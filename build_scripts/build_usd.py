@@ -1547,6 +1547,24 @@ ALEMBIC_URL = "https://github.com/alembic/alembic/archive/refs/tags/1.8.5.zip"
 def InstallAlembic(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ALEMBIC_URL, context, force)):
         cmakeOptions = ['-DUSE_BINARIES=OFF', '-DUSE_TESTS=OFF', '-DUSE_HDF5=OFF']
+        cmakeOptions += ['-DILMBASE_ROOT="{instDir}"'.format(instDir=context.instDir)]
+
+        # When OpenExr is built statically (starting with v2.3.0) the lib names
+        # have _s in them and in debug _d.
+        if context.buildDebug:
+            PatchFile(os.path.join('cmake', 'Modules', 'FindIlmBase.cmake'),
+                [('      ${COMPONENT}-${_ilmbase_libs_ver} ${COMPONENT}\n',
+                  '      ${COMPONENT}-${_ilmbase_libs_ver}_s ${COMPONENT}\n'
+                  '      ${COMPONENT}-${_ilmbase_libs_ver}_d ${COMPONENT}\n'
+                  '      ${COMPONENT}-${_ilmbase_libs_ver}_s_d ${COMPONENT}\n')],
+                  multiLineMatches=True)
+        else:
+            PatchFile(os.path.join('cmake', 'Modules', 'FindIlmBase.cmake'),
+                [('      ${COMPONENT}-${_ilmbase_libs_ver} ${COMPONENT}\n',
+                  '      ${COMPONENT}-${_ilmbase_libs_ver} ${COMPONENT}\n'
+                  '      ${COMPONENT}-${_ilmbase_libs_ver}_s ${COMPONENT}\n')],
+                  multiLineMatches=True)
+
         cmakeOptions += buildArgs
 
         RunCMake(context, force, cmakeOptions)
