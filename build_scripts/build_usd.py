@@ -214,11 +214,29 @@ def GetPythonInfo():
         pythonLibPath = os.path.join(pythonBaseDir, "lib",
                                      _GetPythonLibraryFilename())
     else:
-        pythonIncludeDir = sysconfig.get_config_var("INCLUDEPY")
+        pythonIncludeDir = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001-usd\Python\Include"#sysconfig.get_config_var("INCLUDEPY")
+
+        isPythonDebug = False #context.buildDebug
         if Windows():
             pythonBaseDir = sysconfig.get_config_var("base")
-            pythonLibPath = os.path.join(pythonBaseDir, "libs",
-                                         _GetPythonLibraryFilename())
+            #pythonLibPath = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Release\python27.lib"#os.path.join(pythonBaseDir, "libs",
+                                         #_GetPythonLibraryFilename())
+            #pythonLibPath = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001-usd\Python\libs\python27.lib"
+            if Python3():
+                pythonBaseDir = r"D:\.artifactory\unzipped\Python\3.7.6-001"
+                pythonIncludeDir = r"D:\.artifactory\unzipped\Python\3.7.6-001\Python\include"
+                if isPythonDebug:
+                    pythonLibPath = r"D:\.artifactory\unzipped\Python\3.7.6-001\Python\libs\python37_d.lib"
+                else:
+                    pythonLibPath = r"D:\.artifactory\unzipped\Python\3.7.6-001\Python\libs\python37.lib"
+
+            else:
+                pythonBaseDir = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001"
+                pythonIncludeDir = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\Include"
+                if isPythonDebug:
+                    pythonLibPath = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Debug\python27_d.lib"
+                else:
+                    pythonLibPath = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Release\python27.lib"
         elif Linux():
             pythonLibDir = sysconfig.get_config_var("LIBDIR")
             pythonMultiarchSubdir = sysconfig.get_config_var("multiarchsubdir")
@@ -364,7 +382,14 @@ def RunCMake(context, force, extraArgs = None):
     # (Ninja, make), and --config for multi-configuration generators 
     # (Visual Studio); technically we don't need BOTH at the same
     # time, but specifying both is simpler than branching
-    config=("Debug" if context.buildDebug else "Release")
+    if context.buildDebug:
+        config = "Debug"
+    elif context.buildRelWithDebInfo:
+        # 3dsMax need debug symbols, mostly for CER
+        config = "RelWithDebInfo"
+    else:
+        config = "Release"
+    #config=("Debug" if context.buildDebug else "Release")
 
     with CurrentWorkingDirectory(buildDir):
         Run('cmake '
@@ -642,6 +667,12 @@ elif Windows():
     # this version for all older Visual Studio versions as well.
     BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.70.0/boost_1_70_0.tar.gz"
     BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
+    #BOOST_URL = BOOST_URL = "https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz"
+    #BOOST_VERSION_FILE = "include/boost-1_68/boost/version.hpp"
+
+    # for 3dsMax 2022
+    #BOOST_URL = BOOST_URL = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0.tar.gz"
+    #BOOST_VERSION_FILE = "include/boost-1_73/boost/version.hpp"
 
 def InstallBoost_Helper(context, force, buildArgs):
     # Documentation files in the boost archive can have exceptionally
@@ -697,9 +728,13 @@ def InstallBoost_Helper(context, force, buildArgs):
                 # backslashes for jam, hence the mods below for the path 
                 # arguments. Also, if the path contains spaces jam will not
                 # handle them well. Surround the path parameters in quotes.
-                line = 'using python : %s : "%s" : "%s" ;\n' % (pythonInfo[3], 
+                pyLibPath = os.path.dirname(pythonInfo[1])
+                isPythonDebug = False
+                line = 'using python : %s : "%s" : "%s" : "%s" : <python-debugging>%s ;\n' % (pythonInfo[3],
                        pythonPath.replace('\\', '\\\\'), 
-                       pythonInfo[2].replace('\\', '\\\\'))
+                       pythonInfo[2].replace('\\', '\\\\'),
+                       pyLibPath.replace('\\', '\\\\'),
+                       "on" if isPythonDebug else "off")
                 projectFile.write(line)
             b2_settings.append("--user-config=python-config.jam")
 
@@ -780,7 +815,8 @@ BOOST = Dependency("boost", InstallBoost, BOOST_VERSION_FILE)
 # Intel TBB
 
 if Windows():
-    TBB_URL = "https://github.com/oneapi-src/oneTBB/releases/download/2017_U6/tbb2017_20170412oss_win.zip"
+    #TBB_URL = "https://github.com/oneapi-src/oneTBB/releases/download/2017_U6/tbb2017_20170412oss_win.zip"
+    TBB_URL = "https://github.com/oneapi-src/oneTBB/releases/download/4.4.2/tbb44_20151115oss_win.zip"
 else:
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/2017_U6.tar.gz"
 
@@ -1494,7 +1530,12 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DBoost_NO_SYSTEM_PATHS=True')
         extraArgs += buildArgs
 
+        if not context.buildDebug:
+            context.buildRelWithDebInfo = True
+
         RunCMake(context, force, extraArgs)
+
+        context.buildRelWithDebInfo = False
 
 USD = Dependency("USD", InstallUSD, "include/pxr/pxr.h")
 
@@ -1810,7 +1851,8 @@ class InstallContext:
             self.buildArgs.setdefault(depName.lower(), []).append(arg)
 
         # Build type
-        self.buildDebug = args.build_debug;
+        self.buildDebug = args.build_debug
+        self.buildRelWithDebInfo = False
         self.buildShared = (args.build_type == SHARED_LIBS)
         self.buildMonolithic = (args.build_type == MONOLITHIC_LIB)
 
