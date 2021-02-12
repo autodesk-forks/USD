@@ -71,6 +71,14 @@ if(PXR_ENABLE_PYTHON_SUPPORT)
         find_package(PythonLibs 2.7 REQUIRED)
     endif()
 
+    # NOTE: #3dsMax - extracted from dev_maya_usd branch
+    if(WIN32 AND PXR_DEFINE_BOOST_DEBUG_PYTHON_FLAG)
+        # NOTE: Boost_USE_DEBUG_PYTHON sets the 'y' tag for boost build
+        # 3dsMax does not set the 'y' debug build for boost so we don't set it here
+        # 3dsMax builds boost with -gd only for debug builds (instead of -gyd)
+        set(Boost_USE_DEBUG_PYTHON OFF)
+    endif()
+
     # This option indicates that we don't want to explicitly link to the python
     # libraries. See BUILDING.md for details.
     if(PXR_PY_UNDEFINED_DYNAMIC_LOOKUP AND NOT WIN32 )

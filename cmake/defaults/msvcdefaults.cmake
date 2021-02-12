@@ -99,6 +99,15 @@ if (NOT Boost_USE_STATIC_LIBS)
     _add_define("BOOST_ALL_DYN_LINK")
 endif()
 
+# NOTE: #3dsMax - extracted from dev_maya_usd branch
+# enabling both BOOST_DEBUG_PYTHON and BOOST_LINKING_PYTHON
+#  will cause boost-python to enable -gyd debug builds
+#  this is problematic for 3dsMax as we build only with -gd
+if(${PXR_DEFINE_BOOST_DEBUG_PYTHON_FLAG})
+    _add_define(BOOST_DEBUG_PYTHON)
+    #_add_define(BOOST_LINKING_PYTHON)
+endif()
+
 # Need half::_toFloat and half::_eLut.
 _add_define("OPENEXR_DLL")
 

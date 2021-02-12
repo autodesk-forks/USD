@@ -216,7 +216,7 @@ def GetPythonInfo():
     else:
         pythonIncludeDir = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001-usd\Python\Include"#sysconfig.get_config_var("INCLUDEPY")
 
-        isPythonDebug = False #context.buildDebug
+        isPythonDebug = context.buildDebug
         if Windows():
             pythonBaseDir = sysconfig.get_config_var("base")
             #pythonLibPath = r"D:\.artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Release\python27.lib"#os.path.join(pythonBaseDir, "libs",
@@ -385,14 +385,14 @@ def RunCMake(context, force, extraArgs = None):
     if context.buildDebug:
         config = "Debug"
     elif context.buildRelWithDebInfo:
-        # 3dsMax need debug symbols, mostly for CER
+        # 3dsMax need symbols, mostly for CER
         config = "RelWithDebInfo"
     else:
         config = "Release"
     #config=("Debug" if context.buildDebug else "Release")
 
     with CurrentWorkingDirectory(buildDir):
-        Run('cmake '
+        Run('"C:\\Program Files\\CMake\\bin\\cmake.exe" '
             '-DCMAKE_INSTALL_PREFIX="{instDir}" '
             '-DCMAKE_PREFIX_PATH="{depsInstDir}" '
             '-DCMAKE_BUILD_TYPE={config} '
@@ -409,7 +409,7 @@ def RunCMake(context, force, extraArgs = None):
                     generator=(generator or ""),
                     toolset=(toolset or ""),
                     extraArgs=(" ".join(extraArgs) if extraArgs else "")))
-        Run("cmake --build . --config {config} --target install -- {multiproc}"
+        Run("\"C:\\Program Files\\CMake\\bin\\cmake.exe\" --build . --config {config} --target install -- {multiproc}"
             .format(config=config,
                     multiproc=FormatMultiProcs(context.numJobs, generator)))
 
@@ -665,14 +665,14 @@ elif Windows():
     #
     # boost 1.70 is required for Visual Studio 2019. For simplicity, we use
     # this version for all older Visual Studio versions as well.
-    BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.70.0/boost_1_70_0.tar.gz"
-    BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
-    #BOOST_URL = BOOST_URL = "https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz"
+    #BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.70.0/boost_1_70_0.tar.gz"
+    #BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
+    #BOOST_URL = "https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz"
     #BOOST_VERSION_FILE = "include/boost-1_68/boost/version.hpp"
 
     # for 3dsMax 2022
-    #BOOST_URL = BOOST_URL = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0.tar.gz"
-    #BOOST_VERSION_FILE = "include/boost-1_73/boost/version.hpp"
+    BOOST_URL = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0.tar.gz"
+    BOOST_VERSION_FILE = "include/boost-1_73/boost/version.hpp"
 
 def InstallBoost_Helper(context, force, buildArgs):
     # Documentation files in the boost archive can have exceptionally
@@ -729,7 +729,7 @@ def InstallBoost_Helper(context, force, buildArgs):
                 # arguments. Also, if the path contains spaces jam will not
                 # handle them well. Surround the path parameters in quotes.
                 pyLibPath = os.path.dirname(pythonInfo[1])
-                isPythonDebug = False
+                isPythonDebug = context.buildDebug
                 line = 'using python : %s : "%s" : "%s" : "%s" : <python-debugging>%s ;\n' % (pythonInfo[3],
                        pythonPath.replace('\\', '\\\\'), 
                        pythonInfo[2].replace('\\', '\\\\'),
@@ -737,6 +737,9 @@ def InstallBoost_Helper(context, force, buildArgs):
                        "on" if isPythonDebug else "off")
                 projectFile.write(line)
             b2_settings.append("--user-config=python-config.jam")
+            #if context.buildDebug:
+            # #3dsMax NOTE: enabling below flag causes -gyd debug builds instead of -gd to match that of 3dsMax
+            #    b2_settings.append("python-debugging=on")
 
         if context.buildOIIO:
             b2_settings.append("--with-date_time")
@@ -1407,6 +1410,11 @@ def InstallUSD(context, force, buildArgs):
                                  .format(pyLibPath=pythonInfo[1]))
                 extraArgs.append('-DPYTHON_INCLUDE_DIR="{pyIncPath}"'
                                  .format(pyIncPath=pythonInfo[2]))
+            if context.buildDebug:
+                extraArgs.append('-DPXR_DEFINE_BOOST_DEBUG_PYTHON_FLAG=ON')
+            else:
+                extraArgs.append('-DPXR_DEFINE_BOOST_DEBUG_PYTHON_FLAG=OFF')
+
         else:
             extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=OFF')
 
@@ -2045,7 +2053,7 @@ if find_executable("cmake"):
     if Windows():
         # Windows build depend on boost 1.70, which is not supported before
         # cmake version 3.14
-        cmake_required_version = (3, 14)
+        cmake_required_version = (3, 12)
     else:
         cmake_required_version = (3, 12)
     cmake_version = GetCMakeVersion()
