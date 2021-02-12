@@ -1068,6 +1068,16 @@ int ArchFileAccess(const char* path, int mode)
         }
     }
 
+    //TODO #3dsMax NOTE: hackish workaround for processes running in low integrity mode
+    // AccessCheck() call below fails when executing under a low integrity process
+    // assumption is that AccessCheck is not allowed under low-integrity or at least
+    // some of its underlying requested flags are not allowed
+    // hack: we disable this accesscheck when an ENV value is set
+    // if user process did not have write access, it will fail anyways while writing to disk
+    if (ArchHasEnv("3DSMAX_USD_LOWINTEGRITY")) {
+        return 0;
+    }
+
     bool result = false;
     HANDLE duplicateToken;
     if (DuplicateToken(token, SecurityImpersonation, &duplicateToken))
