@@ -1146,6 +1146,18 @@ OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs
 
 def InstallOpenEXR(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OPENEXR_URL, context, force)):
+
+        # When building statically on Linux we need to add fPIC.
+        staticOpenEXR = 'OPENEXR_BUILD_STATIC' in " ".join(buildArgs)
+        if staticOpenEXR and Linux():
+            PatchFile(os.path.join('src', 'lib', 'CMakeLists.txt'),
+                [('add_subdirectory( Iex )\n',
+                  'IF (${CMAKE_SYSTEM_NAME} MATCHES "Linux")\n'
+                  '  ADD_DEFINITIONS(-fPIC)\n'
+                  'ENDIF()\n\n'
+                  'add_subdirectory( Iex )\n')],
+                multiLineMatches=True)
+
         RunCMake(context, force, 
                  ['-DOPENEXR_INSTALL_TOOLS=OFF',
                   '-DOPENEXR_INSTALL_EXAMPLES=OFF',
@@ -1247,6 +1259,7 @@ OPENVDB = Dependency("OpenVDB", InstallOpenVDB, "include/openvdb/openvdb.h")
 OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.3.21.0.zip"
 
 def InstallOpenImageIO(context, force, buildArgs):
+    staticOpenEXR = 'OpenEXR_USE_STATIC_LIBS' in " ".join(buildArgs)
     with CurrentWorkingDirectory(DownloadURL(OIIO_URL, context, force)):
         # The only time that we want to build tools with OIIO is for testing
         # purposes. Libraries such as usdImagingGL might need to use tools like
@@ -1258,6 +1271,30 @@ def InstallOpenImageIO(context, force, buildArgs):
                      '-DBUILD_DOCS=OFF',
                      '-DUSE_PYTHON=OFF',
                      '-DSTOP_ON_WARNING=OFF']
+
+        _externalpackages_patch = []
+        if staticOpenEXR:
+            # We want the OpenEXR library to be linked statically.
+            # Other libraries, should still be linked dynamically.
+            # OpenImageIO does not support this mix out of the box,
+            # it is all or nothing. So, we patch the OpenEXR setup
+            # to be a static library by removing -DOPENEXR_DLL.
+            _externalpackages_patch = [
+                ("if (MSVC AND NOT LINKSTATIC)\n"
+                 "    add_definitions (-DOPENEXR_DLL) # Is this needed for new versions?\n"
+                 "endif ()",
+                 "",
+                )]
+
+        if context.buildDebug and context.debugPython:
+            # Note: These defines are needed on Windows only.
+            #       This add_definitions exists within a "if (MSVC)" block.
+            _externalpackages_patch.append(
+                ("        add_definitions (-DBOOST_ALL_DYN_LINK=1)",
+                  "        add_definitions (-DBOOST_ALL_DYN_LINK=1 -DBOOST_DEBUG_PYTHON -DBOOST_LINKING_PYTHON)"))
+
+        PatchFile(os.path.join('src', 'cmake', 'externalpackages.cmake'), _externalpackages_patch,
+            multiLineMatches=True)
 
         # OIIO's FindOpenEXR module circumvents CMake's normal library 
         # search order, which causes versions of OpenEXR installed in
@@ -1279,6 +1316,9 @@ def InstallOpenImageIO(context, force, buildArgs):
         # system installed boost
         extraArgs.append('-DBoost_NO_BOOST_CMAKE=On')
         extraArgs.append('-DBoost_NO_SYSTEM_PATHS=True')
+
+        if context.buildDebug and context.debugPython:
+            extraArgs.append('-DBoost_USE_DEBUG_PYTHON=ON')
 
         # OpenImageIO 2.3.5 changed the default postfix for debug library
         # names from "" to "_d". USD's build system currently does not support
