@@ -1098,6 +1098,26 @@ def InstallOpenImageIO(context, force, buildArgs):
                      '-DUSE_PYTHON=OFF',
                      '-DSTOP_ON_WARNING=OFF']
 
+        # When searching for OpenEXR, OpenImageIO searches for
+        # IlmBase >= 2.0.0 and OpenEXR >= 2.2.0.
+        #
+        # Unfortunately, it found IlmBase 2.2.0 and OpenEXR 2.4.1
+        # (even though OpenEXR 2.2.0 was also available) and would
+        # claim to not have found a suitable version of OpenEXR
+        # because these two version are not meant to be used together.
+        #
+        # The fix is to search for OpenEXR 2.2.0 exactly. When
+        # OpenEXR is upgraded, we will upgrade (or remove) this patch.
+        PatchFile(
+            os.path.join('src', 'cmake', 'modules', 'FindOpenEXR.cmake'),
+            [
+                (
+                    "pkg_check_modules(_OPENEXR QUIET OpenEXR>=2.0.0)",
+                    "pkg_check_modules(_OPENEXR OpenEXR=2.2.0)",
+                ),
+            ],
+            multiLineMatches=False)
+
         # OIIO's FindOpenEXR module circumvents CMake's normal library
         # search order, which causes versions of OpenEXR installed in
         # /usr/local or other hard-coded locations in the module to
