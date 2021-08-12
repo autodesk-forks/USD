@@ -146,6 +146,10 @@ def IsVisualStudioVersionOrGreater(desiredVersion):
         return version >= desiredVersion
     return False
 
+def IsVisualStudio2022OrGreater():
+    VISUAL_STUDIO_2022_VERSION = (17, 0)
+    return IsVisualStudioVersionOrGreater(VISUAL_STUDIO_2022_VERSION)
+
 def IsVisualStudio2019OrGreater():
     VISUAL_STUDIO_2019_VERSION = (16, 0)
     return IsVisualStudioVersionOrGreater(VISUAL_STUDIO_2019_VERSION)
@@ -377,7 +381,9 @@ def RunCMake(context, force, extraArgs = None):
     # building a 64-bit project. (Surely there is a better way to do this?)
     # TODO: figure out exactly what "vcvarsall.bat x64" sets to force x64
     if generator is None and Windows():
-        if IsVisualStudio2019OrGreater():
+        if IsVisualStudio2022OrGreater():
+            generator = "Visual Studio 17 2022"
+        elif IsVisualStudio2019OrGreater():
             generator = "Visual Studio 16 2019"
         elif IsVisualStudio2017OrGreater():
             generator = "Visual Studio 15 2017 Win64"
@@ -387,7 +393,7 @@ def RunCMake(context, force, extraArgs = None):
     if generator is not None:
         generator = '-G "{gen}"'.format(gen=generator)
 
-    if IsVisualStudio2019OrGreater():
+    if generator and 'Visual Studio' in generator and IsVisualStudio2019OrGreater():
         generator = generator + " -A x64"
 
     toolset = context.cmakeToolset
@@ -848,6 +854,8 @@ def InstallBoost_Helper(context, force, buildArgs):
                 b2_settings.append("toolset=msvc-14.1")
             elif context.cmakeToolset == "v140":
                 b2_settings.append("toolset=msvc-14.0")
+            elif IsVisualStudio2022OrGreater():
+                b2_settings.append("toolset=msvc-14.3")
             elif IsVisualStudio2019OrGreater():
                 b2_settings.append("toolset=msvc-14.2")
             elif IsVisualStudio2017OrGreater():
