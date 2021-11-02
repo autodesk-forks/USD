@@ -217,28 +217,14 @@ def GetPythonInfo():
         pythonLibPath = os.path.join(pythonBaseDir, "lib",
                                      _GetPythonLibraryFilename())
     else:
-        pythonIncludeDir = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001-usd\Python\Include"#sysconfig.get_config_var("INCLUDEPY")
         isPythonDebug = context.buildDebug and Python3()
         if Windows():
-            pythonBaseDir = sysconfig.get_config_var("base")
-            #pythonLibPath = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Release\python27.lib"#os.path.join(pythonBaseDir, "libs",
-                                         #_GetPythonLibraryFilename())
-            #pythonLibPath = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001-usd\Python\libs\python27.lib"
-            if Python3():
-                pythonBaseDir = r"D:\artifactory\unzipped\Python\3.7.6-001"
-                pythonIncludeDir = r"D:\artifactory\unzipped\Python\3.7.6-001\Python\include"
-                if isPythonDebug:
-                    pythonLibPath = r"D:\artifactory\unzipped\Python\3.7.6-001\Python\libs\python37_d.lib"
-                else:
-                    pythonLibPath = r"D:\artifactory\unzipped\Python\3.7.6-001\Python\libs\python37.lib"
-
+            pythonBaseDir = os.environ.get('MAX_PYTHON_ROOT_37')
+            pythonIncludeDir = os.path.join(pythonBaseDir, "include")
+            if isPythonDebug:
+                pythonLibPath = os.path.join(pythonBaseDir, "libs", "python37_d.lib")
             else:
-                pythonBaseDir = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001"
-                pythonIncludeDir = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\Include"
-                if isPythonDebug:
-                    pythonLibPath = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Debug\python27_d.lib"
-                else:
-                    pythonLibPath = r"D:\artifactory\unzipped\Python\2.7.15-3dsmax_v141-001\Python\libs\Release\python27.lib"
+                pythonLibPath = os.path.join(pythonBaseDir, "libs", "python37.lib")
         elif Linux():
             pythonLibDir = sysconfig.get_config_var("LIBDIR")
             pythonMultiarchSubdir = sysconfig.get_config_var("multiarchsubdir")
@@ -394,7 +380,7 @@ def RunCMake(context, force, extraArgs = None):
     #config=("Debug" if context.buildDebug else "Release")
 
     with CurrentWorkingDirectory(buildDir):
-        Run('"cmake.exe" '
+        Run('cmake '
             '-DCMAKE_INSTALL_PREFIX="{instDir}" '
             '-DCMAKE_PREFIX_PATH="{depsInstDir}" '
             '-DCMAKE_BUILD_TYPE={config} '
@@ -411,7 +397,7 @@ def RunCMake(context, force, extraArgs = None):
                     generator=(generator or ""),
                     toolset=(toolset or ""),
                     extraArgs=(" ".join(extraArgs) if extraArgs else "")))
-        Run("\"cmake.exe\" --build . --config {config} --target install -- {multiproc}"
+        Run("cmake --build . --config {config} --target install -- {multiproc}"
             .format(config=config,
                     multiproc=FormatMultiProcs(context.numJobs, generator)))
 
@@ -1091,15 +1077,16 @@ def InstallOpenImageIO(context, force, buildArgs):
         #
         # The fix is to search for OpenEXR 2.2.0 exactly. When
         # OpenEXR is upgraded, we will upgrade (or remove) this patch.
-        PatchFile(
-            os.path.join('src', 'cmake', 'modules', 'FindOpenEXR.cmake'),
-            [
-                (
-                    "pkg_check_modules(_OPENEXR QUIET OpenEXR>=2.0.0)",
-                    "pkg_check_modules(_OPENEXR OpenEXR=2.2.0)",
-                ),
-            ],
-            multiLineMatches=False)
+        # Removed when updating to 21.08
+        #PatchFile(
+        #    os.path.join('src', 'cmake', 'modules', 'FindOpenEXR.cmake'),
+        #    [
+        #        (
+        #            "pkg_check_modules(_OPENEXR QUIET OpenEXR>=2.0.0)",
+        #            "pkg_check_modules(_OPENEXR OpenEXR=2.2.0)",
+        #        ),
+        #    ],
+        #    multiLineMatches=False)
 
         # OIIO's FindOpenEXR module circumvents CMake's normal library 
         # search order, which causes versions of OpenEXR installed in
