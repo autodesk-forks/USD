@@ -54,7 +54,10 @@ pxr_library(tf
         pathUtils
         patternMatcher
         pointerAndBits
+        pyBoostObjWrapper
         pyLock
+        pyObjWrapper
+        pyTracing
         refBase
         refCount
         refPtr
@@ -103,14 +106,12 @@ pxr_library(tf
         pyModuleNotice
         pyNoticeWrapper
         pyObjectFinder
-        pyObjWrapper
         pyOptional
         pyOverride
         pyPolymorphic
         pyPtrHelpers
         pyResultConversions
         pySingleton
-        pyTracing
         pyUtils
         pyWrapContext
         scriptModuleLoader

@@ -34,11 +34,7 @@
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/weakPtr.h"
 
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
-#include "pxr/base/tf/pyUtils.h"
-#include <boost/python/object.hpp>
-#endif // PXR_PYTHON_SUPPORT_ENABLED
-
+#include "pxr/base/tf/pyBoostObjWrapper.h"
 #include <boost/operators.hpp>
 
 #include <cstddef>
@@ -157,9 +153,7 @@ public:
         virtual TfWeakBase const *GetWeakBase() const = 0;
         virtual operator bool() const = 0;
         virtual bool _IsConst() const = 0;
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
-        virtual boost::python::api::object GetPythonObject() const = 0;
-#endif // PXR_PYTHON_SUPPORT_ENABLED
+        virtual TfPyBoostObjWrapper GetPythonObject() const = 0;
         virtual const std::type_info & GetTypeInfo() const = 0;
         virtual TfType const& GetType() const = 0;
         virtual const void* _GetMostDerivedPtr() const = 0;
@@ -174,9 +168,7 @@ public:
         TF_API virtual TfWeakBase const *GetWeakBase() const;
         TF_API virtual operator bool() const;
         TF_API virtual bool _IsConst() const;
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
-        TF_API virtual boost::python::api::object GetPythonObject() const;
-#endif // PXR_PYTHON_SUPPORT_ENABLED
+        TF_API virtual TfPyBoostObjWrapper GetPythonObject() const;
         TF_API virtual const std::type_info & GetTypeInfo() const;
         TF_API virtual TfType const& GetType() const;
         TF_API virtual const void* _GetMostDerivedPtr() const;
@@ -195,9 +187,7 @@ public:
         virtual TfWeakBase const *GetWeakBase() const;
         virtual operator bool() const;
         virtual bool _IsConst() const;
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
-        virtual boost::python::api::object GetPythonObject() const;
-#endif // PXR_PYTHON_SUPPORT_ENABLED
+        virtual TfPyBoostObjWrapper GetPythonObject() const;
         virtual const std::type_info & GetTypeInfo() const;
         virtual TfType const& GetType() const;
         virtual const void* _GetMostDerivedPtr() const;
@@ -263,15 +253,16 @@ TfAnyWeakPtr::_PointerHolder<Ptr>::operator bool() const
     return bool(_ptr);
 }
 
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
 template <class Ptr>
-boost::python::api::object
+TfPyBoostObjWrapper
 TfAnyWeakPtr::_PointerHolder<Ptr>::GetPythonObject() const
 {
+#ifdef PXR_PYTHON_SUPPORT_ENABLED
     return TfPyObject(_ptr);
-}
+#else
+    return {};
 #endif // PXR_PYTHON_SUPPORT_ENABLED
-
+}
 template <class Ptr>
 const std::type_info &
 TfAnyWeakPtr::_PointerHolder<Ptr>::GetTypeInfo() const
