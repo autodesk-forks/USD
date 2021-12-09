@@ -219,12 +219,14 @@ def GetPythonInfo():
     else:
         isPythonDebug = context.buildDebug and Python3()
         if Windows():
-            pythonBaseDir = os.environ.get('MAX_PYTHON_ROOT_37')
+            pythonBaseDir = os.environ.get('MAX_PYTHON_ROOT_USD')
+            pythonLibName = os.environ.get('MAX_PYTHON_LIB_NAME_USD')
+            pythonLibNameDebug = os.environ.get('MAX_PYTHON_LIB_DEBUG_NAME_USD')
             pythonIncludeDir = os.path.join(pythonBaseDir, "include")
             if isPythonDebug:
-                pythonLibPath = os.path.join(pythonBaseDir, "libs", "python37_d.lib")
+                pythonLibPath = os.path.join(pythonBaseDir, "libs", pythonLibNameDebug)
             else:
-                pythonLibPath = os.path.join(pythonBaseDir, "libs", "python37.lib")
+                pythonLibPath = os.path.join(pythonBaseDir, "libs", pythonLibName)
         elif Linux():
             pythonLibDir = sysconfig.get_config_var("LIBDIR")
             pythonMultiarchSubdir = sysconfig.get_config_var("multiarchsubdir")
@@ -661,8 +663,8 @@ elif Windows():
     #
     # boost 1.70 is required for Visual Studio 2019. For simplicity, we use
     # this version for all older Visual Studio versions as well.
-    BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.70.0/boost_1_70_0.tar.gz"
-    BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
+    BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.76.0/boost_1_76_0.tar.gz"
+    BOOST_VERSION_FILE = "include/boost-1_76/boost/version.hpp"
     #BOOST_URL = "https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz"
     #BOOST_VERSION_FILE = "include/boost-1_68/boost/version.hpp"
 
