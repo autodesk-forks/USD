@@ -68,7 +68,8 @@ TF_DEFINE_PRIVATE_TOKENS(
 static std::string
 _GenPixelShader(mx::GenContext & mxContext, mx::ElementPtr const& mxElem)
 {
-    bool hasTransparency = mx::isTransparentSurface(mxElem);
+    bool hasTransparency = mx::isTransparentSurface(mxElem,
+                               mxContext.getShaderGenerator().getTarget());
 
     mx::GenContext materialContext = mxContext;
     materialContext.getOptions().hwTransparency = hasTransparency;

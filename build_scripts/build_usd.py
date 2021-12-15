@@ -1434,12 +1434,13 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/autodesk-forks/MaterialX/archive/4bea892a88aa72fa1862ea72392d4004f4737056.zip"
+MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.3.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
-        # Autodesk version must be built statically
-        cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=OFF']
+        cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
+                        '-DMATERIALX_NAMESPACE_SUFFIX=MayaUSD',
+                        '-DMATERIALX_LIBNAME_SUFFIX=MayaUSD']
 
         cmakeOptions += buildArgs;
 
