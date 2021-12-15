@@ -1438,9 +1438,7 @@ MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.3.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
-        cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
-                        '-DMATERIALX_NAMESPACE_SUFFIX=MayaUSD',
-                        '-DMATERIALX_LIBNAME_SUFFIX=MayaUSD']
+        cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON']
 
         cmakeOptions += buildArgs;
 
