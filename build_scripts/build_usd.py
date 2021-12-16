@@ -1440,7 +1440,16 @@ def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON']
 
-        cmakeOptions += buildArgs;
+        cmakeOptions += buildArgs
+
+        if "v1.38.3.zip" in MATERIALX_URL:
+            # This will be fixed in v1.38.4:
+            PatchFile(os.path.join('cmake', 'modules', 'MaterialXConfig.cmake.in'),
+                [('set_and_check(MATERIALX_PYTHON_DIR "@PACKAGE_CMAKE_INSTALL_PREFIX@/python")\n',
+                  'IF (@MATERIALX_BUILD_PYTHON@ AND @MATERIALX_INSTALL_PYTHON@)\n'
+                  '  set_and_check(MATERIALX_PYTHON_DIR "@PACKAGE_CMAKE_INSTALL_PREFIX@/python")\n'
+                  'ENDIF()\n')],
+                multiLineMatches=True)
 
         RunCMake(context, force, cmakeOptions)
 
