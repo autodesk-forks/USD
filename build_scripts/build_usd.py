@@ -1453,6 +1453,22 @@ def InstallMaterialX(context, force, buildArgs):
 
         RunCMake(context, force, cmakeOptions)
 
+        # Post-build fix. Make sure MaterialX config is relocatable:
+        filename = os.path.join(context.instDir, 'lib', 'cmake', 'MaterialX', 'MaterialXTargets.cmake')
+        oldLines = open(filename, 'r').readlines()
+        newLines = []
+        for s in oldLines:
+            if s.startswith('set(_IMPORT_PREFIX '):
+                pathBegin = s.find(' ') + 1
+                pathEnd = s.rfind(')')
+                s = s[:pathBegin] + '${PACKAGE_PREFIX_DIR}' + s[pathEnd:]
+            newLines.append(s)
+        if newLines != oldLines:
+            PrintInfo("Patching file {filename} (original in {oldFilename})..."
+                    .format(filename=filename, oldFilename=filename + ".old"))
+            shutil.copy(filename, filename + ".old")
+            open(filename, 'w').writelines(newLines)
+
 MATERIALX = Dependency("MaterialX", InstallMaterialX, "include/MaterialXCore/Library.h")
 
 ############################################################
