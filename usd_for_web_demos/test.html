@@ -19,7 +19,7 @@
     // Load the usd file
     let loadUSDPromise = new Promise( (resolve, reject) => {
       let req = new XMLHttpRequest();
-      req.open("GET", "/" + filename, true);
+      req.open("GET", filename, true);
       req.responseType = "arraybuffer";
 
       req.onload = function (oEvent) {
@@ -38,9 +38,16 @@
 
     Promise.all([loadUSDPromise, getUsdModule(), initPromise]).then(async ([usdFile, Usd]) => {
       window.Usd = Usd;
+      loadUsdFileFromArrayBuffer(filename, usdFile);
+    });
 
-      let extension = filename.split('.')[1];
-      let inputFile = 'input.' + extension;
+    function loadUsdFileFromArrayBuffer(filename, usdFile) {
+      let parts = filename.split('.');
+      let extension = parts[parts.length - 1];
+      extension = extension.split('?')[0];
+      let fileName = (Math.random() + 1).toString(36).substring(7);
+      // fileName = "input"; // TODO need to unload the old file again, then we don't need a random filename here
+      let inputFile = fileName + "." + extension;
 
       Usd.FS.createDataFile('/', inputFile, new Uint8Array(usdFile), true, true, true);
 
@@ -52,12 +59,13 @@
       const stage = window.usdStage = window.driver.GetStage();
       const endTimeCode = stage.GetEndTimeCode();
       animate(1000 / stage.GetTimeCodesPerSecond(), endTimeCode);
-    });
+    }
 
     async function init() {
       const camera = window.camera = new THREE.PerspectiveCamera( 27, window.innerWidth / window.innerHeight, 1, 3500 );
-      camera.position.z = params.get('cameraZ') || 7;;
+      camera.position.z = params.get('cameraZ') || 7;
       camera.position.y = params.get('cameraY') || 7;
+      camera.position.y = params.get('cameraX') || 0;
 
       const scene = window.scene = new THREE.Scene();
       scene.background = new THREE.Color(0xffffff);
@@ -105,6 +113,9 @@
 
       window.addEventListener( 'resize', onWindowResize );
 
+      renderer.domElement.addEventListener("drop", dropHandler);
+      renderer.domElement.addEventListener("dragover", dragOverHandler);
+
       return envMapPromise;
     }
 
@@ -150,6 +161,63 @@
 
       window.renderer.render( window.scene, window.camera );
 
+    }
+
+    async function loadFile(fileOrHandle) {
+      let file = undefined;
+      try {
+        if(fileOrHandle.getFile !== undefined) {
+          file = await fileOrHandle.getFile();
+        }
+        else
+          file = fileOrHandle;
+
+        var reader = new FileReader();
+        reader.onload = function(event) {
+          loadUsdFileFromArrayBuffer(file.name, event.target.result);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+      catch(ex) {
+        console.warn("Error loading file", fileOrHandle, ex);
+      }
+    }
+    
+    function testAndLoadFile(file) {
+      let ext = file.name.split('.').pop();
+      console.log(file.name + ", " + file.size + ", " + ext);
+      if(ext == 'usd' || ext == 'usdz') {
+        loadFile(file);
+      }
+    }
+    
+    function dropHandler(ev) {
+      console.log('File(s) dropped');
+
+      // Prevent default behavior (Prevent file from being opened)
+      ev.preventDefault();
+
+      if (ev.dataTransfer.items)
+      {
+        for (var i = 0; i < ev.dataTransfer.items.length; i++)
+        {
+          let item = ev.dataTransfer.items[i];
+          if (item.kind === 'file')
+          {
+            var file = item.getAsFile();
+            testAndLoadFile(file);
+          }
+        }
+      } else {
+        for (var i = 0; i < ev.dataTransfer.files.length; i++) {
+          let file = ev.dataTransfer.files[i];
+          testAndLoadFile(file);
+        }
+      }
+    }
+
+    function dragOverHandler(ev) {
+      ev.preventDefault();
     }
   </script>
   <div id="container"></div>
