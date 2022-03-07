@@ -65,7 +65,7 @@
       const camera = window.camera = new THREE.PerspectiveCamera( 27, window.innerWidth / window.innerHeight, 1, 3500 );
       camera.position.z = params.get('cameraZ') || 7;
       camera.position.y = params.get('cameraY') || 7;
-      camera.position.y = params.get('cameraX') || 0;
+      camera.position.x = params.get('cameraX') || 0;
 
       const scene = window.scene = new THREE.Scene();
       scene.background = new THREE.Color(0xffffff);
@@ -186,7 +186,7 @@
     function testAndLoadFile(file) {
       let ext = file.name.split('.').pop();
       console.log(file.name + ", " + file.size + ", " + ext);
-      if(ext == 'usd' || ext == 'usdz') {
+      if(ext == 'usd' || ext == 'usdz' || ext == 'usda' || ext == 'usdc') {
         loadFile(file);
       }
     }
