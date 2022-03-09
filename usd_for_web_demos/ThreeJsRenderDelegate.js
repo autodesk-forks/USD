@@ -84,7 +84,7 @@ class HydraMesh {
     this._mesh.castShadow = true;
     this._mesh.receiveShadow = true;
     
-    window.scene.add(this._mesh); // FIXME
+    window.usdRoot.add(this._mesh); // FIXME
   }
 
   updateOrder(attribute, attributeName, dimension = 3) {
