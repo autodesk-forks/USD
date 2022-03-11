@@ -1,4 +1,6 @@
 .p4*
 .DS_Store
 .AppleDouble
+USD_emscripten/
+.vscode/
 

@@ -120,6 +120,15 @@ else()
             find_package(PythonInterp 2.7 REQUIRED)
         endif()
     endif()
+ 
+    # --Boost
+    if(NOT PXR_ENABLE_JS_SUPPORT)
+        find_package(Boost
+            COMPONENTS
+                program_options
+            REQUIRED
+        )
+    endif()
 endif()
 
 # --USD tools

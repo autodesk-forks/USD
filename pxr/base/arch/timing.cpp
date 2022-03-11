@@ -34,7 +34,7 @@
 #include <numeric>
 #include <type_traits>
 
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(__EMSCRIPTEN__)
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -64,6 +64,19 @@ Arch_ComputeNanosecondsPerTick()
     Arch_NanosecondsPerTick = static_cast<double>(info.numer) / info.denom;
 }
 
+#elif defined(__EMSCRIPTEN__)
+
+ARCH_HIDDEN
+void
+Arch_InitTickTimer()
+{
+}
+
+static
+void
+Arch_ComputeNanosecondsPerTick()
+{
+}
 #elif defined(ARCH_OS_LINUX)
 
 static
@@ -192,6 +205,7 @@ Arch_ComputeNanosecondsPerTick()
 #error Unknown architecture.
 #endif
 
+#if !defined(__EMSCRIPTEN__)
 // A externally visible variable used only to ensure the compiler doesn't do
 // certain optimizations we don't want in order to measure accurate times.
 uint64_t testTimeAccum;
@@ -232,6 +246,7 @@ Arch_InitTickTimer()
         });
     }
 }
+#endif
 
 uint64_t
 ArchGetTickQuantum()
@@ -287,9 +302,13 @@ Arch_MeasureExecutionTime(uint64_t maxMicroseconds, bool *reachedConsensus,
     // Since measured times are +/- 1 quantum, we multiply by 2000 to get the
     // desired runtime, and from there figure number of iterations for a sample.
     const uint64_t minTicksPerSample = 2000 * ArchGetTickQuantum();
+    #if defined(__EMSCRIPTEN__)
+    const int sampleIters = 1; // FIXME
+    #else
     const int sampleIters = (estTicksPer < minTicksPerSample)
         ? (minTicksPerSample + estTicksPer/2) / estTicksPer
-        : 1;
+        : 1;    
+    #endif
 
     auto measureSample = [&measureN, sampleIters]() {
         return (measureN(sampleIters) + sampleIters/2) / sampleIters;

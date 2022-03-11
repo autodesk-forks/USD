@@ -420,7 +420,8 @@ def RunCMake(context, force, extraArgs = None):
     AppendCXX11ABIArg("-DCMAKE_CXX_FLAGS", context, extraArgs)
 
     with CurrentWorkingDirectory(buildDir):
-        Run('cmake '
+        Run(('emcmake ' if context.emscripten else '') +
+            'cmake '
             '-DCMAKE_INSTALL_PREFIX="{instDir}" '
             '-DCMAKE_PREFIX_PATH="{depsInstDir}" '
             '-DCMAKE_BUILD_TYPE={config} '
@@ -437,7 +438,8 @@ def RunCMake(context, force, extraArgs = None):
                     generator=(generator or ""),
                     toolset=(toolset or ""),
                     extraArgs=(" ".join(extraArgs) if extraArgs else "")))
-        Run("cmake --build . --config {config} --target install -- {multiproc}"
+        Run(('emmake ' if context.emscripten else '') +
+            "cmake --build . --config {config} --target install -- {multiproc}"
             .format(config=config,
                     multiproc=FormatMultiProcs(context.numJobs, generator)))
 
@@ -594,6 +596,8 @@ def DownloadURL(url, context, force, extractDir = None,
                     members = (m for m in archive.getnames() 
                                if not any((fnmatch.fnmatch(m, p)
                                            for p in dontExtract)))
+            elif filename.endswith('.js'):
+                return os.path.abspath(filename)
             else:
                 raise RuntimeError("unrecognized archive file type")
 
@@ -867,8 +871,13 @@ elif MacOS():
 else:
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/2018_U6.tar.gz"
 
+# Note: this refers to a fork of tbb for wasm. Is this maintained?
+TBB_EMSCRIPTEN_URL = "https://github.com/sdunkel/wasmtbb/archive/master.zip"
+
 def InstallTBB(context, force, buildArgs):
-    if Windows():
+    if context.emscripten:
+        InstallTBB_Emscripten(context, force, buildArgs)
+    elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
     elif Linux() or MacOS():
         InstallTBB_LinuxOrMacOS(context, force, buildArgs)
@@ -904,6 +913,29 @@ def InstallTBB_LinuxOrMacOS(context, force, buildArgs):
         # TBB does not support out-of-source builds in a custom location.
         Run('make -j{procs} {buildArgs}'
             .format(procs=context.numJobs, 
+                    buildArgs=" ".join(buildArgs)))
+
+        # Install both release and debug builds. USD requires the debug
+        # libraries when building in debug mode, and installing both
+        # makes it easier for users to install dependencies in some
+        # location that can be shared by both release and debug USD
+        # builds. Plus, the TBB build system builds both versions anyway.
+        CopyFiles(context, "build/*_release/libtbb*.*", "lib")
+        CopyFiles(context, "build/*_debug/libtbb*.*", "lib")
+        CopyDirectory(context, "include/serial", "include/serial")
+        CopyDirectory(context, "include/tbb", "include/tbb")
+
+def InstallTBB_Emscripten(context, force, buildArgs):
+
+    with CurrentWorkingDirectory(DownloadURL(TBB_EMSCRIPTEN_URL, context, force)):
+        # By default no config for macos is avaiable, but the one for linux
+        # seems to work fine
+        if MacOS():
+            shutil.copy('build/linux.emscripten.inc', 'build/macos.emscripten.inc')
+
+        # TBB does not support out-of-source builds in a custom location.
+        Run('emmake make -j{procs} extra_inc=big_iron.inc tbb {buildArgs}'
+            .format(procs=context.numJobs,
                     buildArgs=" ".join(buildArgs)))
 
         # Install both release and debug builds. USD requires the debug
@@ -1218,6 +1250,12 @@ def InstallOpenSubdiv(context, force, buildArgs):
             '-DNO_GLEW=ON',
             '-DNO_GLFW=ON',
         ]
+        if context.emscripten:
+            extraArgs.append('-DBUILD_SHARED_LIB=OFF')
+            extraArgs.append('-DCMAKE_CXX_FLAGS="-s USE_PTHREADS=1"')
+            extraArgs.append('-DCMAKE_C_FLAGS="-s USE_PTHREADS=1"')
+            extraArgs.append('-DNO_OPENGL=ON')
+            extraArgs.append('-DNO_METAL=ON')
 
         # If Ptex support is disabled in USD, disable support in OpenSubdiv
         # as well. This ensures OSD doesn't accidentally pick up a Ptex
@@ -1248,7 +1286,7 @@ def InstallOpenSubdiv(context, force, buildArgs):
         # just 1 job for now. See:
         # https://github.com/PixarAnimationStudios/OpenSubdiv/issues/1194
         oldNumJobs = context.numJobs
-        if MacOS():
+        if MacOS() or context.emscripten:
             context.numJobs = 1
 
         try:
@@ -1569,6 +1607,21 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DBoost_NO_SYSTEM_PATHS=True')
         extraArgs += buildArgs
 
+        if context.emscripten:
+            extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
+            # For some reason we have to manually specify path to boost
+            extraArgs.append('-DBoost_INCLUDE_DIR='+os.path.join(context.usdInstDir, "include"))
+
+            extraArgs.append('-DTBB_INCLUDE_DIRS=' + os.path.join(context.usdInstDir, 'include'))
+            extraArgs.append('-DTBB_tbb_LIBRARY_DEBUG=' + os.path.join(context.usdInstDir, 'lib/libtbb_debug.a'))
+            extraArgs.append('-DTBB_tbb_LIBRARY_RELEASE=' + os.path.join(context.usdInstDir, 'lib/libtbb.a'))
+
+            extraArgs.append('-DOPENSUBDIV_INCLUDE_DIR=' + os.path.join(context.usdInstDir, 'include'))
+            extraArgs.append('-DOPENSUBDIV_OSDCPU_LIBRARY=' + os.path.join(context.usdInstDir, 'lib/libosdCPU.a'))
+
+            extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=OFF')
+            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
+
         RunCMake(context, force, extraArgs)
 
 USD = Dependency("USD", InstallUSD, "include/pxr/pxr.h")
@@ -1692,6 +1745,9 @@ group.add_argument("--generator", type=str,
 group.add_argument("--toolset", type=str,
                    help=("CMake toolset to use when building libraries with "
                          "cmake"))
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--emscripten", dest="emscripten", action="store_const", const='EMSCRIPTEN',
+                    help="Build for emscripten")
 
 if Linux():
     group.add_argument("--use-cxx11-abi", type=int, choices=[0, 1],
@@ -1901,6 +1957,7 @@ class InstallContext:
         # CMake generator and toolset
         self.cmakeGenerator = args.generator
         self.cmakeToolset = args.toolset
+        self.emscripten = args.emscripten
 
         # Number of jobs
         self.numJobs = args.jobs
@@ -2024,9 +2081,45 @@ if extraPythonPaths:
     paths = os.environ.get('PYTHONPATH', '').split(os.pathsep) + extraPythonPaths
     os.environ['PYTHONPATH'] = os.pathsep.join(paths)
 
+# Disable incompatible options if emscripten is used
+if context.emscripten:
+    disabled = []
+    if context.buildPython:
+        context.buildPython = False
+        disabled.append('Python')
+
+    if context.buildImaging:
+        context.buildImaging = NO_IMAGING
+        disabled.append('imaging')
+    
+    if context.buildUsdImaging:
+        context.buildUsdImaging = NO_IMAGING
+        disabled.append('usdImaging')
+
+    if context.buildExamples:
+        context.buildExamples = False
+        disabled.append('examples')
+
+    if context.buildTutorials:
+        context.buildTutorials = False
+        disabled.append('tutorials')
+
+    if context.buildTools:
+        context.buildTools = False
+        disabled.append('tools')
+
+    if context.buildUsdview:
+        context.buildUsdview = False
+        disabled.append('usdview')
+
+    if len(disabled) > 0:
+        print("The following components were disabled because they are not compatible with emscripten: " + ", ".join(disabled))
+
 # Determine list of dependencies that are required based on options
 # user has selected.
-requiredDependencies = [ZLIB, BOOST, TBB]
+requiredDependencies = [BOOST, TBB]
+if not context.emscripten:
+    requiredDependencies += [ZLIB]
 
 if context.buildAlembic:
     if context.enableHDF5:
@@ -2064,7 +2157,7 @@ if context.buildUsdview:
 # our own. This avoids potential issues where a host application
 # loads an older version of zlib than the one we'd build and link
 # our libraries against.
-if Linux():
+if Linux() and ZLIB in requiredDependencies:
     requiredDependencies.remove(ZLIB)
 
 # Error out if user is building monolithic library on windows with draco plugin
@@ -2183,6 +2276,7 @@ Building with settings:
   Build directory               {buildDir}
   CMake generator               {cmakeGenerator}
   CMake toolset                 {cmakeToolset}
+  Emscripten                    {emscripten}
   Downloader                    {downloader}
 
   Building                      {buildType}
@@ -2242,6 +2336,7 @@ summaryMsg = summaryMsg.format(
                     else context.cmakeGenerator),
     cmakeToolset=("Default" if not context.cmakeToolset
                   else context.cmakeToolset),
+    emscripten=("Enabled" if context.emscripten else "Disabled"),
     downloader=(context.downloaderName),
     dependencies=("None" if not dependenciesToBuild else 
                   ", ".join([d.name for d in dependenciesToBuild])),

@@ -1,6 +1,11 @@
 set(PXR_PREFIX pxr/base)
 set(PXR_PACKAGE vt)
 
+set(EMBIND "")
+if(EMSCRIPTEN)
+    set(EMBIND "--bind")
+endif()
+
 pxr_library(vt
     LIBRARIES
         arch
@@ -9,6 +14,7 @@ pxr_library(vt
         trace
         ${Boost_PYTHON_LIBRARY}
         ${TBB_tbb_LIBRARY}
+        ${EMBIND}
 
     INCLUDE_DIRS
         ${Boost_INCLUDE_DIRS}

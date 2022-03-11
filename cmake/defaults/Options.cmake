@@ -40,6 +40,7 @@ option(PXR_BUILD_PRMAN_PLUGIN "Build the PRMan imaging plugin" OFF)
 option(PXR_ENABLE_MATERIALX_SUPPORT "Enable MaterialX support" OFF)
 option(PXR_BUILD_DOCUMENTATION "Generate doxygen documentation" OFF)
 option(PXR_ENABLE_PYTHON_SUPPORT "Enable Python based components for USD" ON)
+option(PXR_ENABLE_JS_SUPPORT "Enable Javascript based components for USD" OFF)
 option(PXR_USE_PYTHON_3 "Build Python bindings for Python 3" OFF)
 option(PXR_USE_DEBUG_PYTHON "Build with debug python" OFF)
 option(PXR_ENABLE_HDF5_SUPPORT "Enable HDF5 backend in the Alembic plugin for USD" ON)
@@ -200,4 +201,11 @@ endif()
 if (${PXR_BUILD_DRACO_PLUGIN} AND ${PXR_BUILD_MONOLITHIC} AND WIN32)
     message(FATAL_ERROR 
         "Draco plugin can not be enabled for monolithic builds on Windows")
+endif()
+
+# Error out if user is building with Emscripten and tests. 
+# This is currently not supported.
+if (${PXR_ENABLE_JS_SUPPORT} AND ${PXR_BUILD_TESTS})
+    message(FATAL_ERROR 
+        "Emscripten build can not be enabled together with tests")
 endif()

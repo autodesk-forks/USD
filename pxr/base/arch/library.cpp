@@ -51,6 +51,8 @@ void* ArchLibraryOpen(const std::string &filename, int flag)
         arch_lastLibraryError = GetLastError();
         return nullptr;
     }
+#elif defined(__EMSCRIPTEN__)
+    return nullptr;
 #else
     // Clear any unchecked error first.
     (void)dlerror();
@@ -63,6 +65,8 @@ std::string ArchLibraryError()
 #if defined(ARCH_OS_WINDOWS)
     const DWORD error = arch_lastLibraryError;
     return error ? ArchStrSysError(error) : std::string();
+#elif defined(__EMSCRIPTEN__)
+    return "Loading plugins dynamically is not supported in EMSCRIPTEN";
 #else
     const char* const error = dlerror();
     return error ? std::string(error) : std::string();
@@ -79,6 +83,8 @@ int ArchLibraryClose(void* handle)
     if (status) {
         arch_lastLibraryError = GetLastError();
     }
+#elif defined(__EMSCRIPTEN__)
+    int status = 0;
 #else
     int status = dlclose(handle);
 #endif
@@ -89,6 +95,8 @@ void* ArchLibraryGetSymbolAddress(void* handle, const char* name)
 {
 #if defined(ARCH_OS_WINDOWS)
     return GetProcAddress(reinterpret_cast<HMODULE>(handle), name);
+#elif defined(__EMSCRIPTEN__)
+    int status = 0;
 #else
     return dlsym(handle, name);
 #endif

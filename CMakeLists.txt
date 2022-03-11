@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 
 project(usd)
 
-if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT PXR_ENABLE_JS_SUPPORT)
     if (WIN32)
         message(FATAL_ERROR "Compiler does not support 64-bit builds. "
                 "If you are using Visual Studio, make sure you are in the "
@@ -36,6 +36,15 @@ set(PXR_PYTHON_SHEBANG "${PYTHON_EXECUTABLE}"
 include(CXXDefaults)
 add_definitions(${_PXR_CXX_DEFINITIONS})
 set(CMAKE_CXX_FLAGS "${_PXR_CXX_FLAGS} ${CMAKE_CXX_FLAGS}")
+
+if(PXR_ENABLE_JS_SUPPORT)
+    # Add EMSCRIPTEN specific compiler flags (is this the right place)?
+    set(EMSCRIPTEN_COMPILE_FLAGS "-s ALLOW_MEMORY_GROWTH=1 -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=2 -s MODULARIZE=1 -s EXPORT_NAME='getUsdModule' -s 'EXTRA_EXPORTED_RUNTIME_METHODS=[\"FS\"]' -s FORCE_FILESYSTEM=1")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EMSCRIPTEN_COMPILE_FLAGS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EMSCRIPTEN_COMPILE_FLAGS}")
+
+    message("EMSCRIPTEN Flags enabled")
+endif()
 
 include(Public)
 

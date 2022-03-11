@@ -91,6 +91,9 @@ pxr_library(sdf
         declareSpec.h
         layerHints.h
         schemaTypeRegistration.h
+    
+    JS_PUBLIC_HEADERS
+        wrapPathJs.h
 
     PRIVATE_CLASSES
         assetPathResolver

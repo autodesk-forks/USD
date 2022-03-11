@@ -71,6 +71,10 @@ pxr_library(usd
         variantSets
         zipFile
 
+    JS_CPPFILES
+        wrapPrimJs
+        wrapStageJs
+
     PYTHON_PUBLIC_CLASSES
         pyEditContext
         pyConversions
@@ -89,6 +93,9 @@ pxr_library(usd
         primTypeInfoCache
         usdzResolver
         valueUtils
+
+    JS_PUBLIC_HEADERS
+        emscriptenPtrRegistrationHelper.h
 
     PUBLIC_HEADERS
         api.h

@@ -26,7 +26,7 @@
 #include "pxr/base/arch/fileSystem.h"
 #include "pxr/base/arch/symbols.h"
 #include "pxr/base/arch/defines.h"
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(__EMSCRIPTEN__)
 #include <dlfcn.h>
 #elif defined(ARCH_OS_DARWIN)
 #include <dlfcn.h>
@@ -44,7 +44,10 @@ ArchGetAddressInfo(
     std::string* objectPath, void** baseAddress,
     std::string* symbolName, void** symbolAddress)
 {
-#if defined(_GNU_SOURCE) || defined(ARCH_OS_DARWIN)
+#if defined(__EMSCRIPTEN__)
+    // Currently not available for EMSCRIPTEN
+    return false;
+#elif defined(_GNU_SOURCE) || defined(ARCH_OS_DARWIN)
 
     Dl_info info;
     if (dladdr(address, &info)) {

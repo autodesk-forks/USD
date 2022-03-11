@@ -88,7 +88,10 @@ static bool
 _MallocProvidedBySameLibraryAs(const char* functionName,
                                bool skipMallocCheck)
 {
-#if !defined(ARCH_OS_WINDOWS)
+#if defined(__EMSCRIPTEN__)
+    // For EMSCRIPTEN everything is linked statically, so we return true
+    return true;
+#elif !defined(ARCH_OS_WINDOWS)
     const void* function = dlsym(RTLD_DEFAULT, functionName);
     if (!function) {
         return false;

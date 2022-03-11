@@ -32,6 +32,10 @@
 #include "pxr/base/tf/pyObjWrapper.h"
 #endif // PXR_PYTHON_SUPPORT_ENABLED
 
+#if __EMSCRIPTEN__
+#include <emscripten/bind.h>
+#endif // __EMSCRIPTEN__
+
 #include "pxr/base/tf/pyLock.h"
 
 #include "pxr/base/arch/demangle.h"
@@ -232,6 +236,9 @@ class VtValue
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
         using _GetPyObjFunc = TfPyObjWrapper (*)(_Storage const &);
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+        using _GetJsValFunc = emscripten::val (*)(_Storage const &);
+#endif // __EMSCRIPTEN__
         using _StreamOutFunc =
             std::ostream & (*)(_Storage const &, std::ostream &);
         using _GetTypeidFunc = std::type_info const & (*)(_Storage const &);
@@ -264,6 +271,9 @@ class VtValue
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
                             _GetPyObjFunc getPyObj,
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+                            _GetJsValFunc getJsVal,
+#endif // __EMSCRIPTEN__
                             _StreamOutFunc streamOut,
                             _GetTypeidFunc getTypeid,
                             _IsArrayValuedFunc isArrayValued,
@@ -292,6 +302,9 @@ class VtValue
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
             , _getPyObj(getPyObj)
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+            , _getJsVal(getJsVal)
+#endif // __EMSCRIPTEN__
             , _streamOut(streamOut)
             , _getTypeid(getTypeid)
             , _isArrayValued(isArrayValued)
@@ -335,6 +348,11 @@ class VtValue
             return _getPyObj(storage);
         }
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+        emscripten::val GetJsVal(_Storage const &storage) const {
+            return _getJsVal(storage);
+        }
+#endif // __EMSCRIPTEN__
         std::ostream &StreamOut(_Storage const &storage,
                                 std::ostream &out) const {
             return _streamOut(storage, out);
@@ -389,6 +407,9 @@ class VtValue
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
         _GetPyObjFunc _getPyObj;
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+        _GetJsValFunc _getJsVal;
+#endif // __EMSCRIPTEN__
         _StreamOutFunc _streamOut;
         _GetTypeidFunc _getTypeid;
         _IsArrayValuedFunc _isArrayValued;
@@ -413,6 +434,9 @@ class VtValue
         constexpr static std::type_info const &GetElementTypeid() {
             return typeid(void);
         }
+#ifdef __EMSCRIPTEN__        
+        static emscripten::val GetJSVal(T const &obj) { return emscripten::val::undefined(); }
+#endif // __EMSCRIPTEN__
     };
     template <class Array>
     struct _ArrayHelper<
@@ -427,6 +451,15 @@ class VtValue
         constexpr static std::type_info const &GetElementTypeid() {
             return typeid(typename Array::ElementType);
         }
+#ifdef __EMSCRIPTEN__        
+        static emscripten::val GetJSVal(Array const &obj) {
+            emscripten::val arrayVal = emscripten::val::array();
+            for(size_t i = 0; i < obj.size(); ++i) {
+                arrayVal.set(i, emscripten::val(obj[i]));
+            }
+            return arrayVal;
+        }
+#endif // __EMSCRIPTEN__
     };
 
     // Function used in case T has equality comparison.
@@ -478,6 +511,16 @@ class VtValue
             return boost::python::api::object(p);
         }
 #endif //PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+        static emscripten::val GetJsVal(T const &obj) {
+            ProxiedType const &p = VtGetProxiedObject(obj);
+            if (IsArrayValued(obj)) {
+                return _ArrayHelper<ProxiedType>::GetJSVal(p);
+            } else {
+                return emscripten::val(p);
+            }
+        }
+#endif // __EMSCRIPTEN__
         static std::ostream &StreamOut(T const &obj, std::ostream &out) {
             return VtStreamOut(VtGetProxiedObject(obj), out);
         }
@@ -537,7 +580,13 @@ class VtValue
             return boost::python::api::object(*val);
         }
 #endif //PXR_PYTHON_SUPPORT_ENABLED
-        
+#ifdef __EMSCRIPTEN__
+        static emscripten::val GetJsVal(ErasedProxy const &obj) {
+            VtValue const *val = VtGetErasedProxiedVtValue(obj);
+            return emscripten::val(*val);
+        }
+#endif // __EMSCRIPTEN__
+
         static std::ostream &
         StreamOut(ErasedProxy const &obj, std::ostream &out) {
             return VtStreamOut(obj, out);
@@ -604,6 +653,9 @@ class VtValue
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
                         &This::_GetPyObj,
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+                        &This::_GetJsVal,
+#endif // __EMSCRIPTEN__
                         &This::_StreamOut,
 
                         &This::_GetTypeid,
@@ -687,6 +739,12 @@ class VtValue
             return ProxyHelper::GetPyObj(GetObj(storage));
         }
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+
+#ifdef __EMSCRIPTEN__
+        static emscripten::val _GetJsVal(_Storage const &storage) {
+            return ProxyHelper::GetJsVal(GetObj(storage));
+        }
+#endif // __EMSCRIPTEN__
 
         static std::ostream &_StreamOut(
             _Storage const &storage, std::ostream &out) {
@@ -1436,6 +1494,11 @@ private:
 
     VT_API TfPyObjWrapper _GetPythonObject() const;
 #endif // PXR_PYTHON_SUPPORT_ENABLED
+#ifdef __EMSCRIPTEN__
+public:
+    VT_API emscripten::val _GetJsVal() const;
+private:
+#endif // __EMSCRIPTEN__
 
     _Storage _storage;
     TfPointerAndBits<const _TypeInfo> _info;
