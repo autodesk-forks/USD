@@ -143,8 +143,14 @@ _GenMaterialXShader(
         mx::HwTransmissionRenderMethod::TRANSMISSION_OPACITY;
     
     // Use the domeLightPrefilter texture instead of sampling the Environment Map
+#ifdef MATERIALX_MAJOR_VERSION
+    // Enable FIS lighting starting with MaterialX 1.38.3
+    materialContext.getOptions().hwSpecularEnvironmentMethod =
+        mx::HwSpecularEnvironmentMethod::SPECULAR_ENVIRONMENT_FIS;
+#else
     materialContext.getOptions().hwSpecularEnvironmentMethod =
         mx::HwSpecularEnvironmentMethod::SPECULAR_ENVIRONMENT_PREFILTER;
+#endif
 
     return mx::createShader("Shader", materialContext, mxElem);
 }
