@@ -219,9 +219,9 @@ def GetPythonInfo():
     else:
         isPythonDebug = context.buildDebug and Python3()
         if Windows():
-            pythonBaseDir = os.environ.get('MAX_PYTHON_ROOT_USD')
-            pythonLibName = os.environ.get('MAX_PYTHON_LIB_NAME_USD')
-            pythonLibNameDebug = os.environ.get('MAX_PYTHON_LIB_DEBUG_NAME_USD')
+            pythonBaseDir = "C:\Python39" #os.environ.get('MAX_PYTHON_ROOT_USD')
+            pythonLibName = "Python39.lib" #os.environ.get('MAX_PYTHON_LIB_NAME_USD')
+            pythonLibNameDebug = "Python39_d.lib" #os.environ.get('MAX_PYTHON_LIB_DEBUG_NAME_USD')
             pythonIncludeDir = os.path.join(pythonBaseDir, "include")
             if isPythonDebug:
                 pythonLibPath = os.path.join(pythonBaseDir, "libs", pythonLibNameDebug)
@@ -1376,6 +1376,8 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DPXR_LIB_PREFIX="3dsmax_"')
 
         if context.buildPython:
+            extraArgs.append('-DBOOST_ROOT=D:/usd/man_optim4/src/boost_1_76_0')
+        
             extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=ON')
             if Python3():
                 extraArgs.append('-DPXR_USE_PYTHON_3=ON')
