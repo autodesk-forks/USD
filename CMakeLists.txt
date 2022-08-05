@@ -43,6 +43,14 @@ set(PXR_PYTHON_SHEBANG "${PYTHON_SHEBANG_EXECUTABLE}"
     "Replacement path for Python #! line."
 )
 
+if(APPLE)
+    if (OSX_GENERATE_DSYM)
+        add_custom_target(dsym ALL)
+    else()
+        add_custom_target(dsym)
+    endif()
+endif()
+
 # CXXDefaults will set a variety of variables for the project.
 # Consume them here. This is an effort to keep the most common
 # build files readable.
