@@ -32,16 +32,31 @@ if (DEFINED PYTHON_EXECUTABLE)
     get_filename_component(PYTHON_EXE_BASENAME ${PYTHON_EXECUTABLE} NAME)
 endif()
 
-if (DEFINED PYTHON_EXE_BASENAME)
-    set(PYTHON_SHEBANG_EXECUTABLE ${PYTHON_EXE_BASENAME})
-else()
-    set(PYTHON_SHEBANG_EXECUTABLE ${PYTHON_EXECUTABLE})
+if (NOT PXR_PYTHON_SHEBANG)
+    if (DEFINED PYTHON_EXE_BASENAME)
+        set(PYTHON_SHEBANG_EXECUTABLE ${PYTHON_EXE_BASENAME})
+    else()
+        set(PYTHON_SHEBANG_EXECUTABLE ${PYTHON_EXECUTABLE})
+    endif()
+    set(PXR_PYTHON_SHEBANG "${PYTHON_SHEBANG_EXECUTABLE}" 
+        CACHE 
+        STRING
+        "Replacement path for Python #! line."
+    )
 endif()
-set(PXR_PYTHON_SHEBANG "${PYTHON_SHEBANG_EXECUTABLE}" 
-    CACHE 
-    STRING
-    "Replacement path for Python #! line."
-)
+
+if (NOT PYTHON_COMMAND_NAME)
+    if (DEFINED PYTHON_EXE_BASENAME)
+        set(PYTHON_COMMAND_EXECUTABLE ${PYTHON_EXE_BASENAME})
+    else()
+        set(PYTHON_COMMAND_EXECUTABLE ${PYTHON_EXECUTABLE})
+    endif()
+    set(PYTHON_COMMAND_NAME "${PYTHON_COMMAND_EXECUTABLE}"
+        CACHE
+        STRING
+        "Python command to launch usd tools (e.g. usdview) with."
+    )
+endif()
 
 if(APPLE)
     if (OSX_GENERATE_DSYM)
