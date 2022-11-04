@@ -756,6 +756,10 @@ def InstallBoost_Helper(context, force, buildArgs):
     else:
         BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.zip"
 
+    # Autodesk - use the same version on all platforms
+    # For Python 3.11, updated boost verison to fix problem: https://github.com/boostorg/python/issues/400
+    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.zip"
+
     # Documentation files in the boost archive can have exceptionally
     # long paths. This can lead to errors when extracting boost on Windows,
     # since paths are limited to 260 characters by default on that platform.
