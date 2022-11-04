@@ -763,6 +763,7 @@ BOOST_VERSION_FILES = [
     "include/boost/version.hpp",
     "include/boost-1_76/boost/version.hpp",
     "include/boost-1_82/boost/version.hpp",
+    "include/boost-1_85/boost/version.hpp"
     "include/boost-1_86/boost/version.hpp"
 ]
 
@@ -783,6 +784,10 @@ def InstallBoost_Helper(context, force, buildArgs):
     else:
         BOOST_VERSION = (1, 76, 0)
         BOOST_SHA256 = "0fd43bb53580ca54afc7221683dfe8c6e3855b351cd6dce53b1a24a7d7fbeedd"
+
+    # Autodesk - use the same version on all platforms. Match Maya version.
+    BOOST_VERSION = (1, 85, 0)
+    BOOST_SHA256 = "e712fe7eb1b9ec37ac25102525412fb4d74e638996443944025791f48f29408a"
 
     # Documentation files in the boost archive can have exceptionally
     # long paths. This can lead to errors when extracting boost on Windows,
