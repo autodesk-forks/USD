@@ -718,6 +718,11 @@ BOOST_VERSION_FILES = [
 ]
 
 def InstallBoost_Helper(context, force, buildArgs):
+
+    # Autodesk - use the same version on all platforms
+    # For Python 3.11, updated boost verison to fix problem: https://github.com/boostorg/python/issues/400
+    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.81.0/source/boost_1_81_0.zip"
+
     # In general we use boost 1.76.0 to adhere to VFX Reference Platform CY2022.
     # However, there are some cases where a newer version is required.
     # - Building with Python 3.10 requires boost 1.76.0 or newer.
@@ -728,16 +733,16 @@ def InstallBoost_Helper(context, force, buildArgs):
     #   (https://github.com/boostorg/build/issues/735)
     # - Building on MacOS requires boost 1.78.0 or newer to resolve Python 3
     #   compatibility issues on Big Sur and Monterey.
-    pyInfo = GetPythonInfo(context)
-    pyVer = (int(pyInfo[3].split('.')[0]), int(pyInfo[3].split('.')[1]))
-    if context.buildPython and pyVer >= (3, 10):
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
-    elif IsVisualStudio2022OrGreater():
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
-    elif MacOS():
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
-    else:
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.zip"
+    #pyInfo = GetPythonInfo(context)
+    #pyVer = (int(pyInfo[3].split('.')[0]), int(pyInfo[3].split('.')[1]))
+    #if context.buildPython and pyVer >= (3, 10):
+    #    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
+    #elif IsVisualStudio2022OrGreater():
+    #    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
+    #elif MacOS():
+    #    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
+    #else:
+    #    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.zip"
 
     # Documentation files in the boost archive can have exceptionally
     # long paths. This can lead to errors when extracting boost on Windows,
