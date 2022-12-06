@@ -991,6 +991,7 @@ function(_pxr_python_module NAME)
     _pxr_add_rpath(rpath
         "${CMAKE_INSTALL_PREFIX}/${args_WRAPPED_LIB_INSTALL_PREFIX}")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
+    _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib64")
     _pxr_install_rpath(rpath ${LIBRARY_NAME})
 
     _get_folder("_python" folder)
@@ -1407,6 +1408,7 @@ function(_pxr_library NAME)
     _pxr_init_rpath(rpath "${libInstallPrefix}")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/${PXR_INSTALL_SUBDIR}/lib")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
+    _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib64")
     _pxr_install_rpath(rpath ${NAME})
 
     # Debugging Symbols
