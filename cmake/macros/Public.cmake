@@ -576,6 +576,7 @@ function(pxr_build_test_shared_lib LIBRARY_NAME)
     # libraries.
     _pxr_init_rpath(rpath "tests/lib")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
+    _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib64")
     _pxr_install_rpath(rpath ${LIBRARY_NAME})
 
     if (NOT bt_SOURCE_DIR)
@@ -664,6 +665,7 @@ function(pxr_build_test TEST_NAME)
     # libraries.
     _pxr_init_rpath(rpath "tests")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
+    _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib64")
     _pxr_install_rpath(rpath ${TEST_NAME})
 
     # XXX -- We shouldn't have to install to run tests.
@@ -1234,6 +1236,7 @@ function(pxr_toplevel_epilogue)
             _pxr_init_rpath(rpath "${libInstallPrefix}")
             _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/${PXR_INSTALL_SUBDIR}/lib")
             _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
+            _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib64")
             _pxr_install_rpath(rpath usd_m)
         else()
             foreach(lib ${PXR_OBJECT_LIBS})
