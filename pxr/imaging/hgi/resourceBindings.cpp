@@ -40,7 +40,8 @@ HgiResourceBindings::GetDescriptor() const
 
 HgiBufferBindDesc::HgiBufferBindDesc()
     : bindingIndex(0)
-    , stageUsage(HgiShaderStageVertex)
+    , stageUsage(HgiShaderStageVertex | HgiShaderStagePostTessellationVertex)
+    , writable(false)
 {
 }
 
@@ -51,8 +52,10 @@ bool operator==(
     return lhs.buffers == rhs.buffers &&
            lhs.resourceType == rhs.resourceType &&
            lhs.offsets == rhs.offsets &&
+           lhs.sizes == rhs.sizes &&
            lhs.bindingIndex == rhs.bindingIndex &&
-           lhs.stageUsage == rhs.stageUsage;
+           lhs.stageUsage == rhs.stageUsage &&
+           lhs.writable == rhs.writable;
 }
 
 bool operator!=(
@@ -66,6 +69,7 @@ HgiTextureBindDesc::HgiTextureBindDesc()
     : resourceType(HgiBindResourceTypeCombinedSamplerImage)
     , bindingIndex(0)
     , stageUsage(HgiShaderStageFragment)
+    , writable(false)
 {
 }
 
@@ -77,7 +81,8 @@ bool operator==(
            lhs.resourceType == rhs.resourceType &&
            lhs.bindingIndex == rhs.bindingIndex &&
            lhs.stageUsage == rhs.stageUsage &&
-           lhs.samplers == rhs.samplers;
+           lhs.samplers == rhs.samplers &&
+           lhs.writable == rhs.writable;
 }
 
 bool operator!=(

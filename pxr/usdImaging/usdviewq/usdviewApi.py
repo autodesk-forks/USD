@@ -143,6 +143,16 @@ class UsdviewApi(object):
 
         return self.__appController._mainWindow
 
+    @property
+    def viewerMode(self):
+        """Whether the app is in viewer mode, with the additional UI around the
+        stage view collapsed."""
+        return self.__appController.isViewerMode()
+
+    @viewerMode.setter
+    def viewerMode(self, value):
+        self.__appController.setViewerMode(value)
+
     # This needs to be the last property added because otherwise the @property
     # decorator will call this method rather than the actual property decorator.
     @property
@@ -188,9 +198,9 @@ class UsdviewApi(object):
         self.__appController.statusMessage(msg)
 
     def GetSettings(self):
-        """DEPRECATED Returns the old settings object."""
+        """Returns the settings object."""
 
-        return self.__appController._settings
+        return self.__appController._configManager.settings
 
     def ClearPrimSelection(self):
         self.__appController._dataModel.selection.clearPrims()
@@ -208,6 +218,26 @@ class UsdviewApi(object):
         """Returns a QImage of the current stage view in usdview."""
 
         return self.__appController.GrabViewportShot()
+
+    def UpdateViewport(self):
+        """Schedules a redraw."""
+        stageView = self.__appController._stageView
+        if stageView is not None:
+            stageView.updateGL()
+
+    def SetViewportRenderer(self, plugId):
+        """Sets the renderer based on the given ID string.
+
+        The string should be one of the items in GetViewportRendererNames().
+        """
+        self.__appController._rendererPluginChanged(plugId)
+
+    def GetViewportRendererNames(self):
+        """Returns the list of available renderer plugins that can be passed to
+        SetViewportRenderer().
+        """
+        stageView = self.__appController._stageView
+        return stageView.GetRendererPlugins() if stageView else []
 
     def _ExportSession(self, stagePath, defcamName='usdviewCam', imgWidth=None,
             imgHeight=None):

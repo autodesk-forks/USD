@@ -411,6 +411,12 @@ public:
                      int instanceIndex,
                      HdInstancerContext *instancerContext = nullptr) override;
 
+    USDIMAGING_API
+    virtual SdfPathVector
+    GetScenePrimPaths(SdfPath const& rprimId,
+                      std::vector<int> instanceIndices,
+                      std::vector<HdInstancerContext> *instancerContexts = nullptr) override;
+
     // ExtComputation support
     USDIMAGING_API
     TfTokenVector
@@ -661,6 +667,12 @@ private:
     void _GatherDependencies(SdfPath const& subtree,
                              SdfPathVector *affectedCachePaths);
 
+    typedef TfHashMap<SdfPath, SdfPathVector, SdfPath::Hash> _FlattenedDependenciesCacheMap;
+    _FlattenedDependenciesCacheMap _flattenedDependenciesCacheMap;
+
+    void _CacheDependencies(SdfPath const &subtree,
+                            SdfPathVector *affectedCachePaths);
+
     // SdfPath::ReplacePrefix() is used frequently to convert between
     // cache path and Hydra render index path and is a performance bottleneck.
     // These maps pre-computes these conversion.
@@ -741,7 +753,6 @@ private:
     UsdImaging_XformCache _xformCache;
     UsdImaging_MaterialBindingImplData _materialBindingImplData;
     UsdImaging_MaterialBindingCache _materialBindingCache;
-    UsdImaging_CoordSysBindingImplData _coordSysBindingImplData;
     UsdImaging_CoordSysBindingCache _coordSysBindingCache;
     UsdImaging_VisCache _visCache;
     UsdImaging_PurposeCache _purposeCache;
@@ -749,6 +760,8 @@ private:
     UsdImaging_CollectionCache _collectionCache;
     UsdImaging_InheritedPrimvarCache _inheritedPrimvarCache;
     UsdImaging_PointInstancerIndicesCache _pointInstancerIndicesCache;
+    UsdImaging_NonlinearSampleCountCache _nonlinearSampleCountCache;
+    UsdImaging_BlurScaleCache _blurScaleCache;
 
     // Pickability
     PickabilityMap _pickablesMap;

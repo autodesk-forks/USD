@@ -28,6 +28,7 @@
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/meshTopology.h"
 #include "pxr/imaging/hd/points.h"
+#include "pxr/imaging/hd/renderBuffer.h"
 #include "pxr/imaging/hd/renderDelegate.h"
 
 #include "pxr/base/tf/staticTokens.h"
@@ -455,6 +456,11 @@ HdUnitTestDelegate::UpdateTransform(SdfPath const& id,
         HdChangeTracker& tracker = GetRenderIndex().GetChangeTracker();
         tracker.MarkRprimDirty(id, HdChangeTracker::DirtyTransform);
     }
+    if (_cameras.find(id) != _cameras.end()) {
+        _cameras[id].transform = mat;
+        HdChangeTracker& tracker = GetRenderIndex().GetChangeTracker();
+        tracker.MarkSprimDirty(id, HdChangeTracker::DirtyTransform);
+    }        
 }
 
 void 
@@ -639,11 +645,22 @@ HdUnitTestDelegate::UpdateInstancerPrototypes(float time)
 
 void
 HdUnitTestDelegate::AddRenderBuffer(SdfPath const &id,
-    GfVec3i const& dims, HdFormat format, bool multiSampled)
+                                    HdRenderBufferDescriptor const &desc)
 {
     HdRenderIndex& index = GetRenderIndex();
     index.InsertBprim(HdPrimTypeTokens->renderBuffer, this, id);
-    _renderBuffers[id] = _RenderBuffer(dims, format, multiSampled);
+    _renderBuffers[id] = _RenderBuffer(
+        desc.dimensions, desc.format, desc.multiSampled);
+}
+
+void
+HdUnitTestDelegate::UpdateRenderBuffer(SdfPath const &id, 
+                                       HdRenderBufferDescriptor const &desc)
+{
+    _renderBuffers[id] = _RenderBuffer(
+        desc.dimensions, desc.format, desc.multiSampled);
+    HdChangeTracker& tracker = GetRenderIndex().GetChangeTracker();
+    tracker.MarkBprimDirty(id, HdRenderBuffer::DirtyDescription);
 }
 
 void
@@ -748,7 +765,7 @@ HdUnitTestDelegate::GetBasisCurvesTopology(SdfPath const& id)
     // Need to implement testing support for basis curves
     return HdBasisCurvesTopology(curve.type,
                                  curve.basis,
-                                 HdTokens->nonperiodic,
+                                 curve.wrap,
                                  curve.curveVertexCounts,
                                  curve.curveIndices);
 }
@@ -904,7 +921,8 @@ HdRenderBufferDescriptor
 HdUnitTestDelegate::GetRenderBufferDescriptor(SdfPath const& id)
 {
     if (_RenderBuffer *rb = TfMapLookupPtr(_renderBuffers, id)) {
-        return { rb->dims, rb->format, rb->multiSampled };
+        return HdRenderBufferDescriptor(
+                rb->dims, rb->format, rb->multiSampled);
     }
     return HdRenderBufferDescriptor();
 }
@@ -918,6 +936,10 @@ HdUnitTestDelegate::GetTransform(SdfPath const& id)
     if(_meshes.find(id) != _meshes.end()) {
         return GfMatrix4d(_meshes[id].transform);
     }
+    if (_cameras.find(id) != _cameras.end()) {
+        return GfMatrix4d(_cameras[id].transform);
+    }
+
     return GfMatrix4d(1);
 }
 
@@ -1625,6 +1647,21 @@ HdUnitTestDelegate::AddCurves(
         VtValue(1.0f), HdInterpolationConstant,
         width, widthInterp,
         instancerId);
+}
+
+void
+HdUnitTestDelegate::SetCurveWrapMode(
+    SdfPath const &id, TfToken const &wrap)
+{
+    if (_curves.find(id) != _curves.end()) {
+        if (_curves[id].wrap != wrap) {
+            _curves[id].wrap = wrap;
+            HdChangeTracker& tracker = GetRenderIndex().GetChangeTracker();
+            tracker.MarkRprimDirty(id, HdChangeTracker::DirtyTopology);
+        }
+    } else {
+        TF_WARN("Could not find Rprim named %s.\n", id.GetText());
+    }
 }
 
 void

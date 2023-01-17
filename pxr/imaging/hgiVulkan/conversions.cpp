@@ -81,20 +81,21 @@ _FormatTable[HgiFormatCount][2] =
     {HgiFormatInt32Vec2,      VK_FORMAT_R32G32_SINT},
     {HgiFormatInt32Vec3,      VK_FORMAT_R32G32B32_SINT},
     {HgiFormatInt32Vec4,      VK_FORMAT_R32G32B32A32_SINT},
-    {HgiFormatUNorm8Vec4srgb, VK_FORMAT_R8G8B8_SRGB},
+    {HgiFormatUNorm8Vec4srgb, VK_FORMAT_R8G8B8A8_SRGB},
     {HgiFormatBC6FloatVec3,   VK_FORMAT_BC6H_SFLOAT_BLOCK},
     {HgiFormatBC6UFloatVec3,  VK_FORMAT_BC6H_UFLOAT_BLOCK},
     {HgiFormatBC7UNorm8Vec4,  VK_FORMAT_BC7_UNORM_BLOCK},
     {HgiFormatBC7UNorm8Vec4srgb, VK_FORMAT_BC7_SRGB_BLOCK},
     {HgiFormatBC1UNorm8Vec4,  VK_FORMAT_BC1_RGBA_UNORM_BLOCK},
     {HgiFormatBC3UNorm8Vec4,  VK_FORMAT_BC3_UNORM_BLOCK},
-    {HgiFormatFloat32UInt8,   VK_FORMAT_D32_SFLOAT_S8_UINT}
+    {HgiFormatFloat32UInt8,   VK_FORMAT_D32_SFLOAT_S8_UINT},
+    {HgiFormatPackedInt1010102, VK_FORMAT_A2B10G10R10_SNORM_PACK32},
 };
 
 // A few random format validations to make sure the table above stays in sync
 // with the HgiFormat table.
 constexpr bool _CompileTimeValidateHgiFormatTable() {
-    return (HgiFormatCount==34 &&
+    return (HgiFormatCount==35 &&
             HgiFormatUNorm8 == 0 &&
             HgiFormatFloat16Vec4 == 9 &&
             HgiFormatFloat32Vec4 == 13 &&
@@ -128,7 +129,7 @@ _ShaderStageTable[][2] =
     {HgiShaderStageTessellationEval,    VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT},
     {HgiShaderStageGeometry,            VK_SHADER_STAGE_GEOMETRY_BIT},
 };
-static_assert(HgiShaderStageCustomBitsBegin == 1 << 6, "");
+static_assert(HgiShaderStageCustomBitsBegin == 1 << 8, "");
 
 static const uint32_t
 _TextureUsageTable[][2] =
@@ -257,7 +258,7 @@ _textureTypeTable[HgiTextureTypeCount][2] =
     {HgiTextureType1D,      VK_IMAGE_TYPE_1D},
     {HgiTextureType2D,      VK_IMAGE_TYPE_2D},
     {HgiTextureType3D,      VK_IMAGE_TYPE_3D},
-    {HgiTextureType1DArray, VK_IMAGE_TYPE_2D},
+    {HgiTextureType1DArray, VK_IMAGE_TYPE_1D},
     {HgiTextureType2DArray, VK_IMAGE_TYPE_2D}
 };
 static_assert(HgiTextureTypeCount==5, "");
@@ -302,6 +303,15 @@ _mipFilterTable[HgiMipFilterCount][2] =
 static_assert(HgiMipFilterCount==3, "");
 
 static const uint32_t
+_borderColorTable[HgiBorderColorCount][2] =
+{
+    {HgiBorderColorTransparentBlack, VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK},
+    {HgiBorderColorOpaqueBlack,      VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK},
+    {HgiBorderColorOpaqueWhite,      VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE}
+};
+static_assert(HgiBorderColorCount==3, "");
+
+static const uint32_t
 _componentSwizzleTable[HgiComponentSwizzleCount][2] =
 {
     {HgiComponentSwizzleZero, VK_COMPONENT_SWIZZLE_ZERO},
@@ -320,17 +330,68 @@ _primitiveTypeTable[HgiPrimitiveTypeCount][2] =
     {HgiPrimitiveTypeLineList,     VK_PRIMITIVE_TOPOLOGY_LINE_LIST},
     {HgiPrimitiveTypeLineStrip,    VK_PRIMITIVE_TOPOLOGY_LINE_STRIP},
     {HgiPrimitiveTypeTriangleList, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST},
-    {HgiPrimitiveTypePatchList,    VK_PRIMITIVE_TOPOLOGY_PATCH_LIST}
+    {HgiPrimitiveTypePatchList,    VK_PRIMITIVE_TOPOLOGY_PATCH_LIST},
+    {HgiPrimitiveTypeLineListWithAdjacency,
+                            VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY}
 };
-static_assert(HgiPrimitiveTypeCount==5, "");
+static_assert(HgiPrimitiveTypeCount==6, "");
+
+static const std::string
+_imageLayoutFormatTable[HgiFormatCount][2] =
+{ 
+    {"HgiFormatUNorm8",            "r8"},
+    {"HgiFormatUNorm8Vec2",        "rg8"},
+    {"HgiFormatUNorm8Vec4",        "rgba8"},
+    {"HgiFormatSNorm8",            "r8_snorm"},
+    {"HgiFormatSNorm8Vec2",        "rg8_snorm"},
+    {"HgiFormatSNorm8Vec4",        "rgba8_snorm"},
+    {"HgiFormatFloat16",           "r16f"},
+    {"HgiFormatFloat16Vec2",       "rg16f"},
+    {"HgiFormatFloat16Vec3",       ""},
+    {"HgiFormatFloat16Vec4",       "rgba16f"},
+    {"HgiFormatFloat32",           "r32f"},
+    {"HgiFormatFloat32Vec2",       "rg32f"},
+    {"HgiFormatFloat32Vec3",       ""},
+    {"HgiFormatFloat32Vec4",       "rgba32f" },
+    {"HgiFormatInt16",             "r16i"},
+    {"HgiFormatInt16Vec2",         "rg16i"},
+    {"HgiFormatInt16Vec3",         ""},
+    {"HgiFormatInt16Vec4",         "rgba16i"},
+    {"HgiFormatUInt16",            "r16ui"},
+    {"HgiFormatUInt16Vec2",        "rg16ui"},
+    {"HgiFormatUInt16Vec3",        ""},
+    {"HgiFormatUInt16Vec4",        "rgba16ui"},
+    {"HgiFormatInt32",             "r32i"},
+    {"HgiFormatInt32Vec2",         "rg32i"},
+    {"HgiFormatInt32Vec3",         ""},
+    {"HgiFormatInt32Vec4",         "rgba32i"},
+    {"HgiFormatUNorm8Vec4srgb",    ""},
+    {"HgiFormatBC6FloatVec3",      ""},
+    {"HgiFormatBC6UFloatVec3",     ""},
+    {"HgiFormatBC7UNorm8Vec4",     ""},
+    {"HgiFormatBC7UNorm8Vec4srgb", ""},
+    {"HgiFormatBC1UNorm8Vec4",     ""},
+    {"HgiFormatBC3UNorm8Vec4",     ""},
+    {"HgiFormatFloat32UInt8",      ""},
+    {"HgiFormatPackedInt1010102",  ""},
+};
 
 VkFormat
-HgiVulkanConversions::GetFormat(HgiFormat inFormat)
+HgiVulkanConversions::GetFormat(HgiFormat inFormat, bool depthFormat)
 {
     if (!TF_VERIFY(inFormat!=HgiFormatInvalid)) {
         return VK_FORMAT_UNDEFINED;
     }
-    return VkFormat(_FormatTable[inFormat][1]);
+
+    VkFormat vkFormat = VkFormat(_FormatTable[inFormat][1]);
+
+    // Special case for float32 depth format not properly handled by
+    // _FormatTable
+    if (depthFormat && inFormat == HgiFormatFloat32) {
+        vkFormat = VK_FORMAT_D32_SFLOAT;
+    }
+
+    return vkFormat;
 }
 
 HgiFormat
@@ -357,14 +418,18 @@ HgiVulkanConversions::GetFormat(VkFormat inFormat)
 VkImageAspectFlags
 HgiVulkanConversions::GetImageAspectFlag(HgiTextureUsage usage)
 {
-    if (usage & HgiTextureUsageBitsDepthTarget) {
-        if (usage & HgiTextureUsageBitsStencilTarget) {
-            return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-        }
-        return VK_IMAGE_ASPECT_DEPTH_BIT;
+    VkImageAspectFlags result = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    if (usage & HgiTextureUsageBitsDepthTarget && 
+        usage & HgiTextureUsageBitsStencilTarget) {
+        result = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    } else if (usage & HgiTextureUsageBitsDepthTarget) {
+        result = VK_IMAGE_ASPECT_DEPTH_BIT;
+    } else if (usage & HgiTextureUsageBitsStencilTarget) {
+        result = VK_IMAGE_ASPECT_STENCIL_BIT;
     }
 
-    return VK_IMAGE_ASPECT_COLOR_BIT;
+    return result;
 }
 
 VkImageUsageFlags
@@ -518,6 +583,12 @@ HgiVulkanConversions::GetMipFilter(HgiMipFilter mf)
     return VkSamplerMipmapMode(_mipFilterTable[mf][1]);
 }
 
+VkBorderColor
+HgiVulkanConversions::GetBorderColor(HgiBorderColor bc)
+{
+    return VkBorderColor(_borderColorTable[bc][1]);
+}
+
 VkComponentSwizzle
 HgiVulkanConversions::GetComponentSwizzle(HgiComponentSwizzle cs)
 {
@@ -528,6 +599,18 @@ VkPrimitiveTopology
 HgiVulkanConversions::GetPrimitiveType(HgiPrimitiveType pt)
 {
     return VkPrimitiveTopology(_primitiveTypeTable[pt][1]);
+}
+
+std::string
+HgiVulkanConversions::GetImageLayoutFormatQualifier(HgiFormat inFormat)
+{
+    const std::string layoutQualifier = _imageLayoutFormatTable[inFormat][1];
+    if (layoutQualifier.empty()) {
+        TF_WARN("Given HgiFormat is not a supported image unit format, "
+                "defaulting to rgba16f");
+        return _imageLayoutFormatTable[9][1];
+    }
+    return layoutQualifier;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

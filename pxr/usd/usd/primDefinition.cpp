@@ -87,59 +87,129 @@ UsdPrimDefinition::_ListMetadataFields(const TfToken &propName) const
 }
 
 void 
-UsdPrimDefinition::_ComposePropertiesFromPrimSpec(
-    const SdfPrimSpecHandle &weakerPrimSpec, const std::string &propPrefix)
+UsdPrimDefinition::_AddProperties(
+    std::vector<std::pair<TfToken, SdfPath>> &&propNameToPathVec)
 {
-    const SdfPropertySpecView specProperties = weakerPrimSpec->GetProperties();
-    _properties.reserve(_properties.size() + specProperties.size());
+    _properties.reserve(_properties.size() + propNameToPathVec.size());
 
-    // Map each spec property name to the property spec path and add it to the
-    // list of properties if it hasn't already been added.
-    if (propPrefix.empty()) {
-        for (const SdfPropertySpecHandle &prop : specProperties) {
-            if (_propPathMap.emplace(
-                    prop->GetNameToken(), prop->GetPath()).second) {
-                _properties.push_back(prop->GetNameToken());
-            }
-        }
-    } else {
-        for (const SdfPropertySpecHandle &prop : specProperties) {
-            // Apply the prefix to each property name before adding it.
-            const TfToken prefixedPropName(
-                SdfPath::JoinIdentifier(propPrefix, prop->GetNameToken()));
-            if (_propPathMap.emplace(
-                    prefixedPropName, prop->GetPath()).second) {
-                _properties.push_back(prefixedPropName);
-            }
+    for (auto &propNameAndPath : propNameToPathVec) {
+        auto insertIt = _propPathMap.insert(std::move(propNameAndPath));
+        if (insertIt.second) {
+            _properties.push_back(insertIt.first->first);
         }
     }
 }
 
+// Returns true if the property with the given name in these two separate prim
+// definitions have the same type. "Same type" here means that they are both
+// the same kind of property (attribute or relationship) and if they are 
+// attributes, that their attributes type names are the same.
+static bool _PropertyTypesMatch(
+    const UsdPrimDefinition &strongerPrimDef,
+    const UsdPrimDefinition &weakerPrimDef,
+    const TfToken &propName)
+{
+    // Empty prop name represents the schema's prim level metadata. This 
+    // doesn't have a "property type" so it always matches.
+    if (propName.IsEmpty()) {
+        return true;
+    }
+
+    const SdfSpecType specType = strongerPrimDef.GetSpecType(propName);
+    const bool specIsAttribute = (specType == SdfSpecTypeAttribute);
+
+    // Compare spec types (relationship vs attribute)
+    if (specType != weakerPrimDef.GetSpecType(propName)) {
+        TF_WARN("%s '%s' from stronger schema failed to override %s '%s' "
+                "from weaker schema during schema prim definition composition "
+                "because of the property spec types do not match.",
+                specIsAttribute ? "Attribute" : "Relationsip",
+                propName.GetText(),
+                specIsAttribute ? "relationsip" : "attribute",
+                propName.GetText());
+        return false;
+    }
+
+    // Done comparing if its not an attribute.
+    if (!specIsAttribute) {
+        return true;
+    }
+
+    // Compare the type name field of the attributes.
+    TfToken strongerTypeName;
+    strongerPrimDef.GetPropertyMetadata(
+        propName, SdfFieldKeys->TypeName, &strongerTypeName);
+    TfToken weakerTypeName;
+    weakerPrimDef.GetPropertyMetadata(
+        propName, SdfFieldKeys->TypeName, &weakerTypeName);
+    if (weakerTypeName != strongerTypeName) {
+        TF_WARN("Attribute '%s' with type name '%s' from stronger schema "
+                "failed to override attribute '%s' with type name '%s' from "
+                "weaker schema during schema prim definition composition "
+                "because of the attribute type names do not match.",
+                propName.GetText(),
+                strongerTypeName.GetText(),
+                propName.GetText(),
+                weakerTypeName.GetText());
+        return false;
+    }
+    return true;
+}
+
 void 
 UsdPrimDefinition::_ComposePropertiesFromPrimDef(
-    const UsdPrimDefinition &weakerPrimDef, const std::string &propPrefix)
+    const UsdPrimDefinition &weakerPrimDef, 
+    bool useWeakerPropertyForTypeConflict,
+    const std::string &instanceName)
 {
     _properties.reserve(_properties.size() + weakerPrimDef._properties.size());
 
     // Copy over property to path mappings from the weaker prim definition that 
     // aren't already in this prim definition.
-    if (propPrefix.empty()) {
+    if (instanceName.empty()) {
         for (const auto &it : weakerPrimDef._propPathMap) {
             // Note that the prop name may be empty as we use the empty path to
             // map to the spec containing the prim level metadata. We need to 
             // make sure we don't add the empty name to properties list if 
             // we successfully insert a metadata mapping.
-            if (_propPathMap.insert(it).second && !it.first.IsEmpty()){
-                _properties.push_back(it.first);
+            auto insertResult = _propPathMap.insert(it);
+            if (insertResult.second){
+                if (!it.first.IsEmpty()) {
+                    _properties.push_back(it.first);
+                }
+            } else {
+                // The property exists already. If we need to use the weaker 
+                // property in the event of a property type conflict, then we
+                // check if the weaker property's type matches the existing, and
+                // replace the existing with the weaker property if the types
+                // do not match.
+                if (useWeakerPropertyForTypeConflict &&
+                    !_PropertyTypesMatch(*this, weakerPrimDef, it.first)) {
+                    insertResult.first->second = it.second;
+                }
             }
         }
     } else {
         for (const auto &it : weakerPrimDef._propPathMap) {
             // Apply the prefix to each property name before adding it.
-            const TfToken prefixedPropName(
-                SdfPath::JoinIdentifier(propPrefix, it.first.GetString()));
-            if (_propPathMap.emplace(prefixedPropName, it.second).second) {
-                _properties.push_back(prefixedPropName);
+            const TfToken instancedPropName = 
+                UsdSchemaRegistry::MakeMultipleApplyNameInstance(
+                    it.first, instanceName);
+            auto insertResult = _propPathMap.emplace(
+                instancedPropName, it.second);
+            if (insertResult.second) {
+                _properties.push_back(instancedPropName);
+            } else {
+                // The property exists already. If we need to use the weaker 
+                // property in the event of a property type conflict, then we
+                // check if the weaker property's type matches the existing, and
+                // replace the existing with the weaker property if the types
+                // do not match.
+                if (useWeakerPropertyForTypeConflict && 
+                    !_PropertyTypesMatch(
+                        *this, weakerPrimDef, instancedPropName)) {
+                    insertResult.first->second = it.second;
+                }
             }
         }
     }

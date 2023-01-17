@@ -32,6 +32,7 @@
 
 #include "pxr/usd/usd/timeCode.h"
 
+#include "pxr/base/gf/bbox3d.h"
 #include "pxr/base/gf/vec2i.h"
 #include "pxr/base/gf/vec4d.h"
 #include "pxr/base/gf/vec4f.h"
@@ -73,7 +74,8 @@ class UsdImagingGLRenderParams
 {
 public:
 
-    typedef std::vector<GfVec4d> ClipPlanesVector;
+    using ClipPlanesVector = std::vector<GfVec4d>;
+    using BBoxVector = std::vector<GfBBox3d>;
 
     UsdTimeCode frame;
     float complexity;
@@ -100,7 +102,16 @@ public:
     bool enableUsdDrawModes;
     GfVec4f clearColor;
     TfToken colorCorrectionMode;
+    // Optional OCIO color setings, only valid when colorCorrectionMode==HdxColorCorrectionTokens->openColorIO
     int lut3dSizeOCIO;
+    TfToken ocioDisplay;
+    TfToken ocioView;
+    TfToken ocioColorSpace;
+    TfToken ocioLook;
+    // BBox settings
+    BBoxVector bboxes;
+    GfVec4f bboxLineColor;
+    float bboxLineDashSize;
 
     inline UsdImagingGLRenderParams();
 
@@ -136,7 +147,9 @@ UsdImagingGLRenderParams::UsdImagingGLRenderParams() :
     enableSceneLights(true),
     enableUsdDrawModes(true),
     clearColor(0,0,0,1),
-    lut3dSizeOCIO(65)
+    lut3dSizeOCIO(65),
+    bboxLineColor(1),
+    bboxLineDashSize(3)
 {
 }
 
@@ -168,7 +181,14 @@ UsdImagingGLRenderParams::operator==(const UsdImagingGLRenderParams &other)
         && enableUsdDrawModes          == other.enableUsdDrawModes
         && clearColor                  == other.clearColor
         && colorCorrectionMode         == other.colorCorrectionMode
-        && lut3dSizeOCIO               == other.lut3dSizeOCIO;
+        && ocioDisplay                 == other.ocioDisplay
+        && ocioView                    == other.ocioView
+        && ocioColorSpace              == other.ocioColorSpace
+        && ocioLook                    == other.ocioLook
+        && lut3dSizeOCIO               == other.lut3dSizeOCIO
+        && bboxes                      == other.bboxes
+        && bboxLineColor               == other.bboxLineColor
+        && bboxLineDashSize            == other.bboxLineDashSize;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

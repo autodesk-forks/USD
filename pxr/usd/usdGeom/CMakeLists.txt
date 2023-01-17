@@ -42,6 +42,7 @@ pxr_library(usdGeom
         motionAPI
         nurbsCurves
         nurbsPatch
+        plane
         pointBased
         pointInstancer
         points
@@ -86,6 +87,7 @@ pxr_library(usdGeom
         wrapMotionAPI.cpp
         wrapNurbsCurves.cpp
         wrapNurbsPatch.cpp
+        wrapPlane.cpp
         wrapPointBased.cpp
         wrapPointInstancer.cpp
         wrapPoints.cpp
@@ -184,6 +186,11 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdGeomBBoxCache
     DEST testUsdGeomBBoxCache
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdGeomCamera
+    DEST testUsdGeomCamera
 )
 
 pxr_install_test_dir(

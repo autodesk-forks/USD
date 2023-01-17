@@ -24,7 +24,6 @@
 
 #include "pxr/imaging/garch/glApi.h"
 
-#include "pxr/imaging/glf/contextCaps.h"
 #include "pxr/imaging/glf/diagnostic.h"
 #include "pxr/imaging/glf/testGLContext.h"
 #include "pxr/base/gf/frustum.h"
@@ -67,7 +66,6 @@ int main(int argc, char *argv[])
     GlfTestGLContext::RegisterGLContextCallbacks();
     GarchGLApiLoad();
     GlfSharedGLContextScopeHolder sharedContext;
-    GlfContextCaps::InitInstance();
 
     // Hgi and HdDriver should be constructed before HdEngine to ensure they
     // are destructed last. Hgi may be used during engine/delegate destruction.
@@ -85,7 +83,7 @@ int main(int argc, char *argv[])
     // --------------------------------------------------------------------
 
     // AOVs
-    SdfPath colorBuffer("/colorBuffer");
+    SdfPath colorBuffer("/aovColor");
     {
         HdRenderBufferDescriptor desc;
         desc.dimensions = GfVec3i(512, 512, 1);
@@ -93,7 +91,7 @@ int main(int argc, char *argv[])
         desc.multiSampled = false;
         delegate->AddRenderBuffer(colorBuffer, desc);
     }
-    SdfPath depthBuffer("/depthBuffer");
+    SdfPath depthBuffer("/aovDepth");
     {
         HdRenderBufferDescriptor desc;
         desc.dimensions = GfVec3i(512, 512, 1);

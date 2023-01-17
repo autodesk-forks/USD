@@ -25,7 +25,16 @@
 
 #include "pxr/usdImaging/usdImaging/primAdapter.h"
 
+#include "pxr/base/tf/envSetting.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_ENV_SETTING(USDIMAGING_LEGACY_UPDATE_FOR_TIME, 0,
+        "Run UpdateForTime every time any prim is marked dirty (legacy behavior)");
+static bool _LegacyUpdateForTime() {
+    static bool _v = TfGetEnvSetting(USDIMAGING_LEGACY_UPDATE_FOR_TIME) == 0;
+    return _v;
+}
 
 UsdImagingDelegate::_HdPrimInfo*
 UsdImagingIndexProxy::_AddHdPrimInfo(SdfPath const &cachePath,
@@ -182,8 +191,14 @@ UsdImagingIndexProxy::InsertRprim(
         SdfPath indexPath = _delegate->ConvertCachePathToIndexPath(cachePath);
         renderIndex.InsertRprim(primType, _delegate, indexPath);
 
-        primInfo->dirtyBits =
-            renderIndex.GetChangeTracker().GetRprimDirtyBits(indexPath);
+        // NOTE: Starting from AllDirty doesn't necessarily match what the
+        //       render delegate's concrete implementation of a given Rprim
+        //       might return but will be fully inclusive of it. Not querying it
+        //       directly from the change tracker immediately provides
+        //       flexibility as to when insertions will be processed. This is
+        //       relevant to downstream consumption patterns when emulated via
+        //       a scene index.
+        primInfo->dirtyBits = HdChangeTracker::AllDirty;
         _delegate->_dirtyCachePaths.insert(cachePath);
 
         _AddTask(cachePath);
@@ -205,8 +220,14 @@ UsdImagingIndexProxy::InsertSprim(
         SdfPath indexPath = _delegate->ConvertCachePathToIndexPath(cachePath);
         renderIndex.InsertSprim(primType, _delegate, indexPath);
 
-        primInfo->dirtyBits =
-            renderIndex.GetChangeTracker().GetSprimDirtyBits(indexPath);
+        // NOTE: Starting from AllDirty doesn't necessarily match what the
+        //       render delegate's concrete implementation of a given Sprim
+        //       might return but will be fully inclusive of it. Not querying it
+        //       directly from the change tracker immediately provides
+        //       flexibility as to when insertions will be processed. This is
+        //       relevant to downstream consumption patterns when emulated via
+        //       a scene index.
+        primInfo->dirtyBits = HdChangeTracker::AllDirty;
         _delegate->_dirtyCachePaths.insert(cachePath);
 
         _AddTask(cachePath);
@@ -228,8 +249,15 @@ UsdImagingIndexProxy::InsertBprim(
         SdfPath indexPath = _delegate->ConvertCachePathToIndexPath(cachePath);
         renderIndex.InsertBprim(primType, _delegate, indexPath);
 
-        primInfo->dirtyBits =
-            renderIndex.GetChangeTracker().GetBprimDirtyBits(indexPath);
+        // NOTE: Starting from AllDirty doesn't necessarily match what the
+        //       render delegate's concrete implementation of a given Bprim
+        //       might return but will be fully inclusive of it. Not querying it
+        //       directly from the change tracker immediately provides
+        //       flexibility as to when insertions will be processed. This is
+        //       relevant to downstream consumption patterns when emulated via
+        //       a scene index.
+        primInfo->dirtyBits = HdChangeTracker::AllDirty;
+
         _delegate->_dirtyCachePaths.insert(cachePath);
 
         _AddTask(cachePath);
@@ -250,8 +278,14 @@ UsdImagingIndexProxy::InsertInstancer(
         SdfPath indexPath = _delegate->ConvertCachePathToIndexPath(cachePath);
         renderIndex.InsertInstancer(_delegate, indexPath);
 
-        primInfo->dirtyBits =
-            renderIndex.GetChangeTracker().GetInstancerDirtyBits(indexPath);
+        // NOTE: Starting from AllDirty doesn't necessarily match what the
+        //       render delegate's concrete implementation of a given Bprim
+        //       might return but will be fully inclusive of it. Not querying it
+        //       directly from the change tracker immediately provides
+        //       flexibility as to when insertions will be processed. This is
+        //       relevant to downstream consumption patterns when emulated via
+        //       a scene index.
+        primInfo->dirtyBits = HdChangeTracker::AllDirty;
         _delegate->_dirtyCachePaths.insert(cachePath);
 
         TF_DEBUG(USDIMAGING_INSTANCER).Msg(
@@ -272,9 +306,15 @@ UsdImagingIndexProxy::Repopulate(SdfPath const& usdPath)
 }
 
 void
-UsdImagingIndexProxy::Refresh(SdfPath const& cachePath)
+UsdImagingIndexProxy::RequestTrackVariability(SdfPath const& cachePath)
 {
     _AddTask(cachePath);
+}
+
+void
+UsdImagingIndexProxy::RequestUpdateForTime(SdfPath const& cachePath)
+{
+    _delegate->_dirtyCachePaths.insert(cachePath);
 }
 
 void
@@ -301,7 +341,9 @@ UsdImagingIndexProxy::MarkRprimDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -317,7 +359,9 @@ UsdImagingIndexProxy::MarkSprimDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -333,7 +377,9 @@ UsdImagingIndexProxy::MarkBprimDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -349,7 +395,9 @@ UsdImagingIndexProxy::MarkInstancerDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();

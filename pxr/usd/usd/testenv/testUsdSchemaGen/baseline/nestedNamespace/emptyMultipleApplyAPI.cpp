@@ -66,6 +66,20 @@ UsdContrivedEmptyMultipleApplyAPI::Get(const UsdPrim &prim, const TfToken &name)
     return UsdContrivedEmptyMultipleApplyAPI(prim, name);
 }
 
+/* static */
+std::vector<UsdContrivedEmptyMultipleApplyAPI>
+UsdContrivedEmptyMultipleApplyAPI::GetAll(const UsdPrim &prim)
+{
+    std::vector<UsdContrivedEmptyMultipleApplyAPI> schemas;
+    
+    for (const auto &schemaName :
+         UsdAPISchemaBase::_GetMultipleApplyInstanceNames(prim, _GetStaticTfType())) {
+        schemas.emplace_back(prim, schemaName);
+    }
+
+    return schemas;
+}
+
 
 /* virtual */
 UsdSchemaKind UsdContrivedEmptyMultipleApplyAPI::_GetSchemaKind() const
@@ -116,8 +130,7 @@ UsdContrivedEmptyMultipleApplyAPI::_GetTfType() const
 
 /*static*/
 const TfTokenVector&
-UsdContrivedEmptyMultipleApplyAPI::GetSchemaAttributeNames(
-    bool includeInherited, const TfToken instanceName)
+UsdContrivedEmptyMultipleApplyAPI::GetSchemaAttributeNames(bool includeInherited)
 {
     static TfTokenVector localNames;
     static TfTokenVector allNames =
@@ -127,6 +140,24 @@ UsdContrivedEmptyMultipleApplyAPI::GetSchemaAttributeNames(
         return allNames;
     else
         return localNames;
+}
+
+/*static*/
+TfTokenVector
+UsdContrivedEmptyMultipleApplyAPI::GetSchemaAttributeNames(
+    bool includeInherited, const TfToken &instanceName)
+{
+    const TfTokenVector &attrNames = GetSchemaAttributeNames(includeInherited);
+    if (instanceName.IsEmpty()) {
+        return attrNames;
+    }
+    TfTokenVector result;
+    result.reserve(attrNames.size());
+    for (const TfToken &attrName : attrNames) {
+        result.push_back(
+            UsdSchemaRegistry::MakeMultipleApplyNameInstance(attrName, instanceName));
+    }
+    return result;
 }
 
 }}}

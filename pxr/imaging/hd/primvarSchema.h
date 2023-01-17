@@ -48,15 +48,15 @@ PXR_NAMESPACE_OPEN_SCOPE
     (vertex) \
     (faceVarying) \
     (instance) \
-    (Point) \
-    (Normal) \
-    (Vector) \
-    (Color) \
-    (PointIndex) \
-    (EdgeIndex) \
-    (FaceIndex) \
-    (TextureCoordinate) \
-    (Transform) \
+    (point) \
+    (normal) \
+    (vector) \
+    (color) \
+    (pointIndex) \
+    (edgeIndex) \
+    (faceIndex) \
+    (textureCoordinate) \
+    (transform) \
 
 TF_DECLARE_PUBLIC_TOKENS(HdPrimvarSchemaTokens, HD_API,
     HDPRIMVAR_SCHEMA_TOKENS);
@@ -142,6 +142,7 @@ public:
     };
     // Returns true if it contains data sources for an indexed primvar value
     // and for indices.
+    HD_API
     bool IsIndexed();
 
 

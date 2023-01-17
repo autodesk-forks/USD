@@ -128,6 +128,11 @@ public:
                                    SdfPath const& cachePath,
                                    UsdImagingIndexProxy* index) override;
 
+    USDIMAGING_API
+    virtual void MarkCollectionsDirty(UsdPrim const& prim,
+                                      SdfPath const& cachePath,
+                                      UsdImagingIndexProxy* index) override;
+
     // ---------------------------------------------------------------------- //
     /// \name Utility methods
     // ---------------------------------------------------------------------- //
@@ -204,6 +209,13 @@ public:
                 UsdTimeCode time,
                 VtIntArray *outIndices) const override;
 
+    // For implicit prims such as capsules, cones, cylinders and planes, the
+    // "spine" axis along or about which the surface is aligned may be
+    // specified. This utility method returns a basis matrix that transforms
+    // points generated using "Z" as the spine axis to the desired axis.
+    USDIMAGING_API
+    static GfMatrix4d GetImplicitBasis(TfToken const &spineAxis);
+
 protected:
 
     USDIMAGING_API
@@ -215,11 +227,6 @@ protected:
     USDIMAGING_API
     virtual bool _IsBuiltinPrimvar(TfToken const& primvarName) const;
 
-    // Utility for derived classes to try to find an inherited primvar.
-    USDIMAGING_API
-    UsdGeomPrimvar _GetInheritedPrimvar(UsdPrim const& prim,
-                                        TfToken const& primvarName) const;
-
     // Utility for gathering the names of primvars used by the gprim's 
     // materials, used in primvar filtering.
     USDIMAGING_API 
@@ -227,6 +234,11 @@ protected:
         SdfPathVector const& materialUsdPaths, 
         UsdTimeCode time) const;
 
+    /// Returns the primvar names known to be supported for the rprims 
+    /// this adapter produces.  These primvar names are excepted from primvar
+    /// filtering.
+    USDIMAGING_API
+    virtual TfTokenVector const& _GetRprimPrimvarNames() const;
 };
 
 

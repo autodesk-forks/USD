@@ -48,6 +48,29 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+namespace {
+
+// For code that knows at compile time whether we need to apply a transform.
+// Such code is told through a template parameter TransformType whether to
+// apply a transform (TransformType = GfMatrix4d) or not (TransformType =
+// _IdentityTransform).
+class _IdentityTransform
+{
+};
+
+// Overloads to transform GfBBox3d.
+void
+_Transform(GfBBox3d * const bbox, const _IdentityTransform &m)
+{
+}
+
+void
+_Transform(GfBBox3d * const bbox, const GfMatrix4d &m)
+{
+    bbox->Transform(m);
+}
+
+}
 
 // Thread-local Xform cache.
 // This should be replaced with (TBD) multi-threaded XformCache::Prepopulate
@@ -386,10 +409,12 @@ UsdGeomBBoxCache::ComputeUntransformedBound(const UsdPrim& prim)
     return _GetCombinedBBoxForIncludedPurposes(bboxes);
 }
 
+template<typename TransformType>
 GfBBox3d
-UsdGeomBBoxCache::ComputeUntransformedBound(
+UsdGeomBBoxCache::_ComputeBoundWithOverridesHelper(
     const UsdPrim &prim,
     const SdfPathSet &pathsToSkip,
+    const TransformType &primOverride,
     const TfHashMap<SdfPath, GfMatrix4d, SdfPath::Hash> &ctmOverrides)
 {
     GfBBox3d empty;
@@ -461,13 +486,14 @@ UsdGeomBBoxCache::ComputeUntransformedBound(
         GfBBox3d bbox;
         if (!foundAncestorWithOverride) {
             bbox = ComputeRelativeBound(p, prim);
+            _Transform(&bbox, primOverride);
         } else {
             // Compute bound relative to the path for which we know the
             // corrected prim-relative CTM.
             bbox = ComputeRelativeBound(p,
                 prim.GetStage()->GetPrimAtPath(overrideIter->first));
 
-            // The override CTM is already relative to the given prim.
+            // Apply the override CTM.
             const GfMatrix4d &overrideXform = overrideIter->second;
             bbox.Transform(overrideXform);
         }
@@ -479,6 +505,32 @@ UsdGeomBBoxCache::ComputeUntransformedBound(
     return result;
 }
 
+GfBBox3d
+UsdGeomBBoxCache::ComputeUntransformedBound(
+    const UsdPrim &prim,
+    const SdfPathSet &pathsToSkip,
+    const TfHashMap<SdfPath, GfMatrix4d, SdfPath::Hash> &ctmOverrides)
+{
+    return _ComputeBoundWithOverridesHelper(
+        prim,
+        pathsToSkip,
+        _IdentityTransform(),
+        ctmOverrides);
+}
+
+GfBBox3d
+UsdGeomBBoxCache::ComputeWorldBoundWithOverrides(
+    const UsdPrim &prim,
+    const SdfPathSet &pathsToSkip,
+    const GfMatrix4d &primOverride,
+    const TfHashMap<SdfPath, GfMatrix4d, SdfPath::Hash> &ctmOverrides)
+{
+    return _ComputeBoundWithOverridesHelper(
+        prim,
+        pathsToSkip,
+        primOverride,
+        ctmOverrides);
+}
 
 bool
 UsdGeomBBoxCache::_ComputePointInstanceBoundsHelper(
@@ -1106,30 +1158,6 @@ UsdGeomBBoxCache::_GetBBoxFromExtentsHint(
     return true;
 }
 
-bool
-UsdGeomBBoxCache::_ComputeExtent(const UsdGeomBoundable& boundableObj,
-                                 VtVec3fArray* extent) const
-{
-    // Display a message if the debug flag is enabled.
-    TF_DEBUG(USDGEOM_BBOX).Msg(
-        "[BBox Cache] WARNING: No valid extent authored for "
-        "<%s>. Computing a fallback value.",
-        boundableObj.GetPath().GetString().c_str());
-
-    // Create extent
-    bool successGettingExtent =
-        UsdGeomBoundable::ComputeExtentFromPlugins(
-            boundableObj, _time, extent);
-
-    if (!successGettingExtent) {
-        TF_DEBUG(USDGEOM_BBOX).Msg(
-            "[BBox Cache] WARNING: Unable to compute extent for "
-            "<%s>.", boundableObj.GetPath().GetString().c_str());
-    }
-
-    return successGettingExtent;
-}
-
 void
 UsdGeomBBoxCache::_ResolvePrim(_BBoxTask* task,
                                const _PrimContext &primContext,
@@ -1231,69 +1259,26 @@ UsdGeomBBoxCache::_ResolvePrim(_BBoxTask* task,
     // it cannot be created or found, the user is notified of an incorrect prim.
     if (UsdGeomBoundable boundableObj = UsdGeomBoundable(prim)) {
         VtVec3fArray extent;
-        // Read the extent of the geometry, an axis-aligned bounding box in
-        // local space.
-        const UsdAttributeQuery& extentQuery =
-            _GetOrCreateExtentQuery(prim, &queries[Extent]);
 
-        // If some extent is authored, check validity
-        bool successGettingExtent = false;
-        if (extentQuery.Get(&extent, _time)) {
-
-            successGettingExtent = extent.size() == 2;
-            if (!successGettingExtent) {
-                TF_WARN("[BBox Cache] Extent for <%s> is of size %zu "
-                        "instead of 2.", primContext.ToString().c_str(),
-                        extent.size());
-            }
-        }
-
-        // If we failed to get extent, try to create it.
-        if (!successGettingExtent) {
-
-            // Try to calculate the extent.
-            if (UsdGeomPointBased pointBasedObj = UsdGeomPointBased(prim)) {
-
-                // XXX: We check if the points attribute is authored on the
-                // given prim. All we require from clients is that IF they
-                // author points, they MUST also author extent.
-                //
-                // If no extent is authored, but points has some value, we
-                // compute the extent and display a debug message.
-                //
-                // Otherwise, the client is consistent with our demands;
-                // no warning is issued, and no extent is computed.
-                //
-                // For more information, see bugzilla #115735
-
-                bool primHasAuthoredPoints =
-                    pointBasedObj.GetPointsAttr().HasAuthoredValue();
-
-                if (primHasAuthoredPoints) {
-                    successGettingExtent = _ComputeExtent(boundableObj, &extent);
-                }
-
-            } else {
-
-                successGettingExtent = _ComputeExtent(boundableObj, &extent);
-            }
-
-            if (successGettingExtent) {
-                // Extent computation reported success, but validate the result.
-                successGettingExtent = extent.size() == 2;
-                if (!successGettingExtent) {
-                    TF_WARN("[BBox Cache] Computed extent for <%s> is of size %zu "
-                            "instead of 2.", primContext.ToString().c_str(),
-                            extent.size());
-                }
-            }
-        }
+        // UsdGeomBoundable::ComputeExtent checks to see if extent attr has an
+        // authored value and sets extent to that, if not it computes extent 
+        // using intrinsic geometric parameters, provided ComputeExtentFunction 
+        // is registered for this boundableObj.
+        bool successGettingExtent = boundableObj.ComputeExtent(_time, &extent);
 
         // On Successful extent, create BBox for purpose.
         if (successGettingExtent) {
-            pruneChildren = true;
-            GfBBox3d &bboxForPurpose = (*bboxes)[entry->purposeInfo.purpose];
-            bboxForPurpose.SetRange(GfRange3d(extent[0], extent[1]));
+            // Extent computation reported success, but validate the result.
+            successGettingExtent = extent.size() == 2;
+            if (successGettingExtent) {
+                pruneChildren = true;
+                GfBBox3d &bboxForPurpose = (*bboxes)[entry->purposeInfo.purpose];
+                bboxForPurpose.SetRange(GfRange3d(extent[0], extent[1]));
+            } else {
+                TF_WARN("[BBox Cache] Computed extent for <%s> is of size %zu "
+                        "instead of 2.", primContext.ToString().c_str(),
+                        extent.size());
+            }
         }
     }
 

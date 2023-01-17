@@ -22,15 +22,32 @@
 // language governing permissions and limitations under the Apache License.
 //
 #include "pxr/imaging/hd/flatteningSceneIndex.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/xformSchema.h"
 #include "pxr/imaging/hd/purposeSchema.h"
 #include "pxr/imaging/hd/visibilitySchema.h"
+#include "pxr/imaging/hd/materialBindingSchema.h"
+#include "pxr/imaging/hd/instancedBySchema.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/work/utils.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+    (model)
+    (drawMode)
+    (inherited)
+);
+
+static
+const HdDataSourceLocator &_GetDrawModeLocator()
+{
+    static const HdDataSourceLocator l(_tokens->model, _tokens->drawMode);
+    return l;
+}
 
 HdFlatteningSceneIndex::HdFlatteningSceneIndex(
         const HdSceneIndexBaseRefPtr &inputScene)
@@ -52,6 +69,9 @@ HdFlatteningSceneIndex::HdFlatteningSceneIndex(
             HdRetainedTypedSampledDataSource<TfToken>::New(
                 HdRenderTagTokens->geometry))
         .Build())
+
+    , _identityDrawMode(
+        HdRetainedTypedSampledDataSource<TfToken>::New(TfToken()))
 {
 }
 
@@ -125,6 +145,9 @@ HdFlatteningSceneIndex::_PrimsAdded(
                 HdXformSchema::GetDefaultLocator(),
                 HdVisibilitySchema::GetDefaultLocator(),
                 HdPurposeSchema::GetDefaultLocator(),
+                _GetDrawModeLocator(),
+                HdMaterialBindingSchema::GetDefaultLocator(),
+                HdInstancedBySchema::GetDefaultLocator()
             };
 
             _DirtyHierarchy(entry.primPath, locators, &dirtyEntries);
@@ -186,7 +209,18 @@ HdFlatteningSceneIndex::_PrimsDirtied(
                     HdPurposeSchema::GetDefaultLocator())) {
             locators.insert(HdPurposeSchema::GetDefaultLocator());
         }
-
+        if (entry.dirtyLocators.Intersects(_GetDrawModeLocator())) {
+            locators.insert(_GetDrawModeLocator());
+        }
+        if (entry.dirtyLocators.Intersects(
+                HdMaterialBindingSchema::GetDefaultLocator())) {
+            locators.insert(HdMaterialBindingSchema::GetDefaultLocator());
+        }
+        if (entry.dirtyLocators.Intersects(
+                HdInstancedBySchema::GetDefaultLocator())) {
+            locators.insert(HdInstancedBySchema::GetDefaultLocator());
+        }
+        
         if (!locators.IsEmpty()) {
             _DirtyHierarchy(entry.primPath, locators, &dirtyEntries);
         }
@@ -245,9 +279,6 @@ _PrimLevelWrappingDataSource::_PrimLevelWrappingDataSource(
     : _sceneIndex(scene)
     , _primPath(primPath)
     , _inputDataSource(inputDataSource)
-    , _computedXformDataSource(nullptr)
-    , _computedVisDataSource(nullptr)
-    , _computedPurposeDataSource(nullptr)
 {
 }
 
@@ -263,25 +294,45 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::PrimDirtied(
         const HdDataSourceLocatorSet &set)
 {
     bool anyDirtied = false;
-    HdContainerDataSourceHandle null(nullptr);
+    static const HdContainerDataSourceHandle containerNull(nullptr);
+    static const HdTokenDataSourceHandle tokenNull(nullptr);
+    static const HdDataSourceBaseHandle baseNull(nullptr);
 
     if (set.Intersects(HdXformSchema::GetDefaultLocator())) {
         if (HdContainerDataSource::AtomicLoad(_computedXformDataSource)) {
             anyDirtied = true;
         }
-        HdContainerDataSource::AtomicStore(_computedXformDataSource, null);
+        HdContainerDataSource::AtomicStore(
+            _computedXformDataSource, containerNull);
     }
     if (set.Intersects(HdVisibilitySchema::GetDefaultLocator())) {
         if (HdContainerDataSource::AtomicLoad(_computedVisDataSource)) {
             anyDirtied = true;
         }
-        HdContainerDataSource::AtomicStore(_computedVisDataSource, null);
+        HdContainerDataSource::AtomicStore(
+            _computedVisDataSource, containerNull);
     }
     if (set.Intersects(HdPurposeSchema::GetDefaultLocator())) {
         if (HdContainerDataSource::AtomicLoad(_computedPurposeDataSource)) {
             anyDirtied = true;
         }
-        HdContainerDataSource::AtomicStore(_computedPurposeDataSource, null);
+        HdContainerDataSource::AtomicStore(
+            _computedPurposeDataSource, containerNull);
+    }
+    if (set.Intersects(_GetDrawModeLocator())) {
+        anyDirtied = true;
+        HdTokenDataSource::AtomicStore(
+            _computedDrawModeDataSource, tokenNull);
+    }
+    if (set.Intersects(HdMaterialBindingSchema::GetDefaultLocator())) {
+        anyDirtied = true;
+        HdDataSourceBase::AtomicStore(
+            _computedMaterialBindingDataSource, baseNull);
+    }
+    if (set.Intersects(HdInstancedBySchema::GetDefaultLocator())) {
+        anyDirtied = true;
+        HdDataSourceBase::AtomicStore(
+            _computedInstancedByDataSource, baseNull);
     }
 
     return anyDirtied;
@@ -298,6 +349,17 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::Has(
         return true;
     }
     if (name == HdPurposeSchemaTokens->purpose) {
+        return true;
+    }
+    if (name == _tokens->model) {
+        return true;
+    }
+
+    if (name == HdMaterialBindingSchemaTokens->materialBinding) {
+        return true;
+    }
+
+    if (name == HdInstancedBySchemaTokens->instancedBy) {
         return true;
     }
 
@@ -319,6 +381,9 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::GetNames()
         bool hasXform = false;
         bool hasVis = false;
         bool hasPurpose = false;
+        bool hasModel = false;
+        bool hasMaterialBinding = false;
+        bool hasInstancedBy = false;
         for (const TfToken &name : result) {
             if (name == HdXformSchemaTokens->xform) {
                 hasXform = true;
@@ -329,7 +394,17 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::GetNames()
             if (name == HdPurposeSchemaTokens->purpose) {
                 hasPurpose = true;
             }
-            if (hasXform && hasVis && hasPurpose) {
+            if (name == _tokens->model) {
+                hasModel = true;
+            }
+            if (name == HdMaterialBindingSchemaTokens->materialBinding) {
+                hasMaterialBinding = true;
+            }
+            if (name == HdInstancedBySchemaTokens->instancedBy) {
+                hasInstancedBy = true;
+            }
+            if (hasXform && hasVis && hasPurpose && hasModel
+                    && hasMaterialBinding && hasInstancedBy) {
                 break;
             }
         }
@@ -343,10 +418,22 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::GetNames()
         if (!hasPurpose) {
             result.push_back(HdPurposeSchemaTokens->purpose);
         }
+        if (!hasModel) {
+            result.push_back(_tokens->model);
+        }
+        if (!hasMaterialBinding) {
+            result.push_back(HdMaterialBindingSchemaTokens->materialBinding);
+        }
+        if (!hasInstancedBy) {
+            result.push_back(HdInstancedBySchemaTokens->instancedBy);
+        }
     } else {
         result.push_back(HdXformSchemaTokens->xform);
         result.push_back(HdVisibilitySchemaTokens->visibility);
         result.push_back(HdPurposeSchemaTokens->purpose);
+        result.push_back(_tokens->model);
+        result.push_back(HdMaterialBindingSchemaTokens->materialBinding);
+        result.push_back(HdInstancedBySchemaTokens->instancedBy);
     }
 
     return result;
@@ -362,6 +449,12 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::Get(
         return _GetVis();
     } else if (name == HdPurposeSchemaTokens->purpose) {
         return _GetPurpose();
+    } else if (name == _tokens->model) {
+        return _GetModel();
+    } else if (name == HdMaterialBindingSchemaTokens->materialBinding) {
+        return _GetMaterialBinding();
+    } else if (name == HdInstancedBySchemaTokens->instancedBy) {
+        return _GetInstancedBy();
     } else if (_inputDataSource) {
         return _inputDataSource->Get(name);
     } else {
@@ -530,6 +623,181 @@ HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetXform()
             _computedXformDataSource, computedXformDataSource);
 
     return computedXformDataSource;
+}
+
+HdDataSourceBaseHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetModel()
+{
+    HdContainerDataSourceHandle const modelContainer =
+        _inputDataSource
+            ? HdContainerDataSource::Cast(_inputDataSource->Get(_tokens->model))
+            : nullptr;
+    HdContainerDataSourceHandle const overrideContainer =
+        HdRetainedContainerDataSource::New(
+            _tokens->drawMode, _GetDrawMode(modelContainer));
+    if (!modelContainer) {
+        return overrideContainer;
+    }
+    return HdOverlayContainerDataSource::New(overrideContainer, modelContainer);
+}
+
+HdDataSourceBaseHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetDrawMode(
+    const HdContainerDataSourceHandle &modelContainer)
+{
+    HdTokenDataSource::AtomicHandle computedDrawModeDataSource =
+        HdTokenDataSource::AtomicLoad(_computedDrawModeDataSource);
+
+    if (computedDrawModeDataSource) {
+        return computedDrawModeDataSource;
+    }
+
+    computedDrawModeDataSource = _GetDrawModeUncached(modelContainer);
+
+    HdTokenDataSource::AtomicStore(
+        _computedDrawModeDataSource, computedDrawModeDataSource);
+
+    return computedDrawModeDataSource;
+}
+
+HdTokenDataSourceHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetDrawModeUncached(
+    const HdContainerDataSourceHandle &modelContainer)
+{
+    if (modelContainer) {
+        if (const HdTokenDataSourceHandle src =
+                HdTokenDataSource::Cast(
+                    modelContainer->Get(_tokens->drawMode))) {
+            const TfToken drawMode = src->GetTypedValue(0.0f);
+            if (!drawMode.IsEmpty() && drawMode != _tokens->inherited) {
+                return src;
+            }
+        }
+    }
+
+    if (_primPath.GetPathElementCount() == 0) {
+        return _sceneIndex._identityDrawMode;
+    }
+
+    const SdfPath parentPath = _primPath.GetParentPath();
+    const auto it = _sceneIndex._prims.find(parentPath);
+    if (it == _sceneIndex._prims.end()) {
+        return _sceneIndex._identityDrawMode;
+    }
+
+    if (const HdTokenDataSourceHandle src =
+            HdTokenDataSource::Cast(
+                HdContainerDataSource::Get(
+                    it->second.prim.dataSource, _GetDrawModeLocator()))) {
+        return src;
+    }
+
+    return _sceneIndex._identityDrawMode;
+}
+
+HdDataSourceBaseHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetMaterialBinding()
+{
+    HdDataSourceBaseHandle result =
+        HdDataSourceBase::AtomicLoad(_computedMaterialBindingDataSource);
+
+    if (!result) {
+        result = _GetMaterialBindingUncached();
+        HdDataSourceBase::AtomicStore(_computedMaterialBindingDataSource,
+            result);
+    }
+
+    // The cached value of the absence of a materialBinding is a non-container
+    // data source.
+    return HdContainerDataSource::Cast(result);
+}
+
+HdDataSourceBaseHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::
+_GetMaterialBindingUncached()
+{
+    HdContainerDataSourceHandle inputBindings =
+        HdMaterialBindingSchema::GetFromParent(_inputDataSource).GetContainer();
+
+    HdContainerDataSourceHandle parentBindings;
+    if (_primPath.GetPathElementCount()) {
+        SdfPath parentPath = _primPath.GetParentPath();
+        const auto it = _sceneIndex._prims.find(parentPath);
+        if (it != _sceneIndex._prims.end()) {
+            parentBindings = HdMaterialBindingSchema::GetFromParent(
+                    it->second.prim.dataSource).GetContainer();
+        }
+    }
+
+    if (inputBindings) {
+        if (parentBindings) {
+            // Parent and local bindings might have unique fields so we must
+            // overlay them. If we are concerned about overlay depth, we could
+            // compare GetNames() results to decide whether the child bindings
+            // completely mask the parent.
+            return HdOverlayContainerDataSource::New(
+                inputBindings, parentBindings);
+        }
+
+        return inputBindings;
+    } else {
+        if (parentBindings) {
+            return parentBindings;
+        } else {
+            // Cache the absence of value by storing a non-container which will
+            // fail the cast on return. Using retained "false" because its New
+            // returns a shared instance rather than a new allocation.
+            return HdRetainedTypedSampledDataSource<bool>::New(false);
+        }
+    }
+}
+
+HdDataSourceBaseHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetInstancedBy()
+{
+    HdDataSourceBaseHandle result =
+        HdDataSourceBase::AtomicLoad(_computedInstancedByDataSource);
+
+    if (!result) {
+        result = _GetInstancedByUncached();
+        HdDataSourceBase::AtomicStore(
+            _computedInstancedByDataSource, result);
+    }
+
+    // The cached value of the absence of a materialBinding is a non-container
+    // data source.
+    return HdContainerDataSource::Cast(result);
+}
+
+HdDataSourceBaseHandle
+HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetInstancedByUncached()
+{
+    if (HdInstancedBySchema schema =
+            HdInstancedBySchema::GetFromParent(_inputDataSource)) {
+        if (HdPathArrayDataSourceHandle const pathsSrc = schema.GetPaths()) {
+            if (!pathsSrc->GetTypedValue(0.0f).empty()) {
+                return schema.GetContainer();
+            }
+        }
+    }
+
+    if (_primPath.GetPathElementCount() == 0) {
+        return HdRetainedTypedSampledDataSource<bool>::New(false);
+    }
+
+    const SdfPath parentPath = _primPath.GetParentPath();
+    const auto it = _sceneIndex._prims.find(parentPath);
+    if (it == _sceneIndex._prims.end()) {
+        return HdRetainedTypedSampledDataSource<bool>::New(false);
+    }
+
+    HdContainerDataSourceHandle const parentDs =
+        HdInstancedBySchema::GetFromParent(
+            it->second.prim.dataSource).GetContainer();
+    if (!parentDs) {
+        return HdRetainedTypedSampledDataSource<bool>::New(false);
+    }
+    return parentDs;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

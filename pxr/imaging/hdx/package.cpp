@@ -171,6 +171,13 @@ HdxPackageSkydomeShader()
 }
 
 TfToken
+HdxPackageBoundingBoxShader()
+{
+    static TfToken shader = _GetShaderPath("boundingBox.glslfx");
+    return shader;
+}
+
+TfToken
 HdxPackageDefaultDomeLightTexture()
 {
     // Use the tex version of the Domelight's environment map if supported
@@ -179,7 +186,7 @@ HdxPackageDefaultDomeLightTexture()
 
     static TfToken domeLightTexture = (useTex)
         ? _GetTexturePath("StinsonBeach.tex")
-        : _GetTexturePath("StinsonBeach.exr");
+        : _GetTexturePath("StinsonBeach.hdr");
     return domeLightTexture;
 }
 

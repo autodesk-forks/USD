@@ -52,6 +52,7 @@ pxr_library(usd
         references
         relationship
         resolveInfo
+        resolveTarget
         resolver
         schemaBase
         schemaRegistry
@@ -132,6 +133,7 @@ pxr_library(usd
         wrapReferences.cpp
         wrapRelationship.cpp
         wrapResolveInfo.cpp
+        wrapResolveTarget.cpp
         wrapSchemaBase.cpp
         wrapSchemaRegistry.cpp
         wrapSpecializes.cpp
@@ -143,6 +145,7 @@ pxr_library(usd
         wrapTokens.cpp
         wrapTimeCode.cpp
         wrapTyped.cpp
+        wrapUsdFileFormat.cpp
         wrapUtils.cpp
         wrapVariantSets.cpp
         wrapVersion.cpp 
@@ -233,6 +236,7 @@ pxr_test_scripts(
     testenv/testUsdPrims.py
     testenv/testUsdReferences.py
     testenv/testUsdRelationships.py
+    testenv/testUsdResolveTargetPy.py
     testenv/testUsdSchemaBasePy.py
     testenv/testUsdSchemaRegistry.py
     testenv/testUsdSpecializes.py
@@ -264,19 +268,17 @@ pxr_build_test_shared_lib(TestUsdProceduralExternalAssetsFileFormatPlugin
         testenv/TestUsdProceduralExternalAssetsFileFormatPlugin.cpp
 )
 
-if (PXR_USE_AR_2)
-    pxr_build_test_shared_lib(TestUsdResolverChangedResolver
-        CREATE_FRAMEWORK
-        INSTALL_PREFIX UsdPlugins
-        LIBRARIES
-            ar
-            plug
-            tf
-    
-        CPPFILES
-            testenv/TestUsdResolverChangedResolver.cpp
-    )
-endif()
+pxr_build_test_shared_lib(TestUsdResolverChangedResolver
+    CREATE_FRAMEWORK
+    INSTALL_PREFIX UsdPlugins
+    LIBRARIES
+        ar
+        plug
+        tf
+
+    CPPFILES
+        testenv/TestUsdResolverChangedResolver.cpp
+)
 
 pxr_build_test(testUsdAttributeBlockingCpp
     LIBRARIES
@@ -321,18 +323,16 @@ pxr_build_test(testUsdMetadataCpp
         testenv/testUsdMetadata.cpp
 )
 
-if (PXR_USE_AR_2)
-    pxr_build_test(testUsdResolverChanged
-        LIBRARIES
-            arch
-            plug
-            sdf
-            tf
-            usd
-        CPPFILES
-            testenv/testUsdResolverChanged.cpp
-    )
-endif()
+pxr_build_test(testUsdResolverChanged
+    LIBRARIES
+        arch
+        plug
+        sdf
+        tf
+        usd
+    CPPFILES
+        testenv/testUsdResolverChanged.cpp
+)
 
 pxr_build_test(testUsdInstancingCpp
     LIBRARIES
@@ -410,6 +410,17 @@ pxr_build_test(testUsdSchemaBase
         testenv/testUsdSchemaBase.cpp
 )
 
+pxr_build_test(testUsdResolveTarget
+    LIBRARIES
+        pcp
+        sdf
+        tf
+        usd
+        vt
+    CPPFILES
+        testenv/testUsdResolveTarget.cpp
+)
+
 pxr_build_test(testUsdTimeValueAuthoringCpp
     LIBRARIES
         arch
@@ -429,6 +440,16 @@ pxr_build_test(testUsdUsdzResolver
         usd
     CPPFILES
         testenv/testUsdUsdzResolver.cpp
+)
+
+pxr_build_test(testUsdZipFile_CPP
+    LIBRARIES
+        ar
+        arch
+        tf
+        usd
+    CPPFILES
+        testenv/testUsdZipFile.cpp
 )
 
 pxr_install_test_dir(
@@ -526,12 +547,20 @@ pxr_install_test_dir(
     DEST testUsdMetadata
 )
 
-if (PXR_USE_AR_2)
-    pxr_install_test_dir(
-        SRC testenv/testUsdResolverChanged
-        DEST testUsdResolverChanged
-    )
-endif()
+pxr_install_test_dir(
+    SRC testenv/testUsdResolverChanged
+    DEST testUsdResolverChanged
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdResolveTarget.testenv
+    DEST testUsdResolveTarget
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdResolveTarget.testenv
+    DEST testUsdResolveTargetPy
+)
 
 pxr_install_test_dir(
     SRC testenv/testUsdNotices.testenv
@@ -653,6 +682,11 @@ pxr_install_test_dir(
     DEST testUsdZipFile
 )
 
+pxr_install_test_dir(
+    SRC testenv/testUsdZipFile.testenv
+    DEST testUsdZipFile_CPP
+)
+
 pxr_register_test(testUsdAppliedAPISchemas
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdAppliedAPISchemas"
@@ -723,6 +757,12 @@ pxr_register_test(testUsdVariants
 
 pxr_register_test(testUsdAttributeInterpolationCpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdAttributeInterpolationCpp"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdBugs
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdBugs"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -887,16 +927,14 @@ pxr_register_test(testUsdMetadataCpp
     EXPECTED_RETURN_CODE 0
 )
 
-if (PXR_USE_AR_2)
-    # This test relies on a plugin built specifically for this test.
-    # The build system currently doesn't support this for static library
-    # builds, so we only enable this test on shared library builds.
-    if (BUILD_SHARED_LIBS)
-        pxr_register_test(testUsdResolverChanged
-            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolverChanged"
-            EXPECTED_RETURN_CODE 0
-        )
-    endif()
+# This test relies on a plugin built specifically for this test.
+# The build system currently doesn't support this for static library
+# builds, so we only enable this test on shared library builds.
+if (BUILD_SHARED_LIBS)
+    pxr_register_test(testUsdResolverChanged
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolverChanged"
+        EXPECTED_RETURN_CODE 0
+    )
 endif()
 
 pxr_register_test(testUsdStageNoPython
@@ -985,6 +1023,17 @@ pxr_register_test(testUsdInherits
 pxr_register_test(testUsdModel
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdModel"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdResolveTarget
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolveTarget"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdResolveTargetPy
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolveTargetPy"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1113,6 +1162,12 @@ pxr_register_test(testUsdZipFile
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdZipFile"
     EXPECTED_RETURN_CODE 0
 )
+
+pxr_register_test(testUsdZipFile_CPP
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdZipFile_CPP"
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_register_test(testUsdUsdzResolver
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzResolver"
     EXPECTED_RETURN_CODE 0

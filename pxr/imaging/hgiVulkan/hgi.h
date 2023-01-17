@@ -57,6 +57,9 @@ public:
     ~HgiVulkan() override;
 
     HGIVULKAN_API
+    bool IsBackendSupported() const override;
+
+    HGIVULKAN_API
     HgiGraphicsCmdsUniquePtr CreateGraphicsCmds(
         HgiGraphicsCmdsDesc const& desc) override;
 
@@ -134,6 +137,9 @@ public:
 
     HGIVULKAN_API
     HgiVulkanCapabilities const* GetCapabilities() const override;
+
+    HGIVULKAN_API
+    HgiIndirectCommandEncoder* GetIndirectCommandEncoder() const override;
 
     HGIVULKAN_API
     void StartFrame() override;

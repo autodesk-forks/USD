@@ -98,28 +98,25 @@ My_TestGLDrawing::InitTest()
     TRACE_FUNCTION();
     
     std::cout << "My_TestGLDrawing::InitTest()\n";
-    _stage = UsdStage::Open(GetStageFilePath());
-    SdfPathVector excludedPaths;
+    _stage = UsdStage::Open(GetStageFilePath(),
+        IsEnabledUnloadedAsBounds() ? UsdStage::LoadNone : UsdStage::LoadAll);
 
-    if (UsdImagingGLEngine::IsHydraEnabled()) {
-        std::cout << "Using HD Renderer.\n";
-        _engine.reset(new UsdImagingGLEngine(
-            _stage->GetPseudoRoot().GetPath(), excludedPaths));
-        if (!_GetRenderer().IsEmpty()) {
-            if (!_engine->SetRendererPlugin(_GetRenderer())) {
-                std::cerr << "Couldn't set renderer plugin: " <<
-                    _GetRenderer().GetText() << std::endl;
-                exit(-1);
-            } else {
-                std::cout << "Renderer plugin: " << _GetRenderer().GetText()
-                    << std::endl;
-            }
+    if (!UsdImagingGLEngine::IsHydraEnabled()) {
+        std::cerr << "Couldn't initialize hydra" << std::endl;
+        exit(-1);
+    }
+    SdfPathVector excludedPaths;
+    _engine.reset(new UsdImagingGLEngine(
+        _stage->GetPseudoRoot().GetPath(), excludedPaths));
+    if (!_GetRenderer().IsEmpty()) {
+        if (!_engine->SetRendererPlugin(_GetRenderer())) {
+            std::cerr << "Couldn't set renderer plugin: " <<
+                _GetRenderer().GetText() << std::endl;
+            exit(-1);
+        } else {
+            std::cout << "Renderer plugin: " << _GetRenderer().GetText()
+                << std::endl;
         }
-    } else{
-        std::cout << "Using Reference Renderer.\n"; 
-        _engine.reset(
-            new UsdImagingGLEngine(_stage->GetPseudoRoot().GetPath(), 
-                    excludedPaths));
     }
 
     for (const auto &renderSetting : GetRenderSettings()) {
@@ -134,7 +131,15 @@ My_TestGLDrawing::InitTest()
     if (_ShouldFrameAll()) {
         TfTokenVector purposes;
         purposes.push_back(UsdGeomTokens->default_);
-        purposes.push_back(UsdGeomTokens->proxy);
+        if (IsShowGuides()) {
+            purposes.push_back(UsdGeomTokens->guide);
+        }
+        if (IsShowProxy()) {
+            purposes.push_back(UsdGeomTokens->proxy);
+        }
+        if (IsShowRender()) {
+            purposes.push_back(UsdGeomTokens->render);
+        }
 
         // Extent hints are sometimes authored as an optimization to avoid
         // computing bounds, they are particularly useful for some tests where
@@ -167,10 +172,10 @@ My_TestGLDrawing::InitTest()
     }
 
     if(IsEnabledTestLighting()) {
+        _lightingContext = GlfSimpleLightingContext::New();
         if(UsdImagingGLEngine::IsHydraEnabled()) {
             // set same parameter as GlfSimpleLightingContext::SetStateFromOpenGL
             // OpenGL defaults
-            _lightingContext = GlfSimpleLightingContext::New();
             if (!IsEnabledSceneLights()) {
                 GlfSimpleLight light;
                 if (IsEnabledCameraLight()) {
@@ -286,6 +291,10 @@ My_TestGLDrawing::DrawTest(bool offscreen)
     params.showProxy = IsShowProxy();
     params.clearColor = GetClearColor();
 
+    if (IsEnabledUnloadedAsBounds()) {
+        _SetDisplayUnloadedPrimsWithBounds(_engine.get(), true);
+    }
+
     glViewport(0, 0, width, height);
 
     glEnable(GL_DEPTH_TEST);
@@ -298,7 +307,8 @@ My_TestGLDrawing::DrawTest(bool offscreen)
         if(UsdImagingGLEngine::IsHydraEnabled()) {
             _engine->SetLightingState(_lightingContext);
         } else {
-            _engine->SetLightingStateFromOpenGL();
+            _lightingContext->SetStateFromOpenGL();
+            _engine->SetLightingState(_lightingContext);
         }
     }
 

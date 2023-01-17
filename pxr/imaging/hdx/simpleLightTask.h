@@ -88,7 +88,10 @@ private:
     std::map<TfToken, SdfPathVector> _lightIds;
     SdfPathVector _lightIncludePaths;
     SdfPathVector _lightExcludePaths;
-    size_t _numLights;
+    size_t _numLightIds;
+    size_t _maxLights;
+    unsigned _sprimIndexVersion;
+    unsigned _settingsVersion;
 
     // Should be weak ptrs
     HdStSimpleLightingShaderSharedPtr _lightingShader;
@@ -106,8 +109,13 @@ private:
     // the render graph.  Maybe long-term these could be change-tracked.
     GlfSimpleLightVector _glfSimpleLights;
 
+    HdBufferArrayRangeSharedPtr _lightingBar;
+    HdBufferArrayRangeSharedPtr _lightSourcesBar;
+    HdBufferArrayRangeSharedPtr _shadowsBar;
+    HdBufferArrayRangeSharedPtr _materialBar;
+
     size_t _AppendLightsOfType(HdRenderIndex &renderIndex,
-                               std::vector<TfToken> const &lightTypes,
+                               TfTokenVector const &lightTypes,
                                SdfPathVector const &lightIncludePaths,
                                SdfPathVector const &lightExcludePaths,
                                std::map<TfToken, SdfPathVector> *lights);

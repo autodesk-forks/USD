@@ -42,7 +42,7 @@ class HgiVulkanConversions final
 {
 public:
     HGIVULKAN_API
-    static VkFormat GetFormat(HgiFormat inFormat);
+    static VkFormat GetFormat(HgiFormat inFormat, bool depthFormat = false);
 
     HGIVULKAN_API
     static HgiFormat GetFormat(VkFormat inFormat);
@@ -106,12 +106,18 @@ public:
 
     HGIVULKAN_API
     static VkSamplerMipmapMode GetMipFilter(HgiMipFilter mf);
+    
+    HGIVULKAN_API
+    static VkBorderColor GetBorderColor(HgiBorderColor bc);
 
     HGIVULKAN_API
     static VkComponentSwizzle GetComponentSwizzle(HgiComponentSwizzle cs);
 
     HGIVULKAN_API
     static VkPrimitiveTopology GetPrimitiveType(HgiPrimitiveType pt);
+
+    HGIVULKAN_API
+    static std::string GetImageLayoutFormatQualifier(HgiFormat inFormat);
 };
 
 

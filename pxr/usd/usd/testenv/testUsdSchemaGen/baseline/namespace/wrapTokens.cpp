@@ -144,6 +144,12 @@ void wrapUsdContrivedTokens()
     _AddToken(cls, "normal3fArray", UsdContrivedTokens->normal3fArray);
     _AddToken(cls, "normal3h", UsdContrivedTokens->normal3h);
     _AddToken(cls, "normal3hArray", UsdContrivedTokens->normal3hArray);
+    _AddToken(cls, "overrideBaseFalseDerivedFalse", UsdContrivedTokens->overrideBaseFalseDerivedFalse);
+    _AddToken(cls, "overrideBaseFalseDerivedNone", UsdContrivedTokens->overrideBaseFalseDerivedNone);
+    _AddToken(cls, "overrideBaseNoneDerivedFalse", UsdContrivedTokens->overrideBaseNoneDerivedFalse);
+    _AddToken(cls, "overrideBaseTrueDerivedFalse", UsdContrivedTokens->overrideBaseTrueDerivedFalse);
+    _AddToken(cls, "overrideBaseTrueDerivedNone", UsdContrivedTokens->overrideBaseTrueDerivedNone);
+    _AddToken(cls, "overrideBaseTrueDerivedTrue", UsdContrivedTokens->overrideBaseTrueDerivedTrue);
     _AddToken(cls, "pivotPosition", UsdContrivedTokens->pivotPosition);
     _AddToken(cls, "point3d", UsdContrivedTokens->point3d);
     _AddToken(cls, "point3dArray", UsdContrivedTokens->point3dArray);
@@ -165,10 +171,12 @@ void wrapUsdContrivedTokens()
     _AddToken(cls, "stringArray", UsdContrivedTokens->stringArray);
     _AddToken(cls, "temp", UsdContrivedTokens->temp);
     _AddToken(cls, "test", UsdContrivedTokens->test);
-    _AddToken(cls, "testAttrOne", UsdContrivedTokens->testAttrOne);
-    _AddToken(cls, "testAttrTwo", UsdContrivedTokens->testAttrTwo);
+    _AddToken(cls, "test_MultipleApplyTemplate_TestAttrOne", UsdContrivedTokens->test_MultipleApplyTemplate_TestAttrOne);
+    _AddToken(cls, "test_MultipleApplyTemplate_TestAttrTwo", UsdContrivedTokens->test_MultipleApplyTemplate_TestAttrTwo);
     _AddToken(cls, "testingAsset", UsdContrivedTokens->testingAsset);
     _AddToken(cls, "testo", UsdContrivedTokens->testo);
+    _AddToken(cls, "testo_MultipleApplyTemplate_TestAttrOne", UsdContrivedTokens->testo_MultipleApplyTemplate_TestAttrOne);
+    _AddToken(cls, "testo_MultipleApplyTemplate_TestAttrTwo", UsdContrivedTokens->testo_MultipleApplyTemplate_TestAttrTwo);
     _AddToken(cls, "token", UsdContrivedTokens->token);
     _AddToken(cls, "tokenArray", UsdContrivedTokens->tokenArray);
     _AddToken(cls, "transform", UsdContrivedTokens->transform);

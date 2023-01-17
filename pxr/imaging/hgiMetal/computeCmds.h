@@ -71,6 +71,9 @@ public:
     HGIMETAL_API
     void MemoryBarrier(HgiMemoryBarrier barrier) override;
 
+    HGIMETAL_API
+    id<MTLComputeCommandEncoder> GetEncoder();
+
 protected:
     friend class HgiMetal;
 
@@ -86,10 +89,12 @@ private:
     HgiMetalComputeCmds(const HgiMetalComputeCmds&) = delete;
 
     void _CreateEncoder();
+    void _CreateArgumentBuffer();
     
     HgiMetal* _hgi;
     HgiMetalComputePipeline* _pipelineState;
     id<MTLCommandBuffer> _commandBuffer;
+    id<MTLBuffer> _argumentBuffer;
     id<MTLComputeCommandEncoder> _encoder;
     bool _secondaryCommandBuffer;
     bool _hasWork;

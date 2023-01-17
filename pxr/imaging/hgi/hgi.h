@@ -48,6 +48,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 class HgiCapabilities;
+class HgiIndirectCommandEncoder;
 
 using HgiUniquePtr = std::unique_ptr<class Hgi>;
 
@@ -138,6 +139,17 @@ public:
     /// Thread safety: Not thread safe.
     HGI_API
     static HgiUniquePtr CreatePlatformDefaultHgi();
+
+    /// Determine if Hgi instance can run on current hardware.
+    /// Thread safety: This call is thread safe.
+    HGI_API
+    virtual bool IsBackendSupported() const = 0;
+
+    /// Constructs a temporary Hgi object for the current platform and calls
+    /// the object's IsBackendSupported() function.
+    /// Thread safety: Not thread safe.
+    HGI_API
+    static bool IsSupported();
 
     /// Returns a GraphicsCmds object (for temporary use) that is ready to
     /// record draw commands. GraphicsCmds is a lightweight object that
@@ -283,6 +295,12 @@ public:
     /// Thread safety: This call is thread safe.
     HGI_API
     virtual HgiCapabilities const* GetCapabilities() const = 0;
+
+    /// Returns the device-specific indirect command buffer encoder
+    /// or nullptr if not supported.
+    /// Thread safety: This call is thread safe.
+    HGI_API
+    virtual HgiIndirectCommandEncoder* GetIndirectCommandEncoder() const = 0;
 
     /// Optionally called by client app at the start of a new rendering frame.
     /// We can't rely on StartFrame for anything important, because it is up to
