@@ -219,24 +219,11 @@ def GetPythonInfo(context):
     if Windows():
         pythonLibPath = os.path.join(pythonBaseDir, "libs",
                                      _GetPythonLibraryFilename(context))
-<<<<<<< HEAD
-    else:
-        isPythonDebug = context.buildDebug and Python3()
-        if Windows():
-            pythonBaseDir = sysconfig.get_config_var("base")
-            pythonLibPath = os.path.join(pythonBaseDir, "libs", _GetPythonLibraryFilename(context))
-            
-            pythonIncludeDir = os.path.join(pythonBaseDir, "include")
-        elif Linux():
-            pythonLibDir = sysconfig.get_config_var("LIBDIR")
-            pythonMultiarchSubdir = sysconfig.get_config_var("multiarchsubdir")
-=======
     elif Linux():
         pythonMultiarchSubdir = sysconfig.get_config_var("multiarchsubdir")
         # Try multiple ways to get the python lib dir
         for pythonLibDir in (sysconfig.get_config_var("LIBDIR"),
                              os.path.join(pythonBaseDir, "lib")):
->>>>>>> 0c7b9a95f155c221ff7df9270a39a52e3b23af8b
             if pythonMultiarchSubdir:
                 pythonLibPath = \
                     os.path.join(pythonLibDir + pythonMultiarchSubdir,
@@ -720,17 +707,9 @@ elif Windows():
     # boost 1.70 is required for Visual Studio 2019. For simplicity, we use
     # this version for all older Visual Studio versions as well.
 
-    #BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.76.0/boost_1_76_0.tar.gz"
-    #BOOST_VERSION_FILE = "include/boost-1_76/boost/version.hpp"
-    #BOOST_URL = "https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz"
-    #BOOST_VERSION_FILE = "include/boost-1_68/boost/version.hpp"
-
-    # for 3dsMax 2022
-    #BOOST_URL = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0.tar.gz"
-    #BOOST_VERSION_FILE = "include/boost-1_73/boost/version.hpp"
-    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
-    BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
-
+    BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.76.0/boost_1_76_0.tar.gz"
+    BOOST_VERSION_FILE = "include/boost-1_76/boost/version.hpp"
+    
 def InstallBoost_Helper(context, force, buildArgs):
     # Documentation files in the boost archive can have exceptionally
     # long paths. This can lead to errors when extracting boost on Windows,
