@@ -195,6 +195,10 @@ WRAP_CUSTOM {
         .def("GetBindingRel", &This::CollectionBinding::GetBindingRel,
              return_value_policy<return_by_value>())
         .def("IsValid", &This::CollectionBinding::IsValid)
+        .def("IsCollectionBindingRel", &UsdShadeMaterialBindingAPI \
+            ::CollectionBinding::IsCollectionBindingRel,
+            arg("bindingRel"))
+            .staticmethod("IsCollectionBindingRel")
         ;
     
     to_python_converter<This::CollectionBindingVector,
@@ -264,6 +268,14 @@ WRAP_CUSTOM {
              &This::AddPrimToBindingCollection,
              (arg("prim"), arg("bindingName"),
               arg("materialPurpose")=UsdShadeTokens->allPurpose))
+
+        .def("GetMaterialPurposes", &This::GetMaterialPurposes)
+             .staticmethod("GetMaterialPurposes")
+
+        .def("GetResolvedTargetPathFromBindingRel",
+             &UsdShadeMaterialBindingAPI::GetResolvedTargetPathFromBindingRel,
+             arg("bindingRel"))
+            .staticmethod("GetResolvedTargetPathFromBindingRel")
 
         .def("ComputeBoundMaterial", &_WrapComputeBoundMaterial,
              arg("materialPurpose")=UsdShadeTokens->allPurpose)

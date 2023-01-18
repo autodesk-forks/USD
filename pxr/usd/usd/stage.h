@@ -54,6 +54,7 @@
 
 #include <tbb/concurrent_vector.h>
 #include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_rw_mutex.h>
 
 #include <functional>
@@ -73,6 +74,7 @@ class Usd_InstanceCache;
 class Usd_InstanceChanges;
 class Usd_InterpolatorBase;
 class UsdResolveInfo;
+class UsdResolveTarget;
 class Usd_Resolver;
 class UsdPrim;
 class UsdPrimRange;
@@ -1053,19 +1055,10 @@ public:
     /// is as if the muted layer did not exist, which means a composition 
     /// error will be generated.
     ///
-#if AR_VERSION == 1
-    /// A canonical identifier for each layer in \p layersToMute will be
-    /// computed using ArResolver::ComputeRepositoryPath.  Any layer 
-    /// encountered during composition with the same repository path will
-    /// be considered muted and ignored.  Relative paths will be assumed to
-    /// be relative to the cache's root layer.  Search paths are immediately 
-    /// resolved and the result is used for computing the canonical path.
-#else
     /// A canonical identifier for each layer in \p layersToMute will be
     /// computed using ArResolver::CreateIdentifier using the stage's root
     /// layer as the anchoring asset. Any layer encountered during composition
     /// with the same identifier will be considered muted and ignored.
-#endif
     ///
     /// Note that muting a layer will cause this stage to release all
     /// references to that layer.  If no other client is holding on to
@@ -1641,6 +1634,16 @@ private:
     SdfPropertySpecHandleVector
     _GetPropertyStack(const UsdProperty &prop, UsdTimeCode time) const;
 
+    std::vector<std::pair<SdfPropertySpecHandle, SdfLayerOffset>> 
+    _GetPropertyStackWithLayerOffsets(
+        const UsdProperty &prop, UsdTimeCode time) const;
+
+    static SdfPrimSpecHandleVector 
+    _GetPrimStack(const UsdPrim &prim);
+
+    static std::vector<std::pair<SdfPrimSpecHandle, SdfLayerOffset>> 
+    _GetPrimStackWithLayerOffsets(const UsdPrim &prim);
+
     SdfPropertySpecHandle
     _GetSchemaPropertySpec(const UsdPrim &prim, const TfToken &propName) const;
 
@@ -1813,7 +1816,6 @@ private:
         Usd_PrimDataPtr prim, Usd_PrimDataConstPtr parent,
         UsdStagePopulationMask const *mask,
         const SdfPath &primIndexPath = SdfPath());
-    void _ComposeSubtreeInParallel(Usd_PrimDataPtr prim);
     void _ComposeSubtreesInParallel(
         const std::vector<Usd_PrimDataPtr> &prims,
         const std::vector<SdfPath> *primIndexPaths = nullptr);
@@ -2090,21 +2092,66 @@ private:
                          UsdResolveInfo *resolveInfo,
                          const UsdTimeCode *time = nullptr) const;
 
+    void _GetResolveInfoWithResolveTarget(
+        const UsdAttribute &attr, 
+        const UsdResolveTarget &resolveTarget,
+        UsdResolveInfo *resolveInfo,
+        const UsdTimeCode *time = nullptr) const;
+
     template <class T> struct _ExtraResolveInfo;
 
+    // Gets the value resolve info for the given attribute. If time is provided,
+    // the resolve info is evaluated for that specific time (which may be 
+    // default). Otherwise, if time is null, the resolve info is evaluated for
+    // "any numeric time" and will not populate values in extraInfo that 
+    // require a specific time to be evaluated.
     template <class T>
     void _GetResolveInfo(const UsdAttribute &attr, 
                          UsdResolveInfo *resolveInfo,
                          const UsdTimeCode *time = nullptr,
                          _ExtraResolveInfo<T> *extraInfo = nullptr) const;
 
+    // Gets the value resolve info for the given attribute using the given 
+    // resolve target. If time is provided, the resolve info is evaluated for 
+    // that specific time (which may be default). Otherwise, if time is null, 
+    // the resolve info is evaluated for "any numeric time" and will not 
+    // populate values in extraInfo that require a specific time to be 
+    // evaluated.
+    template <class T>
+    void _GetResolveInfoWithResolveTarget(
+        const UsdAttribute &attr, 
+        const UsdResolveTarget &resolveTarget,
+        UsdResolveInfo *resolveInfo,
+        const UsdTimeCode *time = nullptr,
+        _ExtraResolveInfo<T> *extraInfo = nullptr) const;
+
+    // Shared implementation function for _GetResolveInfo and 
+    // _GetResolveInfoWithResolveTarget. The only difference between how these
+    // two functions behave is in how they create the Usd_Resolver used for 
+    // iterating over nodes and layers, thus they provide this implementation
+    // with the needed MakeUsdResolverFn to create the Usd_Resolver.
+    template <class T, class MakeUsdResolverFn>
+    void _GetResolveInfoImpl(const UsdAttribute &attr, 
+                         UsdResolveInfo *resolveInfo,
+                         const UsdTimeCode *time,
+                         _ExtraResolveInfo<T> *extraInfo,
+                         const MakeUsdResolverFn &makeUsdResolveFn) const;
+
     template <class T> struct _ResolveInfoResolver;
     struct _PropertyStackResolver;
 
-    template <class Resolver>
-    void _GetResolvedValueImpl(const UsdProperty &prop,
-                               Resolver *resolver,
-                               const UsdTimeCode *time = nullptr) const;
+    template <class Resolver, class MakeUsdResolverFn>
+    void _GetResolvedValueAtDefaultImpl(
+        const UsdProperty &prop,
+        Resolver *resolver,
+        const MakeUsdResolverFn &makeUsdResolverFn) const;
+
+    template <class Resolver, class MakeUsdResolverFn>
+    void _GetResolvedValueAtTimeImpl(
+        const UsdProperty &prop,
+        Resolver *resolver,
+        const double *time,
+        const MakeUsdResolverFn &makeUsdResolverFn) const;
 
     bool _GetValue(UsdTimeCode time, const UsdAttribute &attr, 
                    VtValue* result) const;
@@ -2140,6 +2187,11 @@ private:
                                       UsdTimeCode time, const UsdAttribute &attr,
                                       Usd_InterpolatorBase* interpolator,
                                       T* value) const;
+
+    template <class T>
+    bool _GetDefaultValueFromResolveInfoImpl(const UsdResolveInfo &info,
+                                             const UsdAttribute &attr,
+                                             T* value) const;
 
     // --------------------------------------------------------------------- //
     // Specialized Time Sample I/O
@@ -2206,6 +2258,7 @@ private:
 
     // The stage's EditTarget.
     UsdEditTarget _editTarget;
+    bool _editTargetIsLocalLayer;
 
     std::unique_ptr<PcpCache> _cache;
     std::unique_ptr<Usd_ClipCache> _clipCache;
@@ -2215,11 +2268,18 @@ private:
 
     size_t _usedLayersRevision;
 
-    // A map from Path to Prim, for fast random access.
-    typedef TfHashMap<
-        SdfPath, Usd_PrimDataIPtr, SdfPath::Hash> PathToNodeMap;
+    // A concurrent map from Path to Prim, for fast random access.
+    struct _TbbHashEq {
+        inline bool equal(SdfPath const &l, SdfPath const &r) const {
+            return l == r;
+        }
+        inline size_t hash(SdfPath const &path) const {
+            return path.GetHash();
+        }
+    };
+    using PathToNodeMap = tbb::concurrent_hash_map<
+        SdfPath, Usd_PrimDataIPtr, _TbbHashEq>;
     PathToNodeMap _primMap;
-    mutable boost::optional<tbb::spin_rw_mutex> _primMapMutex;
 
     // The interpolation type used for all attributes on the stage.
     UsdInterpolationType _interpolationType;

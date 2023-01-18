@@ -30,7 +30,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-struct MxHdInfo;
+struct HdSt_MxShaderGenInfo;
 
 /// \class HdStMaterialXShaderGen
 ///
@@ -39,15 +39,26 @@ struct MxHdInfo;
 class HdStMaterialXShaderGen : public MaterialX::GlslShaderGenerator
 {
 public:
-    HdStMaterialXShaderGen(MxHdInfo const& mxHdInfo);
+    HdStMaterialXShaderGen(HdSt_MxShaderGenInfo const& mxHdInfo);
 
-    static MaterialX::ShaderGeneratorPtr create(MxHdInfo const& mxHdInfo) {
+    static MaterialX::ShaderGeneratorPtr create(
+            HdSt_MxShaderGenInfo const& mxHdInfo) {
         return std::make_shared<HdStMaterialXShaderGen>(mxHdInfo); 
     }
 
     MaterialX::ShaderPtr generate(const std::string& shaderName,
                            MaterialX::ElementPtr mxElement,
                            MaterialX::GenContext& mxContext) const override;
+
+    // Overriding this function to catch and adjust SurfaceNode code
+    void emitLine(const std::string& str, 
+                  MaterialX::ShaderStage& stage, 
+                  bool semicolon = true) const override;
+
+    // Helper to catch when we start/end emitting code for the SurfaceNode
+    void SetEmittingSurfaceNode(bool emittingSurfaceNode) {
+        _emittingSurfaceNode = emittingSurfaceNode;
+    }
 
 protected:
     void _EmitGlslfxShader(const MaterialX::ShaderGraph& mxGraph,
@@ -90,13 +101,29 @@ private:
                                   MaterialX::ShaderStage& stage,
                                   bool assignValue = true) const override;
 
+    // This method was introduced in MaterialX 1.38.5 and replaced the
+    // emitInclude method. We add this method for older versions of MaterialX
+    // for backwards compatibility.
+#if MATERIALX_MAJOR_VERSION <= 1 &&  \
+    MATERIALX_MINOR_VERSION <= 38 && \
+    MATERIALX_BUILD_VERSION <= 4
+    void emitLibraryInclude(const MaterialX::FilePath& filename,
+                            MaterialX::GenContext& context,
+                            MaterialX::ShaderStage& stage) const;
+#endif
+
     // Store MaterialX and Hydra counterparts and other Hydra specific info
     // to generate an appropriate glslfx header and properly initialize 
     // MaterialX values.
     MaterialX::StringMap _mxHdTextureMap;
     MaterialX::StringMap _mxHdPrimvarMap;
+    MaterialX::StringMap _mxHdPrimvarDefaultValueMap;
     std::string _defaultTexcoordName;
     std::string _materialTag;
+    bool _bindlessTexturesEnabled;
+
+    // Helper to catch code for the SurfaceNode
+    bool _emittingSurfaceNode;
 };
 
 

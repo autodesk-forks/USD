@@ -48,7 +48,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///
 /// A simple delegate class for unit test driver.
 ///
-class HdUnitTestDelegate : public HdSceneDelegate {
+class HdUnitTestDelegate : public HdSceneDelegate
+{
 public:
     HD_API
     HdUnitTestDelegate(HdRenderIndex *parentIndex,
@@ -203,6 +204,9 @@ public:
                    HdInterpolation widthInterp=HdInterpolationConstant,
                    bool authoredNormals=false,
                    SdfPath const &instancerId=SdfPath());
+    
+    HD_API
+    void SetCurveWrapMode(SdfPath const &id, TfToken const &wrap);
 
     HD_API
     void AddPoints(SdfPath const &id,
@@ -280,8 +284,11 @@ public:
 
     /// Render buffers
     HD_API
-    void AddRenderBuffer(SdfPath const &id, GfVec3i const& dims,
-                         HdFormat format, bool multiSampled);
+    void AddRenderBuffer(SdfPath const &id, 
+                         HdRenderBufferDescriptor const &desc);
+    HD_API
+    void UpdateRenderBuffer(SdfPath const &id, 
+                            HdRenderBufferDescriptor const &desc);
 
     /// Camera
     HD_API
@@ -459,15 +466,17 @@ private:
                 VtIntArray const &curveVertexCounts,
                 VtIntArray const &curveIndices,
                 TfToken const &type,
-                TfToken const &basis) :
+                TfToken const &basis,
+                TfToken const &wrap = HdTokens->nonperiodic) :
             points(points), curveVertexCounts(curveVertexCounts), 
-            curveIndices(curveIndices), type(type), basis(basis) { }
+            curveIndices(curveIndices), type(type), basis(basis), wrap(wrap) { }
 
         VtVec3fArray points;
         VtIntArray curveVertexCounts;
         VtIntArray curveIndices;
         TfToken type;
         TfToken basis;
+        TfToken wrap;
     };
     struct _Points {
         _Points() { }
@@ -520,6 +529,7 @@ private:
 
     struct _Camera {
         VtDictionary params;
+        GfMatrix4f transform;
     };
     struct _Light {
         VtDictionary params;

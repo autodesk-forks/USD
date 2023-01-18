@@ -37,9 +37,7 @@
 #include "pxr/base/work/dispatcher.h"
 #include "pxr/usd/ar/ar.h"
 #include "pxr/usd/ar/asset.h"
-#if AR_VERSION > 1
 #include "pxr/usd/ar/writableAsset.h"
-#endif
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/types.h"
@@ -73,9 +71,7 @@ using std::tuple;
 using std::vector;
 
 using ArAssetSharedPtr = std::shared_ptr<ArAsset>;
-#if AR_VERSION > 1
 using ArWritableAssetSharedPtr = std::shared_ptr<ArWritableAsset>;
-#endif
 
 // Trait indicating trivially copyable types, a hack since gcc doesn't yet
 // implement is_trivially_copyable correctly.
@@ -283,7 +279,7 @@ class CrateFile
 {
 public:
     struct Version;
-
+    
 private:
     // A move-only helper struct to represent a range of data in a FILE*, with
     // optional "ownership" of that FILE* (i.e. responsibility to fclose upon
@@ -328,7 +324,7 @@ private:
         bool hasOwnership = false;
     };
 
-    // This structure pulls together the underlying ArchMutableFileMapping
+    // This structure pulls together the underlying ArchConstFileMapping
     // representing the memory-mapped file plus all the information we need to
     // support "zero-copy" arrays where we create VtArray instances that point
     // directly into mapped memory.  It gets complicated because the
@@ -342,7 +338,7 @@ private:
         // memory-mapped region, and shares in the lifetime of the mapping.
         struct ZeroCopySource : public Vt_ArrayForeignDataSource {
             explicit ZeroCopySource(
-                CrateFile::_FileMapping *m, void *addr, size_t numBytes);
+                CrateFile::_FileMapping *m, void const *addr, size_t numBytes);
 
             // XXX --------------------------------
             // Hack for tbb bug -- types in tbb::concurrent_unordered_set
@@ -375,7 +371,7 @@ private:
             }
 
             // Return the address this source refers to.
-            void *GetAddr() const { return _addr; }
+            void const *GetAddr() const { return _addr; }
             
             // Return the number of bytes this source refers to.
             size_t GetNumBytes() const { return _numBytes; }
@@ -385,14 +381,14 @@ private:
             static void _Detached(Vt_ArrayForeignDataSource *selfBase);
 
             _FileMapping *_mapping;
-            void *_addr;
+            void const *_addr;
             size_t _numBytes;
         };
         friend struct ZeroCopySource;
         
         _FileMapping() : _refCount(0) {};
 
-        explicit _FileMapping(ArchMutableFileMapping mapping, int64_t offset=0,
+        explicit _FileMapping(ArchConstFileMapping mapping, int64_t offset=0,
                               int64_t length=-1)
             : _refCount(0)
             , _mapping(std::move(mapping))
@@ -404,12 +400,12 @@ private:
         
         // Add an an externally referenced page range.
         ZeroCopySource *
-        AddRangeReference(void *addr, size_t numBytes);
+        AddRangeReference(void const *addr, size_t numBytes);
 
         // Return the start address of the mapped file content.  Note that due
         // to having usdc files embedded into other files (like usdz files) the
         // map start address is NOT guaranteed to be page-aligned.
-        char *GetMapStart() const { return _start; }
+        const char *GetMapStart() const { return _start; }
 
         // Return the length of the relevant content range in the mapping.
         size_t GetLength() const { return _length; }
@@ -417,9 +413,11 @@ private:
     private:
         friend class CrateFile;
 
-        // "Silent-store" to touch outstanding page ranges to detach them in the
-        // copy-on-write sense from their file backing and make them
-        // swap-backed.  No new page ranges can be added once this is invoked.
+        // Set memory protection to read / copy-on-write and then "silent-store"
+        // to touch outstanding page ranges to detach them in the copy-on-write
+        // sense from their file backing and make them swap-backed.  No new page
+        // ranges can be added once this is invoked.  (i.e. a cratefile dtor
+        // cannot run concurrently with other code reading/writing the file.)
         void _DetachReferencedRanges();
 
         // This class is managed by a combination of boost::intrusive_ptr and
@@ -438,8 +436,8 @@ private:
         }
 
         mutable std::atomic<size_t> _refCount { 0 };
-        ArchMutableFileMapping _mapping;
-        char *_start;
+        ArchConstFileMapping _mapping;
+        char const *_start;
         int64_t _length;
         tbb::concurrent_unordered_set<ZeroCopySource> _outstandingRanges;
     };
@@ -474,6 +472,63 @@ private:
 public:
     friend struct ValueRep;
     friend struct TimeSamples;
+
+    struct Version {
+        // Not named 'major' since that's a macro name conflict on POSIXes.
+        uint8_t majver, minver, patchver;
+        
+        constexpr Version() : Version(0,0,0) {}
+        constexpr Version(uint8_t majver, uint8_t minver, uint8_t patchver)
+            : majver(majver), minver(minver), patchver(patchver) {}
+        
+        explicit Version(CrateFile::_BootStrap const &boot)
+            : Version(boot.version[0], boot.version[1], boot.version[2]) {}
+
+        /// Read a version from a dotted decimal integer string, e.g. "1.2.3".
+        static Version FromString(char const *str);
+
+        /// Return a version number as a single 32-bit integer.  From most to
+        /// least significant, the returned integer's bytes are 0,
+        /// major-version, minor-version, patch-version.
+        constexpr uint32_t AsInt() const {
+            return static_cast<uint32_t>(majver) << 16 |
+                static_cast<uint32_t>(minver) << 8 |
+                static_cast<uint32_t>(patchver);
+        }
+
+        /// Return a dotted decimal integer string for this version,
+        /// e.g. "1.2.3".
+        std::string AsString() const;
+
+        /// Return true if this version is not zero in all components.
+        bool IsValid() const { return AsInt() != 0; }
+
+        // Return true if fileVer has the same major version as this, and has a
+        // lesser or same minor version.  Patch version irrelevant, since the
+        // versioning scheme specifies that patch level changes are
+        // forward-compatible.
+        bool CanRead(Version const &fileVer) const {
+            return fileVer.majver == majver && fileVer.minver <= minver;
+        }
+
+        // Return true if fileVer has the same major version as this, and has a
+        // lesser minor version, or has the same minor version and a lesser or
+        // equal patch version.
+        bool CanWrite(Version const &fileVer) const {
+            return fileVer.majver == majver &&
+                (fileVer.minver < minver ||
+                 (fileVer.minver == minver && fileVer.patchver <= patchver));
+        }
+    
+#define LOGIC_OP(op)                                                    \
+        constexpr bool operator op(Version const &other) const {        \
+            return AsInt() op other.AsInt();                            \
+        }
+        LOGIC_OP(==); LOGIC_OP(!=);
+        LOGIC_OP(<);  LOGIC_OP(>);
+        LOGIC_OP(<=); LOGIC_OP(>=);
+#undef LOGIC_OP
+    };
 
     typedef std::pair<TfToken, VtValue> FieldValuePair;
 
@@ -576,15 +631,22 @@ public:
     static bool CanRead(string const &assetPath);
     static bool CanRead(string const &assetPath, ArAssetSharedPtr const &asset);
 
+    static Version GetSoftwareVersion();
     static TfToken const &GetSoftwareVersionToken();
+
+    Version GetFileVersion() const;
     TfToken GetFileVersionToken() const;
 
-    static std::unique_ptr<CrateFile> CreateNew();
+    static std::unique_ptr<CrateFile> CreateNew(bool detached);
 
     // Return nullptr on failure.
-    static std::unique_ptr<CrateFile> Open(string const &assetPath);
     static std::unique_ptr<CrateFile> Open(string const &assetPath,
-                                           ArAssetSharedPtr const &asset);
+                                           bool detached = false);
+    static std::unique_ptr<CrateFile> Open(string const &assetPath,
+                                           ArAssetSharedPtr const &asset,
+                                           bool detached = false);
+
+    bool IsDetached() const { return _detached; }
 
     // Helper for saving to a file.
     struct Packer {
@@ -736,12 +798,19 @@ public:
     std::type_info const &GetTypeid(ValueRep rep) const;
 
 private:
-    explicit CrateFile(bool useMmap);
+    enum class Options {
+        Default,
+        UseMmap,
+        Detached
+    };
+
+    explicit CrateFile(Options opt);
     CrateFile(string const &assetPath, string const &fileName,
               _FileMappingIPtr mapStart, ArAssetSharedPtr const &asset);
     CrateFile(string const &assetPath, string const &fileName,
               _FileRange &&inputFile, ArAssetSharedPtr const &asset);
-    CrateFile(string const &assetPath, ArAssetSharedPtr const &asset);
+    CrateFile(string const &assetPath, ArAssetSharedPtr const &asset,
+              bool detached);
 
     CrateFile(CrateFile const &) = delete;
     CrateFile &operator=(CrateFile const &) = delete;
@@ -974,7 +1043,9 @@ private:
     // populated from an asset.
     _FileMappingIPtr _mmapSrc;
     _FileRange _preadSrc;
+
     ArAssetSharedPtr _assetSrc;
+    const bool _detached;
 
     std::string _assetPath; // Empty if this file data is in-memory only.
     std::string _fileReadFrom; // The file this object was populate from, if it

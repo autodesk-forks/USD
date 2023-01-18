@@ -83,24 +83,20 @@ enum class _ReferenceTypesToInclude {
 class _FileAnalyzer {
 public:
     // The asset remapping function's signature. 
-    // It takes a given asset path, the layer it was found in and a boolean 
-    // value. The bool is used to indicate whether a dependency must be skipped 
-    // on the given asset path, which is useful to skip for things like 
-    // templated clip paths that cannot be resolved directly without additional 
-    // processing. 
-    // The function returns the corresponding remapped path.
+    // It takes a given asset path and the layer it was found in and returns
+    // the corresponding remapped path.
     // 
     // The layer is used to resolve the asset path in cases where the given 
     // asset path is a search path or a relative path. 
     using RemapAssetPathFunc = std::function<std::string 
             (const std::string &assetPath, 
-             const SdfLayerRefPtr &layer, 
-             bool skipDependency)>;
+             const SdfLayerRefPtr &layer)>;
 
     // Takes the asset path and the type of dependency it is and does some 
     // arbitrary processing (like enumerating dependencies).
     using ProcessAssetPathFunc = std::function<void 
             (const std::string &assetPath, 
+             const SdfLayerRefPtr &layer,
              const _DepType &depType)>;
 
     // Opens the file at \p resolvedFilePath and analyzes its external 
@@ -230,11 +226,11 @@ _FileAnalyzer::_ProcessDependency(const std::string &rawRefPath,
                                   const _DepType &depType)
 {
     if (_processPathFunc) {
-        _processPathFunc(rawRefPath, depType);
+        _processPathFunc(rawRefPath, GetLayer(), depType);
     }
 
     if (_remapPathFunc) {
-        return _remapPathFunc(rawRefPath, GetLayer(), /*skipDependency*/ false);
+        return _remapPathFunc(rawRefPath, GetLayer());
     }
 
     // Return the raw reference path if there's no asset path remapping 
@@ -332,7 +328,13 @@ _FileAnalyzer::_ProcessPayloads(const SdfPrimSpecHandle &primSpec)
     } else {
         for (SdfPayload const& payload:
              primSpec->GetPayloadList().GetAddedOrExplicitItems()) {
-            _ProcessDependency(payload.GetAssetPath(), _DepType::Payload);
+
+            // If the asset path is empty this is a local payload. We can ignore
+            // these since they refer to the same layer where the payload was
+            // authored.
+            if (!payload.GetAssetPath().empty()) {
+                _ProcessDependency(payload.GetAssetPath(), _DepType::Payload);
+            }
         }
     }
 }
@@ -462,8 +464,7 @@ _FileAnalyzer::_ProcessMetadata(const SdfPrimSpecHandle &primSpec)
                         // since it can't be resolved by the resolver.
                         clipDict[UsdClipsAPIInfoKeys->templateAssetPath] = 
                             VtValue(_remapPathFunc(templateAssetPath, 
-                                                   GetLayer(), 
-                                                   /*skipDependency*/ true));
+                                                   GetLayer()));
                         clipsDict[clipSetNameAndDict.first] = VtValue(clipDict);
                     }
 
@@ -527,9 +528,15 @@ _FileAnalyzer::_ProcessReferences(const SdfPrimSpecHandle &primSpec)
             &_FileAnalyzer::_RemapRefOrPayload<SdfReference,
             _DepType::Reference>, this, std::placeholders::_1));
     } else {
-        for (SdfReference const& reference:
+        for (SdfReference const& ref:
             primSpec->GetReferenceList().GetAddedOrExplicitItems()) {
-            _ProcessDependency(reference.GetAssetPath(), _DepType::Reference);
+
+            // If the asset path is empty this is a local reference. We can
+            // ignore these since they refer to the same layer where the
+            // reference was authored.
+            if (!ref.GetAssetPath().empty()) {
+                _ProcessDependency(ref.GetAssetPath(), _DepType::Reference);
+            }
         }
     }
 }
@@ -619,29 +626,23 @@ public:
             return;
         }
 
-#if AR_VERSION == 1
-        // ... and can be localized to a physical location on disk.
-        if (!ArGetResolver().FetchToLocalResolvedPath(assetPath.GetAssetPath(),
-                    rootFilePath)) {
-            return;
-        }
-#endif
+        // Record all dependencies in layerDependenciesMap so we can recurse
+        // on them.
+        const auto processPathFunc =
+            [&layerDependenciesMap](
+                const std::string &ap, const SdfLayerRefPtr &layer,
+                _DepType depType) {
+            layerDependenciesMap[layer].push_back(ap);
+        };
 
-        const auto remapAssetPathFunc = 
+        // If destination directory is an empty string, skip any remapping
+        // of asset paths.
+        const auto remapAssetPathFunc = destDir.empty() ?
+            _FileAnalyzer::RemapAssetPathFunc() : 
             [&layerDependenciesMap, &dirRemapper, &destDir, &rootFilePath, 
              &origRootFilePath, &firstLayerName](
                 const std::string &ap, 
-                const SdfLayerRefPtr &layer,
-                bool skipDependency) {
-            if (!skipDependency) {
-                layerDependenciesMap[layer].push_back(ap);
-            } 
-
-            // If destination directory is an empty string, skip any remapping.
-            // of asset paths.
-            if (destDir.empty()) {
-                return ap;
-            }
+                const SdfLayerRefPtr &layer) {
 
             return _RemapAssetPath(ap, layer, 
                     origRootFilePath, rootFilePath, firstLayerName,
@@ -659,7 +660,7 @@ public:
                     TfGetBaseName(rootFilePath));
             filesToLocalize.emplace(destFilePath, _FileAnalyzer(rootFilePath, 
                     /*refTypesToInclude*/ _ReferenceTypesToInclude::All,
-                    remapAssetPathFunc));
+                    remapAssetPathFunc, processPathFunc));
         }
 
         while (!filesToLocalize.empty()) {
@@ -700,8 +701,8 @@ public:
                 }
 
                 const std::string refAssetPath = 
-                        SdfComputeAssetPathRelativeToLayer(
-                            fileAnalyzer.GetLayer(), ref);
+                    SdfComputeAssetPathRelativeToLayer(
+                        fileAnalyzer.GetLayer(), ref);
 
                 std::string resolvedRefFilePath = resolver.Resolve(refAssetPath);
 
@@ -715,18 +716,6 @@ public:
                     _unresolvedAssetPaths.push_back(refAssetPath);
                     continue;
                 } 
-
-#if AR_VERSION == 1
-                // Ensure that the resolved path can be fetched to a physical 
-                // location on disk.
-                if (!ArGetResolver().FetchToLocalResolvedPath(refAssetPath, 
-                        resolvedRefFilePath)) {
-                    TF_WARN("Failed to fetch-to-local resolved path for asset "
-                        "@%s@ : '%s'. Skipping dependency.", 
-                        refAssetPath.c_str(), resolvedRefFilePath.c_str());
-                    continue;
-                }
-#endif
 
                 // Check if this dependency must skipped.
                 if (std::find(dependenciesToSkip.begin(), 
@@ -765,7 +754,7 @@ public:
                 filesToLocalize.emplace(destFilePathForRef, _FileAnalyzer(
                         resolvedRefFilePath, 
                         /* refTypesToInclude */ _ReferenceTypesToInclude::All,
-                        remapAssetPathFunc));
+                        remapAssetPathFunc, processPathFunc));
             }
         }
     }
@@ -874,11 +863,6 @@ _AssetLocalizer::_RemapAssetPath(const std::string &refPath,
 {
     auto &resolver = ArGetResolver();
 
-#if AR_VERSION == 1
-    const bool isContextDependentPath = resolver.IsSearchPath(refPath);
-    const bool isRelativePath = 
-        !isContextDependentPath && resolver.IsRelativePath(refPath);
-#else
     const bool isContextDependentPath =
         resolver.IsContextDependentPath(refPath);
 
@@ -890,7 +874,6 @@ _AssetLocalizer::_RemapAssetPath(const std::string &refPath,
         !isContextDependentPath &&
         (resolver.CreateIdentifier(refPath, layer->GetResolvedPath()) !=
          resolver.CreateIdentifier(refPath));
-#endif
 
     // Return relative paths unmodified.
     if (isRelativePathOut) {
@@ -910,13 +893,7 @@ _AssetLocalizer::_RemapAssetPath(const std::string &refPath,
                 SdfComputeAssetPathRelativeToLayer(layer, refPath);
         const std::string refFilePath = resolver.Resolve(refAssetPath);
 
-        bool resolveOk = !refFilePath.empty();
-#if AR_VERSION == 1
-        // Ensure that the resolved path can be fetched to a physical 
-        // location on disk.
-        resolveOk = resolveOk &&
-            resolver.FetchToLocalResolvedPath(refAssetPath, refFilePath);
-#endif
+        const bool resolveOk = !refFilePath.empty();
 
         if (resolveOk) {
             result = refFilePath;
@@ -927,19 +904,11 @@ _AssetLocalizer::_RemapAssetPath(const std::string &refPath,
     }
 
     // Normalize paths compared below to account for path format differences.
-#if AR_VERSION == 1
-    const std::string layerPath = 
-        resolver.ComputeNormalizedPath(layer->GetRealPath());
-    result = resolver.ComputeNormalizedPath(result);
-    rootFilePath = resolver.ComputeNormalizedPath(rootFilePath);
-    origRootFilePath = resolver.ComputeNormalizedPath(origRootFilePath);
-#else
     const std::string layerPath = 
         TfNormPath(layer->GetRealPath());
     result = TfNormPath(result);
     rootFilePath = TfNormPath(rootFilePath);
     origRootFilePath = TfNormPath(origRootFilePath);
-#endif
 
     bool resultPointsToRoot = ((result == rootFilePath) || 
                                (result == origRootFilePath));
@@ -1007,8 +976,10 @@ _ExtractExternalReferences(
     // remapPathFunc to empty.
     _FileAnalyzer(filePath, refTypesToInclude,
         /*remapPathFunc*/ {}, 
-        [&subLayers, &references, &payloads](const std::string &assetPath,
-                                          const _DepType &depType) {
+        [&subLayers, &references, &payloads](
+            const std::string &assetPath, const SdfLayerRefPtr &layer,
+            const _DepType &depType) 
+        {
             if (depType == _DepType::Reference) {
                 references->push_back(assetPath);
             } else if (depType == _DepType::Sublayer) {
@@ -1350,8 +1321,7 @@ UsdUtilsModifyAssetPaths(
     _FileAnalyzer(layer,
         _ReferenceTypesToInclude::All, 
         [&modifyFn](const std::string& assetPath, 
-                    const SdfLayerRefPtr& layer, 
-                    bool skipDep) { 
+                    const SdfLayerRefPtr& layer) { 
             return modifyFn(assetPath);
         }
     );

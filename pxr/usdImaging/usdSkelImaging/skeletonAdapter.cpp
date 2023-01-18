@@ -475,12 +475,21 @@ UsdSkelImagingSkeletonAdapter::MarkDirty(const UsdPrim& prim,
     if (_IsCallbackForSkeleton(prim)) {
         // Mark the bone mesh dirty
         index->MarkRprimDirty(cachePath, dirty);
+        // Re-run UpdateForTime if needed.
+        if (dirty & HdChangeTracker::DirtyPrimvar) {
+            index->RequestUpdateForTime(cachePath);
+        }
     } else if (_IsSkinnedPrimPath(cachePath)) {
 
         // Since The SkeletonAdapter hijacks skinned prims (see SkelRootAdapter),
         // make sure to delegate to the actual adapter registered for the prim.
         UsdImagingPrimAdapterSharedPtr adapter = _GetPrimAdapter(prim);
         adapter->MarkDirty(prim, cachePath, dirty, index);
+        // Re-run UpdateForTime if needed. Note that adapter->MarkDirty might
+        // request this as well, but the delegate will de-duplicate the calls.
+        if (dirty & HdChangeTracker::DirtyPrimvar) {
+            index->RequestUpdateForTime(cachePath);
+        }
 
         // Propagate dirtyness on the skinned prim to the computations.
         // Also see related comment in ProcessPropertyChange(..)
@@ -915,51 +924,54 @@ UsdSkelImagingSkeletonAdapter::InvokeComputation(
                             blendShapeWeights.UncheckedGet<VtFloatArray>(),
                             skinnedPoints);
 
-    if (!hasConstantInfluences.UncheckedGet<bool>()) {
+    if (numInfluencesPerComponent.UncheckedGet<int>() > 0) {
 
-        UsdSkelSkinPointsLBS(
-            geomBindXform.UncheckedGet<GfMatrix4f>(),
-            skinningXforms.UncheckedGet<VtMatrix4fArray>(),
-            influences.UncheckedGet<VtVec2fArray>(),
-            numInfluencesPerComponent.UncheckedGet<int>(),
-            skinnedPoints);
+        if (!hasConstantInfluences.UncheckedGet<bool>()) {
 
-        // The points returned above are in skel space, and need to be
-        // transformed to prim local space.
-        const GfMatrix4d skelToPrimLocal =
-            skelLocalToWorld.UncheckedGet<GfMatrix4d>() *
-            primWorldToLocal.UncheckedGet<GfMatrix4d>();
-
-        _TransformPoints(skinnedPoints, skelToPrimLocal);
-
-    } else {
-        // Have constant influences. Compute a rigid deformation.
-        GfMatrix4f skinnedTransform;
-        if (UsdSkelSkinTransformLBS(
+            UsdSkelSkinPointsLBS(
                 geomBindXform.UncheckedGet<GfMatrix4f>(),
                 skinningXforms.UncheckedGet<VtMatrix4fArray>(),
                 influences.UncheckedGet<VtVec2fArray>(),
-                &skinnedTransform)) {
-            
-            // The computed skinnedTransform is the transform which, when
-            // applied to the points of the skinned prim, results in skinned
-            // points in *skel* space, and need to be xformed to prim
-            // local space.
+                numInfluencesPerComponent.UncheckedGet<int>(),
+                skinnedPoints);
 
-            const GfMatrix4d restToPrimLocalSkinnedXf =
-                GfMatrix4d(skinnedTransform)*
-                skelLocalToWorld.UncheckedGet<GfMatrix4d>()*
+            // The points returned above are in skel space, and need to be
+            // transformed to prim local space.
+            const GfMatrix4d skelToPrimLocal =
+                skelLocalToWorld.UncheckedGet<GfMatrix4d>() *
                 primWorldToLocal.UncheckedGet<GfMatrix4d>();
 
-            // XXX: Ideally we would modify the xform of the skinned prim,
-            // rather than its underlying points (which is particularly
-            // important if we want to preserve instancing!).
-            // For now, bake the rigid deformation into the points.
-            _TransformPoints(skinnedPoints, restToPrimLocalSkinnedXf);
+            _TransformPoints(skinnedPoints, skelToPrimLocal);
 
         } else {
-            // Nothing to do. We initialized skinnedPoints to the restPoints,
-            // so just return that.
+            // Have constant influences. Compute a rigid deformation.
+            GfMatrix4f skinnedTransform;
+            if (UsdSkelSkinTransformLBS(
+                    geomBindXform.UncheckedGet<GfMatrix4f>(),
+                    skinningXforms.UncheckedGet<VtMatrix4fArray>(),
+                    influences.UncheckedGet<VtVec2fArray>(),
+                    &skinnedTransform)) {
+
+                // The computed skinnedTransform is the transform which, when
+                // applied to the points of the skinned prim, results in skinned
+                // points in *skel* space, and need to be xformed to prim
+                // local space.
+
+                const GfMatrix4d restToPrimLocalSkinnedXf =
+                    GfMatrix4d(skinnedTransform)*
+                    skelLocalToWorld.UncheckedGet<GfMatrix4d>()*
+                    primWorldToLocal.UncheckedGet<GfMatrix4d>();
+
+                // XXX: Ideally we would modify the xform of the skinned prim,
+                // rather than its underlying points (which is particularly
+                // important if we want to preserve instancing!).
+                // For now, bake the rigid deformation into the points.
+                _TransformPoints(skinnedPoints, restToPrimLocalSkinnedXf);
+
+            } else {
+                // Nothing to do. We initialized skinnedPoints to the restPoints,
+                // so just return that.
+            }
         }
     }
 

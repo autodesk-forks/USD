@@ -42,6 +42,10 @@
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/hash.h"
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+#include <MaterialXGenShader/Shader.h>
+#endif
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_ENV_SETTING(HDST_ENABLE_RESOURCE_INSTANCING, true,
@@ -60,12 +64,32 @@ _CopyChainedBuffers(HdBufferSourceSharedPtr const&  src,
 {
     if (src->HasChainedBuffer()) {
         HdBufferSourceSharedPtrVector chainedSrcs = src->GetChainedBuffers();
-        // traverse the tree in a DFS fashion
+        // Traverse the tree in a depth-first fashion.
         for(auto& c : chainedSrcs) {
             range->CopyData(c);
             _CopyChainedBuffers(c, range);
         }
     }
+}
+
+static size_t
+_GetChainedStagingSize(HdBufferSourceSharedPtr const& src)
+{
+    size_t size = 0;
+
+    if (src->HasChainedBuffer()) {
+        HdBufferSourceSharedPtrVector chainedSrcs = src->GetChainedBuffers();
+        // Traverse the tree in a depth-first fashion.
+        for (auto& c : chainedSrcs) {
+            const size_t numElements = c->GetNumElements();
+            if (numElements > 0) {
+                size += numElements * HdDataSizeOfTupleType(c->GetTupleType());
+            }
+            size += _GetChainedStagingSize(c);
+        }
+    }
+
+    return size;
 }
 
 static bool
@@ -129,6 +153,9 @@ void HdStResourceRegistry::InvalidateShaderRegistry()
 {
     _geometricShaderRegistry.Invalidate();
     _glslfxFileRegistry.Invalidate();
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    _materialXShaderRegistry.Invalidate();
+#endif
 }
 
 
@@ -632,6 +659,15 @@ HdStResourceRegistry::RegisterGLSLFXFile(
     return _glslfxFileRegistry.GetInstance(id);
 }
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+HdInstance<MaterialX::ShaderPtr>
+HdStResourceRegistry::RegisterMaterialXShader(
+        HdInstance<MaterialX::ShaderPtr>::ID id)
+{
+    return _materialXShaderRegistry.GetInstance(id);
+}
+#endif
+
 HdInstance<HgiResourceBindingsSharedPtr>
 HdStResourceRegistry::RegisterResourceBindings(
     HdInstance<HgiResourceBindingsSharedPtr>::ID id)
@@ -724,9 +760,6 @@ HdStResourceRegistry::_CommitTextures()
     for (HdStShaderCodeSharedPtr const & shaderCode : shaderCodes) {
         shaderCode->AddResourcesFromTextures(ctx);
     }
-
-    // MipMap generation for textures requires us to submit blit work.
-    SubmitBlitWork();
 }
 
 void
@@ -779,15 +812,21 @@ HdStResourceRegistry::_Commit()
                                     req.range->Resize(
                                         source->GetNumElements());
                                 }
-                            }
 
-                            // Calculate the size of the staging buffer.
-                            if (req.range && req.range->RequiresStaging()) {
-                                size_t srcSize =
-                                    source->GetNumElements() *
-                                    HdDataSizeOfTupleType(
+                                // Calculate the size of the staging buffer.
+                                if (req.range && req.range->RequiresStaging()) {
+                                    const size_t numElements =
+                                        source->GetNumElements();
+                                    // Avoid calling functions on 
+                                    // HdNullBufferSources
+                                    if (numElements > 0) {
+                                        stagingBufferSize += numElements *
+                                            HdDataSizeOfTupleType(
                                                 source->GetTupleType());
-                                stagingBufferSize += srcSize;
+                                    }
+                                    stagingBufferSize += 
+                                        _GetChainedStagingSize(source);
+                                }
                             }
                         }
                     }
@@ -795,7 +834,7 @@ HdStResourceRegistry::_Commit()
             }
             if (++numIterations > 100) {
                 TF_WARN("Too many iterations in resolving buffer source. "
-                        "It's likely due to incosistent dependency.");
+                        "It's likely due to inconsistent dependency.");
                 break;
             }
         }
@@ -849,6 +888,13 @@ HdStResourceRegistry::_Commit()
             _uniformSsboAggregationStrategy.get());
         _singleBufferArrayRegistry.ReallocateAll(
             _singleAggregationStrategy.get());
+        
+        // APPLE METAL: The above creates a set of GPU to GPU copies. However
+        // the next phase may create some CPU to GPU copies to the same memory.
+        // Ideally we wouldn't have requested the GPU copy at all (as it's
+        // redundant) but we did, so we need to ensure these operations are
+        // completed before we issue the CPU to GPU updates.
+        SubmitBlitWork(HgiSubmitWaitTypeWaitUntilCompleted);
     }
 
     {
@@ -950,6 +996,29 @@ HdStResourceRegistry::_Commit()
     }
 }
 
+// Callback functions for garbage collecting Hgi resources
+namespace {
+
+void 
+_DestroyResourceBindings(Hgi *hgi, HgiResourceBindingsHandle *resourceBindings)
+{
+    hgi->DestroyResourceBindings(resourceBindings);
+}
+
+void 
+_DestroyGraphicsPipeline(Hgi *hgi, HgiGraphicsPipelineHandle *graphicsPipeline)
+{
+    hgi->DestroyGraphicsPipeline(graphicsPipeline);
+}
+
+void 
+_DestroyComputePipeline(Hgi *hgi, HgiComputePipelineHandle *computePipeline)
+{
+    hgi->DestroyComputePipeline(computePipeline);
+}
+
+}
+
 void
 HdStResourceRegistry::_GarbageCollect()
 {
@@ -1005,11 +1074,17 @@ HdStResourceRegistry::_GarbageCollect()
     _geometricShaderRegistry.GarbageCollect();
     _glslProgramRegistry.GarbageCollect();
     _glslfxFileRegistry.GarbageCollect();
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    _materialXShaderRegistry.GarbageCollect();
+#endif
 
-    // Cleanup Hgi resources bindings and pipelines
-    _resourceBindingsRegistry.GarbageCollect();
-    _graphicsPipelineRegistry.GarbageCollect();
-    _computePipelineRegistry.GarbageCollect();
+    // Cleanup Hgi resources
+    _resourceBindingsRegistry.GarbageCollect(
+        std::bind(&_DestroyResourceBindings, _hgi, std::placeholders::_1));
+    _graphicsPipelineRegistry.GarbageCollect(
+        std::bind(&_DestroyGraphicsPipeline, _hgi, std::placeholders::_1));
+    _computePipelineRegistry.GarbageCollect(
+        std::bind(&_DestroyComputePipeline, _hgi, std::placeholders::_1));
 
     // cleanup buffer array
     // buffer array retains weak_ptrs of range. All unused ranges should be
@@ -1085,11 +1160,24 @@ HdStResourceRegistry::_UpdateBufferArrayRange(
         }
     }
 
-    // Create new BAR ...
-    HdBufferSpecVector newBufferSpecs =
-        HdBufferSpec::ComputeUnion(updatedOrAddedSpecs,
-            HdBufferSpec::ComputeDifference(curBufferSpecs, removedSpecs));
-    
+    // Create new BAR, avoiding changing the order of existing specs, to 
+    // avoid unnecessary invalidation of the shader cache.
+    HdBufferSpecVector newBufferSpecs;
+    {
+        // Compute eXclusive members of the add and remove lists, because 
+        // we can't guarantee here that removedSpecs and updatedOrAddedSpecs
+        // have no elements in common, and ignoring overlaps is required for
+        // order preservation here.
+        const HdBufferSpecVector specsAddX =
+            HdBufferSpec::ComputeDifference(updatedOrAddedSpecs, removedSpecs);
+        const HdBufferSpecVector specsRemoveX =
+            HdBufferSpec::ComputeDifference(removedSpecs, updatedOrAddedSpecs);
+
+        newBufferSpecs = HdBufferSpec::ComputeUnion(
+            HdBufferSpec::ComputeDifference(curBufferSpecs, specsRemoveX),
+                specsAddX);
+    }
+
     HdBufferArrayRangeSharedPtr newRange = _AllocateBufferArrayRange(
         strategy, bufferArrayRegistry, role, newBufferSpecs, usageHint);
 

@@ -65,6 +65,8 @@ HdxFullscreenShader::HdxFullscreenShader(
   , _srcAlphaBlendFactor(HgiBlendFactorZero)
   , _dstAlphaBlendFactor(HgiBlendFactorZero)
   , _alphaBlendOp(HgiBlendOpAdd)
+  , _attachmentLoadOp(HgiAttachmentLoadOpDontCare)
+  , _attachmentStoreOp(HgiAttachmentStoreOpStore)
 {
     if (_debugName.empty()) {
         _debugName = "HdxFullscreenShader";
@@ -145,9 +147,6 @@ HdxFullscreenShader::SetProgram(
     std::string vsCode;
     //pass this guy in as a reference -->
     
-    if(_hgi->GetAPIName() == HgiTokens->OpenGL) {
-        vsCode = "#version 450 \n";
-    }
     vsCode +=vsGlslfx.GetSource(_tokens->fullscreenVertex);
     TF_VERIFY(!vsCode.empty());
 
@@ -157,9 +156,6 @@ HdxFullscreenShader::SetProgram(
     // Setup the fragment shader
     std::string fsCode;
     
-    if(_hgi->GetAPIName() == HgiTokens->OpenGL) {
-        fsCode = "#version 450 \n";
-    }
     fsCode += fsGlslfx.GetSource(_shaderName);
     TF_VERIFY(!fsCode.empty());
     fragDesc.shaderCode = fsCode.c_str();
@@ -255,6 +251,25 @@ HdxFullscreenShader::SetBlendState(
 }
 
 void
+HdxFullscreenShader::SetAttachmentLoadStoreOp(
+    HgiAttachmentLoadOp attachmentLoadOp,
+    HgiAttachmentStoreOp attachmentStoreOp)
+{
+    if (_attachmentLoadOp == attachmentLoadOp &&
+        _attachmentStoreOp == attachmentStoreOp) 
+    {
+        return;
+    }
+
+    if (_pipeline) {
+        _hgi->DestroyGraphicsPipeline(&_pipeline);
+    }
+
+    _attachmentLoadOp = attachmentLoadOp;
+    _attachmentStoreOp = attachmentStoreOp;
+}
+
+void
 HdxFullscreenShader::SetShaderConstants(
     uint32_t byteSize,
     const void* data)
@@ -304,23 +319,17 @@ HdxFullscreenShader::_CreateBufferResources()
      */
     constexpr size_t elementsPerVertex = 6;
     constexpr size_t vertDataCount = elementsPerVertex * 3;
-    constexpr float vertDataGL[vertDataCount] = 
+    constexpr float vertData[vertDataCount] =
             { -1,  3, 0, 1,     0, 2,
               -1, -1, 0, 1,     0, 0,
                3, -1, 0, 1,     2, 0};
 
-    constexpr float vertDataOther[vertDataCount] =
-            { -1,  3, 0, 1,     0, -1,
-              -1, -1, 0, 1,     0, 1,
-               3, -1, 0, 1,     2, 1};
-
     HgiBufferDesc vboDesc;
     vboDesc.debugName = "HdxFullscreenShader VertexBuffer";
     vboDesc.usage = HgiBufferUsageVertex;
-    vboDesc.initialData = _hgi->GetAPIName() != HgiTokens->OpenGL 
-        ? vertDataOther : vertDataGL;
-    vboDesc.byteSize = sizeof(vertDataGL);
-    vboDesc.vertexStride = elementsPerVertex * sizeof(vertDataGL[0]);
+    vboDesc.initialData = vertData;
+    vboDesc.byteSize = sizeof(vertData);
+    vboDesc.vertexStride = elementsPerVertex * sizeof(vertData[0]);
     _vertexBuffer = _hgi->CreateBuffer(vboDesc);
 
     static const int32_t indices[3] = {0,1,2};
@@ -372,6 +381,7 @@ HdxFullscreenShader::_CreateResourceBindings(TextureMap const& textures)
         HgiTextureBindDesc texBind;
         texBind.bindingIndex = bindSlots++;
         texBind.stageUsage = HgiShaderStageFragment;
+        texBind.writable = false;
         texBind.textures.push_back(texHandle);
         texBind.samplers.push_back(_sampler);
         resourceDesc.textures.push_back(std::move(texBind));
@@ -384,6 +394,7 @@ HdxFullscreenShader::_CreateResourceBindings(TextureMap const& textures)
         bufBind.bindingIndex = buffer.first;
         bufBind.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind.stageUsage = HgiShaderStageFragment;
+        bufBind.writable = false;
         bufBind.offsets.push_back(0);
         bufBind.buffers.push_back(bufferHandle);
         resourceDesc.buffers.push_back(std::move(bufBind));
@@ -460,8 +471,8 @@ HdxFullscreenShader::_CreatePipeline(
 
     // Setup attachments
     _attachment0.blendEnabled = _blendingEnabled;
-    _attachment0.loadOp = HgiAttachmentLoadOpDontCare;
-    _attachment0.storeOp = HgiAttachmentStoreOpStore;
+    _attachment0.loadOp = _attachmentLoadOp;
+    _attachment0.storeOp = _attachmentStoreOp;
     _attachment0.srcColorBlendFactor = _srcColorBlendFactor;
     _attachment0.dstColorBlendFactor = _dstColorBlendFactor;
     _attachment0.colorBlendOp = _colorBlendOp;
@@ -506,7 +517,16 @@ HdxFullscreenShader::_CreatePipeline(
     // pixels that were set with a clearColor alpha of 0.0.
     desc.multiSampleState.alphaToCoverageEnable = false;
 
-    // Setup raserization state
+    // The MSAA on renderPipelineState has to match the render target.
+    if (colorDst) {
+        desc.multiSampleState.sampleCount = 
+            colorDst->GetDescriptor().sampleCount;
+    } else if (depthDst) {
+        desc.multiSampleState.sampleCount = 
+            depthDst->GetDescriptor().sampleCount;
+    }
+
+    // Setup rasterization state
     desc.rasterizationState.cullMode = HgiCullModeBack;
     desc.rasterizationState.polygonMode = HgiPolygonModeFill;
     desc.rasterizationState.winding = HgiWindingCounterClockwise;
@@ -691,7 +711,7 @@ HdxFullscreenShader::_Draw(
     gfxCmds->PushDebugGroup(_debugName.c_str());
     gfxCmds->BindResources(_resourceBindings);
     gfxCmds->BindPipeline(_pipeline);
-    gfxCmds->BindVertexBuffers(0, {_vertexBuffer}, {0});
+    gfxCmds->BindVertexBuffers({{_vertexBuffer, 0, 0}});
     gfxCmds->SetViewport(viewport);
 
     if (!_constantsData.empty()) {
@@ -700,7 +720,7 @@ HdxFullscreenShader::_Draw(
             _constantsData.size(), _constantsData.data());
     }
 
-    gfxCmds->DrawIndexed(_indexBuffer, 3, 0, 0, 1);
+    gfxCmds->DrawIndexed(_indexBuffer, 3, 0, 0, 1, 0);
     gfxCmds->PopDebugGroup();
 
     // Done recording commands, submit work.

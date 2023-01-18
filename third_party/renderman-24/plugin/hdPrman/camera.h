@@ -26,10 +26,9 @@
 
 #include "pxr/pxr.h"
 #include "hdPrman/api.h"
-#include "hdPrman/context.h"
+#include "hdPrman/renderParam.h"
 #include "pxr/imaging/hd/camera.h"
 #include "pxr/imaging/hd/timeSampleArray.h"
-#include "pxr/base/vt/dictionary.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -46,7 +45,10 @@ class HdSceneDelegate;
 class HdPrmanCamera final : public HdCamera
 {
 public:
+    HDPRMAN_API
     HdPrmanCamera(SdfPath const& id);
+
+    HDPRMAN_API
     ~HdPrmanCamera() override;
 
     /// Synchronizes state from the delegate to this object.
@@ -55,30 +57,47 @@ public:
               HdRenderParam   *renderParam,
               HdDirtyBits     *dirtyBits) override;
     
-    /// Returns true if any physical camera parameter was updated during Sync,
-    /// and reset the internal tracking state.
-    /// This is meant to be called post Sync, and exists only because we don't
-    /// hold a handle to the Riley camera to directly update it during Sync.
-    HDPRMAN_API
-    bool GetAndResetHasParamsChanged();
-
     /// Returns the time sampled xforms that were queried during Sync.
     HDPRMAN_API
     HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> const&
     GetTimeSampleXforms() const {
         return _sampleXforms;
     }
- 
-    /// Sets the camera and projection shader parameters as expected by Riley
-    /// from the USD physical camera params.
-    HDPRMAN_API
-    void SetRileyCameraParams(RtParamList& camParams,
-                              RtParamList& projParams) const;
+
+    float GetLensDistortionK1() const {
+        return _lensDistortionK1;
+    }
+
+    float GetLensDistortionK2() const {
+        return _lensDistortionK2;
+    }
+
+    const GfVec2f &GetLensDistortionCenter() const {
+        return _lensDistortionCenter;
+    }
+
+    float GetLensDistortionAnaSq() const {
+        return _lensDistortionAnaSq;
+    }
+
+    const GfVec2f &GetLensDistortionAsym() const {
+        return _lensDistortionAsym;
+    }
+
+    float GetLensDistortionScale() const {
+        return _lensDistortionScale;
+    }
+    
 
 private:
     HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> _sampleXforms;
-    
-    bool _dirtyParams;
+
+    float _lensDistortionK1;
+    float _lensDistortionK2;
+    GfVec2f _lensDistortionCenter;
+    float _lensDistortionAnaSq;
+    GfVec2f _lensDistortionAsym;
+    float _lensDistortionScale;
 };
 
 

@@ -24,21 +24,23 @@
 #include "hdPrman/renderDelegate.h"
 #include "hdPrman/basisCurves.h"
 #include "hdPrman/camera.h"
-#include "hdPrman/context.h"
+#include "hdPrman/cone.h"
+#include "hdPrman/cylinder.h"
+#include "hdPrman/sphere.h"
+#include "hdPrman/renderParam.h"
+#include "hdPrman/renderBuffer.h"
+#include "hdPrman/renderSettings.h"
+#include "hdPrman/sampleFilter.h"
 #include "hdPrman/coordSys.h"
 #include "hdPrman/instancer.h"
-#include "hdPrman/interactiveContext.h"
-#include "hdPrman/interactiveRenderParam.h"
-#include "hdPrman/interactiveRenderPass.h"
+#include "hdPrman/renderParam.h"
+#include "hdPrman/renderPass.h"
 #include "hdPrman/light.h"
 #include "hdPrman/lightFilter.h"
 #include "hdPrman/material.h"
 #include "hdPrman/mesh.h"
-#include "hdPrman/offlineContext.h"
-#include "hdPrman/offlineRenderPass.h"
+#include "hdPrman/paramsSetter.h"
 #include "hdPrman/points.h"
-#include "hdPrman/renderParam.h"
-#include "hdPrman/renderPass.h"
 #include "hdPrman/resourceRegistry.h"
 #include "hdPrman/volume.h"
 
@@ -49,22 +51,36 @@
 #include "pxr/imaging/hd/sprim.h"
 #include "pxr/imaging/hd/tokens.h"
 
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/getenv.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
- 
+
+extern TfEnvSetting<bool> HD_PRMAN_ENABLE_QUICKINTEGRATE;
+
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (openvdbAsset)
     (field3dAsset)
     ((mtlxRenderContext, "mtlx"))
+    (prmanParams) /* XXX currently duplicated whereever used as to not yet */
+                 /* establish a formal convention */
 );
+
+TF_DEFINE_PUBLIC_TOKENS(HdPrmanRenderSettingsTokens,
+    HDPRMAN_RENDER_SETTINGS_TOKENS);
+
+TF_DEFINE_PUBLIC_TOKENS(HdPrmanExperimentalRenderSpecTokens,
+    HDPRMAN_EXPERIMENTAL_RENDER_SPEC_TOKENS);
 
 TF_DEFINE_PUBLIC_TOKENS(HdPrmanIntegratorTokens,
     HDPRMAN_INTEGRATOR_TOKENS);
 
 const TfTokenVector HdPrmanRenderDelegate::SUPPORTED_RPRIM_TYPES =
 {
+    HdPrimTypeTokens->cone,
+    HdPrimTypeTokens->cylinder,
+    HdPrimTypeTokens->sphere,
     HdPrimTypeTokens->mesh,
     HdPrimTypeTokens->basisCurves,
     HdPrimTypeTokens->points,
@@ -86,43 +102,58 @@ const TfTokenVector HdPrmanRenderDelegate::SUPPORTED_SPRIM_TYPES =
     HdPrimTypeTokens->pluginLight,
     HdPrimTypeTokens->extComputation,
     HdPrimTypeTokens->coordSys,
+    HdPrimTypeTokens->sampleFilter,
+    _tokens->prmanParams,
 };
 
 const TfTokenVector HdPrmanRenderDelegate::SUPPORTED_BPRIM_TYPES =
 {
     HdPrimTypeTokens->renderBuffer,
+    HdPrimTypeTokens->renderSettings,
     _tokens->openvdbAsset,
     _tokens->field3dAsset,
 };
 
-HdPrmanRenderDelegate::HdPrmanRenderDelegate(
-    std::shared_ptr<HdPrman_Context> context) : _context(context)
+static
+std::string
+_ToLower(const std::string &s)
 {
-    _Initialize();
+    std::string result = s;
+    for(auto &c : result) {
+        c = tolower(c);
+    }
+    return result;
 }
 
 HdPrmanRenderDelegate::HdPrmanRenderDelegate(
-    std::shared_ptr<HdPrman_Context> context,
     HdRenderSettingsMap const& settingsMap)
-    : HdRenderDelegate(settingsMap), _context(context)
+  : HdRenderDelegate(settingsMap)
 {
+    std::string rileyVariant = _ToLower(
+              GetRenderSetting<std::string>(
+                  HdPrmanRenderSettingsTokens->rileyVariant,
+                  TfGetenv("RILEY_VARIANT")));
+
+    std::string xpuDevices = GetRenderSetting<std::string>(
+        HdPrmanRenderSettingsTokens->xpuDevices, std::string());
+
+    _renderParam = std::make_unique<HdPrman_RenderParam>(
+        rileyVariant, xpuDevices);
+
     _Initialize();
+}
+
+bool
+HdPrmanRenderDelegate::IsInteractive() const
+{
+    return GetRenderSetting<bool>(
+        HdRenderSettingsTokens->enableInteractive, true);
 }
 
 void
 HdPrmanRenderDelegate::_Initialize()
 {
-    std::shared_ptr<HdPrman_InteractiveContext> interactiveContext =
-        std::dynamic_pointer_cast<HdPrman_InteractiveContext>(_context);
-    if (interactiveContext != nullptr) {
-        _renderMode = RenderMode::Interactive;
-    } else { 
-        _renderMode = RenderMode::Offline;
-    }
-
     std::string integrator = HdPrmanIntegratorTokens->PxrPathTracer;
-    const std::string interactiveIntegrator = 
-        HdPrmanIntegratorTokens->PxrDirectLighting;
     std::string integratorEnv = TfGetenv("HD_PRMAN_INTEGRATOR");
     if (!integratorEnv.empty()) {
         integrator = integratorEnv;
@@ -134,60 +165,65 @@ HdPrmanRenderDelegate::_Initialize()
     float pixelVariance = 0.001f;
 
     // Prepare list of render settings descriptors
-    _settingDescriptors.resize(5);
+    _settingDescriptors.reserve(5);
 
-    _settingDescriptors[0] = { 
+    _settingDescriptors.push_back({
         std::string("Integrator"),
         HdPrmanRenderSettingsTokens->integratorName,
         VtValue(integrator) 
-    };
+    });
 
-    _settingDescriptors[1] = {
-        std::string("Interactive Integrator"),
-        HdPrmanRenderSettingsTokens->interactiveIntegrator,
-        VtValue(interactiveIntegrator)
-    };
+    if (TfGetEnvSetting(HD_PRMAN_ENABLE_QUICKINTEGRATE)) {
+        const std::string interactiveIntegrator = 
+            HdPrmanIntegratorTokens->PxrDirectLighting;
+        _settingDescriptors.push_back({
+            std::string("Interactive Integrator"),
+            HdPrmanRenderSettingsTokens->interactiveIntegrator,
+            VtValue(interactiveIntegrator)
+        });
 
-    // If >0, the time in ms that we'll render quick output before switching
-    // to path tracing
-    _settingDescriptors[2] = {
-        std::string("Interactive Integrator Timeout (ms)"),
-        HdPrmanRenderSettingsTokens->interactiveIntegratorTimeout,
-        VtValue(200)
-    };
+        // If >0, the time in ms that we'll render quick output before switching
+        // to path tracing
+        _settingDescriptors.push_back({
+            std::string("Interactive Integrator Timeout (ms)"),
+            HdPrmanRenderSettingsTokens->interactiveIntegratorTimeout,
+            VtValue(200)
+        });
+    }
 
-    _settingDescriptors[3] = { std::string("Max Samples"),
+    _settingDescriptors.push_back({
+        std::string("Max Samples"),
         HdRenderSettingsTokens->convergedSamplesPerPixel,
-        VtValue(maxSamples) };
+        VtValue(maxSamples)
+    });
 
-    _settingDescriptors[4] = { std::string("Variance Threshold"),
+    _settingDescriptors.push_back({
+        std::string("Variance Threshold"),
         HdRenderSettingsTokens->convergedVariance,
-        VtValue(pixelVariance) };
+        VtValue(pixelVariance)
+    });
+
+    _settingDescriptors.push_back({
+        std::string("Riley variant"),
+        HdPrmanRenderSettingsTokens->rileyVariant,
+        VtValue(TfGetenv("RILEY_VARIANT"))
+    });
+
+    _settingDescriptors.push_back({
+        std::string("Disable motion blur"),
+        HdPrmanRenderSettingsTokens->disableMotionBlur,
+        VtValue(false)});
 
     _PopulateDefaultSettings(_settingDescriptors);
 
-    if (_IsInteractive()) {
-        // We do not expect a non-interactive context passed into an
-        // interactive session.
-        TF_VERIFY(interactiveContext);
+    _renderParam->Begin(this);
 
-        _renderParam = std::make_shared<HdPrman_InteractiveRenderParam>(
-            interactiveContext);
-
-        interactiveContext->Begin(this);
-
-        _resourceRegistry = std::make_shared<HdPrman_ResourceRegistry>(
-            interactiveContext);
-    } else { 
-        _renderParam = std::make_shared<HdPrman_RenderParam>(_context);
-
-        _resourceRegistry = std::make_shared<HdResourceRegistry>();
-    }
+    _resourceRegistry = std::make_shared<HdPrman_ResourceRegistry>(
+        _renderParam);
 }
 
 HdPrmanRenderDelegate::~HdPrmanRenderDelegate()
 {
-    _context.reset();
     _renderParam.reset();
 }
 
@@ -243,16 +279,9 @@ HdRenderPassSharedPtr
 HdPrmanRenderDelegate::CreateRenderPass(HdRenderIndex *index,
                                         HdRprimCollection const& collection)
 {
-    if (_renderPass) {
-        return _renderPass;
-    }
-    
-    if (_renderMode == RenderMode::Interactive) {
-        _renderPass = std::make_shared<HdPrman_InteractiveRenderPass>(
-            index, collection, _context);
-    } else if (_renderMode == RenderMode::Offline) {
-        _renderPass = std::make_shared<HdPrman_OfflineRenderPass>(
-            index, collection, _context);
+    if (!_renderPass) {
+        _renderPass = std::make_shared<HdPrman_RenderPass>(
+            index, collection, _renderParam);
     }
     return _renderPass;
 }
@@ -278,6 +307,12 @@ HdPrmanRenderDelegate::CreateRprim(TfToken const& typeId,
         return new HdPrman_Mesh(rprimId);
     } else if (typeId == HdPrimTypeTokens->basisCurves) {
         return new HdPrman_BasisCurves(rprimId);
+    } if (typeId == HdPrimTypeTokens->cone) {
+        return new HdPrman_Cone(rprimId);
+    } if (typeId == HdPrimTypeTokens->cylinder) {
+        return new HdPrman_Cylinder(rprimId);
+    } if (typeId == HdPrimTypeTokens->sphere) {
+        return new HdPrman_Sphere(rprimId);
     } else if (typeId == HdPrimTypeTokens->points) {
         return new HdPrman_Points(rprimId);
     } else if (typeId == HdPrimTypeTokens->volume) {
@@ -318,17 +353,17 @@ HdPrmanRenderDelegate::CreateSprim(TfToken const& typeId,
                typeId == HdPrimTypeTokens->pluginLight) {
         sprim = new HdPrmanLight(sprimId, typeId);
 
-        if (_IsInteractive()) {
-            // Disregard fallback prims in count.
-            if (sprim->GetId() != SdfPath()) {
-                std::shared_ptr<HdPrman_InteractiveContext> interactiveContext =
-                    std::dynamic_pointer_cast<HdPrman_InteractiveContext>(
-                        _context);
-                interactiveContext->sceneLightCount++;
-            }
+        // Disregard fallback prims in count.
+        if (sprim->GetId() != SdfPath()) {
+            _renderParam->IncreaseSceneLightCount();
         }
     } else if (typeId == HdPrimTypeTokens->extComputation) {
         sprim = new HdExtComputation(sprimId);
+    
+    } else if (typeId == _tokens->prmanParams) {
+        sprim = new HdPrmanParamsSetter(sprimId);
+    } else if (typeId == HdPrimTypeTokens->sampleFilter) {
+        sprim = new HdPrman_SampleFilter(sprimId);
     } else {
         TF_CODING_ERROR("Unknown Sprim Type %s", typeId.GetText());
     }
@@ -360,6 +395,10 @@ HdPrmanRenderDelegate::CreateFallbackSprim(TfToken const& typeId)
         return new HdPrmanLight(SdfPath::EmptyPath(), typeId);
     } else if (typeId == HdPrimTypeTokens->extComputation) {
         return new HdExtComputation(SdfPath::EmptyPath());
+    } else if (typeId == _tokens->prmanParams) {
+        return new HdPrmanParamsSetter(SdfPath::EmptyPath());
+    } else if (typeId == HdPrimTypeTokens->sampleFilter) {
+        return new HdPrman_SampleFilter(SdfPath::EmptyPath());
     } else {
         TF_CODING_ERROR("Unknown Sprim Type %s", typeId.GetText());
     }
@@ -370,13 +409,9 @@ HdPrmanRenderDelegate::CreateFallbackSprim(TfToken const& typeId)
 void
 HdPrmanRenderDelegate::DestroySprim(HdSprim *sprim)
 {
-    if (_IsInteractive() && dynamic_cast<HdPrmanLight*>(sprim)) {
-        // Disregard fallback prims in count.
-        if (sprim->GetId() != SdfPath()) {
-            std::shared_ptr<HdPrman_InteractiveContext> interactiveContext =
-                std::dynamic_pointer_cast<HdPrman_InteractiveContext>(_context);
-            interactiveContext->sceneLightCount--;
-        }
+    // Disregard fallback prims in count.
+    if (sprim->GetId() != SdfPath()) {
+        _renderParam->DecreaseSceneLightCount();
     }
     delete sprim;
 }
@@ -391,6 +426,8 @@ HdPrmanRenderDelegate::CreateBprim(
         return new HdPrman_Field(typeId, bprimId);
     } else if (typeId == HdPrimTypeTokens->renderBuffer) {
         return new HdPrmanRenderBuffer(bprimId);
+    } else if (typeId == HdPrimTypeTokens->renderSettings) {
+        return new HdPrman_RenderSettings(bprimId);
     } else {
         TF_CODING_ERROR("Unknown Bprim Type %s", typeId.GetText());
     }
@@ -405,6 +442,8 @@ HdPrmanRenderDelegate::CreateFallbackBprim(TfToken const& typeId)
         return new HdPrman_Field(typeId, SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->renderBuffer) {
         return new HdPrmanRenderBuffer(SdfPath::EmptyPath());
+    } else if (typeId == HdPrimTypeTokens->renderSettings) {
+        return new HdPrman_RenderSettings(SdfPath::EmptyPath());
     } else {
         TF_CODING_ERROR("Unknown Bprim Type %s", typeId.GetText());
     }
@@ -421,7 +460,7 @@ HdAovDescriptor
 HdPrmanRenderDelegate::GetDefaultAovDescriptor(
     TfToken const& name) const
 {
-    if (_IsInteractive()) {
+    if (IsInteractive()) {
         if (name == HdAovTokens->color) {
             return HdAovDescriptor(
                 HdFormatFloat32Vec4, 
@@ -498,32 +537,37 @@ HdPrmanRenderDelegate::SetRenderSetting(TfToken const &key,
 bool
 HdPrmanRenderDelegate::IsStopSupported() const
 {
-    if (_IsInteractive()) {
+    if (IsInteractive()) {
         return true;
     }
     return false;
 }
 
 bool
-HdPrmanRenderDelegate::Stop()
+HdPrmanRenderDelegate::IsStopped() const
 {
-    if (_IsInteractive()) {
-        std::shared_ptr<HdPrman_InteractiveContext> interactiveContext =
-            std::dynamic_pointer_cast<HdPrman_InteractiveContext>(_context);
-        interactiveContext->StopRender();
-        return true;
+    if (IsInteractive()) {
+        return !_renderParam->IsRendering();
     }
-    return false;
+    return true;
+}
+
+bool
+HdPrmanRenderDelegate::Stop(bool blocking)
+{
+    if (IsInteractive()) {
+        _renderParam->StopRender(blocking);
+        return !_renderParam->IsRendering();
+    }
+    return true;
 }
 
 bool
 HdPrmanRenderDelegate::Restart()
 {
-    if (_IsInteractive()) {
+    if (IsInteractive()) {
         // Next call into HdPrman_RenderPass::_Execute will do a StartRender
-        std::shared_ptr<HdPrman_InteractiveContext> interactiveContext =
-            std::dynamic_pointer_cast<HdPrman_InteractiveContext>(_context);
-        interactiveContext->sceneVersion++;
+        _renderParam->sceneVersion++;
         return true;
     }
     return false;

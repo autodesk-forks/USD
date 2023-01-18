@@ -43,6 +43,17 @@ _GetShaderPath(char const * shader)
     return TfToken(path);
 }
 
+static TfToken
+_GetTexturePath(char const * texture)
+{
+    static PlugPluginPtr plugin = PLUG_THIS_PLUGIN;
+    const std::string path =
+        PlugFindPluginResource(plugin, TfStringCatPaths("textures", texture));
+    TF_VERIFY(!path.empty(), "Could not find texture: %s\n", texture);
+
+    return TfToken(path);
+}
+
 TfToken
 HdStPackageComputeShader()
 {
@@ -55,6 +66,13 @@ HdStPackageDomeLightShader()
 {
     static TfToken s = _GetShaderPath("domeLight.glslfx");
     return s;
+}
+
+TfToken
+HdStPackageFallbackDomeLightTexture()
+{
+    static TfToken t = _GetTexturePath("fallbackBlackDomeLight.png");
+    return t;
 }
 
 TfToken
@@ -102,9 +120,15 @@ HdStPackageImageShader()
 TfToken
 HdStPackageSimpleLightingShader()
 {
-    static TfToken simpleLightingShader = 
-        _GetShaderPath("simpleLightingShader.glslfx");
-    return simpleLightingShader;
+    static TfToken s = _GetShaderPath("simpleLightingShader.glslfx");
+    return s;
+}
+
+TfToken
+HdStPackageWidgetShader()
+{
+    static TfToken s = _GetShaderPath("widgetShader.glslfx");
+    return s;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

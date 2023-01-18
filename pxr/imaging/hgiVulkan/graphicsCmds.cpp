@@ -209,22 +209,21 @@ HgiVulkanGraphicsCmds::SetConstantValues(
 
 void
 HgiVulkanGraphicsCmds::BindVertexBuffers(
-    uint32_t firstBinding,
-    HgiBufferHandleVector const& vertexBuffers,
-    std::vector<uint32_t> const& byteOffsets)
+    HgiVertexBufferBindingVector const &bindings)
 {
     // Delay until the pipeline is set and the render pass has begun.
     _pendingUpdates.push_back(
-        [this, firstBinding, vertexBuffers, byteOffsets] {
+        [this, bindings] {
         std::vector<VkBuffer> buffers;
         std::vector<VkDeviceSize> bufferOffsets;
 
-        for (HgiBufferHandle bufHandle : vertexBuffers) {
-            HgiVulkanBuffer* buf=static_cast<HgiVulkanBuffer*>(bufHandle.Get());
+        for (HgiVertexBufferBinding const &binding : bindings) {
+            HgiVulkanBuffer* buf =
+                static_cast<HgiVulkanBuffer*>(binding.buffer.Get());
             VkBuffer vkBuf = buf->GetVulkanBuffer();
             if (vkBuf) {
                 buffers.push_back(vkBuf);
-                bufferOffsets.push_back(0);
+                bufferOffsets.push_back(binding.byteOffset);
             }
         }
 
@@ -240,8 +239,9 @@ HgiVulkanGraphicsCmds::BindVertexBuffers(
 void
 HgiVulkanGraphicsCmds::Draw(
     uint32_t vertexCount,
-    uint32_t firstVertex,
-    uint32_t instanceCount)
+    uint32_t baseVertex,
+    uint32_t instanceCount,
+    uint32_t baseInstance)
 {
     // Make sure the render pass has begun and resource are bound
     _ApplyPendingUpdates();
@@ -250,14 +250,14 @@ HgiVulkanGraphicsCmds::Draw(
         _commandBuffer->GetVulkanCommandBuffer(),
         vertexCount,
         instanceCount,
-        firstVertex,
-        0); // firstInstance
+        baseVertex,
+        baseInstance);
 }
 
 void
 HgiVulkanGraphicsCmds::DrawIndirect(
     HgiBufferHandle const& drawParameterBuffer,
-    uint32_t drawBufferOffset,
+    uint32_t drawBufferByteOffset,
     uint32_t drawCount,
     uint32_t stride)
 {
@@ -270,7 +270,7 @@ HgiVulkanGraphicsCmds::DrawIndirect(
     vkCmdDrawIndirect(
         _commandBuffer->GetVulkanCommandBuffer(),
         drawBuf->GetVulkanBuffer(),
-        drawBufferOffset,
+        drawBufferByteOffset,
         drawCount,
         stride);
 }
@@ -280,19 +280,14 @@ HgiVulkanGraphicsCmds::DrawIndexed(
     HgiBufferHandle const& indexBuffer,
     uint32_t indexCount,
     uint32_t indexBufferByteOffset,
-    uint32_t vertexOffset,
-    uint32_t instanceCount)
+    uint32_t baseVertex,
+    uint32_t instanceCount,
+    uint32_t baseInstance)
 {
     // Make sure the render pass has begun and resource are bound
     _ApplyPendingUpdates();
 
-    TF_VERIFY(instanceCount>0);
-
     HgiVulkanBuffer* ibo = static_cast<HgiVulkanBuffer*>(indexBuffer.Get());
-    HgiBufferDesc const& indexDesc = ibo->GetDescriptor();
-
-    // We assume 32bit indices
-    TF_VERIFY(indexDesc.usage & HgiBufferUsageIndex32);
 
     vkCmdBindIndexBuffer(
         _commandBuffer->GetVulkanCommandBuffer(),
@@ -304,27 +299,25 @@ HgiVulkanGraphicsCmds::DrawIndexed(
         _commandBuffer->GetVulkanCommandBuffer(),
         indexCount,
         instanceCount,
-        0,  // firstIndex,
-        vertexOffset,
-        0); // firstInstance
+        static_cast<uint32_t>(indexBufferByteOffset / sizeof(uint32_t)),
+        baseVertex,
+        baseInstance);
 }
 
 void
 HgiVulkanGraphicsCmds::DrawIndexedIndirect(
     HgiBufferHandle const& indexBuffer,
     HgiBufferHandle const& drawParameterBuffer,
-    uint32_t drawBufferOffset,
+    uint32_t drawBufferByteOffset,
     uint32_t drawCount,
-    uint32_t stride)
+    uint32_t stride,
+    std::vector<uint32_t> const& /*drawParameterBufferUInt32*/,
+    uint32_t /*patchBaseVertexByteOffset*/)
 {
     // Make sure the render pass has begun and resource are bound
     _ApplyPendingUpdates();
 
     HgiVulkanBuffer* ibo = static_cast<HgiVulkanBuffer*>(indexBuffer.Get());
-    HgiBufferDesc const& indexDesc = ibo->GetDescriptor();
-
-    // We assume 32bit indices
-    TF_VERIFY(indexDesc.usage & HgiBufferUsageIndex32);
 
     vkCmdBindIndexBuffer(
         _commandBuffer->GetVulkanCommandBuffer(),
@@ -338,7 +331,7 @@ HgiVulkanGraphicsCmds::DrawIndexedIndirect(
     vkCmdDrawIndexedIndirect(
         _commandBuffer->GetVulkanCommandBuffer(),
         drawBuf->GetVulkanBuffer(),
-        drawBufferOffset,
+        drawBufferByteOffset,
         drawCount,
         stride);
 

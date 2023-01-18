@@ -74,6 +74,7 @@ _CreateResourceBindings(
         bufBind0.bindingIndex = BufferBinding_Points;
         bufBind0.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind0.stageUsage = HgiShaderStageCompute;
+        bufBind0.writable = false;
         bufBind0.offsets.push_back(0);
         bufBind0.buffers.push_back(points);
         resourceDesc.buffers.push_back(std::move(bufBind0));
@@ -84,6 +85,7 @@ _CreateResourceBindings(
         bufBind1.bindingIndex = BufferBinding_Normals;
         bufBind1.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind1.stageUsage = HgiShaderStageCompute;
+        bufBind1.writable = true;
         bufBind1.offsets.push_back(0);
         bufBind1.buffers.push_back(normals);
         resourceDesc.buffers.push_back(std::move(bufBind1));
@@ -94,6 +96,7 @@ _CreateResourceBindings(
         bufBind2.bindingIndex = BufferBinding_Adjacency;
         bufBind2.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind2.stageUsage = HgiShaderStageCompute;
+        bufBind2.writable = false;
         bufBind2.offsets.push_back(0);
         bufBind2.buffers.push_back(adjacency);
         resourceDesc.buffers.push_back(std::move(bufBind2));
@@ -178,6 +181,7 @@ HdSt_SmoothNormalsComputationGPU::Execute(
         int pointsStride;
         int normalsOffset;
         int normalsStride;
+        int indexEnd;
     } uniform;
 
     HdStResourceRegistry* hdStResourceRegistry =
@@ -187,6 +191,7 @@ HdSt_SmoothNormalsComputationGPU::Execute(
           [&](HgiShaderFunctionDesc &computeDesc) {
             computeDesc.debugName = shaderToken.GetString();
             computeDesc.shaderStage = HgiShaderStageCompute;
+            computeDesc.computeDescriptor.localSize = GfVec3i(64, 1, 1);
 
             TfToken srcType;
             TfToken dstType;
@@ -203,9 +208,15 @@ HdSt_SmoothNormalsComputationGPU::Execute(
             } else if (_dstDataType == HdTypeInt32_2_10_10_10_REV) {
                 dstType = HdStTokens->_int;
             }
-            HgiShaderFunctionAddBuffer(&computeDesc, "points", srcType);
-            HgiShaderFunctionAddBuffer(&computeDesc, "normals", dstType);
-            HgiShaderFunctionAddBuffer(&computeDesc, "entry", HdStTokens->_int);
+            HgiShaderFunctionAddBuffer(&computeDesc,
+                "points", srcType,
+                BufferBinding_Points, HgiBindingTypePointer);
+            HgiShaderFunctionAddWritableBuffer(&computeDesc,
+                "normals", dstType,
+                BufferBinding_Normals);
+            HgiShaderFunctionAddBuffer(&computeDesc,
+                "entry", HdStTokens->_int,
+                BufferBinding_Adjacency, HgiBindingTypePointer);
 
             static const std::string params[] = {
                 "vertexOffset",       // offset in aggregated buffer
@@ -214,6 +225,7 @@ HdSt_SmoothNormalsComputationGPU::Execute(
                 "pointsStride",       // interleave stride
                 "normalsOffset",      // interleave offset
                 "normalsStride",      // interleave stride
+                "indexEnd"
             };
             static_assert((sizeof(Uniform) / sizeof(int)) ==
                           (sizeof(params) / sizeof(params[0])), "");
@@ -260,7 +272,6 @@ HdSt_SmoothNormalsComputationGPU::Execute(
         HdDataSizeOfType(HdGetComponentType(normals->GetTupleType().type));
     uniform.normalsOffset = normals->GetOffset() / normalComponentSize;
     uniform.normalsStride = normals->GetStride() / normalComponentSize;
-
     // The number of points is based off the size of the output,
     // However, the number of points in the adjacency table
     // is computed based off the largest vertex indexed from
@@ -268,10 +279,11 @@ HdSt_SmoothNormalsComputationGPU::Execute(
     //
     // Therefore, we need to clamp the number of points
     // to the number of entries in the adjancency table.
-    int numDestPoints = range->GetNumElements();
-    int numSrcPoints = _adjacency->GetNumPoints();
+    const int numDestPoints = range->GetNumElements();
+    const int numSrcPoints = _adjacency->GetNumPoints();
 
-    int numPoints = std::min(numSrcPoints, numDestPoints);
+    const int numPoints = std::min(numSrcPoints, numDestPoints);
+    uniform.indexEnd = numPoints;
 
     Hgi* hgi = hdStResourceRegistry->GetHgi();
 
@@ -298,9 +310,9 @@ HdSt_SmoothNormalsComputationGPU::Execute(
         resourceBindingsInstance.SetValue(rb);
     }
 
-    HgiResourceBindingsSharedPtr const& resourceBindindsPtr =
+    HgiResourceBindingsSharedPtr const& resourceBindingsPtr =
         resourceBindingsInstance.GetValue();
-    HgiResourceBindingsHandle resourceBindings = *resourceBindindsPtr.get();
+    HgiResourceBindingsHandle resourceBindings = *resourceBindingsPtr.get();
 
     // Get or add pipeline in registry.
     HdInstance<HgiComputePipelineSharedPtr> computePipelineInstance =

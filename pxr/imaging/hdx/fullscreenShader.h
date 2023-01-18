@@ -35,6 +35,7 @@
 #include "pxr/imaging/hgi/shaderProgram.h"
 #include "pxr/imaging/hgi/texture.h"
 
+#include <map>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -114,6 +115,13 @@ public:
         HgiBlendFactor srcAlphaBlendFactor,
         HgiBlendFactor dstAlphaBlendFactor,
         HgiBlendOp alphaBlendOp);
+
+    /// By default HdxFullscreenShader uses LoadOpDontCare and StoreOpStore.
+    /// This function allows you to override the attachment load and store op.
+    HDX_API
+    void SetAttachmentLoadStoreOp(
+        HgiAttachmentLoadOp attachmentLoadOp,
+        HgiAttachmentStoreOp attachmentStoreOp);
 
     /// Provide the shader constant values (uniforms).
     /// The data values are copied, so you do not have to set them
@@ -205,6 +213,9 @@ private:
     HgiBlendFactor _srcAlphaBlendFactor;
     HgiBlendFactor _dstAlphaBlendFactor;
     HgiBlendOp _alphaBlendOp;
+
+    HgiAttachmentLoadOp _attachmentLoadOp;
+    HgiAttachmentStoreOp _attachmentStoreOp;
 
     HgiAttachmentDesc _attachment0;
     HgiAttachmentDesc _depthAttachment;

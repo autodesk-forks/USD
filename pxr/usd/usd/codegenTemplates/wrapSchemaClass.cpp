@@ -169,6 +169,15 @@ void wrap{{ cls.cppClassName }}()
 {% endif %}
         .staticmethod("Get")
 {% endif %}
+{% if cls.isMultipleApply %}
+
+        .def("GetAll",
+            (std::vector<{{ cls.cppClassName }}>(*)(const UsdPrim &prim))
+                &This::GetAll,
+            arg("prim"),
+            return_value_policy<TfPySequenceToList>())
+        .staticmethod("GetAll")
+{% endif %}
 {% if cls.isConcrete %}
 
         .def("Define", &This::Define, (arg("stage"), arg("path")))
@@ -195,13 +204,23 @@ void wrap{{ cls.cppClassName }}()
         .staticmethod("Apply")
 {% endif %}
 
+{% if cls.isMultipleApply %}
+        .def("GetSchemaAttributeNames",
+             (const TfTokenVector &(*)(bool))&This::GetSchemaAttributeNames,
+             arg("includeInherited")=true,
+             return_value_policy<TfPySequenceToList>())
+        .def("GetSchemaAttributeNames",
+             (TfTokenVector(*)(bool, const TfToken &))
+                &This::GetSchemaAttributeNames,
+             arg("includeInherited"),
+             arg("instanceName"),
+             return_value_policy<TfPySequenceToList>())
+{% else %}
         .def("GetSchemaAttributeNames",
              &This::GetSchemaAttributeNames,
              arg("includeInherited")=true,
-{% if cls.isMultipleApply %}
-             arg("instanceName")=TfToken(),
-{% endif %}
              return_value_policy<TfPySequenceToList>())
+{% endif %}
         .staticmethod("GetSchemaAttributeNames")
 
         .def("_GetStaticTfType", (TfType const &(*)()) TfType::Find<This>,

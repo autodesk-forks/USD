@@ -23,6 +23,8 @@
 //
 #include "pxr/imaging/hd/dataSourceLocator.h"
 
+#include "pxr/base/arch/hints.h"
+
 #include <sstream>
 #include <algorithm>
 
@@ -209,7 +211,7 @@ HdDataSourceLocator::HasPrefix(const HdDataSourceLocator &prefix) const
 HdDataSourceLocator
 HdDataSourceLocator::GetCommonPrefix(const HdDataSourceLocator &other) const
 {
-    size_t maxPossibleLen = std::min(_tokens.size(), other._tokens.size());
+    const size_t maxPossibleLen = std::min(_tokens.size(), other._tokens.size());
     size_t i = 0;
     for (; i < maxPossibleLen; ++i) {
         if (_tokens[i] != other._tokens[i]) {
@@ -465,7 +467,7 @@ HdDataSourceLocatorSet::Intersects(const HdDataSourceLocator &locator) const
     // hurt us and we want to just loop over everything: we'd do O(ceil(log a))
     // compares plus an intersects, vs O(a) intersects. (e.g. a = 4, we'd do
     // up to 3 compares plus an intersects).
-    const size_t _binarySearchCutoff = 5;
+    constexpr size_t _binarySearchCutoff = 5;
 
     if (_locators.size() < _binarySearchCutoff) {
         for (const auto &l : _locators) {
@@ -500,7 +502,7 @@ HdDataSourceLocatorSet::Intersects(
     // intersects, so for very small arrays where we do O(a+b) compares
     // and then an intersects, this can be more expensive than just doing
     // O(a*b) compares. (e.g. a=b=2 yields 5 vs 4 operations).
-    const size_t _zipperCompareCutoff = 9;
+    constexpr size_t _zipperCompareCutoff = 9;
 
     if (_locators.size() * locatorSet._locators.size() < _zipperCompareCutoff) {
         for (const auto &a : _locators) {
@@ -550,9 +552,129 @@ HdDataSourceLocatorSet::Intersects(
 }
 
 bool
+HdDataSourceLocatorSet::Contains(
+        const HdDataSourceLocator &locator) const
+{
+    // Note: See _binarySearchCutoff in Intersects.
+    constexpr size_t _binarySearchCutoff = 5;
+
+    if (_locators.size() < _binarySearchCutoff) {
+        for (const auto &l : _locators) {
+            if (locator.HasPrefix(l)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    TRACE_FUNCTION();
+
+    const auto it = std::lower_bound(
+        _locators.begin(), _locators.end(),
+        locator, _LessThanNotPrefix);
+    return it != _locators.end() && locator.HasPrefix(*it);    
+}
+
+bool
 HdDataSourceLocatorSet::IsEmpty() const
 {
     return _locators.empty();
+}
+
+HdDataSourceLocatorSet
+HdDataSourceLocatorSet::ReplacePrefix(
+    const HdDataSourceLocator &oldPrefix,
+    const HdDataSourceLocator &newPrefix) const
+{
+    if (ARCH_UNLIKELY(IsEmpty() || (oldPrefix == newPrefix))) {
+        return *this;
+    }
+
+    auto sortAndUniquifyLocators = [](_Locators *pLocators) {
+
+        _Locators &locators = *pLocators;
+        std::sort(locators.begin(), locators.end());
+
+        for (size_t i = 1; i < locators.size(); ) {
+            if (locators[i].Intersects(locators[i-1])) {
+                locators.erase(locators.begin() + i);
+            } else {
+                ++i;
+            }
+        }
+    };
+
+    // Note: See _binarySearchCutoff in Intersects.
+    constexpr size_t _binarySearchCutoff = 5;
+
+    if (_locators.size() < _binarySearchCutoff) {
+        HdDataSourceLocatorSet result = *this;
+        _Locators &locators = result._locators;
+
+        for (auto &l : locators) {
+            l = l.ReplacePrefix(oldPrefix, newPrefix);
+        }
+
+        sortAndUniquifyLocators(&locators);
+
+        return result;
+    }
+
+    TRACE_FUNCTION();
+    // lower_bound with operator < gives us the first element that is not less 
+    // than (i.e., greater than or equal to) oldPrefix, which is what we want
+    // here (unlike in the insertion case where we use _LessThanNotPrefix).
+    // e.g. given the locator set {a/a, a/b/c, a/b/d, a/c} and the prefix a/b,
+    // lower_bound gives us the element a/b/c.
+    auto it =
+        std::lower_bound(_locators.begin(), _locators.end(), oldPrefix);
+    
+    if (it != _locators.end()) {
+
+        if (it->HasPrefix(oldPrefix)) {
+            
+            HdDataSourceLocatorSet result = *this;
+            _Locators &locators = result._locators;
+
+            auto lowerIt = locators.begin() +
+                        std::distance(_locators.begin(), it);
+
+            if (*lowerIt == oldPrefix) {
+                // The closed under descendancy nature of HdDataLocatorSet
+                // implies that the next element cannot be a descendant of the 
+                // current one, implying that it won't share the prefix.
+                *lowerIt = newPrefix;
+
+            } else {
+
+                // Find first element such that elem.HasPrefix(oldPrefix) is
+                // false.
+                auto upperIt =
+                    std::lower_bound(
+                        std::next(lowerIt, 1), locators.end(), oldPrefix,
+                        [](const HdDataSourceLocator &elem,
+                           const HdDataSourceLocator &prefix) {
+
+                            return elem.HasPrefix(prefix);
+                        
+                        });
+
+                for (auto it = lowerIt; it < upperIt; it++) {
+                    *it = it->ReplacePrefix(oldPrefix, newPrefix);
+                }
+            }
+
+            // Since we've edited in-place, sort and uniquify the locators.
+            // XXX We could be smarter in the range that is sorted by factoring
+            //     lower and upper bounds with the new prefix.
+            sortAndUniquifyLocators(&locators);
+            return result;
+        }
+        // Otherwise, there's nothing to do since no element in the set
+        // has the prefix oldPrefix.
+    }
+ 
+    return *this;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

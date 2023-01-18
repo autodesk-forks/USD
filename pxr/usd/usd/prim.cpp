@@ -25,6 +25,7 @@
 #include "pxr/usd/usd/prim.h"
 
 #include "pxr/usd/usd/apiSchemaBase.h"
+#include "pxr/usd/usd/editTarget.h"
 #include "pxr/usd/usd/inherits.h"
 #include "pxr/usd/usd/instanceCache.h"
 #include "pxr/usd/usd/payloads.h"
@@ -32,6 +33,7 @@
 #include "pxr/usd/usd/relationship.h"
 #include "pxr/usd/usd/references.h"
 #include "pxr/usd/usd/resolver.h"
+#include "pxr/usd/usd/resolveTarget.h"
 #include "pxr/usd/usd/schemaBase.h"
 #include "pxr/usd/usd/schemaRegistry.h"
 #include "pxr/usd/usd/specializes.h"
@@ -47,9 +49,11 @@
 #include "pxr/base/work/dispatcher.h"
 #include "pxr/base/work/loops.h"
 #include "pxr/base/work/singularTask.h"
+#include "pxr/base/work/utils.h"
 #include "pxr/base/work/withScopedParallelism.h"
 
 #include "pxr/base/tf/ostreamMethods.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_set.h"
 
 #include <boost/functional/hash.hpp>
 
@@ -724,69 +728,49 @@ UsdPrim::GetPropertyOrder() const
     return order;
 }
 
+using TokenRobinSet = pxr_tsl::robin_set<TfToken, TfToken::HashFunctor>;
+
+// This function was copied from Pcp/{PrimIndex,ComposeSite} and optimized for
+// Usd.
 static void
 _ComposePrimPropertyNames( 
     const PcpPrimIndex& primIndex,
-    const PcpNodeRef& node,
     const UsdPrim::PropertyPredicateFunc &predicate,
-    TfTokenVector *names,
-    TfTokenVector *localNames)
+    TokenRobinSet *inOutNames)
 {
-    if (node.IsCulled()) {
-        return;
-    }
+    
+    auto const &nodeRange = primIndex.GetNodeRange();
+    const bool hasPredicate = static_cast<bool>(predicate);
 
-    // Strength-order does not matter here, since we're just collecting all 
-    // names.
-    TF_FOR_ALL(child, node.GetChildrenRange()) {
-        _ComposePrimPropertyNames(primIndex, *child, predicate, names,
-                                  localNames);
-    }
-
-    // Compose the site's local names over the current result.
-    if (node.CanContributeSpecs()) {
-        for (auto &layer : node.GetLayerStack()->GetLayers()) {
-            if (layer->HasField<TfTokenVector>(node.GetPath(), 
-                    SdfChildrenKeys->PropertyChildren, localNames)) {
-                // If predicate is valid, then append only the names that pass 
-                // the predicate. If not, add all names (including duplicates).
-                if (predicate) {
-                    for(auto &name: *localNames) {
-                        if (predicate(name)) {
-                            names->push_back(name);
+    for (PcpNodeRef node: nodeRange) {
+        if (node.IsCulled() || !node.CanContributeSpecs()) {
+            continue;
+        }
+        for (auto const &layer : node.GetLayerStack()->GetLayers()) {
+            VtValue namesVal;
+            if (layer->HasField(node.GetPath(),
+                                SdfChildrenKeys->PropertyChildren,
+                                &namesVal) &&
+                namesVal.IsHolding<TfTokenVector>()) {
+                // If we have a predicate, then check to see if the name is
+                // already included to avoid redundantly invoking it.  The most
+                // common case for us is repeated names already present.
+                TfTokenVector
+                    localNames = namesVal.UncheckedRemove<TfTokenVector>();
+                if (hasPredicate) {
+                    for (auto &name: localNames) {
+                        if (!inOutNames->count(name) && predicate(name)) {
+                            inOutNames->insert(std::move(name));
                         }
-                    }    
+                    }
                 } else {
-                    names->insert(names->end(), localNames->begin(), 
-                                  localNames->end());
+                    inOutNames->insert(
+                        std::make_move_iterator(localNames.begin()),
+                        std::make_move_iterator(localNames.end()));
                 }
             }
         }
     }
-}
-
-// This function and the one above (_ComposePrimPropertyNames) were copied 
-// from Pcp/{PrimIndex,ComposeSite} and optimized for Usd.
-static void
-_ComputePrimPropertyNames(
-    const PcpPrimIndex &primIndex,
-    const UsdPrim::PropertyPredicateFunc &predicate,
-    TfTokenVector *names)
-{
-    if (!primIndex.IsValid()) {
-        return;
-    }
-
-    TRACE_FUNCTION();
-
-    // Temporary shared vector for collecting local property names.
-    // This is used to re-use storage allocated for the local property 
-    // names in each layer.
-    TfTokenVector localNames;
-
-    // Walk the graph to compose prim child names.
-    _ComposePrimPropertyNames(primIndex, primIndex.GetRootNode(), predicate, 
-                              names, &localNames);
 }
 
 TfTokenVector
@@ -795,37 +779,37 @@ UsdPrim::_GetPropertyNames(
     bool applyOrder,
     const UsdPrim::PropertyPredicateFunc &predicate) const
 {
-    TfTokenVector names;
+    TRACE_FUNCTION();
+    
+    TokenRobinSet names;
+    TfTokenVector namesVec;
 
     // If we're including unauthored properties, take names from definition, if
     // present.
     const UsdPrimDefinition &primDef = _Prim()->GetPrimDefinition();
     if (!onlyAuthored) {   
-        if (predicate) {
-            const TfTokenVector &builtInNames = primDef.GetPropertyNames();
-            for (const auto &builtInName : builtInNames) {
-                if (predicate(builtInName)) {
-                    names.push_back(builtInName);
-                }
+        const TfTokenVector &builtInNames = primDef.GetPropertyNames();
+        for (const auto &builtInName : builtInNames) {
+            if (!predicate || predicate(builtInName)) {
+                names.insert(builtInName);
             }
-        } else {
-            names = primDef.GetPropertyNames();
         }
     }
 
     // Add authored names, then sort and apply ordering.
-    _ComputePrimPropertyNames(GetPrimIndex(), predicate, &names);
+    _ComposePrimPropertyNames(GetPrimIndex(), predicate, &names);
 
     if (!names.empty()) {
         // Sort and uniquify the names.
-        sort(names.begin(), names.end(), TfDictionaryLessThan());
-        names.erase(std::unique(names.begin(), names.end()), names.end());
+        namesVec.resize(names.size());
+        std::copy(names.begin(), names.end(), namesVec.begin());
+        sort(namesVec.begin(), namesVec.end(), TfDictionaryLessThan());
         if (applyOrder) {
-            _ApplyOrdering(GetPropertyOrder(), &names);
+            _ApplyOrdering(GetPropertyOrder(), &namesVec);
         }
     }
 
-    return names;
+    return namesVec;
 }
 
 TfTokenVector
@@ -891,7 +875,9 @@ UsdPrim::_GetPropertiesInNamespace(
                    s[terminator] == delim;
         });
 
-    return _MakeProperties(names);
+    std::vector<UsdProperty> properties(_MakeProperties(names));
+    WorkSwapDestroyAsync(names);
+    return properties;
 }
 
 std::vector<UsdProperty>
@@ -1425,20 +1411,13 @@ UsdPrim::GetInstances() const
 SdfPrimSpecHandleVector 
 UsdPrim::GetPrimStack() const
 {
-    SdfPrimSpecHandleVector primStack;
+    return UsdStage::_GetPrimStack(*this);
+}
 
-    for (Usd_Resolver resolver(&(_Prim()->GetPrimIndex())); 
-                      resolver.IsValid(); resolver.NextLayer()) {
-
-        auto primSpec = resolver.GetLayer()
-            ->GetPrimAtPath(resolver.GetLocalPath());
-
-        if (primSpec) { 
-            primStack.push_back(primSpec); 
-        }
-    }
-
-    return primStack;
+std::vector<std::pair<SdfPrimSpecHandle, SdfLayerOffset>> 
+UsdPrim::GetPrimStackWithLayerOffsets() const
+{
+    return UsdStage::_GetPrimStackWithLayerOffsets(*this);
 }
 
 PcpPrimIndex 
@@ -1467,6 +1446,86 @@ UsdPrim::ComputeExpandedPrimIndex() const
             "computing expanded prim index for <%s>", GetPath().GetText()));
     
     return outputs.primIndex;
+}
+
+static PcpNodeRef 
+_FindStrongestNodeMatchingEditTarget(
+    const PcpPrimIndex& index, const UsdEditTarget &editTarget)
+{
+    // Use the edit target to map the prim's path to the path we expect to find
+    // a node for.
+    const SdfPath &rootPath = index.GetRootNode().GetPath();
+    const SdfPath mappedPath = editTarget.MapToSpecPath(rootPath);
+
+    if (mappedPath.IsEmpty()) {
+        return PcpNodeRef();
+    }
+
+    // We're looking for the first (strongest) node that would be affected by
+    // an edit to the prim using the edit target which means we are looking for
+    // the following criteria to be met:
+    //  1. The node's path matches the prim path mapped through the edit target.
+    //  2. The edit target's layer is in the node's layer stack.
+    for (const PcpNodeRef &node : index.GetNodeRange()) {
+        if (node.GetPath() != mappedPath) {
+            continue;
+        }
+
+        if (node.GetLayerStack()->HasLayer(editTarget.GetLayer())) {
+            return node;
+        }
+    }
+
+    return PcpNodeRef();
+}
+
+UsdResolveTarget 
+UsdPrim::_MakeResolveTargetFromEditTarget(
+    const UsdEditTarget &editTarget,
+    bool makeAsStrongerThan) const
+{
+    // Need the expanded prim index to find nodes and layers that may have been 
+    // culled out in the cached prim index.
+    PcpPrimIndex expandedPrimIndex = ComputeExpandedPrimIndex();
+    if (!expandedPrimIndex.IsValid()) {
+        return UsdResolveTarget();
+    }
+
+    const PcpNodeRef node = _FindStrongestNodeMatchingEditTarget(
+        expandedPrimIndex, editTarget);
+    if (!node) {
+        return UsdResolveTarget();
+    }
+
+    // The resolve target needs to hold on to the expanded prim index.
+    std::shared_ptr<PcpPrimIndex> resolveIndex = 
+        std::make_shared<PcpPrimIndex>(std::move(expandedPrimIndex));
+
+    if (makeAsStrongerThan) {
+        // Return a resolve target starting at the root node and stopping at the
+        // edit node and layer.
+        return UsdResolveTarget(resolveIndex, 
+            node.GetRootNode(), nullptr, node, editTarget.GetLayer());
+    } else {
+        // Return a resolve target starting at the edit node and layer.
+        return UsdResolveTarget(resolveIndex, node, editTarget.GetLayer());
+    }
+}
+
+UsdResolveTarget 
+UsdPrim::MakeResolveTargetUpToEditTarget(
+    const UsdEditTarget &editTarget) const
+{
+    return _MakeResolveTargetFromEditTarget(
+        editTarget, /* makeAsStrongerThan = */ false);
+}
+
+UsdResolveTarget 
+UsdPrim::MakeResolveTargetStrongerThanEditTarget(
+    const UsdEditTarget &editTarget) const
+{
+    return _MakeResolveTargetFromEditTarget(
+        editTarget, /* makeAsStrongerThan = */ true);
 }
 
 UsdPrim

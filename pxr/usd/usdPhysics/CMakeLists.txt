@@ -3,7 +3,6 @@ set(PXR_PACKAGE usdPhysics)
 
 pxr_library(usdPhysics
     LIBRARIES
-        js
         tf
         plug
         vt
@@ -11,6 +10,7 @@ pxr_library(usdPhysics
         trace
         usd
         usdGeom
+        usdShade
         work
         ${Boost_PYTHON_LIBRARY}
         ${TBB_tbb_LIBRARY}
@@ -42,6 +42,7 @@ pxr_library(usdPhysics
         
     PUBLIC_HEADERS
         api.h
+        massProperties.h
 
     PYTHON_CPPFILES
         moduleDeps.cpp
@@ -89,8 +90,9 @@ pxr_library(usdPhysics
 
 pxr_test_scripts(
     testenv/testUsdPhysicsMetrics.py
+    testenv/testUsdPhysicsRigidBodyAPI.py
+    testenv/testUsdPhysicsCollisionGroupAPI.py
 )
-
 
 pxr_register_test(testUsdPhysicsMetrics
     PYTHON
@@ -98,3 +100,14 @@ pxr_register_test(testUsdPhysicsMetrics
     EXPECTED_RETURN_CODE 0
 )
 
+pxr_register_test(testUsdPhysicsRigidBodyAPI
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPhysicsRigidBodyAPI"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdPhysicsCollisionGroupAPI
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPhysicsCollisionGroupAPI"
+    EXPECTED_RETURN_CODE 0
+)

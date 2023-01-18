@@ -88,14 +88,20 @@ public:
     virtual ~UsdContrivedEmptyMultipleApplyAPI();
 
     /// Return a vector of names of all pre-declared attributes for this schema
+    /// class and all its ancestor classes.  Does not include attributes that
+    /// may be authored by custom/extended methods of the schemas involved.
+    USDCONTRIVED_API
+    static const TfTokenVector &
+    GetSchemaAttributeNames(bool includeInherited=true);
+
+    /// Return a vector of names of all pre-declared attributes for this schema
     /// class and all its ancestor classes for a given instance name.  Does not
     /// include attributes that may be authored by custom/extended methods of
     /// the schemas involved. The names returned will have the proper namespace
     /// prefix.
     USDCONTRIVED_API
-    static const TfTokenVector &
-    GetSchemaAttributeNames(
-        bool includeInherited=true, const TfToken instanceName=TfToken());
+    static TfTokenVector
+    GetSchemaAttributeNames(bool includeInherited, const TfToken &instanceName);
 
     /// Returns the name of this multiple-apply schema instance
     TfToken GetName() const {
@@ -120,6 +126,12 @@ public:
     USDCONTRIVED_API
     static UsdContrivedEmptyMultipleApplyAPI
     Get(const UsdPrim &prim, const TfToken &name);
+
+    /// Return a vector of all named instances of UsdContrivedEmptyMultipleApplyAPI on the 
+    /// given \p prim.
+    USDCONTRIVED_API
+    static std::vector<UsdContrivedEmptyMultipleApplyAPI>
+    GetAll(const UsdPrim &prim);
 
 
     /// Returns true if this <b>multiple-apply</b> API schema can be applied,

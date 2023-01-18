@@ -21,11 +21,9 @@
 // KIND, either express or implied. See the Apache License for the specific
 // language governing permissions and limitations under the Apache License.
 //
-#include "pxr/imaging/glf/contextCaps.h"
-
 #include "pxr/imaging/hdSt/interleavedMemoryManager.h"
 #include "pxr/imaging/hdSt/bufferResource.h"
-#include "pxr/imaging/hdSt/glUtils.h"
+#include "pxr/imaging/hdSt/bufferUtils.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/stagingBuffer.h"
 #include "pxr/imaging/hdSt/tokens.h"
@@ -34,6 +32,7 @@
 #include "pxr/imaging/hgi/blitCmds.h"
 #include "pxr/imaging/hgi/blitCmdsOps.h"
 #include "pxr/imaging/hgi/buffer.h"
+#include "pxr/imaging/hgi/capabilities.h"
 
 #include "pxr/base/arch/hash.h"
 #include "pxr/base/tf/diagnostic.h"
@@ -116,7 +115,10 @@ HdStInterleavedUBOMemoryManager::CreateBufferArray(
     HdBufferSpecVector const &bufferSpecs,
     HdBufferArrayUsageHint usageHint)
 {
-    const GlfContextCaps &caps = GlfContextCaps::GetInstance();
+    const int uniformBufferOffsetAlignment = _resourceRegistry->GetHgi()->
+        GetCapabilities()->GetUniformBufferOffsetAlignment();
+    const int maxUniformBlockSize = _resourceRegistry->GetHgi()->
+        GetCapabilities()->GetMaxUniformBlockSize();
 
     return std::make_shared<
         HdStInterleavedMemoryManager::_StripedInterleavedBuffer>(
@@ -125,9 +127,9 @@ HdStInterleavedUBOMemoryManager::CreateBufferArray(
             role,
             bufferSpecs,
             usageHint,
-            caps.uniformBufferOffsetAlignment,
+            uniformBufferOffsetAlignment,
             /*structAlignment=*/sizeof(float)*4,
-            caps.maxUniformBlockSize,
+            maxUniformBlockSize,
             HdPerfTokens->garbageCollectedUbo);
 }
 
@@ -156,7 +158,8 @@ HdStInterleavedSSBOMemoryManager::CreateBufferArray(
     HdBufferSpecVector const &bufferSpecs,
     HdBufferArrayUsageHint usageHint)
 {
-    const GlfContextCaps &caps = GlfContextCaps::GetInstance();
+    const int maxShaderStorageBlockSize = _resourceRegistry->GetHgi()->
+        GetCapabilities()->GetMaxShaderStorageBlockSize();
 
     return std::make_shared<
         HdStInterleavedMemoryManager::_StripedInterleavedBuffer>(
@@ -167,7 +170,7 @@ HdStInterleavedSSBOMemoryManager::CreateBufferArray(
             usageHint,
             /*bufferOffsetAlignment=*/0,
             /*structAlignment=*/0,
-            caps.maxShaderStorageBlockSize,
+            maxShaderStorageBlockSize,
             HdPerfTokens->garbageCollectedSsbo);
 }
 
@@ -190,18 +193,18 @@ HdStInterleavedSSBOMemoryManager::ComputeAggregationId(
 //  _StripedInterleavedBuffer
 // ---------------------------------------------------------------------------
 
-static inline int
-_ComputePadding(int alignment, int currentOffset)
+static inline size_t
+_ComputePadding(int alignment, size_t currentOffset)
 {
     return ((alignment - (currentOffset & (alignment - 1))) & (alignment - 1));
 }
 
-static inline int
+static inline size_t
 _ComputeAlignment(HdTupleType tupleType)
 {
     const HdType componentType = HdGetComponentType(tupleType.type);
-    const int numComponents = HdGetComponentCount(tupleType.type);
-    const int componentSize = HdDataSizeOfType(componentType);
+    const size_t numComponents = HdGetComponentCount(tupleType.type);
+    const size_t componentSize = HdDataSizeOfType(componentType);
 
     // This is simplified to treat arrays of int and floats
     // as vectors. The padding rules state that if we have
@@ -215,7 +218,7 @@ _ComputeAlignment(HdTupleType tupleType)
 
     // Matrices are treated as an array of vec4s, so the
     // max num components we are looking at is 4
-    int alignComponents = std::min(numComponents, 4); 
+    size_t alignComponents = std::min(numComponents, size_t(4)); 
 
     // single elements and vec2's are allowed, but
     // vec3's get rounded up to vec4's
@@ -267,49 +270,74 @@ HdStInterleavedMemoryManager::_StripedInterleavedBuffer::_StripedInterleavedBuff
       shader storage blocks using the "std140" layout, except that the base
       alignment of arrays of scalars and vectors in rule (4) and of structures
       in rule (9) are not rounded up a multiple of the base alignment of a vec4.
+     
+      ***Unless we're using Metal, and then we use C++ alignment padding rules.
      */
+    const bool useCppShaderPadding = _resourceRegistry->GetHgi()->
+        GetCapabilities()->IsSet(HgiDeviceCapabilitiesBitsCppShaderPadding);
 
     TF_FOR_ALL(it, bufferSpecs) {
         // Figure out the alignment we need for this type of data
-        int alignment = _ComputeAlignment(it->tupleType);
+        const size_t alignment = _ComputeAlignment(it->tupleType);
         _stride += _ComputePadding(alignment, _stride);
 
         // We need to save the max alignment size for later because the
         // stride for our struct needs to be aligned to this
-        structAlignment = std::max(structAlignment, alignment);
+        structAlignment = std::max(size_t(structAlignment), alignment);
 
         _stride += HdDataSizeOfTupleType(it->tupleType);
+        
+        if (useCppShaderPadding) {
+            _stride += _ComputePadding(alignment, _stride);
+        }
     }
 
     // Our struct stride needs to be aligned to the max alignment needed within
     // our struct.
     _stride += _ComputePadding(structAlignment, _stride);
 
+    _elementStride = _stride;
+
     // and also aligned if bufferOffsetAlignment exists (for UBO binding)
     if (_bufferOffsetAlignment > 0) {
         _stride += _ComputePadding(_bufferOffsetAlignment, _stride);
     }
 
-    TF_VERIFY(_stride > 0);
+    if (_stride > _maxSize) {
+        TF_WARN("Computed stride = %zu of interleaved buffer is larger than max"
+        " size %zu, cannot create buffer.", _stride, _maxSize);
+        _SetMaxNumRanges(0);
+        return;
+    }
+    if (_stride == 0) {
+        TF_WARN("Computed stride = %zu of interleaved buffer is 0, cannot "
+        " create buffer.", _stride);
+        _SetMaxNumRanges(0);
+        return;
+    }
 
     TF_DEBUG_MSG(HD_BUFFER_ARRAY_INFO,
-                 "Create interleaved buffer array: stride = %d\n", _stride);
+                 "Create interleaved buffer array: stride = %zu\n", _stride);
 
     // populate BufferResources, interleaved
-    int offset = 0;
+    size_t offset = 0;
     TF_FOR_ALL(it, bufferSpecs) {
         // Figure out alignment for this data member
-        int alignment = _ComputeAlignment(it->tupleType);
+        const size_t alignment = _ComputeAlignment(it->tupleType);
         // Add any needed padding to fixup alignment
         offset += _ComputePadding(alignment, offset);
 
         _AddResource(it->name, it->tupleType, offset, _stride);
 
         TF_DEBUG_MSG(HD_BUFFER_ARRAY_INFO,
-                     "  %s : offset = %d, alignment = %d\n",
+                     "  %s : offset = %zu, alignment = %zu\n",
                      it->name.GetText(), offset, alignment);
 
-        offset += HdDataSizeOfTupleType(it->tupleType);
+        const size_t thisSize = HdDataSizeOfTupleType(it->tupleType);
+        offset += thisSize;
+        if (useCppShaderPadding) {
+            offset += _ComputePadding(alignment, thisSize);
+        }
     }
 
     _SetMaxNumRanges(_maxSize / _stride);
@@ -431,7 +459,7 @@ HdStInterleavedMemoryManager::_StripedInterleavedBuffer::Reallocate(
     HgiBufferHandle newBuf;
 
     Hgi* hgi = _resourceRegistry->GetHgi();
-    
+
     // Skip buffers of zero size.
     if (totalSize > 0) {
         HgiBufferDesc bufDesc;
@@ -461,7 +489,10 @@ HdStInterleavedMemoryManager::_StripedInterleavedBuffer::Reallocate(
                 // copy old data
                 ptrdiff_t readOffset = oldIndex * _stride;
                 ptrdiff_t writeOffset = index * _stride;
-                ptrdiff_t copySize = _stride * range->GetNumElements();
+
+                int const oldSize = range->GetCapacity();
+                int const newSize = range->GetNumElements();
+                ptrdiff_t copySize = _stride * std::min(oldSize, newSize);
 
                 relocator.AddRange(readOffset, writeOffset, copySize);
             }
@@ -498,6 +529,19 @@ HdStInterleavedMemoryManager::_StripedInterleavedBuffer::Reallocate(
     // update allocation to all buffer resources
     TF_FOR_ALL(it, GetResources()) {
         it->second->SetAllocation(newBuf, totalSize);
+    }
+
+    // update ranges
+    for (size_t idx = 0; idx < ranges.size(); ++idx) {
+        _StripedInterleavedBufferRangeSharedPtr range =
+            std::static_pointer_cast<_StripedInterleavedBufferRange>(
+                ranges[idx]);
+        if (!range) {
+            TF_CODING_ERROR(
+                "_StripedInterleavedBufferRange expired unexpectedly.");
+            continue;
+        }
+        range->SetCapacity(range->GetNumElements());
     }
 
     blitCmds->PopDebugGroup();
@@ -624,15 +668,31 @@ HdStInterleavedMemoryManager::_StripedInterleavedBufferRange::Resize(int numElem
 
     if (!TF_VERIFY(_stripedBuffer)) return false;
 
-    // interleaved BAR never needs to be resized, since numElements in buffer
-    // resources is always 1. Note that the arg numElements of this function
-    // could be more than 1 for static array.
-    // ignore Resize request.
+    // XXX Some tests rely on an interleaved buffer being valid, even if given
+    // no data.
+    if (numElements == 0) {
+        numElements = 1;
+    }
 
-    // XXX: this could be a problem if a client allows to change the array size
-    //      dynamically -- e.g. instancer nesting level changes.
-    //
-    return false;
+    bool needsReallocation = false;
+
+    if (_capacity != numElements) {
+        const size_t numMaxElements = GetMaxNumElements();
+
+        if (static_cast<size_t>(numElements) > numMaxElements) {
+            TF_WARN("Attempting to resize the BAR with 0x%x elements when the "
+                    "max number of elements in the buffer array is 0x%lx. "
+                    "Clamping BAR size to the latter.",
+                     numElements, numMaxElements);
+
+            numElements = numMaxElements;
+        }
+        _stripedBuffer->SetNeedsReallocation();
+        needsReallocation = true;
+    }
+
+    _numElements = numElements;
+    return needsReallocation;
 }
 
 void
@@ -674,6 +734,7 @@ HdStInterleavedMemoryManager::_StripedInterleavedBufferRange::CopyData(
     int vboStride = VBO->GetStride();
     size_t vboOffset = VBO->GetOffset() + vboStride * _index;
     int dataSize = HdDataSizeOfTupleType(VBO->GetTupleType());
+    size_t const elementStride = _stripedBuffer->GetElementStride();
 
     const unsigned char *data =
         (const unsigned char*)bufferSource->GetData();
@@ -692,7 +753,7 @@ HdStInterleavedMemoryManager::_StripedInterleavedBufferRange::CopyData(
 
         stagingBuffer->StageCopy(blitOp);
         
-        vboOffset += vboStride;
+        vboOffset += elementStride;
         data += dataSize;
     }
 
@@ -717,11 +778,13 @@ HdStInterleavedMemoryManager::_StripedInterleavedBufferRange::ReadData(
         return result;
     }
 
-    result = HdStGLUtils::ReadBuffer(VBO->GetHandle()->GetRawResource(),
-                                   VBO->GetTupleType(),
-                                   VBO->GetOffset() + VBO->GetStride() * _index,
-                                   VBO->GetStride(),
-                                   _numElements);
+    result = HdStReadBuffer(VBO->GetHandle(),
+                            VBO->GetTupleType(),
+                            VBO->GetOffset() + VBO->GetStride() * _index,
+                            VBO->GetStride(),
+                            _numElements,
+                            _stripedBuffer->GetElementStride(),
+                            GetResourceRegistry());
 
     return result;
 }

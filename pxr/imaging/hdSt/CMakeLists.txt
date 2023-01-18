@@ -9,23 +9,19 @@ if (NOT ${PXR_BUILD_GPU_SUPPORT} OR NOT ${PXR_ENABLE_GL_SUPPORT})
     return()
 endif()
 
-if (OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK)
-    add_definitions(-DOPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK)
-endif()
-if (OPENSUBDIV_HAS_GLSL_COMPUTE)
-    add_definitions(-DOPENSUBDIV_HAS_GLSL_COMPUTE)
-endif()
-
 set(optionalLibs "")
 set(optionalIncludeDirs "")
 set(optionalPublicClasses "")
 set(optionalPrivateClasses "")
 if (${PXR_ENABLE_MATERIALX_SUPPORT})
-    add_definitions(-DPXR_MATERIALX_STDLIB_DIR="${MATERIALX_STDLIB_DIR}")
-    add_definitions(-DPXR_MATERIALX_BASE_DIR="${MATERIALX_BASE_DIR}")
-
-    list(APPEND optionalLibs ${MATERIALX_LIBRARIES} hdMtlx)
-    list(APPEND optionalIncludeDirs ${MATERIALX_INCLUDE_DIRS})
+    list(APPEND optionalLibs
+        MaterialXGenShader
+        MaterialXRender
+        MaterialXCore
+        MaterialXFormat
+        MaterialXGenGlsl
+        hdMtlx
+    )
     list(APPEND optionalPrivateClasses
          materialXFilter
          materialXShaderGen
@@ -43,7 +39,9 @@ pxr_library(hdSt
         garch
         glf
         hd
+        hdsi
         hgiGL
+        hgiInterop
         sdr
         tf
         trace
@@ -61,6 +59,8 @@ pxr_library(hdSt
         commandBuffer
         copyComputation
         debugCodes
+        dependencyForwardingSceneIndexPlugin
+        dependencySceneIndexPlugin
         dispatchBuffer
         domeLightComputations
         drawItem
@@ -80,10 +80,11 @@ pxr_library(hdSt
         glConversions
         glslfxShader
         glslProgram
-        glUtils
+        bufferUtils
         hgiConversions
         hioConversions
         imageShaderRenderPass
+        implicitSurfaceSceneIndexPlugin
         instancer
         interleavedMemoryManager
         light      
@@ -141,17 +142,22 @@ pxr_library(hdSt
         extCompComputeShader
         fieldTextureCpuData
         imageShaderShaderKey
-        immediateDrawBatch
         indirectDrawBatch
         materialNetworkShader
+        materialBindingResolvingSceneIndexPlugin
         materialParam
         meshShaderKey
         meshTopology 
+        nodeIdentifierResolvingSceneIndex
+        nodeIdentifierResolvingSceneIndexPlugin
+        pipelineDrawBatch
         pointsShaderKey
         quadrangulate
         resourceBinder
+        resourceLayout
         shaderKey
         subdivision
+        terminalsResolvingSceneIndexPlugin
         triangulate
         unitTestHelper
         volumeShader
@@ -184,6 +190,7 @@ pxr_library(hdSt
         shaders/terminals.glslfx
         shaders/visibility.glslfx
         shaders/volume.glslfx
+        textures/fallbackBlackDomeLight.png
 
     DOXYGEN_FILES
         overview.dox

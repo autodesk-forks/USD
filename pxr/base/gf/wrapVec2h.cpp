@@ -47,6 +47,7 @@
 #include <boost/python/make_constructor.hpp>
 #include <boost/python/operators.hpp>
 #include <boost/python/overloads.hpp>
+#include <boost/python/return_arg.hpp>
 #include <boost/python/tuple.hpp>
 #include <boost/python/slice.hpp>
 
@@ -223,7 +224,7 @@ static list __getslice__(const GfVec2h &self, slice indices) {
         // name should be "get_indices".
         //
         bounds = indices.get_indicies<>(begin, end);
-    } catch (std::invalid_argument) {
+    } catch (std::invalid_argument const &) {
         return result;
     }
 
@@ -283,7 +284,7 @@ static void __setslice__(GfVec2h &self, slice indices, object values) {
         // name should be "get_indices".
         //
         bounds = indices.get_indicies<>(begin, end);
-    } catch (std::invalid_argument) {
+    } catch (std::invalid_argument const &) {
         sliceLength = 0;
     }
 
@@ -328,17 +329,15 @@ static bool __contains__(const GfVec2h &self, GfHalf value) {
     return false;
 }
 
-#if PY_MAJOR_VERSION == 2
 static GfVec2h __truediv__(const GfVec2h &self, GfHalf value)
 {
     return self / value;
 }
 
-static GfVec2h __itruediv__(GfVec2h &self, GfHalf value)
+static GfVec2h& __itruediv__(GfVec2h &self, GfHalf value)
 {
     return self /= value;
 }
-#endif
 
 template <class V>
 static V *__init__() {
@@ -471,13 +470,6 @@ void wrapVec2h()
         .def(self * self)
         .def(str(self))
 
-#if PY_MAJOR_VERSION == 2
-        // Needed only to support "from __future__ import division" in
-        // python 2. In python 3 builds boost::python adds this for us.
-        .def("__truediv__", __truediv__ )
-        .def("__itruediv__", __itruediv__ )
-#endif
-
         .def("Axis", &Vec::Axis).staticmethod("Axis")
 
         .def("XAxis", &Vec::XAxis).staticmethod("XAxis")
@@ -513,4 +505,19 @@ void wrapVec2h()
     TfPyContainerConversions::from_python_sequence<
         std::vector<GfVec2h>,
         TfPyContainerConversions::variable_capacity_policy >();
+
+    if (!PyObject_HasAttrString(cls.ptr(), "__truediv__")) {
+        // __truediv__ not added by .def( self / double() ) above, which
+        // happens when building with python 2, but we need it to support
+        // "from __future__ import division"
+        cls.def("__truediv__", __truediv__);
+    }
+    if (!PyObject_HasAttrString(cls.ptr(), "__itruediv__")) {
+        // __itruediv__ not added by .def( self /= double() ) above, which
+        // happens when building with python 2, but we need it to support
+        // "from __future__ import division". This is also a workaround for a 
+        // bug in the current version of boost::python that incorrectly wraps
+        // in-place division with __idiv__ when building with python 3.
+        cls.def("__itruediv__", __itruediv__, return_self<>{});
+    }
 }

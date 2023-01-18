@@ -73,6 +73,7 @@ _CreateResourceBindings(
         bufBind0.bindingIndex = BufferBinding_Primvar;
         bufBind0.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind0.stageUsage = HgiShaderStageCompute;
+        bufBind0.writable = true;
         bufBind0.offsets.push_back(0);
         bufBind0.buffers.push_back(primvar);
         resourceDesc.buffers.push_back(std::move(bufBind0));
@@ -83,6 +84,7 @@ _CreateResourceBindings(
         bufBind1.bindingIndex = BufferBinding_Quadinfo;
         bufBind1.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind1.stageUsage = HgiShaderStageCompute;
+        bufBind1.writable = true;
         bufBind1.offsets.push_back(0);
         bufBind1.buffers.push_back(quadrangulateTable);
         resourceDesc.buffers.push_back(std::move(bufBind1));
@@ -150,8 +152,13 @@ HdSt_QuadIndexBuilderComputation::HdSt_QuadIndexBuilderComputation(
 void
 HdSt_QuadIndexBuilderComputation::GetBufferSpecs(HdBufferSpecVector *specs) const
 {
-    specs->emplace_back(HdTokens->indices,
-                        HdTupleType{HdTypeInt32Vec4, 1});
+    if (_topology->TriangulateQuads()) {
+        specs->emplace_back(HdTokens->indices,
+                            HdTupleType{HdTypeInt32, 6});
+    } else {
+        specs->emplace_back(HdTokens->indices,
+                            HdTupleType{HdTypeInt32, 4});
+    }
     // coarse-quads uses int2 as primitive param.
     specs->emplace_back(HdTokens->primitiveParam,
                         HdTupleType{HdTypeInt32, 1});
@@ -173,17 +180,29 @@ HdSt_QuadIndexBuilderComputation::Resolve()
     HD_TRACE_FUNCTION();
 
     // generate quad index buffer
-    VtVec4iArray quadsFaceVertexIndices;
+    VtIntArray quadsFaceVertexIndices;
     VtIntArray primitiveParam;
     VtVec2iArray quadsEdgeIndices;
     HdMeshUtil meshUtil(_topology, _id);
-    meshUtil.ComputeQuadIndices(
-            &quadsFaceVertexIndices,
-            &primitiveParam,
-            &quadsEdgeIndices);
+    if (_topology->TriangulateQuads()) {
+        meshUtil.ComputeTriQuadIndices(
+                &quadsFaceVertexIndices,
+                &primitiveParam,
+                &quadsEdgeIndices);
+    } else {
+        meshUtil.ComputeQuadIndices(
+                &quadsFaceVertexIndices,
+                &primitiveParam,
+                &quadsEdgeIndices);
+    }
 
-    _SetResult(std::make_shared<HdVtBufferSource>(HdTokens->indices,
-                                           VtValue(quadsFaceVertexIndices)));
+    if (_topology->TriangulateQuads()) {
+        _SetResult(std::make_shared<HdVtBufferSource>(HdTokens->indices,
+                                       VtValue(quadsFaceVertexIndices), 6));
+    } else {
+        _SetResult(std::make_shared<HdVtBufferSource>(HdTokens->indices,
+                                       VtValue(quadsFaceVertexIndices), 4));
+    }
 
     _primitiveParam.reset(new HdVtBufferSource(HdTokens->primitiveParam,
                                                VtValue(primitiveParam)));
@@ -495,6 +514,7 @@ HdSt_QuadrangulateComputationGPU::Execute(
         int primvarOffset;
         int primvarStride;
         int numComponents;
+        int indexEnd;
     } uniform;
 
     // select shader by datatype
@@ -510,15 +530,20 @@ HdSt_QuadrangulateComputationGPU::Execute(
           [&](HgiShaderFunctionDesc &computeDesc) {
             computeDesc.debugName = shaderToken.GetString();
             computeDesc.shaderStage = HgiShaderStageCompute;
+            computeDesc.computeDescriptor.localSize = GfVec3i(64, 1, 1);
+
             if (shaderToken == HdStGLSLProgramTokens->quadrangulateFloat) {
-                HgiShaderFunctionAddBuffer(
-                    &computeDesc, "primvar", HdStTokens->_float);
+                HgiShaderFunctionAddWritableBuffer(
+                    &computeDesc, "primvar", HdStTokens->_float,
+                    BufferBinding_Primvar);
             } else {
-                HgiShaderFunctionAddBuffer(
-                    &computeDesc, "primvar", HdStTokens->_double);
+                HgiShaderFunctionAddWritableBuffer(
+                    &computeDesc, "primvar", HdStTokens->_double,
+                    BufferBinding_Primvar);
             }
             HgiShaderFunctionAddBuffer(
-                    &computeDesc, "quadInfo", HdStTokens->_int);
+                    &computeDesc, "quadInfo", HdStTokens->_int,
+                    BufferBinding_Quadinfo, HgiBindingTypePointer);
 
             static const std::string params[] = {
                 "vertexOffset",       // offset in aggregated buffer
@@ -528,6 +553,7 @@ HdSt_QuadrangulateComputationGPU::Execute(
                 "primvarOffset",      // interleave offset
                 "primvarStride",      // interleave stride
                 "numComponents",      // interleave datasize
+                "indexEnd"
             };
             static_assert((sizeof(Uniform) / sizeof(int)) ==
                           (sizeof(params) / sizeof(params[0])), "");
@@ -579,6 +605,7 @@ HdSt_QuadrangulateComputationGPU::Execute(
         HdGetComponentCount(primvar->GetTupleType().type);
 
     int numNonQuads = (int)quadInfo->numVerts.size();
+    uniform.indexEnd = numNonQuads;
 
     Hgi* hgi = hdStResourceRegistry->GetHgi();
 
@@ -601,9 +628,9 @@ HdSt_QuadrangulateComputationGPU::Execute(
         resourceBindingsInstance.SetValue(rb);
     }
 
-    HgiResourceBindingsSharedPtr const& resourceBindindsPtr =
+    HgiResourceBindingsSharedPtr const& resourceBindingsPtr =
         resourceBindingsInstance.GetValue();
-    HgiResourceBindingsHandle resourceBindings = *resourceBindindsPtr.get();
+    HgiResourceBindingsHandle resourceBindings = *resourceBindingsPtr.get();
 
     // Get or add pipeline in registry.
     HdInstance<HgiComputePipelineSharedPtr> computePipelineInstance =

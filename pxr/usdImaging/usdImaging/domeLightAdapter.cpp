@@ -42,6 +42,22 @@ UsdImagingDomeLightAdapter::~UsdImagingDomeLightAdapter()
 {
 }
 
+TfTokenVector
+UsdImagingDomeLightAdapter::GetImagingSubprims()
+{
+    return { TfToken() };
+}
+
+TfToken
+UsdImagingDomeLightAdapter::GetImagingSubprimType(TfToken const& subprim)
+{
+    if (subprim.IsEmpty()) {
+        return HdPrimTypeTokens->domeLight;
+    }
+
+    return TfToken();
+}
+
 bool
 UsdImagingDomeLightAdapter::IsSupported(UsdImagingIndexProxy const* index) const
 {
@@ -56,6 +72,7 @@ UsdImagingDomeLightAdapter::Populate(UsdPrim const& prim,
 {
     index->InsertSprim(HdPrimTypeTokens->domeLight, prim.GetPath(), prim);
     HD_PERF_COUNTER_INCR(UsdImagingTokens->usdPopulatedPrimCount);
+    _RegisterLightCollections(prim);
 
     return prim.GetPath();
 }
@@ -64,6 +81,7 @@ void
 UsdImagingDomeLightAdapter::_RemovePrim(SdfPath const& cachePath,
                                          UsdImagingIndexProxy* index)
 {
+    _UnregisterLightCollections(cachePath);
     index->RemoveSprim(HdPrimTypeTokens->domeLight, cachePath);
 }
 

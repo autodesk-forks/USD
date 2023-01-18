@@ -135,11 +135,33 @@ HdSt_DomeLightComputationGPU::Execute(
 
     HdStResourceRegistry* hdStResourceRegistry =
         static_cast<HdStResourceRegistry*>(resourceRegistry);
+
+    constexpr int localSize = 8;
+    const bool hasUniforms = _roughness >= 0.0f;
+
     HdStGLSLProgramSharedPtr const computeProgram =
         HdStGLSLProgram::GetComputeProgram(
             HdStPackageDomeLightShader(), 
             _shaderToken,
-            static_cast<HdStResourceRegistry*>(resourceRegistry));
+            "",
+            static_cast<HdStResourceRegistry*>(resourceRegistry), 
+            [&] (HgiShaderFunctionDesc &computeDesc) {
+                computeDesc.debugName = _shaderToken.GetString();
+                computeDesc.shaderStage = HgiShaderStageCompute;
+                computeDesc.computeDescriptor.localSize = 
+                    GfVec3i(localSize, localSize, 1);
+
+                HgiShaderFunctionAddTexture(&computeDesc, "inTexture");
+                HgiShaderFunctionAddWritableTexture(&computeDesc, "outTexture",
+                    2, HgiFormatFloat16Vec4);
+                if (hasUniforms) {
+                    HgiShaderFunctionAddConstantParam(
+                        &computeDesc, "inRoughness", HdStTokens->_float);
+                }
+                HgiShaderFunctionAddStageInput(
+                    &computeDesc, "hd_GlobalInvocationID", "uvec3",
+                    HgiShaderKeywordTokens->hdGlobalInvocationID);
+            });
     if (!TF_VERIFY(computeProgram)) {
         return;
     }
@@ -165,7 +187,6 @@ HdSt_DomeLightComputationGPU::Execute(
     int height = downsize ? srcDim[1] / 2 : srcDim[1];
     
     // Make sure dimensions align with the local size used in the Compute Shader
-    constexpr int localSize = 8;
     width = _MakeMultipleOf(width, localSize);
     height = _MakeMultipleOf(height, localSize);
 
@@ -217,6 +238,7 @@ HdSt_DomeLightComputationGPU::Execute(
     HgiTextureBindDesc texBind0;
     texBind0.bindingIndex = 0;
     texBind0.stageUsage = HgiShaderStageCompute;
+    texBind0.writable = false;
     texBind0.textures.push_back(srcTextureName);
     texBind0.samplers.push_back(srcSamplerName);
     texBind0.resourceType = HgiBindResourceTypeCombinedSamplerImage;
@@ -225,6 +247,7 @@ HdSt_DomeLightComputationGPU::Execute(
     HgiTextureBindDesc texBind1;
     texBind1.bindingIndex = 1;
     texBind1.stageUsage = HgiShaderStageCompute;
+    texBind1.writable = true;
     texBind1.textures.push_back(dstTextureView->GetViewTexture());
     texBind1.samplers.push_back(srcSamplerName);
     texBind1.resourceType = HgiBindResourceTypeStorageImage;
@@ -239,8 +262,6 @@ HdSt_DomeLightComputationGPU::Execute(
     } uniform;
 
     uniform.roughness = _roughness;
-
-    bool hasUniforms = uniform.roughness >= 0.0f;
 
     HgiComputePipelineDesc desc;
     desc.debugName = "DomeLightComputation";
@@ -264,7 +285,7 @@ HdSt_DomeLightComputationGPU::Execute(
     }
 
     // Queue compute work
-    computeCmds->Dispatch(width / localSize, height / localSize);
+    computeCmds->Dispatch(width, height);
 
     computeCmds->PopDebugGroup();
 

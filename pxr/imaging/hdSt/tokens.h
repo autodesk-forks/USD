@@ -43,6 +43,10 @@ PXR_NAMESPACE_OPEN_SCOPE
     (flatNormalsQuadFloatToPacked)              \
     (flatNormalsQuadDoubleToDouble)             \
     (flatNormalsQuadDoubleToPacked)             \
+    (flatNormalsTriQuadFloatToFloat)            \
+    (flatNormalsTriQuadFloatToPacked)           \
+    (flatNormalsTriQuadDoubleToDouble)          \
+    (flatNormalsTriQuadDoubleToPacked)          \
     (quadrangulateFloat)                        \
     (quadrangulateDouble)
 
@@ -67,7 +71,11 @@ PXR_NAMESPACE_OPEN_SCOPE
     (coarseFaceIndex)                           \
     (processedFaceCounts)                       \
     (processedFaceIndices)                      \
-    (geomSubsetFaceIndices)
+    (geomSubsetFaceIndices)                     \
+    (pointSizeScale)                            \
+    (screenSpaceWidths)                         \
+    (minScreenSpaceWidths)                      \
+    (shadowCompareTextures)
 
 #define HDST_TEXTURE_TOKENS                     \
     (wrapS)                                     \
@@ -94,7 +102,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     (enableTinyPrimCulling)                     \
     (volumeRaymarchingStepSize)                 \
     (volumeRaymarchingStepSizeLighting)         \
-    (volumeMaxTextureMemoryPerField)
+    (volumeMaxTextureMemoryPerField)            \
+    (maxLights)
 
 // Material tags help bucket prims into different queues for draw submission.
 // The tags supported by Storm are:

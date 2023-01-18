@@ -71,7 +71,7 @@ PXR_NAMESPACE_USING_DIRECTIVE
        magic token */
 [[:blank:]]+ {}
 "#"[^\r\n]* {
-        if (yyextra->menvaLineNo == 1) {
+        if (yyextra->sdfLineNo == 1) {
             (*yylval_param) = std::string(yytext, yyleng);
             return TOK_MAGIC;
         }
@@ -86,7 +86,7 @@ PXR_NAMESPACE_USING_DIRECTIVE
      * as part of the token and do NOT emit a separate TOK_NL.
      */
 ((\r\n)|\r|\n) {
-        yyextra->menvaLineNo++;
+        yyextra->sdfLineNo++;
         return TOK_NL;
     }
 
@@ -179,8 +179,8 @@ PXR_NAMESPACE_USING_DIRECTIVE
        Note: we handle empty singly quoted strings below, to disambiguate
        them from the beginning of triply-quoted strings.
        Ex: "Foo \"foo\"" */
-'([^'\r\n]|(\\.))+'   |  /* ' //<- unfreak out coloring code */
-\"([^"\r\n]|(\\.))+\" {  /* " //<- unfreak out coloring code */
+'([^'\\\r\n]|(\\.))+'   |  /* ' //<- unfreak out coloring code */
+\"([^"\\\r\n]|(\\.))+\" {  /* " //<- unfreak out coloring code */
         (*yylval_param) = Sdf_EvalQuotedString(yytext, yyleng, 1);
         return TOK_STRING;
     }
@@ -198,12 +198,12 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
     /* Triply quoted, multi-line strings with escapes.
        Ex: """A\n\"B\"\nC""" */
-'''([^']|(\\.)|('{1,2}[^']))*'''        |  /* ' //<- unfreak out coloring code */
-\"\"\"([^"]|(\\.)|(\"{1,2}[^"]))*\"\"\" {  /* " //<- unfreak out coloring code */
+'''([^'\\]|(\\.)|(\\[\r\n])|('{1,2}[^']))*'''        |  /* ' //<- unfreak out coloring code */
+\"\"\"([^"\\]|(\\.)|(\\[\r\n])|(\"{1,2}[^"]))*\"\"\" {  /* " //<- unfreak out coloring code */
 
         unsigned int numlines = 0;
         (*yylval_param) = Sdf_EvalQuotedString(yytext, yyleng, 3, &numlines);
-        yyextra->menvaLineNo += numlines;
+        yyextra->sdfLineNo += numlines;
         return TOK_STRING;
     }
 
@@ -222,7 +222,7 @@ PXR_NAMESPACE_USING_DIRECTIVE
         if (outOfRange) {
            TF_WARN("Integer literal '%s' on line %d%s%s out of range, parsing "
                    "as double.  Consider exponential notation for large "
-                   "floating point values.", yytext, yyextra->menvaLineNo,
+                   "floating point values.", yytext, yyextra->sdfLineNo,
                    yyextra->fileContext.empty() ? "" : " in file ",
                    yyextra->fileContext.empty() ? "" :
                    yyextra->fileContext.c_str());
@@ -238,7 +238,7 @@ PXR_NAMESPACE_USING_DIRECTIVE
         if (outOfRange) {
            TF_WARN("Integer literal '%s' on line %d%s%s out of range, parsing "
                    "as double.  Consider exponential notation for large "
-                   "floating point values.", yytext, yyextra->menvaLineNo,
+                   "floating point values.", yytext, yyextra->sdfLineNo,
                    yyextra->fileContext.empty() ? "" : " in file ",
                    yyextra->fileContext.empty() ? "" :
                    yyextra->fileContext.c_str());

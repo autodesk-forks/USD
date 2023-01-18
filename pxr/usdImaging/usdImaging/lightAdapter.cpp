@@ -22,6 +22,7 @@
 // language governing permissions and limitations under the Apache License.
 //
 #include "pxr/usdImaging/usdImaging/lightAdapter.h"
+#include "pxr/usdImaging/usdImaging/dataSourcePrim.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 #include "pxr/usdImaging/usdImaging/materialParamUtils.h"
@@ -57,6 +58,28 @@ UsdImagingLightAdapter::~UsdImagingLightAdapter()
 {
 }
 
+HdContainerDataSourceHandle
+UsdImagingLightAdapter::GetImagingSubprimData(
+        TfToken const& subprim,
+        UsdPrim const& prim,
+        const UsdImagingDataSourceStageGlobals &stageGlobals)
+{
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourcePrim::New(
+            prim.GetPath(), prim, stageGlobals);
+    }
+
+    return nullptr;
+}
+
+HdDataSourceLocatorSet
+UsdImagingLightAdapter::InvalidateImagingSubprim(
+    TfToken const& subprim,
+    TfTokenVector const& properties)
+{
+    return UsdImagingDataSourcePrim::Invalidate(subprim, properties);
+}
+
 bool
 UsdImagingLightAdapter::IsSupported(UsdImagingIndexProxy const* index) const
 {
@@ -71,15 +94,48 @@ UsdImagingLightAdapter::Populate(UsdPrim const& prim,
 {
     index->InsertSprim(HdPrimTypeTokens->light, prim.GetPath(), prim);
     HD_PERF_COUNTER_INCR(UsdImagingTokens->usdPopulatedPrimCount);
+    _RegisterLightCollections(prim);
 
     return prim.GetPath();
 }
 
 void
 UsdImagingLightAdapter::_RemovePrim(SdfPath const& cachePath,
-                                    UsdImagingIndexProxy* index)
+                                         UsdImagingIndexProxy* index)
 {
-    index->RemoveSprim(HdPrimTypeTokens->light, cachePath);
+    _UnregisterLightCollections(cachePath);
+    index->RemoveSprim(HdPrimTypeTokens->domeLight, cachePath);
+}
+
+void
+UsdImagingLightAdapter::MarkCollectionsDirty(UsdPrim const& prim,
+                                             SdfPath const& cachePath,
+                                             UsdImagingIndexProxy* index)
+{
+    index->MarkSprimDirty(cachePath, HdLight::DirtyCollection);
+}
+
+bool
+UsdImagingLightAdapter::_UpdateCollectionsChanged(UsdPrim const& prim) const {
+    UsdImaging_CollectionCache &collectionCache = _GetCollectionCache();
+    UsdLuxLightAPI light(prim);
+    bool lightColChanged = collectionCache.UpdateCollection(light.GetLightLinkCollectionAPI());
+    bool shadowColChanged = collectionCache.UpdateCollection(light.GetShadowLinkCollectionAPI());
+    return lightColChanged || shadowColChanged;
+}
+
+void
+UsdImagingLightAdapter::_UnregisterLightCollections(SdfPath const& cachePath) {
+    UsdImaging_CollectionCache &collectionCache = _GetCollectionCache();
+    SdfPath lightLinkPath = cachePath.AppendProperty(UsdImagingTokens->collectionLightLink);
+    collectionCache.RemoveCollection(_GetStage(), lightLinkPath);
+    SdfPath shadowLinkPath = cachePath.AppendProperty(UsdImagingTokens->collectionShadowLink);
+    collectionCache.RemoveCollection(_GetStage(), shadowLinkPath);
+}
+
+void
+UsdImagingLightAdapter::_RegisterLightCollections(UsdPrim const& prim) {
+    _UpdateCollectionsChanged(prim);
 }
 
 void 
@@ -104,7 +160,7 @@ UsdImagingLightAdapter::TrackVariability(UsdPrim const& prim,
         true);
     
     // Determine if the light material network is time varying.
-    if (UsdImaging_IsHdMaterialNetworkTimeVarying(prim)) {
+    if (UsdImagingIsHdMaterialNetworkTimeVarying(prim)) {
         *timeVaryingBits |= HdLight::DirtyBits::DirtyResource;
     }
 
@@ -124,15 +180,6 @@ UsdImagingLightAdapter::TrackVariability(UsdPrim const& prim,
     }
 
     UsdImagingPrimvarDescCache* primvarDescCache = _GetPrimvarDescCache();
-
-    UsdLuxLightAPI light(prim);
-    if (TF_VERIFY(light)) {
-        UsdImaging_CollectionCache &collectionCache = _GetCollectionCache();
-        collectionCache.UpdateCollection(light.GetLightLinkCollectionAPI());
-        collectionCache.UpdateCollection(light.GetShadowLinkCollectionAPI());
-        // TODO: When collections change we need to invalidate affected
-        // prims with the DirtyCollections flag.
-    }
 
     // XXX Cache primvars for lights.
     {
@@ -177,6 +224,14 @@ UsdImagingLightAdapter::ProcessPropertyChange(UsdPrim const& prim,
     if (UsdGeomXformable::IsTransformationAffectedByAttrNamed(propertyName)) {
         return HdLight::DirtyBits::DirtyTransform;
     }
+
+    if (TfStringStartsWith(propertyName.GetString(), UsdImagingTokens->collectionShadowLink.GetString()) || 
+        TfStringStartsWith(propertyName.GetString(), UsdImagingTokens->collectionLightLink.GetString())) {
+        if (_UpdateCollectionsChanged(prim)) {
+            return HdLight::DirtyBits::DirtyCollection;
+        }
+    }
+
     // "DirtyParam" is the catch-all bit for light params.
     return HdLight::DirtyBits::DirtyParams;
 }
@@ -223,6 +278,10 @@ UsdImagingLightAdapter::GetMaterialResource(UsdPrim const &prim,
                                             SdfPath const& cachePath, 
                                             UsdTimeCode time) const
 {
+    if (!_GetSceneLightsEnabled()) {
+        return VtValue();
+    }
+
     if (!prim.HasAPI<UsdLuxLightAPI>()) {
         TF_RUNTIME_ERROR("Expected light prim at <%s> to have an applied API "
                          "of type 'UsdLuxLightAPI'; ignoring",
@@ -236,7 +295,7 @@ UsdImagingLightAdapter::GetMaterialResource(UsdPrim const &prim,
 
     HdMaterialNetworkMap networkMap;
 
-    UsdImaging_BuildHdMaterialNetworkFromTerminal(
+    UsdImagingBuildHdMaterialNetworkFromTerminal(
         prim, 
         HdMaterialTerminalTokens->light,
         _GetShaderSourceTypes(),

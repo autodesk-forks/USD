@@ -124,6 +124,13 @@ void wrapUsdPhysicsLimitAPI()
             (arg("prim"), arg("name")))
         .staticmethod("Get")
 
+        .def("GetAll",
+            (std::vector<UsdPhysicsLimitAPI>(*)(const UsdPrim &prim))
+                &This::GetAll,
+            arg("prim"),
+            return_value_policy<TfPySequenceToList>())
+        .staticmethod("GetAll")
+
         .def("CanApply", &_WrapCanApply, (arg("prim"), arg("name")))
         .staticmethod("CanApply")
 
@@ -131,9 +138,14 @@ void wrapUsdPhysicsLimitAPI()
         .staticmethod("Apply")
 
         .def("GetSchemaAttributeNames",
-             &This::GetSchemaAttributeNames,
+             (const TfTokenVector &(*)(bool))&This::GetSchemaAttributeNames,
              arg("includeInherited")=true,
-             arg("instanceName")=TfToken(),
+             return_value_policy<TfPySequenceToList>())
+        .def("GetSchemaAttributeNames",
+             (TfTokenVector(*)(bool, const TfToken &))
+                &This::GetSchemaAttributeNames,
+             arg("includeInherited"),
+             arg("instanceName"),
              return_value_policy<TfPySequenceToList>())
         .staticmethod("GetSchemaAttributeNames")
 

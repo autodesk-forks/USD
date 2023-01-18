@@ -32,6 +32,8 @@
 #include "pxr/imaging/hd/sceneDelegate.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 
+#include "pxr/imaging/hgi/capabilities.h"
+
 #include "pxr/base/arch/hash.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -118,14 +120,20 @@ HdStExtComputation::Sync(HdSceneDelegate *sceneDelegate,
         std::dynamic_pointer_cast<HdStResourceRegistry>(
                               renderIndex.GetResourceRegistry());
 
+    HgiCapabilities const * capabilities =
+        resourceRegistry->GetHgi()->GetCapabilities();
+    bool const doublesSupported =
+        capabilities->IsSet(HgiDeviceCapabilitiesBitsShaderDoublePrecision);
+
     HdBufferSourceSharedPtrVector inputs;
     for (TfToken const & inputName: GetSceneInputNames()) {
         VtValue inputValue = sceneDelegate->GetExtComputationInput(
                                                 GetId(), inputName);
         size_t arraySize =
             inputValue.IsArrayValued() ? inputValue.GetArraySize() : 1;
-        HdBufferSourceSharedPtr inputSource = std::make_shared<HdVtBufferSource>
-            (inputName, inputValue, arraySize);
+        HdBufferSourceSharedPtr const inputSource =
+            std::make_shared<HdVtBufferSource>(inputName, inputValue,
+                arraySize, doublesSupported);
         if (inputSource->IsValid()) {
             inputs.push_back(inputSource);
         } else {

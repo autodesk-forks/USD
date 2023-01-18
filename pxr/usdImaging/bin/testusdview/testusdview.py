@@ -56,11 +56,6 @@ class TestUsdView(Usdviewq.Launcher):
         # environment for our test scripts.
         arg_parse_result.defaultSettings = True
         super(TestUsdView, self).ValidateOptions(arg_parse_result)
-
-        # Further, we ensure usdview won't try to create any state directory
-        # to save its state, as that would be bad for running multiple tests
-        # in parallel
-        os.environ['PXR_USDVIEW_SUPPRESS_STATE_SAVING'] = "1"
         
         self.__LaunchProcess(arg_parse_result)
 
@@ -159,9 +154,10 @@ def _processEvents(self, iterations=10, waitForConvergence=False):
 AppController._processEvents = _processEvents
 
 # Take a shot of the viewport and save it to a file.
-def _takeShot(self, fileName, iterations=10, waitForConvergence=False):
+def _takeShot(self, fileName, iterations=10, waitForConvergence=False,
+              cropToAspectRatio=False):
     self._processEvents(iterations, waitForConvergence)
-    viewportShot = self.GrabViewportShot()
+    viewportShot = self.GrabViewportShot(cropToAspectRatio=cropToAspectRatio)
     viewportShot.save(fileName, "PNG")
 
 AppController._takeShot = _takeShot

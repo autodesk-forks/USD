@@ -1,12 +1,6 @@
 set(PXR_PREFIX pxr/usd)
 set(PXR_PACKAGE usdResolverExample)
 
-if (NOT PXR_USE_AR_2)
-    message(STATUS
-        "Skipping ${PXR_PACKAGE} because PXR_USE_AR_2 is OFF")
-    return()
-endif()
-
 pxr_plugin(${PXR_PACKAGE}
     LIBRARIES
         ar
@@ -23,7 +17,7 @@ pxr_plugin(${PXR_PACKAGE}
         api.h
 
     PYTHON_CPPFILES
-        moduleDeps
+        moduleDeps.cpp
 
     PYMODULE_CPPFILES
         module.cpp

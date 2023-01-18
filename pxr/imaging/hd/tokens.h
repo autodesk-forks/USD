@@ -39,6 +39,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (bbox)                                      \
     (bezier)                                    \
     (bSpline)                                   \
+    (blurScale)                                 \
     (camera)                                    \
     (catmullRom)                                \
     (collection)                                \
@@ -76,7 +77,9 @@ PXR_NAMESPACE_OPEN_SCOPE
     (linear)                                    \
     (lightLink)                                 \
     (lightFilterLink)                           \
+    (meshLight)                                 \
     (materialParams)                            \
+    (nonlinearSampleCount)                      \
     (nonperiodic)                               \
     (normals)                                   \
     (params)                                    \
@@ -91,6 +94,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (primvar)                                   \
     (primID)                                    \
     (primitiveParam)                            \
+    (tessFactors)                               \
     (quadInfo)                                  \
     (renderTags)                                \
     (rightHanded)                               \
@@ -188,8 +192,10 @@ PXR_NAMESPACE_OPEN_SCOPE
     (cullStyle)                                 \
     (drawRange)                                 \
     (environmentMap)                            \
+    (displacementShader)                        \
     (fragmentShader)                            \
     (geometryShader)                            \
+    (imageToWorldMatrix)                        \
     (indicatorColor)                            \
     (lightingBlendAmount)                       \
     (overrideColor)                             \
@@ -201,12 +207,16 @@ PXR_NAMESPACE_OPEN_SCOPE
     (materialTag)                               \
     (tessControlShader)                         \
     (tessEvalShader)                            \
+    (postTessControlShader)                     \
+    (postTessVertexShader)                      \
     (tessLevel)                                 \
     (viewport)                                  \
     (vertexShader)                              \
     (wireframeColor)                            \
     (worldToViewMatrix)                         \
-    (worldToViewInverseMatrix)
+    (worldToViewInverseMatrix)                  \
+    (stepSize)                                  \
+    (stepSizeLighting)
 
 // Deprecated. Use: HdStMaterialTagTokens
 #define HD_MATERIALTAG_TOKENS                   \
@@ -226,7 +236,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     (guide)                                     \
     (hidden)                                    \
     (proxy)                                     \
-    (render)
+    (render)                                    \
+    (widget)
 
 #define HD_RENDER_CONTEXT_TOKENS                \
     ((universal, ""))
@@ -236,9 +247,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define HD_PRIMTYPE_TOKENS                      \
     /* Rprims */                                \
+    (capsule)                                   \
+    (cone)                                      \
+    (cube)                                      \
+    (cylinder)                                  \
     (mesh)                                      \
     (basisCurves)                               \
     (points)                                    \
+    (sphere)                                    \
     (volume)                                    \
                                                 \
     /* Sprims */                                \
@@ -248,6 +264,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (coordSys)                                  \
     (instancer)                                 \
     (instance)                                  \
+    (sampleFilter)                              \
     /* Sprims Lights */                         \
     (simpleLight)                               \
     (cylinderLight)                             \
@@ -256,6 +273,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (domeLight)                                 \
     (light)                                     \
     (lightFilter)                               \
+    (meshLight)                                 \
     (pluginLight)                               \
     (rectLight)                                 \
     (sphereLight)                               \
@@ -263,7 +281,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     (extComputation)                            \
                                                 \
     /* Bprims */                                \
-    (renderBuffer)
+    (renderBuffer)                              \
+    (renderSettings)
 
 HD_API
 bool HdPrimTypeIsGprim(TfToken const& primType);
@@ -295,6 +314,10 @@ bool HdPrimTypeIsLight(TfToken const& primType);
      * depth of the final fragment.
      */                                         \
     (depth)                                     \
+    /* HdAovTokens->depthStencil represents the clip-space
+     * depth of the final fragment w/ 8-bit stencil.
+     */                                         \
+    (depthStencil)                              \
     /* HdAovTokens->cameraDepth represents the camera-space
      * depth of the final fragment.
      */                                         \
@@ -360,6 +383,7 @@ TfToken HdAovTokensMakeShader(TfToken const& shader);
     (enableShadows)                                   \
     (enableSceneMaterials)                            \
     (enableSceneLights)                               \
+    (domeLightCameraVisibility)                       \
     /* Raytracer sampling settings */                 \
     (convergedVariance)                               \
     (convergedSamplesPerPixel)                        \

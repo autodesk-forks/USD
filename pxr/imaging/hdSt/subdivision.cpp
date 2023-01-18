@@ -504,8 +504,13 @@ HdSt_OsdIndexComputation::GetBufferSpecs(HdBufferSpecVector *specs) const
                             HdTupleType {HdTypeInt32Vec2, 1});
     } else {
         // quads (catmark, bilinear)
-        specs->emplace_back(HdTokens->indices,
-                            HdTupleType {HdTypeInt32Vec4, 1});
+        if (_topology->TriangulateQuads()) {
+            specs->emplace_back(HdTokens->indices,
+                                HdTupleType {HdTypeInt32, 6});
+        } else {
+            specs->emplace_back(HdTokens->indices,
+                                HdTupleType {HdTypeInt32, 4});
+        }
         specs->emplace_back(HdTokens->primitiveParam,
                             HdTupleType {HdTypeInt32Vec3, 1});
         specs->emplace_back(HdTokens->edgeIndices,
@@ -1224,13 +1229,28 @@ HdSt_OsdIndexComputation::Resolve()
         _PopulateUniformPrimitiveBuffer(patchTable);
     } else {
         // populate refined quad indices.
-        VtArray<GfVec4i> indices(ptableSize/4);
-        memcpy(indices.data(), firstIndex, ptableSize * sizeof(int));
+        size_t const numQuads = ptableSize / 4;
+
+        int const numIndicesPerQuad =
+            _topology->TriangulateQuads()
+                ? HdMeshTriQuadBuilder::NumIndicesPerTriQuad
+                : HdMeshTriQuadBuilder::NumIndicesPerQuad;
+        VtIntArray indices(numQuads * numIndicesPerQuad);
+
+        if (numIndicesPerQuad == 4) {
+            memcpy(indices.data(), firstIndex, ptableSize * sizeof(int));
+        } else {
+            HdMeshTriQuadBuilder outputIndices(indices.data(), true);
+            for (size_t i=0; i<numQuads; ++i) {
+                GfVec4i quadIndices(&firstIndex[i*4]);
+                outputIndices.EmitQuadFace(quadIndices);
+            }
+        }
 
         // refined quads index buffer
         HdBufferSourceSharedPtr quadIndices =
             std::make_shared<HdVtBufferSource>(
-                HdTokens->indices, VtValue(indices));
+                HdTokens->indices, VtValue(indices), numIndicesPerQuad);
         _SetResult(quadIndices);
 
         _PopulateUniformPrimitiveBuffer(patchTable);
@@ -1709,6 +1729,7 @@ _CreateResourceBindings(
         bufBind0.bindingIndex = BufferBinding_Sizes;
         bufBind0.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind0.stageUsage = HgiShaderStageCompute;
+        bufBind0.writable = false;
         bufBind0.offsets.push_back(0);
         bufBind0.buffers.push_back(sizes);
         resourceDesc.buffers.push_back(std::move(bufBind0));
@@ -1719,6 +1740,7 @@ _CreateResourceBindings(
         bufBind1.bindingIndex = BufferBinding_Offsets;
         bufBind1.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind1.stageUsage = HgiShaderStageCompute;
+        bufBind1.writable = false;
         bufBind1.offsets.push_back(0);
         bufBind1.buffers.push_back(offsets);
         resourceDesc.buffers.push_back(std::move(bufBind1));
@@ -1729,6 +1751,7 @@ _CreateResourceBindings(
         bufBind2.bindingIndex = BufferBinding_Indices;
         bufBind2.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind2.stageUsage = HgiShaderStageCompute;
+        bufBind2.writable = false;
         bufBind2.offsets.push_back(0);
         bufBind2.buffers.push_back(indices);
         resourceDesc.buffers.push_back(std::move(bufBind2));
@@ -1739,6 +1762,7 @@ _CreateResourceBindings(
         bufBind3.bindingIndex = BufferBinding_Weights;
         bufBind3.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind3.stageUsage = HgiShaderStageCompute;
+        bufBind3.writable = false;
         bufBind3.offsets.push_back(0);
         bufBind3.buffers.push_back(weights);
         resourceDesc.buffers.push_back(std::move(bufBind3));
@@ -1749,6 +1773,7 @@ _CreateResourceBindings(
         bufBind4.bindingIndex = BufferBinding_Primvar;
         bufBind4.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind4.stageUsage = HgiShaderStageCompute;
+        bufBind4.writable = true;
         bufBind4.offsets.push_back(0);
         bufBind4.buffers.push_back(primvar);
         resourceDesc.buffers.push_back(std::move(bufBind4));
@@ -1820,17 +1845,23 @@ _EvalStencilsGPU(
           [&](HgiShaderFunctionDesc &computeDesc) {
             computeDesc.debugName = shaderToken.GetString();
             computeDesc.shaderStage = HgiShaderStageCompute;
+            computeDesc.computeDescriptor.localSize = GfVec3i(64, 1, 1);
 
             HgiShaderFunctionAddBuffer(&computeDesc,
-                                       "sizes", HdStTokens->_int);
+                "sizes", HdStTokens->_int,
+                BufferBinding_Sizes, HgiBindingTypePointer);
             HgiShaderFunctionAddBuffer(&computeDesc,
-                                       "offsets", HdStTokens->_int);
+                "offsets", HdStTokens->_int,
+                BufferBinding_Offsets, HgiBindingTypePointer);
             HgiShaderFunctionAddBuffer(&computeDesc,
-                                       "indices", HdStTokens->_int);
+                "indices", HdStTokens->_int,
+                BufferBinding_Indices, HgiBindingTypePointer);
             HgiShaderFunctionAddBuffer(&computeDesc,
-                                       "weights", HdStTokens->_float);
-            HgiShaderFunctionAddBuffer(&computeDesc,
-                                       "primvar", HdStTokens->_float);
+                "weights", HdStTokens->_float,
+                BufferBinding_Weights, HgiBindingTypePointer);
+            HgiShaderFunctionAddWritableBuffer(&computeDesc,
+                "primvar", HdStTokens->_float,
+                BufferBinding_Primvar);
 
             static const std::string params[] = {
                 "pointIndexStart",
@@ -1917,9 +1948,9 @@ _EvalStencilsGPU(
         resourceBindingsInstance.SetValue(rb);
     }
 
-    HgiResourceBindingsSharedPtr const & resourceBindindsPtr =
+    HgiResourceBindingsSharedPtr const & resourceBindingsPtr =
         resourceBindingsInstance.GetValue();
-    HgiResourceBindingsHandle resourceBindings = *resourceBindindsPtr.get();
+    HgiResourceBindingsHandle resourceBindings = *resourceBindingsPtr.get();
 
     // Get or add pipeline in registry.
     HdInstance<HgiComputePipelineSharedPtr> computePipelineInstance =

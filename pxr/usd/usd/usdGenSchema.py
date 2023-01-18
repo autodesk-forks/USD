@@ -31,7 +31,9 @@ generated that will compile and work with USD Core successfully:
     
     * Must specify the libraryName as layer metadata.
     * Schema typenames must be unique across all libraries.
-    * Attribute names and tokens must be camelCased valid identifiers.
+    * Attribute names and tokens should be camelCased valid identifiers.
+      However, useLiteralIdentifier can be provided to use literals as-is. Any
+      invalid token will be converted using TfMakeValidIdentifier. 
     * usd/schema.usda must exist in the LayerStack, not necessarily as a 
         directly subLayer.
 """
@@ -234,6 +236,15 @@ def _SkipCodeGenForLayer(layer):
     except:
         return False
 
+def _UseLiteralIdentifierForLayer(layer):
+    """ Return whether the layer specifies literalIdentifier metadata, and hence
+    opting in for using literal identifiers instead of the default camelCase
+    identifier."""
+    try:
+        return _GetLibMetadata(layer).get('useLiteralIdentifier', False)
+    except:
+        return False
+
 def _SkipCodeGenForSchemaLib(stage):
     """ Return whether the stage has a layer that specifies that code generation
     should be skipped for its schemas and therefore for the the entire schema
@@ -276,6 +287,33 @@ def _CamelCase(aString):
     
 Token = namedtuple('Token', ['id', 'value', 'desc'])
 
+def _GetNameAndRawNameForPropInfo(sdfProp, classInfo):
+    if classInfo.propertyNamespacePrefix:
+        # A property namespace prefix will only exist for multiple apply API
+        # schemas and is used to create the instanceable namespace prefix 
+        # prepended to all its properties. We prepend this instanceable 
+        # prefix to the raw name here.
+        rawName = Usd.SchemaRegistry.MakeMultipleApplyNameTemplate(
+            classInfo.propertyNamespacePrefix, sdfProp.name)
+        # Since the property info's name is used to create the identifier 
+        # used for tokens and such, we make it from the instanced property 
+        # name with the instance name placeholder replaced with 
+        # "_MultipleApplyTemplate_". This is so we don't end up with an
+        # the implementation detail of "__INSTANCE_NAME__" in the identifier
+        # itself.
+        name = _CamelCase(
+            Usd.SchemaRegistry.MakeMultipleApplyNameInstance(
+                rawName, "_MultipleApplyTemplate_"))
+    else:
+        rawName = sdfProp.name
+        # For property names, camelCase all tokens irrespective of
+        # useLiteralIdentifier, so that we are consistent in our attribute
+        # naming when namespace prefix are provided and respect our coding
+        # convention. (Example: namespacePrefix:attrName ->
+        # namespacePrefixAttrName)
+        name = _MakeValidToken(rawName, False)
+    return (name, rawName)
+
 class PropInfo(object):
     class CodeGen:
         """Specifies how code gen constructs get methods for a property
@@ -288,22 +326,44 @@ class PropInfo(object):
         Generated = 'generated'
         Custom = 'custom'
         
-    def __init__(self, sdfProp):
+    def __init__(self, sdfProp, classInfo):
         # Allow user to specify custom naming through customData metadata.
         self.customData = dict(sdfProp.customData)
+        self.name, self.rawName = _GetNameAndRawNameForPropInfo(
+            sdfProp, classInfo)
 
-        self.name       = _CamelCase(sdfProp.name)
-        self.apiName    = self.customData.get('apiName', self.name)
-        self.apiGet     = self.customData.get('apiGetImplementation', self.CodeGen.Generated)
+        # Determine if this property will be an API schema override in the 
+        # flattened stage.
+        self.isAPISchemaOverride = self.customData.get(
+            'apiSchemaOverride', False)
+
+        # If the property is an API schema override, force the apiName to
+        # empty so it isn't added to any of the C++ API
+        if self.isAPISchemaOverride:
+            self.apiName = ''
+        else:
+            self.apiName = self.customData.get(
+                'apiName', _CamelCase(sdfProp.name))
+        self.apiGet = self.customData.get(
+            'apiGetImplementation', self.CodeGen.Generated)
         if self.apiGet not in [self.CodeGen.Generated, self.CodeGen.Custom]:
             Print.Err("Token '%s' is not valid." % self.apiGet)
-        self.rawName    = sdfProp.name
-        self.doc        = _SanitizeDoc(sdfProp.documentation, '\n    /// ')
-        self.custom     = sdfProp.custom
+        self.doc = _SanitizeDoc(sdfProp.documentation, '\n    /// ')
+        # Keep around the property spec so that we can pull any other data we
+        # may need from it.
+        self._sdfPropSpec = sdfProp
+        # Also keep a reference to the layer so that it doesn't close while 
+        # we're still holding on to one of its property specs.
+        self._layer = sdfProp.layer
+
+    # Anything that isn't explicitly set as an attribute in the PropInfo, we can
+    # fall back to grabbing directly from the SdfProperty spec if requested.
+    def __getattr__(self, attr):
+        return getattr(self._sdfPropSpec, attr)
 
 class RelInfo(PropInfo):
-    def __init__(self, sdfProp):
-        super(RelInfo, self).__init__(sdfProp)
+    def __init__(self, sdfProp, classInfo):
+        super(RelInfo, self).__init__(sdfProp, classInfo)
 
 # Map an Sdf.ValueTypeName.XXX object to the 'XXX' token string -- we use this
 # to go from sdf attribute types to their symbolic tokens, for example:
@@ -324,8 +384,8 @@ def _GetSchemaDefException(msg, path):
     return Exception(errorMsg(msg))
 
 class AttrInfo(PropInfo):
-    def __init__(self, sdfProp):
-        super(AttrInfo, self).__init__(sdfProp)
+    def __init__(self, sdfProp, classInfo):
+        super(AttrInfo, self).__init__(sdfProp, classInfo)
         self.allowedTokens = sdfProp.GetInfo('allowedTokens')
         
         self.variability = str(sdfProp.variability).replace('Sdf.', 'Sdf')
@@ -393,7 +453,7 @@ def _IsTyped(p):
     return Sdf.Path('/Typed') in set(_FindAllInherits(p))
 
 class ClassInfo(object):
-    def __init__(self, usdPrim, sdfPrim):
+    def __init__(self, usdPrim, sdfPrim, useLiteralIdentifier=False):
         # First validate proper class naming...
         if (sdfPrim.typeName != sdfPrim.path.name and
             sdfPrim.typeName != ''):
@@ -421,11 +481,15 @@ class ClassInfo(object):
         # Allow user to specify custom naming through customData metadata.
         self.customData = dict(sdfPrim.customData)
 
+        # For token identifiers
+        self.useLiteralIdentifier = useLiteralIdentifier
+
         # For accumulation of AttrInfo objects
         self.attrs = {}
         self.rels = {}
         self.attrOrder = []
         self.relOrder = []
+        self.apiSchemaOverridePropertyNames = []
         self.tokens = set()
 
         # Important names
@@ -463,6 +527,33 @@ class ClassInfo(object):
         self.doc = _SanitizeDoc(sdfPrim.documentation, '\n/// ')
         self.typeName = sdfPrim.typeName
         self.extraIncludes = self.customData.get('extraIncludes', None)
+
+        # Built-in API schemas metadata.
+        #
+        # We get metadata which is the token list op directly authored for the 
+        # schema class (does not include inherited API schemas from parent 
+        # classes)
+        self.apiSchemasMetadata = sdfPrim.GetInfo('apiSchemas')
+
+        # We also get the full list of authored applied API schemas directly
+        # from the USD prim. This will contain the API schemas authored in the
+        # parent classes.
+        self.allAppliedAPISchemas = \
+            usdPrim.GetPrimTypeInfo().GetAppliedAPISchemas()
+
+        # If a type specifies applied API schemas as built-in it must specify
+        # them as a prepend. I.e. schema types can only add additional applied
+        # API schemas that will be stronger then any inherited built-in API
+        # schemas from parent classes.
+        if self.apiSchemasMetadata != Sdf.TokenListOp():
+            if (self.apiSchemasMetadata.isExplicit or
+                    self.apiSchemasMetadata.addedItems or
+                    self.apiSchemasMetadata.deletedItems or
+                    self.apiSchemasMetadata.explicitItems or
+                    self.apiSchemasMetadata.orderedItems) :
+                raise _GetSchemaDefException(
+                    "The 'apiSchemas' metadata list operation is only allowed "
+                    "to prepend API schemas.", sdfPrim.path)
 
         # Do not to inherit the type name of parent classes.
         if inherits:
@@ -558,18 +649,10 @@ class ClassInfo(object):
         if self.isApi and sdfPrim.path.name != "APISchemaBase" and \
                 self.parentCppClassName != "UsdAPISchemaBase":
             if self.isAppliedAPISchema: 
-                if self.isMultipleApply:
-                    if parentCustomData.get(API_SCHEMA_TYPE) != MULTIPLE_APPLY:
-                        raise _GetSchemaDefException(
-                            "Multiple-apply API schemas must inherit directly "
-                            "from APISchemaBase or another multiple-apply API "
-                            "schema.", 
-                            sdfPrim.path)
-                else:
-                    raise _GetSchemaDefException(
-                        "Applied API schemas must explicitly inherit directly "
-                        "from APISchemaBase.", 
-                        sdfPrim.path)
+                raise _GetSchemaDefException(
+                    "Applied API schemas must explicitly inherit directly "
+                    "from APISchemaBase.", 
+                    sdfPrim.path)
             elif parentCustomData.get(API_SCHEMA_TYPE) != NON_APPLIED:
                 raise _GetSchemaDefException(
                     "Non-applied API schemas must inherit directly from "
@@ -631,12 +714,107 @@ def GetClassInfo(classes, cppClassName):
             return c
     return None
 
+def _MakeMultipleApplySchemaNameTemplate(apiSchemaName):
+    # Multiple apply API schemas are allowed to specify other built-in 
+    # mulitple apply API schemas with or without a sub-instance name.
+    # For example a multiple apply API schema named "MultiApplyAPI" can include
+    # the metadata:
+    #
+    #     prepend apiSchemas = ["OtherMultiApplyAPI", "AnotherMultiApplyAPI:foo"]
+    #
+    # Since a multiple apply API schema is always applied with an instance name,
+    # its built-in API schemas will also need to be applied using the same 
+    # instance name. Thus, we convert the authored built-in API schema names 
+    # into template names in the generatedSchema just like we do for property
+    # names.
+    #
+    # This function would convert the example built-in API schema names above to
+    #   "OtherMultiApplyAPI:__INSTANCE_NAME__" and 
+    #   "AnotherMultiApplyAPI:__INSTANCE_NAME__:foo"
+    # 
+    # This templating allows the schema registry to determine that when 
+    # MultiApplyAPI is applied with an instance name like "bar", that 
+    # OtherMultiApplyAPI also needs to be applied with instance name "bar" and 
+    # AnotherMultiApplyAPI needs to be applied with the instance name "bar:foo".
+    typeName, instanceName = \
+        Usd.SchemaRegistry.GetTypeNameAndInstance(apiSchemaName)
+    return Usd.SchemaRegistry.MakeMultipleApplyNameTemplate(
+        typeName, instanceName) 
+
+# Gets the full list of API schema property overrides for the schema prim. We
+# use the USD prim because we need to know all override properties for the 
+# flattened schema class, so this will include any overrides provided purely 
+# through inheritance.
+def _GetAPISchemaOverridePropertyNames(usdPrim, propertyNamespacePrefix):
+    apiSchemaOverridePropertyNames = []
+
+    for usdProp in usdPrim.GetProperties():
+        # We grab the property stack which gives us the property spec for every
+        # inherited schema class that defines this property.
+        propStack = usdProp.GetPropertyStack(Usd.TimeCode.Default())
+        
+        # Skip if the first and strongest property spec does not define the 
+        # property as an API schema override.
+        if not propStack[0].customData.get('apiSchemaOverride', False):
+            continue
+
+        # If a property is set as an API schema override, we need to verify that
+        # in every base class that also defines the property, the property is 
+        # also set to be an API schema override.
+        #
+        # We do this because we need to ensure that if a base class defines a 
+        # property as not being an API schema override property (it is a 
+        # concrete property of the class) that no class that derives from it
+        # is allowed to change that property into being an API schema override.
+        # This is important since API schema overrides will only be added to a
+        # schema's prim definition if an included API schema actually defines
+        # the property. Changing a property from a base class into an API schema
+        # override may have the effect of deleting that base class property from
+        # the derived class if that property isn't defined in one of its
+        # built-in API schemas. We don't want a to introduce a backdoor way of
+        # deleting properties in derived classes.
+        # 
+        # Note that we do allow derived classes to convert an API schema 
+        # override into a concrete defined property.
+        for prop in propStack[1:]:
+            # Check that each property spec for this property has 
+            # 'apiSchemaOverride = true' in its customData
+            if not prop.customData.get('apiSchemaOverride', False):
+                raise _GetSchemaDefException(
+                    "Invalid schema property definition encountered while "
+                    "processing property %s.\n"
+                    "Property declarations in schema classes cannot set "
+                    "'apiSchemaOverride=true' on properties which exist in their "
+                    "inherited classes but are not already defined as API schemas "
+                    "overrides." 
+                    % usdProp.GetPath(), 
+                     prop.path)
+
+        propName = usdProp.GetName()
+        # A property namespace prefix will be provides for multiple apply API 
+        # schemas. If so, the property names need to be converted into their
+        # template names to match the properties that will be in the 
+        # generatedSchema.
+        if propertyNamespacePrefix:
+            propName = Usd.SchemaRegistry.MakeMultipleApplyNameTemplate(
+                propertyNamespacePrefix, propName)
+
+        # Add the property name to the list.
+        apiSchemaOverridePropertyNames.append(propName)
+           
+    return apiSchemaOverridePropertyNames          
+
 def ParseUsd(usdFilePath):
     sdfLayer = Sdf.Layer.FindOrOpen(usdFilePath)
     stage = Usd.Stage.Open(sdfLayer)
     classes = []
 
     hasInvalidFields = False
+    # Node that we do not want to auto promote the stage to use literal
+    # identifier if all any of the layers (this or sublayers) defined it. But we
+    # just care of the sdfLayer of the schema being generated, and hence only
+    # query the presence of useLiteralIdentifier on the sdfLayer metadata.
+    useLiteralIdentifier = _UseLiteralIdentifierForLayer(sdfLayer)
 
     # PARSE CLASSES
     for sdfPrim in sdfLayer.rootPrims:
@@ -647,7 +825,7 @@ def ParseUsd(usdFilePath):
             hasInvalidFields = True
 
         usdPrim = stage.GetPrimAtPath(sdfPrim.path)
-        classInfo = ClassInfo(usdPrim, sdfPrim)
+        classInfo = ClassInfo(usdPrim, sdfPrim, useLiteralIdentifier)
 
         # make sure that if we have a multiple-apply schema with a property
         # namespace prefix that the prim actually has some properties
@@ -665,6 +843,16 @@ def ParseUsd(usdFilePath):
                         "have a propertyNamespacePrefix metadata field must "
                         "have zero properties", sdfPrim.path)
 
+            # Templatize all the included API schema names for this multiple
+            # apply API (see _MakeMultipleApplySchemaNameTemplate for the
+            # explanation as to why).
+            classInfo.allAppliedAPISchemas = [
+                _MakeMultipleApplySchemaNameTemplate(s) 
+                for s in classInfo.allAppliedAPISchemas]
+            classInfo.apiSchemasMetadata.prependedItems = [
+                _MakeMultipleApplySchemaNameTemplate(s) 
+                for s in classInfo.apiSchemasMetadata.prependedItems]
+
         classes.append(classInfo)
         #
         # We don't want to use the composed property names here because we only
@@ -680,7 +868,7 @@ def ParseUsd(usdFilePath):
 
             # Attribute
             if isinstance(sdfProp, Sdf.AttributeSpec):
-                attrInfo = AttrInfo(sdfProp)
+                attrInfo = AttrInfo(sdfProp, classInfo)
 
                 # Assert unique attribute names
                 if (attrInfo.apiName != ''):
@@ -702,7 +890,7 @@ def ParseUsd(usdFilePath):
 
             # Relationship
             else:
-                relInfo = RelInfo(sdfProp)
+                relInfo = RelInfo(sdfProp, classInfo)
 
                 # Assert unique relationship names
                 if (relInfo.apiName != ''):
@@ -722,6 +910,14 @@ def ParseUsd(usdFilePath):
                 classInfo.rels[relInfo.name] = relInfo
                 classInfo.relOrder.append(relInfo.name)
 
+        # Get all the API schema override properties declared for this class as
+        # they need to appear in the generatedSchema. This includes any 
+        # inherited override properties base class schemas. The properties are
+        # also properly prefixed with the namespace template for multiple apply
+        # schemas.
+        classInfo.apiSchemaOverridePropertyNames = \
+            _GetAPISchemaOverridePropertyNames(
+                usdPrim, classInfo.propertyNamespacePrefix)
     
     for classInfo in classes:
         # If this is an applied API schema that does not inherit from 
@@ -836,8 +1032,29 @@ def _ExtractCustomCode(filePath, default=None):
         Print.Err(e)
         return defaultTxt
 
+def _MakeValidToken(tokenId, useLiteralIdentifier):
+    originalToken = tokenId
+    # If token begins with a digit, then prefix it with an '_',
+    # TfMakeValidIdentifier currently replaced the digit with an '_' for such
+    # tokens.
+    if tokenId[0].isdigit():
+        tokenId = '_' + tokenId
+    if not useLiteralIdentifier or ':' in tokenId:
+        tokenId = _CamelCase(tokenId)
+    # Note that at this point default behavior of using camelCase for all
+    # identifier will result in a valid token, and hence a call to
+    # MakeValidIdentifier will only be made for schema libraries using
+    # useLiteralIdentifier and when a valid token was not provided, example
+    # tokens with non-alphanumeric characters (excluding ':', as its
+    # already covered above).
+    if not Tf.IsValidIdentifier(tokenId):
+        tokenId = Tf.MakeValidIdentifier(tokenId)
+        Print('Updated token {0} to a valid identifier {1}'.format( \
+                originalToken, tokenId))
+    return tokenId
 
-def _AddToken(tokenDict, tokenId, val, desc):
+
+def _AddToken(tokenDict, tokenId, val, desc, useLiteralIdentifier=False):
     """tokenId must be an identifier"""
 
     cppReservedKeywords = [
@@ -861,17 +1078,20 @@ def _AddToken(tokenDict, tokenId, val, desc):
     # If token is a reserved word in either language, append with underscore.
     # 'interface' is not a reserved word but is a macro on Windows when using
     # COM so we treat it as reserved.
+    # None is a reserved word for python3, hencing added here for
+    # python3-proofing
     reserved = set(cppReservedKeywords + keyword.kwlist + [
         'interface',
+        'None',
     ])
     if tokenId in reserved:
         tokenId = tokenId + '_'
     if not Tf.IsValidIdentifier(tokenId):
-        raise Exception(
-            'Token identifiers must be actual C/python-style identifiers.  '
-            '\"%s\" is not a valid identifier... for libraryTokens and '
-            'schemaTokens, use the "value" field to specify the non-identifier '
-            'token value.' % tokenId)
+        tokenId = _MakeValidToken(tokenId, useLiteralIdentifier)
+    elif not useLiteralIdentifier:
+        # if not using literal identifier we always camelCase our valid
+        # identifiers as per convention.
+        tokenId = _CamelCase(tokenId)
 
     if tokenId in tokenDict:
         token = tokenDict[tokenId]
@@ -890,6 +1110,8 @@ def _AddToken(tokenDict, tokenId, val, desc):
     else:
         tokenDict[tokenId] = Token(tokenId, val, desc)
 
+    return tokenId
+
 
 def GatherTokens(classes, libName, libTokens):
     tokenDict = {}
@@ -907,20 +1129,25 @@ def GatherTokens(classes, libName, libTokens):
 
             # Add Attribute Names to token set
             cls.tokens.add(attr.name)
+            # For property names, camelCase all tokens irrespective of
+            # useLiteralIdentifier, so that we are consistent in our attribute
+            # naming when namespace prefix are provided and respect our coding
+            # convention. (Example: namespacePrefix:attrName ->
+            # namespacePrefixAttrName)
             _AddToken(tokenDict, attr.name, attr.rawName, cls.cppClassName)
 
             
             # Add default value (if token type) to token set
             if attr.typeName == Sdf.ValueTypeNames.Token and attr.fallback:
-                fallbackName = _CamelCase(attr.fallback)
                 if attr.apiName != '':
                     desc = 'Default value for %s::Get%sAttr()' % \
                            (cls.cppClassName, _ProperCase(attr.apiName))
                 else:
                     desc = 'Default value for %s schema attribute %s' % \
                            (cls.cppClassName, attr.rawName)
-                cls.tokens.add(fallbackName)
-                _AddToken(tokenDict, fallbackName, attr.fallback, desc)
+                fallbackNameToken = _AddToken(tokenDict, attr.fallback,
+                        attr.fallback, desc, cls.useLiteralIdentifier)
+                cls.tokens.add(fallbackNameToken)
             
             # Add Allowed Tokens for this attribute to token set
             if attr.allowedTokens:
@@ -928,20 +1155,27 @@ def GatherTokens(classes, libName, libTokens):
                     # Empty string is a valid allowedTokens member,
                     # but do not declare a named literal for it.
                     if val != '':
-                        tokenId = _CamelCase(val)
                         if attr.apiName != '':
                             desc = 'Possible value for %s::Get%sAttr()' % \
                                    (cls.cppClassName, _ProperCase(attr.apiName))
                         else:
                             desc = 'Possible value for %s schema attribute %s' % \
                                    (cls.cppClassName, attr.rawName)
-                        cls.tokens.add(tokenId)
-                        _AddToken(tokenDict, tokenId, val, desc)
+                        valToken = _AddToken(tokenDict, val, val, desc, 
+                                cls.useLiteralIdentifier)
+                        cls.tokens.add(valToken)
+
+        # As per already established convention following tokens follow literal
+        # identifier pattern and not camelCased by default:
+        #- relationship names
+        #- schema tokens
+        #- property namespace prefix tokens
+        #- library tokens
 
         # Add tokens from relationships to the token set
         for rel in cls.rels.values():
             cls.tokens.add(rel.name)
-            _AddToken(tokenDict, rel.name, rel.rawName, cls.cppClassName)
+            _AddToken(tokenDict, rel.name, rel.rawName, cls.cppClassName, True)
             
         # Add schema tokens to token set
         schemaTokens = cls.customData.get("schemaTokens", {})
@@ -949,7 +1183,8 @@ def GatherTokens(classes, libName, libTokens):
             cls.tokens.add(token)
             _AddToken(tokenDict, token, tokenInfo.get("value", token),
                       _SanitizeDoc(tokenInfo.get("doc", 
-                          "Special token for the %s schema." % cls.cppClassName), ' '))
+                          "Special token for the %s schema." % \
+                                  cls.cppClassName), ' '), True)
 
         # Add property namespace prefix token for multiple-apply API
         # schema to token set
@@ -957,13 +1192,14 @@ def GatherTokens(classes, libName, libTokens):
             cls.tokens.add(cls.propertyNamespacePrefix)
             _AddToken(tokenDict, cls.propertyNamespacePrefix,
                       cls.propertyNamespacePrefix,
-                      "Property namespace prefix for the %s schema." % cls.cppClassName)
+                      "Property namespace prefix for the %s schema." \
+                              % cls.cppClassName, True)
 
     # Add library-wide tokens to token set
     for token, tokenInfo in libTokens.items():
         _AddToken(tokenDict, token, tokenInfo.get("value", token), 
                   _SanitizeDoc(tokenInfo.get("doc",
-                      "Special token for the %s library." % libName), ' '))
+                      "Special token for the %s library." % libName), ' '), True)
 
     # Sort the list of tokens lexicographically. This pair of keys will provide
     # a case insensitive primary key and a case sensitive secondary key. That
@@ -990,7 +1226,7 @@ def GenerateCode(templatePath, codeGenPath, tokenData, classes, validate,
         raise RuntimeError("Template not found: {0}".format(str(tnf)))
     except TemplateSyntaxError as tse:
         raise RuntimeError("Syntax error in template {0} at line {1}: {2}"
-                           .format(tse.filename, tse.lineno, tse.message))
+                           .format(tse.filename, tse.lineno, tse))
 
     if useExportAPI:
         Print('Writing API:')
@@ -1017,8 +1253,11 @@ def GenerateCode(templatePath, codeGenPath, tokenData, classes, validate,
 
             
     for cls in classes:
+        # Get whether there are any token valued attributes that will
+        # be exposed in the C++ API.
         hasTokenAttrs = any(
-            [cls.attrs[attr].typeName == Sdf.ValueTypeNames.Token
+            [(cls.attrs[attr].typeName == Sdf.ValueTypeNames.Token and
+              cls.attrs[attr].apiName)
              for attr in cls.attrs])
 
         # header file
@@ -1106,7 +1345,7 @@ def GeneratePlugInfo(templatePath, codeGenPath, classes, validate, env,
         raise RuntimeError("Template not found: {0}".format(str(tnf)))
     except TemplateSyntaxError as tse:
         raise RuntimeError("Syntax error in template {0} at line {1}: {2}"
-                           .format(tse.filename, tse.lineno, tse.message))
+                           .format(tse.filename, tse.lineno, tse))
 
     #
     # Generate plugInfo.json.
@@ -1237,6 +1476,40 @@ def _MakeFlattenedRegistryLayer(filePath):
 
     return flatLayer
     
+def _RenamePropertiesWithInstanceablePrefix(usdPrim):
+    # Properties of multiple apply API schemas must be prefixed with an 
+    # instanceable property name so we rename the properties here. Since we 
+    # can't move/rename properties through Usd APIs (yet), we copy the existing
+    # properties using the prefixed name and delete the original properties 
+    # after.
+
+    # Store the original property names for deletion.
+    originalPropNames = usdPrim.GetPropertyNames()
+    if not originalPropNames:
+        return
+
+    # Multiple apply API schemas require a property namespace prefix that will
+    # be prepended along with the instance name for all its properties.
+    namespacePrefix = usdPrim.GetCustomDataByKey(PROPERTY_NAMESPACE_PREFIX)
+    if not namespacePrefix:
+        raise _GetSchemaDefException("propertyNamespacePrefix "
+            "must exist as a metadata field on multiple-apply "
+            "API schemas with properties", usdPrim.GetPath())
+
+    # For each property create a copy with the prefixed instanceable property
+    # name.
+    for prop in usdPrim.GetProperties():
+        newPropName = Usd.SchemaRegistry.MakeMultipleApplyNameTemplate(
+            namespacePrefix, prop.GetName())
+        if usdPrim.HasProperty(newPropName):
+            raise _GetSchemaDefException("Prefixed property name '%s' already "
+                "exists as property base name in the schema." % newPropName, 
+                usdPrim.GetPath())
+        prop.FlattenTo(usdPrim, newPropName)
+
+    # Remove all the original properties after they've all been copied.
+    for name in originalPropNames:
+        usdPrim.RemoveProperty(name)
 
 def GenerateRegistry(codeGenPath, filePath, classes, validate, env):
 
@@ -1249,27 +1522,21 @@ def GenerateRegistry(codeGenPath, filePath, classes, validate, env):
     # so because it is more convenient for these kinds of operations.
     flatStage = Usd.Stage.Open(flatLayer)
     pathsToDelete = []
-    primsToKeep = set(cls.usdPrimTypeName for cls in classes)
+    primsToKeep = {cls.usdPrimTypeName : cls for cls in classes}
     if not flatStage.RemovePrim('/GLOBAL'):
         Print.Err("ERROR: Could not remove GLOBAL prim.")
-    allMultipleApplyAPISchemaNamespaces = {}
     allFallbackSchemaPrimTypes = {}
     for p in flatStage.GetPseudoRoot().GetAllChildren():
+        if p.GetName() not in primsToKeep:
+            pathsToDelete.append(p.GetPath())
+            continue
+
         # If this is an API schema, check if it's applied and record necessary
         # information.
-        if p.GetName() in primsToKeep and p.GetName().endswith('API'):
+        if p.GetName().endswith('API'):
             apiSchemaType = p.GetCustomDataByKey(API_SCHEMA_TYPE) or SINGLE_APPLY
             if apiSchemaType == MULTIPLE_APPLY:
-                namespacePrefix = p.GetCustomDataByKey(PROPERTY_NAMESPACE_PREFIX)
-                if namespacePrefix:
-                    allMultipleApplyAPISchemaNamespaces[p.GetName()] = \
-                        namespacePrefix
-                elif not p.GetPropertyNames():
-                    allMultipleApplyAPISchemaNamespaces[p.GetName()] = ""
-                else:
-                    raise _GetSchemaDefException("propertyNamespacePrefix "
-                        "must exist as a metadata field on multiple-apply "
-                        "API schemas with properties", p.GetPath())
+                _RenamePropertiesWithInstanceablePrefix(p)
 
             # API schema classes must not have authored metadata except for 
             # these exceptions:
@@ -1281,7 +1548,7 @@ def GenerateRegistry(codeGenPath, filePath, classes, validate, env):
                 'specifier', 'customData', 'documentation']
             # Single apply API schemas are also allowed to specify 'apiSchemas'
             # metadata to include other API schemas.
-            if apiSchemaType == SINGLE_APPLY:
+            if apiSchemaType == SINGLE_APPLY or apiSchemaType == MULTIPLE_APPLY:
                 allowedAPIMetadata.append('apiSchemas')
             invalidMetadata = [key for key in p.GetAllAuthoredMetadata().keys()
                                if key not in allowedAPIMetadata]
@@ -1299,23 +1566,38 @@ def GenerateRegistry(codeGenPath, filePath, classes, validate, env):
                 allFallbackSchemaPrimTypes[p.GetName()] = \
                     Vt.TokenArray(fallbackTypes)
 
+        # Set the full list of the class's applied API apiSchemas as an explicit
+        # list op in the apiSchemas metadata. Note that this API schemas list
+        # will have been converted to template names if the class is a multiple
+        # apply API schema.
+        appliedAPISchemas = primsToKeep[p.GetName()].allAppliedAPISchemas
+        if appliedAPISchemas:
+            p.SetMetadata('apiSchemas',
+                          Sdf.TokenListOp.CreateExplicit(appliedAPISchemas))
+
         p.ClearCustomData()
+
+        # Properties may have customData indicating that they are an 
+        # 'apiSchemaOverride'. We don't leave this data on the property in 
+        # in the generatedSchema, but rather we already used it to collect the 
+        # names of all API schema override properties for the schema class. 
+        # We store this list of API schema override properties as custom data 
+        # on the prim spec and delete the custom data on the property.
         for myproperty in p.GetAuthoredProperties():
             myproperty.ClearCustomData()
-        if p.GetName() not in primsToKeep:
-            pathsToDelete.append(p.GetPath())
+
+        apiSchemaOverridePropertyNames = sorted(
+            primsToKeep[p.GetName()].apiSchemaOverridePropertyNames)
+        if apiSchemaOverridePropertyNames:
+            p.SetCustomDataByKey('apiSchemaOverridePropertyNames',
+                                 Vt.TokenArray(apiSchemaOverridePropertyNames))
+
     for p in pathsToDelete:
         flatStage.RemovePrim(p)
         
     # Set layer's comment to indicate that the file is generated.
     flatLayer.comment = 'WARNING: THIS FILE IS GENERATED BY usdGenSchema. '\
                         ' DO NOT EDIT.'
-
-    # Add the list of all applied and multiple-apply API schemas.
-    if allMultipleApplyAPISchemaNamespaces:
-        flatLayer.customLayerData = {
-            'multipleApplyAPISchemas' : allMultipleApplyAPISchemaNamespaces
-        }
 
     if allFallbackSchemaPrimTypes:
         flatLayer.GetPrimAtPath('/').SetInfo(Usd.Tokens.fallbackPrimTypes, 
@@ -1469,7 +1751,6 @@ if __name__ == '__main__':
         libTokens, \
         skipCodeGen, \
         classes = ParseUsd(schemaPath)
-        tokenData = GatherTokens(classes, libName, libTokens)
         
         if args.validate:
             Print('Validation on, any diffs found will cause failure.')
@@ -1500,6 +1781,8 @@ if __name__ == '__main__':
 
         # Generate code for schema libraries that aren't specified as codeless.
         if not skipCodeGen:
+            # Gathered tokens are only used for code-full schemas.
+            tokenData = GatherTokens(classes, libName, libTokens)
             GenerateCode(templatePath, codeGenPath, tokenData, classes, 
                          args.validate,
                          namespaceOpen, namespaceClose, namespaceUsing,

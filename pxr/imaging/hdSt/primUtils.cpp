@@ -26,9 +26,11 @@
 
 #include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/drawItem.h"
+#include "pxr/imaging/hdSt/glslfxShader.h"
 #include "pxr/imaging/hdSt/instancer.h"
 #include "pxr/imaging/hdSt/material.h"
 #include "pxr/imaging/hdSt/materialNetworkShader.h"
+#include "pxr/imaging/hdSt/package.h"
 #include "pxr/imaging/hdSt/renderParam.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/shaderCode.h"
@@ -50,7 +52,10 @@
 
 #include "pxr/imaging/hio/glslfx.h"
 
+#include "pxr/imaging/hgi/capabilities.h"
+
 #include "pxr/base/tf/envSetting.h"
+#include "pxr/base/tf/staticData.h"
 #include "pxr/base/arch/hash.h"
 
 #include <algorithm>
@@ -59,6 +64,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_ENV_SETTING(HDST_ENABLE_SHARED_VERTEX_PRIMVAR, 1,
                       "Enable sharing of vertex primvar");
+
+TF_MAKE_STATIC_DATA(
+    HdSt_MaterialNetworkShaderSharedPtr,
+    _fallbackWidgetShader)
+{
+    *_fallbackWidgetShader = std::make_shared<HdStGLSLFXShader>(
+        std::make_shared<HioGlslfx>(HdStPackageWidgetShader()));
+}
 
 // -----------------------------------------------------------------------------
 // Draw invalidation utilities
@@ -225,6 +238,28 @@ HdStGetInstancerPrimvarDescriptors(
 }
 
 // -----------------------------------------------------------------------------
+// Tracking render tag changes
+// -----------------------------------------------------------------------------
+
+void
+HdStUpdateRenderTag(HdSceneDelegate *delegate,
+                    HdRenderParam *renderParam,
+                    HdRprim *rprim)
+{
+    HdStRenderParam * const stRenderParam =
+        static_cast<HdStRenderParam*>(renderParam);
+
+    const TfToken prevRenderTag = rprim->GetRenderTag();
+    rprim->HdRprim::UpdateRenderTag(delegate, renderParam);
+    const TfToken &renderTag = rprim->GetRenderTag();
+    if (renderTag == prevRenderTag) {
+        return;
+    }
+    stRenderParam->DecreaseRenderTagCount(prevRenderTag);
+    stRenderParam->IncreaseRenderTagCount(renderTag);
+}
+
+// -----------------------------------------------------------------------------
 // Material processing utilities
 // -----------------------------------------------------------------------------
 
@@ -334,11 +369,18 @@ HdStGetMaterialNetworkShader(
     HdStMaterial const * material = static_cast<HdStMaterial const *>(
             renderIndex.GetSprim(HdPrimTypeTokens->material, materialId));
     if (material == nullptr) {
-        TF_DEBUG(HD_RPRIM_UPDATED).Msg("Using fallback material for %s\n",
-            prim->GetId().GetText());
+        if (prim->GetRenderTag(delegate) == HdRenderTagTokens->widget) {
+            TF_DEBUG(HD_RPRIM_UPDATED).Msg("Using built-in widget material for "
+                "%s\n", prim->GetId().GetText());
+               
+            return *_fallbackWidgetShader;
+        } else {
+            TF_DEBUG(HD_RPRIM_UPDATED).Msg("Using fallback material for %s\n",
+                prim->GetId().GetText());
 
-        material = static_cast<HdStMaterial const *>(
+            material = static_cast<HdStMaterial const *>(
                 renderIndex.GetFallbackSprim(HdPrimTypeTokens->material));
+        }
     }
 
     return material->GetMaterialNetworkShader();
@@ -640,13 +682,19 @@ HdStPopulateConstantPrimvars(
         const GfMatrix4d transform = delegate->GetTransform(id);
         sharedData->bounds.SetMatrix(transform); // for CPU frustum culling
 
-        sources.push_back(
-            std::make_shared<HdVtBufferSource>(
-                HdTokens->transform, transform));
+        HgiCapabilities const * capabilities =
+            hdStResourceRegistry->GetHgi()->GetCapabilities();
+        bool const doublesSupported = capabilities->IsSet(
+            HgiDeviceCapabilitiesBitsShaderDoublePrecision);
 
         sources.push_back(
             std::make_shared<HdVtBufferSource>(
-                HdTokens->transformInverse, transform.GetInverse()));
+                HdTokens->transform, transform, doublesSupported));
+
+        sources.push_back(
+            std::make_shared<HdVtBufferSource>(
+                HdTokens->transformInverse, transform.GetInverse(),
+                doublesSupported));
 
         bool leftHanded = transform.IsLeftHanded();
 
@@ -667,12 +715,14 @@ HdStPopulateConstantPrimvars(
                 std::make_shared<HdVtBufferSource>(
                     HdInstancerTokens->instancerTransform,
                     rootTransforms,
-                    rootTransforms.size()));
+                    rootTransforms.size(),
+                    doublesSupported));
             sources.push_back(
                 std::make_shared<HdVtBufferSource>(
                     HdInstancerTokens->instancerTransformInverse,
                     rootInverseTransforms,
-                    rootInverseTransforms.size()));
+                    rootInverseTransforms.size(),
+                    doublesSupported));
 
             // XXX: It might be worth to consider to have isFlipped
             // for non-instanced prims as well. It can improve
@@ -1022,9 +1072,7 @@ _GetBitmaskEncodedVisibilityBuffer(VtIntArray invisibleIndices,
     for (VtIntArray::const_iterator i = invisibleIndices.begin(),
                                   end = invisibleIndices.end(); i != end; ++i) {
         if (*i >= numTotalIndices || *i < 0) {
-            HF_VALIDATION_WARN(rprimId,
-                "Topological invisibility data (%d) is not in the range [0, %d)"
-                ".", *i, numTotalIndices);
+            // This invisible index is out of range.  Ignore it silently.
             continue;
         }
         const size_t arrayIndex = *i/numBitsPerUInt;

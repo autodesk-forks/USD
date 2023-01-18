@@ -23,8 +23,10 @@
 //
 #include "pxr/usdImaging/usdImaging/basisCurvesAdapter.h"
 
+#include "pxr/usdImaging/usdImaging/dataSourceBasisCurves.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
+#include "pxr/usdImaging/usdImaging/primvarUtils.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 
 #include "pxr/imaging/hd/basisCurves.h"
@@ -38,6 +40,17 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+// XXX: These primvar names are known here so that they may be exempted from 
+// the filtering procedure that would normally exclude them.  This primvar
+// filtering procedure is slated for removal in favor of the one in hdSt, 
+// but in the mean time we must know these names here, despite them not yet
+// being part of any formal schema and thus subject to change or deletion.
+TF_DEFINE_PRIVATE_TOKENS(
+    _rprimPrimvarNameTokens,
+    (pointSizeScale)
+    (screenSpaceWidths)
+    (minScreenSpaceWidths)
+);
 
 TF_REGISTRY_FUNCTION(TfType)
 {
@@ -48,6 +61,36 @@ TF_REGISTRY_FUNCTION(TfType)
 
 UsdImagingBasisCurvesAdapter::~UsdImagingBasisCurvesAdapter() 
 {
+}
+
+TfTokenVector
+UsdImagingBasisCurvesAdapter::GetImagingSubprims()
+{
+    return { TfToken() };
+}
+
+TfToken
+UsdImagingBasisCurvesAdapter::GetImagingSubprimType(TfToken const& subprim)
+{
+    if (subprim.IsEmpty()) {
+        return HdPrimTypeTokens->basisCurves;
+    }
+    return TfToken();
+}
+
+HdContainerDataSourceHandle
+UsdImagingBasisCurvesAdapter::GetImagingSubprimData(
+        TfToken const& subprim,
+        UsdPrim const& prim,
+        const UsdImagingDataSourceStageGlobals &stageGlobals)
+{
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourceBasisCurvesPrim::New(
+            prim.GetPath(),
+            prim,
+            stageGlobals);
+    }
+    return nullptr;
 }
 
 bool
@@ -187,7 +230,7 @@ UsdImagingBasisCurvesAdapter::UpdateForTime(
             HdInterpolation interpolation;
             VtFloatArray widths;
             if (curves.GetWidthsAttr().Get(&widths, time)) {
-                interpolation = _UsdToHdInterpolation(
+                interpolation = UsdImagingUsdToHdInterpolation(
                     curves.GetWidthsInterpolation());
             } else {
                 interpolation = HdInterpolationConstant;
@@ -214,7 +257,7 @@ UsdImagingBasisCurvesAdapter::UpdateForTime(
             if (curves.GetNormalsAttr().Get(&normals, time)) {
                 _MergePrimvar(&primvars,
                     UsdGeomTokens->normals,
-                    _UsdToHdInterpolation(curves.GetNormalsInterpolation()),
+                    UsdImagingUsdToHdInterpolation(curves.GetNormalsInterpolation()),
                     HdPrimvarRoleTokens->normal);
             } else {
                 _RemovePrimvar(&primvars, UsdGeomTokens->normals);
@@ -244,14 +287,14 @@ UsdImagingBasisCurvesAdapter::ProcessPropertyChange(UsdPrim const& prim,
         UsdGeomCurves curves(prim);
         return UsdImagingPrimAdapter::_ProcessNonPrefixedPrimvarPropertyChange(
             prim, cachePath, propertyName, HdTokens->widths,
-            _UsdToHdInterpolation(curves.GetWidthsInterpolation()),
+            UsdImagingUsdToHdInterpolation(curves.GetWidthsInterpolation()),
             HdChangeTracker::DirtyWidths);
     
     } else if (propertyName == UsdGeomTokens->normals) {
         UsdGeomPointBased pb(prim);
         return UsdImagingPrimAdapter::_ProcessNonPrefixedPrimvarPropertyChange(
             prim, cachePath, propertyName, HdTokens->normals,
-            _UsdToHdInterpolation(pb.GetNormalsInterpolation()),
+            UsdImagingUsdToHdInterpolation(pb.GetNormalsInterpolation()),
             HdChangeTracker::DirtyNormals);
     }
     // Handle prefixed primvars that use special dirty bits.
@@ -411,6 +454,25 @@ UsdImagingBasisCurvesAdapter::Get(UsdPrim const& prim,
     }
 
     return BaseAdapter::Get(prim, cachePath, key, time, outIndices);
+}
+
+/*override*/
+TfTokenVector const&
+UsdImagingBasisCurvesAdapter::_GetRprimPrimvarNames() const
+{
+    // This result should match the GetBuiltinPrimvarNames result from
+    // HdStBasisCurves, which we're not allowed to call here. Points, normals
+    // and widths are already handled explicitly in GprimAdapter, so there's no
+    // need to except them from filtering by claiming them here.
+    //
+    // See comment on _rprimPrimvarNameTokens warning regarding using these 
+    // primvars.
+    static TfTokenVector primvarNames{
+        _rprimPrimvarNameTokens->pointSizeScale,
+        _rprimPrimvarNameTokens->screenSpaceWidths,
+        _rprimPrimvarNameTokens->minScreenSpaceWidths
+    };
+    return primvarNames;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

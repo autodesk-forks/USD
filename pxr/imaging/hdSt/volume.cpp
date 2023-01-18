@@ -103,11 +103,15 @@ HdStVolume::_InitRepr(TfToken const &reprToken, HdDirtyBits* dirtyBits)
     // All representations point to _volumeRepr.
     if (!_volumeRepr) {
         _volumeRepr = std::make_shared<HdRepr>();
-        _volumeRepr->AddDrawItem(
-            std::make_unique<HdStDrawItem>(&_sharedData));
+        auto drawItem = std::make_unique<HdStDrawItem>(&_sharedData);
+        // Make sure we never replace this material by the default material
+        // network (_GetFallbackMaterialNetworkShader in drawBatch.cpp) which
+        // simply does not work with the volume render pass shader.
+        drawItem->SetMaterialIsFinal(true);
+        _volumeRepr->AddDrawItem(std::move(drawItem));
         *dirtyBits |= HdChangeTracker::NewRepr;
     }
-    
+
     _ReprVector::iterator it = std::find_if(_reprs.begin(), _reprs.end(),
                                             _ReprComparator(reprToken));
     bool isNew = it == _reprs.end();
@@ -116,6 +120,13 @@ HdStVolume::_InitRepr(TfToken const &reprToken, HdDirtyBits* dirtyBits)
         it = _reprs.insert(_reprs.end(),
                 std::make_pair(reprToken, _volumeRepr));
     }
+}
+
+void
+HdStVolume::UpdateRenderTag(HdSceneDelegate *delegate,
+                            HdRenderParam *renderParam)
+{
+    HdStUpdateRenderTag(delegate, renderParam, this);
 }
 
 void
@@ -155,6 +166,7 @@ HdStVolume::Finalize(HdRenderParam *renderParam)
 
     // Decrement material tag count for volume material tag
     stRenderParam->DecreaseMaterialTagCount(HdStMaterialTagTokens->volume);
+    stRenderParam->DecreaseRenderTagCount(GetRenderTag());
 }
 
 void
@@ -314,8 +326,7 @@ _ComputeMaterialNetworkShader(
 
     // Generate new shader from volume shader
     HdSt_VolumeShaderSharedPtr const result =
-        std::make_shared<HdSt_VolumeShader>(
-            sceneDelegate->GetRenderIndex().GetRenderDelegate());
+        std::make_shared<HdSt_VolumeShader>();
 
     // Buffer specs and source for the shader BAR
     HdBufferSpecVector bufferSpecs;
@@ -397,14 +408,25 @@ _ComputeMaterialNetworkShader(
             { textureName, textureType, nullptr, desc->fieldId.GetHash() });
     }
 
+    result->SetNamedTextureHandles(namedTextureHandles);
+    result->SetFieldDescriptors(fieldDescs);
+    result->UpdateTextureHandles(sceneDelegate);
+    // Get now allocated texture handles
+    namedTextureHandles = result->GetNamedTextureHandles();
+
+    const bool doublesSupported = resourceRegistry->GetHgi()->
+        GetCapabilities()->IsSet(
+            HgiDeviceCapabilitiesBitsShaderDoublePrecision);
+
     // Get buffer specs for textures (i.e., for
     // field sampling transforms and bindless texture handles).
-    HdSt_TextureBinder::GetBufferSpecs(namedTextureHandles, &bufferSpecs);
+    HdSt_TextureBinder::GetBufferSpecs(namedTextureHandles, &bufferSpecs,
+        doublesSupported);
 
     // Create params (so that HdGet_... are created) and buffer specs,
     // to communicate volume bounding box and sample distance to shader.
     HdSt_VolumeShader::GetParamsAndBufferSpecsForBBoxAndSampleDistance(
-        &params, &bufferSpecs);
+        &params, &bufferSpecs, doublesSupported);
 
     const bool hasField = !namedTextureHandles.empty();
 
@@ -414,7 +436,8 @@ _ComputeMaterialNetworkShader(
     if (!hasField) {
         HdSt_VolumeShader::GetBufferSourcesForBBoxAndSampleDistance(
             { GfBBox3d(authoredExtents), 1.0f },
-            &bufferSources);
+            &bufferSources,
+            doublesSupported);
     }
 
     // Make volume shader responsible if we have fields with bounding
@@ -423,9 +446,7 @@ _ComputeMaterialNetworkShader(
     result->SetParams(params);
     result->SetBufferSources(
         bufferSpecs, std::move(bufferSources), resourceRegistry);
-    result->SetNamedTextureHandles(namedTextureHandles);
-    result->SetFieldDescriptors(fieldDescs);
-
+    
     // Append the volume shader (calling into the GLSL functions
     // generated above)
     result->SetFragmentSource(volumeMaterialData.source);
@@ -505,7 +526,8 @@ HdStVolume::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
                                      dirtyBits,
                                      constantPrimvars);
     }
-        
+
+    bool updatedTextureHandles = false;
     if ((*dirtyBits) & HdChangeTracker::DirtyMaterialId) {
         /* MATERIAL SHADER (may affect subsequent primvar population) */
 
@@ -535,6 +557,7 @@ HdStVolume::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
                 GetId(),
                 _ComputeVolumeMaterialData(material),
                 _sharedData.bounds.GetRange()));
+        updatedTextureHandles = true;
     }        
 
     HdStResourceRegistrySharedPtr resourceRegistry =
@@ -550,8 +573,11 @@ HdStVolume::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
         return;
     }
 
-    if ((*dirtyBits) & (HdChangeTracker::DirtyVolumeField |
-                        HdChangeTracker::DirtyMaterialId)) {
+    // We do not need to call UpdateTextureHandles() on the 
+    // materialNetworkShader if DirtyMaterialId, as it was already called
+    // during _ComputeMaterialNetworkShader().
+    if (((*dirtyBits) & (HdChangeTracker::DirtyVolumeField)) && 
+        !updatedTextureHandles) {
         /* FIELD TEXTURES */
         
         // (Re-)Allocate the textures associated with the field prims.

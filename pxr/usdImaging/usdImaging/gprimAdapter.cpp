@@ -28,6 +28,7 @@
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 #include "pxr/usdImaging/usdImaging/instancerContext.h"
+#include "pxr/usdImaging/usdImaging/primvarUtils.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 
 #include "pxr/imaging/hd/perfLog.h"
@@ -36,6 +37,7 @@
 #include "pxr/imaging/hd/sceneDelegate.h"
 
 #include "pxr/usd/usdGeom/gprim.h"
+#include "pxr/usd/usdGeom/motionAPI.h"
 #include "pxr/usd/usdGeom/pointBased.h"
 #include "pxr/usd/usdGeom/primvarsAPI.h"
 
@@ -156,11 +158,6 @@ UsdImagingGprimAdapter::_AddRprim(TfToken const& primType,
                 index->GetMaterialAdapter(materialPrim);
             if (materialAdapter) {
                 materialAdapter->Populate(materialPrim, index, nullptr);
-                // We need to register a dependency on the material prim so
-                // that geometry is updated when the material is
-                // (specifically, DirtyMaterialId).
-                // XXX: Eventually, it would be great to push this into hydra.
-                index->AddDependency(cachePath, materialPrim);
             }
         } else {
             TF_WARN("Gprim <%s> has illegal material reference to "
@@ -168,6 +165,17 @@ UsdImagingGprimAdapter::_AddRprim(TfToken const& primType,
                     materialPrim.GetPath().GetText(),
                     materialPrim.GetTypeName().GetText());
         }
+    }
+
+    // Add Dependency on valid target path bound on the material:binding
+    // relationship on this gprim
+    // Note that this path could represent a prim which is not available on the
+    // usd stage, either because of unloaded state or over prim, etc.
+    // But since AddDependency only care about the SdfPath, _GetPrim not
+    // returning a valid prim is okay, as all we want is to add the prim path on
+    // the dependency map!
+    if (!resolvedUsdMaterialPath.IsEmpty()) {
+        index->AddDependency(cachePath, _GetPrim(resolvedUsdMaterialPath));
     }
 
     // Populate coordinate system sprims bound to rprims.
@@ -243,7 +251,20 @@ UsdImagingGprimAdapter::TrackVariability(UsdPrim const& prim,
                    HdChangeTracker::DirtyPoints,
                    UsdImagingTokens->usdVaryingPrimvar,
                    timeVaryingBits,
-                   false);
+                   false) ||
+            _IsVarying(prim,
+                       UsdGeomTokens->motionNonlinearSampleCount,
+                       HdChangeTracker::DirtyPoints,
+                       UsdImagingTokens->usdVaryingPrimvar,
+                       timeVaryingBits,
+                       true) ||
+                _IsVarying(prim,
+                           UsdGeomTokens->motionBlurScale,
+                           HdChangeTracker::DirtyPoints,
+                           UsdImagingTokens->usdVaryingPrimvar,
+                           timeVaryingBits,
+                           true);
+
     // XXX: "points" is handled by derived classes.
 
     // Discover time-varying double-sidedness.
@@ -318,6 +339,35 @@ UsdImagingGprimAdapter::UpdateForTime(UsdPrim const& prim,
                 HdInterpolationVertex,
                 HdPrimvarRoleTokens->vector);
         }
+
+        // Since nonlinearSampleCount is tied to the calculation
+        // of the motion-blurred points, we also use the points dirty
+        // bit here to know when to publish its value. Since it is
+        // inherited, we go through the corresponding resolved attribute
+        // cache.
+        UsdImaging_NonlinearSampleCountCache *nonlinearSampleCountCache =
+            _GetNonlinearSampleCountCache();
+        // Check that it has any opinions.
+        if (nonlinearSampleCountCache->GetValue(prim) !=
+                UsdImaging_NonlinearSampleCountStrategy::invalidValue) {
+            _MergePrimvar(
+                &vPrimvars,
+                HdTokens->nonlinearSampleCount,
+                HdInterpolationConstant,
+                HdPrimvarRoleTokens->none);
+        }
+
+        // Comment similar to above nonlinear sample count cache applies to
+        // blur scale.
+        UsdImaging_BlurScaleCache *blurScaleCache = _GetBlurScaleCache();
+        // Check that it has any opinions.
+        if (blurScaleCache->GetValue(prim).has_value) {
+            _MergePrimvar(
+                &vPrimvars,
+                HdTokens->blurScale,
+                HdInterpolationConstant,
+                HdPrimvarRoleTokens->none);
+        }
     }
 
     SdfPathVector materialUsdPaths;
@@ -356,7 +406,7 @@ UsdImagingGprimAdapter::UpdateForTime(UsdPrim const& prim,
             _MergePrimvar(
                 &vPrimvars,
                 HdTokens->displayColor,
-                _UsdToHdInterpolation(colorInterp),
+                UsdImagingUsdToHdInterpolation(colorInterp),
                 HdPrimvarRoleTokens->color,
                 !colorIndices.empty());
         } else {
@@ -374,7 +424,7 @@ UsdImagingGprimAdapter::UpdateForTime(UsdPrim const& prim,
             _MergePrimvar(
                 &vPrimvars,
                 HdTokens->displayOpacity,
-                _UsdToHdInterpolation(opacityInterp),
+                UsdImagingUsdToHdInterpolation(opacityInterp),
                 TfToken(),
                 !opacityIndices.empty());
         } else {
@@ -398,20 +448,32 @@ UsdImagingGprimAdapter::UpdateForTime(UsdPrim const& prim,
         primvars.insert(primvars.end(), local.begin(), local.end());
 
         // Some backends may not want to load all primvars due to memory limits.
-        // We filter the list of primvars based on what the materials need.
+        // We filter the list of primvars, removing any the materials and rprims
+        // don't expect.
+        TfTokenVector rprimPrimvarNames;
         TfTokenVector matPrimvarNames;
-        if (_IsPrimvarFilteringNeeded() && !materialUsdPaths.empty()) {
-            matPrimvarNames = _CollectMaterialPrimvars(materialUsdPaths, time);
+        if (_IsPrimvarFilteringNeeded()) {
+            rprimPrimvarNames = _GetRprimPrimvarNames();
+            if (!materialUsdPaths.empty()) {
+                matPrimvarNames = _CollectMaterialPrimvars(materialUsdPaths,
+                                                           time);
+            }
         }
 
         for (auto const &pv : primvars) {
             if (_IsBuiltinPrimvar(pv.GetPrimvarName())) {
+                // This primvar has been handled explicitly above already.
                 continue;
             }
             if (_IsPrimvarFilteringNeeded() &&
+                std::find(rprimPrimvarNames.begin(),
+                          rprimPrimvarNames.end(),
+                          pv.GetPrimvarName()) == rprimPrimvarNames.end() &&
                 std::find(matPrimvarNames.begin(),
                           matPrimvarNames.end(),
                           pv.GetPrimvarName()) == matPrimvarNames.end()) {
+                // No material or rprim expects this primvar, so it doesn't
+                // pass filtering, so skip it.
                 continue;
             }
 
@@ -441,7 +503,9 @@ UsdImagingGprimAdapter::ProcessPropertyChange(UsdPrim const& prim,
         return HdChangeTracker::DirtyDoubleSided;
 
     if (propertyName == UsdGeomTokens->velocities ||
-             propertyName == UsdGeomTokens->accelerations)
+             propertyName == UsdGeomTokens->accelerations ||
+             propertyName == UsdGeomTokens->motionNonlinearSampleCount ||
+             propertyName == UsdGeomTokens->motionBlurScale)
         // XXX: "points" is handled by derived classes.
         return HdChangeTracker::DirtyPoints;
 
@@ -468,6 +532,13 @@ UsdImagingGprimAdapter::MarkDirty(UsdPrim const& prim,
                                   UsdImagingIndexProxy* index)
 {
     index->MarkRprimDirty(cachePath, dirty);
+    // Note that if any primvars have changed, we need to re-run UpdateForTime.
+    // Value clips mean that frame changes can change the primvar set.
+    // Material updates can also trigger a new primvar set.
+    if (HdChangeTracker::IsAnyPrimvarDirty(dirty, cachePath) ||
+        (dirty & HdChangeTracker::DirtyMaterialId)) {
+        index->RequestUpdateForTime(cachePath);
+    }
 }
 
 void
@@ -523,10 +594,18 @@ UsdImagingGprimAdapter::MarkMaterialDirty(UsdPrim const& prim,
                                           SdfPath const& cachePath,
                                           UsdImagingIndexProxy* index)
 {
-    // If the Usd material changed, it could mean the primvar set also changed
-    // Hydra doesn't currently manage detection and propagation of these
-    // changes, so we must mark the rprim dirty.
     index->MarkRprimDirty(cachePath, HdChangeTracker::DirtyMaterialId);
+    // If the Usd material changed, it could mean the primvars used for
+    // material filtering also changed.
+    index->RequestUpdateForTime(cachePath);
+}
+
+void
+UsdImagingGprimAdapter::MarkCollectionsDirty(UsdPrim const& prim,
+                                             SdfPath const& cachePath,
+                                             UsdImagingIndexProxy* index)
+{
+    index->MarkRprimDirty(cachePath, HdChangeTracker::DirtyCategories);
 }
 
 /*virtual*/
@@ -699,8 +778,38 @@ UsdImagingGprimAdapter::Get(UsdPrim const& prim,
             pointBased.GetAccelerationsAttr().Get(&accelerations, time)) {
             return VtValue(accelerations);
         }
-
-    } else if (UsdGeomPrimvar pv = gprim.GetPrimvar(key)) {
+    } else if (key == HdTokens->nonlinearSampleCount) {
+        UsdImaging_NonlinearSampleCountCache *cache =
+            _GetNonlinearSampleCountCache();
+        const int value =
+            cache->GetTime() == time
+                ? cache->GetValue(prim)
+                : UsdImaging_NonlinearSampleCountStrategy::
+                      ComputeNonlinearSampleCount(prim,time);
+        if (value !=
+                UsdImaging_NonlinearSampleCountStrategy::invalidValue) {
+            return VtValue(value);
+        } else {
+            // Default value from UsdGeom's
+            // MotionAPI.motion:nonlinearSampleCount
+            constexpr int defaultValue = 3;
+            return VtValue(defaultValue);
+        }
+    } else if (key == HdTokens->blurScale) {
+        UsdImaging_BlurScaleCache *cache = _GetBlurScaleCache();
+        const UsdImaging_BlurScaleStrategy::value_type value =
+            cache->GetTime() == time
+                ? cache->GetValue(prim)
+                : UsdImaging_BlurScaleStrategy::ComputeBlurScale(prim,time);
+        if (value.has_value) {
+            return VtValue(value.value);
+        } else {
+            // Default value from UsdGeom's
+            // MotionAPI.motion:blurScale
+            constexpr float defaultValue = 1.0f;
+            return VtValue(defaultValue);
+        }
+    } else if (UsdGeomPrimvar pv = UsdGeomPrimvarsAPI(gprim).GetPrimvar(key)) {
         if (outIndices) {
             if (pv && pv.Get(&value, time)) {
                 pv.GetIndices(outIndices, time);
@@ -950,21 +1059,35 @@ UsdImagingGprimAdapter::GetOpacity(UsdPrim const& prim,
     return true;
 }
 
-UsdGeomPrimvar
-UsdImagingGprimAdapter::_GetInheritedPrimvar(UsdPrim const& prim,
-                                             TfToken const& primvarName) const
+/* static */
+GfMatrix4d
+UsdImagingGprimAdapter::GetImplicitBasis(TfToken const &axis)
 {
-    UsdImaging_InheritedPrimvarStrategy::value_type inheritedPrimvarRecord =
-        _GetInheritedPrimvars(prim.GetParent());
-    if (inheritedPrimvarRecord) {
-        for (UsdGeomPrimvar const& pv : inheritedPrimvarRecord->primvars) {
-            if (pv.GetPrimvarName() == primvarName) {
-                return pv;
-            }
-        }
+    GfVec4d u, v, spine;
+    if (axis == UsdGeomTokens->x) {
+        u = GfVec4d::YAxis();
+        v = GfVec4d::ZAxis();
+        spine = GfVec4d::XAxis();
+    } else if (axis == UsdGeomTokens->y) {
+        u = GfVec4d::ZAxis();
+        v = GfVec4d::XAxis();
+        spine = GfVec4d::YAxis();
+    } else { // (axis == UsdGeomTokens->z)
+        u = GfVec4d::XAxis();
+        v = GfVec4d::YAxis();
+        spine = GfVec4d::ZAxis();
     }
-    return UsdGeomPrimvar();
+
+    GfMatrix4d basis;
+    basis.SetRow(0, u);
+    basis.SetRow(1, v);
+    basis.SetRow(2, spine);
+    basis.SetRow(3, GfVec4d::WAxis());
+
+    return basis;
 }
+
+// -------------------------------------------------------------------------- //
 
 TfTokenVector
 UsdImagingGprimAdapter::_CollectMaterialPrimvars(
@@ -996,6 +1119,14 @@ UsdImagingGprimAdapter::_CollectMaterialPrimvars(
 
     return primvars;
 }
+
+TfTokenVector const&
+UsdImagingGprimAdapter::_GetRprimPrimvarNames() const
+{
+    static TfTokenVector primvarNames;
+    return primvarNames;
+}
+
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
