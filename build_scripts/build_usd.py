@@ -712,8 +712,8 @@ elif Windows():
     # for 3dsMax 2022
     #BOOST_URL = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0.tar.gz"
     #BOOST_VERSION_FILE = "include/boost-1_73/boost/version.hpp"
-    BOOST_URL = "https://downloads.sourceforge.net/project/boost/boost/1.76.0/boost_1_76_0.tar.gz"
-    BOOST_VERSION_FILE = "include/boost-1_76/boost/version.hpp"
+    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
+    BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
 
 def InstallBoost_Helper(context, force, buildArgs):
     # Documentation files in the boost archive can have exceptionally
