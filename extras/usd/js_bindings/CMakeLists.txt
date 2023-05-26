@@ -1,7 +1,7 @@
 set(PXR_PREFIX jsBindings)
 set(PXR_PACKAGE jsBindings)
 
-if (NOT PXR_ENABLE_JS_SUPPORT)
+if (NOT PXR_ENABLE_JS_SUPPORT OR PXR_ENABLE_PYTHON_SUPPORT)
   return()
 endif()
 
@@ -39,8 +39,17 @@ if(PXR_EMSCRIPTEN_NODE)
   list(TRANSFORM RESOURCE_PARAMETERS REPLACE "-preload" "-embed")
 endif()
 
+set(ADDITIONAL_LIBS "")
+
+if (PXR_ENABLE_PYTHON_SUPPORT)
+    set(ADDITIONAL_LIBS
+            -Wl,--whole-archive ${PYTHON_LIBRARIES} -Wl,--no-whole-archive
+            ${Python3_LIBRARY_DIRS}/libffi.a)
+endif()
+
 pxr_cpp_bin(${BINDINGS_NAME}
     LIBRARIES
+      ${ADDITIONAL_LIBS}
       ${BINDING_DEPENDENCIES}
       ${RESOURCE_PARAMETERS}
 )

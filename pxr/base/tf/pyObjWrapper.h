@@ -54,8 +54,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 class TfPyObjWrapperStub
 {
 public:
+#ifdef ARCH_BITS_64
     static constexpr std::size_t Size = 16;
     static constexpr std::size_t Align = 8;
+#else
+    // 32 bit architecture
+    static constexpr std::size_t Size = 8;
+    static constexpr std::size_t Align = 4;
+#endif
 
 private:
     ARCH_PRAGMA_PUSH

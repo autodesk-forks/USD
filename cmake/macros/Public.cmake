@@ -386,6 +386,8 @@ function(pxr_library NAME)
             PRECOMPILED_HEADERS ${pch}
             PRECOMPILED_HEADER_NAME ${args_PRECOMPILED_HEADER_NAME}
         )
+    else()
+        message("Skipping python module creation for ${NAME}")
     endif()
 endfunction()
 

@@ -57,6 +57,9 @@ verbosity = 1
 EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB'
 EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
 
+# Emscripten libraries flags
+SIDE_MODULE_LDFLAGS = "-sSIDE_MODULE=1 -sMODULARIZE=1"
+
 def Print(msg):
     if verbosity > 0:
         print(msg)
@@ -779,7 +782,7 @@ def InstallBoost_Helper(context, force, buildArgs):
 
         macOSArch = ""
 
-        if MacOS():
+        if MacOS() and not context.emscripten:
             if apple_utils.GetTargetArch(context) == \
                         apple_utils.TARGET_X86:
                 macOSArch = "-arch {0}".format(apple_utils.TARGET_X86)
@@ -818,14 +821,25 @@ def InstallBoost_Helper(context, force, buildArgs):
             '--prefix="{instDir}"'.format(instDir=context.instDir),
             '--build-dir="{buildDir}"'.format(buildDir=context.buildDir),
             '-j{procs}'.format(procs=num_procs),
-            'address-model=64',
-            'link=shared',
-            'runtime-link=shared',
-            'threading=multi', 
             'variant={variant}'.format(variant=boostBuildVariant),
             '--with-atomic',
             '--with-regex'
         ]
+
+        if context.emscripten:
+            b2_settings.append("link=static")
+            b2_settings.append("link=static")
+            b2_settings.append('runtime-link=static')
+            b2_settings.append("threading=single")
+            b2_settings.append("--disable-icu")
+            b2_settings.append("cxxflags=\"-fexceptions -DBOOST_SP_DISABLE_THREADS=1\"")
+            b2_settings.append("cflags=\"-fPIC -fexceptions -DBOOST_SP_DISABLE_THREADS=1\"")
+            b2_settings.append("linkflags=\"-fpic {0}\"".format(SIDE_MODULE_LDFLAGS))
+        else:
+            b2_settings.append('address-model=64')
+            b2_settings.append('link=shared')
+            b2_settings.append('runtime-link=shared')
+            b2_settings.append('threading=multi')
 
         if context.buildPython:
             b2_settings.append("--with-python")
@@ -882,31 +896,34 @@ def InstallBoost_Helper(context, force, buildArgs):
         if force:
             b2_settings.append("-a")
 
-        if Windows():
-            # toolset parameter for Visual Studio documented here:
-            # https://github.com/boostorg/build/blob/develop/src/tools/msvc.jam
-            if context.cmakeToolset == "v143":
-                b2_settings.append("toolset=msvc-14.3")
-            elif context.cmakeToolset == "v142":
-                b2_settings.append("toolset=msvc-14.2")
-            elif context.cmakeToolset == "v141":
-                b2_settings.append("toolset=msvc-14.1")
-            elif IsVisualStudio2022OrGreater():
-                b2_settings.append("toolset=msvc-14.3")
-            elif IsVisualStudio2019OrGreater():
-                b2_settings.append("toolset=msvc-14.2")
-            elif IsVisualStudio2017OrGreater():
-                b2_settings.append("toolset=msvc-14.1")
+        if context.emscripten:
+            b2_settings.append("toolset=emscripten")
+        else:
+            if Windows():
+                # toolset parameter for Visual Studio documented here:
+                # https://github.com/boostorg/build/blob/develop/src/tools/msvc.jam
+                if context.cmakeToolset == "v143":
+                    b2_settings.append("toolset=msvc-14.3")
+                elif context.cmakeToolset == "v142":
+                    b2_settings.append("toolset=msvc-14.2")
+                elif context.cmakeToolset == "v141":
+                    b2_settings.append("toolset=msvc-14.1")
+                elif IsVisualStudio2022OrGreater():
+                    b2_settings.append("toolset=msvc-14.3")
+                elif IsVisualStudio2019OrGreater():
+                    b2_settings.append("toolset=msvc-14.2")
+                elif IsVisualStudio2017OrGreater():
+                    b2_settings.append("toolset=msvc-14.1")
 
-        if MacOS():
-            # Must specify toolset=clang to ensure install_name for boost
-            # libraries includes @rpath
-            b2_settings.append("toolset=clang")
+            if MacOS():
+                # Must specify toolset=clang to ensure install_name for boost
+                # libraries includes @rpath
+                b2_settings.append("toolset=clang")
 
-            if macOSArch:
-                b2_settings.append("cxxflags=\"{0}\"".format(macOSArch))
-                b2_settings.append("cflags=\"{0}\"".format(macOSArch))
-                b2_settings.append("linkflags=\"{0}\"".format(macOSArch))
+                if macOSArch:
+                    b2_settings.append("cxxflags=\"{0}\"".format(macOSArch))
+                    b2_settings.append("cflags=\"{0}\"".format(macOSArch))
+                    b2_settings.append("linkflags=\"{0}\"".format(macOSArch))
 
         if context.buildDebug:
             b2_settings.append("--debug-configuration")
@@ -2008,7 +2025,7 @@ def InstallUSD(context, force, buildArgs):
             extraArgs.append('-DOPENSUBDIV_OSDCPU_LIBRARY="{}"'.format(os.path.join(context.usdInstDir, 'lib/libosdCPU.a')))
 
             extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=ON')
-            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
+            #extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
 
             if context.emscripten == 'EMSCRIPTEN_NODE':
                 extraArgs.append('-DPXR_EMSCRIPTEN_NODE=1')
@@ -2527,9 +2544,6 @@ if extraPythonPaths:
 # Disable incompatible options if emscripten is used
 if context.emscripten:
     disabled = []
-    if context.buildPython:
-        context.buildPython = False
-        disabled.append('Python')
 
     if context.buildExamples:
         context.buildExamples = False

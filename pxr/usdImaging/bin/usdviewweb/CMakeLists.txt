@@ -4,11 +4,11 @@ set(PXR_PACKAGE usdviewweb)
 set(RESOURCE_PARAMETERS "")
 function(add_resources target)
     add_dependencies(${PXR_PACKAGE} ${target})
-    target_link_libraries(${PXR_PACKAGE} ${target})
+    target_link_libraries(${PXR_PACKAGE} -Wl,--whole-archive ${target} -Wl,--no-whole-archive)
     # This local var is needed since list append cannot update the PARENT_SCOPE
     set(LOCAL_VAR ${RESOURCE_PARAMETERS})
-    get_property(RESOURCES TARGET ${target} PROPERTY EMSCRIPTEN_RESOURCES)
-    list(APPEND LOCAL_VAR "${RESOURCES}")
+    get_property(RESSOURCES TARGET ${target} PROPERTY EMSCRIPTEN_RESOURCES)
+    list(APPEND LOCAL_VAR "${RESSOURCES}")
     set(RESOURCE_PARAMETERS "${LOCAL_VAR}" PARENT_SCOPE)
 endfunction()
 
@@ -41,23 +41,13 @@ if (EMSCRIPTEN)
     add_resources(usdRender)
     add_resources(usdVol)
     add_resources(ndr)
-    add_resources(sdrGlslfx)
-    add_resources(hio)
-    add_resources(usdLux)
-    add_resources(usdImagingGL)
 
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/plugin/usd/plugInfo.json")
 
-    set(GLSLANG_LIBS
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}glslang${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}glslang-default-resource-limits${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MachineIndependent${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Tools${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Tools-opt${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}GenericCodeGen${CMAKE_STATIC_LIBRARY_SUFFIX}
-    )
+    set(USD_EMSCRIPTEN_LINKER_FLAGS_OPEN "-Wl,--whole-archive")
+    set(USD_EMSCRIPTEN_LINKER_FLAGS_CLOSE "-Wl,--no-whole-archive")
+
     # XXX: We manually set the libraries instead of using the LIBRARIES argument pxr_cpp_bin due to
     # problems with the tbb library.
     target_link_libraries(${PXR_PACKAGE}
@@ -91,14 +81,17 @@ if (EMSCRIPTEN)
             ${CMAKE_INSTALL_PREFIX}/lib/libtint_lang_wgsl_writer.a
             ${CMAKE_INSTALL_PREFIX}/lib/libtint_utils_diagnostic.a
             ${TBB_tbb_LIBRARY}
+            ${USD_EMSCRIPTEN_LINKER_FLAGS_OPEN}
             cameraUtil
             garch
             geomUtil
             gf
             hdar
             hdsi
+            sdrGlslfx
             hf
             hgiInterop
+            hio
             js
             kind
             plug
@@ -106,9 +99,11 @@ if (EMSCRIPTEN)
             pcp
             tf
             trace
+            usdImagingGL
             sdr
             vt
             work
+            ${USD_EMSCRIPTEN_LINKER_FLAGS_CLOSE}
     )
     set(BUILD_FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.js

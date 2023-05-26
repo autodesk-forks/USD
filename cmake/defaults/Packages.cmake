@@ -129,11 +129,22 @@ if(PXR_ENABLE_PYTHON_SUPPORT)
     # Boost_PYTHON_LIBRARY variable so that we don't have to duplicate this
     # logic in each library's CMakeLists.txt.
     set(python_version_nodot "${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}")
+
+    if (EMSCRIPTEN)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES_OLD ${CMAKE_FIND_LIBRARY_SUFFIXES})
+        list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".bc")
+    endif()
+
     find_package(Boost
         COMPONENTS
         python${python_version_nodot}
         REQUIRED
     )
+
+    if (EMSCRIPTEN)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_OLD})
+    endif()
+
     set(Boost_PYTHON_LIBRARY "${Boost_PYTHON${python_version_nodot}_LIBRARY}")
 
     # --Jinja2

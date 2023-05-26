@@ -2,17 +2,19 @@ set(PXR_PREFIX pxr/hdEmscripten)
 set(PXR_PACKAGE hdEmscripten)
 
 if (NOT PXR_ENABLE_JS_SUPPORT)
-    return()
+  return()
 endif()
 
 set(BINDINGS_NAME "emHdBindings")
-
+cd ..
 pxr_library(hdEmscripten
     LIBRARIES
       hd
       usd
       usdUtils
       sdf
+      -Wl,--whole-archive usdShaders -Wl,--no-whole-archive
+      ${ADDITIONAL_LIBRARIES}
 
     PUBLIC_CLASSES
         webRenderDelegate

@@ -124,17 +124,6 @@ _GetPlatformDependentRendererDisplayName(HfPluginDesc const &pluginDescriptor)
     // any platform uses WebGPU instead of GL. Eventually, this should
     // properly delegate to using Hgi to determine the display
     // name for Storm.
-#if defined EMSCRIPTEN
-    return "WebGPU";
-#else
-
-    if (Tf_GetEnvSettingByName("HGI_ENABLE_WEBGPU"))
-    #if defined(PXR_WEBGPU_SUPPORT_ENABLED)
-            return "WebGPU";
-    #else
-        TF_CODING_ERROR("Build requires PXR_WEBGPU_SUPPORT_ENABLED=true to use WebGPU");
-    #endif
-#endif
 
 #if defined(__APPLE__)
     // Rendering for Storm is delegated to Hgi. We override the

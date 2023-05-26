@@ -48,6 +48,12 @@ if(PXR_ENABLE_JS_SUPPORT)
     add_compile_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS}")
     add_link_options("SHELL:-sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB -sASYNCIFY \
         -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB")
+    if (PXR_ENABLE_PYTHON_SUPPORT)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sUSE_ZLIB -sUSE_BZIP2")
+    endif()
+
+
+
     message("EMSCRIPTEN Flags enabled")
 endif()
 

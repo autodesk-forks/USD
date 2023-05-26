@@ -20,9 +20,5 @@ install(FILES
   "${PROJECT_BINARY_DIR}/pxrConfig.cmake"
   DESTINATION "${CMAKE_INSTALL_PREFIX}"
 )
-install(FILES
-  "${CMAKE_CURRENT_LIST_DIR}/../cmake/macros/pxrStaticConfig.cmake"
-  DESTINATION "${CMAKE_INSTALL_PREFIX}"
-)
 
 install(EXPORT pxrTargets DESTINATION "cmake")
