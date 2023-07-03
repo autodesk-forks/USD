@@ -15,16 +15,30 @@ set(PXR_ENABLE_PRECOMPILED_HEADERS_PREV ${PXR_ENABLE_PRECOMPILED_HEADERS})
 message("Storing PXR_ENABLE_PRECOMPILED_HEADERS:${PXR_ENABLE_PRECOMPILED_HEADERS_PREV}")
 message(STATUS "Set to compiler flag /std:c++17")
 
+set(HGI_WEBGPU_LIBRARIES)
 set(LIB_PREFIX ${CMAKE_STATIC_LIBRARY_PREFIX})
 if (WIN32)
     set(STATIC_LIB_SUFFIX ${CMAKE_STATIC_LIBRARY_SUFFIX}) # .lib (static or dynamic library)
     set(SHARED_LIB_SUFFIX ${CMAKE_STATIC_LIBRARY_SUFFIX}) # .lib (static or dynamic library)
+    list(APPEND HGI_WEBGPU_LIBRARIES
+        dxguid.lib
+        ${CMAKE_INSTALL_PREFIX}/lib/${LIB_PREFIX}dawn_common${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/SPIRV-Tools-opt${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/SPIRV-Tools${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_strings${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_strings_internal${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_str_format_internal${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_int128${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_raw_logging_internal${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_throw_delegate${SHARED_LIB_SUFFIX}
+        ${CMAKE_INSTALL_PREFIX}/lib/absl_base${SHARED_LIB_SUFFIX}
+    )
 elseif(APPLE)
     set(STATIC_LIB_SUFFIX ${CMAKE_STATIC_LIBRARY_SUFFIX}) # .a (static library)
     set(SHARED_LIB_SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX}) # .dylib (dynamic library)
 endif()
 
-set(HGI_WEBGPU_LIBRARIES
+list(APPEND HGI_WEBGPU_LIBRARIES
     # dawn
     ${CMAKE_INSTALL_PREFIX}/lib/${LIB_PREFIX}dawn_native${SHARED_LIB_SUFFIX}
     ${CMAKE_INSTALL_PREFIX}/lib/${LIB_PREFIX}dawn_platform${SHARED_LIB_SUFFIX}

@@ -1614,7 +1614,7 @@ def InstallDawn(context, force, buildArgs):
             pythonInfo = GetPythonInfo(context)
             Run("{} tools/fetch_dawn_dependencies.py".format(pythonInfo[0].replace('\\', '/')))
             cmakeOptions = [
-                '-DBUILD_SHARED_LIBS=ON',
+                '-DDAWN_ENABLE_VULKAN=OFF',
                 '-DTINT_BUILD_SPV_READER=ON',
                 '-DTINT_BUILD_WGSL_WRITER=ON',
                 '-DTINT_BUILD_TESTS=OFF',
@@ -1632,28 +1632,35 @@ def InstallDawn(context, force, buildArgs):
         CopyDirectory(context, "src/tint", "include/src/tint")
 
     with CurrentWorkingDirectory(buildDir):
-        CopyFiles(context, "src/dawn/*.*", "lib")
-        CopyFiles(context, "src/dawn/common/*.*", "lib")
-        CopyFiles(context, "src/dawn/glfw/*.*", "lib")
-        CopyFiles(context, "src/dawn/native/*.*", "lib")
-        CopyFiles(context, "src/dawn/platform/*.*", "lib")
-        CopyFiles(context, "src/dawn/wire/*.*", "lib")
-        CopyFiles(context, "third_party/spirv-tools/source/*SPIRV-Tools.*", "lib")
-        CopyFiles(context, "third_party/spirv-tools/source/opt/*SPIRV-Tools-opt.*", "lib")
         CopyFiles(context, "gen/include/dawn/*.*", "include/dawn")
 
         if Windows():
-            CopyFiles(context, "*.dll", "lib")
-            CopyFiles(context, "bin/*.dll", "lib") # abseil library
-            CopyFiles(context, "src/tint/*.lib", "lib")
+            CopyFiles(context, "src/dawn/*/*dawn*.lib", "lib")
+            CopyFiles(context, "src/dawn/native/*/*dawn*.lib", "lib")
+            CopyFiles(context, "src/dawn/platform/*/*dawn*.*", "lib")
+            CopyFiles(context, "src/dawn/common/*/*dawn*.*", "lib")
+            CopyFiles(context, "src/dawn/wire/*/*dawn*.*", "lib")
+            CopyFiles(context, "third_party/spirv-tools/source/*/*SPIRV-Tools.*", "lib")
+            CopyFiles(context, "third_party/spirv-tools/source/opt/*/*SPIRV-Tools-opt.*", "lib")
+            CopyFiles(context, "third_party/abseil/absl/strings/*/*.lib", "lib")
+            CopyFiles(context, "third_party/abseil/absl/base/*/*.lib", "lib")
+            CopyFiles(context, "third_party/abseil/absl/numeric/*/*.lib", "lib")
+            CopyFiles(context, "src/tint/*/*.lib", "lib")
         else:
+            CopyFiles(context, "src/dawn/*dawn*.*", "lib")
+            CopyFiles(context, "src/dawn/native/*.*", "lib")
+            CopyFiles(context, "src/dawn/platform/*.*", "lib")
+            CopyFiles(context, "src/dawn/wire/*.*", "lib")
+            CopyFiles(context, "third_party/spirv-tools/source/*SPIRV-Tools.*", "lib")
+            CopyFiles(context, "third_party/spirv-tools/source/opt/*SPIRV-Tools-opt.*", "lib")
+            
             CopyFiles(context, "third_party/abseil/absl/strings/*.*", "lib")
             CopyFiles(context, "third_party/abseil/absl/base/*.*", "lib")
             CopyFiles(context, "third_party/abseil/absl/numeric/*.*", "lib")
             CopyFiles(context, "src/tint/*.*", "lib")
 
 
-DAWN = Dependency("Dawn", InstallDawn, "include/dawn/dawn_proc.h")
+DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
 
 ############################################################
 # shaderc
@@ -1663,7 +1670,7 @@ SHADERC_URL = "https://github.com/google/shaderc/archive/refs/tags/v2023.2.zip"
 def InstallShaderc(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(SHADERC_URL, context, force)):
         pythonInfo = GetPythonInfo(context)
-        Run("{} ./utils/git-sync-deps".format(pythonInfo[0]))
+        Run("{} ./utils/git-sync-deps".format(pythonInfo[0].replace("\\","/")))
         cmakeOptions = [
             '-DSHADERC_SKIP_TESTS=ON',
             '-DSHADERC_SKIP_EXAMPLES=ON',
