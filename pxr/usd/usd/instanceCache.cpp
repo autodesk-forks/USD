@@ -173,8 +173,14 @@ Usd_InstanceCache::ProcessChanges(Usd_InstanceChanges* changes)
             const Usd_InstanceKey& key = v.first;
             const _PrimIndexPaths& primIndexes = v.second;
             if (TF_VERIFY(!primIndexes.empty())) {
+                SdfPath selectedPrimIndex;
+                for (const auto &primIndexPath: primIndexes) {
+                    if (selectedPrimIndex < primIndexPath) {
+                        selectedPrimIndex = primIndexPath;
+                    }
+                }
                 TF_VERIFY(
-                    keysToProcess.emplace(primIndexes.front(), key).second);
+                    keysToProcess.emplace(selectedPrimIndex, key).second);
             }
         }
 
