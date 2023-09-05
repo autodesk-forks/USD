@@ -868,7 +868,7 @@ else:
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/2018_U6.tar.gz"
 
 # Note: this refers to a fork of tbb for wasm. Is this maintained?
-TBB_EMSCRIPTEN_URL = "https://github.com/sdunkel/wasmtbb/archive/master.zip"
+TBB_EMSCRIPTEN_URL = "https://github.com/sdunkel/wasmtbb/archive/refs/tags/master.zip"
 
 def InstallTBB(context, force, buildArgs):
     if context.emscripten:
