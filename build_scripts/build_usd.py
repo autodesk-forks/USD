@@ -1568,7 +1568,7 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.7.zip"
+MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.8.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
@@ -1593,21 +1593,10 @@ def InstallMaterialX(context, force, buildArgs):
                         '-DMATERIALX_PYTHON_EXECUTABLE="{0}"'.format(pythonInfo[0]),
                         '-DPYTHON_EXECUTABLE="{0}"'.format(pythonInfo[0]),
                         '-DPYTHON_LIBRARY="{0}"'.format(pythonInfo[1]),
-                        '-DPYTHON_INCLUDE_DIR="{0}"'.format(pythonInfo[2])
+                        '-DPYTHON_INCLUDE_DIR="{0}"'.format(pythonInfo[2]),
+                        '-DPYBIND11_PYTHONLIBS_OVERWRITE=OFF'
         ]
         cmakeOptions += buildArgs
-
-        PatchFile(os.path.join('source', 'PyMaterialX', 'External', 'PyBind11', 'tools', 'FindPythonLibsNew.cmake'),
-                [('list(GET _PYTHON_VALUES 2 PYTHON_INCLUDE_DIR)',
-                'if (NOT DEFINED PYTHON_INCLUDE_DIR)\n' +
-                'list(GET _PYTHON_VALUES 2 PYTHON_INCLUDE_DIR)\n' +
-                'endif()'),
-                ('if(CMAKE_HOST_WIN32)',
-                'if(NOT DEFINED PYTHON_LIBRARY)\n' +
-                'if(CMAKE_HOST_WIN32)'),
-                ('mark_as_advanced(PYTHON_LIBRARY PYTHON_INCLUDE_DIR)',
-                'endif()\n' +
-                'mark_as_advanced(PYTHON_LIBRARY PYTHON_INCLUDE_DIR)')])
 
         PatchFile(os.path.join('source', 'PyMaterialX', 'CMakeLists.txt'),
                 [('    set(MATERIALX_PYTHON_DEBUG_POSTFIX "_d")',
