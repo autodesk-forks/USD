@@ -1125,7 +1125,8 @@ JPEG = Dependency("JPEG", InstallJPEG, "include/jpeglib.h")
 ############################################################
 # TIFF
 
-TIFF_URL = "https://gitlab.com/libtiff/libtiff/-/archive/v4.0.7/libtiff-v4.0.7.zip"
+# Autodesk: blackduck scans revealed security problems, updated to latest version.
+TIFF_URL = "https://gitlab.com/libtiff/libtiff/-/archive/v4.6.0/libtiff-v4.6.0.zip"
 
 def InstallTIFF(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TIFF_URL, context, force)):
