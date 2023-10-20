@@ -143,6 +143,9 @@
     #define ARCH_PRAGMA_UNARY_MINUS_ON_UNSIGNED \
         __pragma(warning(disable:4146)) 
 
+    #define ARCH_PRAGMA_NON_DLL_INTERFACE \
+        __pragma(warning(disable:4275)) 
+
 #endif
 
 #if !defined ARCH_PRAGMA_PUSH
@@ -243,6 +246,10 @@
 
 #if !defined ARCH_PRAGMA_INSTANCE_METHOD_NOT_FOUND
     #define ARCH_PRAGMA_INSTANCE_METHOD_NOT_FOUND
+#endif
+
+#if !defined ARCH_PRAGMA_NON_DLL_INTERFACE
+    #define ARCH_PRAGMA_NON_DLL_INTERFACE
 #endif
 
 #endif // PXR_BASE_ARCH_PRAGMAS_H
