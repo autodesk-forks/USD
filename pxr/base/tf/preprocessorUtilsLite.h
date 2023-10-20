@@ -30,6 +30,10 @@
 
 #include "pxr/base/arch/defines.h"
 
+// https://github.com/PixarAnimationStudios/OpenUSD/issues/2624
+#include "pxr/base/arch/pragmas.h"
+ARCH_PRAGMA_MACRO_TOO_FEW_ARGUMENTS
+
 // Helper for TF_PP_CAT. This extra indirection is required so that macros get
 // expanded before the pasting occurs.
 #define TF_PP_CAT_IMPL(x, y) x ## y

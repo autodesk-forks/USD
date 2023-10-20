@@ -223,6 +223,9 @@ protected:
 /// determine where unintended copy-on-write detaches come from.  When set,
 /// VtArray will log a stack trace for every copy-on-write detach that occurs.
 ///
+
+ARCH_PRAGMA_PUSH
+ARCH_PRAGMA_NON_DLL_INTERFACE
 template<typename ELEM>
 class VtArray : public Vt_ArrayBase {
   public:
@@ -929,6 +932,7 @@ class VtArray : public Vt_ArrayBase {
     
     value_type *_data;
 };
+ARCH_PRAGMA_POP
 
 // Declare basic array instantiations as extern templates.  They are explicitly
 // instantiated in array.cpp.
