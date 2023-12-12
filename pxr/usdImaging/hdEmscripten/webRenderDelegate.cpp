@@ -52,6 +52,10 @@ const std::map<HdInterpolation, std::string> InterpolationStrings = {
     {HdInterpolationInstance, "instance"}
 };
 
+const std::map<HdGeomSubset::Type, std::string> HdGeomSubsetTypeStrings = {
+    {HdGeomSubset::Type::TypeFaceSet, "typefaceset"},
+};
+
 void _runInMainThread(int funPointer) {
     std::function<void()>  *function = reinterpret_cast<std::function<void()>*>(funPointer);
     (*function)();
@@ -169,6 +173,23 @@ public:
             });
         }
 
+        HdGeomSubsets geomSubsets = delegate->GetMeshTopology(id).GetGeomSubsets();
+        if (geomSubsets.size() > 0) {
+            runInMainThread([&]() {
+                val subsets = val::array();
+                int i = 0;
+                for (auto &geomSubset : geomSubsets) {
+                    val subsetObj = val::object();
+                    subsetObj.set("type", HdGeomSubsetTypeStrings.at(geomSubset.type));
+                    subsetObj.set("id", geomSubset.id.GetString());
+                    subsetObj.set("materialId", geomSubset.materialId.GetString());
+                    subsetObj.set("indices", val(typed_memory_view(geomSubset.indices.size(), geomSubset.indices.cdata())));
+                    subsets.set(i++, subsetObj);
+                }
+                _rPrim.call<void>("updateSubset", subsets);
+            });
+        }
+
         *dirtyBits &= ~HdChangeTracker::AllSceneDirtyBits;
     }
 
@@ -274,6 +295,7 @@ private:
                                 _SendPrimvar(triangulated, primvar.name.GetString(), ip);
                                 break;
                             }
+                            case HdInterpolationVarying:
                             case HdInterpolationConstant:
                             case HdInterpolationVertex: {
                                 _SendPrimvar(value, primvar.name.GetString(), ip);
