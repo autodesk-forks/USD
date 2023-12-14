@@ -1110,86 +1110,94 @@ exr_result_t nanoexr_read_exr(const char* filename,
     uint16_t oneValue = float_to_half(1.0f);
     uint16_t zeroValue = float_to_half(0.0f);
     
-    // if the image is rgba, and any of the channels are missing, fill them in
-    // by propagating the channel to the left if possible. If not, fill with
-    // zero or one. Alpha is always filled with one.
-    if (img->channelCount == 4 && rgbaIndex[3] == -1) {
-        // fill the alpha channel with 1.0
-        if (img->pixelType == EXR_PIXEL_HALF) {
-            fill_channel_u16(img, 3, oneValue);
-        }
-        else if (img->pixelType == EXR_PIXEL_FLOAT) {
-            fill_channel_float(img, 3, 1.0f);
-        }
-        else if (img->pixelType == EXR_PIXEL_UINT) {
-            // We're treating uint data as data, not rgba, so fill with zero
-            fill_channel_u32(img, 3, 0);
+    // if the image has more channels that what was actually read, and any of the
+    // channels are missing, fill them in by propagating the channel to the left
+    // if possible. If not, fill with zero or one. Alpha is always filled with one.
+    int readChannelCount = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (rgbaIndex[i] >= 0) {
+            readChannelCount++;
         }
     }
-    if (img->channelCount > 2 && rgbaIndex[2] == -1) {
-        // if G exists, propagate it, else if R exists, propagate it, else fill with zero
-        // note that the data has been de-swizzled already so at this point,
-        // rgbaIndex serves only as a sentinel
-        int srcChannel = rgbaIndex[1] >= 0 ? 1 : (rgbaIndex[0] >= 0 ? 0 : -1);
-        if (srcChannel >= 0) {
+    if (img->channelCount > readChannelCount) {
+        if (img->channelCount == 4 && rgbaIndex[3] == -1) {
+            // fill the alpha channel with 1.0
             if (img->pixelType == EXR_PIXEL_HALF) {
-                copy_channel_u16(img, img->data, img->data, 2, srcChannel);
+                fill_channel_u16(img, 3, oneValue);
             }
             else if (img->pixelType == EXR_PIXEL_FLOAT) {
-                copy_channel_float(img, img->data, img->data, 2, srcChannel);
+                fill_channel_float(img, 3, 1.0f);
             }
             else if (img->pixelType == EXR_PIXEL_UINT) {
-                copy_channel_u32(img, img->data, img->data, 2, srcChannel);
+                // We're treating uint data as data, not rgba, so fill with zero
+                fill_channel_u32(img, 3, 0);
             }
         }
-        else {
+        if (img->channelCount > 2 && rgbaIndex[2] == -1) {
+            // if G exists, propagate it, else if R exists, propagate it, else fill with zero
+            // note that the data has been de-swizzled already so at this point,
+            // rgbaIndex serves only as a sentinel
+            int srcChannel = rgbaIndex[1] >= 0 ? 1 : (rgbaIndex[0] >= 0 ? 0 : -1);
+            if (srcChannel >= 0) {
+                if (img->pixelType == EXR_PIXEL_HALF) {
+                    copy_channel_u16(img, img->data, img->data, 2, srcChannel);
+                }
+                else if (img->pixelType == EXR_PIXEL_FLOAT) {
+                    copy_channel_float(img, img->data, img->data, 2, srcChannel);
+                }
+                else if (img->pixelType == EXR_PIXEL_UINT) {
+                    copy_channel_u32(img, img->data, img->data, 2, srcChannel);
+                }
+            }
+            else {
+                if (img->pixelType == EXR_PIXEL_HALF) {
+                    fill_channel_u16(img, 2, zeroValue);
+                }
+                else if (img->pixelType == EXR_PIXEL_FLOAT) {
+                    fill_channel_float(img, 2, 0.0f);
+                }
+                else if (img->pixelType == EXR_PIXEL_UINT) {
+                    fill_channel_u32(img, 2, 0);
+                }
+            }
+        }
+        if (img->channelCount > 1 && rgbaIndex[1] == -1) {
+            // if R exists, propagate it, else fill with zero
+            int srcChannel = rgbaIndex[0] >= 0 ? 0 : -1;
+            if (srcChannel >= 0) {
+                if (img->pixelType == EXR_PIXEL_HALF) {
+                    copy_channel_u16(img, img->data, img->data, 1, srcChannel);
+                }
+                else if (img->pixelType == EXR_PIXEL_FLOAT) {
+                    copy_channel_float(img, img->data, img->data, 1, srcChannel);
+                }
+                else if (img->pixelType == EXR_PIXEL_UINT) {
+                    copy_channel_u32(img, img->data, img->data, 1, srcChannel);
+                }
+            }
+            else {
+                if (img->pixelType == EXR_PIXEL_HALF) {
+                    fill_channel_u16(img, 1, zeroValue);
+                }
+                else if (img->pixelType == EXR_PIXEL_FLOAT) {
+                    fill_channel_float(img, 1, 0.0f);
+                }
+                else if (img->pixelType == EXR_PIXEL_UINT) {
+                    fill_channel_u32(img, 1, 0);
+                }
+            }
+        }
+        if (rgbaIndex[0] == -1) {
+            // fill with zero
             if (img->pixelType == EXR_PIXEL_HALF) {
-                fill_channel_u16(img, 2, zeroValue);
+                fill_channel_u16(img, 0, zeroValue);
             }
             else if (img->pixelType == EXR_PIXEL_FLOAT) {
-                fill_channel_float(img, 2, 0.0f);
+                fill_channel_float(img, 0, 0.0f);
             }
             else if (img->pixelType == EXR_PIXEL_UINT) {
-                fill_channel_u32(img, 2, 0);
+                fill_channel_u32(img, 0, 0);
             }
-        }
-    }
-    if (img->channelCount > 1 && rgbaIndex[1] == -1) {
-        // if R exists, propagate it, else fill with zero
-        int srcChannel = rgbaIndex[0] >= 0 ? 0 : -1;
-        if (srcChannel >= 0) {
-            if (img->pixelType == EXR_PIXEL_HALF) {
-                copy_channel_u16(img, img->data, img->data, 1, srcChannel);
-            }
-            else if (img->pixelType == EXR_PIXEL_FLOAT) {
-                copy_channel_float(img, img->data, img->data, 1, srcChannel);
-            }
-            else if (img->pixelType == EXR_PIXEL_UINT) {
-                copy_channel_u32(img, img->data, img->data, 1, srcChannel);
-            }
-        }
-        else {
-            if (img->pixelType == EXR_PIXEL_HALF) {
-                fill_channel_u16(img, 1, zeroValue);
-            }
-            else if (img->pixelType == EXR_PIXEL_FLOAT) {
-                fill_channel_float(img, 1, 0.0f);
-            }
-            else if (img->pixelType == EXR_PIXEL_UINT) {
-                fill_channel_u32(img, 1, 0);
-            }
-        }
-    }
-    if (rgbaIndex[0] == -1) {
-        // fill with zero
-        if (img->pixelType == EXR_PIXEL_HALF) {
-            fill_channel_u16(img, 0, zeroValue);
-        }
-        else if (img->pixelType == EXR_PIXEL_FLOAT) {
-            fill_channel_float(img, 0, 0.0f);
-        }
-        else if (img->pixelType == EXR_PIXEL_UINT) {
-            fill_channel_u32(img, 0, 0);
         }
     }
 
