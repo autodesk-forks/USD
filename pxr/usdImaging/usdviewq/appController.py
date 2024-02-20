@@ -2767,6 +2767,13 @@ class AppController(QtCore.QObject):
 
         # Close all other windows. Guarantees popups will close as well
         QtWidgets.QApplication.instance().closeAllWindows()
+        
+        # 3dsmax specific patch for versions 2025 and greater. The reason for this is due to
+        # the fact that we ship a custom Qt Version with 3dsmax, and in 2025, with the upgrade
+        # to Qt 6.5.3, there seems to be a an issue with the custom Qt version that causes
+        # Qt applications to not terminate cleanly with the above call, and the workaround
+        # is to call "QtWidgets.QApplication.instance().quit()" to force the QT app to terminate.
+        QtWidgets.QApplication.instance().quit()
 
         # Start timer to measure Qt shutdown time
         self._startQtShutdownTimer()
