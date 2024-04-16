@@ -42,12 +42,12 @@ if(PXR_ENABLE_JS_SUPPORT)
     set(EMSCRIPTEN_COMPILE_FLAGS "-fPIC \
         -pthread -sPTHREAD_POOL_SIZE=24 \
         -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB -sMODULARIZE=1 \
-        -sEXPORTED_RUNTIME_METHODS=[\"FS\"] \
+        -sEXPORTED_RUNTIME_METHODS=[\"FS\"] -fexceptions \
         -sFORCE_FILESYSTEM=1 \
     ")
     add_compile_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS}")
     add_link_options("SHELL:-sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB \
-        -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB")
+        -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -fexceptions")
     message("EMSCRIPTEN Flags enabled")
 endif()
 

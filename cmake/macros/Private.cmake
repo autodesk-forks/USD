@@ -823,7 +823,7 @@ function(_pxr_target_link_libraries NAME)
 
     # Split core libraries from non-core libraries.
     _pxr_split_libraries("${args_UNPARSED_ARGUMENTS}" internal external)
-    
+
     set(NAME_INTERNAL "${NAME}")
     if (args_IS_STATIC_PLUGIN)
         set(NAME_INTERNAL "${NAME}_internal")
@@ -1201,10 +1201,7 @@ function(_pxr_library NAME)
         ${ARGN}
     )
 
-    set(NAME_INTERNAL "${NAME}")
-    if (PXR_ENABLE_JS_SUPPORT)
-        set(NAME_INTERNAL "${NAME}_internal")
-    endif()
+    _get_final_package_name("${NAME}" NAME_INTERNAL)
 
     #
     # Set up the target.
@@ -1599,3 +1596,10 @@ function(_pxr_library NAME)
         endif()
     endif()
 endfunction() # _pxr_library
+
+function(_get_final_package_name PXR_PACKAGE FINAL_PXR_PACKAGE)
+    set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}" PARENT_SCOPE)
+    if(PXR_ENABLE_JS_SUPPORT)
+        set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}_internal" PARENT_SCOPE)
+    endif ()
+endfunction()

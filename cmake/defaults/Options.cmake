@@ -238,13 +238,6 @@ if (${PXR_BUILD_DRACO_PLUGIN} AND ${PXR_BUILD_MONOLITHIC} AND WIN32)
         "Draco plugin can not be enabled for monolithic builds on Windows")
 endif()
 
-# Error out if user is building with Emscripten and tests. 
-# This is currently not supported.
-if (${PXR_ENABLE_JS_SUPPORT} AND ${PXR_BUILD_TESTS})
-    message(FATAL_ERROR 
-        "Emscripten build can not be enabled together with tests")
-endif()
-
 # Make sure PXR_BUILD_DOCUMENTATION and PXR_ENABLE_PYTHON_SUPPORT are enabled 
 # if PXR_BUILD_PYTHON_DOCUMENTATION is enabled
 if (${PXR_BUILD_PYTHON_DOCUMENTATION})

@@ -2,7 +2,7 @@
 #include "pxr/usd/sdf/wrapPathJs.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/usd/sdf/valueTypeName.h"
-#include "pxr/usd/usd/emscriptenSdfToVtValue.h"
+#include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
 #include "pxr/usd/usdShade/connectableAPI.h"
 #include "pxr/usd/usdShade/input.h"
 #include "pxr/usd/usdShade/shader.h"

@@ -1,4 +1,4 @@
-#include "pxr/usd/usd/emscriptenSdfToVtValue.h"
+#include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
 
 #include "pxr/base/tf/wrapTokenJs.h"
 #include "pxr/base/vt/array.h"

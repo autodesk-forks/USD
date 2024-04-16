@@ -1,6 +1,6 @@
 #include "pxr/usd/usdGeom/mesh.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
-#include "pxr/usd/usd/emscriptenSdfToVtValue.h"
+#include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
 #include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
 
 #include <emscripten/bind.h>

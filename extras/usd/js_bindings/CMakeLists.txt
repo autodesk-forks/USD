@@ -6,8 +6,6 @@ if (NOT PXR_ENABLE_JS_SUPPORT)
 endif()
 
 set(BINDINGS_NAME "jsBindings")
-set(BINDING_DEPENDENCIES "")
-list(APPEND BINDING_DEPENDENCIES hd usd hgi hgiWebGPU usdLux usdGeom usdUtils sdf tf usdShaders)
 
 set(RESOURCE_PARAMETERS "")
 function(add_resources target)
@@ -21,12 +19,7 @@ endfunction()
 # Gather resources (schemas) to make them available to attach them to the bundle
 add_resources(usdShade)
 add_resources(sdf)
-add_resources(hd)
-add_resources(hgi)
-add_resources(hgiWebGPU)
 add_resources(usdHydra)
-add_resources(usdShaders)
-add_resources(usdImaging)
 add_resources(usd)
 add_resources(ar)
 add_resources(usdLux)
@@ -41,8 +34,13 @@ endif()
 
 pxr_cpp_bin(${BINDINGS_NAME}
     LIBRARIES
-      ${BINDING_DEPENDENCIES}
-      ${RESOURCE_PARAMETERS}
+        usd
+        usdLux
+        usdGeom
+        usdUtils
+        sdf
+        tf
+        ${RESOURCE_PARAMETERS}
 )
 
 target_compile_options(${BINDINGS_NAME} PRIVATE "SHELL:-lembind")
