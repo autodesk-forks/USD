@@ -1,5 +1,6 @@
 set(PXR_PREFIX pxr/hdEmscripten)
 set(PXR_PACKAGE hdEmscripten)
+add_subdirectory(httpResolver)
 
 if (NOT PXR_ENABLE_JS_SUPPORT)
     return()
@@ -13,6 +14,7 @@ pxr_library(hdEmscripten
       usd
       usdUtils
       sdf
+      httpResolver
 
     PUBLIC_CLASSES
         webRenderDelegate
@@ -22,7 +24,7 @@ pxr_library(hdEmscripten
 )
 
 
-target_link_options(hdEmscripten_internal PRIVATE "SHELL: -sEXPORT_NAME=getUsdModule -sMODULARIZE=1 -lembind -sFORCE_FILESYSTEM=1")
+target_link_options(hdEmscripten_internal PRIVATE "SHELL: -Os -g0 -sEXPORT_NAME=getUsdModule -sMODULARIZE=1 -sFORCE_FILESYSTEM=1 -sASYNCIFY")
 target_compile_options(hdEmscripten_internal PRIVATE "SHELL: -lembind")
 
 set(RESOURCE_PARAMETERS "")
@@ -46,6 +48,7 @@ add_resources(usdLux)
 add_resources(ar)
 add_resources(usdGeom)
 add_resources(ndr)
+add_resources(httpResolver)
 
 list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
 
@@ -71,6 +74,7 @@ pxr_cpp_bin(${BINDINGS_NAME}
   LIBRARIES
       hdEmscripten
       usdImaging
+      httpResolver
       ${RESOURCE_PARAMETERS}
 )
 
@@ -78,8 +82,7 @@ set_target_properties(${BINDINGS_NAME}
     PROPERTIES
         SUFFIX ".js"
 )
-target_link_options(${BINDINGS_NAME} PRIVATE "SHELL:-sEXPORT_NAME=getUsdModule -sMODULARIZE=1 -lembind -sFORCE_FILESYSTEM=1")
-target_compile_options(${BINDINGS_NAME} PRIVATE "SHELL: -lembind")
+target_link_options(${BINDINGS_NAME} PRIVATE "SHELL: -Os -g0 -sEXPORT_NAME=getUsdModule -sMODULARIZE=1 -lembind -sFORCE_FILESYSTEM=1 -sASYNCIFY")
 
 install(
     FILES
