@@ -4,7 +4,6 @@ ARG BUILD_TARGET="--build-target wasm"
 ARG EMSCRIPTEN_VERSION=3.1.55
 RUN apt-get -y update && apt-get install -y\
         software-properties-common \
-        cmake \
         g++ \
         lbzip2 \
         git \
