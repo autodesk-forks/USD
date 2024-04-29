@@ -1,5 +1,5 @@
 #include "pxr/usd/usdGeom/xformOp.h"
-#include "pxr/usd/usd/emscriptenSdfToVtValue.h"
+#include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
 #include <emscripten/bind.h>
 
 using namespace emscripten;

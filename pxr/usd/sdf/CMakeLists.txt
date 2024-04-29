@@ -103,6 +103,7 @@ pxr_library(sdf
     JS_PUBLIC_HEADERS
         wrapPathJs.h
         wrapAssetPathJs.h
+        emscriptenSdfToVtValue.h
 
     PRIVATE_CLASSES
         assetPathResolver
@@ -181,6 +182,7 @@ pxr_library(sdf
         wrapAttributeSpecJs.cpp
         wrapTypesJs.cpp
         wrapValueTypeNameJs.cpp
+        emscriptenSdfToVtValue.cpp
 
     PYMODULE_FILES 
         __init__.py

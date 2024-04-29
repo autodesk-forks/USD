@@ -3,7 +3,7 @@
 #include "pxr/usd/sdf/wrapPathJs.h"
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
-#include "pxr/usd/usd/emscriptenSdfToVtValue.h"
+#include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usdShade/shader.h"
 

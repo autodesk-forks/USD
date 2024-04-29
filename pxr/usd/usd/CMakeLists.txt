@@ -79,7 +79,6 @@ pxr_library(usd
         wrapPrimJs.cpp
         wrapReferencesJs.cpp
         wrapStageJs.cpp
-        emscriptenSdfToVtValue.cpp
 
     PYTHON_PUBLIC_CLASSES
         pyEditContext
@@ -102,7 +101,6 @@ pxr_library(usd
 
     JS_PUBLIC_HEADERS
         emscriptenPtrRegistrationHelper.h
-        emscriptenSdfToVtValue.h
 
     PUBLIC_HEADERS
         api.h

@@ -210,6 +210,11 @@ pxr_library(hdSt
         overview.dox
 )
 
+if (EMSCRIPTEN)
+    message(STATUS "Skipping rest of ${PXR_PACKAGE} tests because they are currently unsupported for wasm")
+    return()
+endif()
+
 pxr_build_test(testHdStQualifiers
     LIBRARIES
         hdSt
