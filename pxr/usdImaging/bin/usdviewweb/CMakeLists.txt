@@ -16,10 +16,6 @@ pxr_cpp_bin(${PXR_PACKAGE}
     INCLUDE_DIRS
         ${TBB_INCLUDE_DIRS}
 )
-set_target_properties(${PXR_PACKAGE}
-    PROPERTIES
-        SUFFIX ".html"
-)
 
 if (EMSCRIPTEN)
     add_resources(ar)
@@ -85,6 +81,7 @@ if (EMSCRIPTEN)
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.worker.js
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wasm-server.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/usdviewweb.html
         )
 
     set(MODEL "Knife")

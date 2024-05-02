@@ -36,8 +36,6 @@
 #define MODEL_EXT_NAME "usdz"
 #endif
 
-#define SCREEN_SIZE 768
-
 static void error_callback(int error, const char *description)
 {
     std::cout << "Error: " << description << std::endl;

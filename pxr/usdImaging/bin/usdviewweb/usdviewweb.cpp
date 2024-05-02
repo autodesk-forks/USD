@@ -154,47 +154,57 @@ struct VertexOutput {
         return device.CreateRenderPipeline(&pipelineDsc);
     }
 
-    EM_JS(void, ems_setup, (int canvasX, int canvasY), {
-        if (_ems_main)
-        {
-            if (navigator["gpu"]) {
-                navigator["gpu"]["requestAdapter"]().then(function (adapter) {
-                    const requestedFeatures = [ "depth32float-stencil8", "float32-filterable" ];
-                    const requiredFeatures = [];
-                    requestedFeatures.forEach(feat => {
-                            if (adapter.features.has(feat)) {
-                                requiredFeatures.push(feat);
-                                console.log("WebGPU adapter supports " + feat + ".");
-                            } else {
-                                console.log("WebGPU adapter does not support " + feat + ".");
-                            }
-                    });
-                    adapter["requestDevice"]({requiredFeatures}).then( function (device) {
-                        Module["preinitializedWebGPUDevice"] = device;
-                        const canvasContainer = document.getElementsByClassName("emscripten_border")[0];
-
-                        // This is  a trick to still reuse the glfw manipulation
-                        const webgpuCanvas = document.createElement("canvas");
-                        webgpuCanvas.id = "webgpuCanvas";
-                        webgpuCanvas.height = canvasX;
-                        webgpuCanvas.width = canvasY;
-                        canvasContainer.appendChild(webgpuCanvas);
-                        canvasContainer.style.display = "flex";
-                        canvasContainer.style.justifyContent = "center";
-                        const mainCanvas = document.getElementById("canvas");
-                        mainCanvas.style.position = "absolute";
-                        mainCanvas.style.opacity = 0;
-                        _ems_main();
-                    }).catch((res) => { console.log(res); });
-                }, function () {
-                    console.log("WebGPU adapter not found.");
-                });
-            } else {
-                console.log("WebGPU not found.");
-            }
-        } else {
-            console.log("Module entry point not found.");
-        }
+    EM_JS(void, ems_setup, (), {
+        if (_ems_main) {
+        if (navigator["gpu"]) {
+        navigator["gpu"]["requestAdapter"]().then(function (adapter) {
+            const requestedFeatures = [
+            'depth32float-stencil8',
+                    'float32-filterable'
+            ];
+            const requiredFeatures = [];
+            requestedFeatures.forEach((feat) => {
+                    if (adapter.features.has(feat))
+                    {
+                        requiredFeatures.push(feat);
+                        console.log('WebGPU adapter supports ' + feat + '.');
+                    }
+                    else
+                    {
+                        console.log('WebGPU adapter does not support ' + feat + '.');
+                    }
+            });
+            const requiredLimits = {
+                    maxStorageBuffersPerShaderStage: 10,
+                    maxColorAttachmentBytesPerSample: 64,
+                    maxBufferSize: 0x40000000
+            };
+            adapter["requestDevice"]({requiredFeatures, requiredLimits}).then( function (device) {
+                Module["preinitializedWebGPUDevice"] = device;
+                const canvasContainer = document.getElementById("canvasContainer");
+                const height = document.getElementById('canvasContainer').offsetHeight;
+                const width = document.getElementById('canvasContainer').offsetWidth;
+                const webgpuCanvas = document.createElement("canvas");
+                webgpuCanvas.id = "webgpuCanvas";
+                webgpuCanvas.height = height;
+                webgpuCanvas.width = width;
+                canvasContainer.appendChild(webgpuCanvas);
+                canvasContainer.style.display = "flex";
+                canvasContainer.style.justifyContent = "center";
+                const mainCanvas = document.getElementById("canvas");
+                mainCanvas.style.position = "absolute";
+                mainCanvas.style.opacity = 0;
+                _ems_main(width, height);
+            }).catch((res) => { console.log(res); });
+        }, function () {
+            console.log("WebGPU adapter not found.");
+        });
+    } else {
+        console.log("WebGPU not found.");
+    }
+    } else {
+    console.log("Module entry point not found.");
+    }
     });
 
     void initGLEngine() {
@@ -254,7 +264,7 @@ struct VertexOutput {
         return world;
     }
 
-    extern "C" int __main__(int argc, char **argv) {
+    extern "C" int initialize(uint32_t width, uint32_t height) {
         filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
         TF_INFO(INFO).Msg("File: %s", filePath.c_str());
         TF_INFO(INFO).Msg("Starting GLEngine ");
@@ -267,7 +277,7 @@ struct VertexOutput {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
         // just use multiples of 256 now until row alignment is handled in HgiWebGPU
-        auto window = glfwCreateWindow(SCREEN_SIZE, SCREEN_SIZE, "HgiWebGPU Test", NULL, NULL);
+        auto window = glfwCreateWindow(width, height, "HgiWebGPU Test", NULL, NULL);
         if (!window) {
             glfwTerminate();
             exit(EXIT_FAILURE);
@@ -306,8 +316,8 @@ struct VertexOutput {
         {
             wgpu::TextureDescriptor textureDescriptor;
             textureDescriptor.dimension = wgpu::TextureDimension::e2D;
-            textureDescriptor.size.width = SCREEN_SIZE;
-            textureDescriptor.size.height = SCREEN_SIZE;
+            textureDescriptor.size.width = width;
+            textureDescriptor.size.height = height;
             textureDescriptor.size.depthOrArrayLayers = 1;
             textureDescriptor.sampleCount = 1;
             textureDescriptor.format = wgpu::TextureFormat::RGBA8Unorm;
@@ -316,7 +326,7 @@ struct VertexOutput {
             testTexture = device.CreateTexture(&textureDescriptor);
 
             // Initialize the texture with arbitrary data until we can load images
-            std::vector<uint8_t> data(2 * 4 * SCREEN_SIZE * SCREEN_SIZE, 0);
+            std::vector<uint8_t> data(2 * 4 * width * height, 0);
             for (size_t i = 0; i < data.size(); ++i) {
                 data[i] = static_cast<uint8_t>(i % 253);
             }
@@ -332,7 +342,7 @@ struct VertexOutput {
             imageCopyBuffer.buffer = stagingBuffer;
              wgpu::TextureDataLayout textureDataLayout;
             textureDataLayout.offset = 0;
-            textureDataLayout.bytesPerRow = 4 * SCREEN_SIZE;
+            textureDataLayout.bytesPerRow = 4 * width;
 
             imageCopyBuffer.layout = textureDataLayout;
 
@@ -340,7 +350,7 @@ struct VertexOutput {
             imageCopyTexture.texture = testTexture;
             imageCopyTexture.mipLevel = 0;
             imageCopyTexture.origin = {0, 0, 0};
-            wgpu::Extent3D copySize = {SCREEN_SIZE, SCREEN_SIZE, 1};
+            wgpu::Extent3D copySize = {width, height, 1};
 
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
             encoder.CopyBufferToTexture(&imageCopyBuffer, &imageCopyTexture, &copySize);
@@ -503,10 +513,10 @@ PXR_NAMESPACE_CLOSE_SCOPE
 extern "C" int __main__(int argc, char **argv);
 
 int main(int argc, char **argv) {
-    pxr::ems_setup(SCREEN_SIZE, SCREEN_SIZE);
+    pxr::ems_setup();
     return 0;
 }
 
-extern "C" __attribute__((used, visibility("default"))) void ems_main() {
-    __main__(0, nullptr);
+extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height) {
+    pxr::initialize(width, height);
 }

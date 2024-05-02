@@ -1451,7 +1451,7 @@ def InstallOpenSubdiv(context, force, buildArgs):
             extraArgs.append('-DNO_METAL=ON')
 
         # Use Metal for macOS and all Apple embedded systems.
-        if MacOS():
+        if MacOS() and not context.buildWebGPU:
             extraArgs.append('-DNO_OPENGL=ON')
 
         # Add on any user-specified extra arguments.
