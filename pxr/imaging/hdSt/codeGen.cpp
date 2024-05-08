@@ -198,9 +198,7 @@ HdSt_CodeGen::IsEnabledHgiResourceGeneration(Hgi const *hgi)
 {
     static bool const isEnabled =
         TfGetEnvSetting(HDST_ENABLE_HGI_RESOURCE_GENERATION);
-    
-    TfToken const& hgiName = hgi->GetAPIName();
-
+        
     // Hgi resource generation is required for WebGPU
 #if defined(PXR_WEBGPU_SUPPORT_ENABLED)
     isEnabled = true;
@@ -208,7 +206,7 @@ HdSt_CodeGen::IsEnabledHgiResourceGeneration(Hgi const *hgi)
 
     // Check if is env var is true, otherwise return true if NOT using HgiGL, 
     // as Hgi resource generation is required for Metal and Vulkan.
-    return isEnabled || hgiName != HgiTokens->OpenGL;
+    return isEnabled;
 }
 
 HdSt_CodeGen::HdSt_CodeGen(
