@@ -173,6 +173,8 @@ HdxOitResolveTask::Sync(
             params.useAovMultiSample);
         _renderPassState->SetResolveAovMultiSample(
             params.resolveAovMultiSample);
+
+        _newScreenSize = params.screenSize;
     }
 
     *dirtyBits = HdChangeTracker::Clean;
@@ -243,6 +245,11 @@ HdxOitResolveTask::_ComputeScreenSize(
 {
     const HdRenderPassAovBindingVector& aovBindings = _GetAovBindings(ctx);
     if (aovBindings.empty()) {
+        // For legacy purpose check if the new size is valid.
+        if (_newScreenSize[0]!=0 && _newScreenSize[1]!=0) {
+            return _newScreenSize;
+        }
+
         return _GetScreenSize();
     }
 
@@ -250,6 +257,11 @@ HdxOitResolveTask::_ComputeScreenSize(
     HdRenderBuffer * const buffer = static_cast<HdRenderBuffer*>(
         renderIndex->GetBprim(HdPrimTypeTokens->renderBuffer, bufferId));
     if (!buffer) {
+        // For legacy purpose check if the new size is valid.
+        if (_newScreenSize[0]!=0 && _newScreenSize[1]!=0) {
+            return _newScreenSize;
+        }
+
         TF_CODING_ERROR("No render buffer at path %s specified in AOV bindings",
                         bufferId.GetText());
         return _GetScreenSize();
@@ -440,7 +452,8 @@ operator==(HdxOitResolveTaskParams const& lhs,
            HdxOitResolveTaskParams const& rhs)
 {
     return lhs.useAovMultiSample == rhs.useAovMultiSample
-        && lhs.resolveAovMultiSample == rhs.resolveAovMultiSample;
+        && lhs.resolveAovMultiSample == rhs.resolveAovMultiSample
+        && lhs.screenSize == rhs.screenSize;
 }
 
 bool
@@ -455,7 +468,8 @@ operator<<(std::ostream& out, HdxOitResolveTaskParams const& p)
 {
     out << "OitResolveTask Params: (...) "
         << p.useAovMultiSample << " "
-        << p.resolveAovMultiSample;
+        << p.resolveAovMultiSample << " "
+        << p.screenSize;
     return out;
 }
 

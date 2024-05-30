@@ -47,13 +47,12 @@ using HdStRenderPassShaderSharedPtr =
 /// OIT resolve task params.
 struct HdxOitResolveTaskParams
 {
-    HdxOitResolveTaskParams()
-        : useAovMultiSample(true)
-        , resolveAovMultiSample(true)
-    {}
+    HdxOitResolveTaskParams() = default;
 
-    bool useAovMultiSample;
-    bool resolveAovMultiSample;
+    bool useAovMultiSample { true };
+    bool resolveAovMultiSample { true };
+
+    pxr::GfVec2i screenSize { 0 };
 };
 
 /// \class HdxOitResolveTask
@@ -123,7 +122,11 @@ private:
     HdStRenderPassStateSharedPtr _renderPassState;
     HdStRenderPassShaderSharedPtr _renderPassShader;
 
+    /// Current screen size.
     GfVec2i _screenSize;
+    /// New screen size (from params).
+    GfVec2i _newScreenSize;
+
     HdBufferArrayRangeSharedPtr _counterBar;
     HdBufferArrayRangeSharedPtr _dataBar;
     HdBufferArrayRangeSharedPtr _depthBar;
