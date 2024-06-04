@@ -32,7 +32,7 @@
 #include <iostream>
 
 EMSCRIPTEN_REGISTER_TYPE_CONVERSION(pxr::TfToken)
-    return BindingType<val>::toWireType(val(value.GetString()));
+    return BindingType<val>::toWireType(val(value.GetString()), rvp::default_tag{});
 }
 static pxr::TfToken fromWireType(WireType value) {
     return pxr::TfToken(BindingType<val>::fromWireType(value).as<std::string>());

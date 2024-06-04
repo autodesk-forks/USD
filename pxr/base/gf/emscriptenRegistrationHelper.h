@@ -11,7 +11,7 @@
       for(size_t i = 0; i < VectorType::dimension; ++i) { \
           arrayVal.set(i, emscripten::val(value[i])); \
       } \
-      return BindingType<val>::toWireType(arrayVal); \
+      return BindingType<val>::toWireType(arrayVal, rvp::default_tag{}); \
     } \
     \
     static VectorType fromWireType(WireType value) { \

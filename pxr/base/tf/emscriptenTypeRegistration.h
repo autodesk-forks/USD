@@ -68,7 +68,7 @@
           template<> \
           struct BindingType<TYPE> { \
               typedef EM_VAL WireType; \
-              static WireType toWireType(const TYPE& value) { \
+              static WireType toWireType(const TYPE& value, rvp::default_tag) { \
 
 #define EMSCRIPTEN_REGISTER_TYPE_CONVERSION_END(TYPE) \
             } \
@@ -88,8 +88,8 @@ namespace emscripten { \
             using ValBinding = BindingType<val>; \
             using WireType = ValBinding::WireType; \
         \
-            static WireType toWireType(const std::vector<ValueType> &vec) { \
-                return ValBinding::toWireType(val::array(vec)); \
+            static WireType toWireType(const std::vector<ValueType> &vec, rvp::default_tag) { \
+                return ValBinding::toWireType(val::array(vec), rvp::default_tag{}); \
             } \
         \
             static std::vector<ValueType> fromWireType(WireType value) { \

@@ -31,7 +31,7 @@
 #include "pxr/base/tf/emscriptenTypeRegistration.h"
 
 EMSCRIPTEN_REGISTER_TYPE_CONVERSION(pxr::SdfPath)
-    return BindingType<val>::toWireType(val(value.GetString()));
+    return BindingType<val>::toWireType(val(value.GetString()), rvp::default_tag{});
 }
 static pxr::SdfPath fromWireType(WireType value) {
     return pxr::SdfPath(BindingType<val>::fromWireType(value).as<std::string>());

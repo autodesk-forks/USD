@@ -5,7 +5,7 @@
 #include "pxr/base/tf/emscriptenTypeRegistration.h"
   
 EMSCRIPTEN_REGISTER_TYPE_CONVERSION(pxr::SdfAssetPath)
-  return BindingType<val>::toWireType(val(value.GetAssetPath()));
+  return BindingType<val>::toWireType(val(value.GetAssetPath()), rvp::default_tag{});
 }
 
 static pxr::SdfAssetPath fromWireType(WireType value) {

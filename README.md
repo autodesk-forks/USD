@@ -22,7 +22,7 @@ As we worked on a WebGPU based backend, we developed 2 solutions for different s
 to their advantages and disadvantages:
 
 - **Dawn-based**: It is used for easier debugging and developing on desktop (Win and macOS).
-It can be tested by enabling the `--dawn` option when building using build_usd.py.
+It can be tested by enabling the `--webgpu` option when building using build_usd.py.
 To try it out, you can use `usdview` but, due to some limitations for WebGPU,
 some features need to be disabled.
 ```

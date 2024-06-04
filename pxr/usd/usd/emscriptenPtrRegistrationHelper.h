@@ -78,7 +78,7 @@
 // TYPE should be the class type, without the pxr scope
 #define EMSCRIPTEN_ENABLE_WEAK_PTR_CAST(TYPE) \
     EMSCRIPTEN_REGISTER_TYPE_CONVERSION(pxr::TfWeakPtr<pxr::TYPE>) \
-        return BindingType<val>::toWireType(val(pxr::TfCreateRefPtrFromProtectedWeakPtr(value))); \
+        return BindingType<val>::toWireType(val(pxr::TfCreateRefPtrFromProtectedWeakPtr(value)), rvp::default_tag{}); \
     } \
     static pxr::TfWeakPtr<pxr::TYPE> fromWireType(WireType value) { \
         return pxr::TfWeakPtr<pxr::TYPE>(BindingType<val>::fromWireType(value).as<pxr::TfRefPtr<pxr::TYPE>>()); \

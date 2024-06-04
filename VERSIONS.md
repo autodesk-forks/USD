@@ -39,3 +39,4 @@ Our test machines have the following software versions installed.
 | OpenVDB       | 9.1.0                | 7.1.0, 9.1.0                 | 9.1.0                          |
 | Vulkan SDK    | 1.3.243.0            | 1.3.243.0                    | 1.3.243.0                      |
 | Draco         | 1.3.6                | 1.3.6                        | 1.3.6                          |
+| Chrome        | 126                  | 126                          | 126                            |
