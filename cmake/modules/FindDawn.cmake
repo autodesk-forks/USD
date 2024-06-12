@@ -33,6 +33,8 @@
 FindDawn
 --------------
 Find Dawn headers and libraries.
+This file highly depends on what dawn branch it is being tested on.
+The last revision was for chromium/6523
 Imported Targets
 ^^^^^^^^^^^^^^^^
 ``Dawn::dawn``
@@ -43,8 +45,8 @@ Imported Targets
   The Dawn Wire library, if found.
 ``Dawn::platform```
   The Dawn platform library, if found.
-``Dawn::cpp```
-  The Dawn CPP library, if found.
+``Dawn::common```
+  The Dawn common library, if found.
 Result Variables
 ^^^^^^^^^^^^^^^^
 This will define the following variables in your project:
@@ -58,6 +60,8 @@ This will define the following variables in your project:
   this should be passed to target_compile_options(), if the
   target is not used for linking
 #]=======================================================================]
+
+
 find_path(WebGPU_INCLUDE_DIR
         NAMES webgpu/webgpu.h
         PATHS ${Dawn_ROOT}/include
@@ -67,7 +71,11 @@ find_path(Dawn_INCLUDE_DIR
         PATHS ${Dawn_ROOT}/include
 )
 find_library(Dawn_LIBRARY
-        NAMES ${Dawn_NAMES} dawn_proc
+        NAMES dawn_proc
+        PATHS ${Dawn_ROOT}/lib
+)
+find_library(WebGPU_Dawn_LIBRARY
+        NAMES webgpu_dawn
         PATHS ${Dawn_ROOT}/lib
 )
 find_library(WebGPU_Dawn_LIBRARY
@@ -78,24 +86,40 @@ find_library(WebGPU_Dawn_LIBRARY
 set(Dawn_LIBRARIES)
 if (WebGPU_INCLUDE_DIR AND Dawn_INCLUDE_DIR AND Dawn_LIBRARY AND WebGPU_Dawn_LIBRARY)
     set(Dawn_LIBRARIES ${Dawn_LIBRARY} ${WebGPU_Dawn_LIBRARY})
-    if (WIN32)
-        find_library(Dawn_common_LIBRARY
-                NAMES dawn_common
-                PATHS ${Dawn_ROOT}/lib
-        )
-        if(Dawn_common_LIBRARY)
-            set(_Dawn_REQUIRED_LIBS_FOUND ON)
-            list(APPEND Dawn_LIBRARIES ${Dawn_common_LIBRARY})
-            get_filename_component(Dawn_LIBRARY_DIR "${Dawn_LIBRARY}" DIRECTORY)
-            set(Dawn_LIBS_FOUND "Dawn (required): ${Dawn_LIBRARY} ${WebGPU_Dawn_LIBRARY} ${Dawn_common_LIBRARY}")
-        else()
-            set(_Dawn_REQUIRED_LIBS_FOUND OFF)
-        endif()
-
-    else()
+    find_library(Dawn_common_LIBRARY
+            NAMES dawn_common
+            PATHS ${Dawn_ROOT}/lib
+    )
+    if(Dawn_common_LIBRARY)
         set(_Dawn_REQUIRED_LIBS_FOUND ON)
+        list(APPEND Dawn_LIBRARIES ${Dawn_common_LIBRARY})
         get_filename_component(Dawn_LIBRARY_DIR "${Dawn_LIBRARY}" DIRECTORY)
-        set(Dawn_LIBS_FOUND "Dawn (required): ${Dawn_LIBRARY} ${WebGPU_Dawn_LIBRARY}")
+        set(Dawn_LIBS_FOUND "Dawn (required): ${Dawn_LIBRARY} ${WebGPU_Dawn_LIBRARY} ${Dawn_common_LIBRARY}")
+        set(ABSL_DEPENDENCIES
+                absl_city
+                absl_int128
+                absl_hash
+                absl_low_level_hash
+                absl_raw_hash_set
+                absl_raw_logging_internal
+                absl_str_format_internal
+                absl_throw_delegate
+        )
+        foreach(ABSL_DEP ${ABSL_DEPENDENCIES})
+            find_library(ABSL_${ABSL_DEP}_LIBRARY
+                    NAMES ${ABSL_DEP}
+                    PATHS ${Dawn_LIBRARY_DIR}
+            )
+            if(ABSL_${ABSL_DEP}_LIBRARY)
+                list(APPEND Dawn_LIBRARIES ${ABSL_${ABSL_DEP}_LIBRARY})
+                list(APPEND Dawn_LIBS_FOUND "${ABSL_DEP} (required): ${ABSL_${ABSL_DEP}_LIBRARY}")
+            else()
+                set(_Dawn_REQUIRED_LIBS_FOUND OFF)
+                list(APPEND Dawn_LIBS_NOT_FOUND "${ABSL_DEP} (required)")
+            endif()
+        endforeach ()
+    else()
+        set(_Dawn_REQUIRED_LIBS_FOUND OFF)
     endif()
 else ()
     set(_Dawn_REQUIRED_LIBS_FOUND OFF)
@@ -112,17 +136,13 @@ if ("cpp" IN_LIST REQUESTED_DAWN_COMPONENTS)
             NAMES webgpu/webgpu_cpp.h
             PATHS ${Dawn_ROOT}/include ${WebGPU_INCLUDE_DIR}
     )
-    find_library(WebGPU_CPP_LIBRARY
-            NAMES dawncpp
-            PATHS ${Dawn_ROOT}/lib ${Dawn_LIBRARY}
-    )
-    if (WebGPU_CPP_INCLUDE_DIR AND WebGPU_CPP_LIBRARY)
-        list(APPEND Dawn_LIBRARIES ${WebGPU_CPP_LIBRARY})
+    if (WebGPU_CPP_INCLUDE_DIR)
+        list(APPEND Dawn_INCLUDE_DIRS ${WebGPU_CPP_INCLUDE_DIR})
         list(APPEND Dawn_INCLUDE_DIRS ${WebGPU_CPP_INCLUDE_DIR})
         if (Dawn_FIND_REQUIRED_cpp)
-            list(APPEND Dawn_LIBS_FOUND "dawncpp (required): ${WebGPU_CPP_LIBRARY}")
+            list(APPEND Dawn_LIBS_FOUND "dawncpp (required): ${WebGPU_CPP_INCLUDE_DIR}")
         else ()
-            list(APPEND Dawn_LIBS_FOUND "dawncpp (optional): ${WebGPU_CPP_LIBRARY}")
+            list(APPEND Dawn_LIBS_FOUND "dawncpp (optional): ${WebGPU_CPP_INCLUDE_DIR}")
         endif ()
     else ()
         if (Dawn_FIND_REQUIRED_cpp)

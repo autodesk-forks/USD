@@ -23,12 +23,14 @@
 # Try to find Tint include and library directories.
 #
 # After successful discovery, this will set for inclusion where needed:
-# TINT_INCLUDE_DIRS - containing the Dawn headers
+# TINT_INCLUDE_DIRS - containing the Tint headers
 # TINT_LIBRARIES - containing Tint library
 #[=======================================================================[.rst:
 FindTint
 --------------
 Find Tint headers and libraries.
+This file highly depends on what tint commit it is being tested on.
+The last revision was for the commit 5b68c1266eb91bd29c26751a820919f1afa31260
 Imported Targets
 ^^^^^^^^^^^^^^^^
 ``Tint::api``
@@ -77,7 +79,7 @@ endif ()
 
 unset(Tint_FOUND CACHE)
 set(Tint_FOUND ON)
-# These lists change constantly, so we might need to update them as we update tint and dawn
+
 set(TINT_WRITER_COMPONENTS
         ast_printer
         ast_raise
@@ -96,6 +98,7 @@ set(TINT_COMMON_COMPONENTS
         lang_core_intrinsic
         lang_core_ir
         lang_core_ir_transform
+        lang_core_ir_transform_common
         lang_core_type
         # TODO: Are all these libraries required in all cases?
         lang_wgsl
@@ -194,6 +197,23 @@ foreach(COMPONENT ${TINT_REQUESTED_COMPONENTS})
         endforeach ()
     endif ()
     mark_as_advanced(TINT_${COMPONENT}_LIBRARY)
+endforeach ()
+
+
+set(ABSL_DEPENDENCIES
+        absl_strings
+)
+foreach(ABSL_DEP ${ABSL_DEPENDENCIES})
+    find_library(ABSL_${ABSL_DEP}_LIBRARY
+            NAMES ${ABSL_DEP}
+            PATHS ${TINT_LIBRARY_DIR}
+    )
+    if(ABSL_${ABSL_DEP}_LIBRARY)
+        list(APPEND Tint_LIBRARIES ${ABSL_${ABSL_DEP}_LIBRARY})
+    else()
+        set(Tint_FOUND OFF)
+        list(APPEND Tint_LIBRARIES_NOT_FOUND "${ABSL_DEP}")
+    endif()
 endforeach ()
 
 if (NOT Tint_FIND_QUIETLY)

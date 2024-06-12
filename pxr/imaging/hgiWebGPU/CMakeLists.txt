@@ -16,16 +16,16 @@ if(NOT EMSCRIPTEN)
 
     set(LIB_PREFIX ${CMAKE_STATIC_LIBRARY_PREFIX})
     set(HGI_WEBGPU_LIBRARIES)
-    if (WIN32)
+    if (APPLE)
+        list(APPEND HGI_WEBGPU_LIBRARIES
+            "-framework IOKit"
+            "-framework IOSurface"
+            "-framework Metal"
+            "-framework QuartzCore"
+        )
+    elseif (WIN32)
         list(APPEND HGI_WEBGPU_LIBRARIES
             dxguid.lib
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_strings${CMAKE_STATIC_LIBRARY_SUFFIX}
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_strings_internal${CMAKE_STATIC_LIBRARY_SUFFIX}
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_str_format_internal${CMAKE_STATIC_LIBRARY_SUFFIX}
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_int128${CMAKE_STATIC_LIBRARY_SUFFIX}
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_raw_logging_internal${CMAKE_STATIC_LIBRARY_SUFFIX}
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_throw_delegate${CMAKE_STATIC_LIBRARY_SUFFIX}
-            ${CMAKE_INSTALL_PREFIX}/lib/absl_base${CMAKE_STATIC_LIBRARY_SUFFIX}
         )
     endif()
 endif()

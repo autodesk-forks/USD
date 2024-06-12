@@ -1199,6 +1199,7 @@ def InstallTIFF(context, force, buildArgs):
         else:
             extraArgs = []
         extraArgs += buildArgs
+        extraArgs += ["-Dtiff-docs=OFF", "-Dtiff-tests=OFF"]
         RunCMake(context, force, extraArgs)
 
 TIFF = Dependency("TIFF", InstallTIFF, "include/tiff.h")
@@ -1354,7 +1355,8 @@ def InstallOpenImageIO(context, force, buildArgs):
         # purposes. Libraries such as usdImagingGL might need to use tools like
         # idiff to compare the output images from their tests
         buildOIIOTools = 'ON' if (context.buildUsdImaging
-                                  and context.buildTests) else 'OFF'
+                                  and context.buildTests
+                                  and not context.targetWasm) else 'OFF'
         extraArgs = ['-DOIIO_BUILD_TOOLS={}'.format(buildOIIOTools),
                      '-DOIIO_BUILD_TESTS=OFF',
                      '-DBUILD_DOCS=OFF',
@@ -1589,13 +1591,12 @@ THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 ############################################################
 # glslang
 
-GLSLANG_RELATIVE_PATH = "third_party/vulkan-deps/glslang/src"
 def InstallGlslang(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):
         if context.targetWasm:
-            srcDir = os.path.join(os.getcwd(), "tint", GLSLANG_RELATIVE_PATH)
+            srcDir = os.path.join(os.getcwd(), "tint", "third_party/vulkan-deps/glslang/src")
         else:
-            srcDir = os.path.join(os.getcwd(), "dawn", GLSLANG_RELATIVE_PATH)
+            srcDir = os.path.join(os.getcwd(), "dawn", "third_party/glslang/src")
 
         if not os.path.isdir(srcDir):
             raise RuntimeError("glslang not found at " + srcDir + ". This is probably because dawn or " +
@@ -1629,12 +1630,12 @@ GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangTo
 # Tint
 
 TINT_REPO = "https://dawn.googlesource.com/tint"
-TINT_COMMIT = "ad53840f61e1b18a4321efd82fafdc5e07d1853c"
+TINT_COMMIT = "5b68c1266eb91bd29c26751a820919f1afa31260"
+
 TINT_CMAKE_OPTIONS = [
     '-DTINT_BUILD_SPV_READER=ON',
     '-DTINT_BUILD_SPV_WRITER=OFF',
     '-DTINT_BUILD_WGSL_WRITER=ON',
-    '-DTINT_BUILD_DOCS=OFF',
     '-DTINT_BUILD_TESTS=OFF',
     '-DTINT_BUILD_CMD_TOOLS=OFF',
     '-DTINT_BUILD_BENCHMARKS=OFF'
@@ -1659,17 +1660,26 @@ def InstallTint(context, force, buildArgs):
                 'third_party/vulkan-deps',
                 'third_party/vulkan-deps/spirv-headers/src',
                 'third_party/vulkan-deps/spirv-tools/src',
-                GLSLANG_RELATIVE_PATH,
+                'third_party/vulkan-deps/glslang/src',
                 'third_party/abseil-cpp',
             ]
             google_depot_tools.fetch_dependecies(required_submodules)
 
             # This will allow us to install the already built spirv-tools library
+
             PatchFile("third_party/CMakeLists.txt", [
             ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
             '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
             ('    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
             '    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n'),
+            ])
+
+            PatchFile("src/tint/utils/system/terminal_posix.cc", [
+                ('#include "src/tint/utils/system/terminal.h"\n',
+                 """#include "src/tint/utils/system/terminal.h"
+                 #ifdef EMSCRIPTEN
+                 #include <sys/select.h>
+                 #endif\n""")
             ])
 
             cmakeOptions = [
@@ -1711,7 +1721,7 @@ TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6159"
+DAWN_CHROMIUM_VERSION = "6531"
 
 def InstallDawn(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):
@@ -1725,17 +1735,14 @@ def InstallDawn(context, force, buildArgs):
         with CurrentWorkingDirectory(srcDir):
             required_submodules = [
                 'third_party/protobuf',
-                'third_party/vulkan-deps',
-                'third_party/vulkan-deps/spirv-headers/src',
-                'third_party/vulkan-deps/spirv-tools/src',
-                'third_party/vulkan-deps/vulkan-headers/src',
-                'third_party/vulkan-deps/vulkan-loader/src',
-                'third_party/vulkan-deps/vulkan-tools/src',
-                'third_party/glfw',
+                'third_party/spirv-headers/src',
+                'third_party/spirv-tools/src',
                 'third_party/abseil-cpp',
+                'third_party/libprotobuf-mutator/src',
+                'third_party/vulkan-headers/src',
                 'third_party/jinja2',
                 'third_party/markupsafe',
-                GLSLANG_RELATIVE_PATH
+                'third_party/glslang/src'
             ]
 
             PatchFile("third_party/CMakeLists.txt",
@@ -1759,10 +1766,12 @@ def InstallDawn(context, force, buildArgs):
 
             google_depot_tools.fetch_dependecies(required_submodules)
             cmakeOptions = [
-                '-DBUILD_SHARED_LIBS={}'.format('OFF' if Windows() else 'ON'),
                 '-DDAWN_BUILD_SAMPLES=OFF',
-                '-DDAWN_ENABLE_INSTALL=ON'
+                '-DDAWN_ENABLE_INSTALL=ON',
+                '-DDAWN_USE_GLFW=OFF'
             ]
+            if Windows():
+                cmakeOptions+='-DBUILD_SHARED_LIBS=OFF'
             cmakeOptions += TINT_CMAKE_OPTIONS
             cmakeOptions += buildArgs
             buildDir = RunCMake(context, force, cmakeOptions)
@@ -1785,9 +1794,11 @@ def InstallDawn(context, force, buildArgs):
         CopyFiles(context, "src/dawn/common/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/spirv-tools/source/{buildConfig}*SPIRV-Tools.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/spirv-tools/source/opt/{buildConfig}*SPIRV-Tools-opt.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/strings/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/base/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/container/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/hash/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/numeric/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/strings/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "src/tint/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         # Extra include files
         CopyFiles(context, "gen/include/dawn/*.*", "include/dawn")

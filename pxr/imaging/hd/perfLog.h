@@ -46,9 +46,6 @@ PXR_NAMESPACE_OPEN_SCOPE
 class SdfPath;
 class HdResourceRegistry;
 
-// XXX: it would be nice to move this into Trace or use the existing Trace
-// counter mechanism, however we are restricted to TraceLite in the rocks.
-
 //----------------------------------------------------------------------------//
 // PERFORMANCE INSTURMENTATION MACROS                                         //
 //----------------------------------------------------------------------------//

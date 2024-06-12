@@ -304,7 +304,7 @@ if (PXR_BUILD_IMAGING)
 
     if (PXR_ENABLE_WEBGPU_SUPPORT)
         if (NOT EMSCRIPTEN)
-            find_package(Dawn QUIET REQUIRED
+            find_package(Dawn REQUIRED
                 COMPONENTS
                     native
                     wire
@@ -314,14 +314,27 @@ if (PXR_BUILD_IMAGING)
         endif ()
         set(TINT_COMPONENTS
             lang_spirv_reader
+            lang_spirv_reader_lower
+            lang_spirv_reader_parser
+            lang_spirv_validate
         )
         if (WIN32)
             list(APPEND TINT_COMPONENTS
+                lang_hsl
+                lang_hsl_intrinsic
+                lang_hsl_ir
                 lang_hlsl_writer
+                lang_hlsl_writer_printer
+                lang_hlsl_writer_raise
             )
         elseif (APPLE)
             list(APPEND TINT_COMPONENTS
+                lang_msl
+                lang_msl_intrinsic
+                lang_msl_ir
                 lang_msl_writer
+                lang_msl_writer_printer
+                lang_msl_writer_raise
             )
         else()
             # TODO: This has not been validated with the correct platform

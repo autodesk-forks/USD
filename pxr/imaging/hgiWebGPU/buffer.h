@@ -24,11 +24,9 @@
 #ifndef PXR_IMAGING_HGI_WEBGPU_BUFFER_H
 #define PXR_IMAGING_HGI_WEBGPU_BUFFER_H
 
-#if defined(EMSCRIPTEN)
 #include <webgpu/webgpu_cpp.h>
-#else
-#include <dawn/webgpu_cpp.h>
-#endif
+#include <webgpu/webgpu.h>
+
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hgiWebGPU/api.h"

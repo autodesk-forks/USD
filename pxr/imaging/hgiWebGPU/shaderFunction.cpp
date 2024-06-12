@@ -158,16 +158,16 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
             readerOptions.allow_non_uniform_derivatives = true;
             tint::Program program = tint::spirv::reader::Read(spirvData, readerOptions);
             if (!program.IsValid()) {
-                TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + program.Diagnostics().str() + "\n");
+                TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + program.Diagnostics().Str() + "\n");
                 return;
             };
 
             tint::wgsl::writer::Options options{};
             auto tintResult = tint::wgsl::writer::Generate(program, options);
-            if (tintResult) {
+            if (tintResult == tint::Success) {
                 wgslCode = tintResult->wgsl;
             } else {
-                _errors = tintResult.Failure().reason.str();
+                _errors = tintResult.Failure().reason.Str();
             }
 
             wgslDesc.code = wgslCode.c_str();
@@ -186,17 +186,17 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     }
 #else
         _shaderModule.GetCompilationInfo(
-                [](WGPUCompilationInfoRequestStatus status, WGPUCompilationInfo const *compilationInfo, void *userdata) {
-                    if (status != WGPUCompilationInfoRequestStatus_Success) {
+                wgpu::CallbackMode::AllowSpontaneous,
+                [&](wgpu::CompilationInfoRequestStatus status, const wgpu::CompilationInfo* compilationInfo) {
+                    if (status != wgpu::CompilationInfoRequestStatus::Success) {
                         std::stringstream errorss;
                         for (uint32_t i = 0; i < compilationInfo->messageCount; ++i) {
                             auto &compilationMessage = compilationInfo->messages[i];
                             errorss << compilationMessage.lineNum << ": " << compilationMessage.message << std::endl;
                         }
-                        auto *errors = static_cast<std::string *>(userdata);
-                        *errors = errorss.str();
+                        _errors = errorss.str();
                     }
-                }, &_errors);
+                });
 #endif
     }
     
