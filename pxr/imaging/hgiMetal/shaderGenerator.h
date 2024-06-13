@@ -83,6 +83,10 @@ private:
         const HgiShaderFunctionDesc &descriptor);
 
     void _BuildKeywordInputShaderSections(const HgiShaderFunctionDesc &descriptor);
+    
+    //GLSL Source Code Translator
+    void _ReplaceSourceCode(std::ostream &ss);
+    void _MergeSourceCode(std::ostream &ss);
 
     HgiMetalShaderSectionUniquePtrVector _shaderSections;
     HgiMetalShaderStageEntryPointUniquePtr _generatorShaderSections;

@@ -212,6 +212,8 @@ struct HdVec4f_2_10_10_10_REV
         int const* asInt = reinterpret_cast<int const*>(this);
         return *asInt;
     }
+    
+//    operator int() const { return GetAsInt(); }
 
     bool operator==(const HdVec4f_2_10_10_10_REV &other) const {
         return (other.w == w && 
@@ -222,12 +224,32 @@ struct HdVec4f_2_10_10_10_REV
     bool operator!=(const HdVec4f_2_10_10_10_REV &other) const {
         return !(*this == other);
     }
+    float operator[] (size_t n) const {
+        switch(n)
+        {
+        case 0: return HdConvertFixedToFloat(x, 10);
+        case 1: return HdConvertFixedToFloat(y, 10);
+        case 2: return HdConvertFixedToFloat(z, 10);
+        case 3: return HdConvertFixedToFloat(w, 2);
+        default: return 0;
+        }
+    }
 
     int x : 10;
     int y : 10;
     int z : 10;
     int w : 2;
 };
+
+//std::size_t hash_value(HdVec4f_2_10_10_10_REV const& b)
+//{
+//  std::size_t seed = 0;
+//  boost::hash_combine(seed, b.x);
+//  boost::hash_combine(seed, b.y);
+//  boost::hash_combine(seed, b.z);
+//  boost::hash_combine(seed, b.w);
+//  return seed;
+//}
 
 /// \enum HdType
 ///

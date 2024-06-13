@@ -20,6 +20,8 @@ pxr_library(hgiMetal
         ${APPUIKIT_LIBRARY}
 
     PUBLIC_HEADERS
+        accelerationStructure.h
+        accelerationStructureCmds.h
         api.h
         blitCmds.h
         buffer.h
@@ -30,6 +32,8 @@ pxr_library(hgiMetal
         graphicsCmds.h
         graphicsPipeline.h
         hgi.h
+        rayTracingCmds.h
+        rayTracingPipeline.h
         resourceBindings.h
         sampler.h
         shaderFunction.h
@@ -43,6 +47,8 @@ pxr_library(hgiMetal
         shaderSection.h
 
     CPPFILES
+        accelerationStructure.mm
+        accelerationStructureCmds.mm
         blitCmds.mm
         buffer.mm
         capabilities.mm
@@ -53,6 +59,8 @@ pxr_library(hgiMetal
         graphicsCmds.mm
         graphicsPipeline.mm
         hgi.mm
+        rayTracingCmds.mm
+        rayTracingPipeline.mm
         resourceBindings.mm
         sampler.mm
         shaderFunction.mm

@@ -27,6 +27,9 @@
 #include "pxr/pxr.h"
 #include "pxr/imaging/hgiMetal/api.h"
 #include "pxr/imaging/hgiMetal/capabilities.h"
+#include "pxr/imaging/hgiMetal/accelerationStructureCmds.h"
+#include "pxr/imaging/hgiMetal/rayTracingPipeline.h"
+#include "pxr/imaging/hgiMetal/rayTracingCmds.h"
 #include "pxr/imaging/hgi/hgi.h"
 #include "pxr/imaging/hgi/tokens.h"
 
@@ -73,6 +76,12 @@ public:
 
     HGIMETAL_API
     HgiBlitCmdsUniquePtr CreateBlitCmds() override;
+
+    HGIMETAL_API
+    HgiAccelerationStructureCmdsUniquePtr CreateAccelerationStructureCmds() override;
+
+    HGIMETAL_API
+    HgiRayTracingCmdsUniquePtr CreateRayTracingCmds() override;
 
     HGIMETAL_API
     HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) override;
@@ -138,6 +147,13 @@ public:
     void DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle) override;
 
     HGIMETAL_API
+    HgiRayTracingPipelineHandle CreateRayTracingPipeline(
+            HgiRayTracingPipelineDesc const& pipeDesc) override;
+
+    HGIMETAL_API
+    void DestroyRayTracingPipeline(HgiRayTracingPipelineHandle* pipeHandle) override;
+
+    HGIMETAL_API
     TfToken const& GetAPIName() const override;
 
     HGIMETAL_API
@@ -148,6 +164,22 @@ public:
 
     HGIMETAL_API
     void EndFrame() override;
+
+
+    HGIMETAL_API
+        HgiAccelerationStructureHandle CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) override;
+
+    HGIMETAL_API
+        void DestroyAccelerationStructure(HgiAccelerationStructureHandle* accelStructHandle)  override;
+
+    HGIMETAL_API
+        virtual HgiAccelerationStructureGeometryHandle CreateAccelerationStructureGeometry(HgiAccelerationStructureTriangleGeometryDesc const& desc)  override;
+
+    HGIMETAL_API
+        virtual HgiAccelerationStructureGeometryHandle CreateAccelerationStructureGeometry(HgiAccelerationStructureInstanceGeometryDesc const& desc)  override;
+
+    HGIMETAL_API
+        virtual void DestroyAccelerationStructureGeometry(HgiAccelerationStructureGeometryHandle* accelStructHandle) override;
 
     //
     // HgiMetal specific

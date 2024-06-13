@@ -28,6 +28,7 @@
 
 #include <boost/lexical_cast.hpp>
 #include <boost/iterator.hpp>
+#include <boost/range.hpp>
 
 #include <algorithm>
 #include <iostream>

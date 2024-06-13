@@ -38,6 +38,7 @@
 #include "pxr/imaging/hgiMetal/shaderFunction.h"
 #include "pxr/imaging/hgiMetal/shaderProgram.h"
 #include "pxr/imaging/hgiMetal/texture.h"
+#include "pxr/imaging/hgiMetal/accelerationStructure.h"
 
 #include "pxr/base/trace/trace.h"
 
@@ -113,8 +114,11 @@ HgiMetal::HgiMetal(id<MTLDevice> device)
     _captureScopeFullFrame.label =
         [NSString stringWithFormat:@"Full Hydra Frame"];
     
-    [[MTLCaptureManager sharedCaptureManager]
-        setDefaultCaptureScope:_captureScopeFullFrame];
+//    [[MTLCaptureManager sharedCaptureManager]
+//        setDefaultCaptureScope:_captureScopeFullFrame];
+    MTLCaptureDescriptor* desc = [MTLCaptureDescriptor new];
+    desc.captureObject = _device;
+    [[MTLCaptureManager sharedCaptureManager] startCaptureWithDescriptor:desc error:nil];
 
 #if !__has_feature(objc_arc)
     _pool = nil;
@@ -182,6 +186,20 @@ HgiMetal::CreateBlitCmds()
         _currentCmds = blitCmds;
     }
     return HgiBlitCmdsUniquePtr(blitCmds);
+}
+
+HgiAccelerationStructureCmdsUniquePtr
+HgiMetal::CreateAccelerationStructureCmds()
+{
+    HgiMetalAccelerationStructureCmds* cmds(new HgiMetalAccelerationStructureCmds(this));
+    return HgiAccelerationStructureCmdsUniquePtr(cmds);
+}
+
+HgiRayTracingCmdsUniquePtr
+HgiMetal::CreateRayTracingCmds()
+{
+    HgiMetalRayTracingCmds* cmds(new HgiMetalRayTracingCmds(this));
+    return HgiRayTracingCmdsUniquePtr(cmds);
 }
 
 HgiTextureHandle
@@ -320,6 +338,19 @@ HgiMetal::DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle)
     _TrashObject(pipeHandle);
 }
 
+HgiRayTracingPipelineHandle
+HgiMetal::CreateRayTracingPipeline(HgiRayTracingPipelineDesc const& desc)
+{
+    return HgiRayTracingPipelineHandle(
+       new HgiMetalRayTracingPipeline(this, desc), GetUniqueId());
+}
+
+void
+HgiMetal::DestroyRayTracingPipeline(HgiRayTracingPipelineHandle* pipeHandle)
+{
+    // TrashObject(pipeHandle, GetGarbageCollector()->GetRayTracingPipelineList());
+}
+
 TfToken const&
 HgiMetal::GetAPIName() const {
     return HgiTokens->Metal;
@@ -334,6 +365,8 @@ HgiMetal::GetCapabilities() const
 void
 HgiMetal::StartFrame()
 {
+//    [[MTLCaptureManager sharedCaptureManager] startCaptureWithScope:_captureScopeFullFrame];
+    
 #if !__has_feature(objc_arc)
     _pool = [[NSAutoreleasePool alloc] init];
 #endif
@@ -353,6 +386,8 @@ HgiMetal::StartFrame()
 void
 HgiMetal::EndFrame()
 {
+    [[MTLCaptureManager sharedCaptureManager] stopCapture];
+    
     if (--_frameDepth == 0) {
         [_captureScopeFullFrame endScope];
     }
@@ -363,6 +398,37 @@ HgiMetal::EndFrame()
         _pool = nil;
     }
 #endif
+}
+
+HgiAccelerationStructureHandle HgiMetal::CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) 
+{
+     return HgiAccelerationStructureHandle(
+         new HgiMetalAccelerationStructure(this, desc),
+         GetUniqueId());
+}
+
+void HgiMetal::DestroyAccelerationStructure(HgiAccelerationStructureHandle* accelStructHandle) 
+{
+    delete accelStructHandle->Get();
+}
+
+HgiAccelerationStructureGeometryHandle HgiMetal::CreateAccelerationStructureGeometry(HgiAccelerationStructureTriangleGeometryDesc const& desc) 
+{
+    return HgiAccelerationStructureGeometryHandle(
+        new HgiMetalAccelerationStructureGeometry(this, desc),
+        GetUniqueId());
+}
+
+HgiAccelerationStructureGeometryHandle HgiMetal::CreateAccelerationStructureGeometry(HgiAccelerationStructureInstanceGeometryDesc const& desc)
+{
+    return HgiAccelerationStructureGeometryHandle(
+        new HgiMetalAccelerationStructureGeometry(this, desc),
+        GetUniqueId());
+}
+
+void HgiMetal::DestroyAccelerationStructureGeometry(HgiAccelerationStructureGeometryHandle* accelStructHandle) 
+{
+    delete accelStructHandle->Get();
 }
 
 id<MTLCommandQueue>
@@ -420,6 +486,10 @@ HgiMetal::CommitSecondaryCommandBuffer(
     id<MTLCommandBuffer> commandBuffer,
     CommitCommandBufferWaitType waitType)
 {
+    [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+        int dummy = 5;
+    }];
+    
     [commandBuffer commit];
     if (waitType == CommitCommandBuffer_WaitUntilScheduled) {
         [commandBuffer waitUntilScheduled];

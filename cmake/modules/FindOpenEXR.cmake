@@ -56,6 +56,10 @@ if(OPENEXR_INCLUDE_DIR)
   endif()
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
+  SET(LIB_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+endif()
+
 foreach(OPENEXR_LIB
     Half
     Iex
@@ -70,8 +74,8 @@ foreach(OPENEXR_LIB
     # using both versioned and unversioned names.
     find_library(OPENEXR_${OPENEXR_LIB}_LIBRARY
         NAMES
-            ${OPENEXR_LIB}-${OPENEXR_MAJOR_VERSION}_${OPENEXR_MINOR_VERSION}
-            ${OPENEXR_LIB}
+            ${OPENEXR_LIB}-${OPENEXR_MAJOR_VERSION}_${OPENEXR_MINOR_VERSION}${LIB_POSTFIX}
+            ${OPENEXR_LIB}${LIB_POSTFIX}
         HINTS
             "${OPENEXR_LOCATION}"
             "$ENV{OPENEXR_LOCATION}"

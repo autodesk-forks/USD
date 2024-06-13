@@ -81,9 +81,11 @@ _MakeNewPlatformDefaultHgi(HgiDeviceCapabilities requirements)
     if ((requirements & HgiDeviceCapabilitiesBitsRayTracing) || TfGetEnvSetting(HGI_ENABLE_VULKAN)) {
         #if defined(PXR_VULKAN_SUPPORT_ENABLED)
             hgiType = "HgiVulkan";
+        #elif defined(PXR_METAL_SUPPORT_ENABLED)
+            hgiType = "HgiMetal";
         #else
             TF_CODING_ERROR(
-                "Build requires PXR_VULKAN_SUPPORT_ENABLED=true to use Vulkan");
+                "Build requires PXR_VULKAN_SUPPORT_ENABLED=true to use Vulkan or PXR_METAL_SUPPORT_ENABLED=true to use Metal");
         #endif
     }
 

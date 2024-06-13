@@ -29,7 +29,7 @@
 #include "pxr/imaging/hgi/rayTracingPipeline.h"
 #include "pxr/imaging/hgi/accelerationStructure.h"
 #include "pxr/imaging/hgi/resourceBindings.h"
-#include "pxr/imaging/hgi/cmds.h"
+#include "pxr/imaging/hgi/computeCmds.h"
 #include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE

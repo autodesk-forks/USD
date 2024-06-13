@@ -792,6 +792,7 @@ enum HgiAccelerationStructureType {
 enum HgiIndexType {
     HgiIndexTypeUInt32,
     HgiIndexTypeUInt16,
+    HgiIndexTypeCount,
 };
 
 enum HgiAccelerationStructureBuildFlags {

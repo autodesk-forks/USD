@@ -22,6 +22,10 @@
 # language governing permissions and limitations under the Apache License.
 #
 
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
+  SET(LIB_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+endif()
+
 if(UNIX)
     find_path(OIIO_BASE_DIR
             include/OpenImageIO/oiioversion.h
@@ -31,7 +35,7 @@ if(UNIX)
             "/opt/oiio"
     )
     find_path(OIIO_LIBRARY_DIR
-            libOpenImageIO.so
+            libOpenImageIO${LIB_POSTFIX}.so
         HINTS
             "${OIIO_LOCATION}"
             "$ENV{OIIO_LOCATION}"
@@ -49,7 +53,7 @@ elseif(WIN32)
             "$ENV{OIIO_LOCATION}"
     )
     find_path(OIIO_LIBRARY_DIR
-            OpenImageIO.lib
+            OpenImageIO${LIB_POSTFIX}.lib
         HINTS
             "${OIIO_LOCATION}"
             "$ENV{OIIO_LOCATION}"
@@ -81,7 +85,7 @@ foreach(OIIO_LIB
     )
 
     find_library(OIIO_${OIIO_LIB}_LIBRARY
-            ${OIIO_LIB}
+            ${OIIO_LIB}${LIB_POSTFIX}
         HINTS
             "${OIIO_LOCATION}"
             "$ENV{OIIO_LOCATION}"

@@ -681,7 +681,7 @@ ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
 if MacOS():
     # This version of boost resolves Python3 compatibilty issues on Big Sur and Monterey and is
     # compatible with Python 2.7 through Python 3.10
-    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.tar.gz"
+    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.84.0/source/boost_1_84_0.tar.gz"
     BOOST_VERSION_FILE = "include/boost/version.hpp"
 elif Linux():
     BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
@@ -1541,6 +1541,11 @@ def InstallUSD(context, force, buildArgs):
         else:
             extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=OFF')
 
+        if context.buildMetal:
+            extraArgs.append('-DPXR_ENABLE_METAL_SUPPORT=ON')
+        else:
+            extraArgs.append('-DPXR_ENABLE_METAL_SUPPORT=OFF')
+
         if context.buildTools:
             extraArgs.append('-DPXR_BUILD_USD_TOOLS=ON')
         else:
@@ -1794,6 +1799,11 @@ subgroup.add_argument("--vulkan", dest="build_vulkan", action="store_true",
 subgroup.add_argument("--no-vulkan", dest="build_vulkan", action="store_false",
                       help="Do not build vulkan")
 subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--metal", dest="build_metal", action="store_true",
+                      default=False, help="Build metal")
+subgroup.add_argument("--no-metal", dest="build_metal", action="store_false",
+                      help="Do not build Metal (default)")
+subgroup = group.add_mutually_exclusive_group()
 subgroup.add_argument("--tools", dest="build_tools", action="store_true",
                      default=True, help="Build USD tools (default)")
 subgroup.add_argument("--no-tools", dest="build_tools", action="store_false",
@@ -2015,6 +2025,7 @@ class InstallContext:
         self.buildExamples = args.build_examples
         self.buildTutorials = args.build_tutorials
         self.buildVulkan = args.build_vulkan
+        self.buildMetal = args.build_metal
         self.buildTools = args.build_tools
 
         # - Imaging
@@ -2275,6 +2286,7 @@ summaryMsg += """\
     Examples                    {buildExamples}
     Tutorials                   {buildTutorials}
     Vulkan                      {buildVulkan}
+    Metal                       {buildMetal}
     Tools                       {buildTools}
     Alembic Plugin              {buildAlembic}
       HDF5 support:             {enableHDF5}
@@ -2335,6 +2347,7 @@ summaryMsg = summaryMsg.format(
     buildExamples=("On" if context.buildExamples else "Off"),
     buildTutorials=("On" if context.buildTutorials else "Off"),
     buildVulkan=("On" if context.buildVulkan else "Off"),
+    buildMetal=("On" if context.buildMetal else "Off"),
     buildTools=("On" if context.buildTools else "Off"),
     buildAlembic=("On" if context.buildAlembic else "Off"),
     buildDraco=("On" if context.buildDraco else "Off"),

@@ -170,6 +170,51 @@ constexpr bool _CompileTimeValidateHgiVertexFormatTable() {
 static_assert(_CompileTimeValidateHgiVertexFormatTable(),
               "_VertexFormatDesc array out of sync with HgiFormat enum");
 
+struct {
+    HgiFormat hgiFormat;
+    MTLAttributeFormat metalAF;
+} static const  _attributeFormatTable[] =
+{
+    {HgiFormatUNorm8,            MTLAttributeFormatUCharNormalized},
+    {HgiFormatUNorm8Vec2,        MTLAttributeFormatUChar2Normalized},
+    {HgiFormatUNorm8Vec4,        MTLAttributeFormatUChar4Normalized},
+    {HgiFormatSNorm8,            MTLAttributeFormatCharNormalized},
+    {HgiFormatSNorm8Vec2,        MTLAttributeFormatChar2Normalized},
+    {HgiFormatSNorm8Vec4,        MTLAttributeFormatChar4Normalized},
+    {HgiFormatFloat16,           MTLAttributeFormatHalf},
+    {HgiFormatFloat16Vec2,       MTLAttributeFormatHalf2},
+    {HgiFormatFloat16Vec3,       MTLAttributeFormatHalf3},
+    {HgiFormatFloat16Vec4,       MTLAttributeFormatHalf4},
+    {HgiFormatFloat32,           MTLAttributeFormatFloat},
+    {HgiFormatFloat32Vec2,       MTLAttributeFormatFloat2},
+    {HgiFormatFloat32Vec3,       MTLAttributeFormatFloat3},
+    {HgiFormatFloat32Vec4,       MTLAttributeFormatFloat4},
+    {HgiFormatInt16,             MTLAttributeFormatShort},
+    {HgiFormatInt16Vec2,         MTLAttributeFormatShort2},
+    {HgiFormatInt16Vec3,         MTLAttributeFormatShort3},
+    {HgiFormatInt16Vec4,         MTLAttributeFormatShort4},
+    {HgiFormatUInt16,            MTLAttributeFormatUShort},
+    {HgiFormatUInt16Vec2,        MTLAttributeFormatUShort2},
+    {HgiFormatUInt16Vec3,        MTLAttributeFormatUShort3},
+    {HgiFormatUInt16Vec4,        MTLAttributeFormatUShort4},
+    {HgiFormatInt32,             MTLAttributeFormatInt},
+    {HgiFormatInt32Vec2,         MTLAttributeFormatInt2},
+    {HgiFormatInt32Vec3,         MTLAttributeFormatInt3},
+    {HgiFormatInt32Vec4,         MTLAttributeFormatInt4},
+    {HgiFormatUNorm8Vec4srgb,    MTLAttributeFormatInvalid},
+    {HgiFormatBC6FloatVec3,      MTLAttributeFormatInvalid},
+    {HgiFormatBC6UFloatVec3,     MTLAttributeFormatInvalid},
+    {HgiFormatBC7UNorm8Vec4,     MTLAttributeFormatInvalid},
+    {HgiFormatBC7UNorm8Vec4srgb, MTLAttributeFormatInvalid},
+    {HgiFormatBC1UNorm8Vec4,     MTLAttributeFormatInvalid},
+    {HgiFormatBC3UNorm8Vec4,     MTLAttributeFormatInvalid},
+    {HgiFormatFloat32UInt8,      MTLAttributeFormatInvalid},
+    {HgiFormatPackedInt1010102,  MTLAttributeFormatInvalid},
+};
+
+static_assert(TfArraySize(_attributeFormatTable) == HgiFormatCount,
+              "_attributeFormatTable array out of sync with HgiFormat enum");
+
 //
 // HgiCullMode
 //
@@ -444,6 +489,17 @@ struct {
                                 MTLPrimitiveTypeTriangle /*Invalid*/}
 };
 
+struct {
+    HgiIndexType hgiIndexType;
+    MTLIndexType metalIT;
+} static const _indexTypeTable[HgiIndexTypeCount] = {
+    {HgiIndexTypeUInt32, MTLIndexTypeUInt32},
+    {HgiIndexTypeUInt16, MTLIndexTypeUInt16},
+};
+
+static_assert(TfArraySize(_indexTypeTable) == HgiIndexTypeCount,
+              "_indexTypeTable array out of sync with HgiIndexType enum");
+
 MTLPixelFormat
 HgiMetalConversions::GetPixelFormat(HgiFormat inFormat, HgiTextureUsage inUsage)
 {
@@ -608,6 +664,20 @@ HgiMetalConversions::GetColorWriteMask(HgiColorMask mask)
             | ((mask & HgiColorMaskAlpha) ? MTLColorWriteMaskAlpha : 0);
     
     return mtlMask;
+}
+
+MTLIndexType
+HgiMetalConversions::GetIndexType(HgiIndexType type)
+{
+    return _indexTypeTable[type].metalIT;
+}
+
+MTLAttributeFormat
+HgiMetalConversions::GetAttributeFormat(HgiFormat format)
+{
+    if(format == HgiFormatInvalid)
+        return MTLAttributeFormatInvalid;
+    return _attributeFormatTable[format].metalAF;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

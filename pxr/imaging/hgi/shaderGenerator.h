@@ -74,7 +74,7 @@ protected:
     HGI_API
     HgiShaderStage _GetShaderStage() const;
 
-private:
+protected:
     const HgiShaderFunctionDesc &_descriptor;
 
     // This is used if the descriptor does not specify a string

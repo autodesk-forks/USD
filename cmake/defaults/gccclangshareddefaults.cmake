@@ -48,6 +48,21 @@ if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
     endif()
 endif()
 
+# Disabling for now.
+_disable_warning("unused-private-field")
+_disable_warning("self-assign-overloaded")
+_disable_warning("pessimizing-move")
+_disable_warning("unneeded-internal-declaration")
+_disable_warning("unused-function")
+_disable_warning("bitwise-instead-of-logical")
+_disable_warning("expansion-to-defined")
+_disable_warning("range-loop-construct")
+_disable_warning("non-c-typedef-for-linkage")
+_disable_warning("unused-but-set-variable")
+_disable_warning("potentially-evaluated-expression")
+_disable_warning("undefined-var-template")
+_disable_warning("unused-lambda-capture")
+
 # If using pthreads then tell the compiler.  This should automatically cause
 # the linker to pull in the pthread library if necessary so we also clear
 # PXR_THREAD_LIBS.
