@@ -1771,7 +1771,7 @@ def InstallDawn(context, force, buildArgs):
                 '-DDAWN_USE_GLFW=OFF'
             ]
             if Windows():
-                cmakeOptions+='-DBUILD_SHARED_LIBS=OFF'
+                cmakeOptions.append('-DBUILD_SHARED_LIBS=OFF')
             cmakeOptions += TINT_CMAKE_OPTIONS
             cmakeOptions += buildArgs
             buildDir = RunCMake(context, force, cmakeOptions)
