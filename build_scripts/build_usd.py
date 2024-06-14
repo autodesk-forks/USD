@@ -1735,6 +1735,7 @@ def InstallDawn(context, force, buildArgs):
         with CurrentWorkingDirectory(srcDir):
             required_submodules = [
                 'third_party/protobuf',
+                'third_party/vulkan-utility-libraries/src',
                 'third_party/spirv-headers/src',
                 'third_party/spirv-tools/src',
                 'third_party/abseil-cpp',
@@ -1742,7 +1743,6 @@ def InstallDawn(context, force, buildArgs):
                 'third_party/vulkan-headers/src',
                 'third_party/jinja2',
                 'third_party/markupsafe',
-                'third_party/glslang/src'
             ]
 
             PatchFile("third_party/CMakeLists.txt",
