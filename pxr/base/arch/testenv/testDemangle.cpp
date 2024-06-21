@@ -103,7 +103,7 @@ int main()
     // to interpret multiple right angle brackets in nested template
     // declarations. The implementation of the C++ ABI has been updated
     // accordingly starting with Clang 14 on macOS 13.3
-#if defined(MAC_OS_VERSION_13_3)
+#if defined(MAC_OS_VERSION_13_3) || defined(EMSCRIPTEN)
     const bool improvedAngleBracketDemangling = true;
 #else
     const bool improvedAngleBracketDemangling = false;
