@@ -100,17 +100,17 @@ struct {
     wgpu::VertexFormat webGPUVertexFormat;
 } static const _formatTable[] =
     {
-            {HgiFormatUNorm8,           wgpu::VertexFormat::Undefined},
+            {HgiFormatUNorm8,           wgpu::VertexFormat::Unorm8x2},  // Not supported by WebGPU
             {HgiFormatUNorm8Vec2,       wgpu::VertexFormat::Unorm8x2},
             {HgiFormatUNorm8Vec4,       wgpu::VertexFormat::Unorm8x4},
 
-            {HgiFormatSNorm8,           wgpu::VertexFormat::Undefined},
+            {HgiFormatSNorm8,           wgpu::VertexFormat::Snorm8x2},
             {HgiFormatSNorm8Vec2,       wgpu::VertexFormat::Snorm8x2},
             {HgiFormatSNorm8Vec4,       wgpu::VertexFormat::Snorm8x4},
 
-            {HgiFormatFloat16,          wgpu::VertexFormat::Undefined},
+            {HgiFormatFloat16,          wgpu::VertexFormat::Float16x2},  // Not supported by WebGPU
             {HgiFormatFloat16Vec2,      wgpu::VertexFormat::Float16x2},
-            {HgiFormatFloat16Vec3,      wgpu::VertexFormat::Undefined},
+            {HgiFormatFloat16Vec3,      wgpu::VertexFormat::Float16x4},  // Not supported by WebGPU
             {HgiFormatFloat16Vec4,      wgpu::VertexFormat::Float16x4},
 
             {HgiFormatFloat32,          wgpu::VertexFormat::Float32},
@@ -118,31 +118,31 @@ struct {
             {HgiFormatFloat32Vec3,      wgpu::VertexFormat::Float32x3},
             {HgiFormatFloat32Vec4,      wgpu::VertexFormat::Float32x4},
 
-            {HgiFormatInt16,            wgpu::VertexFormat::Undefined},
-            {HgiFormatInt16Vec2,        wgpu::VertexFormat::Undefined},
-            {HgiFormatInt16Vec3,        wgpu::VertexFormat::Undefined},
-            {HgiFormatInt16Vec4,        wgpu::VertexFormat::Undefined},
+            {HgiFormatInt16,            wgpu::VertexFormat::Uint16x2},   // Not supported by WebGPU
+            {HgiFormatInt16Vec2,        wgpu::VertexFormat::Uint16x2},   // Not supported by WebGPU
+            {HgiFormatInt16Vec3,        wgpu::VertexFormat::Uint16x4},   // Not supported by WebGPU
+            {HgiFormatInt16Vec4,        wgpu::VertexFormat::Uint16x4},   // Not supported by WebGPU
 
-            {HgiFormatUInt16,           wgpu::VertexFormat::Undefined},
-            {HgiFormatUInt16Vec2,       wgpu::VertexFormat::Undefined},
-            {HgiFormatUInt16Vec3,       wgpu::VertexFormat::Undefined},
-            {HgiFormatUInt16Vec4,       wgpu::VertexFormat::Undefined},
+            {HgiFormatUInt16,           wgpu::VertexFormat::Uint16x2},   // Not supported by WebGPU
+            {HgiFormatUInt16Vec2,       wgpu::VertexFormat::Uint16x2},
+            {HgiFormatUInt16Vec3,       wgpu::VertexFormat::Uint16x4},   // Not supported by WebGPU
+            {HgiFormatUInt16Vec4,       wgpu::VertexFormat::Uint16x4},
 
             {HgiFormatInt32,            wgpu::VertexFormat::Sint32},
             {HgiFormatInt32Vec2,        wgpu::VertexFormat::Sint32x2},
             {HgiFormatInt32Vec3,        wgpu::VertexFormat::Sint32x3},
             {HgiFormatInt32Vec4,        wgpu::VertexFormat::Sint32x4},
 
-            {HgiFormatUNorm8Vec4srgb,   wgpu::VertexFormat::Undefined},
+            {HgiFormatUNorm8Vec4srgb,   wgpu::VertexFormat::Unorm8x4},
 
-            {HgiFormatBC6FloatVec3,     wgpu::VertexFormat::Undefined},
-            {HgiFormatBC6UFloatVec3,    wgpu::VertexFormat::Undefined},
-            {HgiFormatBC7UNorm8Vec4,    wgpu::VertexFormat::Undefined},
-            {HgiFormatBC7UNorm8Vec4srgb,wgpu::VertexFormat::Undefined},
-            {HgiFormatBC1UNorm8Vec4,    wgpu::VertexFormat::Undefined},
-            {HgiFormatBC3UNorm8Vec4,    wgpu::VertexFormat::Undefined},
+            {HgiFormatBC6FloatVec3,     wgpu::VertexFormat::Float32x4},  // Not supported by WebGPU
+            {HgiFormatBC6UFloatVec3,    wgpu::VertexFormat::Float32x4},  // Not supported by WebGPU
+            {HgiFormatBC7UNorm8Vec4,    wgpu::VertexFormat::Float32x4},  // Not supported by WebGPU
+            {HgiFormatBC7UNorm8Vec4srgb,wgpu::VertexFormat::Float32x4},  // Not supported by WebGPU
+            {HgiFormatBC1UNorm8Vec4,    wgpu::VertexFormat::Float32x4},  // Not supported by WebGPU
+            {HgiFormatBC3UNorm8Vec4,    wgpu::VertexFormat::Float32x4},  // Not supported by WebGPU
 
-            {HgiFormatFloat32UInt8,     wgpu::VertexFormat::Undefined},
+            {HgiFormatFloat32UInt8,     wgpu::VertexFormat::Float32x2},
 #ifdef EMSCRIPTEN
             // TODO: webgpu_cpp.h header hasn't been updated to support Unorm10_10_10_2
             {HgiFormatPackedInt1010102, wgpu::VertexFormat::Undefined},
@@ -501,13 +501,7 @@ HgiWebGPUConversions::GetVertexFormat(HgiFormat inFormat)
         return wgpu::VertexFormat::Float32x4;
     }
 
-    auto outFormat = _formatTable[inFormat].webGPUVertexFormat;
-    if (outFormat == wgpu::VertexFormat::Undefined)
-    {
-        TF_CODING_ERROR("Unsupported HgiFormat %d", inFormat);
-        return wgpu::VertexFormat::Float32x4;
-    }
-    return outFormat;
+    return _formatTable[inFormat].webGPUVertexFormat;;
 }
 
 wgpu::CullMode

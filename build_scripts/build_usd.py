@@ -1594,9 +1594,9 @@ THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 def InstallGlslang(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):
         if context.targetWasm:
-            srcDir = os.path.join(os.getcwd(), "tint", "third_party/vulkan-deps/glslang/src")
+            srcDir = os.path.join(os.getcwd(), "tint", "third_party", "vulkan-deps", "glslang", "src")
         else:
-            srcDir = os.path.join(os.getcwd(), "dawn", "third_party/glslang/src")
+            srcDir = os.path.join(os.getcwd(), "dawn", "third_party", "glslang", "src")
 
         if not os.path.isdir(srcDir):
             raise RuntimeError("glslang not found at " + srcDir + ". This is probably because dawn or " +
@@ -1721,7 +1721,7 @@ TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6531"
+DAWN_CHROMIUM_VERSION = "6549"
 
 def InstallDawn(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):
@@ -1741,6 +1741,7 @@ def InstallDawn(context, force, buildArgs):
                 'third_party/abseil-cpp',
                 'third_party/libprotobuf-mutator/src',
                 'third_party/vulkan-headers/src',
+                'third_party/glslang/src',
                 'third_party/jinja2',
                 'third_party/markupsafe',
             ]
@@ -1754,8 +1755,7 @@ def InstallDawn(context, force, buildArgs):
 
             if Windows():
                 required_submodules += [
-                    'third_party/dxheaders',
-                    'third_party/vulkan-deps/vulkan-utility-libraries/src',
+                    'third_party/dxheaders'
                 ]
 
                 # Dawn native cmake needs revise for DX12
@@ -1768,10 +1768,13 @@ def InstallDawn(context, force, buildArgs):
             cmakeOptions = [
                 '-DDAWN_BUILD_SAMPLES=OFF',
                 '-DDAWN_ENABLE_INSTALL=ON',
-                '-DDAWN_USE_GLFW=OFF'
+                '-DDAWN_USE_GLFW=OFF',
             ]
             if Windows():
                 cmakeOptions.append('-DBUILD_SHARED_LIBS=OFF')
+            else:
+                cmakeOptions.append('-DBUILD_SHARED_LIBS=ON')
+
             cmakeOptions += TINT_CMAKE_OPTIONS
             cmakeOptions += buildArgs
             buildDir = RunCMake(context, force, cmakeOptions)
@@ -1796,9 +1799,15 @@ def InstallDawn(context, force, buildArgs):
         CopyFiles(context, "third_party/spirv-tools/source/opt/{buildConfig}*SPIRV-Tools-opt.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/base/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/container/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/crc/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/debugging/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/hash/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/numeric/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/profiling/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/abseil/absl/strings/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/synchronization/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/time/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/abseil/absl/types/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "src/tint/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         # Extra include files
         CopyFiles(context, "gen/include/dawn/*.*", "include/dawn")

@@ -3202,6 +3202,13 @@ static bool hasExt(const char * ext,
     return false;
 }
 
+#if defined(__EMSCRIPTEN__)
+// Emscripten handles mapping OpeGL functions and the implementation of WebGL is handled by the browser
+static bool loadSymbols()
+{
+    return true;
+}
+#else
 static bool loadSymbols()
 {
     glGetIntegerv = (PFNGLGETINTEGERVPROC) loadFunction("glGetIntegerv");
@@ -6357,6 +6364,7 @@ static bool loadSymbols()
 
     return true;
 }
+#endif
 
 const GLubyte * gluErrorString(GLenum error)
 {

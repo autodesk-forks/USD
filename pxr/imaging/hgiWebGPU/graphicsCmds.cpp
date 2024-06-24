@@ -245,7 +245,6 @@ HgiWebGPUGraphicsCmds::Draw(
     _ApplyPendingUpdates();
 
     _renderPassEncoder.Draw(vertexCount, instanceCount, baseVertex, 0);
-    _hasWork = true;
 }
 
 void
@@ -280,7 +279,6 @@ HgiWebGPUGraphicsCmds::DrawIndexed(
     uint32_t const baseIndex = indexBufferByteOffset / sizeof(uint32_t);
     _renderPassEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0, ibo->GetByteSizeOfResource());
     _renderPassEncoder.DrawIndexed(indexCount, instanceCount, baseIndex, baseVertex, baseInstance);
-    _hasWork = true;
 }
 
 void
@@ -332,6 +330,7 @@ HgiWebGPUGraphicsCmds::_ApplyPendingUpdates()
     for (auto const& fn : _pendingUpdates)
         fn();
 
+    _hasWork = true;
     _pendingUpdates.clear();
 }
 
@@ -343,12 +342,14 @@ HgiWebGPUGraphicsCmds::_EndRenderPass()
         _renderPassEncoder.End();
         _renderPassEncoder = nullptr;
 
-        auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
-        if (depthTarget) {
-            HgiTextureDesc depthDesc = depthTarget->GetDescriptor();
-            if(depthDesc.sampleCount > 1 && _descriptor.depthResolveTexture) {
-                auto depthResolveTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthResolveTexture.Get());
-                _hgi->ResolveDepth(_commandEncoder, *depthTarget, *depthResolveTarget);
+        if (_hasWork)  {
+            auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
+            if (depthTarget) {
+                HgiTextureDesc depthDesc = depthTarget->GetDescriptor();
+                if(depthDesc.sampleCount > 1 && _descriptor.depthResolveTexture) {
+                    auto depthResolveTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthResolveTexture.Get());
+                    _hgi->ResolveDepth(_commandEncoder, *depthTarget, *depthResolveTarget);
+                }
             }
         }
 
