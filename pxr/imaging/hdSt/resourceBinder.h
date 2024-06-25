@@ -357,7 +357,8 @@ public:
                          MetaData::DrawingCoordBufferBinding const &dcBinding,
                          bool instanceDraw,
                          HdStBindingRequestVector const &customBindings,
-                         HgiCapabilities const *capabilities);
+                         HgiCapabilities const *capabilities,
+                         TfToken const &apiName);
 
     /// Assign all binding points used in computation.
     /// Returns metadata to be used for codegen.

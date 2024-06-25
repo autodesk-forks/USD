@@ -44,6 +44,7 @@
 #include "pxr/imaging/hgiGL/shaderProgram.h"
 
 #include "pxr/imaging/hgi/resourceBindings.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/tf/staticTokens.h"
 
@@ -195,7 +196,8 @@ HdSt_ResourceBinder::ResolveBindings(
     HdSt_ResourceBinder::MetaData::DrawingCoordBufferBinding const &dcBinding,
     bool instanceDraw,
     HdStBindingRequestVector const &customBindings,
-    HgiCapabilities const *capabilities)
+    HgiCapabilities const *capabilities,
+    TfToken const &apiName)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -207,7 +209,9 @@ HdSt_ResourceBinder::ResolveBindings(
     const bool bindlessTexturesEnabled = 
         capabilities->IsSet(HgiDeviceCapabilitiesBitsBindlessTextures);
     const bool isMetal =
-        capabilities->IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
+            apiName == HgiTokens->Metal;
+    const bool isWebGPU =
+            apiName == HgiTokens->WebGPU;
 
     HdStBinding::Type arrayBufferBindingType = HdStBinding::SSBO;
     if (bindlessBuffersEnabled) {
@@ -639,12 +643,14 @@ HdSt_ResourceBinder::ResolveBindings(
             HdTupleType valueType = instanceIndices->GetTupleType();
                 TfToken glType =
                     HdStGLConversions::GetGLSLTypename(valueType.type);
+            // TODO: WebGPU doesn't support vertex buffers to be writable, so we disable it with the caveat that
+            // it will impact culling execution
             metaDataOut->culledInstanceIndexArrayBinding =
                 MetaData::BindingDeclaration(
                     /*name=*/HdInstancerTokens->culledInstanceIndices,
                     /*type=*/glType,
                     /*binding=*/culledInstanceIndexArrayBinding,
-                    /*isWritable=*/true);
+                    /*isWritable=*/!isWebGPU);
         }
     }
 

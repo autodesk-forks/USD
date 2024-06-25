@@ -483,7 +483,8 @@ HdSt_DrawBatch::_DrawingProgram::CompileShader(
                                     instanceDraw,
                                     customBindings,
                                     resourceRegistry->GetHgi()->
-                                        GetCapabilities());
+                                        GetCapabilities(),
+                                    resourceRegistry->GetHgi()->GetAPIName());
 
     HdSt_CodeGen codeGen(_geometricShader, shaders,
                          drawItem->GetMaterialTag(), std::move(metaData));

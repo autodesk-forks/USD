@@ -275,7 +275,8 @@ CodeGenTest(HdSt_ShaderKey const &key, bool useBindlessBuffer,
                            metaData.get(),
                            dcBinding,
                            /*instanced=*/true, empty,
-                           registry->GetHgi()->GetCapabilities());
+                           registry->GetHgi()->GetCapabilities(),
+                           registry->GetHgi()->GetAPIName());
 
     HdSt_CodeGen codeGen(geometricShader, shaders,
                          drawItem.GetMaterialTag(), std::move(metaData));
