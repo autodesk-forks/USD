@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 
 #if defined(ARCH_OS_WINDOWS)
 #include <Windows.h>
@@ -158,8 +159,17 @@ ArchTestCrash(ArchTestCrashMode mode)
         _exit(0);
     }
     else if (childPid == -1) {
+#if defined(EMSCRIPTEN)
+try {
+    throw std::runtime_error("Simulating a crash");
+}
+catch (const std::runtime_error& e) {
+    std::cerr << "Caught an exception: " << e.what() << std::endl;
+}
+#else
         ARCH_WARNING("Failed to fork to test a crash");
         _exit(1);
+#endif
     }
 
     // Wait for the child.

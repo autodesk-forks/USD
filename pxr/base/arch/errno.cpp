@@ -29,6 +29,9 @@
 #if defined(ARCH_OS_WINDOWS)
 #include <Windows.h>
 #endif
+#if defined(EMSCRIPTEN)
+#include <locale.h>
+#endif
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -42,8 +45,19 @@ std::string
 ArchStrerror(int errorCode)
 {
     char msg_buf[256];
-   
-#if defined(_GNU_SOURCE)
+
+#if defined(EMSCRIPTEN)
+    locale_t locale = newlocale(LC_ALL_MASK, "C", NULL);
+    if (locale == (locale_t)0) {
+        return "Failed to create locale";
+    }
+    const char* msg = strerror_l(errorCode, locale);
+    freelocale(locale);
+    if (msg == nullptr) {
+        return "Unknown error code";
+    }
+    return std::string(msg);  
+#elif defined(_GNU_SOURCE)
     // from strerror_r(3):
     //
     //   The GNU-specific strerror_r() returns a pointer to a string
@@ -54,7 +68,7 @@ ArchStrerror(int errorCode)
     //   (the string may be truncated if buflen is too small and errnum is
     //   unknown). The string always includes a terminating null byte.
     //
-    return (char*) strerror_r(errorCode, msg_buf, 256);
+    return (char*) strerror_r(errorCode, msg_buf, 256);  
 #elif !defined(ARCH_COMPILER_MSVC)
     strerror_r(errorCode, msg_buf, 256);
 #else
