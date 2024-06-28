@@ -7,6 +7,22 @@ if (NOT ${PXR_BUILD_GPU_SUPPORT} OR NOT ${PXR_ENABLE_WEBGPU_SUPPORT})
     return()
 endif()
 
+# build the Tint and shaderc/glslang libraries as modules
+if (EMSCRIPTEN)
+    find_library(TINT_LIBRARY tint)
+    find_library(SHADERC_LIBRARY shaderc)
+    find_library(GLSLANG_LIBRARY glslang)
+
+    add_library(tint MODULE IMPORTED GLOBAL)
+    set_target_properties(tint PROPERTIES IMPORTED_LOCATION ${TINT_LIBRARY})
+
+    add_library(shaderc MODULE IMPORTED GLOBAL)
+    set_target_properties(shaderc PROPERTIES IMPORTED_LOCATION ${SHADERC_LIBRARY})
+
+    add_library(glslang MODULE IMPORTED GLOBAL)
+    set_target_properties(glslang PROPERTIES IMPORTED_LOCATION ${GLSLANG_LIBRARY})
+endif()
+
 if(NOT EMSCRIPTEN)
     message(STATUS "DAWN WebGPU support is ON")
     set(PXR_ENABLE_PRECOMPILED_HEADERS OFF)
@@ -46,7 +62,8 @@ pxr_library(hgiWebGPU
         glslang::SPIRV
         glslang::GenericCodeGen
         ${SPIRV-Tools-opt_LIBRARIES}
-        ${Tint_LIBRARIES}
+        tint
+        shaderc
 
     PUBLIC_CLASSES
         blitCmds
