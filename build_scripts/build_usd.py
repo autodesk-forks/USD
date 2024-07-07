@@ -1600,12 +1600,27 @@ def InstallGlslang(context, force, buildArgs):
 
         if not os.path.isdir(srcDir):
             raise RuntimeError("glslang not found at " + srcDir + ". This is probably because dawn or " +
-               "tint installation was not executed firts")
+               "tint installation was not executed first")
 
         with CurrentWorkingDirectory(srcDir):
 
             if context.buildDebug:
                 PatchFile("CMakeLists.txt", [('set(CMAKE_DEBUG_POSTFIX "d")','set(CMAKE_DEBUG_POSTFIX "")')])
+
+            import platform
+
+            # Get the current operating system
+            current_os = platform.system()
+
+            # Determine the dynamic library extension based on the operating system
+            if current_os == "Linux":
+                lib_ext = ".so"
+            elif current_os == "Darwin":
+                lib_ext = ".dylib"
+            elif current_os == "Windows":
+                lib_ext = ".dll"
+            else:
+                raise ValueError("Unsupported operating system: " + current_os)
 
             cmakeOptions = [
                 '-DALLOW_EXTERNAL_SPIRV_TOOLS=ON',
@@ -1623,6 +1638,9 @@ def InstallGlslang(context, force, buildArgs):
                 ]
             cmakeOptions += buildArgs
             RunCMake(context, force, cmakeOptions)
+
+            with CurrentWorkingDirectory(buildDir):
+                CopyFiles(context, "src/glslang/libglslang*" + lib_ext, "lib")
 
 GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangToSpv.h")
 
@@ -1682,6 +1700,21 @@ def InstallTint(context, force, buildArgs):
                  #endif\n""")
             ])
 
+            import platform
+
+            # Get the current operating system
+            current_os = platform.system()
+
+            # Determine the dynamic library extension based on the operating system
+            if current_os == "Linux":
+                lib_ext = ".so"
+            elif current_os == "Darwin":
+                lib_ext = ".dylib"
+            elif current_os == "Windows":
+                lib_ext = ".dll"
+            else:
+                raise ValueError("Unsupported operating system: " + current_os)
+
             cmakeOptions = [
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
                     + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
@@ -1713,7 +1746,7 @@ def InstallTint(context, force, buildArgs):
             CopyDirectory(context, "src/tint", "include/src/tint")
 
         with CurrentWorkingDirectory(buildDir):
-            CopyFiles(context, "src/tint/libtint*.a", "lib")
+            CopyFiles(context, "src/tint/libtint*" + lib_ext, "lib")
 
 
 TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")

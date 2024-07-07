@@ -374,6 +374,9 @@ function(pxr_library NAME)
         PRECOMPILED_HEADER_NAME "${args_PRECOMPILED_HEADER_NAME}"
         LIB_INSTALL_PREFIX_RESULT libInstallPrefix
     )
+    if(PXR_ENABLE_JS_SUPPORT)
+        target_link_options(${NAME} PRIVATE "-sSIDE_MODULE=1")
+    endif()
 
     if(PXR_ENABLE_PYTHON_SUPPORT AND (args_PYMODULE_CPPFILES OR args_PYMODULE_FILES OR args_PYSIDE_UI_FILES))
         _pxr_python_module(
@@ -595,8 +598,8 @@ function(pxr_build_test TEST_NAME)
     )
 
     if (PXR_ENABLE_JS_BINDINGS_SUPPORT)
-        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-lembind")
-        target_link_options(${TEST_NAME} PRIVATE "SHELL:-lembind")
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
     endif()
 
     # Turn PIC ON otherwise ArchGetAddressInfo() on Linux may yield
