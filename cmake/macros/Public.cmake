@@ -374,8 +374,9 @@ function(pxr_library NAME)
         PRECOMPILED_HEADER_NAME "${args_PRECOMPILED_HEADER_NAME}"
         LIB_INSTALL_PREFIX_RESULT libInstallPrefix
     )
-    if(PXR_ENABLE_JS_SUPPORT)
-        target_link_options(${NAME} PRIVATE "-sSIDE_MODULE=1")
+    get_target_property(targetType ${NAME} TYPE)
+    if(${targetType} STREQUAL "INTERFACE_LIBRARY" AND PXR_ENABLE_JS_SUPPORT)
+        target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
     endif()
 
     if(PXR_ENABLE_PYTHON_SUPPORT AND (args_PYMODULE_CPPFILES OR args_PYMODULE_FILES OR args_PYSIDE_UI_FILES))
