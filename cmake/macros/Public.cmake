@@ -374,10 +374,6 @@ function(pxr_library NAME)
         PRECOMPILED_HEADER_NAME "${args_PRECOMPILED_HEADER_NAME}"
         LIB_INSTALL_PREFIX_RESULT libInstallPrefix
     )
-    get_target_property(targetType ${NAME} TYPE)
-    if(${targetType} STREQUAL "INTERFACE_LIBRARY" AND PXR_ENABLE_JS_SUPPORT)
-        target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
-    endif()
 
     if(PXR_ENABLE_PYTHON_SUPPORT AND (args_PYMODULE_CPPFILES OR args_PYMODULE_FILES OR args_PYSIDE_UI_FILES))
         _pxr_python_module(
@@ -391,7 +387,11 @@ function(pxr_library NAME)
             PRECOMPILED_HEADER_NAME ${args_PRECOMPILED_HEADER_NAME}
         )
     endif()
-endfunction()
+    get_target_property(targetType ${NAME} TYPE)
+    if(${targetType} STREQUAL "INTERFACE_LIBRARY" AND PXR_ENABLE_JS_SUPPORT)
+        target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
+    endif()
+    endfunction()
 
 macro(pxr_shared_library NAME)
     pxr_library(${NAME} TYPE "SHARED" ${ARGN})
@@ -406,6 +406,7 @@ macro(pxr_plugin NAME)
         # Not ideal but dynamic linking is not supported yet in the usd build toolchain
         message(STATUS "Building ${NAME} plugin as static library for emscripten support")
         pxr_library(${NAME} TYPE "STATIC" ${ARGN})
+        target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
     else()
         pxr_library(${NAME} TYPE "PLUGIN" ${ARGN})
     endif()
@@ -626,6 +627,11 @@ function(pxr_build_test TEST_NAME)
 
     # XXX -- We shouldn't have to install to run tests.
     if(PXR_ENABLE_JS_SUPPORT)
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        foreach(LIB ${bt_LIBRARIES})
+            set_target_properties(${LIB} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
+        endforeach()
         install(
             FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm
