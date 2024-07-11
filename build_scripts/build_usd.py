@@ -1138,10 +1138,10 @@ def InstallTBB_Emscripten(context, force, buildArgs):
 
         # Run the script from the "x64 Native Tools Command Prompt" of Visual Studio,
         # to get the correct compiler and arch for TBB Emscripten build on windows
-        Run('{emmake} make -j{procs} extra_inc=big_iron.inc tbb {buildArgs}'
-            .format(emmake="emmake.bat" if Windows() else "emmake",
-                    procs=context.numJobs,
-                    buildArgs=" ".join(buildArgs)))
+        Run('{emmake} make CXXFLAGS="-fPIC" -j{procs} extra_inc=big_iron.inc tbb {buildArgs}'.format(
+            emmake="emmake.bat" if Windows() else "emmake",
+            procs=context.numJobs,
+            buildArgs=" ".join(buildArgs)))
 
         # Install both release and debug builds. USD requires the debug
         # libraries when building in debug mode, and installing both

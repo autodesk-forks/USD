@@ -515,6 +515,9 @@ function(pxr_build_test_shared_lib LIBRARY_NAME)
         SHARED
         ${bt_CPPFILES}
     )
+    if(PXR_ENABLE_JS_SUPPORT)
+        set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
+    endif()
     _pxr_target_link_libraries(${LIBRARY_NAME}
         ${bt_LIBRARIES}
     )
