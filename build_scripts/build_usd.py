@@ -1130,6 +1130,15 @@ def InstallTBB_Emscripten(context, force, buildArgs):
         PatchFile("build/linux.emscripten.inc",
                   [("-DUSE_PTHREAD", "-DUSE_PTHREAD -pthread")],
                   multiLineMatches=True)
+        with open('build/big_iron.inc', 'r') as file:
+            lines = file.readlines()
+        # override CXXFLAGS += 
+        for i, line in enumerate(lines):
+            if line.strip().startswith('override CXXFLAGS +='):
+                lines[i] = 'override CXXFLAGS += -fPIC -D__TBB_DYNAMIC_LOAD_ENABLED=0 -D__TBB_SOURCE_DIRECTLY_INCLUDED=1\n'
+        with open('build/big_iron.inc', 'w') as file:
+            file.writelines(lines)
+            
         # By default no config for other platform is available, but the one for linux
         # seems to work fine
         if MacOS():
