@@ -995,6 +995,7 @@ TBB_EMSCRIPTEN_URL = "https://github.com/sdunkel/wasmtbb/archive/refs/heads/mast
 
 def InstallTBB(context, force, buildArgs):
     if context.targetWasm:
+        buildArgs.append("CXXFLAGS=-fPIC")
         InstallTBB_Emscripten(context, force, buildArgs)
     elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
