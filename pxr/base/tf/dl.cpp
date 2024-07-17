@@ -30,6 +30,11 @@
 #include "pxr/base/tf/scriptModuleLoader.h"
 #endif // PXR_PYTHON_SUPPORT_ENABLED
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <dlfcn.h>
+#endif // EMSCRIPTEN_SUPPORT
+
 #include "pxr/base/tf/getenv.h"
 #include <string>
 #include <stdlib.h>
@@ -60,6 +65,15 @@ TfDlopen(
     std::string *error,
     bool loadScriptBindings)
 {
+#ifdef __EMSCRIPTEN__
+    void* handle = dlopen(filename.c_str(), RTLD_NOW);
+    if (!handle) {
+        if (error) {
+            *error = dlerror();
+        }
+    }
+    return handle;
+#else
     TF_DEBUG(TF_DLOPEN).Msg("TfDlopen: [opening] '%s' (flag=%x)...\n",
                             filename.c_str(), flag);
 
@@ -95,6 +109,7 @@ TfDlopen(
 #endif // PXR_PYTHON_SUPPORT_ENABLED
     
     return handle;
+#endif
 }
 
 int
