@@ -1769,6 +1769,7 @@ def InstallDawn(context, force, buildArgs):
                 '-DDAWN_BUILD_SAMPLES=OFF',
                 '-DDAWN_ENABLE_INSTALL=ON',
                 '-DDAWN_USE_GLFW=OFF',
+                '-DABSL_ENABLE_INSTALL=ON'
             ]
             if Windows():
                 cmakeOptions.append('-DBUILD_SHARED_LIBS=OFF')
@@ -1797,17 +1798,6 @@ def InstallDawn(context, force, buildArgs):
         CopyFiles(context, "src/dawn/common/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/spirv-tools/source/{buildConfig}*SPIRV-Tools.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/spirv-tools/source/opt/{buildConfig}*SPIRV-Tools-opt.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/base/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/container/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/crc/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/debugging/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/hash/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/numeric/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/profiling/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/strings/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/synchronization/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/time/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/abseil/absl/types/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "src/tint/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         # Extra include files
         CopyFiles(context, "gen/include/dawn/*.*", "include/dawn")

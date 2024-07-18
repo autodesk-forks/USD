@@ -44,27 +44,17 @@ HgiWebGPUBuffer::HgiWebGPUBuffer(HgiWebGPU *hgi, HgiBufferDesc const & desc)
     bufferDesc.label = desc.debugName.c_str();
     bufferDesc.usage = HgiWebGPUConversions::GetBufferUsage(desc.usage);
 
-    if( desc.usage & HgiBufferUsageIndex32 || desc.usage & HgiBufferUsageVertex || desc.usage & HgiBufferUsageUniform || desc.usage & HgiBufferUsageStorage)
-        bufferDesc.usage |= wgpu::BufferUsage::CopyDst;
-    else
-        bufferDesc.usage |= wgpu::BufferUsage::MapRead;
-
-    // TODO: We basically need to add all usages since we don't know at this point in time in which stage this will be used.
-    // For example, the pxr/imaging/hdSt/vboMemoryManager.cpp#351 sets HgiBufferUsageUniform | HgiBufferUsageVertex
-    // for the points buffer, which is then later used in the pxr/imaging/hdSt/smoothNormals.cpp#75 with a resource
-    // binding of the type storage, resulting in incompatible types
-    bufferDesc.usage |= wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Storage | wgpu::BufferUsage::Index;
+    // There is no information on how the buffer will be used after creation so, we add the possibility to use it
+    // as a src or destination for copy operations.
+    bufferDesc.usage |= wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
 
     bufferDesc.size = desc.byteSize;
     wgpu::Device device = hgi->GetPrimaryDevice();
     _bufferHandle = device.CreateBuffer(&bufferDesc);
 
-    _cpuStagingBuffer.resize(desc.byteSize);
-
     if (desc.initialData) {
         wgpu::Queue queue = hgi->GetQueue();
         queue.WriteBuffer(_bufferHandle, 0, desc.initialData, desc.byteSize);
-        memcpy(_cpuStagingBuffer.data(), desc.initialData, desc.byteSize);
     }
     
     _descriptor.initialData = nullptr;
@@ -73,6 +63,11 @@ HgiWebGPUBuffer::HgiWebGPUBuffer(HgiWebGPU *hgi, HgiBufferDesc const & desc)
 HgiWebGPUBuffer::~HgiWebGPUBuffer()
 {
     _bufferHandle = nullptr;
+
+    if (_cpuStaging) {
+        free(_cpuStaging);
+        _cpuStaging = nullptr;
+    }
 }
 
 size_t
@@ -90,7 +85,14 @@ HgiWebGPUBuffer::GetRawResource() const
 void*
 HgiWebGPUBuffer::GetCPUStagingAddress()
 {
-    return static_cast<void *>(_cpuStagingBuffer.data());
+    if (!_cpuStaging) {
+        _cpuStaging = malloc(_descriptor.byteSize);
+    }
+
+    // This lets the client code memcpy into the cpu staging buffer directly.
+    // The staging data must be explicitly copied to the GPU buffer
+    // via CopyBufferCpuToGpu cmd by the client.
+    return _cpuStaging;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
