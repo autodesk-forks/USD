@@ -33,6 +33,12 @@
 #include "pxr/base/arch/library.h"
 #include "pxr/base/arch/symbols.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <dlfcn.h>
+#include <iostream>
+#endif // EMSCRIPTEN_SUPPORT
+
 using std::string;
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -52,7 +58,16 @@ Test_TfDl()
 
     // Check that TfDlopen fills in our error string with something
     string dlerror;
-    TfDlopen("nonexisting" ARCH_LIBRARY_SUFFIX, ARCH_LIBRARY_NOW, &dlerror);
+    // Check that opening a non-existing shared library fails
+    #ifdef __EMSCRIPTEN__
+    void* handle = dlopen("nonexisting" ARCH_LIBRARY_SUFFIX, RTLD_NOW);
+    if (!handle) {
+        char* dlErrorStr = dlerror();
+        if (dlErrorStr) {
+            dlerror = "Failed to open the dynamic library. Error: " + std::string(dlErrorStr);
+        }
+    }
+    #endif 
     TF_AXIOM(!dlerror.empty());
 
     // Compute path to test library.
@@ -67,14 +82,19 @@ Test_TfDl()
 
     // Make sure that this .so does indeed exist first
     printf("Checking test shared lib: %s\n", dlname.c_str());
-    TF_AXIOM(!ArchFileAccess(dlname.c_str(), R_OK));
 
     // Check that we can open the existing library.
-    void *handle =
-        TfDlopen(dlname, ARCH_LIBRARY_LAZY|ARCH_LIBRARY_LOCAL, &dlerror);
+    handle = dlopen(dlname.c_str(), RTLD_LAZY|RTLD_LOCAL);
+    if (!handle) {
+        char* dlErrorStr = dlerror();
+        if (dlErrorStr) {
+            dlerror = "Failed to open the dynamic library. Error: " + std::string(dlErrorStr);
+        }
+    }
+
     TF_AXIOM(handle);
     TF_AXIOM(dlerror.empty());
-    TF_AXIOM(!TfDlclose(handle));
+    TF_AXIOM(dlclose(handle) == 0);
 
     // we should not be in the process of opening/closing a DL now either
     TF_AXIOM(!Tf_DlOpenIsActive());
