@@ -35,6 +35,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 HgiWebGPUBuffer::HgiWebGPUBuffer(HgiWebGPU *hgi, HgiBufferDesc const & desc)
     : HgiBuffer(desc)
     , _bufferHandle(nullptr)
+    , _cpuStaging(nullptr)
 {
     if (desc.byteSize == 0) {
         TF_CODING_ERROR("Buffers must have a non-zero length");
