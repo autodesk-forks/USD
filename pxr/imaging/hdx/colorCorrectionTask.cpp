@@ -34,7 +34,6 @@
 #include "pxr/imaging/hgi/graphicsCmds.h"
 #include "pxr/imaging/hgi/graphicsCmdsDesc.h"
 #include "pxr/imaging/hgi/hgi.h"
-#include "pxr/imaging/hgi/capabilities.h"
 #include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/work/dispatcher.h"
@@ -893,25 +892,10 @@ HdxColorCorrectionTask::_CreateBufferResources()
     }
 
     // A larger-than screen triangle made to fit the screen.
-    float vertData[3][6] =
+    constexpr float vertData[][6] =
             { { -1,  3, 0, 1,     0, 2 },
               { -1, -1, 0, 1,     0, 0 },
               {  3, -1, 0, 1,     2, 0 } };
-    
-    const bool isYUp = _GetHgi()->GetCapabilities()->IsViewportYUp();
-    
-    //filp the uv coordinate if Y is down
-    if (!isYUp)
-    {
-        vertData[0][4] = 0;
-        vertData[0][5] = -1;
-        
-        vertData[1][4] = 0;
-        vertData[1][5] = 1;
-        
-        vertData[2][4] = 2;
-        vertData[2][5] = 1;
-    }
 
     HgiBufferDesc vboDesc;
     vboDesc.debugName = "HdxColorCorrectionTask VertexBuffer";
