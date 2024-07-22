@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/collectionCache.h"
 #include "pxr/usdImaging/usdImaging/debugCodes.h"
@@ -39,11 +22,13 @@ _IsQueryTrivial(UsdCollectionAPI::MembershipQuery const& query)
 }
 
 void
-UsdImaging_CollectionCache::_MarkCollectionContentDirty(UsdStageWeakPtr const& stage, 
+UsdImaging_CollectionCache::_MarkCollectionContentDirty(
+    UsdStageWeakPtr const& stage, 
     UsdCollectionAPI::MembershipQuery const& query)
 {
     SdfPathSet linkedPaths = UsdComputeIncludedPathsFromCollection(query, stage);
-    std::merge(_dirtyPaths.begin(), _dirtyPaths.end(), linkedPaths.begin(), linkedPaths.end(),
+    std::merge(_dirtyPaths.begin(), _dirtyPaths.end(), 
+        linkedPaths.begin(), linkedPaths.end(),
         std::inserter(_dirtyPaths, _dirtyPaths.begin()));
 }
 
@@ -90,14 +75,15 @@ UsdImaging_CollectionCache::UpdateCollection(UsdCollectionAPI const& c)
     _idForPath[path] = id;
 
     _MarkCollectionContentDirty(stage, query);
-    // Also add the light in the dirty set for it to be marked as collection dirty
     _dirtyPaths.insert(c.GetPrim().GetPath());
 
     return changed;
 }
 
 size_t
-UsdImaging_CollectionCache::RemoveCollection(UsdStageWeakPtr const& stage, SdfPath const& collectionPath)
+UsdImaging_CollectionCache::RemoveCollection(
+    UsdStageWeakPtr const& stage, 
+    SdfPath const& collectionPath)
 {
     std::lock_guard<std::mutex> lock(_mutex);
 

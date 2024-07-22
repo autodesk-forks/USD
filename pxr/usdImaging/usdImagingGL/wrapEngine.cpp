@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include <boost/python/class.hpp>
 #include <boost/python/def.hpp>
@@ -94,9 +77,9 @@ void _SetOverrideWindowPolicy(UsdImagingGLEngine & self,
 {
     extract<CameraUtilConformWindowPolicy> extractor(pyObj);
     if (extractor.check()) {
-        self.SetOverrideWindowPolicy({true, extractor()});
+        self.SetOverrideWindowPolicy(extractor());
     } else {
-        self.SetOverrideWindowPolicy({false, CameraUtilFit});
+        self.SetOverrideWindowPolicy(std::nullopt);
     }
 }
     
@@ -105,11 +88,14 @@ void _SetOverrideWindowPolicy(UsdImagingGLEngine & self,
 void wrapEngine()
 {
     { 
+        using Parameters = UsdImagingGLEngine::Parameters;
+
         scope engineScope = class_<UsdImagingGLEngine, boost::noncopyable>(
                 "Engine", "UsdImaging Renderer class")
             .def( init<>() )
             .def( init<const SdfPath &, const SdfPathVector&,
                     const SdfPathVector& >() )
+            .def( init<const Parameters &>() )
             .def("Render", &UsdImagingGLEngine::Render)
             .def("SetWindowPolicy", &UsdImagingGLEngine::SetWindowPolicy)
             .def("SetRenderViewport", &UsdImagingGLEngine::SetRenderViewport)
@@ -121,8 +107,6 @@ void wrapEngine()
             .def("AddSelected", &UsdImagingGLEngine::AddSelected)
             .def("SetSelectionColor", &UsdImagingGLEngine::SetSelectionColor)
             .def("TestIntersection", &_TestIntersection)
-            .def("IsHydraEnabled", &UsdImagingGLEngine::IsHydraEnabled)
-                .staticmethod("IsHydraEnabled")
             .def("IsConverged", &UsdImagingGLEngine::IsConverged)
             .def("GetRendererPlugins", &UsdImagingGLEngine::GetRendererPlugins,
                  return_value_policy< TfPySequenceToList >())
@@ -146,6 +130,14 @@ void wrapEngine()
                  return_value_policy< TfPySequenceToList >())
             .def("GetRendererSetting", &UsdImagingGLEngine::GetRendererSetting)
             .def("SetRendererSetting", &UsdImagingGLEngine::SetRendererSetting)
+            .def("SetActiveRenderPassPrimPath",
+                 &UsdImagingGLEngine::SetActiveRenderPassPrimPath)
+            .def("SetActiveRenderSettingsPrimPath",
+                 &UsdImagingGLEngine::SetActiveRenderSettingsPrimPath)
+            .def("GetAvailableRenderSettingsPrimPaths",
+                 &UsdImagingGLEngine::GetAvailableRenderSettingsPrimPaths,
+                 return_value_policy< TfPySequenceToList >())
+                 .staticmethod("GetAvailableRenderSettingsPrimPaths")
             .def("SetColorCorrectionSettings", 
                     &UsdImagingGLEngine::SetColorCorrectionSettings)
             .def("IsColorCorrectionCapable", 
@@ -169,8 +161,27 @@ void wrapEngine()
             .def("SetRenderBufferSize", &UsdImagingGLEngine::SetRenderBufferSize)
             .def("SetFraming", &UsdImagingGLEngine::SetFraming)
             .def("SetOverrideWindowPolicy", _SetOverrideWindowPolicy)
+            .def("PollForAsynchronousUpdates",
+                &UsdImagingGLEngine::PollForAsynchronousUpdates)
+            
         ;
 
+
+        class_<Parameters>(
+                "Parameters", "Parameters to construct renderer engine")
+            .def_readwrite("rootPath", &Parameters::rootPath)
+            .def_readwrite("excludedPaths", &Parameters::excludedPaths)
+            .def_readwrite("invisedPaths", &Parameters::invisedPaths)
+            .def_readwrite("sceneDelegateID", &Parameters::sceneDelegateID)
+            .def_readwrite("driver", &Parameters::driver)
+            .def_readwrite("rendererPluginId", &Parameters::rendererPluginId)
+            .def_readwrite("gpuEnabled", &Parameters::gpuEnabled)
+            .def_readwrite("displayUnloadedPrimsWithBounds", 
+                &Parameters::displayUnloadedPrimsWithBounds)
+            .def_readwrite("allowAsynchronousSceneProcessing",
+                &Parameters::allowAsynchronousSceneProcessing)
+            
+        ;
     }
 
     // Wrap the constants.

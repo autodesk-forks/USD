@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # This script is a simple driver for the PCP level of the composition
 # algorithm.  Given the inputs (currently just a root layer), it
@@ -39,6 +22,9 @@ parser.add_argument('--errorFile', dest='errorFileName',
 parser.add_argument('-d', '--dumpPath', dest='dumpPathStr', 
         default=Sdf.Path.emptyPath,
         help = 'Print the internal composition structures for the given path.')
+parser.add_argument('--usd', action='store_true',
+        dest='usd',
+        default=False, help = 'Creates the PcpCache in USD mode.')
 parser.add_argument('--layerStackOnly', action='store_true',
         dest='layerStackOnly',
         default=False, help = 'Dump only the layer stack.')
@@ -73,11 +59,19 @@ dumpPath = Sdf.Path(args.dumpPathStr) if args.dumpPathStr else Sdf.Path()
 
 Work.SetMaximumConcurrencyLimit()
 
+# Error messages and dump strings can contain absolute paths to layers which
+# change depending on where the this test command is run. This cleans out the
+# absolute test run path from these strings so that baseline compares will work
+# regardless of where this is run. 
+def CleanTestRunPaths(msg):
+    cwd = os.getcwd().replace('\\', '/') + '/'
+    return re.compile(re.escape(cwd), re.IGNORECASE).sub('', msg)
+
 def PrintErrorMessage(errorFile, msg):
     if errorFile:
-        print(msg, file=errorFile)
+        print(CleanTestRunPaths(msg), file=errorFile)
     else:
-        print(msg, file=sys.stderr)
+        print(CleanTestRunPaths(msg), file=sys.stderr)
 
 def PrintErrors(errorFile, errors):
     global hadError
@@ -121,7 +115,7 @@ for layerPath in args.layer:
     # Dump the layer stack.
     errors = []
     layerStackId = Pcp.LayerStackIdentifier( rootLayer, sessionLayer )
-    pcpCache = Pcp.Cache(layerStackId)
+    pcpCache = Pcp.Cache(layerStackId, usd=args.usd)
     assert pcpCache.GetVariantFallbacks() == {}
     pcpCache.SetVariantFallbacks(variantFallbacks)
     assert pcpCache.GetVariantFallbacks() == variantFallbacks
@@ -169,9 +163,6 @@ for layerPath in args.layer:
         assert pcpCache.FindPrimIndex(primPath) is not None
         errors += primIndexErrors
 
-        if len(primIndex.primStack) == 0:
-            continue
-
         print('-'*72)
         print('Results for composing <%s>' % (primPath))
 
@@ -198,7 +189,7 @@ for layerPath in args.layer:
 
         # Optionally dump the index for this path.
         if primPath == dumpPath:
-            print(primIndex.DumpToString(args.dumpMaps))
+            print(CleanTestRunPaths(primIndex.DumpToString(args.dumpMaps)))
 
         propStackMap = {} 
         targetsMap = {}
@@ -210,9 +201,18 @@ for layerPath in args.layer:
             propPath, properties = properties[0], properties[1:]
 
             assert pcpCache.FindPropertyIndex(propPath) is None
-            (propIndex, propIndexErrors) = \
-                pcpCache.ComputePropertyIndex(propPath)
-            assert pcpCache.FindPropertyIndex(propPath) is not None
+            if args.usd:
+                # In USD mode, property indexes are not cached so we build it 
+                # here.
+                (propIndex, propIndexErrors) = \
+                    Pcp.BuildPrimPropertyIndex(propPath, pcpCache, primIndex)
+                # Building the index does not cache it.
+                assert pcpCache.FindPropertyIndex(propPath) is None
+            else:
+                (propIndex, propIndexErrors) = \
+                    pcpCache.ComputePropertyIndex(propPath)
+                assert pcpCache.FindPropertyIndex(propPath) is not None
+
             errors += propIndexErrors
 
             if len(propIndex.propertyStack) == 0:
@@ -237,12 +237,11 @@ for layerPath in args.layer:
                 if deletedPaths:
                     deletedTargetPathsMap[propPath] = deletedPaths
 
-        if len(primIndex.primStack) > 0:
-            print('\nPrim Stack:')
-            for primSpec in primIndex.primStack:
-                # Determine a short form of the spec's layer's path.
-                layerLabel = GetLayerLabel(primSpec.layer)
-                print('    %-20s %s' % (layerLabel, primSpec.path))
+        print('\nPrim Stack:')
+        for primSpec in primIndex.primStack:
+            # Determine a short form of the spec's layer's path.
+            layerLabel = GetLayerLabel(primSpec.layer)
+            print('    %-20s %s' % (layerLabel, primSpec.path))
 
         if len(nodesWithOffsets) > 0:
             print('\nTime Offsets:')

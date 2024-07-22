@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_PATH_TABLE_H
 #define PXR_USD_SDF_PATH_TABLE_H
@@ -29,9 +12,6 @@
 #include "pxr/usd/sdf/path.h"
 #include "pxr/base/tf/pointerAndBits.h"
 #include "pxr/base/tf/functionRef.h"
-
-#include <boost/iterator/iterator_facade.hpp>
-#include <boost/noncopyable.hpp>
 
 #include <algorithm>
 #include <utility>
@@ -96,12 +76,20 @@ private:
     // pointer (\a next) to the next item in the hash bucket's linked list, and
     // two pointers (\a firstChild and \a nextSibling) that describe the tree
     // structure.
-    struct _Entry : boost::noncopyable {
+    struct _Entry {
+        _Entry(const _Entry&) = delete;
+        _Entry& operator=(const _Entry&) = delete;
         _Entry(value_type const &value, _Entry *n)
             : value(value)
             , next(n)
-            , firstChild(0)
-            , nextSiblingOrParent(0, false) {}
+            , firstChild(nullptr)
+            , nextSiblingOrParent(nullptr, false) {}
+
+        _Entry(value_type &&value, _Entry *n)
+            : value(std::move(value))
+            , next(n)
+            , firstChild(nullptr)
+            , nextSiblingOrParent(nullptr, false) {}
 
         // If this entry's nextSiblingOrParent field points to a sibling, return
         // a pointer to it, otherwise return null.
@@ -195,20 +183,48 @@ public:
     // iterators.  Currently only forward traversal is supported.
     template <class, class> friend class Iterator;
     template <class ValType, class EntryPtr>
-    class Iterator :
-        public boost::iterator_facade<Iterator<ValType, EntryPtr>,
-                                      ValType, boost::forward_traversal_tag>
+    class Iterator
     {
     public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = ValType;
+        using reference = ValType&;
+        using pointer = ValType*;
+        using difference_type = std::ptrdiff_t;
+
         /// The standard requires default construction but places practically no
         /// requirements on the semantics of default-constructed iterators.
-        Iterator() {}
+        Iterator() = default;
 
         /// Copy constructor (also allows for converting non-const to const).
         template <class OtherVal, class OtherEntryPtr>
         Iterator(Iterator<OtherVal, OtherEntryPtr> const &other)
             : _entry(other._entry)
             {}
+
+        reference operator*() const { return dereference(); }
+        pointer operator->() const { return &(dereference()); }
+
+        Iterator& operator++() {
+            increment();
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator result(*this);
+            increment();
+            return result;
+        }
+
+        template <class OtherVal, class OtherEntryPtr>
+        bool operator==(Iterator<OtherVal, OtherEntryPtr> const &other) const {
+            return equal(other);
+        }
+
+        template <class OtherVal, class OtherEntryPtr>
+        bool operator!=(Iterator<OtherVal, OtherEntryPtr> const &other) const {
+            return !equal(other);
+        }
 
         /// Return an iterator \a e, defining a maximal range [\a *this, \a e)
         /// such that for all \a i in the range, \a i->first is \a
@@ -241,7 +257,6 @@ public:
         }
 
     protected:
-        friend class boost::iterator_core_access;
         friend class SdfPathTable;
         template <class, class> friend class Iterator;
 
@@ -249,8 +264,6 @@ public:
             : _entry(entry) {}
 
         // Fundamental functionality to implement the iterator.
-        // boost::iterator_facade will invoke these as necessary to implement
-        // the full iterator public interface.
 
         // Iterator increment.
         inline void increment() {
@@ -281,6 +294,89 @@ public:
     /// Result type for insert().
     typedef std::pair<iterator, bool> _IterBoolPair;
 
+    /// A handle owning a path table node that may be used to "reserve" a stable
+    /// memory location for key & mapped object.  A node handle may be inserted
+    /// into a table later, and if that insertion is successful, the underlying
+    /// key & mapped object remain at the same memory location.
+    struct NodeHandle
+    {
+        friend class SdfPathTable;
+        
+        /// Create a new NodeHandle for a table entry.  This NodeHandle can
+        /// later be inserted into an SdfPathTable.  If inserted successfully,
+        /// the key and value addresses remain valid.  NodeHandles may be
+        /// created concurrently without additional synchronization.
+        static NodeHandle
+        New(value_type const &value) {
+            NodeHandle ret;
+            ret._unlinkedEntry.reset(new _Entry(value, nullptr));
+            return ret;
+        }
+
+        /// \overload
+        static NodeHandle
+        New(value_type &&value) {
+            NodeHandle ret;
+            ret._unlinkedEntry.reset(new _Entry(std::move(value), nullptr));
+            return ret;
+        }
+
+        /// \overload
+        static NodeHandle
+        New(key_type const &key, mapped_type const &mapped) {
+            return New({ key, mapped });
+        }
+
+        /// Return a const reference to this NodeHandle's key.  This NodeHandle
+        /// must be valid to call this member function (see
+        /// NodeHandle::IsValid).
+        key_type const &GetKey() const {
+            return _unlinkedEntry->value.first;
+        }
+
+        /// Return a mutable reference to this NodeHandle's key.  This
+        /// NodeHandle must be valid to call this member function (see
+        /// NodeHandle::IsValid).
+        key_type &GetMutableKey() {
+            return _unlinkedEntry->value.first;
+        }
+
+        /// Return a const reference to this NodeHandle's mapped object.  This
+        /// NodeHandle must be valid to call this member function (see
+        /// NodeHandle::IsValid).
+        mapped_type const &GetMapped() const {
+            return _unlinkedEntry->value.second;
+        }
+
+        /// Return a mutable reference to this NodeHandle's mapped object.  This
+        /// NodeHandle must be valid to call this member function (see
+        /// NodeHandle::IsValid).
+        mapped_type &GetMutableMapped() {
+            return _unlinkedEntry->value.second;
+        }
+
+        /// Return true if this NodeHandle owns a path table entry, false
+        /// otherwise.
+        bool IsValid() const {
+            return static_cast<bool>(_unlinkedEntry);
+        }
+        
+        /// Return true if this NodeHandle owns a path table entry, false
+        /// otherwise.
+        explicit operator bool() const {
+            return IsValid();
+        }
+
+        /// Delete any owned path table entry.  After calling this function,
+        /// IsValid() returns false.
+        void reset() {
+            _unlinkedEntry.reset();
+        }
+
+    private:
+        std::unique_ptr<_Entry> _unlinkedEntry;
+    };
+    
     /// Default constructor.
     SdfPathTable() : _size(0), _mask(0) {}
 
@@ -471,14 +567,23 @@ public:
         _IterBoolPair result = _InsertInTable(value);
         if (result.second) {
             // New element -- make sure the parent is inserted.
-            _Entry * const newEntry = result.first._entry;
-            SdfPath const &parentPath = _GetParentPath(value.first);
-            if (!parentPath.IsEmpty()) {
-                iterator parIter =
-                    insert(value_type(parentPath, mapped_type())).first;
-                // Add the new entry to the parent's children.
-                parIter._entry->AddChild(newEntry);
-            }
+            _UpdateTreeForNewEntry(result);
+        }
+        return result;
+    }
+
+    /// \overload
+    ///
+    /// Insert the entry held by \p node into this table.  If the insertion is
+    /// successful, the contents of \p node are moved-from and indeterminate.
+    /// Otherwise if the insertion is unsuccessful, the contents of \p node are
+    /// unmodified.
+    _IterBoolPair insert(NodeHandle &&node) {
+        // Insert in table.
+        _IterBoolPair result = _InsertInTable(std::move(node));
+        if (result.second) {
+            // New element -- make sure the parent is inserted.
+            _UpdateTreeForNewEntry(result);
         }
         return result;
     }
@@ -614,39 +719,67 @@ private:
         return path.GetParentPath();
     }
 
+    void _UpdateTreeForNewEntry(_IterBoolPair const &iresult) {
+        // New element -- make sure the parent is inserted.
+        _Entry * const newEntry = iresult.first._entry;
+        SdfPath const &parentPath = _GetParentPath(newEntry->value.first);
+        if (!parentPath.IsEmpty()) {
+            iterator parIter =
+                insert(value_type(parentPath, mapped_type())).first;
+            // Add the new entry to the parent's children.
+            parIter._entry->AddChild(newEntry);
+        }
+    }
+
     // Helper to insert \a value in the hash table.  Is responsible for growing
     // storage space when necessary.  Does not consider the tree structure.
-    _IterBoolPair _InsertInTable(value_type const &value) {
+    template <class MakeEntryFn>
+    _IterBoolPair _InsertInTableImpl(key_type const &key,
+                                     MakeEntryFn &&makeEntry) {
         // If we have no storage at all so far, grow.
         if (_mask == 0)
             _Grow();
 
         // Find the item, if present.
-        _Entry **bucketHead = &(_buckets[_Hash(value.first)]);
-        for (_Entry *e = *bucketHead; e; e = e->next)
-            if (e->value.first == value.first)
+        _Entry **bucketHead = &(_buckets[_Hash(key)]);
+        for (_Entry *e = *bucketHead; e; e = e->next) {
+            if (e->value.first == key) {
                 return _IterBoolPair(iterator(e), false);
+            }
+        }
 
         // Not present.  If the table is getting full then grow and re-find the
         // bucket.
         if (_IsTooFull()) {
             _Grow();
-            bucketHead = &(_buckets[_Hash(value.first)]);
+            bucketHead = &(_buckets[_Hash(key)]);
         }
 
-        TfAutoMallocTag2 tag2("Sdf", "SdfPathTable::_FindOrCreate");
-        TfAutoMallocTag tag(__ARCH_PRETTY_FUNCTION__);
-
-        // Create a new item and insert it in the list
-        *bucketHead = new _Entry(value, *bucketHead);
+        // Make an entry and insert it in the list.
+        *bucketHead = std::forward<MakeEntryFn>(makeEntry)(*bucketHead);
 
         // One more element
         ++_size;
 
         // Return the new item
         return _IterBoolPair(iterator(*bucketHead), true);
-    }
+    }        
+    
+    _IterBoolPair _InsertInTable(value_type const &value) {
+        return _InsertInTableImpl(
+            value.first, [&value](_Entry *next) {
+                return new _Entry(value, next);
+            });
+    }                       
 
+    _IterBoolPair _InsertInTable(NodeHandle &&node) {
+        return _InsertInTableImpl(
+            node.GetKey(), [&node](_Entry *next) mutable {
+                node._unlinkedEntry->next = next;
+                return node._unlinkedEntry.release();
+            });
+    }
+                                  
     // Erase \a entry from the hash table.  Does not consider tree structure.
     void _EraseFromTable(_Entry *entry) {
         // Remove from table.

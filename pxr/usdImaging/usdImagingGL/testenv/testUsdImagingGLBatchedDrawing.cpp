@@ -1,28 +1,9 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
-//
-
-#include "pxr/imaging/garch/glApi.h"
 
 #include "pxr/usdImaging/usdImagingGL/unitTestGLDrawing.h"
 
@@ -95,8 +76,6 @@ private:
     double _time;
 };
 
-GLuint vao;
-
 static
 UsdStageRefPtr
 _CreateStage(std::string const& primName) {
@@ -117,10 +96,6 @@ _CreateStage(std::string const& primName) {
 void
 My_TestGLDrawing::InitTest()
 {
-    std::cout << glGetString(GL_VENDOR) << "\n";
-    std::cout << glGetString(GL_RENDERER) << "\n";
-    std::cout << glGetString(GL_VERSION) << "\n";
-
     WorkSetMaximumConcurrencyLimit();
 
     HdPerfLog& perfLog = HdPerfLog::GetInstance();
@@ -176,11 +151,6 @@ My_TestGLDrawing::InitTest()
             _batchIndex->HasRprim(path),
             "Failed to find <%s> in the render index.",
             path.GetText());
-    }
-
-    if(IsEnabledTestLighting()) {
-        glEnable(GL_LIGHTING);
-        glEnable(GL_LIGHT0);
     }
 
     _translate[0] = 0.0;
@@ -243,17 +213,7 @@ My_TestGLDrawing::DrawTest(bool offscreen)
     params.drawMode = UsdImagingGLDrawMode::DRAW_SHADED_SMOOTH;
     params.enableLighting =  IsEnabledTestLighting();
     params.cullStyle = GetCullStyle();
-
-    glViewport(0, 0, width, height);
-
-    GLfloat clearColor[4] = { .25f, .25f, 0.25f, 1.0f };
-    glClearBufferfv(GL_COLOR, 0, clearColor);
-
-    GLfloat clearDepth[1] = { 1.0f };
-    glClearBufferfv(GL_DEPTH, 0, clearDepth);
-
-    glEnable(GL_DEPTH_TEST);
-
+    params.clearColor = GetClearColor();
 
     if(IsEnabledTestLighting()) {
         GlfSimpleLightingContextRefPtr lightingContext = GlfSimpleLightingContext::New();

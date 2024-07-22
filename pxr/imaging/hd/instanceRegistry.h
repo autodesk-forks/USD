@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_INSTANCE_REGISTRY_H
 #define PXR_IMAGING_HD_INSTANCE_REGISTRY_H
@@ -172,6 +155,15 @@ public:
     /// be recycled if they are needed again.
     size_t GarbageCollect(int recycleCount = 0);
 
+    /// Removes unreferenced entries and returns the count
+    /// of remaining entries. If an entry is to be removed, callback function
+    /// "callback" will be called on the entry before removal. When 
+    /// recycleCount is greater than zero, unreferenced entries will not be 
+    /// removed until GarbageCollect() is called that many more times, i.e. 
+    /// allowing unreferenced entries to be recycled if they are needed again.
+    template <typename Callback>
+    size_t GarbageCollect(Callback &&callback, int recycleCount = 0);
+
     /// Returns a const iterator being/end of dictionary. Mainly used for
     /// resource auditing.
     typedef typename InstanceType::Dictionary::const_iterator const_iterator;
@@ -247,6 +239,15 @@ template <typename VALUE>
 size_t
 HdInstanceRegistry<VALUE>::GarbageCollect(int recycleCount)
 {
+    // Call GarbageCollect with empty callback function
+    return GarbageCollect([](void*){}, recycleCount);
+}
+
+template <typename VALUE>
+template <typename Callback>
+size_t
+HdInstanceRegistry<VALUE>::GarbageCollect(Callback &&callback, int recycleCount)
+{
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
@@ -262,6 +263,7 @@ HdInstanceRegistry<VALUE>::GarbageCollect(int recycleCount)
         // erase instance which isn't referred from anyone
         bool isUnique = _IsUnique(it->second.value);
         if (isUnique && (++it->second.recycleCounter > recycleCount)) {
+            std::forward<Callback>(callback)(it->second.value.get());
             it = _dictionary.unsafe_erase(it);
         } else {
             ++it;

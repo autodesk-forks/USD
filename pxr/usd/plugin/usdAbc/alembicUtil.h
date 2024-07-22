@@ -1,25 +1,8 @@
 //
 // Copyright 2016-2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_PLUGIN_USD_ABC_ALEMBIC_UTIL_H
 #define PXR_USD_PLUGIN_USD_ABC_ALEMBIC_UTIL_H
@@ -37,15 +20,8 @@
 #include "pxr/base/tf/staticTokens.h"
 #include <Alembic/Abc/ICompoundProperty.h>
 #include <Alembic/Abc/ISampleSelector.h>
-#include <boost/call_traits.hpp>
-#include <boost/operators.hpp>
-#include <boost/optional.hpp>
-#include <boost/shared_array.hpp>
-#include <boost/type_traits/is_same.hpp>
-#include <boost/type_traits/remove_const.hpp>
-#include <boost/type_traits/remove_reference.hpp>
-#include <boost/variant.hpp>
 
+#include <type_traits>
 #include <functional>
 #include <algorithm>
 #include <iosfwd>
@@ -53,6 +29,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <variant>
 
 
 namespace Alembic {
@@ -127,6 +104,13 @@ TF_DECLARE_PUBLIC_TOKENS(UsdAbcPropertyNames, USD_ABC_PROPERTY_NAMES);
     /* end */
 TF_DECLARE_PUBLIC_TOKENS(UsdAbcCustomMetadata, USD_ABC_CUSTOM_METADATA);
 
+// Convert non-trivial types like `std::string` to `const std::string&` while
+// preserving the type for `int`, `bool`, `char`, etc.
+template <typename T>
+using UsdAbc_SetParameter = std::conditional<
+    std::is_arithmetic_v<T>, std::add_const_t<T>,
+    std::add_lvalue_reference_t<std::add_const_t<T>>>;
+
 //
 // Alembic property value types.
 //
@@ -134,7 +118,7 @@ TF_DECLARE_PUBLIC_TOKENS(UsdAbcCustomMetadata, USD_ABC_CUSTOM_METADATA);
 /// A type to represent an Alembic value type.  An Alembic DataType has
 /// a POD and extent but not scalar vs array;  this type includes that
 /// extra bit.  It also supports compound types as their schema titles.
-struct UsdAbc_AlembicType : boost::totally_ordered<UsdAbc_AlembicType> {
+struct UsdAbc_AlembicType {
     PlainOldDataType pod;     // POD type in scalar and array.
     uint8_t extent;           // Extent of POD (e.g. 3 for a 3-tuple).
     bool_t array;             // true for array, false otherwise.
@@ -162,6 +146,26 @@ struct UsdAbc_AlembicType : boost::totally_ordered<UsdAbc_AlembicType> {
         array(header.getPropertyType() == kArrayProperty)
     {
         // Do nothing
+    }
+
+    friend bool operator !=(UsdAbc_AlembicType const &lhs,
+                            UsdAbc_AlembicType const &rhs) {
+        return !(lhs == rhs);
+    }
+
+    friend bool operator>(const UsdAbc_AlembicType& lhs, const UsdAbc_AlembicType& rhs)
+    {
+        return rhs < lhs;
+    }
+
+    friend bool operator<=(const UsdAbc_AlembicType& lhs, const UsdAbc_AlembicType& rhs)
+    {
+        return !(rhs < lhs);
+    }
+
+    friend bool operator>=(const UsdAbc_AlembicType& lhs, const UsdAbc_AlembicType& rhs)
+    {
+        return !(lhs < rhs);
     }
 
     bool IsEmpty() const
@@ -213,22 +217,22 @@ public:
     /// Assigns \p rhs to the value passed in the c'tor.
     bool Set(const VtValue& rhs) const
     {
-        return boost::apply_visitor(_Set(rhs), _valuePtr);
+        return std::visit(_Set(rhs), _valuePtr);
     }
 
     /// Assigns \p rhs to the value passed in the c'tor.
     template <class T>
     bool Set(T rhs) const
     {
-        typedef typename boost::remove_reference<
-                    typename boost::remove_const<T>::type>::type Type;
-        return boost::apply_visitor(_SetTyped<Type>(rhs), _valuePtr);
+        typedef std::remove_reference_t<
+                    std::remove_const_t<T>> Type;
+        return std::visit(_SetTyped<Type>(rhs), _valuePtr);
     }
 
     /// Returns \c true iff constructed with a NULL pointer.
     bool IsEmpty() const
     {
-        return _valuePtr.which() == 0;
+        return _valuePtr.index() == 0;
     }
 
     /// Explicit bool conversion operator. Converts to true iff this object was 
@@ -243,7 +247,7 @@ private:
     class _Empty {};
 
     // Visitor for assignment.
-    struct _Set : public boost::static_visitor<bool> {
+    struct _Set {
         _Set(const VtValue& rhs) : value(rhs) { }
 
         bool operator()(_Empty) const
@@ -269,8 +273,8 @@ private:
 
     // Visitor for assignment.
     template <class T>
-    struct _SetTyped : public boost::static_visitor<bool> {
-        _SetTyped(typename boost::call_traits<T>::param_type rhs) : value(rhs){}
+    struct _SetTyped {
+        _SetTyped(typename UsdAbc_SetParameter<T>::type rhs) : value(rhs){}
 
         bool operator()(_Empty) const
         {
@@ -290,11 +294,11 @@ private:
             return dst->StoreValue(value);
         }
 
-        typename boost::call_traits<T>::param_type value;
+        typename UsdAbc_SetParameter<T>::type value;
     };
 
 private:
-    boost::variant<_Empty, VtValue*, SdfAbstractDataValue*> _valuePtr;
+    std::variant<_Empty, VtValue*, SdfAbstractDataValue*> _valuePtr;
 };
 
 //
@@ -396,13 +400,12 @@ public:
         TF_VERIFY(value);
     }
 
-    /// A sample using raw data from a shared pointer to a T[].
+    /// A sample using raw data from a unique pointer to a T[].
     template <class T>
-    _SampleForAlembic(const boost::shared_array<T>& values, size_t count) :
+    _SampleForAlembic(std::unique_ptr<T[]>&& value, size_t count) :
         _numSamples(count),
-        _value(_HolderValue(new _ArrayHolder<T>(values)))
+        _value(_HolderValue(new _ArrayHolder<T>(std::move(value))))
     {
-        TF_VERIFY(values);
     }
 
     bool IsError(std::string* message) const
@@ -523,16 +526,15 @@ private:
         std::shared_ptr<T> _ptr;
     };
 
-    // Hold a shared_array.
+    // Hold an array.
     template <class T>
     class _ArrayHolder : public _Holder {
     public:
-        _ArrayHolder(const boost::shared_array<T>& ptr) : _ptr(ptr) { }
+        _ArrayHolder(std::unique_ptr<T[]>&& arr) : _array(std::move(arr)) { }
         virtual ~_ArrayHolder() { }
-        virtual const void* Get() const { return _ptr.get(); }
-
+        virtual const void* Get() const { return _array.get(); }
     private:
-        boost::shared_array<T> _ptr;
+        std::unique_ptr<T[]> _array;
     };
 
     // Hold a _Holder as a value type.
@@ -550,9 +552,9 @@ private:
     template <class T>
     static _HolderValue _MakeRawArrayHolder(const std::vector<T>& value)
     {
-        boost::shared_array<T> copy(new T[value.size()]);
+        std::unique_ptr<T[]> copy(new T[value.size()]);
         std::copy(value.begin(), value.end(), copy.get());
-        return _HolderValue(new _ArrayHolder<T>(copy));
+        return _HolderValue(new _ArrayHolder<T>(std::move(copy)));
     }
 
 private:
@@ -844,10 +846,10 @@ template <class UsdType, class AlembicType, size_t extent>
 struct _ConvertPODFromUsdScalar {
     _SampleForAlembic operator()(const VtValue& src) const
     {
-        boost::shared_array<AlembicType> dst(new AlembicType[extent]);
+        std::unique_ptr<AlembicType[]> dst(new AlembicType[extent]);
         _ConvertPODFromUsd<UsdType, AlembicType, extent>()(
                 src.UncheckedGet<UsdType>(), dst.get());
-        return _SampleForAlembic(dst, extent);
+        return _SampleForAlembic(std::move(dst), extent);
     }
 };
 
@@ -870,12 +872,12 @@ struct _ConvertPODFromUsdArray {
     {
         const VtArray<UsdType>& data = src.UncheckedGet<VtArray<UsdType> >();
         const size_t size = data.size();
-        boost::shared_array<AlembicType> array(new AlembicType[size * extent]);
+        std::unique_ptr<AlembicType[]> array(new AlembicType[size * extent]);
         AlembicType* ptr = array.get();
         for (size_t i = 0, n = size; i != n; ptr += extent, ++i) {
             _ConvertPODFromUsd<UsdType, AlembicType, extent>()(data[i], ptr);
         }
-        return _SampleForAlembic(array, size * extent);
+        return _SampleForAlembic(std::move(array), size * extent);
     }
 };
 

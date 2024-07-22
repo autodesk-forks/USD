@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hdSt/imageShaderRenderPass.h"
@@ -50,14 +33,20 @@ _NewDrawBatch(HdStDrawItemInstance *drawItemInstance,
     HdStResourceRegistrySharedPtr const &resourceRegistry =
         std::static_pointer_cast<HdStResourceRegistry>(
             index->GetResourceRegistry());
-    HgiCapabilities const *hgiCapabilities =
-        resourceRegistry->GetHgi()->GetCapabilities();
 
-    // We don't want or need frustum culling of our fullscreen triangle.
-    if (HdSt_PipelineDrawBatch::IsEnabled(hgiCapabilities)) {
-        return std::make_shared<HdSt_PipelineDrawBatch>(drawItemInstance,false);
+    // Since we're just drawing a single full-screen triangle
+    // we don't want frustum culling or indirect command encoding.
+    bool const allowGpuFrustumCulling = false;
+    bool const allowIndirectCommandEncoding = false;
+    if (HdSt_PipelineDrawBatch::IsEnabled(resourceRegistry->GetHgi())) {
+        return std::make_shared<HdSt_PipelineDrawBatch>(
+                drawItemInstance,
+                allowGpuFrustumCulling,
+                allowIndirectCommandEncoding);
     } else {
-        return std::make_shared<HdSt_IndirectDrawBatch>(drawItemInstance,false);
+        return std::make_shared<HdSt_IndirectDrawBatch>(
+                drawItemInstance,
+                allowGpuFrustumCulling);
     }
 }
 
@@ -99,7 +88,8 @@ HdSt_ImageShaderRenderPass::_SetupVertexPrimvarBAR(
 
     HdBufferArrayRangeSharedPtr vertexPrimvarRange =
         registry->AllocateNonUniformBufferArrayRange(
-            HdTokens->primvar, bufferSpecs, HdBufferArrayUsageHint());
+            HdTokens->primvar, bufferSpecs,
+            HdBufferArrayUsageHintBitsVertex);
 
     registry->AddSources(vertexPrimvarRange, std::move(sources));
 
@@ -163,11 +153,17 @@ HdSt_ImageShaderRenderPass::_Execute(
     if (!TF_VERIFY(gfxCmds)) {
         return;
     }
+    
+    gfxCmds->PushDebugGroup(__ARCH_PRETTY_FUNCTION__);
+
+    const GfVec4i viewport = stRenderPassState->ComputeViewport();
+    gfxCmds->SetViewport(viewport);
 
     // Camera state needs to be updated once per pass (not per batch).
     stRenderPassState->ApplyStateFromCamera();
 
-    _drawBatch->ExecuteDraw(gfxCmds.get(), stRenderPassState, resourceRegistry);
+    _drawBatch->ExecuteDraw(gfxCmds.get(), stRenderPassState, resourceRegistry,
+        /*firstDrawBatch*/true);
 
     gfxCmds->PopDebugGroup();
     _hgi->SubmitCmds(gfxCmds.get());

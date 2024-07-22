@@ -1,33 +1,16 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_PRIM_DATA_HANDLE_H
 #define PXR_USD_USD_PRIM_DATA_HANDLE_H
 
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/api.h"
-#include <boost/functional/hash.hpp>
-#include <boost/intrusive_ptr.hpp>
+#include "pxr/base/tf/delegatedCountPtr.h"
+#include "pxr/base/tf/hash.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -36,9 +19,9 @@ class SdfPath;
 // To start we always validate.
 #define USD_CHECK_ALL_PRIM_ACCESSES
 
-// Forward declare boost::intrusive_ptr requirements.  Defined in primData.h.
-void intrusive_ptr_add_ref(const class Usd_PrimData *prim);
-void intrusive_ptr_release(const class Usd_PrimData *prim);
+// Forward declare TfDelegatedCountPtr requirements.  Defined in primData.h.
+void TfDelegatedCountIncrement(const class Usd_PrimData *prim) noexcept;
+void TfDelegatedCountDecrement(const class Usd_PrimData *prim) noexcept;
 
 // Forward declarations for Usd_PrimDataHandle's use.  Defined in primData.h.
 USD_API
@@ -49,9 +32,9 @@ bool Usd_IsDead(Usd_PrimData const *p);
 typedef Usd_PrimData *Usd_PrimDataPtr;
 typedef const Usd_PrimData *Usd_PrimDataConstPtr;
 
-// convenience typedefs for intrusive_ptr.
-typedef boost::intrusive_ptr<Usd_PrimData> Usd_PrimDataIPtr;
-typedef boost::intrusive_ptr<const Usd_PrimData> Usd_PrimDataConstIPtr;
+// convenience typedefs for TfDelegatedCountPtr.
+using Usd_PrimDataIPtr = TfDelegatedCountPtr<Usd_PrimData>;
+using Usd_PrimDataConstIPtr = TfDelegatedCountPtr<const Usd_PrimData>;
 
 // Private helper class that holds a reference to prim data.  UsdObject (and by
 // inheritance its subclasses) hold an instance of this class.  It lets
@@ -64,18 +47,18 @@ public:
 
     // Construct a null handle.
     Usd_PrimDataHandle() {}
-    // Convert/construct a handle from a prim data intrusive ptr.
+    // Convert/construct a handle from a prim data delegated count ptr.
     Usd_PrimDataHandle(const Usd_PrimDataIPtr &primData)
         : _p(primData) {}
-    // Convert/construct a handle from a prim data intrusive ptr.
+    // Convert/construct a handle from a prim data delegated count ptr.
     Usd_PrimDataHandle(const Usd_PrimDataConstIPtr &primData)
         : _p(primData) {}
     // Convert/construct a handle from a prim data raw ptr.
     Usd_PrimDataHandle(Usd_PrimDataPtr primData)
-        : _p(Usd_PrimDataConstIPtr(primData)) {}
+        : _p(TfDelegatedCountIncrementTag, primData) {}
     // Convert/construct a handle from a prim data raw ptr.
     Usd_PrimDataHandle(Usd_PrimDataConstPtr primData)
-        : _p(Usd_PrimDataConstIPtr(primData)) {}
+        : _p(TfDelegatedCountIncrementTag, primData) {}
 
     // Reset this handle to null.
     void reset() { _p.reset(); }
@@ -126,7 +109,7 @@ private:
 
     // Provide hash_value.
     friend size_t hash_value(const Usd_PrimDataHandle &h) {
-        return boost::hash_value(h._p.get());
+        return TfHash()(h._p.get());
     }
 
     friend element_type *get_pointer(const Usd_PrimDataHandle &h) {

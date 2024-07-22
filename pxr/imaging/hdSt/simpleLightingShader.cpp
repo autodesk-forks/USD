@@ -1,27 +1,11 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/simpleLightingShader.h"
+#include "pxr/imaging/hdSt/binding.h"
 #include "pxr/imaging/hdSt/textureIdentifier.h"
 #include "pxr/imaging/hdSt/subtextureIdentifier.h"
 #include "pxr/imaging/hdSt/textureObject.h"
@@ -39,7 +23,6 @@
 #include "pxr/imaging/hd/renderDelegate.h"
 #include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
-#include "pxr/imaging/hd/binding.h"
 
 #include "pxr/imaging/hio/glslfx.h"
 
@@ -48,7 +31,7 @@
 
 #include "pxr/base/tf/staticTokens.h"
 
-#include <boost/functional/hash.hpp>
+#include "pxr/base/tf/hash.h"
 
 #include <sstream>
 
@@ -90,18 +73,24 @@ HdStSimpleLightingShader::ComputeHash() const
         useShadows ? _lightingContext->ComputeNumShadowsUsed() : 0;
 
     size_t hash = glslfxFile.Hash();
-    boost::hash_combine(hash, numLights);
-    boost::hash_combine(hash, useShadows);
-    boost::hash_combine(hash, numShadows);
-    boost::hash_combine(hash, _lightingContext->ComputeShaderSourceHash());
+    hash = TfHash::Combine(
+        hash,
+        numLights,
+        useShadows,
+        numShadows,
+        _lightingContext->ComputeShaderSourceHash()
+    );
 
     for (const HdStShaderCode::NamedTextureHandle &namedHandle :
         _namedTextureHandles) {
         
         // Use name and hash only - not the texture itself as this
         // does not affect the generated shader source.
-        boost::hash_combine(hash, namedHandle.name);
-        boost::hash_combine(hash, namedHandle.hash);
+        hash = TfHash::Combine(
+            hash,
+            namedHandle.name,
+            namedHandle.hash
+        );
     }
 
     return (ID)hash;
@@ -169,8 +158,6 @@ HdStSimpleLightingShader::BindResources(const int program,
     }
     
     HdSt_TextureBinder::BindResources(binder, _namedTextureHandles);
-
-    binder.BindShaderResources(this);
 }
 
 /* virtual */
@@ -186,14 +173,9 @@ HdStSimpleLightingShader::UnbindResources(const int program,
 }
 
 void
-HdStSimpleLightingShader::AddBufferBinding(HdBindingRequest const& req)
+HdStSimpleLightingShader::AddBufferBinding(HdStBindingRequest const& req)
 {
-    auto it = _customBuffers.insert({req.GetName(), req});
-    // Entry already existed and was equal to what we want to set it.
-    if (!it.second && it.first->second == req) {
-        return;
-    }
-    it.first->second = req;
+    _customBuffers[req.GetName()] = req;
 }
 
 void
@@ -210,7 +192,7 @@ HdStSimpleLightingShader::ClearBufferBindings()
 
 /*virtual*/
 void
-HdStSimpleLightingShader::AddBindings(HdBindingRequestVector *customBindings)
+HdStSimpleLightingShader::AddBindings(HdStBindingRequestVector *customBindings)
 {
     customBindings->reserve(customBindings->size() + _customBuffers.size() + 1);
     TF_FOR_ALL(it, _customBuffers) {
@@ -229,7 +211,7 @@ HdStSimpleLightingShader::AddBindings(HdBindingRequestVector *customBindings)
                 _tokens->domeLightIrradiance,
                 VtValue(GfVec4f(0.0)),
                 TfTokenVector(),
-                HdTextureType::Uv));
+                HdStTextureType::Uv));
         // prefilter map
         _lightTextureParams.push_back(
             HdSt_MaterialParam(
@@ -237,7 +219,7 @@ HdStSimpleLightingShader::AddBindings(HdBindingRequestVector *customBindings)
                 _tokens->domeLightPrefilter,
                 VtValue(GfVec4f(0.0)),
                 TfTokenVector(),
-                HdTextureType::Uv));
+                HdStTextureType::Uv));
         // BRDF texture
         _lightTextureParams.push_back(
             HdSt_MaterialParam(
@@ -245,7 +227,7 @@ HdStSimpleLightingShader::AddBindings(HdBindingRequestVector *customBindings)
                 _tokens->domeLightBRDF,
                 VtValue(GfVec4f(0.0)),
                 TfTokenVector(),
-                HdTextureType::Uv));
+                HdStTextureType::Uv));
     }
 
     const bool useShadows =
@@ -262,7 +244,7 @@ HdStSimpleLightingShader::AddBindings(HdBindingRequestVector *customBindings)
                 HdStTokens->shadowCompareTextures,
                 VtValue(GfVec4f(0.0)),
                 TfTokenVector(),
-                HdTextureType::Uv,
+                HdStTextureType::Uv,
                 /*swizzle*/std::string(),
                 /*isPremultiplied*/false,
                 /*arrayOfTexturesSize*/numShadowPasses));
@@ -273,31 +255,6 @@ HdSt_MaterialParamVector const&
 HdStSimpleLightingShader::GetParams() const 
 {
     return _lightTextureParams;
-}
-
-void
-HdStSimpleLightingShader::SetLightingStateFromOpenGL()
-{
-    _lightingContext->SetStateFromOpenGL();
-}
-
-void
-HdStSimpleLightingShader::SetLightingState(
-    GlfSimpleLightingContextPtr const &src)
-{
-    if (src) {
-        _useLighting = true;
-        _lightingContext->SetUseLighting(!src->GetLights().empty());
-        _lightingContext->SetLights(src->GetLights());
-        _lightingContext->SetMaterial(src->GetMaterial());
-        _lightingContext->SetSceneAmbient(src->GetSceneAmbient());
-        _lightingContext->SetShadows(src->GetShadows());
-    } else {
-        // XXX:
-        // if src is null, turn off lights (this is temporary used for shadowmap drawing).
-        // see GprimUsdBaseIcBatch::Draw()
-        _useLighting = false;
-    }
 }
 
 static
@@ -369,13 +326,13 @@ _MakeNamedTextureHandle(
     HdStTextureHandleSharedPtr const textureHandle =
         resourceRegistry->AllocateTextureHandle(
             textureId,
-            HdTextureType::Uv,
+            HdStTextureType::Uv,
             samplerParameters,
             /* memoryRequest = */ 0,
             shader);
 
     return { name,
-             HdTextureType::Uv,
+             HdStTextureType::Uv,
              textureHandle,
              name.Hash() };
 }
@@ -499,7 +456,7 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
         _domeLightEnvironmentTextureHandle =
             resourceRegistry->AllocateTextureHandle(
                 textureId,
-                HdTextureType::Uv,
+                HdStTextureType::Uv,
                 envSamplerParameters,
                 /* targetMemory = */ 0,
                 shared_from_this());
@@ -590,7 +547,7 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
                 HdStTextureHandleSharedPtr const textureHandle =
                     resourceRegistry->AllocateTextureHandle(
                         _shadowAovBuffers[i]->GetTextureIdentifier(false),
-                        HdTextureType::Uv,
+                        HdStTextureType::Uv,
                         shadowSamplerParameters,
                         /* memoryRequest = */ 0,
                         shared_from_this());
@@ -601,7 +558,7 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
                 _shadowTextureHandles.push_back(
                     NamedTextureHandle{ 
                         shadowTextureName,
-                        HdTextureType::Uv,
+                        HdStTextureType::Uv,
                         textureHandle,
                         shadowTextureName.Hash()});
             }
@@ -657,11 +614,11 @@ HdStSimpleLightingShader::AddResourcesFromTextures(ResourceContext &ctx) const
     const GfVec3i srcDim = srcTexture->GetDescriptor().dimensions;
 
     const unsigned int numPrefilterLevels = 
-        (unsigned int) std::log2(std::max(srcDim[0], srcDim[1]));
+        std::max((unsigned int)(std::log2(std::max(srcDim[0], srcDim[1]))), 1u);
 
     // Prefilter map computations. mipLevel = 0 allocates texture.
     for (unsigned int mipLevel = 0; mipLevel < numPrefilterLevels; ++mipLevel) {
-        const float roughness =
+        const float roughness = (numPrefilterLevels == 1) ? 0.f :
             (float)mipLevel / (float)(numPrefilterLevels - 1);
 
         ctx.AddComputation(

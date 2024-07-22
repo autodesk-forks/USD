@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hio/glslfx.h"
 #include "pxr/imaging/hd/perfLog.h"
@@ -31,6 +14,7 @@
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/base/arch/hash.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/scopeDescription.h"
 
 #include <climits>
 #include <cstdlib>
@@ -236,6 +220,16 @@ _ValidateCompilation(
     return true;
 }
 
+static std::string
+_GetScopeDescriptionLabel(HgiShaderProgramDesc const &desc)
+{
+    if (desc.debugName.empty()) {
+        return {};
+    } else {
+        return TfStringPrintf(" (%s)", desc.debugName.c_str());
+    }
+}
+
 HdStGLSLProgram::HdStGLSLProgram(
     TfToken const &role,
     HdStResourceRegistry *const registry)
@@ -250,10 +244,11 @@ HdStGLSLProgram::~HdStGLSLProgram()
 {
     Hgi *const hgi = _registry->GetHgi();
 
+    for (HgiShaderFunctionHandle fn : _programDesc.shaderFunctions) {
+        hgi->DestroyShaderFunction(&fn);
+    }
+
     if (_program) {
-        for (HgiShaderFunctionHandle fn : _program->GetShaderFunctions()) {
-            hgi->DestroyShaderFunction(&fn);
-        }
         hgi->DestroyShaderProgram(&_program);
     }
 }
@@ -294,6 +289,9 @@ HdStGLSLProgram::CompileShader(
         TF_CODING_ERROR("Invalid shader type %d\n", stage);
         return false;
     }
+
+    TF_DESCRIBE_SCOPE(
+        "Compiling GLSL shader" + _GetScopeDescriptionLabel(_programDesc));
 
     if (TfDebug::IsEnabled(HDST_DUMP_SHADER_SOURCE)) {
         _DumpShaderSource(shaderType, shaderSource);
@@ -341,6 +339,9 @@ HdStGLSLProgram::CompileShader(HgiShaderFunctionDesc const &desc)
         TF_CODING_ERROR("Invalid shader type %d\n", desc.shaderStage);
         return false;
     }
+
+    TF_DESCRIBE_SCOPE(
+        "Compiling GLSL shader" + _GetScopeDescriptionLabel(_programDesc));
 
     if (TfDebug::IsEnabled(HDST_DUMP_SHADER_SOURCE)) {
         _DumpShaderSource(desc);
@@ -403,6 +404,9 @@ HdStGLSLProgram::Link()
         return false;
     }
 
+    TF_DESCRIBE_SCOPE(
+        "Linking GLSL shader" + _GetScopeDescriptionLabel(_programDesc));
+
     Hgi *const hgi = _registry->GetHgi();
 
     // Create the shader program.
@@ -449,12 +453,18 @@ HdStGLSLProgram::GetComputeProgram(
         TfToken const &shaderToken,
         HdStResourceRegistry *resourceRegistry)
 {
+    const HdStGLSLProgram::ID hash = _ComputeHash(shaderToken);
+
     // Find the program from registry
     HdInstance<HdStGLSLProgramSharedPtr> programInstance =
-                resourceRegistry->RegisterGLSLProgram(
-                        _ComputeHash(shaderToken));
+                resourceRegistry->RegisterGLSLProgram(hash);
 
     if (programInstance.IsFirstInstance()) {
+
+        TF_DEBUG(HDST_LOG_COMPUTE_SHADER_PROGRAM_MISSES).Msg(
+            "(MISS) First compute program instance for %s (hash = %zu)\n",
+            shaderFileName.GetText(), hash);
+
         // if not exists, create new one
         HdStGLSLProgramSharedPtr newProgram =
             std::make_shared<HdStGLSLProgram>(
@@ -477,6 +487,11 @@ HdStGLSLProgram::GetComputeProgram(
             return nullptr;
         }
         programInstance.SetValue(newProgram);
+
+    } else {
+        TF_DEBUG(HDST_LOG_COMPUTE_SHADER_PROGRAM_HITS).Msg(
+            "(HIT) Found compute program instance for %s (hash = %zu)\n",
+            shaderFileName.GetText(), hash);
     }
     return programInstance.GetValue();
 }
@@ -515,12 +530,17 @@ HdStGLSLProgram::GetComputeProgram(
     HdStResourceRegistry *resourceRegistry,
     PopulateDescriptorCallback populateDescriptor)
 {
+    const HdStGLSLProgram::ID hash = _ComputeHash(shaderToken, defines);
     // Find the program from registry
     HdInstance<HdStGLSLProgramSharedPtr> programInstance =
-                resourceRegistry->RegisterGLSLProgram(
-                        _ComputeHash(shaderToken, defines));
+                resourceRegistry->RegisterGLSLProgram(hash);
 
     if (programInstance.IsFirstInstance()) {
+
+        TF_DEBUG(HDST_LOG_COMPUTE_SHADER_PROGRAM_MISSES).Msg(
+            "(MISS) First compute program instance for %s (hash = %zu)\n",
+            shaderFileName.GetText(), hash);
+
         // If program does not exist, create new one
         const HioGlslfx glslfx(shaderFileName, HioGlslfxTokens->defVal);
         std::string errorString;
@@ -562,6 +582,10 @@ HdStGLSLProgram::GetComputeProgram(
             return nullptr;
         }
         programInstance.SetValue(newProgram);
+    } else {
+        TF_DEBUG(HDST_LOG_COMPUTE_SHADER_PROGRAM_HITS).Msg(
+            "(HIT) Found compute program instance for %s (hash = %zu)\n",
+            shaderFileName.GetText(), hash);
     }
     return programInstance.GetValue();
 }

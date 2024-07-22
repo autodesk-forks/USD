@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_SCENE_INDEX_OBSERVER_H
 #define PXR_IMAGING_HD_SCENE_INDEX_OBSERVER_H
@@ -60,6 +43,7 @@ public:
         SdfPath primPath;
         TfToken primType;
 
+        AddedPrimEntry() {}
         AddedPrimEntry(const SdfPath &primPath, const TfToken &primType)
         : primPath(primPath)
         , primType(primType)
@@ -106,6 +90,24 @@ public:
 
     using DirtiedPrimEntries = TfSmallVector<DirtiedPrimEntry, 16>;
 
+    //----------------------------------
+
+    /// A notice indicating a prim (and its descendents) was renamed or
+    /// reparented.
+    struct RenamedPrimEntry
+    {
+        SdfPath oldPrimPath;
+        SdfPath newPrimPath;
+        RenamedPrimEntry(
+            const SdfPath &oldPrimPath,
+            const SdfPath &newPrimPath)
+        : oldPrimPath(oldPrimPath)
+        , newPrimPath(newPrimPath)
+        {}
+    };
+
+    using RenamedPrimEntries = TfSmallVector<RenamedPrimEntry, 16>;
+
     //-------------------------------------------------------------------------
 
     /// A notification indicating prims have been added to the scene. The
@@ -115,6 +117,7 @@ public:
     /// for prims that already exist; in that case, observers should be sure to
     /// update the prim type, in case it changed, and resync the prim. This
     /// function is not expected to be threadsafe.
+    HD_API
     virtual void PrimsAdded(
             const HdSceneIndexBase &sender,
             const AddedPrimEntries &entries) = 0;
@@ -123,6 +126,7 @@ public:
     /// Note that this message is considered hierarchical; if \p /Path is
     /// removed, \p /Path/child is considered removed as well. This function is
     /// not expected to be threadsafe.
+    HD_API
     virtual void PrimsRemoved(
             const HdSceneIndexBase &sender,
             const RemovedPrimEntries &entries) = 0;
@@ -133,9 +137,40 @@ public:
     /// datasource locators are considered hierarchical: if \p primvars is
     /// dirtied on a prim, \p primvars/color is considered dirtied as well.
     /// This function is not expected to be threadsafe.
+    HD_API
     virtual void PrimsDirtied(
             const HdSceneIndexBase &sender,
             const DirtiedPrimEntries &entries) = 0;
+
+    /// A notification indicating prims (and their descendants) have been
+    /// renamed or reparented.
+    /// This function is not expected to be threadsafe.
+    HD_API
+    virtual void PrimsRenamed(
+            const HdSceneIndexBase &sender,
+            const RenamedPrimEntries &entries) = 0;
+
+    /// A utility for converting prims renamed messages into equivalent removed
+    /// and added notices.
+    HD_API
+    static void ConvertPrimsRenamedToRemovedAndAdded(
+        const HdSceneIndexBase &sender,
+        const HdSceneIndexObserver::RenamedPrimEntries &renamedEntries,
+        HdSceneIndexObserver::RemovedPrimEntries *outputRemovedEntries,
+        HdSceneIndexObserver::AddedPrimEntries *outputAddedEntries);
+
+    /// A utility for converting prims renamed messages into equivalent removed
+    /// and added notices at the observer level
+    HD_API
+    static void ConvertPrimsRenamedToRemovedAndAdded(
+        const HdSceneIndexBase &sender,
+        const HdSceneIndexObserver::RenamedPrimEntries &renamedEntries,
+        HdSceneIndexObserver *observer);
+
+
+
+
+
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

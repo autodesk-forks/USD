@@ -14,7 +14,7 @@ kind = "component"
     {
         def Material "Material"
         {
-            token inputs:textureCoords = "st"
+            string inputs:textureCoords = "st"
             float inputs:roughness = 0.9
             token outputs:surface.connect = </Scene/Looks/Material/PbrPreview.outputs:surface>
 
@@ -30,7 +30,7 @@ kind = "component"
             def Shader "Primvar"
             {
                 uniform token info:id = "UsdPrimvarReader_float2"
-                token inputs:varname.connect = </Scene/Looks/Material.inputs:textureCoords>
+                string inputs:varname.connect = </Scene/Looks/Material.inputs:textureCoords>
                 float2 outputs:result
             }
 
@@ -123,7 +123,10 @@ def Scope "Prototypes"(
     active=false
 )
 {
-    def Mesh "Plane" {
+    def Mesh "Plane" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
         uniform bool doubleSided = 1
 
         float2[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (interpolation = "vertex")

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usd/usdLux/portalLight.h"
 #include "pxr/usd/usd/schemaRegistry.h"
@@ -103,6 +86,40 @@ UsdLuxPortalLight::_GetTfType() const
     return _GetStaticTfType();
 }
 
+UsdAttribute
+UsdLuxPortalLight::GetWidthAttr() const
+{
+    return GetPrim().GetAttribute(UsdLuxTokens->inputsWidth);
+}
+
+UsdAttribute
+UsdLuxPortalLight::CreateWidthAttr(VtValue const &defaultValue, bool writeSparsely) const
+{
+    return UsdSchemaBase::_CreateAttr(UsdLuxTokens->inputsWidth,
+                       SdfValueTypeNames->Float,
+                       /* custom = */ false,
+                       SdfVariabilityVarying,
+                       defaultValue,
+                       writeSparsely);
+}
+
+UsdAttribute
+UsdLuxPortalLight::GetHeightAttr() const
+{
+    return GetPrim().GetAttribute(UsdLuxTokens->inputsHeight);
+}
+
+UsdAttribute
+UsdLuxPortalLight::CreateHeightAttr(VtValue const &defaultValue, bool writeSparsely) const
+{
+    return UsdSchemaBase::_CreateAttr(UsdLuxTokens->inputsHeight,
+                       SdfValueTypeNames->Float,
+                       /* custom = */ false,
+                       SdfVariabilityVarying,
+                       defaultValue,
+                       writeSparsely);
+}
+
 namespace {
 static inline TfTokenVector
 _ConcatenateAttributeNames(const TfTokenVector& left,const TfTokenVector& right)
@@ -120,6 +137,8 @@ const TfTokenVector&
 UsdLuxPortalLight::GetSchemaAttributeNames(bool includeInherited)
 {
     static TfTokenVector localNames = {
+        UsdLuxTokens->inputsWidth,
+        UsdLuxTokens->inputsHeight,
     };
     static TfTokenVector allNames =
         _ConcatenateAttributeNames(
@@ -148,16 +167,52 @@ PXR_NAMESPACE_CLOSE_SCOPE
 PXR_NAMESPACE_OPEN_SCOPE
 
 static bool
+_ComputeLocalExtent(const float width, const float height, VtVec3fArray *extent)
+{
+    if (!extent) {
+        return false;
+    }
+
+    extent->resize(2);
+    (*extent)[1] = GfVec3f(width * 0.5f, height * 0.5f, 0.0f);
+    (*extent)[0] = -(*extent)[1];
+    return true;
+}
+
+static bool 
 _ComputeExtent(
     const UsdGeomBoundable &boundable,
     const UsdTimeCode &time,
     const GfMatrix4d *transform,
     VtVec3fArray *extent)
 {
-    // Schema defined constant Boundary extent of the unit rectangle in the XY 
-    // plane that defines the portal.
-    return boundable.GetPrim().GetPrimDefinition().GetAttributeFallbackValue(
-            UsdLuxTokens->extent, extent);
+    const UsdLuxPortalLight light(boundable);
+    if (!TF_VERIFY(light)) {
+        return false;
+    }
+
+    float width;
+    if (!light.GetWidthAttr().Get(&width, time)) {
+        return false;
+    }
+
+    float height;
+    if (!light.GetHeightAttr().Get(&height, time)) {
+        return false;
+    }
+
+    if (!_ComputeLocalExtent(width, height, extent)) {
+        return false;
+    }
+
+    if (transform) {
+        GfBBox3d bbox(GfRange3d((*extent)[0], (*extent)[1]), *transform);
+        GfRange3d range = bbox.ComputeAlignedRange();
+        (*extent)[0] = GfVec3f(range.GetMin());
+        (*extent)[1] = GfVec3f(range.GetMax());
+    }
+
+    return true;
 }
 
 TF_REGISTRY_FUNCTION(UsdGeomBoundable)

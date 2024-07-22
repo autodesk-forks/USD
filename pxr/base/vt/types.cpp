@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -29,11 +12,10 @@
 #include "pxr/base/vt/array.h"
 #include "pxr/base/vt/value.h"
 
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 #include "pxr/base/tf/type.h"
 
 #include <algorithm>
-
-#include <boost/preprocessor/seq/for_each.hpp>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -46,37 +28,37 @@ PXR_NAMESPACE_OPEN_SCOPE
 // VtZero<double>()
 // VtZero<GfVec3d>()
 // etc.
-#define VT_ZERO_0_CONSTRUCTOR(r, unused, elem)      \
+#define VT_ZERO_0_CONSTRUCTOR(unused, elem)         \
 template<>                                          \
 VT_API VT_TYPE(elem) VtZero() {                     \
     return (VT_TYPE(elem))(0);                      \
 }
-#define VT_ZERO_0FLOAT_CONSTRUCTOR(r, unused, elem) \
+#define VT_ZERO_0FLOAT_CONSTRUCTOR(unused, elem)    \
 template<>                                          \
 VT_API VT_TYPE(elem) VtZero() {                     \
     return VT_TYPE(elem)(0.0f);                     \
 }
-#define VT_ZERO_0DOUBLE_CONSTRUCTOR(r, unused, elem)\
+#define VT_ZERO_0DOUBLE_CONSTRUCTOR(unused, elem)   \
 template<>                                          \
 VT_API VT_TYPE(elem) VtZero() {                     \
     return VT_TYPE(elem)(0.0);                      \
 }
-#define VT_ZERO_EMPTY_CONSTRUCTOR(r, unused, elem)  \
+#define VT_ZERO_EMPTY_CONSTRUCTOR(unused, elem)     \
 template<>                                          \
 VT_API VT_TYPE(elem) VtZero() {                     \
     return VT_TYPE(elem)() ;                        \
 }
 
-BOOST_PP_SEQ_FOR_EACH(VT_ZERO_0_CONSTRUCTOR , ~,    \
+TF_PP_SEQ_FOR_EACH(VT_ZERO_0_CONSTRUCTOR , ~,       \
     VT_BUILTIN_NUMERIC_VALUE_TYPES                  \
     VT_VEC_VALUE_TYPES                              \
     VT_QUATERNION_VALUE_TYPES                       \
     VT_DUALQUATERNION_VALUE_TYPES)
-BOOST_PP_SEQ_FOR_EACH(VT_ZERO_0FLOAT_CONSTRUCTOR , ~, \
+TF_PP_SEQ_FOR_EACH(VT_ZERO_0FLOAT_CONSTRUCTOR , ~,  \
     VT_MATRIX_FLOAT_VALUE_TYPES)
-BOOST_PP_SEQ_FOR_EACH(VT_ZERO_0DOUBLE_CONSTRUCTOR , ~, \
+TF_PP_SEQ_FOR_EACH(VT_ZERO_0DOUBLE_CONSTRUCTOR , ~, \
     VT_MATRIX_DOUBLE_VALUE_TYPES)
-BOOST_PP_SEQ_FOR_EACH(VT_ZERO_EMPTY_CONSTRUCTOR, ~, \
+TF_PP_SEQ_FOR_EACH(VT_ZERO_EMPTY_CONSTRUCTOR, ~,    \
     VT_RANGE_VALUE_TYPES                            \
     VT_STRING_VALUE_TYPES                           \
     VT_NONARRAY_VALUE_TYPES)
@@ -87,10 +69,10 @@ TF_REGISTRY_FUNCTION(TfType)
     // The following preprocessor code instantiates TfTypes for VtArray holding
     // various scalar value types.
 
-#   define _INSTANTIATE_ARRAY(r, unused, elem) \
+#   define _INSTANTIATE_ARRAY(unused, elem) \
         TfType::Define< VtArray<VT_TYPE(elem)> >();
 
-    BOOST_PP_SEQ_FOR_EACH(_INSTANTIATE_ARRAY, ~, VT_SCALAR_VALUE_TYPES)
+    TF_PP_SEQ_FOR_EACH(_INSTANTIATE_ARRAY, ~, VT_SCALAR_VALUE_TYPES)
 }
 
 // Floating point conversions... in future, we might hope to use SSE here.

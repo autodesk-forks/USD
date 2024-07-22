@@ -1,36 +1,18 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/materialNetworkShader.h"
+#include "pxr/imaging/hdSt/binding.h"
 #include "pxr/imaging/hdSt/resourceBinder.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/textureBinder.h"
 #include "pxr/imaging/hdSt/textureHandle.h"
 #include "pxr/imaging/hdSt/materialParam.h"
 
-#include "pxr/imaging/hd/binding.h"
 #include "pxr/imaging/hd/bufferArrayRange.h"
-#include "pxr/imaging/hd/resource.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
@@ -39,6 +21,8 @@
 
 #include "pxr/base/arch/hash.h"
 #include "pxr/base/tf/envSetting.h"
+
+#include "pxr/base/tf/hash.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -150,21 +134,18 @@ HdSt_MaterialNetworkShader::BindResources(const int program,
                                  HdSt_ResourceBinder const &binder)
 {
     HdSt_TextureBinder::BindResources(binder, _namedTextureHandles);
-
-    binder.BindShaderResources(this);
 }
 /*virtual*/
 void
 HdSt_MaterialNetworkShader::UnbindResources(const int program,
                                    HdSt_ResourceBinder const &binder)
 {
-    binder.UnbindShaderResources(this);
-
     HdSt_TextureBinder::UnbindResources(binder, _namedTextureHandles);
 }
 /*virtual*/
 void
-HdSt_MaterialNetworkShader::AddBindings(HdBindingRequestVector *customBindings)
+HdSt_MaterialNetworkShader::AddBindings(
+    HdStBindingRequestVector *customBindings)
 {
 }
 
@@ -184,17 +165,6 @@ HdSt_MaterialNetworkShader::ComputeHash() const
 HdStShaderCode::ID
 HdSt_MaterialNetworkShader::ComputeTextureSourceHash() const
 {
-    // To avoid excessive plumbing and checking of HgiCapabilities in order to 
-    // determine if bindless textures are enabled, we make things a little 
-    // easier for ourselves by having this function check and return 0 if 
-    // using bindless textures.
-    const bool useBindlessHandles = _namedTextureHandles.empty() ? false :
-        _namedTextureHandles[0].handle->UseBindlessHandles();
-    
-    if (useBindlessHandles) { 
-        return 0;
-    }
-
     if (!_isValidComputedTextureSourceHash) {
         _computedTextureSourceHash = _ComputeTextureSourceHash();
         _isValidComputedTextureSourceHash = true;
@@ -207,12 +177,11 @@ HdSt_MaterialNetworkShader::_ComputeHash() const
 {
     size_t hash = HdSt_MaterialParam::ComputeHash(_params);
 
-    boost::hash_combine(hash, 
-        ArchHash(_fragmentSource.c_str(), _fragmentSource.size()));
-    boost::hash_combine(hash, 
-        ArchHash(_geometrySource.c_str(), _geometrySource.size()));
-    boost::hash_combine(hash,
-        ArchHash(_displacementSource.c_str(), _displacementSource.size()));
+    hash = TfHash::Combine(hash, 
+        ArchHash(_fragmentSource.c_str(), _fragmentSource.size()),
+        ArchHash(_geometrySource.c_str(), _geometrySource.size()),
+        ArchHash(_displacementSource.c_str(), _displacementSource.size())
+    );
 
     // Codegen is inspecting the shader bar spec to generate some
     // of the struct's, so we should probably use _paramSpec
@@ -229,14 +198,24 @@ HdSt_MaterialNetworkShader::_ComputeTextureSourceHash() const
 {
     TRACE_FUNCTION();
 
+    // To avoid excessive plumbing and checking of HgiCapabilities in order to
+    // determine if bindless textures are enabled, we make things a little
+    // easier for ourselves by having this function check and return 0 if
+    // using bindless textures.
+    const bool useBindlessHandles = _namedTextureHandles.empty() ? false :
+        _namedTextureHandles[0].handle->UseBindlessHandles();
+
+    if (useBindlessHandles) {
+        return 0;
+    }
+
     size_t hash = 0;
 
     for (const HdStShaderCode::NamedTextureHandle &namedHandle :
              _namedTextureHandles) {
 
         // Use name, texture object and sampling parameters.
-        boost::hash_combine(hash, namedHandle.name);
-        boost::hash_combine(hash, namedHandle.hash);
+        hash = TfHash::Combine(hash, namedHandle.name, namedHandle.hash);
     }
     
     return hash;
@@ -301,7 +280,7 @@ HdSt_MaterialNetworkShader::SetBufferSources(
                 resourceRegistry->AllocateShaderStorageBufferArrayRange(
                     HdTokens->materialParams,
                     bufferSpecs,
-                    HdBufferArrayUsageHint());
+                    HdBufferArrayUsageHintBitsStorage);
 
             if (!TF_VERIFY(range->IsValid())) {
                 _paramArray.reset();
@@ -338,36 +317,6 @@ void
 HdSt_MaterialNetworkShader::Reload()
 {
     // Nothing to do, this shader's sources are externally managed.
-}
-
-/*static*/
-bool
-HdSt_MaterialNetworkShader::CanAggregate(HdStShaderCodeSharedPtr const &shaderA,
-                                         HdStShaderCodeSharedPtr const &shaderB)
-{
-    // Can aggregate if the shaders are identical.
-    if (shaderA == shaderB) {
-        return true;
-    }
-
-    HdBufferArrayRangeSharedPtr dataA = shaderA->GetShaderData();
-    HdBufferArrayRangeSharedPtr dataB = shaderB->GetShaderData();
-
-    bool dataIsAggregated = (dataA == dataB) ||
-                            (dataA && dataA->IsAggregatedWith(dataB));
-
-    // We can't aggregate if the shaders have data buffers that aren't
-    // aggregated or if the shaders don't match.
-    if (!dataIsAggregated || shaderA->ComputeHash() != shaderB->ComputeHash()) {
-        return false;
-    }
-
-    if (shaderA->ComputeTextureSourceHash() !=
-        shaderB->ComputeTextureSourceHash()) {
-        return false;
-    }
-
-    return true;
 }
 
 TF_DEFINE_PRIVATE_TOKENS(

@@ -2,33 +2,17 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 import os, platform, itertools, sys, unittest
 
 # Initialize Ar to use Sdf_TestResolver unless a different implementation
 # is specified via the TEST_SDF_LAYER_RESOLVER to allow testing with other
 # filesystem-based resolvers.
+sdfTestResolver = "Sdf_TestResolver"
 preferredResolver = os.environ.get(
-    "TEST_SDF_LAYER_RESOLVER", "Sdf_TestResolver")
+    "TEST_SDF_LAYER_RESOLVER", sdfTestResolver)
 
 from pxr import Ar
 Ar.SetPreferredResolver(preferredResolver)
@@ -108,6 +92,17 @@ class TestSdfLayer(unittest.TestCase):
         layer.identifier = Sdf.Layer.CreateIdentifier(
             "testSetIdentifierWithArgsNew.sdf", {"a":"b"})
 
+    def test_SaveWithArgs(self):
+        Sdf.Layer.CreateAnonymous().Export("testSaveWithArgs.sdf")
+
+        # Verify that a layer opened with file format arguments can be saved.
+        layer = Sdf.Layer.FindOrOpen("testSaveWithArgs.sdf", args={"a":"b"})
+        self.assertTrue("a=b" in layer.identifier)
+        self.assertTrue("a" in layer.GetFileFormatArguments())
+
+        layer.documentation = "test_SaveWithArgs"
+        self.assertTrue(layer.Save())
+
     def test_OpenWithInvalidFormat(self):
         l = Sdf.Layer.FindOrOpen('foo.invalid')
         self.assertIsNone(l)
@@ -172,10 +167,6 @@ class TestSdfLayer(unittest.TestCase):
         l = Sdf.Layer.CreateAnonymous()
         self.assertEqual(l.GetDisplayName(), '')
 
-    @unittest.skipIf(platform.system() == "Windows" and
-                     not hasattr(Ar.Resolver, "CreateIdentifier"),
-                     "This test case currently fails on Windows due to "
-                     "path canonicalization issues except with Ar 2.0.")
     def test_UpdateAssetInfo(self):
         # Test that calling UpdateAssetInfo on a layer whose resolved
         # path hasn't changed doesn't cause notification to be sent.
@@ -415,10 +406,6 @@ def "Root"
         self.assertFalse(anonLayer.Import('bogus.sdf'))
         self.assertEqual(newLayer.ExportToString(), anonLayer.ExportToString())
 
-    @unittest.skipIf(platform.system() == "Windows" and
-                     not hasattr(Ar.Resolver, "CreateIdentifier"),
-                     "This test case currently fails on Windows due to "
-                     "path canonicalization issues except with Ar 2.0.")
     def test_LayersWithEquivalentPaths(self):
         # Test that FindOrOpen and Find return the same layer when
         # given different paths that should point to the same location.
@@ -533,9 +520,9 @@ def "Root"
         _TestWithRelativePath('FindOrOpenRelativeLayer.sdf')
         _TestWithRelativePath('subdir/FindOrOpenRelativeLayer.sdf')
 
-    @unittest.skipIf(preferredResolver != "ArDefaultResolver",
+    @unittest.skipIf(preferredResolver != sdfTestResolver,
                      "Test uses search-path functionality specific to "
-                     "ArDefaultResolver")
+                     "the default test resolver")
     def test_FindOrOpenDefaultResolverSearchPaths(self):
         # Set up test directory structure by exporting layers. We
         # don't use Sdf.Layer.CreateNew here to avoid populating the
@@ -821,6 +808,142 @@ over "test"
         emptySet = layer.GetObjectAtPath('/test{empty=}')
         emptySet.RemoveVariant(layer.GetObjectAtPath('/test{empty=nothing}'))
         self.assertTrue(emptySet.isInert)
+
+    def test_FileFormatTargets(self):
+        # Export a dummy layer that we can try to open below.
+        Sdf.Layer.CreateAnonymous().Export('dummy.test_target_format')
+
+        # Opening a layer with the primary format target specified should
+        # give the same layer as opening the layer with no target specified.
+        # Note that the target argument does not show up in the identifier
+        # in this case.
+        layerA = Sdf.Layer.FindOrOpen(
+            'dummy.test_target_format', args={'target':'A'})
+        self.assertTrue(layerA)
+        self.assertTrue('target=A' not in layerA.identifier)
+        self.assertTrue('target' not in layerA.GetFileFormatArguments())
+        self.assertEqual(
+            layerA.GetFileFormat(),
+            Sdf.FileFormat.FindById('test_target_format_A'))
+
+        layerA2 = Sdf.Layer.FindOrOpen('dummy.test_target_format')
+        self.assertTrue(layerA2)
+        self.assertEqual(layerA, layerA2)
+
+        # Opening a layer with another target specified should yield
+        # a different layer, since this is a invoking a different file
+        # format.
+        layerB = Sdf.Layer.FindOrOpen(
+            'dummy.test_target_format', args={'target':'B'})
+        self.assertTrue(layerB)
+        self.assertTrue('target=B' in layerB.identifier)
+        self.assertTrue('target' in layerB.GetFileFormatArguments())
+        self.assertEqual(
+            layerB.GetFileFormat(),
+            Sdf.FileFormat.FindById('test_target_format_B'))
+        self.assertNotEqual(layerA, layerB)
+
+        # Saving changes to both layers should be allowed. However, there
+        # is no built-in synchronization so if both layers end up writing
+        # to the same file they may stomp over each other.
+        layerA.documentation = "From layerA"
+        self.assertTrue(layerA.Save())
+
+        layerB.documentation = "From layerB"
+        self.assertTrue(layerB.Save())
+
+        # Creating a new layer with a file format target should work. Since
+        # the specified target is the primary format target, it does not
+        # show up in the identifier.
+        newLayerA = Sdf.Layer.CreateNew(
+            'new_layer.test_target_format', args={'target':'A'})
+        self.assertTrue(newLayerA)
+        self.assertTrue('target=A' not in newLayerA.identifier)
+        self.assertTrue('target' not in newLayerA.GetFileFormatArguments())
+        self.assertEqual(
+            newLayerA.GetFileFormat(),
+            Sdf.FileFormat.FindById('test_target_format_A'))
+
+        # Creating a new layer without specifying a target will fail because
+        # the layer we created above has the same identifier.
+        with self.assertRaises(Tf.ErrorException):
+            newLayerA2 = Sdf.Layer.CreateNew('new_layer.test_target_format')
+
+        # However, creating a layer with a different target should work.
+        newLayerB = Sdf.Layer.CreateNew(
+            'new_layer.test_target_format', args={'target':'B'})
+        self.assertTrue(newLayerB)
+        self.assertTrue('target=B' in newLayerB.identifier)
+        self.assertTrue('target' in newLayerB.GetFileFormatArguments())
+        self.assertEqual(
+            newLayerB.GetFileFormat(),
+            Sdf.FileFormat.FindById('test_target_format_B'))
+        self.assertNotEqual(newLayerA, newLayerB)
+
+        # Looking up these newly-created layers with and without
+        # arguments should work as expected.
+        self.assertEqual(
+            newLayerA, Sdf.Layer.Find('new_layer.test_target_format'))
+        self.assertEqual(
+            newLayerA,
+            Sdf.Layer.Find('new_layer.test_target_format',
+                           args={'target':'A'}))
+        self.assertEqual(
+            newLayerB,
+            Sdf.Layer.Find('new_layer.test_target_format',
+                           args={'target':'B'}))
+
+    def test_OpenCloseThreadSafety(self):
+        import concurrent.futures
+        PATH = "testSdfLayer_OpenCloseThreadSafety.sdf"
+        OPENS = 25
+        WORKERS = 16
+        ITERATIONS = 10
+        layer = Sdf.Layer.CreateNew(PATH)
+        layer.Save()
+        del layer
+
+        for _ in range(ITERATIONS):
+            with (concurrent.futures.ThreadPoolExecutor(
+                    max_workers=WORKERS)) as executor:
+                futures = [
+                    executor.submit(
+                        lambda: bool(Sdf.Layer.FindOrOpen(PATH)))
+                    for _ in range(OPENS)]
+                completed = sum(1 if f.result() else 0 for f in
+                                concurrent.futures.as_completed(futures))
+            self.assertEqual(completed, OPENS)
+    
+    def test_DefaultPrim(self):
+        layer = Sdf.Layer.CreateAnonymous()
+        
+        # Set defaultPrim
+        layer.defaultPrim = '/foo'
+        self.assertEqual(layer.GetDefaultPrimAsPath(), '/foo')
+
+        # Set the defaultPrim by name, should return path
+        layer.defaultPrim = 'bar'
+        Sdf.CreatePrimInLayer(layer, '/bar')
+        self.assertEqual(layer.GetDefaultPrimAsPath(), '/bar')
+
+        # Set sub-root prims as default, should return path
+        layer.defaultPrim = 'foo/bar'
+        Sdf.CreatePrimInLayer(layer, '/foo/bar')
+        self.assertEqual(layer.GetDefaultPrimAsPath(), '/foo/bar')
+
+        # Set invalid prim path as default, should return empty path
+        layer.defaultPrim = 'foo.bar'
+        self.assertEqual(layer.GetDefaultPrimAsPath(), '')
+        # Set invalid path as default, should return empty path
+        layer.defaultPrim = '//'
+        self.assertEqual(layer.GetDefaultPrimAsPath(), '')
+        layer.defaultPrim = ''
+        self.assertEqual(layer.GetDefaultPrimAsPath(), '')
+
+        # Try layer-level authoring API.
+        self.assertTrue(layer.HasDefaultPrim())
+        layer.ClearDefaultPrim()
+        self.assertFalse(layer.HasDefaultPrim())
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_TYPE_H
 #define PXR_BASE_TF_TYPE_H
@@ -269,7 +252,10 @@ public:
 
     /// Return a C++ RTTI type_info for this type.
     ///
-    /// If this type is unknown or has not yet had a C++ type defined,
+    /// If this type is unknown, this will return a unique \c type_info
+    /// specifically for the unknown type.
+    ///
+    /// If this type has been declared, but not yet had a C++ type defined,
     /// \c typeid(void) will be returned.
     ///
     /// \see Define()
@@ -647,50 +633,38 @@ private:
     static TfType const &_FindImplPyPolymorphic(PyPolymorphicBase const *ptr);
     
     // PyPolymorphic case.
-    template <class T>
-    static typename std::enable_if<
-        std::is_base_of<PyPolymorphicBase, T>::value, TfType const &>::type
-    _FindImpl(T const *rawPtr) {
-        return _FindImplPyPolymorphic(
-            static_cast<PyPolymorphicBase const *>(rawPtr));
+    static TfType const &
+    _FindImpl(PyPolymorphicBase const *rawPtr) {
+        return _FindImplPyPolymorphic(rawPtr);
     }
 
-    // Polymorphic.
+    // Not PyPolymorphic.
     template <class T>
-    static typename std::enable_if<
-        std::is_polymorphic<T>::value &&
-        !std::is_base_of<PyPolymorphicBase, T>::value, TfType const &>::type
+    static TfType const &
     _FindImpl(T const *rawPtr) {
-        if (auto ptr = dynamic_cast<PyPolymorphicBase const *>(rawPtr))
-            return _FindImplPyPolymorphic(ptr);
-        return Find(typeid(*rawPtr));
+        if constexpr (std::is_polymorphic<T>::value) {
+            if (auto ptr = dynamic_cast<PyPolymorphicBase const *>(rawPtr)) {
+                return _FindImplPyPolymorphic(ptr);
+            }
+            else {
+                return Find(typeid(*rawPtr));
+            }
+        }
+        else {
+            return Find(typeid(T));
+        }
     }
-
-    template <class T>
-    static typename std::enable_if<
-        !std::is_polymorphic<T>::value, TfType const &>::type
-    _FindImpl(T const *rawPtr) {
-        return Find(typeid(T));
-    }
-
 #else
     template <class T>
-    static typename std::enable_if<
-        std::is_polymorphic<T>::value, TfType const &>::type
+    static TfType const &
     _FindImpl(T const *rawPtr) {
         return Find(typeid(*rawPtr));
-    }
-
-    template <class T>
-    static typename std::enable_if<
-        !std::is_polymorphic<T>::value, TfType const &>::type
-    _FindImpl(T const *rawPtr) {
-        return Find(typeid(T));
     }
 
 #endif // PXR_PYTHON_SUPPORT_ENABLED
 
-    bool _IsAImpl(TfType queryType) const;
+    // Callers must hold at least a read lock on the type registry's mutex.
+    bool _IsAImplNoLock(TfType queryType) const;
 
     typedef void *(*_CastFunction)(void *, bool derivedToBase);
 
@@ -709,8 +683,9 @@ private:
     // Construct a TfType with the given _TypeInfo.
     explicit TfType(_TypeInfo *info) : _info(info) {}
 
-    // Adds base type(s), and link as a derived type of that bases.
-    void _AddBases(
+    // Add base type(s), and link as a derived type of the bases.  Callers
+    // must hold a registry write lock.
+    void _AddBasesNoLock(
         const std::vector<TfType> &bases,
         std::vector<std::string> *errorToEmit) const;
 
@@ -725,6 +700,20 @@ private:
                         size_t sizeofType,
                         bool isPodType,
                         bool isEnumType) const;
+
+    TF_API
+    static TfType const &_DeclareImpl(
+        const std::type_info &thisTypeInfo,
+        const std::type_info **baseTypeInfos,
+        size_t numBaseTypes);
+
+    TF_API
+    static TfType const &_DefineImpl(
+        const std::type_info &thisTypeInfo,
+        const std::type_info **baseTypeInfos,
+        _CastFunction *castFunctions,
+        size_t numBaseTypes,
+        size_t sizeofThisType, bool isPod, bool isEnum);
 
     // Execute the definition callback if one exists.
     void _ExecuteDefinitionCallback() const;

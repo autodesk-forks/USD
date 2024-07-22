@@ -1,29 +1,13 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/layerStack.h"
+#include "pxr/usd/pcp/expressionVariables.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/base/tf/makePyConstructor.h"
 #include "pxr/base/tf/pyPtrHelpers.h"
@@ -78,6 +62,19 @@ void wrapLayerStack()
         .add_property("layerTree", 
                       make_function(&PcpLayerStack::GetLayerTree,
                                     return_value_policy<return_by_value>()))
+        .add_property("sessionLayerTree", 
+                      make_function(&PcpLayerStack::GetSessionLayerTree,
+                                    return_value_policy<return_by_value>()))
+        .add_property("mutedLayers",
+                      make_function(&PcpLayerStack::GetMutedLayers,
+                                    return_value_policy<TfPySequenceToList>()))
+        .add_property("expressionVariables",
+                      make_function(&PcpLayerStack::GetExpressionVariables,
+                                    return_value_policy<return_by_value>()))
+        .add_property("expressionVariableDependencies",
+                      make_function(
+                          &PcpLayerStack::GetExpressionVariableDependencies,
+                          return_value_policy<TfPySequenceToList>()))
         .add_property("relocatesSourceToTarget",
                       make_function(&PcpLayerStack::GetRelocatesSourceToTarget,
                                     return_value_policy<return_by_value>()))
@@ -101,5 +98,3 @@ void wrapLayerStack()
         // TODO: repr, eq, etc.
         ;
 }
-
-TF_REFPTR_CONST_VOLATILE_GET(PcpLayerStack)

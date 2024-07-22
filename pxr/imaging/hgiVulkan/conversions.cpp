@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hgiVulkan/vulkan.h"
 #include "pxr/imaging/hgiVulkan/conversions.h"
@@ -168,12 +151,13 @@ _BufferUsageTable[][2] =
     {HgiBufferUsageIndex32, VK_BUFFER_USAGE_INDEX_BUFFER_BIT},
     {HgiBufferUsageVertex,  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
     {HgiBufferUsageStorage, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
+    {HgiBufferUsageIndirect, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT},
     {HgiBufferUsageShaderBindingTable, VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR},
     {HgiBufferUsageAccelerationStructureBuildInputReadOnly, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR},
     {HgiBufferUsageAccelerationStructureStorage, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR},
     {HgiBufferUsageShaderDeviceAddress, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT},
 };
-static_assert(HgiBufferUsageCustomBitsBegin == 1 << 10, "");
+static_assert(HgiBufferUsageCustomBitsBegin == 1 << 11, "");
 
 static const uint32_t
 _CullModeTable[HgiCullModeCount][2] =
@@ -197,8 +181,10 @@ static_assert(HgiPolygonModeCount==3, "");
 static const uint32_t
 _WindingTable[HgiWindingCount][2] =
 {
-    {HgiWindingClockwise,        VK_FRONT_FACE_CLOCKWISE},
-    {HgiWindingCounterClockwise, VK_FRONT_FACE_COUNTER_CLOCKWISE}
+    // We flip the winding order in HgiVulkan. See
+    // HgiVulkanGraphicsCmds::SetViewport for details.
+    {HgiWindingClockwise,        VK_FRONT_FACE_COUNTER_CLOCKWISE},
+    {HgiWindingCounterClockwise, VK_FRONT_FACE_CLOCKWISE}
 };
 static_assert(HgiWindingCount==2, "");
 
@@ -211,6 +197,7 @@ _BindResourceTypeTable[HgiBindResourceTypeCount][2] =
     {HgiBindResourceTypeStorageImage,         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
     {HgiBindResourceTypeUniformBuffer,        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
     {HgiBindResourceTypeStorageBuffer,        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+    {HgiBindResourceTypeTessFactors,          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
     {HgiBindResourceTypeAccelerationStructure,        VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR},
 };
 static_assert(HgiBindResourceTypeCount==7, "");
@@ -271,7 +258,7 @@ _textureTypeTable[HgiTextureTypeCount][2] =
     {HgiTextureType1D,      VK_IMAGE_TYPE_1D},
     {HgiTextureType2D,      VK_IMAGE_TYPE_2D},
     {HgiTextureType3D,      VK_IMAGE_TYPE_3D},
-    {HgiTextureType1DArray, VK_IMAGE_TYPE_2D},
+    {HgiTextureType1DArray, VK_IMAGE_TYPE_1D},
     {HgiTextureType2DArray, VK_IMAGE_TYPE_2D}
 };
 static_assert(HgiTextureTypeCount==5, "");
@@ -413,12 +400,21 @@ _AccelerationStructureGeometryFlagsTable[][2] =
 };
 
 VkFormat
-HgiVulkanConversions::GetFormat(HgiFormat inFormat)
+HgiVulkanConversions::GetFormat(HgiFormat inFormat, bool depthFormat)
 {
     if (!TF_VERIFY(inFormat!=HgiFormatInvalid)) {
         return VK_FORMAT_UNDEFINED;
     }
-    return VkFormat(_FormatTable[inFormat][1]);
+
+    VkFormat vkFormat = VkFormat(_FormatTable[inFormat][1]);
+
+    // Special case for float32 depth format not properly handled by
+    // _FormatTable
+    if (depthFormat && inFormat == HgiFormatFloat32) {
+        vkFormat = VK_FORMAT_D32_SFLOAT;
+    }
+
+    return vkFormat;
 }
 
 HgiFormat
@@ -445,14 +441,18 @@ HgiVulkanConversions::GetFormat(VkFormat inFormat)
 VkImageAspectFlags
 HgiVulkanConversions::GetImageAspectFlag(HgiTextureUsage usage)
 {
-    if (usage & HgiTextureUsageBitsDepthTarget) {
-        if (usage & HgiTextureUsageBitsStencilTarget) {
-            return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-        }
-        return VK_IMAGE_ASPECT_DEPTH_BIT;
+    VkImageAspectFlags result = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    if (usage & HgiTextureUsageBitsDepthTarget && 
+        usage & HgiTextureUsageBitsStencilTarget) {
+        result = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    } else if (usage & HgiTextureUsageBitsDepthTarget) {
+        result = VK_IMAGE_ASPECT_DEPTH_BIT;
+    } else if (usage & HgiTextureUsageBitsStencilTarget) {
+        result = VK_IMAGE_ASPECT_STENCIL_BIT;
     }
 
-    return VK_IMAGE_ASPECT_COLOR_BIT;
+    return result;
 }
 
 VkImageUsageFlags

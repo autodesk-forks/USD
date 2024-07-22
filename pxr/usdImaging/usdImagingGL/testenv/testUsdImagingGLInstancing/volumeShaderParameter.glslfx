@@ -1,0 +1,83 @@
+-- glslfx version 0.1
+
+//
+// Copyright 2019 Pixar
+//
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
+//
+
+-- configuration
+{
+    "techniques": {
+        "default": {
+            "volumeShader": {
+                "source": [ "VolumeShaderParameter.VolumeShader" ]
+            }
+        }
+    }
+}
+
+--- --------------------------------------------------------------------------
+-- glsl VolumeShaderParameter.VolumeShader
+
+// Forward declare function.
+FORWARD_DECL(vec3 coordsToLocalVolumeSpace(vec3));
+
+float
+scaledDistance(vec3 coords)
+{
+    const vec3 p = coordsToLocalVolumeSpace(coords);
+
+    // Bounding box
+    const vec3 localMin = HdGet_bboxLocalMin().xyz;
+    const vec3 localMax = HdGet_bboxLocalMax().xyz;
+
+    vec3 relativeToCenter = p - (localMin + localMax) / 2;
+    relativeToCenter /= (localMax - localMin);
+
+    return length(relativeToCenter);
+}
+
+// Extinction function, returns sum of absorption and out-scattering cross
+// ratio.
+//
+// Here: constant on ellipsoid and zero outside.
+float
+extinctionFunction(vec3 coords)
+{
+    return 0;
+}
+
+// Scattering function, returns in-scattering cross-section (will be combined
+// with phase function).
+//
+// Here: constant on ellipsoid and zero outside.
+float
+scatteringFunction(vec3 coords)
+{
+    return 0;
+}
+
+// Emission function, returns emission cross-section.
+//
+// Here: constant on ellipsoid and zero outside.
+vec3
+emissionFunction(vec3 coords)
+{
+    return HdGet_emissionColor() * step(scaledDistance(coords), 0.5);
+}
+
+// Phase function in volume rendering equation.
+//
+// Here: isotropic.
+float
+phaseFunction(vec3 direction1, vec3 direction2)
+{
+    const float pi = 3.14159265358979;
+    const float sphereArea = 4.0 * pi;
+    const float inverseSphereArea = 1.0 / sphereArea;
+
+    return inverseSphereArea;
+}
+

@@ -1,6 +1,11 @@
 .. It is unfortunate we disable sub-structure with "titlesonly" for all the
 .. Resources pages, but until we can figure out how to do it selectively for
 .. the Glossary, which is much too long to be indexed thusly, that's where we are
+
+.. Note that for the left nav for the RTD theme, certain settings in this file
+.. are replaced by RTD settings in conf.py. Example: maxdepth is replaced by 
+.. navigation_depth in conf.py
+
 .. toctree::
    :hidden:
    :titlesonly:
@@ -10,6 +15,18 @@
    Terms and Concepts <glossary>
    Tutorials <tut_usd_tutorials>
    dl_downloads
+   usd_products
+
+.. toctree::
+   :hidden:
+   :caption: User Guides
+   :maxdepth: 1
+
+   Collections and Patterns <user_guides/collections_and_patterns>
+   Namespace Editing <user_guides/namespace_editing>
+   Rendering with USD <user_guides/render_user_guide>
+   USD Variable Expressions <user_guides/variable_expressions>
+   Schema Domains <user_guides/schemas/index>
 
 .. toctree::
    :hidden:
@@ -28,10 +45,12 @@
    :hidden:
    :caption: Collaborate
 
-   Source Code @ GitHub <https://github.com/PixarAnimationStudios/USD>
-   usd-interest Group <https://groups.google.com/g/usd-interest>
+   Source Code @ GitHub <https://github.com/PixarAnimationStudios/OpenUSD>
+   OpenUSD Forum <https://forum.openusd.org>
    Contributing <contributing_to_usd>
    Contributors <contributors>
+   Release Schedule <release_schedule>
+   License <license>
 
 .. toctree::
    :hidden:

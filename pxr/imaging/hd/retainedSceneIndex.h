@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_RETAINED_SCENE_INDEX_H
 #define PXR_IMAGING_HD_RETAINED_SCENE_INDEX_H
@@ -45,6 +28,7 @@ class HdRetainedSceneIndex : public HdSceneIndexBase
 public:
 
     /// Creates a new retained scene index.
+    HD_API
     static HdRetainedSceneIndexRefPtr New() {
         return TfCreateRefPtr(new HdRetainedSceneIndex);
     }
@@ -64,10 +48,12 @@ public:
     /// type, and datasource; the retained scene index assumes ownership of
     /// these and uses them to answer scene queries. This will also generate
     /// a PrimsAdded notification, if applicable.
+    HD_API
     virtual void AddPrims(const AddedPrimEntries &entries);
 
     /// Removes a prim subtree from the retained scene index. This will also
     /// generate a PrimsRemoved notification, if applicable.
+    HD_API
     virtual void RemovePrims(
         const HdSceneIndexObserver::RemovedPrimEntries &entries);
 
@@ -75,13 +61,17 @@ public:
     /// doesn't have any internal invalidation mechanisms, but it generates
     /// a PrimsDirtied notification, if applicable. Subclasses can use it for
     /// invalidation of caches or retained data.
+    HD_API
     virtual void DirtyPrims(
             const HdSceneIndexObserver::DirtiedPrimEntries &entries);
 
     // ------------------------------------------------------------------------
     // HdSceneIndexBase implementations.
 
+    HD_API
     HdSceneIndexPrim GetPrim(const SdfPath & primPath) const override;
+
+    HD_API
     SdfPathVector GetChildPrimPaths(const SdfPath &primPath) const override;
 
 protected:

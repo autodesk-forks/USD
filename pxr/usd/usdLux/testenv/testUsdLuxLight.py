@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -369,6 +352,8 @@ class TestUsdLuxLight(unittest.TestCase):
         self.assertTrue(cylLight)
         sphereLight = UsdLux.SphereLight.Define(stage, "/SphereLight")
         self.assertTrue(sphereLight)
+        portalLight = UsdLux.PortalLight.Define(stage, "/PortalLight")
+        self.assertTrue(portalLight)
 
         # Verify the extent and bbox computations for each light given its
         # fallback attribute values.
@@ -376,6 +361,7 @@ class TestUsdLuxLight(unittest.TestCase):
         _VerifyExtentAndBBox(diskLight, [(-0.5, -0.5, 0.0), (0.5, 0.5, 0.0)])
         _VerifyExtentAndBBox(cylLight, [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)])
         _VerifyExtentAndBBox(sphereLight, [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)])
+        _VerifyExtentAndBBox(portalLight, [(-0.5, -0.5, 0.0), (0.5, 0.5, 0.0)])
 
         # Change the size related attribute of each light and verify the extents
         # and bounding boxes are updated.
@@ -393,20 +379,18 @@ class TestUsdLuxLight(unittest.TestCase):
         sphereLight.CreateRadiusAttr(3.0)
         _VerifyExtentAndBBox(sphereLight, [(-3.0, -3.0, -3.0), (3.0, 3.0, 3.0)])
 
-        # Special case for portal light. Portal lights don't have any attributes
-        # that affect their extent. Extent values are used only when
-        # explicitly authored but portal lights' do register a
-        # ComputeExtentFuction, which sets the extent as default from the
-        # schema.
-        portalLight = UsdLux.PortalLight.Define(stage, "/PortalLight")
-        self.assertTrue(portalLight)
-        _VerifyExtentAndBBox(portalLight, [(-0.5, -0.5, 0.0), (0.5, 0.5, 0.0)])
+        portalLight.CreateWidthAttr(4.0)
+        portalLight.CreateHeightAttr(6.0)
+        _VerifyExtentAndBBox(portalLight, [(-2.0, -3.0, 0.0), (2.0, 3.0, 0.0)])
 
         # For completeness verify that distant and dome lights are not 
         # boundable.
         domeLight = UsdLux.DomeLight.Define(stage, "/DomeLight")
         self.assertTrue(domeLight)
         self.assertFalse(UsdGeom.Boundable(domeLight))
+        domeLight_1 = UsdLux.DomeLight.Define(stage, "/DomeLight_1")
+        self.assertTrue(domeLight_1)
+        self.assertFalse(UsdGeom.Boundable(domeLight_1))
         distLight = UsdLux.DistantLight.Define(stage, "/DistLight")
         self.assertTrue(distLight)
         self.assertFalse(UsdGeom.Boundable(distLight))
@@ -455,12 +439,26 @@ class TestUsdLuxLight(unittest.TestCase):
             'DistantLight' : ['angle'],
             'DomeLight' : ['texture:file', 'texture:format'],
             'GeometryLight' : [],
-            'PortalLight' : [],
+            'PortalLight' : ['width', 'height'],
             'RectLight' : ['width', 'height', 'texture:file'],
             'SphereLight' : ['radius'],
             'MeshLight' : [],
             'VolumeLight' : []
             }
+
+        expectedLightTypes = [
+            'CylinderLight',
+            'DiskLight',
+            'DistantLight',
+            'DomeLight',
+            'DomeLight_1',
+            'GeometryLight',
+            'PortalLight',
+            'RectLight',
+            'SphereLight',
+            'MeshLight',
+            'VolumeLight'
+            ]
 
         # Get all the derived types of UsdLuxBoundableLightBase and 
         # UsdLuxNonboundableLightBase that are defined in UsdLux
@@ -479,7 +477,7 @@ class TestUsdLuxLight(unittest.TestCase):
         # Verify that at least one known light type is in our list to guard
         # against this giving false positives if no light types are available.
         self.assertIn(UsdLux.RectLight, lightTypes)
-        self.assertEqual(len(lightTypes), len(expectedLightNodes))
+        self.assertEqual(len(lightTypes), len(expectedLightTypes))
 
         stage = Usd.Stage.CreateInMemory()
         prim = stage.DefinePrim("/Prim")
@@ -564,8 +562,11 @@ class TestUsdLuxLight(unittest.TestCase):
                 if expectedTypeName.isArray:
                     if not primDefaultValue or len(primDefaultValue) == 0:
                         expectedTypeName = expectedTypeName.scalarType
-                elif expectedTypeName == Sdf.ValueTypeNames.Token:
-                    expectedTypeName = Sdf.ValueTypeNames.String 
+                # token SdfType should Have String SdrTypes, but still return as
+                # token when queried for GetTypeAsSdfType
+                if expectedTypeName == Sdf.ValueTypeNames.Token:
+                    self.assertEqual(nodeInput.GetType(),
+                            Sdf.ValueTypeNames.String)
                 # Bool SdfTypes should Have Int SdrTypes, but still return as
                 # Bool when queried for GetTypeAsSdfType
                 if expectedTypeName == Sdf.ValueTypeNames.Bool:

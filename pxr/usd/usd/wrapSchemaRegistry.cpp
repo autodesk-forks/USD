@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/schemaRegistry.h"
@@ -33,6 +16,7 @@
 #include "pxr/base/tf/pySingleton.h"
 
 #include <boost/python.hpp>
+#include <boost/python/enum.hpp>
 
 using std::string;
 
@@ -49,11 +33,58 @@ _WrapBuildComposedPrimDefinition(const UsdSchemaRegistry &self,
 
 void wrapUsdSchemaRegistry()
 {
-    typedef UsdSchemaRegistry This;
-    typedef TfWeakPtr<UsdSchemaRegistry> ThisPtr;
+    using SchemaInfoConstPtr = const UsdSchemaRegistry::SchemaInfo *;
+    using SchemaInfoConstPtrVector = std::vector<SchemaInfoConstPtr>;
 
-    class_<This, ThisPtr, boost::noncopyable>("SchemaRegistry", no_init)
+    using This = UsdSchemaRegistry;
+    using ThisPtr = TfWeakPtr<UsdSchemaRegistry>;
+
+    scope s = class_<This, ThisPtr, boost::noncopyable>("SchemaRegistry", no_init)
         .def(TfPySingleton())
+        .def("ParseSchemaFamilyAndVersionFromIdentifier",
+             &This::ParseSchemaFamilyAndVersionFromIdentifier,
+             (arg("schemaIdentifier")),
+             return_value_policy<TfPyPairToTuple>())
+        .staticmethod("ParseSchemaFamilyAndVersionFromIdentifier")
+        .def("MakeSchemaIdentifierForFamilyAndVersion",
+             &This::MakeSchemaIdentifierForFamilyAndVersion,
+             (arg("schemaFamily"), arg("schemaVersion")))
+        .staticmethod("MakeSchemaIdentifierForFamilyAndVersion")
+
+        .def("IsAllowedSchemaFamily", &This::IsAllowedSchemaFamily,
+             arg("schemaFamily"))
+        .staticmethod("IsAllowedSchemaFamily")
+        .def("IsAllowedSchemaIdentifier", &This::IsAllowedSchemaIdentifier,
+             arg("schemaIdentifier"))
+        .staticmethod("IsAllowedSchemaIdentifier")
+
+        .def("FindSchemaInfo", 
+             (SchemaInfoConstPtr(*)(const TfType &)) &This::FindSchemaInfo,
+             (arg("schemaType")),
+             return_internal_reference<>())
+        .def("FindSchemaInfo", 
+             (SchemaInfoConstPtr(*)(const TfToken &)) &This::FindSchemaInfo,
+             (arg("schemaIdentifier")),
+             return_internal_reference<>())
+        .def("FindSchemaInfo", 
+             (SchemaInfoConstPtr(*)(const TfToken &, UsdSchemaVersion)) 
+             &This::FindSchemaInfo,
+             (arg("schemaFamily"), arg("schemaVersion")),
+             return_internal_reference<>())
+        .staticmethod("FindSchemaInfo")
+
+        .def("FindSchemaInfosInFamily", 
+             (const SchemaInfoConstPtrVector &(*)(const TfToken &))
+             &This::FindSchemaInfosInFamily,
+             arg("schemaFamily"),
+             return_value_policy<TfPySequenceToList>())
+        .def("FindSchemaInfosInFamily",
+             (SchemaInfoConstPtrVector(*)(
+                 const TfToken &, UsdSchemaVersion, This::VersionPolicy))
+             &This::FindSchemaInfosInFamily,
+             (arg("schemaFamily"), arg("schemaVersion"), arg("versionPolicy")),
+             return_value_policy<TfPySequenceToList>())
+        .staticmethod("FindSchemaInfosInFamily")
 
         .def("GetSchemaTypeName",
              (TfToken (*)(const TfType &)) &This::GetSchemaTypeName,
@@ -197,4 +228,29 @@ void wrapUsdSchemaRegistry()
         .def("GetFallbackPrimTypes", &This::GetFallbackPrimTypes, 
              return_value_policy<return_by_value>())
         ;
+
+    // Need to convert TfToken properties of SchemaInfo to string
+    // to wrap them to python
+    auto wrapIdentifier = +[](const This::SchemaInfo &schemaInfo) {
+        return schemaInfo.identifier.GetString();
+    };
+    auto wrapFamily = +[](const This::SchemaInfo &schemaInfo) {
+        return schemaInfo.family.GetString();
+    };
+
+    class_<This::SchemaInfo>("SchemaInfo", no_init)
+        .add_property("identifier", wrapIdentifier)
+        .def_readonly("type", &This::SchemaInfo::type)
+        .add_property("family", wrapFamily)
+        .def_readonly("version", &This::SchemaInfo::version)
+        .def_readonly("kind", &This::SchemaInfo::kind)
+        ;
+
+    enum_<UsdSchemaRegistry::VersionPolicy>("VersionPolicy")
+        .value("All", UsdSchemaRegistry::VersionPolicy::All)
+        .value("GreaterThan", UsdSchemaRegistry::VersionPolicy::GreaterThan)
+        .value("GreaterThanOrEqual", UsdSchemaRegistry::VersionPolicy::GreaterThanOrEqual)
+        .value("LessThan", UsdSchemaRegistry::VersionPolicy::LessThan)
+        .value("LessThanOrEqual", UsdSchemaRegistry::VersionPolicy::LessThanOrEqual)
+    ;    
 }

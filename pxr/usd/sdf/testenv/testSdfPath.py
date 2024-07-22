@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -75,6 +58,20 @@ class TestSdfPath(unittest.TestCase):
         self.assertTrue(Sdf.Path('aaa') < Sdf.Path('aab'))
         self.assertTrue(not Sdf.Path('aaa') < Sdf.Path())
         self.assertTrue(Sdf.Path('/') < Sdf.Path('/a'))
+
+        # Test greaterthan
+        self.assertGreater(Sdf.Path('aab'), Sdf.Path('aaa'))
+        self.assertGreater(Sdf.Path('/a'), Sdf.Path.emptyPath)
+
+        # Test lessequal
+        self.assertLessEqual(Sdf.Path('aaa'), Sdf.Path('aab'))
+        self.assertLessEqual(Sdf.Path('aaa'), Sdf.Path('aaa'))
+        self.assertLessEqual(Sdf.Path.emptyPath, Sdf.Path('/a'))
+
+        # Test greaterequal
+        self.assertGreaterEqual(Sdf.Path('aab'), Sdf.Path('aaa'))
+        self.assertGreaterEqual(Sdf.Path('aaa'), Sdf.Path('aaa'))
+        self.assertGreaterEqual(Sdf.Path('/a'), Sdf.Path.emptyPath)
         
         # XXX test path from elements ['.prop'] when we have that wrapped?
         
@@ -100,10 +97,14 @@ class TestSdfPath(unittest.TestCase):
             "Foo.bar[targ.attr].boom",
             "/A/B/C.rel3[/Blah].attr3",
             "A/B.rel2[/A/B/C.rel3[/Blah].attr3].attr2",
-            "/A.rel1[/A/B.rel2[/A/B/C.rel3[/Blah].attr3].attr2].attr1"
+            "/A.rel1[/A/B.rel2[/A/B/C.rel3[/Blah].attr3].attr2].attr1",
+            "/root_utf8_umlaute_ß_3",
+            "Süßigkeiten.bar",
+            "/ß34/情報/información",
+            "情報._جيد"
         ]
-        testAbsolute = [True, False, False, False, False, False, True, False, False, False, True, False, False, False, True, False, True]
-        testProperty = [True, False, False, True, True, True, False, True, False, True, True, True, True, True, True, True, True]
+        testAbsolute = [True, False, False, False, False, False, True, False, False, False, True, False, False, False, True, False, True, True, False, True, False]
+        testProperty = [True, False, False, True, True, True, False, True, False, True, True, True, True, True, True, True, True, False, True, False, True]
         testElements = [
             ["Foo", "Bar", ".baz"],
             ["Foo"],
@@ -121,7 +122,11 @@ class TestSdfPath(unittest.TestCase):
             ["Foo", ".bar", "[targ.attr]", ".boom"],
             ["A", "B", "C", ".rel3", "[/Blah]", ".attr3"],
             ["A", "B", ".rel2", "[/A/B/C.rel3[/Blah].attr3]", ".attr2"],
-            ["A", ".rel1", "[/A/B.rel2[/A/B/C.rel3[/Blah].attr3].attr2]", ".attr1"]
+            ["A", ".rel1", "[/A/B.rel2[/A/B/C.rel3[/Blah].attr3].attr2]", ".attr1"],
+            ["root_utf8_umlaute_ß_3"],
+            ["Süßigkeiten", ".bar"],
+            ["ß34", "情報", "información"],
+            ["情報", "._جيد"]
         ]
         
         # Test IsAbsolutePath and IsPropertyPath
@@ -130,6 +135,10 @@ class TestSdfPath(unittest.TestCase):
             self.assertEqual(path.IsPropertyPath(), testProperty[testIndex])
             prefixes = Sdf._PathElemsToPrefixes(path.IsAbsolutePath(), elements)
             self.assertEqual(path.GetPrefixes(), prefixes)
+            for i in range(path.pathElementCount):
+                prefixes = Sdf._PathElemsToPrefixes(
+                    path.IsAbsolutePath(), elements, i)
+                self.assertEqual(path.GetPrefixes(i), prefixes)
             self.assertEqual(path, eval(repr(path)))
             assert Sdf.Path.IsValidPathString(str(path))
         

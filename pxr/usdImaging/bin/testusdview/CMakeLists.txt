@@ -29,6 +29,26 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdviewDetachedLayers
+    DEST testUsdviewDetachedLayers1
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdviewDetachedLayers
+    DEST testUsdviewDetachedLayers2
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdviewDetachedLayers
+    DEST testUsdviewDetachedLayers3
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdviewDetachedLayers
+    DEST testUsdviewDetachedLayers4
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdviewFileArguments
     DEST testUsdviewFileArguments1
 )
@@ -214,11 +234,6 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
-    SRC testenv/testUsdviewSampleFilterEdits
-    DEST testUsdviewSampleFilterEdits
-)
-
-pxr_install_test_dir(
     SRC testenv/testUsdviewAnimatedBounds
     DEST testUsdviewAnimatedBounds
 )
@@ -269,6 +284,16 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdviewSceneLights
+    DEST testUsdviewSceneLights
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdviewSceneLights
+    DEST testUsdviewSceneLights_Delegate
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdviewLightVisibility
     DEST testUsdviewLightVisibility
 )
@@ -314,11 +339,6 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
-    SRC testenv/testUsdviewLegacyImpl
-    DEST testUsdviewLegacyImpl
-)
-
-pxr_install_test_dir(
     SRC testenv/testUsdviewOIT
     DEST testUsdviewOIT
 )
@@ -338,6 +358,20 @@ pxr_install_test_dir(
     DEST testUsdviewPointWidths
 )
 
+pxr_install_test_dir(
+    SRC testenv/testUsdviewPointInstancerVariant
+    DEST testUsdviewPointInstancerVariant
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdviewExpressionVariableEdits
+    DEST testUsdviewExpressionVariableEdits
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdviewExpressionVariableEdits
+    DEST testUsdviewExpressionVariableEdits_Delegate
+)
 
 pxr_register_test(testUsdviewAlive
     PRE_COMMAND "${PYTHON_EXECUTABLE} testUsdviewAliveSetup.py"
@@ -346,22 +380,52 @@ pxr_register_test(testUsdviewAlive
     EXPECTED_RETURN_CODE 0
 )
 
+pxr_register_test(testUsdviewDetachedLayers1
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_1.py --norender --detachLayers root.usd"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewDetachedLayers2
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_2.py --norender --detachLayersInclude 'foo,with spaces' root.usd"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewDetachedLayers3
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_3.py --norender --detachLayers --detachLayersExclude 'foo,with spaces' root.usd"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewDetachedLayers4
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_4.py --norender root.usd"
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_register_test(testUsdviewFileArguments1
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testValidFileArg.py test.usda"
     EXPECTED_RETURN_CODE 0
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewFileArguments2
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testValidFileArg.py test.usd"
     EXPECTED_RETURN_CODE 0
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewFileArguments3
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testValidFileArg.py test.usdc"
     EXPECTED_RETURN_CODE 0
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewFileArguments4
@@ -370,6 +434,8 @@ pxr_register_test(testUsdviewFileArguments4
     STDERR_REDIRECT py_test_out
     DIFF_COMPARE py_test_out
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewFileArguments5
@@ -379,6 +445,8 @@ pxr_register_test(testUsdviewFileArguments5
     STDERR_REDIRECT invalidSyntax_test_out
     DIFF_COMPARE invalidSyntax_test_out
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewFileArguments6
@@ -387,6 +455,8 @@ pxr_register_test(testUsdviewFileArguments6
     STDERR_REDIRECT txt_test_out
     DIFF_COMPARE txt_test_out
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewFileArguments7
@@ -395,36 +465,48 @@ pxr_register_test(testUsdviewFileArguments7
     STDERR_REDIRECT missing_test_out
     DIFF_COMPARE missing_test_out
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewWrapper1
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback.py"
     EXPECTED_RETURN_CODE 2
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewWrapper2
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback_Invalid_1.py test.usda"
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewWrapper3
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback_Invalid_2.py test.usda"
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewWrapper4
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback_Invalid_3.py test.usda"
     EXPECTED_RETURN_CODE 1
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewWrapper5
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview test.usda"
     EXPECTED_RETURN_CODE 2
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
 pxr_register_test(testUsdviewPrimPathBar
@@ -568,8 +650,8 @@ pxr_register_test(testUsdviewFreeCamera
         truck_-1_-1.png
         truck_1_1.png
         end.png
-    FAIL 1
-    FAIL_PERCENT 0.00002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -581,8 +663,8 @@ pxr_register_test(testUsdviewFreeCameraAspect
         aspect185.png
         aspect239.png
         aspect05.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -596,8 +678,8 @@ pxr_register_test(testUsdviewSelectionHighlighting
         sel_highlight_double.png
         sel_highlight_instance.png
         sel_highlight_color.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -615,8 +697,8 @@ pxr_register_test(testUsdviewRenderMode
         geom_smooth.png
         geom_flat.png
         render_mode_hidden_surface_wireframe.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -629,8 +711,8 @@ pxr_register_test(testUsdviewLights
         noLights.png
         dome.png
         bothLights.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -641,10 +723,52 @@ pxr_register_test(testUsdviewLights_yup
     IMAGE_DIFF_COMPARE
         domeYup.png
         bothLightsYup.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewSceneLights
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneLights.py test.usda"
+    IMAGE_DIFF_COMPARE
+        camera_noScene_GL.png
+        camera_scene_GL.png
+        domeVis_noScene_GL.png
+        domeVis_scene_GL.png
+        domeInvis_noScene_GL.png
+        domeInvis_scene_GL.png
+        sceneLights_GL.png
+        sceneLights_edit_GL.png
+        noLights_GL.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
+)
+
+pxr_register_test(testUsdviewSceneLights_Delegate
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneLights.py test.usda"
+    IMAGE_DIFF_COMPARE
+        camera_noScene_GL.png
+        camera_scene_GL.png
+        domeVis_noScene_GL.png
+        domeVis_scene_GL.png
+        domeInvis_noScene_GL.png
+        domeInvis_scene_GL.png
+        sceneLights_GL.png
+        sceneLights_edit_GL.png
+        noLights_GL.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=0
 )
 
 pxr_register_test(testUsdviewLightVisibility
@@ -655,8 +779,8 @@ pxr_register_test(testUsdviewLightVisibility
         singleInvisible2.png
         allVisible.png
         allInvisible.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -667,8 +791,8 @@ pxr_register_test(testUsdviewLightVisibility_varying
     IMAGE_DIFF_COMPARE
         visible.png
         invisible.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -681,8 +805,8 @@ pxr_register_test(testUsdviewBackgroundColor
         grey_dark.png
         grey_light.png
         white.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -695,8 +819,8 @@ pxr_register_test(testUsdviewComplexity
         medium.png
         high.png
         very_high.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -708,8 +832,8 @@ pxr_register_test(testUsdviewFieldOfView
         fov45.png
         fov60.png
         fov90.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -724,8 +848,8 @@ pxr_register_test(testUsdviewClippingPlanes
         override_both.png
         before_recompute.png
         after_recompute.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -738,8 +862,8 @@ pxr_register_test(testUsdviewDefaultMaterial
         ambient.png
         specular.png
         both.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -752,8 +876,8 @@ pxr_register_test(testUsdviewCameraMaskMode
         outline_gl.png
         partial_gl.png
         full_gl.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -767,8 +891,8 @@ if (EMBREE_FOUND AND ${PXR_BUILD_EMBREE_PLUGIN})
             outline_embree.png
             partial_embree.png
             full_embree.png
-        FAIL 1
-        FAIL_PERCENT 0.0002
+        FAIL 0.05
+        FAIL_PERCENT 0.03
         PERCEPTUAL
         EXPECTED_RETURN_CODE 0
         TESTENV testUsdviewCameraMaskMode
@@ -783,8 +907,8 @@ pxr_register_test(testUsdviewFrameSelection
         toggleToStart.png
         rotatedStart.png
         toggleToFramed.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -796,8 +920,8 @@ pxr_register_test(testUsdviewReloadReopen
         coloredAndFramed.png
         reloaded.png
         reopened.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -809,8 +933,8 @@ pxr_register_test(testUsdviewMaterialEdits
         1.png
         2.png
         3.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     EXPECTED_RETURN_CODE 0
 )
 
@@ -819,9 +943,8 @@ pxr_register_test(testUsdviewUpAxis_zUp
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewUpAxis_zUp.py testZUp.usda"
     IMAGE_DIFF_COMPARE
         zUp.png
-        yUp.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -834,8 +957,8 @@ pxr_register_test(testUsdviewDeactivate
         parentDeactivate.png
         parentChildDeactivate1.png
         parentChildDeactivate2.png
-    FAIL 1
-    FAIL_PERCENT 0.2
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -852,7 +975,7 @@ pxr_register_test(testUsdviewCPUSkinning
         post_skinned_prim_resync_frame_2.png
         pre_skel_resync_frame_6.png
         post_skel_resync_frame_6.png
-    FAIL 1
+    FAIL 0.05
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
     ENV
@@ -871,7 +994,7 @@ pxr_register_test(testUsdviewGPUSkinning
         post_skinned_prim_resync_frame_2.png
         pre_skel_resync_frame_6.png
         post_skel_resync_frame_6.png
-    FAIL 1
+    FAIL 0.05
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
     ENV
@@ -884,7 +1007,7 @@ pxr_register_test(testUsdviewInfGeom
     IMAGE_DIFF_COMPARE
         infGeom.png
         fixedGeom.png
-    FAIL 1
+    FAIL 0.05
     FAIL_PERCENT 0.06
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
@@ -914,8 +1037,8 @@ pxr_register_test(testUsdviewPrimvarEdits
         remove_fallback_primvar_wireOnSurf.png
         add_unused_primvars.png
         remove_unused_primvars.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -925,8 +1048,8 @@ pxr_register_test(testUsdviewOIT
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewOIT.py test.usda"
     IMAGE_DIFF_COMPARE
         oit.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -936,25 +1059,11 @@ pxr_register_test(testUsdviewAdditive
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewAdditive.py test.usda"
     IMAGE_DIFF_COMPARE
         additive.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
-
-# This test is disabled because of failures on some platforms.
-#
-# pxr_register_test(testUsdviewLegacyImpl
-#     PYTHON
-#     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLegacyImpl.py test.usda"
-#     IMAGE_DIFF_COMPARE
-#         perspective.png
-#         ortho.png
-#     FAIL 1
-#     FAIL_PERCENT 0.000031
-#     PERCEPTUAL
-#     EXPECTED_RETURN_CODE 0
-# )
 
 pxr_register_test(testUsdviewVariantSelection
     PYTHON
@@ -968,8 +1077,8 @@ pxr_register_test(testUsdviewVariantSelection
         cone2.png
         cube2.png
         cylinder2.png
-    FAIL 1
-    FAIL_PERCENT 0.0002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
@@ -983,10 +1092,52 @@ pxr_register_test(testUsdviewPointWidths
         set_point_widths_050.png
         set_point_widths_primvar_075.png
         end.png
-    FAIL 1
-    FAIL_PERCENT 0.002
+    FAIL 0.05
+    FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewPointInstancerVariant
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPointInstancerVariant.py test.usda"
+    IMAGE_DIFF_COMPARE
+        variantB.png
+        variantA.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewExpressionVariableEdits_Delegate
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewExpressionVariableEdits.py test.usda"
+    IMAGE_DIFF_COMPARE
+        start.png
+        step_1.png
+        step_2.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=0
+)
+
+pxr_register_test(testUsdviewExpressionVariableEdits
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewExpressionVariableEdits.py test.usda"
+    IMAGE_DIFF_COMPARE
+        start.png
+        step_1.png
+        step_2.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
 
 if(OPENCOLORIO_FOUND AND ${PXR_BUILD_OPENCOLORIO_PLUGIN})

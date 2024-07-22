@@ -1,24 +1,8 @@
 //
 // Copyright 2018 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -57,6 +41,7 @@ namespace {
             {SdrPropertyTypes->String,  SdfValueTypeNames->String},
             {SdrPropertyTypes->Float,   SdfValueTypeNames->Float},
             {SdrPropertyTypes->Color,   SdfValueTypeNames->Color3f},
+            {SdrPropertyTypes->Color4,  SdfValueTypeNames->Color4f},
             {SdrPropertyTypes->Point,   SdfValueTypeNames->Point3f},
             {SdrPropertyTypes->Normal,  SdfValueTypeNames->Normal3f},
             {SdrPropertyTypes->Vector,  SdfValueTypeNames->Vector3f},
@@ -73,6 +58,7 @@ namespace {
             {SdrPropertyTypes->String,  SdfValueTypeNames->StringArray},
             {SdrPropertyTypes->Float,   SdfValueTypeNames->FloatArray},
             {SdrPropertyTypes->Color,   SdfValueTypeNames->Color3fArray},
+            {SdrPropertyTypes->Color4,  SdfValueTypeNames->Color4fArray},
             {SdrPropertyTypes->Point,   SdfValueTypeNames->Point3fArray},
             {SdrPropertyTypes->Normal,  SdfValueTypeNames->Normal3fArray},
             {SdrPropertyTypes->Vector,  SdfValueTypeNames->Vector3fArray},
@@ -127,6 +113,11 @@ namespace {
             {SdrPropertyTypes->Color,
                 {
                     {SdrPropertyRole->None, {SdrPropertyTypes->Float, 3}}
+                }
+            },
+            {SdrPropertyTypes->Color4,
+                {
+                    {SdrPropertyRole->None, {SdrPropertyTypes->Float, 4}}
                 }
             },
             {SdrPropertyTypes->Point,
@@ -248,7 +239,9 @@ namespace {
             }
 
             if (type == SdrPropertyTypes->Vstruct) {
-                return std::make_pair(SdfValueTypeNames->Float, type);
+                return std::make_pair(isArray ? SdfValueTypeNames->FloatArray 
+                                              : SdfValueTypeNames->Float,
+                                      type);
             }
 
             return _GetTypeIndicatorFromDefaultMapping(type, isArray);
@@ -285,14 +278,25 @@ namespace {
             if (type == SdrPropertyTypes->Terminal ||
                 type == SdrPropertyTypes->Struct ||
                 type == SdrPropertyTypes->Vstruct) {
-                return std::make_pair(SdfValueTypeNames->Token, type);
+                return std::make_pair(isArray ? SdfValueTypeNames->TokenArray
+                                              : SdfValueTypeNames->Token, 
+                                      type);
             }
 
             // We prefer more specific types, so if the arraySize is 2, 3, or 4,
-            // then try to convert to a fixed-dimension float array.
+            // then try to convert to a fixed-dimension int or float array.
             // In the future if we change this to not return a fixed-size array,
             // all the parsers need to be updated to not return a fixed-size
             // array as well.
+            if (type == SdrPropertyTypes->Int) {
+                if (arraySize == 2) {
+                    return std::make_pair(SdfValueTypeNames->Int2, TfToken());
+                } else if (arraySize == 3) {
+                    return std::make_pair(SdfValueTypeNames->Int3, TfToken());
+                } else if (arraySize == 4) {
+                    return std::make_pair(SdfValueTypeNames->Int4, TfToken());
+                }
+            }
             if (type == SdrPropertyTypes->Float) {
                 if (arraySize == 2) {
                     return std::make_pair(SdfValueTypeNames->Float2, TfToken());
@@ -471,6 +475,12 @@ namespace {
                 isSdrValueConformed = sdrDefaultValue.IsHolding<GfVec3f>();
             } else {
                 isSdrValueConformed = sdrDefaultValue.IsHolding<VtArray<GfVec3f>>();
+            }
+        } else if (sdrType == SdrPropertyTypes->Color4) {
+            if (!isArray) {
+                isSdrValueConformed = sdrDefaultValue.IsHolding<GfVec4f>();
+            } else {
+                isSdrValueConformed = sdrDefaultValue.IsHolding<VtArray<GfVec4f>>();
             }
         } else if (sdrType == SdrPropertyTypes->Matrix) {
             if (!isArray) {
@@ -739,6 +749,19 @@ SdrShaderProperty::CanConnectTo(const NdrProperty& other) const
 
     // Connections between float-3 types are possible
     if (inputIsFloat3 && outputIsFloat3) {
+        return true;
+    }
+
+    bool inputIsFloat4 =
+        (inputType == SdrPropertyTypes->Color4) ||
+        (sdfInputType == SdfValueTypeNames->Float4);
+
+    bool outputIsFloat4 =
+        (outputType == SdrPropertyTypes->Color4) ||
+        (sdfOutputType == SdfValueTypeNames->Float4);
+
+    // Connections between float-4 types are possible
+    if (inputIsFloat4 && outputIsFloat4) {
         return true;
     }
 

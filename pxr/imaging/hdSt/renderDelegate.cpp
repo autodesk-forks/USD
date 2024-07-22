@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/imaging/hdSt/renderDelegate.h"
@@ -48,6 +31,7 @@
 #include "pxr/imaging/hd/camera.h"
 #include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/extComputation.h"
+#include "pxr/imaging/hd/imageShader.h"
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/tokens.h"
 
@@ -90,13 +74,16 @@ const TfTokenVector HdStRenderDelegate::SUPPORTED_SPRIM_TYPES =
     HdPrimTypeTokens->distantLight,
     HdPrimTypeTokens->rectLight,
     HdPrimTypeTokens->simpleLight,
-    HdPrimTypeTokens->sphereLight
+    HdPrimTypeTokens->sphereLight,
+    HdPrimTypeTokens->imageShader
 };
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (mtlx)
 );
+#endif
 
 using HdStResourceRegistryWeakPtr =  std::weak_ptr<HdStResourceRegistry>;
 
@@ -255,10 +242,10 @@ HdStRenderDelegate::SetDrivers(HdDriverVector const& drivers)
         }
     }
     
+    TF_VERIFY(_hgi, "HdSt requires Hgi HdDriver");
+
     _resourceRegistry =
         _HgiToResourceRegistryMap::GetInstance().GetOrCreateRegistry(_hgi);
-
-    TF_VERIFY(_hgi, "HdSt requires Hgi HdDriver");
 }
 
 const TfTokenVector &
@@ -330,7 +317,8 @@ HdStRenderDelegate::GetDefaultAovDescriptor(TfToken const& name) const
                 HdFormatFloat32, colorDepthMSAA, VtValue(1.0f));
     } else if (HdAovHasDepthStencilSemantic(name)) {
         return HdAovDescriptor(
-                HdFormatFloat32UInt8, colorDepthMSAA, VtValue(1.0f));
+                HdFormatFloat32UInt8, colorDepthMSAA,
+                VtValue(HdDepthStencilType(1.0f, 0)));
     } else if (_AovHasIdSemantic(name)) {
         return HdAovDescriptor(
                 HdFormatUNorm8Vec4, colorDepthMSAA, VtValue(GfVec4f(0)));
@@ -413,6 +401,8 @@ HdStRenderDelegate::CreateSprim(TfToken const& typeId,
                 typeId == HdPrimTypeTokens->cylinderLight ||
                 typeId == HdPrimTypeTokens->rectLight) {
         return new HdStLight(sprimId, typeId);
+    } else if (typeId == HdPrimTypeTokens->imageShader) {
+        return new HdImageShader(sprimId);
     } else {
         TF_CODING_ERROR("Unknown Sprim Type %s", typeId.GetText());
     }
@@ -439,6 +429,8 @@ HdStRenderDelegate::CreateFallbackSprim(TfToken const& typeId)
                 typeId == HdPrimTypeTokens->cylinderLight ||
                 typeId == HdPrimTypeTokens->rectLight) {
         return new HdStLight(SdfPath::EmptyPath(), typeId);
+    } else if (typeId == HdPrimTypeTokens->imageShader) {
+        return new HdImageShader(SdfPath::EmptyPath());
     } else {
         TF_CODING_ERROR("Unknown Sprim Type %s", typeId.GetText());
     }
@@ -590,7 +582,7 @@ HdStRenderDelegate::_ApplyTextureSettings()
                      HdStVolume::defaultMaxTextureMemoryPerField));
 
     _resourceRegistry->SetMemoryRequestForTextureType(
-        HdTextureType::Field, 1048576 * memInMb);
+        HdStTextureType::Field, 1048576 * memInMb);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

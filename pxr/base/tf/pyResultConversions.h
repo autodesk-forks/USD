@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_PY_RESULT_CONVERSIONS_H
 #define PXR_BASE_TF_PY_RESULT_CONVERSIONS_H
@@ -31,9 +14,6 @@
 #include <boost/python/tuple.hpp>
 #include <boost/python/list.hpp>
 #include <boost/python/dict.hpp>
-
-#include <boost/type_traits/add_reference.hpp>
-#include <boost/type_traits/remove_reference.hpp>
 
 #include <type_traits>
 
@@ -138,7 +118,7 @@ struct TfPyPairToTuple {
 
 template <typename T>
 struct Tf_PySequenceToListConverter {
-    typedef typename boost::remove_reference<T>::type SeqType;
+    typedef std::remove_reference_t<T> SeqType;
     bool convertible() const {
         return true;
     }
@@ -152,7 +132,7 @@ struct Tf_PySequenceToListConverter {
 
 template <typename T>
 struct Tf_PySequenceToSetConverter {
-    typedef typename std::remove_reference<T>::type SeqType;
+    typedef std::remove_reference_t<T> SeqType;
     bool convertible() const {
         return true;
     }
@@ -166,7 +146,7 @@ struct Tf_PySequenceToSetConverter {
 
 template <typename T>
 struct Tf_PyMapToDictionaryConverter {
-    typedef typename boost::remove_reference<T>::type SeqType;
+    typedef std::remove_reference_t<T> SeqType;
     // TODO: convertible() should be made more robust by checking that the
     // value_type of the container is pair<const key_type, data_type> 
     bool convertible() const {
@@ -182,7 +162,7 @@ struct Tf_PyMapToDictionaryConverter {
 
 template <typename T>
 struct Tf_PySequenceToTupleConverter {
-    typedef typename boost::remove_reference<T>::type SeqType;
+    typedef std::remove_reference_t<T> SeqType;
     bool convertible() const {
         return true;
     }

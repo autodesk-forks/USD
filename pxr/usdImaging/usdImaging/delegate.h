@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_IMAGING_USD_IMAGING_DELEGATE_H
 #define PXR_USD_IMAGING_USD_IMAGING_DELEGATE_H
@@ -60,7 +43,6 @@
 #include "pxr/base/tf/hashset.h"
 #include "pxr/base/tf/denseHashSet.h"
 
-#include <boost/container/flat_map.hpp>
 #include <tbb/spin_rw_mutex.h>
 #include <map>
 #include <string>
@@ -74,8 +56,6 @@ typedef std::vector<UsdPrim> UsdPrimVector;
 class UsdImagingPrimAdapter;
 class UsdImagingIndexProxy;
 class UsdImagingInstancerContext;
-
-typedef boost::container::flat_map<SdfPath, bool> PickabilityMap;
 
 using UsdImagingPrimAdapterSharedPtr = std::shared_ptr<UsdImagingPrimAdapter>;
 
@@ -209,6 +189,14 @@ public:
     /// Returns the root visibility for the entire delegate.
     bool GetRootVisibility() const { return _rootIsVisible; }
 
+    /// Sets the root instancer id for the entire delegate, which is used as a 
+    /// fallback value for GetInstancerId.
+    USDIMAGING_API
+    void SetRootInstancerId(SdfPath const& instancerId);
+
+    /// Returns the root instancer id for the entire delegate.
+    SdfPath GetRootInstancerId() const { return _rootInstancerId; }
+
     /// Set the list of paths that must be invised.
     USDIMAGING_API
     void SetInvisedPrimPaths(SdfPathVector const &invisedPaths);
@@ -216,18 +204,6 @@ public:
     /// Set transform value overrides on a set of paths.
     USDIMAGING_API
     void SetRigidXformOverrides(RigidXformOverridesMap const &overrides);
-
-    /// Returns the root paths of pickable objects.
-    USDIMAGING_API
-    PickabilityMap GetPickabilityMap() const;
-
-    /// Sets pickability for a specific path.
-    USDIMAGING_API
-    void SetPickability(SdfPath const& path, bool pickable);
-
-    /// Clears any pickability opinions that this delegates might have.
-    USDIMAGING_API
-    void ClearPickabilityMap();
 
     /// Sets display of prims with purpose "render"
     USDIMAGING_API
@@ -318,6 +294,9 @@ public:
     /// GetRefineLevelFallback().
     USDIMAGING_API
     virtual HdDisplayStyle GetDisplayStyle(SdfPath const& id) override;
+
+    USDIMAGING_API
+    HdModelDrawMode GetModelDrawMode(SdfPath const& id) override;
 
     USDIMAGING_API
     virtual VtValue Get(SdfPath const& id, TfToken const& key) override;
@@ -559,14 +538,25 @@ private:
     void _OnUsdObjectsChanged(UsdNotice::ObjectsChanged const&,
                               UsdStageWeakPtr const& sender);
 
+    // Map holding USD subtree path keys mapped to associated hydra prim cache
+    // paths. This may be prepopulated and provided to the Refresh and Resync
+    // methods below to speed up dependency gathering.
+    typedef TfHashMap<SdfPath, SdfPathVector, SdfPath::Hash>
+        _FlattenedDependenciesCacheMap;
+
     // The lightest-weight update, it does fine-grained invalidation of
     // individual properties at the given path (prim or property).
     //
     // If \p path is a prim path, changedPrimInfoFields will be populated
     // with the list of scene description fields that caused this prim to
     // be refreshed.
-    void _RefreshUsdObject(SdfPath const& usdPath, 
+    //
+    // Returns whether the prim or the subtree rooted at `usdPath` needed to
+    // be resync'd (i.e., removed and repopulated).
+    //
+    bool _RefreshUsdObject(SdfPath const& usdPath, 
                            TfTokenVector const& changedPrimInfoFields,
+                           _FlattenedDependenciesCacheMap const &cache,
                            UsdImagingIndexProxy* proxy,
                            SdfPathSet* allTrackedVariabilityPaths); 
 
@@ -577,7 +567,9 @@ private:
     // Repopulate() on those prims individually. If repopulateFromRoot is
     // true, Repopulate() will be called on \p rootPath instead. This is slower,
     // but handles changes in tree topology.
-    void _ResyncUsdPrim(SdfPath const& usdRootPath, UsdImagingIndexProxy* proxy,
+    void _ResyncUsdPrim(SdfPath const& usdRootPath,
+                        _FlattenedDependenciesCacheMap const &cache,
+                        UsdImagingIndexProxy* proxy,
                         bool repopulateFromRoot = false);
 
     // ---------------------------------------------------------------------- //
@@ -590,9 +582,6 @@ private:
                   usdPath.GetAbsoluteRootOrPrimPath().GetText());
         return p;
     }
-
-    VtValue _GetUsdPrimAttribute(SdfPath const& cachePath,
-                                 TfToken const &attrName);
 
     void _UpdateSingleValue(SdfPath const& cachePath, int dirtyFlags);
 
@@ -664,8 +653,18 @@ private:
     // Map from USD path to Hydra path, for tracking USD->hydra dependencies.
     _DependencyMap _dependencyInfo;
 
+    // Appends hydra prim cache paths corresponding to the USD subtree
+    // provided by looking up the dependency map (above).
     void _GatherDependencies(SdfPath const& subtree,
                              SdfPathVector *affectedCachePaths);
+
+    // Overload that takes an additional cache argument to help speed up the
+    // dependency gathering operation. The onus is on the client to prepopulate
+    // the cache.
+    void
+    _GatherDependencies(SdfPath const &subtree,
+                        _FlattenedDependenciesCacheMap const &cache,
+                        SdfPathVector *affectedCachePaths);
 
     // SdfPath::ReplacePrefix() is used frequently to convert between
     // cache path and Hydra render index path and is a performance bottleneck.
@@ -718,6 +717,7 @@ private:
 
     GfMatrix4d _rootXf;
     bool _rootIsVisible;
+    SdfPath _rootInstancerId;
 
     /// The current time from which the delegate will read data.
     UsdTimeCode _time;
@@ -747,7 +747,6 @@ private:
     UsdImaging_XformCache _xformCache;
     UsdImaging_MaterialBindingImplData _materialBindingImplData;
     UsdImaging_MaterialBindingCache _materialBindingCache;
-    UsdImaging_CoordSysBindingImplData _coordSysBindingImplData;
     UsdImaging_CoordSysBindingCache _coordSysBindingCache;
     UsdImaging_VisCache _visCache;
     UsdImaging_PurposeCache _purposeCache;
@@ -757,9 +756,6 @@ private:
     UsdImaging_PointInstancerIndicesCache _pointInstancerIndicesCache;
     UsdImaging_NonlinearSampleCountCache _nonlinearSampleCountCache;
     UsdImaging_BlurScaleCache _blurScaleCache;
-
-    // Pickability
-    PickabilityMap _pickablesMap;
 
     // Purpose-based rendering toggles
     bool _displayRender;

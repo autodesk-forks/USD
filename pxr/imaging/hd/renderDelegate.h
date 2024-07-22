@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_RENDER_DELEGATE_H
 #define PXR_IMAGING_HD_RENDER_DELEGATE_H
@@ -29,6 +12,7 @@
 #include "pxr/imaging/hd/aov.h"
 #include "pxr/imaging/hd/changeTracker.h"
 #include "pxr/imaging/hd/command.h"
+#include "pxr/imaging/hd/dataSource.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/tf/token.h"
 
@@ -45,6 +29,8 @@ class HdRenderIndex;
 class HdRenderPass;
 class HdInstancer;
 class HdDriver;
+
+TF_DECLARE_REF_PTRS(HdSceneIndexBase);
 
 using HdRenderPassSharedPtr = std::shared_ptr<class HdRenderPass>;
 using HdRenderPassStateSharedPtr = std::shared_ptr<class HdRenderPassState>;
@@ -181,6 +167,13 @@ public:
     ///
     HD_API
     virtual VtDictionary GetRenderStats() const;
+
+    ///
+    /// Gives capabilities of render delegate as data source
+    /// (conforming to HdRenderCapabilitiesSchema).
+    ///
+    HD_API
+    virtual HdContainerDataSourceHandle GetCapabilities() const;
 
     ////////////////////////////////////////////////////////////////////////////
     ///
@@ -413,6 +406,14 @@ public:
     HD_API
     virtual TfTokenVector GetMaterialRenderContexts() const;
 
+    /// Returns a list of namespace prefixes for render settings attributes 
+    /// relevant to a render delegate. This list is used to gather just the 
+    /// relevant attributes from render settings scene description. The default
+    /// is an empty list, which will gather all custom (non-schema) attributes.
+    ///
+    HD_API
+    virtual TfTokenVector GetRenderSettingsNamespaces() const;
+
     ///
     /// Return true to indicate that the render delegate wants rprim primvars
     /// to be filtered by the scene delegate to reduce the amount of primvars
@@ -476,6 +477,39 @@ public:
         return _displayName;
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    ///
+    /// Hydra 2.0 API
+    ///
+    /// \note The following methods aid in migrating existing 1.0 based
+    ///       render delegates to the Hydra 2.0 API.
+    ///
+    ////////////////////////////////////////////////////////////////////////////
+    
+    /// Called after the scene index graph is created during render index
+    /// construction, providing a hook point for the render delegate to
+    /// register an observer of the terminal scene index.
+    ///
+    /// \note Render delegates should not assume that the scene index is fully
+    ///       populated at this point.
+    ///
+    HD_API
+    virtual void SetTerminalSceneIndex(
+        const HdSceneIndexBaseRefPtr &terminalSceneIndex);
+
+    /// Called at the beginning of HdRenderIndex::SyncAll, before render index
+    /// prim sync, to provide the render delegate an opportunity to directly
+    /// process change notices from observing the terminal scene index,
+    /// rather than using the Hydra 1.0 Sync algorithm.
+    ///
+    HD_API
+    virtual void Update();
+
+    /// Whether or not multithreaded sync is enabled for the
+    /// specified prim type.
+    HD_API
+    virtual bool IsParallelSyncEnabled(const TfToken &primType) const;
+
 protected:
     /// This class must be derived from.
     HD_API
@@ -500,7 +534,7 @@ protected:
 
 private:
 
-    friend class HdRendererPluginRegistry;
+    friend class HdRendererPlugin;
     ///
     /// Populated when instantiated via the HdRendererPluginRegistry and
     /// currently used to associate a renderer delegate instance with related

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_CHANGE_TRACKER_H
 #define PXR_IMAGING_HD_CHANGE_TRACKER_H
@@ -95,8 +78,6 @@ public:
     // Dirty bits for Tasks
     // XXX: Move this to HdTask
     enum TaskDirtyBits : HdDirtyBits {
-        //Varying               = 1 << 0,
-        DirtyType             = 1 << 1,
         DirtyParams           = 1 << 2,
         DirtyCollection       = 1 << 3,
         DirtyRenderTags       = 1 << 4,
@@ -413,6 +394,19 @@ public:
     HD_API
     void MarkSprimClean(SdfPath const& id, HdDirtyBits newBits=Clean);
 
+    /// Insert a dependency between \p sprimId and parent instancer
+    /// \p instancerId.  Changes to the latter mark the former with
+    /// DirtyInstancer.
+    HD_API
+    void AddInstancerSprimDependency(SdfPath const& instancerId,
+                                     SdfPath const& sprimId);
+
+    /// Remove a dependency between \p sprimId and parent instancer
+    /// \p instancerId.
+    HD_API
+    void RemoveInstancerSprimDependency(SdfPath const& instancerId,
+                                        SdfPath const& sprimId);
+
     /// Insert a dependency between \p sprimId and parent sprim
     /// \p parentSprimId.
     HD_API
@@ -603,8 +597,9 @@ private:
     _CollectionStateMap _collectionState;
 
     // Provides reverse-association between instancers and the child
-    // instancers/rprims that use them.
+    // instancers/prims that use them.
     _DependencyMap _instancerRprimDependencies;
+    _DependencyMap _instancerSprimDependencies;
     _DependencyMap _instancerInstancerDependencies;
 
     // Provides forward and reverse-association between sprims and the child

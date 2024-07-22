@@ -2,25 +2,8 @@
 #
 # Copyright 2021 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 """
 This script generates dynamic schema.usda, generatedSchema.usda and
@@ -51,6 +34,7 @@ import os, sys, json
 from subprocess import call
 from pxr import Sdf, Tf, UsdUtils, Sdr
 from pxr.UsdUtils.constantsGroup import ConstantsGroup
+from pxr.UsdUtils.toolPaths import FindUsdBinary
 
 class SchemaConfigConstants(ConstantsGroup):
     SDR_NODES = "sdrNodes"
@@ -67,41 +51,7 @@ class SchemaLayerConstants(ConstantsGroup):
 
 class MiscConstants(ConstantsGroup):
     USD_GEN_SCHEMA = "usdGenSchema"
-    WINDOWS = "Windows"
-    PATH = "PATH"
-    CMD_EXTENSION = ".cmd"
     README_FILE_NAME = "README.md"
-
-def _GetUsdGenSchemaCmd():
-    # Adopting logic from usddiff.py
-    from distutils.spawn import find_executable
-    import platform
-
-    cmd = find_executable(MiscConstants.USD_GEN_SCHEMA)
-    
-    # usdGenSchema is found in PATH
-    if cmd:
-        return cmd
-    else:
-        # try to find usdGenSchema from installed directory of this script
-        cmd = find_executable(USD_GEN_SCHEMA, 
-                path=os.path.abspath(os.path.dirname(sys.argv[0])))
-        if cmd:
-            return cmd
-
-    if (platform.system() == 'Windows'):
-        # find_executable under Windows only returns *.EXE files
-        # so we need to traverse PATH.
-        for path in os.environ['PATH'].split(os.pathsep):
-            base = os.path.join(path, USD_GEN_SCHEMA)
-            # We need to test for usdGenSchema.cmd first because on Windows, 
-            # the USD executables are wrapped due to lack of N*IX style shebang 
-            # support on Windows.
-            for ext in [MiscConstants.CMD_EXTENSION, '']:
-                cmd = base + ext
-                if os.access(cmd, os.X_OK):
-                    return cmd
-    return None
 
 def _ConfigureSchemaLayer(schemaLayer, schemaSubLayers, skipCodeGeneration,
         useLiteralIdentifier):
@@ -347,11 +297,11 @@ if __name__ == '__main__':
         UsdUtils.UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext,
                 assetPathIdentifier)
 
-    usdGenSchemaCmd = _GetUsdGenSchemaCmd()
+    usdGenSchemaCmd = FindUsdBinary(MiscConstants.USD_GEN_SCHEMA)
     usdGenSchemaArgs = ["--validate"] if validate else []
     if not usdGenSchemaCmd:
         Tf.RaiseRuntimeError("%s not found. Make sure %s is in the PATH." \
-                %(USD_GEN_SCHEMA))
+                %(MiscConstants.USD_GEN_SCHEMA))
 
     call([usdGenSchemaCmd] + usdGenSchemaArgs, cwd=schemaGenerationPath)
 

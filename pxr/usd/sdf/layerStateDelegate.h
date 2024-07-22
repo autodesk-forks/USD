@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_LAYER_STATE_DELEGATE_H
 #define PXR_USD_SDF_LAYER_STATE_DELEGATE_H
@@ -71,14 +54,14 @@ public:
         const SdfPath& path,
         const TfToken& field,
         const VtValue& value,
-        const VtValue *oldValue=NULL);
+        VtValue *oldValue=NULL);
 
     SDF_API
     void SetField(
         const SdfPath& path,
         const TfToken& field,
         const SdfAbstractDataConstValue& value,
-        const VtValue *oldValue=NULL);
+        VtValue *oldValue=NULL);
 
     SDF_API
     void SetFieldDictValueByKey(
@@ -86,7 +69,7 @@ public:
         const TfToken& field,
         const TfToken& keyPath,
         const VtValue& value,
-        const VtValue *oldValue=NULL);
+        VtValue *oldValue=NULL);
 
     SDF_API
     void SetFieldDictValueByKey(
@@ -94,7 +77,7 @@ public:
         const TfToken& field,
         const TfToken& keyPath,
         const SdfAbstractDataConstValue& value,
-        const VtValue *oldValue=NULL);
+        VtValue *oldValue=NULL);
 
     SDF_API
     void SetTimeSample(
@@ -267,72 +250,100 @@ class SdfSimpleLayerStateDelegate
     : public SdfLayerStateDelegateBase
 {
 public:
+    SDF_API
     static SdfSimpleLayerStateDelegateRefPtr New();
 
 protected:
+    SDF_API
     SdfSimpleLayerStateDelegate();
 
     // SdfLayerStateDelegateBase overrides
+    SDF_API
     virtual bool _IsDirty() override;
+
+    SDF_API
     virtual void _MarkCurrentStateAsClean() override;
+
+    SDF_API
     virtual void _MarkCurrentStateAsDirty() override;
 
+    SDF_API
     virtual void _OnSetLayer(
         const SdfLayerHandle& layer) override;
 
+    SDF_API
     virtual void _OnSetField(
         const SdfPath& path,
         const TfToken& fieldName,
         const VtValue& value) override;
+
+    SDF_API
     virtual void _OnSetField(
         const SdfPath& path,
         const TfToken& fieldName,
         const SdfAbstractDataConstValue& value) override;
+
+    SDF_API
     virtual void _OnSetFieldDictValueByKey(
         const SdfPath& path,
         const TfToken& fieldName,
         const TfToken& keyPath,
         const VtValue& value) override;
+
+    SDF_API
     virtual void _OnSetFieldDictValueByKey(
         const SdfPath& path,
         const TfToken& fieldName,
         const TfToken& keyPath,
         const SdfAbstractDataConstValue& value) override;
 
+    SDF_API
     virtual void _OnSetTimeSample(
         const SdfPath& path,
         double time,
         const VtValue& value) override;
+
+    SDF_API
     virtual void _OnSetTimeSample(
         const SdfPath& path,
         double time,
         const SdfAbstractDataConstValue& value) override;
 
+    SDF_API
     virtual void _OnCreateSpec(
         const SdfPath& path,
         SdfSpecType specType,
         bool inert) override;
 
+    SDF_API
     virtual void _OnDeleteSpec(
         const SdfPath& path,
         bool inert) override;
 
+    SDF_API
     virtual void _OnMoveSpec(
         const SdfPath& oldPath,
         const SdfPath& newPath) override;
 
+    SDF_API
     virtual void _OnPushChild(
         const SdfPath& path,
         const TfToken& fieldName,
         const TfToken& value) override;
+
+    SDF_API
     virtual void _OnPushChild(
         const SdfPath& path,
         const TfToken& fieldName,
         const SdfPath& value) override;
+
+    SDF_API
     virtual void _OnPopChild(
         const SdfPath& path,
         const TfToken& fieldName,
         const TfToken& oldValue) override;
+
+    SDF_API
     virtual void _OnPopChild(
         const SdfPath& path,
         const TfToken& fieldName,

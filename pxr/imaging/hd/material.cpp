@@ -1,31 +1,43 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/material.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/perfLog.h"
 
+#include "pxr/usd/sdr/shaderNode.h"
+#include "pxr/usd/sdr/shaderProperty.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+
+    (wrapS)
+    (wrapT)
+    (wrapR)
+
+    (repeat)
+    (mirror)
+    (clamp)
+    (black)
+    (useMetadata)
+
+    (HwUvTexture_1)
+
+    (minFilter)
+    (magFilter)
+
+    (nearest)
+    (linear)
+    (nearestMipmapNearest)
+    (nearestMipmapLinear)
+    (linearMipmapNearest)
+    (linearMipmapLinear)
+);
 
 HdMaterial::HdMaterial(SdfPath const& id)
  : HdSprim(id)
@@ -94,6 +106,199 @@ HdConvertToHdMaterialNetwork2(
         result.primvars = hdNetwork.primvars;
     }
     return result;
+}
+
+// Look up value from the parameters map and fallback to corresponding value on
+// given SdrNode.
+template<typename T>
+static
+auto
+_ResolveParameter(
+    const std::map<TfToken, VtValue>& parameters,
+    const SdrShaderNodeConstPtr& sdrNode,
+    const TfToken& name,
+    const T& defaultValue) -> T
+{
+    // First consult parameters...
+    const auto it = parameters.find(name);
+    if (it != parameters.end()) {
+        const VtValue& value = it->second;
+        if (value.IsHolding<T>()) {
+            return value.UncheckedGet<T>();
+        }
+    }
+
+    // Then fallback to SdrNode.
+    if (sdrNode) {
+        if (const SdrShaderPropertyConstPtr input =
+                                        sdrNode->GetShaderInput(name)) {
+            const VtValue& value = input->GetDefaultValueAsSdfType();
+            if (value.IsHolding<T>()) {
+                return value.UncheckedGet<T>();
+            }
+        }
+    }
+
+    return defaultValue;
+}
+
+static
+HdWrap
+_ResolveWrapSamplerParameter(
+    const TfToken& nodeTypeId,
+    const std::map<TfToken, VtValue>& parameters,
+    const SdrShaderNodeConstPtr& sdrNode,
+    const SdfPath& nodePath,
+    const TfToken& name)
+{
+    const TfToken value = _ResolveParameter(
+        parameters, sdrNode, name, _tokens->useMetadata);
+
+    if (value == _tokens->repeat) {
+        return HdWrapRepeat;
+    }
+
+    if (value == _tokens->mirror) {
+        return HdWrapMirror;
+    }
+
+    if (value == _tokens->clamp) {
+        return HdWrapClamp;
+    }
+
+    if (value == _tokens->black) {
+        return HdWrapBlack;
+    }
+
+    if (value == _tokens->useMetadata) {
+        if (nodeTypeId == _tokens->HwUvTexture_1) {
+            return HdWrapLegacy;
+        }
+        return HdWrapUseMetadata;
+    }
+
+    if (!nodePath.IsEmpty()) {
+        TF_WARN("Unknown wrap mode on prim %s: %s",
+                nodePath.GetText(), value.GetText());
+    } else {
+        TF_WARN("Unknown wrap mode: %s", value.GetText());
+    }
+
+    return HdWrapUseMetadata;
+}
+
+static
+HdMinFilter
+_ResolveMinSamplerParameter(
+    const TfToken& nodeTypeId,
+    const std::map<TfToken, VtValue>& parameters,
+    const SdrShaderNodeConstPtr& sdrNode,
+    const SdfPath& nodePath)
+{
+    // Using linearMipmapLinear as fallback value.
+
+    // Note that it is ambiguous whether the fallback value in the old
+    // texture system (usdImagingGL/textureUtils.cpp) was linear or
+    // linearMipmapLinear: when nothing was authored in USD for the
+    // min filter, linearMipmapLinear was used, but when an empty
+    // token was authored, linear was used.
+
+    const TfToken value = _ResolveParameter(
+        parameters, sdrNode, _tokens->minFilter,
+        _tokens->linearMipmapLinear);
+
+    if (value == _tokens->nearest) {
+        return HdMinFilterNearest;
+    }
+
+    if (value == _tokens->linear) {
+        return HdMinFilterLinear;
+    }
+
+    if (value == _tokens->nearestMipmapNearest) {
+        return HdMinFilterNearestMipmapNearest;
+    }
+
+    if (value == _tokens->nearestMipmapLinear) {
+        return HdMinFilterNearestMipmapLinear;
+    }
+
+    if (value == _tokens->linearMipmapNearest) {
+        return HdMinFilterLinearMipmapNearest;
+    }
+
+    if (value == _tokens->linearMipmapLinear) {
+        return HdMinFilterLinearMipmapLinear;
+    }
+
+    return HdMinFilterLinearMipmapLinear;
+}
+
+static
+HdMagFilter
+_ResolveMagSamplerParameter(
+    const TfToken& nodeTypeId,
+    const std::map<TfToken, VtValue>& parameters,
+    const SdrShaderNodeConstPtr& sdrNode,
+    const SdfPath& nodePath)
+{
+    const TfToken value = _ResolveParameter(
+        parameters, sdrNode, _tokens->magFilter, _tokens->linear);
+
+    if (value == _tokens->nearest) {
+        return HdMagFilterNearest;
+    }
+
+    return HdMagFilterLinear;
+}
+
+static
+HdSamplerParameters
+_GetSamplerParameters(
+    const TfToken& nodeTypeId,
+    const std::map<TfToken, VtValue>& parameters,
+    const SdrShaderNodeConstPtr& sdrNode,
+    const SdfPath& nodePath)
+{
+    return { _ResolveWrapSamplerParameter(
+                 nodeTypeId, parameters, sdrNode, nodePath, _tokens->wrapS),
+             _ResolveWrapSamplerParameter(
+                 nodeTypeId, parameters, sdrNode, nodePath, _tokens->wrapT),
+             _ResolveWrapSamplerParameter(
+                 nodeTypeId, parameters, sdrNode, nodePath, _tokens->wrapR),
+             _ResolveMinSamplerParameter(
+                 nodeTypeId, parameters, sdrNode, nodePath),
+             _ResolveMagSamplerParameter(
+                 nodeTypeId, parameters, sdrNode, nodePath),
+             HdBorderColorTransparentBlack, 
+             /*enableCompare*/false, 
+             HdCmpFuncNever };
+}
+
+HdSamplerParameters
+HdGetSamplerParameters(
+    const HdMaterialNode2& node,
+    const SdrShaderNodeConstPtr& sdrNode,
+    const SdfPath& nodePath)
+{
+    return _GetSamplerParameters(
+        node.nodeTypeId,
+        node.parameters,
+        sdrNode,
+        nodePath);
+}
+
+HdSamplerParameters
+HdGetSamplerParameters(
+    const TfToken& nodeTypeId,
+    const std::map<TfToken, VtValue>& parameters,
+    const SdfPath& nodePath)
+{
+    return _GetSamplerParameters(
+        nodeTypeId,
+        parameters,
+        nullptr,
+        nodePath);
 }
 
 

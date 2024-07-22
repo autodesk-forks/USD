@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hio/glslfxConfig.h"
 #include "pxr/imaging/hio/debugCodes.h"
@@ -310,7 +293,7 @@ HioGlslfxConfig::_GetSourceKeyMap(VtDictionary const & dict,
 
     const VtDictionary& specDict = techniqueSpec.UncheckedGet<VtDictionary>();
     // get all of the shader stages specified in the spec
-    for (const std::pair<std::string, VtValue>& p : specDict) {
+    for (const auto& p : specDict) {
         const string& shaderStageKey = p.first;
         const VtValue& shaderStageSpec = p.second;
 
@@ -438,8 +421,8 @@ HioGlslfxConfig::_GetParameters(VtDictionary const & dict,
 
     const VtDictionary& paramsDict = params.UncheckedGet<VtDictionary>();
     // pre-process the paramsDict in order to get the merged ordering
-    for (const std::pair<std::string, VtValue>& p : paramsDict) {
-        string paramName = p.first;
+    for (const auto& p : paramsDict) {
+        const string& paramName = p.first;
         if (std::find(paramOrder.begin(), paramOrder.end(), paramName) ==
                 paramOrder.end()) {
             paramOrder.push_back(paramName);
@@ -546,7 +529,7 @@ HioGlslfxConfig::_GetTextures(VtDictionary const & dict,
     }
 
     const VtDictionary& texturesDict = textures.UncheckedGet<VtDictionary>();
-    for (const std::pair<std::string, VtValue>& p : texturesDict) {
+    for (const auto& p : texturesDict) {
         const string& textureName = p.first;
         const VtValue& textureData = p.second;
         if (!textureData.IsHolding<VtDictionary>()) {
@@ -617,7 +600,7 @@ HioGlslfxConfig::_GetAttributes(VtDictionary const & dict,
 
     const VtDictionary& attributesDict =
         attributes.UncheckedGet<VtDictionary>();
-    for (const std::pair<std::string, VtValue>& p : attributesDict) {
+    for (const auto& p : attributesDict) {
         const string& attributeName = p.first;
         const VtValue& attributeData = p.second;
         if (!attributeData.IsHolding<VtDictionary>()) {

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -55,16 +38,50 @@ _GetChildren(const PcpNodeRef& node)
     return Pcp_GetChildren(node);
 }
 
+// Test function to retrieve an invalid PcpNodeRef in Python
+static PcpNodeRef
+_GetInvalidPcpNode()
+{
+    return {};
+}
+
 } // anonymous namespace 
+
+// We override __getattribute__ for PcpNode to check object validity and raise
+// an exception instead of crashing from Python.
+
+// Store the original __getattribute__ so we can dispatch to it after verifying
+// validity.
+static TfStaticData<TfPyObjWrapper> _object__getattribute__;
+
+// This function gets wrapped as __getattribute__ on PcpNodeRef.
+static object
+__getattribute__(object selfObj, const char *name) {
+    // Allow attribute lookups if the attribute name starts with '__', or if the
+    // node is valid.
+    if ((name[0] == '_' && name[1] == '_') ||
+        bool(extract<PcpNodeRef &>(selfObj)())){
+        // Dispatch to object's __getattribute__.
+        return (*_object__getattribute__)(selfObj, name);
+    } else {
+        // Otherwise raise a runtime error.
+        TfPyThrowRuntimeError(
+            TfStringPrintf("Invalid access to %s", TfPyRepr(selfObj).c_str()));
+    }
+    // Unreachable.
+    return object();
+}
 
 void
 wrapNode()
 {
+
+    def("_GetInvalidPcpNode", &_GetInvalidPcpNode);
+
     typedef PcpNodeRef This;
 
-    scope s = class_<This>
-        ("NodeRef", no_init)
-
+    class_<This> clsObj("NodeRef", no_init);
+    clsObj
         .add_property("site", &This::GetSite)
         .add_property("path", 
                       make_function(&This::GetPath, 
@@ -107,8 +124,15 @@ wrapNode()
         .def("GetPathAtIntroduction", &This::GetPathAtIntroduction)
 
         .def("CanContributeSpecs", &This::CanContributeSpecs)
+        .def("GetSpecContributionRestrictedDepth",
+            &This::GetSpecContributionRestrictedDepth)
 
         .def(self == self)
         .def(self != self)
+        .def(!self)
         ;
+
+    // Save existing __getattribute__ and replace.
+    *_object__getattribute__ = object(clsObj.attr("__getattribute__"));
+    clsObj.def("__getattribute__", __getattribute__);
 }

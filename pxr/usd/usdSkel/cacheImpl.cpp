@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usd/usdSkel/cacheImpl.h"
 
@@ -176,7 +159,7 @@ UsdSkel_CacheImpl::ReadScope::_FindOrCreateSkinningQuery(
         skelQuery ? skelQuery.GetJointOrder() : VtTokenArray(),
         animQuery ? animQuery.GetBlendShapeOrder() : VtTokenArray(),
         key.jointIndicesAttr, key.jointWeightsAttr,
-        key.geomBindTransformAttr, key.jointsAttr,
+        key.skinningMethodAttr, key.geomBindTransformAttr, key.jointsAttr,
         key.blendShapesAttr, key.blendShapeTargetsRel);
 }
 
@@ -188,17 +171,6 @@ std::string
 _MakeIndent(size_t count, int indentSize=2)
 {
     return std::string(count*indentSize, ' ');
-}
-
-void
-_DeprecatedBindingCheck(bool hasBindingAPI, const UsdProperty& prop)
-{
-    if (!hasBindingAPI) {
-        TF_WARN("Found binding property <%s>, but the SkelBindingAPI was not "
-                "applied on the owning prim. In the future, binding properties "
-                "will be ignored unless the SkelBindingAPI is applied "
-                "(see UsdSkelBindingAPI::Apply)", prop.GetPath().GetText());
-    }
 }
 
 /// If \p attr is an attribute on an instance proxy, return the attr on the
@@ -265,77 +237,73 @@ UsdSkel_CacheImpl::ReadScope::Populate(const UsdSkelRoot& root,
             it.PruneChildren();
             continue;
         }
-
-        // XXX: For backwards-compatibility, must potentially look for
-        // UsdSkelBindingAPI properties, even if the API schema was not
-        // applied to the prim.
-        
-        const bool hasBindingAPI = it->HasAPI<UsdSkelBindingAPI>();
         
         _SkinningQueryKey key(stack.back().first);
-
-        const UsdSkelBindingAPI binding(*it);
-
-        UsdSkelSkeleton skel;
-        if (binding.GetSkeleton(&skel)) {
-            key.skel = skel.GetPrim();
-        }
 
         // XXX: When looking for binding properties, only include
         // properties that have an authored value. Properties with
         // no authored value are treated as if they do not exist.
-
-        if (UsdAttribute attr = _GetAttrInPrototype(
-                binding.GetJointIndicesAttr())) {
-            if (attr.HasAuthoredValue()) {
-                _DeprecatedBindingCheck(hasBindingAPI, attr);
-                key.jointIndicesAttr = std::move(attr);
-            }
-        }
-
-        if (UsdAttribute attr = _GetAttrInPrototype(
-                binding.GetJointWeightsAttr())) {
-            if (attr.HasAuthoredValue()) {
-                _DeprecatedBindingCheck(hasBindingAPI, attr);
-                key.jointWeightsAttr = std::move(attr);
-            }
-        }
-        
-        if (UsdAttribute attr = _GetAttrInPrototype(
-                binding.GetGeomBindTransformAttr())) {
-            if (attr.HasAuthoredValue()) {
-                _DeprecatedBindingCheck(hasBindingAPI, attr);
-                key.geomBindTransformAttr = std::move(attr);
-            }
-        }
-
-        if (UsdAttribute attr = _GetAttrInPrototype(
-                binding.GetJointsAttr())) {
-            if (attr.HasAuthoredValue()) {
-                _DeprecatedBindingCheck(hasBindingAPI, attr);
-                key.jointsAttr = std::move(attr);
-            }
-        }
-
+        const bool hasSkelBindingAPI = it->HasAPI<UsdSkelBindingAPI>();
         const bool isSkinnable = UsdSkelIsSkinnablePrim(*it);
+        
+        if (hasSkelBindingAPI) {
+            const UsdSkelBindingAPI binding(*it);
 
-        // Unlike other binding properties above, skel:blendShapes and
-        // skel:blendShapeTargets are *not* inherited, so we only check
-        // for them on skinnable prims.
-        if (isSkinnable) {
+            UsdSkelSkeleton skel;
+            if (binding.GetSkeleton(&skel)) {
+                key.skel = skel.GetPrim();
+            }
+
             if (UsdAttribute attr = _GetAttrInPrototype(
-                    binding.GetBlendShapesAttr())) {
+                    binding.GetJointIndicesAttr())) {
                 if (attr.HasAuthoredValue()) {
-                    _DeprecatedBindingCheck(hasBindingAPI, attr);
-                    key.blendShapesAttr = std::move(attr);
+                    key.jointIndicesAttr = std::move(attr);
                 }
             }
 
-            if (UsdRelationship rel = _GetRelInPrototype(
-                    binding.GetBlendShapeTargetsRel())) {
-                if (rel.HasAuthoredTargets()) {
-                    _DeprecatedBindingCheck(hasBindingAPI, rel);
-                    key.blendShapeTargetsRel = std::move(rel);
+            if (UsdAttribute attr = _GetAttrInPrototype(
+                    binding.GetJointWeightsAttr())) {
+                if (attr.HasAuthoredValue()) {
+                    key.jointWeightsAttr = std::move(attr);
+                }
+            }
+
+            if (UsdAttribute attr = binding.GetSkinningMethodAttr()) {
+                if (attr.HasAuthoredValue()) {
+                    key.skinningMethodAttr = std::move(attr);
+                }
+            }
+
+            if (UsdAttribute attr = _GetAttrInPrototype(
+                    binding.GetGeomBindTransformAttr())) {
+                if (attr.HasAuthoredValue()) {
+                    key.geomBindTransformAttr = std::move(attr);
+                }
+            }
+
+            if (UsdAttribute attr = _GetAttrInPrototype(
+                    binding.GetJointsAttr())) {
+                if (attr.HasAuthoredValue()) {
+                    key.jointsAttr = std::move(attr);
+                }
+            }
+
+            // Unlike other binding properties above, skel:blendShapes and
+            // skel:blendShapeTargets are *not* inherited, so we only check
+            // for them on skinnable prims.
+            if (isSkinnable) {
+                if (UsdAttribute attr = _GetAttrInPrototype(
+                        binding.GetBlendShapesAttr())) {
+                    if (attr.HasAuthoredValue()) {
+                        key.blendShapesAttr = std::move(attr);
+                    }
+                }
+
+                if (UsdRelationship rel = _GetRelInPrototype(
+                        binding.GetBlendShapeTargetsRel())) {
+                    if (rel.HasAuthoredTargets()) {
+                        key.blendShapeTargetsRel = std::move(rel);
+                    }
                 }
             }
         }

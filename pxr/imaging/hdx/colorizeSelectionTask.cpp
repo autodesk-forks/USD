@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdx/colorizeSelectionTask.h"
 
@@ -122,8 +105,11 @@ HdxColorizeSelectionTask::Prepare(HdTaskContext* ctx,
     if (sel && sel->GetVersion() != _lastVersion) {
         _lastVersion = sel->GetVersion();
         _hasSelection =
-            sel->GetSelectionOffsetBuffer(renderIndex, _params.enableSelection,
-                                          &_selectionOffsets);
+            sel->GetSelectionOffsetBuffer(
+                renderIndex,
+                _params.enableSelectionHighlight,
+                _params.enableLocateHighlight,
+                &_selectionOffsets);
     }
 }
 
@@ -224,7 +210,7 @@ HdxColorizeSelectionTask::Execute(HdTaskContext* ctx)
         HdFormatUNorm8Vec4, 
         _outputBuffer);
 
-    _compositor->BindTextures({_tokens->colorIn}, {_texture});
+    _compositor->BindTextures({_texture});
 
     if (_UpdateParameterBuffer()) {
         const size_t byteSize = sizeof(_ParameterBuffer);
@@ -258,6 +244,12 @@ HdxColorizeSelectionTask::Execute(HdTaskContext* ctx)
             HgiBlendFactorZero,
             HgiBlendFactorOne,
             HgiBlendOpAdd);
+            
+        // Use LoadOpLoad because we want to blend the selection color onto
+        // the previous contents of the render target. 
+        _compositor->SetAttachmentLoadStoreOp(
+            HgiAttachmentLoadOpLoad,
+            HgiAttachmentStoreOpStore);
     }
 
     _compositor->Draw(aovTexture, /*no depth*/HgiTextureHandle());
@@ -278,13 +270,15 @@ HdxColorizeSelectionTask::_GetColorForMode(int mode) const
 void
 HdxColorizeSelectionTask::_ColorizeSelection()
 {
-    int32_t *piddata = reinterpret_cast<int32_t*>(_primId->Map());
+    const int32_t *piddata = reinterpret_cast<int32_t*>(_primId->Map());
     if (!piddata) {
         // Skip the colorizing if we can't look up prim ID
         return;
     }
-    int32_t *iiddata = reinterpret_cast<int32_t*>(_instanceId->Map());
-    int32_t *eiddata = reinterpret_cast<int32_t*>(_elementId->Map());
+    const int32_t *iiddata = _instanceId ?
+        reinterpret_cast<int32_t*>(_instanceId->Map()) : nullptr;
+    const int32_t *eiddata = _elementId ?
+        reinterpret_cast<int32_t*>(_elementId->Map()) : nullptr;
 
     for (size_t i = 0; i < _outputBufferSize; ++i) {
         GfVec4f output = GfVec4f(0,0,0,1);
@@ -420,7 +414,7 @@ HdxColorizeSelectionTask::_CreateTexture(
     texDesc.pixelsByteSize = width * height * pixelByteSize;
     texDesc.sampleCount = HgiSampleCount1;
     texDesc.usage = HgiTextureUsageBitsShaderRead;
-    _texture = _hgi->CreateTexture(texDesc);
+    _texture = _GetHgi()->CreateTexture(texDesc);
 }
 
 // -------------------------------------------------------------------------- //
@@ -431,7 +425,8 @@ std::ostream& operator<<(std::ostream& out,
                          const HdxColorizeSelectionTaskParams& pv)
 {
     out << "ColorizeSelectionTask Params: (...) "
-        << pv.enableSelection << " "
+        << pv.enableSelectionHighlight << " "
+        << pv.enableLocateHighlight << " "
         << pv.selectionColor << " "
         << pv.locateColor << " "
         << pv.primIdBufferPath << " "
@@ -443,12 +438,13 @@ std::ostream& operator<<(std::ostream& out,
 bool operator==(const HdxColorizeSelectionTaskParams& lhs,
                 const HdxColorizeSelectionTaskParams& rhs)
 {
-    return lhs.enableSelection      == rhs.enableSelection      &&
-           lhs.selectionColor       == rhs.selectionColor       &&
-           lhs.locateColor          == rhs.locateColor          &&
-           lhs.primIdBufferPath     == rhs.primIdBufferPath     &&
-           lhs.instanceIdBufferPath == rhs.instanceIdBufferPath &&
-           lhs.elementIdBufferPath  == rhs.elementIdBufferPath;
+    return lhs.enableSelectionHighlight == rhs.enableSelectionHighlight &&
+           lhs.enableLocateHighlight    == rhs.enableLocateHighlight    &&
+           lhs.selectionColor           == rhs.selectionColor           &&
+           lhs.locateColor              == rhs.locateColor              &&
+           lhs.primIdBufferPath         == rhs.primIdBufferPath         &&
+           lhs.instanceIdBufferPath     == rhs.instanceIdBufferPath     &&
+           lhs.elementIdBufferPath      == rhs.elementIdBufferPath;
 }
 
 bool operator!=(const HdxColorizeSelectionTaskParams& lhs,

@@ -1,31 +1,17 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hgiMetal/shaderGenerator.h"
+#include "pxr/imaging/hgiMetal/hgi.h"
+#include "pxr/imaging/hgiMetal/conversions.h"
 #include "pxr/imaging/hgiMetal/resourceBindings.h"
 #include "pxr/imaging/hgi/tokens.h"
 
+#include <sstream>
 #include <unordered_map>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -49,6 +35,33 @@ HgiMetalShaderGenerator::CreateShaderSection(T && ...t)
 }
 
 namespace {
+
+// Convert the enums to the interpolation/sampling string in MSL.
+std::string
+_GetInterpolationString(
+    HgiInterpolationType interpolation, HgiSamplingType sampling)
+{
+    if (interpolation == HgiInterpolationFlat) {
+        return "flat";
+    } else if (interpolation == HgiInterpolationNoPerspective) {
+        if (sampling == HgiSamplingCentroid) {
+            return "centroid_no_perspective";
+        } else if (sampling == HgiSamplingSample) {
+            return "sample_no_perspective";
+        } else {
+            return "center_no_perspective";
+        }
+    } else {
+        if (sampling == HgiSamplingCentroid) {
+            return "centroid_perspective";
+        } else if (sampling == HgiSamplingSample) {
+            return "sample_perspective";
+        } else {
+            // Default behavior is "center_perspective"
+            return "";
+        }
+    }
+}
 
 //This is a conversion layer from descriptors into shader sections
 //In purity we don't want the shader generator to know how to
@@ -153,7 +166,8 @@ _GetBuiltinKeyword(HgiShaderFunctionParamDesc const &param,
        {HgiShaderKeywordTokens->hdPrimitiveID, "primitive_id"},
        {HgiShaderKeywordTokens->hdFrontFacing, "front_facing"},
        {HgiShaderKeywordTokens->hdPosition, "position"},
-       {HgiShaderKeywordTokens->hdBaryCoordNoPerspNV, "barycentric_coord"}
+       {HgiShaderKeywordTokens->hdBaryCoordNoPersp, "barycentric_coord"},
+       {HgiShaderKeywordTokens->hdFragCoord, "position"}
     };
 
     //check if has a role
@@ -272,6 +286,22 @@ _GetDeclarationDefinitions()
         " atomic_fetch_add_explicit(&a, v, memory_order_relaxed)\n"
         "#define ATOMIC_EXCHANGE(a, desired)"
         " atomic_exchange_explicit(&a, desired, memory_order_relaxed)\n"
+        "int atomicCompSwap(device atomic_int *a, int expected, int desired) {\n"
+        "    int found = expected;\n"
+        "    while(!atomic_compare_exchange_weak_explicit(a, &found, desired,\n"
+        "        memory_order_relaxed, memory_order_relaxed)) {\n"
+        "        if (found != expected) { return found; }\n"
+        "        else { found = expected; }\n"
+        "    } return expected; }\n"
+        "uint atomicCompSwap(device atomic_uint *a, uint expected, uint desired) {\n"
+        "    uint found = expected;\n"
+        "    while(!atomic_compare_exchange_weak_explicit(a, &found, desired,\n"
+        "        memory_order_relaxed, memory_order_relaxed)) {\n"
+        "        if (found != expected) { return found; }\n"
+        "        else { found = expected; }\n"
+        "    } return expected; }\n"
+        "#define ATOMIC_COMP_SWAP(a, expected, desired)"
+        " atomicCompSwap(&a, expected, desired)\n"
         "\n";
 }
 
@@ -368,7 +398,7 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
     }
 
     if (@available(macos 100.100, ios 12.0, *)) {
-        header  << "#define ARCH_OS_IOS\n";
+        header  << "#define ARCH_OS_IPHONE\n";
         // Define all iOS 12 feature set enums onwards
         if ([device supportsFeatureSet:MTLFeatureSet(12)])
             header << "#define METAL_FEATURESET_IOS_GPUFAMILY1_v5\n";
@@ -431,7 +461,6 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
     header  << _GetPackedTypeDefinitions();
 
     header << "#define in /*in*/\n"
-              "#define discard discard_fragment();\n"
               "#define radians(d) (d * 0.01745329252)\n"
               "#define noperspective /*center_no_perspective MTL_FIXME*/\n"
               "#define dFdx    dfdx\n"
@@ -581,7 +610,8 @@ _AccumulateParamsAndBlockParams(
 bool
 _IsTessFunction(const HgiShaderFunctionDesc &descriptor)
 {
-    return descriptor.shaderStage == HgiShaderStagePostTessellationVertex;
+    return descriptor.shaderStage == HgiShaderStagePostTessellationControl ||
+           descriptor.shaderStage == HgiShaderStagePostTessellationVertex;
 }
 
 ShaderStageData::ShaderStageData(
@@ -614,6 +644,8 @@ ShaderStageData::ShaderStageData(
                 descriptor.shaderStage,
                 descriptor.shaderStage == HgiShaderStageVertex
                 || descriptor.shaderStage ==
+                  HgiShaderStagePostTessellationControl
+                || descriptor.shaderStage ==
                   HgiShaderStagePostTessellationVertex)))
     , _outputs(
         _AccumulateParamsAndBlockParams(
@@ -642,6 +674,8 @@ ShaderStageData::AccumulateParams(
     HgiShaderStage stage,
     bool iterateAttrs)
 {
+    // Currently we don't add qualifiers for function parameters.
+    const static std::string emptyQualifiers("");
     HgiMetalShaderSectionPtrVector stageShaderSections;
     //only some roles have an index
     if(!iterateAttrs) {
@@ -675,24 +709,15 @@ ShaderStageData::AccumulateParams(
                 attributes.push_back(HgiShaderSectionAttribute{role, indexAsStr});
             }
 
-            switch (p.interpolation) {
-            case HgiInterpolationDefault:
-                break;
-            case HgiInterpolationFlat:
-                attributes.push_back(
-                    HgiShaderSectionAttribute{"flat", ""});
-                break;
-            case HgiInterpolationNoPerspective:
-                attributes.push_back(
-                    HgiShaderSectionAttribute{"center_no_perspective", ""});
-                break;
-            }
+            attributes.push_back(HgiShaderSectionAttribute{
+                _GetInterpolationString(p.interpolation, p.sampling), ""});
 
             HgiMetalMemberShaderSection * const section =
                 generator->CreateShaderSection<
                     HgiMetalMemberShaderSection>(
                         p.nameInShader,
                         p.type,
+                        emptyQualifiers,
                         attributes,
                         p.arraySize);
             stageShaderSections.push_back(section);
@@ -717,6 +742,7 @@ ShaderStageData::AccumulateParams(
                     HgiMetalMemberShaderSection>(
                         p.nameInShader,
                         p.type,
+                        emptyQualifiers,
                         attributes,
                         p.arraySize);
             stageShaderSections.push_back(section);
@@ -748,6 +774,8 @@ ShaderStageData::AccumulateParamBlocks(
                         HgiMetalMemberShaderSection>(
                             m.name,
                             m.type,
+                            _GetInterpolationString(
+                                m.interpolation, m.sampling),
                             attributes,
                             std::string(),
                             p.instanceName);
@@ -777,11 +805,11 @@ ShaderStageData::AccumulateBufferBindings(
     HgiMetalShaderGenerator *generator)
 {
     HgiMetalShaderSectionPtrVector stageShaderSections;
-    int maxBindIndex = 0;
+    uint32_t maxBindIndex = 0;
 
     std::vector<const HgiShaderFunctionBufferDesc*> slots(32, nullptr);
     for (size_t i = 0; i < buffers.size(); i++) {
-        int bindIndex = buffers[i].bindIndex;
+        uint32_t bindIndex = buffers[i].bindIndex;
         maxBindIndex = std::max(maxBindIndex, bindIndex);
         if (maxBindIndex >= slots.size()) {
             slots.resize(slots.size() + 32, nullptr);
@@ -1221,14 +1249,14 @@ _BuildTessAttribute(
 {
     ss << "[[patch(";
     switch (tessDesc.patchType) {
-        case HgiShaderFunctionTessellationDesc::PatchType::Triangle:
+        case HgiShaderFunctionTessellationDesc::PatchType::Triangles:
             ss << "triangle, ";
             break;
-        case HgiShaderFunctionTessellationDesc::PatchType::Quad:
+        case HgiShaderFunctionTessellationDesc::PatchType::Quads:
             ss << "quad, ";
             break;
-            default:
-                TF_CODING_ERROR("Unknown patch type");
+        default:
+            TF_CODING_ERROR("Unknown patch type");
             break;
     }
     ss << tessDesc.numVertsPerPatchIn << ")]]";
@@ -1325,6 +1353,85 @@ HgiMetalShaderGenerator::_BuildShaderStageEntryPoints(
                             "tvInput",
                             functionAttributesSS.str());
         }
+        case HgiShaderStagePostTessellationControl: {
+            _BuildTessAttribute(functionAttributesSS,
+                                descriptor.tessellationDescriptor);
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                            stageData,
+                            this,
+                            "ptc",
+                            "TessControl",
+                            "vertex",
+                            "tcInput",
+                            functionAttributesSS.str());
+        }
+        case HgiShaderStageRayGen: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "kernel",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageAnyHit: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "anyhit",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageClosestHit: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "closesthit",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageMiss: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "miss",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageIntersection: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "intersection",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageCallable: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "callable",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
         case HgiShaderStageRayGen: {
             return std::make_unique
                     <HgiMetalShaderStageEntryPoint>(
@@ -1399,26 +1506,39 @@ HgiMetalShaderGenerator::_BuildShaderStageEntryPoints(
 }
 
 HgiMetalShaderGenerator::HgiMetalShaderGenerator(
-    const HgiShaderFunctionDesc &descriptor,
-    id<MTLDevice> device)
+    HgiMetal const *hgi,
+    const HgiShaderFunctionDesc &descriptor)
   : HgiShaderGenerator(descriptor)
+  , _hgi(hgi)
   , _generatorShaderSections(_BuildShaderStageEntryPoints(descriptor))
 {
+    // Currently we don't add qualifiers for global uniforms.
+    const static std::string emptyQualifiers("");
     for (const auto &member: descriptor.stageGlobalMembers) {
         HgiShaderSectionAttributeVector attrs;
         CreateShaderSection<
             HgiMetalMemberShaderSection>(
                 member.nameInShader,
                 member.type,
+                emptyQualifiers,
                 attrs,
                 member.arraySize);
     }
+
     std::stringstream macroSection;
-    macroSection << _GetHeader(device, descriptor.shaderStage);
+    macroSection << _GetHeader(hgi->GetPrimaryDevice(), descriptor.shaderStage);
+
     if (_IsTessFunction(descriptor)) {
         macroSection << "#define VERTEX_CONTROL_POINTS_PER_PATCH "
         << descriptor.tessellationDescriptor.numVertsPerPatchIn
         << "\n";
+    }
+
+    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+        macroSection << "#define discard discard_fragment(); "
+                        "discarded_fragment = true;\n";
+    } else {
+        macroSection << "#define discard discard_fragment();\n";
     }
     
     CreateShaderSection<HgiMetalMacroShaderSection>(
@@ -1834,6 +1954,11 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
             section->VisitScopeStructs(ss);
         }
         ss << "\n// //////// Scope Member Declarations ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "bool discarded_fragment;\n";
+            }
+        }
         for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
             section->VisitScopeMemberDeclarations(ss);
         }
@@ -1889,22 +2014,23 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
         HgiMetalStageOutputShaderSection* const outputs =
         _generatorShaderSections->GetOutputs();
         std::stringstream returnSS;
-        if (outputs) {
+        if (outputs &&
+            (_GetShaderStage() != HgiShaderStagePostTessellationControl)) {
             const HgiMetalStructTypeDeclarationShaderSection* const decl =
-            outputs->GetStructTypeDeclaration();
+                outputs->GetStructTypeDeclaration();
             decl->WriteIdentifier(returnSS);
         }
         else {
             //handle compute
             returnSS << "void";
         }
-        
+
         ss << _generatorShaderSections->GetEntryPointAttributes();
-        
+
         ss << _generatorShaderSections->GetEntryPointStageName();
         ss << " " << returnSS.str() << " "
-        << _generatorShaderSections->GetEntryPointFunctionName() << "(\n";
-        
+            << _generatorShaderSections->GetEntryPointFunctionName() << "(\n";
+
         // Pass in all parameters declared by interested code sections into the
         // entry point of the shader
         firstParam = true;
@@ -1923,8 +2049,8 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
         }
         ss <<"){\n";
         ss << _generatorShaderSections->GetScopeTypeName() << " "
-        << _generatorShaderSections->GetScopeInstanceName();
-        
+            << _generatorShaderSections->GetScopeInstanceName();
+    
         if (hasContructorParams) {
             ss << "(\n";
             firstParam = true;
@@ -1944,20 +2070,40 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
             ss << ")";
         }
         ss << ";\n";
-        
+
         // Execute all code that hooks into the entry point function
         ss << "\n// //////// Entry Point Function Executions ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << _generatorShaderSections->GetScopeInstanceName()
+                    << ".discarded_fragment = false;\n";
+            }
+        }
         for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
             if (section->VisitEntryPointFunctionExecutions(
-                                                           ss, _generatorShaderSections->GetScopeInstanceName())) {
-                                                               ss << "\n";
-                                                           }
+                ss, _generatorShaderSections->GetScopeInstanceName())) {
+                ss << "\n";
+            }
+        }
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "if (" << _generatorShaderSections->GetScopeInstanceName()
+                    << ".discarded_fragment)\n";
+                ss << "{\n";
+                if (outputs) {
+                    ss << "    return {};\n";
+                } else {
+                    ss << "    return;\n";
+                }
+                ss << "}\n";
+            }
         }
         //return the instance of the shader entrypoint output type
-        if(outputs)
+        if(outputs &&
+            (_GetShaderStage() != HgiShaderStagePostTessellationControl))
         {
             const std::string outputInstanceName =
-            _generatorShaderSections->GetOutputInstanceName();
+                _generatorShaderSections->GetOutputInstanceName();
             ss << "return " << outputInstanceName << ";\n";
         }
         else {

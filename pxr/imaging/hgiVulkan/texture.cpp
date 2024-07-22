@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/imaging/hgiVulkan/buffer.h"
@@ -74,7 +57,7 @@ HgiVulkanTexture::HgiVulkanTexture(
     , _cpuStagingAddress(nullptr)
 {
     GfVec3i const& dimensions = desc.dimensions;
-    bool isDepthBuffer = desc.usage & HgiTextureUsageBitsDepthTarget;
+    bool const isDepthBuffer = desc.usage & HgiTextureUsageBitsDepthTarget;
 
     //
     // Gather image create info
@@ -83,7 +66,8 @@ HgiVulkanTexture::HgiVulkanTexture(
     VkImageCreateInfo imageCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
 
     imageCreateInfo.imageType = HgiVulkanConversions::GetTextureType(desc.type);
-    imageCreateInfo.format = HgiVulkanConversions::GetFormat(desc.format);
+    imageCreateInfo.format = HgiVulkanConversions::GetFormat(
+        desc.format, isDepthBuffer);
     imageCreateInfo.mipLevels = desc.mipLevels;
     imageCreateInfo.arrayLayers = desc.layerCount;
     imageCreateInfo.samples = 
@@ -114,16 +98,8 @@ HgiVulkanTexture::HgiVulkanTexture(
     imageCreateInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
         VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    // Set STORAGE_IMAGE usage bit, only if optimal tiling supported and texture format is not sRGB.
-    if (_optimalTiling && !isSRGBFormat(imageCreateInfo.format)) {
-
-        // XXX STORAGE_IMAGE requires VK_IMAGE_USAGE_STORAGE_BIT, but Hgi
-        // doesn't tell us if a texture will be used as image load/store.
-        if ((desc.usage & HgiTextureUsageBitsShaderRead) ||
-                (desc.usage & HgiTextureUsageBitsShaderWrite)) {
-            imageCreateInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
-            }
-    }
+    // XXX STORAGE_IMAGE requires VK_IMAGE_USAGE_STORAGE_BIT, but Hgi
+    // doesn't tell us if a texture will be used as image load/store.
 
     VkFormatFeatureFlags formatValidationFlags =
         HgiVulkanConversions::GetFormatFeature(desc.usage);
@@ -262,6 +238,7 @@ HgiVulkanTexture::HgiVulkanTexture(
         TransitionImageBarrier(
             cb,
             this,
+            VK_IMAGE_LAYOUT_UNDEFINED,
             layout,
             NO_PENDING_WRITES,
             GetDefaultAccessFlags(desc.usage),
@@ -296,14 +273,15 @@ HgiVulkanTexture::HgiVulkanTexture(
     HgiVulkanTexture* srcTexture =
         static_cast<HgiVulkanTexture*>(desc.sourceTexture.Get());
     HgiTextureDesc const& srcTexDesc = desc.sourceTexture->GetDescriptor();
-    bool isDepthBuffer = srcTexDesc.usage & HgiTextureUsageBitsDepthTarget;
+    bool const isDepthBuffer = 
+        srcTexDesc.usage & HgiTextureUsageBitsDepthTarget;
 
     _vkImage = srcTexture->GetImage();
     _vkImageLayout = srcTexture->GetImageLayout();
 
     VkImageViewCreateInfo view = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view.viewType = HgiVulkanConversions::GetTextureViewType(srcTexDesc.type);
-    view.format = HgiVulkanConversions::GetFormat(desc.format);
+    view.format = HgiVulkanConversions::GetFormat(desc.format, isDepthBuffer);
     view.components.r = HgiVulkanConversions::GetComponentSwizzle(
         srcTexDesc.componentMapping.r);
     view.components.g = HgiVulkanConversions::GetComponentSwizzle(
@@ -317,8 +295,8 @@ HgiVulkanTexture::HgiVulkanTexture(
         VK_IMAGE_ASPECT_DEPTH_BIT /*| VK_IMAGE_ASPECT_STENCIL_BIT*/ :
         VK_IMAGE_ASPECT_COLOR_BIT;
 
-    view.subresourceRange.baseMipLevel = 0;
-    view.subresourceRange.baseArrayLayer = 0;
+    view.subresourceRange.baseMipLevel = desc.sourceFirstMip;
+    view.subresourceRange.baseArrayLayer = desc.sourceFirstLayer;
     view.subresourceRange.layerCount = desc.layerCount;
     view.subresourceRange.levelCount = desc.mipLevels;
     view.image = srcTexture->GetImage();
@@ -480,7 +458,8 @@ HgiVulkanTexture::CopyBufferToTexture(
 
         const HgiMipInfo &mipInfo = mipInfos[mip];
         VkBufferImageCopy bufferCopyRegion = {};
-        bufferCopyRegion.imageSubresource.aspectMask= VK_IMAGE_ASPECT_COLOR_BIT;
+        bufferCopyRegion.imageSubresource.aspectMask =
+            HgiVulkanConversions::GetImageAspectFlag(_descriptor.usage);
         bufferCopyRegion.imageSubresource.mipLevel = (uint32_t) mip;
         bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
         bufferCopyRegion.imageSubresource.layerCount = _descriptor.layerCount;
@@ -498,6 +477,7 @@ HgiVulkanTexture::CopyBufferToTexture(
     TransitionImageBarrier(
         cb,
         this,
+        GetImageLayout(),
         _optimalTiling ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL, // Transition tex to this layout
         NO_PENDING_WRITES,                    // No pending writes
         VK_ACCESS_TRANSFER_WRITE_BIT,         // Write access to image
@@ -520,6 +500,7 @@ HgiVulkanTexture::CopyBufferToTexture(
     TransitionImageBarrier(
         cb,
         this,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         layout,                              // Transition tex to this
         VK_ACCESS_TRANSFER_WRITE_BIT,        // Pending vkCmdCopyBufferToImage
         access,                              // Shader read access
@@ -527,10 +508,82 @@ HgiVulkanTexture::CopyBufferToTexture(
         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT); // Consumer stage
 }
 
+void 
+HgiVulkanTexture::SubmitLayoutChange(HgiTextureUsage newLayout)
+{
+    VkImageLayout newVkLayout = 
+        HgiVulkanTexture::GetDefaultImageLayout(newLayout);
+
+    HgiVulkanCommandQueue* queue = _device->GetCommandQueue();
+    HgiVulkanCommandBuffer* cb = queue->AcquireResourceCommandBuffer();
+
+    VkAccessFlags srcAccessMask, dstAccessMask = VK_ACCESS_NONE;
+
+    // The following cases are based on few initial assumptions to provide
+    // an infrastructure for access mask selection based on layouts.
+    // Feel free to update depending on need and use cases.
+    switch (GetImageLayout()) {
+    case VK_IMAGE_LAYOUT_PREINITIALIZED:
+        srcAccessMask =
+            VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        break;
+    default:
+        srcAccessMask = VK_ACCESS_NONE;
+        break;
+    }
+
+    switch (newVkLayout) {
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
+        dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        break;
+    default:
+        dstAccessMask = VK_ACCESS_NONE;
+        break;
+    }
+
+    TransitionImageBarrier(
+        cb,
+        this,
+        GetImageLayout(),
+        newVkLayout,
+        srcAccessMask, 
+        dstAccessMask,
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+}
+
 void
 HgiVulkanTexture::TransitionImageBarrier(
     HgiVulkanCommandBuffer* cb,
     HgiVulkanTexture* tex,
+    VkImageLayout oldLayout,
     VkImageLayout newLayout,
     VkAccessFlags producerAccess,
     VkAccessFlags consumerAccess,
@@ -539,7 +592,6 @@ HgiVulkanTexture::TransitionImageBarrier(
     int32_t mipLevel)
 {
     HgiTextureDesc const& desc = tex->GetDescriptor();
-    bool isDepthBuffer = desc.usage & HgiTextureUsageBitsDepthTarget;
 
     uint32_t firstMip = mipLevel < 0 ? 0 : (uint32_t)mipLevel;
     uint32_t mipCnt = mipLevel < 0 ? desc.mipLevels : 1;
@@ -548,14 +600,13 @@ HgiVulkanTexture::TransitionImageBarrier(
     barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     barrier[0].srcAccessMask = producerAccess; // what producer does / changes.
     barrier[0].dstAccessMask = consumerAccess; // what consumer does / changes.
-    barrier[0].oldLayout = tex->GetImageLayout();
+    barrier[0].oldLayout = oldLayout;
     barrier[0].newLayout = newLayout;
     barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier[0].image = tex->GetImage();
-    barrier[0].subresourceRange.aspectMask = isDepthBuffer ?
-        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT :
-        VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier[0].subresourceRange.aspectMask = 
+        HgiVulkanConversions::GetImageAspectFlag(desc.usage);
     barrier[0].subresourceRange.baseMipLevel = firstMip;
     barrier[0].subresourceRange.levelCount = mipCnt;
     barrier[0].subresourceRange.layerCount = desc.layerCount;
@@ -583,12 +634,15 @@ HgiVulkanTexture::GetDefaultImageLayout(HgiTextureUsage usage)
     if (usage & HgiTextureUsageBitsShaderWrite) {
         // Assume the ShaderWrite means its a storage image.
         return VK_IMAGE_LAYOUT_GENERAL;
-    } else if (usage & HgiTextureUsageBitsShaderRead) {
-        return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    } else if (usage & HgiTextureUsageBitsDepthTarget) {
-        return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    // Prioritize attachment layouts over shader read layout. Some textures 
+    // might have both usages.
     } else if (usage & HgiTextureUsageBitsColorTarget) {
         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    } else if (usage & HgiTextureUsageBitsDepthTarget ||
+               usage & HgiTextureUsageBitsStencilTarget) {
+        return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else if (usage & HgiTextureUsageBitsShaderRead) {
+        return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
     return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

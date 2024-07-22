@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_PCP_COMPOSE_SITE_H
 #define PXR_USD_PCP_COMPOSE_SITE_H
@@ -52,6 +35,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/api.h"
+#include "pxr/usd/pcp/errors.h"
 #include "pxr/usd/pcp/node.h"
 #include "pxr/usd/sdf/layerOffset.h"
 #include "pxr/usd/sdf/path.h"
@@ -61,6 +45,8 @@
 #include "pxr/usd/sdf/site.h"
 
 #include <set>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -69,51 +55,110 @@ TF_DECLARE_WEAK_AND_REF_PTRS(PcpLayerStack);
 
 class PcpLayerStackSite;
 
-/// \struct PcpSourceArcInfo
+/// \struct PcpArcInfo
 ///
-/// Information about the source of the target of an arc.
-/// All arcs have a layer that the arc comes from. References and payloads 
+/// Helper information about an arc. All arcs have a 
+/// layer that the arc comes from. References and payloads 
 /// supply an authored asset path as well.
 ///
-struct PcpSourceArcInfo {
-    SdfLayerHandle layer;
-    SdfLayerOffset layerStackOffset;
+struct PcpArcInfo {
+    SdfLayerHandle sourceLayer;
+    SdfLayerOffset sourceLayerStackOffset;
     std::string authoredAssetPath;
+    int arcNum;
 };
 
 /// A vector of reference or payload arc information.
-typedef std::vector<PcpSourceArcInfo> PcpSourceArcInfoVector;
+typedef std::vector<PcpArcInfo> PcpArcInfoVector;
 
 /// References
 PCP_API
 void
-PcpComposeSiteReferences(PcpLayerStackRefPtr const &layerStack,
-                         SdfPath const &path,
-                         SdfReferenceVector *result,
-                         PcpSourceArcInfoVector *info);
+PcpComposeSiteReferences(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    SdfReferenceVector *result,
+    PcpArcInfoVector *info,
+    std::unordered_set<std::string> *exprVarDependencies,
+    PcpErrorVector *errors);
+
 inline void
-PcpComposeSiteReferences(PcpNodeRef const &node,
-                         SdfReferenceVector *result,
-                         PcpSourceArcInfoVector *info)
+PcpComposeSiteReferences(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    SdfReferenceVector *result,
+    PcpArcInfoVector *info)
 {
-    return PcpComposeSiteReferences(node.GetLayerStack(), node.GetPath(),
-                                    result, info);
+    return PcpComposeSiteReferences(
+        layerStack, path, result, info, nullptr , nullptr);
+}
+
+inline void
+PcpComposeSiteReferences(
+    PcpNodeRef const &node,
+    SdfReferenceVector *result,
+    PcpArcInfoVector *info,
+    std::unordered_set<std::string> *exprVarDependencies,
+    PcpErrorVector *errors)
+{
+    return PcpComposeSiteReferences(
+        node.GetLayerStack(), node.GetPath(), 
+        result, info, exprVarDependencies, errors);
+}
+
+inline void
+PcpComposeSiteReferences(
+    PcpNodeRef const &node,
+    SdfReferenceVector *result,
+    PcpArcInfoVector *info)
+{
+    return PcpComposeSiteReferences(
+        node.GetLayerStack(), node.GetPath(), result, info, nullptr, nullptr);
 }
 
 /// Payloads
 PCP_API
 void
-PcpComposeSitePayloads(PcpLayerStackRefPtr const &layerStack,
-                       SdfPath const &path,
-                       SdfPayloadVector *result,
-                       PcpSourceArcInfoVector *info);
+PcpComposeSitePayloads(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    SdfPayloadVector *result,
+    PcpArcInfoVector *info,
+    std::unordered_set<std::string> *exprVarDependencies,
+    PcpErrorVector *errors);
+
 inline void
-PcpComposeSitePayloads(PcpNodeRef const &node,
-                       SdfPayloadVector *result,
-                       PcpSourceArcInfoVector *info)
+PcpComposeSitePayloads(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    SdfPayloadVector *result,
+    PcpArcInfoVector *info)
 {
-    return PcpComposeSitePayloads(node.GetLayerStack(), node.GetPath(),
-                                  result, info);
+    return PcpComposeSitePayloads(
+        layerStack, path, result, info, nullptr, nullptr);
+}
+
+inline void
+PcpComposeSitePayloads(
+    PcpNodeRef const &node,
+    SdfPayloadVector *result,
+    PcpArcInfoVector *info,
+    std::unordered_set<std::string> *exprVarDependencies,
+    PcpErrorVector *errors)
+{
+    return PcpComposeSitePayloads(
+        node.GetLayerStack(), node.GetPath(),
+        result, info, exprVarDependencies, errors);
+}
+
+inline void
+PcpComposeSitePayloads(
+    PcpNodeRef const &node,
+    SdfPayloadVector *result,
+    PcpArcInfoVector *info)
+{
+    return PcpComposeSitePayloads(
+        node.GetLayerStack(), node.GetPath(), result, info, nullptr, nullptr);
 }
 
 /// Permission
@@ -183,7 +228,7 @@ PCP_API
 void
 PcpComposeSiteInherits(PcpLayerStackRefPtr const &layerStack,
                        SdfPath const &path, SdfPathVector *result,
-                       PcpSourceArcInfoVector *info);
+                       PcpArcInfoVector *info);
 
 PCP_API
 void
@@ -201,7 +246,7 @@ PCP_API
 void
 PcpComposeSiteSpecializes(PcpLayerStackRefPtr const &layerStack,
                           SdfPath const &path, SdfPathVector *result,
-                          PcpSourceArcInfoVector *info);
+                          PcpArcInfoVector *info);
 
 PCP_API
 void
@@ -221,7 +266,7 @@ void
 PcpComposeSiteVariantSets(PcpLayerStackRefPtr const &layerStack,
                           SdfPath const &path,
                           std::vector<std::string> *result,
-                          PcpSourceArcInfoVector *info);
+                          PcpArcInfoVector *info);
 
 PCP_API
 void
@@ -254,32 +299,67 @@ PcpComposeSiteVariantSetOptions(PcpNodeRef const &node,
 /// VariantSelection
 PCP_API
 bool
-PcpComposeSiteVariantSelection(PcpLayerStackRefPtr const &layerStack,
-                               SdfPath const &path,
-                               std::string const &vsetName,
-                               std::string *result);
+PcpComposeSiteVariantSelection(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    std::string const &vsetName,
+    std::string *result,
+    std::unordered_set<std::string> *exprVarDependencies,
+    PcpErrorVector *errors);
+
+inline bool
+PcpComposeSiteVariantSelection(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    std::string const &vsetName,
+    std::string *result)
+{
+    return PcpComposeSiteVariantSelection(
+        layerStack, path, vsetName, result, nullptr, nullptr);
+}
+
 inline bool
 PcpComposeSiteVariantSelection(PcpNodeRef const &node,
                                std::string const &vsetName,
                                std::string *result)
 {
-    return PcpComposeSiteVariantSelection(node.GetLayerStack(), node.GetPath(),
-                                          vsetName, result);
+    return PcpComposeSiteVariantSelection(
+        node.GetLayerStack(), node.GetPath(), vsetName, result);
 }
 
 /// VariantSelections
 PCP_API
 void 
-PcpComposeSiteVariantSelections(PcpLayerStackRefPtr const &layerStack,
-                                SdfPath const &path,
-                                SdfVariantSelectionMap *result);
+PcpComposeSiteVariantSelections(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    SdfVariantSelectionMap *result,
+    std::unordered_set<std::string> *exprVarDependencies,
+    PcpErrorVector *errors);
+
+inline void 
+PcpComposeSiteVariantSelections(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path,
+    SdfVariantSelectionMap *result)
+{
+    return PcpComposeSiteVariantSelections(
+        layerStack, path, result, nullptr, nullptr);
+}
+
 inline void
 PcpComposeSiteVariantSelections(PcpNodeRef const &node,
                                 SdfVariantSelectionMap *result)
 {
-    return PcpComposeSiteVariantSelections(node.GetLayerStack(), node.GetPath(),
-                                           result);
+    return PcpComposeSiteVariantSelections(
+        node.GetLayerStack(), node.GetPath(), result);
 }
+
+PCP_API
+bool
+PcpComposeSiteHasVariantSelections(
+    PcpLayerStackRefPtr const &layerStack,
+    SdfPath const &path);
 
 /// Compose child names.
 /// If the optional \p orderField is provided, its order will be applied.

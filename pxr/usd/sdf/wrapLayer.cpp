@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 /// \file wrapLayer.cpp
 
@@ -596,6 +579,10 @@ void wrapLayer()
 
         .def("TransferContent", &SdfLayer::TransferContent)
 
+        .def("StreamsData", &This::StreamsData)
+
+        .def("IsDetached", &This::IsDetached)
+
         .add_property("empty", &This::IsEmpty)
 
         .add_property("dirty", &This::IsDirty)
@@ -666,6 +653,17 @@ void wrapLayer()
         .def("UpdateCompositionAssetDependency", 
              &This::UpdateCompositionAssetDependency)
 
+        .def("SetDetachedLayerRules", &This::SetDetachedLayerRules)
+        .staticmethod("SetDetachedLayerRules")
+
+        .def("GetDetachedLayerRules", &This::GetDetachedLayerRules,
+             return_value_policy<return_by_value>())
+        .staticmethod("GetDetachedLayerRules")
+
+        .def("IsIncludedByDetachedLayerRules", 
+             &This::IsIncludedByDetachedLayerRules)
+        .staticmethod("IsIncludedByDetachedLayerRules")
+
         .def("SetMuted", &This::SetMuted)
 
         .def("IsMuted", &_WrapIsMuted)
@@ -717,6 +715,8 @@ void wrapLayer()
                       &This::GetDefaultPrim,
                       &This::SetDefaultPrim,
                       "The layer's default reference target token.")
+        .def("GetDefaultPrimAsPath",
+             &This::GetDefaultPrimAsPath)
         .def("HasDefaultPrim",
              &This::HasDefaultPrim)
         .def("ClearDefaultPrim",
@@ -729,6 +729,14 @@ void wrapLayer()
 
         .def("HasCustomLayerData", &This::HasCustomLayerData)
         .def("ClearCustomLayerData", &This::ClearCustomLayerData)
+
+        .add_property("expressionVariables",
+           &This::GetExpressionVariables,
+           &This::SetExpressionVariables,
+           "The expressionVariables dictionary associated with this layer.")
+
+        .def("HasExpressionVariables", &This::HasExpressionVariables)
+        .def("ClearExpressionVariables", &This::ClearExpressionVariables)
 
         .add_property("startTimeCode",
             &This::GetStartTimeCode,
@@ -841,6 +849,12 @@ void wrapLayer()
             "property is claimed to be read only, you can modify the contents "
             "of this list by assigning new layer offsets to specific indices.")
 
+        .add_property("relocates", 
+            &This::GetRelocates,
+            &This::SetRelocates)
+        .def("HasRelocates", &This::HasRelocates)
+        .def("ClearRelocates", &This::ClearRelocates)
+
         .def("GetLoadedLayers",
             make_function(&This::GetLoadedLayers, 
                           return_value_policy<TfPySequenceToList>()), 
@@ -912,6 +926,7 @@ void wrapLayer()
         .setattr("FramesPerSecondKey", SdfFieldKeys->FramesPerSecond)
         .setattr("FramePrecisionKey", SdfFieldKeys->FramePrecision)
         .setattr("OwnerKey", SdfFieldKeys->Owner)
+        .setattr("LayerRelocatesKey", SdfFieldKeys->LayerRelocates)
         .setattr("SessionOwnerKey", SdfFieldKeys->SessionOwner)
         .setattr("TimeCodesPerSecondKey", SdfFieldKeys->TimeCodesPerSecond)
 
@@ -932,6 +947,28 @@ void wrapLayer()
         .def("EraseTimeSample", &_EraseTimeSample)
         ;
 
+    {
+        using This = SdfLayer::DetachedLayerRules;
+        class_<This>("DetachedLayerRules")
+            .def(init<>())
+
+            .def("IncludeAll", &This::IncludeAll,
+                 return_value_policy<return_by_value>())
+            .def("Include", &This::Include,
+                 return_value_policy<return_by_value>())
+            .def("Exclude", &This::Exclude,
+                 return_value_policy<return_by_value>())
+
+            .def("IncludedAll", &This::IncludedAll)
+            .def("GetIncluded", &This::GetIncluded,
+                 return_value_policy<TfPySequenceToList>())
+            .def("GetExcluded", &This::GetExcluded,
+                 return_value_policy<TfPySequenceToList>())
+
+            .def("IsIncluded", &This::IsIncluded)
+            ;
+    }
+
     TfPyContainerConversions::from_python_sequence<
         SdfLayerHandleSet, TfPyContainerConversions::set_policy>();
 
@@ -940,5 +977,3 @@ void wrapLayer()
         TfPyContainerConversions::variable_capacity_policy>();
 
 }
-
-TF_REFPTR_CONST_VOLATILE_GET(SdfLayer)

@@ -140,14 +140,6 @@ class SkelAnimation "SkelAnimation" (
     )
 }
 
-
-class PackedJointAnimation "PackedJointAnimation" (
-    inherits = </SkelAnimation>
-    doc = """Deprecated. Please use SkelAnimation instead."""
-)
-{
-}
-
 class "SkelBindingAPI" (
     inherits = </APISchemaBase>
     doc = """Provides API for authoring and extracting all the skinning-related
@@ -182,6 +174,14 @@ class "SkelBindingAPI" (
         doc = """Skeleton to be bound to this prim and its descendents that
         possess a mapping and weighting to the joints of the identified
         Skeleton."""
+    )
+
+    uniform token primvars:skel:skinningMethod = "classicLinear" (
+        customData = {
+            string apiName = "skinningMethod"
+        }
+        allowedTokens = ["classicLinear", "dualQuaternion"]
+        doc = """The skinningMethod specifies the skinning method for the prim."""
     )
 
     matrix4d primvars:skel:geomBindTransform (

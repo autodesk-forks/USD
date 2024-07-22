@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usdGeom/primvar.h"
@@ -320,6 +303,7 @@ template <typename ArrayType>
 bool 
 UsdGeomPrimvar::_ComputeFlattenedArray(const VtValue &attrVal,
                        const VtIntArray &indices,
+                       int elementSize,
                        VtValue *value, 
                        std::string *errorString)
 {
@@ -328,7 +312,7 @@ UsdGeomPrimvar::_ComputeFlattenedArray(const VtValue &attrVal,
 
     ArrayType result;
     if (_ComputeFlattenedHelper(attrVal.UncheckedGet<ArrayType>(), indices, 
-                                &result, errorString)) {
+                                elementSize, &result, errorString)) {
         *value = VtValue::Take(result);
     }
 
@@ -358,7 +342,7 @@ UsdGeomPrimvar::ComputeFlattened(VtValue *value, UsdTimeCode time) const
     }
 
     std::string errStr;
-    bool res = ComputeFlattened(value, attrVal, indices, &errStr);
+    bool res = ComputeFlattened(value, attrVal, indices, GetElementSize(), &errStr);
     if (!errStr.empty()) {
         TF_WARN("For primvar %s: %s", 
                 UsdDescribe(_attr).c_str(), errStr.c_str());
@@ -373,6 +357,17 @@ UsdGeomPrimvar::ComputeFlattened(
     const VtIntArray &indices,
     std::string *errStr)
 {
+    return ComputeFlattened(value, attrVal, indices, 1, errStr);
+}
+
+bool 
+UsdGeomPrimvar::ComputeFlattened(
+    VtValue *value, 
+    const VtValue &attrVal,
+    const VtIntArray &indices,
+    int elementSize,
+    std::string *errStr)
+{
     // If the primvar attr value is not an array simply return the 
     // attribute value.
     if (!attrVal.IsArrayValued()) {
@@ -382,28 +377,28 @@ UsdGeomPrimvar::ComputeFlattened(
 
     // Handle all known supported array value types.
     bool foundSupportedType =
-        _ComputeFlattenedArray<VtVec2fArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec2dArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec2iArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec2hArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec3fArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec3dArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec3iArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec3hArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec4fArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec4dArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec4iArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtVec4hArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtMatrix3dArray>(attrVal, indices, value, 
+        _ComputeFlattenedArray<VtVec2fArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec2dArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec2iArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec2hArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec3fArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec3dArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec3iArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec3hArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec4fArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec4dArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec4iArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtVec4hArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtMatrix3dArray>(attrVal, indices, elementSize, value, 
                 errStr)    ||
-        _ComputeFlattenedArray<VtMatrix4dArray>(attrVal, indices, value, 
+        _ComputeFlattenedArray<VtMatrix4dArray>(attrVal, indices, elementSize, value, 
                 errStr)    ||
-        _ComputeFlattenedArray<VtStringArray>(attrVal, indices, value, errStr)||
-        _ComputeFlattenedArray<VtDoubleArray>(attrVal, indices, value, errStr)||
-        _ComputeFlattenedArray<VtIntArray>(attrVal, indices, value, errStr)   ||
-        _ComputeFlattenedArray<VtUIntArray>(attrVal, indices, value, errStr)  ||
-        _ComputeFlattenedArray<VtFloatArray>(attrVal, indices, value, errStr) ||
-        _ComputeFlattenedArray<VtHalfArray>(attrVal, indices, value, errStr);
+        _ComputeFlattenedArray<VtStringArray>(attrVal, indices, elementSize, value, errStr)||
+        _ComputeFlattenedArray<VtDoubleArray>(attrVal, indices, elementSize, value, errStr)||
+        _ComputeFlattenedArray<VtIntArray>(attrVal, indices, elementSize, value, errStr)   ||
+        _ComputeFlattenedArray<VtUIntArray>(attrVal, indices, elementSize, value, errStr)  ||
+        _ComputeFlattenedArray<VtFloatArray>(attrVal, indices, elementSize, value, errStr) ||
+        _ComputeFlattenedArray<VtHalfArray>(attrVal, indices, elementSize, value, errStr);
 
     if (!foundSupportedType && errStr) {
         std::string thisErr = TfStringPrintf(

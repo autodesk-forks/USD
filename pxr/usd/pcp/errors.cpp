@@ -1,29 +1,14 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/errors.h"
+
+#include "pxr/base/tf/enum.h"
 #include "pxr/base/tf/stringUtils.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -50,17 +35,22 @@ TF_REGISTRY_FUNCTION(TfEnum) {
     TF_ADD_ENUM_NAME(PcpErrorType_InvalidSublayerOwnership);
     TF_ADD_ENUM_NAME(PcpErrorType_InvalidSublayerPath);
     TF_ADD_ENUM_NAME(PcpErrorType_InvalidVariantSelection);
+    TF_ADD_ENUM_NAME(PcpErrorType_MutedAssetPath);
+    TF_ADD_ENUM_NAME(PcpErrorType_InvalidAuthoredRelocation);
+    TF_ADD_ENUM_NAME(PcpErrorType_InvalidConflictingRelocation);
+    TF_ADD_ENUM_NAME(PcpErrorType_InvalidSameTargetRelocations);
     TF_ADD_ENUM_NAME(PcpErrorType_OpinionAtRelocationSource);
     TF_ADD_ENUM_NAME(PcpErrorType_PrimPermissionDenied);
     TF_ADD_ENUM_NAME(PcpErrorType_PropertyPermissionDenied);
     TF_ADD_ENUM_NAME(PcpErrorType_SublayerCycle);
     TF_ADD_ENUM_NAME(PcpErrorType_TargetPermissionDenied);
     TF_ADD_ENUM_NAME(PcpErrorType_UnresolvedPrimPath);
+    TF_ADD_ENUM_NAME(PcpErrorType_VariableExpressionError);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PcpErrorBase::PcpErrorBase(TfEnum errorType) :
+PcpErrorBase::PcpErrorBase(PcpErrorType errorType) :
     errorType(errorType)
 {
 }
@@ -200,6 +190,59 @@ PcpErrorArcPermissionDenied::ToString() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
+PcpErrorArcToProhibitedChildPtr
+PcpErrorArcToProhibitedChild::New()
+{
+    return PcpErrorArcToProhibitedChildPtr(
+        new PcpErrorArcToProhibitedChild);
+}
+
+PcpErrorArcToProhibitedChild::PcpErrorArcToProhibitedChild() :
+    PcpErrorBase(PcpErrorType_ArcToProhibitedChild)
+{
+}
+
+PcpErrorArcToProhibitedChild::
+~PcpErrorArcToProhibitedChild()
+{
+}
+
+// virtual
+std::string
+PcpErrorArcToProhibitedChild::ToString() const
+{
+    std::string msg = TfStringPrintf("%s\nCANNOT ", TfStringify(site).c_str());
+    switch(arcType) {
+    case PcpArcTypeInherit:
+        msg += "inherit from:\n";
+        break;
+    case PcpArcTypeRelocate:
+        msg += "be relocated from:\n";
+        break;
+    case PcpArcTypeVariant:
+        msg += "use variant:\n";
+        break;
+    case PcpArcTypeReference:
+        msg += "reference:\n";
+        break;
+    case PcpArcTypePayload:
+        msg += "get payload from:\n";
+        break;
+    default:
+        msg += "refer to:\n";
+        break;
+    }   
+    msg += TfStringPrintf("%s\nwhich is a prohibited child of its parent "
+        "because it would require allowing opinions from the source of a "
+        "relocation at %s.", 
+        TfStringify(targetSite).c_str(),
+        TfStringify(relocationSourceSite).c_str());
+
+    return msg;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 PcpErrorCapacityExceededPtr
 PcpErrorCapacityExceeded::New(PcpErrorType errorType)
 {
@@ -226,8 +269,8 @@ PcpErrorCapacityExceeded::ToString() const
 ///////////////////////////////////////////////////////////////////////////////
 
 PcpErrorInconsistentPropertyBase::PcpErrorInconsistentPropertyBase(
-    TfEnum errorType) :
-    PcpErrorBase(errorType)
+    PcpErrorType errorType)
+    : PcpErrorBase(errorType)
 {
 }
 
@@ -351,33 +394,6 @@ PcpErrorInconsistentAttributeVariability::ToString() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PcpErrorInternalAssetPathPtr
-PcpErrorInternalAssetPath::New()
-{
-    return PcpErrorInternalAssetPathPtr(new PcpErrorInternalAssetPath);
-}
-
-PcpErrorInternalAssetPath::PcpErrorInternalAssetPath() :
-    PcpErrorBase(PcpErrorType_InternalAssetPath)
-{
-}
-
-PcpErrorInternalAssetPath::~PcpErrorInternalAssetPath()
-{
-}
-
-// virtual
-std::string
-PcpErrorInternalAssetPath::ToString() const
-{
-    return TfStringPrintf("Ignoring %s path on prim <%s> because asset @%s@ "
-                          "is internal.",
-                          TfEnum::GetDisplayName(arcType).c_str(), 
-                          site.path.GetText(), resolvedAssetPath.c_str()); 
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 PcpErrorInvalidPrimPathPtr
 PcpErrorInvalidPrimPath::New()
 {
@@ -397,18 +413,19 @@ PcpErrorInvalidPrimPath::~PcpErrorInvalidPrimPath()
 std::string
 PcpErrorInvalidPrimPath::ToString() const
 {
-    return TfStringPrintf("Invalid %s path <%s> on prim %s "
-                          "-- must be an absolute prim path.", 
+    return TfStringPrintf("Invalid %s path <%s> introduced by %s"
+                          "-- must be an absolute prim path with no "
+                          "variant selections.", 
                           TfEnum::GetDisplayName(arcType).c_str(), 
                           primPath.GetText(),
-                          TfStringify(site).c_str());
+                          TfStringify(PcpSite(sourceLayer, site.path)).c_str());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 PcpErrorInvalidAssetPathBase::PcpErrorInvalidAssetPathBase(
-    TfEnum errorType) :
-    PcpErrorBase(errorType)
+    PcpErrorType errorType)
+    : PcpErrorBase(errorType)
 {
 }
 
@@ -438,10 +455,11 @@ PcpErrorInvalidAssetPath::~PcpErrorInvalidAssetPath()
 std::string
 PcpErrorInvalidAssetPath::ToString() const
 {
-    return TfStringPrintf("Could not open asset @%s@ for %s on prim %s%s%s.",
+    return TfStringPrintf("Could not open asset @%s@ for "
+                          "%s introduced by %s%s%s.",
                           resolvedAssetPath.c_str(), 
                           TfEnum::GetDisplayName(arcType).c_str(), 
-                          TfStringify(site).c_str(),
+                          TfStringify(PcpSite(sourceLayer, site.path)).c_str(),
                           messages.empty() ? "" : " -- ",
                           messages.c_str());
 }
@@ -467,15 +485,15 @@ PcpErrorMutedAssetPath::~PcpErrorMutedAssetPath()
 std::string
 PcpErrorMutedAssetPath::ToString() const
 {
-    return TfStringPrintf("Asset @%s@ was muted for %s on prim %s.",
+    return TfStringPrintf("Asset @%s@ was muted for %s introduced by %s.",
                           resolvedAssetPath.c_str(), 
                           TfEnum::GetDisplayName(arcType).c_str(), 
-                          TfStringify(site).c_str());
+                          TfStringify(PcpSite(sourceLayer, site.path)).c_str());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PcpErrorTargetPathBase::PcpErrorTargetPathBase(TfEnum errorType)
+PcpErrorTargetPathBase::PcpErrorTargetPathBase(PcpErrorType errorType)
     : PcpErrorBase(errorType)
 {
 }
@@ -641,11 +659,14 @@ PcpErrorInvalidReferenceOffset::~PcpErrorInvalidReferenceOffset()
 std::string
 PcpErrorInvalidReferenceOffset::ToString() const
 {
-    return TfStringPrintf("Invalid reference offset %s at %s on "
-                          "asset path '%s'. Using no offset instead.", 
-                          TfStringify(offset).c_str(),
-                          TfStringify(PcpSite(layer, sourcePath)).c_str(),
-                          assetPath.c_str());
+    return TfStringPrintf(
+        "Invalid %s offset %s for @%s@<%s> introduced by %s. "
+        "Using no offset instead.",
+        TfEnum::GetDisplayName(arcType).c_str(), 
+        TfStringify(offset).c_str(),
+        assetPath.c_str(),
+        targetPath.GetText(),
+        TfStringify(PcpSite(sourceLayer, sourcePath)).c_str());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -713,32 +734,147 @@ PcpErrorInvalidSublayerPath::ToString() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PcpErrorInvalidVariantSelectionPtr
-PcpErrorInvalidVariantSelection::New()
-{
-    return PcpErrorInvalidVariantSelectionPtr(
-        new PcpErrorInvalidVariantSelection);
-}
-
-PcpErrorInvalidVariantSelection::PcpErrorInvalidVariantSelection() :
-    PcpErrorBase(PcpErrorType_InvalidVariantSelection)
+PcpErrorRelocationBase::PcpErrorRelocationBase(PcpErrorType errorType)
+    : PcpErrorBase(errorType)
 {
 }
 
-PcpErrorInvalidVariantSelection::~PcpErrorInvalidVariantSelection()
+PcpErrorRelocationBase::~PcpErrorRelocationBase()
+{
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+PcpErrorInvalidAuthoredRelocationPtr
+PcpErrorInvalidAuthoredRelocation::New()
+{
+    return PcpErrorInvalidAuthoredRelocationPtr(
+        new PcpErrorInvalidAuthoredRelocation);
+}
+
+PcpErrorInvalidAuthoredRelocation::PcpErrorInvalidAuthoredRelocation() :
+    PcpErrorRelocationBase(PcpErrorType_InvalidAuthoredRelocation)
+{
+}
+
+PcpErrorInvalidAuthoredRelocation::~PcpErrorInvalidAuthoredRelocation()
 {
 }
 
 // virtual
 std::string
-PcpErrorInvalidVariantSelection::ToString() const
+PcpErrorInvalidAuthoredRelocation::ToString() const
 {
-    return TfStringPrintf("Invalid variant selection {%s = %s} at <%s> "
-                          "in @%s@.",
-                          vset.c_str(),
-                          vsel.c_str(),
-                          sitePath.GetText(),
-                          siteAssetPath.c_str());
+    return TfStringPrintf("Relocation from <%s> to <%s> authored at @%s@<%s> is "
+                          "invalid and will be ignored: %s",
+                          sourcePath.GetText(),
+                          targetPath.GetText(),
+                          layer->GetIdentifier().c_str(), 
+                          owningPath.GetText(),
+                          messages.c_str());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+PcpErrorInvalidConflictingRelocationPtr
+PcpErrorInvalidConflictingRelocation::New()
+{
+    return PcpErrorInvalidConflictingRelocationPtr(
+        new PcpErrorInvalidConflictingRelocation);
+}
+
+PcpErrorInvalidConflictingRelocation::PcpErrorInvalidConflictingRelocation() :
+    PcpErrorRelocationBase(PcpErrorType_InvalidConflictingRelocation)
+{
+}
+
+PcpErrorInvalidConflictingRelocation::~PcpErrorInvalidConflictingRelocation()
+{
+}
+
+// virtual
+std::string
+PcpErrorInvalidConflictingRelocation::ToString() const
+{
+    auto conflictReasonCstr = [](ConflictReason reason) {
+        switch (reason) {
+            case ConflictReason::TargetIsConflictSource:
+                return "The target of a relocate cannot be the source of "
+                    "another relocate in the same layer stack.";
+            case ConflictReason::SourceIsConflictTarget:
+                return "The source of a relocate cannot be the target of "
+                    "another relocate in the same layer stack.";
+            case ConflictReason::TargetIsConflictSourceDescendant:
+                return "The target of a relocate cannot be a descendant of "
+                    "the source of another relocate.";
+            case ConflictReason::SourceIsConflictSourceDescendant:
+                return "The source of a relocate cannot be a descendant of "
+                    "the source of another relocate.";
+        };
+        return "Invalid conflict reason.";
+    };
+
+    return TfStringPrintf("Relocation from <%s> to <%s> authored at @%s@<%s> "
+                          "conflicts with another relocation from <%s> to <%s> "
+                          "authored at @%s@<%s> and will be ignored: %s",
+                          sourcePath.GetText(),
+                          targetPath.GetText(),
+                          layer->GetIdentifier().c_str(), 
+                          owningPath.GetText(),
+                          conflictSourcePath.GetText(),
+                          conflictTargetPath.GetText(),
+                          conflictLayer->GetIdentifier().c_str(), 
+                          conflictOwningPath.GetText(),
+                          conflictReasonCstr(conflictReason));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+PcpErrorInvalidSameTargetRelocationsPtr
+PcpErrorInvalidSameTargetRelocations::New()
+{
+    return PcpErrorInvalidSameTargetRelocationsPtr(
+        new PcpErrorInvalidSameTargetRelocations);
+}
+
+PcpErrorInvalidSameTargetRelocations::PcpErrorInvalidSameTargetRelocations() :
+    PcpErrorRelocationBase(PcpErrorType_InvalidSameTargetRelocations)
+{
+}
+
+PcpErrorInvalidSameTargetRelocations::~PcpErrorInvalidSameTargetRelocations()
+{
+}
+
+// virtual
+std::string
+PcpErrorInvalidSameTargetRelocations::ToString() const
+{
+    auto sourceToString = [](const RelocationSource &source) {
+        return TfStringPrintf("relocation from <%s> authored at @%s@<%s>",
+            source.sourcePath.GetText(),
+            source.layer->GetIdentifier().c_str(),
+            source.owningPath.GetText());
+    };
+
+    auto sourceIt = sources.begin();
+    if (sourceIt == sources.end()) {
+        TF_CODING_ERROR(
+            "PcpErrorInvalidSameTargetRelocations must have sources");
+        return std::string();
+    }
+
+    std::string sourcesString = sourceToString(*sourceIt);
+    while (++sourceIt != sources.end()) {
+        sourcesString.append("; ");
+        sourcesString.append(sourceToString(*sourceIt));
+    }
+
+    return TfStringPrintf("The path <%s> is the target of multiple relocations "
+                          "from different sources. The following relocates to "
+                          "this target are invalid and will be ignored: %s.",
+                          targetPath.GetText(),
+                          sourcesString.c_str());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -916,10 +1052,58 @@ PcpErrorUnresolvedPrimPath::~PcpErrorUnresolvedPrimPath()
 std::string
 PcpErrorUnresolvedPrimPath::ToString() const
 {
-    return TfStringPrintf("Unresolved %s path <%s> on prim %s.",
-                          TfEnum::GetDisplayName(arcType).c_str(), 
-                          unresolvedPath.GetText(),
-                          TfStringify(site).c_str());
+    return TfStringPrintf(
+        "Unresolved %s prim path %s introduced by %s",
+        TfEnum::GetDisplayName(arcType).c_str(), 
+        TfStringify(PcpSite(targetLayer, unresolvedPath)).c_str(),
+        TfStringify(PcpSite(sourceLayer, site.path)).c_str());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+PcpErrorVariableExpressionErrorPtr
+PcpErrorVariableExpressionError::New()
+{
+    return PcpErrorVariableExpressionErrorPtr(
+        new PcpErrorVariableExpressionError);
+}
+
+PcpErrorVariableExpressionError::PcpErrorVariableExpressionError()
+    : PcpErrorBase(PcpErrorType_VariableExpressionError)
+{
+}
+
+PcpErrorVariableExpressionError::~PcpErrorVariableExpressionError()
+{
+}
+
+std::string
+PcpErrorVariableExpressionError::ToString() const
+{
+    // Example error messages:
+    // Error evaluating expression "`if(${FOO}, ..."
+    // for sublayer in @foo.sdf@: invalid syntax
+    //
+    // Error evaluating expression "`if(${FOO}, ..."
+    // for reference at </Foo> in @bar.sdf@: invalid syntax
+    auto makeSourceStr = [this]() {
+        std::string result;
+        if (!sourcePath.IsAbsoluteRootPath()) {
+            result += TfStringPrintf(
+                "at %s ", sourcePath.GetAsString().c_str());
+        }
+        result += TfStringPrintf(
+            "in @%s@", 
+            sourceLayer ? sourceLayer->GetIdentifier().c_str() : "<expired>");
+        return result;
+
+    };
+
+    return TfStringPrintf(
+        R"(Error evaluating expression %s for %s %s: %s)",
+        expression.substr(0, 32).c_str(), 
+        context.c_str(), makeSourceStr().c_str(),
+        expressionError.c_str());
 }
 
 ///////////////////////////////////////////////////////////////////////////////

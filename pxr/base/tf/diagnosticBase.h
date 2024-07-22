@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_DIAGNOSTIC_BASE_H
 #define PXR_BASE_TF_DIAGNOSTIC_BASE_H
@@ -27,6 +10,7 @@
 /// \file tf/diagnosticBase.h
 
 #include "pxr/pxr.h"
+#include "pxr/base/tf/api.h"
 #include "pxr/base/tf/callContext.h"
 #include "pxr/base/tf/enum.h"
 #include "pxr/base/tf/refBase.h"
@@ -37,13 +21,13 @@
 #include "pxr/base/arch/attributes.h"
 #include "pxr/base/arch/function.h"
 
-#include <boost/any.hpp>
+#include <any>
 #include <cstdarg>
 #include <string>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-typedef boost::any TfDiagnosticInfo;
+typedef std::any TfDiagnosticInfo;
 
 class TfDiagnosticMgr;
 
@@ -159,7 +143,7 @@ public:
     /// then GetInfo() returns NULL.
     template <typename T>
     const T* GetInfo() const {
-        return boost::any_cast<T>(&_info);
+        return std::any_cast<T>(&_info);
     }
 
     /// Set the info object associated with this diagnostic message.
@@ -178,17 +162,17 @@ public:
         return _quiet;
     }
 
-    /// Return the commentary string.
-    std::string GetPrettyPrintString() const;
-
     /// Return true if this diagnostic's code is a fatal code.
+    TF_API
     bool IsFatal() const;
 
     /// Return true if this diagnostic's code is either a fatal or nonfatal
     /// coding error.
+    TF_API
     bool IsCodingError() const;
     
     /// Construct an instance.
+    TF_API
     TfDiagnosticBase(TfEnum code, char const *codeString,
                      TfCallContext const &context,
                      const std::string& commentary,

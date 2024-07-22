@@ -1,31 +1,16 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/basisCurvesTopology.h"
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/base/arch/hash.h"
+
+#include <algorithm>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -36,14 +21,13 @@ _ComputeNumPoints(
     VtIntArray const &curveVertexCounts,
     VtIntArray const &indices)
 {
+    // Make absolutely sure the iterator is constant
+    // (so we don't detach the array while multi-threaded)
     if (indices.empty()) {
-        size_t sum = 0;
-        for (int i : curveVertexCounts) {
-            sum += i;
-        }
-        return sum;
+        return std::accumulate(
+            curveVertexCounts.cbegin(), curveVertexCounts.cend(), size_t {0} );
     } else {
-        return 1 + *std::max_element(indices.begin(), indices.end());
+        return 1 + *std::max_element(indices.cbegin(), indices.cend());
     }
 }
 
@@ -166,16 +150,8 @@ operator << (std::ostream &out, HdBasisCurvesTopology const &topo)
 size_t
 HdBasisCurvesTopology::CalculateNeededNumberOfControlPoints() const
 {
-    size_t numVerts= 0;
-
-    // Make absolutely sure the iterator is constant 
-    // (so we don't detach the array while multi-threaded)
-    for (VtIntArray::const_iterator itCounts = _curveVertexCounts.cbegin();
-            itCounts != _curveVertexCounts.cend(); ++itCounts) {
-        numVerts += *itCounts;
-    }
-
-    return numVerts;
+    // This is computed on construction and accounts for authored indices.
+    return _numPoints;
 }
 
 size_t
@@ -185,7 +161,8 @@ HdBasisCurvesTopology::CalculateNeededNumberOfVaryingControlPoints() const
         // For linear curves, varying and vertex interpolation is identical.
         return CalculateNeededNumberOfControlPoints();
     }
-    size_t numVerts= 0;
+
+    size_t numVarying = 0;
     int numSegs = 0, vStep = 0;
     bool wrap = GetCurveWrap() == HdTokens->periodic;
     
@@ -201,22 +178,28 @@ HdBasisCurvesTopology::CalculateNeededNumberOfVaryingControlPoints() const
     for (VtIntArray::const_iterator itCounts = _curveVertexCounts.cbegin();
             itCounts != _curveVertexCounts.cend(); ++itCounts) {
         
-        // Handling for the case of potentially incorrect vertex counts 
+        // Partial handling for the case of potentially incorrect vertex counts.
+        // We don't validate the vertex count for each curve (which differs
+        // based on the basis and wrap mode) since a renderer
+        // may choose to handle underspecified vertices via e.g., repetition.
         if (*itCounts < 1) {
             continue;
         }
 
-        // The number of verts is different if we have periodic vs non-periodic
-        // curves, check basisCurvesComputations.cpp line 207 for a diagram.
+        // The number of segments is different if we have periodic vs 
+        // non-periodic curves, check basisCurvesComputations.cpp for a diagram.
         if (wrap) {
-            numSegs = *itCounts / vStep;
+            // For bezier curves, if the authored vertex count is less than the
+            // minimum, treat it as 1 segment.
+            numSegs = std::max<int>(*itCounts / vStep, 1);
+            numVarying += numSegs;
         } else {
-            numSegs = ((*itCounts - 4) / vStep) + 1;
+            numSegs = (std::max<int>(*itCounts - 4, 0) / vStep) + 1;
+            numVarying += numSegs + 1;
         }
-        numVerts += numSegs + 1;
     }
 
-    return numVerts;
+    return numVarying;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

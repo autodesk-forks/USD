@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # pylint: disable=map-builtin-not-iterating
 
@@ -455,8 +438,6 @@ class TestUsdCreateProperties(unittest.TestCase):
                                                   Sdf.ValueTypeNames.Asset)
                 arrayAsset = foo.CreateAttribute('arrayAsset',
                                                  Sdf.ValueTypeNames.AssetArray)
-                singleAssetQuery = Usd.AttributeQuery(foo, 'singleAsset')
-                arrayAssetQuery = Usd.AttributeQuery(foo, 'arrayAsset')
 
                 relPath = './' + os.path.split(targetFile.name)[1]
                 relPathArray = Sdf.AssetPathArray(42, [relPath])
@@ -465,6 +446,9 @@ class TestUsdCreateProperties(unittest.TestCase):
 
                 singleAsset.Set(relPath)
                 arrayAsset.Set(relPathArray)
+
+                singleAssetQuery = Usd.AttributeQuery(foo, 'singleAsset')
+                arrayAssetQuery = Usd.AttributeQuery(foo, 'arrayAsset')
 
                 singleAssetValue = singleAsset.Get()
                 arrayAssetValue = arrayAsset.Get()
@@ -530,24 +514,42 @@ class TestUsdCreateProperties(unittest.TestCase):
             stage = Usd.Stage.Open(layerB.identifier)
             over = stage.OverridePrim(primPath)
             over.CreateAttribute(propName, Sdf.ValueTypeNames.String)
-            over.GetReferences().AddReference(Sdf.Reference(layerA.identifier, primPath))
+            over.GetReferences().AddReference(
+                Sdf.Reference(layerA.identifier, primPath, 
+                              Sdf.LayerOffset(10.0)))
 
             stage = Usd.Stage.Open(layerC.identifier)
             over = stage.OverridePrim(primPath)
             over.CreateAttribute(propName, Sdf.ValueTypeNames.String)
-            over.GetReferences().AddReference(Sdf.Reference(layerB.identifier, primPath))
-
+            over.GetReferences().AddReference(
+                Sdf.Reference(layerB.identifier, primPath, 
+                              Sdf.LayerOffset(0.0, 2.0)))
             attr = over.GetAttribute(propName)
             expectedPropertyStack = [l.GetPropertyAtPath(propPath) for l in
                                      [layerC, layerB, layerA]]
+            expectedPropertyStackWithLayerOffsets = [
+                (expectedPropertyStack[0], Sdf.LayerOffset()),
+                (expectedPropertyStack[1], Sdf.LayerOffset(0.0, 2.0)),
+                (expectedPropertyStack[2], Sdf.LayerOffset(20.0, 2.0))
+            ]
+
+            # ensure that fetching property stacks with and without providing
+            # the default timecode as an argument yields the same result.
+            self.assertEqual(attr.GetPropertyStack(), expectedPropertyStack)
+            self.assertEqual(attr.GetPropertyStackWithLayerOffsets(),
+                             expectedPropertyStackWithLayerOffsets)
             self.assertEqual(attr.GetPropertyStack(Usd.TimeCode.Default()), 
                                               expectedPropertyStack)
+            self.assertEqual(attr.GetPropertyStackWithLayerOffsets(
+                                 Usd.TimeCode.Default()), 
+                             expectedPropertyStackWithLayerOffsets)
             # ensure that using a non-default time-code gets the same
             # set since clips are not in play here
             self.assertEqual(attr.GetPropertyStack(101.0), 
                                               expectedPropertyStack)
+            self.assertEqual(attr.GetPropertyStackWithLayerOffsets(101.0), 
+                             expectedPropertyStackWithLayerOffsets)
 
-            
     def test_GetPropertyStackWithClips(self):
         clipPath = '/root/fx/test'
         attrName = 'extent'

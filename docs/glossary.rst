@@ -198,7 +198,10 @@ management and analysis of composed scenes, USD provides an `AssetInfo
 <#usdglossary-assetinfo>`_ schema. The text :filename:`.usda` format 
 uses a special syntax for asset-valued strings to make them easily
 differentiable from ordinary strings, using the "@" symbol instead of quotes to
-delimit their values. See `AssetInfo <#usdglossary-assetinfo>`_ for an example.
+delimit their values, or "@@@" as delimiter if the asset path itself contains
+the "@" character. If an asset path must contain the string "@@@" then it
+should be singly escaped, as "\\@@@". See `AssetInfo
+<#usdglossary-assetinfo>`_ for examples of both forms.
 
 .. _usdglossary-assetinfo:
 
@@ -270,7 +273,9 @@ A continuation of the example above that illustrates `assemblies
        kind = "assembly"
    )
    {
-       # Possibly deep namespace hierarchy of prims, with references to other assets
+       # Example of an asset that embeds the '@', and so must be delimited
+       # with the "@@@" form
+       asset primvars:texture = @@@body_decal.exr@v3@@@
    }
 
 .. _usdglossary-assetresolution:
@@ -565,6 +570,10 @@ and illuminating the scene by targeting the asset's collections (which break
 down the asset into meaningful groups) with other collections.
 
 We create and query Collections using :usdcpp:`UsdCollectionAPI`.
+
+For more details on Collections, including pattern-based collections that use
+a path expression to determine collection membership, 
+see :ref:`collections_and_patterns`.`
 
 .. _usdglossary-component:
 
@@ -1085,6 +1094,10 @@ for easy integration within pipelines that have their own scene data, as well
 as their own renderers. Pixar uses Hydra for asset preview in many of its
 tools, including :program:`usdview` and the `Presto Animation System
 <http://www.cartoonbrew.com/tech/watch-a-rare-demo-of-pixars-animation-system-presto-98099.html>`_.
+
+If you're interested in developing with Hydra components, see the 
+`Hydra Getting Started Guide <api/_page__hydra__getting__started__guide.html>`__
+and other Hydra developer documentation in our `Developer Guides <api/_developer__guides.html>`__.
 
 .. _usdglossary-index:
 
@@ -2727,13 +2740,19 @@ creation-time, a session layer participates fully in the stage's `composition
 <#usdglossary-composition>`_, as the strongest layer in the stage's `Root
 LayerStack <#usdglossary-rootlayerstack>`_, and can possess its own `SubLayers
 <#usdglossary-sublayers>`_. Session layers generally embody "application state",
-and, if saved, would saved as part of application state rather than as part of
-the data set they modify. :ref:`toolset:usdview` creates a sesssion layer, into
-which are targeted all `VariantSet <#usdglossary-variantset>`_ selections,
+and, if saved, would be saved as part of application state rather than as part 
+of the data set they modify. :ref:`toolset:usdview` creates a sesssion layer, 
+into which are targeted all `VariantSet <#usdglossary-variantset>`_ selections,
 `vis/invis <#usdglossary-visibility>`_ opinions, and `activation/deactivation
 <#usdglossary-active-inactive>`_ operations provided by the GUI. In keeping with
 the view of session-layer as application state rather than asset data,
 :usdcpp:`UsdStage::Save` **does not save its stage's session layer(s)**.
+
+To edit content in a session layer, get the layer's edit target using 
+:usdcpp:`stage->GetEditTargetForLocalLayer(stage->GetSessionLayer()) 
+<UsdStage::GetEditTargetForLocalLayer>` and set that target in the stage by 
+calling :usdcpp:`UsdStage::SetEditTarget` or creating a 
+:usdcpp:`UsdEditContext`.
 
 .. _usdglossary-specializes:
 
@@ -3339,6 +3358,38 @@ with the addition of allowing the "-" character, and an optional leading ".".
    {
    }
 
+A variant can contain overriding opinions (for properties, metadata, and more),
+as well as any arbitrary scene description (entire child prim subtrees, etc).
+Variants can also **include additional composition arcs**. This gives us great
+flexibility in building up variations out of existing, modular pieces that
+can be `referenced <#usdglossary-references>`_, `inherited
+<#usdglossary-inherits>`_, etc. In the following example snippet, the 
+"referenceVariantSet" VariantSet contains two variants that reference different
+USD assets. Changing the variant selection controls which asset is referenced in 
+the scene.
+
+.. code-block:: usda
+   :caption: VariantSet with references
+
+   over "Model" (
+       prepend variantSets = "referenceVariantSet"
+       variants = {
+          string referenceVariantSet = "asset1"
+       }
+   )
+   {
+       variantSet "referenceVariantSet" = {
+           "asset1" (
+               prepend references = @Asset1.usda@
+           ) {          
+           }
+           "asset2" (
+               prepend references = @Asset2.usda@
+           ) {          
+           }
+       }
+   }
+
 .. _usdglossary-variantset:
 
 VariantSet
@@ -3433,14 +3484,6 @@ Here is an example of a very simple VariantSet:
       order) as part of their `List Editing <#usdglossary-listediting>`_ nature,
       and the final order of the VariantSets provides their relative strength
       with respect to each other, should their opinions overlap.
-
-       ..
-
-    * Each Variant can contain arbitrary scene description **including the
-      introduction of additional composition arcs**. This gives us great
-      flexibility in building up variations out of existing, modular pieces that
-      can be `referenced <#usdglossary-references>`_, `inherited
-      <#usdglossary-inherits>`_, etc.
 
        ..
 

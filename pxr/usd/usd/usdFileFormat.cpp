@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/usdFileFormat.h"
@@ -33,7 +16,6 @@
 #include "pxr/base/trace/trace.h"
 
 #include "pxr/base/tf/envSetting.h"
-#include "pxr/base/tf/pathUtils.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
 
@@ -190,6 +172,17 @@ UsdUsdFileFormat::InitData(const FileFormatArguments& args) const
     return fileFormat->InitData(args);
 }
 
+SdfAbstractDataRefPtr
+UsdUsdFileFormat::_InitDetachedData(const FileFormatArguments& args) const
+{
+    SdfFileFormatConstPtr fileFormat = _GetFileFormatForArguments(args);
+    if (!fileFormat) {
+        fileFormat = _GetDefaultFileFormat();
+    }
+    
+    return fileFormat->InitDetachedData(args);
+}
+
 bool
 UsdUsdFileFormat::CanRead(const string& filePath) const
 {
@@ -207,6 +200,29 @@ UsdUsdFileFormat::Read(
 {
     TRACE_FUNCTION();
 
+    return _ReadHelper</* Detached = */ false>(
+        layer, resolvedPath, metadataOnly);
+}
+
+bool
+UsdUsdFileFormat::_ReadDetached(
+    SdfLayer* layer,
+    const std::string& resolvedPath,
+    bool metadataOnly) const
+{
+    TRACE_FUNCTION();
+
+    return _ReadHelper</* Detached = */ true>(
+        layer, resolvedPath, metadataOnly);
+}
+
+template <bool Detached>
+bool 
+UsdUsdFileFormat::_ReadHelper(
+    SdfLayer* layer,
+    const string& resolvedPath,
+    bool metadataOnly) const
+{
     // Fetch the asset from Ar.
     auto asset = ArGetResolver().OpenAsset(ArResolvedPath(resolvedPath));
     if (!asset) {
@@ -223,7 +239,7 @@ UsdUsdFileFormat::Read(
     {
         TfErrorMark m;
         if (usdcFileFormat->_ReadFromAsset(
-                layer, resolvedPath, asset, metadataOnly)) {
+                layer, resolvedPath, asset, metadataOnly, Detached)) {
             return true;
         }
         m.Clear();
@@ -240,7 +256,7 @@ UsdUsdFileFormat::Read(
     // gives us better diagnostic messages.
     if (usdcFileFormat->_CanReadFromAsset(resolvedPath, asset)) {
         return usdcFileFormat->_ReadFromAsset(
-            layer, resolvedPath, asset, metadataOnly);
+            layer, resolvedPath, asset, metadataOnly, Detached);
     }
 
     if (usdaFileFormat->_CanReadFromAsset(resolvedPath, asset)) {
@@ -282,36 +298,35 @@ UsdUsdFileFormat::WriteToFile(
     // arguments, just use that.
     SdfFileFormatConstPtr fileFormat = _GetFileFormatForArguments(args);
 
-    // Otherwise, if we are saving a .usd layer (i.e., calling SdfLayer::Save),
-    // we want to maintain that layer's underlying format. For example,
-    // calling Save() on an ASCII .usd file should produce an ASCII file
-    // and not convert it to binary.
-    // 
-    // If we are exporting to a .usd layer (i.e., calling SdfLayer::Export),
-    // we use the default underlying format for .usd. This ensures consistent
-    // behavior -- creating a new .usd layer always uses the default format
-    // unless otherwise specified.
+    // When exporting to a .usd layer (i.e., calling SdfLayer::Export), we use
+    // the default underlying format for .usd. This ensures consistent behavior
+    // -- creating a new .usd layer always uses the default format unless
+    // otherwise specified.
     if (!fileFormat) {
-        // Note that SdfLayer::GetRealPath is *not* the same as realpath(3); 
-        // it does not follow symlinks. Hence, we use TfRealPath to determine 
-        // if the source and destination files are the same. If so, we know 
-        // we're saving the layer, not exporting it to a new location.
-        auto layerRealPath = 
-            TfRealPath(layer.GetRealPath(), 
-                       /* allowInaccessibleSuffix = */ true);
-        auto destRealPath = 
-            TfRealPath(filePath, /* allowInaccessibleSuffix = */ true);
-        const bool isSavingLayer = (layerRealPath == destRealPath);
-        if (isSavingLayer) {
-            fileFormat = _GetUnderlyingFileFormatForLayer(layer);
-        }
+        fileFormat = _GetDefaultFileFormat();
     }
+
+    return fileFormat->WriteToFile(layer, filePath, comment, args);
+}
+
+bool
+UsdUsdFileFormat::SaveToFile(
+    const SdfLayer& layer,
+    const std::string& filePath,
+    const std::string& comment,
+    const FileFormatArguments& args) const
+{
+    // If we are saving a .usd layer (i.e., calling SdfLayer::Save), we want to
+    // maintain that layer's underlying format. For example, calling Save() on a
+    // text .usd file should produce a text file and not convert it to binary.
+    // 
+    SdfFileFormatConstPtr fileFormat = _GetUnderlyingFileFormatForLayer(layer);
 
     if (!fileFormat) {
         fileFormat = _GetDefaultFileFormat();
     }
 
-    return fileFormat->WriteToFile(layer, filePath, comment);
+    return fileFormat->SaveToFile(layer, filePath, comment, args);
 }
 
 bool 
@@ -340,7 +355,7 @@ UsdUsdFileFormat::WriteToStream(
     size_t indent) const
 {
     return _GetUnderlyingFileFormatForLayer(
-        *boost::get_pointer(spec->GetLayer()))->WriteToStream(
+        *get_pointer(spec->GetLayer()))->WriteToStream(
             spec, out, indent);
 }
 

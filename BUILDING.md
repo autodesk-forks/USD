@@ -16,7 +16,7 @@ Advanced Build Configuration
 
 ## Building With Build Script
 
-The simplest way to build USD is to run the supplied ```build_usd.py``` 
+The simplest way to build USD is to run the supplied `build_usd.py`
 script. This script will download required dependencies and build 
 and install them along with USD in a given directory. 
 
@@ -35,10 +35,7 @@ Some examples:
 ```bash
 cmake                                       \
 -DTBB_ROOT_DIR=/path/to/tbb                 \
--DOPENEXR_LOCATION=/path/to/openexr         \
 -DOPENSUBDIV_ROOT_DIR=/path/to/opensubdiv   \
--DPTEX_LOCATION=/path/to/ptex               \
--DOIIO_LOCATION=/path/to/openimageio        \
 -DBOOST_ROOT=/path/to/boost                 \
 /path/to/USD/source
 
@@ -53,10 +50,7 @@ The following will generate an Xcode project that can be used to build USD.
 cmake                                       \
 -G "Xcode"                                  \
 -DTBB_ROOT_DIR=/path/to/tbb                 \
--DOPENEXR_LOCATION=/path/to/openexr         \
 -DOPENSUBDIV_ROOT_DIR=/path/to/opensubdiv   \
--DPTEX_LOCATION=/path/to/ptex               \
--DOIIO_LOCATION=/path/to/openimageio        \
 -DBOOST_ROOT=/path/to/boost                 \
 /path/to/USD/source
 
@@ -65,24 +59,27 @@ cmake --build . --target install -- -j <NUM_CORES>
 
 #### On Windows
 
-The following will generate a Visual Studio 2015 solution that can be used to
+The following will generate a Visual Studio 2017 solution that can be used to
 build USD.
 
 ```cmd.exe
 "C:\Program Files\CMake\bin\cmake.exe"      ^
--G "Visual Studio 14 2015 Win64"            ^
+-G "Visual Studio 15 2017 Win64"            ^
 -DTBB_ROOT_DIR=C:\path\to\tbb               ^
--DOPENEXR_LOCATION=C:\path\to\openexr       ^
 -DOPENSUBDIV_ROOT_DIR=C:\path\to\opensubdiv ^
--DPTEX_LOCATION=C:\path\to\ptex             ^
--DOIIO_LOCATION=C:\path\to\openimageio      ^
 -DBOOST_ROOT=C:\path\to\boost               ^
 \path\to\USD\source
 
 cmake --build . --target install -- /m:%NUMBER_OF_PROCESSORS%
 ```
 
-Note: if you're trying to build with Visual Studio 2017, use the "Visual Studio 15 2017 Win64" generator.
+For other versions of Visual Studio, use the following cmake arguments:
+
+- For VS2019: `-G "Visual Studio 16 2019" -A x64`
+- For VS2022: `-G "Visual Studio 17 2022" -A x64`
+
+For more information on Visual Studio generators for cmake, see 
+[Visual Studio Generators](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html#visual-studio-generators).
 
 ## Optional Components
 
@@ -92,22 +89,21 @@ removes the need for their dependencies when building USD.
 
 ##### Python
 
-Python support in USD refers to:
+Some optional USD components use Python:
 - [The USD Toolset](https://graphics.pixar.com/usd/docs/USD-Toolset.html)
 - [Third Party Plugins](https://graphics.pixar.com/usd/docs/USD-3rd-Party-Plugins.html)
 - Python language bindings for the USD C++ API
 - Unit tests using Python
 
-Support for Python can optionally be disabled by specifying the cmake flag
-```PXR_ENABLE_PYTHON_SUPPORT=FALSE```.
+Please refer to [VERSIONS.md](VERSIONS.md) for supported Python versions.
 
-Support for Python 3 can be enabled by specifying the cmake flag
-```PXR_USE_PYTHON_3=ON```.
+Support for Python can optionally be disabled by specifying the cmake flag
+`PXR_ENABLE_PYTHON_SUPPORT=FALSE`.
 
 ##### OpenGL
 
 Support for OpenGL can optionally be disabled by specifying the cmake flag
-```PXR_ENABLE_GL_SUPPORT=FALSE```.  This will skip components and libraries
+`PXR_ENABLE_GL_SUPPORT=FALSE`.  This will skip components and libraries
 that depend on GL, including:
 - usdview
 - Hydra GL imaging
@@ -116,24 +112,46 @@ that depend on GL, including:
 
 Building USD with Metal enabled requires macOS Mojave (10.14) or newer.
 Support for Metal can optionally be disabled by specifying the cmake flag
-```PXR_ENABLE_METAL_SUPPORT=FALSE```.  This will skip components and libraries
+`PXR_ENABLE_METAL_SUPPORT=FALSE`.  This will skip components and libraries
 that depend on Metal, including:
 - Hydra imaging
 
 ##### Vulkan
 
+Vulkan support for USD is currently experimental and disabled by default.
+
 Building USD with Vulkan enabled requires the Vulkan SDK and glslang to
-be installed. The VULKAN_SDK environment variable must point to the
-location of the SDK. The glslang compiler headers must be locatable during
-the build process.
+be installed. If you wish to build a debug build on Windows, please make sure 
+you have the optional component "Shader Toolchain Debug Symbols" installed as 
+part of the Vulkan SDK.
+
+The VULKAN_SDK environment variable must point to the location of the SDK. The 
+glslang compiler headers must be locatable during the build process.
 
 Support for Vulkan can optionally be enabled by specifying the cmake flag
-```PXR_ENABLE_VULKAN_SUPPORT=TRUE```.
+`PXR_ENABLE_VULKAN_SUPPORT=TRUE`.
+
+##### MaterialX
+
+Enable [MaterialX](https://github.com/materialx/materialx) support in the 
+build by specifying the cmake flag `PXR_ENABLE_MATERIALX_SUPPORT=TRUE` when
+invoking cmake. Note that MaterialX with shared library support is required.
+
+When building via build_usd.py, MaterialX support is enabled by default. The
+default can be overriden using the --materialx and --no-materialx flags.
+
+The additional dependencies that must be supplied when invoking cmake are:
+
+| Dependency Name    | Description                                                 |
+| ------------------ |-----------------------------------------------------------  |
+| MaterialX_DIR      | Path to the CMake package config of a MaterialX SDK install.|
+
+See [3rd Party Library and Application Versions](VERSIONS.md) for version information.
 
 ##### OSL (OpenShadingLanguage)
 
 Support for OSL is disabled by default, and can optionally be enabled by
-specifying the cmake flag ```PXR_ENABLE_OSL_SUPPORT=TRUE```.  This will
+specifying the cmake flag `PXR_ENABLE_OSL_SUPPORT=TRUE`.  This will
 enable components and libraries that depend on OSL.
 
 Enabling OSL suport allows the Shader Definition Registry (sdr) to
@@ -142,48 +160,108 @@ parse metadata from OSL shaders.
 ##### Documentation
 
 Doxygen documentation can optionally be generated by specifying the cmake flag
-```PXR_BUILD_DOCUMENTATION=TRUE```. 
+`PXR_BUILD_DOCUMENTATION=TRUE`.
 
-The additional dependencies that must be supplied for enabling documentation 
+There are two documentation sub-components, controlled by setting
+`PXR_BUILD_HTML_DOCUMENTATION` and `PXR_BUILD_PYTHON_DOCUMENTATION`. See the
+sections below for descriptions of precisely what they control.  Neither sub-
+component will have any effect if `PXR_BUILD_DOCUMENTATION` is not `TRUE`.
+
+The additional dependencies that must be supplied for enabling documentation
 generation are:
 
 | Dependency Name    | Description                             |
-| ------------------ |---------------------------------------  | 
+| ------------------ |---------------------------------------  |
 | DOXYGEN_EXECUTABLE | The location of Doxygen                 |
+
+See [3rd Party Library and Application Versions](VERSIONS.md) for version
+information, including supported Doxygen versions.
+
+##### HTML Documentation
+
+If `PXR_BUILD_HTML_DOCUMENTATION` evaluates `TRUE` then building of the HTML
+documentation is enabled.  This includes USD overview and general concepts, and
+the C++ API documentation.  It defaults to `TRUE`, and so is built by default
+when `PXR_BUILD_DOCUMENTATION` is also enabled (but has no effect if
+`PXR_BUILD_DOCUMENTATION` is not set.)
+
+The additional dependencies that must be supplied for enabling HTML
+documentation generation are:
+
+| Dependency Name    | Description                             |
+| ------------------ |---------------------------------------  |
 | DOT_EXECUTABLE     | The location of Dot(from GraphViz).     |
 
-See [3rd Party Library and Application Versions](VERSIONS.md) for version information.
+See [3rd Party Library and Application Versions](VERSIONS.md) for version
+information, including supported GraphViz versions.
 
+##### Python Documentation
+
+Python docstrings for Python entities can be generated by specifying the cmake
+flag `PXR_BUILD_PYTHON_DOCUMENTATION`. This process requires that Python support
+(`PXR_ENABLE_PYTHON_SUPPORT`) and documentation (`PXR_BUILD_DOCUMENTATION`) are
+enabled. It defaults to `FALSE`.
+
+This process uses the scripts in the docs/python subdirectory. Relevant
+documentation from generated doxygen XML data is extracted and matched with
+associated Python classes, functions, and properties in the built Python 
+modules. A `__DOC.py` file is generated and installed in each of the directories 
+of the installed Python modules. The `__DOC.py` file adds the docstrings to the 
+Python entities when the module is loaded.
 
 ##### Imaging
 
 This component contains Hydra, a high-performance graphics rendering engine.
 
-Disable this component by specifying the cmake flag ```PXR_BUILD_IMAGING=FALSE``` when
+Disable this component by specifying the cmake flag `PXR_BUILD_IMAGING=FALSE` when
 invoking cmake. Disabling this component will also disable the [USD Imaging](#usd-imaging)
 component and any [Imaging Plugins](#imaging-plugins).
-
-Support for Ptex can optionally be disabled by specifying the cmake flag
-```PXR_ENABLE_PTEX_SUPPORT=FALSE```.
-
 
 ##### USD Imaging
 
 This component provides the USD imaging delegates for Hydra, as well as
 usdview, a standalone native viewer for USD files.
 
-Disable this component by specifying the cmake flag ```PXR_BUILD_USD_IMAGING=FALSE``` when
+Disable this component by specifying the cmake flag `PXR_BUILD_USD_IMAGING=FALSE` when
 invoking cmake. usdview may also be disabled independently by specifying the cmake flag 
-```PXR_BUILD_USDVIEW=FALSE```.
+`PXR_BUILD_USDVIEW=FALSE`.
+
+##### Command-line Tools
+
+USD by default builds several helpful command-line tools for validating and 
+manipulating USD files. For more information on the tools, see [USD Toolset](https://graphics.pixar.com/usd/release/toolset.html).
+
+Disable building the command-line tools by specifying the cmake flag 
+`PXR_BUILD_USD_TOOLS=FALSE` when invoking cmake. 
+
+##### Examples
+
+USD by default builds several example projects that demonstrate how to develop
+various extensions and plugins.
+
+Disable building the examples by specifying the cmake flag 
+`PXR_BUILD_EXAMPLES=FALSE` when invoking cmake. 
+
+##### Tutorials
+
+USD by default builds USD and Python files used for the [USD Tutorials](https://graphics.pixar.com/usd/release/tut_usd_tutorials.html).
+
+Disable building the tutorial support files by specifying the cmake flag 
+`PXR_BUILD_TUTORIALS=FALSE` when invoking cmake. 
 
 ## Imaging Plugins
 
 Hydra's rendering functionality can be extended with these optional plugins.
 
+##### Ptex
+
+Support for Ptex is disabled by default and can be enabled by specifying the 
+cmake flag `PXR_ENABLE_PTEX_SUPPORT=TRUE`.
+
 ##### OpenImageIO 
 
 This plugin can optionally be enabled by specifying the cmake flag
-```PXR_BUILD_OPENIMAGEIO_PLUGIN=TRUE```. When enabled, OpenImageIO provides 
+`PXR_BUILD_OPENIMAGEIO_PLUGIN=TRUE`. When enabled, OpenImageIO provides
 broader support for reading and writing different image formats as textures. 
 If OpenImageIO is disabled, imaging by default supports the image formats bmp, 
 jpg, png, tga, and hdr. With OpenImageIO enabled, support extends to exr, tif, 
@@ -193,14 +271,14 @@ like subimages and mipmaps.
 ##### OpenColorIO 
 
 This plugin can optionally be enabled by specifying the cmake flag
-```PXR_BUILD_OPENCOLORIO_PLUGIN=TRUE```. When enabled, OpenColorIO provides 
+`PXR_BUILD_OPENCOLORIO_PLUGIN=TRUE`. When enabled, OpenColorIO provides
 color management for Hydra viewports. 
 
 ##### Embree Rendering
 
 This component contains an example rendering backend for Hydra and usdview, 
 based on the embree raycasting library. Enable the plugin in the build by 
-specifying the cmake flag ```PXR_BUILD_EMBREE_PLUGIN=TRUE``` when invoking 
+specifying the cmake flag `PXR_BUILD_EMBREE_PLUGIN=TRUE` when invoking
 cmake.
 
 The additional dependencies that must be supplied when invoking cmake are:
@@ -215,7 +293,7 @@ See [3rd Party Library and Application Versions](VERSIONS.md) for version inform
 
 This plugin uses Pixar's RenderMan as a rendering backend for Hydra and 
 usdview. Enable the plugin in the build by specifying the cmake flag 
-```PXR_BUILD_PRMAN_PLUGIN=TRUE``` when invoking cmake. 
+`PXR_BUILD_PRMAN_PLUGIN=TRUE` when invoking cmake.
 
 The additional dependencies that must be supplied when invoking cmake are:
 
@@ -243,19 +321,23 @@ The USD Katana plugins can be found in the Foundry-supported repo available
 ##### Alembic Plugin
 
 Enable the [Alembic](https://github.com/alembic/alembic) plugin in the build
-by specifying the cmake flag ```PXR_BUILD_ALEMBIC_PLUGIN=TRUE``` when invoking cmake.
+by specifying the cmake flag `PXR_BUILD_ALEMBIC_PLUGIN=TRUE` when invoking cmake.
 
 The additional dependencies that must be supplied when invoking cmake are:
 
-| Dependency Name    | Description                                       |
-| ------------------ |-------------------------------------------------- |
-| ALEMBIC_DIR        | The location of [Alembic](https://https://github.com/alembic/alembic)   | 
-| OPENEXR_LOCATION   | The location of [OpenEXR](http://www.openexr.com) |
+| Dependency Name                   | Description                                       |
+| ----------------------------------|-------------------------------------------------- |
+| ALEMBIC_DIR                       | The location of [Alembic](https://https://github.com/alembic/alembic)   | 
+| OPENEXR_LOCATION                  | The location of [OpenEXR](http://www.openexr.com) |
+| Imath_DIR (If not using OpenEXR)  | Path to the CMake package config of a Imath SDK install. (With OpenEXR 3+, Imath can be used explicitly instead of OpenEXR.)|
+
+Either OpenEXR or Imath is required depending on which library is used by the
+Alembic library specified in ALEMBIC_DIR.
 
 See [3rd Party Library and Application Versions](VERSIONS.md) for version information.
 
 Support for Alembic files using the HDF5 backend is enabled by default but can be
-disabled by specifying the cmake flag ```PXR_ENABLE_HDF5_SUPPORT=FALSE```. HDF5
+disabled by specifying the cmake flag `PXR_ENABLE_HDF5_SUPPORT=FALSE`. HDF5
 support requires the following dependencies:
 
 | Dependency Name    | Description     |
@@ -264,23 +346,9 @@ support requires the following dependencies:
 
 For further information see the documentation on the Alembic plugin [here](http://openusd.org/docs/Alembic-USD-Plugin.html).
 
-##### MaterialX Plugin
-
-Enable [MaterialX](https://github.com/materialx/materialx) support in the 
-build by specifying the cmake flag ```PXR_ENABLE_MATERIALX_SUPPORT=TRUE``` when 
-invoking cmake. Note that MaterialX with shared library support is required.
-
-The additional dependencies that must be supplied when invoking cmake are:
-
-| Dependency Name    | Description                                                 |
-| ------------------ |-----------------------------------------------------------  |
-| MaterialX_DIR      | Path to the CMake package config of a MaterialX SDK install.|
-
-See [3rd Party Library and Application Versions](VERSIONS.md) for version information.
-
 ##### Draco Plugin
 
-Enable the [Draco](https://github.com/google/draco) plugin in the build by specifying the cmake flag ```PXR_BUILD_DRACO_PLUGIN=TRUE```
+Enable the [Draco](https://github.com/google/draco) plugin in the build by specifying the cmake flag `PXR_BUILD_DRACO_PLUGIN=TRUE`
 when invoking cmake. This plugin is compatible with Draco 1.3.4. The additional dependencies that must be supplied when invoking cmake are:
 
 | Dependency Name    | Description                              | Version |
@@ -289,8 +357,35 @@ when invoking cmake. This plugin is compatible with Draco 1.3.4. The additional 
 
 ## Tests
 
-Disable unit testing and prevent tests from being built by specifying the cmake flag ```PXR_BUILD_TESTS=FALSE```
-when invoking cmake.
+Tests are built by default but can be disabled by specifying the cmake flag 
+`PXR_BUILD_TESTS=FALSE` when invoking cmake.
+
+##### Running Tests
+Run tests by invoking ctest from the build directory, which is typically the 
+directory in which cmake was originally invoked. For example, to run all tests 
+in a release build with verbose output:
+
+```bash
+ctest -C Release -V
+```
+
+The "-R" argument may be used to specify a regular expression matching the names 
+of tests to be run. For example, to run all tests in a release build matching 
+"testUsdShade" with verbose output:
+
+```bash
+ctest -C Release -R testUsdShade -V
+```
+
+See the [ctest documentation](https://cmake.org/cmake/help/latest/manual/ctest.1.html) for more options.
+
+##### Test Run Directories
+
+Each test is run out of an automatically-created temporary directory containing any additional files required by the test. Set the cmake
+option `PXR_TEST_RUN_TEMP_DIR_PREFIX` to prepend a prefix string to the name of these directories. For example, setting this option to
+"foo-" will create test run directories named "foo-<test dir>"
+
+##### Diagnosing Failed Tests
 
 In order to aid with diagnosing of failing tests, test generated files for failing test are explicitly put in the following directories, where
 <ctest_run_timestamp> (formatted as "%Y-%m-%dT%H.%M.%S") represents the timestamp when ctest was run for the failing test.
@@ -309,10 +404,10 @@ libraries when needed.
 
 The plugin system requires knowledge of where these metadata files are located. The cmake build will ensure this is set up
 properly based on the install location of the build. However, if you plan to relocate these files to a new location after
-the build, you must inform the build by setting the cmake variable ```PXR_INSTALL_LOCATION``` to the intended final
+the build, you must inform the build by setting the cmake variable `PXR_INSTALL_LOCATION` to the intended final
 directory where these files will be located. This variable may be a ':'-delimited list of paths.
 
-Another way USD is locating plugins is the ```PXR_PLUGINPATH_NAME``` environment variable. This variable
+Another way USD is locating plugins is the `PXR_PLUGINPATH_NAME` environment variable. This variable
 may be a list of paths. If you do not want your USD build to use this default variable name, you can override the name
 of the environment variable using the following CMake option:
 
@@ -320,10 +415,10 @@ of the environment variable using the following CMake option:
 -DPXR_OVERRIDE_PLUGINPATH_NAME=CUSTOM_USD_PLUGINPATHS
 ```
 
-By doing this, USD will check the ```CUSTOM_USD_PLUGINPATHS``` environment variable for paths, instead of the default
-```PXR_PLUGINPATH_NAME``` one.
+By doing this, USD will check the `CUSTOM_USD_PLUGINPATHS` environment variable for paths, instead of the default
+`PXR_PLUGINPATH_NAME` one.
 
-The values specified in ```PXR_PLUGINPATH_NAME``` or ```PXR_INSTALL_LOCATION```
+The values specified in `PXR_PLUGINPATH_NAME` or `PXR_INSTALL_LOCATION`
 have the following characteristics:
 
 - Values may contain any number of paths.
@@ -343,7 +438,7 @@ By default shared libraries will have the prefix 'lib'. This means, for a given
 component such as [usdGeom](pxr/usd/lib/usdGeom), the build will generate a corresponding
 libusdGeom object (libusdGeom.so on Linux, libusdGeom.dll on Windows
 and libusdGeom.dylib on Mac). You can change the prefix (or remove it) through
-```PXR_LIB_PREFIX```. For example,
+`PXR_LIB_PREFIX`. For example,
 
 ```
 -DPXR_LIB_PREFIX=pxr
@@ -363,9 +458,9 @@ flags:
 
 | Option Name                    | Description                             | Default |
 | ------------------------------ |-----------------------------------------| ------- |
-| PXR_SET_EXTERNAL_NAMESPACE     | The outer namespace identifier          | ```pxr```     |
-| PXR_SET_INTERNAL_NAMESPACE     | The internal namespace identifier       | ```pxrInternal_v_x_y``` (for version x.y.z) |
-| PXR_ENABLE_NAMESPACES          | Enable namespaces                       | ```ON```    |
+| PXR_SET_EXTERNAL_NAMESPACE     | The outer namespace identifier          | `pxr`     |
+| PXR_SET_INTERNAL_NAMESPACE     | The internal namespace identifier       | `pxrInternal_v_x_y` (for version x.y.z) |
+| PXR_ENABLE_NAMESPACES          | Enable namespaces                       | `ON`    |
 
 When enabled, there are a set of macros provided in a generated header,
 pxr/pxr.h, which facilitates using namespaces:
@@ -374,8 +469,8 @@ pxr/pxr.h, which facilitates using namespaces:
 | ------------------------------ |-----------------------------------------|
 | PXR_NAMESPACE_OPEN_SCOPE       | Opens the namespace scope.                                           |
 | PXR_NAMESPACE_CLOSE_SCOPE      | Closes the namespace.                                                |
-| PXR_NS                         | Explicit qualification on items, e.g. ```PXR_NS::TfToken foo = ...```|
-| PXR_NAMESPACE_USING_DIRECTIVE  | Enacts a using-directive, e.g. ```using namespace PXR_NS;```         |
+| PXR_NS                         | Explicit qualification on items, e.g. `PXR_NS::TfToken foo = ...`|
+| PXR_NAMESPACE_USING_DIRECTIVE  | Enacts a using-directive, e.g. `using namespace PXR_NS;`         |
 
 ##### ASCII Parser Editing/Validation
 
@@ -384,7 +479,7 @@ There is an ASCII parser for the USD file format, which can be found in
 for the adventurous ones, there are a couple additional requirements.
 
 If you choose to edit the ASCII parsers, make sure
-```PXR_VALIDATE_GENERATED_CODE``` is set to ```TRUE```.  This flag enables tests
+`PXR_VALIDATE_GENERATED_CODE` is set to `TRUE`.  This flag enables tests
 that check the generated code in [sdf](pxr/usd/lib/sdf) and
 [gf](pxr/base/lib/gf).
 
@@ -419,7 +514,7 @@ There are certain optimizations that can be enabled in the build.
 ##### Malloc Library
 
 We've found that USD performs best with allocators such as [Jemalloc](https://github.com/jemalloc/jemalloc).
-In support of this, you can specify your own allocator through ```PXR_MALLOC_LIBRARY```.
+In support of this, you can specify your own allocator through `PXR_MALLOC_LIBRARY`.
 This variable should be set to a path to a shared object for the allocator. For example,
 
 ```bash
@@ -435,8 +530,8 @@ There are four ways to link USD controlled by the following options:
 
 | Option Name            | Default   | Description                               |
 | ---------------------- | --------- | ----------------------------------------- |
-| BUILD_SHARED_LIBS      | ```ON```  | Build shared or static libraries          |
-| PXR_BUILD_MONOLITHIC   | ```OFF``` | Build single or several libraries         |
+| BUILD_SHARED_LIBS      | `ON`      | Build shared or static libraries          |
+| PXR_BUILD_MONOLITHIC   | `OFF`     | Build single or several libraries         |
 | PXR_MONOLITHIC_IMPORT  |           | CMake file defining usd_ms import library |
 
 ##### Shared Libraries
@@ -446,8 +541,8 @@ just the libraries necessary for a given task.
 
 | Option Name            | Value     |
 | ---------------------- | --------- |
-| BUILD_SHARED_LIBS      | ```ON```  |
-| PXR_BUILD_MONOLITHIC   | ```OFF``` |
+| BUILD_SHARED_LIBS      | `ON`      |
+| PXR_BUILD_MONOLITHIC   | `OFF`     |
 | PXR_MONOLITHIC_IMPORT  |           |
 
 ```bash
@@ -464,8 +559,8 @@ application and another in each plugin/module.
 
 | Option Name            | Value     |
 | ---------------------- | --------- |
-| BUILD_SHARED_LIBS      | ```OFF``` |
-| PXR_BUILD_MONOLITHIC   | ```OFF``` |
+| BUILD_SHARED_LIBS      | `OFF`     |
+| PXR_BUILD_MONOLITHIC   | `OFF`     |
 | PXR_MONOLITHIC_IMPORT  |           |
 
 ```bash
@@ -484,11 +579,11 @@ libraries of the default mode.  Plugins inside of `pxr/` are compiled into
 This mode is useful to reduce the number of installed files and simplify
 linking against USD.
 
-| Option Name            | Value      |
-| ---------------------- | ---------- |
+| Option Name            | Value        |
+| ---------------------- | ----------   |
 | BUILD_SHARED_LIBS      | _Don't care_ |
-| PXR_BUILD_MONOLITHIC   | ```ON```   |
-| PXR_MONOLITHIC_IMPORT  |            |
+| PXR_BUILD_MONOLITHIC   | `ON`         |
+| PXR_MONOLITHIC_IMPORT  |              |
 
 ```bash
 cmake -DPXR_BUILD_MONOLITHIC=ON ...
@@ -502,10 +597,10 @@ client has control of building the monolithic shared library.  This mode
 is useful to embed USD into another shared library.  The build steps are
 significantly more complicated and are described below.
 
-| Option Name            | Value      |
-| ---------------------- | ---------- |
-| BUILD_SHARED_LIBS      | _Don't care_ |
-| PXR_BUILD_MONOLITHIC   | ```ON```   |
+| Option Name            | Value                 |
+| ---------------------- | ----------            |
+| BUILD_SHARED_LIBS      | _Don't care_          |
+| PXR_BUILD_MONOLITHIC   | `ON`                  |
 | PXR_MONOLITHIC_IMPORT  | _Path-to-import-file_ |
 
 To build in this mode:

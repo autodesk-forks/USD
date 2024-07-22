@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_TOKEN_H
 #define PXR_BASE_TF_TOKEN_H
@@ -90,7 +73,7 @@ public:
     enum _ImmortalTag { Immortal };
 
     /// Create the empty token, containing the empty string.
-    constexpr TfToken() noexcept {}
+    constexpr TfToken() noexcept = default;
 
     /// Copy constructor.
     TfToken(TfToken const& rhs) noexcept : _rep(rhs._rep) { _AddRef(); }
@@ -269,13 +252,16 @@ public:
     /// Allows \c TfToken to be used in \c std::set
     inline bool operator<(TfToken const& r) const {
         auto ll = _rep.GetLiteral(), rl = r._rep.GetLiteral();
-        if (ll && rl) {
-            auto lrep = _rep.Get(), rrep = r._rep.Get();
-            uint64_t lcc = lrep->_compareCode, rcc = rrep->_compareCode;
-            return lcc < rcc || (lcc == rcc && lrep->_str < rrep->_str);
+        if (!ll || !rl) {
+            // One or both are zero -- return true if ll is zero and rl is not.
+            return !ll && rl;
         }
-        // One or both are zero -- return true if ll is zero and rl is not.
-        return !ll && rl;
+        if (ll == rl) {
+            return false;
+        }
+        auto lrep = _rep.Get(), rrep = r._rep.Get();
+        uint64_t lcc = lrep->_compareCode, rcc = rrep->_compareCode;
+        return lcc < rcc || (lcc == rcc && lrep->_str < rrep->_str);
     }
 
     /// Greater-than operator that compares tokenized strings lexicographically.
@@ -301,8 +287,23 @@ public:
     /// Returns \c true iff this token contains the empty string \c ""
     bool IsEmpty() const { return _rep.GetLiteral() == 0; }
 
-    /// Returns \c true iff this is an immortal token.
-    bool IsImmortal() const { return !_rep->_isCounted; }
+    /// Returns \c true iff this is an immortal token.  Note that a return of \c
+    /// false could be instantly stale if another thread races to immortalize
+    /// this token.  A return of \c true is always valid since tokens cannot
+    /// lose immortality.
+    bool IsImmortal() const {
+        if (!_rep.BitsAs<bool>()) {
+            return true;
+        }
+        // There is no synchronization or ordering constraints between this read
+        // and other reads/writes, so relaxed memory order suffices.
+        bool immortal = !(_rep->_refCount.load(std::memory_order_relaxed) & 1);
+        if (immortal) {
+            // Our belief is wrong, update our cache of countedness.
+            _rep.SetBits(false);
+        }
+        return immortal;
+    }
 
     /// Stream insertion.
     friend TF_API std::ostream &operator <<(std::ostream &stream, TfToken const&);
@@ -321,88 +322,85 @@ private:
     }
 
     void _AddRef() const {
-        if (_rep.BitsAs<bool>()) {
-            // We believe this rep is refCounted.
-            if (!_rep->IncrementIfCounted()) {
-                // Our belief is wrong, update our cache of countedness.
-                _rep.SetBits(false);
-            }
+        if (!_rep.BitsAs<bool>()) {
+            // Not counted, do nothing.
+            return;
+        }
+        // We believe this rep is refCounted.
+        if (!_rep->IncrementAndCheckCounted()) {
+            // Our belief is wrong, update our cache of countedness.
+            _rep.SetBits(false);
         }
     }
 
     void _RemoveRef() const {
-        if (_rep.BitsAs<bool>()) {
-            // We believe this rep is refCounted.
-            if (_rep->_isCounted) {
-                if (_rep->_refCount.load(std::memory_order_relaxed) == 1) {
-                    _PossiblyDestroyRep();
-                }
-                else {
-                    /*
-                     * This is deliberately racy.  It's possible the statement
-                     * below drops our count to zero, and we leak the rep
-                     * (i.e. we leave it in the table).  That's a low
-                     * probability event, in exchange for only grabbing the lock
-                     * (in _PossiblyDestroyRep()) when the odds are we really do
-                     * need to modify the table.
-                     *
-                     * Note that even if we leak the rep, if we look it up
-                     * again, we'll simply repull it from the table and keep
-                     * using it.  So it's not even necessarily a true leak --
-                     * it's just a potential leak.
-                     */
-                    _rep->_refCount.fetch_sub(1, std::memory_order_relaxed);
-                }
-            } else {
-                // Our belief is wrong, update our cache of countedness.
-                _rep.SetBits(false);
-            }
+        if (!_rep.BitsAs<bool>()) {
+            // Not counted, do nothing.
+            return;
         }
+        // Decrement the refcount.
+        _rep->Decrement();
     }
-    
-    void TF_API _PossiblyDestroyRep() const;
-    
+
     struct _Rep {
-        _Rep() {}
-        explicit _Rep(char const *s) : _str(s), _cstr(_str.c_str()) {}
-        explicit _Rep(std::string const &s) : _str(s), _cstr(_str.c_str()) {}
+        _Rep() = default;
+
+        explicit _Rep(std::string &&str,
+                      unsigned setNum,
+                      uint64_t compareCode)
+            : _setNum(setNum)
+            , _compareCode(compareCode)
+            , _str(std::move(str))
+            , _cstr(_str.c_str()) {}
+
+        explicit _Rep(std::string const &str,
+                      unsigned setNum,
+                      uint64_t compareCode)
+            : _Rep(std::string(str), setNum, compareCode) {}
+
+        explicit _Rep(char const *str,
+                      unsigned setNum,
+                      uint64_t compareCode)
+            : _Rep(std::string(str), setNum, compareCode) {}
 
         // Make sure we reacquire _cstr from _str on copy and assignment
         // to avoid holding on to a dangling pointer. However, if rhs'
         // _cstr member doesn't come from its _str, just copy it directly
         // over. This is to support lightweight _Rep objects used for 
         // internal lookups.
-        _Rep(_Rep const &rhs) : _str(rhs._str), 
-                                _cstr(rhs._str.c_str() != rhs._cstr ? 
-                                          rhs._cstr : _str.c_str()),
-                                _compareCode(rhs._compareCode),
-                                _refCount(rhs._refCount.load()),
-                                _isCounted(rhs._isCounted), 
-                                _setNum(rhs._setNum) {}
-        _Rep& operator=(_Rep const &rhs) {
-            _str = rhs._str;
-            _cstr = (rhs._str.c_str() != rhs._cstr ? rhs._cstr : _str.c_str());
-            _compareCode = rhs._compareCode;
-            _refCount = rhs._refCount.load();
-            _isCounted = rhs._isCounted;
+        _Rep(_Rep const &rhs)
+            : _refCount(rhs._refCount.load(std::memory_order_relaxed))
+            , _setNum(rhs._setNum)
+            , _compareCode(rhs._compareCode)
+            , _str(rhs._str)
+            , _cstr(rhs._str.c_str() == rhs._cstr ? _str.c_str() : rhs._cstr) {}
+
+        _Rep &operator=(_Rep const &rhs) {
+            _refCount = rhs._refCount.load(std::memory_order_relaxed);
             _setNum = rhs._setNum;
+            _compareCode = rhs._compareCode;
+            _str = rhs._str;
+            _cstr = (rhs._str.c_str() == rhs._cstr ? _str.c_str() : rhs._cstr);
             return *this;
         }
 
-        inline bool IncrementIfCounted() const {
-            const bool isCounted = _isCounted;
-            if (isCounted) {
-                _refCount.fetch_add(1, std::memory_order_relaxed);
-            }
-            return isCounted;
+        inline bool IncrementAndCheckCounted() const {
+            // Refcounts are manipulated by add/sub 2, since the lowest-order
+            // bit indicates whether or not the rep is counted.
+            return _refCount.fetch_add(2, std::memory_order_relaxed) & 1;
         }
 
+        inline void Decrement() const {
+            // Refcounts are manipulated by add/sub 2, since the lowest-order
+            // bit indicates whether or not the rep is counted.
+            _refCount.fetch_sub(2, std::memory_order_release);
+        }
+
+        mutable std::atomic_uint _refCount;
+        unsigned _setNum;
+        uint64_t _compareCode;
         std::string _str;
         char const *_cstr;
-        mutable uint64_t _compareCode;
-        mutable std::atomic_int _refCount;
-        mutable bool _isCounted;
-        mutable unsigned char _setNum;
     };
 
     friend struct TfTokenFastArbitraryLessThan;

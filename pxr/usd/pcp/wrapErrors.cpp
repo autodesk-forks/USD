@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -42,6 +25,11 @@ static TfEnum _GetErrorType(PcpErrorBasePtr const& err)
     return err->errorType;
 }
 
+static PcpSite _GetRootSite(PcpErrorBasePtr const& err)
+{
+    return err->rootSite;
+}
+
 void 
 wrapErrors()
 {    
@@ -57,12 +45,18 @@ wrapErrors()
     class_<PcpErrorBase, boost::noncopyable, PcpErrorBasePtr>
         ("ErrorBase", "", no_init)
         .add_property("errorType", _GetErrorType)
+        .add_property("rootSite", _GetRootSite)
         .def("__str__", &PcpErrorBase::ToString)
         ;
 
     class_<PcpErrorTargetPathBase, boost::noncopyable,
         bases<PcpErrorBase>, PcpErrorTargetPathBasePtr >
         ("ErrorTargetPathBase", "", no_init)
+        ;
+
+    class_<PcpErrorRelocationBase, boost::noncopyable,
+        bases<PcpErrorBase>, PcpErrorRelocationBasePtr >
+        ("ErrorRelocationBase", "", no_init)
         ;
 
     class_<PcpErrorArcCycle, bases<PcpErrorBase>, PcpErrorArcCyclePtr >
@@ -72,6 +66,11 @@ wrapErrors()
     class_<PcpErrorArcPermissionDenied, bases<PcpErrorBase>,
         PcpErrorArcPermissionDeniedPtr>
         ("ErrorArcPermissionDenied", "", no_init)
+        ;
+
+    class_<PcpErrorArcToProhibitedChild, bases<PcpErrorBase>,
+        PcpErrorArcToProhibitedChildPtr>
+        ("ErrorArcToProhibitedChild", "", no_init)
         ;
 
     class_<PcpErrorCapacityExceeded, bases<PcpErrorBase>,
@@ -92,11 +91,6 @@ wrapErrors()
     class_<PcpErrorInconsistentAttributeVariability, bases<PcpErrorBase>,
         PcpErrorInconsistentAttributeVariabilityPtr>
         ("ErrorInconsistentAttributeVariability", "", no_init)
-        ;
-
-    class_<PcpErrorInternalAssetPath, bases<PcpErrorBase>,
-        PcpErrorInternalAssetPathPtr>
-        ("ErrorInternalAssetPath", "", no_init)
         ;
 
     class_<PcpErrorInvalidPrimPath, bases<PcpErrorBase>,
@@ -154,9 +148,19 @@ wrapErrors()
         ("ErrorInvalidSublayerPath", "", no_init)
         ;
 
-    class_<PcpErrorInvalidVariantSelection, bases<PcpErrorBase>,
-           PcpErrorInvalidVariantSelectionPtr>
-        ("ErrorInvalidVariantSelection", "", no_init)
+    class_<PcpErrorInvalidAuthoredRelocation, bases<PcpErrorRelocationBase>,
+        PcpErrorInvalidAuthoredRelocationPtr>
+        ("ErrorInvalidAuthoredRelocation", "", no_init)
+        ;
+
+    class_<PcpErrorInvalidConflictingRelocation, bases<PcpErrorRelocationBase>,
+        PcpErrorInvalidConflictingRelocationPtr>
+        ("ErrorInvalidConflictingRelocation", "", no_init)
+        ;
+
+    class_<PcpErrorInvalidSameTargetRelocations, bases<PcpErrorRelocationBase>,
+        PcpErrorInvalidSameTargetRelocationsPtr>
+        ("ErrorInvalidSameTargetRelocations", "", no_init)
         ;
 
     class_<PcpErrorOpinionAtRelocationSource, bases<PcpErrorBase>, 
@@ -189,6 +193,11 @@ wrapErrors()
         ("ErrorUnresolvedPrimPath", "", no_init)
         ;
 
+    class_<PcpErrorVariableExpressionError, bases<PcpErrorBase>,
+           PcpErrorVariableExpressionErrorPtr>
+        ("ErrorVariableExpressionError", "", no_init)
+        ;
+
     // Register conversion for python list <-> vector<PcpErrorBasePtr>
     to_python_converter< PcpErrorVector, 
                          TfPySequenceToPython<PcpErrorVector> >();
@@ -196,31 +205,3 @@ wrapErrors()
         PcpErrorVector,
         TfPyContainerConversions::variable_capacity_policy >();
 }
-
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidVariantSelection)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorPropertyPermissionDenied)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorBase)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorTargetPathBase)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorArcCycle)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorArcPermissionDenied)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorCapacityExceeded)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInconsistentPropertyType)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInconsistentAttributeType)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInconsistentAttributeVariability)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInternalAssetPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidPrimPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidAssetPathBase)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidAssetPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorMutedAssetPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidInstanceTargetPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidExternalTargetPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidTargetPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidSublayerOffset)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidReferenceOffset)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidSublayerOwnership)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorInvalidSublayerPath)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorOpinionAtRelocationSource)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorPrimPermissionDenied)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorSublayerCycle)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorTargetPermissionDenied)
-TF_REFPTR_CONST_VOLATILE_GET(PcpErrorUnresolvedPrimPath)

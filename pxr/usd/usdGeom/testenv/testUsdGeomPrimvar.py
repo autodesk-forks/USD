@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 import sys, os, unittest
 from pxr import Gf, Usd, UsdGeom, Sdf, Tf, Vt
@@ -473,6 +456,26 @@ class TestUsdGeomPrimvarsAPI(unittest.TestCase):
         self.assertFalse(oBasePrimvar2.IsIndexed())
         self.assertTrue(oBasePrimvar2.GetIndicesAttr().GetResolveInfo().ValueIsBlocked())
 
+        # Make sure ComputeFlattened works correctly
+        _2darr = gp_pv.CreatePrimvar('sphereHarmonics', Sdf.ValueTypeNames.FloatArray)
+        arrVals = Vt.FloatArray([0, 1, 2, 3, 4, 5, 6, 7, 8])
+        arrIdxs = Vt.IntArray([0, 1, 2, 0, 1, 2])
+        self.assertTrue( _2darr.Set(arrVals))
+        self.assertTrue(_2darr.SetIndices(arrIdxs))
+        self.assertTrue(_2darr.IsIndexed())
+
+        self.assertTrue(_2darr.SetElementSize(1))
+        self.assertEqual(_2darr.ComputeFlattened(), [0, 1, 2, 0, 1, 2])
+
+        self.assertTrue(_2darr.SetElementSize(2))
+        self.assertEqual(_2darr.ComputeFlattened(), [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
+
+        self.assertTrue(_2darr.SetElementSize(3))
+        self.assertEqual(_2darr.ComputeFlattened(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8])
+
+        self.assertTrue(_2darr.SetElementSize(4))
+        self.assertEqual(_2darr.ComputeFlattened(), None)
+
     def test_Bug124579(self):
         from pxr import Usd
         from pxr import UsdGeom
@@ -691,6 +694,18 @@ class TestUsdGeomPrimvarsAPI(unittest.TestCase):
         # a RuntimeError exception.
         with self.assertRaises(RuntimeError):
             u1.GetElementSize()
+
+    def test_Hash(self):
+        """Validate different primvar objects referring to the same underlying
+        property hash to the same value."""
+        stage = Usd.Stage.CreateInMemory()
+        mesh = UsdGeom.Mesh.Define(stage, '/mesh')
+        meshPrimvarsAPI = UsdGeom.PrimvarsAPI(mesh)
+        primvar = meshPrimvarsAPI.CreatePrimvar("pv", Sdf.ValueTypeNames.Int)
+        self.assertTrue(primvar)
+        self.assertIsNot(primvar, meshPrimvarsAPI.GetPrimvar("pv"))
+        self.assertEqual(primvar, meshPrimvarsAPI.GetPrimvar("pv"))
+        self.assertEqual(hash(primvar), hash(meshPrimvarsAPI.GetPrimvar("pv")))
 
 if __name__ == "__main__":
     unittest.main()

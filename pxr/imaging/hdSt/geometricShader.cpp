@@ -1,38 +1,21 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hdSt/geometricShader.h"
 
+#include "pxr/imaging/hdSt/binding.h"
 #include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/shaderKey.h"
 
-#include "pxr/imaging/hd/binding.h"
 #include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/imaging/hio/glslfx.h"
 
-#include <boost/functional/hash.hpp>
+#include "pxr/base/tf/hash.h"
 
 #include <iostream>
 #include <string>
@@ -80,12 +63,15 @@ HdSt_GeometricShader::HdSt_GeometricShader(std::string const &glslfxString,
 
     std::stringstream ss(glslfxString);
     _glslfx.reset(new HioGlslfx(ss));
-    boost::hash_combine(_hash, _glslfx->GetHash());
-    boost::hash_combine(_hash, cullingPass);
-    boost::hash_combine(_hash, primType);
-    boost::hash_combine(_hash, cullStyle);
-    boost::hash_combine(_hash, useMetalTessellation);
-    boost::hash_combine(_hash, fvarPatchType);
+    _hash = TfHash::Combine(
+        _hash,
+        _glslfx->GetHash(),
+        cullingPass,
+        primType,
+        cullStyle,
+        useMetalTessellation,
+        fvarPatchType
+    );
     //
     // note: Don't include polygonMode into the hash.
     //       It is independent from the GLSL program.
@@ -99,6 +85,66 @@ HioGlslfx const *
 HdSt_GeometricShader::_GetGlslfx() const
 {
     return _glslfx.get();
+}
+
+// Note: The geometric shader may override the state if necessary, including
+// disabling h/w culling altogether.  This is required to handle instancing
+// since instanceScale / instanceTransform can flip the xform handedness.
+HgiCullMode
+HdSt_GeometricShader::ResolveCullMode(
+    HdCullStyle const renderStateCullStyle) const
+{
+    if (!_useHardwareFaceCulling) {
+        // Use fragment shader culling via discard.
+        return HgiCullModeNone;
+    }
+
+    // If the Rprim has an opinion, that wins, else use the render state style.
+    HdCullStyle const resolvedCullStyle =
+        _cullStyle == HdCullStyleDontCare ? renderStateCullStyle : _cullStyle;
+
+    HgiCullMode resolvedCullMode = HgiCullModeNone;
+
+    switch (resolvedCullStyle) {
+        case HdCullStyleFront:
+            if (_hasMirroredTransform) {
+                resolvedCullMode = HgiCullModeBack;
+            } else {
+                resolvedCullMode = HgiCullModeFront;
+            }
+            break;
+        case HdCullStyleFrontUnlessDoubleSided:
+            if (!_doubleSided) {
+                if (_hasMirroredTransform) {
+                    resolvedCullMode = HgiCullModeBack;
+                } else {
+                    resolvedCullMode = HgiCullModeFront;
+                }
+            }
+            break;
+        case HdCullStyleBack:
+            if (_hasMirroredTransform) {
+                resolvedCullMode = HgiCullModeFront;
+            } else {
+                resolvedCullMode = HgiCullModeBack;
+            }
+            break;
+        case HdCullStyleBackUnlessDoubleSided:
+            if (!_doubleSided) {
+                if (_hasMirroredTransform) {
+                    resolvedCullMode = HgiCullModeFront;
+                } else {
+                    resolvedCullMode = HgiCullModeBack;
+                }
+            }
+            break;
+        case HdCullStyleNothing:
+        default:
+            resolvedCullMode = HgiCullModeNone;
+            break;
+    }
+
+    return resolvedCullMode;
 }
 
 /* virtual */
@@ -131,7 +177,7 @@ HdSt_GeometricShader::UnbindResources(const int program,
 
 /*virtual*/
 void
-HdSt_GeometricShader::AddBindings(HdBindingRequestVector *customBindings)
+HdSt_GeometricShader::AddBindings(HdStBindingRequestVector *customBindings)
 {
     // no-op
 }
@@ -169,6 +215,9 @@ HdSt_GeometricShader::GetPrimitiveIndexSize() const
             break;
         case PrimitiveType::PRIM_MESH_BOXSPLINETRIANGLE:
             primIndexSize = 12;
+            break;
+        case PrimitiveType::PRIM_COMPUTE:
+            primIndexSize = 0;
             break;
     }
 
@@ -231,6 +280,9 @@ HdSt_GeometricShader::GetNumPrimitiveVertsForGeometryShader() const
         case PrimitiveType::PRIM_MESH_REFINED_QUADS:
             numPrimVerts = 4;
             break;
+        case PrimitiveType::PRIM_COMPUTE:
+            numPrimVerts = 0;
+            break;
     }
 
     return numPrimVerts;
@@ -275,6 +327,9 @@ HdSt_GeometricShader::GetHgiPrimitiveType() const
         case PrimitiveType::PRIM_MESH_BSPLINE:
         case PrimitiveType::PRIM_MESH_BOXSPLINETRIANGLE:
             primitiveType = HgiPrimitiveTypePatchList;
+            break;
+        case PrimitiveType::PRIM_COMPUTE:
+            primitiveType = HgiPrimitiveTypePointList;
             break;
     }
 

@@ -1,28 +1,12 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/imaging/hgiVulkan/api.h"
+#include "pxr/imaging/hgiVulkan/conversions.h"
 #include "pxr/imaging/hgiVulkan/device.h"
 #include "pxr/imaging/hgiVulkan/diagnostic.h"
 #include "pxr/imaging/hgiVulkan/shaderCompiler.h"
@@ -218,6 +202,14 @@ HgiVulkanGatherDescriptorSetInfo(
     return infos;
 }
 
+static bool
+_IsDescriptorTextureType(VkDescriptorType descType) {
+    return (descType == VK_DESCRIPTOR_TYPE_SAMPLER ||
+            descType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
+            descType == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+            descType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+}
+
 VkDescriptorSetLayoutVector
 HgiVulkanMakeDescriptorSetLayouts(
     HgiVulkanDevice* device,
@@ -260,9 +252,26 @@ HgiVulkanMakeDescriptorSetLayouts(
                     dst = &trg.bindings.back();
                 }
 
-                // If a vertex module and a fragment module access the same
-                // resource, we need to merge the stageFlags.
-                dst->stageFlags |= bi.stageFlags;
+                // These need to match the shader stages used when creating the
+                // VkDescriptorSetLayout in HgiVulkanResourceBindings.
+                if (dst->stageFlags != HgiVulkanConversions::GetShaderStages(
+                    HgiShaderStageCompute)) {
+                    
+                    if (_IsDescriptorTextureType(dst->descriptorType)) {
+                        dst->stageFlags = 
+                            HgiVulkanConversions::GetShaderStages(
+                                HgiShaderStageGeometry |
+                                HgiShaderStageFragment);
+                    } else {
+                        dst->stageFlags = 
+                            HgiVulkanConversions::GetShaderStages(
+                                HgiShaderStageVertex |
+                                HgiShaderStageTessellationControl |
+                                HgiShaderStageTessellationEval |
+                                HgiShaderStageGeometry | 
+                                HgiShaderStageFragment);
+                    }
+                }
             }
         }
     }

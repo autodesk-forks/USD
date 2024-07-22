@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/base/tf/diagnostic.h"
 
@@ -32,8 +15,6 @@
 #include "pxr/imaging/hgiVulkan/sampler.h"
 #include "pxr/imaging/hgiVulkan/texture.h"
 #include "pxr/imaging/hgiVulkan/accelerationStructure.h"
-
-#include <unordered_set>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -106,70 +87,80 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     // slot=XX in the shader. Instead we keep all resources in one
     // descriptor set and increment all Hgi binding indices here.
     // This assumes that Hgi codeGen does the same for vulkan glsl.
-    bool reorder = false;
-    std::unordered_set<uint32_t> bindingsVisited;
 
-    for (HgiAccelerationStructureBindDesc const& b : desc.accelerationStructures) {
-        if (reorder) break;
-        reorder = bindingsVisited.find(b.bindingIndex) != bindingsVisited.end();
-        bindingsVisited.insert(b.bindingIndex);
-    }
-    for (HgiBufferBindDesc const& b : desc.buffers) {
-        if (reorder) break;
-        reorder = bindingsVisited.find(b.bindingIndex) != bindingsVisited.end();
-        bindingsVisited.insert(b.bindingIndex);
-    }
-    for (HgiTextureBindDesc const& b : desc.textures) {
-        if (reorder) break;
-        reorder = bindingsVisited.find(b.bindingIndex) != bindingsVisited.end();
-        bindingsVisited.insert(b.bindingIndex);
-    }
+    // For non-bindless buffers in Storm, uniform and storage buffers share a 
+    // binding index counter, while textures have their own binding index 
+    // counter. Thus for Vulkan, we adjust the texture bind indices to start 
+    // after the last buffer bind index.
+    // E.g. If HgiResourceBindingDesc indicates the following binding indices:
+    // UBO1: 0, SSBO1: 1, SSB02: 2, TEX1: 0, TEX2: 1, here we change that to:
+    // UBO1: 0, SSBO1: 1, SSB02: 2, TEX1: 3, TEX2: 4.
 
-    //
+    uint32_t textureBindIndexStart = 0;
+    
+    // XXX We need to overspecify the stage usage here so we can match the 
+    // VkDescriptorSetLayout that is created with spirv-reflect for the 
+    // graphics and compute pipelines.
+    VkShaderStageFlags const bufferShaderStageFlags =
+        HgiVulkanConversions::GetShaderStages(
+            HgiShaderStageVertex | HgiShaderStageTessellationControl |
+            HgiShaderStageTessellationEval | HgiShaderStageGeometry |
+            HgiShaderStageFragment);
+    VkShaderStageFlags const textureShaderStageFlags =
+        HgiVulkanConversions::GetShaderStages(
+            HgiShaderStageGeometry | HgiShaderStageFragment);
+
     // Create DescriptorSetLayout to describe resource bindings.
     //
-    // Buffers
     std::vector<VkDescriptorSetLayoutBinding> bindings;
 
-    for (HgiAccelerationStructureBindDesc const& b : desc.accelerationStructures) {
+    uint32_t bufferBindIndexStart = 0;
+    for (HgiAccelerationStructureBindDesc const& a : desc.accelerationStructures) {
         VkDescriptorSetLayoutBinding d = {};
-        uint32_t bi = reorder ? (uint32_t)bindings.size() : b.bindingIndex;
-        d.binding = bi; // binding number in shader stage
+        d.binding = a.bindingIndex;
         d.descriptorType =
-            HgiVulkanConversions::GetDescriptorType(b.resourceType);
+            HgiVulkanConversions::GetDescriptorType(a.resourceType);
         poolSizes[b.resourceType].descriptorCount++;
-        d.descriptorCount = (uint32_t)b.accelerationStructures.size();
-        d.stageFlags = HgiVulkanConversions::GetShaderStages(b.stageUsage);
+        d.descriptorCount = (uint32_t)a.accelerationStructures.size();
+        d.stageFlags = HgiVulkanConversions::GetShaderStages(a.stageUsage);
         d.pImmutableSamplers = nullptr;
         bindings.push_back(std::move(d));
+
+        bufferBindIndexStart =
+            std::max(bufferBindIndexStart, a.bindingIndex + 1);
     }
 
+    // Buffers
     for (HgiBufferBindDesc const& b : desc.buffers) {
         VkDescriptorSetLayoutBinding d = {};
-        uint32_t bi = reorder ? (uint32_t)bindings.size() : b.bindingIndex;
-        d.binding = bi; // binding number in shader stage
+        d.binding = bufferBindIndexStart + b.bindingIndex;
         d.descriptorType =
             HgiVulkanConversions::GetDescriptorType(b.resourceType);
         poolSizes[b.resourceType].descriptorCount++;
-        d.descriptorCount = (uint32_t)b.buffers.size();
-        d.stageFlags = HgiVulkanConversions::GetShaderStages(b.stageUsage);
+        d.descriptorCount = (uint32_t) b.buffers.size();
+        d.stageFlags = (b.stageUsage == HgiShaderStageCompute) ?
+            HgiVulkanConversions::GetShaderStages(b.stageUsage) :
+            bufferShaderStageFlags;
         d.pImmutableSamplers = nullptr;
         bindings.push_back(std::move(d));
+
+        textureBindIndexStart =
+            std::max(textureBindIndexStart, bufferBindIndexStart + b.bindingIndex + 1);
     }
 
     // Textures
-
     for (HgiTextureBindDesc const& t : desc.textures) {
         // Descriptor count made of textures and samplers.
         size_t descriptorCount = std::max(t.textures.size(), t.samplers.size());
         VkDescriptorSetLayoutBinding d = {};
-        uint32_t bi = reorder ? (uint32_t) bindings.size() : t.bindingIndex;
-        d.binding = bi; // binding number in shader stage
+        d.binding = textureBindIndexStart + t.bindingIndex;
         d.descriptorType =
             HgiVulkanConversions::GetDescriptorType(t.resourceType);
         poolSizes[t.resourceType].descriptorCount++;
         d.descriptorCount = descriptorCount;
-        d.stageFlags = HgiVulkanConversions::GetShaderStages(t.stageUsage);
+        d.stageFlags = (t.stageUsage == HgiShaderStageCompute) ?
+            HgiVulkanConversions::GetShaderStages(t.stageUsage) :
+            textureShaderStageFlags;
         d.pImmutableSamplers = nullptr;
         bindings.push_back(std::move(d));
     }
@@ -263,10 +254,12 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
             limits.maxPerStageDescriptorUniformBuffers},
         {HgiBindResourceTypeStorageBuffer,
             limits.maxPerStageDescriptorStorageBuffers},
+        {HgiBindResourceTypeTessFactors,
+            0} // unsupported
         {HgiBindResourceTypeAccelerationStructure,
             1024}
     };
-    static_assert(HgiBindResourceTypeCount==7, "");
+    static_assert(HgiBindResourceTypeCount==8, "");
 
     std::vector<VkWriteDescriptorSet> writeSets;
 
@@ -362,9 +355,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     size_t bufInfoOffset = 0;
     for (HgiBufferBindDesc const& bufDesc : desc.buffers) {
         VkWriteDescriptorSet writeSet= {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-        writeSet.dstBinding = reorder ? // index in descriptor set
-            (uint32_t) writeSets.size() :
-            bufDesc.bindingIndex;
+        writeSet.dstBinding = bufDesc.bindingIndex;
         writeSet.dstArrayElement = 0;
         writeSet.descriptorCount = (uint32_t) bufDesc.buffers.size(); // 0 ok
         writeSet.dstSet = _vkDescriptorSet;
@@ -425,9 +416,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
         // For dstBinding we must provided an index in descriptor set.
         // Must be one of the bindings specified in VkDescriptorSetLayoutBinding
         VkWriteDescriptorSet writeSet= {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-        writeSet.dstBinding = reorder ? // index in descriptor set
-            (uint32_t) writeSets.size() :
-            texDesc.bindingIndex;
+        writeSet.dstBinding = textureBindIndexStart + texDesc.bindingIndex;
         writeSet.dstArrayElement = 0;
         writeSet.descriptorCount = (uint32_t)descriptorCount;
         writeSet.dstSet = _vkDescriptorSet;
@@ -452,7 +441,6 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
         writeSets.data(),
         0,        // copy count
         nullptr); // copy_desc
-
 }
 
 HgiVulkanResourceBindings::~HgiVulkanResourceBindings()

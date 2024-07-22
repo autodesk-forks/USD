@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USDLUX_GENERATED_SHADOWAPI_H
 #define USDLUX_GENERATED_SHADOWAPI_H
@@ -215,7 +198,9 @@ public:
     // --------------------------------------------------------------------- //
     // SHADOW:DISTANCE 
     // --------------------------------------------------------------------- //
-    /// The maximum distance shadows are cast.
+    /// The maximum distance shadows are cast. The distance is
+    /// measured as the distance between the point on the surface and the 
+    /// occluder.
     /// The default value (-1) indicates no limit.
     /// 
     ///
@@ -239,8 +224,13 @@ public:
     // --------------------------------------------------------------------- //
     // SHADOW:FALLOFF 
     // --------------------------------------------------------------------- //
-    /// The near distance at which shadow falloff begins.
-    /// The default value (-1) indicates no falloff.
+    /// The size of the shadow falloff zone within the shadow max 
+    /// distance, which can be used to hide the hard cut-off for shadows seen 
+    /// stretching past the max distance. The falloff zone is the area that 
+    /// fades from full shadowing at the beginning of the falloff zone to no 
+    /// shadowing at the max distance from the occluder. The falloff zone 
+    /// distance cannot exceed the shadow max distance. A falloff value equal 
+    /// to or less than zero (with -1 as the default) indicates no falloff. 
     /// 
     ///
     /// | ||
@@ -264,7 +254,8 @@ public:
     // SHADOW:FALLOFFGAMMA 
     // --------------------------------------------------------------------- //
     /// A gamma (i.e., exponential) control over shadow strength
-    /// with linear distance within the falloff zone.
+    /// with linear distance within the falloff zone. This controls the rate
+    /// of the falloff.
     /// This requires the use of shadowDistance and shadowFalloff.
     ///
     /// | ||

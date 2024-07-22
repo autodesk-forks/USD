@@ -1,27 +1,11 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/lightAdapter.h"
+#include "pxr/usdImaging/usdImaging/dataSourcePrim.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 #include "pxr/usdImaging/usdImaging/materialParamUtils.h"
@@ -53,8 +37,29 @@ bool UsdImagingLightAdapter::IsEnabledSceneLights() {
     return _v;
 }
 
-UsdImagingLightAdapter::~UsdImagingLightAdapter() 
+HdContainerDataSourceHandle
+UsdImagingLightAdapter::GetImagingSubprimData(
+        UsdPrim const& prim,
+        TfToken const& subprim,
+        const UsdImagingDataSourceStageGlobals &stageGlobals)
 {
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourcePrim::New(
+            prim.GetPath(), prim, stageGlobals);
+    }
+
+    return nullptr;
+}
+
+HdDataSourceLocatorSet
+UsdImagingLightAdapter::InvalidateImagingSubprim(
+    UsdPrim const& prim,
+    TfToken const& subprim,
+    TfTokenVector const& properties,
+    UsdImagingPropertyInvalidationType invalidationType)
+{
+    return UsdImagingDataSourcePrim::Invalidate(
+        prim, subprim, properties, invalidationType);
 }
 
 bool
@@ -69,11 +74,7 @@ UsdImagingLightAdapter::Populate(UsdPrim const& prim,
                             UsdImagingIndexProxy* index,
                             UsdImagingInstancerContext const* instancerContext)
 {
-    index->InsertSprim(HdPrimTypeTokens->light, prim.GetPath(), prim);
-    HD_PERF_COUNTER_INCR(UsdImagingTokens->usdPopulatedPrimCount);
-    _RegisterLightCollections(prim);
-
-    return prim.GetPath();
+    return _AddSprim(HdPrimTypeTokens->light, prim, index, instancerContext);
 }
 
 void
@@ -147,7 +148,7 @@ UsdImagingLightAdapter::TrackVariability(UsdPrim const& prim,
     for (UsdAttribute const& attr : attrs) {
         // Don't double-count transform attrs.
         if (UsdGeomXformable::IsTransformationAffectedByAttrNamed(
-                attr.GetBaseName())) {
+                attr.GetName())) {
             continue;
         }
         if (attr.GetNumTimeSamples()>1){
@@ -255,10 +256,6 @@ UsdImagingLightAdapter::GetMaterialResource(UsdPrim const &prim,
                                             SdfPath const& cachePath, 
                                             UsdTimeCode time) const
 {
-    if (!_GetSceneLightsEnabled()) {
-        return VtValue();
-    }
-
     if (!prim.HasAPI<UsdLuxLightAPI>()) {
         TF_RUNTIME_ERROR("Expected light prim at <%s> to have an applied API "
                          "of type 'UsdLuxLightAPI'; ignoring",
@@ -280,7 +277,49 @@ UsdImagingLightAdapter::GetMaterialResource(UsdPrim const &prim,
         &networkMap,
         time);
 
+    if (!_GetSceneLightsEnabled()) {
+        // When scene lights are disabeled we need to mark them as disabled
+        // by setting the intensity value to 0. This parameter is found on 
+        // the terminal node, which is the last node in the light network.
+        networkMap.map[HdMaterialTerminalTokens->light].nodes.back().
+            parameters[HdLightTokens->intensity] = 0.0f;
+    }
+
     return VtValue(networkMap);
+}
+
+SdfPath
+UsdImagingLightAdapter::_AddSprim(
+    const TfToken& primType,
+    const UsdPrim& usdPrim,
+    UsdImagingIndexProxy* index,
+    const UsdImagingInstancerContext* instancerContext)
+{
+    SdfPath cachePath = ResolveCachePath(usdPrim.GetPath(), instancerContext);
+    UsdPrim proxyPrim = _GetPrim(ResolveProxyPrimPath(
+        cachePath, instancerContext));
+
+    if (instancerContext != nullptr) {
+        index->InsertSprim(
+            primType, cachePath, proxyPrim, instancerContext->instancerAdapter);
+        index->RemovePrimInfoDependency(cachePath);
+        index->AddDependency(cachePath, usdPrim);
+    } else {
+        index->InsertSprim(primType, cachePath, proxyPrim);
+    }
+    HD_PERF_COUNTER_INCR(UsdImagingTokens->usdPopulatedPrimCount);
+    _RegisterLightCollections(proxyPrim);
+    return cachePath;
+}
+
+void
+UsdImagingLightAdapter::_RemoveSprim(
+    const TfToken& primType,
+    const SdfPath& cachePath,
+    UsdImagingIndexProxy* index)
+{
+    _UnregisterLightCollections(cachePath);
+    index->RemoveSprim(primType, cachePath);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

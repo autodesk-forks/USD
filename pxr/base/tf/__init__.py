@@ -1,25 +1,8 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 """
 Tf -- Tools Foundation
@@ -40,11 +23,26 @@ if sys.version_info >= (3, 8) and platform.system() == "Windows":
         import_paths = os.getenv('PXR_USD_WINDOWS_DLL_PATH')
         if import_paths is None:
             import_paths = os.getenv('PATH', '')
-        for path in import_paths.split(os.pathsep):
+        # the underlying windows API call, AddDllDirectory, states that:
+        #
+        # > If AddDllDirectory is used to add more than one directory to the
+        # > process DLL search path, the order in which those directories are
+        # > searched is unspecified.
+        #
+        # https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-adddlldirectory
+        #
+        # However, in practice, it seems that the most-recently-added ones
+        # take precedence - so, reverse the order of entries in PATH to give
+        # it the same precedence
+        #
+        # Note that we have a test (testTfPyDllLink) to alert us if this
+        # undefined behavior changes.
+        for path in reversed(import_paths.split(os.pathsep)):
             # Calling add_dll_directory raises an exception if paths don't
             # exist, or if you pass in dot
             if os.path.exists(path) and path != '.':
-                dirs.append(os.add_dll_directory(path))
+                abs_path = os.path.abspath(path)
+                dirs.append(os.add_dll_directory(abs_path))
         # This block guarantees we clear the dll directories if an exception
         # is raised in the with block.
         try:

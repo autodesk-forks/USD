@@ -2,25 +2,8 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 from __future__ import division
 
@@ -113,6 +96,13 @@ class TestGfRotation(unittest.TestCase):
         self.assertTrue(len(str(r)))
 
     def test_Operators(self):
+
+        def AssertRotationIsClose(rot1, rot2, epsilon=1e-15):
+            axis1 = rot1.GetAxis()
+            axis2 = rot2.GetAxis()
+            self.assertTrue(Gf.IsClose(axis1, axis2, epsilon))
+            self.assertAlmostEqual(rot1.GetAngle(), rot2.GetAngle())
+
         r1 = Gf.Rotation(Gf.Vec3d(1,1,1), 30)
         r2 = Gf.Rotation(Gf.Vec3d(1,1,1), 30)
         r3 = Gf.Rotation(Gf.Vec3d(1,0,0), 60)
@@ -165,7 +155,7 @@ class TestGfRotation(unittest.TestCase):
 
         # check for associativity
         r6 = Gf.Rotation(Gf.Vec3d(0,0,1), 45)
-        self.assertEqual((r1*r2)*r6, r1*(r2*r6))
+        AssertRotationIsClose((r1*r2)*r6, r1*(r2*r6))
 
         # Test that setting via a quaternion gives a valid repr.
         m = Gf.Matrix4d().SetRotate(Gf.Rotation(Gf.Vec3d(1,1,1), 30))
@@ -204,6 +194,11 @@ class TestGfRotation(unittest.TestCase):
         rot = Gf.Rotation.RotateOntoProjected(v1, v2, axis)
         self.assertTrue(Gf.IsClose(rot.angle, -1.91983, 0.00001))
         self.assertEqual(rot.axis, axis.GetNormalized())
+
+    def test_Hash(self):
+        rot = Gf.Rotation(Gf.Vec3d(1.0, 0.0, 0.0), 40.0)
+        self.assertEqual(hash(rot), hash(rot))
+        self.assertEqual(hash(rot), hash(Gf.Rotation(rot)))
 
 if __name__ == '__main__':
     unittest.main()

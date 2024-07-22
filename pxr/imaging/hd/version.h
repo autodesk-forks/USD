@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_VERSION_H
 #define PXR_IMAGING_HD_VERSION_H
@@ -59,7 +42,58 @@
 // 43 -> 44: Replaced HdCamera::GetProjectionMatrix with
 //           HdComputeProjectionMatrix.
 // 44 -> 45: Added HdSceneDelegate::GetScenePrimPaths.
-#define HD_API_VERSION 45
+// 45 -> 46: New signatures for HdRendererPlugin::IsSupported and
+//           HdRendererPluginRegistry::GetDefaultPluginId
+// 46 -> 47: Adding HdRenderDelegate::GetRenderSettingsNamespaces()
+// 47 -> 48: New signature for HdRenderIndex::InsertSceneIndex: added optional 
+//           argument needsPrefixing
+// 48 -> 49: Moved HdExtCompCpuComputation, Hd_ExtCompInputSource,
+//           Hd_CompExtCompInputSource, and Hd_SceneExtCompInputSource to hdSt.
+// 49 -> 50: Added HdModelDrawMode struct and getter API to HdSceneDelegate.
+// 50 -> 51: HdMaterialBindingSchema became HdMaterialBindingsSchema which uses
+//           the new HdMaterialBindingSchema.
+// 51 -> 52: Added lens distortion, focus, and split diopter parameters to
+//           HdCamera.
+// 52 -> 53: Changing dirty bits of HdCoordSys.
+// 53 -> 54: Introducing HdFlattenedDataSourceProvider to make
+//           HdFlatteningSceneIndex modular.
+// 54 -> 55: Introduce API in HdRenderDelegate to aid in transitioning
+//           render delegates to a Hydra 2.0 world.
+// 55 -> 56: Adds hydra-namespaced internal instancer primvars
+// 56 -> 57: Changing SetOverrideWindowPolicy to std::optional on
+//           HdRenderPassState, HdxPickFromRenderBufferTaskParams,
+//           HdxTaskController and UsdImagingGLEngine.
+// 57 -> 58: Introducing hdsi/version.h
+// 58 -> 59: HdGeomSubsetsSchema::GetIds() renamed to
+//           HdGeomSubsetsSchema::GetGeomSubsetNames().
+// 59 -> 60: Introduced HdRenderDelegate::GetCapabilities().
+// 60 -> 61: Adding HdPrimvarSchema::GetFlattenedPrimvarValue().
+//           Note that in an upcoming change,
+//           HdPrimvarSchema::GetPrimvarValue() might change and
+//           simply return the data source source at primvarValue.
+// 61 -> 62: Remove 'bindingStrength' from HdMaterialBindingSchema.
+// 62 -> 63: HdMaterialSchema::GetMaterialNetwork,
+//           HdMaterialNetwork::GetNodes, GetTerminals,
+//           HdMaterialNode::GetParameters, GetInputConnections
+//           return Hydra schemas instead of just container data sources.
+//           schemaTypeDefs.h replaces vectorSchemaTypeDefs.h.
+// 63 -> 64: Adding disableDepthOfField to HdRenderSettings::RenderProduct
+// 64 -> 65: Introduce HdCollectionPredicateLibrary and 
+//           HdCollectionExpressionEvaluator for path expression evaluation on
+//           scene index prims.
+// 65 -> 66: Make HdSchema::_GetTypedDataSource and getters in generated
+//           hydra schemas const.
+// 66 -> 67: Removes legacy internal instancer primvar names and the
+//           TfEnvSetting for using them (see 56).
+// 67 -> 68: Adds HdSceneDelegate::SampleFOO with startTime and endTime.
+// 68 -> 69: Removes HdGeomSubsetsSchema. Geom subsets are now represented
+//           in Hydra as child prims of their parent geometry.
+// 69 -> 70: Add dirty bit translation for light filter prims in backend
+//           emulation.
+// 70 -> 71: Add virtual HdRenderDelegate::IsParallelSyncEnabled.
+//
+
+#define HD_API_VERSION 71
 
 // 1  ->  2: SimpleLighting -> FallbackLighting
 #define HD_SHADER_API 2

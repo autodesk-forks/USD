@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_PCP_DYNAMIC_FILE_FORMAT_CONTEXT_H
 #define PXR_USD_PCP_DYNAMIC_FILE_FORMAT_CONTEXT_H
@@ -68,13 +51,14 @@ public:
     bool ComposeValueStack(const TfToken &field, 
                            VtValueVector *values) const;
 
-private:
-    // Callback function for ComposeValue. This callback function will
-    // be passed values for the field given to ComposeValue from
-    // strongest to weakest available opinion and is free to copy or
-    // swap out the value as desired. 
-    using _ComposeFunction = std::function<void(VtValue &&)>;
+    /// Compose the \p value of the default field of the attribute with the 
+    /// given \p attributeName and return its current strongest opinion.
+    /// Returns true if a value for the field was found. 
+    PCP_API
+    bool ComposeAttributeDefaultValue(
+        const TfToken &attributeName, VtValue *value) const;
 
+private:
     /// Constructs a context. 
     /// \p parentNode and \p previousFrame are used to traverse the 
     /// current state of the prim index graph when composing the opinions on 
@@ -83,11 +67,16 @@ private:
     /// ComposeValueStack are called on for dependency tracking.
     PcpDynamicFileFormatContext(
         const PcpNodeRef &parentNode, 
+        const SdfPath &pathInNode,
+        int arcNum,
         PcpPrimIndex_StackFrame *previousFrame,
-        TfToken::Set *composedFieldNames);
+        TfToken::Set *composedFieldNames,
+        TfToken::Set *composedAttributeNames);
+
     /// Access to private constructor. Should only be called by prim indexing.
     friend PcpDynamicFileFormatContext Pcp_CreateDynamicFileFormatContext(
-        const PcpNodeRef &, PcpPrimIndex_StackFrame *, TfToken::Set *);
+        const PcpNodeRef &, const SdfPath&, int, PcpPrimIndex_StackFrame *, 
+        TfToken::Set *, TfToken::Set *);
 
     /// Returns whether the given \p field is allowed to be used to generate
     /// file format arguments. It can also return whether the value type of 
@@ -97,10 +86,19 @@ private:
 
 private:
     PcpNodeRef _parentNode;
+    SdfPath _pathInNode;
+    int _arcNum;
     PcpPrimIndex_StackFrame *_previousStackFrame;
 
     // Cached names of fields that had values composed by this context.
     TfToken::Set *_composedFieldNames;
+
+    // Cached names of attributes that had default values composed by this 
+    // context.
+    TfToken::Set *_composedAttributeNames;
+
+    // Declare private helper.
+    class _ComposeValueHelper;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

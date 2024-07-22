@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/abstractData.h"
@@ -67,6 +50,12 @@ SdfAbstractData::IsEmpty() const
     SdfAbstractData_IsEmptyChecker checker;
     VisitSpecs(&checker);
     return checker.isEmpty;
+}
+
+bool
+SdfAbstractData::IsDetached() const
+{
+    return !StreamsData();
 }
 
 struct SdfAbstractData_CopySpecs : public SdfAbstractDataSpecVisitor
@@ -182,7 +171,7 @@ SdfAbstractData::Equals(const SdfAbstractDataRefPtr &rhs) const
 
     // Check that the set of specs matches.
     SdfAbstractData_CheckAllSpecsExist 
-        rhsHasAllSpecsInThis(*boost::get_pointer(rhs));
+        rhsHasAllSpecsInThis(*get_pointer(rhs));
     VisitSpecs(&rhsHasAllSpecsInThis);
     if (!rhsHasAllSpecsInThis.passed)
         return false;
@@ -194,7 +183,7 @@ SdfAbstractData::Equals(const SdfAbstractDataRefPtr &rhs) const
 
     // Check that every spec matches.
     SdfAbstractData_CheckAllSpecsMatch 
-        thisSpecsMatchRhsSpecs(*boost::get_pointer(rhs));
+        thisSpecsMatchRhsSpecs(*get_pointer(rhs));
     VisitSpecs(&thisSpecsMatchRhsSpecs);
     return thisSpecsMatchRhsSpecs.passed;
 }
@@ -286,7 +275,7 @@ SdfAbstractData::HasDictKey(const SdfPath &path,
     VtValue tmp;
     bool result = HasDictKey(path, fieldName, keyPath, value ? &tmp : NULL);
     if (result && value) {
-        value->StoreValue(tmp);
+        result = value->StoreValue(tmp);
     }
     return result;
 }

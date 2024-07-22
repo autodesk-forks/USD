@@ -1,27 +1,11 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/pathUtils.h"
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/usd/sdf/attributeSpec.h"
@@ -60,6 +44,13 @@ TF_DECLARE_PUBLIC_TOKENS(Test_PcpDynamicFileFormatPlugin_FileFormatTokens,
 TF_DEFINE_PUBLIC_TOKENS(
     Test_PcpDynamicFileFormatPlugin_FileFormatTokens, 
     TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS);
+
+TF_DEFINE_ENV_SETTING(TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS, 
+    false,
+    "Set to true or 1 to have this dynamic file format inputs come from "
+    "attribute default values instead of prim metadata fields. This allows "
+    "to test that we can get equivalent functionality from both types of "
+    "inputs for dynamic payloads.");
 
 /// \class Test_PcpDynamicFileFormatPlugin_FileFormat
 ///
@@ -143,12 +134,21 @@ public:
         FileFormatArguments* args,
         VtValue *dependencyContextData) const override;
 
-    // Another required override for dynamic file arguments to help determine
-    // which changes may cause prims using this file format to be invalidated.
+    // Override for dynamic file arguments to help determine which metadata 
+    // field changes may cause prims using this file format to be invalidated.
     bool CanFieldChangeAffectFileFormatArguments(
         const TfToken& field,
         const VtValue& oldValue,
         const VtValue& newValue,
+        const VtValue &dependencyContextData) const override;
+
+    // Override for dynamic file arguments to help determine which attribute's 
+    // default value field changes may cause prims using this file format to be
+    // invalidated.
+    bool CanAttributeDefaultValueChangeAffectFileFormatArguments(
+        const TfToken &attributeName,
+        const VtValue &oldValue,
+        const VtValue &newValue,
         const VtValue &dependencyContextData) const override;
 
 protected:
@@ -206,6 +206,32 @@ _GetFileFormatArg(SdfFileFormat::FileFormatArguments args,
     }
     *outValue = TfUnstringify<T>(it->second);
     return true;
+}
+
+// Helper for setting the param value in the generated specs created during
+// Read. This handles both the metadata field and the attribute default value
+// input methods depending on the environment setting.
+template <class T>
+void _SetParamValueInSpec(
+    const SdfPrimSpecHandle &xformSpec,
+    const TfToken &paramName, 
+    const T& value)
+{
+    VtValue val(value);
+    if (TfGetEnvSetting(
+            TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS)) {
+        // Attribute input. Create the attribute spec and set the default value.
+        SdfAttributeSpecHandle attr = SdfAttributeSpec::New(
+            xformSpec, 
+            paramName, 
+            SdfGetValueTypeNameForValue(val), 
+            SdfVariabilityUniform, 
+            true);
+        attr->SetInfo(SdfFieldKeys->Default, val);
+    } else {
+        // Metadata input. Set the metadata value.
+        xformSpec->SetInfo(paramName, val);
+    }
 }
 
 bool
@@ -311,24 +337,29 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::Read(
             orderAttrSpec->SetDefaultValue(VtValue(orderVal));
 
             // Recurse by adding a payload to this same layer asset path but 
-            // with updated metadata for generating the contents.
+            // with updated metadata or attributes for generating the contents.
 
             // Pass through the same values of num and height for the payload.
-            xformSpec->SetInfo(
+            _SetParamValueInSpec(
+                xformSpec,
                 Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num, 
-                VtValue(num));
-            xformSpec->SetInfo(
+                num);
+            _SetParamValueInSpec(
+                xformSpec,
                 Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Height, 
-                VtValue(height));
+                height);
             // Decrease depth by one. This is the most important as it stops
             // the recursion.
-            xformSpec->SetInfo(
+            _SetParamValueInSpec(
+                xformSpec,
                 Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Depth, 
-                VtValue(depth - 1 ));
+                depth - 1);
             // Halve the radius
-            xformSpec->SetInfo(
+            _SetParamValueInSpec(
+                xformSpec,
                 Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Radius, 
-                VtValue(radius/ 2.0));
+                radius / 2.0);
+
             // Add the payload to this asset and use the default prim. This 
             // will generate a new layer since the file format arguments will
             // be different.
@@ -357,7 +388,6 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::ReadFromString(
     return true;
 }
 
-
 bool 
 Test_PcpDynamicFileFormatPlugin_FileFormat::WriteToString(
     const SdfLayer& layer,
@@ -380,8 +410,9 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::WriteToStream(
         SdfTextFileFormatTokens->Id)->WriteToStream(spec, out, indent);
 }
 
-// Helper for extracting a value by name from composed metadata or already
-// computed argument dictionary
+// Helper for extracting a value by name from an already computed argument 
+// dictionary or computed from composed metadata field or attribute default 
+// value.
 template <class T>
 static bool _ExtractArg(const TfToken &argName,
                         const PcpDynamicFileFormatContext& context,
@@ -394,20 +425,30 @@ static bool _ExtractArg(const TfToken &argName,
         return true;
     }
 
-    // Otherwise compose the value from the prim field context.
     VtValue val;
-    if (!context.ComposeValue(argName, &val) || val.IsEmpty()) {
-        return false;
+    if (TfGetEnvSetting(
+           TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS)) {
+        // Attempt to compose the value from an attribute named argName.
+        if (!context.ComposeAttributeDefaultValue(argName, &val) || 
+                !val.IsHolding<T>()) {
+            return false;
+        }
+    } else {
+        // Attempt to compose the value from the prim field named argName.
+        if (!context.ComposeValue(argName, &val) || val.IsEmpty()) {
+            return false;
+        }
+
+        if (!val.IsHolding<T>()) {
+            TF_CODING_ERROR(
+                "Expected '%s' value to hold an %s, got '%s'", 
+                argName.GetText(), 
+                TfType::Find<T>().GetTypeName().c_str(),
+                TfStringify(val).c_str());
+            return false;
+        } 
     }
 
-    if (!val.IsHolding<T>()) {
-        TF_CODING_ERROR(
-            "Expected '%s' value to hold an %s, got '%s'", 
-            argName.GetText(), 
-            TfType::Find<T>().GetTypeName().c_str(),
-            TfStringify(val).c_str());
-        return false;
-    } 
     *outValue = val.UncheckedGet<T>();
     return true;
 }
@@ -421,16 +462,8 @@ _ExtractPayloadId(const std::string& assetPath, std::string *payloadId)
     SdfFileFormat::FileFormatArguments args;
     SdfLayer::SplitIdentifier(assetPath, &layerPath, &args);
 
-    const auto &it = args.find(
-        Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId.GetString());
-
-    // Find the subdictionary in argDict for asset's payloadId.
-    if (it != args.end()) {
-        *payloadId = it->second;
-        return true;
-    }
-
-    return false;
+    return TfMapLookup(args,
+        Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId, payloadId);
 }
 
 // Helper for composing the "argDict" metadata field as a dictionary value from
@@ -438,32 +471,48 @@ _ExtractPayloadId(const std::string& assetPath, std::string *payloadId)
 // particular asset.
 static void _ExtractArgDict(
     const PcpDynamicFileFormatContext& context,
-    const std::string& assetPath,
+    const std::string& payloadId,
     VtDictionary* dict)
 {
-    // Compose the "argDict" metadata from the prim field context.
-    VtValue value;
-    if (!context.ComposeValue(
-            Test_PcpDynamicFileFormatPlugin_FileFormatTokens->ArgDict, &value)) {
-        return;
-    }
-    if (!value.IsHolding<VtDictionary>()) {
-        return;
-    }
-    const VtDictionary &argDict = value.UncheckedGet<VtDictionary>();
+    if (TfGetEnvSetting(
+            TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS)) {
+        // Attributes cannot be dictionary valued so instead, we handle the 
+        // "payload ID in an arg dictionary" case by instead looking for 
+        // arg attributes that are namespace prefixed with payload ID. E.g.
+        // an attribute named "Pl1:TestPcp_num" would specify the "num" 
+        // parameter specifically for the payload with the ID of "Pl1".
+        auto getArgValueForPayloadId = [&](const TfToken &argName) {
+            TfToken propName(SdfPath::JoinIdentifier(payloadId, argName));
+            VtValue val;
+            // If we successfully compose a default from the payload prefixed
+            // attribute, add it to the dictionary under the argument name (no
+            // prefix). This will match the same dictionary format as used by
+            // the "argDict" method.
+            if (context.ComposeAttributeDefaultValue(propName, &val)) {
+                (*dict)[argName] = val;
+            }
+        };
+        getArgValueForPayloadId(
+            Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Depth);
+        getArgValueForPayloadId(
+            Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num);
+        getArgValueForPayloadId(
+            Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Height);
+        getArgValueForPayloadId(
+            Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Radius);
+    } else {
+        // Compose the "argDict" metadata from the prim field context.
+        VtValue value;
+        if (!context.ComposeValue(
+                Test_PcpDynamicFileFormatPlugin_FileFormatTokens->ArgDict, &value)) {
+            return;
+        }
+        if (!value.IsHolding<VtDictionary>()) {
+            return;
+        }
+        const VtDictionary &argDict = value.UncheckedGet<VtDictionary>();
 
-    // Extract the current file format arguments from the asset path so we can
-    // look for a specified "payloadId"
-    std::string layerPath;
-    SdfFileFormat::FileFormatArguments args;
-    SdfLayer::SplitIdentifier(assetPath, &layerPath, &args);
-
-    const auto &it = args.find(
-        Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId.GetString());
-
-    // Find the subdictionary in argDict for asset's payloadId.
-    if (it != args.end()) {
-        const std::string &payloadId = it->second;
+        // Find the subdictionary in argDict for asset's payloadId.
         if (VtDictionaryIsHolding<VtDictionary>(argDict, payloadId)) {
             *dict = VtDictionaryGet<VtDictionary>(argDict, payloadId);
         }
@@ -495,7 +544,7 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::ComposeFieldsForFileFormatArguments(
     std::string payloadId;
     VtDictionary argDict;
     if (_ExtractPayloadId(assetPath, &payloadId)) {
-        _ExtractArgDict(context, assetPath, &argDict);
+        _ExtractArgDict(context, payloadId, &argDict);
         customDependencyData[
             Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId] = 
                 payloadId;
@@ -512,6 +561,8 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::ComposeFieldsForFileFormatArguments(
         if (depth < 1) {
             return;
         }
+        (*args)[Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Depth] = 
+        TfStringify(depth);
     }
     int num = 0;
     if (_ExtractArg(Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num, 
@@ -519,11 +570,9 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::ComposeFieldsForFileFormatArguments(
         if (num < 1) {
             return;
         }
-    }
-    (*args)[Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Depth] = 
-        TfStringify(depth);
-    (*args)[Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num] = 
+        (*args)[Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num] = 
         TfStringify(num);
+    }
 
     // Compose the radius and height metadata and add them as well.
     double radius = 10.0;
@@ -541,7 +590,8 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::ComposeFieldsForFileFormatArguments(
 }
 
 bool 
-Test_PcpDynamicFileFormatPlugin_FileFormat::CanFieldChangeAffectFileFormatArguments(
+Test_PcpDynamicFileFormatPlugin_FileFormat::
+CanFieldChangeAffectFileFormatArguments(
     const TfToken& field,
     const VtValue& oldValue,
     const VtValue& newValue,
@@ -565,18 +615,104 @@ Test_PcpDynamicFileFormatPlugin_FileFormat::CanFieldChangeAffectFileFormatArgume
         return false;
     }
 
-    // For this test example, argDict only applies to assets that have a
-    // payloadId in its file arguments. Reject the argDict changes if the file 
-    // arguments do not.
     if (field == Test_PcpDynamicFileFormatPlugin_FileFormatTokens->ArgDict) {
-        if (depDataDict.count(
-                Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId) == 0) {
+        if (!VtDictionaryIsHolding<std::string>(
+                depDataDict,
+                Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId)) {
             return false;
+        }
+
+        const std::string payloadId = VtDictionaryGet<std::string>(
+            depDataDict,
+            Test_PcpDynamicFileFormatPlugin_FileFormatTokens->PayloadId);
+        
+        auto getPayloadDict = [&](const VtValue &val) {
+            if (!val.IsHolding<VtDictionary>()) {
+                return VtDictionary();
+            }
+        
+            return VtDictionaryGet<VtDictionary>(
+                val.UncheckedGet<VtDictionary>(), 
+                payloadId, 
+                VtDefault = VtDictionary());
+        };
+
+        return getPayloadDict(oldValue) != getPayloadDict(newValue);
+    }
+
+    // For depth and num, all values less than 1 are treated as 0. We test
+    // how this can be used to further filter out some changes as "will not 
+    // affect the payload".
+    if (field == Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Depth) {
+        if (oldValue.IsHolding<int>() && newValue.IsHolding<int>()) {
+            if (oldValue.UncheckedGet<int>() < 1 && 
+                    newValue.UncheckedGet<int>() < 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (field == Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num) {
+        if (oldValue.IsHolding<int>() && newValue.IsHolding<int>()) {
+            if (oldValue.UncheckedGet<int>() < 1 && 
+                    newValue.UncheckedGet<int>() < 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    return true;
+}
+
+bool 
+Test_PcpDynamicFileFormatPlugin_FileFormat::
+CanAttributeDefaultValueChangeAffectFileFormatArguments(
+    const TfToken &attributeName,
+    const VtValue &oldValue,
+    const VtValue &newValue,
+    const VtValue &dependencyContextData) const
+{
+    // Our implementation of ComposeFieldsForFileFormatArguments sets a 
+    // VtDictionary in the dependencyContextData. That better be what we get
+    // back here.
+    if (!TF_VERIFY(dependencyContextData.IsHolding<VtDictionary>())) {
+        return false;
+    }
+    const VtDictionary &depDataDict = 
+        dependencyContextData.UncheckedGet<VtDictionary>();
+
+    // Return false if the contextId stored in the dependency has never been 
+    // generated by ComposeFieldForFileFormatArguments. Our unit test will use 
+    // this to verify that Pcp is sending the generated dependency data back to
+    // this function.
+    uint64_t contextId = VtDictionaryGet<uint64_t>(depDataDict, CONTEXT_ID_KEY);
+    if (_contextIds.find(contextId) == _contextIds.end()) {
+        return false;
+    }
+
+    // For depth and num, all values less than 1 are treated as 0. We test
+    // how this can be used to further filter out some changes as "will not 
+    // affect the payload".
+    if (attributeName == Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Depth) {
+        if (oldValue.IsHolding<int>() && newValue.IsHolding<int>()) {
+            if (oldValue.UncheckedGet<int>() < 1 && 
+                    newValue.UncheckedGet<int>() < 1) {
+                return false;
+            }
         }
     }
 
-    if (oldValue == newValue) {
-        return false;
+    if (attributeName == Test_PcpDynamicFileFormatPlugin_FileFormatTokens->Num) {
+        if (oldValue.IsHolding<int>() && newValue.IsHolding<int>()) {
+            if (oldValue.UncheckedGet<int>() < 1 && 
+                    newValue.UncheckedGet<int>() < 1) {
+                return false;
+            }
+        }
     }
 
     return true;

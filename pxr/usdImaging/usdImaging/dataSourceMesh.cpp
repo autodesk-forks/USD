@@ -1,25 +1,8 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/dataSourceMesh.h"
 
@@ -34,21 +17,6 @@ UsdImagingDataSourceSubdivisionTags::UsdImagingDataSourceSubdivisionTags(
     : _usdMesh(usdMesh)
     , _stageGlobals(stageGlobals)
 {
-}
-
-
-bool
-UsdImagingDataSourceSubdivisionTags::Has(const TfToken &name)
-{
-    return
-        name == HdSubdivisionTagsSchemaTokens->faceVaryingLinearInterpolation ||
-        name == HdSubdivisionTagsSchemaTokens->interpolateBoundary ||
-        name == HdSubdivisionTagsSchemaTokens->triangleSubdivisionRule ||
-        name == HdSubdivisionTagsSchemaTokens->cornerIndices ||
-        name == HdSubdivisionTagsSchemaTokens->cornerSharpnesses ||
-        name == HdSubdivisionTagsSchemaTokens->creaseIndices ||
-        name == HdSubdivisionTagsSchemaTokens->creaseLengths ||
-        name == HdSubdivisionTagsSchemaTokens->creaseSharpnesses;
 }
 
 TfTokenVector
@@ -110,17 +78,6 @@ UsdImagingDataSourceMeshTopology::UsdImagingDataSourceMeshTopology(
 {
 }
 
-
-bool
-UsdImagingDataSourceMeshTopology::Has(const TfToken &name)
-{
-    return
-        name == HdMeshTopologySchemaTokens->faceVertexCounts ||
-        name == HdMeshTopologySchemaTokens->faceVertexIndices ||
-        name == HdMeshTopologySchemaTokens->holeIndices ||
-        name == HdMeshTopologySchemaTokens->orientation;
-}
-
 TfTokenVector
 UsdImagingDataSourceMeshTopology::GetNames()
 {
@@ -172,17 +129,6 @@ UsdImagingDataSourceMesh::UsdImagingDataSourceMesh(
 {
 }
 
-bool
-UsdImagingDataSourceMesh::Has(const TfToken &name)
-{
-    return
-        name == HdMeshSchemaTokens->topology ||
-        name == HdMeshSchemaTokens->subdivisionScheme ||
-        name == HdMeshSchemaTokens->doubleSided ||
-        name == HdMeshSchemaTokens->subdivisionTags;
-    // XXX: TODO geomsubsets
-}
-
 TfTokenVector
 UsdImagingDataSourceMesh::GetNames()
 {
@@ -232,16 +178,6 @@ UsdImagingDataSourceMeshPrim::UsdImagingDataSourceMeshPrim(
     // Note: DataSourceGprim handles the special PointBased primvars for us.
 }
 
-bool 
-UsdImagingDataSourceMeshPrim::Has(const TfToken& name)
-{
-    if (name == HdMeshSchemaTokens->mesh) {
-        return true;
-    }
-
-    return UsdImagingDataSourceGprim::Has(name);
-}
-
 TfTokenVector 
 UsdImagingDataSourceMeshPrim::GetNames()
 {
@@ -262,6 +198,52 @@ UsdImagingDataSourceMeshPrim::Get(const TfToken & name)
     } else {
         return UsdImagingDataSourceGprim::Get(name);
     }
+}
+
+/*static*/
+HdDataSourceLocatorSet
+UsdImagingDataSourceMeshPrim::Invalidate(
+    UsdPrim const& prim,
+    const TfToken &subprim,
+    const TfTokenVector &properties,
+    const UsdImagingPropertyInvalidationType invalidationType)
+{
+    HdDataSourceLocatorSet locators;
+
+    for (const TfToken &propertyName : properties) {
+        if (propertyName == UsdGeomTokens->subdivisionScheme) {
+            locators.insert(HdMeshSchema::GetSubdivisionSchemeLocator());
+        }
+
+        if (propertyName == UsdGeomTokens->faceVertexCounts ||
+                propertyName == UsdGeomTokens->faceVertexIndices ||
+                propertyName == UsdGeomTokens->holeIndices ||
+                propertyName == UsdGeomTokens->orientation) {
+            locators.insert(HdMeshSchema::GetTopologyLocator());
+        }
+
+        if (propertyName == UsdGeomTokens->interpolateBoundary ||
+                propertyName == UsdGeomTokens->faceVaryingLinearInterpolation ||
+                propertyName == UsdGeomTokens->triangleSubdivisionRule ||
+                propertyName == UsdGeomTokens->creaseIndices ||
+                propertyName == UsdGeomTokens->creaseLengths ||
+                propertyName == UsdGeomTokens->creaseSharpnesses ||
+                propertyName == UsdGeomTokens->cornerIndices ||
+                propertyName == UsdGeomTokens->cornerSharpnesses) {
+            // XXX UsdGeomTokens->creaseMethod, when we add support for that.
+            locators.insert(HdMeshSchema::GetSubdivisionTagsLocator());
+        }
+
+        if (propertyName == UsdGeomTokens->doubleSided)  {
+            locators.insert(HdMeshSchema::GetDoubleSidedLocator());
+        }
+    }
+
+    // Give base classes a chance to invalidate.
+    locators.insert(
+        UsdImagingDataSourceGprim::Invalidate(
+            prim, subprim, properties, invalidationType));
+    return locators;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_LAYER_H
 #define PXR_USD_SDF_LAYER_H
@@ -45,11 +28,10 @@
 #include "pxr/base/vt/value.h"
 #include "pxr/base/work/dispatcher.h"
 
-#include <boost/optional.hpp>
-
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -82,6 +64,10 @@ struct Sdf_AssetInfo;
 /// back out to the original asset.  You can use the Export() method to write
 /// the layer to a different location. You can use the GetIdentifier() method
 /// to get the layer's Id or GetRealPath() to get the resolved, full URI.
+///
+/// Layer identifiers are UTF-8 encoded strings. A layer's file format is
+/// determined via the identifier's extension (as resolved by Ar) with [A-Z]
+/// (and no other characters) explicitly case folded.
 ///
 /// Layers can have a timeCode range (startTimeCode and endTimeCode). This range
 /// represents the suggested playback range, but has no impact on the extent of 
@@ -249,6 +235,24 @@ public:
     /// Returns whether this layer has no significant data.
     SDF_API
     bool IsEmpty() const;
+
+    /// Returns true if this layer streams data from its serialized data
+    /// store on demand, false otherwise.
+    ///
+    /// Layers with streaming data are treated differently to avoid pulling
+    /// in data unnecessarily. For example, reloading a streaming layer 
+    /// will not perform fine-grained change notification, since doing 
+    /// so would require the full contents of the layer to be loaded.
+    SDF_API
+    bool StreamsData() const;
+
+    /// Returns true if this layer is detached from its serialized data
+    /// store, false otherwise.
+    ///
+    /// Detached layers are isolated from external changes to their serialized
+    /// data.
+    SDF_API
+    bool IsDetached() const;
 
     /// Copies the content of the given layer into this layer.
     /// Source layer is unmodified.
@@ -815,18 +819,31 @@ public:
     void SetComment(const std::string &comment);
     
     /// Return the defaultPrim metadata for this layer.  This field
-    /// indicates the name of which root prim should be targeted by a reference
-    /// or payload to this layer that doesn't specify a prim path.
+    /// indicates the name or path of which prim should be targeted by a
+    /// reference or payload to this layer that doesn't specify a prim path.
     ///
     /// The default value is the empty token.
     SDF_API
     TfToken GetDefaultPrim() const;
 
-    /// Set the default prim metadata for this layer.  The root prim with this
-    /// name will be targeted by a reference or a payload to this layer that
-    /// doesn't specify a prim path.  Note that this must be a root prim
-    /// <b>name</b> not a path.  E.g. "rootPrim" rather than "/rootPrim".  See
-    /// GetDefaultPrim().
+    /// Return this layer's default prim metadata interpreted as an absolute 
+    /// prim path regardless of whether it was authored as a root prim name or a
+    /// prim path. For example, if the authored default prim value is 
+    /// "rootPrim", return </rootPrim>. If the authored default prim value is 
+    /// "/path/to/non/root/prim", return </path/to/non/root/prim>. If the 
+    /// authored default prim value cannot be interpreted as a prim path, 
+    /// return the empty SdfPath.
+    ///
+    /// The default value is an empty path.
+    SDF_API
+    SdfPath GetDefaultPrimAsPath() const;
+
+    /// Set the default prim metadata for this layer.  The prim at this path
+    /// will be targeted by a reference or a payload to this layer that doesn't 
+    /// specify a prim path.
+    /// Note that this can be a name if it refers to a root prim, or a path to
+    /// any prim in this layer. E.g. "rootPrim", "/path/to/non/root/prim" or
+    /// "/rootPrim".  See GetDefaultPrim().
     SDF_API
     void SetDefaultPrim(const TfToken &name);
 
@@ -905,9 +922,8 @@ public:
     /// layers to lock framesPerSecond and timeCodesPerSecond to the same value
     /// by specifying only framesPerSecond.
     /// 
-    /// The default value of timeCodesPerSecond (which is used only if there is
-    /// no authored value for either timeCodesPerSecond or framesPerSecond) is
-    /// 24.
+    /// The default value of timeCodesPerSecond, used only if there is no 
+    /// authored value for either timeCodesPerSecond or framesPerSecond, is 24.
     SDF_API
     double GetTimeCodesPerSecond() const;
 
@@ -1024,6 +1040,23 @@ public:
     /// Clears out the CustomLayerData dictionary associated with this layer.
     SDF_API
     void ClearCustomLayerData();
+
+    /// Returns the expression variables dictionary authored on this layer.
+    /// See \ref Sdf_Page_VariableExpressions for more details.
+    SDF_API
+    VtDictionary GetExpressionVariables() const;
+    
+    /// Sets the expression variables dictionary for this layer.
+    SDF_API
+    void SetExpressionVariables(const VtDictionary& expressionVars);
+
+    /// Returns true if expression variables are authored on this layer.
+    SDF_API
+    bool HasExpressionVariables() const;
+
+    /// Clears the expression variables dictionary authored on this layer.
+    SDF_API
+    void ClearExpressionVariables();
 
     /// @}
     /// \name Prims
@@ -1181,6 +1214,158 @@ public:
     void SetSubLayerOffset(const SdfLayerOffset& offset, int index);
 
     /// @}
+    /// \name Relocates
+    /// @{
+
+    /// Get the list of relocates specified in this layer's metadata.
+    ///
+    /// Each individual relocate in the list is specified as a pair of 
+    /// \c \SdfPath where the first is the source path of the relocate and the
+    /// second is target path.
+    ///
+    /// Note that is NOT a proxy object and cannot be used to edit the field in
+    /// place. 
+    SDF_API
+    SdfRelocates GetRelocates() const;
+    
+    /// Set the entire list of namespace relocations specified on this layer to
+    /// \p relocates.
+    SDF_API
+    void SetRelocates(const SdfRelocates& relocates);
+
+    /// Returns true if this layer's metadata has any relocates opinion, 
+    /// including that there should be no relocates (i.e. an empty list).  An 
+    /// empty list (no relocates) does not mean the same thing as a missing list
+    /// (no opinion).
+    SDF_API
+    bool HasRelocates() const;
+    
+    /// Clears the layer relocates opinion in the layer's metadata.
+    SDF_API
+    void ClearRelocates();
+
+    /// @}
+
+    /// \name Detached Layers
+    ///
+    /// Detached layers are layers that are detached from the serialized
+    /// data store and isolated from any external changes to that serialized
+    /// data.
+    ///
+    /// File format plugins may produce layers that maintain a persistent
+    /// connection to their serialized representation to read data on-demand.
+    /// For example, a file format might set up layers to hold an open file
+    /// handle and read attribute time samples from it only when requested, to
+    /// avoid pulling in unnecessary data. However, there may be times when
+    /// keeping this connection is undesirable. In the previous example, a
+    /// crash might occur if some other process were to change the file on
+    /// disk, or users might be prevented from overwriting the file at all
+    /// which could interfere with workflow.
+    ///
+    /// To avoid these problems, the functions below may be used to specify
+    /// layers that are to be detached from the original serialized data.
+    ///
+    /// @{
+
+    /// \class DetachedLayerRules
+    ///
+    /// Object used to specify detached layers. Layers may be included or
+    /// excluded from the detached layer set by specifying simple substring
+    /// patterns for layer identifiers. For example, the following will
+    /// include all layers in the detached layer set, except for those whose
+    /// identifiers contain the substring "sim" or "geom":
+    ///
+    /// \code
+    /// SdfLayer::SetDetachedLayerRules(
+    ///     SdfLayer::DetachedLayerRules()
+    ///         .IncludeAll();
+    ///         .Exclude({"sim", "geom"})
+    /// );
+    /// \endcode
+    class DetachedLayerRules
+    {
+    public:
+        /// A default constructed rules object Excludes all layers from
+        /// the detached layer set.
+        DetachedLayerRules() = default;
+
+        /// Include all layers in the detached layer set.
+        DetachedLayerRules& IncludeAll() 
+        { 
+            _includeAll = true; 
+            _include.clear();
+            return *this; 
+        }
+
+        /// Include layers whose identifiers contain any of the strings in
+        /// \p patterns in the detached layer set.
+        SDF_API
+        DetachedLayerRules& Include(const std::vector<std::string>& patterns);
+
+        /// Exclude layers whose identifiers contain any of the strings in
+        /// \p patterns from the detached layer set.
+        SDF_API
+        DetachedLayerRules& Exclude(const std::vector<std::string>& patterns);
+
+        bool IncludedAll() const { return _includeAll; }
+        const std::vector<std::string>& GetIncluded() const { return _include; }
+        const std::vector<std::string>& GetExcluded() const { return _exclude; }
+
+        /// Returns true if \p identifier is included in the detached layer set,
+        /// false otherwise.
+        ///
+        /// \p identifier is included if it matches an include pattern (or the
+        /// mask includes all identifiers) and it does not match any of the
+        /// exclude patterns. Anonymous layer identifiers are always excluded
+        /// from the mask.
+        SDF_API
+        bool IsIncluded(const std::string& identifier) const;
+
+    private:
+        friend class SdfLayer;
+
+        std::vector<std::string> _include;
+        std::vector<std::string> _exclude;
+        bool _includeAll = false;
+    };
+
+    /// Sets the rules specifying detached layers.
+    ///
+    /// Newly-created or opened layers whose identifiers are included in
+    /// \p rules will be opened as detached layers. Existing layers that are now
+    /// included or no longer included will be reloaded. Any unsaved
+    /// modifications to those layers will be lost.
+    ///
+    /// This function is not thread-safe. It may not be run concurrently with
+    /// any other functions that open, close, or read from any layers.
+    ///
+    /// The detached layer rules are initially set to exclude all layers.
+    /// This may be overridden by setting the environment variables
+    /// SDF_LAYER_INCLUDE_DETACHED and SDF_LAYER_EXCLUDE_DETACHED to specify
+    /// the initial set of include and exclude patterns in the rules. These
+    /// variables can be set to a comma-delimited list of patterns.
+    /// SDF_LAYER_INCLUDE_DETACHED may also be set to "*" to include
+    /// all layers. Note that these environment variables only set the initial
+    /// state of the detached layer rules; these values may be overwritten by
+    /// subsequent calls to this function.
+    ///
+    /// See SdfLayer::DetachedLayerRules::IsIncluded for details on how the
+    /// rules are applied to layer identifiers.
+    SDF_API
+    static void SetDetachedLayerRules(const DetachedLayerRules& mask);
+
+    /// Returns the current rules for the detached layer set.
+    SDF_API
+    static const DetachedLayerRules& GetDetachedLayerRules();
+
+    /// Returns whether the given layer identifier is included in the
+    /// current rules for the detached layer set. This is equivalent to
+    /// GetDetachedLayerRules().IsIncluded(identifier).
+    SDF_API
+    static bool IsIncludedByDetachedLayerRules(const std::string& identifier);
+
+    /// @}
+
     /// \name Muting
     /// @{
 
@@ -1443,7 +1628,8 @@ private:
     static SdfLayerRefPtr _CreateNew(
         SdfFileFormatConstPtr fileFormat,
         const std::string& identifier,
-        const FileFormatArguments& args);
+        const FileFormatArguments& args,
+        bool saveLayer = true);
 
     static SdfLayerRefPtr _CreateNewWithFormat(
         const SdfFileFormatConstPtr &fileFormat,
@@ -1474,7 +1660,7 @@ private:
     // reference itself internally without being susceptible to a race.)
     bool _WaitForInitializationAndCheckIfSuccessful();
 
-    // Returns whether or not this menv layer should post change 
+    // Returns whether or not this layer should post change 
     // notification.  This simply returns (!_GetIsLoading())
     bool _ShouldNotify() const;
 
@@ -1546,7 +1732,7 @@ private:
     template <class ScopedLock>
     static SdfLayerRefPtr
     _TryToFindLayer(const std::string &identifier,
-                    const std::string &resolvedPath,
+                    const ArResolvedPath &resolvedPath,
                     ScopedLock &lock, bool retryAsWriter);
 
     /// Returns true if the spec at the specified path has no effect on the 
@@ -1562,13 +1748,7 @@ private:
     /// Return true if the entire subtree rooted at \a path does not affect the 
     /// scene. For this purpose, property specs that have only required fields 
     /// are considered inert.
-    ///
-    /// If this function returns true and \p inertSpecs is given, it will be 
-    /// populated with the paths to all inert prim and property specs at and
-    /// beneath \p path. These paths will be sorted so that child paths
-    /// appear before their parent path.
-    bool _IsInertSubtree(const SdfPath &path,
-                         std::vector<SdfPath>* inertSpecs = nullptr);
+    bool _IsInertSubtree(const SdfPath &path) const;
 
     /// Cause \p spec to be removed if it does not affect the scene. This 
     /// removes any empty descendants before checking if \p spec itself is 
@@ -1651,7 +1831,7 @@ private:
     // Reads contents of asset specified by \p identifier with resolved
     // path \p resolvedPath into this layer.
     bool _Read(const std::string& identifier, 
-               const std::string& resolvedPath, 
+               const ArResolvedPath& resolvedPath, 
                bool metadataOnly);
     
     // Saves this layer if it is dirty or the layer doesn't already exist
@@ -1667,13 +1847,16 @@ private:
     // users to export and save to any file name, regardless of extension.
     bool _WriteToFile(const std::string& newFileName, 
                       const std::string& comment, 
-                      SdfFileFormatConstPtr fileFormat = TfNullPtr,
-                      const FileFormatArguments& args = FileFormatArguments())
-                      const;
+                      SdfFileFormatConstPtr fileFormat,
+                      const FileFormatArguments& args) const;
 
     // Swap contents of _data and data. This operation does not register
     // inverses or emit change notification.
     void _SwapData(SdfAbstractDataRefPtr &data);
+
+    // Set _data to \p newData and send coarse DidReplaceLayerContent
+    // invalidation notice.
+    void _AdoptData(const SdfAbstractDataRefPtr &newData);
 
     // Set _data to match data, calling other primitive setter methods to
     // provide fine-grained inverses and notification.  If \p data might adhere
@@ -1688,21 +1871,32 @@ private:
     // Returns const handle to _data.
     SdfAbstractDataConstPtr _GetData() const;
 
-    // Inverse primitive for setting a single field.
+    // Returns a new SdfAbstractData object for this layer.
+    SdfAbstractDataRefPtr _CreateData() const;
+
+    // Inverse primitive for setting a single field. The previous value for the
+    // field may be given via \p oldValue. If \p oldValue is non-nullptr, the
+    // VtValue it points to will be moved-from after the function completes. If
+    // \p oldValue is nullptr, the old field value will be retrieved
+    // automatically.
     template <class T>
     void _PrimSetField(const SdfPath& path, 
                        const TfToken& fieldName,
                        const T& value,
-                       const VtValue *oldValue = NULL,
+                       VtValue *oldValue = nullptr,
                        bool useDelegate = true);
 
-    // Inverse primitive for setting a single key in a dict-valued field.
+    // Inverse primitive for setting a single key in a dict-valued field.  The
+    // previous dictionary value for the field (*not* the individual entry) may
+    // be supplied via \p oldValue. If \p oldValue is non-nullptr, the VtValue
+    // it points to will be moved-from after the function completes. If \p
+    // oldValue is nullptr, the old field value will be retrieved automatically.
     template <class T>
     void _PrimSetFieldDictValueByKey(const SdfPath& path,
                                      const TfToken& fieldName,
                                      const TfToken& keyPath,
                                      const T& value,
-                                     const VtValue *oldValue = NULL,
+                                     VtValue *oldValue = nullptr,
                                      bool useDelegate = true);
 
     // Primitive for appending a child to the list of children.
@@ -1787,7 +1981,7 @@ private:
 
     // This is an optional<bool> that is only set once initialization
     // is complete, before _initializationComplete is set.
-    boost::optional<bool> _initializationWasSuccessful;
+    std::optional<bool> _initializationWasSuccessful;
 
     // remembers the last 'IsDirty' state.
     mutable bool _lastDirtyState;

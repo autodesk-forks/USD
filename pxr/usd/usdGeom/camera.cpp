@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usd/usdGeom/camera.h"
 #include "pxr/usd/usd/schemaRegistry.h"
@@ -395,25 +378,27 @@ PXR_NAMESPACE_CLOSE_SCOPE
 // ===================================================================== //
 // --(BEGIN CUSTOM CODE)--
 
+#include <optional>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 template<class T>
-static boost::optional<T> _GetValue(const UsdPrim &prim,
-                                    const TfToken &name,
-                                    const UsdTimeCode &time)
+static std::optional<T> _GetValue(const UsdPrim &prim,
+                                  const TfToken &name,
+                                  const UsdTimeCode &time)
 {
     const UsdAttribute attr = prim.GetAttribute(name);
     if (!attr) {
         TF_WARN("%s attribute on prim %s missing.",
                 name.GetText(), prim.GetPath().GetText());
-        return boost::none;
+        return {};
     }
     
     T value;
     if (!attr.Get(&value, time)) {
         TF_WARN("Failed to extract value from attribute %s at <%s>.",
                 name.GetText(), attr.GetPath().GetText());
-        return boost::none;
+        return {};
     }
 
     return value;
@@ -488,55 +473,55 @@ UsdGeomCamera::GetCamera(const UsdTimeCode &time) const
     camera.SetTransform(
         ComputeLocalToWorldTransform(time));
 
-    if (const boost::optional<TfToken> projection = _GetValue<TfToken>(
+    if (const std::optional<TfToken> projection = _GetValue<TfToken>(
             GetPrim(), UsdGeomTokens->projection, time)) {
         camera.SetProjection(_TokenToProjection(*projection));
     }
 
-    if (const boost::optional<float> horizontalAperture = _GetValue<float>(
+    if (const std::optional<float> horizontalAperture = _GetValue<float>(
             GetPrim(), UsdGeomTokens->horizontalAperture, time)) {
         camera.SetHorizontalAperture(*horizontalAperture);
     }
 
-    if (const boost::optional<float> verticalAperture = _GetValue<float>(
+    if (const std::optional<float> verticalAperture = _GetValue<float>(
             GetPrim(), UsdGeomTokens->verticalAperture, time)) {
         camera.SetVerticalAperture(*verticalAperture);
     }
 
-    if (const boost::optional<float> horizontalApertureOffset =
+    if (const std::optional<float> horizontalApertureOffset =
         _GetValue<float>(
             GetPrim(), UsdGeomTokens->horizontalApertureOffset, time)) {
         camera.SetHorizontalApertureOffset(*horizontalApertureOffset);
     }
 
-    if (const boost::optional<float> verticalApertureOffset = _GetValue<float>(
+    if (const std::optional<float> verticalApertureOffset = _GetValue<float>(
             GetPrim(), UsdGeomTokens->verticalApertureOffset, time)) {
         camera.SetVerticalApertureOffset(*verticalApertureOffset);
     }
 
-    if (const boost::optional<float> focalLength = _GetValue<float>(
+    if (const std::optional<float> focalLength = _GetValue<float>(
             GetPrim(), UsdGeomTokens->focalLength, time)) {
         camera.SetFocalLength(*focalLength);
     }
 
-    if (const boost::optional<GfVec2f> clippingRange = _GetValue<GfVec2f>(
+    if (const std::optional<GfVec2f> clippingRange = _GetValue<GfVec2f>(
             GetPrim(), UsdGeomTokens->clippingRange, time)) {
         camera.SetClippingRange(_Vec2fToRange1f(*clippingRange));
     }
 
-    if (const boost::optional<VtArray<GfVec4f> > clippingPlanes =
+    if (const std::optional<VtArray<GfVec4f> > clippingPlanes =
         _GetValue<VtArray<GfVec4f> >(
             GetPrim(), UsdGeomTokens->clippingPlanes, time)) {
 
         camera.SetClippingPlanes(_VtArrayVec4fToVector(*clippingPlanes));
     }
 
-    if (const boost::optional<float> fStop = _GetValue<float>(
+    if (const std::optional<float> fStop = _GetValue<float>(
             GetPrim(), UsdGeomTokens->fStop, time)) {
         camera.SetFStop(*fStop);
     }
 
-    if (const boost::optional<float> focusDistance = _GetValue<float>(
+    if (const std::optional<float> focusDistance = _GetValue<float>(
             GetPrim(), UsdGeomTokens->focusDistance, time)) {
         camera.SetFocusDistance(*focusDistance);
     }

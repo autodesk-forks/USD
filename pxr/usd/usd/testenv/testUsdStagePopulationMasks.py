@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 import unittest
 from pxr import Usd, Sdf, Tf
@@ -198,12 +181,17 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         c = stage.DefinePrim('/World/C')
         d = stage.DefinePrim('/World/D')
         e = stage.DefinePrim('/World/E')
+        f = stage.OverridePrim('/World/F')
+        g = stage.OverridePrim('/World/F/G')
+        h = stage.OverridePrim('/World/H')
 
         cAttr = c.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
 
         a.CreateRelationship('r').AddTarget(b.GetPath())
         b.CreateRelationship('r').AddTarget(cAttr.GetPath())
         c.CreateRelationship('r').AddTarget(d.GetPath())
+        d.CreateRelationship('r').AddTarget(f.GetPath())
+        g.CreateRelationship('r').AddTarget(h.GetPath())
 
         a.CreateRelationship('pred').AddTarget(e.GetPath())
         
@@ -214,8 +202,11 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert not masked.GetPrimAtPath(c.GetPath())
         assert not masked.GetPrimAtPath(d.GetPath())
         assert not masked.GetPrimAtPath(e.GetPath())
+        assert not masked.GetPrimAtPath(f.GetPath())
+        assert not masked.GetPrimAtPath(g.GetPath())
+        assert not masked.GetPrimAtPath(h.GetPath())
 
-        # Now expand the mask for all relationships.
+        # Now expand the mask for all relationships, with default traversal.
         masked.ExpandPopulationMask()
 
         assert masked.GetPrimAtPath(a.GetPath())
@@ -223,7 +214,13 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert masked.GetPrimAtPath(c.GetPath())
         assert masked.GetPrimAtPath(d.GetPath())
         assert masked.GetPrimAtPath(e.GetPath())
+        assert masked.GetPrimAtPath(f.GetPath())     # f is hit by d,
+        assert masked.GetPrimAtPath(g.GetPath())     # g is included by being
+                                                     # descendant to f, but it
+                                                     # is not traversed so...
+        assert not masked.GetPrimAtPath(h.GetPath()) # h is not included.
 
+        # Reset to just a.
         masked.SetPopulationMask(Usd.StagePopulationMask().Add(a.GetPath()))
      
         assert masked.GetPrimAtPath(a.GetPath())
@@ -231,6 +228,9 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert not masked.GetPrimAtPath(c.GetPath())
         assert not masked.GetPrimAtPath(d.GetPath())
         assert not masked.GetPrimAtPath(e.GetPath())
+        assert not masked.GetPrimAtPath(f.GetPath())
+        assert not masked.GetPrimAtPath(g.GetPath())
+        assert not masked.GetPrimAtPath(h.GetPath())
 
         # Expand with a predicate that only consults relationships named 'pred'
         masked.ExpandPopulationMask(
@@ -241,6 +241,21 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert not masked.GetPrimAtPath(c.GetPath())
         assert not masked.GetPrimAtPath(d.GetPath())
         assert masked.GetPrimAtPath(e.GetPath())
+        assert not masked.GetPrimAtPath(f.GetPath())
+        assert not masked.GetPrimAtPath(g.GetPath())
+        assert not masked.GetPrimAtPath(h.GetPath())
+
+        # Reset to just a again, then expand with the all prims predicate.
+        masked.SetPopulationMask(Usd.StagePopulationMask().Add(a.GetPath()))
+        masked.ExpandPopulationMask(Usd.PrimAllPrimsPredicate)
+        assert masked.GetPrimAtPath(a.GetPath())
+        assert masked.GetPrimAtPath(b.GetPath())
+        assert masked.GetPrimAtPath(c.GetPath())
+        assert masked.GetPrimAtPath(d.GetPath())
+        assert masked.GetPrimAtPath(e.GetPath())
+        assert masked.GetPrimAtPath(f.GetPath())
+        assert masked.GetPrimAtPath(g.GetPath()) # traversed now, hitting h
+        assert masked.GetPrimAtPath(h.GetPath()) # now hit by g.
 
     def test_ExpansionConnections(self):
         stage = Usd.Stage.CreateInMemory()
@@ -249,16 +264,24 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         c = stage.DefinePrim('/World/C')
         d = stage.DefinePrim('/World/D')
         e = stage.DefinePrim('/World/E')
+        f = stage.OverridePrim('/World/F')
+        g = stage.OverridePrim('/World/F/G')
+        h = stage.OverridePrim('/World/H')
 
         bAttr = b.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
         cAttr = c.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
         dAttr = d.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
         eAttr = e.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
+        fAttr = f.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
+        gAttr = g.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
+        hAttr = h.CreateAttribute('attr', Sdf.ValueTypeNames.Float)
 
         floatType = Sdf.ValueTypeNames.Float
         a.CreateAttribute('a', floatType).AddConnection(bAttr.GetPath())
         b.CreateAttribute('a', floatType).AddConnection(cAttr.GetPath())
         c.CreateAttribute('a', floatType).AddConnection(dAttr.GetPath())
+        d.CreateAttribute('a', floatType).AddConnection(fAttr.GetPath())
+        g.CreateAttribute('a', floatType).AddConnection(hAttr.GetPath())
 
         a.CreateAttribute('pred', floatType).AddConnection(eAttr.GetPath())
         
@@ -269,8 +292,11 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert not masked.GetPrimAtPath(c.GetPath())
         assert not masked.GetPrimAtPath(d.GetPath())
         assert not masked.GetPrimAtPath(e.GetPath())
+        assert not masked.GetPrimAtPath(f.GetPath())
+        assert not masked.GetPrimAtPath(g.GetPath())
+        assert not masked.GetPrimAtPath(h.GetPath())
 
-        # Now expand the mask for all connections.
+        # Now expand the mask for all connections, with default traversal.
         masked.ExpandPopulationMask()
 
         assert masked.GetPrimAtPath(a.GetPath())
@@ -278,7 +304,13 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert masked.GetPrimAtPath(c.GetPath())
         assert masked.GetPrimAtPath(d.GetPath())
         assert masked.GetPrimAtPath(e.GetPath())
+        assert masked.GetPrimAtPath(f.GetPath())     # f is hit by d,
+        assert masked.GetPrimAtPath(g.GetPath())     # g is included by being
+                                                     # descendant to f, but it
+                                                     # is not traversed so...
+        assert not masked.GetPrimAtPath(h.GetPath()) # h is not included.
 
+        # Reset to just a.
         masked.SetPopulationMask(Usd.StagePopulationMask().Add(a.GetPath()))
      
         assert masked.GetPrimAtPath(a.GetPath())
@@ -286,6 +318,9 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert not masked.GetPrimAtPath(c.GetPath())
         assert not masked.GetPrimAtPath(d.GetPath())
         assert not masked.GetPrimAtPath(e.GetPath())
+        assert not masked.GetPrimAtPath(f.GetPath())
+        assert not masked.GetPrimAtPath(g.GetPath())
+        assert not masked.GetPrimAtPath(h.GetPath())
 
         # Expand with a predicate that only consults attributes named 'pred'
         masked.ExpandPopulationMask(
@@ -296,6 +331,21 @@ class TestUsdStagePopulationMask(unittest.TestCase):
         assert not masked.GetPrimAtPath(c.GetPath())
         assert not masked.GetPrimAtPath(d.GetPath())
         assert masked.GetPrimAtPath(e.GetPath())
+        assert not masked.GetPrimAtPath(f.GetPath())
+        assert not masked.GetPrimAtPath(g.GetPath())
+        assert not masked.GetPrimAtPath(h.GetPath())
+
+        # Reset to just a again, then expand with the all prims predicate.
+        masked.SetPopulationMask(Usd.StagePopulationMask().Add(a.GetPath()))
+        masked.ExpandPopulationMask(Usd.PrimAllPrimsPredicate)
+        assert masked.GetPrimAtPath(a.GetPath())
+        assert masked.GetPrimAtPath(b.GetPath())
+        assert masked.GetPrimAtPath(c.GetPath())
+        assert masked.GetPrimAtPath(d.GetPath())
+        assert masked.GetPrimAtPath(e.GetPath())
+        assert masked.GetPrimAtPath(f.GetPath())
+        assert masked.GetPrimAtPath(g.GetPath()) # traversed now, hitting h
+        assert masked.GetPrimAtPath(h.GetPath()) # now hit by g.
 
     def test_Bug143308(self):
         # We didn't correctly mask calls to parallel prim indexing, leading to

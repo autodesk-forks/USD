@@ -10,34 +10,62 @@ class "AbstractTest" (
 {
     string testAttr = "foo" (
         allowedTokens = ["bar", "baz"]
+        customData = {
+            string userDocBrief = "Testing brief user doc for schema attr"
+        }
         displayGroup = "Display Group"
         displayName = "Display Name"
         doc = "Testing documentation metadata"
         hidden = true
         testCustomMetadata = "garply"
+        testDictionaryMetadata = {
+            string name = "bar"
+            int value = 3
+        }
     )
 }
 
 class MetadataTest "MetadataTest" (
+    customData = {
+        string userDocBrief = "Testing brief user doc for schema class"
+    }
     doc = "Testing documentation metadata"
     hidden = true
     testCustomMetadata = "garply"
+    testDictionaryMetadata = {
+        string name = "foo"
+        int value = 2
+    }
 )
 {
     string testAttr = "foo" (
         allowedTokens = ["bar", "baz"]
+        customData = {
+            string userDocBrief = "Testing brief user doc for schema attr"
+        }
         displayGroup = "Display Group"
         displayName = "Display Name"
         doc = "Testing documentation metadata"
         hidden = true
         testCustomMetadata = "garply"
+        testDictionaryMetadata = {
+            string name = "bar"
+            int value = 3
+        }
     )
     rel testRel (
+        customData = {
+            string userDocBrief = "Testing brief user doc for schema rel"
+        }
         displayGroup = "Display Group"
         displayName = "Display Name"
         doc = "Testing documentation metadata"
         hidden = true
         testCustomMetadata = "garply"
+        testDictionaryMetadata = {
+            string name = "baz"
+            int value = 5
+        }
     )
 }
 

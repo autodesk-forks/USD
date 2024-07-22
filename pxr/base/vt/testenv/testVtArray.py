@@ -2,29 +2,14 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 # pylint: disable=range-builtin-not-iterating
 #
 from __future__ import division
+
+import array
 import unittest
 import sys, math
 from pxr import Gf, Vt
@@ -57,6 +42,19 @@ class TestVtArray(unittest.TestCase):
         d = Vt.DoubleArray(4)
         with self.assertRaises(TypeError):
             a = d['foo']
+
+    def test_NegativeIndexes(self):
+        d = Vt.DoubleArray([1.0, 3.0, 5.0])
+        d[-1] = 2.0
+        d[-2] = 4.0
+        self.assertEqual(d, [1.0, 4.0, 2.0])
+
+        # Indexing off-the-end with negative indexes should raise.
+        with self.assertRaises(IndexError):
+            d[-4] = 6.0
+
+        with self.assertRaises(IndexError):
+            x = d[-4]
 
     def test_TooFewElements(self):
         d = Vt.DoubleArray(4)
@@ -141,6 +139,10 @@ class TestVtArray(unittest.TestCase):
         self.assertGreater(da[0], 1.0)
         self.assertEqual(da, eval(repr(da)))
 
+        ha = Vt.HalfArray((1.0001, 1e39, float('-inf')))
+        self.assertGreater(da[0], 1.0)
+        self.assertEqual(ha, eval(repr(ha)))
+
     def test_Overflows(self):
         overflows = [
             # (array type, (largest negative number to overflow,
@@ -157,10 +159,10 @@ class TestVtArray(unittest.TestCase):
         for arrayType, (x0, x1) in overflows:
             for x in (x0, x1):
                 with self.assertRaises(OverflowError):
-                    array = arrayType((x,))
+                    arrayT = arrayType((x,))
             for x in (x0+1, x1-1):
-                array = arrayType((x,))
-                self.assertEqual(array, eval(repr(array)))
+                arrayT = arrayType((x,))
+                self.assertEqual(arrayT, eval(repr(arrayT)))
 
     def test_ParallelizedOps(self):
         m0 = Vt.Matrix4dArray((Gf.Matrix4d(1),Gf.Matrix4d(2)))
@@ -356,6 +358,14 @@ class TestVtArray(unittest.TestCase):
         _TestDivision(Vt.QuatfArray, Gf.Quatf, Gf.Vec3f)
         _TestDivision(Vt.QuatdArray, Gf.Quatd, Gf.Vec3d)
         _TestDivision(Vt.QuaternionArray, Gf.Quaternion, Gf.Vec3d)
+
+    def test_LargeBuffer(self):
+        '''VtArray can be created from a buffer with item count
+           greater than maxint'''
+        largePyBuffer = array.array('B', (0,)) * 2500000000
+        vtArrayFromBuffer = Vt.UCharArray.FromBuffer(largePyBuffer)
+        self.assertEqual(len(vtArrayFromBuffer), 2500000000)
+
 
 if __name__ == '__main__':
     unittest.main()

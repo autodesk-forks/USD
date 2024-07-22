@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from pxr import Sdf, Usd, UsdShade
 import unittest    
@@ -653,6 +636,102 @@ class TestUsdShadeMaterialBinding(unittest.TestCase):
         self.assertEqual(self._GetBoundMaterial(leaf3, 
             materialPurpose=UsdShade.Tokens.full).GetPath(), 
             redMat.GetPath())
+
+    def test_DeactivatedMaterialBindings(self):
+        stage = Usd.Stage.Open("testDeactivatedMaterialBindings.usda")
+        
+        # /Geometry/InnerScope/gprim and other prims in a collection are 
+        # assigned a material which is under a deactivated scope, test to make 
+        # sure we still return the same binding, but with an invalid material 
+        # prim.
+        gprim = stage.GetPrimAtPath("/Geometry/InnerScope/gprim")
+        deactivatedLooks1 = stage.GetPrimAtPath("/Looks/DeactivatedLooks1")
+        materialBinding = UsdShade.MaterialBindingAPI(gprim)
+
+        # Deactivated materials
+        self.assertFalse(deactivatedLooks1.IsActive())
+        computedBoundMaterial = materialBinding.ComputeBoundMaterial()
+        self.assertFalse(computedBoundMaterial[0])
+
+        expectedMaterialPath = Sdf.Path('/Looks/DeactivatedLooks1/GlobalMat1')
+        expectedBindingRel = \
+            Sdf.Path('/Geometry/InnerScope/gprim.material:binding')
+        self.assertEqual(
+                UsdShade.MaterialBindingAPI.GetResolvedTargetPathFromBindingRel(
+                    computedBoundMaterial[1]), expectedMaterialPath)
+        self.assertEqual(computedBoundMaterial[1].GetPath(),
+                expectedBindingRel)
+        self.assertFalse(UsdShade.MaterialBindingAPI.CollectionBinding. \
+                        IsCollectionBindingRel(computedBoundMaterial[1]))
+
+        # Active materials
+        deactivatedLooks1.SetActive(True)
+        self.assertTrue(deactivatedLooks1.IsActive())
+        computedBoundMaterial = materialBinding.ComputeBoundMaterial()
+        self.assertTrue(computedBoundMaterial[0])
+        self.assertEqual(
+                UsdShade.MaterialBindingAPI.GetResolvedTargetPathFromBindingRel(
+                    computedBoundMaterial[1]),
+                expectedMaterialPath)
+        self.assertEqual(computedBoundMaterial[1].GetPath(),
+                expectedBindingRel)
+        self.assertFalse(UsdShade.MaterialBindingAPI.CollectionBinding. \
+                        IsCollectionBindingRel(computedBoundMaterial[1]))
+
+        # Lets try a collection binding
+        s1 = stage.GetPrimAtPath("/Collections/s1")
+        deactivatedLooks2 = stage.GetPrimAtPath("/Looks/DeactivatedLooks2")
+        materialBinding = UsdShade.MaterialBindingAPI(s1)
+        
+        # Deactivated materials
+        self.assertFalse(deactivatedLooks2.IsActive())
+        computedBoundMaterial = materialBinding.ComputeBoundMaterial()
+        self.assertFalse(computedBoundMaterial[0])
+
+        expectedMaterialPath = Sdf.Path('/Looks/DeactivatedLooks2/GlobalMat1')
+        expectedBindingRel = \
+            Sdf.Path('/Collections.material:binding:collection:bindSet1')
+        self.assertEqual(
+                UsdShade.MaterialBindingAPI.GetResolvedTargetPathFromBindingRel(
+                    computedBoundMaterial[1]), expectedMaterialPath)
+        self.assertEqual(computedBoundMaterial[1].GetPath(),
+                expectedBindingRel)
+        self.assertTrue(UsdShade.MaterialBindingAPI.CollectionBinding. \
+                        IsCollectionBindingRel(computedBoundMaterial[1]))
+
+        # Active materials
+        deactivatedLooks2.SetActive(True)
+        self.assertTrue(deactivatedLooks2.IsActive())
+        computedBoundMaterial = materialBinding.ComputeBoundMaterial()
+        self.assertTrue(computedBoundMaterial[0])
+        self.assertEqual(
+                UsdShade.MaterialBindingAPI.GetResolvedTargetPathFromBindingRel(
+                    computedBoundMaterial[1]), expectedMaterialPath)
+        self.assertEqual(computedBoundMaterial[1].GetPath(),
+                expectedBindingRel)
+        self.assertTrue(UsdShade.MaterialBindingAPI.CollectionBinding. \
+                        IsCollectionBindingRel(computedBoundMaterial[1]))
+
+        # Lets try a over prim bound on material binding
+        # - For such a prim, ComputeBoundMaterial should return an invalid
+        # UsdShadeMaterial with the same winning bindingRel.
+        s2 = stage.GetPrimAtPath("/Collections/s2")
+        materialBinding = UsdShade.MaterialBindingAPI(s2)
+        overPrim = stage.GetPrimAtPath("/OverPrims/GlobalMat1")
+        self.assertFalse(overPrim.IsA("UsdShadeMaterial"))
+
+        expectedBindingRel = \
+            Sdf.Path('/Collections.material:binding:collection:bindSet2')
+        computedBoundMaterial = materialBinding.ComputeBoundMaterial()
+        self.assertFalse(computedBoundMaterial[0])
+        boundTargetPath = UsdShade.MaterialBindingAPI. \
+                GetResolvedTargetPathFromBindingRel(computedBoundMaterial[1])
+        self.assertFalse(
+                stage.GetPrimAtPath(boundTargetPath).IsA("UsdShadeMaterial"))
+        self.assertEqual(boundTargetPath, overPrim.GetPath())
+        self.assertEqual(computedBoundMaterial[1].GetPath(), expectedBindingRel)
+        self.assertTrue(UsdShade.MaterialBindingAPI.CollectionBinding. \
+                        IsCollectionBindingRel(computedBoundMaterial[1]))
 
     def test_BlockingOnOver(self):
         stage = Usd.Stage.CreateInMemory()

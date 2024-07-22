@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 
@@ -77,6 +60,16 @@ ValidateValue(
     TF_AXIOM(attr);
     TF_AXIOM(attr.Get(&value));
     TF_AXIOM(value == expectedValue);
+}
+
+void
+ValidatePaths(
+    const UsdNotice::ObjectsChanged::PathRange range,
+    const std::vector<std::string>& expectedPaths)
+{
+    TF_AXIOM(
+        SdfPathVector(range) == 
+        SdfPathVector(expectedPaths.begin(), expectedPaths.end()));
 }
 
 class NoticeTester 
@@ -149,20 +142,6 @@ main(int argc, char** argv)
         shotCListener(shotC), woodyListener(woody),
         unrelatedListener(unrelatedShot);
 
-    // We always expect to see resyncs for the pseudo-root for the
-    // following test cases. Resolver changes currently invalidate
-    // the whole stage because there may be asset path-valued attributes
-    // that clients need to re-resolve.
-    shotAListener.test = shotBListener.test = shotCListener.test =
-        woodyListener.test =
-        [](const UsdNotice::ObjectsChanged& n) {
-            TF_AXIOM(
-                SdfPathVector(n.GetResyncedPaths()) ==
-                SdfPathVector{SdfPath::AbsoluteRootPath()});
-            TF_AXIOM(
-                SdfPathVector(n.GetChangedInfoOnlyPaths()).empty());
-        };
-
     // Change notifications should never come from unrelatedShot.
     unrelatedListener.test = 
         [](const UsdNotice::ObjectsChanged& n) {
@@ -180,7 +159,30 @@ main(int argc, char** argv)
     // Change the asset path associated with Buzz and reload. This
     // should cause the _TestResolver to emit a ResolverChanged notice,
     // which should cause all other stages using equivalent contexts
-    // to update.
+    // to update and resync Buzz. We also expect resolved asset path
+    // resyncs at the pseudo-root, since a resolver change may affect
+    // asset paths throughout the entire stage.
+    shotAListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {"/AndysRoom/Buzz"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+    shotBListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {"/BonniesRoom/Buzz"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+    shotCListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {"/AntiquesRoom/Buzz"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+    woodyListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+
     assetPaths["Buzz"] = "ts2/Buzz.usda";
     _ResolverInterface->SetAssetPathsForConfig("toy_story", assetPaths);
 
@@ -203,6 +205,31 @@ main(int argc, char** argv)
 
     // Change the version associated with Woody and reload. Same
     // thing should happen as above.
+    shotAListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {"/AndysRoom/Woody"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+    shotBListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {"/BonniesRoom/Woody"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+    shotCListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        ValidatePaths(n.GetResyncedPaths(), {"/AntiquesRoom/Woody"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {"/"});
+    };
+    woodyListener.test = [&](const UsdNotice::ObjectsChanged& n) {
+        // In this case, the version change affects the resolution of
+        // a local sublayer, which currently translates to a full resync
+        // of the stage. The resolved asset path resync of the pseudo-root
+        // is subsumed by the stage resync.
+        ValidatePaths(n.GetResyncedPaths(), {"/"});
+        ValidatePaths(n.GetChangedInfoOnlyPaths(), {});
+        ValidatePaths(n.GetResolvedAssetPathsResyncedPaths(), {});
+    };
+
     _ResolverInterface->SetVersionForConfig("toy_story", "ts2");
 
     printf("Reloading stage...\n");

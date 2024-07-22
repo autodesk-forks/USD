@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_COPY_UTILS_H
 #define PXR_USD_SDF_COPY_UTILS_H
@@ -32,8 +15,8 @@
 #include "pxr/usd/sdf/declareHandles.h"
 #include "pxr/usd/sdf/types.h"
 
-#include <boost/optional.hpp>
 #include <functional>
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -100,7 +83,7 @@ using SdfShouldCopyValueFn = std::function<
     bool(SdfSpecType specType, const TfToken& field,
          const SdfLayerHandle& srcLayer, const SdfPath& srcPath, bool fieldInSrc,
          const SdfLayerHandle& dstLayer, const SdfPath& dstPath, bool fieldInDst,
-         boost::optional<VtValue>* valueToCopy)>;
+         std::optional<VtValue>* valueToCopy)>;
 
 /// \class SdfCopySpecsValueEdit
 /// Value containing an editing operation for SdfCopySpecs.
@@ -152,8 +135,8 @@ using SdfShouldCopyChildrenFn = std::function<
     bool(const TfToken& childrenField,
          const SdfLayerHandle& srcLayer, const SdfPath& srcPath, bool fieldInSrc,
          const SdfLayerHandle& dstLayer, const SdfPath& dstPath, bool fieldInDst,
-         boost::optional<VtValue>* srcChildren, 
-         boost::optional<VtValue>* dstChildren)>;
+         std::optional<VtValue>* srcChildren,
+         std::optional<VtValue>* dstChildren)>;
 
 /// SdfShouldCopyValueFn used by the simple version of SdfCopySpec.
 ///
@@ -170,7 +153,7 @@ SdfShouldCopyValue(
     SdfSpecType specType, const TfToken& field,
     const SdfLayerHandle& srcLayer, const SdfPath& srcPath, bool fieldInSrc,
     const SdfLayerHandle& dstLayer, const SdfPath& dstPath, bool fieldInDst,
-    boost::optional<VtValue>* valueToCopy);
+    std::optional<VtValue>* valueToCopy);
 
 /// SdfShouldCopyChildrenFn used by the simple version of SdfCopySpec.
 ///
@@ -187,8 +170,8 @@ SdfShouldCopyChildren(
     const TfToken& childrenField,
     const SdfLayerHandle& srcLayer, const SdfPath& srcPath, bool fieldInSrc,
     const SdfLayerHandle& dstLayer, const SdfPath& dstPath, bool fieldInDst,
-    boost::optional<VtValue>* srcChildren, 
-    boost::optional<VtValue>* dstChildren);
+    std::optional<VtValue>* srcChildren,
+    std::optional<VtValue>* dstChildren);
 
 /// Utility function for copying spec data at \p srcPath in \p srcLayer to
 /// \p destPath in \p destLayer. Various behaviors (such as which parts of the

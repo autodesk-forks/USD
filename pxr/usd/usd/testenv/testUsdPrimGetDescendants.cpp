@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -32,6 +15,84 @@
 #include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+static void
+TestRangeEqualityOperators()
+{
+    const std::string layerFile = "test.usda";
+    UsdStageRefPtr stage = UsdStage::Open(layerFile, UsdStage::LoadNone);
+    TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants());
+    TF_AXIOM(!stage->GetPseudoRoot().GetAllDescendants().empty());
+
+    // Test UsdPrimSubtreeRange equality operator
+    TF_AXIOM(UsdPrimSubtreeRange() == UsdPrimSubtreeRange());
+    TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() ==
+             stage->GetPseudoRoot().GetAllDescendants());
+
+    // Test UsdPrimSubtreeRange templated equality operator
+    TF_AXIOM(UsdPrimSubtreeRange() == std::vector<UsdPrim>());
+    TF_AXIOM(std::vector<UsdPrim>() == UsdPrimSubtreeRange());
+    {
+        const auto allDescendants = stage->GetPseudoRoot().GetAllDescendants();
+        std::vector<UsdPrim> allPrims(
+            std::begin(allDescendants),
+            std::end(allDescendants)
+        );
+        TF_AXIOM(!allPrims.empty());
+        TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() == allPrims);
+        TF_AXIOM(allPrims == stage->GetPseudoRoot().GetAllDescendants());
+    }
+
+    // Test UsdPrimSubtreeRange inequality operator
+    TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() !=
+             stage->GetPseudoRoot().GetFilteredDescendants(UsdPrimIsModel));
+
+    // Test UsdPrimSubtreeRange templated inequality operator
+    TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() !=
+             std::vector<UsdPrim>());
+    TF_AXIOM(std::vector<UsdPrim>() !=
+             stage->GetPseudoRoot().GetAllDescendants());
+    {
+        const auto allDescendants = stage->GetPseudoRoot().GetAllDescendants();
+        std::vector<UsdPrim> allDescendantsPlusOne(
+            std::begin(allDescendants),
+            std::end(allDescendants)
+        );
+        allDescendantsPlusOne.push_back(UsdPrim());
+        TF_AXIOM(allDescendantsPlusOne.size() > 1);
+        TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() !=
+                 allDescendantsPlusOne);
+        TF_AXIOM(allDescendantsPlusOne !=
+                 stage->GetPseudoRoot().GetAllDescendants());
+    }
+    {
+        const auto allDescendants = stage->GetPseudoRoot().GetAllDescendants();
+        std::vector<UsdPrim> allDescendantsMinusOne(
+            std::begin(allDescendants),
+            std::end(allDescendants)
+        );
+        TF_AXIOM(!allDescendantsMinusOne.empty());
+        allDescendantsMinusOne.pop_back();
+        TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() !=
+                 allDescendantsMinusOne);
+        TF_AXIOM(allDescendantsMinusOne !=
+                 stage->GetPseudoRoot().GetAllDescendants());
+    }
+    {
+        const auto allDescendants = stage->GetPseudoRoot().GetAllDescendants();
+        std::vector<UsdPrim> allDescendantsBackReplaced(
+            std::begin(allDescendants),
+            std::end(allDescendants)
+        );
+        TF_AXIOM(!allDescendantsBackReplaced.empty());
+        TF_AXIOM(allDescendantsBackReplaced.back() != UsdPrim());
+        allDescendantsBackReplaced.back() = UsdPrim();
+        TF_AXIOM(stage->GetPseudoRoot().GetAllDescendants() !=
+                 allDescendantsBackReplaced);
+        TF_AXIOM(allDescendantsBackReplaced !=
+                 stage->GetPseudoRoot().GetAllDescendants());
+    }
+}
 
 static void
 TestGetDescendants()
@@ -249,6 +310,7 @@ TestGetDescendantsAsInstanceProxies()
 int 
 main(int argc, char** argv)
 {
+    TestRangeEqualityOperators();
     TestGetDescendants();
     TestGetDescendantsAsInstanceProxies();
 

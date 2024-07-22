@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 
@@ -55,29 +38,25 @@ TF_DEFINE_PRIVATE_TOKENS(
     // wireframe mixins
     ((edgeNoneFS,                  "MeshWire.Fragment.NoEdge"))
 
+    ((edgeOpacityNoForceFS,        "MeshWire.Fragment.FinalEdgeOpacityNoForce"))
+    ((edgeOpacityForceFS,          "MeshWire.Fragment.FinalEdgeOpacityForce"))
+
     ((edgeMaskTriangleFS,          "MeshWire.Fragment.EdgeMaskTriangle"))
     ((edgeMaskQuadFS,              "MeshWire.Fragment.EdgeMaskQuad"))
     ((edgeMaskRefinedQuadFS,       "MeshWire.Fragment.EdgeMaskRefinedQuad"))
     ((edgeMaskTriQuadFS,           "MeshWire.Fragment.EdgeMaskTriQuad"))
-    ((edgeMaskPTVSTriQuadFS,       "MeshWire.Fragment.EdgeMaskPTVSTriQuad"))
-    ((edgeMaskPTVSRefinedTriQuadFS,
-        "MeshWire.Fragment.EdgeMaskPTVSRefinedTriQuad"))
-    ((edgeMaskMetalRefinedTriQuadFS,
-        "MeshWire.Fragment.EdgeMaskMetalRefinedTriQuad"))
     ((edgeMaskNoneFS,              "MeshWire.Fragment.EdgeMaskNone"))
 
     ((edgeCommonFS,                "MeshWire.Fragment.EdgeCommon"))
-    ((edgeRefinedTriquadFS,        "MeshWire.Fragment.EdgeRefinedTriquad"))
+    ((edgeTriQuadPTVSFS,           "MeshWire.Fragment.EdgeTriQuadPTVS"))
     ((edgeParamFS,                 "MeshWire.Fragment.EdgeParam"))
 
     ((edgeOnlyBlendFS,             "MeshWire.Fragment.EdgeOnlyBlendColor"))
     ((edgeOnlyNoBlendFS,           "MeshWire.Fragment.EdgeOnlyNoBlend"))
                          
-    ((edgeCoordBary,               "MeshWire.Fragment.EdgeCoord.Barycentric"))
-    ((edgeCoordPTVSBary,
-        "MeshWire.Fragment.EdgeCoord.PostTessPositionInPatch.Triangle"))
-    ((edgeCoordPTVSBilinear,
-        "MeshWire.Fragment.EdgeCoord.PostTessPositionInPatch.Quad"))
+    ((edgeCoordBarycentricCoordFS, "MeshWire.Fragment.EdgeCoord.Barycentric"))
+    ((edgeCoordTessCoordFS,        "MeshWire.Fragment.EdgeCoord.Tess"))
+    ((edgeCoordTessCoordTriangleFS,"MeshWire.Fragment.EdgeCoord.TessTriangle"))
 
     ((edgeOnSurfFS,                "MeshWire.Fragment.EdgeOnSurface"))
     ((patchEdgeTriangleFS,         "MeshPatchWire.Fragment.PatchEdgeTriangle"))
@@ -114,36 +93,32 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     // main for all the shader stages
     ((mainVS,                      "Mesh.Vertex"))
+    ((mainPatchCommonTCS,          "Mesh.TessControl.PatchCommon"))
     ((mainBSplineQuadTCS,          "Mesh.TessControl.BSplineQuad"))
     ((mainBezierQuadTES,           "Mesh.TessEval.BezierQuad"))
     ((mainBoxSplineTriangleTCS,    "Mesh.TessControl.BoxSplineTriangle"))
     ((mainBezierTriangleTES,       "Mesh.TessEval.BezierTriangle"))
     ((mainVaryingInterpTES,        "Mesh.TessEval.VaryingInterpolation"))
-    ((mainPTCS,                    "Mesh.PostTessControl"))
     ((mainTrianglePTVS,            "Mesh.PostTessVertex.Triangle"))
     ((mainQuadPTVS,                "Mesh.PostTessVertex.Quad"))
     ((mainTriQuadPTVS,             "Mesh.PostTessVertex.TriQuad"))
-    ((mainVaryingInterpPTVS,       "Mesh.PostTessVertex.VaryingInterpolation"))
+    ((mainPatchCommonPTCS,         "Mesh.PostTessControl.PatchCommon"))
+    ((mainBSplineQuadPTCS,         "Mesh.PostTessControl.BSplineQuad"))
+    ((mainBSplineQuadPTVS,         "Mesh.PostTessVertex.BSplineQuad"))
+    ((mainBoxSplineTrianglePTCS,   "Mesh.PostTessControl.BoxSplineTriangle"))
+    ((mainBoxSplineTrianglePTVS,   "Mesh.PostTessVertex.BoxSplineTriangle"))
     ((mainTriangleTessGS,          "Mesh.Geometry.TriangleTess"))
     ((mainTriangleGS,              "Mesh.Geometry.Triangle"))
     ((mainTriQuadGS,               "Mesh.Geometry.TriQuad"))
     ((mainQuadGS,                  "Mesh.Geometry.Quad"))
-    ((mainPatchCoordFSCPBary,
-        "Mesh.Fragment.PatchCoord.ControlPointBarycentric"))
-    ((mainPatchCoordCPTriangle,
-        "Mesh.Fragment.PatchCoord.ControlPointTessCoord.Triangle"))
-    ((mainPatchCoordFSCPTessCTriangle, 
-        "Mesh.Fragment.PatchCoord.ControlPointTessCoord.Triangle"))
-    ((mainPatchCoordPTVSTri,
-        "Mesh.PostTessellationVertex.PatchCoord.Triangle"))
-    ((mainPatchCoordPTVSQuad,
-        "Mesh.PostTessellationVertex.PatchCoord.Quad"))
-    ((mainPatchCoordPTVSTriQuad, 
-        "Mesh.PostTessellationVertex.PatchCoord.TriQuad"))
     ((mainPatchCoordFS,            "Mesh.Fragment.PatchCoord"))
+    ((mainPatchCoordNoGSFS,        "Mesh.Fragment.PatchCoord.NoGS"))
+    ((mainPatchCoordTessFS,        "Mesh.Fragment.PatchCoord.Tess"))
     ((mainPatchCoordTriangleFS,    "Mesh.Fragment.PatchCoord.Triangle"))
     ((mainPatchCoordQuadFS,        "Mesh.Fragment.PatchCoord.Quad"))
     ((mainPatchCoordTriQuadFS,     "Mesh.Fragment.PatchCoord.TriQuad"))
+    ((mainPatchCoordTrianglePTVSFS,"Mesh.Fragment.PatchCoord.TrianglePTVS"))
+    ((mainPatchCoordQuadPTVSFS,    "Mesh.Fragment.PatchCoord.QuadPTVS"))
     ((mainPatchCoordTriQuadPTVSFS, "Mesh.Fragment.PatchCoord.TriQuadPTVS"))
     ((mainFS,                      "Mesh.Fragment"))
 
@@ -185,7 +160,8 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     bool hasMirroredTransform,
     bool hasInstancer,
     bool enableScalarOverride,
-    bool pointsShadingEnabled)
+    bool pointsShadingEnabled,
+    bool forceOpaqueEdges)
     : primType(primitiveType)
     , cullStyle(cullStyle)
     , hasMirroredTransform(hasMirroredTransform)
@@ -226,6 +202,10 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
 
     const bool renderEdges = geomStyle == HdMeshGeomStyleEdgeOnSurf ||
                              geomStyle == HdMeshGeomStyleHullEdgeOnSurf;
+
+    // Selected edges can be highlighted even if not otherwise displayed
+    const bool renderSelectedEdges = geomStyle == HdMeshGeomStyleSurf ||
+                                     geomStyle == HdMeshGeomStyleHull;
 
     /* Normals configurations:
      * Smooth normals:
@@ -282,9 +262,21 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     VS[vsIndex++] = _tokens->mainVS;
     VS[vsIndex] = TfToken();
 
+    // Determine if PTVS should be used for Metal.
+    bool const usePTVSTechniques =
+            isPrimTypePatches ||
+            hasCustomDisplacement ||
+            ptvsSceneNormals ||
+            ptvsGeometricNormals ||
+            !hasBuiltinBarycentrics;
+
+    // Determine if using actually using Metal PTVS.
     useMetalTessellation =
-        hasMetalTessellation && !isPrimTypePoints &&
-        (hasCustomDisplacement || ptvsSceneNormals || ptvsGeometricNormals);
+        hasMetalTessellation && !isPrimTypePoints && usePTVSTechniques;
+
+    // PTVS shaders can provide barycentric coords w/o GS.
+    bool const hasFragmentShaderBarycentrics =
+        hasBuiltinBarycentrics || useMetalTessellation;
 
     // post tess vertex shader vertex steps
     uint8_t ptvsIndex = 0;
@@ -332,20 +324,22 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             PTVS[ptvsIndex++] = _tokens->noCustomDisplacementGS;
         }
 
-        if (isPrimTypePatches || isPrimTypeTris) {
+        if (isPrimTypeTris) {
             PTVS[ptvsIndex++] = _tokens->mainTrianglePTVS;
         } else if (isPrimTypeQuads) {
             PTVS[ptvsIndex++] = _tokens->mainQuadPTVS;
         } else if (isPrimTypeTriQuads) {
             PTVS[ptvsIndex++] = _tokens->mainTriQuadPTVS;
-        }
-        
-        if (isPrimTypeTris) {
-            PTVS[ptvsIndex++] = _tokens->mainPatchCoordPTVSTri;
-        } else if (isPrimTypeQuads) {
-            PTVS[ptvsIndex++] = _tokens->mainPatchCoordPTVSQuad;
-        } else if (isPrimTypeTriQuads) {
-            PTVS[ptvsIndex++] = _tokens->mainPatchCoordPTVSTriQuad;
+        } else if (isPrimTypePatchesBSpline) {
+            PTCS[ptcsIndex++] = _tokens->instancing;
+            PTCS[ptcsIndex++] = _tokens->mainPatchCommonPTCS;
+            PTCS[ptcsIndex++] = _tokens->mainBSplineQuadPTCS;
+            PTVS[ptvsIndex++] = _tokens->mainBSplineQuadPTVS;
+        } else if (isPrimTypePatchesBoxSplineTriangle) {
+            PTCS[ptcsIndex++] = _tokens->instancing;
+            PTCS[ptcsIndex++] = _tokens->mainPatchCommonPTCS;
+            PTCS[ptcsIndex++] = _tokens->mainBoxSplineTrianglePTCS;
+            PTVS[ptvsIndex++] = _tokens->mainBoxSplineTrianglePTVS;
         }
         
         PTVS[ptvsIndex] = TfToken();
@@ -355,22 +349,24 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     bool const ptvsStageEnabled = !PTVS[0].IsEmpty();
 
     // tessellation control shader
-    if (!ptvsStageEnabled) {
-        TCS[0] = isPrimTypePatches ? _tokens->instancing : TfToken();
-        TCS[1] = isPrimTypePatches ? isPrimTypePatchesBSpline
-                                     ? _tokens->mainBSplineQuadTCS
-                                     : _tokens->mainBoxSplineTriangleTCS
-                                   : TfToken();
-        TCS[2] = TfToken();
+    if (isPrimTypePatches && !ptvsStageEnabled) {
+        TCS[0] = _tokens->instancing;
+        TCS[1] = _tokens->mainPatchCommonTCS;
+        TCS[2] = isPrimTypePatchesBSpline
+                     ? _tokens->mainBSplineQuadTCS
+                     : _tokens->mainBoxSplineTriangleTCS;
+        TCS[3] = TfToken();
 
         // tessellation evaluation shader
-        TES[0] = isPrimTypePatches ? _tokens->instancing : TfToken();
-        TES[1] = isPrimTypePatches ? isPrimTypePatchesBSpline
-                                     ? _tokens->mainBezierQuadTES
-                                     : _tokens->mainBezierTriangleTES
-                                   : TfToken();
-        TES[2] = isPrimTypePatches ? _tokens->mainVaryingInterpTES : TfToken();
+        TES[0] = _tokens->instancing;
+        TES[1] = isPrimTypePatchesBSpline
+                     ? _tokens->mainBezierQuadTES
+                     : _tokens->mainBezierTriangleTES;
+        TES[2] = _tokens->mainVaryingInterpTES;
         TES[3] = TfToken();
+    } else {
+        TCS[0] = TfToken();
+        TES[0] = TfToken();
     }
 
     // geometry shader
@@ -422,11 +418,11 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             && (isPrimTypeTris ||
                 isPrimTypeTriQuads)
             // whether we can skip generating coords for edges
-            && ((!renderWireframe && !renderEdges) ||
-                hasBuiltinBarycentrics)
+            && ((!renderWireframe && !renderEdges && !renderSelectedEdges) ||
+                hasFragmentShaderBarycentrics)
             // whether we can skip generating coords for per-face interpolation
             && (!hasPerFaceInterpolation ||
-                hasBuiltinBarycentrics))
+                hasFragmentShaderBarycentrics))
             ;
             
     if (canSkipGS) {
@@ -474,41 +470,40 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
 
     // Wire (edge) related mixins
     if (renderWireframe || renderEdges) {
-        if (ptvsStageEnabled) {
-            if (isPrimTypeTriQuads) {
-                FS[fsIndex++] = _tokens->edgeCoordPTVSBilinear;
-            } else {
-                FS[fsIndex++] = _tokens->edgeCoordPTVSBary;
-            }
+        if (isPrimTypeTris && ptvsStageEnabled) {
+            FS[fsIndex++] = _tokens->edgeCoordTessCoordTriangleFS;
+        } else if ((isPrimTypeQuads||isPrimTypeTriQuads) && ptvsStageEnabled) {
+            FS[fsIndex++] = _tokens->edgeCoordTessCoordFS;
         } else {
-            FS[fsIndex++] = _tokens->edgeCoordBary;
+            FS[fsIndex++] = _tokens->edgeCoordBarycentricCoordFS;
         }
+
         if (isPrimTypeRefinedMesh) {
-            if (isPrimTypeTriQuads && ptvsStageEnabled) {
-                FS[fsIndex++] = _tokens->edgeMaskPTVSRefinedTriQuadFS;
-            } else if (isPrimTypeTriQuads && hasMetalTessellation && 
-                       !ptvsStageEnabled) {
-                FS[fsIndex++] = _tokens->edgeMaskMetalRefinedTriQuadFS;
-            } else if (isPrimTypeQuads) {
+            if (isPrimTypeQuads || isPrimTypeTriQuads) {
                 FS[fsIndex++] = _tokens->edgeMaskRefinedQuadFS;
             } else {
                 FS[fsIndex++] = _tokens->edgeMaskNoneFS;
             }
         } else if (isPrimTypeTris) {
             FS[fsIndex++] = _tokens->edgeMaskTriangleFS;
-        } else if (isPrimTypeTriQuads && !ptvsStageEnabled) {
+        } else if (isPrimTypeTriQuads) {
             FS[fsIndex++] = _tokens->edgeMaskTriQuadFS;
-        } else if (isPrimTypeTriQuads && ptvsStageEnabled) {
-            FS[fsIndex++] = _tokens->edgeMaskPTVSTriQuadFS;
         } else {
             FS[fsIndex++] = _tokens->edgeMaskQuadFS;
         }
+
         if (isPrimTypeTriQuads && ptvsStageEnabled) {
-            FS[fsIndex++] = _tokens->edgeRefinedTriquadFS;
+            FS[fsIndex++] = _tokens->edgeTriQuadPTVSFS;
         } else {
             FS[fsIndex++] = _tokens->edgeCommonFS;
         }
         FS[fsIndex++] = _tokens->edgeParamFS;
+
+        if (forceOpaqueEdges) {
+            FS[fsIndex++] = _tokens->edgeOpacityForceFS;
+        } else {
+            FS[fsIndex++] = _tokens->edgeOpacityNoForceFS;
+        }
 
         if (renderWireframe) {
             if (isPrimTypePatches) {
@@ -598,24 +593,34 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     FS[fsIndex++] = hasTopologicalVisibility? _tokens->topVisFS :
                                               _tokens->topVisFallbackFS;
 
-    if (!ptvsStageEnabled) {
-        // Use barycentrics coord if not using posttess for control point
-        // in patchcoord
-        FS[fsIndex++] = _tokens->mainPatchCoordFSCPBary;
-    } else if (isPrimTypeTris) {
-        FS[fsIndex++] = _tokens->mainPatchCoordCPTriangle;
-    }
-    if (isPrimTypeTris && !gsStageEnabled) {
+    // Triangles
+    if (isPrimTypeTris && ptvsStageEnabled) {
+        FS[fsIndex++] = _tokens->mainPatchCoordTrianglePTVSFS;
+    } else if (isPrimTypeTris && !gsStageEnabled) {
         FS[fsIndex++] = _tokens->mainPatchCoordTriangleFS;
+
+    // Quads
+    } else if (isPrimTypeQuads && ptvsStageEnabled) {
+        FS[fsIndex++] = _tokens->mainPatchCoordQuadPTVSFS;
     } else if (isPrimTypeQuads && !gsStageEnabled) {
         FS[fsIndex++] = _tokens->mainPatchCoordQuadFS;
-    } else if (isPrimTypeTriQuads && !ptvsStageEnabled) {
-        FS[fsIndex++] = _tokens->mainPatchCoordTriQuadFS;
+
+    // TriQuads
     } else if (isPrimTypeTriQuads && ptvsStageEnabled) {
         FS[fsIndex++] = _tokens->mainPatchCoordTriQuadPTVSFS;
+    } else if (isPrimTypeTriQuads) {
+        FS[fsIndex++] = _tokens->mainPatchCoordTriQuadFS;
+
+    // Patches
+    } else if (isPrimTypePatches && ptvsStageEnabled) {
+        FS[fsIndex++] = _tokens->mainPatchCoordTessFS;
+    // Points/No GS
+    } else if (isPrimTypePoints || canSkipGS) {
+        FS[fsIndex++] = _tokens->mainPatchCoordNoGSFS;
     } else {
         FS[fsIndex++] = _tokens->mainPatchCoordFS;
     }
+
     FS[fsIndex++] = _tokens->mainFS;
     FS[fsIndex] = TfToken();
 }

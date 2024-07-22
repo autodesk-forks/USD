@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_SINGLETON_H
 #define PXR_BASE_TF_SINGLETON_H
@@ -57,9 +40,10 @@
 /// \code
 ///     // file: registry.h
 ///     #include "pxr/base/tf/singleton.h"
-///     #include <boost/noncopyable.hpp>
 ///
-///     class Registry : boost::noncopyable {
+///     class Registry {
+///         Registry(const Registry&) = delete;
+///         Registry& operator=(const Registry&) = delete;
 ///     public:
 ///         static Registry& GetInstance() {
 ///              return TfSingleton<Registry>::GetInstance();
@@ -92,9 +76,10 @@
 /// \endcode
 ///
 /// The constructor and destructor are declared private, and the singleton
-/// object will typically derive off of \c boost::noncopyable to prevent
-/// copying. Note that singleton objects quite commonly also make use of \c
-/// TfRegistryManager to acquire the data they need throughout a program.
+/// object will typically delete its copy constructor and assignment operator
+/// to prevent copying. Note that singleton objects quite commonly also make
+/// use of \c TfRegistryManager to acquire the data they need throughout a
+/// program.
 ///
 /// The friend class \c TfSingleton<Registry> is the only class allowed to
 /// create an instance of a Registry.  The helper function \c
@@ -103,11 +88,9 @@
 /// to the sole instance of the registry.
 
 #include "pxr/pxr.h"
-#include "pxr/base/arch/hints.h"
 #include "pxr/base/arch/pragmas.h"
-#include "pxr/base/tf/diagnosticLite.h"
 
-#include <mutex>
+#include <atomic>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -135,20 +118,31 @@ public:
     /// (for example, letting only one thread at a time call a member
     /// function) are the responsibility of the class author.
     inline static T& GetInstance() {
+        // Suppress undefined-var-template warnings from clang; _instance
+        // is expected to be instantiated in another translation unit via
+        // the TF_INSTANTIATE_SINGLETON macro.
         ARCH_PRAGMA_PUSH
-        // Suppress warnings from clang. TfSingletons are explicitly
-        // instantiated, so the warning around this usage is a false positive.
         ARCH_PRAGMA_UNDEFINED_VAR_TEMPLATE
-        return ARCH_LIKELY(_instance) ? *_instance : _CreateInstance();
+        T *p = _instance.load();
+        if (!p) {
+            p = _CreateInstance(_instance);
+        }
         ARCH_PRAGMA_POP
+        return *p;
     }
 
     /// Return whether or not the single object of type \c T is currently in
     /// existence.
     ///
     /// This call tests whether or not the singleton currently exists.
-    static bool CurrentlyExists() {
-        return _instance ? true : false;
+    inline static bool CurrentlyExists() {
+        // Suppress undefined-var-template warnings from clang; _instance
+        // is expected to be instantiated in another translation unit via
+        // the TF_INSTANTIATE_SINGLETON macro.
+        ARCH_PRAGMA_PUSH
+        ARCH_PRAGMA_UNDEFINED_VAR_TEMPLATE
+        return static_cast<bool>(_instance.load());
+        ARCH_PRAGMA_POP
     }
 
     /// Indicate that the sole instance object has already been created.
@@ -169,12 +163,7 @@ public:
     /// Be sure that \c T has been constructed (enough) before calling this
     /// function. Calling this function anyplace but within the call chain of
     /// \c T's constructor will generate a fatal coding error.
-    static void SetInstanceConstructed(T& instance) {
-        if (_instance)
-            TF_FATAL_ERROR("this function may not be called after "
-                           "GetInstance() has completed");
-        _instance = &instance;
-    }
+    inline static void SetInstanceConstructed(T& instance);
      
     /// Destroy the sole instance object of type \c T, if it exists.
     ///
@@ -184,18 +173,12 @@ public:
     /// that the instance is not being used in one thread during an attempt to
     /// delete the instance from another thread.  After being destroyed, a
     /// call to \c GetInstance() will create a new instance.
-    static void DeleteInstance() {
-        if (_instance)
-            _DestroyInstance();
-    }
+    inline static void DeleteInstance();
+    
 private:
-    static T& _CreateInstance();
-    static void _DestroyInstance();
-    static T* _instance;
-    ARCH_PRAGMA_PUSH
-    ARCH_PRAGMA_NEEDS_EXPORT_INTERFACE
-    static std::mutex* _mutex;
-    ARCH_PRAGMA_POP
+    static T *_CreateInstance(std::atomic<T *> &instance);
+    
+    static std::atomic<T *> _instance;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

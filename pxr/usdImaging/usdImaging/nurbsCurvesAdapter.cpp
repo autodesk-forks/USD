@@ -1,30 +1,15 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/nurbsCurvesAdapter.h"
 
+#include "pxr/usdImaging/usdImaging/dataSourceNurbsCurves.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
+#include "pxr/usdImaging/usdImaging/primvarUtils.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 
 #include "pxr/imaging/hd/basisCurves.h" 
@@ -37,7 +22,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-
 TF_REGISTRY_FUNCTION(TfType)
 {
     typedef UsdImagingNurbsCurvesAdapter Adapter;
@@ -45,9 +29,7 @@ TF_REGISTRY_FUNCTION(TfType)
     t.SetFactory< UsdImagingPrimAdapterFactory<Adapter> >();
 }
 
-UsdImagingNurbsCurvesAdapter::~UsdImagingNurbsCurvesAdapter() 
-{
-}
+UsdImagingNurbsCurvesAdapter::~UsdImagingNurbsCurvesAdapter() = default;
 
 bool
 UsdImagingNurbsCurvesAdapter::IsSupported(
@@ -188,7 +170,7 @@ UsdImagingNurbsCurvesAdapter::UpdateForTime(UsdPrim const& prim,
             HdInterpolation interpolation;
             VtFloatArray widths;
             if (curves.GetWidthsAttr().Get(&widths, time)) {
-                interpolation = _UsdToHdInterpolation(
+                interpolation = UsdImagingUsdToHdInterpolation(
                     curves.GetWidthsInterpolation());
             } else {
                 interpolation = HdInterpolationConstant;
@@ -215,7 +197,7 @@ UsdImagingNurbsCurvesAdapter::UpdateForTime(UsdPrim const& prim,
             if (curves.GetNormalsAttr().Get(&normals, time)) {
                 _MergePrimvar(&primvars,
                         UsdGeomTokens->normals,
-                        _UsdToHdInterpolation(curves.GetNormalsInterpolation()),
+                        UsdImagingUsdToHdInterpolation(curves.GetNormalsInterpolation()),
                         HdPrimvarRoleTokens->normal);
             } else {
                 _RemovePrimvar(&primvars, UsdGeomTokens->normals);
@@ -240,14 +222,14 @@ UsdImagingNurbsCurvesAdapter::ProcessPropertyChange(UsdPrim const& prim,
         UsdGeomCurves curves(prim);
         return UsdImagingPrimAdapter::_ProcessNonPrefixedPrimvarPropertyChange(
             prim, cachePath, propertyName, HdTokens->widths,
-            _UsdToHdInterpolation(curves.GetWidthsInterpolation()),
+            UsdImagingUsdToHdInterpolation(curves.GetWidthsInterpolation()),
             HdChangeTracker::DirtyWidths);
     
     } else if (propertyName == UsdGeomTokens->normals) {
         UsdGeomPointBased pb(prim);
         return UsdImagingPrimAdapter::_ProcessNonPrefixedPrimvarPropertyChange(
             prim, cachePath, propertyName, HdTokens->normals,
-            _UsdToHdInterpolation(pb.GetNormalsInterpolation()),
+            UsdImagingUsdToHdInterpolation(pb.GetNormalsInterpolation()),
             HdChangeTracker::DirtyNormals);
     }
     // Handle prefixed primvars that use special dirty bits.
@@ -356,6 +338,51 @@ UsdImagingNurbsCurvesAdapter::Get(UsdPrim const& prim,
     }
 
     return BaseAdapter::Get(prim, cachePath, key, time, outIndices);
+}
+
+TfTokenVector
+UsdImagingNurbsCurvesAdapter::GetImagingSubprims(UsdPrim const& prim)
+{
+    return { TfToken() };
+}
+
+TfToken
+UsdImagingNurbsCurvesAdapter::GetImagingSubprimType(
+        UsdPrim const& prim,
+        TfToken const& subprim)
+{
+    if (subprim.IsEmpty()) {
+        return HdPrimTypeTokens->nurbsCurves;
+    }
+    return TfToken();
+}
+
+HdContainerDataSourceHandle
+UsdImagingNurbsCurvesAdapter::GetImagingSubprimData(
+        UsdPrim const& prim,
+        TfToken const& subprim,
+        const UsdImagingDataSourceStageGlobals &stageGlobals)
+{
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourceNurbsCurvesPrim::New(
+            prim.GetPath(), prim, stageGlobals);
+    }
+    return nullptr;
+}
+
+HdDataSourceLocatorSet
+UsdImagingNurbsCurvesAdapter::InvalidateImagingSubprim(
+        UsdPrim const& prim,
+        TfToken const& subprim,
+        TfTokenVector const& properties,
+        const UsdImagingPropertyInvalidationType invalidationType)
+{
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourceNurbsCurvesPrim::Invalidate(
+            prim, subprim, properties, invalidationType);
+    }
+
+    return HdDataSourceLocatorSet();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

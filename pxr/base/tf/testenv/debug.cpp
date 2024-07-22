@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/base/tf/regTest.h"
@@ -29,7 +12,6 @@
 
 #include <iostream>
 #include <map>
-#include <boost/assign/list_of.hpp>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -94,14 +76,14 @@ Test_TfDebugTestEnv()
 
     std::vector<std::string> symNames = TfDebug::GetDebugSymbolNames();
     std::sort(symNames.begin(), symNames.end());
-    std::vector<std::string> expSymNames =
-        boost::assign::list_of
-            ("FLAM")
-            ("FLIM")
-            ("FLIMFLAM")
-            ("FOO")
-            ("FOOFLAM")
-            ("FOOFLIMFLAM");
+    std::vector<std::string> expSymNames {{ 
+        "FLAM",
+        "FLIM",
+        "FLIMFLAM",
+        "FOO",
+        "FOOFLAM",
+        "FOOFLIMFLAM" }};
+
     std::vector<std::string> result;
     std::set_intersection(
         symNames.begin(), symNames.end(),
@@ -112,14 +94,14 @@ Test_TfDebugTestEnv()
         return false;
     }
 
-    std::map<std::string, std::string> expDescriptions =
-        boost::assign::map_list_of
-            ("FOO",         "fake foo env var")
-            ("FOOFLAM",     "fake fooflam env var")
-            ("FOOFLIMFLAM", "fake fooflimflam env var")
-            ("FLIMFLAM",    "fake flimflam env var")
-            ("FLIM",        "fake flim env var")
-            ("FLAM",        "fake flam env var");
+    std::map<std::string, std::string> expDescriptions = {
+    	{ "FOO", "fake foo env var" },
+	{ "FOOFLAM", "fake fooflam env var" },
+        { "FOOFLIMFLAM", "fake fooflimflam env var" },
+    	{ "FLIMFLAM", "fake flimflam env var" },
+	{ "FLIM", "fake flim env var" },
+    	{ "FLAM", "fake flam env var" }};
+    
     for (std::map<std::string, std::string>::const_iterator i =
          expDescriptions.begin(); i != expDescriptions.end(); ++i) {
         std::string description = TfDebug::GetDebugSymbolDescription(i->first);

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_ALLOWED_H
 #define PXR_USD_SDF_ALLOWED_H
@@ -30,10 +13,9 @@
 #include "pxr/usd/sdf/api.h"
 #include "pxr/base/tf/diagnostic.h"
 
+#include <optional>
 #include <string>
 #include <utility>
-#include <boost/operators.hpp>
-#include <boost/optional.hpp>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -44,9 +26,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// A \c SdfAllowed either evaluates to \c true in a boolean context
 /// or evaluates to \c false and has a string annotation.
 ///
-class SdfAllowed : private boost::equality_comparable<SdfAllowed> {
+class SdfAllowed {
 private:
-    typedef boost::optional<std::string> _State;
+    typedef std::optional<std::string> _State;
 
 public:
     typedef std::pair<bool, std::string> Pair;
@@ -61,12 +43,13 @@ public:
     SdfAllowed(const std::string& whyNot) : _state(whyNot) { }
     /// Construct in \p condition with annotation \p whyNot if \c false.
     SdfAllowed(bool condition, const char* whyNot) :
-        _state(!condition, std::string(whyNot)) { }
+        SdfAllowed(condition, std::string(whyNot)) { }
     /// Construct in \p condition with annotation \p whyNot if \c false.
     SdfAllowed(bool condition, const std::string& whyNot) :
-        _state(!condition, whyNot) { }
+        _state(condition ? std::nullopt :
+               std::make_optional(whyNot)) { }
     /// Construct from bool,string pair \p x.
-    SdfAllowed(const Pair& x) : _state(!x.first, x.second) { }
+    SdfAllowed(const Pair& x) : SdfAllowed(x.first, x.second) { }
     ~SdfAllowed() { }
 
 #if !defined(doxygen)
@@ -111,6 +94,11 @@ public:
     bool operator==(const SdfAllowed& other) const
     {
         return _state == other._state;
+    }
+
+    bool operator!=(const SdfAllowed& other) const
+    {
+        return !(*this == other);
     }
 
 private:

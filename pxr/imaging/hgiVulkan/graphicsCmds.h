@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HGIVULKAN_GRAPHICS_CMDS_H
 #define PXR_IMAGING_HGIVULKAN_GRAPHICS_CMDS_H
@@ -41,6 +24,7 @@ class HgiVulkanCommandBuffer;
 
 using HgiVulkanGfxFunction = std::function<void(void)>;
 using HgiVulkanGfxFunctionVector = std::vector<HgiVulkanGfxFunction>;
+using VkClearValueVector = std::vector<VkClearValue>;
 
 
 /// \class HgiVulkanGraphicsCmds
@@ -117,7 +101,7 @@ public:
         uint32_t patchBaseVertexByteOffset) override;
 
     HGIVULKAN_API
-    void MemoryBarrier(HgiMemoryBarrier barrier) override;
+    void InsertMemoryBarrier(HgiMemoryBarrier barrier) override;
 
     /// Returns the command buffer used inside this cmds.
     HGIVULKAN_API
@@ -137,6 +121,7 @@ private:
     HgiVulkanGraphicsCmds & operator=(const HgiVulkanGraphicsCmds&) = delete;
     HgiVulkanGraphicsCmds(const HgiVulkanGraphicsCmds&) = delete;
 
+    void _ClearAttachmentsIfNeeded();
     void _ApplyPendingUpdates();
     void _EndRenderPass();
     void _CreateCommandBuffer();
@@ -149,6 +134,7 @@ private:
     bool _viewportSet;
     bool _scissorSet;
     HgiVulkanGfxFunctionVector _pendingUpdates;
+    VkClearValueVector _vkClearValues;
 
     // GraphicsCmds is used only one frame so storing multi-frame state on
     // GraphicsCmds will not survive.

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 ///
 /// \file js/value.cpp
@@ -29,7 +12,8 @@
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/staticData.h"
 #include "pxr/base/tf/stringUtils.h"
-#include <boost/variant.hpp>
+
+#include <variant>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -46,6 +30,48 @@ struct Js_Null
     }
 };
 
+// Wrapper around std::unique_ptr that should always be
+// dereferencable and whose equality is determined by
+// its held object. This is needed to make JsObject
+// and JsArray (which hold JsValues) holdable by JsValue
+template <typename T>
+class Js_Wrapper final {
+public:
+    // Js_Wrapper should never by null, so disallow
+    // defualt construction
+    Js_Wrapper() = delete;
+
+    // Copy semantics are not necessary as the _Holder
+    // type is not copyable
+    Js_Wrapper(const Js_Wrapper&) = delete;
+    Js_Wrapper& operator=(const Js_Wrapper&) = delete;
+
+    Js_Wrapper(Js_Wrapper&&) = default;
+    Js_Wrapper& operator=(Js_Wrapper&&) = default;
+    ~Js_Wrapper() = default;
+
+    explicit Js_Wrapper(const T& wrapped) :
+        _ptr(std::make_unique<T>(wrapped)) {}
+    explicit Js_Wrapper(T&& wrapped) :
+        _ptr(std::make_unique<T>(std::move(wrapped))) {}
+
+    const T& Get() const { return *_ptr; }
+
+    bool operator==(const Js_Wrapper& other) const {
+        return Get() == other.Get();
+    }
+
+    bool operator!=(const Js_Wrapper& other) const {
+        return Get() != other.Get();
+    }
+
+private:
+    std::unique_ptr<T> _ptr;
+};
+
+using Js_ObjectWrapper = Js_Wrapper<JsObject>;
+using Js_ArrayWrapper = Js_Wrapper<JsArray>;
+
 /// \struct JsValue::_Holder
 /// Private holder class used to abstract away how a value is stored
 /// internally in JsValue objects.
@@ -53,22 +79,25 @@ struct JsValue::_Holder
 {
     // The order these types are defined in the variant is important. See the
     // comments in the implementation of IsUInt64 for details.
-    typedef boost::variant<
-        boost::recursive_wrapper<JsObject>,
-        boost::recursive_wrapper<JsArray>,
-        std::string, bool, int64_t, double, Js_Null, uint64_t>
-        Variant;
+    using Variant = std::variant<
+        Js_ObjectWrapper,
+        Js_ArrayWrapper,
+        std::string, bool, int64_t, double, Js_Null, uint64_t>;
 
     _Holder()
         : value(Js_Null()), type(JsValue::NullType) { }
     _Holder(const JsObject& value)
-        : value(value), type(JsValue::ObjectType) { }
+        : value(Js_ObjectWrapper(value)),
+          type(JsValue::ObjectType) { }
     _Holder(JsObject&& value)
-        : value(std::move(value)), type(JsValue::ObjectType) { }
+        : value(Js_ObjectWrapper(std::move(value))),
+          type(JsValue::ObjectType) { }
     _Holder(const JsArray& value)
-        : value(value), type(JsValue::ArrayType) { }
+        : value(Js_ArrayWrapper(value)),
+          type(JsValue::ArrayType) { }
     _Holder(JsArray&& value)
-        : value(std::move(value)), type(JsValue::ArrayType) { }
+        : value(Js_ArrayWrapper(std::move(value))),
+          type(JsValue::ArrayType) { }
     _Holder(const char* value)
         : value(std::string(value)), type(JsValue::StringType) { }
     _Holder(const std::string& value)
@@ -216,7 +245,7 @@ JsValue::GetJsObject() const
         return *_emptyObject;
     }
 
-    return *boost::get<JsObject>(&_holder->value);
+    return std::get<Js_ObjectWrapper>(_holder->value).Get();
 }
 
 const JsArray&
@@ -230,7 +259,7 @@ JsValue::GetJsArray() const
         return *_emptyArray;
     }
 
-    return *boost::get<JsArray>(&_holder->value);
+    return std::get<Js_ArrayWrapper>(_holder->value).Get();
 }
 
 const std::string&
@@ -244,7 +273,7 @@ JsValue::GetString() const
         return *_emptyString;
     }
 
-    return *boost::get<std::string>(&_holder->value);
+    return std::get<std::string>(_holder->value);
 }
 
 bool
@@ -256,7 +285,7 @@ JsValue::GetBool() const
         return false;
     }
 
-    return boost::get<bool>(_holder->value);
+    return std::get<bool>(_holder->value);
 }
 
 int
@@ -283,7 +312,7 @@ JsValue::GetInt64() const
     if (IsUInt64())
         return static_cast<int64_t>(GetUInt64());
 
-    return boost::get<int64_t>(_holder->value);
+    return std::get<int64_t>(_holder->value);
 }
 
 uint64_t
@@ -298,7 +327,7 @@ JsValue::GetUInt64() const
     if (!IsUInt64())
         return static_cast<uint64_t>(GetInt64());
 
-    return boost::get<uint64_t>(_holder->value);
+    return std::get<uint64_t>(_holder->value);
 }
 
 double
@@ -316,7 +345,7 @@ JsValue::GetReal() const
         return 0;
     }
 
-    return boost::get<double>(_holder->value);
+    return std::get<double>(_holder->value);
 }
 
 JsValue::Type
@@ -373,7 +402,7 @@ JsValue::IsUInt64() const
     // This relies on the position of Js_Null and uint64_t in the variant
     // type declaration, as well as the value of NullType in the Type enum.
     // This is how json_spirit itself determines whether the type is uint64_t.
-    return _holder->value.which() == (NullType + 1);
+    return _holder->value.index() == (NullType + 1);
 }
 
 bool

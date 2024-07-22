@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_CRATE_FILE_H
 #define PXR_USD_USD_CRATE_FILE_H
@@ -31,6 +14,9 @@
 #include "crateValueInliners.h"
 
 #include "pxr/base/arch/fileSystem.h"
+#include "pxr/base/tf/delegatedCountPtr.h"
+#include "pxr/base/tf/hash.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
 #include "pxr/base/tf/token.h"
 #include "pxr/base/vt/array.h"
 #include "pxr/base/vt/value.h"
@@ -41,10 +27,6 @@
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/types.h"
-
-#include <boost/container/flat_map.hpp>
-#include <boost/functional/hash.hpp>
-#include <boost/intrusive_ptr.hpp>
 
 #include <tbb/concurrent_unordered_set.h>
 #include <tbb/spin_rw_mutex.h>
@@ -198,12 +180,12 @@ struct TimeSamples {
     }
 
     friend size_t hash_value(TimeSamples const &ts) {
-        size_t h = 0;
-        boost::hash_combine(h, ts.valueRep);
-        boost::hash_combine(h, ts.times);
-        boost::hash_combine(h, ts.values);
-        boost::hash_combine(h, ts.valuesFileOffset);
-        return h;
+        return TfHash::Combine(
+            ts.valueRep,
+            ts.times,
+            ts.values,
+            ts.valuesFileOffset
+        );
     }
 
     friend std::ostream &
@@ -271,7 +253,7 @@ private:
 struct _Hasher {
     template <class T>
     inline size_t operator()(const T &val) const {
-        return boost::hash<T>()(val);
+        return TfHash()(val);
     }
 };
 
@@ -324,123 +306,167 @@ private:
         bool hasOwnership = false;
     };
 
-    // This structure pulls together the underlying ArchMutableFileMapping
-    // representing the memory-mapped file plus all the information we need to
-    // support "zero-copy" arrays where we create VtArray instances that point
-    // directly into mapped memory.  It gets complicated because the
-    // external-facing SdfLayer semantics are strict value semantics.  In
-    // particular, we need to support the case where a client gets a VtArray out
-    // of a .usdc file, then destroys the layer object, and even mutates the
-    // file on disk, and the fetched array has to behave correctly.
-    struct _FileMapping {
+    class _FileMapping {
+        
+        // This helper structure pulls together the underlying
+        // ArchConstFileMapping representing the memory-mapped file plus all the
+        // information we need to support "zero-copy" arrays where we create
+        // VtArray instances that point directly into mapped memory.  It gets
+        // complicated because the external-facing SdfLayer semantics are strict
+        // value semantics.  In particular, we need to support the case where a
+        // client gets a VtArray out of a .usdc file, then destroys the layer
+        // object, and even mutates the file on disk, and the fetched array has
+        // to behave correctly.
+        class _Impl {
+            friend class _FileMapping;
 
-        // This is a foreign data source for VtArray that refers into a
-        // memory-mapped region, and shares in the lifetime of the mapping.
-        struct ZeroCopySource : public Vt_ArrayForeignDataSource {
-            explicit ZeroCopySource(
-                CrateFile::_FileMapping *m, void *addr, size_t numBytes);
+            // This is a foreign data source for VtArray that refers into a
+            // memory-mapped region, and shares in the lifetime of the mapping.
+            struct ZeroCopySource : public Vt_ArrayForeignDataSource {
+                explicit ZeroCopySource(_Impl *m,
+                                        void const *addr,
+                                        size_t numBytes);
+                
+                bool operator==(ZeroCopySource const &other) const;
+                bool operator!=(ZeroCopySource const &other) const {
+                    return !(*this == other);
+                }
 
-            // XXX --------------------------------
-            // Hack for tbb bug -- types in tbb::concurrent_unordered_set
-            // must be copy constructible until version 2017 update 1.  Remove
-            // this once we're on or past that version of tbb.
-            ZeroCopySource(ZeroCopySource const &other)
-                : Vt_ArrayForeignDataSource(other._detachedFn, other._refCount)
-                , _mapping(other._mapping)
-                , _addr(other._addr)
-                , _numBytes(other._numBytes)
-                {}
-            // XXX --------------------------------
+                struct Hash {
+                    inline size_t operator()(const ZeroCopySource& z) const {
+                        return TfHash::Combine(
+                            reinterpret_cast<uintptr_t>(z._addr),
+                            z._numBytes
+                        );
+                    }
+                };
+                
+                // Return true if the refcount is nonzero.
+                bool IsInUse() const { return _refCount; }
+                
+                // Increment count and return true if it went from 0 to 1.
+                bool NewRef() {
+                    return _refCount.fetch_add(
+                        1, std::memory_order_relaxed) == 0;
+                }
+                
+                // Return the address this source refers to.
+                void const *GetAddr() const { return _addr; }
+                
+                // Return the number of bytes this source refers to.
+                size_t GetNumBytes() const { return _numBytes; }
+                
+            private:
+                // Callback for VtArray foreign data source.
+                static void _Detached(Vt_ArrayForeignDataSource *selfBase);
+                
+                _Impl *_mapping;
+                void const *_addr;
+                size_t _numBytes;
+            };
+            friend struct ZeroCopySource;
             
-            bool operator==(ZeroCopySource const &other) const;
-            bool operator!=(ZeroCopySource const &other) const {
-                return !(*this == other);
-            }
-            friend size_t tbb_hasher(ZeroCopySource const &z) {
-                size_t seed = reinterpret_cast<uintptr_t>(z._addr);
-                boost::hash_combine(seed, z._numBytes);
-                return seed;
-            }
-
-            // Return true if the refcount is nonzero.
-            bool IsInUse() const { return _refCount; }
-
-            // Increment count and return true if it went from 0 to 1.
-            bool NewRef() {
-                return _refCount.fetch_add(1, std::memory_order_relaxed) == 0;
-            }
-
-            // Return the address this source refers to.
-            void *GetAddr() const { return _addr; }
+            _Impl() : _refCount(0) {};
             
-            // Return the number of bytes this source refers to.
-            size_t GetNumBytes() const { return _numBytes; }
+            explicit _Impl(ArchConstFileMapping &&mapping,
+                           int64_t offset, int64_t length)
+                : _refCount(0)
+                , _mapping(std::move(mapping))
+                , _start(_mapping.get() + offset)
+                , _length(length == -1 ?
+                          ArchGetFileMappingLength(_mapping) : length) {}
             
-        private:
-            // Callback for VtArray foreign data source.
-            static void _Detached(Vt_ArrayForeignDataSource *selfBase);
-
-            _FileMapping *_mapping;
-            void *_addr;
-            size_t _numBytes;
+            // Add an an externally referenced page range.
+            Vt_ArrayForeignDataSource *
+            _AddRangeReference(void const *addr, size_t numBytes);
+            
+            // Set memory protection to read / copy-on-write and then
+            // "silent-store" to touch outstanding page ranges to detach them in
+            // the copy-on-write sense from their file backing and make them
+            // swap-backed.  No new page ranges can be added once this is
+            // invoked.  (i.e. a cratefile dtor cannot run concurrently with
+            // other code reading/writing the file.)
+            void _DetachReferencedRanges();
+            
+            // This class is managed by a combination of TfDelegatedCountPtr
+            // and manual reference counting -- see explicit calls to
+            // TfDelegatedCount{Increment,Decrement} in the .cpp file.
+            friend inline void
+            TfDelegatedCountIncrement(_Impl const *m) noexcept {
+                m->_refCount.fetch_add(1, std::memory_order_relaxed);
+            }
+            friend inline void
+            TfDelegatedCountDecrement(_Impl const *m) noexcept {
+                if (m->_refCount.fetch_sub(1, std::memory_order_release) == 1) {
+                    std::atomic_thread_fence(std::memory_order_acquire);
+                    delete m;
+                }
+            }
+            
+            mutable std::atomic<size_t> _refCount { 0 };
+            ArchConstFileMapping _mapping;
+            char const *_start;
+            int64_t _length;
+            tbb::concurrent_unordered_set<ZeroCopySource,
+                ZeroCopySource::Hash> _outstandingRanges;
         };
-        friend struct ZeroCopySource;
-        
-        _FileMapping() : _refCount(0) {};
 
-        explicit _FileMapping(ArchMutableFileMapping mapping, int64_t offset=0,
-                              int64_t length=-1)
-            : _refCount(0)
-            , _mapping(std::move(mapping))
-            , _start(_mapping.get() + offset)
-            , _length(length == -1 ?
-                      ArchGetFileMappingLength(_mapping) : length) {}
-
-        ~_FileMapping();
+    public:
+        // Default constructor leaves _FileMapping "null".
+        _FileMapping() noexcept = default;
         
-        // Add an an externally referenced page range.
-        ZeroCopySource *
-        AddRangeReference(void *addr, size_t numBytes);
+        // Construct with new mapping.
+        explicit _FileMapping(ArchConstFileMapping &&mapping,
+                              int64_t offset=0, int64_t length=-1) noexcept
+            : _impl(TfDelegatedCountIncrementTag,
+                    new _Impl(std::move(mapping), offset, length)) {}
+
+        _FileMapping(_FileMapping &&other) noexcept
+            : _impl(std::move(other._impl)) {
+            other._impl = nullptr;
+        }
+        
+        _FileMapping &operator=(_FileMapping &&other) noexcept {
+            if (this != std::addressof(other)) {
+                _impl = std::move(other._impl);
+                other._impl = nullptr;
+            }
+            return *this;
+        }
+
+        ~_FileMapping() { Reset(); }
+
+        void Reset() {
+            // When a cratefile instance drops its mapping, it needs to detach
+            // referenced ranges.
+            if (_impl) {
+                _impl->_DetachReferencedRanges();
+                _impl.reset();
+            }
+        }
+
+        explicit operator bool() const noexcept {
+            return static_cast<bool>(_impl);
+        }
 
         // Return the start address of the mapped file content.  Note that due
         // to having usdc files embedded into other files (like usdz files) the
         // map start address is NOT guaranteed to be page-aligned.
-        char *GetMapStart() const { return _start; }
+        const char *GetMapStart() const { return _impl->_start; }
 
         // Return the length of the relevant content range in the mapping.
-        size_t GetLength() const { return _length; }
+        size_t GetLength() const { return _impl->_length; }
+
+        // Add an an externally referenced page range.
+        Vt_ArrayForeignDataSource *
+        AddRangeReference(void const *addr, size_t numBytes) {
+            return _impl->_AddRangeReference(addr, numBytes);
+        }
 
     private:
-        friend class CrateFile;
-
-        // "Silent-store" to touch outstanding page ranges to detach them in the
-        // copy-on-write sense from their file backing and make them
-        // swap-backed.  No new page ranges can be added once this is invoked.
-        void _DetachReferencedRanges();
-
-        // This class is managed by a combination of boost::intrusive_ptr and
-        // manual reference counting -- see explicit calls to
-        // intrusive_ptr_add_ref/release in the .cpp file.
-        friend inline void
-        intrusive_ptr_add_ref(_FileMapping const *m) {
-            m->_refCount.fetch_add(1, std::memory_order_relaxed);
-        }
-        friend inline void
-        intrusive_ptr_release(_FileMapping const *m) {
-            if (m->_refCount.fetch_sub(1, std::memory_order_release) == 1) {
-                std::atomic_thread_fence(std::memory_order_acquire);
-                delete m;
-            }
-        }
-
-        mutable std::atomic<size_t> _refCount { 0 };
-        ArchMutableFileMapping _mapping;
-        char *_start;
-        int64_t _length;
-        tbb::concurrent_unordered_set<ZeroCopySource> _outstandingRanges;
+        TfDelegatedCountPtr<_Impl> _impl;
     };
-    using _FileMappingIPtr = boost::intrusive_ptr<_FileMapping>;
-
+    
     ////////////////////////////////////////////////////////////////////////
 
     // _BootStrap structure.  Appears at start of file, houses version, file
@@ -552,9 +578,10 @@ public:
         }
         friend size_t hash_value(const Field &f) {
             _Hasher h;
-            size_t result = h(f.tokenIndex);
-            boost::hash_combine(result, f.valueRep);
-            return result;
+            return TfHash::Combine(
+                h(f.tokenIndex),
+                f.valueRep
+            );
         }
         TokenIndex tokenIndex;
         ValueRep valueRep;
@@ -577,10 +604,11 @@ public:
         }
         friend size_t hash_value(Spec const &s) {
             _Hasher h;
-            size_t result = h(s.pathIndex);
-            boost::hash_combine(result, s.fieldSetIndex);
-            boost::hash_combine(result, s.specType);
-            return result;
+            return TfHash::Combine(
+                h(s.pathIndex),
+                s.fieldSetIndex,
+                s.specType
+            );
         }
         PathIndex pathIndex;
         FieldSetIndex fieldSetIndex;
@@ -614,10 +642,11 @@ public:
         }
         friend size_t hash_value(Spec_0_0_1 const &s) {
             _Hasher h;
-            size_t result = h(s.pathIndex);
-            boost::hash_combine(result, s.fieldSetIndex);
-            boost::hash_combine(result, s.specType);
-            return result;
+            return TfHash::Combine(
+                h(s.pathIndex),
+                s.fieldSetIndex,
+                s.specType
+            );
         }
         PathIndex pathIndex;
         FieldSetIndex fieldSetIndex;
@@ -635,12 +664,16 @@ public:
     Version GetFileVersion() const;
     TfToken GetFileVersionToken() const;
 
-    static std::unique_ptr<CrateFile> CreateNew();
+    static std::unique_ptr<CrateFile> CreateNew(bool detached);
 
     // Return nullptr on failure.
-    static std::unique_ptr<CrateFile> Open(string const &assetPath);
     static std::unique_ptr<CrateFile> Open(string const &assetPath,
-                                           ArAssetSharedPtr const &asset);
+                                           bool detached = false);
+    static std::unique_ptr<CrateFile> Open(string const &assetPath,
+                                           ArAssetSharedPtr const &asset,
+                                           bool detached = false);
+
+    bool IsDetached() const { return _detached; }
 
     // Helper for saving to a file.
     struct Packer {
@@ -674,10 +707,6 @@ public:
         explicit Packer(CrateFile *crate) : _crate(crate) {}
         CrateFile *_crate;
     };
-
-    // Return true if this CrateFile object wasn't populated from a file, or if
-    // the given \p fileName is the file this object was populated from.
-    bool CanPackTo(string const &fileName) const;
 
     Packer StartPacking(string const &fileName);
 
@@ -792,12 +821,19 @@ public:
     std::type_info const &GetTypeid(ValueRep rep) const;
 
 private:
-    explicit CrateFile(bool useMmap);
+    enum class Options {
+        Default,
+        UseMmap,
+        Detached
+    };
+
+    explicit CrateFile(Options opt);
     CrateFile(string const &assetPath, string const &fileName,
-              _FileMappingIPtr mapStart, ArAssetSharedPtr const &asset);
+              _FileMapping &&mapping, ArAssetSharedPtr const &asset);
     CrateFile(string const &assetPath, string const &fileName,
               _FileRange &&inputFile, ArAssetSharedPtr const &asset);
-    CrateFile(string const &assetPath, ArAssetSharedPtr const &asset);
+    CrateFile(string const &assetPath, ArAssetSharedPtr const &asset,
+              bool detached);
 
     CrateFile(CrateFile const &) = delete;
     CrateFile &operator=(CrateFile const &) = delete;
@@ -806,9 +842,9 @@ private:
     void _InitPread();
     void _InitAsset();
 
-    static _FileMappingIPtr
+    static _FileMapping
     _MmapFile(char const *fileName, FILE *file);
-    static _FileMappingIPtr
+    static _FileMapping
     _MmapAsset(char const *fileName, ArAssetSharedPtr const &asset);
 
     class _Writer;
@@ -896,15 +932,10 @@ private:
 
     ////////////////////////////////////////////////////////////////////////
 
-    // Base class, to have a pointer type.
-    struct _ValueHandlerBase;
-    template <class, class=void> struct _ScalarValueHandlerBase;
-    template <class, class=void> struct _ArrayValueHandlerBase;
+    // Type-specific _ValueHandler<T> derives _ValueHandlerBase, just so we can
+    // have common pointers to specific instances.
+    struct _ValueHandlerBase {};
     template <class> struct _ValueHandler;
-
-    friend struct _ValueHandlerBase;
-    template <class, class> friend struct _ScalarValueHandlerBase;
-    template <class, class> friend struct _ArrayValueHandlerBase;
     template <class> friend struct _ValueHandler;
 
     template <class T> inline _ValueHandler<T> &_GetValueHandler();
@@ -993,7 +1024,7 @@ private:
     mutable tbb::spin_rw_mutex _sharedTimesMutex;
 
     // functions to write VtValues to file by type.
-    boost::container::flat_map<
+    pxr_tsl::robin_map<
         std::type_index, std::function<ValueRep (VtValue const &)>>
         _packValueFunctions;
 
@@ -1028,13 +1059,13 @@ private:
     // both _mmapSrc and _preadSrc are null, we read data from the _assetSrc via
     // ArAsset::Read().  If all three are null then this structure was not
     // populated from an asset.
-    _FileMappingIPtr _mmapSrc;
+    _FileMapping _mmapSrc;
     _FileRange _preadSrc;
+
     ArAssetSharedPtr _assetSrc;
+    const bool _detached;
 
     std::string _assetPath; // Empty if this file data is in-memory only.
-    std::string _fileReadFrom; // The file this object was populate from, if it
-                               // was populated from a file.
 
     std::unique_ptr<char []> _debugPageMap; // Debug page access map, see
                                             // USDC_DUMP_PAGE_MAPS.

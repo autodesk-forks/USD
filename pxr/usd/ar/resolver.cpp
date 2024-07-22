@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 
 #include "pxr/pxr.h"
 #include "pxr/usd/ar/asset.h"
@@ -49,6 +32,7 @@
 #include "pxr/base/tf/stl.h"
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/type.h"
+#include "pxr/base/tf/unicodeUtils.h"
 
 #include <tbb/concurrent_hash_map.h>
 
@@ -70,7 +54,7 @@ TF_DEFINE_PRIVATE_TOKENS(_tokens,
     // Plugin metadata key for package resolver extensions.
     (extensions)
     
-    // Plugin metadata key for resolver URI schemes.
+    // Plugin metadata key for resolver URI/IRI schemes.
     (uriSchemes)
 
     // Plugin metadata keys for specifying resolver functionality.
@@ -85,7 +69,7 @@ TF_DEFINE_ENV_SETTING(
 
 TF_DEFINE_ENV_SETTING(
     PXR_AR_DISABLE_PLUGIN_URI_RESOLVERS, false,
-    "Disables plugin URI resolver implementations.");
+    "Disables plugin URI/IRI resolver implementations.");
 
 static TfStaticData<std::string> _preferredResolver;
 
@@ -114,7 +98,7 @@ public:
     // TfType for the resolver implementation.
     TfType type;
 
-    // URI schemes associated with the resolver implementation.
+    // URI/IRI schemes associated with the resolver implementation.
     std::vector<std::string> uriSchemes;
 
     // Whether this resolver can be used as a primary resolver.
@@ -126,6 +110,39 @@ public:
     // Whether this resolver implements any scoped cache-related opereations.
     bool implementsScopedCaches = false;
 };
+
+// Ensure resource identifier schemes conform during resolver
+// initialization. Scheme is assumed to be already casefolded. Resource
+// identifier schemes (under both the URI and IRI) specifications must start
+// with an ASCII alpha character, followed by any number of ASCII alphanumeric
+// or the hyphen, period, and plus characters.
+std::pair<bool, std::string>
+_ValidateResourceIdentifierScheme(const std::string_view& caseFoldedScheme) {
+    if (caseFoldedScheme.empty()) {
+        return std::make_pair(false, "Scheme cannot be empty");
+    }
+    if (caseFoldedScheme.front() > 'z' || caseFoldedScheme.front() < 'a') {
+        return std::make_pair(false, "Scheme must start with ASCII 'a-z'");
+    }
+    const auto it = std::find_if(std::next(caseFoldedScheme.begin()),
+                                 caseFoldedScheme.end(),
+                                 [](const char c) {
+        return !((c >= '0' && c <= '9') ||
+                 (c >= 'a' && c <= 'z') ||
+                 (c == '-') || (c== '.') || (c=='+'));
+    });
+    if (it != caseFoldedScheme.end()) {
+        TfUtf8CodePointIterator codePointIt(it, caseFoldedScheme.end());
+        return std::make_pair(
+            false,
+            TfStringPrintf(
+                "'%s' not allowed in scheme. "
+                "Characters must be ASCII 'a-z', '-', '+', or '.'",
+                TfStringify(TfUtf8CodePoint{*codePointIt}).c_str())
+        );
+    }
+    return std::make_pair(true, "");
+}
 
 std::string 
 _GetTypeNames(const std::vector<_ResolverInfo>& resolvers)
@@ -210,7 +227,7 @@ _GetAvailableResolvers()
     std::vector<_ResolverInfo> resolvers;
     resolvers.reserve(sortedResolverTypes.size());
 
-    // Fill in the URI schemes associated with each available resolver.
+    // Fill in the URI/IRI schemes associated with each available resolver.
     for (const TfType& resolverType : sortedResolverTypes) {
         const PlugPluginPtr plugin = _GetPluginForType(resolverType);
         if (!plugin) {
@@ -442,6 +459,20 @@ public:
         return *_resolver->Get();
     }
 
+    std::vector<std::string> GetURISchemes() const
+    {
+        std::vector<std::string> uriSchemes;
+        uriSchemes.reserve(_uriResolvers.size());
+
+        for (const auto& [scheme, _] : _uriResolvers) {
+            uriSchemes.emplace_back(scheme);
+        }
+
+        std::sort(uriSchemes.begin(), uriSchemes.end());
+
+        return uriSchemes;
+    }
+
     const ArResolverContext* GetInternallyManagedCurrentContext() const
     {
         _ContextStack& contextStack = _threadContextStack.local();
@@ -506,12 +537,13 @@ public:
         const ArResolvedPath& anchorAssetPath,
         const CreateIdentifierFn& createIdentifierFn) const
     {
-        // If assetPath has a recognized URI scheme, we assume it's an absolute
-        // URI per RFC 3986 sec 4.3 and delegate to the associated URI resolver
-        // to handle this query.
+        // If assetPath has a recognized URI/IRI scheme, we assume it's an
+        // absolute identifier per RFC 3986 sec 4.3 (RFC 3987 sec 2.2 for IRIs)
+        // and delegate to the associated scheme's resolver to handle this
+        // query.
         //
-        // If path does not have a recognized URI scheme, we delegate to the
-        // resolver for the anchorAssetPath. Although we could implement URI
+        // If path does not have a recognized URI/IRI scheme, we delegate to
+        // the resolver for the anchorAssetPath. Although we could implement
         // anchoring per RFC 3986 sec 5 here, we want to give implementations
         // the chance to do additional manipulations.
         ArResolver* resolver = _GetURIResolver(assetPath);
@@ -589,11 +621,11 @@ public:
         return resolver.GetExtension(path);
     }
 
-    // The primary resolver and the URI resolvers all participate
+    // The primary resolver and the URI/IRI resolvers all participate
     // in context binding and may have context-related data to store
     // away. To accommodate this, _Resolve stores away a vector of
     // VtValues where each element corresponds to the primary resolver
-    // or a URI resolver.
+    // or a URI/IRI resolver.
     using _ResolverContextData = std::vector<VtValue>;
 
     void _BindContext(
@@ -1109,9 +1141,10 @@ private:
             uriSchemes.reserve(resolverInfo.uriSchemes.size());
 
             for (std::string uriScheme : resolverInfo.uriSchemes) {
-                // Per RFC 3986 sec 3.1 schemes are case-insensitive.
-                // Force all schemes to lower-case to support this.
-                uriScheme = TfStringToLower(uriScheme);
+                // Per RFC 3986 sec 3.1 / RFC 3987 sec 5.3.2.1 schemes are
+                // case-insensitive. Force all schemes to lower-case to support
+                // this.
+                uriScheme = TfStringToLowerAscii(uriScheme);
 
                 if (const _ResolverSharedPtr* existingResolver =
                     TfMapLookupPtr(uriResolvers, uriScheme)) {
@@ -1121,6 +1154,17 @@ private:
                         resolverInfo.type.GetTypeName().c_str(),
                         uriScheme.c_str(), 
                         (*existingResolver)->GetType().GetTypeName().c_str());
+                }
+                else if (const auto validation =
+                            _ValidateResourceIdentifierScheme(uriScheme);
+                         !validation.first) {
+                    TF_WARN(
+                        "ArGetResolver(): '%s' for '%s' is not a valid "
+                        "resource identifier scheme: %s. Paths with this "
+                        "prefix will be handled by other resolvers.",
+                        uriScheme.c_str(),
+                        resolverInfo.type.GetTypeName().c_str(),
+                        validation.second.c_str());
                 }
                 else {
                     uriSchemes.push_back(uriScheme);
@@ -1241,7 +1285,7 @@ private:
             return nullptr;
         }
 
-        // Search for the first ":" character delimiting a URI scheme in
+        // Search for the first ":" character delimiting a URI/IRI scheme in
         // the given asset path. As an optimization, we only search the
         // first _maxURISchemeLength + 1 (to accommodate the ":") characters.
         const size_t numSearchChars =
@@ -1262,11 +1306,12 @@ private:
         const std::string& scheme,
         const _ResolverInfo** info = nullptr) const
     {
-        // Per RFC 3986 sec 3.1 schemes are case-insensitive. The schemes
-        // stored in _uriResolvers are always stored in lower-case, so
-        // convert our candidate scheme to lower case as well.
+        // Per RFC 3986 sec 3.1 / RFC 3987 5.3.2.1 schemes are
+        // case-insensitive. The schemes stored in _uriResolvers are always
+        // stored in lower-case, so convert our candidate scheme to lower case
+        // as well.
         const _ResolverSharedPtr* uriResolver = 
-            TfMapLookupPtr(_uriResolvers, TfStringToLower(scheme));
+            TfMapLookupPtr(_uriResolvers, TfStringToLowerAscii(scheme));
         if (uriResolver) {
             if (info) { 
                 *info = &((*uriResolver)->info);
@@ -1344,7 +1389,7 @@ private:
         return resolveFn(path);
     }
 
-    // Primary and URI Resolvers --------------------
+    // Primary and URI/IRI Resolvers --------------------
 
     class _Resolver
         : public _PluginResolver<ArResolver, Ar_ResolverFactoryBase>
@@ -1368,7 +1413,7 @@ private:
     // Primary Resolver
     _ResolverSharedPtr _resolver;
 
-    // URI Resolvers
+    // URI/IRI Resolvers
     std::unordered_map<std::string, _ResolverSharedPtr> _uriResolvers;
     size_t _maxURISchemeLength;
 
@@ -1729,6 +1774,14 @@ ArResolver&
 ArGetResolver()
 {
     return _GetResolver();
+}
+
+const std::vector<std::string>& 
+ArGetRegisteredURISchemes()
+{
+    static const std::vector<std::string> uriSchemes = 
+        _GetResolver().GetURISchemes();
+    return uriSchemes;
 }
 
 ArResolver&

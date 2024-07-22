@@ -9,9 +9,11 @@ pxr_library(ar
         plug
         vt
         ${Boost_PYTHON_LIBRARY}
+        ${TBB_tbb_LIBRARY}
 
     INCLUDE_DIRS
         ${Boost_INCLUDE_DIRS}
+        ${TBB_INCLUDE_DIRS}
 
     PUBLIC_CLASSES
         asset
@@ -22,6 +24,7 @@ pxr_library(ar
         defineResolver
         filesystemAsset
         filesystemWritableAsset
+        inMemoryAsset
         notice
         packageResolver
         packageUtils
@@ -54,6 +57,7 @@ pxr_library(ar
 
     PYMODULE_CPPFILES
         module.cpp
+        wrapAssetInfo.cpp
         wrapDefaultResolverContext.cpp
         wrapDefaultResolver.cpp
         wrapNotice.cpp
@@ -76,6 +80,7 @@ pxr_library(ar
 )
 
 pxr_test_scripts(
+    testenv/testArAssetInfo.py
     testenv/testArAdvancedAPI.py
     testenv/testArDefaultResolver.py
     testenv/testArPackageUtils.py
@@ -85,7 +90,6 @@ pxr_test_scripts(
 )
 
 pxr_build_test_shared_lib(TestArAdvancedAPI
-    CREATE_FRAMEWORK
     INSTALL_PREFIX ArPlugins
     LIBRARIES
         tf
@@ -95,7 +99,6 @@ pxr_build_test_shared_lib(TestArAdvancedAPI
 ) 
 
 pxr_build_test_shared_lib(TestArPackageResolver
-    CREATE_FRAMEWORK
     INSTALL_PREFIX ArPlugins
     LIBRARIES
         tf
@@ -105,7 +108,6 @@ pxr_build_test_shared_lib(TestArPackageResolver
 ) 
 
 pxr_build_test_shared_lib(TestArOptionalImplementation
-    CREATE_FRAMEWORK
     INSTALL_PREFIX ArPlugins
     LIBRARIES
         tf
@@ -183,7 +185,6 @@ pxr_register_test(testArOptionalImplementation_5
 # builds, so we only enable this test on shared library builds.
 if (BUILD_SHARED_LIBS)
     pxr_build_test_shared_lib(TestArURIResolver
-        CREATE_FRAMEWORK
         INSTALL_PREFIX ArPlugins
         LIBRARIES
             tf
@@ -199,6 +200,15 @@ if (BUILD_SHARED_LIBS)
             ar
         CPPFILES
             testenv/testArURIResolver.cpp
+    )
+
+    pxr_test_scripts(
+        testenv/testArURIResolver.py
+    )
+
+    pxr_register_test(testArURIResolver
+        PYTHON
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArURIResolver"
     )
 
     pxr_register_test(testArURIResolver_CPP
@@ -237,6 +247,20 @@ pxr_build_test(testArResolverContext_CPP
         testenv/testArResolverContext.cpp
 ) 
 
+pxr_build_test(testArThreadedAssetCreation
+    LIBRARIES
+        arch
+        tf
+        ar
+    CPPFILES
+        testenv/testArThreadedAssetCreation.cpp
+) 
+
+pxr_register_test(testArAssetInfo
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArAssetInfo"
+)
+
 pxr_register_test(testArAdvancedAPI
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArAdvancedAPI"
@@ -273,4 +297,8 @@ pxr_register_test(testArResolverContext
 
 pxr_register_test(testArResolverContext_CPP
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArResolverContext_CPP"
+)
+
+pxr_register_test(testArThreadedAssetCreation
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArThreadedAssetCreation"
 )

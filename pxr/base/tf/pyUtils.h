@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_PY_UTILS_H
 #define PXR_BASE_TF_PY_UTILS_H
@@ -33,7 +16,7 @@
 #include "pxr/base/tf/weakPtr.h"
 #include "pxr/base/tf/diagnosticLite.h"
 #include "pxr/base/tf/preprocessorUtilsLite.h"
-#include "pxr/base/tf/py3Compat.h"
+#include "pxr/base/tf/pySafePython.h"
 #include "pxr/base/tf/pyInterpreter.h"
 #include "pxr/base/tf/pyLock.h"
 #include "pxr/base/tf/api.h"
@@ -62,29 +45,71 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// Returns true if python is initialized.
 TF_API bool TfPyIsInitialized();
 
-/// Raises a python \c IndexError and throws a C++ exception.
-/// Intended to be used in wrapper code.
-TF_API void TfPyThrowIndexError(std::string const &msg);
+/// Raises a Python \c IndexError with the given error \p msg and throws a
+/// boost::python::error_already_set exception. Callers must hold the GIL
+/// before calling this function.
+TF_API void TfPyThrowIndexError(const char *msg);
 
-/// Raises a python \c RuntimError and throws a C++ exception.
-/// Intended to be used in wrapper code.
-TF_API void TfPyThrowRuntimeError(std::string const &msg);
+/// \overload
+inline void TfPyThrowIndexError(std::string const &msg)
+{
+    TfPyThrowIndexError(msg.c_str());
+}
 
-/// Raises a python \c StopIteration exception and throws a C++ exception.
-/// Intended to be used in wrapper code.
-TF_API void TfPyThrowStopIteration(std::string const &msg);
+/// Raises a Python \c RuntimeError with the given error \p msg and throws a
+/// boost::python::error_already_set exception. Callers must hold the GIL
+/// before calling this function.
+TF_API void TfPyThrowRuntimeError(const char *msg);
 
-/// Raises a python \c KeyError and throws a C++ exception.
-/// Intended to be used in wrapper code.
-TF_API void TfPyThrowKeyError(std::string const &msg);
+/// \overload
+inline void TfPyThrowRuntimeError(std::string const &msg)
+{
+    TfPyThrowRuntimeError(msg.c_str());
+}
 
-/// Raises a python \c ValueError and throws a C++ exception.
-/// Intended to be used in wrapper code.
-TF_API void TfPyThrowValueError(std::string const &msg);
+/// Raises a Python \c StopIteration with the given error \p msg and throws a
+/// boost::python::error_already_set exception. Callers must hold the GIL
+/// before calling this function.
+TF_API void TfPyThrowStopIteration(const char *msg);
 
-/// Raises a python \c TypeError and throws a C++ exception.
-/// Intended to be used in wrapper code.
-TF_API void TfPyThrowTypeError(std::string const &msg);
+/// \overload
+inline void TfPyThrowStopIteration(std::string const &msg)
+{
+    TfPyThrowStopIteration(msg.c_str());
+}
+
+/// Raises a Python \c KeyError with the given error \p msg and throws a
+/// boost::python::error_already_set exception. Callers must hold the GIL
+/// before calling this function.
+TF_API void TfPyThrowKeyError(const char *msg);
+
+/// \overload
+inline void TfPyThrowKeyError(std::string const &msg)
+{
+    TfPyThrowKeyError(msg.c_str());
+}
+
+/// Raises a Python \c ValueError with the given error \p msg and throws a
+/// boost::python::error_already_set exception. Callers must hold the GIL
+/// before calling this function.
+TF_API void TfPyThrowValueError(const char *msg);
+
+/// \overload
+inline void TfPyThrowValueError(std::string const &msg)
+{
+    TfPyThrowValueError(msg.c_str());
+}
+
+/// Raises a Python \c TypeError with the given error \p msg and throws a
+/// boost::python::error_already_set exception. Callers must hold the GIL
+/// before calling this function.
+TF_API void TfPyThrowTypeError(const char *msg);
+
+/// \overload
+inline void TfPyThrowTypeError(std::string const &msg)
+{
+    TfPyThrowTypeError(msg.c_str());
+}
 
 /// Return true iff \a obj is None.
 TF_API bool TfPyIsNone(boost::python::object const &obj);

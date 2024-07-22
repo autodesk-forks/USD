@@ -1,27 +1,9 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
-//
-#include "pxr/imaging/garch/glApi.h"
 
 #include "pxr/base/gf/bbox3d.h"
 #include "pxr/base/gf/frustum.h"
@@ -31,9 +13,6 @@
 #include "pxr/base/gf/vec3d.h"
 #include "pxr/base/tf/getenv.h"
 
-#include "pxr/imaging/glf/contextCaps.h"
-#include "pxr/imaging/glf/drawTarget.h"
-#include "pxr/imaging/glf/glContext.h"
 #include "pxr/imaging/garch/glDebugWindow.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usdGeom/bboxCache.h"
@@ -111,6 +90,13 @@ public:
         }
     }
 
+    void PrimsRenamed(
+            const HdSceneIndexBase &sender,
+            const RenamedPrimEntries &entries) override
+    {
+        ConvertPrimsRenamedToRemovedAndAdded(sender, entries, this);
+    }
+
     EventVector GetEvents()
     {
         return _events;
@@ -142,19 +128,6 @@ int main(int argc, char *argv[])
     // prepare GL context
     GarchGLDebugWindow window("UsdImagingGL Test", 512, 512);
     window.Init();
-    GarchGLApiLoad();
-
-    // wrap into GlfGLContext so that GlfDrawTarget works
-    GlfGLContextSharedPtr ctx = GlfGLContext::GetCurrentGLContext();
-    GlfContextCaps::InitInstance();
-
-    // prep draw target
-    int width = 512, height = 512;
-    GlfDrawTargetRefPtr drawTarget = GlfDrawTarget::New(GfVec2i(width, height));
-    drawTarget->Bind();
-    drawTarget->AddAttachment("color", GL_RGBA, GL_FLOAT, GL_RGBA);
-    drawTarget->Unbind();
-
 
     // open stage
     UsdStageRefPtr stage = UsdStage::Open(stageFilePath);
@@ -174,14 +147,10 @@ int main(int argc, char *argv[])
         new UsdImagingGLEngine(stage->GetPseudoRoot().GetPath(), 
                 excludedPaths));
 
-#define _Render() \
-    drawTarget->Bind(); \
-    engine->Render(stage->GetPseudoRoot(), params); \
-    drawTarget->Unbind(); \
-
+    engine->SetRendererAov(HdAovTokens->color);
 
     //-------------------------------------------------------------------------
-    _Render();
+    engine->Render(stage->GetPseudoRoot(), params);
 
     // NOTE: this makes assumptions based on scene index emulation and will
     //       need to be updated when UsdImagingGLEngine no longer uses the
@@ -210,13 +179,17 @@ int main(int argc, char *argv[])
 
     sceneIndex->AddObserver(HdSceneIndexObserverPtr(&observer));
 
+    // we are testing to confirm that an existing input prim is allowed to
+    // pass through
+    const size_t inputChildCount = 1;
 
     SdfPath cubePerMeshProcPrimPath("/World/cubePerMeshProc");
 
     std::cout << "Checking initial child count of: "
         << cubePerMeshProcPrimPath << std::endl;
     TF_AXIOM(
-        sceneIndex->GetChildPrimPaths(cubePerMeshProcPrimPath).size() == 4);
+        sceneIndex->GetChildPrimPaths(cubePerMeshProcPrimPath).size() ==
+            (4 + inputChildCount));
     std::cout << "...OK" << std::endl;
 
 
@@ -237,11 +210,12 @@ int main(int argc, char *argv[])
         srcMeshRel.SetTargets({SdfPath("/World/myMesh")});
     }
 
-    _Render();
+    engine->Render(stage->GetPseudoRoot(), params);
 
     std::cout << "Checking adjusted child count of: "
         << cubePerMeshProcPrimPath << "..." << std::endl;
-    TF_AXIOM(sceneIndex->GetChildPrimPaths(cubePerMeshProcPrimPath).size() == 8);
+    TF_AXIOM(sceneIndex->GetChildPrimPaths(cubePerMeshProcPrimPath).size() ==
+            (8 + inputChildCount));
     std::cout << "...OK" << std::endl;
 
     //-------------------------------------------------------------------------
@@ -267,7 +241,7 @@ int main(int argc, char *argv[])
     {
         observer.Clear();
         params.frame = 2;
-        _Render();
+        engine->Render(stage->GetPseudoRoot(), params);
 
         std::cout << "changing frame to 2" << std::endl;
 
@@ -287,12 +261,13 @@ int main(int argc, char *argv[])
             srcMeshRel.SetTargets({SdfPath("/World/myMesh2")});
         }
 
-        _Render();
+        engine->Render(stage->GetPseudoRoot(), params);
 
         std::cout << "Checking restored child count of: "
             << cubePerMeshProcPrimPath << "..." << std::endl;
         TF_AXIOM(
-            sceneIndex->GetChildPrimPaths(cubePerMeshProcPrimPath).size() == 4);
+            sceneIndex->GetChildPrimPaths(cubePerMeshProcPrimPath).size() == 
+                (4 + inputChildCount));
         std::cout << "...OK" << std::endl;
     }
 
@@ -302,7 +277,7 @@ int main(int argc, char *argv[])
     {
         observer.Clear();
         params.frame = 1;
-        _Render();
+        engine->Render(stage->GetPseudoRoot(), params);
 
         std::cout << "changing frame to 1" << std::endl;\
         std::cout << "confirming no child prims with dirtied xforms..."
@@ -320,7 +295,7 @@ int main(int argc, char *argv[])
         observer.Clear();
         cubePerMeshProcPrim.GetAttribute(
             TfToken("primvars:scale")).Set(VtValue(1.25f));
-        _Render();
+        engine->Render(stage->GetPseudoRoot(), params);
 
         std::cout << "setting 'primvars:scale' of "
             << cubePerMeshProcPrimPath << std::endl;
@@ -360,7 +335,7 @@ int main(int argc, char *argv[])
         UsdPrim procPrim = stage->GetPrimAtPath(makeSomeStuffProcPrimPath);
         procPrim.GetAttribute(TfToken("primvars:myDepth")).Set(VtValue(2));
 
-        _Render();
+        engine->Render(stage->GetPseudoRoot(), params);
 
         std::cout << "confirming child and grandchild types "
             << makeSomeStuffProcPrimPath << "..." << std::endl;
@@ -379,6 +354,103 @@ int main(int argc, char *argv[])
         std::cout << "...OK" << std::endl;
 
     }
+
+
+    SdfPath dependsOnChildNamesProcPrimPath("/World/dependsOnChildNamesProc");
+    SdfPath resultPath =
+        dependsOnChildNamesProcPrimPath.AppendChild(TfToken("myResult"));
+
+    TfToken childNamesToken("childNames");
+    HdDataSourceLocator childNamesLocator(childNamesToken);
+
+    //-------------------------------------------------------------------------
+    // confirm initial state of dependsOnChildNamesProc
+    {
+        std::cout << "confirming initial child count of childNames data source "
+            << "of: " << resultPath << "..." <<std::endl;
+
+        if (auto childNamesDs =
+                HdContainerDataSource::Cast(HdContainerDataSource::Get(
+                    sceneIndex->GetPrim(resultPath
+                        ).dataSource, childNamesLocator))) {
+
+            TF_AXIOM(childNamesDs->GetNames().size() == 3);
+
+            std::cout << "...OK" << std::endl;
+
+        } else {
+            std::cerr << "...couldn't find childNames data source" << std::endl;
+            return -1;
+        }
+    }
+
+    //-------------------------------------------------------------------------
+    // deactivate/active target prim children and confirm proc prim is dirtied
+    {
+
+        std::cout << "testing dependency of " << resultPath
+            << " following deactivation of targetPrim child..." << std::endl;
+
+        observer.Clear();
+
+        UsdPrim prim = stage->GetPrimAtPath(SdfPath("/World/childNameTest/C"));
+        prim.SetActive(false);
+
+        engine->Render(stage->GetPseudoRoot(), params);
+
+        bool resultPrimDirtied = false;
+
+        for (const auto &e : observer.GetEvents()) {
+            if (e.eventType ==
+                        _RecordingSceneIndexObserver::EventType_PrimDirtied) {
+                if (e.primPath == resultPath) {
+                    resultPrimDirtied = true;
+                    break;
+                }
+            }
+        }
+
+        TF_AXIOM(resultPrimDirtied);
+        std::cout << "...OK" << std::endl;
+
+        size_t childCount = 0;
+        if (auto childNamesDs =
+                HdContainerDataSource::Cast(HdContainerDataSource::Get(
+                    sceneIndex->GetPrim(resultPath
+                        ).dataSource, childNamesLocator))) {
+
+            childCount = childNamesDs->GetNames().size();
+        }
+
+        std::cout << "confirming childCount updated..." << std::endl;
+        TF_AXIOM(childCount == 2);
+        std::cout << "...OK" << std::endl;
+
+        std::cout << "testing dependency of " << resultPath
+            << " following reactivation of targetPrim child..." << std::endl;
+
+        observer.Clear();
+        prim.SetActive(true);
+
+        engine->Render(stage->GetPseudoRoot(), params);
+
+        resultPrimDirtied = false;
+
+        for (const auto &e : observer.GetEvents()) {
+            if (e.eventType ==
+                        _RecordingSceneIndexObserver::EventType_PrimDirtied) {
+                if (e.primPath == resultPath) {
+                    resultPrimDirtied = true;
+                    break;
+                }
+            }
+        }
+
+        TF_AXIOM(resultPrimDirtied);
+        std::cout << "...OK" << std::endl;
+    }
+
+    //
 
 
     return EXIT_SUCCESS;

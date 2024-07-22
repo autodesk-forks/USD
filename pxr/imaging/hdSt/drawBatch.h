@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_DRAW_BATCH_H
 #define PXR_IMAGING_HD_ST_DRAW_BATCH_H
@@ -63,7 +46,8 @@ class HdSt_DrawBatch
 {
 public:
     HDST_API
-    HdSt_DrawBatch(HdStDrawItemInstance * drawItemInstance);
+    HdSt_DrawBatch(HdStDrawItemInstance * drawItemInstance,
+                   bool const allowTextureResourceRebinding = false);
 
     HDST_API
     virtual ~HdSt_DrawBatch();
@@ -95,11 +79,24 @@ public:
         HdStRenderPassStateSharedPtr const &renderPassState,
         HdStResourceRegistrySharedPtr const &resourceRegistry) = 0;
 
+    /// Encode drawing commands for this batch.
+    virtual void EncodeDraw(
+        HdStRenderPassStateSharedPtr const & renderPassState,
+        HdStResourceRegistrySharedPtr const & resourceRegistry,
+        bool firstDrawBatch) = 0;
+
     /// Executes the drawing commands for this batch.
     virtual void ExecuteDraw(
         HgiGraphicsCmds *gfxCmds,
         HdStRenderPassStateSharedPtr const &renderPassState,
-        HdStResourceRegistrySharedPtr const & resourceRegistry) = 0;
+        HdStResourceRegistrySharedPtr const & resourceRegistry,
+        bool firstDrawBatch) = 0;
+
+    /// Returns the draw item instances in this batch.
+    std::vector<HdStDrawItemInstance const*> const &
+    GetDrawItemInstances() const {
+        return _drawItemInstances;
+    }
 
     /// Let the batch know that one of it's draw item instances has changed
     /// NOTE: This callback is called from multiple threads, so needs to be
@@ -122,6 +119,9 @@ protected:
     ///
     class _DrawingProgram {
     public:
+        using DrawingCoordBufferBinding =
+                HdSt_ResourceBinder::MetaData::DrawingCoordBufferBinding;
+
         _DrawingProgram() {}
 
         HDST_API
@@ -130,7 +130,8 @@ protected:
         HDST_API
         bool CompileShader(
                 HdStDrawItem const *drawItem,
-                HdStResourceRegistrySharedPtr const &resourceRegistry);
+                HdStResourceRegistrySharedPtr const &resourceRegistry,
+                bool logCacheLookup = false);
 
         HdStGLSLProgramSharedPtr GetGLSLProgram() const {
             return _glslProgram;
@@ -150,6 +151,17 @@ protected:
             _shaders.clear();
         }
         
+        void SetDrawingCoordBufferBinding(
+            DrawingCoordBufferBinding const &
+                drawingCoordBufferBinding) {
+            _drawingCoordBufferBinding = drawingCoordBufferBinding;
+        }
+
+        const DrawingCoordBufferBinding &
+        GetDrawingCoordBufferBinding() const {
+            return _drawingCoordBufferBinding;
+        }
+
         void SetMaterialNetworkShader(
                 HdSt_MaterialNetworkShaderSharedPtr const &shader) {
             _materialNetworkShader = shader;
@@ -197,7 +209,7 @@ protected:
         // enabled or not.
         HDST_API
         virtual void _GetCustomBindings(
-            HdBindingRequestVector *customBindings,
+            HdStBindingRequestVector *customBindings,
             bool *enableInstanceDraw) const;
 
         HDST_API
@@ -206,6 +218,7 @@ protected:
     private:
         HdStGLSLProgramSharedPtr _glslProgram;
         HdSt_ResourceBinder _resourceBinder;
+        DrawingCoordBufferBinding _drawingCoordBufferBinding;
         HdStShaderCodeSharedPtrVector _shaders;
         HdSt_GeometricShaderSharedPtr _geometricShader;
         HdSt_MaterialNetworkShaderSharedPtr _materialNetworkShader;
@@ -218,12 +231,23 @@ protected:
 
 protected:
     HDST_API
-    static bool _IsAggregated(HdStDrawItem const *drawItem0,
-                              HdStDrawItem const *drawItem1);
+    bool _IsAggregated(HdStDrawItem const *drawItem0,
+                       HdStDrawItem const *drawItem1);
 
     std::vector<HdStDrawItemInstance const*> _drawItemInstances;
 
+    bool const _allowTextureResourceRebinding;
+
 private:
+    HDST_API
+    static
+    bool _CanAggregateMaterials(HdStDrawItem const *drawItem0,
+                                HdStDrawItem const *drawItem1);
+
+    HDST_API
+    bool _CanAggregateTextures(HdStDrawItem const *drawItem0,
+                               HdStDrawItem const *drawItem1);
+
     _DrawingProgram _program;
     HdStShaderCode::ID _shaderHash;
 };

@@ -1,41 +1,27 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/lightFilterAdapter.h"
+
+#include "pxr/usdImaging/usdImaging/dataSourceMaterial.h"
+#include "pxr/usdImaging/usdImaging/dataSourcePrim.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 #include "pxr/usdImaging/usdImaging/lightAdapter.h"
 #include "pxr/usdImaging/usdImaging/materialParamUtils.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
-
+#include "pxr/imaging/hd/materialSchema.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
-
 #include "pxr/imaging/hd/light.h"
 #include "pxr/imaging/hd/material.h"
 #include "pxr/usd/ar/resolverScopedCache.h"
 #include "pxr/usd/ar/resolverContextBinder.h"
 #include "pxr/usd/usdLux/lightFilter.h"
-
 #include "pxr/base/tf/envSetting.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -101,7 +87,7 @@ UsdImagingLightFilterAdapter::TrackVariability(UsdPrim const& prim,
     for (UsdAttribute const& attr : attrs) {
         // Don't double-count transform attrs.
         if (UsdGeomXformable::IsTransformationAffectedByAttrNamed(
-                attr.GetBaseName())) {
+                attr.GetName())) {
             continue;
         }
         if (attr.GetNumTimeSamples()>1){
@@ -167,7 +153,8 @@ UsdImagingLightFilterAdapter::MarkVisibilityDirty(UsdPrim const& prim,
                                             SdfPath const& cachePath,
                                             UsdImagingIndexProxy* index)
 {
-    // TBD
+    // "DirtyParam" is the catch-all bit for light params.
+    index->MarkSprimDirty(cachePath, HdLight::DirtyBits::DirtyParams);
 }
 
 VtValue 
@@ -203,6 +190,77 @@ UsdImagingLightFilterAdapter::GetMaterialResource(UsdPrim const &prim,
         time);
 
     return VtValue(networkMap);
+}
+
+TfTokenVector
+UsdImagingLightFilterAdapter::GetImagingSubprims(UsdPrim const& prim)
+{
+    return { TfToken() };
+}
+
+TfToken
+UsdImagingLightFilterAdapter::GetImagingSubprimType(UsdPrim const& prim,
+    TfToken const& subprim)
+{
+    if (subprim.IsEmpty()) {
+        return HdPrimTypeTokens->lightFilter;
+    }
+
+    return TfToken();
+}
+
+HdContainerDataSourceHandle
+UsdImagingLightFilterAdapter::GetImagingSubprimData(
+        UsdPrim const& prim,
+        TfToken const& subprim,
+        const UsdImagingDataSourceStageGlobals &stageGlobals)
+{
+    if (!subprim.IsEmpty()) {
+        return nullptr;
+    }
+
+    // Overlay the material data source, which computes the node
+    // network, over the base prim data source, which provides
+    // other needed data like xform and visibility.
+    return HdOverlayContainerDataSource::New(
+        HdRetainedContainerDataSource::New(
+            HdPrimTypeTokens->material,
+            UsdImagingDataSourceMaterial::New(
+                prim,
+                stageGlobals,
+                HdMaterialTerminalTokens->lightFilter)
+            ),
+        UsdImagingDataSourcePrim::New(
+            prim.GetPath(), prim, stageGlobals));
+}
+
+HdDataSourceLocatorSet
+UsdImagingLightFilterAdapter::InvalidateImagingSubprim(
+        UsdPrim const& prim,
+        TfToken const& subprim,
+        TfTokenVector const& properties,
+        const UsdImagingPropertyInvalidationType invalidationType)
+{
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourcePrim::Invalidate(
+            prim, subprim, properties, invalidationType);
+    }
+
+    HdDataSourceLocatorSet result;
+    for (const TfToken &propertyName : properties) {
+        if (TfStringStartsWith(propertyName.GetString(), "inputs:")) {
+            // NOTE: since we don't have access to the prim itself and our
+            //       lightFilter terminal is currently named for the USD path,
+            //       we cannot be specific to the individual parameter.
+            // TODO: Consider whether we want to make the terminal node
+            //       in the material network have a fixed name for the
+            //       lightFilter case so that we could.
+            result.insert(HdMaterialSchema::GetDefaultLocator());
+            break;
+        }
+    }
+
+    return result;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

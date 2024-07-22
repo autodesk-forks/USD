@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_SCHEMA_H
 #define PXR_USD_SDF_SCHEMA_H
@@ -59,8 +42,9 @@ TF_DECLARE_WEAK_PTRS(PlugPlugin);
 /// Generic class that provides information about scene description fields
 /// but doesn't actually provide any fields.
 ///
-class SdfSchemaBase : public TfWeakBase, public boost::noncopyable {
-
+class SdfSchemaBase : public TfWeakBase {
+    SdfSchemaBase(const SdfSchemaBase&) = delete;
+    SdfSchemaBase& operator=(const SdfSchemaBase&) = delete;
 protected:
     class _SpecDefiner;
 
@@ -276,9 +260,10 @@ public:
     /// quickly rule out field names that aren't required (and thus don't need
     /// special handling).
     inline bool IsRequiredFieldName(const TfToken &fieldName) const {
-        for (size_t i = 0; i != _requiredFieldNames.size(); ++i) {
-            if (_requiredFieldNames[i] == fieldName)
+        for (TfToken const &fname: _requiredFieldNames) {
+            if (fname == fieldName) {
                 return true;
+            }
         }
         return false;
     }
@@ -290,17 +275,34 @@ public:
     /// used directly.
     /// @{
 
+    SDF_API 
     static SdfAllowed IsValidAttributeConnectionPath(const SdfPath& path);
+    SDF_API 
     static SdfAllowed IsValidIdentifier(const std::string& name);
+    SDF_API 
     static SdfAllowed IsValidNamespacedIdentifier(const std::string& name);
+    SDF_API 
     static SdfAllowed IsValidInheritPath(const SdfPath& path);
+    SDF_API 
     static SdfAllowed IsValidPayload(const SdfPayload& payload);
+    SDF_API 
     static SdfAllowed IsValidReference(const SdfReference& ref);
+    SDF_API 
     static SdfAllowed IsValidRelationshipTargetPath(const SdfPath& path);
-    static SdfAllowed IsValidRelocatesPath(const SdfPath& path);
+    SDF_API 
+    static SdfAllowed IsValidRelocatesSourcePath(const SdfPath& path);
+    SDF_API 
+    static SdfAllowed IsValidRelocatesTargetPath(const SdfPath& path);
+    SDF_API 
+    static SdfAllowed IsValidRelocate(const SdfRelocate& relocate);
+    SDF_API 
     static SdfAllowed IsValidSpecializesPath(const SdfPath& path);
+    SDF_API 
     static SdfAllowed IsValidSubLayer(const std::string& sublayer);
+    SDF_API 
     static SdfAllowed IsValidVariantIdentifier(const std::string& name);
+    SDF_API
+    static SdfAllowed IsValidVariantSelection(const std::string& sel);
 
     /// @}
 
@@ -589,6 +591,7 @@ SDF_API_TEMPLATE_CLASS(TfSingleton<SdfSchema>);
     ((DisplayUnit, "displayUnit"))                           \
     ((Documentation, "documentation"))                       \
     ((EndTimeCode, "endTimeCode"))                           \
+    ((ExpressionVariables, "expressionVariables"))           \
     ((FramePrecision, "framePrecision"))                     \
     ((FramesPerSecond, "framesPerSecond"))                   \
     ((Hidden, "hidden"))                                     \
@@ -596,6 +599,7 @@ SDF_API_TEMPLATE_CLASS(TfSingleton<SdfSchema>);
     ((InheritPaths, "inheritPaths"))                         \
     ((Instanceable, "instanceable"))                         \
     ((Kind, "kind"))                                         \
+    ((LayerRelocates, "layerRelocates"))                     \
     ((PrimOrder, "primOrder"))                               \
     ((NoLoadHint, "noLoadHint"))                             \
     ((Owner, "owner"))                                       \

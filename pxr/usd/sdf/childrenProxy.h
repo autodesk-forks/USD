@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_CHILDREN_PROXY_H
 #define PXR_USD_SDF_CHILDREN_PROXY_H
@@ -33,9 +16,6 @@
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/iterator.h"
 
-#include <boost/iterator/iterator_facade.hpp>
-#include <boost/iterator/reverse_iterator.hpp>
-#include <boost/operators.hpp>
 #include <iterator>
 #include <map>
 #include <utility>
@@ -43,7 +23,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 template <class _View>
-class SdfChildrenProxy : boost::equality_comparable<SdfChildrenProxy<_View> > {
+class SdfChildrenProxy {
 public:
     typedef _View View;
     typedef typename View::Adapter Adapter;
@@ -118,22 +98,67 @@ private:
     };
 
     template <class _Owner, class _Iter, class _Value>
-    class _Iterator :
-        public boost::iterator_facade<
-                    _Iterator<_Owner, _Iter, _Value>,
-                    _Value,
-                    std::bidirectional_iterator_tag,
-                    _Value> {
+    class _Iterator {
+        class _PtrProxy {
+        public:
+            _Value* operator->() { return &_value; }
+        private:
+            friend class _Iterator;
+            explicit _PtrProxy(const _Value& value) : _value(value) {}
+            _Value _value;
+        };
     public:
-        _Iterator() { }
+        static_assert(!std::is_reference<_Value>::value &&
+                      !std::is_pointer<_Value>::value,
+                      "_Value cannot be a pointer or reference type.");
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type = _Value;
+        using reference = _Value;
+        using pointer = _PtrProxy;
+        using difference_type = std::ptrdiff_t;
+
+        _Iterator() = default;
         _Iterator(_Owner owner, _inner_iterator i) : _owner(owner), _pos(i) { }
         template <class O2, class I2, class V2>
         _Iterator(const _Iterator<O2, I2, V2>& other) :
             _owner(other._owner), _pos(other._pos) { }
 
-    private:
-        friend class boost::iterator_core_access;
+        reference operator*() const { return dereference(); }
+        pointer operator->() const { return pointer(dereference()); }
 
+        _Iterator& operator++() {
+            increment();
+            return *this;
+        }
+
+        _Iterator& operator--() {
+            decrement();
+            return *this;
+        }
+
+        _Iterator operator++(int) {
+            _Iterator result(*this);
+            increment();
+            return result;
+        }
+
+        _Iterator operator--(int) {
+            _Iterator result(*this);
+            decrement();
+            return result;
+        }
+
+        template <class O2, class I2, class V2>
+        bool operator==(const _Iterator<O2, I2, V2>& other) const {
+            return equal(other);
+        }
+
+        template <class O2, class I2, class V2>
+        bool operator!=(const _Iterator<O2, I2, V2>& other) const {
+            return !equal(other);
+        }
+
+    private:
         _Value dereference() const
         {
             return _Traits::Dereference(_owner, _pos);
@@ -164,9 +189,9 @@ private:
 public:
     typedef _ValueProxy reference;
     typedef _Iterator<This*, _inner_iterator, _PairProxy> iterator;
-    typedef boost::reverse_iterator<iterator> reverse_iterator;
+    typedef Tf_ProxyReferenceReverseIterator<iterator> reverse_iterator;
     typedef _Iterator<const This*, _inner_iterator, value_type> const_iterator;
-    typedef boost::reverse_iterator<const_iterator> const_reverse_iterator;
+    typedef Tf_ProxyReferenceReverseIterator<const_iterator> const_reverse_iterator;
 
     static const int CanSet    = 1;
     static const int CanInsert = 2;
@@ -353,6 +378,11 @@ public:
         return _view == other._view;
     }
 
+    bool operator!=(const This& other) const
+    {
+        return !(*this == other);
+    }
+
     /// Explicit bool conversion operator. The proxy object converts to 
     /// \c true if it is valid, \c false otherwise.
     explicit operator bool() const
@@ -463,7 +493,7 @@ private:
 
 // Allow TfIteration over children proxies.
 template <typename _View>
-struct Tf_ShouldIterateOverCopy<SdfChildrenProxy<_View> > : boost::true_type
+struct Tf_ShouldIterateOverCopy<SdfChildrenProxy<_View> > : std::true_type
 {
 };
 

@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hgiMetal/buffer.h"
 #include "pxr/imaging/hgiMetal/computeCmds.h"
@@ -34,7 +17,9 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-HgiMetalComputeCmds::HgiMetalComputeCmds(HgiMetal* hgi)
+HgiMetalComputeCmds::HgiMetalComputeCmds(
+    HgiMetal* hgi,
+    HgiComputeCmdsDesc const& desc)
     : HgiComputeCmds()
     , _hgi(hgi)
     , _pipelineState(nullptr)
@@ -42,6 +27,7 @@ HgiMetalComputeCmds::HgiMetalComputeCmds(HgiMetal* hgi)
     , _argumentBuffer(nil)
     , _encoder(nil)
     , _secondaryCommandBuffer(false)
+    , _dispatchMethod(desc.dispatchMethod)
 {
     _CreateEncoder();
 }
@@ -55,12 +41,17 @@ void
 HgiMetalComputeCmds::_CreateEncoder()
 {
     if (!_encoder) {
-        _commandBuffer = _hgi->GetPrimaryCommandBuffer(this);
+        _commandBuffer = _hgi->GetPrimaryCommandBuffer(this, false);
         if (_commandBuffer == nil) {
             _commandBuffer = _hgi->GetSecondaryCommandBuffer();
             _secondaryCommandBuffer = true;
         }
-        _encoder = [_commandBuffer computeCommandEncoder];
+        MTLDispatchType dispatchType =
+            (_dispatchMethod == HgiComputeDispatchConcurrent)
+                ? MTLDispatchTypeConcurrent
+                : MTLDispatchTypeSerial;
+        _encoder = [_commandBuffer
+                        computeCommandEncoderWithDispatchType:dispatchType];
     }
 }
 
@@ -143,7 +134,10 @@ HgiMetalComputeCmds::Dispatch(int dimX, int dimY)
         threadsPerThreadgroup:MTLSizeMake(MIN(thread_width, dimX),
                                           MIN(thread_height, dimY), 1)];
 
-    _hasWork = true;
+    if (!_secondaryCommandBuffer) {
+        _hgi->SetHasWork();
+    }
+
     _argumentBuffer = nil;
 }
 
@@ -163,7 +157,7 @@ HgiMetalComputeCmds::PopDebugGroup()
 }
 
 void
-HgiMetalComputeCmds::MemoryBarrier(HgiMemoryBarrier barrier)
+HgiMetalComputeCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
 {
     if (TF_VERIFY(barrier == HgiMemoryBarrierAll)) {
         _CreateEncoder();
@@ -173,14 +167,18 @@ HgiMetalComputeCmds::MemoryBarrier(HgiMemoryBarrier barrier)
     }
 }
 
+HgiComputeDispatch
+HgiMetalComputeCmds::GetDispatchMethod() const
+{
+    return _dispatchMethod;
+}
+
 bool
 HgiMetalComputeCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
 {
-    bool submittedWork = false;
     if (_encoder) {
         [_encoder endEncoding];
         _encoder = nil;
-        submittedWork = true;
 
         HgiMetal::CommitCommandBufferWaitType waitType;
         switch(wait) {
@@ -206,7 +204,14 @@ HgiMetalComputeCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
     _commandBuffer = nil;
     _argumentBuffer = nil;
 
-    return submittedWork;
+    return true;
+}
+
+HGIMETAL_API
+id<MTLComputeCommandEncoder> HgiMetalComputeCmds::GetEncoder()
+{
+    _CreateEncoder();
+    return _encoder;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

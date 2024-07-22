@@ -1,31 +1,23 @@
 //
 // Copyright 2018 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 
 #include "pxr/usdImaging/usdImaging/primAdapter.h"
 
+#include "pxr/base/tf/envSetting.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_ENV_SETTING(USDIMAGING_LEGACY_UPDATE_FOR_TIME, 0,
+        "Run UpdateForTime every time any prim is marked dirty (legacy behavior)");
+static bool _LegacyUpdateForTime() {
+    static bool _v = TfGetEnvSetting(USDIMAGING_LEGACY_UPDATE_FOR_TIME) == 0;
+    return _v;
+}
 
 UsdImagingDelegate::_HdPrimInfo*
 UsdImagingIndexProxy::_AddHdPrimInfo(SdfPath const &cachePath,
@@ -297,9 +289,15 @@ UsdImagingIndexProxy::Repopulate(SdfPath const& usdPath)
 }
 
 void
-UsdImagingIndexProxy::Refresh(SdfPath const& cachePath)
+UsdImagingIndexProxy::RequestTrackVariability(SdfPath const& cachePath)
 {
     _AddTask(cachePath);
+}
+
+void
+UsdImagingIndexProxy::RequestUpdateForTime(SdfPath const& cachePath)
+{
+    _delegate->_dirtyCachePaths.insert(cachePath);
 }
 
 void
@@ -326,7 +324,9 @@ UsdImagingIndexProxy::MarkRprimDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -342,7 +342,9 @@ UsdImagingIndexProxy::MarkSprimDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -358,7 +360,9 @@ UsdImagingIndexProxy::MarkBprimDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -374,7 +378,9 @@ UsdImagingIndexProxy::MarkInstancerDirty(SdfPath const& cachePath,
         _delegate->_GetHdPrimInfo(cachePath);
     if (TF_VERIFY(primInfo, "%s", cachePath.GetText())) {
         primInfo->dirtyBits |= dirtyBits;
-        _delegate->_dirtyCachePaths.insert(cachePath);
+        if (_LegacyUpdateForTime()) {
+            _delegate->_dirtyCachePaths.insert(cachePath);
+        }
     }
 
     HdChangeTracker &tracker = _delegate->GetRenderIndex().GetChangeTracker();
@@ -385,11 +391,10 @@ UsdImagingIndexProxy::MarkInstancerDirty(SdfPath const& cachePath,
 UsdImagingPrimAdapterSharedPtr
 UsdImagingIndexProxy::GetMaterialAdapter(UsdPrim const& materialPrim)
 {
-    if (!TF_VERIFY(!materialPrim.IsInstance())) {
-        return nullptr;
-    }
+    // Note that if the material is instanced, we ignore the instancing
+    // and just return a material adapter for the instance path instead.
     UsdImagingPrimAdapterSharedPtr materialAdapter =
-        _delegate->_AdapterLookup(materialPrim, false);
+        _delegate->_AdapterLookup(materialPrim, true);
     return materialAdapter &&
            materialAdapter->IsSupported(this) ? materialAdapter : nullptr;
 }
@@ -494,7 +499,6 @@ UsdImagingIndexProxy::_ProcessRemovals()
 
             _delegate->_primvarDescCache.Clear(cachePath);
             _delegate->_refineLevelMap.erase(cachePath);
-            _delegate->_pickablesMap.erase(cachePath);
 
             _delegate->_hdPrimInfoMap.erase(cachePath);
 

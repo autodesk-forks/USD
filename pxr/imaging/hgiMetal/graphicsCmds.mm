@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hgi/graphicsCmdsDesc.h"
 #include "pxr/imaging/hgiMetal/buffer.h"
@@ -28,6 +11,7 @@
 #include "pxr/imaging/hgiMetal/graphicsCmds.h"
 #include "pxr/imaging/hgiMetal/graphicsPipeline.h"
 #include "pxr/imaging/hgiMetal/hgi.h"
+#include "pxr/imaging/hgiMetal/indirectCommandEncoder.h"
 #include "pxr/imaging/hgiMetal/resourceBindings.h"
 #include "pxr/imaging/hgiMetal/texture.h"
 
@@ -82,8 +66,8 @@ HgiMetalGraphicsCmds::HgiMetalGraphicsCmds(
     , _descriptor(desc)
     , _primitiveType(HgiPrimitiveTypeTriangleList)
     , _primitiveIndexSize(0)
+    , _drawBufferBindingIndex(0)
     , _debugLabel(nil)
-    , _hasWork(false)
     , _viewportSet(false)
     , _scissorRectSet(false)
     , _enableParallelEncoder(false)
@@ -222,7 +206,8 @@ HgiMetalGraphicsCmds::HgiMetalGraphicsCmds(
                 _renderPassDescriptor.stencilAttachment;
             stencilAttachment.loadAction = metalDepthAttachment.loadAction;
             stencilAttachment.storeAction = metalDepthAttachment.storeAction;
-            stencilAttachment.clearStencil = hgiDepthAttachment.clearValue[0];
+            stencilAttachment.clearStencil =
+                static_cast<uint32_t>(hgiDepthAttachment.clearValue[1]);
             stencilAttachment.texture = metalDepthAttachment.texture;
             
             if (desc.depthResolveTexture) {
@@ -246,7 +231,7 @@ HgiMetalGraphicsCmds::HgiMetalGraphicsCmds(
     }
     
     if (hasClear) {
-        _GetEncoder();
+        GetEncoder();
         _CreateArgumentBuffer();
     }
 }
@@ -280,7 +265,7 @@ HgiMetalGraphicsCmds::_VegaIndirectFix()
     // Fix for Vega in macOS before 12.0.  There is state leakage between
     // indirect draw of different prim types which results in a GPU crash.
     // Flush with a null draw through the direct path.
-    id<MTLRenderCommandEncoder> encoder = _GetEncoder();
+    id<MTLRenderCommandEncoder> encoder = GetEncoder();
     MTLPrimitiveType mtlType =
         HgiMetalConversions::GetPrimitiveType(_primitiveType);
     [encoder drawPrimitives:mtlType
@@ -376,7 +361,7 @@ HgiMetalGraphicsCmds::_SetNumberParallelEncoders(uint32_t numEncoders)
 }
 
 id<MTLRenderCommandEncoder>
-HgiMetalGraphicsCmds::_GetEncoder(uint32_t encoderIndex)
+HgiMetalGraphicsCmds::GetEncoder(uint32_t encoderIndex)
 {
     uint32_t numActiveEncoders = _GetNumEncoders();
     
@@ -431,7 +416,7 @@ HgiMetalGraphicsCmds::SetViewport(GfVec4i const& vp)
     // being inverted.
     // This combination allows us to emulate the OpenGL coordinate space on
     // Metal
-    _CachedEncState.viewport = (MTLViewport){x, h-y, w, -h, 0.0, 1.0};
+    _CachedEncState.viewport = (MTLViewport){x, y+h, w, -h, 0.0, 1.0};
     
     for (auto& encoder : _encoders) {
         [encoder setViewport:_CachedEncState.viewport];
@@ -536,7 +521,7 @@ HgiMetalGraphicsCmds::Draw(
     _SyncArgumentBuffer();
 
     MTLPrimitiveType type=HgiMetalConversions::GetPrimitiveType(_primitiveType);
-    id<MTLRenderCommandEncoder> encoder = _GetEncoder();
+    id<MTLRenderCommandEncoder> encoder = GetEncoder();
 
     _stepFunctions.SetVertexBufferOffsets(encoder, baseInstance);
 
@@ -563,7 +548,7 @@ HgiMetalGraphicsCmds::Draw(
         }
     }
 
-    _hasWork = true;
+    _hgi->SetHasWork();
 }
 
 void
@@ -577,7 +562,6 @@ HgiMetalGraphicsCmds::DrawIndirect(
         HgiMetalConversions::GetPrimitiveType(_primitiveType);
     id<MTLBuffer> drawBufferId =
         static_cast<HgiMetalBuffer*>(drawParameterBuffer.Get())->GetBufferId();
-    const HgiCapabilities *capabilities = _hgi->GetCapabilities();
 
     _SyncArgumentBuffer();
     static const uint32_t _drawCallsPerThread = 256;
@@ -599,7 +583,7 @@ HgiMetalGraphicsCmds::DrawIndirect(
             const uint32_t encoderCount = (i == numEncoders - 1)
                                         ? finalCount : normalCount;
             wd.Run([&, i, encoderOffset, encoderCount]() {
-                id<MTLRenderCommandEncoder> encoder = _GetEncoder(i);
+                id<MTLRenderCommandEncoder> encoder = GetEncoder(i);
                 
                 if (_primitiveType == HgiPrimitiveTypePatchList) {
                     const NSUInteger controlPointCount = _primitiveIndexSize;
@@ -634,6 +618,8 @@ HgiMetalGraphicsCmds::DrawIndirect(
             });
         }
     });
+
+    _hgi->SetHasWork();
 }
 
 void
@@ -652,7 +638,7 @@ HgiMetalGraphicsCmds::DrawIndexed(
     MTLPrimitiveType mtlType =
         HgiMetalConversions::GetPrimitiveType(_primitiveType);
 
-    id<MTLRenderCommandEncoder> encoder = _GetEncoder();
+    id<MTLRenderCommandEncoder> encoder = GetEncoder();
         
     _stepFunctions.SetVertexBufferOffsets(encoder, baseInstance);
 
@@ -683,7 +669,7 @@ HgiMetalGraphicsCmds::DrawIndexed(
                           baseInstance:baseInstance];
     }
 
-    _hasWork = true;
+    _hgi->SetHasWork();
 }
 
 void
@@ -723,7 +709,7 @@ HgiMetalGraphicsCmds::DrawIndexedIndirect(
             const uint32_t encoderCount = (i == numEncoders - 1)
                                         ? finalCount : normalCount;
             wd.Run([&, i, encoderOffset, encoderCount]() {
-                id<MTLRenderCommandEncoder> encoder = _GetEncoder(i);
+                id<MTLRenderCommandEncoder> encoder = GetEncoder(i);
                 
                 if (_primitiveType == HgiPrimitiveTypePatchList) {
                     const NSUInteger controlPointCount = _primitiveIndexSize;
@@ -776,6 +762,8 @@ HgiMetalGraphicsCmds::DrawIndexedIndirect(
             });
         }
     });
+
+    _hgi->SetHasWork();
 }
 
 void
@@ -788,7 +776,7 @@ HgiMetalGraphicsCmds::PushDebugGroup(const char* label)
         HGIMETAL_DEBUG_PUSH_GROUP(_parallelEncoder, label)
     }
     else if (!_encoders.empty()) {
-        HGIMETAL_DEBUG_PUSH_GROUP(_GetEncoder(), label)
+        HGIMETAL_DEBUG_PUSH_GROUP(GetEncoder(), label)
     }
     else {
         _debugLabel = [@(label) copy];
@@ -802,7 +790,7 @@ HgiMetalGraphicsCmds::PopDebugGroup()
         HGIMETAL_DEBUG_POP_GROUP(_parallelEncoder)
     }
     else if (!_encoders.empty()) {
-        HGIMETAL_DEBUG_POP_GROUP(_GetEncoder());
+        HGIMETAL_DEBUG_POP_GROUP(GetEncoder());
     }
     if (_debugLabel) {
         [_debugLabel release];
@@ -811,7 +799,7 @@ HgiMetalGraphicsCmds::PopDebugGroup()
 }
 
 void
-HgiMetalGraphicsCmds::MemoryBarrier(HgiMemoryBarrier barrier)
+HgiMetalGraphicsCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
 {
     TF_VERIFY(barrier==HgiMemoryBarrierAll, "Unknown barrier");
     
@@ -873,7 +861,7 @@ HgiMetalGraphicsCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
     _encoders.clear();
     _CachedEncState.ResetCachedEncoderState();
     
-    return _hasWork;
+    return true;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

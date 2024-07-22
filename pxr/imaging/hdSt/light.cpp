@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/light.h"
 #include "pxr/imaging/hdSt/tokens.h"
@@ -265,8 +248,7 @@ HdStLight::_ApproximateAreaLight(SdfPath const &id,
     }
 
     // See glf/shaders/simpleLighting.glslfx for attenuation math
-    if (_lightType == HdPrimTypeTokens->distantLight ||
-        _lightType == HdPrimTypeTokens->domeLight) {
+    if (_lightType == HdPrimTypeTokens->distantLight) {
         l.SetAttenuation(GfVec3f(0.0f, 0.0f, 0.0f)); // none
     } else {
         l.SetAttenuation(GfVec3f(0.0f, 0.0f, 1.0f)); // distance^-2
@@ -431,6 +413,12 @@ HdStLight::Sync(HdSceneDelegate *sceneDelegate,
         // scene-delegate transform, in favor of the transform passed in by
         // params...
         if (_lightType == HdPrimTypeTokens->domeLight) {
+            // Apply domeOffset if present
+            VtValue domeOffset = sceneDelegate->GetLightParamValue(id,
+                HdLightTokens->domeOffset);
+            if (domeOffset.IsHolding<GfMatrix4d>()) {
+                transform = domeOffset.UncheckedGet<GfMatrix4d>() * transform;
+            }
             GlfSimpleLight light =
                 Get(HdLightTokens->params).GetWithDefault<GlfSimpleLight>();
             light.SetTransform(transform);

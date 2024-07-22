@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/volumeShader.h"
 
@@ -56,7 +39,7 @@ HdSt_VolumeShader::HdSt_VolumeShader()
 HdSt_VolumeShader::~HdSt_VolumeShader() = default;
 
 void 
-HdSt_VolumeShader::AddBindings(HdBindingRequestVector * const customBindings)
+HdSt_VolumeShader::AddBindings(HdStBindingRequestVector * const customBindings)
 {
     HdSt_MaterialNetworkShader::AddBindings(customBindings);
 }
@@ -181,55 +164,36 @@ HdSt_VolumeShader::GetBufferSourcesForBBoxAndSampleDistance(
     const GfRange3d &range = bbox.GetRange();
 
     {
-        VtValue matrixVal;
-        if (doublesSupported) {
-            matrixVal = VtValue(bbox.GetInverseMatrix());
-
-        } else {
-            GfMatrix4d dmatrix = bbox.GetInverseMatrix();
-            GfMatrix4f fmatrix(
-                dmatrix[0][0], dmatrix[0][1], dmatrix[0][2], dmatrix[0][3],
-                dmatrix[1][0], dmatrix[1][1], dmatrix[1][2], dmatrix[1][3],
-                dmatrix[2][0], dmatrix[2][1], dmatrix[2][2], dmatrix[2][3],
-                dmatrix[3][0], dmatrix[3][1], dmatrix[3][2], dmatrix[3][3]);
-            matrixVal = VtValue(fmatrix);
-        }
         static const TfToken sourceName(
             _ConcatFallback(_tokens->volumeBBoxInverseTransform));
         sources->push_back(
             std::make_shared<HdVtBufferSource>(
                 sourceName,
-                matrixVal));
+                VtValue(bbox.GetInverseMatrix()),
+                1,
+                doublesSupported));
     }
 
     {
-        VtValue vecVal;
-        if (doublesSupported) {
-            vecVal = GetSafeMin(range);
-        } else {
-            vecVal = GfVec3f(GetSafeMin(range));
-        }
         static const TfToken sourceName(
             _ConcatFallback(_tokens->volumeBBoxLocalMin));
         sources->push_back(
             std::make_shared<HdVtBufferSource>(
                 sourceName,
-                vecVal));
+                VtValue(GetSafeMin(range)),
+                1,
+                doublesSupported));
     }
 
     {
-        VtValue vecVal;
-        if (doublesSupported) {
-            vecVal = GetSafeMax(range);
-        } else {
-            vecVal = GfVec3f(GetSafeMax(range));
-        }
         static const TfToken sourceName(
             _ConcatFallback(_tokens->volumeBBoxLocalMax));
         sources->push_back(
             std::make_shared<HdVtBufferSource>(
                 sourceName,
-                vecVal));
+                VtValue(GetSafeMax(range)),
+                1,
+                doublesSupported));
     }
 
     {
@@ -432,7 +396,7 @@ HdSt_VolumeShader::UpdateTextureHandles(
         const HdStTextureIdentifier &textureId =
             TF_VERIFY(fieldPrim) ?
             fieldPrim->GetTextureIdentifier() : HdStTextureIdentifier();
-        const HdTextureType textureType = textureHandles[i].type;
+        const HdStTextureType textureType = textureHandles[i].type;
         const size_t textureMemory =
             TF_VERIFY(fieldPrim) ?
             fieldPrim->GetTextureMemory() : 0;

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_PY_IDENTITY_H
 #define PXR_BASE_TF_PY_IDENTITY_H
@@ -40,8 +23,6 @@
 #include <boost/python/class.hpp>
 #include <boost/python/handle.hpp>
 #include <boost/python/object.hpp>
-#include <boost/type_traits/is_base_of.hpp>
-#include <boost/utility.hpp>
 
 #include "pxr/base/tf/hashmap.h"
 
@@ -135,9 +116,9 @@ struct Tf_PyOwnershipHelper {
 
 template <typename Ptr>
 struct Tf_PyOwnershipHelper<Ptr,
-    typename boost::enable_if<
-        boost::mpl::and_<boost::is_same<TfRefPtr<typename Ptr::DataType>, Ptr>,
-            boost::is_base_of<TfRefBase, typename Ptr::DataType> > >::type>
+    std::enable_if_t<
+        std::is_same<TfRefPtr<typename Ptr::DataType>, Ptr>::value &&
+        std::is_base_of<TfRefBase, typename Ptr::DataType>::value>>
 {
     struct _RefPtrHolder {
         static boost::python::object
@@ -229,13 +210,13 @@ struct Tf_PyIsRefPtr<TfRefPtr<T> > {
 
 
 template <class Ptr>
-typename boost::enable_if<Tf_PyIsRefPtr<Ptr> >::type
+std::enable_if_t<Tf_PyIsRefPtr<Ptr>::value>
 Tf_PySetPythonIdentity(Ptr const &, PyObject *)
 {
 }
 
 template <class Ptr>
-typename boost::disable_if<Tf_PyIsRefPtr<Ptr> >::type
+std::enable_if_t<!Tf_PyIsRefPtr<Ptr>::value>
 Tf_PySetPythonIdentity(Ptr const &ptr, PyObject *obj)
 {
     if (ptr.GetUniqueIdentifier()) {

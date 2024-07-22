@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HGI_ENUMS_H
 #define PXR_IMAGING_HGI_ENUMS_H
@@ -71,6 +54,10 @@ using HgiBits = uint32_t;
 ///   Supports Metal tessellation shaders</li>
 /// <li>HgiDeviceCapabilitiesBitsBasePrimitiveOffset:
 ///   The device requires workaround for base primitive offset</li>
+/// <li>HgiDeviceCapabilitiesBitsPrimitiveIdEmulation:
+///   The device requires workaround for primitive id</li>
+/// <li>HgiDeviceCapabilitiesBitsIndirectCommandBuffers:
+///   Indirect command buffers are supported</li>
 /// </ul>
 /// <li>HgiDeviceCapabilitiesBitsRayTracing:
 ///   The device supports ray tracing</li>
@@ -94,7 +81,9 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsCustomDepthRange        = 1 << 13,
     HgiDeviceCapabilitiesBitsMetalTessellation       = 1 << 14,
     HgiDeviceCapabilitiesBitsBasePrimitiveOffset     = 1 << 15,
-    HgiDeviceCapabilitiesBitsRayTracing              = 1 << 16,
+    HgiDeviceCapabilitiesBitsPrimitiveIdEmulation    = 1 << 16,
+    HgiDeviceCapabilitiesBitsIndirectCommandBuffers  = 1 << 17,
+    HgiDeviceCapabilitiesBitsRayTracing              = 1 << 18,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -320,14 +309,15 @@ enum HgiBufferUsageBits : HgiBits
     HgiBufferUsageIndex32 = 1 << 1,
     HgiBufferUsageVertex = 1 << 2,
     HgiBufferUsageStorage = 1 << 3,
-    HgiBufferUsageAccelerationStructureBuildInputReadOnly = 1 << 4,
-    HgiBufferUsageAccelerationStructureStorage = 1 << 5,
-    HgiBufferUsageShaderDeviceAddress = 1 << 6,
-    HgiBufferUsageShaderBindingTable = 1 << 7,
-    HgiBufferUsageNoTransfer = 1 << 8,
-    HgiBufferUsageRayTracingExtensions = 1 << 9,
+    HgiBufferUsageIndirect = 1 << 4,
+    HgiBufferUsageAccelerationStructureBuildInputReadOnly = 1 << 5,
+    HgiBufferUsageAccelerationStructureStorage = 1 << 6,
+    HgiBufferUsageShaderDeviceAddress = 1 << 7,
+    HgiBufferUsageShaderBindingTable = 1 << 8,
+    HgiBufferUsageNoTransfer = 1 << 9,
+    HgiBufferUsageRayTracingExtensions = 1 << 10,
 
-    HgiBufferUsageCustomBitsBegin = 1 << 10,
+    HgiBufferUsageCustomBitsBegin = 1 << 11,
 };
 using HgiBufferUsage = HgiBits;
 
@@ -402,6 +392,8 @@ using HgiShaderStage = HgiBits;
 ///   Uniform buffer (UBO).</li>
 /// <li>HgiBindResourceTypeStorageBuffer:
 ///   Shader storage buffer (SSBO).</li>
+/// <li>HgiBindResourceTypeTessFactors:
+///   Tessellation factors for Metal tessellation.</li>
 /// </ul>
 ///
 enum HgiBindResourceType
@@ -412,6 +404,7 @@ enum HgiBindResourceType
     HgiBindResourceTypeStorageImage,
     HgiBindResourceTypeUniformBuffer,
     HgiBindResourceTypeStorageBuffer,
+    HgiBindResourceTypeTessFactors,
     HgiBindResourceTypeAccelerationStructure,
 
     HgiBindResourceTypeCount
@@ -731,7 +724,7 @@ enum HgiBindingType
 
 /// \enum HgiInterpolationType
 ///
-/// Describes the type of shader resource binding model to use.
+/// Describes the type of parameter interpolation.
 ///
 /// <ul>
 /// <li>HgiInterpolationDefault:
@@ -753,6 +746,51 @@ enum HgiInterpolationType
     HgiInterpolationDefault = 0,
     HgiInterpolationFlat,
     HgiInterpolationNoPerspective,
+};
+
+/// \enum HgiSamplingType
+///
+/// Describes the type of parameter sampling.
+///
+/// <ul>
+/// <li>HgiSamplingDefault:
+///   The shader input will have default sampling.
+///   Glsl example: vec2 parameter;
+///   Msl example: vec2 parameter;</li>
+/// <li>HgiSamplingCentroid:
+///   The shader input will have centroid sampling.
+///   Glsl example: centroid vec2 parameter;
+///   Msl example: vec2 parameter[[centroid_perspective]];</li>
+/// <li>HgiSamplingSample:
+///   The shader input will have per-sample sampling.
+///   Glsl example: sample vec2 parameter;
+///   Msl example: vec2 parameter[[sample_perspective]];</li>
+/// </ul>
+///
+enum HgiSamplingType
+{
+    HgiSamplingDefault = 0,
+    HgiSamplingCentroid,
+    HgiSamplingSample,
+};
+
+/// \enum HgiStorageType
+///
+/// Describes the type of parameter storage.
+///
+/// <ul>
+/// <li>HgiStorageDefault:
+///   The shader input will have default storage.
+///   Glsl example: vec2 parameter;</li>
+/// <li>HgiStoragePatch:
+///   The shader input will have per-patch storage.
+///   Glsl example: patch vec2 parameter;</li>
+/// </ul>
+///
+enum HgiStorageType
+{
+    HgiStorageDefault = 0,
+    HgiStoragePatch,
 };
 
 /// \enum HgiShaderTextureType
@@ -803,6 +841,23 @@ enum HgiRayTracingShaderGroupType {
     HgiRayTracingShaderGroupTypeGeneral,
     HgiRayTracingShaderGroupTypeTriangles,
     HgiRayTracingShaderGroupTypeProcedural,
+};
+
+/// \enum HgiComputeDispatch
+///
+/// Specifies the dispatch method for compute encoders.
+///
+/// <ul>
+/// <li>HgiComputeDispatchSerial:
+///   Kernels are dispatched serially.</li>
+/// <li>HgiComputeDispatchConcurrent:
+///   Kernels are dispatched concurrently, if supported by the API</li>
+/// </ul>
+///
+enum HgiComputeDispatch
+{
+    HgiComputeDispatchSerial = 0,
+    HgiComputeDispatchConcurrent
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

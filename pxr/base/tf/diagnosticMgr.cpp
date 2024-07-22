@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -42,11 +25,10 @@
 #include "pxr/base/arch/stackTrace.h"
 #include "pxr/base/arch/threads.h"
 
-#include <boost/utility.hpp>
-
 #include <signal.h>
 #include <stdlib.h>
 
+#include <any>
 #include <thread>
 #include <memory>
 
@@ -124,6 +106,7 @@ TF_REGISTRY_FUNCTION(TfDebug)
 // Abort without logging.  This is meant for use by things like TF_FATAL_ERROR,
 // which already log (more extensive) session information before doing the
 // abort.
+[[noreturn]]
 static
 void
 Tf_UnhandledAbort()
@@ -381,14 +364,16 @@ void TfDiagnosticMgr::PostFatal(TfCallContext const &context,
 {
     _ReentrancyGuard guard(&_reentrantGuard.local());
     if (guard.ScopeWasReentered()) {
-        return;
+        TfLogCrash("RECURSIVE FATAL ERROR",
+                   msg, std::string() /*additionalInfo*/,
+                   context, true /*logToDB*/);
     }
 
     if (TfDebug::IsEnabled(TF_ATTACH_DEBUGGER_ON_ERROR) ||
-        TfDebug::IsEnabled(TF_ATTACH_DEBUGGER_ON_FATAL_ERROR))
+        TfDebug::IsEnabled(TF_ATTACH_DEBUGGER_ON_FATAL_ERROR)) {
         ArchDebuggerTrap();
+    }
 
-    bool dispatchedToDelegate = false;
     {
         tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/false);
         for (auto const& delegate : _delegates) {
@@ -396,30 +381,27 @@ void TfDiagnosticMgr::PostFatal(TfCallContext const &context,
                 delegate->IssueFatalError(context, msg);
             }
         }
-        dispatchedToDelegate = !_delegates.empty();
+    }
+
+    if (statusCode == TF_DIAGNOSTIC_CODING_ERROR_TYPE) {
+        fprintf(stderr, "Fatal coding error: %s [%s], in %s(), %s:%zu\n",
+                msg.c_str(), ArchGetProgramNameForErrors(),
+                context.GetFunction(), context.GetFile(), context.GetLine());
+    }
+    else if (statusCode == TF_DIAGNOSTIC_RUNTIME_ERROR_TYPE) {
+        fprintf(stderr, "Fatal error: %s [%s].\n",
+                msg.c_str(), ArchGetProgramNameForErrors());
+        exit(1);
+    }
+    else {
+        // Report and log information about the fatal error
+        TfLogCrash("FATAL ERROR", msg, std::string() /*additionalInfo*/,
+                   context, true /*logToDB*/);
     }
     
-    if (!dispatchedToDelegate) {
-        if (statusCode == TF_DIAGNOSTIC_CODING_ERROR_TYPE) {
-            fprintf(stderr, "Fatal coding error: %s [%s], in %s(), %s:%zu\n",
-                    msg.c_str(), ArchGetProgramNameForErrors(),
-                    context.GetFunction(), context.GetFile(), context.GetLine());
-        }
-        else if (statusCode == TF_DIAGNOSTIC_RUNTIME_ERROR_TYPE) {
-            fprintf(stderr, "Fatal error: %s [%s].\n",
-                    msg.c_str(), ArchGetProgramNameForErrors());
-            exit(1);
-        }
-        else {
-            // Report and log information about the fatal error
-            TfLogCrash("FATAL ERROR", msg, std::string() /*additionalInfo*/,
-                       context, true /*logToDB*/);
-        }
-
-        // Abort, but avoid the signal handler, since we've already logged the
-        // session info in TfLogStackTrace.
-        Tf_UnhandledAbort();
-    }
+    // Abort, but avoid the signal handler, since we've already logged the
+    // session info in TfLogStackTrace.
+    Tf_UnhandledAbort();
 }
 
 TfDiagnosticMgr::ErrorIterator
@@ -673,7 +655,7 @@ TfDiagnosticMgr::FormatDiagnostic(const TfEnum &code,
 
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
     if (const TfPyExceptionState* exc =
-            boost::any_cast<TfPyExceptionState>(&info)) {
+            std::any_cast<TfPyExceptionState>(&info)) {
         output += TfStringPrintf("%s\n", exc->GetExceptionString().c_str());
     }
 #endif // PXR_PYTHON_SUPPORT_ENABLED

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_PRIM_RANGE_H
 #define PXR_USD_USD_PRIM_RANGE_H
@@ -137,20 +120,43 @@ public:
     /// A forward iterator into a UsdPrimRange.  Iterators are valid for the
     /// range they were obtained from.  An iterator \em i obtained from a range
     /// \em r is not valid for a range \em c copied from \em r.
-    class iterator : public boost::iterator_adaptor<
-        iterator,                      // crtp base.
-        Usd_PrimDataConstPtr,          // base iterator.
-        UsdPrim,                       // value type.
-        boost::forward_traversal_tag,  // traversal.
-        UsdPrim>                       // reference type.
-    {
+    class iterator {
+        using _UnderlyingIterator = Usd_PrimDataConstPtr;
+        class _PtrProxy {
+        public:
+            UsdPrim* operator->() { return &_prim; }
+        private:
+            friend class iterator;
+            explicit _PtrProxy(const UsdPrim& prim) : _prim(prim) {}
+            UsdPrim _prim;
+        };
     public:
-        iterator() : iterator_adaptor_(nullptr) {}
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = UsdPrim;
+        using reference = UsdPrim;
+        using pointer = _PtrProxy;
+        using difference_type = std::ptrdiff_t;
+
+        iterator() = default;
 
         /// Allow implicit conversion from EndSentinel.
         iterator(EndSentinel e)
-            : iterator_adaptor_(e._range->_end)
+            : _underlyingIterator(e._range->_end)
             , _range(e._range) {}
+
+        reference operator*() const { return dereference(); }
+        pointer operator->() const { return pointer(dereference()); }
+
+        iterator& operator++() {
+            increment();
+            return *this;
+        }
+
+        iterator operator++(int) {
+            iterator result = *this;
+            increment();
+            return result;
+        }
         
         /// Return true if the iterator points to a prim visited the second time
         /// (in post order) for a pre- and post-order iterator, false otherwise.
@@ -164,7 +170,7 @@ public:
         /// Return true if this iterator is equivalent to \p other.
         inline bool operator==(iterator const &other) const {
             return _range == other._range &&
-                base() == other.base() &&
+                _underlyingIterator == other._underlyingIterator &&
                 _proxyPrimPath == other._proxyPrimPath &&
                 _depth == other._depth &&
                 _pruneChildrenFlag == other._pruneChildrenFlag &&
@@ -173,7 +179,8 @@ public:
 
         /// Return true if this iterator is equivalent to \p other.
         inline bool operator==(EndSentinel const &other) const {
-            return _range == other._range && base() == _range->_end;
+            return _range == other._range &&
+                   _underlyingIterator == _range->_end;
         }
 
         /// Return true if this iterator is not equivalent to \p other.
@@ -188,13 +195,12 @@ public:
          
     private:
         friend class UsdPrimRange;
-        friend class boost::iterator_core_access;
         
         iterator(UsdPrimRange const *range,
                  Usd_PrimDataConstPtr prim,
                  SdfPath proxyPrimPath,
                  unsigned int depth)
-            : iterator_adaptor_(prim)
+            : _underlyingIterator(prim)
             , _range(range)
             , _proxyPrimPath(proxyPrimPath)
             , _depth(depth) {}
@@ -202,9 +208,10 @@ public:
         USD_API void increment();
         
         inline reference dereference() const { 
-            return UsdPrim(base(), _proxyPrimPath);
+            return UsdPrim(_underlyingIterator, _proxyPrimPath);
         }
 
+        _UnderlyingIterator _underlyingIterator = nullptr;
         UsdPrimRange const *_range = nullptr;
         SdfPath _proxyPrimPath;
         unsigned int _depth = 0;
@@ -338,7 +345,7 @@ public:
     /// UsdPrimRange::iterator::IsPostVisit() be true.
     void set_begin(iterator const &newBegin) {
         TF_VERIFY(!newBegin.IsPostVisit());
-        _begin = newBegin.base();
+        _begin = newBegin._underlyingIterator;
         _initProxyPrimPath = newBegin._proxyPrimPath;
         _initDepth = newBegin._depth;
     }
@@ -392,8 +399,9 @@ private:
 
         // Advance to the first prim that passes the predicate.
         iterator b = begin();
-        if (b.base() != _end &&
-            !Usd_EvalPredicate(_predicate, b.base(), proxyPrimPath)) {
+        if (b._underlyingIterator != _end &&
+            !Usd_EvalPredicate(_predicate, b._underlyingIterator,
+                               proxyPrimPath)) {
             b._pruneChildrenFlag = true;
             set_begin(++b);
         }

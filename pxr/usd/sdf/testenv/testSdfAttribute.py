@@ -2,25 +2,8 @@
 #
 # Copyright 2020 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # pylint: disable=range-builtin-not-iterating
 
@@ -143,10 +126,6 @@ class TestSdfAttribute(unittest.TestCase):
         # assign a default value, otherwise after ClearInfo, attr will expire.
         attr.default = 1
 
-        self.assertEqual(attr.HasInfo('bogus_key_test'), False)
-        with self.assertRaises(Tf.ErrorException):
-            attr.ClearInfo('bogus_key_test')
-
         self.assertEqual(attr.custom, False)
         attr.custom = True
         self.assertEqual(attr.custom, True)
@@ -246,6 +225,24 @@ class TestSdfAttribute(unittest.TestCase):
         attr.ClearInfo('displayGroup')
         self.assertFalse(attr.HasInfo('displayGroup'))
         self.assertEqual(attr.displayGroup, '')
+
+    def test_ClearUnexpectedField(self):
+        layer = Sdf.Layer.CreateAnonymous("ClearUnexpected")
+        layer.ImportFromString(
+'''#sdf 1.4.32
+def Sphere "Foo"
+{
+    double radius (
+        displayName = "Radius"
+        unrecognized = "Test"
+    )
+}
+''')
+
+        spec = layer.GetPropertyAtPath("/Foo.radius")
+        self.assertTrue(spec.HasInfo("unrecognized"))
+        spec.ClearInfo("unrecognized")
+        self.assertFalse(spec.HasInfo("unrecognized"))
 
     def test_Connections(self):
         layer = Sdf.Layer.CreateAnonymous()
@@ -481,6 +478,30 @@ def Scope "Scope"
                          {1.23: 5, 3.23: 10, 6: 5})
         self.assertEqual(prim.attributes['desc'].GetInfo('timeSamples'),
                          {1.23: 'foo', 3.23: 'bar', 6: 'baz'})
+
+    def test_OpaqueNoAuthoredDefault(self):
+        """
+        Attempting to set the default value of an opaque attribute should fail.
+        """
+        layer = Sdf.Layer.CreateAnonymous()
+        prim = Sdf.PrimSpec(layer, "Test", Sdf.SpecifierDef, "TestType")
+        attr = Sdf.AttributeSpec(prim, "Attr", Sdf.ValueTypeNames.Opaque)
+        self.assertEqual(attr.default, None)
+        with self.assertRaises(Tf.ErrorException):
+            attr.default = Sdf.OpaqueValue()
+        self.assertEqual(attr.default, None)
+
+    def test_GroupNoAuthoredDefault(self):
+        """
+        Attempting to set the default value of a group attribute should fail.
+        """
+        layer = Sdf.Layer.CreateAnonymous()
+        prim = Sdf.PrimSpec(layer, "Test", Sdf.SpecifierDef, "TestType")
+        attr = Sdf.AttributeSpec(prim, "Attr", Sdf.ValueTypeNames.Group)
+        self.assertEqual(attr.default, None)
+        with self.assertRaises(Tf.ErrorException):
+            attr.default = Sdf.OpaqueValue()
+        self.assertEqual(attr.default, None)
 
 if __name__ == '__main__':
     unittest.main()

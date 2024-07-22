@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -29,7 +12,6 @@
 
 #include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/makePyConstructor.h"
-#include "pxr/base/tf/py3Compat.h"
 #include "pxr/base/tf/pyContainerConversions.h"
 #include "pxr/base/tf/pyObjectFinder.h"
 #include "pxr/base/tf/pyPtrHelpers.h"
@@ -44,7 +26,6 @@
 #include <boost/python/has_back_reference.hpp>
 #include <boost/python/operators.hpp>
 #include <boost/python/overloads.hpp>
-#include <boost/preprocessor.hpp>
 
 #include <string>
 
@@ -63,7 +44,7 @@ namespace {
 static TfType
 _GetTfTypeFromPython(PyObject *p)
 {
-    if (TfPyBytes_Check(p) || PyUnicode_Check(p))
+    if (PyBytes_Check(p) || PyUnicode_Check(p))
         return TfType::FindByName( extract<string>(p)() );
     else
         return TfType::FindByPythonClass( object(borrowed(p)) );
@@ -223,7 +204,7 @@ _FindByPythonClass(const boost::python::object & classObj)
     // string typename.  Rather than returning the unknown type (assuming
     // of course that we never declare Python's string type as a TfType),
     // we instead direct the caller to use FindByName().
-    if (TfPyBytes_Check(classObj.ptr()) || PyUnicode_Check(classObj.ptr())) {
+    if (PyBytes_Check(classObj.ptr()) || PyUnicode_Check(classObj.ptr())) {
         TfPyThrowTypeError("String passed to Tf.Type.Find() -- you probably "
                            "want Tf.Type.FindByName() instead");
     }

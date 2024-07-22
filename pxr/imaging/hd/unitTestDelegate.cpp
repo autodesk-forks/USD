@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/unitTestDelegate.h"
 
@@ -232,6 +215,22 @@ HdUnitTestDelegate::AddMesh(SdfPath const &id,
     if (!instancerId.IsEmpty()) {
         _instancerBindings[id] = instancerId;
         _instancers[instancerId].prototypes.push_back(id);
+    }
+}
+
+void
+HdUnitTestDelegate::SetMeshCullStyle(
+    SdfPath const &id, HdCullStyle const &cullStyle)
+{
+    auto it = _meshes.find(id);
+    if (it != _meshes.end()) {
+        if (it->second.cullStyle != cullStyle) {
+            it->second.cullStyle = cullStyle;
+            HdChangeTracker& tracker = GetRenderIndex().GetChangeTracker();
+            tracker.MarkRprimDirty(id, HdChangeTracker::DirtyCullStyle);
+        }
+    } else {
+        TF_WARN("Could not find mesh Rprim named %s. \n", id.GetText());
     }
 }
 
@@ -765,7 +764,7 @@ HdUnitTestDelegate::GetBasisCurvesTopology(SdfPath const& id)
     // Need to implement testing support for basis curves
     return HdBasisCurvesTopology(curve.type,
                                  curve.basis,
-                                 HdTokens->nonperiodic,
+                                 curve.wrap,
                                  curve.curveVertexCounts,
                                  curve.curveIndices);
 }
@@ -824,6 +823,16 @@ HdUnitTestDelegate::GetDisplayStyle(SdfPath const& id)
     }
     // returns fallback refinelevel
     return HdDisplayStyle(_refineLevel);
+}
+
+/*virtual*/
+HdCullStyle 
+HdUnitTestDelegate::GetCullStyle(SdfPath const& id)
+{
+    if (_meshes.find(id) != _meshes.end()) {
+        return _meshes[id].cullStyle;
+    }
+    return HdCullStyleDontCare;
 }
 
 /*virtual*/
@@ -1051,15 +1060,15 @@ HdUnitTestDelegate::Get(SdfPath const& id, TfToken const& key)
         else if(_points.find(id) != _points.end()) {
             return VtValue(_points[id].points);
         }
-    } else if (key == HdInstancerTokens->scale) {
+    } else if (key == HdInstancerTokens->instanceScales) {
         if (_instancers.find(id) != _instancers.end()) {
             return VtValue(_instancers[id].scale);
         }
-    } else if (key == HdInstancerTokens->rotate) {
+    } else if (key == HdInstancerTokens->instanceRotations) {
         if (_instancers.find(id) != _instancers.end()) {
             return VtValue(_instancers[id].rotate);
         }
-    } else if (key == HdInstancerTokens->translate) {
+    } else if (key == HdInstancerTokens->instanceTranslations) {
         if (_instancers.find(id) != _instancers.end()) {
             return VtValue(_instancers[id].translate);
         }
@@ -1097,15 +1106,15 @@ HdUnitTestDelegate::GetIndexedPrimvar(SdfPath const& id, TfToken const& key,
         else if(_points.find(id) != _points.end()) {
             return VtValue(_points[id].points);
         }
-    } else if (key == HdInstancerTokens->scale) {
+    } else if (key == HdInstancerTokens->instanceScales) {
         if (_instancers.find(id) != _instancers.end()) {
             return VtValue(_instancers[id].scale);
         }
-    } else if (key == HdInstancerTokens->rotate) {
+    } else if (key == HdInstancerTokens->instanceRotations) {
         if (_instancers.find(id) != _instancers.end()) {
             return VtValue(_instancers[id].rotate);
         }
-    } else if (key == HdInstancerTokens->translate) {
+    } else if (key == HdInstancerTokens->instanceTranslations) {
         if (_instancers.find(id) != _instancers.end()) {
             return VtValue(_instancers[id].translate);
         }
@@ -1149,9 +1158,12 @@ HdUnitTestDelegate::GetPrimvarDescriptors(SdfPath const& id,
     }
     if (interpolation == HdInterpolationInstance && _hasInstancePrimvars &&
         _instancers.find(id) != _instancers.end()) {
-        primvars.emplace_back(HdInstancerTokens->scale, interpolation);
-        primvars.emplace_back(HdInstancerTokens->rotate, interpolation);
-        primvars.emplace_back(HdInstancerTokens->translate, interpolation);
+        primvars.emplace_back(HdInstancerTokens->instanceScales,
+            interpolation);
+        primvars.emplace_back(HdInstancerTokens->instanceRotations,
+            interpolation);
+        primvars.emplace_back(HdInstancerTokens->instanceTranslations,
+            interpolation);
     }
 
     auto const cit = _primvars.find(id);
@@ -1650,6 +1662,21 @@ HdUnitTestDelegate::AddCurves(
 }
 
 void
+HdUnitTestDelegate::SetCurveWrapMode(
+    SdfPath const &id, TfToken const &wrap)
+{
+    if (_curves.find(id) != _curves.end()) {
+        if (_curves[id].wrap != wrap) {
+            _curves[id].wrap = wrap;
+            HdChangeTracker& tracker = GetRenderIndex().GetChangeTracker();
+            tracker.MarkRprimDirty(id, HdChangeTracker::DirtyTopology);
+        }
+    } else {
+        TF_WARN("Could not find Rprim named %s.\n", id.GetText());
+    }
+}
+
+void
 HdUnitTestDelegate::AddPoints(
     SdfPath const &id, GfMatrix4f const &transform,
     HdInterpolation colorInterp,
@@ -1962,7 +1989,7 @@ HdUnitTestDelegate::PopulateBasicTestSet()
                            HdInterpolationVertex, HdInterpolationVertex);
 
         dmat.SetTranslate(GfVec3d(xPos, 3.0, 0.0));
-        AddCurves(SdfPath("/curve3"), HdTokens->cubic, HdTokens->bSpline, GfMatrix4f(dmat),
+        AddCurves(SdfPath("/curve3"), HdTokens->cubic, HdTokens->bspline, GfMatrix4f(dmat),
                            HdInterpolationVertex, HdInterpolationConstant);
 
         dmat.SetTranslate(GfVec3d(xPos, 6.0, 0.0));

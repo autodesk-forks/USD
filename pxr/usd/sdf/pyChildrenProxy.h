@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_PY_CHILDREN_PROXY_H
 #define PXR_USD_SDF_PY_CHILDREN_PROXY_H
@@ -157,19 +140,9 @@ private:
             .def("insert", &This::_InsertItemByIndex, TfPyRaiseOnError<>())
             .def("get", &This::_PyGet, TfPyRaiseOnError<>())
             .def("get", &This::_PyGetDefault, TfPyRaiseOnError<>())
-#if PY_MAJOR_VERSION < 3
-            .def("has_key", &This::_HasKey, TfPyRaiseOnError<>())
-            .def("itervalues", &This::_GetValueIterator, TfPyRaiseOnError<>())
-            .def("iterkeys",   &This::_GetKeyIterator, TfPyRaiseOnError<>())
-            .def("iteritems",  &This::_GetItemIterator, TfPyRaiseOnError<>())
-            .def("items", &This::_GetItems, TfPyRaiseOnError<>())
-            .def("keys", &This::_GetKeys, TfPyRaiseOnError<>())
-            .def("values", &This::_GetValues, TfPyRaiseOnError<>())
-#else
             .def("items", &This::_GetItemIterator, TfPyRaiseOnError<>())
             .def("keys", &This::_GetKeyIterator, TfPyRaiseOnError<>())
             .def("values", &This::_GetValueIterator, TfPyRaiseOnError<>())
-#endif
             .def("index", &This::_FindIndexByKey, TfPyRaiseOnError<>())
             .def("index", &This::_FindIndexByValue, TfPyRaiseOnError<>())
             .def("__eq__", &This::operator==, TfPyRaiseOnError<>())
@@ -179,19 +152,19 @@ private:
         class_<_Iterator<_ExtractItem> >
             ((name + "_Iterator").c_str(), no_init)
             .def("__iter__", &This::template _Iterator<_ExtractItem>::GetCopy)
-            .def(TfPyIteratorNextMethodName, &This::template _Iterator<_ExtractItem>::GetNext)
+            .def("__next__", &This::template _Iterator<_ExtractItem>::GetNext)
             ;
 
         class_<_Iterator<_ExtractKey> >
             ((name + "_KeyIterator").c_str(), no_init)
             .def("__iter__", &This::template _Iterator<_ExtractKey>::GetCopy)
-            .def(TfPyIteratorNextMethodName, &This::template _Iterator<_ExtractKey>::GetNext)
+            .def("__next__", &This::template _Iterator<_ExtractKey>::GetNext)
             ;
 
         class_<_Iterator<_ExtractValue> >
             ((name + "_ValueIterator").c_str(), no_init)
             .def("__iter__", &This::template _Iterator<_ExtractValue>::GetCopy)
-            .def(TfPyIteratorNextMethodName, &This::template _Iterator<_ExtractValue>::GetNext)
+            .def("__next__", &This::template _Iterator<_ExtractValue>::GetNext)
             ;
     }
 
@@ -359,23 +332,6 @@ private:
         }
         return result;
     }
-
-#if PY_MAJOR_VERSION < 3
-    boost::python::list _GetItems() const
-    {
-        return _Get<_ExtractItem>();
-    }
-
-    boost::python::list _GetKeys() const
-    {
-        return _Get<_ExtractKey>();
-    }
-
-    boost::python::list _GetValues() const
-    {
-        return _Get<_ExtractValue>();
-    }
-#endif
 
     int _FindIndexByKey(const key_type& key) const
     {

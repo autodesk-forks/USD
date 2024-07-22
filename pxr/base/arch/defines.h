@@ -1,32 +1,11 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_ARCH_DEFINES_H
 #define PXR_BASE_ARCH_DEFINES_H
-
-#include "pxr/pxr.h"
-
-PXR_NAMESPACE_OPEN_SCOPE
 
 //
 // OS
@@ -38,7 +17,10 @@ PXR_NAMESPACE_OPEN_SCOPE
 #include "TargetConditionals.h"
 #define ARCH_OS_DARWIN
 #if TARGET_OS_IPHONE
-#define ARCH_OS_IOS
+// TARGET_OS_IPHONE refers to all iOS derivative platforms
+// TARGET_OS_IOS refers to iPhone/iPad
+// For now, we specialize for the umbrella TARGET_OS_IPHONE group
+#define ARCH_OS_IPHONE
 #else
 #define ARCH_OS_OSX
 #endif
@@ -108,6 +90,16 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define ARCH_HAS_MMAP_MAP_POPULATE
 #endif
 
-PXR_NAMESPACE_CLOSE_SCOPE
+// When using MSVC, provide an easy way to detect whether the older
+// "traditional" preprocessor is being used as opposed to the newer, more
+// standards-conforming preprocessor. The traditional preprocessor may require
+// custom versions of macros.
+// See here for more detail about MSVC's preprocessors:
+// https://learn.microsoft.com/en-us/cpp/preprocessor/preprocessor-experimental-overview
+#if defined(ARCH_COMPILER_MSVC)
+    #if !defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL
+    #define ARCH_PREPROCESSOR_MSVC_TRADITIONAL
+    #endif
+#endif
 
 #endif // PXR_BASE_ARCH_DEFINES_H 

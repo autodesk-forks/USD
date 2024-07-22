@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usd/usdSkel/root.h"
 #include "pxr/usd/usd/schemaRegistry.h"
@@ -169,39 +152,27 @@ _ComputeExtent(const UsdGeomBoundable& boundable,
     UsdSkelCache skelCache;
     skelCache.Populate(skelRoot, UsdTraverseInstanceProxies());
 
-    std::vector<UsdSkelBinding> bindings;
-    if (!skelCache.ComputeSkelBindings(
-            skelRoot, &bindings, UsdTraverseInstanceProxies()) ||
-        bindings.size() == 0) {
-
-        // XXX: The extent of a SkelRoot is intended to bound the set of
-        // skinnable prims only. If we have no bindings, then there are no
-        // skinnable prims to bound, and the case can be treated as a failed
-        // extent computation.
-        // We could potentially look for the set of skeletons bound beneath
-        // the SkelRoot and compute the union of their extents, but since
-        // Skeleton prims are themselves boundable, this seems redundant.
-        return false;
-    }
-
     UsdGeomXformCache xfCache;
-
     GfRange3d bbox;
     VtVec3fArray skelExtent;
 
-    for (const UsdSkelBinding& binding : bindings) {
-
-        UsdSkelSkeletonQuery skelQuery =
-            skelCache.GetSkelQuery(binding.GetSkeleton());
-        if (!TF_VERIFY(skelQuery))
+    auto processSkeleton = [&](
+        UsdSkelSkeleton const &skeleton,
+        UsdSkelBinding const &binding = UsdSkelBinding()) {
+        
+        UsdSkelSkeletonQuery skelQuery = skelCache.GetSkelQuery(skeleton);
+        
+        if (!TF_VERIFY(skelQuery)) {
             return false;
+        }
 
         // Compute skel-space joint transforms.
         // The extent for this skel is based on the pivots of all bones,
         // with some additional padding.
         VtMatrix4dArray skelXforms;
-        if(!skelQuery.ComputeJointSkelTransforms(&skelXforms, time))
-            continue;
+        if(!skelQuery.ComputeJointSkelTransforms(&skelXforms, time)) {
+            return true;
+        }
 
         // Pre-compute a constant padding metric across all prims
         // skinned by this skeleton. 
@@ -224,7 +195,7 @@ _ComputeExtent(const UsdGeomBoundable& boundable,
         // transforms, in the space of the SkelRoot prim.
         bool resetXformStack = false;
         GfMatrix4d skelRootXform =
-        xfCache.ComputeRelativeTransform(binding.GetSkeleton().GetPrim(),
+        xfCache.ComputeRelativeTransform(skeleton.GetPrim(),
                                          skelRoot.GetPrim(),
                                          &resetXformStack);
         if(!resetXformStack && transform) {
@@ -233,8 +204,39 @@ _ComputeExtent(const UsdGeomBoundable& boundable,
         UsdSkelComputeJointsExtent(skelXforms, &skelExtent,
                                    padding, &skelRootXform);
 
-        for(const auto& p : skelExtent)
+        for(const auto& p : skelExtent) {
             bbox.UnionWith(p);
+        }
+
+        return true;
+    };
+    
+    std::vector<UsdSkelBinding> bindings;
+    if (!skelCache.ComputeSkelBindings(
+            skelRoot, &bindings, UsdTraverseInstanceProxies()) ||
+        bindings.size() == 0) {
+
+        // If we don't have any bindings, we visualize the skeletons themselves,
+        // so simply traverse the subtree and process any descendant skeletons
+        // to produce our extent.
+
+        for (UsdPrim prim: UsdPrimRange(
+                 skelRoot.GetPrim(), UsdTraverseInstanceProxies())) {
+            UsdSkelSkeleton skeleton(prim);
+            if (skeleton) {
+                if (!processSkeleton(skeleton)) {
+                    return false;
+                }
+            }
+        }
+    }
+    else {
+        // Normal case -- process all the bindings.
+        for (const UsdSkelBinding& binding : bindings) {
+            if (!processSkeleton(binding.GetSkeleton(), binding)) {
+                return false;
+            }
+        }
     }
 
     extent->resize(2);

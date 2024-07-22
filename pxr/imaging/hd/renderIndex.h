@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_RENDER_INDEX_H
 #define PXR_IMAGING_HD_RENDER_INDEX_H
@@ -130,10 +113,15 @@ public:
     //    hgi = Hgi::CreatePlatformDefaultHgi()
     //    hgiDriver = new HdDriver<Hgi*>(HgiTokens→renderDriver, hgi)
     //    HdRenderIndex::New(_renderDelegate, {_hgiDriver})
+    // 
+    /// "instanceName" is an optional identifier useful for applications to
+    /// associate this render index with related resources (such as the scene
+    /// index instances).
     HD_API
     static HdRenderIndex* New(
         HdRenderDelegate *renderDelegate,
-        HdDriverVector const& drivers);
+        HdDriverVector const& drivers,
+        const std::string &instanceName=std::string());
 
     HD_API
     ~HdRenderIndex();
@@ -359,11 +347,17 @@ public:
     HD_API
     void InsertSceneIndex(
             const HdSceneIndexBaseRefPtr &inputScene,
-            SdfPath const& scenePathPrefix);
+            SdfPath const& scenePathPrefix,
+            bool needsPrefixing = true);
 
     HD_API
     void RemoveSceneIndex(
             const HdSceneIndexBaseRefPtr &inputScene);
+
+    /// The terminal scene index that is driving what is in the render index
+    /// through emulation.
+    HD_API
+    HdSceneIndexBaseRefPtr GetTerminalSceneIndex() const;
 
     // ---------------------------------------------------------------------- //
     /// \name Render Delegate
@@ -395,40 +389,43 @@ public:
     /// invalidations to be consolidated into vectorized batches. Calling this
     /// will cause subsequent notices to be be queued.
     /// 
-    /// NOTE: This does not currently track any nested state. Repeated calls
-    ///       prior to a corresponding SceneIndexEmulationNoticeBatchEnd will
-    ///       have no effect.
+    /// NOTE: This tracks depth internally and is safe to call in nested 
+    ///       contexts. It is not safe to call from multiple threads, though.
     HD_API
     void SceneIndexEmulationNoticeBatchBegin();
 
     /// Flushes any queued scene index observer notices and disables further
     /// queueing.
     ///
-    /// NOTE: This does not currently track any nested state. Calling this
-    ///       will immediately flush and disable queueing regardless of the
-    ///       number of times SceneIndexEmulationNoticeBatchBegin is called
-    ///       prior.
+    /// NOTE: This tracks depth internally and is safe to call in nested 
+    ///       contexts. It is not safe to call from multiple threads, though.
     HD_API
     void SceneIndexEmulationNoticeBatchEnd();
 
+    HD_API
+    std::string GetInstanceName() const;
 
 private:
     // The render index constructor is private so we can check
     // renderDelegate before construction: see HdRenderIndex::New(...).
     HdRenderIndex(
         HdRenderDelegate *renderDelegate, 
-        HdDriverVector const& drivers);
+        HdDriverVector const& drivers,
+        const std::string &instanceName=std::string());
 
     // ---------------------------------------------------------------------- //
     // Private Helper methods 
     // ---------------------------------------------------------------------- //
 
     // Go through all RPrims and reallocate their instance ids
-    // This is called once we have exhausted all all 24bit instance ids.
+    // This is called once we have exhausted all 24bit instance ids.
     void _CompactPrimIds();
 
     // Allocate the next available instance id to the prim
     void _AllocatePrimId(HdRprim* prim);
+
+    using HdTaskCreateFnc =
+            std::function<HdTaskSharedPtr(HdSceneDelegate*, SdfPath const&)>;
 
     // Inserts the task into the index and updates tracking state.
     // _TrackDelegateTask is called by the inlined InsertTask<T>, so it needs
@@ -436,7 +433,7 @@ private:
     HD_API
     void _TrackDelegateTask(HdSceneDelegate* delegate, 
                             SdfPath const& taskId,
-                            HdTaskSharedPtr const& task);
+                            HdTaskCreateFnc taskCreateFnc);
 
     template <typename T>
     static inline const TfToken & _GetTypeId();
@@ -498,9 +495,12 @@ private:
 
     HdLegacyPrimSceneIndexRefPtr _emulationSceneIndex;
     HdNoticeBatchingSceneIndexRefPtr _emulationNoticeBatchingSceneIndex;
+    unsigned int _noticeBatchingDepth;
+
     std::unique_ptr<class HdSceneIndexAdapterSceneDelegate> _siSd;
 
     HdMergingSceneIndexRefPtr _mergingSceneIndex;
+    HdSceneIndexBaseRefPtr _terminalSceneIndex;
 
     struct _TaskInfo {
         HdSceneDelegate *sceneDelegate;
@@ -531,6 +531,9 @@ private:
 
     HdRenderDelegate *_renderDelegate;
     HdDriverVector _drivers;
+
+
+    std::string _instanceName;
 
     // ---------------------------------------------------------------------- //
     // Sync State
@@ -576,11 +579,12 @@ template <typename T>
 void
 HdRenderIndex::InsertTask(HdSceneDelegate* delegate, SdfPath const& id)
 {
-    HD_TRACE_FUNCTION();
-    HF_MALLOC_TAG_FUNCTION();
+    auto createTask = [](HdSceneDelegate* _delegate, SdfPath const& _id) -> HdTaskSharedPtr
+    {
+        return std::make_shared<T>(_delegate, _id);
+    };
 
-    HdTaskSharedPtr task = std::make_shared<T>(delegate, id);
-    _TrackDelegateTask(delegate, id, task);
+    _TrackDelegateTask(delegate, id, createTask);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

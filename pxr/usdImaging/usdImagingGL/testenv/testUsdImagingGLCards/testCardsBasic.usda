@@ -1,0 +1,143 @@
+#usda 1.0
+(
+    upAxis = "Z"
+)
+
+def Camera "MainCamera"
+{
+    float focalLength = 26
+    float horizontalAperture = 30
+    float verticalAperture = 20
+    token projection = "perspective"
+    matrix4d xformOp:transform = (( 0.984808,  0.173648, 0.000000, 0.0 ),
+                                  (-0.102068,  0.578855, 0.809017, 0.0 ),
+                                  ( 0.140484, -0.796726, 0.587785, 0.0 ),
+                                  ( 1.359634, -9.652739, 6.128376, 1.0 ))
+    token[] xformOpOrder = ["xformOp:transform"]
+}
+
+def Xform "World" (
+    kind = "group"
+)
+{
+    def Xform "Group1" (
+        kind = "group"
+    )
+    {
+        def Sphere "SphereAsBox" (
+            kind = "component"
+            prepend apiSchemas = ["GeomModelAPI"]
+        )
+        {
+            float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+            uniform token model:drawMode = "cards"
+            uniform token model:cardGeometry = "box"
+            uniform float3 model:drawModeColor = (0, 1, 1)
+            uniform asset model:cardTextureXPos = @WoodPlanks.jpg@
+            uniform asset model:cardTextureYPos = @WoodPlanks.jpg@
+            custom double3 xformOp:translate = (-3, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Sphere "SphereAsCross" (
+            kind = "component"
+            prepend apiSchemas = ["GeomModelAPI"]
+        )
+        {
+            float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+            uniform token model:drawMode = "cards"
+            uniform token model:cardGeometry = "cross"
+            uniform asset model:cardTextureXPos = @WoodPlanks.jpg@
+            uniform asset model:cardTextureYPos = @WoodPlanks.jpg@
+            custom double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Sphere "SphereFromTexture" (
+            kind = "component"
+            prepend apiSchemas = ["GeomModelAPI"]
+        )
+        {
+            float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+            uniform token model:drawMode = "cards"
+            uniform token model:cardGeometry = "fromTexture"
+            uniform asset model:cardTextureXPos = @WoodPlanksDonut.exr@
+            custom double3 xformOp:translate = (3, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Xform "Group2" (
+        kind = "group"
+    )
+    {
+
+        def PointInstancer "Instancer" (
+            prepend apiSchemas = ["GeomModelAPI"]
+        )
+        {
+            uniform token model:drawMode = "cards"
+            double3 xformOp:translate = (0, 3, 0)
+            token[] xformOpOrder = ["xformOp:translate"]
+            point3f[] positions = [(0, 0, 0)]
+            int[] protoIndices = [0]
+            rel prototypes = [ </World/Group2/Instancer/Prototypes/Foo> ]
+
+            def "Prototypes" (
+                kind = "group"
+            )
+            {
+                def "Foo" (
+                    references = [</World/Group1>]
+                    kind = "component"
+                    instanceable = true
+                ) {}
+            }
+        }
+    }
+    
+    # This group tests cards with PI-NI nested instancing, see PIPE-9177
+    def Xform "Group3" (
+        kind = "group"
+    )
+    {
+        def PointInstancer "Instancer" (
+            prepend apiSchemas = ["GeomModelAPI"]
+            kind = "group"
+        )
+        {
+            uniform token model:drawMode = "cards"
+            point3f[] positions = [(0, 0, 0), (0, 0, 0), (0, 0, 0)]
+            int[] protoIndices = [0, 1, 2]
+            rel prototypes = [
+                </World/Group3/Instancer/Prototypes/SphereAsBox>,
+                </World/Group3/Instancer/Prototypes/SphereAsCross>,
+                </World/Group3/Instancer/Prototypes/SphereFromTexture> ]
+            double3 xformOp:translate = (0, -3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            
+            def "Prototypes" (
+                kind = "group"
+            )
+            {
+                def "SphereAsBox" (
+                    append references = </World/Group1/SphereAsBox>
+                    instanceable = true
+                )
+                { }
+                
+                def "SphereAsCross" (
+                    instanceable = true
+                    append references = </World/Group1/SphereAsCross>
+                )
+                { }
+                
+                def "SphereFromTexture" (
+                    instanceable = true
+                    append references = </World/Group1/SphereFromTexture>
+                )
+                { }
+            }
+        }
+    }
+}

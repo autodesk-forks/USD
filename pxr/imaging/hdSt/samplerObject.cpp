@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/samplerObject.h"
 #include "pxr/imaging/hdSt/ptexTextureObject.h"
@@ -93,17 +76,12 @@ _ToHgiSamplerDesc(HdSamplerParameters const &samplerParameters)
     return desc;
 }
 
-// Generate GL sampler
+// Generate sampler
 static
 HgiSamplerHandle
 _GenSampler(HdSt_SamplerObjectRegistry * const samplerObjectRegistry,
-            HdSamplerParameters const &samplerParameters,
-            const bool createSampler)
+            HdSamplerParameters const &samplerParameters)
 {
-    if (!createSampler) {
-        return HgiSamplerHandle();
-    }
-
     HdStResourceRegistry * const registry =
         samplerObjectRegistry->GetResourceRegistry();
     if (!TF_VERIFY(registry)) {
@@ -174,8 +152,7 @@ HdStUvSamplerObject::HdStUvSamplerObject(
       _GenSampler(
           samplerObjectRegistry,
           _ResolveUvSamplerParameters(
-              texture, samplerParameters),
-          texture.IsValid()))
+              texture, samplerParameters)))
 {
 }
 
@@ -197,8 +174,7 @@ HdStFieldSamplerObject::HdStFieldSamplerObject(
   , _sampler(
       _GenSampler(
           samplerObjectRegistry,
-          samplerParameters,
-          texture.IsValid()))
+          samplerParameters))
 {
 }
 
@@ -226,6 +202,17 @@ HdSamplerParameters PTEX_SAMPLER_PARAMETERS(
     /*enableCompare*/false, 
     HdCmpFuncNever);
 
+static
+HdSamplerParameters LAYOUT_SAMPLER_PARAMETERS(
+    HdWrapRepeat,
+    HdWrapRepeat,
+    HdWrapRepeat,
+    HdMinFilterNearest,
+    HdMagFilterNearest,
+    HdBorderColorTransparentBlack, 
+    /*enableCompare*/false, 
+    HdCmpFuncNever);
+
 HdStPtexSamplerObject::HdStPtexSamplerObject(
     HdStPtexTextureObject const &ptexTexture,
     // samplerParameters are ignored are ptex
@@ -235,8 +222,11 @@ HdStPtexSamplerObject::HdStPtexSamplerObject(
   , _texelsSampler(
       _GenSampler(
           samplerObjectRegistry,
-          PTEX_SAMPLER_PARAMETERS,
-          ptexTexture.IsValid()))
+          PTEX_SAMPLER_PARAMETERS))
+  , _layoutSampler(
+      _GenSampler(
+          samplerObjectRegistry,
+          LAYOUT_SAMPLER_PARAMETERS))
 {
 }
 
@@ -244,6 +234,7 @@ HdStPtexSamplerObject::~HdStPtexSamplerObject()
 {
     if (Hgi * hgi = _GetHgi()) {
         hgi->DestroySampler(&_texelsSampler);
+        hgi->DestroySampler(&_layoutSampler);
     }
 }
 
@@ -276,8 +267,11 @@ HdStUdimSamplerObject::HdStUdimSamplerObject(
   , _texelsSampler(
       _GenSampler(
           samplerObjectRegistry,
-          UDIM_SAMPLER_PARAMETERS,
-          udimTexture.IsValid()))
+          UDIM_SAMPLER_PARAMETERS))
+  , _layoutSampler(
+      _GenSampler(
+          samplerObjectRegistry,
+          LAYOUT_SAMPLER_PARAMETERS))
 {
 }
 
@@ -285,6 +279,7 @@ HdStUdimSamplerObject::~HdStUdimSamplerObject()
 {
     if (Hgi * hgi = _GetHgi()) {
         hgi->DestroySampler(&_texelsSampler);
+        hgi->DestroySampler(&_layoutSampler);
     }
 }
 

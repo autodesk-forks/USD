@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -156,6 +139,31 @@ _IterateAndPrintPrimIndex(
 }
 
 static void
+_IterateAndPrintPrimIndexSubtreeRanges(
+    std::ostream& out,
+    PcpCache* cache,
+    const SdfPath& primPath)
+{
+    PcpErrorVector errors;
+    const PcpPrimIndex& primIndex = cache->ComputePrimIndex(primPath, &errors);
+    PcpRaiseErrors(errors);
+
+    for (const auto &node : primIndex.GetNodeRange()) {
+        out << std::endl;
+        out << "Subtree iterating over subtree nodes starting at node " 
+            << Pcp_FormatSite(node.GetSite()) << ":"
+            << std::endl;
+
+        for (const PcpNodeRef &subtreeNode : primIndex.GetNodeSubtreeRange(node)) {
+            out << " ";
+            _ValidateAndPrintNode(out, subtreeNode);
+            out << std::endl;
+        }
+    }
+}
+
+
+static void
 _IterateAndPrintPropertyIndex(
     std::ostream& out,
     PcpCache* cache,
@@ -222,6 +230,30 @@ _TestRandomAccessOperations(IteratorType first, IteratorType last)
         TF_AXIOM(it - idx == first);
         TF_AXIOM(it == first + idx);
     }
+}
+
+// Ensure that using increment/decrement operators and std::prev / std::next
+// produce symmetrical results
+template <class IteratorType>
+static void
+_TestIncrementAndAdvanceSymmetry(IteratorType first, IteratorType last)
+{
+    TF_AXIOM(first != last);
+    TF_AXIOM(std::distance(first, last) > 2);
+
+    IteratorType byIncrement = first;
+    ++byIncrement;
+    ++byIncrement;
+    --byIncrement;
+
+    IteratorType byAdvance = std::prev(std::next(first, 2));
+
+    TF_AXIOM(std::distance(first, byIncrement) == 1);
+    TF_AXIOM(std::distance(first, byAdvance) == 1);
+    TF_AXIOM(std::distance(byIncrement, first) == -1);
+    TF_AXIOM(std::distance(byAdvance, first) == -1);
+    TF_AXIOM(std::distance(byAdvance, byIncrement) == 0);
+    TF_AXIOM(byIncrement == byAdvance);
 }
 
 static std::unique_ptr<PcpCache>
@@ -296,6 +328,27 @@ main(int argc, char** argv)
         _TestComparisonOperations(propRange.first, propRange.second);
     }
 
+    std::cout << "Testing Increment / Advance Symmetry" << std::endl;
+    {
+        PcpErrorVector errors;
+        const PcpPrimIndex& primIndex =
+            cache->ComputePrimIndex(SdfPath("/Model"), &errors);
+        PcpRaiseErrors(errors);
+
+        const PcpNodeRange nodeRange = primIndex.GetNodeRange();
+        _TestIncrementAndAdvanceSymmetry(nodeRange.first, nodeRange.second);
+
+        const PcpPrimRange primRange = primIndex.GetPrimRange();
+        _TestIncrementAndAdvanceSymmetry(primRange.first, primRange.second);
+
+        const PcpPropertyIndex& propIndex =
+            cache->ComputePropertyIndex(SdfPath("/Model.a"), &errors);
+        PcpRaiseErrors(errors);
+
+        const PcpPropertyRange propRange = propIndex.GetPropertyRange();
+        _TestIncrementAndAdvanceSymmetry(propRange.first, propRange.second);
+    }
+
     std::cout << "Testing random access operations..." << std::endl;
     {
         PcpErrorVector errors;
@@ -326,6 +379,26 @@ main(int argc, char** argv)
             PcpPropertyReverseIterator(propRange.first));
     }
 
+    std::cout << "Testing GetNodeIteratorAtNode" << std::endl;
+    {
+        PcpErrorVector errors;
+        const PcpPrimIndex& primIndex = 
+            cache->ComputePrimIndex(SdfPath("/Model"), &errors);
+        PcpRaiseErrors(errors);
+
+        const PcpNodeRange nodeRange = primIndex.GetNodeRange();
+        for (PcpNodeIterator it = nodeRange.first; 
+                it != nodeRange.second; ++it) {
+            PcpNodeRef node = *it;
+            PcpNodeIterator iteratorAtNode = 
+                primIndex.GetNodeIteratorAtNode(node);
+            TF_AXIOM(it == iteratorAtNode);
+        }
+
+        TF_AXIOM(
+            primIndex.GetNodeIteratorAtNode(PcpNodeRef()) == nodeRange.second);
+    }
+
     std::cout << "Testing iteration (output to file)..." << std::endl;
     {
         std::ofstream outfile("iteration_results.txt");
@@ -339,6 +412,13 @@ main(int argc, char** argv)
                     << "====================" << std::endl 
                     << std::endl;
         }
+
+        _IterateAndPrintPrimIndexSubtreeRanges(
+            outfile, cache.get(), SdfPath("/Model"));
+
+        outfile << std::endl 
+                << "====================" << std::endl 
+                << std::endl;
 
         _IterateAndPrintPropertyIndex(
             outfile, cache.get(), SdfPath("/Model.a"), /* localOnly */ true);

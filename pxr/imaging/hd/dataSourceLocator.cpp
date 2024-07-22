@@ -1,27 +1,12 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/dataSourceLocator.h"
+
+#include "pxr/base/arch/hints.h"
 
 #include <sstream>
 #include <algorithm>
@@ -285,25 +270,22 @@ HdDataSourceLocator::operator<(const HdDataSourceLocator &rhs) const
     return lhslen < rhslen;
 }
 
-//-----------------------------------------------------------------------------
 
-HdDataSourceLocatorSet::HdDataSourceLocatorSet(
-    const HdDataSourceLocator &locator)
+std::ostream&
+operator<<(std::ostream& out, const HdDataSourceLocator &self)
 {
-    _locators.push_back(locator);
+    return out << self.GetString();
 }
 
-HdDataSourceLocatorSet::HdDataSourceLocatorSet(
-    const std::initializer_list<const HdDataSourceLocator> &l)
-{
-    _locators.insert(_locators.end(), l.begin(), l.end());
+//-----------------------------------------------------------------------------
 
+void
+HdDataSourceLocatorSet::_Normalize()
+{
     if (_locators.size() < 2) {
         return;
     }
 
-    // Since the initializer list comes in unsorted, we need to sort and
-    // uniqueify it.
     std::sort(_locators.begin(), _locators.end());
 
     for (size_t i = 1; i < _locators.size(); ) {
@@ -313,6 +295,30 @@ HdDataSourceLocatorSet::HdDataSourceLocatorSet(
             ++i;
         }
     }
+}
+
+
+const HdDataSourceLocatorSet &
+HdDataSourceLocatorSet::UniversalSet()
+{
+    static const HdDataSourceLocatorSet &result{
+        HdDataSourceLocator::EmptyLocator()};
+    return result;
+}
+
+HdDataSourceLocatorSet::HdDataSourceLocatorSet(
+    const HdDataSourceLocator &locator)
+  : _locators{locator}
+{
+}
+
+HdDataSourceLocatorSet::HdDataSourceLocatorSet(
+    const std::initializer_list<const HdDataSourceLocator> &l)
+  : _locators(l.begin(), l.end())
+{
+    // Since the initializer list comes in unsorted, we need to sort and
+    // uniquify it.
+    _Normalize();
 }
 
 static bool
@@ -435,6 +441,27 @@ HdDataSourceLocatorSet::insert(const HdDataSourceLocatorSet &locatorSet)
 }
 
 void
+HdDataSourceLocatorSet::insert(HdDataSourceLocatorSet &&locatorSet)
+{
+    if (_locators.empty()) {
+        _locators = std::move(locatorSet._locators);
+        return;
+    }
+
+    // Note that the swapping the two small vectors might be expensive
+    // itself, so introducing a cut-off.
+    // This is a guess - we have not run performance tests to find the
+    // optimal value for this cut-off.
+    constexpr size_t _swapCutoff = 5;
+
+    if (_locators.size() + _swapCutoff < locatorSet._locators.size()) {
+        _locators.swap(locatorSet._locators);
+    }
+
+    insert(locatorSet);
+}
+
+void
 HdDataSourceLocatorSet::append(const HdDataSourceLocator &locator)
 {
     if (_locators.size() == 0 ||
@@ -457,8 +484,9 @@ HdDataSourceLocatorSet::end() const
     return _locators.end();
 }
 
-bool
-HdDataSourceLocatorSet::Intersects(const HdDataSourceLocator &locator) const
+HdDataSourceLocatorSet::const_iterator
+HdDataSourceLocatorSet::_FirstIntersection(
+    const HdDataSourceLocator &locator) const
 {
     // Note: operator< and _LessThanNotPrefix are almost as expensive as
     // intersects, so for very small arrays the std::lower_bound can actually
@@ -468,15 +496,15 @@ HdDataSourceLocatorSet::Intersects(const HdDataSourceLocator &locator) const
     constexpr size_t _binarySearchCutoff = 5;
 
     if (_locators.size() < _binarySearchCutoff) {
-        for (const auto &l : _locators) {
-            if (l.Intersects(locator)) {
-                return true;
+        for (const_iterator it = _locators.begin();
+             it != _locators.end();
+             ++it) {
+            if (it->Intersects(locator)) {
+                return it;
             }
         }
-        return false;
+        return _locators.end();
     }
-
-    TRACE_FUNCTION();
 
     // As with insert, we can split the set into 3 disjoint ranges.
     // We want to find the first item such that e > locator or
@@ -487,9 +515,16 @@ HdDataSourceLocatorSet::Intersects(const HdDataSourceLocator &locator) const
             locator, _LessThanNotPrefix);
     if (it != _locators.end() &&
         (locator.HasPrefix(*it) || it->HasPrefix(locator))) {
-        return true;
+        return it;
     }
-    return false;
+
+    return _locators.end();
+}
+
+bool
+HdDataSourceLocatorSet::Intersects(const HdDataSourceLocator &locator) const
+{
+    return _FirstIntersection(locator) != _locators.end();
 }
 
 bool
@@ -577,6 +612,147 @@ bool
 HdDataSourceLocatorSet::IsEmpty() const
 {
     return _locators.empty();
+}
+
+HdDataSourceLocatorSet
+HdDataSourceLocatorSet::ReplacePrefix(
+    const HdDataSourceLocator &oldPrefix,
+    const HdDataSourceLocator &newPrefix) const
+{
+    if (ARCH_UNLIKELY(IsEmpty() || (oldPrefix == newPrefix))) {
+        return *this;
+    }
+
+    // Note: See _binarySearchCutoff in Intersects.
+    constexpr size_t _binarySearchCutoff = 5;
+
+    if (_locators.size() < _binarySearchCutoff) {
+        HdDataSourceLocatorSet result = *this;
+        _Locators &locators = result._locators;
+
+        for (auto &l : locators) {
+            l = l.ReplacePrefix(oldPrefix, newPrefix);
+        }
+
+        result._Normalize();
+        return result;
+    }
+
+    TRACE_FUNCTION();
+    // lower_bound with operator < gives us the first element that is not less 
+    // than (i.e., greater than or equal to) oldPrefix, which is what we want
+    // here (unlike in the insertion case where we use _LessThanNotPrefix).
+    // e.g. given the locator set {a/a, a/b/c, a/b/d, a/c} and the prefix a/b,
+    // lower_bound gives us the element a/b/c.
+    auto it =
+        std::lower_bound(_locators.begin(), _locators.end(), oldPrefix);
+    
+    if (it != _locators.end()) {
+
+        if (it->HasPrefix(oldPrefix)) {
+            
+            HdDataSourceLocatorSet result = *this;
+            _Locators &locators = result._locators;
+
+            auto lowerIt = locators.begin() +
+                        std::distance(_locators.begin(), it);
+
+            if (*lowerIt == oldPrefix) {
+                // The closed under descendancy nature of HdDataLocatorSet
+                // implies that the next element cannot be a descendant of the 
+                // current one, implying that it won't share the prefix.
+                *lowerIt = newPrefix;
+
+            } else {
+
+                // Find first element such that elem.HasPrefix(oldPrefix) is
+                // false.
+                auto upperIt =
+                    std::lower_bound(
+                        std::next(lowerIt, 1), locators.end(), oldPrefix,
+                        [](const HdDataSourceLocator &elem,
+                           const HdDataSourceLocator &prefix) {
+
+                            return elem.HasPrefix(prefix);
+                        
+                        });
+
+                for (auto it = lowerIt; it < upperIt; it++) {
+                    *it = it->ReplacePrefix(oldPrefix, newPrefix);
+                }
+            }
+
+            result._Normalize();
+
+            return result;
+        }
+        // Otherwise, there's nothing to do since no element in the set
+        // has the prefix oldPrefix.
+    }
+ 
+    return *this;
+}
+
+const HdDataSourceLocator &
+HdDataSourceLocatorSet::IntersectionIterator::operator*() const
+{
+    if (_isFirst && _locator.HasPrefix(*_iterator)) {
+        return _locator;
+    }
+    return *_iterator;
+}
+
+HdDataSourceLocatorSet::IntersectionIterator &
+HdDataSourceLocatorSet::IntersectionIterator::operator++()
+{
+    _isFirst = false;
+    ++_iterator;
+    if (_iterator != _end && !_iterator->HasPrefix(_locator)) {
+        _iterator = _end;
+    }
+    return *this;
+}
+
+HdDataSourceLocatorSet::IntersectionIterator
+HdDataSourceLocatorSet::IntersectionIterator::operator++(int)
+{
+    IntersectionIterator result(*this);
+    operator++();
+    return result;
+}
+
+HdDataSourceLocatorSet::IntersectionView
+HdDataSourceLocatorSet::Intersection(const HdDataSourceLocator &locator) const
+{
+    return IntersectionView(
+        IntersectionIterator(
+            /* isFirst = */ true,
+            _FirstIntersection(locator),
+            end(),
+            locator),
+        IntersectionIterator(
+            /* isFirst = */ false,
+            end(),
+            end(),
+            locator));
+}
+
+std::ostream&
+operator<<(std::ostream& out, const HdDataSourceLocatorSet &self) 
+{
+    out << "{ ";
+    bool separator = false;
+    for (auto const& l : self) {
+        if (separator) {
+            out << ", ";
+        } else {
+            separator = true;
+        }
+        out << l;
+    }
+    out << " }";
+    return out;
+
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_SCENE_INDEX_H
 #define PXR_IMAGING_HD_SCENE_INDEX_H
@@ -31,6 +14,8 @@
 
 #include "pxr/base/tf/declarePtrs.h"
 #include "pxr/base/tf/singleton.h"
+#include "pxr/base/tf/denseHashSet.h"
+
 
 #include "pxr/usd/sdf/path.h"
 
@@ -62,6 +47,8 @@ struct HdSceneIndexPrim
 class HdSceneIndexBase : public TfRefBase, public TfWeakBase
 {
 public:
+    HD_API
+    HdSceneIndexBase();
 
     HD_API
     ~HdSceneIndexBase() override;
@@ -117,6 +104,59 @@ public:
                 GetPrim(primPath).dataSource, locator);
     }
 
+    // ------------------------------------------------------------------------
+    // System-wide API
+    // ------------------------------------------------------------------------
+
+    /// Sends a message with optional arguments to this and any upstream input
+    /// scene indices. Scene indices may implement _SystemMessage to provide
+    /// custom handling. See systemMessages.h for common message definitions.
+    HD_API
+    void SystemMessage(
+        const TfToken &messageType,
+        const HdDataSourceBaseHandle &args);
+
+    // ------------------------------------------------------------------------
+    // User Interface Utilities
+    // ------------------------------------------------------------------------
+
+    /// Returns a value previously set by SetDisplayName. If no value (or an
+    /// empty string) was last set, this returns a symbol-demangled version of
+    /// the class type itself. This is in service of user interfaces with views
+    /// of scene index chains or graphs.
+    HD_API
+    std::string GetDisplayName() const;
+
+    /// Allows for scene index instances to be identified in a more contextually
+    /// relevant way. This is in service of user interfaces with views of scene
+    /// index chains or graphs.
+    HD_API
+    void SetDisplayName(const std::string &n);
+
+    /// Adds a specified tag token to a scene index instance. This is in service
+    /// of user interfaces which want to filter views of a scene index chain
+    /// or graph.
+    HD_API
+    void AddTag(const TfToken &tag);
+
+    /// Removes a specified tag token to a scene index instance.
+    /// This is in service of user interfaces which want to filter views of a
+    /// scene index chain or graph.
+    HD_API
+    void RemoveTag(const TfToken &tag);
+
+    /// Returns true if a specified tag token has been added to a scene index
+    /// instance. This is in service of user interfaces which want to filter
+    /// views of a scene index chain or graph.
+    HD_API
+    bool HasTag(const TfToken &tag) const;
+
+    /// Returns all tag tokens currently added to a scene index instance. This
+    /// is in service of user interfaces which want to filter views of a scene
+    /// index chain or graph.
+    HD_API
+    TfTokenVector GetTags() const;
+
 protected:
 
     /// Notify attached observers of prims added to the scene. The set of
@@ -150,16 +190,52 @@ protected:
     void _SendPrimsDirtied(
         const HdSceneIndexObserver::DirtiedPrimEntries &entries);
 
+
+    /// Notify attached observers of prims (and their descendents) which have
+    /// been renamed or reparented.
+    /// This function is not threadsafe; some observers expect it to be called
+    /// from a single thread.
+    HD_API
+    void _SendPrimsRenamed(
+        const HdSceneIndexObserver::RenamedPrimEntries &entries);
+
+
     /// Returns whether the scene index has any registered observers; this
     /// information can be used to skip work preparing notices when there are
     /// no observers.
     HD_API
     bool _IsObserved() const;
 
-private:
+    /// Implement in order to react directly to system messages sent from
+    /// downstream.
+    HD_API
+    virtual void _SystemMessage(
+        const TfToken &messageType,
+        const HdDataSourceBaseHandle &args);
 
-    using _ObserverSet = std::set<HdSceneIndexObserverPtr>;
-    _ObserverSet _observers;
+private:
+    void _RemoveExpiredObservers();
+
+    // Scoped (RAII) helper to manage tracking recursion depth,
+    // and to remove expired observers after completing delivery.
+    struct _NotifyScope;
+
+    // Registered observers, in order of registration.
+    using _Observers = std::vector<HdSceneIndexObserverPtr>;
+    _Observers _observers;
+
+    // Count of in-flight observer notifications
+    int _notifyDepth;
+
+    // Flag hinting that expired observers may exist.
+    bool _shouldRemoveExpiredObservers;
+
+    // User-visible label for this scene index
+    std::string _displayName;
+
+    // Tags used to categorize this scene index
+    using _TagSet = TfDenseHashSet<TfToken, TfHash, std::equal_to<TfToken>, 8>;
+    _TagSet _tags;
 };
 
 
@@ -181,6 +257,7 @@ public:
 
     /// Returns the singleton-instance of this registry.
     ///
+    HD_API
     static HdSceneIndexNameRegistry &GetInstance()  {
         return TfSingleton<HdSceneIndexNameRegistry>::GetInstance();
     }

@@ -5,6 +5,7 @@
 (
     subLayers = [
         @foo.usd@,
+        @bar.usd@
     ]
 )
 
@@ -13,20 +14,33 @@ def Xform "Model" (
         asset identifier = @foo.usd@
         asset[] payloadAssetDependencies = [@foo.usd@, @bar.usd@]
     }
-    payload = @foo.usd@</foo>
+    payload = [
+        @foo.usd@</foo>,
+        @bar.usd@,
+        @baz.usd@
+    ]
     references = [
         @foo.usd@</foo>, 
-        @bar.usd@
+        @bar.usd@,
+        @baz.usd@
     ]
     customData = {
         asset foo = @foo.usd@
         dictionary d = {
             asset foo = @foo.usd@
+            asset[] bar = [@foo.usd@, @bar.usd@]
+        }
+        dictionary emptyDict = {
         }
     }
 )
 {
-    asset foo = @foo.usd@
+    asset foo = @foo.usd@ (
+        customData = {
+            asset foo = @foo.usd@
+            asset[] bar = [@foo.usd@, @bar.usd@]
+        }
+    )
     asset[] bar = [
         @foo.usd@,
         @bar.usd@,
@@ -39,6 +53,7 @@ def Xform "Model" (
         1: [@foo.usd@, @bar.usd@],
         2: [@bar.usd@, @foo.usd@],
     }
+    asset[] emptyArr = []
 }
 
 def Xform "Variants" (
@@ -52,4 +67,10 @@ def Xform "Variants" (
             asset foo = @foo.usd@
         }
     }
+}
+
+def "PrependPayload" (
+    prepend payload = @./payload.usda@
+)
+{
 }

@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -36,9 +19,21 @@ _GetArcFunction(const std::string & source, const std::string & target)
     return PcpMapFunction::Create(pathMap, SdfLayerOffset());
 }
 
+void TestMapFunctionHash(){
+    TF_AXIOM(TfHash()(PcpMapFunction()) == TfHash()(PcpMapFunction()));
+
+    const auto pair_1 = std::make_pair(SdfPath("/path/source"), SdfPath("/path/target"));
+    const auto pair_2 = std::make_pair(SdfPath("/path/source2"), SdfPath("/path/target2"));
+    TF_AXIOM(TfHash()(PcpMapFunction::Create({pair_1, pair_2}, SdfLayerOffset())) ==
+             TfHash()(PcpMapFunction::Create({pair_1, pair_2}, SdfLayerOffset())));
+    TF_AXIOM(TfHash()(PcpMapFunction::Create({pair_1, pair_2}, SdfLayerOffset(1.0, 2.0))) ==
+             TfHash()(PcpMapFunction::Create({pair_1, pair_2}, SdfLayerOffset(1.0, 2.0))));
+}
+
 int 
 main(int argc, char** argv)
 {
+    TestMapFunctionHash();
     // Here we focus on testing the core PcpMapExpression API;
     // We don't bother testing convenience API that passes
     // queries onto the MapFunction value.

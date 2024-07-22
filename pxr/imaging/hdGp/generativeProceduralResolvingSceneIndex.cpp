@@ -1,40 +1,20 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "generativeProceduralResolvingSceneIndex.h"
 #include "generativeProceduralPluginRegistry.h"
 
 #include "pxr/imaging/hd/primvarsSchema.h"
+#include "pxr/imaging/hd/systemMessages.h"
 
 #include "pxr/base/tf/denseHashSet.h"
 #include "pxr/base/work/loops.h"
+#include "pxr/base/work/withScopedParallelism.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
-
-TF_DEFINE_PRIVATE_TOKENS(
-    _tokens,
-    ((resolvedGenerativeProcedural, "resolvedHydraGenerativeProcedural"))
-);
 
 /*static*/
 HdGpGenerativeProcedural *
@@ -50,6 +30,7 @@ HdGpGenerativeProceduralResolvingSceneIndex::
     const HdSceneIndexBaseRefPtr &inputScene)
 : HdSingleInputFilteringSceneIndexBase(inputScene)
 , _targetPrimTypeName(HdGpGenerativeProceduralTokens->generativeProcedural)
+, _attemptAsync(false)
 {
 }
 
@@ -59,6 +40,7 @@ HdGpGenerativeProceduralResolvingSceneIndex::
     const TfToken &targetPrimTypeName)
 : HdSingleInputFilteringSceneIndexBase(inputScene)
 , _targetPrimTypeName(targetPrimTypeName)
+, _attemptAsync(false)
 {
 }
 
@@ -89,10 +71,28 @@ HdGpGenerativeProceduralResolvingSceneIndex::GetPrim(
         //_Notices notices; 
         //_UpdateProcedural(primPath, false, &notices);
 
-        prim.primType = _tokens->resolvedGenerativeProcedural;
+        prim.primType = HdGpGenerativeProceduralTokens->resolvedGenerativeProcedural;
     }
 
     return prim;
+}
+
+// Adds unique elements from the cached child prim paths to a vector
+/*static*/
+void
+HdGpGenerativeProceduralResolvingSceneIndex::_CombinePathArrays(
+    const _DensePathSet &s, SdfPathVector *v)
+{
+    if (v->empty()) {
+        v->insert(v->begin(), s.begin(), s.end());
+        return;
+    }
+    _DensePathSet uniqueValues(v->begin(), v->end());
+    for (const SdfPath &p : s) {
+        if (uniqueValues.find(p) == uniqueValues.end()) {
+            v->push_back(p);
+        }
+    }
 }
 
 /* virtual */
@@ -100,14 +100,33 @@ SdfPathVector
 HdGpGenerativeProceduralResolvingSceneIndex::GetChildPrimPaths(
     const SdfPath &primPath) const
 {
+
+    // Always incorporate the input's children even if we are beneath a
+    // resolved procedural. This allows a procedural to mask the type or data
+    // of an existing descendent (by returning it from Update) or to let it
+    // go through unmodified.
+    SdfPathVector inputResult =
+        _GetInputSceneIndex()->GetChildPrimPaths(primPath);
+
+    // Check to see if the requested path already exists as a prim managed by
+    // a procedural. Look up what the procedural added and potentially combine
+    // with what might be present on the input scene.
+    //
+    // XXX: This doesn't cause a procedural to be run at an ancestor path --
+    //      so we'd expect a notice-less traversal case to have already called
+    //      GetChildPrimPaths with the parent procedural. The overhead of
+    //      ensuring that happens for every scope outweighs the unlikely
+    //      possibility of incorrect results for a speculative query without
+    //      hitting any of the existing triggers.
     const auto it = _generatedPrims.find(primPath);
     if (it != _generatedPrims.end()) {
         if (_ProcEntry *procEntry = it->second.responsibleProc.load()) {
             std::unique_lock<std::mutex> cookLock(procEntry->cookMutex);
             const auto chIt = procEntry->childHierarchy.find(primPath);
             if (chIt != procEntry->childHierarchy.end()) {
-                return SdfPathVector(
-                    chIt->second.begin(), chIt->second.end());
+
+                _CombinePathArrays(chIt->second, &inputResult);
+                return inputResult;
             }
         }
     }
@@ -124,15 +143,12 @@ HdGpGenerativeProceduralResolvingSceneIndex::GetChildPrimPaths(
             std::unique_lock<std::mutex> cookLock(procEntry->cookMutex);
             const auto hIt = procEntry->childHierarchy.find(primPath);
             if (hIt != procEntry->childHierarchy.end()) {
-                return SdfPathVector(hIt->second.begin(), hIt->second.end());
+                _CombinePathArrays(hIt->second, &inputResult);
             }
         }
-
-        return {};
     }
 
-    // Otherwise call through to the empty scene.
-    return _GetInputSceneIndex()->GetChildPrimPaths(primPath);
+    return inputResult;
 }
 
 /* virtual */
@@ -150,15 +166,25 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsAdded(
 
     bool entriesCopied = false;
 
+    { // _dependencies and _procedural lock aquire
+    // hold lock for longer but don't try to acquire it per iteration
+    _MapLock procsLock(_proceduralsMutex);
+    _MapLock depsLock(_dependenciesMutex);
+
     for (auto it = entries.begin(), e = entries.end(); it != e; ++it) {
         const HdSceneIndexObserver::AddedPrimEntry &entry = *it;
+        if (entry.primPath.IsAbsoluteRootPath()) {
+            continue;
+        }
+
         if (entry.primType == _targetPrimTypeName) {
             if (!entriesCopied) {
                 entriesCopied = true;
                 notices.added.insert(notices.added.end(), entries.begin(), it);
             }
             notices.added.emplace_back(
-                entry.primPath, _tokens->resolvedGenerativeProcedural);
+                entry.primPath,
+                HdGpGenerativeProceduralTokens->resolvedGenerativeProcedural);
 
             // force an update since an add of an existing prim is
             // considered a full invalidation as it may change type
@@ -169,7 +195,47 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsAdded(
                 notices.added.emplace_back(entry.primPath, entry.primType);
             }
         }
+
+        // We've already skipped the case where entry.primPath is the absolute
+        // root, so GetParentPath() makes sense here.
+        const SdfPath entryPrimParentPath = entry.primPath.GetParentPath();
+        // NOTE: potentially share code with primsremoved
+        _DependencyMap::const_iterator dIt =
+            _dependencies.find(entryPrimParentPath);
+        if (dIt != _dependencies.end()) {
+            for (const SdfPath &dependentPath : dIt->second) {
+                // don't bother checking a procedural which already scheduled
+                if (proceduralsToCook.find(dependentPath) !=
+                       proceduralsToCook.end()) {
+                    continue;
+                }
+
+                _ProcEntryMap::const_iterator procIt =
+                    _procedurals.find(dependentPath);
+                if (procIt == _procedurals.end()) {
+                    continue;
+                }
+
+                const _ProcEntry &procEntry = procIt->second;
+                const auto dslIt =
+                    procEntry.dependencies.find(entryPrimParentPath);
+                
+                if (dslIt == procEntry.dependencies.end()) {
+                    continue;
+                }
+                
+                if (dslIt->second.Intersects(HdGpGenerativeProcedural::
+                        GetChildNamesDependencyKey())) {
+                    proceduralsToCook.insert(dependentPath);
+                    // TODO consider providing this dependency set
+                    // to send to _UpdateProcedural. Currently removals
+                    // don't bother to track individual procedurals
+                }
+            }
+        }
     }
+
+    } // _dependencies and _procedural lock release
 
     if (!proceduralsToCook.empty()) {
         const size_t parallelThreshold = 2;
@@ -184,12 +250,17 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsAdded(
                 ++i;
             }
 
+            {
+            TF_PY_ALLOW_THREADS_IN_SCOPE();
+            WorkWithScopedParallelism([&]() {
             WorkParallelForEach(cookEntries.begin(), cookEntries.end(),
                     [this](const _CookEntry &e) {
                 this->_UpdateProcedural(e.first, true, const_cast<
                     HdGpGenerativeProceduralResolvingSceneIndex::_Notices *>(
                         &e.second));
             });
+            });
+            }
 
             // combine all of the resulting notices following parallel cook
             for (const _CookEntry &e : cookEntries) {
@@ -290,6 +361,41 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsRemoved(
                     }
                 }
             }
+        } else {
+            // check if parent path is a dependency with childNames
+            _DependencyMap::const_iterator dIt =
+                _dependencies.find(entry.primPath.GetParentPath());
+            if (dIt != _dependencies.end()) {
+                for (const SdfPath &dependentPath : dIt->second) {
+
+                    // don't bother checking a procedural slated for removal
+                    if (removedProcedurals.find(dependentPath) !=
+                           removedProcedurals.end()) {
+                        continue;
+                    }
+
+                    _ProcEntryMap::const_iterator procIt =
+                            _procedurals.find(dependentPath);
+                    if (procIt == _procedurals.end()) {
+                        continue;
+                    }
+
+                    const _ProcEntry &procEntry = procIt->second;
+                    const auto dslIt = procEntry.dependencies.find(
+                            entry.primPath.GetParentPath());
+                    if (dslIt == procEntry.dependencies.end()) {
+                        continue;
+                    }
+
+                    if (dslIt->second.Intersects(HdGpGenerativeProcedural::
+                            GetChildNamesDependencyKey())) {
+                        invalidatedProcedurals.insert(dependentPath);
+                        // TODO consider providing this dependency set
+                        // to send to _UpdateProcedural. Currently removals
+                        // don't bother to track individual procedurals
+                    }
+                }
+            }
         }
 
         it = procAncestors.find(entry.primPath);
@@ -337,12 +443,17 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsRemoved(
                 ++i;
             }
 
+            {
+            TF_PY_ALLOW_THREADS_IN_SCOPE();
+            WorkWithScopedParallelism([&]() {
             WorkParallelForEach(cookEntries.begin(), cookEntries.end(),
                     [this](const _CookEntry &e) {
                 this->_UpdateProcedural(e.first, true, const_cast<
                     HdGpGenerativeProceduralResolvingSceneIndex::_Notices *>(
                         &e.second));
             });
+            });
+            }
 
             // combine all of the resulting notices following parallel cook
             for (const _CookEntry &e : cookEntries) {
@@ -356,9 +467,7 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsRemoved(
 
         } else {
             for (const SdfPath &invalidatedProcPath : invalidatedProcedurals) {
-                // XXX Procedurals here are cooked serially
-                //     TODO: Do this loop in parallel and gather the generated
-                //           notices.
+                // Procedurals here are cooked serially
                 _UpdateProcedural(invalidatedProcPath, true, &notices);
             }
         }
@@ -367,11 +476,12 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsRemoved(
             _SendPrimsAdded(notices.added);
         }
 
+        _SendPrimsRemoved(notices.removed);
+
         if (!notices.dirtied.empty()) {
             _SendPrimsDirtied(notices.dirtied);
         }
 
-        _SendPrimsRemoved(notices.removed);
     } else {
         _SendPrimsRemoved(entries);
     }
@@ -446,12 +556,17 @@ HdGpGenerativeProceduralResolvingSceneIndex::_PrimsDirtied(
                 ++i;
             }
 
+            {
+            TF_PY_ALLOW_THREADS_IN_SCOPE();
+            WorkWithScopedParallelism([&]() {
             WorkParallelForEach(cookEntries.begin(), cookEntries.end(),
                     [this](const _CookEntry &e) {
                 this->_UpdateProcedural(e.path, true, const_cast<
                     HdGpGenerativeProceduralResolvingSceneIndex::_Notices *>(
                         &e.notices), e.deps);
             });
+            });
+            }
 
             // combine all of the resulting notices following parallel cook
             for (const _CookEntry &e : cookEntries) {
@@ -527,7 +642,28 @@ HdGpGenerativeProceduralResolvingSceneIndex::_UpdateProceduralDependencies(
     if (!procEntry.proc || procType != procEntry.typeName) {
         proc.reset(
             _ConstructProcedural(procType, proceduralPrimPath));
+
+        if (proc) {
+            bool result = proc->AsyncBegin(_attemptAsync);
+            if (_attemptAsync && result) {
+                _activeSyncProcedurals[proceduralPrimPath] =
+                    TfCreateWeakPtr(&procEntry);
+            }
+        }
+
     } else {
+
+        // give the procedural a chance to become asychronous following an
+        // update if we aren't already
+        if (procEntry.proc && _attemptAsync &&
+                _activeSyncProcedurals.find(proceduralPrimPath)
+                    == _activeSyncProcedurals.end()) {
+            if (procEntry.proc->AsyncBegin(true)) {
+                _activeSyncProcedurals[proceduralPrimPath] =
+                    TfCreateWeakPtr(&procEntry);
+            }
+        }
+
         proc = procEntry.proc;
     }
 
@@ -549,23 +685,23 @@ HdGpGenerativeProceduralResolvingSceneIndex::_UpdateProceduralDependencies(
 
         // compare old and new dependency maps
         _PathSet dependencesToRemove;
-        for (const auto pathLocatorsPair : procEntry.dependencies) {
+        for (const auto& pathLocatorsPair : procEntry.dependencies) {
             const SdfPath &dependencyPath = pathLocatorsPair.first;
             if (newDependencies.find(dependencyPath) == newDependencies.end()) {
                 dependencesToRemove.insert(dependencyPath);
             }
         }
 
-        for (const auto pathLocatorsPair : newDependencies) {
-            const SdfPath &dependencyPath = pathLocatorsPair.first;
-            if (procEntry.dependencies.find(dependencyPath)
-                    == procEntry.dependencies.end()) {
-                _dependencies[dependencyPath].insert(proceduralPrimPath);
-            }
-        }
-
-        if (!dependencesToRemove.empty()) {
+        if (!newDependencies.empty() || !dependencesToRemove.empty()) {
             _MapLock depsLock(_dependenciesMutex);
+
+            for (const auto& pathLocatorsPair : newDependencies) {
+                const SdfPath &dependencyPath = pathLocatorsPair.first;
+                if (procEntry.dependencies.find(dependencyPath)
+                        == procEntry.dependencies.end()) {
+                    _dependencies[dependencyPath].insert(proceduralPrimPath);
+                }
+            }
             for (const SdfPath &dependencyPath : dependencesToRemove) {
                 _DependencyMap::iterator it =
                     _dependencies.find(dependencyPath);
@@ -637,176 +773,11 @@ HdGpGenerativeProceduralResolvingSceneIndex::_UpdateProcedural(
 
         std::unique_lock<std::mutex> cookLock(procEntry.cookMutex);
 
-        // TODO validate paths
+        _UpdateProceduralResult(
+             &procEntry, proceduralPrimPath, newChildTypes, outputNotices);
 
-        // TODO, compare new/old and generate notices
-        if (outputNotices) {
-            // stuff we need to signal
-            TfDenseHashSet<SdfPath, TfHash> removedChildPrims;
+         procEntry.state.store(_ProcEntry::StateCooked);
 
-            TfDenseHashSet<SdfPath, TfHash> generatedPrims;
-
-
-            // if there are no previous cooks, we can directly add all
-            // without comparison
-            if (procEntry.childTypes.empty()) {
-                for (const auto pathTypePair : newChildTypes) {
-                    const SdfPath &childPrimPath = pathTypePair.first;
-                    outputNotices->added.emplace_back(
-                        childPrimPath, pathTypePair. second);
-
-                    if (childPrimPath.HasPrefix(proceduralPrimPath)) {
-                        for (const SdfPath &p :
-                                childPrimPath.GetAncestorsRange()) {
-                            if (p == proceduralPrimPath) {
-                                break;
-                            }
-                            procEntry.childHierarchy[
-                                p.GetParentPath()].insert(p);
-                            generatedPrims.insert(p);
-                        }
-                    } else {
-                        // TODO, warning, error
-                    }
-                }
-
-                for (const auto &pathPathSetPair : procEntry.childHierarchy) {
-                    generatedPrims.insert(pathPathSetPair.first);
-                }
-
-            } else if (procEntry.childTypes != newChildTypes) {
-                // gather hierarchy for inclusion
-                _ProcEntry::_PathSetMap newChildHierarchy;
-
-                // add new entries (or entries whose types have changed)
-                for (const auto pathTypePair : newChildTypes) {
-                    const SdfPath &childPrimPath = pathTypePair.first;
-
-                    if (childPrimPath.HasPrefix(proceduralPrimPath)) {
-                        for (const SdfPath &p :
-                                childPrimPath.GetAncestorsRange()) {
-                            if (p == proceduralPrimPath) {
-                                break;
-                            }
-                            newChildHierarchy[p.GetParentPath()].insert(p);
-                        }
-                    } else {
-                        // TODO, warning, error?
-                    }
-
-                    auto it = procEntry.childTypes.find(childPrimPath);
-                    if (it != procEntry.childTypes.end() &&
-                            pathTypePair.second == it->second) {
-                        // previously existed and type is the same, do nothing
-                    } else {
-                        // either didn't previously exist or type is different
-                        outputNotices->added.emplace_back(
-                            childPrimPath, pathTypePair.second);
-                        generatedPrims.insert(pathTypePair.first);
-                    }
-                }
-
-                // remove entries not present in new cook
-                for (const auto pathTypePair : procEntry.childTypes) {
-                    if (newChildTypes.find(pathTypePair.first) ==
-                            newChildTypes.end()) {
-                        if (newChildHierarchy.find(pathTypePair.first)
-                                == newChildHierarchy.end()) {
-                            outputNotices->removed.emplace_back(
-                                pathTypePair.first);
-                            removedChildPrims.insert(pathTypePair.first);
-                        }
-                    }
-                }
-
-                // Add/remove _generatedPrims entries for intermediate hierarchy
-                // NOTE: Hierarchy can potentially be identical with two 
-                // childType values of the same size. So always do comparsions
-                // in that case.
-                if (newChildTypes.size() != procEntry.childTypes.size() ||
-                         newChildHierarchy != procEntry.childHierarchy) {
-                    for (const auto &pathPathSetPair : newChildHierarchy) {
-                        const SdfPath &parentPath = pathPathSetPair.first;
-                        if (parentPath == proceduralPrimPath) {
-                            continue;
-                        }
-
-                        bool addAsIntermediate = false;
-
-                        if (procEntry.childHierarchy.find(parentPath) ==
-                                procEntry.childHierarchy.end()) {
-                            // if it's also not directly in our current
-                            // childTypes, add it as a type-less prim
-                            if (newChildTypes.find(parentPath) ==
-                                    newChildTypes.end()) {
-                                addAsIntermediate = true;
-                            } else if (procEntry.childTypes.find(parentPath) !=
-                                    procEntry.childTypes.end()) {
-                                // -or- it WAS in our child types, it means that
-                                // our type has to changed to an intermediate
-                                addAsIntermediate = true;
-                            }
-                        } else {
-                            // it WAS in our child types and not in our current
-                            // types, it means that our type has to changed to
-                            // an intermediate
-                            if (procEntry.childTypes.find(parentPath) !=
-                                        procEntry.childTypes.end()
-                                    && newChildTypes.find(parentPath) ==
-                                        newChildTypes.end()) {
-                                addAsIntermediate = true;
-                            }
-                        }
-
-                        if (addAsIntermediate) {
-                            generatedPrims.insert(parentPath);
-                            outputNotices->added.emplace_back(
-                                    parentPath, TfToken());
-                        }
-                    }
-
-                    for (const auto &pathPathSetPair :
-                            procEntry.childHierarchy) {
-                        const SdfPath &parentPath = pathPathSetPair.first;
-                        if (parentPath == proceduralPrimPath) {
-                            continue;
-                        }
-                        if (newChildHierarchy.find(parentPath) ==
-                                newChildHierarchy.end()) {
-
-                            // if it was an implicitly created intermediate
-                            // prim, we need to remove it separately
-                            if (newChildTypes.find(parentPath) ==
-                                    newChildTypes.end()) {
-                                removedChildPrims.insert(parentPath);
-                                outputNotices->removed.emplace_back(parentPath);
-                            }
-                        }
-                    }
-
-                    procEntry.childHierarchy = std::move(newChildHierarchy);
-                }
-            }
-
-            for (const SdfPath &generatedPrimPath : generatedPrims) {
-                if (generatedPrimPath == proceduralPrimPath) {
-                    continue;
-                }
-                _generatedPrims[
-                    generatedPrimPath].responsibleProc.store(&procEntry);
-            }
-
-            for (const SdfPath &removedPrimPath : removedChildPrims) {
-                auto gpIt = _generatedPrims.find(removedPrimPath);
-                if (gpIt != _generatedPrims.end()) {
-                    gpIt->second.responsibleProc.store(nullptr);
-                }
-            }
-
-        }
-
-        procEntry.childTypes = std::move(newChildTypes);
-        procEntry.state.store(_ProcEntry::StateCooked);
     } else {
         std::unique_lock<std::mutex> cookLock(procEntry.cookMutex);
     }
@@ -831,9 +802,9 @@ HdGpGenerativeProceduralResolvingSceneIndex::_RemoveProcedural(
     // 1) remove existing dependencies
     if (!procEntry.dependencies.empty()) {
 
-        _MapLock depsLock(_proceduralsMutex);
+        _MapLock depsLock(_dependenciesMutex);
 
-        for (const auto pathLocatorsPair : procEntry.dependencies) {
+        for (const auto& pathLocatorsPair : procEntry.dependencies) {
             _DependencyMap::iterator dIt =
                 _dependencies.find(pathLocatorsPair.first);
 
@@ -850,7 +821,7 @@ HdGpGenerativeProceduralResolvingSceneIndex::_RemoveProcedural(
     // 2) remove record of generated prims
     if (!procEntry.childTypes.empty()) {
 
-        for (const auto pathTypePair : procEntry.childTypes) {
+        for (const auto& pathTypePair : procEntry.childTypes) {
             const auto gpIt = _generatedPrims.find(pathTypePair.first);
             if (gpIt != _generatedPrims.end()) {
                 gpIt->second.responsibleProc.store(nullptr);
@@ -859,7 +830,7 @@ HdGpGenerativeProceduralResolvingSceneIndex::_RemoveProcedural(
 
         // childHierarchy may contain intermediate prims not directly
         // specified
-        for (const auto pathPathSetPair : procEntry.childHierarchy) {
+        for (const auto& pathPathSetPair : procEntry.childHierarchy) {
             const auto gpIt = _generatedPrims.find(pathPathSetPair.first);
             if (gpIt != _generatedPrims.end()) {
                 gpIt->second.responsibleProc.store(nullptr);
@@ -892,5 +863,253 @@ HdGpGenerativeProceduralResolvingSceneIndex::_GarbageCollect()
         }
     }
 }
+
+
+void
+HdGpGenerativeProceduralResolvingSceneIndex::_SystemMessage(
+    const TfToken &messageType,
+    const HdDataSourceBaseHandle &args)
+{
+    if (!_attemptAsync) {
+        if (messageType == HdSystemMessageTokens->asyncAllow) {
+            _attemptAsync = true;
+        }
+        return;
+    } else {
+        if (messageType != HdSystemMessageTokens->asyncPoll) {
+            return;
+        }
+    }
+
+
+
+
+    _Notices notices;
+    HdGpGenerativeProcedural::ChildPrimTypeMap primTypes;
+
+
+    TfSmallVector<SdfPath, 8> removedEntries;
+
+    for (auto &pathEntryPair : _activeSyncProcedurals) {
+        const SdfPath &proceduralPrimPath = pathEntryPair.first;
+        _ProcEntryPtr &procEntryPtr = pathEntryPair.second;
+
+        if (!procEntryPtr) {
+            removedEntries.push_back(proceduralPrimPath);
+            continue;
+        }
+
+        if (!procEntryPtr->proc) {
+            continue;
+        }
+
+        HdGpGenerativeProcedural::AsyncState result = 
+            procEntryPtr->proc->AsyncUpdate(procEntryPtr->childTypes,
+                &primTypes, &notices.dirtied);
+
+        if (result == HdGpGenerativeProcedural::FinishedWithNewChanges ||
+                result == HdGpGenerativeProcedural::ContinuingWithNewChanges) {
+            _UpdateProceduralResult(get_pointer(procEntryPtr),
+                proceduralPrimPath, primTypes, &notices);
+            primTypes.clear();
+        }
+        
+        if (result == HdGpGenerativeProcedural::Finished ||
+                result == HdGpGenerativeProcedural::FinishedWithNewChanges) {
+            removedEntries.push_back(proceduralPrimPath);
+        }
+    }
+
+    if (!removedEntries.empty()) {
+        for (const SdfPath &removedPath : removedEntries) {
+            _activeSyncProcedurals.unsafe_erase(removedPath);
+        }
+    }
+
+    if (!notices.added.empty()) {
+        _SendPrimsAdded(notices.added);
+    }
+
+    if (!notices.removed.empty()) {
+        _SendPrimsRemoved(notices.removed);
+    }
+
+    if (!notices.dirtied.empty()) {
+        _SendPrimsDirtied(notices.dirtied);
+    }
+}
+
+void
+HdGpGenerativeProceduralResolvingSceneIndex::_UpdateProceduralResult(
+    _ProcEntry *procEntryPtr,
+    const SdfPath &proceduralPrimPath,
+    const HdGpGenerativeProcedural::ChildPrimTypeMap &newChildTypes,
+    _Notices *outputNotices) const
+{
+    _ProcEntry &procEntry = *procEntryPtr;
+
+    // stuff we need to signal
+    TfDenseHashSet<SdfPath, TfHash> removedChildPrims;
+    TfDenseHashSet<SdfPath, TfHash> generatedPrims;
+
+    // if there are no previous cooks, we can directly add all
+    // without comparison
+    if (procEntry.childTypes.empty()) {
+        for (const auto& pathTypePair : newChildTypes) {
+            const SdfPath &childPrimPath = pathTypePair.first;
+            outputNotices->added.emplace_back(
+                childPrimPath, pathTypePair. second);
+
+            if (childPrimPath.HasPrefix(proceduralPrimPath)) {
+                for (const SdfPath &p :
+                        childPrimPath.GetAncestorsRange()) {
+                    if (p == proceduralPrimPath) {
+                        break;
+                    }
+                    procEntry.childHierarchy[
+                        p.GetParentPath()].insert(p);
+                    generatedPrims.insert(p);
+                }
+            } else {
+                // TODO, warning, error
+            }
+        }
+
+        for (const auto &pathPathSetPair : procEntry.childHierarchy) {
+            generatedPrims.insert(pathPathSetPair.first);
+        }
+
+    } else if (procEntry.childTypes != newChildTypes) {
+        // gather hierarchy for inclusion
+        _ProcEntry::_PathSetMap newChildHierarchy;
+
+        // add new entries (or entries whose types have changed)
+        for (const auto& pathTypePair : newChildTypes) {
+            const SdfPath &childPrimPath = pathTypePair.first;
+
+            if (childPrimPath.HasPrefix(proceduralPrimPath)) {
+                for (const SdfPath &p :
+                        childPrimPath.GetAncestorsRange()) {
+                    if (p == proceduralPrimPath) {
+                        break;
+                    }
+                    newChildHierarchy[p.GetParentPath()].insert(p);
+                }
+            } else {
+                // TODO, warning, error?
+            }
+
+            auto it = procEntry.childTypes.find(childPrimPath);
+            if (it != procEntry.childTypes.end() &&
+                    pathTypePair.second == it->second) {
+                // previously existed and type is the same, do nothing
+            } else {
+                // either didn't previously exist or type is different
+                outputNotices->added.emplace_back(
+                    childPrimPath, pathTypePair.second);
+                generatedPrims.insert(pathTypePair.first);
+            }
+        }
+
+        // remove entries not present in new cook
+        for (const auto& pathTypePair : procEntry.childTypes) {
+            if (newChildTypes.find(pathTypePair.first) ==
+                    newChildTypes.end()) {
+                if (newChildHierarchy.find(pathTypePair.first)
+                        == newChildHierarchy.end()) {
+                    outputNotices->removed.emplace_back(
+                        pathTypePair.first);
+                    removedChildPrims.insert(pathTypePair.first);
+                }
+            }
+        }
+
+        // Add/remove _generatedPrims entries for intermediate hierarchy
+        // NOTE: Hierarchy can potentially be identical with two 
+        // childType values of the same size. So always do comparsions
+        // in that case.
+        if (newChildTypes.size() != procEntry.childTypes.size() ||
+                 newChildHierarchy != procEntry.childHierarchy) {
+            for (const auto &pathPathSetPair : newChildHierarchy) {
+                const SdfPath &parentPath = pathPathSetPair.first;
+                if (parentPath == proceduralPrimPath) {
+                    continue;
+                }
+
+                bool addAsIntermediate = false;
+
+                if (procEntry.childHierarchy.find(parentPath) ==
+                        procEntry.childHierarchy.end()) {
+                    // if it's also not directly in our current
+                    // childTypes, add it as a type-less prim
+                    if (newChildTypes.find(parentPath) ==
+                            newChildTypes.end()) {
+                        addAsIntermediate = true;
+                    } else if (procEntry.childTypes.find(parentPath) !=
+                            procEntry.childTypes.end()) {
+                        // -or- it WAS in our child types, it means that
+                        // our type has to changed to an intermediate
+                        addAsIntermediate = true;
+                    }
+                } else {
+                    // it WAS in our child types and not in our current
+                    // types, it means that our type has to changed to
+                    // an intermediate
+                    if (procEntry.childTypes.find(parentPath) !=
+                                procEntry.childTypes.end()
+                            && newChildTypes.find(parentPath) ==
+                                newChildTypes.end()) {
+                        addAsIntermediate = true;
+                    }
+                }
+
+                if (addAsIntermediate) {
+                    generatedPrims.insert(parentPath);
+                    outputNotices->added.emplace_back(
+                            parentPath, TfToken());
+                }
+            }
+
+            for (const auto &pathPathSetPair :
+                    procEntry.childHierarchy) {
+                const SdfPath &parentPath = pathPathSetPair.first;
+                if (parentPath == proceduralPrimPath) {
+                    continue;
+                }
+                if (newChildHierarchy.find(parentPath) ==
+                        newChildHierarchy.end()) {
+
+                    // if it was an implicitly created intermediate
+                    // prim, we need to remove it separately
+                    if (newChildTypes.find(parentPath) ==
+                            newChildTypes.end()) {
+                        removedChildPrims.insert(parentPath);
+                        outputNotices->removed.emplace_back(parentPath);
+                    }
+                }
+            }
+
+            procEntry.childHierarchy = std::move(newChildHierarchy);
+        }
+    }
+
+    for (const SdfPath &generatedPrimPath : generatedPrims) {
+        if (generatedPrimPath == proceduralPrimPath) {
+            continue;
+        }
+        _generatedPrims[
+            generatedPrimPath].responsibleProc.store(&procEntry);
+    }
+
+    for (const SdfPath &removedPrimPath : removedChildPrims) {
+        auto gpIt = _generatedPrims.find(removedPrimPath);
+        if (gpIt != _generatedPrims.end()) {
+            gpIt->second.responsibleProc.store(nullptr);
+        }
+    }
+
+    procEntry.childTypes = std::move(newChildTypes);
+}
+
 
 PXR_NAMESPACE_CLOSE_SCOPE

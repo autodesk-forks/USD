@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usd/usdGeom/samplingUtils.h"
 #include "pxr/usd/usdGeom/motionAPI.h"
@@ -295,13 +278,15 @@ UsdGeom_GetPositionsVelocitiesAndAccelerations(
     return true;
 }
 
+/// Helper implementations for UsdGeom_GetOrientationsAndAngularVelocities
+template <class QuatType>
 bool
-UsdGeom_GetOrientationsAndAngularVelocities(
+_UsdGeom_GetOrientationsAndAngularVelocities(
     const UsdAttribute& orientationsAttr,
     const UsdAttribute& angularVelocitiesAttr,
     UsdTimeCode baseTime,
     size_t expectedNumOrientations,
-    VtQuathArray* orientations,
+    VtArray<QuatType>* orientations,
     VtVec3fArray* angularVelocities,
     UsdTimeCode* angularVelocitiesSampleTime,
     UsdPrim const &prim)
@@ -313,7 +298,7 @@ UsdGeom_GetOrientationsAndAngularVelocities(
     double orientationsUpperTimeValue = 0.0;
     bool orientationsHasSamples = true;
 
-    if (!_GetAttrForTransforms<VtQuathArray>(
+    if (!_GetAttrForTransforms<VtArray<QuatType>>(
             orientationsAttr,
             baseTime,
             &orientationsSampleTime,
@@ -383,6 +368,50 @@ UsdGeom_GetOrientationsAndAngularVelocities(
     }
 
     return true;
+}
+
+bool 
+UsdGeom_GetOrientationsAndAngularVelocities(
+    const UsdAttribute& orientationsAttr,
+    const UsdAttribute& angularVelocitiesAttr,
+    UsdTimeCode baseTime,
+    size_t expectedNumOrientations,
+    VtQuatfArray* orientations,
+    VtVec3fArray* angularVelocities,
+    UsdTimeCode* angularVelocitiesSampleTime,
+    UsdPrim const &prim)
+{
+    return _UsdGeom_GetOrientationsAndAngularVelocities<GfQuatf>(
+        orientationsAttr,
+        angularVelocitiesAttr,
+        baseTime,
+        expectedNumOrientations,
+        orientations,
+        angularVelocities,
+        angularVelocitiesSampleTime,
+        prim);
+}
+
+bool 
+UsdGeom_GetOrientationsAndAngularVelocities(
+    const UsdAttribute& orientationsAttr,
+    const UsdAttribute& angularVelocitiesAttr,
+    UsdTimeCode baseTime,
+    size_t expectedNumOrientations,
+    VtQuathArray* orientations,
+    VtVec3fArray* angularVelocities,
+    UsdTimeCode* angularVelocitiesSampleTime,
+    UsdPrim const &prim)
+{
+    return _UsdGeom_GetOrientationsAndAngularVelocities<GfQuath>(
+        orientationsAttr, 
+        angularVelocitiesAttr,
+        baseTime,
+        expectedNumOrientations,
+        orientations,
+        angularVelocities,
+        angularVelocitiesSampleTime,
+        prim);
 }
 
 

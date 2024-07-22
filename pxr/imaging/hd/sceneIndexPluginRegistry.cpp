@@ -1,28 +1,12 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/sceneIndexPluginRegistry.h"
 #include "pxr/imaging/hd/sceneIndexPlugin.h"
+#include "pxr/imaging/hd/sceneIndexUtil.h"
 #include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 
@@ -87,7 +71,8 @@ HdSceneIndexBaseRefPtr
 HdSceneIndexPluginRegistry::_AppendForPhases(
     const HdSceneIndexBaseRefPtr &inputScene,
     const _PhasesMap &phasesMap,
-    const HdContainerDataSourceHandle &argsUnderlay)
+    const HdContainerDataSourceHandle &argsUnderlay,
+    const std::string &renderInstanceId)
 {
     HdSceneIndexBaseRefPtr result = inputScene;
     for (const auto &phasesPair : phasesMap) {
@@ -110,8 +95,13 @@ HdSceneIndexPluginRegistry::_AppendForPhases(
                 args = argsUnderlay;
             }
 
-            result = AppendSceneIndex(
-                entry.sceneIndexPluginId, result, args);
+            if (entry.callback) {
+                result = entry.callback(renderInstanceId, result, args);
+            } else {
+                result = AppendSceneIndex(
+                    entry.sceneIndexPluginId, result, args);
+            }
+
         }
     }
     return result;
@@ -141,7 +131,8 @@ HdSceneIndexPluginRegistry::_CollectAdditionalMetadata(
 HdSceneIndexBaseRefPtr
 HdSceneIndexPluginRegistry::AppendSceneIndicesForRenderer(
     const std::string &rendererDisplayName,
-    const HdSceneIndexBaseRefPtr &inputScene)
+    const HdSceneIndexBaseRefPtr &inputScene,
+    const std::string &renderInstanceId)
 {
 
     // Preload any renderer plug-ins which have been tagged (via plugInfo) to
@@ -166,31 +157,43 @@ HdSceneIndexPluginRegistry::AppendSceneIndicesForRenderer(
         }
     }
 
-    HdSceneIndexBaseRefPtr result = inputScene;
-
     HdContainerDataSourceHandle underlayArgs =
         HdRetainedContainerDataSource::New(
             HdSceneIndexPluginRegistryTokens->rendererDisplayName,
             HdRetainedTypedSampledDataSource<std::string>::New(
                 rendererDisplayName));
 
+    _PhasesMap mergedPhasesMap;
+
     // append scene indices registered to run for all renderers first
     _RenderersMap::const_iterator it = _sceneIndicesForRenderers.find("");
     if (it != _sceneIndicesForRenderers.end()) {
-        result = _AppendForPhases(result, it->second, underlayArgs);
+        mergedPhasesMap = it->second;
+    }
+    // append scene indices registered to run for specified renderer
+    if (!rendererDisplayName.empty()) {
+        it = _sceneIndicesForRenderers.find(rendererDisplayName);
+        if (it != _sceneIndicesForRenderers.end()) {
+            for (auto const &phaseEntry: it->second) {
+                InsertionPhase phase = phaseEntry.first;
+                _EntryList &mergedEntries = mergedPhasesMap[phase];
+                mergedEntries.insert(
+                    mergedEntries.end(),
+                    phaseEntry.second.begin(),
+                    phaseEntry.second.end());
+            }
+        }
     }
 
-    // then check for the specific renderer
-    if (rendererDisplayName.empty()) {
-        return result;
+    HdSceneIndexBaseRefPtr scene =
+        _AppendForPhases(inputScene, mergedPhasesMap,
+                         underlayArgs, renderInstanceId);
+    if (TfGetEnvSetting<bool>(HD_USE_ENCAPSULATING_SCENE_INDICES)) {
+        scene = HdMakeEncapsulatingSceneIndex(
+            { inputScene }, scene);
+        scene->SetDisplayName("Scene index plugins");
     }
-
-    it = _sceneIndicesForRenderers.find(rendererDisplayName);
-    if (it != _sceneIndicesForRenderers.end()) {
-        result = _AppendForPhases(result, it->second, underlayArgs);
-    }
-
-    return result;
+    return scene;
 }
 
 void
@@ -209,8 +212,24 @@ HdSceneIndexPluginRegistry::RegisterSceneIndexForRenderer(
     } else {
         entryList.emplace_back(sceneIndexPluginId, inputArgs);
     }
+}
 
+void
+HdSceneIndexPluginRegistry::RegisterSceneIndexForRenderer(
+    const std::string &rendererDisplayName,
+    SceneIndexAppendCallback callback,
+    const HdContainerDataSourceHandle &inputArgs,
+    InsertionPhase insertionPhase,
+    InsertionOrder insertionOrder)
+{
+    _EntryList &entryList =
+        _sceneIndicesForRenderers[rendererDisplayName][insertionPhase];
 
+    if (insertionOrder == InsertionOrderAtStart) {
+        entryList.insert(entryList.begin(), _Entry{callback, inputArgs});
+    } else {
+        entryList.emplace_back(callback, inputArgs);
+    }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

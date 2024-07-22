@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 // GENERATED FILE.  DO NOT EDIT.
 #include <boost/python/class.hpp>
@@ -106,6 +89,7 @@ void wrapUsdPhysicsTokens()
     _AddToken(cls, "physicsFilteredPairs", UsdPhysicsTokens->physicsFilteredPairs);
     _AddToken(cls, "physicsGravityDirection", UsdPhysicsTokens->physicsGravityDirection);
     _AddToken(cls, "physicsGravityMagnitude", UsdPhysicsTokens->physicsGravityMagnitude);
+    _AddToken(cls, "physicsInvertFilteredGroups", UsdPhysicsTokens->physicsInvertFilteredGroups);
     _AddToken(cls, "physicsJointEnabled", UsdPhysicsTokens->physicsJointEnabled);
     _AddToken(cls, "physicsKinematicEnabled", UsdPhysicsTokens->physicsKinematicEnabled);
     _AddToken(cls, "physicsLocalPos0", UsdPhysicsTokens->physicsLocalPos0);
@@ -115,6 +99,7 @@ void wrapUsdPhysicsTokens()
     _AddToken(cls, "physicsLowerLimit", UsdPhysicsTokens->physicsLowerLimit);
     _AddToken(cls, "physicsMass", UsdPhysicsTokens->physicsMass);
     _AddToken(cls, "physicsMaxDistance", UsdPhysicsTokens->physicsMaxDistance);
+    _AddToken(cls, "physicsMergeGroup", UsdPhysicsTokens->physicsMergeGroup);
     _AddToken(cls, "physicsMinDistance", UsdPhysicsTokens->physicsMinDistance);
     _AddToken(cls, "physicsPrincipalAxes", UsdPhysicsTokens->physicsPrincipalAxes);
     _AddToken(cls, "physicsRestitution", UsdPhysicsTokens->physicsRestitution);
@@ -133,4 +118,21 @@ void wrapUsdPhysicsTokens()
     _AddToken(cls, "x", UsdPhysicsTokens->x);
     _AddToken(cls, "y", UsdPhysicsTokens->y);
     _AddToken(cls, "z", UsdPhysicsTokens->z);
+    _AddToken(cls, "PhysicsArticulationRootAPI", UsdPhysicsTokens->PhysicsArticulationRootAPI);
+    _AddToken(cls, "PhysicsCollisionAPI", UsdPhysicsTokens->PhysicsCollisionAPI);
+    _AddToken(cls, "PhysicsCollisionGroup", UsdPhysicsTokens->PhysicsCollisionGroup);
+    _AddToken(cls, "PhysicsDistanceJoint", UsdPhysicsTokens->PhysicsDistanceJoint);
+    _AddToken(cls, "PhysicsDriveAPI", UsdPhysicsTokens->PhysicsDriveAPI);
+    _AddToken(cls, "PhysicsFilteredPairsAPI", UsdPhysicsTokens->PhysicsFilteredPairsAPI);
+    _AddToken(cls, "PhysicsFixedJoint", UsdPhysicsTokens->PhysicsFixedJoint);
+    _AddToken(cls, "PhysicsJoint", UsdPhysicsTokens->PhysicsJoint);
+    _AddToken(cls, "PhysicsLimitAPI", UsdPhysicsTokens->PhysicsLimitAPI);
+    _AddToken(cls, "PhysicsMassAPI", UsdPhysicsTokens->PhysicsMassAPI);
+    _AddToken(cls, "PhysicsMaterialAPI", UsdPhysicsTokens->PhysicsMaterialAPI);
+    _AddToken(cls, "PhysicsMeshCollisionAPI", UsdPhysicsTokens->PhysicsMeshCollisionAPI);
+    _AddToken(cls, "PhysicsPrismaticJoint", UsdPhysicsTokens->PhysicsPrismaticJoint);
+    _AddToken(cls, "PhysicsRevoluteJoint", UsdPhysicsTokens->PhysicsRevoluteJoint);
+    _AddToken(cls, "PhysicsRigidBodyAPI", UsdPhysicsTokens->PhysicsRigidBodyAPI);
+    _AddToken(cls, "PhysicsScene", UsdPhysicsTokens->PhysicsScene);
+    _AddToken(cls, "PhysicsSphericalJoint", UsdPhysicsTokens->PhysicsSphericalJoint);
 }

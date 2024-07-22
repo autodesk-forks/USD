@@ -1,35 +1,16 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_QUADRANGULATE_H
 #define PXR_IMAGING_HD_ST_QUADRANGULATE_H
 
 #include "pxr/pxr.h"
-#include "pxr/imaging/hd/version.h"
+#include "pxr/imaging/hdSt/computation.h"
+
 #include "pxr/imaging/hd/bufferSource.h"
-#include "pxr/imaging/hd/computation.h"
-#include "pxr/imaging/hd/perfLog.h"
-#include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/base/vt/array.h"
 #include "pxr/base/tf/token.h"
@@ -112,10 +93,10 @@ class HdSt_MeshTopology;
 class HdSt_QuadInfoBuilderComputation : public HdNullBufferSource {
 public:
     HdSt_QuadInfoBuilderComputation(HdSt_MeshTopology *topology, SdfPath const &id);
-    virtual bool Resolve() override;
+    bool Resolve() override;
 
 protected:
-    virtual bool _CheckValid() const override;
+    bool _CheckValid() const override;
 
 private:
     SdfPath const _id;
@@ -147,14 +128,14 @@ public:
         HdSt_MeshTopology *topology,
         HdSt_QuadInfoBuilderComputationSharedPtr const &quadInfoBuilder,
         SdfPath const &id);
-    virtual void GetBufferSpecs(HdBufferSpecVector *specs) const override;
-    virtual bool Resolve() override;
+    void GetBufferSpecs(HdBufferSpecVector *specs) const override;
+    bool Resolve() override;
 
-    virtual bool HasChainedBuffer() const override;
-    virtual HdBufferSourceSharedPtrVector GetChainedBuffers() const override;
+    bool HasChainedBuffer() const override;
+    HdBufferSourceSharedPtrVector GetChainedBuffers() const override;
 
 protected:
-    virtual bool _CheckValid() const override;
+    bool _CheckValid() const override;
 
 private:
     SdfPath const _id;
@@ -173,11 +154,11 @@ public:
     HdSt_QuadrangulateTableComputation(
         HdSt_MeshTopology *topology,
         HdBufferSourceSharedPtr const &quadInfoBuilder);
-    virtual void GetBufferSpecs(HdBufferSpecVector *specs) const override;
-    virtual bool Resolve() override;
+    void GetBufferSpecs(HdBufferSpecVector *specs) const override;
+    bool Resolve() override;
 
 protected:
-    virtual bool _CheckValid() const override;
+    bool _CheckValid() const override;
 
 private:
     SdfPath const _id;
@@ -195,16 +176,16 @@ public:
                                 HdBufferSourceSharedPtr const &source,
                                 HdBufferSourceSharedPtr const &quadInfoBuilder,
                                 SdfPath const &id);
-    virtual void GetBufferSpecs(HdBufferSpecVector *specs) const override;
-    virtual bool Resolve() override;
-    virtual HdTupleType GetTupleType() const override;
+    void GetBufferSpecs(HdBufferSpecVector *specs) const override;
+    bool Resolve() override;
+    HdTupleType GetTupleType() const override;
 
-    virtual bool HasPreChainedBuffer() const override;
-    virtual HdBufferSourceSharedPtr GetPreChainedBuffer() const override;
+    bool HasPreChainedBuffer() const override;
+    HdBufferSourceSharedPtr GetPreChainedBuffer() const override;
 
 
 protected:
-    virtual bool _CheckValid() const override;
+    bool _CheckValid() const override;
 
 private:
     SdfPath const _id;
@@ -223,11 +204,11 @@ public:
                                            HdBufferSourceSharedPtr const &source,
                                            SdfPath const &id);
 
-    virtual void GetBufferSpecs(HdBufferSpecVector *specs) const override;
-    virtual bool Resolve() override;
+    void GetBufferSpecs(HdBufferSpecVector *specs) const override;
+    bool Resolve() override;
 
 protected:
-    virtual bool _CheckValid() const override;
+    bool _CheckValid() const override;
 
 private:
     SdfPath const _id;
@@ -239,17 +220,17 @@ private:
 ///
 /// GPU quadrangulation.
 ///
-class HdSt_QuadrangulateComputationGPU : public HdComputation {
+class HdSt_QuadrangulateComputationGPU : public HdStComputation {
 public:
     /// This computaion doesn't generate buffer source (i.e. 2nd phase)
     HdSt_QuadrangulateComputationGPU(HdSt_MeshTopology *topology,
                                TfToken const &sourceName,
                                HdType dataType,
                                SdfPath const &id);
-    virtual void Execute(HdBufferArrayRangeSharedPtr const &range,
-                         HdResourceRegistry *resourceRegistry) override;
-    virtual void GetBufferSpecs(HdBufferSpecVector *specs) const override;
-    virtual int GetNumOutputElements() const override;
+    void Execute(HdBufferArrayRangeSharedPtr const &range,
+                 HdResourceRegistry *resourceRegistry) override;
+    void GetBufferSpecs(HdBufferSpecVector *specs) const override;
+    int GetNumOutputElements() const override;
 
 private:
     SdfPath const _id;

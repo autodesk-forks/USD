@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_IMAGING_USD_IMAGING_SPHERE_ADAPTER_H
 #define PXR_USD_IMAGING_USD_IMAGING_SPHERE_ADAPTER_H
@@ -45,6 +28,11 @@ class UsdImagingSphereAdapter : public UsdImagingGprimAdapter
 public:
     using BaseAdapter = UsdImagingGprimAdapter;
 
+    // Number of radial segments about the Z axis.
+    static constexpr size_t numRadial = 10;
+    // Number of divisions along the Z axis.
+    static constexpr size_t numAxial  = 10;
+
     UsdImagingSphereAdapter()
         : UsdImagingGprimAdapter()
     {}
@@ -56,21 +44,25 @@ public:
     // ---------------------------------------------------------------------- //
 
     USDIMAGING_API
-    TfTokenVector GetImagingSubprims() override;
+    TfTokenVector GetImagingSubprims(UsdPrim const& prim) override;
 
     USDIMAGING_API
-    TfToken GetImagingSubprimType(TfToken const& subprim) override;
+    TfToken GetImagingSubprimType(
+            UsdPrim const& prim,
+            TfToken const& subprim) override;
 
     USDIMAGING_API
     HdContainerDataSourceHandle GetImagingSubprimData(
-            TfToken const& subprim,
             UsdPrim const& prim,
+            TfToken const& subprim,
             const UsdImagingDataSourceStageGlobals &stageGlobals) override;
 
     USDIMAGING_API
     HdDataSourceLocatorSet InvalidateImagingSubprim(
-        TfToken const& subprim,
-        TfTokenVector const& properties) override;
+            UsdPrim const& prim,
+            TfToken const& subprim,
+            TfTokenVector const& properties,
+            UsdImagingPropertyInvalidationType invalidationType) override;
 
     // ---------------------------------------------------------------------- //
     /// \name Initialization
@@ -118,15 +110,6 @@ public:
     VtValue GetPoints(
         UsdPrim const& prim,
         UsdTimeCode time) const override;
-
-    // Used by the legacyEngine.
-    USDIMAGING_API
-    static VtValue GetMeshPoints(UsdPrim const& prim, 
-                                 UsdTimeCode time);
-
-    // Used by the legacyEngine.
-    USDIMAGING_API
-    static VtValue GetMeshTopology();
 };
 
 
