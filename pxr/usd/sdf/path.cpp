@@ -22,7 +22,6 @@
 
 #include "pxr/base/trace/trace.h"
 
-#include <boost/functional/hash.hpp>
 #include <algorithm>
 #include <ostream>
 
