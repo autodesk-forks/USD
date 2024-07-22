@@ -2678,9 +2678,7 @@ if context.targetWasm:
 
 # Determine list of dependencies that are required based on options
 # user has selected.
-requiredDependencies = [BOOST, TBB]
-if not context.targetWasm:
-    requiredDependencies += [ZLIB]
+requiredDependencies = [BOOST, TBB, ZLIB]
 
 if context.targetWasm and context.buildTests:
     requiredDependencies += [THREE]
