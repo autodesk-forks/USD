@@ -132,7 +132,7 @@ _MakeNamedHgi(const TfToken& hgiToken)
         hgiType = "HgiMetal";
 #endif
     } else if (hgiToken.IsEmpty()) {
-        return _MakeNewPlatformDefaultHgi();
+        return _MakeNewPlatformDefaultHgi(0);
     } else {
         // If an invalid token is provided, return nullptr.
         TF_CODING_ERROR("Unsupported token %s was provided.",

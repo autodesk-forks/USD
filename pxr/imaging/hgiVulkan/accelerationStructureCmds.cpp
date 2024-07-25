@@ -69,7 +69,8 @@ HgiVulkanAccelerationStructureCmds::Build(HgiAccelerationStructureHandleVector a
     std::vector< VkAccelerationStructureBuildRangeInfoKHR*> rangeInfoPointers;
     std::vector< VkAccelerationStructureBuildGeometryInfoKHR> buildInfo;
 
-    assert(ranges.size() == accelStructures.size());
+    if(ranges.size() != accelStructures.size())
+        TF_FATAL_ERROR("Mismatched number of ranges and acceleration structures");
 
     for (int i = 0; i < ranges.size(); i++) {
         VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};

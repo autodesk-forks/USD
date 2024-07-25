@@ -89,7 +89,7 @@ constexpr bool _CompileTimeValidateHgiFormatTable() {
             HgiFormatBC3UNorm8Vec4 == 32) ? true : false;
 }
 
-static_assert(_CompileTimeValidateHgiFormatTable(), 
+static_assert(_CompileTimeValidateHgiFormatTable(),
               "_FormatDesc array out of sync with HgiFormat enum");
 
 
@@ -191,16 +191,16 @@ static_assert(HgiWindingCount==2, "");
 static const uint32_t
 _BindResourceTypeTable[HgiBindResourceTypeCount][2] =
 {
-    {HgiBindResourceTypeSampler,              VK_DESCRIPTOR_TYPE_SAMPLER},
-    {HgiBindResourceTypeSampledImage,         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE},
-    {HgiBindResourceTypeCombinedSamplerImage, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
-    {HgiBindResourceTypeStorageImage,         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
-    {HgiBindResourceTypeUniformBuffer,        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
-    {HgiBindResourceTypeStorageBuffer,        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
-    {HgiBindResourceTypeTessFactors,          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
-    {HgiBindResourceTypeAccelerationStructure,        VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR},
+    {HgiBindResourceTypeSampler,               VK_DESCRIPTOR_TYPE_SAMPLER},
+    {HgiBindResourceTypeSampledImage,          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE},
+    {HgiBindResourceTypeCombinedSamplerImage,  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+    {HgiBindResourceTypeStorageImage,          VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
+    {HgiBindResourceTypeUniformBuffer,         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+    {HgiBindResourceTypeStorageBuffer,         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+    {HgiBindResourceTypeTessFactors,           VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+    {HgiBindResourceTypeAccelerationStructure, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR},
 };
-static_assert(HgiBindResourceTypeCount==7, "");
+static_assert(HgiBindResourceTypeCount==8, "");
 
 static const uint32_t
 _blendEquationTable[HgiBlendOpCount][2] =
@@ -338,7 +338,7 @@ static_assert(HgiPrimitiveTypeCount==6, "");
 
 static const std::string
 _imageLayoutFormatTable[HgiFormatCount][2] =
-{ 
+{
     {"HgiFormatUNorm8",            "r8"},
     {"HgiFormatUNorm8Vec2",        "rg8"},
     {"HgiFormatUNorm8Vec4",        "rgba8"},
@@ -443,7 +443,7 @@ HgiVulkanConversions::GetImageAspectFlag(HgiTextureUsage usage)
 {
     VkImageAspectFlags result = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    if (usage & HgiTextureUsageBitsDepthTarget && 
+    if (usage & HgiTextureUsageBitsDepthTarget &&
         usage & HgiTextureUsageBitsStencilTarget) {
         result = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
     } else if (usage & HgiTextureUsageBitsDepthTarget) {

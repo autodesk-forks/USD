@@ -88,18 +88,18 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     // descriptor set and increment all Hgi binding indices here.
     // This assumes that Hgi codeGen does the same for vulkan glsl.
 
-    // For non-bindless buffers in Storm, uniform and storage buffers share a 
-    // binding index counter, while textures have their own binding index 
-    // counter. Thus for Vulkan, we adjust the texture bind indices to start 
+    // For non-bindless buffers in Storm, uniform and storage buffers share a
+    // binding index counter, while textures have their own binding index
+    // counter. Thus for Vulkan, we adjust the texture bind indices to start
     // after the last buffer bind index.
     // E.g. If HgiResourceBindingDesc indicates the following binding indices:
     // UBO1: 0, SSBO1: 1, SSB02: 2, TEX1: 0, TEX2: 1, here we change that to:
     // UBO1: 0, SSBO1: 1, SSB02: 2, TEX1: 3, TEX2: 4.
 
     uint32_t textureBindIndexStart = 0;
-    
-    // XXX We need to overspecify the stage usage here so we can match the 
-    // VkDescriptorSetLayout that is created with spirv-reflect for the 
+
+    // XXX We need to overspecify the stage usage here so we can match the
+    // VkDescriptorSetLayout that is created with spirv-reflect for the
     // graphics and compute pipelines.
     VkShaderStageFlags const bufferShaderStageFlags =
         HgiVulkanConversions::GetShaderStages(
@@ -120,7 +120,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
         d.binding = a.bindingIndex;
         d.descriptorType =
             HgiVulkanConversions::GetDescriptorType(a.resourceType);
-        poolSizes[b.resourceType].descriptorCount++;
+        poolSizes[a.resourceType].descriptorCount++;
         d.descriptorCount = (uint32_t)a.accelerationStructures.size();
         d.stageFlags = HgiVulkanConversions::GetShaderStages(a.stageUsage);
         d.pImmutableSamplers = nullptr;
@@ -255,7 +255,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
         {HgiBindResourceTypeStorageBuffer,
             limits.maxPerStageDescriptorStorageBuffers},
         {HgiBindResourceTypeTessFactors,
-            0} // unsupported
+            0}, // unsupported
         {HgiBindResourceTypeAccelerationStructure,
             1024}
     };
@@ -272,7 +272,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     accelerationStructureInfos.resize(desc.accelerationStructures.size());
     accelerationStructureIds.resize(desc.accelerationStructures.size());
 
-    int asIdx = 0;
+    size_t asIdx = 0;
     for (HgiAccelerationStructureBindDesc const& asDesc : desc.accelerationStructures) {
         uint32_t& limit = bindLimits[asDesc.resourceType][1];
         if (!TF_VERIFY(limit > 0, "Maximum size array-of-acceleration structures exceeded")) {
@@ -303,9 +303,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     asIdx = 0;
     for (HgiAccelerationStructureBindDesc const& asDesc : desc.accelerationStructures) {
         VkWriteDescriptorSet writeSet = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-        writeSet.dstBinding = reorder ? // index in descriptor set
-            (uint32_t)writeSets.size() :
-            asDesc.bindingIndex;
+        writeSet.dstBinding = asDesc.bindingIndex;
         writeSet.pNext = &accelerationStructureInfos[asIdx];
         writeSet.dstArrayElement = 0;
         writeSet.descriptorCount = (uint32_t)asDesc.accelerationStructures.size(); // 0 ok
