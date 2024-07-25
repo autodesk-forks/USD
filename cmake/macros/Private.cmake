@@ -1300,7 +1300,7 @@ function(_pxr_library NAME)
     endif()
 
     # Final name.
-    set(libraryFilename "${args_PREFIX}${NAME}${args_SUFFIX}")
+    set(libraryFilename "${args_PREFIX}${NAME}${CMAKE_DEBUG_POSTFIX}${args_SUFFIX}")
     set(pluginToLibraryPath "")
 
     # Figure out the relative path from this library's plugin location
