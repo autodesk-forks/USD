@@ -1,3 +1,7 @@
+cmake_minimum_required(VERSION 3.12)
+
+option(LINK_AS_SIDE_MODULE "Link libraries as side modules" OFF)
+
 set(PXR_PREFIX pxr/usdImaging)
 set(PXR_PACKAGE usdviewweb)
 
@@ -5,11 +9,13 @@ set(RESOURCE_PARAMETERS "")
 function(add_resources target)
     add_dependencies(${PXR_PACKAGE} ${target})
     target_link_libraries(${PXR_PACKAGE} ${target})
-    # This local var is needed since list append cannot update the PARENT_SCOPE
     set(LOCAL_VAR ${RESOURCE_PARAMETERS})
     get_property(RESOURCES TARGET ${target} PROPERTY EMSCRIPTEN_RESOURCES)
     list(APPEND LOCAL_VAR "${RESOURCES}")
     set(RESOURCE_PARAMETERS "${LOCAL_VAR}" PARENT_SCOPE)
+    if (LINK_AS_SIDE_MODULE)
+        set_target_properties(${target} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
+    endif()
 endfunction()
 
 pxr_cpp_bin(${PXR_PACKAGE}
