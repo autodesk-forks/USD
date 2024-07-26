@@ -39,6 +39,7 @@ HgiMetalBuildableAccelerationStructure::HgiMetalBuildableAccelerationStructure(
     
     HgiMetalBuffer* indexBuffer = (HgiMetalBuffer*)_hgiDesc.indexData.Get();
     HgiMetalBuffer* vertexBuffer = (HgiMetalBuffer*)_hgiDesc.vertexData.Get();
+    HgiMetalBuffer* primitiveData = (HgiMetalBuffer*)_hgiDesc.primitiveData.Get();
     
     _triangleGeomDesc.indexBuffer = indexBuffer->GetBufferId();
     _triangleGeomDesc.indexBufferOffset = 0;
@@ -50,10 +51,10 @@ HgiMetalBuildableAccelerationStructure::HgiMetalBuildableAccelerationStructure(
 
     _triangleGeomDesc.triangleCount = _hgiDesc.count;
     
-    _triangleGeomDesc.primitiveDataBuffer = nil;
+    _triangleGeomDesc.primitiveDataBuffer = primitiveData->GetBufferId();
     _triangleGeomDesc.primitiveDataBufferOffset = 0;
-    _triangleGeomDesc.primitiveDataStride = 0;
-    _triangleGeomDesc.primitiveDataElementSize = 0;
+    _triangleGeomDesc.primitiveDataStride = _hgiDesc.primitiveDataStride;
+    _triangleGeomDesc.primitiveDataElementSize = _hgiDesc.primitiveDataElementSize;
     
     //_triangleGeomDesc.intersectionFunctionTableOffset = 0;
     
