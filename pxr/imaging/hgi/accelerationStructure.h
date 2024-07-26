@@ -75,11 +75,11 @@ struct HgiAccelerationStructureTriangleGeometryDesc
     HgiBufferHandle indexData;
     HgiBufferHandle transformData;
     HgiAccelerationStructureGeometryFlags flags = HgiAccelerationStructureGeometryOpaque;
-    uint32_t count;
+    uint32_t count = 0;
     // per primitive data
     HgiBufferHandle primitiveData;
-    size_t          primitiveDataStride;
-    size_t          primitiveDataElementSize;
+    size_t          primitiveDataStride = 0;
+    size_t          primitiveDataElementSize = 0;
 };
 
 HGI_API

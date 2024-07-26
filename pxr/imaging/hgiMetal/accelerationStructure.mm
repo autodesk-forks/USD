@@ -51,10 +51,20 @@ HgiMetalBuildableAccelerationStructure::HgiMetalBuildableAccelerationStructure(
 
     _triangleGeomDesc.triangleCount = _hgiDesc.count;
     
-    _triangleGeomDesc.primitiveDataBuffer = primitiveData->GetBufferId();
-    _triangleGeomDesc.primitiveDataBufferOffset = 0;
-    _triangleGeomDesc.primitiveDataStride = _hgiDesc.primitiveDataStride;
-    _triangleGeomDesc.primitiveDataElementSize = _hgiDesc.primitiveDataElementSize;
+    if (primitiveData)
+    {
+        _triangleGeomDesc.primitiveDataBuffer = primitiveData->GetBufferId();
+        _triangleGeomDesc.primitiveDataBufferOffset = 0;
+        _triangleGeomDesc.primitiveDataStride = _hgiDesc.primitiveDataStride;
+        _triangleGeomDesc.primitiveDataElementSize = _hgiDesc.primitiveDataElementSize;
+    }
+    else
+    {
+        _triangleGeomDesc.primitiveDataBuffer = nil;
+        _triangleGeomDesc.primitiveDataBufferOffset = 0;
+        _triangleGeomDesc.primitiveDataStride = 0;
+        _triangleGeomDesc.primitiveDataElementSize = 0;
+    }
     
     //_triangleGeomDesc.intersectionFunctionTableOffset = 0;
     
