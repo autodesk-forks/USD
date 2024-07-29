@@ -1493,7 +1493,7 @@ void HgiMetalShaderGenerator::_ReplaceSourceCode(std::ostream &ss) {
     NSData* shaderHeader = [NSData dataWithContentsOfFile:shaderHeaderSourcePath];
 
     if(!shaderHeader) {
-        ss << "on no: can't find shader header";
+        ss << "oh no: can't find shader header";
         return;
     }
 
@@ -1513,7 +1513,7 @@ void HgiMetalShaderGenerator::_ReplaceSourceCode(std::ostream &ss) {
         NSString* shaderRayGenSourcePath    = [shaderDirectory stringByAppendingPathComponent:@"ray_gen.metal"];
         NSData* shaderRayGen = [NSData dataWithContentsOfFile:shaderRayGenSourcePath];
         if(!shaderRayGen) {
-            ss << "on no: can't find ray gen shader";
+            ss << "oh no: can't find ray gen shader";
             return;
         }
         NSString* shaderRayGenStr = [[NSString alloc] initWithData:shaderRayGen encoding:NSUTF8StringEncoding];
