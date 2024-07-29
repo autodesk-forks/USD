@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hgiVulkan/capabilities.h"
 #include "pxr/imaging/hgiVulkan/commandQueue.h"
@@ -28,13 +11,11 @@
 #include "pxr/imaging/hgiVulkan/hgi.h"
 #include "pxr/imaging/hgiVulkan/instance.h"
 #include "pxr/imaging/hgiVulkan/pipelineCache.h"
+#include "pxr/imaging/hgiVulkan/vk_mem_alloc.h"
 
 #include "pxr/base/tf/diagnostic.h"
 #include <iostream>
 
-#define VMA_IMPLEMENTATION
-    #include "pxr/imaging/hgiVulkan/vk_mem_alloc.h"
-#undef VMA_IMPLEMENTATION
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -238,8 +219,8 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     }
 
     // Allow use of built-in shader barycentrics.
-    if (IsSupportedExtension(VK_NV_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME)) {
-        extensions.push_back(VK_NV_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
+    if (IsSupportedExtension(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME)) {
+        extensions.push_back(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
     }
 
     // Allow use of shader draw parameters.
@@ -247,9 +228,22 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         extensions.push_back(VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME);
     }
 
+    // Allow use of vertex attribute divisors.
+    if (IsSupportedExtension(VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME)) {
+        extensions.push_back(VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME);
+    }
+
     // This extension is needed to allow the viewport to be flipped in Y so that
     // shaders and vertex data can remain the same between opengl and vulkan.
     extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
+
+    // Enabling certain features may incure a performance hit
+    // (e.g. robustBufferAccess), so only enable the features we will use.
+    VkPhysicalDeviceVulkan11Features vulkan11Features =
+        {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+    vulkan11Features.pNext = _capabilities->vkVulkan11Features.pNext;
+    vulkan11Features.shaderDrawParameters =
+        _capabilities->vkVulkan11Features.shaderDrawParameters;
 
     VkPhysicalDeviceVulkan12Features vulkan12Features = {};
     vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -259,7 +253,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     vulkan12Features.runtimeDescriptorArray = true;
     vulkan12Features.shaderSampledImageArrayNonUniformIndexing = true;
 
-    vulkan12Features.pNext = nullptr;// _capabilities->vkDeviceFeatures2.pNext;
+    vulkan12Features.pNext = &vulkan11Features;
 
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures;
     rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
@@ -287,12 +281,8 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     createInfo.pNext = &accelerationStructureFeatures;
 
 
-    // Enabling certain features may incure a performance hit
-    // (e.g. robustBufferAccess), so only enable the features we will use.
     VkPhysicalDeviceFeatures2 features =
         {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-
-    //extension features
     features.pNext = &createInfo;
 
     features.features.multiDrawIndirect =
@@ -309,10 +299,21 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         _capabilities->vkDeviceFeatures.shaderClipDistance;
     features.features.tessellationShader =
         _capabilities->vkDeviceFeatures.tessellationShader;
+    features.features.depthClamp =
+        _capabilities->vkDeviceFeatures.depthClamp;
+    features.features.shaderFloat64 =
+        _capabilities->vkDeviceFeatures.shaderFloat64;
+    features.features.fillModeNonSolid =
+        _capabilities->vkDeviceFeatures.fillModeNonSolid;
+    features.features.alphaToOne =
+        _capabilities->vkDeviceFeatures.alphaToOne;
 
     // Needed to write to storage buffers from vertex shader (eg. GPU culling).
     features.features.vertexPipelineStoresAndAtomics =
         _capabilities->vkDeviceFeatures.vertexPipelineStoresAndAtomics;
+    // Needed to write to storage buffers from fragment shader (eg. OIT).
+    features.features.fragmentStoresAndAtomics =
+        _capabilities->vkDeviceFeatures.fragmentStoresAndAtomics;
 
     #if !defined(VK_USE_PLATFORM_MACOS_MVK)
         // Needed for buffer address feature

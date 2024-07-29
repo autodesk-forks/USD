@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_GEOMETRIC_SHADER_H
 #define PXR_IMAGING_HD_ST_GEOMETRIC_SHADER_H
@@ -73,8 +56,8 @@ public:
         PRIM_MESH_REFINED_TRIQUADS,  // e.g: triangulated catmark/bilinear
         PRIM_MESH_BSPLINE,           // e.g. catmark limit surface patches
         PRIM_MESH_BOXSPLINETRIANGLE, // e.g. loop limit surface patches
-        PRIM_VOLUME                  // Simply draws triangles of bounding
-                                     // box of a volume.
+        PRIM_VOLUME,                 // Triangles of bounding box of a volume.
+        PRIM_COMPUTE                 // A compute shader, e.g frustum culling
     };
 
     /// static query functions for PrimitiveType
@@ -130,6 +113,10 @@ public:
                primType == PrimitiveType::PRIM_BASIS_CURVES_LINEAR_PATCHES;
     }
 
+    static inline bool IsPrimTypeCompute(PrimitiveType primType) {
+        return primType == PrimitiveType::PRIM_COMPUTE;
+    }
+
     // Face-varying patch type
     enum class FvarPatchType { 
         PATCH_COARSE_TRIANGLES,  
@@ -171,7 +158,7 @@ public:
     void UnbindResources(int program,
                          HdSt_ResourceBinder const &binder) override;
     HDST_API
-    void AddBindings(HdBindingRequestVector *customBindings) override;
+    void AddBindings(HdStBindingRequestVector *customBindings) override;
 
     /// Returns true if this geometric shader is used for GPU frustum culling.
     bool IsFrustumCullingPass() const {
@@ -180,22 +167,6 @@ public:
 
     PrimitiveType GetPrimitiveType() const {
         return _primType;
-    }
-
-    HdCullStyle GetCullStyle() const {
-        return _cullStyle;
-    }
-
-    bool GetUseHardwareFaceCulling() const {
-        return _useHardwareFaceCulling;
-    }
-
-    bool GetHasMirroredTransform() const {
-        return _hasMirroredTransform;
-    }
-
-    bool GetDoubleSided() const {
-        return _doubleSided;
     }
 
     bool GetUseMetalTessellation() const {
@@ -235,8 +206,16 @@ public:
         return IsPrimTypeTriQuads(_primType);
     }
 
+    bool IsPrimTypeRefinedMesh() const {
+        return IsPrimTypeRefinedMesh(_primType);
+    }
+
     bool IsPrimTypePatches() const {
         return IsPrimTypePatches(_primType);
+    }
+
+    bool IsPrimTypeCompute() const {
+        return IsPrimTypeCompute(_primType);
     }
 
     FvarPatchType GetFvarPatchType() const {
@@ -261,6 +240,10 @@ public:
     // Returns the HgiPrimitiveType for the primitive type.
     HDST_API
     HgiPrimitiveType GetHgiPrimitiveType() const;
+
+    // Resolve the cull mode from the cull style in the render state.
+    HDST_API
+    HgiCullMode ResolveCullMode(HdCullStyle const renderStateCullStyle) const;
 
     // Factory for convenience.
     static HdSt_GeometricShaderSharedPtr Create(

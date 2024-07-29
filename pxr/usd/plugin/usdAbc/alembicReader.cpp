@@ -1,25 +1,8 @@
 //
 // Copyright 2016-2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 /// \file alembicReader.cpp
 
@@ -36,8 +19,6 @@
 #include "pxr/base/tf/staticData.h"
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/base/tf/ostreamMethods.h"
-#include <boost/type_traits/is_base_of.hpp>
-#include <boost/utility/enable_if.hpp>
 #include <Alembic/Abc/ArchiveInfo.h>
 #include <Alembic/Abc/IArchive.h>
 #include <Alembic/Abc/IObject.h>
@@ -54,6 +35,7 @@
 #include <Alembic/AbcGeom/IXform.h>
 #include <Alembic/AbcGeom/SchemaInfoDeclarations.h>
 #include <Alembic/AbcGeom/Visibility.h>
+#include <optional>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -90,7 +72,7 @@ TF_DEFINE_ENV_SETTING(
 
 #if ALEMBIC_LIBRARY_VERSION >= 10709
 TF_DEFINE_ENV_SETTING(
-    USD_ABC_READ_ARCHIVE_USE_MMAP, false,
+    USD_ABC_READ_ARCHIVE_USE_MMAP, true,
     "Use mmap when reading from an Ogawa archive.");
 #endif
 
@@ -658,7 +640,7 @@ public:
                                 const ISampleSelector&)> Converter;
 
     /// An optional ordering of name children or properties.
-    typedef boost::optional<TfTokenVector> Ordering;
+    typedef std::optional<TfTokenVector> Ordering;
 
     /// Sample times.
     typedef UsdAbc_AlembicDataReader::TimeSamples TimeSamples;
@@ -820,11 +802,14 @@ private:
                    const UsdAbc_AlembicDataAny& value) const;
 
     // Custom auto-lock that safely ignores a NULL pointer.
-    class _Lock : boost::noncopyable {
+    class _Lock {
     public:
         _Lock(std::recursive_mutex* mutex) : _mutex(mutex) {
             if (_mutex) _mutex->lock();
         }
+        _Lock (const _Lock&) = delete;
+        _Lock& operator= (const _Lock&) = delete;
+
         ~_Lock() { if (_mutex) _mutex->unlock(); }
 
     private:
@@ -915,6 +900,13 @@ _ReaderContext::Open(const std::string& filePath, std::string* errorLog,
     IFactory::CoreType abcType;
     factory.setPolicy(Abc::ErrorHandler::Policy::kQuietNoopPolicy);
     factory.setOgawaNumStreams(_GetNumOgawaStreams());
+
+#if ALEMBIC_LIBRARY_VERSION >= 10709
+    if (!TfGetEnvSetting(USD_ABC_READ_ARCHIVE_USE_MMAP)) {
+        factory.setOgawaReadStrategy(Alembic::AbcCoreFactory::IFactory::kFileStreams);
+    }
+#endif
+
     IArchive archive = factory.getArchive(layeredABC, abcType);
 
 #if PXR_HDF5_SUPPORT_ENABLED && !H5_HAVE_THREADSAFE
@@ -943,7 +935,12 @@ _ReaderContext::Open(const std::string& filePath, std::string* errorLog,
     // Get info.
     uint32_t apiVersion;
     std::string writer, version, date, comment;
+    double fps = 0.0;
+#if ALEMBIC_LIBRARY_VERSION >= 10712
+    GetArchiveInfo(archive, writer, version, apiVersion, date, comment, fps);
+#else
     GetArchiveInfo(archive, writer, version, apiVersion, date, comment);
+#endif
 
     // Report.
     if (IsFlagSet(UsdAbc_AlembicContextFlagNames->verbose)) {
@@ -980,9 +977,13 @@ _ReaderContext::Open(const std::string& filePath, std::string* errorLog,
             root.getProperties().getPropertyHeader("Usd")) {
         const MetaData& metadata = property->getMetaData();
         _pseudoRoot->metadata[SdfFieldKeys->TimeCodesPerSecond] = 24.0;
-       _GetDoubleMetadata(metadata, _pseudoRoot->metadata,
+        _GetDoubleMetadata(metadata, _pseudoRoot->metadata,
                            SdfFieldKeys->TimeCodesPerSecond);
-       _timeScale = _pseudoRoot->metadata[SdfFieldKeys->TimeCodesPerSecond].Get<double>();
+        _timeScale = _pseudoRoot->metadata[SdfFieldKeys->TimeCodesPerSecond].Get<double>();
+    }
+    else if (fps != 0.0) {
+        _pseudoRoot->metadata[SdfFieldKeys->TimeCodesPerSecond] = fps;
+        _timeScale = _pseudoRoot->metadata[SdfFieldKeys->TimeCodesPerSecond].Get<double>();
     }
 
     // Collect instancing information.
@@ -2623,7 +2624,7 @@ struct _CopyXform {
     }
 
 private:
-    mutable boost::optional<MetaData> _metadata;
+    mutable std::optional<MetaData> _metadata;
 };
 
 /// Base class to copy attributes of an almebic camera to a USD camera
@@ -3682,10 +3683,10 @@ _ReadPrim(
     // Handle non-instances.
     _ReaderContext::Prim* instance = nullptr;
     if (!context.IsInstance(object)) {
-        // Combine geom with parent if parent is a transform.  There are
-        // several cases where we want to bail out and, rather than use a
-        // huge if statement or deep if nesting, we'll use do/while and
-        // break to do it.
+        // Combine geom with parent if parent is a transform with only a single
+        // child. There are several cases where we want to bail out and, rather
+        // than use a huge if statement or deep if nesting, we'll use do/while
+        // and break to do it.
         do {
             if (!TfGetEnvSetting(USD_ABC_XFORM_PRIM_COLLAPSE)) {
                 // Transform collapse is specified as unwanted behavior
@@ -3704,6 +3705,11 @@ _ReadPrim(
 
             // The parent must not be the root of an instance.
             if (context.IsInstance(parent)) {
+                break;
+            }
+
+            // The parent must not have more than this one object as a child.
+            if (parent.getNumChildren() > 1u) {
                 break;
             }
 
@@ -3788,7 +3794,7 @@ _ReadPrim(
 
         // Discard name children ordering since we don't have any name
         // children (except via the prototype reference).
-        instance->primOrdering = boost::none;
+        instance->primOrdering = std::nullopt;
     }
 
     // Get the prim cache.  If instance is true then prim is the prototype,
@@ -3839,7 +3845,7 @@ _ReadPrim(
         if (instance && instance->promoted) {
             // prim is the prototype.
             prim.properties.clear();
-            prim.propertyOrdering = boost::none;
+            prim.propertyOrdering = std::nullopt;
             prim.metadata.clear();
             prim.propertiesCache.clear();
         }

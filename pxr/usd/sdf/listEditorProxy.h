@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_LIST_EDITOR_PROXY_H
 #define PXR_USD_SDF_LIST_EDITOR_PROXY_H
@@ -33,10 +16,9 @@
 
 #include "pxr/base/vt/value.h"  // for Vt_DefaultValueFactory
 
-#include <boost/optional.hpp>
-#include <boost/shared_ptr.hpp>
-
 #include <functional>
+#include <memory>
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -63,11 +45,11 @@ public:
     typedef std::vector<value_type> value_vector_type;
 
     // ApplyEdits types.
-    typedef std::function<boost::optional<value_type>
+    typedef std::function<std::optional<value_type>
                         (SdfListOpType, const value_type&)> ApplyCallback;
 
     // ModifyEdits types.
-    typedef std::function<boost::optional<value_type>
+    typedef std::function<std::optional<value_type>
                         (const value_type&)> ModifyCallback;
 
     /// Creates a default proxy object. The object evaluates to \c false in a 
@@ -78,7 +60,7 @@ public:
 
     /// Creates a new proxy object backed by the supplied list editor.
     explicit SdfListEditorProxy(
-        const boost::shared_ptr<Sdf_ListEditor<TypePolicy> >& listEditor)
+        const std::shared_ptr<Sdf_ListEditor<TypePolicy> >& listEditor)
         : _listEditor(listEditor)
     {
     }
@@ -294,8 +276,20 @@ public:
         return ListProxy(_listEditor, SdfListOpTypeOrdered);
     }
 
-    /// Returns the added or explicitly set items.
+    /// Deprecated.  Please use \ref GetAppliedItems
     value_vector_type GetAddedOrExplicitItems() const
+    {
+        return GetAppliedItems();
+    }
+
+    /// Returns the effective list of items represented by the operations in
+    /// this list op. This function should be used to determine the final list
+    /// of items added instead of looking at the individual explicit, prepended,
+    /// and appended item lists. 
+    ///
+    /// This is equivalent to calling ApplyOperations on an empty item vector.
+    
+    value_vector_type GetAppliedItems() const
     {
         value_vector_type result;
         if (_Validate()) {
@@ -461,7 +455,7 @@ private:
     }
 
 private:
-    boost::shared_ptr<Sdf_ListEditor<TypePolicy> > _listEditor;
+    std::shared_ptr<Sdf_ListEditor<TypePolicy> > _listEditor;
 
     friend class Sdf_ListEditorProxyAccess;
     template <class T> friend class SdfPyWrapListEditorProxy;

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_SCENE_DELEGATE_H
 #define PXR_IMAGING_HD_SCENE_DELEGATE_H
@@ -41,6 +24,7 @@
 #include "pxr/base/vt/array.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/vt/value.h"
+#include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/path.h"
 
 #include "pxr/base/gf/vec2i.h"
@@ -118,7 +102,7 @@ struct HdDisplayStyle {
     /// \param refineLevel_ the refine level to display.
     ///        Valid range is [0, 8].
     /// \param flatShading enables flat shading, defaults to false.
-    /// \param displacement enables displacement shading, defaults to false.
+    /// \param displacement enables displacement shading, defaults to true.
     /// \param occludedSelectionShowsThrough controls whether the prim lets
     ///        occluded selection show through it, defaults to false.
     /// \param pointsShadingEnabled controls whether the prim's points 
@@ -200,6 +184,79 @@ struct HdPrimvarDescriptor {
 };
 
 typedef std::vector<HdPrimvarDescriptor> HdPrimvarDescriptorVector;
+
+/// \struct HdModelDrawMode
+///
+/// Describes optional alternative imaging behavior for prims.
+/// 
+/// Some scene delegates, like the UsdImagingDelegate, will pre-flatten this
+/// data, but other scene delegates may wish to use this to pipe the data 
+/// through to a draw mode resolving scene index (see 
+/// UsdImagingDrawModeSceneIndex as an example of such a scene index).
+/// 
+/// There is currently no plan to add emulation support for this information,
+/// such as via HdLegacyPrimSceneIndex or HdSceneIndexAdapterSceneDelegate.
+/// 
+struct HdModelDrawMode {
+    // Alternate imaging mode. Options are origin, bounds, cards, default, and 
+    // inherited.
+    TfToken drawMode;
+    // Specifies whether to apply the alternative imaging mode or not.
+    bool applyDrawMode;
+    // The color in which to draw the geometry.
+    GfVec3f drawModeColor;
+    // The specific geometry to use in cards mode. Options are cross, box, and 
+    // fromTexture. 
+    TfToken cardGeometry;
+    // The textures applied to the respective quads in cards mode.
+    SdfAssetPath cardTextureXPos;
+    SdfAssetPath cardTextureYPos;
+    SdfAssetPath cardTextureZPos;
+    SdfAssetPath cardTextureXNeg;
+    SdfAssetPath cardTextureYNeg;
+    SdfAssetPath cardTextureZNeg;
+
+    HdModelDrawMode()
+    : drawMode(HdModelDrawModeTokens->inherited)
+    , applyDrawMode(false)
+    , drawModeColor(GfVec3f(0.18))
+    , cardGeometry(HdModelDrawModeTokens->cross)
+    {}
+
+    HdModelDrawMode(
+        TfToken const& drawMode_,
+        bool applyDrawMode_=false,
+        GfVec3f drawModeColor_=GfVec3f(0.18),
+        TfToken const& cardGeometry_=HdModelDrawModeTokens->cross,
+        SdfAssetPath cardTextureXPos_=SdfAssetPath(),
+        SdfAssetPath cardTextureYPos_=SdfAssetPath(),
+        SdfAssetPath cardTextureZPos_=SdfAssetPath(),
+        SdfAssetPath cardTextureXNeg_=SdfAssetPath(),
+        SdfAssetPath cardTextureYNeg_=SdfAssetPath(),
+        SdfAssetPath cardTextureZNeg_=SdfAssetPath())
+        : drawMode(drawMode_), applyDrawMode(applyDrawMode_),
+          drawModeColor(drawModeColor_), cardGeometry(cardGeometry_),
+          cardTextureXPos(cardTextureXPos_), cardTextureYPos(cardTextureYPos_),
+          cardTextureZPos(cardTextureZPos_), cardTextureXNeg(cardTextureXNeg_),
+          cardTextureYNeg(cardTextureYNeg_), cardTextureZNeg(cardTextureZNeg_)
+    {}
+
+    bool operator==(HdModelDrawMode const& rhs) const {
+        return drawMode == rhs.drawMode && 
+               applyDrawMode == rhs.applyDrawMode &&
+               drawModeColor == rhs.drawModeColor &&
+               cardGeometry == rhs.cardGeometry &&
+               cardTextureXPos == rhs.cardTextureXPos &&
+               cardTextureYPos == rhs.cardTextureYPos &&
+               cardTextureZPos == rhs.cardTextureZPos &&
+               cardTextureXNeg == rhs.cardTextureXNeg &&
+               cardTextureYNeg == rhs.cardTextureYNeg &&
+               cardTextureZNeg == rhs.cardTextureZNeg;
+    }
+    bool operator!=(HdModelDrawMode const& rhs) const {
+        return !(*this == rhs);
+    }
+};
 
 /// \struct HdExtComputationPrimvarDescriptor
 ///
@@ -457,6 +514,10 @@ public:
     HD_API
     virtual HdIdVectorSharedPtr GetCoordSysBindings(SdfPath const& id);
 
+    /// Returns the model draw mode object for the given prim.
+    HD_API
+    virtual HdModelDrawMode GetModelDrawMode(SdfPath const& id);
+
     // -----------------------------------------------------------------------//
     /// \name Motion samples
     // -----------------------------------------------------------------------//
@@ -475,29 +536,35 @@ public:
                     float *sampleTimes, 
                     GfMatrix4d *sampleValues);
 
+    // An overload of SampleTransform that explicitly takes the startTime
+    // and endTime rather than relying on the scene delegate having state
+    // about what the source of the current shutter interval should be.
+    HD_API
+    virtual size_t
+    SampleTransform(SdfPath const & id,
+                    float startTime,
+                    float endTime,
+                    size_t maxSampleCount,
+                    float *sampleTimes,
+                    GfMatrix4d *sampleValues);
+
     /// Convenience form of SampleTransform() that takes an HdTimeSampleArray.
     /// This function returns the union of the authored transform samples 
     /// and the boundaries of the current camera shutter interval.
     template <unsigned int CAPACITY>
-    void 
+    void
     SampleTransform(SdfPath const & id,
-                    HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa) {
-        size_t authoredSamples = 
-            SampleTransform(id, CAPACITY, sa->times.data(), sa->values.data());
-        if (authoredSamples > CAPACITY) {
-            sa->Resize(authoredSamples);
-            size_t authoredSamplesSecondAttempt = 
-                SampleTransform(
-                    id, 
-                    authoredSamples, 
-                    sa->times.data(), 
-                    sa->values.data());
-            // Number of samples should be consisntent through multiple
-            // invokations of the sampling function.
-            TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
-        }
-        sa->count = authoredSamples;
-    }
+                    HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa);
+
+    /// Convenience form of SampleTransform() that takes an HdTimeSampleArray.
+    /// This function returns the union of the authored transform samples 
+    /// and the boundaries of the current camera shutter interval.
+    template <unsigned int CAPACITY>
+    void
+    SampleTransform(SdfPath const & id,
+                    float startTime,
+                    float endTime,
+                    HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa);
 
     /// Store up to \a maxSampleCount transform samples in \a *sampleValues.
     /// Returns the union of the authored samples and the boundaries 
@@ -513,6 +580,19 @@ public:
                              float *sampleTimes,
                              GfMatrix4d *sampleValues);
 
+    // An overload of SampleInstancerTransform that explicitly takes the
+    // startTime and endTime rather than relying on the scene delegate
+    // having state about what the source of the current shutter interval
+    // should be.
+    HD_API
+    virtual size_t
+    SampleInstancerTransform(SdfPath const &instancerId,
+                             float startTime,
+                             float endTime,
+                             size_t maxSampleCount, 
+                             float *sampleTimes,
+                             GfMatrix4d *sampleValues);
+
     /// Convenience form of SampleInstancerTransform()
     /// that takes an HdTimeSampleArray.
     /// This function returns the union of the authored samples 
@@ -520,27 +600,17 @@ public:
     template <unsigned int CAPACITY>
     void
     SampleInstancerTransform(SdfPath const &instancerId,
-                             HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa) {
-        size_t authoredSamples = 
-            SampleInstancerTransform(
-                instancerId, 
-                CAPACITY, 
-                sa->times.data(), 
-                sa->values.data());
-        if (authoredSamples > CAPACITY) {
-            sa->Resize(authoredSamples);
-            size_t authoredSamplesSecondAttempt = 
-                SampleInstancerTransform(
-                    instancerId, 
-                    authoredSamples, 
-                    sa->times.data(), 
-                    sa->values.data());
-            // Number of samples should be consisntent through multiple
-            // invokations of the sampling function.
-            TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
-        }
-        sa->count = authoredSamples;
-    }
+                             HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa);
+
+    /// Convenience form of SampleInstancerTransform()
+    /// that takes an HdTimeSampleArray.
+    /// This function returns the union of the authored samples 
+    /// and the boundaries of the current camera shutter interval.
+    template <unsigned int CAPACITY>
+    void
+    SampleInstancerTransform(SdfPath const &instancerId,
+                             float startTime, float endTime,
+                             HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa);
 
     /// Store up to \a maxSampleCount primvar samples in \a *samplesValues.
     /// Returns the union of the authored samples and the boundaries 
@@ -567,6 +637,19 @@ public:
                   float *sampleTimes, 
                   VtValue *sampleValues);
 
+    // An overload of SamplePrimvar that explicitly takes the startTime
+    // and endTime rather than relying on the scene delegate having state
+    // about what the source of the current shutter interval should be.
+    HD_API
+    virtual size_t
+    SamplePrimvar(SdfPath const& id, 
+                  TfToken const& key,
+                  float startTime,
+                  float endTime,
+                  size_t maxSampleCount, 
+                  float *sampleTimes, 
+                  VtValue *sampleValues);
+
     /// Convenience form of SamplePrimvar() that takes an HdTimeSampleArray.
     /// This function returns the union of the authored samples 
     /// and the boundaries of the current camera shutter interval.
@@ -576,6 +659,17 @@ public:
                   TfToken const& key,
                   HdTimeSampleArray<VtValue, CAPACITY> *sa);
 
+    /// Convenience form of SamplePrimvar() that takes an HdTimeSampleArray.
+    /// This function returns the union of the authored samples 
+    /// and the boundaries of the current camera shutter interval.
+    template <unsigned int CAPACITY>
+    void 
+    SamplePrimvar(SdfPath const &id, 
+                  TfToken const& key,
+                  float startTime,
+                  float endTime,
+                  HdTimeSampleArray<VtValue, CAPACITY> *sa);
+    
     /// SamplePrimvar() for getting an unflattened primvar and its indices. If 
     /// \a *sampleIndices is not nullptr and the primvar has indices, it will 
     /// return unflattened primvar samples in \a *sampleValues and the primvar's 
@@ -590,6 +684,21 @@ public:
                          VtValue *sampleValues,
                          VtIntArray *sampleIndices);
 
+    // An overload of SampleIndexedPrimvar that explicitly takes the startTime
+    // and endTime rather than relying on the scene delegate having state
+    // about what the source of the current shutter interval should be.
+    HD_API
+    virtual size_t
+    SampleIndexedPrimvar(SdfPath const& id, 
+                         TfToken const& key,
+                         float startTime,
+                         float endTime,
+                         size_t maxSampleCount, 
+                         float *sampleTimes, 
+                         VtValue *sampleValues,
+                         VtIntArray *sampleIndices);
+    
+    
     /// Convenience form of SampleIndexedPrimvar() that takes 
     /// HdTimeSampleArrays. This function returns the union of the authored 
     /// samples and the boundaries of the current camera shutter interval.
@@ -597,6 +706,17 @@ public:
     void 
     SampleIndexedPrimvar(SdfPath const &id, 
                          TfToken const& key,
+                         HdIndexedTimeSampleArray<VtValue, CAPACITY> *sa);
+
+    /// Convenience form of SampleIndexedPrimvar() that takes 
+    /// HdTimeSampleArrays. This function returns the union of the authored 
+    /// samples and the boundaries of the current camera shutter interval.
+    template <unsigned int CAPACITY>
+    void 
+    SampleIndexedPrimvar(SdfPath const &id, 
+                         TfToken const& key,
+                         float startTime,
+                         float endTime,
                          HdIndexedTimeSampleArray<VtValue, CAPACITY> *sa);
 
     // -----------------------------------------------------------------------//
@@ -770,6 +890,18 @@ public:
                                              float *sampleTimes,
                                              VtValue *sampleValues);
 
+    // An overload of SampleTransform that explicitly takes the startTime
+    // and endTime rather than relying on the scene delegate having state
+    // about what the source of the current shutter interval should be.
+    HD_API
+    virtual size_t SampleExtComputationInput(SdfPath const& computationId,
+                                             TfToken const& input,
+                                             float startTime,
+                                             float endTime,
+                                             size_t maxSampleCount,
+                                             float *sampleTimes,
+                                             VtValue *sampleValues);
+
     /// Convenience form of SampleExtComputationInput() that takes an
     /// HdTimeSampleArray.
     /// Returns the union of the authored samples and the boundaries
@@ -777,22 +909,18 @@ public:
     template <unsigned int CAPACITY>
     void SampleExtComputationInput(SdfPath const& computationId,
                                    TfToken const& input,
-                                   HdTimeSampleArray<VtValue, CAPACITY> *sa) {
-        size_t authoredSamples = SampleExtComputationInput(
-                computationId, input, CAPACITY,
-                sa->times.data(), sa->values.data());
+                                   HdTimeSampleArray<VtValue, CAPACITY> *sa);
 
-        if (authoredSamples > CAPACITY) {
-            sa->Resize(authoredSamples);
-            size_t authoredSamplesSecondAttempt = SampleExtComputationInput(
-                    computationId, input, authoredSamples,
-                    sa->times.data(), sa->values.data());
-            // Number of samples should be consisntent through multiple
-            // invokations of the sampling function.
-            TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
-        }
-        sa->count = authoredSamples;
-    }
+    /// Convenience form of SampleExtComputationInput() that takes an
+    /// HdTimeSampleArray.
+    /// Returns the union of the authored samples and the boundaries
+    /// of the current camera shutter interval.
+    template <unsigned int CAPACITY>
+    void SampleExtComputationInput(SdfPath const& computationId,
+                                   TfToken const& input,
+                                   float startTime,
+                                   float endTime,
+                                   HdTimeSampleArray<VtValue, CAPACITY> *sa);
 
     /// Returns the kernel source assigned to the computation at the path id.
     /// If the string is empty the computation has no GPU kernel and the
@@ -840,13 +968,117 @@ private:
 
 template <unsigned int CAPACITY>
 void 
+HdSceneDelegate::SampleTransform(SdfPath const & id,
+                                 HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa) {
+    size_t authoredSamples = 
+        SampleTransform(id, CAPACITY, sa->times.data(), sa->values.data());
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = 
+            SampleTransform(
+                id, 
+                authoredSamples, 
+                sa->times.data(), 
+                sa->values.data());
+        // Number of samples should be consisntent through multiple
+        // invokations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void 
+HdSceneDelegate::SampleTransform(SdfPath const & id,
+                                 float startTime,
+                                 float endTime,
+                                 HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa) {
+    size_t authoredSamples = 
+        SampleTransform(id, startTime, endTime, CAPACITY,
+                        sa->times.data(), sa->values.data());
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = 
+            SampleTransform(
+                id, 
+                startTime,
+                endTime,
+                authoredSamples,
+                sa->times.data(), 
+                sa->values.data());
+        // Number of samples should be consisntent through multiple
+        // invokations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void
+HdSceneDelegate::SampleInstancerTransform(
+        SdfPath const &instancerId,
+        HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa) {
+    size_t authoredSamples = 
+        SampleInstancerTransform(
+            instancerId, 
+            CAPACITY, 
+            sa->times.data(), 
+            sa->values.data());
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = 
+            SampleInstancerTransform(
+                instancerId, 
+                authoredSamples, 
+                sa->times.data(), 
+                sa->values.data());
+        // Number of samples should be consisntent through multiple
+        // invokations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void
+HdSceneDelegate::SampleInstancerTransform(
+        SdfPath const &instancerId,
+        float startTime, float endTime,
+        HdTimeSampleArray<GfMatrix4d, CAPACITY> *sa) {
+    size_t authoredSamples = 
+        SampleInstancerTransform(
+            instancerId,
+            startTime,
+            endTime,
+            CAPACITY, 
+            sa->times.data(), 
+            sa->values.data());
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = 
+            SampleInstancerTransform(
+                instancerId,
+                startTime,
+                endTime,
+                authoredSamples, 
+                sa->times.data(), 
+                sa->values.data());
+        // Number of samples should be consisntent through multiple
+        // invokations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void 
 HdSceneDelegate::SamplePrimvar(SdfPath const &id, 
                                TfToken const& key,
                                HdTimeSampleArray<VtValue, CAPACITY> *sa) {
     size_t authoredSamples = 
         SamplePrimvar(
             id, 
-            key, 
+            key,
             CAPACITY, 
             sa->times.data(), 
             sa->values.data());
@@ -855,7 +1087,7 @@ HdSceneDelegate::SamplePrimvar(SdfPath const &id,
         size_t authoredSamplesSecondAttempt = 
             SamplePrimvar(
                 id, 
-                key, 
+                key,
                 authoredSamples, 
                 sa->times.data(), 
                 sa->values.data());
@@ -868,13 +1100,47 @@ HdSceneDelegate::SamplePrimvar(SdfPath const &id,
 
 template <unsigned int CAPACITY>
 void 
-HdSceneDelegate::SampleIndexedPrimvar(SdfPath const &id, 
+HdSceneDelegate::SamplePrimvar(SdfPath const &id, 
+                               TfToken const& key,
+                               float startTime,
+                               float endTime,
+                               HdTimeSampleArray<VtValue, CAPACITY> *sa) {
+    size_t authoredSamples = 
+        SamplePrimvar(
+            id, 
+            key,
+            startTime,
+            endTime,
+            CAPACITY, 
+            sa->times.data(), 
+            sa->values.data());
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = 
+            SamplePrimvar(
+                id, 
+                key,
+                startTime,
+                endTime,
+                authoredSamples, 
+                sa->times.data(), 
+                sa->values.data());
+        // Number of samples should be consistent through multiple
+        // invocations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void 
+HdSceneDelegate::SampleIndexedPrimvar(SdfPath const &id,
                          TfToken const& key,
                          HdIndexedTimeSampleArray<VtValue, CAPACITY> *sa) {
     size_t authoredSamples = 
         SampleIndexedPrimvar(
             id, 
-            key, 
+            key,
             CAPACITY, 
             sa->times.data(), 
             sa->values.data(),
@@ -884,13 +1150,95 @@ HdSceneDelegate::SampleIndexedPrimvar(SdfPath const &id,
         size_t authoredSamplesSecondAttempt = 
             SampleIndexedPrimvar(
                 id, 
-                key, 
+                key,
                 authoredSamples, 
                 sa->times.data(), 
                 sa->values.data(),
                 sa->indices.data());
         // Number of samples should be consistent through multiple
         // invocations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void 
+HdSceneDelegate::SampleIndexedPrimvar(SdfPath const &id,
+                         TfToken const& key,
+                         float startTime,
+                         float endTime,
+                         HdIndexedTimeSampleArray<VtValue, CAPACITY> *sa) {
+    size_t authoredSamples = 
+        SampleIndexedPrimvar(
+            id, 
+            key,
+            startTime,
+            endTime,
+            CAPACITY, 
+            sa->times.data(), 
+            sa->values.data(),
+            sa->indices.data());
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = 
+            SampleIndexedPrimvar(
+                id, 
+                key,
+                startTime,
+                endTime,
+                authoredSamples, 
+                sa->times.data(), 
+                sa->values.data(),
+                sa->indices.data());
+        // Number of samples should be consistent through multiple
+        // invocations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void
+HdSceneDelegate::SampleExtComputationInput(
+        SdfPath const& computationId,
+        TfToken const& input,
+        HdTimeSampleArray<VtValue, CAPACITY> *sa) {
+    size_t authoredSamples = SampleExtComputationInput(
+        computationId, input, CAPACITY,
+        sa->times.data(), sa->values.data());
+
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = SampleExtComputationInput(
+            computationId, input, authoredSamples,
+            sa->times.data(), sa->values.data());
+        // Number of samples should be consisntent through multiple
+        // invokations of the sampling function.
+        TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
+    }
+    sa->count = authoredSamples;
+}
+
+template <unsigned int CAPACITY>
+void
+HdSceneDelegate::SampleExtComputationInput(
+        SdfPath const& computationId,
+        TfToken const& input,
+        float startTime,
+        float endTime,
+        HdTimeSampleArray<VtValue, CAPACITY> *sa) {
+    size_t authoredSamples = SampleExtComputationInput(
+        computationId, input, startTime, endTime, CAPACITY,
+        sa->times.data(), sa->values.data());
+
+    if (authoredSamples > CAPACITY) {
+        sa->Resize(authoredSamples);
+        size_t authoredSamplesSecondAttempt = SampleExtComputationInput(
+            computationId, input, startTime, endTime, authoredSamples,
+            sa->times.data(), sa->values.data());
+        // Number of samples should be consisntent through multiple
+        // invokations of the sampling function.
         TF_VERIFY(authoredSamples == authoredSamplesSecondAttempt);
     }
     sa->count = authoredSamples;

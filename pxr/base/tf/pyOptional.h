@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_PY_OPTIONAL_H
 #define PXR_BASE_TF_PY_OPTIONAL_H
@@ -29,12 +12,13 @@
 #include "pxr/pxr.h"
 
 #include "pxr/base/tf/pyUtils.h"
-#include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <boost/python/converter/from_python.hpp>
 #include <boost/python/extract.hpp>
 #include <boost/python/to_python_converter.hpp>
 #include <boost/python/to_python_value.hpp>
+
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -63,11 +47,14 @@ struct register_python_conversion
 };
 
 template <typename T>
-struct python_optional : public boost::noncopyable
+struct python_optional
 {
+    python_optional(const python_optional&) = delete;
+    python_optional& operator=(const python_optional&) = delete;
+    template <typename Optional>
     struct optional_to_python
     {
-        static PyObject * convert(const boost::optional<T>& value)
+        static PyObject * convert(const Optional& value)
         {
             if (value) {
                 boost::python::object obj = TfPyObject(*value);
@@ -78,6 +65,7 @@ struct python_optional : public boost::noncopyable
         }
     };
 
+    template <typename Optional>
     struct optional_from_python
     {
         static void * convertible(PyObject * source)
@@ -99,9 +87,9 @@ struct python_optional : public boost::noncopyable
                 ((rvalue_from_python_storage<T> *)data)->storage.bytes;
 
             if (data->convertible == Py_None) {
-                new (storage) boost::optional<T>(); // An uninitialized optional
+                new (storage) Optional(); // An uninitialized optional
             } else {
-                new (storage) boost::optional<T>(boost::python::extract<T>(source));
+                new (storage) Optional(boost::python::extract<T>(source));
             }
 
             data->convertible = storage;
@@ -109,8 +97,14 @@ struct python_optional : public boost::noncopyable
     };
 
     explicit python_optional() {
-        register_python_conversion<boost::optional<T>,
-                                   optional_to_python, optional_from_python>();
+        register_python_conversion<
+            std::optional<T>,
+            optional_to_python<std::optional<T>>, 
+            optional_from_python<std::optional<T>>>();
+        register_python_conversion<
+            boost::optional<T>,
+            optional_to_python<boost::optional<T>>, 
+            optional_from_python<boost::optional<T>>>();
     }
 };
 

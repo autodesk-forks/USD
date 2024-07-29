@@ -1,31 +1,15 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/path.h"
 
 #include "pxr/base/tf/stopwatch.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/pxrCLI11/CLI11.h"
 #include "pxr/base/tf/stringUtils.h"
 
 #include <atomic>
@@ -34,13 +18,12 @@
 #include <mutex>
 #include <thread>
 
-#include <boost/program_options.hpp>
 
 using std::string;
 using std::vector;
-namespace boost_po = boost::program_options;
 
 PXR_NAMESPACE_USING_DIRECTIVE
+using namespace pxr_CLI;
 
 static unsigned int randomSeed;
 static size_t numThreads;
@@ -193,32 +176,15 @@ static TfStopwatch _DoPathOperations()
 int main(int argc, char const **argv)
 {
     // Set up arguments and their defaults
-    boost_po::options_description desc("Options");
-    desc.add_options()
+    CLI::App app("Tests SdfPath threading", "testSdfPathThreading");
+    app.add_option("--seed", randomSeed, "Random seed")
+        ->default_val(time(NULL));
+    app.add_option("--numThreads", numThreads, "Number of threads to use")
+        ->default_val(std::thread::hardware_concurrency());
+    app.add_option("--msec", msecsToRun, "Milliseconds to run")
+        ->default_val(2000);
 
-        ("seed",
-        boost_po::value<unsigned int>(&randomSeed)->default_value(time(NULL)),
-        "Random seed")
-
-        ("numThreads", 
-        boost_po::value<size_t>(&numThreads)->default_value(
-            std::thread::hardware_concurrency()), 
-        "Number of threads to use")
-
-        ("msec", 
-        boost_po::value<size_t>(&msecsToRun)->default_value(2000),
-        "Milliseconds to run")
-    ;
-
-    boost_po::variables_map vm;
-    try {
-        boost_po::store(boost_po::parse_command_line(argc, argv, desc), vm);
-        boost_po::notify(vm);
-    } catch (const boost_po::error &e) {
-        fprintf(stderr, "%s\n", e.what());
-        fprintf(stderr, "%s\n", TfStringify(desc).c_str());
-        exit(1);
-    }
+    CLI11_PARSE(app, argc, argv);
 
     // Initialize. 
     srand(randomSeed);

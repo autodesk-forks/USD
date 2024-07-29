@@ -11,7 +11,7 @@ if(APPLE)
     set(GARCH_GLPLATFORMCONTEXT       glPlatformContextDarwin)
     set(GARCH_GLPLATFORMDEBUGWINDOW   glPlatformDebugWindowDarwin)
     set(GARCH_SOURCE_EXTENSION        mm)
-    FIND_LIBRARY(APPKIT_LIBRARY AppKit)
+    set(GARCH_PLATFORM_LIBRARIES      "-framework AppKit")
 elseif(X11_FOUND)
     set(GARCH_GLPLATFORMCONTEXT       glPlatformContextGLX)
     set(GARCH_GLPLATFORMDEBUGWINDOW   glPlatformDebugWindowGLX)
@@ -27,8 +27,8 @@ pxr_library(garch
         arch
         tf
         ${X11_LIBRARIES}
-        ${OPENGL_gl_LIBRARY}
-        ${APPKIT_LIBRARY}
+        OpenGL::GL
+        ${GARCH_PLATFORM_LIBRARIES}
 
     INCLUDE_DIRS
         ${Boost_INCLUDE_DIRS}

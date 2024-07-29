@@ -2,7 +2,6 @@
 \page usdMedia_page_front UsdMedia : USD Media Schema
 \if ( PIXAR_MFB_BUILD )
 \mainpage UsdMedia : USD Media Schema
-\publicLib
 \endif
 
 \section usdMedia_overview Overview
@@ -10,7 +9,11 @@
 UsdMedia provides a representation for including other media, such as audio,
 in the context of a stage.
 
-UsdMedia currently contains one media type, UsdMediaSpatialAudio, which allows
-the playback of audio files both spatially and non-spatially.
+UsdMedia currently provides the following media types:
+- UsdMediaAssetPreviewsAPI, which encodes various pre-rendered previews of
+  assets (e.g. thumbnails) on prims in a scene.
+- UsdMediaSpatialAudio, which encodes both spatial and non-spatial audio as
+  UsdGeomXformable-derived prims in a scene.
+
 
 */

@@ -1,25 +1,8 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include <iostream>
 #include "pxr/imaging/hd/retainedDataSource.h"
@@ -27,6 +10,8 @@
 #include "pxr/imaging/hd/meshTopologySchema.h"
 #include "pxr/imaging/hd/primvarsSchema.h"
 #include "pxr/imaging/hd/xformSchema.h"
+#include "pxr/imaging/hd/materialNetworkSchema.h"
+#include "pxr/imaging/hd/materialInterfaceMappingSchema.h"
 
 #include "pxr/imaging/hd/tokens.h"
 
@@ -479,6 +464,63 @@ bool TestSpecializedNew()
 
 //-----------------------------------------------------------------------------
 
+bool TestContainerSchemas()
+{
+    HdContainerDataSourceHandle c1 = HdRetainedContainerDataSource::New(
+        TfToken("a"), HdRetainedTypedSampledDataSource<int>::New(1),
+        TfToken("b"), HdRetainedTypedSampledDataSource<int>::New(2),
+        TfToken("c"), HdRetainedTypedSampledDataSource<float>::New(3.0f));
+
+    HdTypedContainerSchema<HdIntDataSource> s1(c1);
+
+    if (!s1.Get(TfToken("a")) || !s1.Get(TfToken("b"))) {
+        std::cerr << "expected int data source result" << std::endl;
+        return false;
+    }
+
+    if (s1.Get(TfToken("c"))) {
+        std::cerr << "unexpected data source result from float" << std::endl;
+        return false;
+    }
+
+    auto _TDS = [](const char *v) {
+        return HdRetainedTypedSampledDataSource<TfToken>::New(TfToken(v));
+    };
+
+    HdDataSourceBaseHandle h1[] = {
+        HdMaterialInterfaceMappingSchema::Builder()
+            .SetNodePath(_TDS("A"))
+            .SetInputName(_TDS("x"))
+            .Build(),
+        HdMaterialInterfaceMappingSchema::Builder()
+            .SetNodePath(_TDS("B"))
+            .SetInputName(_TDS("y"))
+            .Build(),
+    };
+
+    HdContainerDataSourceHandle c2 = HdRetainedContainerDataSource::New(
+        TfToken("Q"), HdRetainedSmallVectorDataSource::New(2, h1));
+
+    HdMaterialInterfaceMappingsContainerSchema mappings(c2);
+    HdTokenDataSourceHandle t =
+        mappings.Get(TfToken("Q")).GetElement(1).GetNodePath();
+
+    if (!t) {
+        std::cerr << "expected token data source for mapping node path"
+            << std::endl;
+        return false;
+    }
+
+    if (t->GetTypedValue(0.0f) != TfToken("B")) {
+        std::cerr << "unexpected value for mapping node path" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+
 #define xstr(s) str(s)
 #define str(s) #s
 #define TEST(X) std::cout << (++i) << ") " <<  str(X) << "..." << std::endl; \
@@ -499,6 +541,7 @@ int main(int argc, char**argv)
     TEST(TestXformSchema);
     TEST(TestPrimvarSchema);
     TEST(TestSpecializedNew);
+    TEST(TestContainerSchemas);
 
     // ------------------------------------------------------------------------
     std::cout << "DONE testHdValue: SUCCESS" << std::endl;

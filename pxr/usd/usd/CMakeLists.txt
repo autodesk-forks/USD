@@ -27,6 +27,7 @@ pxr_library(usd
         attributeQuery
         collectionAPI
         collectionMembershipQuery
+        collectionPredicateLibrary
         common
         crateInfo
         debugCodes
@@ -37,6 +38,7 @@ pxr_library(usd
         inherits
         interpolation
         modelAPI
+        namespaceEditor
         notice
         object
         payloads
@@ -52,6 +54,7 @@ pxr_library(usd
         references
         relationship
         resolveInfo
+        resolveTarget
         resolver
         schemaBase
         schemaRegistry
@@ -64,6 +67,10 @@ pxr_library(usd
         timeCode
         tokens
         typed
+        validator
+        validatorTokens
+        validationError
+        validationRegistry
         usdFileFormat
         usdaFileFormat
         usdcFileFormat
@@ -100,6 +107,9 @@ pxr_library(usd
         wrapUtils.h
         testenv/TestUsdResolverChangedResolver.h
 
+    CPPFILES
+        coreValidators.cpp
+
     PYTHON_CPPFILES
         moduleDeps.cpp
 
@@ -119,6 +129,7 @@ pxr_library(usd
         wrapInherits.cpp
         wrapInterpolation.cpp
         wrapModelAPI.cpp
+        wrapNamespaceEditor.cpp
         wrapNotice.cpp
         wrapObject.cpp
         wrapPayloads.cpp
@@ -132,6 +143,7 @@ pxr_library(usd
         wrapReferences.cpp
         wrapRelationship.cpp
         wrapResolveInfo.cpp
+        wrapResolveTarget.cpp
         wrapSchemaBase.cpp
         wrapSchemaRegistry.cpp
         wrapSpecializes.cpp
@@ -143,6 +155,7 @@ pxr_library(usd
         wrapTokens.cpp
         wrapTimeCode.cpp
         wrapTyped.cpp
+        wrapUsdFileFormat.cpp
         wrapUtils.cpp
         wrapVariantSets.cpp
         wrapVersion.cpp 
@@ -177,11 +190,13 @@ pxr_library(usd
         doxygen/multiThreading.dox
         doxygen/objectModel.dox
         doxygen/propertiesOfSceneDescription.dox 
+        doxygen/utf8Overview.dox
         doxygen/valueClips.dox
         doxygen/images/instancing/Instancing_Example.png
         doxygen/images/instancing/Nested_Instancing_Example.png
         doxygen/images/instancing/Relationship_Example.png
         doxygen/images/instancing/Uninstanced_vs_Instanced.png
+        examples_usd.cpp
 )
 
 if (NOT PXR_ENABLE_PYTHON_SUPPORT)
@@ -209,6 +224,7 @@ pxr_test_scripts(
     testenv/testUsdClasses.py
     testenv/testUsdCollectionAPI.py
     testenv/testUsdCratePayloadConversionFromVersion07.py
+    testenv/testUsdCrateRelocates.py
     testenv/testUsdCreateProperties.py
     testenv/testUsdDataFormats.py
     testenv/testUsdExternalAssetDependencies.py
@@ -225,19 +241,28 @@ pxr_test_scripts(
     testenv/testUsdLoadUnloadDeepNestedInstancing.py
     testenv/testUsdMetadata.py
     testenv/testUsdModel.py
+    testenv/testUsdNamespaceEditor.py
+    testenv/testUsdNamespaceEditorProperties.py
     testenv/testUsdNotices.py
+    testenv/testUsdOpaqueAttributes.py
+    testenv/testUsdPathExpressionAttrs.py
     testenv/testUsdPayloads.py
     testenv/testUsdPrimCompositionQuery.py
     testenv/testUsdPrimFlagsPredicate.py
     testenv/testUsdPrimRange.py
     testenv/testUsdPrims.py
+    testenv/testUsdReadOutOfBounds.py
     testenv/testUsdReferences.py
     testenv/testUsdRelationships.py
+    testenv/testUsdResolveTargetPy.py
     testenv/testUsdSchemaBasePy.py
     testenv/testUsdSchemaRegistry.py
+    testenv/testUsdSchemaRegistryThreadedInit.py
+    testenv/testUsdSchemaVersioning.py
     testenv/testUsdSpecializes.py
     testenv/testUsdStage.py
     testenv/testUsdStageCache.py
+    testenv/testUsdStageDefaultResolver.py
     testenv/testUsdStageLoadUnload.py
     testenv/testUsdStagePopulationMasks.py
     testenv/testUsdTimeCodeRepr.py
@@ -253,7 +278,6 @@ pxr_test_scripts(
 )
 
 pxr_build_test_shared_lib(TestUsdProceduralExternalAssetsFileFormatPlugin
-    CREATE_FRAMEWORK
     INSTALL_PREFIX UsdPlugins
     LIBRARIES
         sdf
@@ -265,7 +289,6 @@ pxr_build_test_shared_lib(TestUsdProceduralExternalAssetsFileFormatPlugin
 )
 
 pxr_build_test_shared_lib(TestUsdResolverChangedResolver
-    CREATE_FRAMEWORK
     INSTALL_PREFIX UsdPlugins
     LIBRARIES
         ar
@@ -375,7 +398,6 @@ pxr_build_test(testUsdStageThreading
         work
         sdf
         usd
-        ${Boost_PROGRAM_OPTIONS_LIBRARY}
     CPPFILES
         testenv/testUsdStageThreading.cpp
 )
@@ -406,6 +428,24 @@ pxr_build_test(testUsdSchemaBase
         testenv/testUsdSchemaBase.cpp
 )
 
+pxr_build_test(testUsdSchemaRegistryCpp
+    LIBRARIES
+        usd
+    CPPFILES
+        testenv/testUsdSchemaRegistryCpp.cpp
+)
+
+pxr_build_test(testUsdResolveTarget
+    LIBRARIES
+        pcp
+        sdf
+        tf
+        usd
+        vt
+    CPPFILES
+        testenv/testUsdResolveTarget.cpp
+)
+
 pxr_build_test(testUsdTimeValueAuthoringCpp
     LIBRARIES
         arch
@@ -425,6 +465,22 @@ pxr_build_test(testUsdUsdzResolver
         usd
     CPPFILES
         testenv/testUsdUsdzResolver.cpp
+)
+
+pxr_build_test(testUsdValidator
+    LIBRARIES
+        tf
+        usd
+    CPPFILES
+        testenv/testUsdValidator.cpp
+)
+
+pxr_build_test(testUsdValidationRegistry
+    LIBRARIES
+        tf
+        usd
+    CPPFILES
+        testenv/testUsdValidationRegistry.cpp
 )
 
 pxr_build_test(testUsdZipFile_CPP
@@ -455,6 +511,11 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdCratePayloadConversionFromVersion07.testenv
     DEST testUsdCratePayloadConversionFromVersion07
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdCrateRelocates.testenv
+    DEST testUsdCrateRelocates
 )
 
 pxr_install_test_dir(
@@ -533,13 +594,38 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdReadOutOfBounds
+    DEST testUsdReadOutOfBounds
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdResolverChanged
     DEST testUsdResolverChanged
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdResolveTarget.testenv
+    DEST testUsdResolveTarget
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdResolveTarget.testenv
+    DEST testUsdResolveTargetPy
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdNotices.testenv
     DEST testUsdNotices
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdNamespaceEditor
+    DEST testUsdNamespaceEditor
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdNamespaceEditorProperties
+    DEST testUsdNamespaceEditorProperties
 )
 
 pxr_install_test_dir(
@@ -573,13 +659,23 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
-    SRC testenv/testUsdSchemaGen
-    DEST testUsdSchemaGen
+    SRC testenv/testUsdGenSchema
+    DEST testUsdGenSchema
 )
 
 pxr_install_test_dir(
     SRC testenv/testUsdSchemaRegistry
     DEST testUsdSchemaRegistry
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdSchemaRegistry
+    DEST testUsdSchemaRegistryCpp
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdSchemaVersioning
+    DEST testUsdSchemaVersioning
 )
 
 pxr_install_test_dir(
@@ -650,6 +746,11 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdUsdzResolver
     DEST testUsdUsdzResolver
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdValidationRegistry
+    DEST testUsdValidationRegistry
 )
 
 pxr_install_test_dir(
@@ -876,18 +977,13 @@ pxr_register_test(testUsdFileFormats
     EXPECTED_RETURN_CODE 0
 )
 
-# XXX:
-# Temporarily disable this test on Windows; the ArAsset-based
-# codepath in the .usdc file format code has issues.
-if (NOT WIN32)
-    pxr_register_test(testUsdFileFormats_asset
-        PYTHON
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFileFormats"
-        ENV
-            USDC_USE_ASSET=1
-        EXPECTED_RETURN_CODE 0
-    )
-endif()
+pxr_register_test(testUsdFileFormats_asset
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFileFormats"
+    ENV
+        USDC_USE_ASSET=1
+    EXPECTED_RETURN_CODE 0
+)
 
 pxr_register_test(testUsdFileFormats_pread
     PYTHON
@@ -899,6 +995,16 @@ pxr_register_test(testUsdFileFormats_pread
 
 pxr_register_test(testUsdMetadataCpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdMetadataCpp"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdValidator
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdValidator"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdValidationRegistry
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdValidationRegistry"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -971,6 +1077,12 @@ pxr_register_test(testUsdPrimRange
     EXPECTED_RETURN_CODE 0
 )
 
+pxr_register_test(testUsdStageDefaultResolver
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdStageDefaultResolver"
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_register_test(testUsdStageLoadUnload
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdStageLoadUnload"
@@ -983,9 +1095,21 @@ pxr_register_test(testUsdPayloads
     EXPECTED_RETURN_CODE 0
 )
 
+pxr_register_test(testUsdPathExpressionAttrs
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPathExpressionAttrs"
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_register_test(testUsdCratePayloadConversionFromVersion07
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdCratePayloadConversionFromVersion07"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdCrateRelocates
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdCrateRelocates"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -998,6 +1122,17 @@ pxr_register_test(testUsdInherits
 pxr_register_test(testUsdModel
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdModel"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdResolveTarget
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolveTarget"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdResolveTargetPy
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolveTargetPy"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1061,6 +1196,24 @@ pxr_register_test(testUsdNotices
     EXPECTED_RETURN_CODE 0
 )
 
+pxr_register_test(testUsdNamespaceEditor
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdNamespaceEditor"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdNamespaceEditorProperties
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdNamespaceEditorProperties"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdReadOutOfBounds
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdReadOutOfBounds"
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_register_test(testUsdRelationships
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdRelationships"
@@ -1081,6 +1234,23 @@ pxr_register_test(testUsdSchemaBasePy
 pxr_register_test(testUsdSchemaRegistry
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaRegistry"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdSchemaRegistryCpp
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaRegistryCpp"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdSchemaRegistryThreadedInit
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaRegistryThreadedInit"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdSchemaVersioning
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaVersioning"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1134,5 +1304,11 @@ pxr_register_test(testUsdZipFile_CPP
 
 pxr_register_test(testUsdUsdzResolver
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzResolver"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdOpaqueAttributes
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdOpaqueAttributes"
     EXPECTED_RETURN_CODE 0
 )

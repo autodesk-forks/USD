@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hgiGL/shaderSection.h"
@@ -70,9 +53,7 @@ HgiGLShaderSection::WriteDeclaration(std::ostream &ss) const
     WriteType(ss);
     ss << " ";
     WriteIdentifier(ss);
-    if (!_arraySize.empty()) {
-        ss << _arraySize;
-    }
+    WriteArraySize(ss);
     ss << ";\n";
 }
 
@@ -135,6 +116,8 @@ HgiGLMemberShaderSection::HgiGLMemberShaderSection(
     const std::string &identifier,
     const std::string &typeName,
     const HgiInterpolationType interpolation,
+    const HgiSamplingType sampling,
+    const HgiStorageType storage,
     const HgiShaderSectionAttributeVector &attributes,
     const std::string &storageQualifier,
     const std::string &defaultValue,
@@ -148,6 +131,8 @@ HgiGLMemberShaderSection::HgiGLMemberShaderSection(
                          blockInstanceIdentifier)
     , _typeName(typeName)
     , _interpolation(interpolation)
+    , _sampling(sampling)
+    , _storage(storage)
 {
 }
 
@@ -160,6 +145,22 @@ HgiGLMemberShaderSection::VisitGlobalMemberDeclarations(std::ostream &ss)
         return true;
     }
 
+    WriteInterpolation(ss);
+    WriteSampling(ss);
+    WriteStorage(ss);
+    WriteDeclaration(ss);
+    return true;
+}
+
+void
+HgiGLMemberShaderSection::WriteType(std::ostream& ss) const
+{
+    ss << _typeName;
+}
+
+void
+HgiGLMemberShaderSection::WriteInterpolation(std::ostream& ss) const
+{
     switch (_interpolation) {
     case HgiInterpolationDefault:
         break;
@@ -170,14 +171,33 @@ HgiGLMemberShaderSection::VisitGlobalMemberDeclarations(std::ostream &ss)
         ss << "noperspective ";
         break;
     }
-    WriteDeclaration(ss);
-    return true;
 }
 
 void
-HgiGLMemberShaderSection::WriteType(std::ostream& ss) const
+HgiGLMemberShaderSection::WriteSampling(std::ostream& ss) const
 {
-    ss << _typeName;
+    switch (_sampling) {
+    case HgiSamplingDefault:
+        break;
+    case HgiSamplingCentroid:
+        ss << "centroid ";
+        break;
+    case HgiSamplingSample:
+        ss << "sample ";
+        break;
+    }
+}
+
+void
+HgiGLMemberShaderSection::WriteStorage(std::ostream& ss) const
+{
+    switch (_storage) {
+    case HgiStorageDefault:
+        break;
+    case HgiStoragePatch:
+        ss << "patch ";
+        break;
+    }
 }
 
 HgiGLBlockShaderSection::HgiGLBlockShaderSection(
@@ -223,9 +243,7 @@ HgiGLTextureShaderSection::HgiGLTextureShaderSection(
                         attributes,
                         _storageQualifier,
                         defaultValue,
-                        arraySize > 0 ? 
-                        "[" + std::to_string(arraySize) + "]" :
-                        "")
+                        arraySize > 0 ? std::to_string(arraySize) : "")
   , _dimensions(dimensions)
   , _format(format)
   , _textureType(textureType)
@@ -321,13 +339,11 @@ HgiGLTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         "vec" + std::to_string(coordDim);
 
     if (_arraySize > 0) {
-        WriteType(ss);
-        ss << " HgiGetSampler_";
+        ss << "#define HgiGetSampler_";
         WriteIdentifier(ss);
-        ss << "(uint index) {\n";
-        ss << "    return ";
+        ss << "(index) ";
         WriteIdentifier(ss);
-        ss << "[index];\n}\n";
+        ss << "[index]\n";
     } else {
         ss << "#define HgiGetSampler_";
         WriteIdentifier(ss);
@@ -522,7 +538,7 @@ HgiGLInterstageBlockShaderSection::HgiGLInterstageBlockShaderSection(
     const std::string &blockInstanceIdentifier,
     const std::string &qualifier,
     const std::string &arraySize,
-    const HgiGLShaderSectionPtrVector &members)
+    const HgiGLMemberShaderSectionPtrVector &members)
     : HgiGLShaderSection(blockIdentifier,
                          HgiShaderSectionAttributeVector(),
                          qualifier,
@@ -541,8 +557,11 @@ HgiGLInterstageBlockShaderSection::VisitGlobalMemberDeclarations(
     ss << _qualifier << " ";
     WriteIdentifier(ss);
     ss << " {\n";
-    for (const HgiGLShaderSection* member : _members) {
+    for (const HgiGLMemberShaderSection* member : _members) {
         ss << "  ";
+        member->WriteInterpolation(ss);
+        member->WriteSampling(ss);
+        member->WriteStorage(ss);
         member->WriteType(ss);
         ss << " ";
         member->WriteIdentifier(ss);

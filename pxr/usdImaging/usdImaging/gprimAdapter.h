@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_IMAGING_USD_IMAGING_GPRIM_ADAPTER_H
 #define PXR_USD_IMAGING_USD_IMAGING_GPRIM_ADAPTER_H
@@ -28,7 +11,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdImaging/api.h"
-#include "pxr/usdImaging/usdImaging/primAdapter.h"
+#include "pxr/usdImaging/usdImaging/instanceablePrimAdapter.h"
 
 #include "pxr/usd/usdGeom/xformCache.h"
 
@@ -45,18 +28,21 @@ class UsdGeomGprim;
 /// Gprim data support, such as visibility, doubleSided, extent, displayColor,
 /// displayOpacity, purpose, and transform.
 ///
-class UsdImagingGprimAdapter : public UsdImagingPrimAdapter
+class UsdImagingGprimAdapter : public UsdImagingInstanceablePrimAdapter
 {
 public:
-    using BaseAdapter = UsdImagingPrimAdapter;
+    using BaseAdapter = UsdImagingInstanceablePrimAdapter;
 
-    UsdImagingGprimAdapter()
-        : UsdImagingPrimAdapter()
-    {}
+    // ---------------------------------------------------------------------- //
+    /// \name Scene Index Support
+    // ---------------------------------------------------------------------- //
 
     USDIMAGING_API
-    ~UsdImagingGprimAdapter() override;
-
+    HdDataSourceLocatorSet InvalidateImagingSubprim(
+            UsdPrim const& prim,
+            TfToken const& subprim,
+            TfTokenVector const& properties,
+            UsdImagingPropertyInvalidationType invalidationType) override;
     // ---------------------------------------------------------------------- //
     /// \name Parallel Setup and Resolve
     // ---------------------------------------------------------------------- //
@@ -83,53 +69,53 @@ public:
     // ---------------------------------------------------------------------- //
 
     USDIMAGING_API
-    virtual HdDirtyBits ProcessPropertyChange(UsdPrim const& prim,
+    HdDirtyBits ProcessPropertyChange(UsdPrim const& prim,
                                               SdfPath const& cachePath,
                                               TfToken const& property) override;
 
     USDIMAGING_API
-    virtual void MarkDirty(UsdPrim const& prim,
+    void MarkDirty(UsdPrim const& prim,
                            SdfPath const& cachePath,
                            HdDirtyBits dirty,
                            UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkRefineLevelDirty(UsdPrim const& prim,
+    void MarkRefineLevelDirty(UsdPrim const& prim,
                                       SdfPath const& cachePath,
                                       UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkReprDirty(UsdPrim const& prim,
+    void MarkReprDirty(UsdPrim const& prim,
                                SdfPath const& cachePath,
                                UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkCullStyleDirty(UsdPrim const& prim,
+    void MarkCullStyleDirty(UsdPrim const& prim,
                                     SdfPath const& cachePath,
                                     UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkRenderTagDirty(UsdPrim const& prim,
+    void MarkRenderTagDirty(UsdPrim const& prim,
                                     SdfPath const& cachePath,
                                     UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkTransformDirty(UsdPrim const& prim,
+    void MarkTransformDirty(UsdPrim const& prim,
                                     SdfPath const& cachePath,
                                     UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkVisibilityDirty(UsdPrim const& prim,
+    void MarkVisibilityDirty(UsdPrim const& prim,
                                      SdfPath const& cachePath,
                                      UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkMaterialDirty(UsdPrim const& prim,
+    void MarkMaterialDirty(UsdPrim const& prim,
                                    SdfPath const& cachePath,
                                    UsdImagingIndexProxy* index) override;
 
     USDIMAGING_API
-    virtual void MarkCollectionsDirty(UsdPrim const& prim,
+    void MarkCollectionsDirty(UsdPrim const& prim,
                                       SdfPath const& cachePath,
                                       UsdImagingIndexProxy* index) override;
 
@@ -175,12 +161,6 @@ public:
                       SdfPath const& materialUsdPath,
                       UsdImagingInstancerContext const* instancerContext);
 
-    // Helper function: map USD path to UsdImaging cache path,
-    // applying any name-encoding required by the instancerContext.
-    USDIMAGING_API
-    static SdfPath _ResolveCachePath(SdfPath const& usdPath,
-            UsdImagingInstancerContext const* instancerContext);
-
     /// Reads the extent from the given prim. If the extent is not authored,
     /// an empty GfRange3d is returned, the extent will not be computed.
     USDIMAGING_API
@@ -209,10 +189,17 @@ public:
                 UsdTimeCode time,
                 VtIntArray *outIndices) const override;
 
+    // For implicit prims such as capsules, cones, cylinders and planes, the
+    // "spine" axis along or about which the surface is aligned may be
+    // specified. This utility method returns a basis matrix that transforms
+    // points generated using "Z" as the spine axis to the desired axis.
+    USDIMAGING_API
+    static GfMatrix4d GetImplicitBasis(TfToken const &spineAxis);
+
 protected:
 
     USDIMAGING_API
-    virtual void _RemovePrim(SdfPath const& cachePath,
+    void _RemovePrim(SdfPath const& cachePath,
                              UsdImagingIndexProxy* index) override;
 
     // Give derived classes an opportunity to block GprimAdapter processing
@@ -233,7 +220,6 @@ protected:
     USDIMAGING_API
     virtual TfTokenVector const& _GetRprimPrimvarNames() const;
 };
-
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

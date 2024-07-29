@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 // GENERATED FILE.  DO NOT EDIT.
 #include <boost/python/class.hpp>
@@ -72,14 +55,8 @@ void wrapUsdLuxTokens()
     _AddToken(cls, "consumeAndContinue", UsdLuxTokens->consumeAndContinue);
     _AddToken(cls, "consumeAndHalt", UsdLuxTokens->consumeAndHalt);
     _AddToken(cls, "cubeMapVerticalCross", UsdLuxTokens->cubeMapVerticalCross);
-    _AddToken(cls, "cylinderLight", UsdLuxTokens->cylinderLight);
-    _AddToken(cls, "diskLight", UsdLuxTokens->diskLight);
-    _AddToken(cls, "distantLight", UsdLuxTokens->distantLight);
-    _AddToken(cls, "domeLight", UsdLuxTokens->domeLight);
-    _AddToken(cls, "extent", UsdLuxTokens->extent);
     _AddToken(cls, "filterLink", UsdLuxTokens->filterLink);
     _AddToken(cls, "geometry", UsdLuxTokens->geometry);
-    _AddToken(cls, "geometryLight", UsdLuxTokens->geometryLight);
     _AddToken(cls, "guideRadius", UsdLuxTokens->guideRadius);
     _AddToken(cls, "ignore", UsdLuxTokens->ignore);
     _AddToken(cls, "independent", UsdLuxTokens->independent);
@@ -119,16 +96,38 @@ void wrapUsdLuxTokens()
     _AddToken(cls, "lightMaterialSyncMode", UsdLuxTokens->lightMaterialSyncMode);
     _AddToken(cls, "lightShaderId", UsdLuxTokens->lightShaderId);
     _AddToken(cls, "materialGlowTintsLight", UsdLuxTokens->materialGlowTintsLight);
-    _AddToken(cls, "meshLight", UsdLuxTokens->meshLight);
+    _AddToken(cls, "MeshLight", UsdLuxTokens->MeshLight);
     _AddToken(cls, "mirroredBall", UsdLuxTokens->mirroredBall);
     _AddToken(cls, "noMaterialResponse", UsdLuxTokens->noMaterialResponse);
     _AddToken(cls, "orientToStageUpAxis", UsdLuxTokens->orientToStageUpAxis);
-    _AddToken(cls, "portalLight", UsdLuxTokens->portalLight);
+    _AddToken(cls, "poleAxis", UsdLuxTokens->poleAxis);
     _AddToken(cls, "portals", UsdLuxTokens->portals);
-    _AddToken(cls, "rectLight", UsdLuxTokens->rectLight);
+    _AddToken(cls, "scene", UsdLuxTokens->scene);
     _AddToken(cls, "shadowLink", UsdLuxTokens->shadowLink);
-    _AddToken(cls, "sphereLight", UsdLuxTokens->sphereLight);
     _AddToken(cls, "treatAsLine", UsdLuxTokens->treatAsLine);
     _AddToken(cls, "treatAsPoint", UsdLuxTokens->treatAsPoint);
-    _AddToken(cls, "volumeLight", UsdLuxTokens->volumeLight);
+    _AddToken(cls, "VolumeLight", UsdLuxTokens->VolumeLight);
+    _AddToken(cls, "Y", UsdLuxTokens->Y);
+    _AddToken(cls, "Z", UsdLuxTokens->Z);
+    _AddToken(cls, "BoundableLightBase", UsdLuxTokens->BoundableLightBase);
+    _AddToken(cls, "CylinderLight", UsdLuxTokens->CylinderLight);
+    _AddToken(cls, "DiskLight", UsdLuxTokens->DiskLight);
+    _AddToken(cls, "DistantLight", UsdLuxTokens->DistantLight);
+    _AddToken(cls, "DomeLight", UsdLuxTokens->DomeLight);
+    _AddToken(cls, "DomeLight_1", UsdLuxTokens->DomeLight_1);
+    _AddToken(cls, "GeometryLight", UsdLuxTokens->GeometryLight);
+    _AddToken(cls, "LightAPI", UsdLuxTokens->LightAPI);
+    _AddToken(cls, "LightFilter", UsdLuxTokens->LightFilter);
+    _AddToken(cls, "LightListAPI", UsdLuxTokens->LightListAPI);
+    _AddToken(cls, "ListAPI", UsdLuxTokens->ListAPI);
+    _AddToken(cls, "MeshLightAPI", UsdLuxTokens->MeshLightAPI);
+    _AddToken(cls, "NonboundableLightBase", UsdLuxTokens->NonboundableLightBase);
+    _AddToken(cls, "PluginLight", UsdLuxTokens->PluginLight);
+    _AddToken(cls, "PluginLightFilter", UsdLuxTokens->PluginLightFilter);
+    _AddToken(cls, "PortalLight", UsdLuxTokens->PortalLight);
+    _AddToken(cls, "RectLight", UsdLuxTokens->RectLight);
+    _AddToken(cls, "ShadowAPI", UsdLuxTokens->ShadowAPI);
+    _AddToken(cls, "ShapingAPI", UsdLuxTokens->ShapingAPI);
+    _AddToken(cls, "SphereLight", UsdLuxTokens->SphereLight);
+    _AddToken(cls, "VolumeLightAPI", UsdLuxTokens->VolumeLightAPI);
 }

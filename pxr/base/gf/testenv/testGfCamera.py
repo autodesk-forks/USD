@@ -2,25 +2,8 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 from __future__ import division
 from pxr import Gf
@@ -34,8 +17,25 @@ class TestGfCamera(unittest.TestCase):
         for v1, v2 in zip(l1, l2):
             self.assertTrue(Gf.IsClose(v1, v2, delta))
 
-    def AssertEqualCams(self, cam1, cam2):
-        # Check fields
+    def AssertCamsClose(self, cam1, cam2, delta = 1e-6):
+        self.AssertListGfClose(cam1.transform, cam2.transform, delta=delta)
+        self.assertEqual(cam1.projection, cam2.projection)
+        self.assertAlmostEqual(cam1.horizontalAperture, cam2.horizontalAperture, delta=delta)
+        self.assertAlmostEqual(cam1.verticalAperture, cam2.verticalAperture, delta=delta)
+        self.assertAlmostEqual(cam1.horizontalApertureOffset, cam2.horizontalApertureOffset, delta=delta)
+        self.assertAlmostEqual(cam1.verticalApertureOffset, cam2.verticalApertureOffset, delta=delta)
+        self.assertAlmostEqual(cam1.focalLength, cam2.focalLength, delta=delta)
+        self.assertAlmostEqual(cam1.clippingRange, cam2.clippingRange, delta=delta)
+        self.assertAlmostEqual(cam1.clippingPlanes, cam2.clippingPlanes, delta=delta)
+        self.assertAlmostEqual(cam1.fStop, cam2.fStop, delta=delta)
+        self.assertAlmostEqual(cam1.focusDistance, cam2.focusDistance, delta=delta)
+
+        # Check computation of frustum
+        self.AssertListGfClose(cam1.frustum.ComputeCorners(),
+                               cam2.frustum.ComputeCorners(),
+                               delta=delta)
+
+    def AssertCamsEqual(self, cam1, cam2):
         self.assertEqual(cam1.transform, cam2.transform)
         self.assertEqual(cam1.projection, cam2.projection)
         self.assertEqual(cam1.horizontalAperture, cam2.horizontalAperture)
@@ -58,7 +58,7 @@ class TestGfCamera(unittest.TestCase):
 
     def AssertCamSelfEvaluating(self, cam):
 
-        self.AssertEqualCams(cam, eval(repr(cam)))
+        self.AssertCamsEqual(cam, eval(repr(cam)))
 
 
     def test_CameraEqualOperator(self):
@@ -369,7 +369,7 @@ class TestGfCamera(unittest.TestCase):
             verticalAperture = 20.0,
             focalLength = 26.684656143188477)
 
-        self.AssertEqualCams(cam, otherCam)
+        self.AssertCamsClose(cam, otherCam)
 
         self.assertEqual(cam.projection, Gf.Camera.Perspective)
             

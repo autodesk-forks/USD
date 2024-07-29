@@ -1,25 +1,8 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_IMAGING_USD_IMAGING_API_SCHEMA_ADAPTER_H
 #define PXR_USD_IMAGING_USD_IMAGING_API_SCHEMA_ADAPTER_H
@@ -29,6 +12,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdImaging/api.h"
 #include "pxr/usdImaging/usdImaging/version.h"
+#include "pxr/usdImaging/usdImaging/types.h"
 
 #include "pxr/usd/usd/prim.h"
 
@@ -69,6 +53,7 @@ public:
     /// instance names.
     USDIMAGING_API
     virtual TfTokenVector GetImagingSubprims(
+            UsdPrim const& prim,
             TfToken const& appliedInstanceName);
 
     /// Called to determine whether an API schema specifies the hydra type of
@@ -79,6 +64,7 @@ public:
     /// instance names.
     USDIMAGING_API
     virtual TfToken GetImagingSubprimType(
+            UsdPrim const& prim,
             TfToken const& subprim,
             TfToken const& appliedInstanceName);
 
@@ -91,8 +77,8 @@ public:
     /// avoid doing work until some consumes the data.
     USDIMAGING_API
     virtual HdContainerDataSourceHandle GetImagingSubprimData(
-            TfToken const& subprim,
             UsdPrim const& prim,
+            TfToken const& subprim,
             TfToken const& appliedInstanceName,
             const UsdImagingDataSourceStageGlobals &stageGlobals);
 
@@ -101,20 +87,24 @@ public:
     /// be flagged as dirty.
     USDIMAGING_API
     virtual HdDataSourceLocatorSet InvalidateImagingSubprim(
+            UsdPrim const& prim,
             TfToken const& subprim,
             TfToken const& appliedInstanceName,
-            TfTokenVector const& properties);
+            TfTokenVector const& properties,
+            UsdImagingPropertyInvalidationType invalidationType);
 };
 
 
-class UsdImagingAPISchemaAdapterFactoryBase : public TfType::FactoryBase {
+class UsdImagingAPISchemaAdapterFactoryBase : public TfType::FactoryBase
+{
 public:
     virtual UsdImagingAPISchemaAdapterSharedPtr New() const = 0;
 };
 
 template <class T>
 class UsdImagingAPISchemaAdapterFactory
-    : public UsdImagingAPISchemaAdapterFactoryBase {
+    : public UsdImagingAPISchemaAdapterFactoryBase
+{
 public:
     virtual UsdImagingAPISchemaAdapterSharedPtr New() const
     {

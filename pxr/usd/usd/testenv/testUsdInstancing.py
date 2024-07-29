@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # NOTE: 
 # Because Usd does not guarantee a stable assignment of
@@ -32,6 +15,10 @@ from __future__ import print_function
 
 from pxr import Usd, Sdf, Tf
 import unittest
+
+def GetSourcePrimIndexPath(stage, prototypePath):
+    prototype = stage.GetPrimAtPath(prototypePath)
+    return prototype._GetSourcePrimIndex().rootNode.path
 
 def ValidateExpectedInstances(stage, expectedInstances):
     """
@@ -54,10 +41,10 @@ def ValidateExpectedInstances(stage, expectedInstances):
 
         # Validate that the prototype prim's source prim index is one of
         # the instance's prim indexes.
-        prototypePrimIndexPath = prototype._GetSourcePrimIndex().rootNode.path
+        prototypePrimIndexPath = GetSourcePrimIndexPath(stage, prototypePath)
         instancePrimIndexPaths = [
-            stage.GetPrimAtPath(p)._GetSourcePrimIndex().rootNode.path
-            for p in instancePaths]
+            GetSourcePrimIndexPath(stage, p) for p in instancePaths
+        ]
 
         assert prototypePrimIndexPath in instancePrimIndexPaths, \
             "Prototype <%s> using unexpected prim index <%s>, expected " \
@@ -490,7 +477,7 @@ class TestUsdInstancing(unittest.TestCase):
             { '/__Prototype_2': instances,
               '/__Prototype_3': ['/__Prototype_2/B'] })
         ValidateExpectedChanges(nl,
-            ['/A_1', '/A_2', '/A_3'])
+            ['/A_1', '/A_2', '/A_3', '/__Prototype_1', '/__Prototype_2', '/__Prototype_3'])
 
         print("-" * 60)
         print("Unloading instances")
@@ -499,7 +486,7 @@ class TestUsdInstancing(unittest.TestCase):
         ValidateExpectedInstances(s,
             { '/__Prototype_4': instances })
         ValidateExpectedChanges(nl,
-            ['/A_1', '/A_2', '/A_3'])
+            ['/A_1', '/A_2', '/A_3', '/__Prototype_2', '/__Prototype_3', '/__Prototype_4'])
 
         # Stress-test by repeatedly loading and unloading instances.
         # Don't want too much output, so we delete the notice listener.
@@ -536,7 +523,7 @@ class TestUsdInstancing(unittest.TestCase):
         model_1.Load()
 
         ValidateExpectedInstances(s, { '/__Prototype_1': ['/Model_1'] })
-        ValidateExpectedChanges(nl, ['/Model_1'])
+        ValidateExpectedChanges(nl, ['/Model_1', '/__Prototype_1'])
 
         print("-" * 60)
         print("Loading instance /Model_2")
@@ -552,7 +539,7 @@ class TestUsdInstancing(unittest.TestCase):
         model_1.Unload()
 
         ValidateExpectedInstances(s, { '/__Prototype_1': ['/Model_2'] })
-        ValidateExpectedChanges(nl, ['/Model_1'])
+        ValidateExpectedChanges(nl, ['/Model_1', '/__Prototype_1'])
 
         print("-" * 60)
         print("Loading instance /ModelGroup_1")
@@ -562,7 +549,7 @@ class TestUsdInstancing(unittest.TestCase):
         ValidateExpectedInstances(s, 
             { '/__Prototype_1': ['/Model_2', '/__Prototype_2/Model'],
               '/__Prototype_2': ['/ModelGroup_1'] })
-        ValidateExpectedChanges(nl, ['/ModelGroup_1'])
+        ValidateExpectedChanges(nl, ['/ModelGroup_1', '/__Prototype_2'])
 
         print("-" * 60)
         print("Loading instance /ModelGroup_2")
@@ -581,7 +568,7 @@ class TestUsdInstancing(unittest.TestCase):
         ValidateExpectedInstances(s, 
             { '/__Prototype_1': ['/Model_2', '/__Prototype_2/Model'],
               '/__Prototype_2': ['/ModelGroup_2'] })
-        ValidateExpectedChanges(nl, ['/ModelGroup_1'])
+        ValidateExpectedChanges(nl, ['/ModelGroup_1', '/__Prototype_2'])
 
     def test_Payloads2(self):
         """Test instancing and change processing when unloading the last
@@ -600,12 +587,21 @@ class TestUsdInstancing(unittest.TestCase):
         # Model_1 and one shared by all the unloaded instances.
         print("-" * 60)
         print("Loading instance /Model_1")
+
+        # We expect resync notices for the newly-loaded /Model_1 and the
+        # corresponding new prototype /__Prototype_2. If /Model_1's prim
+        # index is the source for /__Prototype_1, we also expect a resync
+        # notice for that prototype since its source prim index will change.
+        expectedResyncs = ['/Model_1', '/__Prototype_2']
+        if GetSourcePrimIndexPath(s, '/__Prototype_1') == '/Model_1':
+            expectedResyncs.append('/__Prototype_1')
+
         s.Load('/Model_1')
 
         ValidateExpectedInstances(s,
             { '/__Prototype_1': ['/Model_2', '/Model_3', '/Model_4' ],
               '/__Prototype_2': ['/Model_1'] })
-        ValidateExpectedChanges(nl, ['/Model_1'])
+        ValidateExpectedChanges(nl, expectedResyncs)
 
         # Now unload Model_1 and load Model_2 in the same call. Model_2
         # should now be attached to the prototype previously used by Model_1,
@@ -613,31 +609,52 @@ class TestUsdInstancing(unittest.TestCase):
         # unloaded instances.
         print("-" * 60)
         print("Unload instance /Model_1, load instance /Model_2")
+
+        # We expect resync notices for the newly-loaded /Model_2 and
+        # newly-unloaded /Model_1. We also expect a resync for /__Prototype_2
+        # since its source prim index will change from /Model_1 to /Model_2.
+        # If /Model_2's prim index is the source for /__Prototype_1, we also
+        # expect a resync notice for that prototype since its source prim
+        # index will change.
+        expectedResyncs = ['/Model_1', '/Model_2', '/__Prototype_2']
+        if GetSourcePrimIndexPath(s, '/__Prototype_1') == '/Model_2':
+            expectedResyncs.append('/__Prototype_1')
+
         s.LoadAndUnload(['/Model_2'], ['/Model_1'])
 
         ValidateExpectedInstances(s,
             { '/__Prototype_1': ['/Model_1', '/Model_3', '/Model_4' ],
               '/__Prototype_2': ['/Model_2'] })
-        ValidateExpectedChanges(nl, ['/Model_1', '/Model_2'])
+        ValidateExpectedChanges(nl, expectedResyncs)
 
         # Continue loading and unloading instances in the same way.
         print("-" * 60)
         print("Unload instance /Model_2, load instance /Model_3")
+
+        expectedResyncs = ['/Model_2', '/Model_3', '/__Prototype_2']
+        if GetSourcePrimIndexPath(s, '/__Prototype_1') == '/Model_3':
+            expectedResyncs.append('/__Prototype_1')
+
         s.LoadAndUnload(['/Model_3'], ['/Model_2'])
 
         ValidateExpectedInstances(s,
             { '/__Prototype_1': ['/Model_1', '/Model_2', '/Model_4' ],
               '/__Prototype_2': ['/Model_3'] })
-        ValidateExpectedChanges(nl, ['/Model_2', '/Model_3'])
+        ValidateExpectedChanges(nl, expectedResyncs)
 
         print("-" * 60)
         print("Unload instance /Model_3, load instance /Model_4")
+
+        expectedResyncs = ['/Model_3', '/Model_4', '/__Prototype_2']
+        if GetSourcePrimIndexPath(s, '/__Prototype_1') == '/Model_4':
+            expectedResyncs.append('/__Prototype_1')
+
         s.LoadAndUnload(['/Model_4'], ['/Model_3'])
 
         ValidateExpectedInstances(s,
             { '/__Prototype_1': ['/Model_1', '/Model_2', '/Model_3' ],
               '/__Prototype_2': ['/Model_4'] })
-        ValidateExpectedChanges(nl, ['/Model_3', '/Model_4'])
+        ValidateExpectedChanges(nl, expectedResyncs)
 
     def test_Deactivated(self):
         """Test instancing and change processing when activating and

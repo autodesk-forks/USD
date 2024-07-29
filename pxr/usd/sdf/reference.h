@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_REFERENCE_H
 #define PXR_USD_SDF_REFERENCE_H
@@ -31,10 +14,9 @@
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/layerOffset.h"
 #include "pxr/usd/sdf/path.h"
+#include "pxr/base/tf/hash.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/vt/value.h"
-
-#include <boost/operators.hpp>
 
 #include <iosfwd>
 #include <string>
@@ -73,7 +55,7 @@ typedef std::vector<SdfReference> SdfReferenceVector;
 /// Custom data is for use by plugins or other non-tools supplied extensions
 /// that need to be able to store data associated with references.
 ///
-class SdfReference : boost::totally_ordered<SdfReference> {
+class SdfReference {
 public:
     /// Creates a reference with all its meta data.  The default reference is an
     /// internal reference to the default prim.  See SdfAssetPath for what
@@ -163,20 +145,40 @@ public:
     SDF_API bool IsInternal() const;
 
     friend inline size_t hash_value(const SdfReference &r) {
-        size_t h = 0;
-        boost::hash_combine(h, r._assetPath);
-        boost::hash_combine(h, r._primPath);
-        boost::hash_combine(h, r._layerOffset);
-        boost::hash_combine(h, r._customData);
-        return h;
+        return TfHash::Combine(
+            r._assetPath,
+            r._primPath,
+            r._layerOffset,
+            r._customData
+        );
     }
 
     /// Returns whether this reference equals \a rhs.
     SDF_API bool operator==(const SdfReference &rhs) const;
 
+    /// \sa SdfReference::operator==(const SdfReference&)
+    bool operator!=(const SdfReference &rhs) const {
+        return !(*this == rhs);
+    }
+
     /// Returns whether this reference is less than \a rhs.  The meaning
     /// of less than is somewhat arbitrary.
     SDF_API bool operator<(const SdfReference &rhs) const;
+
+    /// \sa SdfReference::operator<(const SdfReference&)
+    bool operator>(const SdfReference &rhs) const {
+        return rhs < *this;
+    }
+
+    /// \sa SdfReference::operator<(const SdfReference&)
+    bool operator<=(const SdfReference &rhs) const {
+        return !(rhs < *this);
+    }
+
+    /// \sa SdfReference::operator<(const SdfReference&)
+    bool operator>=(const SdfReference &rhs) const {
+        return !(*this < rhs);
+    }
 
     /// Struct that defines equality of SdfReferences based on their
     /// identity (the asset path and prim path).

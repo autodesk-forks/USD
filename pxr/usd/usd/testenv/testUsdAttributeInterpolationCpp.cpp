@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -35,6 +18,7 @@
 
 #include "pxr/base/gf/matrix2f.h"
 #include "pxr/base/gf/matrix2d.h"
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 #include "pxr/base/tf/stringUtils.h"
 
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
@@ -324,6 +308,46 @@ struct TestCase<VtArray<SdfAssetPath> >
                              CreateVtArray(SdfAssetPath("s2")));
     }
 };
+
+template <> 
+struct TestCase<SdfPathExpression>
+{
+    static void AddTestCase(const UsdPrim& prim)
+    {
+        UsdAttribute attr =
+            prim.CreateAttribute(TfToken("testPathExpr"),
+                                 SdfValueTypeNames->PathExpression);
+        TF_VERIFY(attr.Set(SdfPathExpression("p1"), UsdTimeCode(0.0)));
+        TF_VERIFY(attr.Set(SdfPathExpression("p2"), UsdTimeCode(2.0)));
+    }
+    
+    static void TestLinearInterpolation(const UsdPrim& prim)
+    {
+        // pathExpression does not linearly interpolate
+        TestHeldInterpolation(prim);
+    }
+
+    static void TestHeldInterpolation(const UsdPrim& prim)
+    {
+        UsdAttribute attr = prim.GetAttribute(TfToken("testPathExpr"));
+        VerifyAttributeValue(attr, UsdTimeCode(0.0),
+                             SdfPathExpression("/TestPrim/p1"));
+        VerifyAttributeValue(attr, UsdTimeCode(1.0),
+                             SdfPathExpression("/TestPrim/p1"));
+        VerifyAttributeValue(attr, UsdTimeCode(2.0),
+                             SdfPathExpression("/TestPrim/p2"));
+    }
+};
+
+template <> 
+struct TestCase<VtArray<SdfPathExpression> >
+{
+    // We do not support shaped pathExpression values.
+    static void AddTestCase(const UsdPrim& prim) {}
+    static void TestLinearInterpolation(const UsdPrim& prim) {}
+    static void TestHeldInterpolation(const UsdPrim& prim) {}
+};
+
 
 template <>
 struct TestCase<GfHalf>
@@ -1849,6 +1873,30 @@ struct TestCase<VtArray<GfQuath> >
     }
 };
 
+template <>
+struct TestCase<SdfOpaqueValue>
+{
+    static void AddTestCase(const UsdPrim& prim)
+    {
+        prim.CreateAttribute(TfToken("testOpaque"), SdfValueTypeNames->Opaque);
+    }
+
+    // UsdAttribute::Get always returns false for opaque-valued attributes
+    // (because you can't author a value on them), so it never does any
+    // interpolation, so we don't need to test anything here.
+    static void TestLinearInterpolation(const UsdPrim& prim) {}
+    static void TestHeldInterpolation(const UsdPrim& prim) {}
+};
+
+template <>
+struct TestCase<VtArray<SdfOpaqueValue>>
+{
+    // We don't support shaped opaque attributes.
+    static void AddTestCase(const UsdPrim& prim) {}
+    static void TestLinearInterpolation(const UsdPrim& prim) {}
+    static void TestHeldInterpolation(const UsdPrim& prim) {}
+};
+
 
 // ------------------------------------------------------------
 
@@ -1856,7 +1904,7 @@ static size_t
 AddTestCasesToPrim(const UsdPrim& prim)
 {
     size_t numTestCasesAdded = 0;
-#define ADD_TEST_CASE(r, unused, tup)                                   \
+#define ADD_TEST_CASE(unused, tup)                                      \
     {                                                                   \
         typedef SDF_VALUE_CPP_TYPE(tup) Type;                           \
         typedef SDF_VALUE_CPP_ARRAY_TYPE(tup) ShapedType;               \
@@ -1865,7 +1913,7 @@ AddTestCasesToPrim(const UsdPrim& prim)
                                                                         \
         ++numTestCasesAdded;                                            \
     }
-    BOOST_PP_SEQ_FOR_EACH(ADD_TEST_CASE, ~, SDF_VALUE_TYPES);
+    TF_PP_SEQ_FOR_EACH(ADD_TEST_CASE, ~, SDF_VALUE_TYPES);
 #undef ADD_TEST_CASE
 
     return numTestCasesAdded;
@@ -1880,14 +1928,14 @@ RunInterpolationTests(const UsdPrim& prim)
     stage->SetInterpolationType(UsdInterpolationTypeLinear);
     TF_VERIFY(stage->GetInterpolationType() == UsdInterpolationTypeLinear);
 
-#define RUN_LINEAR_INTERPOLATION_TEST(r, unused, tup)                   \
+#define RUN_LINEAR_INTERPOLATION_TEST(unused, tup)                      \
     {                                                                   \
         typedef SDF_VALUE_CPP_TYPE(tup) Type;                           \
         typedef SDF_VALUE_CPP_ARRAY_TYPE(tup) ShapedType;               \
         TestCase<Type>::TestLinearInterpolation(prim);                  \
         TestCase<ShapedType>::TestLinearInterpolation(prim);            \
     }
-    BOOST_PP_SEQ_FOR_EACH(
+    TF_PP_SEQ_FOR_EACH(
         RUN_LINEAR_INTERPOLATION_TEST, ~, SDF_VALUE_TYPES);
 #undef RUN_LINEAR_INTERPOLATION_TEST
 
@@ -1895,14 +1943,14 @@ RunInterpolationTests(const UsdPrim& prim)
     stage->SetInterpolationType(UsdInterpolationTypeHeld);
     TF_VERIFY(stage->GetInterpolationType() == UsdInterpolationTypeHeld);
 
-#define RUN_HELD_INTERPOLATION_TEST(r, unused, tup)                     \
+#define RUN_HELD_INTERPOLATION_TEST(unused, tup)                        \
     {                                                                   \
         typedef SDF_VALUE_CPP_TYPE(tup) Type;                           \
         typedef SDF_VALUE_CPP_ARRAY_TYPE(tup) ShapedType;               \
         TestCase<Type>::TestHeldInterpolation(prim);                    \
         TestCase<ShapedType>::TestHeldInterpolation(prim);              \
     }
-    BOOST_PP_SEQ_FOR_EACH(
+    TF_PP_SEQ_FOR_EACH(
         RUN_HELD_INTERPOLATION_TEST, ~, SDF_VALUE_TYPES);
 #undef RUN_HELD_INTERPOLATION_TEST    
 }
@@ -1922,7 +1970,7 @@ TestInterpolation(const string &layerIdent)
     // value type is added without a corresponding TestCase<T> added,
     // this test won't compile. If a value type is removed, this
     // check will fail at runtime.
-    static const size_t numTestCasesExpected = 31;
+    static const size_t numTestCasesExpected = 33;
     const size_t numTestCasesAdded = AddTestCasesToPrim(testPrim);
     TF_VERIFY(numTestCasesAdded == numTestCasesExpected,
               "Expected %zd cases, got %zu.",

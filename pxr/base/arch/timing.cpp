@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -30,134 +13,131 @@
 
 #include <atomic>
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <numeric>
 #include <type_traits>
+#include <thread>
 
 #if defined(ARCH_OS_LINUX)
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #elif defined(ARCH_OS_WINDOWS)
 #include <Windows.h>
 #include <chrono>
-#include <thread>
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-static double Arch_NanosecondsPerTick = 1.0;
+template <class T>
+constexpr static T UninitializedState = -1;
+
+template <class T>
+constexpr static T InitializingState = -2;
+
+static std::atomic<double> 
+Arch_NanosecondsPerTick{UninitializedState<double>};
 
 // Tick measurement granularity.
-static uint64_t Arch_TickQuantum = ~0;
+static std::atomic<int64_t> 
+Arch_TickQuantum{UninitializedState<int64_t>};
+
 // Cost to take a measurement with ArchIntervalTimer.
-static uint64_t Arch_IntervalTimerTickOverhead = ~0;
+static std::atomic<int64_t>  
+Arch_IntervalTimerTickOverhead{UninitializedState<int64_t>};
+
+template <typename T>
+static
+T
+GetAtomicVar(std::atomic<T> &atomicVar, T (*computeVal)())
+{
+    T state = atomicVar.load(std::memory_order_relaxed);
+    
+    // Value has beeen initialized and can be read immediately.
+    if (state >= 0) {
+        return state;
+    }
+
+    // First thread that needs the value will start computing it.
+    if (state == UninitializedState<T> && 
+        atomicVar.compare_exchange_strong(state, InitializingState<T>)) {
+        
+        T newVal = computeVal();
+        atomicVar.store(newVal,std::memory_order_relaxed);
+        return newVal;
+    }
+    // Another thread is currently updating the value.
+    // Block until value is ready.
+    while (state < 0) {
+        std::this_thread::yield();
+        state = atomicVar.load(std::memory_order_relaxed);
+    }
+    return state;
+}
+
 
 #if defined(ARCH_OS_DARWIN)
 
 static
-void
+double
 Arch_ComputeNanosecondsPerTick()
 {
     mach_timebase_info_data_t info;
     mach_timebase_info(&info);
-    Arch_NanosecondsPerTick = static_cast<double>(info.numer) / info.denom;
+    return static_cast<double>(info.numer) / info.denom;
 }
 
 #elif defined(ARCH_OS_LINUX)
 
 static
-void
+double
 Arch_ComputeNanosecondsPerTick()
 {
 #if defined(ARCH_CPU_ARM)
     uint64_t counter_hz;
     __asm __volatile("mrs	%0, CNTFRQ_EL0" : "=&r" (counter_hz));
-    Arch_NanosecondsPerTick = double(1e9) / double(counter_hz);
-#else
-    // NOTE: Normally ifstream would be cleaner, but it causes crashes when
-    //       used in conjunction with DSOs and the Intel Compiler.
-    FILE *in;
-    char linebuffer[1024];
-    double cpuHz = 0.0;
 
-    in = fopen("/proc/cpuinfo", "r");
-
-    if (in) {
-
-        while (fgets(linebuffer, sizeof(linebuffer), in)) {
-            char* colon;
-
-            if (strncmp(linebuffer, "bogomips", 8) == 0 &&
-                (colon = strchr(linebuffer, ':'))) {
-
-                colon++;
-            
-                // The bogomips line is Millions of Instructions / sec
-                // So convert.
-                // The magic 2.0 is from Red Hat, which corresponds
-                // to modern Intel / AMD processors.
-                cpuHz = 1e6 * atof(colon) / 2.0;
-                break;
-            }
-        }
-        
-        fclose(in);
-    }
-
-    if (cpuHz == 0.0) {
-        in = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
-        if (in) {
-            if (fgets(linebuffer, sizeof(linebuffer), in)) {
-                // We just read the cpuspeed in kHz.  Convert.
-                //
-                cpuHz = 1000 * atof(linebuffer);
-            }
-           fclose(in);
-
-        }
-    }
-
-    // If we could not find that file (the cpufreq driver is unavailable
-    // for some reason, fall back to /proc/cpuinfo.
+    // As noted in this commit in the linux kernel:
     //
-    if (cpuHz == 0.0) {
-        in = fopen("/proc/cpuinfo","r");
-
-        if (!in) {
-            // Note: ARCH_ERROR will abort the program
-            //
-            ARCH_ERROR("Cannot open /proc/cpuinfo");
-        }
-
-        while (fgets(linebuffer, sizeof(linebuffer), in)) {
-            char* colon;
-            if (strncmp(linebuffer, "cpu MHz", 7) == 0 &&
-                (colon = strchr(linebuffer, ':'))) {
-                colon++;
-
-                // colon is pointing to a cpu speed in MHz.  Convert.
-                cpuHz = 1e6 * atof(colon);
-
-                break;
-            }
-        }
-
-        fclose(in);
-
-        if (cpuHz == 0.0) {
-            ARCH_ERROR("Could not find 'cpu MHz' in /proc/cpuinfo");
-        }
+    // https://github.com/torvalds/linux/commit/c6f97add0f2ac83b98b06dbdda58fa47638ae7b0
+    //
+    // ...the value of CNTFRQ_EL0 is sometimes unreliable.  The linux kernel
+    // instead reads the tick rate from the device tree, and if that fails,
+    // only then falls back on CNTFRQ_EL0.
+    //
+    // Since we already have measurement-based code, and reading from the device
+    // tree seemed tricky, we instead check if CNTFRQ_EL0 seems "sane"
+    // (ie, > 1Hz), and if not, fall back on the measurement code used in all
+    // other linux flavors.
+    if (counter_hz > 1) {
+        return double(1e9) / double(counter_hz);
     }
-
-    Arch_NanosecondsPerTick = double(1e9) / double(cpuHz);
-    
 #endif
+
+    // Measure how long it takes to call ::now().
+    uint64_t nowDuration =
+        ArchMeasureExecutionTime(std::chrono::steady_clock::now);
+
+    auto clockStart = std::chrono::steady_clock::now();
+    ArchIntervalTimer itimer;
+    std::this_thread::sleep_for(std::chrono::milliseconds(6));
+    const auto clockEnd = std::chrono::steady_clock::now();
+    const auto ticks = itimer.GetElapsedTicks();
+
+    const std::chrono::duration<double> clockSecs = clockEnd - clockStart;
+    const double clockNanoSecs = clockSecs.count() * 1e9;
+
+    // Subtract the tick timer overhead for the one measurement we made as well
+    // as the overhead to call now() one time.
+    return clockNanoSecs /
+        double(ticks - ArchGetIntervalTimerTickOverhead() - nowDuration);
 }
 #elif defined(ARCH_OS_WINDOWS)
 
 static
-void
+double
 Arch_ComputeNanosecondsPerTick()
 {
     // We want to use rdtsc so we need to find the frequency.  We run a
@@ -185,7 +165,7 @@ Arch_ComputeNanosecondsPerTick()
 
     // Nanoseconds per tick.
     constexpr auto nanosPerSecond = 1.0e9;
-    Arch_NanosecondsPerTick = nanosPerSecond * durationInSeconds / (t2 - t1);
+    return nanosPerSecond * durationInSeconds / (t2 - t1);
 }
 
 #else    
@@ -196,15 +176,13 @@ Arch_ComputeNanosecondsPerTick()
 // certain optimizations we don't want in order to measure accurate times.
 uint64_t testTimeAccum;
 
-ARCH_HIDDEN
-void
-Arch_InitTickTimer()
+static
+int64_t 
+Arch_ComputeTickQuantum()
 {
-    // Calculate Arch_NanosecondsPerTick.
-    Arch_ComputeNanosecondsPerTick();
-
     constexpr int NumTrials = 64;
-    
+    uint64_t currMin = ~0;
+
     // Calculate the timer quantum.
     for (int trial = 0; trial != NumTrials; ++trial) {
         uint64_t times[] = {
@@ -217,39 +195,41 @@ Arch_InitTickTimer()
         for (int i = 0; i != std::extent<decltype(times)>::value - 1; ++i) {
             times[i] = times[i+1] - times[i];
         }
-        Arch_TickQuantum = std::min(
-            Arch_TickQuantum,
-            *std::min_element(std::begin(times), std::prev(std::end(times))));
+        currMin = std::min(currMin, *std::min_element(
+            std::begin(times), std::prev(std::end(times))));
     }
-
-    // Calculate the interval timer overhead (the time cost to take an interval
-    // measurement).
-    {
-        uint64_t *escape = &testTimeAccum;
-        Arch_IntervalTimerTickOverhead = ArchMeasureExecutionTime([escape]() {
-            ArchIntervalTimer itimer;
-            *escape = itimer.GetElapsedTicks();
-        });
-    }
+    return static_cast<int64_t>(currMin);
 }
 
 uint64_t
 ArchGetTickQuantum()
 {
-    return Arch_TickQuantum;
+    return GetAtomicVar(Arch_TickQuantum, Arch_ComputeTickQuantum);
 }
 
+static
+int64_t
+Arch_ComputeIntervalTimerTickOverhead()
+{
+    uint64_t *escape = &testTimeAccum;
+    return static_cast<int64_t>(ArchMeasureExecutionTime([escape]() {
+        ArchIntervalTimer itimer;
+        *escape = itimer.GetElapsedTicks();
+    }));
+}
 uint64_t
 ArchGetIntervalTimerTickOverhead()
 {
-    return Arch_IntervalTimerTickOverhead;
+    return GetAtomicVar(Arch_IntervalTimerTickOverhead, 
+        Arch_ComputeIntervalTimerTickOverhead);
 }
 
 
 int64_t
 ArchTicksToNanoseconds(uint64_t nTicks)
 {
-    return int64_t(static_cast<double>(nTicks)*Arch_NanosecondsPerTick + .5);
+    return static_cast<int64_t>(
+        std::llround(static_cast<double>(nTicks)*ArchGetNanosecondsPerTick()));
 }
 
 double
@@ -259,18 +239,21 @@ ArchTicksToSeconds(uint64_t nTicks)
 }
 
 uint64_t
-ArchSecondsToTicks(double seconds) {
-    return static_cast<uint64_t>(1.0e9 * seconds / ArchGetNanosecondsPerTick());
+ArchSecondsToTicks(double seconds)
+{
+    return static_cast<uint64_t>(
+        std::llround(1.0e9 * seconds / ArchGetNanosecondsPerTick()));
 }
 
 double 
 ArchGetNanosecondsPerTick() 
 {
-    return Arch_NanosecondsPerTick;
+    return GetAtomicVar(Arch_NanosecondsPerTick,           
+        Arch_ComputeNanosecondsPerTick);
 }
 
 uint64_t
-Arch_MeasureExecutionTime(uint64_t maxMicroseconds, bool *reachedConsensus,
+Arch_MeasureExecutionTime(uint64_t maxTicks, bool *reachedConsensus,
                           void const *m, uint64_t (*callM)(void const *, int))
 {
     auto measureN = [m, callM](int nTimes) { return callM(m, nTimes); };
@@ -307,13 +290,11 @@ Arch_MeasureExecutionTime(uint64_t maxMicroseconds, bool *reachedConsensus,
         t = measureSample();
     }
 
-    // Sanity... limit timing to 5 seconds.
-    if (maxMicroseconds > 5000000) {
-        maxMicroseconds = 5000000;
+    // Sanity... limit timing to 5 billion ticks
+    if (maxTicks > 5.e9) {
+        maxTicks = 5.e9;
     }
     
-    const uint64_t maxTicks =
-        ArchSecondsToTicks(double(maxMicroseconds) / 1.e6);
     ArchIntervalTimer limitTimer;
 
     uint64_t bestMedian = ~0;

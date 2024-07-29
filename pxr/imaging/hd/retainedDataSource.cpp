@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/retainedDataSource.h"
 
@@ -27,6 +10,8 @@
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/vt/array.h"
+#include "pxr/base/vt/typeHeaders.h"
+#include "pxr/base/vt/visitValue.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/assetPath.h"
 
@@ -41,11 +26,6 @@ namespace
 class Hd_EmptyContainerDataSource : public HdRetainedContainerDataSource
 {
 public:
-    bool Has(const TfToken &name) override 
-    {
-        return false;
-    }
-
     TfTokenVector GetNames() override 
     {
         return {};
@@ -67,16 +47,6 @@ class Hd_SmallRetainedContainerDataSource
 public:
     static const size_t capacity = T;
     HD_DECLARE_DATASOURCE(Hd_SmallRetainedContainerDataSource<T>);
-
-    bool Has(const TfToken &name) override 
-    {
-        for (size_t i = 0; i < _count; ++i) {
-            if (name == _names[i]) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     TfTokenVector GetNames() override 
     {
@@ -140,17 +110,12 @@ class Hd_MappedRetainedContainerDataSource
 public:
     HD_DECLARE_DATASOURCE(Hd_MappedRetainedContainerDataSource<T>);
 
-    bool Has(const TfToken &name) override
-    {
-        return _values.find(name) != _values.end();
-    }
-
     TfTokenVector GetNames() override
     {
         TfTokenVector result;
         result.reserve(_values.size());
 
-        for (const auto I : _values) {
+        for (const auto &I : _values) {
             result.push_back(I.first);
         }
         return result;
@@ -356,8 +321,8 @@ HdRetainedContainerDataSource::New(
 // ----------------------------------------------------------------------------
 
 HdRetainedSmallVectorDataSource::HdRetainedSmallVectorDataSource(
-    size_t count, 
-    HdDataSourceBaseHandle *values) : 
+    const size_t count, 
+    const HdDataSourceBaseHandle *values) : 
     _values(count)
 {
     for (size_t i = 0; i < count; ++i) {
@@ -382,87 +347,45 @@ HdRetainedSmallVectorDataSource::GetElement(size_t element)
 
 // ----------------------------------------------------------------------------
 
+struct Hd_CreateTypedRetainedDataSourceVisitor
+{
+    template <class T>
+    HdSampledDataSource::Handle operator()(T const &obj) const {
+        return HdRetainedTypedSampledDataSource<T>::New(obj);
+    }
+
+    HdSampledDataSource::Handle operator()(VtValue const &v) const {
+        if (v.IsHolding<SdfPath>()) {
+            return HdRetainedTypedSampledDataSource<SdfPath>::New(
+                v.UncheckedGet<SdfPath>());
+        } else if (v.IsHolding<VtArray<SdfPath>>()) {
+            return HdRetainedTypedSampledDataSource<VtArray<SdfPath>>::New(
+                v.UncheckedGet<VtArray<SdfPath>>());
+        } else if (v.IsHolding<SdfAssetPath>()) {
+            return HdRetainedTypedSampledDataSource<SdfAssetPath>::New(
+                v.UncheckedGet<SdfAssetPath>());
+        } else if (v.IsHolding<VtArray<SdfAssetPath>>()) {
+            return HdRetainedTypedSampledDataSource<VtArray<SdfAssetPath>>::New(
+                v.UncheckedGet<VtArray<SdfAssetPath>>());
+        } else if (v.IsHolding<SdfPathVector>()) {
+            return HdRetainedTypedSampledDataSource<SdfPathVector>::New(
+                v.UncheckedGet<SdfPathVector>());
+        } else if (v.IsHolding<SdfPathExpression>()) {
+            return HdRetainedTypedSampledDataSource<SdfPathExpression>::New(
+                v.UncheckedGet<SdfPathExpression>());
+        } else if (v.IsEmpty()) {
+            return HdSampledDataSourceHandle(nullptr);
+        } else {
+            TF_CODING_ERROR("Unsupported type %s", v.GetTypeName().c_str());
+            return HdSampledDataSourceHandle(nullptr);
+        }
+    }
+};
+
 HdSampledDataSource::Handle
 HdCreateTypedRetainedDataSource(VtValue const &v)
 {
-    if (v.IsHolding<int>()) {
-        return HdRetainedTypedSampledDataSource<int>::New(
-                v.UncheckedGet<int>());
-    } else if (v.IsHolding<VtArray<int>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<int>>::New(
-                v.UncheckedGet<VtArray<int>>());
-    } else if (v.IsHolding<float>()) {
-        return HdRetainedTypedSampledDataSource<float>::New(
-                v.UncheckedGet<float>());
-    } else if (v.IsHolding<VtArray<float>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<float>>::New(
-                v.UncheckedGet<VtArray<float>>());
-    } else if (v.IsHolding<double>()) {
-        return HdRetainedTypedSampledDataSource<double>::New(
-                v.UncheckedGet<double>());
-    } else if (v.IsHolding<VtArray<double>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<double>>::New(
-                v.UncheckedGet<VtArray<double>>());
-    } else if (v.IsHolding<bool>()) {
-        return HdRetainedTypedSampledDataSource<bool>::New(
-                v.UncheckedGet<bool>());
-    } else if (v.IsHolding<VtArray<bool>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<bool>>::New(
-                v.UncheckedGet<VtArray<bool>>());
-    } else if (v.IsHolding<TfToken>()) {
-        return HdRetainedTypedSampledDataSource<TfToken>::New(
-                v.UncheckedGet<TfToken>());
-    } else if (v.IsHolding<VtArray<TfToken>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<TfToken>>::New(
-                v.UncheckedGet<VtArray<TfToken>>());
-    } else if (v.IsHolding<SdfPath>()) {
-        return HdRetainedTypedSampledDataSource<SdfPath>::New(
-                v.UncheckedGet<SdfPath>());
-    } else if (v.IsHolding<VtArray<SdfPath>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<SdfPath>>::New(
-                v.UncheckedGet<VtArray<SdfPath>>());
-    } else if (v.IsHolding<SdfAssetPath>()) {
-        return HdRetainedTypedSampledDataSource<SdfAssetPath>::New(
-                v.UncheckedGet<SdfAssetPath>());
-    } else if (v.IsHolding<VtArray<SdfAssetPath>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<SdfAssetPath>>::New(
-                v.UncheckedGet<VtArray<SdfAssetPath>>());
-    } else if (v.IsHolding<GfVec2f>()) {
-        return HdRetainedTypedSampledDataSource<GfVec2f>::New(
-                v.UncheckedGet<GfVec2f>());
-    } else if (v.IsHolding<VtArray<GfVec2f>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<GfVec2f>>::New(
-                v.UncheckedGet<VtArray<GfVec2f>>());
-    } else if (v.IsHolding<GfVec3f>()) {
-        return HdRetainedTypedSampledDataSource<GfVec3f>::New(
-                v.UncheckedGet<GfVec3f>());
-    } else if (v.IsHolding<VtArray<GfVec3f>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<GfVec3f>>::New(
-                v.UncheckedGet<VtArray<GfVec3f>>());
-    } else if (v.IsHolding<GfVec3d>()) {
-        return HdRetainedTypedSampledDataSource<GfVec3d>::New(
-                v.UncheckedGet<GfVec3d>());
-    } else if (v.IsHolding<VtArray<GfVec3d>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<GfVec3d>>::New(
-                v.UncheckedGet<VtArray<GfVec3d>>());
-    } else if (v.IsHolding<GfMatrix4d>()) {
-        return HdRetainedTypedSampledDataSource<GfMatrix4d>::New(
-                v.UncheckedGet<GfMatrix4d>());
-    } else if (v.IsHolding<VtArray<GfMatrix4d>>()) {
-        return HdRetainedTypedSampledDataSource<VtArray<GfMatrix4d>>::New(
-                v.UncheckedGet<VtArray<GfMatrix4d>>());
-    } else if (v.IsHolding<SdfPathVector>()) {
-        return HdRetainedTypedSampledDataSource<SdfPathVector>::New(
-                v.UncheckedGet<SdfPathVector>());
-    } else if (v.IsHolding<std::string>()) {
-        return HdRetainedTypedSampledDataSource<std::string>::New(
-                v.UncheckedGet<std::string>());
-    } else if (v.IsEmpty()) {
-        return HdSampledDataSourceHandle(nullptr);
-    } else {
-        TF_CODING_ERROR("Unsupported type %s", v.GetTypeName().c_str());
-        return HdSampledDataSourceHandle(nullptr);
-    }
+    return VtVisitValue(v, Hd_CreateTypedRetainedDataSourceVisitor());
 }
 
 //-----------------------------------------------------------------------------
@@ -482,6 +405,64 @@ HdRetainedTypedSampledDataSource<bool>::New(const bool &value)
             new HdRetainedTypedSampledDataSource<bool>(false));
         return ds;
     }
+}
+
+static
+HdSampledDataSourceHandle
+_MakeStaticCopy(HdSampledDataSourceHandle const &ds)
+{
+    return HdCreateTypedRetainedDataSource(ds->GetValue(0.0f));
+}
+
+static
+HdVectorDataSourceHandle
+_MakeStaticCopy(HdVectorDataSourceHandle const &ds)
+{
+    const size_t n = ds->GetNumElements();
+    std::vector<HdDataSourceBaseHandle> values;
+    values.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        values.push_back(ds->GetElement(i));
+    }
+    return HdRetainedSmallVectorDataSource::New(n, values.data());
+}
+
+HdContainerDataSourceHandle
+HdMakeStaticCopy(HdContainerDataSourceHandle const &ds)
+{
+    if (!ds) {
+        return nullptr;
+    }
+    const TfTokenVector names = ds->GetNames();
+    std::vector<HdDataSourceBaseHandle> items;
+    items.reserve(names.size());
+    for (const TfToken &name : names) {
+        items.push_back(HdMakeStaticCopy(ds->Get(name)));
+    }
+    return HdRetainedContainerDataSource::New(
+        names.size(), names.data(), items.data());
+}
+
+HdDataSourceBaseHandle
+HdMakeStaticCopy(HdDataSourceBaseHandle const &ds)
+{
+    if (!ds) {
+        return nullptr;
+    }
+    if (HdContainerDataSourceHandle const containerDs =
+            HdContainerDataSource::Cast(ds)) {
+        return HdMakeStaticCopy(containerDs);
+    }
+    if (HdVectorDataSourceHandle const vectorDs =
+            HdVectorDataSource::Cast(ds)) {
+        return _MakeStaticCopy(vectorDs);
+    }
+    if (HdSampledDataSourceHandle const sampledDs =
+            HdSampledDataSource::Cast(ds)) {
+        return _MakeStaticCopy(sampledDs);
+    }
+    TF_CODING_ERROR("Unsupported data source type");
+    return nullptr;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

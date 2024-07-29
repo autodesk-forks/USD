@@ -1,25 +1,8 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_IMAGING_USD_IMAGING_STAGE_SCENE_INDEX_H
 #define PXR_USD_IMAGING_USD_IMAGING_STAGE_SCENE_INDEX_H
@@ -28,34 +11,36 @@
 
 #include "pxr/usdImaging/usdImaging/api.h"
 #include "pxr/usdImaging/usdImaging/dataSourceStageGlobals.h"
+#include "pxr/usdImaging/usdImaging/types.h"
 
 #include "pxr/imaging/hd/sceneIndex.h"
 
 #include "pxr/usd/usd/notice.h"
 #include "pxr/usd/usd/stage.h"
 
-#include <tbb/concurrent_hash_map.h>
-#include <tbb/concurrent_unordered_map.h>
+#include <mutex>
+#include <set>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class UsdImagingPrimAdapter;
-using UsdImagingPrimAdapterSharedPtr = std::shared_ptr<UsdImagingPrimAdapter>;
+#define USDIMAGING_STAGE_SCENE_INDEX_TOKENS \
+    (includeUnloadedPrims)                  \
 
-class UsdImagingAPISchemaAdapter;
-using UsdImagingAPISchemaAdapterSharedPtr =
-    std::shared_ptr<UsdImagingAPISchemaAdapter>;
+TF_DECLARE_PUBLIC_TOKENS(UsdImagingStageSceneIndexTokens, USDIMAGING_API,
+                         USDIMAGING_STAGE_SCENE_INDEX_TOKENS);
 
+using UsdImagingPrimAdapterSharedPtr =
+    std::shared_ptr<class UsdImagingPrimAdapter>;
+class UsdImaging_AdapterManager;
 
-class UsdImagingStageSceneIndex;
 TF_DECLARE_REF_PTRS(UsdImagingStageSceneIndex);
 
 class UsdImagingStageSceneIndex : public HdSceneIndexBase
 {
 public:
-
-    static UsdImagingStageSceneIndexRefPtr New() {
-        return TfCreateRefPtr(new UsdImagingStageSceneIndex());
+    static UsdImagingStageSceneIndexRefPtr New(
+                    HdContainerDataSourceHandle const &inputArgs = nullptr) {
+        return TfCreateRefPtr(new UsdImagingStageSceneIndex(inputArgs));
     }
 
     USDIMAGING_API
@@ -78,13 +63,12 @@ public:
     USDIMAGING_API
     void SetStage(UsdStageRefPtr stage);
 
-    // Traverse the scene collecting imaging prims, and then call PrimsAdded.
-    USDIMAGING_API
-    void Populate();
-
     // Set the time, and call PrimsDirtied for any time-varying attributes.
+    //
+    // PrimsDirtied is only called if the time is different from the last call
+    // or forceDirtyingTimeDeps is true.
     USDIMAGING_API
-    void SetTime(UsdTimeCode time);
+    void SetTime(UsdTimeCode time, bool forceDirtyingTimeDeps = false);
 
     // Return the current time.
     USDIMAGING_API
@@ -100,53 +84,41 @@ public:
 
 private:
     USDIMAGING_API
-    UsdImagingStageSceneIndex();
+    UsdImagingStageSceneIndex(HdContainerDataSourceHandle const &inputArgs);
 
-    Usd_PrimFlagsConjunction _GetTraversalPredicate() const;
+    Usd_PrimFlagsPredicate _GetPrimPredicate() const;
 
-    using _APISchemaEntry =
-        std::pair<UsdImagingAPISchemaAdapterSharedPtr, TfToken>;
-    using _APISchemaAdapters = TfSmallVector<_APISchemaEntry, 8>;
-
-    // Adapter delegation.
-
-    _APISchemaAdapters _AdapterSetLookup(UsdPrim prim) const;
-
-    UsdImagingAPISchemaAdapterSharedPtr _APIAdapterLookup(
-            const TfToken &adapterKey) const;
-
-    UsdImagingPrimAdapterSharedPtr _PrimAdapterLookup(
-            const TfToken &adapterKey) const;
-
-    TfTokenVector _GetImagingSubprims(
-            const _APISchemaAdapters &adapters) const;
-    
-    TfToken _GetImagingSubprimType(
-            const _APISchemaAdapters &adapters,
-            const TfToken &subprim) const;
-
-    HdContainerDataSourceHandle _GetImagingSubprimData(
-            const _APISchemaAdapters &adapters,
-            UsdPrim prim, const TfToken& subprim) const;
-
-    HdDataSourceLocatorSet _InvalidateImagingSubprim(
-            const _APISchemaAdapters &adapters,
-            TfToken const& subprim, TfTokenVector const& properties) const;
-
+    void _ApplyPendingResyncs();
+    void _ComputeDirtiedEntries(
+        const std::map<SdfPath, TfTokenVector> &pathToUsdProperties,
+        SdfPathVector * primPathsToResync,
+        UsdImagingPropertyInvalidationType invalidationType,
+        HdSceneIndexObserver::DirtiedPrimEntries * dirtiedPrims) const;
 
     class _StageGlobals : public UsdImagingDataSourceStageGlobals
     {
     public:
         // Datasource-facing API
         void FlagAsTimeVarying(
-            const SdfPath & primPath,
+            const SdfPath & hydraPath,
             const HdDataSourceLocator & locator) const override;
+
+        void FlagAsAssetPathDependent(
+            const SdfPath & usdPath) const override;
 
         UsdTimeCode GetTime() const override;
 
         // Scene index-facing API
         void SetTime(UsdTimeCode time,
                 HdSceneIndexObserver::DirtiedPrimEntries *dirtied);
+
+        void RemoveAssetPathDependentsUnder(const SdfPath &path);
+
+        void InvalidateAssetPathDependentsUnder(
+            const SdfPath &path,
+            std::vector<SdfPath> *primsToInvalidate,
+            std::map<SdfPath, TfTokenVector> *propertiesToInvalidate) const;
+
         void Clear();
 
     private:
@@ -162,14 +134,21 @@ private:
                 HdDataSourceLocatorSet, _PathHashCompare>;
         mutable _VariabilityMap _timeVaryingLocators;
 
+        using _AssetPathDependentsSet = std::set<SdfPath>;
+        mutable _AssetPathDependentsSet _assetPathDependents;
+        mutable std::mutex _assetPathDependentsMutex;
+
         UsdTimeCode _time;
     };
+
+    const bool _includeUnloadedPrims;
 
     UsdStageRefPtr _stage;
     _StageGlobals _stageGlobals;
 
     // Population
-    void _Populate(UsdPrim subtreeRoot);
+    void _Populate();
+    void _PopulateSubtree(UsdPrim subtreeRoot);
 
     // Edit processing
     void _OnUsdObjectsChanged(UsdNotice::ObjectsChanged const& notice,
@@ -180,26 +159,12 @@ private:
     SdfPathVector _usdPrimsToResync;
     // Property changes get converted into PrimsDirtied messages.
     std::map<SdfPath, TfTokenVector> _usdPropertiesToUpdate;
+    std::map<SdfPath, TfTokenVector> _usdPropertiesToResync;
 
-    // Usd Prim Type to Adapter lookup table, concurrent because it could
-    // be potentially filled during concurrent GetPrim calls rather than
-    // just during single-threaded population.
-    using _PrimAdapterMap = tbb::concurrent_unordered_map<
-        TfToken, UsdImagingPrimAdapterSharedPtr, TfHash>;
+    using _PrimAdapterPair = std::pair<UsdPrim, UsdImagingPrimAdapterSharedPtr>;
+    _PrimAdapterPair _FindResponsibleAncestor(const UsdPrim &prim) const;
 
-    mutable _PrimAdapterMap _primAdapterMap;
-
-    using _ApiAdapterMap = tbb::concurrent_unordered_map<
-        TfToken, UsdImagingAPISchemaAdapterSharedPtr, TfHash>;
-
-    mutable _ApiAdapterMap _apiAdapterMap;
-
-    // Use UsdPrimTypeInfo pointer as key because they are guaranteed to be
-    // cached at least as long as the stage is open.
-    using _AdapterSetMap = tbb::concurrent_unordered_map<
-        const UsdPrimTypeInfo *, _APISchemaAdapters, TfHash>;
-
-    mutable _AdapterSetMap _adapterSetMap;
+    std::unique_ptr<UsdImaging_AdapterManager> const _adapterManager;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -7,17 +7,14 @@ if (NOT ${PXR_BUILD_GPU_SUPPORT} OR NOT ${PXR_ENABLE_METAL_SUPPORT})
     return()
 endif()
 
-FIND_LIBRARY(METAL_LIBRARY Metal)
-FIND_LIBRARY(APPUIKIT_LIBRARY AppKit)
-
 pxr_library(hgiMetal
     LIBRARIES
         arch
         hgi
         tf
         trace
-        ${METAL_LIBRARY}
-        ${APPUIKIT_LIBRARY}
+        "-framework Metal"
+        "-framework AppKit"
 
     PUBLIC_HEADERS
         accelerationStructure.h
@@ -34,6 +31,7 @@ pxr_library(hgiMetal
         hgi.h
         rayTracingCmds.h
         rayTracingPipeline.h
+        indirectCommandEncoder.h
         resourceBindings.h
         sampler.h
         shaderFunction.h
@@ -61,6 +59,7 @@ pxr_library(hgiMetal
         hgi.mm
         rayTracingCmds.mm
         rayTracingPipeline.mm
+        indirectCommandEncoder.mm
         resourceBindings.mm
         sampler.mm
         shaderFunction.mm
@@ -72,4 +71,6 @@ pxr_library(hgiMetal
 
     RESOURCE_FILES
         plugInfo.json
+
+    DISABLE_PRECOMPILED_HEADERS
 )

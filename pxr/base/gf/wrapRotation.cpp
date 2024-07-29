@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -152,19 +135,11 @@ static string _Repr(GfRotation const &self) {
         TfPyRepr(self.GetAngle()) + ")";
 }
 
-#if PY_MAJOR_VERSION == 2
-static GfRotation __truediv__(const GfRotation &self, double value)
-{
-    return self / value;
-}
-
-static GfRotation __itruediv__(GfRotation &self, double value)
-{
-    return self /= value;
-}
-#endif
-
 } // anonymous namespace 
+
+static size_t __hash__(GfRotation const &self) {
+    return TfHash()(self);
+}
 
 void wrapRotation()
 {    
@@ -176,6 +151,7 @@ void wrapRotation()
         .def(init<const GfQuaternion &>())
         .def(init<const GfQuatd &>())
         .def(init<const GfVec3d &, const GfVec3d &>())
+        .def(init<const GfRotation &>())
 
         .def( TfTypePythonClass() )
 
@@ -250,15 +226,9 @@ void wrapRotation()
         .def( double() * self )
         .def( self / double() )
 
- #if PY_MAJOR_VERSION == 2
-        // Needed only to support "from __future__ import division" in
-        // python 2. In python 3 builds boost::python adds this for us.
-        .def("__truediv__", __truediv__ )
-        .def("__itruediv__", __itruediv__ )
-#endif
+        .def("__repr__", _Repr)
+        .def("__hash__", __hash__)
 
-       .def("__repr__", _Repr)
-        
         ;
     to_python_converter<std::vector<This>,
         TfPySequenceToPython<std::vector<This> > >();

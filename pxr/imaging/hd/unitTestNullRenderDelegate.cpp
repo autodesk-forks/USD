@@ -1,30 +1,14 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/unitTestNullRenderDelegate.h"
 #include "pxr/imaging/hd/bufferArray.h"
 #include "pxr/imaging/hd/camera.h"
 #include "pxr/imaging/hd/coordSys.h"
+#include "pxr/imaging/hd/light.h"
 #include "pxr/imaging/hd/material.h"
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/basisCurves.h"
@@ -33,7 +17,6 @@
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/repr.h"
 #include "pxr/imaging/hd/resourceRegistry.h"
-#include "pxr/imaging/hd/strategyBase.h"
 #include "pxr/imaging/hd/unitTestNullRenderPass.h"
 
 #include <iostream>
@@ -235,6 +218,29 @@ private:
     Hd_NullMaterial &operator =(const Hd_NullMaterial &) = delete;
 };
 
+class Hd_NullLight final : public HdLight {
+public:
+    Hd_NullLight(SdfPath const& id) : HdLight(id) {}
+    virtual ~Hd_NullLight() = default;
+
+    virtual void Sync(HdSceneDelegate *sceneDelegate,
+                      HdRenderParam   *renderParam,
+                      HdDirtyBits     *dirtyBits) override
+    {
+        *dirtyBits = HdLight::Clean;
+    }
+
+    virtual HdDirtyBits GetInitialDirtyBitsMask() const override
+    {
+        return HdLight::AllDirty;
+    }
+
+private:
+    Hd_NullLight()                                 = delete;
+    Hd_NullLight(const Hd_NullLight &)             = delete;
+    Hd_NullLight &operator =(const Hd_NullLight &) = delete;
+};
+
 class Hd_NullCoordSys final : public HdCoordSys {
 public:
     Hd_NullCoordSys(SdfPath const& id) : HdCoordSys(id) {}
@@ -290,6 +296,7 @@ const TfTokenVector Hd_UnitTestNullRenderDelegate::SUPPORTED_SPRIM_TYPES =
 {
     HdPrimTypeTokens->camera,
     HdPrimTypeTokens->coordSys,
+    HdPrimTypeTokens->domeLight,
     HdPrimTypeTokens->material
 };
 
@@ -369,6 +376,8 @@ Hd_UnitTestNullRenderDelegate::CreateSprim(TfToken const& typeId,
 {
     if (typeId == HdPrimTypeTokens->material) {
         return new Hd_NullMaterial(sprimId);
+    } else if (typeId == HdPrimTypeTokens->domeLight) {
+        return new Hd_NullLight(SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->coordSys) {
         return new Hd_NullCoordSys(sprimId);
     } else if (typeId == HdPrimTypeTokens->camera) {
@@ -384,6 +393,8 @@ Hd_UnitTestNullRenderDelegate::CreateFallbackSprim(TfToken const& typeId)
 {
     if (typeId == HdPrimTypeTokens->material) {
         return new Hd_NullMaterial(SdfPath::EmptyPath());
+    } else if (typeId == HdPrimTypeTokens->domeLight) {
+        return new Hd_NullLight(SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->coordSys) {
         return new Hd_NullCoordSys(SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->camera) {

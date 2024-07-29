@@ -2,25 +2,8 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 from __future__ import division
 
@@ -287,6 +270,12 @@ class TestGfVec(unittest.TestCase):
             #
             v[:2] = [None, None]
 
+    def HashTest(self, Vec):
+        v1 = Vec()
+        SetVec(v1, [12, 1, 2, -4])
+        self.assertEqual(hash(v1), hash(v1))
+        self.assertEqual(hash(v1), hash(Vec(v1)))
+
     def MethodsTest(self, Vec):
         v1 = Vec()
         v2 = Vec()
@@ -544,6 +533,7 @@ class TestGfVec(unittest.TestCase):
             self.ConstructorsTest( Vec )
             self.OperatorsTest( Vec )
             self.MethodsTest( Vec )
+            self.HashTest( Vec )
 
 
     def test_TupleToVec(self):
@@ -630,14 +620,15 @@ class TestGfVec(unittest.TestCase):
         with self.assertRaises(TypeError):
             Gf.Dot(('a', 'b', 'c', 'd'), (1.0, 1.0, 1.0, 1.0))
 
-        # Bug USD-6284 shows that we erroneously implemented the Python 2.x
-        # buffer protocol 'getcharbuffer' method to expose the binary content,
-        # where really a string is expected.  This tests that we correctly raise
-        # instead of treating the binary object representation as a string.
+        # Some Python 3 builtins like int() will just blindly attempt to treat 
+        # bytes from objects that support the buffer protocol as string 
+        # characters, ignoring what the actual data format is. 
+        # This tests that we correctly raise instead of treating the binary 
+        # object representation as a string.
         
-        # We get different exceptions between Python 2 & 3 here, see Python
+        # For python3 we get ValueError instead of a TypeError, see Python
         # issue 41707 (https://bugs.python.org/issue41707).
-        excType = TypeError if sys.version_info.major < 3 else ValueError
+        excType = ValueError
 
         with self.assertRaises(excType):
             int(Gf.Vec3d(1,2,3))

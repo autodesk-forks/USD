@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_PCP_TYPES_H
 #define PXR_USD_PCP_TYPES_H
@@ -28,12 +11,10 @@
 #include "pxr/usd/pcp/api.h"
 #include "pxr/usd/pcp/site.h"
 #include "pxr/usd/sdf/layer.h"
-#include "pxr/base/tf/denseHashSet.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_set.h"
 
 #include <limits>
 #include <vector>
-
-#include <boost/operators.hpp>
 
 /// \file pcp/types.h
 
@@ -119,7 +100,7 @@ PcpIsClassBasedArc(PcpArcType arcType)
 /// what type of arcs. 
 ///
 struct PcpSiteTrackerSegment {
-    PcpSiteStr site;
+    PcpSite site;
     PcpArcType arcType;
 };
 
@@ -130,7 +111,7 @@ struct PcpSiteTrackerSegment {
 typedef std::vector<PcpSiteTrackerSegment> PcpSiteTracker;
 
 // Internal type for Sd sites.
-struct Pcp_SdSiteRef : boost::totally_ordered<Pcp_SdSiteRef> {
+struct Pcp_SdSiteRef {
     Pcp_SdSiteRef(const SdfLayerRefPtr& layer_, const SdfPath& path_) :
         layer(layer_), path(path_)
     {
@@ -142,10 +123,30 @@ struct Pcp_SdSiteRef : boost::totally_ordered<Pcp_SdSiteRef> {
         return layer == other.layer && path == other.path;
     }
 
+    bool operator!=(const Pcp_SdSiteRef& other) const
+    {
+        return !(*this == other);
+    }
+
     bool operator<(const Pcp_SdSiteRef& other) const
     {
         return layer < other.layer ||
                (!(other.layer < layer) && path < other.path);
+    }
+
+    bool operator<=(const Pcp_SdSiteRef& other) const
+    {
+        return !(other < *this);
+    }
+
+    bool operator>(const Pcp_SdSiteRef& other) const
+    {
+        return other < *this;
+    }
+
+    bool operator>=(const Pcp_SdSiteRef& other) const
+    {
+        return !(*this < other);
     }
 
     // These are held by reference for performance,
@@ -187,7 +188,7 @@ typedef std::vector<Pcp_CompressedSdSite> Pcp_CompressedSdSiteVector;
 ///
 typedef std::map<std::string, std::vector<std::string>> PcpVariantFallbackMap;
 
-typedef TfDenseHashSet<TfToken, TfToken::HashFunctor> PcpTokenSet;
+using PcpTokenSet = pxr_tsl::robin_set<TfToken, TfToken::HashFunctor>;
 
 /// \var size_t PCP_INVALID_INDEX
 /// A value which indicates an invalid index. This is simply used inplace of

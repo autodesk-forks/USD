@@ -1,30 +1,14 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/site.h"
 #include "pxr/usd/pcp/layerStack.h"
+#include "pxr/base/tf/hash.h"
 
 #include <ostream>
 
@@ -87,78 +71,11 @@ PcpSite::operator<(const PcpSite &rhs) const
 size_t
 PcpSite::Hash::operator()(const PcpSite &site) const
 {
-    size_t hash = 0;
-    boost::hash_combine(hash, site.layerStackIdentifier);
-    boost::hash_combine(hash, site.path);
-    return hash;
+    return TfHash::Combine(
+        site.layerStackIdentifier,
+        site.path
+    );
 }
-
-////////////////////////////////////////////////////////////////////////
-
-PcpSiteStr::PcpSiteStr()
-{
-    // Do nothing
-}
-
-PcpSiteStr::PcpSiteStr(const PcpLayerStackIdentifierStr &id,
-                       const SdfPath &path) :
-    layerStackIdentifierStr(id),
-    path(path)
-{
-    // Do nothing
-}
-
-PcpSiteStr::PcpSiteStr(const PcpLayerStackIdentifier &id,
-                       const SdfPath &path) :
-    layerStackIdentifierStr(id),
-    path(path)
-{
-    // Do nothing
-}
-
-PcpSiteStr::PcpSiteStr( const SdfLayerHandle &layer, const SdfPath &path)
-    : layerStackIdentifierStr(layer ? layer->GetIdentifier() : std::string())
-    , path(path)
-{
-    // Do nothing
-}
-
-PcpSiteStr::PcpSiteStr(PcpLayerStackSite const &site)
-    : layerStackIdentifierStr(site.layerStack->GetIdentifier())
-    , path(site.path)
-{
-}
-
-PcpSiteStr::PcpSiteStr(PcpSite const &site)
-    : layerStackIdentifierStr(site.layerStackIdentifier)
-    , path(site.path)
-{
-}
-
-bool
-PcpSiteStr::operator==(const PcpSiteStr &rhs) const
-{
-    return layerStackIdentifierStr == rhs.layerStackIdentifierStr
-        && path == rhs.path;
-}
-
-bool
-PcpSiteStr::operator<(const PcpSiteStr &rhs) const
-{
-    return (layerStackIdentifierStr < rhs.layerStackIdentifierStr) ||
-           (layerStackIdentifierStr == rhs.layerStackIdentifierStr && 
-            path < rhs.path);
-}
-
-size_t
-PcpSiteStr::Hash::operator()(const PcpSiteStr &site) const
-{
-    size_t hash = 0;
-    boost::hash_combine(hash, site.layerStackIdentifierStr);
-    boost::hash_combine(hash, site.path);
-    return hash;
-}
-
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -192,10 +109,10 @@ PcpLayerStackSite::operator<(const PcpLayerStackSite &rhs) const
 size_t
 PcpLayerStackSite::Hash::operator()(const PcpLayerStackSite &site) const
 {
-    size_t hash = 0;
-    boost::hash_combine(hash, site.layerStack);
-    boost::hash_combine(hash, site.path);
-    return hash;
+    return TfHash::Combine(
+        site.layerStack,
+        site.path
+    );
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -204,12 +121,6 @@ std::ostream&
 operator<<(std::ostream& s, const PcpSite& x)
 {
     return s << x.layerStackIdentifier << "<" << x.path << ">";
-}
-
-std::ostream&
-operator<<(std::ostream& s, const PcpSiteStr& x)
-{
-    return s << x.layerStackIdentifierStr << "<" << x.path << ">";
 }
 
 std::ostream&

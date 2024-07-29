@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USDPHYSICS_GENERATED_DRIVEAPI_H
 #define USDPHYSICS_GENERATED_DRIVEAPI_H
@@ -146,6 +129,12 @@ public:
     USDPHYSICS_API
     static UsdPhysicsDriveAPI
     Get(const UsdPrim &prim, const TfToken &name);
+
+    /// Return a vector of all named instances of UsdPhysicsDriveAPI on the 
+    /// given \p prim.
+    USDPHYSICS_API
+    static std::vector<UsdPhysicsDriveAPI>
+    GetAll(const UsdPrim &prim);
 
     /// Checks if the given name \p baseName is the base name of a property
     /// of PhysicsDriveAPI.
@@ -328,7 +317,7 @@ public:
     // --------------------------------------------------------------------- //
     /// Damping of the drive. Units: 
     /// if linear drive: mass/second
-    /// If angular drive: mass*DIST_UNITS*DIST_UNITS/second/second/degrees.
+    /// If angular drive: mass*DIST_UNITS*DIST_UNITS/second/degrees.
     ///
     /// | ||
     /// | -- | -- |
@@ -352,7 +341,7 @@ public:
     // --------------------------------------------------------------------- //
     /// Stiffness of the drive. Units:
     /// if linear drive: mass/second/second
-    /// if angular drive: mass*DIST_UNITS*DIST_UNITS/degree/second/second.
+    /// if angular drive: mass*DIST_UNITS*DIST_UNITS/degrees/second/second.
     ///
     /// | ||
     /// | -- | -- |

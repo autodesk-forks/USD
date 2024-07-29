@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_STAGE_CACHE_H
 #define PXR_USD_USD_STAGE_CACHE_H
@@ -28,9 +11,7 @@
 #include "pxr/usd/usd/api.h"
 #include "pxr/usd/sdf/declareHandles.h"
 #include "pxr/base/tf/declarePtrs.h"
-
-#include <boost/lexical_cast.hpp>
-#include <boost/operators.hpp>
+#include "pxr/base/tf/stringUtils.h"
 
 #include <string>
 #include <memory>
@@ -97,7 +78,7 @@ public:
     /// It never makes sense to use an Id with a stage other than the one it was
     /// obtained from.
     ///
-    struct Id : private boost::totally_ordered<Id> {
+    struct Id {
         /// Default construct an invalid id.
         Id() : _value(-1) {}
 
@@ -108,7 +89,15 @@ public:
         /// Create an Id from a string value.  The supplied \p val must have
         /// been obtained by calling ToString() previously.
         static Id FromString(const std::string &s) {
-            return FromLongInt(boost::lexical_cast<long int>(s));
+            bool overflow = false;
+            const long int result = TfStringToLong(s, &overflow);
+            if (overflow) {
+                TF_CODING_ERROR(
+                    "'%s' overflowed during conversion to int64_t.",
+                    s.c_str()
+                );
+            }
+            return FromLongInt(result);
         }
 
         /// Convert this Id to an integral representation.
@@ -116,7 +105,7 @@ public:
 
         /// Convert this Id to a string representation.
         std::string ToString() const {
-            return boost::lexical_cast<std::string>(ToLongInt());
+            return TfStringify(ToLongInt());
         }
 
         /// Return true if this Id is valid.
@@ -130,9 +119,25 @@ public:
         friend bool operator==(const Id &lhs, const Id &rhs) {
             return lhs.ToLongInt() == rhs.ToLongInt();
         }
+        /// Inequality comparison.
+        friend bool operator!=(const Id &lhs, const Id &rhs) {
+            return !(lhs == rhs);
+        }
         /// Less-than comparison.
         friend bool operator<(const Id &lhs, const Id &rhs) {
             return lhs.ToLongInt() < rhs.ToLongInt();
+        }
+        /// Less-than or equal comparison.
+        friend bool operator<=(const Id &lhs, const Id &rhs) {
+            return !(rhs < lhs);
+        }
+        /// Greater-than comparison.
+        friend bool operator>(const Id &lhs, const Id &rhs) {
+            return rhs < lhs;
+        }
+        /// Greater-than or equal comparison.
+        friend bool operator>=(const Id &lhs, const Id &rhs) {
+            return !(lhs < rhs);
         }
         /// Hash.
         friend size_t hash_value(Id id) {

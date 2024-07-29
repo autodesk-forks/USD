@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_DATASOURCELOCATOR_H
 #define PXR_IMAGING_HD_DATASOURCELOCATOR_H
@@ -30,6 +13,8 @@
 #include "pxr/base/tf/hash.h"
 
 #include "pxr/imaging/hd/api.h"
+
+#include <iosfwd>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -212,6 +197,9 @@ HdDataSourceLocator::Hash() const
     return TfHash()(*this);
 }
 
+HD_API std::ostream& operator<<(std::ostream& out,
+    const HdDataSourceLocator &self);
+
 //-----------------------------------------------------------------------------
 
 ///
@@ -235,7 +223,12 @@ private:
 public:
     using const_iterator = typename _Locators::const_iterator;
 
+    /// The empty set.
     explicit HdDataSourceLocatorSet() {}
+
+    /// The set containing everything.
+    HD_API
+    static const HdDataSourceLocatorSet &UniversalSet();
 
     HD_API
     HdDataSourceLocatorSet(const HdDataSourceLocator &locator);
@@ -265,6 +258,10 @@ public:
     HD_API
     void insert(const HdDataSourceLocatorSet &locatorSet);
 
+    /// Changes this set to be the union of this set and the given set.
+    HD_API
+    void insert(HdDataSourceLocatorSet &&locatorSet);
+
     /// append() is semantically equivalent to insert(), but works much faster
     /// if \p locator would be added to the end of the set, lexicographically.
     HD_API
@@ -284,7 +281,7 @@ public:
     const_iterator begin() const;
     HD_API
     const_iterator end() const;
-    
+
     /// True if and only if locator or any of its descendants is
     /// in the set (closed under descendancy).
     ///
@@ -302,9 +299,11 @@ public:
     /// two sets contains a prefix of the other set.
     HD_API
     bool Intersects(const HdDataSourceLocatorSet &locatorSet) const;
+
     /// True if and only if this set contains no data source locator.
     HD_API
     bool IsEmpty() const;
+
     /// True if the set (closed under descendancy) contains the given
     /// locator.
     ///
@@ -313,13 +312,123 @@ public:
     HD_API
     bool Contains(const HdDataSourceLocator &locator) const;
 
+    /// Returns a lexicographically sorted locator set wherein locators in this 
+    /// set that have \p oldPrefix as a prefix use \p newPrefix instead. The
+    /// returned set is closed under descendancy and may have equal or fewer
+    /// data source locators as a result.
+    HD_API
+    HdDataSourceLocatorSet ReplacePrefix(
+        const HdDataSourceLocator &oldPrefix,
+        const HdDataSourceLocator &newPrefix) const;
+
+    class IntersectionIterator;
+    class IntersectionView;
+
+    /// Returns intersection with a locator as a range-like object so that it
+    /// can be used in a for-loop.
+    ///
+    /// Every element in the intersection has locator as a prefix.
+    ///
+    /// Examples:
+    /// Intersection of { primvars:color } with primvars is
+    ///                 { primvars:color }.
+    /// Intersection of { primvars:color } with primvars:color:interpolation is
+    ///                 { primvars:color:interpolation }.
+    ///
+    HD_API
+    IntersectionView Intersection(const HdDataSourceLocator &locator) const;
+
 private:
+    // Sort and uniquify it.
+    void _Normalize();
+
     void _InsertAndDeleteSuffixes(_Locators::iterator *position,
                                   const HdDataSourceLocator &locator);
+
+    const_iterator _FirstIntersection(const HdDataSourceLocator &locator) const;
+
     // Lexicographically sorted minimal list of locators generating
     // the set.
     _Locators _locators;
 };
+
+class HdDataSourceLocatorSet::IntersectionIterator
+{
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = const HdDataSourceLocator;
+    using reference = value_type&;
+    using pointer = value_type*;
+    using difference_type = std::ptrdiff_t;
+
+    IntersectionIterator()
+      : _isFirst(false)
+    {
+    }
+
+    IntersectionIterator(const bool isFirst,
+                         const const_iterator &iterator,
+                         const const_iterator &end,
+                         const HdDataSourceLocator &locator)
+      : _isFirst(isFirst)
+      , _iterator(iterator)
+      , _end(end)
+      , _locator(locator)
+    {
+    }
+
+    HD_API
+    const HdDataSourceLocator &operator*() const;
+
+    const HdDataSourceLocator* operator->() const
+    {
+        return std::addressof(**this);
+    }
+
+    HD_API
+    IntersectionIterator& operator++();
+
+    HD_API
+    IntersectionIterator operator++(int);
+
+    bool operator==(const IntersectionIterator &other) const noexcept
+    {
+        return _iterator == other._iterator;
+    }
+
+    bool operator!=(const IntersectionIterator &other) const noexcept
+    {
+        return _iterator != other._iterator;
+    }
+
+private:
+    bool _isFirst;
+    const_iterator _iterator;
+    const_iterator _end;
+    HdDataSourceLocator _locator;
+};
+
+class HdDataSourceLocatorSet::IntersectionView
+{
+public:
+    IntersectionView(const IntersectionIterator &begin,
+                     const IntersectionIterator &end)
+      : _begin(begin)
+      , _end(end)
+    {
+    }
+
+    const IntersectionIterator &begin() const { return _begin; }
+
+    const IntersectionIterator &end() const { return _end; }
+
+private:
+    const IntersectionIterator _begin;
+    const IntersectionIterator _end;
+};
+
+HD_API std::ostream& operator<<(std::ostream& out,
+    const HdDataSourceLocatorSet &self);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

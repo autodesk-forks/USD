@@ -1,28 +1,12 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hgiMetal/hgi.h"
+#include "pxr/imaging/hgiMetal/capabilities.h"
 #include "pxr/imaging/hgiMetal/conversions.h"
 #include "pxr/imaging/hgiMetal/diagnostic.h"
 #include "pxr/imaging/hgiMetal/graphicsPipeline.h"
@@ -115,6 +99,57 @@ HgiMetalGraphicsPipeline::_CreateVertexDescriptor()
     }
 }
 
+static
+void
+_SetTessellationStateFromShaderFunctions(
+    MTLRenderPipelineDescriptor *stateDesc,
+    HgiShaderFunctionHandleVector const & shaderFuncs)
+{
+    const HgiShaderFunctionHandle *postTessVertexFunc = nullptr;
+    for (const HgiShaderFunctionHandle &handle : shaderFuncs) {
+        if (handle->GetDescriptor().shaderStage ==
+                HgiShaderStagePostTessellationVertex) {
+            postTessVertexFunc = &handle;
+        }
+    }
+    if (postTessVertexFunc == nullptr) {
+        TF_CODING_ERROR("Did not find a post tess vertex function");
+        return;
+    }
+
+    switch (postTessVertexFunc->Get()->GetDescriptor()
+            .tessellationDescriptor.spacing) {
+        case HgiShaderFunctionTessellationDesc::Spacing::Equal:
+            stateDesc.tessellationPartitionMode =
+                    MTLTessellationPartitionModeInteger;
+            break;
+        case HgiShaderFunctionTessellationDesc::Spacing::FractionalOdd:
+            stateDesc.tessellationPartitionMode =
+                    MTLTessellationPartitionModeFractionalOdd;
+            break;
+        case HgiShaderFunctionTessellationDesc::Spacing::FractionalEven:
+            stateDesc.tessellationPartitionMode =
+                    MTLTessellationPartitionModeFractionalEven;
+            break;
+        default:
+            stateDesc.tessellationPartitionMode =
+                    MTLTessellationPartitionModeInteger;
+            break;
+    }
+
+    switch (postTessVertexFunc->Get()->GetDescriptor()
+            .tessellationDescriptor.ordering) {
+        case HgiShaderFunctionTessellationDesc::Ordering::CW:
+            stateDesc.tessellationOutputWindingOrder =
+                    MTLWindingClockwise;
+            break;
+        case HgiShaderFunctionTessellationDesc::Ordering::CCW:
+            stateDesc.tessellationOutputWindingOrder =
+                    MTLWindingCounterClockwise;
+            break;
+    }
+}
+
 void
 HgiMetalGraphicsPipeline::_CreateRenderPipelineState(HgiMetal *hgi)
 {
@@ -124,6 +159,10 @@ HgiMetalGraphicsPipeline::_CreateRenderPipelineState(HgiMetal *hgi)
     // Create a new render pipeline state object
     HGIMETAL_DEBUG_LABEL(stateDesc, _descriptor.debugName.c_str());
     stateDesc.rasterSampleCount = _descriptor.multiSampleState.sampleCount;
+    
+    bool const icbSupport = hgi->GetCapabilities()->
+        IsSet(HgiDeviceCapabilitiesBitsIndirectCommandBuffers);
+    stateDesc.supportIndirectCommandBuffers = icbSupport;
 
     stateDesc.inputPrimitiveTopology =
         HgiMetalConversions::GetPrimitiveClass(_descriptor.primitiveType);
@@ -131,8 +170,50 @@ HgiMetalGraphicsPipeline::_CreateRenderPipelineState(HgiMetal *hgi)
     HgiMetalShaderProgram const *metalProgram =
         static_cast<HgiMetalShaderProgram*>(_descriptor.shaderProgram.Get());
 
-    if (_descriptor.primitiveType == HgiPrimitiveTypePatchList) {
-        stateDesc.vertexFunction = metalProgram->GetPostTessVertexFunction();
+    const bool usePTVSPath = _descriptor.primitiveType == HgiPrimitiveTypePatchList;
+    if (usePTVSPath) {
+        switch (_descriptor.tessellationState.tessFactorMode) {
+            case HgiTessellationState::Constant:
+                stateDesc.vertexFunction =
+                        metalProgram->GetPostTessVertexFunction();
+                stateDesc.tessellationFactorStepFunction =      
+                        MTLTessellationFactorStepFunctionConstant;
+                break;
+            case HgiTessellationState::TessControl:
+                stateDesc.vertexFunction =
+                        metalProgram->GetPostTessControlFunction();
+                stateDesc.tessellationFactorStepFunction =
+                        MTLTessellationFactorStepFunctionConstant;
+                stateDesc.tessellationPartitionMode =
+                        MTLTessellationPartitionModePow2;
+                break;
+            case HgiTessellationState::TessVertex:
+            {
+                stateDesc.vertexFunction =
+                        metalProgram->GetPostTessVertexFunction();
+                stateDesc.tessellationFactorStepFunction =
+                        MTLTessellationFactorStepFunctionPerPatch;
+
+                _SetTessellationStateFromShaderFunctions(
+                    stateDesc, metalProgram->GetShaderFunctions());
+                break;
+            }
+            default:
+                TF_CODING_ERROR("Unexpected tess factor mode");
+        }
+
+        // Basis curves should be treated as tris w/ polygonMode line
+        // since Metal tessellation does not support isoline mode.
+        if (stateDesc.inputPrimitiveTopology ==
+                                MTLPrimitiveTopologyClassLine) {
+            stateDesc.inputPrimitiveTopology =
+                MTLPrimitiveTopologyClassTriangle;
+        }
+
+        if (_descriptor.tessellationState.patchType ==
+                                HgiTessellationState::Isoline) {
+             _descriptor.rasterizationState.polygonMode = HgiPolygonModeLine;
+        }
 
         MTLWinding winding = HgiMetalConversions::GetWinding(
             _descriptor.rasterizationState.winding);
@@ -143,6 +224,9 @@ HgiMetalGraphicsPipeline::_CreateRenderPipelineState(HgiMetal *hgi)
 
         stateDesc.tessellationControlPointIndexType =
             MTLTessellationControlPointIndexTypeUInt32;
+
+        // Set maxTessellationFactor to be consistent with GL etc.
+        stateDesc.maxTessellationFactor = 64;
     } else {
         stateDesc.vertexFunction = metalProgram->GetVertexFunction();
     }

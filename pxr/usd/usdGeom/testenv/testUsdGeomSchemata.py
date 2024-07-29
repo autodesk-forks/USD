@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # pylint: disable=map-builtin-not-iterating
 
@@ -128,6 +111,20 @@ class TestUsdGeomSchemata(unittest.TestCase):
         self.assertFalse(prim.IsA(UsdGeom.Mesh))       # Capsule is not a Mesh
         self.assertTrue(prim.IsA(UsdGeom.Xformable))   # Capsule is a Xformable
         self.assertFalse(prim.IsA(UsdGeom.Cylinder))   # Capsule is not a Cylinder
+        # Belongs to Cylinder family
+        self.assertTrue(prim.IsInFamily(UsdGeom.Tokens.Capsule))
+        self.assertTrue(schema.GetAxisAttr())
+
+        # Capsule_1 Tests
+
+        schema = UsdGeom.Capsule_1.Define(stage, "/Capsule_1")
+        self.assertTrue(schema)
+        prim = schema.GetPrim()
+        self.assertFalse(prim.IsA(UsdGeom.Mesh))       # Capsule is not a Mesh
+        self.assertTrue(prim.IsA(UsdGeom.Xformable))   # Capsule is a Xformable
+        self.assertFalse(prim.IsA(UsdGeom.Cylinder))   # Capsule is not a Cylinder
+        # Belongs to Cylinder family
+        self.assertTrue(prim.IsInFamily(UsdGeom.Tokens.Capsule))
         self.assertTrue(schema.GetAxisAttr())
 
         # Cone Tests
@@ -158,6 +155,20 @@ class TestUsdGeomSchemata(unittest.TestCase):
         self.assertFalse(prim.IsA(UsdGeom.Mesh))       # Cylinder is not a Mesh
         self.assertTrue(prim.IsA(UsdGeom.Xformable))   # Cylinder is a Xformable
         self.assertTrue(prim.IsA(UsdGeom.Cylinder))    # Cylinder is a Cylinder
+        # Belongs to Cylinder family
+        self.assertTrue(prim.IsInFamily(UsdGeom.Tokens.Cylinder))
+        self.assertTrue(schema.GetAxisAttr())
+
+        # Cylinder_1 Tests
+
+        schema = UsdGeom.Cylinder_1.Define(stage, "/Cylinder_1")
+        self.assertTrue(schema)
+        prim = schema.GetPrim()
+        self.assertFalse(prim.IsA(UsdGeom.Mesh))       # Cylinder is not a Mesh
+        self.assertTrue(prim.IsA(UsdGeom.Xformable))   # Cylinder is a Xformable
+        self.assertTrue(prim.IsA(UsdGeom.Cylinder_1))    # Cylinder is a Cylinder
+        # Belongs to Cylinder family
+        self.assertTrue(prim.IsInFamily(UsdGeom.Tokens.Cylinder))
         self.assertTrue(schema.GetAxisAttr())
 
         # Mesh Tests
@@ -708,19 +719,12 @@ class TestUsdGeomSchemata(unittest.TestCase):
         for t in types:
             self.assertTrue(prim.HasAPI(t))
 
-        # Check that we get an exception for unknown and non-API types
-        with self.assertRaises(Tf.ErrorException):
-            prim.HasAPI(Tf.Type.Unknown)
-        
-        with self.assertRaises(Tf.ErrorException):
-            prim.HasAPI(Tf.Type.FindByName('UsdGeomXform'))
-
-        with self.assertRaises(Tf.ErrorException):
-            prim.HasAPI(Tf.Type.FindByName('UsdGeomImageable'))
-
-        with self.assertRaises(Tf.ErrorException):
-            # Test with a non-applied API schema.
-            prim.HasAPI(Tf.Type.FindByName('UsdModelAPI'))
+        # Check that we return false but not an exception for unknown, non-API,
+        # and non-applied API types.
+        self.assertFalse(prim.HasAPI(Tf.Type.Unknown))
+        self.assertFalse(prim.HasAPI(Tf.Type.FindByName('UsdGeomXform')))
+        self.assertFalse(prim.HasAPI(Tf.Type.FindByName('UsdGeomImageable')))
+        self.assertFalse(prim.HasAPI(Tf.Type.FindByName('UsdModelAPI')))
 
 if __name__ == "__main__":
     unittest.main()

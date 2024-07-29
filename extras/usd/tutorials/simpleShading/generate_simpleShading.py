@@ -2,25 +2,8 @@
 #
 # Copyright 2018 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 
 # This is an example script from the USD tutorial,
@@ -49,7 +32,7 @@ billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
 texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st", 
                                     Sdf.ValueTypeNames.TexCoord2fArray, 
                                     UsdGeom.Tokens.varying)
-texCoords.Set([(0, 0), (1, 0), (1,1), (0, 1)])
+texCoords.Set([(0, 0), (2, 0), (2,2), (0, 2)])
 
 # Now make a Material that contains a PBR preview surface, a texture reader,
 # and a primvar reader to fetch the texture coordinate from the geometry
@@ -73,19 +56,20 @@ stReader.CreateIdAttr('UsdPrimvarReader_float2')
 # Note here we are connecting the shader's input to the material's 
 # "public interface" attribute. This allows users to change the primvar name
 # on the material itself without drilling inside to examine shader nodes.
-stReader.CreateInput('varname',Sdf.ValueTypeNames.Token).ConnectToSource(stInput)
+stReader.CreateInput('varname',Sdf.ValueTypeNames.String).ConnectToSource(stInput)
 
 # diffuse texture
 diffuseTextureSampler = UsdShade.Shader.Define(stage,'/TexModel/boardMat/diffuseTexture')
 diffuseTextureSampler.CreateIdAttr('UsdUVTexture')
 diffuseTextureSampler.CreateInput('file', Sdf.ValueTypeNames.Asset).Set("USDLogoLrg.png")
 diffuseTextureSampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(stReader.ConnectableAPI(), 'result')
+diffuseTextureSampler.CreateInput("wrapS", Sdf.ValueTypeNames.Token).Set("repeat")
+diffuseTextureSampler.CreateInput("wrapT", Sdf.ValueTypeNames.Token).Set("repeat")
 diffuseTextureSampler.CreateOutput('rgb', Sdf.ValueTypeNames.Float3)
 pbrShader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(diffuseTextureSampler.ConnectableAPI(), 'rgb')
 
 # Now bind the Material to the card
-binding = UsdShade.MaterialBindingAPI.Apply(billboard.GetPrim())
-if binding:
-    binding.Bind(material)
+billboard.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
+UsdShade.MaterialBindingAPI(billboard).Bind(material)
 
 stage.Save()

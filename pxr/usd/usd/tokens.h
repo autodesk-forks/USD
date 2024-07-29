@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USD_TOKENS_H
 #define USD_TOKENS_H
@@ -78,6 +61,10 @@ struct UsdTokensType {
     /// 
     /// Property namespace prefix for the UsdCollectionAPI schema.
     const TfToken collection;
+    /// \brief "collection:__INSTANCE_NAME__"
+    /// 
+    /// UsdCollectionAPI
+    const TfToken collection_MultipleApplyTemplate_;
     /// \brief "collection:__INSTANCE_NAME__:excludes"
     /// 
     /// UsdCollectionAPI
@@ -94,13 +81,17 @@ struct UsdTokensType {
     /// 
     /// UsdCollectionAPI
     const TfToken collection_MultipleApplyTemplate_Includes;
+    /// \brief "collection:__INSTANCE_NAME__:membershipExpression"
+    /// 
+    /// UsdCollectionAPI
+    const TfToken collection_MultipleApplyTemplate_MembershipExpression;
     /// \brief "exclude"
     /// 
     ///  This is the token used to exclude a path from a collection.  Although it is not a possible value for the "expansionRule" attribute, it is used as the expansionRule for excluded paths  in UsdCollectionAPI::MembershipQuery::IsPathIncluded. 
     const TfToken exclude;
     /// \brief "expandPrims"
     /// 
-    /// Possible value for UsdCollectionAPI::GetExpansionRuleAttr(), Default value for UsdCollectionAPI::GetExpansionRuleAttr()
+    /// Fallback value for UsdCollectionAPI::GetExpansionRuleAttr()
     const TfToken expandPrims;
     /// \brief "expandPrimsAndProperties"
     /// 
@@ -114,6 +105,26 @@ struct UsdTokensType {
     /// 
     ///  A dictionary metadata that maps the name of a concrete schema prim type to an ordered list of schema prim types to use instead if the schema prim type doesn't exist in version of USD being used. 
     const TfToken fallbackPrimTypes;
+    /// \brief "APISchemaBase"
+    /// 
+    /// Schema identifer and family for UsdAPISchemaBase
+    const TfToken APISchemaBase;
+    /// \brief "ClipsAPI"
+    /// 
+    /// Schema identifer and family for UsdClipsAPI
+    const TfToken ClipsAPI;
+    /// \brief "CollectionAPI"
+    /// 
+    /// Schema identifer and family for UsdCollectionAPI
+    const TfToken CollectionAPI;
+    /// \brief "ModelAPI"
+    /// 
+    /// Schema identifer and family for UsdModelAPI
+    const TfToken ModelAPI;
+    /// \brief "Typed"
+    /// 
+    /// Schema identifer and family for UsdTyped
+    const TfToken Typed;
     /// A vector of all of the tokens listed above.
     const std::vector<TfToken> allTokens;
 };

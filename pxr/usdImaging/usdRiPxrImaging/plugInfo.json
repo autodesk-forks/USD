@@ -1,0 +1,46 @@
+{
+    "Plugins": [
+        {
+            "Info": {
+                "Types": {
+                    "UsdRiPxrImagingDisplayFilterAdapter": {
+                        "bases": [
+                            "UsdImagingPrimAdapter"
+                        ],
+                        "isInternal": true,
+                        "primTypeName": "PxrDisplayFilterPluginBase",
+                        "includeDerivedPrimTypes": true
+                    },
+                    "UsdRiPxrImagingIntegratorAdapter": {
+                        "bases": [
+                            "UsdImagingPrimAdapter"
+                        ],
+                        "isInternal": true,
+                        "primTypeName": "PxrIntegratorPluginBase",
+                        "includeDerivedPrimTypes" : true 
+                    },
+                    "UsdRiPxrImagingSampleFilterAdapter": {
+                        "bases": [
+                            "UsdImagingPrimAdapter"
+                        ],
+                        "isInternal": true,
+                        "primTypeName": "PxrSampleFilterPluginBase",
+                        "includeDerivedPrimTypes" : true 
+                    },
+                    "UsdRiPxrImagingCameraAPIAdapter": {
+                        "bases": [
+                            "UsdImagingAPISchemaAdapter"
+                        ],
+                        "isInternal": true,
+                        "apiSchemaName": "PxrCameraAPI"
+                    }
+                }
+            },
+            "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@",
+            "Name": "usdRiPxrImaging",
+            "ResourcePath": "@PLUG_INFO_RESOURCE_PATH@",
+            "Root": "@PLUG_INFO_ROOT@",
+            "Type": "library"
+        }
+    ]
+}

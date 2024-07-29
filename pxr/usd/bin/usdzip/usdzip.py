@@ -2,29 +2,12 @@
 #
 # Copyright 2018 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 from __future__ import print_function
 import argparse
-import glob 
+import glob
 import os
 import sys
 
@@ -45,11 +28,33 @@ def _Print(stream, msg):
 def _Err(msg):
     sys.stderr.write(msg + '\n')
 
-def _CheckCompliance(rootLayer, arkit=False):
-    checker = UsdUtils.ComplianceChecker(arkit=arkit, 
-        # We're going to flatten the USD stage and convert the root layer to 
-        # crate file format before packaging, if necessary. Hence, skip these 
-        # checks.
+def _DumpContents(dumpLocation, zipFile):
+    with _Stream(dumpLocation, "w") as ofp:
+        _Print(ofp, "    Offset\t      Comp\t    Uncomp\tName")
+        _Print(ofp, "    ------\t      ----\t    ------\t----")
+        fileNames = zipFile.GetFileNames()
+        for fileName in fileNames:
+            fileInfo = zipFile.GetFileInfo(fileName)
+            _Print(ofp, "%10d\t%10d\t%10d\t%s" % 
+                (fileInfo.dataOffset, fileInfo.size, 
+                    fileInfo.uncompressedSize, fileName))
+
+        _Print(ofp, "----------")
+        _Print(ofp, "%d files total" % len(fileNames))
+
+def _ListContents(listLocation, zipFile):
+    with _Stream(listLocation, "w") as ofp:
+        for fileName in zipFile.GetFileNames():
+            _Print(ofp, fileName)
+
+# Runs UsdUtils.ComplianceChecker on the given layer
+def _CheckUsdzCompliance(rootLayer, arkit=False):
+    """
+    Runs UsdUtils.ComplianceChecker on the given layer and reports errors.
+    Returns True if no errors or failed checks were reported, False otherwise.
+    """
+
+    checker = UsdUtils.ComplianceChecker(arkit=arkit,
         skipARKitRootLayerCheck=True)
     checker.CheckCompliance(rootLayer)
     errors = checker.GetErrors()
@@ -65,8 +70,27 @@ def _CheckCompliance(rootLayer, arkit=False):
             _Err(msg)
     return len(errors) == 0 and len(failedChecks) == 0
 
-def _CreateUsdzPackage(usdzFile, filesToAdd, recurse, checkCompliance, verbose):
+# Creates a usdz package under usdzFile
+def _CreateUsdzPackage(usdzFile, filesToAdd, recurse, ensureCompliance, verbose):
+    """
+    Creates a usdz package with the files provided in filesToAdd and saves as
+    the usdzFile.
+    If filesToAdd contains nested subdirectories, recurse flag can be specified,
+    which will make sure to recurse through the directory structure and include
+    the files in the usdz archive.
+    Specifying ensureCompliance, will additionally run 
+    UsdUtils.ComplianceChecker on the rootLayer of the usdz package being 
+    created. Failing compliance, will result in a Runtime exception being raised
+    Returns True on successful creation of the usdz package.
+    Note that any encountered exception will cause the usdzFile to be discarded, 
+    and the exception re-raised for clients to handle.
+    """
+    if (not usdzFile.endswith('.usdz')):
+        return False
+
     with Usd.ZipFileWriter.CreateNew(usdzFile) as usdzWriter:
+        # Note that any exception raised here will result in ZipFileWriter's 
+        # exit discarding the usdzFile. 
         fileList = []
         while filesToAdd:
             # Pop front (first file) from the list of files to add.
@@ -91,40 +115,23 @@ def _CreateUsdzPackage(usdzFile, filesToAdd, recurse, checkCompliance, verbose):
                 else:
                     _Err("Skipping empty file '%s'." % f)
 
-        if checkCompliance and len(fileList) > 0:
+        if ensureCompliance and len(fileList) > 0:
             rootLayer = fileList[0]
-            if not _CheckCompliance(rootLayer):
-                return False
+            if not _CheckUsdzCompliance(rootLayer):
+                # Fails compliance when it was requested, raise an exception as
+                # it was requested by the client
+                raise RuntimeError("Root layer (%s) of the usdz package " \
+                        "(%s), failed compliance check." %(rootLayer, usdzFile))
 
         for f in fileList:
             try:
                 usdzWriter.AddFile(f)
             except Tf.ErrorException as e:
-                _Err('Failed to add file \'%s\' to package. Discarding '
-                    'package.' % f)
-                # When the "with" block exits, Discard() will be called on 
-                # usdzWriter automatically if an exception occurs.
+                _Err('CreateUsdzPackage failed to add file \'%s\' to package. '
+                     'Discarding package.' % f)
+                # Raise this to the client
                 raise
         return True
-
-def _DumpContents(dumpLocation, zipFile):
-    with _Stream(dumpLocation, "w") as ofp:
-        _Print(ofp, "    Offset\t      Comp\t    Uncomp\tName")
-        _Print(ofp, "    ------\t      ----\t    ------\t----")
-        fileNames = zipFile.GetFileNames()
-        for fileName in fileNames:
-            fileInfo = zipFile.GetFileInfo(fileName)
-            _Print(ofp, "%10d\t%10d\t%10d\t%s" % 
-                (fileInfo.dataOffset, fileInfo.size, 
-                    fileInfo.uncompressedSize, fileName))
-
-        _Print(ofp, "----------")
-        _Print(ofp, "%d files total" % len(fileNames))
-
-def _ListContents(listLocation, zipFile):
-    with _Stream(listLocation, "w") as ofp:
-        for fileName in zipFile.GetFileNames():
-            _Print(ofp, fileName)
 
 def main():
     parser = argparse.ArgumentParser(description='Utility for creating a .usdz '
@@ -226,7 +233,8 @@ def main():
                       (usdzFile, inputFiles))
 
             if args.asset or args.arkitAsset:
-                Tf.Debug.SetDebugSymbolsByName("USDUTILS_CREATE_USDZ_PACKAGE", 1)
+                Tf.Debug.SetDebugSymbolsByName(
+                    "USDUTILS_CREATE_USDZ_PACKAGE", 1)
 
             if not args.recurse:
                 print('Not recursing into sub-directories.')
@@ -239,32 +247,41 @@ def main():
 
     success = True
     if len(inputFiles) > 0:
-        success = _CreateUsdzPackage(usdzFile, inputFiles, args.recurse, 
-                args.checkCompliance, args.verbose) and success
+        try:
+            success = _CreateUsdzPackage(usdzFile, inputFiles, args.recurse, 
+                    args.checkCompliance, args.verbose) and success
+        except Exception as e:
+            success = False
+            _Err("Failed to create usdz package (%s) containing (%s) files, "
+                 "as the following exception was raised: \n\t(%s)"
+                        %(usdzFile, ','.join(inputFiles), e))
 
     elif args.asset:
         r = Ar.GetResolver()
         resolvedAsset = r.Resolve(args.asset)
         if args.checkCompliance:
-            success = _CheckCompliance(resolvedAsset, arkit=False) and success
+            success = _CheckUsdzCompliance(resolvedAsset, 
+                    arkit=False) and success
 
         context = r.CreateDefaultContextForAsset(resolvedAsset) 
         with Ar.ResolverContextBinder(context):
             # Create the package only if the compliance check was passed.
             success = success and UsdUtils.CreateNewUsdzPackage(
-                Sdf.AssetPath(args.asset), usdzFile)
+                Sdf.AssetPath(args.asset), usdzFile, editLayersInPlace=True)
 
     elif args.arkitAsset:
         r = Ar.GetResolver()
         resolvedAsset = r.Resolve(args.arkitAsset)
         if args.checkCompliance:
-            success = _CheckCompliance(resolvedAsset, arkit=True) and success
+            success = _CheckUsdzCompliance(resolvedAsset, 
+                    arkit=True) and success
 
         context = r.CreateDefaultContextForAsset(resolvedAsset)
         with Ar.ResolverContextBinder(context):
             # Create the package only if the compliance check was passed.
             success = success and UsdUtils.CreateNewARKitUsdzPackage(
-                    Sdf.AssetPath(args.arkitAsset), usdzFile)
+                    Sdf.AssetPath(args.arkitAsset), usdzFile, 
+                        editLayersInPlace=True)
 
     if args.listTarget or args.dumpTarget:
         if os.path.exists(usdzFile):

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hd/perfLog.h"
@@ -27,6 +10,10 @@
 #include "pxr/base/vt/array.h"
 #include "pxr/base/vt/types.h"
 
+#include "pxr/base/gf/matrix2d.h"
+#include "pxr/base/gf/matrix2f.h"
+#include "pxr/base/gf/matrix3d.h"
+#include "pxr/base/gf/matrix3f.h"
 #include "pxr/base/gf/matrix4d.h"
 #include "pxr/base/gf/matrix4f.h"
 
@@ -40,8 +27,33 @@ PXR_NAMESPACE_OPEN_SCOPE
 // HdVtBufferSource Implementation
 // ------------------------------------------------------------------------- //
 
+namespace {
+
+template <typename DBL, typename FLT>
 void
-HdVtBufferSource::_SetValue(const VtValue &v, int arraySize)
+_ConvertDoubleToFloat(VtValue * value, HdTupleType * tupleType)
+{
+    *value = VtValue(FLT(value->UncheckedGet<DBL>()));
+    *tupleType = HdGetValueTupleType(*value);
+}
+
+template <typename DBL, typename FLT>
+void
+_ConvertDoubleToFloatArray(VtValue * value, HdTupleType * tupleType)
+{
+    VtArray<DBL> const & dblArray = value->UncheckedGet<VtArray<DBL>>();
+    VtArray<FLT> fltArray(dblArray.size());
+    for (size_t i = 0; i < dblArray.size(); ++i) {
+        fltArray[i] = FLT(dblArray[i]);
+    }
+    *value = VtValue(fltArray);
+    *tupleType = HdGetValueTupleType(*value);
+}
+
+}
+
+void
+HdVtBufferSource::_SetValue(const VtValue &v, int arraySize, bool allowDoubles)
 {
     _value = v;
     _tupleType = HdGetValueTupleType(_value);
@@ -74,6 +86,51 @@ HdVtBufferSource::_SetValue(const VtValue &v, int arraySize)
             intValues[i] = boolValues[i] ? 1 : 0;
         }
         _value = VtValue(intValues);
+    } else if (!allowDoubles) {
+        // Any doubles must be converted to floats.
+        if (_value.IsArrayValued()) {
+            if (_value.IsHolding<VtDoubleArray>()) {
+                _ConvertDoubleToFloatArray<double, float>(&_value, &_tupleType);
+            } else if (_value.IsHolding<VtVec2dArray>()) {
+                _ConvertDoubleToFloatArray<GfVec2d, GfVec2f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<VtVec3dArray>()) {
+                _ConvertDoubleToFloatArray<GfVec3d, GfVec3f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<VtVec4dArray>()) {
+                _ConvertDoubleToFloatArray<GfVec4d, GfVec4f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<VtMatrix2dArray>()) {
+                _ConvertDoubleToFloatArray<GfMatrix2d, GfMatrix2f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<VtMatrix3dArray>()) {
+                _ConvertDoubleToFloatArray<GfMatrix3d, GfMatrix3f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<VtMatrix4dArray>()) {
+                _ConvertDoubleToFloatArray<GfMatrix4d, GfMatrix4f>(&_value,
+                    &_tupleType);
+            }
+        }
+        else {
+            if (_value.IsHolding<double>()) {
+                _ConvertDoubleToFloat<double, float>(&_value, &_tupleType);
+            } else if (_value.IsHolding<GfVec2d>()) {
+                _ConvertDoubleToFloat<GfVec2d, GfVec2f>(&_value, &_tupleType);
+            } else if (_value.IsHolding<GfVec3d>()) {
+                _ConvertDoubleToFloat<GfVec3d, GfVec3f>(&_value, &_tupleType);
+            } else if (_value.IsHolding<GfVec4d>()) {
+                _ConvertDoubleToFloat<GfVec4d, GfVec4f>(&_value, &_tupleType);
+            } else if (_value.IsHolding<GfMatrix2d>()) {
+                _ConvertDoubleToFloat<GfMatrix2d, GfMatrix2f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<GfMatrix3d>()) {
+                _ConvertDoubleToFloat<GfMatrix3d, GfMatrix3f>(&_value,
+                    &_tupleType);
+            } else if (_value.IsHolding<GfMatrix4d>()) {
+                _ConvertDoubleToFloat<GfMatrix4d, GfMatrix4f>(&_value,
+                    &_tupleType);
+            }
+        }
     }
 
     // Factor the VtArray length into numElements and tuple count.
@@ -87,48 +144,31 @@ HdVtBufferSource::_SetValue(const VtValue &v, int arraySize)
 }
 
 HdVtBufferSource::HdVtBufferSource(TfToken const& name, VtValue const& value,
-                                   int arraySize)
+                                   int arraySize, bool allowDoubles)
     : _name(name)
 {
-    _SetValue(value, arraySize);
+    _SetValue(value, arraySize, allowDoubles);
 }
 
 HdVtBufferSource::HdVtBufferSource(TfToken const &name,
-                                   GfMatrix4d const &matrix)
+                                   GfMatrix4d const &matrix,
+                                   bool allowDoubles)
     : _name(name)
 {
-    if (GetDefaultMatrixType() == HdTypeDoubleMat4) {
-        _SetValue( VtValue(matrix), 1 );
-    } else {
-        GfMatrix4f fmatrix(
-            matrix[0][0], matrix[0][1], matrix[0][2], matrix[0][3],
-            matrix[1][0], matrix[1][1], matrix[1][2], matrix[1][3],
-            matrix[2][0], matrix[2][1], matrix[2][2], matrix[2][3],
-            matrix[3][0], matrix[3][1], matrix[3][2], matrix[3][3]);
-        _SetValue( VtValue(fmatrix), 1 );
-    }
+    bool const resolvedAllowDoubles = allowDoubles &&
+        GetDefaultMatrixType() == HdTypeDoubleMat4;
+    _SetValue(VtValue(matrix), 1, resolvedAllowDoubles);
 }
 
 HdVtBufferSource::HdVtBufferSource(TfToken const &name,
                                    VtArray<GfMatrix4d> const &matrices,
-                                   int arraySize)
+                                   int arraySize,
+                                   bool allowDoubles)
     : _name(name)
 {
-    if (GetDefaultMatrixType() == HdTypeDoubleMat4) {
-        _SetValue( VtValue(matrices), arraySize );
-    } else {
-        VtArray<GfMatrix4f> fmatrices(matrices.size());
-        for (size_t i = 0; i < matrices.size(); ++i) {
-            GfMatrix4d const &matrix = matrices[i];
-            GfMatrix4f fmatrix(
-                matrix[0][0], matrix[0][1], matrix[0][2], matrix[0][3],
-                matrix[1][0], matrix[1][1], matrix[1][2], matrix[1][3],
-                matrix[2][0], matrix[2][1], matrix[2][2], matrix[2][3],
-                matrix[3][0], matrix[3][1], matrix[3][2], matrix[3][3]);
-            fmatrices[i] = fmatrix;
-        }
-        _SetValue( VtValue(fmatrices), arraySize );
-    }
+    bool const resolvedAllowDoubles = allowDoubles &&
+        GetDefaultMatrixType() == HdTypeDoubleMat4;
+    _SetValue(VtValue(matrices), arraySize, resolvedAllowDoubles);
 }
 
 HdVtBufferSource::~HdVtBufferSource()

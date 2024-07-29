@@ -1,29 +1,13 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "primDataSourceOverlayCache.h"
 
 #include "pxr/base/trace/trace.h"
+#include "pxr/base/tf/denseHashSet.h"
 #include "pxr/base/work/utils.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -152,33 +136,6 @@ HdPrimDataSourceOverlayCache::_HdPrimDataSourceOverlay::PrimDirtied(
     }
 }
 
-bool
-HdPrimDataSourceOverlayCache::_HdPrimDataSourceOverlay::Has(
-    const TfToken &name)
-{
-    if (ARCH_UNLIKELY(!_inputDataSource)) {
-        return false;
-    }
-
-    auto cache = _cache.lock();
-    if (TF_VERIFY(cache)) {
-        const auto it = cache->_overlayTopology.find(name);
-        if (it != cache->_overlayTopology.end()) {
-            if (it->second.dependenciesOptional) {
-                return true;
-            }
-            for (const auto &loc : it->second.onPrim) {
-                if (!_inputDataSource->Has(loc.GetFirstElement())) {
-                    return false;
-                }
-            }
-            return false;
-        }
-    }
-
-    return _inputDataSource->Has(name);
-}
-
 TfTokenVector
 HdPrimDataSourceOverlayCache::_HdPrimDataSourceOverlay::GetNames()
 {
@@ -189,6 +146,7 @@ HdPrimDataSourceOverlayCache::_HdPrimDataSourceOverlay::GetNames()
     }
 
     TfTokenVector names = _inputDataSource->GetNames();
+    TfDenseHashSet<TfToken, TfHash> namesAtStart(names.begin(), names.end());
 
     auto cache = _cache.lock();
     if (TF_VERIFY(cache)) {
@@ -200,7 +158,8 @@ HdPrimDataSourceOverlayCache::_HdPrimDataSourceOverlay::GetNames()
                 continue;
             }
             for (const auto &loc : overlay.second.onPrim) {
-                if (_inputDataSource->Has(loc.GetFirstElement())) {
+                if (namesAtStart.find(loc.GetFirstElement())
+                        != namesAtStart.end()) {
                     names.push_back(overlay.first);
                     sortMe = true;
                     break;
@@ -239,7 +198,7 @@ HdPrimDataSourceOverlayCache::_HdPrimDataSourceOverlay::Get(
             // map, it hasn't been computed... First, check for dependencies.
             if (!topoIt->second.dependenciesOptional) {
                 for (const auto &loc : topoIt->second.onPrim) {
-                    if (!_inputDataSource->Has(loc.GetFirstElement())) {
+                    if (!_inputDataSource->Get(loc.GetFirstElement())) {
                         _overlayMap.insert(std::make_pair(name, nullptr));
                         return nullptr;
                     }

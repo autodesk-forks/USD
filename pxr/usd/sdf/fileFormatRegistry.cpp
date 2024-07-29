@@ -1,30 +1,14 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 ///
 /// \file Sdf/fileFormatRegistry.cpp
 
 #include "pxr/pxr.h"
+#include "pxr/usd/sdf/fileFormat.h"
 #include "pxr/usd/sdf/fileFormatRegistry.h"
 #include "pxr/usd/sdf/debugCodes.h"
 #include "pxr/usd/sdf/fileFormat.h"
@@ -34,6 +18,9 @@
 #include "pxr/base/tf/iterator.h"
 #include "pxr/base/tf/scopeDescription.h"
 #include "pxr/base/tf/staticTokens.h"
+
+#include <algorithm>
+#include <type_traits>
 
 using std::string;
 using std::vector;
@@ -45,7 +32,29 @@ TF_DEFINE_PRIVATE_TOKENS(_PlugInfoKeyTokens,
     ((Extensions, "extensions"))
     ((Target,     "target"))
     ((Primary,    "primary"))
+    ((SupportsReading, "supportsReading"))
+    ((SupportsWriting, "supportsWriting"))
+    ((SupportsEditing, "supportsEditing"))
     );
+
+// Searches plugin meta data to determine if a capability is supported for the
+// file format type.  All capabilities are enabled by default (for backwards
+// compatability) so the user must explicitly opt out in plugInfo.json
+static bool 
+_FormatCapabilityIsSupported(
+    PlugRegistry& reg,
+    TfType formatType,
+    const string& key)
+{
+    JsValue capability = reg.GetDataFromPluginMetaData(formatType, key);
+
+    if (capability.IsBool() && !capability.GetBool()) {
+        return false;
+    }
+
+    return true;
+}
+
 
 SdfFileFormatRefPtr
 Sdf_FileFormatRegistry::_Info::GetFileFormat() const
@@ -98,27 +107,28 @@ Sdf_FileFormatRegistry::FindById(
     return TfNullPtr;
 }
 
-SdfFileFormatConstPtr
-Sdf_FileFormatRegistry::FindByExtension(
+Sdf_FileFormatRegistry::_InfoSharedPtr 
+Sdf_FileFormatRegistry::_GetFormatInfo(
     const string& s,
     const string& target)
 {
-    TRACE_FUNCTION();
+    _InfoSharedPtr formatInfo;
 
     if (s.empty()) {
         TF_CODING_ERROR("Cannot find file format for empty string");
-        return TfNullPtr;
+        return formatInfo;
     }
 
-    string ext = SdfFileFormat::GetFileExtension(s);
+    // Convert to lowercase for lookup.
+    string ext = TfStringToLowerAscii(
+        SdfFileFormat::GetFileExtension(s));
     if (ext.empty()) {
         TF_CODING_ERROR("Unable to determine extension for '%s'", s.c_str());
-        return TfNullPtr;
+        return formatInfo;
     }
 
     _RegisterFormatPlugins();
 
-    _InfoSharedPtr formatInfo;
     if (target.empty()) {
         _ExtensionIndex::const_iterator it = _extensionIndex.find(ext);
         if (it != _extensionIndex.end())
@@ -136,6 +146,18 @@ Sdf_FileFormatRegistry::FindByExtension(
         }
     }
 
+    return formatInfo;
+}
+
+SdfFileFormatConstPtr
+Sdf_FileFormatRegistry::FindByExtension(
+    const string& s,
+    const string& target)
+{
+    TRACE_FUNCTION();
+
+    _InfoSharedPtr formatInfo = _GetFormatInfo(s, target);
+
     return formatInfo ? _GetFileFormat(formatInfo) : TfNullPtr;
 }
 
@@ -152,18 +174,81 @@ Sdf_FileFormatRegistry::FindAllFileFormatExtensions()
     return result;
 }
 
+std::set<std::string>
+Sdf_FileFormatRegistry::FindAllDerivedFileFormatExtensions(
+    const TfType& baseType)
+{
+    TRACE_FUNCTION();
+
+    _RegisterFormatPlugins();
+
+    if (!baseType.IsA<SdfFileFormat>()) {
+        TF_CODING_ERROR("Type %s does not derive from SdfFileFormat",
+                        baseType.GetTypeName().c_str());
+        return {};
+    }
+
+    std::set<std::string> result; 
+    for (const auto& p : _fullExtensionIndex) {
+        for (const _InfoSharedPtr &info : p.second) {
+            if (info->type.IsA(baseType)) {
+                result.insert(p.first);
+            }
+        }
+    }
+
+    return result;
+}
+
 TfToken
 Sdf_FileFormatRegistry::GetPrimaryFormatForExtension(
     const std::string& ext)
 {
     _RegisterFormatPlugins();
 
-    _ExtensionIndex::const_iterator it = _extensionIndex.find(ext);
+    // Case fold [A-Z] for lookup.
+    _ExtensionIndex::const_iterator it = _extensionIndex.find(
+        TfStringToLowerAscii(ext)
+    );
     if (it != _extensionIndex.end()) {
         return it->second->formatId;
     }
     
     return TfToken();
+}
+
+Sdf_FileFormatRegistry::_Info::Capabilities 
+Sdf_FileFormatRegistry::_ParseFormatCapabilities(
+    const TfType& formatType)
+{
+    using UT = std::underlying_type<_Info::Capabilities>::type;
+    using Capabilities = _Info::Capabilities;
+
+    PlugRegistry& reg = PlugRegistry::GetInstance();
+
+    _Info::Capabilities capabilities = Capabilities::None;
+    if (_FormatCapabilityIsSupported( 
+        reg, formatType, _PlugInfoKeyTokens->SupportsReading)) {
+        capabilities = static_cast<Capabilities>(
+            static_cast<UT>(capabilities) | 
+            static_cast<UT>(Capabilities::Reading));
+    }
+
+    if (_FormatCapabilityIsSupported( 
+        reg, formatType, _PlugInfoKeyTokens->SupportsWriting)) {
+        capabilities = static_cast<Capabilities>(
+            static_cast<UT>(capabilities) | 
+            static_cast<UT>(Capabilities::Writing));
+    }
+
+    if (_FormatCapabilityIsSupported( 
+        reg, formatType, _PlugInfoKeyTokens->SupportsEditing)) {
+        capabilities = static_cast<Capabilities>(
+            static_cast<UT>(capabilities) | 
+            static_cast<UT>(Capabilities::Editing));
+    }
+
+    return capabilities;
 }
 
 void
@@ -246,13 +331,21 @@ Sdf_FileFormatRegistry::_RegisterFormatPlugins()
             continue;
         }
 
-        const vector<string>& extensions = aExtensions.GetArrayOf<string>();
+        vector<string> extensions = aExtensions.GetArrayOf<string>();
         if (extensions.empty()) {
             TF_CODING_ERROR("File format '%s' plugin meta data '%s' is empty",
                 formatType.GetTypeName().c_str(),
                 _PlugInfoKeyTokens->Extensions.GetText());
             continue;
         }
+
+        // Case fold [A-Z] all 'extensions'.
+        std::transform(extensions.begin(), extensions.end(),
+                       extensions.begin(),
+                       [](std::string const &ext) {
+                            return TfStringToLowerAscii(ext);
+                       }
+        );
 
         // The 'target' entry does not need to be specified in every
         // file format's plugin info. If it is not, then the value will be
@@ -297,10 +390,12 @@ Sdf_FileFormatRegistry::_RegisterFormatPlugins()
             continue;
         }
 
+        _Info::Capabilities capabilities = _ParseFormatCapabilities(formatType);
+
         TF_DEBUG(SDF_FILE_FORMAT).Msg("_RegisterFormatPlugins: "
             "  target '%s'\n", target.c_str());
 
-        const TfToken formatIdToken(formatId);
+        const TfToken formatIdToken(formatId, TfToken::Immortal);
 
         _InfoSharedPtr& info = formatInfo[formatIdToken];
         if (info) {
@@ -309,7 +404,8 @@ Sdf_FileFormatRegistry::_RegisterFormatPlugins()
             continue;
         }
         info = std::make_shared<_Info>(
-            formatIdToken, formatType, TfToken(target), plugin);
+            formatIdToken, formatType,
+            TfToken(target, TfToken::Immortal), plugin, capabilities);
 
         // Record the extensions that this file format plugin can handle.
         // Note that an extension may be supported by multiple file format
@@ -435,6 +531,50 @@ Sdf_FileFormatRegistry::_GetFileFormat(
         return TfNullPtr;
 
     return info->GetFileFormat();
+}
+
+bool 
+Sdf_FileFormatRegistry::FormatSupportsReading(
+    const std::string& extension,
+    const std::string& target)
+{
+    return _FormatSupportsCapability(extension, target, 
+        _Info::Capabilities::Reading);
+}
+
+bool 
+Sdf_FileFormatRegistry::FormatSupportsWriting(
+    const std::string& extension,
+    const std::string& target)
+{
+    return _FormatSupportsCapability(extension, target, 
+        _Info::Capabilities::Writing);
+}
+
+bool 
+Sdf_FileFormatRegistry::FormatSupportsEditing(
+    const std::string& extension,
+    const std::string& target)
+{
+    return _FormatSupportsCapability(extension, target, 
+        _Info::Capabilities::Editing);
+}
+
+bool 
+Sdf_FileFormatRegistry::_FormatSupportsCapability(
+    const std::string& path,
+    const std::string& target,
+    _Info::Capabilities capabilityFlag)
+{
+    using UT = std::underlying_type<_Info::Capabilities>::type;
+    _InfoSharedPtr formatInfo = _GetFormatInfo(path, target);
+    
+    if (!formatInfo) {
+        return false;
+    }
+
+    return static_cast<UT>(formatInfo->capabilities) & 
+        static_cast<UT>(capabilityFlag);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

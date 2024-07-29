@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_ARCH_ATTRIBUTES_H
 #define PXR_BASE_ARCH_ATTRIBUTES_H
@@ -161,6 +144,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// \hideinitializer
 #   define ARCH_DESTRUCTOR(_name, _priority, ...)
 
+/// Macro to begin the definition of a class that is using private inheritance
+/// to take advantage of the empty base optimization. Some compilers require
+/// an explicit tag.
+///
+/// In C++20, usage of private inheritance may be able to be retired with the
+/// [[no_unique_address]] tag.
+#   define ARCH_EMPTY_BASES
+
 #elif defined(ARCH_COMPILER_GCC) || defined(ARCH_COMPILER_CLANG)
 
 #   define ARCH_PRINTF_FUNCTION(_fmt, _firstArg) \
@@ -171,6 +162,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 #   define ARCH_UNUSED_ARG   __attribute__ ((unused))
 #   define ARCH_UNUSED_FUNCTION __attribute__((unused))
 #   define ARCH_USED_FUNCTION __attribute__((used))
+#   define ARCH_EMPTY_BASES
 
 #elif defined(ARCH_COMPILER_MSVC)
 
@@ -180,6 +172,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 #   define ARCH_UNUSED_ARG
 #   define ARCH_UNUSED_FUNCTION
 #   define ARCH_USED_FUNCTION
+#   define ARCH_EMPTY_BASES __declspec(empty_bases)
 
 #else
 
@@ -238,7 +231,7 @@ struct Arch_ConstructorEntry {
     static const Arch_ConstructorEntry _ARCH_CAT_NOEXPAND(arch_ctor_, _name)   \
         __attribute__((used, section("__DATA,pxrctor"))) = {                   \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
-        0u,                                                                    \
+        static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
     static void _name(__VA_ARGS__)
@@ -249,7 +242,7 @@ struct Arch_ConstructorEntry {
     static const Arch_ConstructorEntry _ARCH_CAT_NOEXPAND(arch_dtor_, _name)   \
         __attribute__((used, section("__DATA,pxrdtor"))) = {                   \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
-        0u,                                                                    \
+        static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
     static void _name(__VA_ARGS__)
@@ -301,7 +294,7 @@ struct Arch_ConstructorInit {
     extern const Arch_ConstructorEntry                                         \
     _ARCH_CAT_NOEXPAND(arch_ctor_, _name) = {                                  \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
-        0u,                                                                    \
+        static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
     }                                                                          \
@@ -316,7 +309,7 @@ struct Arch_ConstructorInit {
     extern const Arch_ConstructorEntry                                         \
     _ARCH_CAT_NOEXPAND(arch_dtor_, _name) = {                                  \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
-        0u,                                                                    \
+        static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
     }                                                                          \

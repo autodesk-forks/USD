@@ -1,38 +1,31 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/dataSourcePrim.h"
 #include "pxr/usdImaging/usdImaging/dataSourceAttribute.h"
+#include "pxr/usdImaging/usdImaging/dataSourcePrimvars.h"
+#include "pxr/usdImaging/usdImaging/dataSourceUsdPrimInfo.h"
+#include "pxr/usdImaging/usdImaging/extentsHintSchema.h"
+#include "pxr/usdImaging/usdImaging/geomModelSchema.h"
 #include "pxr/usdImaging/usdImaging/modelSchema.h"
+#include "pxr/usdImaging/usdImaging/tokens.h"
+#include "pxr/usdImaging/usdImaging/usdPrimInfoSchema.h"
 
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/extentSchema.h"
 #include "pxr/imaging/hd/purposeSchema.h"
+#include "pxr/imaging/hd/primOriginSchema.h"
 #include "pxr/imaging/hd/visibilitySchema.h"
 #include "pxr/imaging/hd/xformSchema.h"
+#include "pxr/imaging/hd/primvarsSchema.h"
+#include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/usd/usd/modelAPI.h"
-#include "pxr/usd/kind/registry.h"
+#include "pxr/usd/usdGeom/primvarsAPI.h"
+#include "pxr/usd/usdGeom/modelAPI.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -44,18 +37,9 @@ UsdImagingDataSourceVisibility::UsdImagingDataSourceVisibility(
     , _stageGlobals(stageGlobals)
 {
     if (_visibilityQuery.ValueMightBeTimeVarying()) {
-        _stageGlobals.FlagAsTimeVarying(sceneIndexPath,
-                HdDataSourceLocator(HdVisibilitySchemaTokens->visibility));
+        _stageGlobals.FlagAsTimeVarying(
+            sceneIndexPath, HdVisibilitySchema::GetDefaultLocator());
     }
-}
-
-bool
-UsdImagingDataSourceVisibility::Has(const TfToken &name)
-{
-    if (name == HdVisibilitySchemaTokens->visibility) {
-        return true;
-    }
-    return false;
 }
 
 TfTokenVector
@@ -113,15 +97,6 @@ UsdImagingDataSourcePurpose::UsdImagingDataSourcePurpose(
 {
 }
 
-bool
-UsdImagingDataSourcePurpose::Has(const TfToken &name)
-{
-    if (name == HdPurposeSchemaTokens->purpose) {
-        return true;
-    }
-    return false;
-}
-
 TfTokenVector
 UsdImagingDataSourcePurpose::GetNames()
 {
@@ -134,7 +109,17 @@ HdDataSourceBaseHandle
 UsdImagingDataSourcePurpose::Get(const TfToken &name)
 {
     if (name == HdPurposeSchemaTokens->purpose) {
-        return UsdImagingDataSourceAttributeNew(_purposeQuery, _stageGlobals);
+        TfToken purpose;
+        // Purpose is uniform, so just use a retained data source.
+        if (_purposeQuery.Get<TfToken>(&purpose)) {
+            if (purpose == UsdGeomTokens->default_) {
+                static HdDataSourceBaseHandle const ds =
+                    HdRetainedTypedSampledDataSource<TfToken>::New(
+                        HdTokens->geometry);
+                return ds;
+            }
+            return HdRetainedTypedSampledDataSource<TfToken>::New(purpose);
+        }
     }
 
     return nullptr;
@@ -143,10 +128,10 @@ UsdImagingDataSourcePurpose::Get(const TfToken &name)
 // ----------------------------------------------------------------------------
 
 UsdImagingDataSourceExtentCoordinate::UsdImagingDataSourceExtentCoordinate(
-        const HdVec3fArrayDataSourceHandle &extentAttr,
+        const HdVec3fArrayDataSourceHandle &extentDs,
         const SdfPath &attrPath,
         unsigned int index)
-    : _extentAttr(extentAttr)
+    : _extentDs(extentDs)
     , _attrPath(attrPath)
     , _index(index)
 {
@@ -167,7 +152,7 @@ UsdImagingDataSourceExtentCoordinate::GetTypedValue(
     // datasource code if it were only doing the indexing.  Here, we're jumping
     // through some extra hoops to cast it up to vec3d rather than vec3f,
     // since that's what hydra expects.
-    VtVec3fArray raw = _extentAttr->GetTypedValue(shutterOffset);
+    const VtVec3fArray raw = _extentDs->GetTypedValue(shutterOffset);
     if (_index >= raw.size()) {
         TF_WARN("<%s> Attribute does not have expected index entry %d",
                 _attrPath.GetText(), _index);
@@ -184,7 +169,7 @@ UsdImagingDataSourceExtentCoordinate::GetContributingSampleTimesForInterval(
         HdSampledDataSource::Time endTime,
         std::vector<HdSampledDataSource::Time> * outSampleTimes)
 {
-    return _extentAttr->GetContributingSampleTimesForInterval(
+    return _extentDs->GetContributingSampleTimesForInterval(
             startTime, endTime, outSampleTimes);
 }
 
@@ -196,30 +181,19 @@ UsdImagingDataSourceExtent::UsdImagingDataSourceExtent(
         const UsdImagingDataSourceStageGlobals &stageGlobals)
 {
     if (extentQuery.ValueMightBeTimeVarying()) {
-        stageGlobals.FlagAsTimeVarying(sceneIndexPath,
-                HdDataSourceLocator(HdExtentSchemaTokens->extent));
+        stageGlobals.FlagAsTimeVarying(
+            sceneIndexPath, HdExtentSchema::GetDefaultLocator());
     }
 
     _attrPath = extentQuery.GetAttribute().GetPath();
-    _extentAttr = HdVec3fArrayDataSource::Cast(
+    _extentDs = HdVec3fArrayDataSource::Cast(
             UsdImagingDataSourceAttributeNew(extentQuery, stageGlobals));
-}
-
-bool
-UsdImagingDataSourceExtent::Has(const TfToken &name)
-{
-    if (!_extentAttr) {
-        return false;
-    }
-
-    return (name == HdExtentSchemaTokens->min ||
-            name == HdExtentSchemaTokens->max);
 }
 
 TfTokenVector
 UsdImagingDataSourceExtent::GetNames()
 {
-    if (!_extentAttr) {
+    if (!_extentDs) {
         return {};
     }
 
@@ -233,18 +207,103 @@ HdDataSourceBaseHandle
 UsdImagingDataSourceExtent::Get(const TfToken &name)
 {
     // If the extents attr hasn't been defined, this prim has no extents.
-    if (!_extentAttr) {
+    if (!_extentDs) {
         return nullptr;
     }
 
     if (name == HdExtentSchemaTokens->min) {
         return UsdImagingDataSourceExtentCoordinate::New(
-                _extentAttr, _attrPath, 0);
+                _extentDs, _attrPath, 0);
     } else if (name == HdExtentSchemaTokens->max) {
         return UsdImagingDataSourceExtentCoordinate::New(
-                _extentAttr, _attrPath, 1);
+                _extentDs, _attrPath, 1);
     }
 
+    return nullptr;
+}
+
+// ----------------------------------------------------------------------------
+
+static
+TfTokenVector _UsdToHdPurposes(const TfTokenVector &v)
+{
+    TfTokenVector result;
+    for (const TfToken &usdPurpose : v) {
+        if (usdPurpose == UsdGeomTokens->default_) {
+            result.push_back(HdTokens->geometry);
+        } else {
+            result.push_back(usdPurpose);
+        }
+    }
+    return result;
+}
+
+static
+const TfTokenVector &_OrderedPurposes()
+{
+    static const TfTokenVector result =
+        _UsdToHdPurposes(UsdGeomImageable::GetOrderedPurposeTokens());
+    return result;
+}
+
+UsdImagingDataSourceExtentsHint::UsdImagingDataSourceExtentsHint(
+        const UsdAttributeQuery &extentQuery,
+        const SdfPath &sceneIndexPath,
+        const UsdImagingDataSourceStageGlobals &stageGlobals)
+{
+    if (extentQuery.ValueMightBeTimeVarying()) {
+        stageGlobals.FlagAsTimeVarying(
+            sceneIndexPath,
+            UsdImagingExtentsHintSchema::GetDefaultLocator());
+    }
+
+    _attrPath = extentQuery.GetAttribute().GetPath();
+    _extentDs = HdVec3fArrayDataSource::Cast(
+            UsdImagingDataSourceAttributeNew(extentQuery, stageGlobals));
+}
+
+TfTokenVector
+UsdImagingDataSourceExtentsHint::GetNames()
+{
+    if (!_extentDs) {
+        return {};
+    }
+
+    const TfTokenVector &orderedPurposes = _OrderedPurposes();
+
+    const size_t n0 = _extentDs->GetTypedValue(0.0f).size() / 2;
+    const size_t n1 = orderedPurposes.size();
+    const size_t n = std::min(n0, n1);
+
+    return TfTokenVector(orderedPurposes.begin(), orderedPurposes.begin() + n);
+}
+
+HdDataSourceBaseHandle
+UsdImagingDataSourceExtentsHint::Get(const TfToken &name)
+{
+    if (!_extentDs) {
+        return nullptr;
+    }
+
+    const TfTokenVector &orderedPurposes = _OrderedPurposes();
+
+    const size_t n0 = _extentDs->GetTypedValue(0.0f).size() / 2;
+    const size_t n1 = orderedPurposes.size();
+    const size_t n = std::min(n0, n1);
+
+    for (size_t i = 0; i < n; i++) {
+        if (name == orderedPurposes[i]) {
+            return
+                HdExtentSchema::Builder()
+                    .SetMin(
+                        UsdImagingDataSourceExtentCoordinate::New(
+                            _extentDs, _attrPath, 2 * i))
+                    .SetMax(
+                        UsdImagingDataSourceExtentCoordinate::New(
+                            _extentDs, _attrPath, 2 * i + 1))
+                    .Build();
+        }
+    }
     return nullptr;
 }
 
@@ -325,7 +384,7 @@ UsdImagingDataSourceXformMatrix::GetContributingSampleTimesForInterval(
     _xformQuery.GetTimeSamplesInInterval(interval, &timeSamples);
 
     // Add boundary timesamples, if necessary.
-    if (timeSamples[0] > interval.GetMin()) {
+    if (timeSamples.empty() || timeSamples[0] > interval.GetMin()) {
         timeSamples.insert(timeSamples.begin(), interval.GetMin());
     }
     if (timeSamples.back() < interval.GetMax()) {
@@ -336,7 +395,7 @@ UsdImagingDataSourceXformMatrix::GetContributingSampleTimesForInterval(
     // hydra (and prman) use float :/.
     outSampleTimes->resize(timeSamples.size());
     for (size_t i = 0; i < timeSamples.size(); ++i) {
-        (*outSampleTimes)[i] = timeSamples[i];
+        (*outSampleTimes)[i] = timeSamples[i] - time.GetValue();
     }
 
     return true;
@@ -352,21 +411,9 @@ UsdImagingDataSourceXform::UsdImagingDataSourceXform(
     , _stageGlobals(stageGlobals)
 {
     if (_xformQuery.TransformMightBeTimeVarying()) {
-        _stageGlobals.FlagAsTimeVarying(sceneIndexPath,
-                HdDataSourceLocator(HdXformSchemaTokens->xform));
+        _stageGlobals.FlagAsTimeVarying(
+            sceneIndexPath, HdXformSchema::GetDefaultLocator());
     }
-}
-
-bool
-UsdImagingDataSourceXform::Has(const TfToken & name)
-{
-    if (name == HdXformSchemaTokens->matrix) {
-        return true;
-    } else if (name == HdXformSchemaTokens->resetXformStack) {
-        return true;
-    }
-    
-    return false;
 }
 
 TfTokenVector
@@ -392,184 +439,137 @@ UsdImagingDataSourceXform::Get(const TfToken &name)
     return nullptr;
 }
 
-
 // ----------------------------------------------------------------------------
 
-UsdImagingDataSourceModel::UsdImagingDataSourceModel(
-        const UsdGeomModelAPI &model,
-        const SdfPath &sceneIndexPath,
-        const UsdImagingDataSourceStageGlobals &stageGlobals)
-  : _model(model)
-  , _sceneIndexPath(sceneIndexPath)
-  , _stageGlobals(stageGlobals)
+UsdImagingDataSourcePrimOrigin::UsdImagingDataSourcePrimOrigin(
+        const UsdPrim &usdPrim)
+  : _usdPrim(usdPrim)
 {
-}
-
-bool
-UsdImagingDataSourceModel::Has(const TfToken &name)
-{
-    if (name == UsdImagingModelSchemaTokens->drawMode) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->applyDrawMode) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->drawModeColor) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardGeometry) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureXPos) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureYPos) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureZPos) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureXNeg) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureYNeg) {
-        return true;
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureZNeg) {
-        return true;
-    }
-
-    return false;
 }
 
 TfTokenVector
-UsdImagingDataSourceModel::GetNames()
+UsdImagingDataSourcePrimOrigin::GetNames()
 {
     return {
-        UsdImagingModelSchemaTokens->drawMode,
-        UsdImagingModelSchemaTokens->applyDrawMode,
-        UsdImagingModelSchemaTokens->drawModeColor,
-        UsdImagingModelSchemaTokens->cardGeometry,
-        UsdImagingModelSchemaTokens->cardTextureXPos,
-        UsdImagingModelSchemaTokens->cardTextureYPos,
-        UsdImagingModelSchemaTokens->cardTextureZPos,
-        UsdImagingModelSchemaTokens->cardTextureXNeg,
-        UsdImagingModelSchemaTokens->cardTextureYNeg,
-        UsdImagingModelSchemaTokens->cardTextureZNeg
+        HdPrimOriginSchemaTokens->scenePath
+    };
+}
+
+// If prim, say /__Prototype_1/MyXform/MySphere is inside a Usd
+// Prototype (here /__Prototype_1), return the path relative to
+// the prototype root (here MyXform/MySphere).
+// If prim is not inside a Usd Prototype, just return (absolute) prim path.
+//
+// Assumes that all Usd prototype roots are children of the pseudo root.
+//
+static
+SdfPath
+_ComputePrototypeRelativePath(const UsdPrim &prim)
+{
+    const SdfPath path = prim.GetPath();
+
+    const SdfPathVector prefixes = path.GetPrefixes();
+    if (prefixes.empty()) {
+        return path;
+    }
+
+    // Get path of potential prototype containing the prim.
+    const SdfPath prototypePath = prefixes[0];
+    UsdPrim prototype = prim.GetStage()->GetPrimAtPath(prototypePath);
+    if (!prototype) {
+        return path;
+    }
+    if (!prototype.IsPrototype()) {
+        return path;
+    }
+    return path.MakeRelativePath(prototypePath);
+}
+
+HdDataSourceBaseHandle
+UsdImagingDataSourcePrimOrigin::Get(const TfToken &name)
+{ 
+    if (name == HdPrimOriginSchemaTokens->scenePath) {
+        if (!_usdPrim) {
+            return nullptr;
+        }
+
+        using OriginPath = HdPrimOriginSchema::OriginPath;
+        using DataSource = HdRetainedTypedSampledDataSource<OriginPath>;
+        return
+            DataSource::New(
+                OriginPath(
+                    _ComputePrototypeRelativePath(_usdPrim)));
+    }
+
+    return nullptr;
+}
+
+// ----------------------------------------------------------------------------
+
+/// \class UsdImagingDataSourcePrim_ModelAPI
+///
+/// Data source representing UsdModelAPI.
+///
+class UsdImagingDataSourcePrim_ModelAPI : public HdContainerDataSource
+{
+public:
+    HD_DECLARE_DATASOURCE(UsdImagingDataSourcePrim_ModelAPI);
+    TfTokenVector GetNames() override;
+    HdDataSourceBaseHandle Get(const TfToken &name) override;
+
+private:
+    UsdImagingDataSourcePrim_ModelAPI(const UsdModelAPI &model);
+    const UsdModelAPI _model;
+};
+
+HD_DECLARE_DATASOURCE_HANDLES(UsdImagingDataSourcePrim_ModelAPI);
+
+UsdImagingDataSourcePrim_ModelAPI::UsdImagingDataSourcePrim_ModelAPI(
+        const UsdModelAPI &model)
+  : _model(model)
+{
+}
+
+TfTokenVector
+UsdImagingDataSourcePrim_ModelAPI::GetNames()
+{
+    return {
+        UsdImagingModelSchemaTokens->modelPath,
+        UsdImagingModelSchemaTokens->assetIdentifier,
+        UsdImagingModelSchemaTokens->assetName,
+        UsdImagingModelSchemaTokens->assetVersion,
     };
 }
 
 HdDataSourceBaseHandle
-UsdImagingDataSourceModel::Get(const TfToken &name)
-{
-    if (name == UsdImagingModelSchemaTokens->drawMode) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->drawMode);
-        return UsdImagingDataSourceAttribute<TfToken>::New(
-            _model.GetModelDrawModeAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->applyDrawMode) {
-        UsdPrim prim = _model.GetPrim();
-        if (prim.IsModel()) {
-            if (UsdModelAPI(prim).IsKind(KindTokens->component)) {
-                return HdRetainedTypedSampledDataSource<bool>::New(true);
-            }
+UsdImagingDataSourcePrim_ModelAPI::Get(const TfToken &name)
+{ 
+    TRACE_FUNCTION();
+    if (name == UsdImagingModelSchemaTokens->modelPath) {
+        return HdRetainedTypedSampledDataSource<SdfPath>::New(
+            _model.GetPrim().GetPath());
+    } else if (name == UsdImagingModelSchemaTokens->assetIdentifier) {
+        SdfAssetPath assetIdentifier;
+        if (_model.GetAssetIdentifier(&assetIdentifier)) {
+            return HdRetainedTypedSampledDataSource<SdfAssetPath>
+                ::New(assetIdentifier);
         }
-
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->applyDrawMode);
-        return UsdImagingDataSourceAttribute<bool>::New(
-            _model.GetModelApplyDrawModeAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
+        return nullptr;
+    } else if (name == UsdImagingModelSchemaTokens->assetName) {
+        std::string assetName;
+        if (_model.GetAssetName(&assetName)) {
+            return HdRetainedTypedSampledDataSource<std::string>
+                ::New(assetName);
+        }
+        return nullptr;
+    } else if (name == UsdImagingModelSchemaTokens->assetVersion) {
+        std::string assetVersion;
+        if (_model.GetAssetVersion(&assetVersion)) {
+            return HdRetainedTypedSampledDataSource<std::string>
+                ::New(assetVersion);
+        }
+        return nullptr;
     }
-    if (name == UsdImagingModelSchemaTokens->drawModeColor) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->drawModeColor);
-        return UsdImagingDataSourceAttribute<GfVec3f>::New(
-            _model.GetModelDrawModeColorAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardGeometry) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardGeometry);
-        return UsdImagingDataSourceAttribute<TfToken>::New(
-            _model.GetModelCardGeometryAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureXPos) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardTextureXPos);
-        return UsdImagingDataSourceAttribute<SdfAssetPath>::New(
-            _model.GetModelCardTextureXPosAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureYPos) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardTextureYPos);
-        return UsdImagingDataSourceAttribute<SdfAssetPath>::New(
-            _model.GetModelCardTextureYPosAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureZPos) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardTextureZPos);
-        return UsdImagingDataSourceAttribute<SdfAssetPath>::New(
-            _model.GetModelCardTextureZPosAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureXNeg) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardTextureXNeg);
-        return UsdImagingDataSourceAttribute<SdfAssetPath>::New(
-            _model.GetModelCardTextureXNegAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureYNeg) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardTextureYNeg);
-        return UsdImagingDataSourceAttribute<SdfAssetPath>::New(
-            _model.GetModelCardTextureYNegAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-    if (name == UsdImagingModelSchemaTokens->cardTextureZNeg) {
-        static const HdDataSourceLocator locator =
-            UsdImagingModelSchema::GetDefaultLocator().Append(
-                UsdImagingModelSchemaTokens->cardTextureZNeg);
-        return UsdImagingDataSourceAttribute<SdfAssetPath>::New(
-            _model.GetModelCardTextureZNegAttr(),
-            _stageGlobals,
-            _sceneIndexPath,
-            locator);
-    }
-
     return nullptr;
 }
 
@@ -585,28 +585,6 @@ UsdImagingDataSourcePrim::UsdImagingDataSourcePrim(
 {
 }
 
-bool 
-UsdImagingDataSourcePrim::Has(
-    const TfToken &name)
-{
-    if (!_sceneIndexPath.IsPrimPath()) {
-        return false;
-    }
-
-    if (name == HdVisibilitySchemaTokens->visibility ||
-        name == HdPurposeSchemaTokens->purpose) {
-        return _GetUsdPrim().IsA<UsdGeomImageable>();
-    } else if (name == HdXformSchemaTokens->xform) {
-        return _GetUsdPrim().IsA<UsdGeomXformable>();
-    } else if (name == HdExtentSchemaTokens->extent) {
-        return _GetUsdPrim().IsA<UsdGeomBoundable>();
-    } else if (name == TfToken("model")) {
-        return _GetUsdPrim().IsA<UsdGeomModelAPI>();
-    }
-
-    return false;
-}
-
 TfTokenVector
 UsdImagingDataSourcePrim::GetNames()
 {
@@ -617,21 +595,31 @@ UsdImagingDataSourcePrim::GetNames()
     }
     
     if (_GetUsdPrim().IsA<UsdGeomImageable>()) {
-        vec.push_back(HdVisibilitySchemaTokens->visibility);
-        vec.push_back(HdPurposeSchemaTokens->purpose);
+        vec.push_back(HdVisibilitySchema::GetSchemaToken());
+        vec.push_back(HdPurposeSchema::GetSchemaToken());
     }
 
     if (_GetUsdPrim().IsA<UsdGeomXformable>()) {
-        vec.push_back(HdXformSchemaTokens->xform);
+        vec.push_back(HdXformSchema::GetSchemaToken());
     }
 
     if (_GetUsdPrim().IsA<UsdGeomBoundable>()) {
-        vec.push_back(HdExtentSchemaTokens->extent);
+        vec.push_back(HdExtentSchema::GetSchemaToken());
     }
 
-    if (_GetUsdPrim().HasAPI<UsdGeomModelAPI>()) {
-        vec.push_back(TfToken("model"));
+    if (_GetUsdPrim().IsModel()) {
+        vec.push_back(UsdImagingModelSchema::GetSchemaToken());
     }
+    
+    if (UsdAttributeQuery(UsdGeomModelAPI(_GetUsdPrim()).GetExtentsHintAttr())
+                        .HasAuthoredValue()) {
+        vec.push_back(UsdImagingExtentsHintSchema::GetSchemaToken());
+    }
+
+
+    vec.push_back(UsdImagingUsdPrimInfoSchema::GetSchemaToken());
+    vec.push_back(HdPrimOriginSchema::GetSchemaToken());
+    vec.push_back(HdPrimvarsSchema::GetSchemaToken());
 
     return vec;
 }
@@ -645,7 +633,7 @@ UsdImagingDataSourcePrim::Get(const TfToken &name)
         return nullptr;
     }
 
-    if (name == HdXformSchemaTokens->xform) {
+    if (name == HdXformSchema::GetSchemaToken()) {
         UsdGeomXformable xformable(_GetUsdPrim());
         if (!xformable) {
             return nullptr;
@@ -658,7 +646,13 @@ UsdImagingDataSourcePrim::Get(const TfToken &name)
         } else {
             return nullptr;
         }
-    } else if (name == HdVisibilitySchemaTokens->visibility) {
+    } else if (name == HdPrimvarsSchema::GetSchemaToken()) {
+        return UsdImagingDataSourcePrimvars::New(
+                _GetSceneIndexPath(),
+                _GetUsdPrim(),
+                UsdGeomPrimvarsAPI(_GetUsdPrim()),
+                _GetStageGlobals());
+    } else if (name == HdVisibilitySchema::GetSchemaToken()) {
         UsdGeomImageable imageable(_GetUsdPrim());
         if (!imageable) {
             return nullptr;
@@ -671,7 +665,7 @@ UsdImagingDataSourcePrim::Get(const TfToken &name)
         } else {
             return nullptr;
         }
-    } else if (name == HdPurposeSchemaTokens->purpose) {
+    } else if (name == HdPurposeSchema::GetSchemaToken()) {
         UsdGeomImageable imageable(_GetUsdPrim());
         if (!imageable) {
             return nullptr;
@@ -684,7 +678,7 @@ UsdImagingDataSourcePrim::Get(const TfToken &name)
         } else {
             return nullptr;
         }
-    } else if (name == HdExtentSchemaTokens->extent) {
+    } else if (name == HdExtentSchema::GetSchemaToken()) {
         UsdGeomBoundable boundable(_GetUsdPrim());
         if (!boundable) {
             return nullptr;
@@ -693,25 +687,48 @@ UsdImagingDataSourcePrim::Get(const TfToken &name)
         UsdAttributeQuery extentQuery(boundable.GetExtentAttr());
         if (extentQuery.HasAuthoredValue()) {
             return UsdImagingDataSourceExtent::New(
-                extentQuery, _sceneIndexPath, _GetStageGlobals());
+                extentQuery,
+                _sceneIndexPath,
+                _GetStageGlobals());
         } else {
             return nullptr;
         }
-    } else if (name == UsdImagingModelSchemaTokens->model) {
-        UsdGeomModelAPI model(_GetUsdPrim());
-        if (!model) {
+    } else if (name == UsdImagingExtentsHintSchema::GetSchemaToken()) {
+        // For compatibility with UsdImagingDelegate, we read the extentsHint
+        // even if the prim is not a Usd model or UsdGeomModelAPI.
+        UsdAttributeQuery extentsHintQuery(
+            UsdGeomModelAPI(_GetUsdPrim()).GetExtentsHintAttr());
+        if (extentsHintQuery.HasAuthoredValue()) {
+            return UsdImagingDataSourceExtentsHint::New(
+                extentsHintQuery,
+                _sceneIndexPath,
+                _GetStageGlobals());
+        } else {
             return nullptr;
         }
-        return UsdImagingDataSourceModel::New(
-            model, _sceneIndexPath, _GetStageGlobals());
+    } else if (name == UsdImagingModelSchema::GetSchemaToken()) {
+        if (UsdModelAPI model = UsdModelAPI(_GetUsdPrim())) {
+            if (model.IsModel()) {
+                return UsdImagingDataSourcePrim_ModelAPI::New(model);
+            }
+        }
+        return nullptr;
+    } else if (name == UsdImagingUsdPrimInfoSchema::GetSchemaToken()) {
+        return UsdImagingDataSourceUsdPrimInfo::New(
+            _GetUsdPrim());
+    } else if (name == HdPrimOriginSchema::GetSchemaToken()) {
+        return UsdImagingDataSourcePrimOrigin::New(
+            _GetUsdPrim());
     }
-
     return nullptr;
 }
 
 /*static*/ HdDataSourceLocatorSet
 UsdImagingDataSourcePrim::Invalidate(
-        const TfToken &subprim, const TfTokenVector &properties)
+        UsdPrim const& prim,
+        const TfToken &subprim, 
+        const TfTokenVector &properties,
+        UsdImagingPropertyInvalidationType invalidationType)
 {
     HdDataSourceLocatorSet locators;
 
@@ -731,6 +748,22 @@ UsdImagingDataSourcePrim::Invalidate(
 
         if (propertyName == UsdGeomTokens->extent) {
             locators.insert(HdExtentSchema::GetDefaultLocator());
+        }
+
+        if (propertyName == UsdGeomTokens->extentsHint) {
+            locators.insert(UsdImagingExtentsHintSchema::GetDefaultLocator());
+        }
+
+        if (UsdGeomPrimvarsAPI::CanContainPropertyName(propertyName)) {
+            if (invalidationType == UsdImagingPropertyInvalidationType::Resync) {
+                locators.insert(
+                    HdPrimvarsSchema::GetDefaultLocator());
+            } else {
+                static const int prefixLength = 9; // "primvars:"
+                locators.insert(
+                    HdPrimvarsSchema::GetDefaultLocator()
+                        .Append(TfToken(propertyName.data() + prefixLength)));
+            }
         }
     }
 

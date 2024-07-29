@@ -1,6 +1,11 @@
 #usda 1.0
 
-def Xform "Group"
+# A cube with no material binding. The fallback material of the renderer will
+# be used.
+#
+def Xform "Group" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
 {
     def Xform "Geom"
     {

@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -134,18 +117,31 @@ class TestUsdPrim(unittest.TestCase):
 
         stage = Usd.Stage.Open(payload)
         over = stage.OverridePrim(primPath)
-        over.GetReferences().AddReference(Sdf.Reference(basicOver.identifier, primPath))
+        over.GetReferences().AddReference(
+            Sdf.Reference(basicOver.identifier, primPath, 
+                          Sdf.LayerOffset(0.0, 2.0)))
 
         stage = Usd.Stage.Open(base)
         prim = stage.DefinePrim(primPath)
-        prim.GetPayloads().AddPayload(payload.identifier, primPath)
+        prim.GetPayloads().AddPayload(
+            Sdf.Payload(payload.identifier, primPath, Sdf.LayerOffset(10.0)))
         stage.GetRootLayer().subLayerPaths.append(sublayer.identifier) 
+        stage.GetRootLayer().subLayerOffsets[0] = Sdf.LayerOffset(20.0)
 
         expectedPrimStack = [layer.GetPrimAtPath(primPath) for layer in layers]
         stage = Usd.Stage.Open(base)
         prim = stage.GetPrimAtPath(primPath)
 
         assert prim.GetPrimStack() == expectedPrimStack
+
+        expectedPrimStackWithLayerOffsets = [
+            (expectedPrimStack[0], Sdf.LayerOffset()),
+            (expectedPrimStack[1], Sdf.LayerOffset(20.0)),
+            (expectedPrimStack[2], Sdf.LayerOffset(10.0)),
+            (expectedPrimStack[3], Sdf.LayerOffset(10.0, 2.0)),
+        ]
+        assert (prim.GetPrimStackWithLayerOffsets() == 
+                    expectedPrimStackWithLayerOffsets)
 
     def test_GetCachedPrimBits(self):
         layerFile = 'test.usda'
@@ -797,12 +793,14 @@ class TestUsdPrim(unittest.TestCase):
             barPrim = s.OverridePrim('/bar')
             assert s.GetDefaultPrim() == barPrim
 
-            # Try error cases.
+            # Set sub-root prims as default, should pick it up
             s.GetRootLayer().defaultPrim = 'foo/bar'
             assert not s.GetDefaultPrim()
-            s.OverridePrim('/foo/bar')
-            assert not s.GetDefaultPrim()
-            s.defaultPrim = ''
+            fooBarPrim = s.OverridePrim('/foo/bar')
+            assert s.GetDefaultPrim() == fooBarPrim
+            
+            # Try error cases
+            s.GetRootLayer().defaultPrim = ''
             assert not s.GetDefaultPrim()
 
             # Try stage-level authoring API.
@@ -910,10 +908,6 @@ class TestUsdPrim(unittest.TestCase):
             self.assertTrue(prim.ComputeExpandedPrimIndex().IsValid())
             self.assertTrue(prim.ComputeExpandedPrimIndex().DumpToString())
 
-        def _ValidateNoPrimIndexes(prim):
-            self.assertFalse(prim.GetPrimIndex().IsValid())
-            self.assertFalse(prim.GetPrimIndex().DumpToString())
-
         for fmt in allFormats:
             s = _CreateTestStage(fmt)
 
@@ -921,9 +915,14 @@ class TestUsdPrim(unittest.TestCase):
             _ValidatePrimIndexes(s.GetPrimAtPath('/Ref'))
             _ValidatePrimIndexes(s.GetPrimAtPath('/Ref/Child'))
 
-            # Prototype prims do not expose a valid prim index.
+            # Prototype prims do not expose a valid prim index, but can still 
+            # be used to compute an expanded prim index which is necessary for
+            # composition queries.
             prototype = s.GetPrototypes()[0]
-            _ValidateNoPrimIndexes(prototype)
+            self.assertFalse(prototype.GetPrimIndex().IsValid())
+            self.assertFalse(prototype.GetPrimIndex().DumpToString())
+            self.assertTrue(prototype.ComputeExpandedPrimIndex().IsValid())
+            self.assertTrue(prototype.ComputeExpandedPrimIndex().DumpToString())
 
             # However, prims beneath prototypes do expose a valid prim index.
             # Note this prim index may change from run to run depending on
@@ -1004,19 +1003,12 @@ class TestUsdPrim(unittest.TestCase):
 
             self.assertTrue(world.HasAPI(Usd.CollectionAPI))
 
-            # The schemaType that's passed into HasAPI must derive from 
-            # UsdAPISchemaBase and must not be UsdAPISchemaBase.
-            with self.assertRaises(RuntimeError):
-                world.HasAPI(Usd.Typed)
-            with self.assertRaises(RuntimeError):
-                world.HasAPI(Usd.APISchemaBase)
-            with self.assertRaises(RuntimeError):
-                world.HasAPI(Usd.ModelAPI)
-
-            # Try calling HasAPI a random TfType that isn't a derivative of 
-            # SchemaBase.
-            with self.assertRaises(RuntimeError):
-                world.HasAPI(Sdf.ListOpType)
+            # HasAPI always returns false (but doesn't error) for types that 
+            # aren't applied API schema types.
+            self.assertFalse(world.HasAPI(Usd.Typed))
+            self.assertFalse(world.HasAPI(Usd.APISchemaBase))
+            self.assertFalse(world.HasAPI(Usd.ModelAPI))
+            self.assertFalse(world.HasAPI(Sdf.ListOpType))
 
             self.assertEqual(['CollectionAPI:root'], world.GetAppliedSchemas())
 
@@ -1144,6 +1136,55 @@ class TestUsdPrim(unittest.TestCase):
             self.assertTrue(
                 isinstance(child.GetPropertyAtPath("Grandchild.y"),
                 Usd.Relationship))
+
+    def test_GetDescription(self):
+        rootLayer = Sdf.Layer.CreateAnonymous(".usda")
+        rootLayer.ImportFromString("""
+        #usda 1.0
+
+        def Scope "Ref"
+        { 
+            def Scope "Child"
+            {
+            }
+        }
+
+        def Scope "Instance" (
+            instanceable = True
+            references = </Ref>
+        )
+        {
+        }
+        """.strip())
+
+        s = Usd.Stage.Open(rootLayer)
+
+        basic = s.GetPrimAtPath("/Ref")
+        basicChild = basic.GetChild("Child")
+
+        instance = s.GetPrimAtPath("/Instance")
+        instanceProxyChild = instance.GetChild("Child")
+
+        prototype = instance.GetPrototype()
+        prototypeChild = prototype.GetChild("Child")
+
+        print(basic.GetDescription())
+        print(basicChild.GetDescription())
+        print(instance.GetDescription())
+        print(instanceProxyChild.GetDescription())
+        print(prototype.GetDescription())
+        print(prototypeChild.GetDescription())
+
+        # Drop the Usd.Stage and ensure GetDescription on the now-expired
+        # Usd.Prims does not crash.
+        del s
+
+        print(basic.GetDescription())
+        print(basicChild.GetDescription())
+        print(instance.GetDescription())
+        print(instanceProxyChild.GetDescription())
+        print(prototype.GetDescription())
+        print(prototypeChild.GetDescription())
 
 if __name__ == "__main__":
     unittest.main()

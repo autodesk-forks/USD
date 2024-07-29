@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/base/tf/hash.h"
@@ -29,12 +12,10 @@
 #include "pxr/base/tf/token.h"
 #include "pxr/base/tf/weakPtr.h"
 
-// We're getting rid of our dependency on boost::hash -- this code is left
-// commented for testing purposes, for now (6/2020).
-//#include <boost/functional/hash.hpp>
-
+#include <optional>
 #include <set>
 #include <string>
+#include <variant>
 #include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
@@ -155,23 +136,6 @@ _TestStatsTwo(Hasher const &h, char const *label)
     sw.Stop();
     printf("took %f seconds\n", sw.GetSeconds());
 }
-
-/*  See comment at top of file.
-
-struct BoostHasher
-{
-    size_t operator()(uint64_t x) const {
-        return boost::hash<uint64_t>()(x);
-    }
-    
-    size_t operator()(Two t) const {
-        size_t seed = 0;
-        boost::hash_combine(seed, t.x);
-        boost::hash_combine(seed, t.y);
-        return seed;
-    }
-};
-*/
 
 struct TfHasher
 {
@@ -294,6 +258,15 @@ Test_TfHash()
     std::vector<int> vint = {1, 2, 3, 4, 5};
     printf("hash(vector<int>): %zu\n", h(vint));
 
+    std::vector<bool> vbool = {true, false, true};
+    printf("hash(vector<bool>): %zu\n", h(vbool));
+
+    std::set<int> sint = {1, 2, 3, 4, 5};
+    printf("hash(set<int>): %zu\n", h(sint));
+
+    std::map<int, uint32_t> mint = {{-1, 1}, {2, 3}, {-4, 5}};
+    printf("hash(map<int, uint32_t>): %zu\n", h(mint));
+
     std::pair<int, float> intfloat = {1, 2.34};
     printf("hash(pair<int, float>): %zu\n", h(intfloat));
 
@@ -306,13 +279,30 @@ Test_TfHash()
     printf("combine hash of the 3: %zu\n",
            TfHash::Combine(vint, intfloat, vp));
 
+    // Validate support for std::type_index
+    printf("hash(type_index): %zu\n", h(std::type_index(typeid(int))));
+
+    // Validate support for std::shared_ptr
+    printf("hash(shared_ptr): %zu\n", h(std::make_shared<int>(5)));
+
+    // Validate support for std::unique_ptr
+    printf("hash(unique_ptr): %zu\n", h(std::make_unique<int>(7)));
+
+    // Validate support for std::optional
+    printf("hash(optional): %zu\n", h(std::make_optional<std::string>("xyz")));
+    TF_AXIOM(h(std::optional<std::string>("xyz")) ==
+             h(std::optional<std::string>("xyz")));
+
+    // Validate support for std::variant
+    printf("hash(variant): %zu\n",
+           h(std::variant<std::string, int, double>("abc")));
+    TF_AXIOM(h(std::variant<std::string, int, double>("abc")) ==
+             h(std::variant<std::string, int, double>("abc")));
+
     TfHasher tfh;
-    //BoostHasher bh;
 
     _TestStatsOne(tfh, "TfHash");
     _TestStatsTwo(tfh, "TfHash");
-    //_TestStatsOne(bh, "Boost hash");
-    //_TestStatsTwo(bh, "Boost hash");
 
     bool status = true;
     return status;

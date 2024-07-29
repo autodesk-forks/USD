@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from pxr import Sdf
 import unittest, itertools
@@ -236,6 +219,35 @@ class TestSdfListOp(unittest.TestCase):
         for v in a:
             self.assertTrue(listOp.HasItem(v))
         self.assertFalse(listOp.HasItem(4))
+
+    def test_Hash(self):
+        listOp = Sdf.IntListOp.Create(appendedItems = [1, 2, 3],
+                                      prependedItems = [0, 8, 9],
+                                      deletedItems = [-1, -2])
+        self.assertEqual(hash(listOp), hash(listOp))
+        self.assertEqual(
+            hash(listOp),
+            hash(
+                Sdf.IntListOp.Create(
+                    appendedItems=listOp.appendedItems,
+                    prependedItems=listOp.prependedItems,
+                    deletedItems=listOp.deletedItems
+                )
+            )
+        )
+
+    # Sanity test for binding, ApplyOperation logic exhaustively tested above
+    def test_GetAppliedItems(self):
+        e = [1, 2, 3]
+        listOp = _ExplicitItems(e)
+        items = listOp.GetAppliedItems()
+        self.assertEqual(items, e)
+
+        p = [4, 5, 6]
+        a = [7, 8, 9]
+        listOp = Sdf.IntListOp.Create(prependedItems=p, appendedItems=a)
+        items = listOp.GetAppliedItems()
+        self.assertEqual(items, p + a)
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 import contextlib
 import os
@@ -543,6 +526,15 @@ class TestUsdValueClips(unittest.TestCase):
         self.CheckTimeSamples(attr1)
         self.CheckTimeSamples(attr2)
         self.CheckTimeSamples(attr3)
+
+        # Verify GetPropertyStackWithLayerOffsets run on an attribute with 
+        # clips returns the clip spec's layer offset matching the source spec's
+        # layer offset.
+        self.assertEqual(attr3.GetPropertyStackWithLayerOffsets(40),
+            [(Sdf.Find('layerOffsets/clip.usda', '/Model.size'), 
+                Sdf.LayerOffset(20)), 
+             (Sdf.Find('layerOffsets/ref.usda', '/Model.size'), 
+                Sdf.LayerOffset(20))])
 
     def test_TimeCodeClipsWithLayerOffsets(self):
         """Tests behavior of clips when layer offsets are involved and the
@@ -2453,6 +2445,11 @@ class TestUsdValueClips(unittest.TestCase):
         # clip layer. Note that at time 1 we have a clip with no samples
         # so we should get the default value defined in the manifest;
         # the resolved path there should be anchored to the manifest layer.
+        #
+        # The stage variable expressions authored in the asset paths in
+        # clip3.usda are evaluated using the variables authored in the
+        # stage's root and session layer. Variables in the clip itself
+        # are currently ignored.
 
         attr = stage.GetAttributeAtPath('/Model.assetPath')
         _CheckAssetPathValue(
@@ -2464,6 +2461,9 @@ class TestUsdValueClips(unittest.TestCase):
         _CheckAssetPathValue(
             attr, time=2,
             expected=os.path.abspath('assetPathValues/clip2/clip2.usda'))
+        _CheckAssetPathValue(
+            attr, time=3,
+            expected=os.path.abspath('assetPathValues/clip3/clip3.usda'))
 
         attr = stage.GetAttributeAtPath('/Model.assetPathArray')
         _CheckAssetPathArrayValue(
@@ -2475,6 +2475,9 @@ class TestUsdValueClips(unittest.TestCase):
         _CheckAssetPathArrayValue(
             attr, time=2,
             expected=[os.path.abspath('assetPathValues/clip2/clip2.usda')])
+        _CheckAssetPathArrayValue(
+            attr, time=3,
+            expected=[os.path.abspath('assetPathValues/clip3/clip3.usda')])
 
     def test_ComputeClipAssetPaths(self):
         """Test Usd.ClipsAPI.ComputeClipAssetPaths"""
@@ -2493,7 +2496,8 @@ class TestUsdValueClips(unittest.TestCase):
             [p.resolvedPath for p in computedAssetPaths],
             [os.path.abspath('assetPathValues/clip1/clip1.usda'),
              os.path.abspath('assetPathValues/nosamples.usda'),
-             os.path.abspath('assetPathValues/clip2/clip2.usda')])
+             os.path.abspath('assetPathValues/clip2/clip2.usda'),
+             os.path.abspath('assetPathValues/clip3/clip3.usda')])
 
         stage = Usd.Stage.Open('template/int1/result_int_1.usda')
         clipsAPI = Usd.ClipsAPI(
@@ -2520,6 +2524,99 @@ class TestUsdValueClips(unittest.TestCase):
         layer = Sdf.Layer.Find(layerId)
         self.assertTrue(layer)
         self.assertEqual(layer.GetFileFormatArguments(), {'a': '1', 'b': 'str'})
+
+    def test_SublayerChanges(self):
+        """Test that clip layers are loaded successfully when sublayers
+        are added or removed before the clip layers are pulled on."""
+
+        def _test(stage):
+            # Query our test attribute's property stack and verify that it
+            # contains the opinions we expect. This will open the clip layer.
+            a = stage.GetAttributeAtPath('/SingleClip.attr_1')
+            propertyStack = a.GetPropertyStack(0)
+
+            rootLayer = stage.GetRootLayer()
+            sublayerWithClip = Sdf.Layer.FindRelativeToLayer(
+                rootLayer, 'layers/sublayer.usda')
+            self.assertTrue(sublayerWithClip)
+
+            clipLayer = Sdf.Layer.FindRelativeToLayer(
+                sublayerWithClip, 'clip.usda')
+            self.assertTrue(clipLayer)
+
+            refLayer = Sdf.Layer.FindRelativeToLayer(
+                rootLayer, 'layers/ref.usda')
+            self.assertTrue(refLayer)
+
+            self.assertEqual(
+                propertyStack,
+                [sublayerWithClip.GetAttributeAtPath('/SingleClip.attr_1'),
+                 clipLayer.GetAttributeAtPath('/Model.attr_1'),
+                 refLayer.GetAttributeAtPath('/Model.attr_1')])
+
+        # Test combinations of inserting and removing sublayers prior to
+        # pulling on attributes and opening clip layers. Clip layers are
+        # opened the first time the _test function is called, so these
+        # tests are separated into insert-first and remove-first to cover
+        # both cases. Empty and non-empty sublayers are also tested 
+        # separately since there's an optimization that avoids significant
+        # resyncs in the former case.
+
+        def _TestInsertAndRemoveEmptySublayer():
+            dummySublayer = Sdf.Layer.CreateAnonymous('.usda')
+            rootLayer = Sdf.Layer.FindOrOpen('sublayerChanges/root.usda')
+
+            stage = Usd.Stage.Open(rootLayer)
+            rootLayer.subLayerPaths.insert(0, dummySublayer.identifier)
+            _test(stage)
+
+            del rootLayer.subLayerPaths[0]
+            _test(stage)
+
+        def _TestRemoveAndInsertEmptySublayer():
+            dummySublayer = Sdf.Layer.CreateAnonymous('.usda')
+
+            rootLayer = Sdf.Layer.FindOrOpen('sublayerChanges/root.usda')
+            rootLayer.subLayerPaths.insert(0, dummySublayer.identifier)
+
+            stage = Usd.Stage.Open(rootLayer)
+            del rootLayer.subLayerPaths[0]
+            _test(stage)
+
+            rootLayer.subLayerPaths.insert(0, dummySublayer.identifier)
+            _test(stage)
+
+        def _TestInsertAndRemoveNonEmptySublayer():
+            dummySublayer = Sdf.Layer.CreateAnonymous('.usda')
+            Sdf.CreatePrimInLayer(dummySublayer, '/Dummy')
+
+            rootLayer = Sdf.Layer.FindOrOpen('sublayerChanges/root.usda')
+
+            stage = Usd.Stage.Open(rootLayer)
+            rootLayer.subLayerPaths.insert(0, dummySublayer.identifier)
+            _test(stage)
+
+            del rootLayer.subLayerPaths[0]
+            _test(stage)
+
+        def _TestRemoveAndInsertNonEmptySublayer():
+            dummySublayer = Sdf.Layer.CreateAnonymous('.usda')
+            Sdf.CreatePrimInLayer(dummySublayer, '/Dummy')
+
+            rootLayer = Sdf.Layer.FindOrOpen('sublayerChanges/root.usda')
+            rootLayer.subLayerPaths.insert(0, dummySublayer.identifier)
+
+            stage = Usd.Stage.Open(rootLayer)
+            del rootLayer.subLayerPaths[0]
+            _test(stage)
+
+            rootLayer.subLayerPaths.insert(0, dummySublayer.identifier)
+            _test(stage)
+            
+        _TestInsertAndRemoveNonEmptySublayer()
+        _TestRemoveAndInsertNonEmptySublayer()
+        _TestInsertAndRemoveEmptySublayer()
+        _TestRemoveAndInsertEmptySublayer()
 
 if __name__ == "__main__":
     unittest.main()

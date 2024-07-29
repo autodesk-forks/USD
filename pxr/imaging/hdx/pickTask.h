@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HDX_PICK_TASK_H
 #define PXR_IMAGING_HDX_PICK_TASK_H
@@ -28,7 +11,9 @@
 #include "pxr/imaging/hdx/api.h"
 
 #include "pxr/imaging/hdSt/textureUtils.h"
+#include "pxr/imaging/hd/dataSource.h"
 #include "pxr/imaging/hd/enums.h"
+#include "pxr/imaging/hd/primOriginSchema.h"
 #include "pxr/imaging/hd/renderPass.h"
 #include "pxr/imaging/hd/renderPassState.h"
 #include "pxr/imaging/hd/rprimCollection.h"
@@ -57,12 +42,14 @@ PXR_NAMESPACE_OPEN_SCOPE
     (pickFaces)                      \
     (pickEdges)                      \
     (pickPoints)                     \
+    (pickPointsAndInstances)         \
                                      \
     /* Resolve mode */               \
     (resolveNearestToCamera)         \
     (resolveNearestToCenter)         \
     (resolveUnique)                  \
-    (resolveAll)
+    (resolveAll)                     \
+    (resolveDeep)
 
 TF_DECLARE_PUBLIC_TOKENS(HdxPickTokens, HDX_API, HDX_PICK_TOKENS);
 
@@ -88,18 +75,26 @@ struct HdxPickTaskParams
 
 /// Picking hit structure. This is output by the pick task as a record of
 /// what objects the picking query found.
-struct HdxPickHit {
+struct HdxPickHit
+{
+    /// delegateID of HdSceneDelegate that provided the picked prim.
+    /// Irrelevant for scene indices.
     SdfPath delegateId;
+    /// Path computed from scenePath's in primOrigin data source of
+    /// picked prim and instancers if provided by scene index.
+    /// Otherwise, path in render index.
     SdfPath objectId;
+    /// Only supported for scene delegates, see HdxPrimOriginInfo for
+    /// scene indices.
     SdfPath instancerId;
     int instanceIndex;
     int elementIndex;
     int edgeIndex;
     int pointIndex;
-    GfVec3f worldSpaceHitPoint;
+    GfVec3d worldSpaceHitPoint;
     GfVec3f worldSpaceHitNormal;
-    // normalizedDepth is in the range [0,1].  Nb: the pick depth buffer won't
-    // contain items drawn with renderTag "widget" for simplicity.
+    /// normalizedDepth is in the range [0,1].  Nb: the pick depth buffer won't
+    /// contain items drawn with renderTag "widget" for simplicity.
     float normalizedDepth;
 
     inline bool IsValid() const {
@@ -112,6 +107,97 @@ struct HdxPickHit {
 
 using HdxPickHitVector = std::vector<HdxPickHit>;
 
+/// Information about an instancer instancing a picked object (or an
+/// instancer instancing such an instancer and so on).
+struct HdxInstancerContext
+{
+    /// The path of the instancer in the scene index.
+    SdfPath instancerSceneIndexPath;
+    /// The prim origin data source of the instancer.
+    HdContainerDataSourceHandle instancerPrimOrigin;
+
+    /// For implicit instancing (native instancing in USD), the path of
+    /// the picked instance in the scene index.
+    SdfPath instanceSceneIndexPath;
+
+    /// The prim origin data source of the picked (implicit) instance
+    ///
+    /// Note that typically, exactly one of instancePrimOrigin
+    /// or instancerPrimOrigin will contain data depending on whether
+    /// the instancing at the current level was implicit or not,
+    /// respectively. This is because for implicit instancing, there is no
+    /// authored instancer in the original scene (e.g., no USD instancer
+    /// prim for USD native instancing).
+    ///
+    /// For non-nested implicit instancing, the scenePath of the
+    /// instancePrimOrigin will be an absolute path.
+    /// For nested implicit instancing, the scenePath of the instancePrimOrigin
+    /// is an absolute path for the outer instancer context and a relative
+    /// path otherwise.
+    /// The relative path corresponds to an instance within a prototype that
+    /// was itself instanced. It is relative to the prototype's root.
+    ///
+    HdContainerDataSourceHandle instancePrimOrigin;
+    /// Index of the picked instance.
+    int instanceId;
+};
+
+/// A helper to extract information about the picked prim that allows
+/// modern applications to identify a prim and, e.g., obtain the scene path
+/// such as the path of the corresponding UsdPrim.
+///
+/// Note that this helper assumes that we use scene indices and that the
+/// primOrigin data source was populated for each pickable prim in the
+/// scene index. Typically, an application will populate the scenePath in the
+/// primOrigin data source. But the design allows an application to populate
+/// the primOrigin container data source with arbitrary data that helps to
+/// give context about a prim and identify the picked prim.
+///
+/// Note that legacy applications using scene delegates cannot use
+/// HdxPrimOriginInfo and have to translate the scene index path to a scene
+/// path using the scene delegate API
+/// HdSceneDelegate::GetScenePrimPath and
+/// HdSceneDelegate::ConvertIndexPathToCachePath.
+///
+struct HdxPrimOriginInfo
+{
+    /// Query terminal scene index of render index for information about
+    /// picked prim.
+    HDX_API
+    static HdxPrimOriginInfo
+    FromPickHit(HdRenderIndex * renderIndex,
+                const HdxPickHit &hit);
+
+    /// Combines instance scene paths and prim scene path to obtain the full
+    /// scene path.
+    ///
+    /// The scene path is extracted from the prim origin container data
+    /// source by using the given key.
+    ///
+    HDX_API
+    SdfPath GetFullPath(
+        const TfToken &nameInPrimOrigin =
+                    HdPrimOriginSchemaTokens->scenePath) const;
+
+    /// Computes an HdInstancerContext object (equivalent to the one computed
+    /// by GetScenePrimPath) from the vector of HdxInstancerContext objects.
+    /// Note that while HdxInstancerContext has a wealth of data about both
+    /// scene instancers and hydra-created instancers, HdInstancerContext
+    /// is meant to be just a list of (scene instancer, local instance id)
+    /// tuples, used by some clients (e.g. usdview) for selection processing.
+    HDX_API
+    HdInstancerContext ComputeInstancerContext(
+        const TfToken &nameInPrimOrigin =
+                    HdPrimOriginSchemaTokens->scenePath) const;
+
+    /// Information about the instancers instancing the picked object.
+    /// The outer most instancer will be first.
+    std::vector<HdxInstancerContext> instancerContexts;
+    /// The prim origin data source for the picked prim if provided
+    /// by the scene index.
+    HdContainerDataSourceHandle primOrigin;
+};
+
 /// Pick task context params.  This contains task params that can't come from
 /// the scene delegate (like resolution mode and pick location, that might
 /// be resolved late), as well as the picking collection and the output
@@ -123,6 +209,7 @@ using HdxPickHitVector = std::vector<HdxPickHit>;
 ///         HdxPickTokens->pickFaces
 ///         HdxPickTokens->pickEdges
 ///         HdxPickTokens->pickPoints
+///         HdxPickTokens->pickPointsAndInstances
 ///
 /// 'resolveMode': Dictates the resolution of which hit(s) are returned in
 ///     'outHits'.
@@ -138,6 +225,10 @@ using HdxPickHitVector = std::vector<HdxPickHit>;
 ///     4. HdxPickTokens->resolveAll: Returns all the hits for the pick location
 ///         or region. The number of hits returned depends on the resolution
 ///         used and may have duplicates.
+///     5. HdxPickTokens->resolveDeep: Returns the unique hits not only of visible 
+///         geometry but also of all the geometry hiding behind. The 'pickTarget'
+///         influences this operation. For e.g., the subprim indices are ignored
+///         when the pickTarget is pickPrimsAndInstances.
 ///
 struct HdxPickTaskContextParams
 {
@@ -145,6 +236,7 @@ struct HdxPickTaskContextParams
 
     HdxPickTaskContextParams()
         : resolution(128, 128)
+        , maxNumDeepEntries(32000)
         , pickTarget(HdxPickTokens->pickPrimsAndInstances)
         , resolveMode(HdxPickTokens->resolveNearestToCamera)
         , doUnpickablesOcclude(false)
@@ -153,10 +245,12 @@ struct HdxPickTaskContextParams
         , clipPlanes()
         , depthMaskCallback(nullptr)
         , collection()
+        , alphaThreshold(0.0001f)
         , outHits(nullptr)
     {}
 
     GfVec2i resolution;
+    int maxNumDeepEntries;
     TfToken pickTarget;
     TfToken resolveMode;
     bool doUnpickablesOcclude;
@@ -165,6 +259,7 @@ struct HdxPickTaskContextParams
     std::vector<GfVec4d> clipPlanes;
     DepthMaskCallback depthMaskCallback;
     HdRprimCollection collection;
+    float alphaThreshold;
     HdxPickHitVector *outHits;
 };
 
@@ -238,6 +333,9 @@ private:
     bool _UseOcclusionPass() const;
     bool _UseWidgetPass() const;
 
+    void _ClearPickBuffer();
+    void _ResolveDeep();
+
     template<typename T>
     HdStTextureUtils::AlignedBuffer<T>
     _ReadAovBuffer(TfToken const & aovName) const;
@@ -265,6 +363,9 @@ private:
     TfToken _depthToken;
     std::unique_ptr<HdStRenderBuffer> _widgetDepthStencilBuffer;
     HdRenderPassAovBindingVector _widgetAovBindings;
+
+    // pick buffer used for deep selection
+    HdBufferArrayRangeSharedPtr _pickBuffer;
 
     HdxPickTask() = delete;
     HdxPickTask(const HdxPickTask &) = delete;
@@ -344,6 +445,7 @@ public:
 
 private:
     bool _ResolveHit(int index, int x, int y, float z, HdxPickHit* hit) const;
+
     size_t _GetHash(int index) const;
     bool _IsValidHit(int index) const;
 

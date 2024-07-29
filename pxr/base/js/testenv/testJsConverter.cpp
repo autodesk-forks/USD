@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 ///
 /// \file testenv/testJsConverter.cpp
@@ -31,8 +14,7 @@
 #include "pxr/base/tf/diagnosticLite.h"
 #include "pxr/base/tf/staticData.h"
 
-#include <boost/any.hpp>
-
+#include <any>
 #include <iostream>
 #include <fstream>
 #include <map>
@@ -45,7 +27,7 @@ PXR_NAMESPACE_USING_DIRECTIVE
 namespace {
 
 // Generic types and functions.
-typedef boost::any _Any;
+typedef std::any _Any;
 typedef std::vector<_Any> _AnyVector;
 typedef std::map<string, _Any> _Dictionary;
 inline const std::type_info* GetType(const _Any& any)
@@ -54,17 +36,17 @@ inline const std::type_info* GetType(const _Any& any)
 }
 bool IsEmpty(const _Any& any)
 {
-    return any.empty();
+    return !any.has_value();
 }
 template <class T>
 bool IsHolding(const _Any& any)
 {
-    return boost::any_cast<T>(&any) != 0;
+    return std::any_cast<T>(&any) != 0;
 }
 template <class T>
 T Get(const _Any& any)
 {
-    return boost::any_cast<const T&>(any);
+    return std::any_cast<const T&>(any);
 }
 
 // This is a simplified version of TfIndenter.
@@ -335,6 +317,20 @@ int main(int argc, char const *argv[])
             indent << "checking null conversion" << std::endl;
             TF_AXIOM(object[p.first].IsNull());
             TF_AXIOM(IsEmpty(p.second));
+        } else if (p.first == "ArrayOfObjects") {
+            indent << "checking array of object conversion" << std::endl;
+            TF_AXIOM(object[p.first].IsArray());
+            TF_AXIOM(object[p.first].Is<JsArray>());
+            const auto arrayOfObjects = object[p.first].Get<JsArray>();
+            TF_AXIOM(arrayOfObjects.size() == 2);
+            TF_AXIOM(arrayOfObjects[0].IsObject());
+            TF_AXIOM(arrayOfObjects[1].IsObject());
+            // Test coverage for equivalence of nested structures
+            const static JsArray EXPECTED = {
+                JsObject({{"String", JsValue{"value1"}}}),
+                JsObject({{"Real", JsValue{5.0}}})
+            };
+            TF_AXIOM(arrayOfObjects == EXPECTED);
         }
     }
 

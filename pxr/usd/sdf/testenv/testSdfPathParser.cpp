@@ -1,77 +1,51 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include <iostream>
 #include <cassert>
 #include <cstdio>
 
 #include "pxr/pxr.h"
+#include "pxr/usd/sdf/path.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/stringUtils.h"
-#include "pxr/usd/sdf/pathParser.h"
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
-const char* path;
-
-void testPaths(char const *paths[], int expect) {
-
-    Sdf_PathParserContext context;
-
-    // Initialize the scanner, allowing it to be reentrant.
-    SdfPathYylex_init(&context.scanner);
+void testPaths(char const *paths[], bool expectEmpty) {
 
     while(*paths) {
 
         printf("testing: %s\n", *paths);
-        SdfPathYy_scan_string(*paths, context.scanner);
-        int result = SdfPathYyparse(&context);
 
+        SdfPath resultPath(*paths);
+        
         // Report parse errors.
-        if (result != expect) {
-            fprintf(stderr, "parse error: %s in %s\n",
-                    context.errStr.c_str(), *paths);
-            TF_AXIOM(result == expect);
+        if (resultPath.IsEmpty() != expectEmpty) {
+            TF_FATAL_ERROR("Expected <%s> %sto parse",
+                           *paths, expectEmpty ? "not " : "");
         }
 
         // Report mismatches between original string and the string
         // representation of the parsed path.  We allow whitespace to
         // be different.
-        if (result == 0) {
-            std::string s = context.path.GetToken().GetString();
+        if (!resultPath.IsEmpty()) {
+            std::string s = resultPath.GetAsString();
             std::string expected = TfStringReplace(*paths, " ", "");
-            TF_VERIFY(s == expected,
-                      "mismatch: %s -> %s\n", *paths, s.c_str());
-            char const *debugText = Sdf_PathGetDebuggerPathText(context.path);
-            TF_VERIFY(std::string(debugText) == expected,
-                      "debug mismatch: %s -> %s\n",
-                      debugText, expected.c_str());
+            if (s != expected) {
+                TF_FATAL_ERROR("mismatch: %s -> %s", *paths, expected.c_str());
+            }
+            char const *debugText = Sdf_PathGetDebuggerPathText(resultPath);
+            if (std::string(debugText) != expected) {
+                TF_FATAL_ERROR("debug mismatch: %s -> %s",
+                               debugText, expected.c_str());
+            }
         }
         ++paths;
     }
-
-    // Clean up.
-    SdfPathYylex_destroy(context.scanner);
 }
 
 int main()
@@ -172,6 +146,7 @@ int main()
         "foo.mapper",
         "foo.mapper.expression",
         "foo.mapper.mapper[/A.b]",
+        "/root_utf8_umlaute_ß_3",
         NULL
     };
 
@@ -230,6 +205,8 @@ int main()
         "foo{a=:}",
         "foo{a=x:}",
         "Foo.attr.mapper[/Bar].arg:baz",
+        "/foo😀", // valid UTF-8 string that isn't an identifier
+        "/foo/bar/_∂baz", // valid UTF-8 string that isn't an identifier
         NULL
     };
 

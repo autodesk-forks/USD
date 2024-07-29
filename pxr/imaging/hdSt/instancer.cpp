@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/instancer.h"
 
@@ -30,6 +13,8 @@
 #include "pxr/imaging/hd/rprimSharedData.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
+
+#include "pxr/imaging/hgi/capabilities.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -69,6 +54,10 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferSourceSharedPtrVector sources;
     sources.reserve(primvars.size());
 
+    HdStResourceRegistrySharedPtr const& resourceRegistry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+        sceneDelegate->GetRenderIndex().GetResourceRegistry());
+
     // Reset _instancePrimvarNumElements, in case the number of instances
     // is varying.
     _instancePrimvarNumElements= 0;
@@ -77,13 +66,28 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
         VtValue value = sceneDelegate->Get(instancerId, primvar.name);
         if (!value.IsEmpty()) {
             HdBufferSourceSharedPtr source;
-            if (primvar.name == HdInstancerTokens->instanceTransform &&
-                TF_VERIFY(value.IsHolding<VtArray<GfMatrix4d> >())) {
-                // Explicitly invoke the c'tor taking a
-                // VtArray<GfMatrix4d> to ensure we properly convert to
-                // the appropriate floating-point matrix type.
-                source.reset(new HdVtBufferSource(primvar.name,
-                            value.UncheckedGet<VtArray<GfMatrix4d> >()));
+            if (primvar.name == HdInstancerTokens->instanceTransforms) {
+                if (value.IsHolding<VtArray<GfMatrix4d>>()) {
+                    // Explicitly invoke the c'tor taking a
+                    // VtArray<GfMatrix4d> to ensure we properly convert to
+                    // the appropriate floating-point matrix type.
+                    HgiCapabilities const * capabilities =
+                        resourceRegistry->GetHgi()->GetCapabilities();
+                    bool const doublesSupported = capabilities->IsSet(
+                        HgiDeviceCapabilitiesBitsShaderDoublePrecision);
+                    source.reset(new HdVtBufferSource(
+                        primvar.name,
+                        value.UncheckedGet<VtArray<GfMatrix4d>>(),
+                        1,
+                        doublesSupported));
+                }
+                else if (value.IsHolding<VtArray<GfMatrix4f>>()) {
+                    source.reset(new HdVtBufferSource(
+                        primvar.name,
+                        value,
+                        1,
+                        false));
+                }
             }
             else {
                 source.reset(new HdVtBufferSource(primvar.name, value));
@@ -129,26 +133,22 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
          sources, _instancePrimvarRange, *dirtyBits)) {
         // XXX: This should be based off the DirtyPrimvarDesc bit.
         bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
-        HdBufferSpecVector removedSpecs;
-        if (hasDirtyPrimvarDesc) {
-            TfTokenVector internallyGeneratedPrimvars; // none
-            removedSpecs = HdStGetRemovedPrimvarBufferSpecs(
-                _instancePrimvarRange, primvars,
-                internallyGeneratedPrimvars, instancerId);
-        }
-        
         HdBufferSpecVector bufferSpecs;
         HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
 
-        HdStResourceRegistrySharedPtr const& resourceRegistry =
-            std::static_pointer_cast<HdStResourceRegistry>(
-            sceneDelegate->GetRenderIndex().GetResourceRegistry());
-
+        HdBufferSpecVector removedSpecs;
+        if (hasDirtyPrimvarDesc) {
+            TfTokenVector internallyGeneratedPrimvars; // none
+            removedSpecs = HdStGetRemovedOrReplacedPrimvarBufferSpecs(
+                _instancePrimvarRange, primvars,
+                internallyGeneratedPrimvars, bufferSpecs, instancerId);
+        }
+        
         // Update local primvar range.
         _instancePrimvarRange =
             resourceRegistry->UpdateNonUniformBufferArrayRange(
                 HdTokens->primvar, _instancePrimvarRange, bufferSpecs,
-                removedSpecs, HdBufferArrayUsageHint());
+                removedSpecs, HdBufferArrayUsageHintBitsStorage);
 
         TF_VERIFY(_instancePrimvarRange->IsValid());
 

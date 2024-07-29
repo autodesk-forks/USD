@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdx/renderSetupTask.h"
 #include "pxr/imaging/hdx/package.h"
@@ -44,15 +27,28 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+static const HioGlslfxSharedPtr &
+_GetRenderPassColorGlslfx()
+{
+    static const HioGlslfxSharedPtr glslfx =
+        std::make_shared<HioGlslfx>(HdxPackageRenderPassColorShader());
+    return glslfx;
+}
+
+static const HioGlslfxSharedPtr &
+_GetRenderPassIdGlslfx()
+{
+    static const HioGlslfxSharedPtr glslfx =
+        std::make_shared<HioGlslfx>(HdxPackageRenderPassIdShader());
+    return glslfx;
+}
+
 HdxRenderSetupTask::HdxRenderSetupTask(HdSceneDelegate* delegate, SdfPath const& id)
     : HdTask(id)
     , _colorRenderPassShader(
-        std::make_shared<HdStRenderPassShader>(
-            HdxPackageRenderPassColorShader()))
+        std::make_shared<HdStRenderPassShader>(_GetRenderPassColorGlslfx()))
     , _idRenderPassShader(
-        std::make_shared<HdStRenderPassShader>(
-            HdxPackageRenderPassIdShader()))
-    , _overrideWindowPolicy{false, CameraUtilFit}
+        std::make_shared<HdStRenderPassShader>(_GetRenderPassIdGlslfx()))
     , _viewport(0)
 {
 }
@@ -170,14 +166,18 @@ HdxRenderSetupTask::SyncParams(HdSceneDelegate* delegate,
                 params.blendAlphaSrcFactor, params.blendAlphaDstFactor);
         renderPassState->SetBlendConstantColor(params.blendConstantColor);
         
+        // Don't enable alpha to coverage for id renders.
         renderPassState->SetAlphaToCoverageEnabled(
             params.enableAlphaToCoverage &&
+            !params.enableIdRender &&
             !TfDebug::IsEnabled(HDX_DISABLE_ALPHA_TO_COVERAGE));
 
         if (HdStRenderPassState * const hdStRenderPassState =
                     dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
+
+            // Don't enable multisample for id renders.
             hdStRenderPassState->SetUseAovMultiSample(
-                params.useAovMultiSample);
+                params.useAovMultiSample && !params.enableIdRender);
             hdStRenderPassState->SetResolveAovMultiSample(
                 params.resolveAovMultiSample);
             
@@ -227,24 +227,20 @@ HdxRenderSetupTask::PrepareCamera(HdRenderIndex* renderIndex)
         return;
     } 
 
-    const HdCamera *camera = static_cast<const HdCamera *>(
-        renderIndex->GetSprim(HdPrimTypeTokens->camera, _cameraId));
-    if (!camera) {
-        // We don't require a valid camera to accommodate setup tasks used
-        // solely for specifying the AOV bindings for clearing or resolving the
-        // AOVs. The viewport transform is irrelevant in this scenario as well.
-        return;
-    }
+    const HdCamera * const camera =
+        static_cast<const HdCamera *>(
+            renderIndex->GetSprim(HdPrimTypeTokens->camera, _cameraId));
 
     HdRenderPassStateSharedPtr const &renderPassState =
             _GetRenderPassState(renderIndex);
 
+    renderPassState->SetCamera(camera);
+    renderPassState->SetOverrideWindowPolicy(_overrideWindowPolicy);
+
     if (_framing.IsValid()) {
-        renderPassState->SetCameraAndFraming(
-            camera, _framing, _overrideWindowPolicy);
+        renderPassState->SetFraming(_framing);
     } else {
-        renderPassState->SetCameraAndViewport(
-            camera, _viewport);
+        renderPassState->SetViewport(_viewport);
     }
 }
 

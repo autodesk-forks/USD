@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_ATTRIBUTE_QUERY_H
 #define PXR_USD_USD_ATTRIBUTE_QUERY_H
@@ -30,6 +13,7 @@
 #include "pxr/usd/usd/common.h"
 #include "pxr/usd/usd/prim.h"
 #include "pxr/usd/usd/resolveInfo.h"
+#include "pxr/usd/usd/resolveTarget.h"
 #include "pxr/usd/usd/timeCode.h"
 
 #include "pxr/base/tf/token.h"
@@ -52,7 +36,16 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// the attribute \em is affected by Value Clips, the performance gain will
 /// just be less.
 ///
-/// \section Thread safety
+/// \section Resolve_targets Resolve targets
+/// An attribute query can also be constructed for an attribute along with a 
+/// UsdResolveTarget. A resolve target allows value resolution to consider only
+/// a subrange of the prim stack instead of the entirety of it. All of the methods 
+/// of an attribute query created with a resolve target will perform value 
+/// resolution within that resolve target. This can be useful for finding the
+/// value of an attribute resolved up to a particular layer or for determining
+/// if a value authored on layer would be overridden by a stronger opinion.
+///
+/// \section Thread_safety Thread safety
 /// This object provides the basic thread-safety guarantee.  Multiple threads
 /// may call the value accessor functions simultaneously.
 ///
@@ -70,6 +63,14 @@ public:
     USD_API
     UsdAttributeQuery();
 
+    /// Copy constructor.
+    USD_API
+    UsdAttributeQuery(const UsdAttributeQuery &other);
+
+    /// Move constructor.
+    USD_API
+    UsdAttributeQuery(UsdAttributeQuery &&other) = default;
+
     /// Construct a new query for the attribute \p attr.
     USD_API
     explicit UsdAttributeQuery(const UsdAttribute& attr);
@@ -78,6 +79,15 @@ public:
     /// the prim \p prim.
     USD_API
     UsdAttributeQuery(const UsdPrim& prim, const TfToken& attrName);
+
+    /// Construct a new query for the attribute \p attr with the given 
+    /// resolve target \p resolveTarget.
+    ///
+    /// Note that a UsdResolveTarget is associated with a particular prim so 
+    /// only resolve targets for the attribute's owning prim are allowed.
+    USD_API
+    UsdAttributeQuery(const UsdAttribute &attr, 
+        const UsdResolveTarget &resolveTarget);
 
     /// Construct new queries for the attributes named in \p attrNames under
     /// the prim \p prim. The objects in the returned vector will line up
@@ -107,6 +117,14 @@ public:
     explicit operator bool() const {
         return IsValid();
     }
+
+    /// Copy assignment.
+    USD_API
+    UsdAttributeQuery &operator=(const UsdAttributeQuery &other);
+
+    /// Move assignment.
+    USD_API
+    UsdAttributeQuery &operator=(UsdAttributeQuery &&other) = default;
 
     /// @}
 
@@ -242,7 +260,9 @@ public:
     /// @}
 
 private:
-    void _Initialize(const UsdAttribute& attr);
+    void _Initialize();
+
+    void _Initialize(const UsdResolveTarget &resolveTarget);
 
     template <typename T>
     USD_API
@@ -251,6 +271,7 @@ private:
 private:
     UsdAttribute _attr;
     UsdResolveInfo _resolveInfo;
+    std::unique_ptr<UsdResolveTarget> _resolveTarget;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

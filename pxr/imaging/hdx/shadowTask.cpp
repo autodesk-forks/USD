@@ -1,27 +1,11 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdx/shadowTask.h"
+#include "pxr/imaging/hdx/debugCodes.h"
 #include "pxr/imaging/hdx/tokens.h"
 #include "pxr/imaging/hdx/package.h"
 
@@ -30,6 +14,7 @@
 #include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
 
+#include "pxr/imaging/hdSt/hioConversions.h"
 #include "pxr/imaging/hdSt/light.h"
 #include "pxr/imaging/hdSt/renderPass.h"
 #include "pxr/imaging/hdSt/renderPassShader.h"
@@ -40,6 +25,10 @@
 
 #include "pxr/imaging/glf/simpleLightingContext.h"
 #include "pxr/imaging/glf/diagnostic.h"
+
+#include "pxr/imaging/hio/image.h"
+#include "pxr/base/arch/fileSystem.h"
+#include "pxr/base/tf/scoped.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -366,6 +355,54 @@ HdxShadowTask::Execute(HdTaskContext* ctx)
             _passes[shadowId + numShadowMaps]->Execute(
                _renderPassStates[shadowId + numShadowMaps],
                GetRenderTags());
+        }
+    }
+
+    if (TfDebug::IsEnabled(HDX_DEBUG_DUMP_SHADOW_TEXTURES)) {
+        for (size_t shadowId = 0; shadowId < numShadowMaps; shadowId++) {
+            HdRenderBuffer * renderBuffer = 
+                shadowAovBindings[shadowId].renderBuffer;
+            HioImage::StorageSpec storage;
+            storage.width = renderBuffer->GetWidth();
+            storage.height = renderBuffer->GetHeight();
+            storage.format = 
+                HdStHioConversions::GetHioFormat(renderBuffer->GetFormat());
+            storage.flipped = true;
+            storage.data = renderBuffer->Map();
+            TfScoped<> scopedUnmap([renderBuffer](){ renderBuffer->Unmap(); });
+
+            const std::string filename = ArchNormPath(
+                TfStringPrintf("%s/HdxShadowTask.%zu.png",
+                    ArchGetTmpDir(),
+                    shadowId));
+
+            if (storage.format == HioFormatInvalid) {
+                TfDebug::Helper().Msg(
+                    "Hgi texture has format not corresponding to an "
+                    "HioFormat: %s\n", filename.c_str());
+                continue;
+            }
+
+            if (!storage.data) {
+                TfDebug::Helper().Msg(
+                    "No data for texture: %s\n", filename.c_str());
+                continue;
+            }
+                        
+            HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
+            if (!image) {
+                TfDebug::Helper().Msg(
+                    "Failed to open image for writing: %s\n", filename.c_str());
+                continue;
+            }
+
+            if (image->Write(storage)) {
+                TfDebug::Helper().Msg(
+                    "Wrote shadow texture: %s\n", filename.c_str());
+            } else {
+                TfDebug::Helper().Msg(
+                    "Failed to write shadow texture: %s\n", filename.c_str());
+            }
         }
     }
 }

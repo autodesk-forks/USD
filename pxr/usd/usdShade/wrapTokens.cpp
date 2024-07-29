@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 // GENERATED FILE.  DO NOT EDIT.
 #include <boost/python/class.hpp>
@@ -67,6 +50,7 @@ void wrapUsdShadeTokens()
     _AddToken(cls, "allPurpose", UsdShadeTokens->allPurpose);
     _AddToken(cls, "bindMaterialAs", UsdShadeTokens->bindMaterialAs);
     _AddToken(cls, "coordSys", UsdShadeTokens->coordSys);
+    _AddToken(cls, "coordSys_MultipleApplyTemplate_Binding", UsdShadeTokens->coordSys_MultipleApplyTemplate_Binding);
     _AddToken(cls, "displacement", UsdShadeTokens->displacement);
     _AddToken(cls, "fallbackStrength", UsdShadeTokens->fallbackStrength);
     _AddToken(cls, "full", UsdShadeTokens->full);
@@ -94,4 +78,11 @@ void wrapUsdShadeTokens()
     _AddToken(cls, "universalSourceType", UsdShadeTokens->universalSourceType);
     _AddToken(cls, "volume", UsdShadeTokens->volume);
     _AddToken(cls, "weakerThanDescendants", UsdShadeTokens->weakerThanDescendants);
+    _AddToken(cls, "ConnectableAPI", UsdShadeTokens->ConnectableAPI);
+    _AddToken(cls, "CoordSysAPI", UsdShadeTokens->CoordSysAPI);
+    _AddToken(cls, "Material", UsdShadeTokens->Material);
+    _AddToken(cls, "MaterialBindingAPI", UsdShadeTokens->MaterialBindingAPI);
+    _AddToken(cls, "NodeDefAPI", UsdShadeTokens->NodeDefAPI);
+    _AddToken(cls, "NodeGraph", UsdShadeTokens->NodeGraph);
+    _AddToken(cls, "Shader", UsdShadeTokens->Shader);
 }

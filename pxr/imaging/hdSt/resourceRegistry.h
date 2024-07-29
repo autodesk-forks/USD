@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_RESOURCE_REGISTRY_H
 #define PXR_IMAGING_HD_ST_RESOURCE_REGISTRY_H
@@ -28,14 +11,14 @@
 #include "pxr/base/vt/dictionary.h"
 
 #include "pxr/imaging/hdSt/api.h"
+#include "pxr/imaging/hdSt/bufferArrayRegistry.h"
+#include "pxr/imaging/hdSt/enums.h"
 
 #include "pxr/imaging/hgi/hgi.h"
 
 #include "pxr/imaging/hd/bufferArrayRange.h"
-#include "pxr/imaging/hd/bufferArrayRegistry.h"
 #include "pxr/imaging/hd/bufferSource.h"
 #include "pxr/imaging/hd/bufferSpec.h"
-#include "pxr/imaging/hd/enums.h"
 #include "pxr/imaging/hd/instanceRegistry.h"
 #include "pxr/imaging/hd/resourceRegistry.h"
 
@@ -45,9 +28,16 @@
 #include <map>
 #include <memory>
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+#include <MaterialXCore/Library.h>
+MATERIALX_NAMESPACE_BEGIN
+    using ShaderPtr = std::shared_ptr<class Shader>;
+MATERIALX_NAMESPACE_END
+#endif
+
 PXR_NAMESPACE_OPEN_SCOPE
 
-using HdComputationSharedPtr = std::shared_ptr<class HdComputation>;
+using HdStComputationSharedPtr = std::shared_ptr<class HdStComputation>;
 using HdStDispatchBufferSharedPtr = std::shared_ptr<class HdStDispatchBuffer>;
 using HdStGLSLProgramSharedPtr = std::shared_ptr<class HdStGLSLProgram>;
 using HioGlslfxSharedPtr = std::shared_ptr<class HioGlslfx>;
@@ -68,8 +58,8 @@ using HdStBufferResourceSharedPtr =
     std::shared_ptr<class HdStBufferResource>;
 using HdStResourceRegistrySharedPtr = 
     std::shared_ptr<class HdStResourceRegistry>;
-using Hd_VertexAdjacencySharedPtr = 
-    std::shared_ptr<class Hd_VertexAdjacency>;
+using HdSt_VertexAdjacencyBuilderSharedPtr = 
+    std::shared_ptr<class HdSt_VertexAdjacencyBuilder>;
 using HdSt_MeshTopologySharedPtr = 
     std::shared_ptr<class HdSt_MeshTopology>;
 using HgiResourceBindingsSharedPtr = 
@@ -103,8 +93,8 @@ enum HdStComputeQueue {
     HdStComputeQueueThree,
     HdStComputeQueueCount};
 
-using HdStComputationSharedPtrVector = 
-    std::vector<std::pair<HdComputationSharedPtr, HdStComputeQueue>>;
+using HdStComputationComputeQueuePairVector = 
+    std::vector<std::pair<HdStComputationSharedPtr, HdStComputeQueue>>;
 
 
 /// \class HdStResourceRegistry
@@ -154,7 +144,7 @@ public:
         /// file containing several grids, movie file containing frames).
         const HdStTextureIdentifier &textureId,
         /// Texture type, e.g., uv, ptex, ...
-        HdTextureType textureType,
+        HdStTextureType textureType,
         /// Sampling parameters such as wrapS, ...
         /// wrapS, wrapT, wrapR mode, min filer, mag filter
         const HdSamplerParameters &samplerParams,
@@ -181,7 +171,7 @@ public:
         /// file containing several grids, movie file containing frames).
         const HdStTextureIdentifier &textureId,
         /// Texture type, e.g., uv, ptex, ...
-        HdTextureType textureType);
+        HdStTextureType textureType);
 
     /// Sets how much memory a single texture can consume in bytes by
     /// texture type.
@@ -192,7 +182,7 @@ public:
     ///
     HDST_API
     void SetMemoryRequestForTextureType(
-        HdTextureType textureType,
+        HdStTextureType textureType,
         size_t memoryRequest);
 
     /// ------------------------------------------------------------------------
@@ -306,7 +296,7 @@ public:
     /// they are registered.
     HDST_API
     void AddComputation(HdBufferArrayRangeSharedPtr const &range,
-                        HdComputationSharedPtr const &computation,
+                        HdStComputationSharedPtr const &computation,
                         HdStComputeQueue const queue);
 
     /// ------------------------------------------------------------------------
@@ -327,7 +317,8 @@ public:
     HDST_API
     HdStBufferResourceSharedPtr RegisterBufferResource(
         TfToken const &role, 
-        HdTupleType tupleType);
+        HdTupleType tupleType,
+        HgiBufferUsage bufferUsage);
 
     /// Remove any entries associated with expired dispatch buffers.
     HDST_API
@@ -363,8 +354,9 @@ public:
         HdInstance<HdSt_BasisCurvesTopologySharedPtr>::ID id);
 
     HDST_API
-    HdInstance<Hd_VertexAdjacencySharedPtr>
-    RegisterVertexAdjacency(HdInstance<Hd_VertexAdjacencySharedPtr>::ID id);
+    HdInstance<HdSt_VertexAdjacencyBuilderSharedPtr>
+    RegisterVertexAdjacencyBuilder(
+        HdInstance<HdSt_VertexAdjacencyBuilderSharedPtr>::ID id);
 
     /// Topology Index buffer array range instancing
     /// Returns the HdInstance points to shared HdBufferArrayRange,
@@ -413,6 +405,13 @@ public:
     HdInstance<HioGlslfxSharedPtr>
     RegisterGLSLFXFile(HdInstance<HioGlslfxSharedPtr>::ID id);
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    /// Register MaterialX GLSLFX Shader.
+    HDST_API
+    HdInstance<MaterialX::ShaderPtr>
+    RegisterMaterialXShader(HdInstance<MaterialX::ShaderPtr>::ID id);
+#endif
+
     /// Register a Hgi resource bindings into the registry.
     HDST_API
     HdInstance<HgiResourceBindingsSharedPtr>
@@ -428,6 +427,22 @@ public:
     HdInstance<HgiComputePipelineSharedPtr>
     RegisterComputePipeline(HdInstance<HgiComputePipelineSharedPtr>::ID id);
 
+    /// Finds a sub resource registry for the given identifier if it already
+    /// exists or creates one by invoking the provided factory function.
+    ///
+    /// A sub resource registry is simply another resource registry defined
+    /// externally but whose lifetime is tied to this HdStResourceRegistry and
+    /// can be retrieved via this function.
+    ///
+    /// Any sub resource registries will have their Commit functions invoked
+    /// when Commit is invoked on this instance, and their GarbageCollect
+    /// functions invoked when GarbageCollect is invoked on this instance.
+    HDST_API
+    HdResourceRegistry*
+    FindOrCreateSubResourceRegistry(
+        const std::string& identifier,
+        const std::function<std::unique_ptr<HdResourceRegistry>()>& factory);
+
     /// Returns the global hgi blit command queue for recording blitting work.
     /// When using this global cmd instead of creating a new HgiBlitCmds we
     /// reduce the number of command buffers being created.
@@ -442,7 +457,8 @@ public:
     /// The returned pointer should not be held onto by the client as it is
     /// only valid until the HgiComputeCmds has been submitted.
     HDST_API
-    HgiComputeCmds* GetGlobalComputeCmds();
+    HgiComputeCmds* GetGlobalComputeCmds(
+        HgiComputeDispatch dispatchMethod = HgiComputeDispatchSerial);
 
     /// Submits blit work queued in global blit cmds for GPU execution.
     /// We can call this when we want to submit some work to the GPU.
@@ -473,7 +489,7 @@ public:
     /// (vertex, varying, facevarying)
     /// Takes ownership of the passed in strategy object.
     void SetNonUniformAggregationStrategy(
-                std::unique_ptr<HdAggregationStrategy> &&strategy) {
+                std::unique_ptr<HdStAggregationStrategy> &&strategy) {
         _nonUniformAggregationStrategy = std::move(strategy);
     }
 
@@ -481,28 +497,28 @@ public:
     /// (vertex, varying, facevarying)
     /// Takes ownership of the passed in strategy object.
     void SetNonUniformImmutableAggregationStrategy(
-                std::unique_ptr<HdAggregationStrategy> &&strategy) {
+                std::unique_ptr<HdStAggregationStrategy> &&strategy) {
         _nonUniformImmutableAggregationStrategy = std::move(strategy);
     }
 
     /// Set the aggregation strategy for uniform (shader globals)
     /// Takes ownership of the passed in strategy object.
     void SetUniformAggregationStrategy(
-                std::unique_ptr<HdAggregationStrategy> &&strategy) {
+                std::unique_ptr<HdStAggregationStrategy> &&strategy) {
         _uniformUboAggregationStrategy = std::move(strategy);
     }
 
     /// Set the aggregation strategy for SSBO (uniform primvars)
     /// Takes ownership of the passed in strategy object.
     void SetShaderStorageAggregationStrategy(
-                std::unique_ptr<HdAggregationStrategy> &&strategy) {
+                std::unique_ptr<HdStAggregationStrategy> &&strategy) {
         _uniformSsboAggregationStrategy = std::move(strategy);
     }
 
     /// Set the aggregation strategy for single buffers (for nested instancer).
     /// Takes ownership of the passed in strategy object.
     void SetSingleStorageAggregationStrategy(
-                std::unique_ptr<HdAggregationStrategy> &&strategy) {
+                std::unique_ptr<HdStAggregationStrategy> &&strategy) {
         _singleAggregationStrategy = std::move(strategy);
     }
 
@@ -520,16 +536,16 @@ private:
     void _CommitTextures();
     // Wrapper function for BAR allocation
     HdBufferArrayRangeSharedPtr _AllocateBufferArrayRange(
-        HdAggregationStrategy *strategy,
-        HdBufferArrayRegistry &bufferArrayRegistry,
+        HdStAggregationStrategy *strategy,
+        HdStBufferArrayRegistry &bufferArrayRegistry,
         TfToken const &role,
         HdBufferSpecVector const &bufferSpecs,
         HdBufferArrayUsageHint usageHint);
     
     /// Wrapper function for BAR allocation/reallocation-migration.
     HdBufferArrayRangeSharedPtr _UpdateBufferArrayRange(
-        HdAggregationStrategy *strategy,
-        HdBufferArrayRegistry &bufferArrayRegistry,
+        HdStAggregationStrategy *strategy,
+        HdStBufferArrayRegistry &bufferArrayRegistry,
         TfToken const &role,
         HdBufferArrayRangeSharedPtr const& curRange,
         HdBufferSpecVector const &updatedOrAddedSpecs,
@@ -575,10 +591,10 @@ private:
     
     struct _PendingComputation{
         _PendingComputation(HdBufferArrayRangeSharedPtr const &range,
-                            HdComputationSharedPtr const &computation)
+                            HdStComputationSharedPtr const &computation)
             : range(range), computation(computation) { }
         HdBufferArrayRangeSharedPtr range;
-        HdComputationSharedPtr computation;
+        HdStComputationSharedPtr computation;
     };
 
     // If we need more 'compute queues' we can increase HdStComputeQueueCount.
@@ -588,19 +604,19 @@ private:
     _PendingComputationList  _pendingComputations[HdStComputeQueueCount];
 
     // aggregated buffer array
-    HdBufferArrayRegistry _nonUniformBufferArrayRegistry;
-    HdBufferArrayRegistry _nonUniformImmutableBufferArrayRegistry;
-    HdBufferArrayRegistry _uniformUboBufferArrayRegistry;
-    HdBufferArrayRegistry _uniformSsboBufferArrayRegistry;
-    HdBufferArrayRegistry _singleBufferArrayRegistry;
+    HdStBufferArrayRegistry _nonUniformBufferArrayRegistry;
+    HdStBufferArrayRegistry _nonUniformImmutableBufferArrayRegistry;
+    HdStBufferArrayRegistry _uniformUboBufferArrayRegistry;
+    HdStBufferArrayRegistry _uniformSsboBufferArrayRegistry;
+    HdStBufferArrayRegistry _singleBufferArrayRegistry;
 
     // current aggregation strategies
-    std::unique_ptr<HdAggregationStrategy> _nonUniformAggregationStrategy;
-    std::unique_ptr<HdAggregationStrategy>
+    std::unique_ptr<HdStAggregationStrategy> _nonUniformAggregationStrategy;
+    std::unique_ptr<HdStAggregationStrategy>
                                 _nonUniformImmutableAggregationStrategy;
-    std::unique_ptr<HdAggregationStrategy> _uniformUboAggregationStrategy;
-    std::unique_ptr<HdAggregationStrategy> _uniformSsboAggregationStrategy;
-    std::unique_ptr<HdAggregationStrategy> _singleAggregationStrategy;
+    std::unique_ptr<HdStAggregationStrategy> _uniformUboAggregationStrategy;
+    std::unique_ptr<HdStAggregationStrategy> _uniformSsboAggregationStrategy;
+    std::unique_ptr<HdStAggregationStrategy> _singleAggregationStrategy;
 
     typedef std::vector<HdStDispatchBufferSharedPtr>
         _DispatchBufferRegistry;
@@ -619,8 +635,8 @@ private:
         _basisCurvesTopologyRegistry;
 
     // Register vertex adjacency.
-    HdInstanceRegistry<Hd_VertexAdjacencySharedPtr>
-        _vertexAdjacencyRegistry;
+    HdInstanceRegistry<HdSt_VertexAdjacencyBuilderSharedPtr>
+        _vertexAdjacencyBuilderRegistry;
 
     // Register topology index buffers.
     typedef HdInstanceRegistry<HdBufferArrayRangeSharedPtr>
@@ -653,6 +669,11 @@ private:
     HdInstanceRegistry<HioGlslfxSharedPtr>
         _glslfxFileRegistry;
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    // MaterialX glslfx shader registry
+    HdInstanceRegistry<MaterialX::ShaderPtr> _materialXShaderRegistry;
+#endif
+
     // texture handle registry
     std::unique_ptr<class HdSt_TextureHandleRegistry> _textureHandleRegistry;
 
@@ -667,6 +688,11 @@ private:
     // Hgi compute pipeline registry
     HdInstanceRegistry<HgiComputePipelineSharedPtr>
         _computePipelineRegistry;
+
+    using _SubResourceRegistryMap =
+        tbb::concurrent_unordered_map<std::string,
+                                    std::unique_ptr<HdResourceRegistry>>;
+    _SubResourceRegistryMap _subResourceRegistries;
 
     HgiBlitCmdsUniquePtr _blitCmds;
     HgiComputeCmdsUniquePtr _computeCmds;

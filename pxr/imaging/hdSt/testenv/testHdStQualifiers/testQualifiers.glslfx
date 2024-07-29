@@ -1,0 +1,81 @@
+-- glslfx version 0.1
+
+//
+// Copyright 2024 Pixar
+//
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
+//
+
+-- configuration
+{
+    "techniques": {
+        "default": {
+            "vertexShader" : {
+                "source": [ "Qualifiers.Vertex" ]
+            },
+            "fragmentShader" : {
+                "source": [ "Qualifiers.Fragment" ]
+            }
+        }
+    }
+}
+
+--- --------------------------------------------------------------------------
+-- layout Qualifiers.Vertex
+
+[
+    ["out block", "DataWithQualifiers", "myData",
+        ["float", "NormalMember"],
+        ["float", "FlatMember", "flat"],
+        ["float", "NoPerspectiveMember", "noperspective"],
+        ["float", "CentroidMember", "centroid"],
+        ["float", "SampleMember", "sample"]
+    ]
+]
+
+--- --------------------------------------------------------------------------
+-- glsl Qualifiers.Vertex
+
+vec3 HdGet_points()
+{
+    myData.NormalMember = 1.0;
+    myData.FlatMember = 1.0;
+    myData.NoPerspectiveMember = 1.0;
+    myData.CentroidMember = 1.0;
+    myData.SampleMember = 1.0;
+    return vec3(0.0);
+}
+
+MAT4 HdGet_transform()
+{
+    return MAT4(1.0);
+}
+
+--- --------------------------------------------------------------------------
+-- layout Qualifiers.Fragment
+
+[
+    ["in block", "DataWithQualifiers", "myData",
+        ["float", "NormalMember"],
+        ["float", "FlatMember", "flat"],
+        ["float", "NoPerspectiveMember", "noperspective"],
+        ["float", "CentroidMember", "centroid"],
+        ["float", "SampleMember", "sample"]
+    ]
+]
+
+--- --------------------------------------------------------------------------
+-- glsl Qualifiers.Fragment
+
+int HdGetScalar_edgeIndices()
+{
+    return 0;
+}
+
+vec4 surfaceShader(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    return vec4(myData.NormalMember + myData.FlatMember,
+        myData.NoPerspectiveMember, myData.CentroidMember, myData.SampleMember);
+}
+

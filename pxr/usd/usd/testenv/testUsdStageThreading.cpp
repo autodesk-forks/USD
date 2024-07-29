@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
@@ -35,18 +18,17 @@
 #include "pxr/base/tf/stopwatch.h"
 #include "pxr/base/tf/debug.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/pxrCLI11/CLI11.h"
 #include "pxr/base/work/dispatcher.h"
 #include "pxr/base/work/withScopedParallelism.h"
 
-#include <boost/random.hpp>
-#include <boost/program_options.hpp>
-
+#include <random>
 #include <thread>
 
 using std::string;
 using std::vector;
 PXR_NAMESPACE_USING_DIRECTIVE
-namespace boost_po = boost::program_options;
+using namespace pxr_CLI;
 
 static size_t numThreads;
 static size_t msecsToRun;
@@ -151,18 +133,13 @@ _WorkTask(size_t msecsToRun, bool runForever)
     // Use a local random number generator to minimize synchronization
     // between threads, as would happen with using libc's random().
     const std::thread::id threadId = std::this_thread::get_id();
-    boost::mt19937 mt(std::hash<std::thread::id>()(threadId));
-    boost::uniform_int<unsigned int> dist(0, _testCases.size()-1);
-    boost::variate_generator< boost::mt19937, boost::uniform_int<unsigned int> >
-        gen(mt, dist);
+    std::mt19937 mt(std::hash<std::thread::id>()(threadId));
+    std::uniform_int_distribution<unsigned int> dist(0, _testCases.size()-1);
 
     while (runForever || static_cast<size_t>(sw.GetMilliseconds()) < msecsToRun) {
         sw.Start();
-        const int i = gen();
+        const int i = dist(mt);
 
-        printf("  Thread %s running test case %d\n",
-               TfStringify(threadId).c_str(), i);
-                                    
         const _Result & expected = _testCases[i].second;
         const _Result & actual   = _ComputeResult(_testCases[i].first);
         TF_VERIFY(actual.didLoad == expected.didLoad);
@@ -180,41 +157,25 @@ _WorkTask(size_t msecsToRun, bool runForever)
 int main(int argc, char const **argv)
 {
     // Set up arguments and their defaults
-    boost_po::options_description desc("Options");
-    desc.add_options()
-        ("forever",
-         boost_po::bool_switch(&runForever),
-         "Run forever")
+    CLI::App app("Tests USD threading", "testUsdStageThreading");
+    app.add_flag("--forever", runForever, "Run Forever");
+    app.add_option("--numThreads", numThreads, "Number of threads to use")
+        ->default_val(std::thread::hardware_concurrency());
+    app.add_option("--msec", msecsToRun, "Milliseconds to run")
+        ->default_val(10*1000);
 
-        ("numThreads",
-         boost_po::value<size_t>(&numThreads)->default_value(
-             std::thread::hardware_concurrency()),
-         "Number of threads to use")
-
-        ("msec",
-         boost_po::value<size_t>(&msecsToRun)->default_value(10*1000),
-         "Milliseconds to run")
-    ;
-
-    boost_po::variables_map vm;                                                 
-    try {                                                                       
-        boost_po::store(boost_po::parse_command_line(argc, argv, desc), vm);    
-        boost_po::notify(vm);                                                   
-    } catch (const boost_po::error &e) {                                        
-        fprintf(stderr, "%s\n", e.what());                                      
-        fprintf(stderr, "%s\n", TfStringify(desc).c_str());                     
-        exit(1);                                                                
-    }
-
+    CLI11_PARSE(app, argc, argv);
 
     // Initialize. 
     printf("Using %zu threads\n", numThreads);
 
     // Pull on the schema registry to create any schema layers so we can get a
     // baseline of # of loaded layers.
+    printf("pulling schema registry\n");
     UsdSchemaRegistry::GetInstance();
     size_t baselineNumLayers = SdfLayer::GetLoadedLayers().size();
-
+    printf("done\n");
+    
     printf("==================================================\n");
     printf("SETUP PHASE (MAIN THREAD ONLY)\n");
     for (const auto& assetPath : *_testPaths) {
@@ -244,16 +205,15 @@ int main(int argc, char const **argv)
     TfStopwatch sw;
     sw.Start();
 
-    WorkWithScopedParallelism([&]() {
-            WorkDispatcher wd;
-            auto localMsecsToRun = msecsToRun;
-            auto localRunForever = runForever;
-            for (size_t i = 0; i < numThreads; ++i) {
-                wd.Run([localMsecsToRun, localRunForever]() {
-                        _WorkTask(localMsecsToRun, localRunForever);
-                    });
-            }
-        });
+    WorkWithScopedDispatcher([&](WorkDispatcher &wd) {
+        auto localMsecsToRun = msecsToRun;
+        auto localRunForever = runForever;
+        for (size_t i = 0; i < numThreads; ++i) {
+            wd.Run([localMsecsToRun, localRunForever]() {
+                _WorkTask(localMsecsToRun, localRunForever);
+            });
+        }
+    });
 
     sw.Stop();
 

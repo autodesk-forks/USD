@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -283,6 +266,18 @@ class TestUsdMetadata(unittest.TestCase):
             foo = stage.OverridePrim("/Foo")
             attr = foo.CreateAttribute("attr", Sdf.ValueTypeNames.String)
             rel = foo.CreateRelationship("rel")
+
+            # verify display name metadata on prim
+            self.assertEqual(foo.GetDisplayName(), "")
+            self.assertFalse(foo.HasAuthoredDisplayName())
+            self.assertEqual(foo.SetDisplayName("foo"), True)
+            self.assertEqual(foo.GetDisplayName(), "foo")
+            self.assertTrue(foo.HasAuthoredDisplayName())
+            self.assertEqual(foo.GetMetadata("displayName"), "foo")
+            self.assertEqual(foo.ClearDisplayName(), True)
+            self.assertEqual(foo.GetDisplayName(), "")
+            self.assertFalse(foo.HasAuthoredDisplayName())
+            self.assertEqual(foo.GetMetadata("displayName"), None)
 
             for prop in [attr, rel]:
                 self.assertEqual(prop.GetDisplayName(), "")
@@ -906,66 +901,111 @@ class TestUsdMetadata(unittest.TestCase):
 
     def test_AssetPathMetadata(self):
         '''Test path resolution for asset path-valued metadata'''
-        s = Usd.Stage.Open("assetPaths/root.usda")
+
+        def _Test(rootLayer):
+            s = Usd.Stage.Open("assetPaths/root.usda")
+            prim = s.GetPrimAtPath("/AssetPathTest")
+
+            # Test attribute timeSample resolution
+            attr = prim.GetAttribute("assetPath")
+        
+            timeSamples = attr.GetMetadata("timeSamples")
+            self._ComparePaths(os.path.normpath(timeSamples[0].resolvedPath),
+                               os.path.abspath("assetPaths/asset.usda"))
+            self._ComparePaths(os.path.normpath(timeSamples[1].resolvedPath),
+                               os.path.abspath("assetPaths/asset.usda"))
+        
+            self._ComparePaths(
+                os.path.normpath(attr.GetMetadata("default").resolvedPath), 
+                os.path.abspath("assetPaths/asset.usda"))
+        
+            attr = s.GetPrimAtPath("/AssetPathTest").GetAttribute("assetPathArray")
+            self._ComparePathLists(
+                list([os.path.normpath(p.resolvedPath) 
+                      for p in attr.GetMetadata("default")]),
+                [os.path.abspath("assetPaths/asset.usda")])
+
+            # Test prim metadata resolution
+            metadataDict = prim.GetMetadata("customData")
+            self._ComparePaths(
+                os.path.normpath(metadataDict["assetPath"].resolvedPath),
+                os.path.abspath("assetPaths/asset.usda"))
+            self._ComparePathLists(
+                list([os.path.normpath(p.resolvedPath) 
+                      for p in metadataDict["assetPathArray"]]),
+                [os.path.abspath("assetPaths/asset.usda")])
+            
+            metadataDict = metadataDict["subDict"]
+            self._ComparePaths(
+                os.path.normpath(metadataDict["assetPath"].resolvedPath),
+                os.path.abspath("assetPaths/asset.usda"))
+            self._ComparePathLists(
+                list([os.path.normpath(p.resolvedPath) 
+                      for p in metadataDict["assetPathArray"]]),
+                [os.path.abspath("assetPaths/asset.usda")])
+
+            # Test stage metadata resolution
+            metadataDict = s.GetMetadata("customLayerData")
+            self._ComparePaths(
+                os.path.normpath(metadataDict["assetPath"].resolvedPath),
+                os.path.abspath("assetPaths/asset.usda"))
+            self._ComparePathLists(
+                list([os.path.normpath(p.resolvedPath) 
+                      for p in metadataDict["assetPathArray"]]),
+                [os.path.abspath("assetPaths/asset.usda")])
+            
+            metadataDict = metadataDict["subDict"]
+            self._ComparePaths(
+                os.path.normpath(metadataDict["assetPath"].resolvedPath),
+                os.path.abspath("assetPaths/asset.usda"))
+            self._ComparePathLists(
+                list([os.path.normpath(p.resolvedPath) 
+                      for p in metadataDict["assetPathArray"]]),
+                [os.path.abspath("assetPaths/asset.usda")])
+
+        _Test("assetPaths/root.usda")
+        _Test("assetPathsWithExpressions/root.usda")
+
+    def test_AssetPathExpressionErrors(self):
+        '''Test path resolution for asset path-valued metadata with invalid
+        expressions'''
+        s = Usd.Stage.Open("assetPathsWithBadExpressions/root.usda")
+        
         prim = s.GetPrimAtPath("/AssetPathTest")
 
         # Test attribute timeSample resolution
         attr = prim.GetAttribute("assetPath")
         
+        # Asset paths with invalid variable expressions are left unmodified.
+        authoredAssetPath = Sdf.AssetPath('`"${BAD"`')
+
         timeSamples = attr.GetMetadata("timeSamples")
-        self._ComparePaths(os.path.normpath(timeSamples[0].resolvedPath),
-                           os.path.abspath("assetPaths/asset.usda"))
-        self._ComparePaths(os.path.normpath(timeSamples[1].resolvedPath),
-                           os.path.abspath("assetPaths/asset.usda"))
+        self.assertEqual(timeSamples[0], authoredAssetPath)
+        self.assertEqual(timeSamples[1], authoredAssetPath)
+
+        self.assertEqual(attr.GetMetadata("default"), authoredAssetPath)
         
-        self._ComparePaths(
-            os.path.normpath(attr.GetMetadata("default").resolvedPath), 
-            os.path.abspath("assetPaths/asset.usda"))
-        
-        attr = s.GetPrimAtPath("/AssetPathTest").GetAttribute("assetPathArray")
-        self._ComparePathLists(
-            list([os.path.normpath(p.resolvedPath) 
-                  for p in attr.GetMetadata("default")]),
-            [os.path.abspath("assetPaths/asset.usda")])
+        attr = prim.GetAttribute("assetPathArray")
+        self.assertEqual(attr.GetMetadata("default"), [authoredAssetPath])
 
         # Test prim metadata resolution
         metadataDict = prim.GetMetadata("customData")
-        self._ComparePaths(
-            os.path.normpath(metadataDict["assetPath"].resolvedPath),
-            os.path.abspath("assetPaths/asset.usda"))
-        self._ComparePathLists(
-            list([os.path.normpath(p.resolvedPath) 
-                  for p in metadataDict["assetPathArray"]]),
-            [os.path.abspath("assetPaths/asset.usda")])
+        self.assertEqual(metadataDict["assetPath"], authoredAssetPath)
+        self.assertEqual(metadataDict["assetPathArray"], [authoredAssetPath])
             
         metadataDict = metadataDict["subDict"]
-        self._ComparePaths(
-            os.path.normpath(metadataDict["assetPath"].resolvedPath),
-            os.path.abspath("assetPaths/asset.usda"))
-        self._ComparePathLists(
-            list([os.path.normpath(p.resolvedPath) 
-                  for p in metadataDict["assetPathArray"]]),
-            [os.path.abspath("assetPaths/asset.usda")])
+        self.assertEqual(metadataDict["assetPath"], authoredAssetPath)
+        self.assertEqual(metadataDict["assetPathArray"], [authoredAssetPath])
 
         # Test stage metadata resolution
         metadataDict = s.GetMetadata("customLayerData")
-        self._ComparePaths(
-            os.path.normpath(metadataDict["assetPath"].resolvedPath),
-            os.path.abspath("assetPaths/asset.usda"))
-        self._ComparePathLists(
-            list([os.path.normpath(p.resolvedPath) 
-                  for p in metadataDict["assetPathArray"]]),
-            [os.path.abspath("assetPaths/asset.usda")])
+        self.assertEqual(metadataDict["assetPath"], authoredAssetPath)
+        self.assertEqual(metadataDict["assetPathArray"], [authoredAssetPath])
             
         metadataDict = metadataDict["subDict"]
-        self._ComparePaths(
-            os.path.normpath(metadataDict["assetPath"].resolvedPath),
-            os.path.abspath("assetPaths/asset.usda"))
-        self._ComparePathLists(
-            list([os.path.normpath(p.resolvedPath) 
-                  for p in metadataDict["assetPathArray"]]),
-            [os.path.abspath("assetPaths/asset.usda")])
-
+        self.assertEqual(metadataDict["assetPath"], authoredAssetPath)
+        self.assertEqual(metadataDict["assetPathArray"], [authoredAssetPath])
+        
     def test_TimeSamplesMetadata(self):
         '''Test timeSamples composition, with layer offsets'''
         for fmt in allFormats:

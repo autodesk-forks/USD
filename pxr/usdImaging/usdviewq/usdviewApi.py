@@ -2,25 +2,8 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to # it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) #    of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF # ANY
-# KIND, either express or implied. See the Apache License for the # specific
-# language governing permissions and limitations under the Apache # License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 import types
 
@@ -198,9 +181,9 @@ class UsdviewApi(object):
         self.__appController.statusMessage(msg)
 
     def GetSettings(self):
-        """DEPRECATED Returns the old settings object."""
+        """Returns the settings object."""
 
-        return self.__appController._settings
+        return self.__appController._configManager.settings
 
     def ClearPrimSelection(self):
         self.__appController._dataModel.selection.clearPrims()
@@ -238,6 +221,12 @@ class UsdviewApi(object):
         """
         stageView = self.__appController._stageView
         return stageView.GetRendererPlugins() if stageView else []
+
+    def GetViewportCurrentRendererId(self):
+        stageView = self.__appController._stageView
+        if stageView:
+            return stageView.GetCurrentRendererId()
+        return None
 
     def _ExportSession(self, stagePath, defcamName='usdviewCam', imgWidth=None,
             imgHeight=None):

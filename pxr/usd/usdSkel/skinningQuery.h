@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_SKEL_SKINNING_QUERY_H
 #define PXR_USD_USD_SKEL_SKINNING_QUERY_H
@@ -37,6 +20,7 @@
 
 #include "pxr/usd/usdSkel/animMapper.h"
 
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -63,6 +47,7 @@ public:
                          const VtTokenArray& blendShapeOrder,
                          const UsdAttribute& jointIndices,
                          const UsdAttribute& jointWeights,
+                         const UsdAttribute& skinningMethod,
                          const UsdAttribute& geomBindTransform,
                          const UsdAttribute& joints,
                          const UsdAttribute& blendShapes,
@@ -99,6 +84,10 @@ public:
     /// across all points, or false otherwise.
     USDSKEL_API
     bool IsRigidlyDeformed() const;
+
+    const UsdAttribute& GetSkinningMethodAttr() const {
+        return _skinningMethodAttr;
+    }
 
     const UsdAttribute& GetGeomBindTransformAttr() const {
         return _geomBindTransformAttr;
@@ -190,7 +179,8 @@ public:
              VtFloatArray* weights,
              UsdTimeCode time=UsdTimeCode::Default()) const;
 
-    /// Compute skinned points using linear blend skinning.
+    /// Compute skinned points using specified skinning method attr
+    /// (fallback to linear blend skinning if not specified)
     /// Both \p xforms and \p points are given in _skeleton space_,
     /// using the joint order of the bound skeleton.
     /// Joint influences and the (optional) binding transform are computed
@@ -203,7 +193,8 @@ public:
                               VtVec3fArray* points,
                               UsdTimeCode time=UsdTimeCode::Default()) const;
 
-    /// Compute skinned normals using linear blend skinning.
+    /// Compute skinned normals using specified skinning method attr
+    /// (fallback to linear blend skinning if not specified)
     /// Both \p xforms and \p points are given in _skeleton space_,
     /// using the joint order of the bound skeleton.
     /// Joint influences and the (optional) binding transform are computed
@@ -216,7 +207,8 @@ public:
                               VtVec3fArray* points,
                               UsdTimeCode time=UsdTimeCode::Default()) const;
 
-    /// Compute a skinning transform using linear blend skinning.
+    /// Compute a skinning transform using specified skinning method attr
+    /// (fallback to linear blend skinning if not specified)
     /// The \p xforms are given in _skeleton space_, using the joint order of
     /// the bound skeleton.
     /// Joint influences and the (optional) binding transform are computed
@@ -243,6 +235,9 @@ public:
                                 const UsdGeomBoundable& boundable) const;
 
     USDSKEL_API
+    TfToken GetSkinningMethod() const;
+
+    USDSKEL_API
     GfMatrix4d
     GetGeomBindTransform(UsdTimeCode time=UsdTimeCode::Default()) const;
 
@@ -266,13 +261,14 @@ private:
 
     UsdGeomPrimvar _jointIndicesPrimvar;
     UsdGeomPrimvar _jointWeightsPrimvar;
+    UsdAttribute _skinningMethodAttr;
     UsdAttribute _geomBindTransformAttr;
     UsdAttribute _blendShapes;
     UsdRelationship _blendShapeTargets;
     UsdSkelAnimMapperRefPtr _jointMapper;
     UsdSkelAnimMapperRefPtr _blendShapeMapper;
-    boost::optional<VtTokenArray> _jointOrder;
-    boost::optional<VtTokenArray> _blendShapeOrder;
+    std::optional<VtTokenArray> _jointOrder;
+    std::optional<VtTokenArray> _blendShapeOrder;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

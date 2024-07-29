@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_OBJECT_H
 #define PXR_USD_USD_OBJECT_H
@@ -34,6 +17,8 @@
 
 #include "pxr/usd/sdf/abstractData.h"
 #include "pxr/usd/sdf/path.h"
+
+#include "pxr/base/tf/hash.h"
 
 #include <type_traits>
 
@@ -180,8 +165,15 @@ public:
     }
 
     // hash_value overload for std/boost hash.
-    USD_API
-    friend size_t hash_value(const UsdObject &obj);
+    friend size_t hash_value(const UsdObject &obj) {
+        return TfHash()(obj);
+    }
+
+    // TfHash support
+    template <class HashState>
+    friend void TfHashAppend(HashState &h, const UsdObject &obj) {
+        h.Append(obj._type, obj._prim, obj._proxyPrimPath, obj._propName);
+    }
 
     /// Return the stage that owns the object, and to whose state and lifetime
     /// this object's validity is tied.
@@ -625,6 +617,30 @@ public:
     /// will return a meaningful value for documentation. 
     USD_API
     bool HasAuthoredDocumentation() const;
+
+    /// Return this object's display name (metadata).  This returns the
+    /// empty string if no display name has been set.
+    /// \sa SetDisplayName()
+    USD_API
+    std::string GetDisplayName() const;
+
+    /// Sets this object's display name (metadata).  Returns true on success.
+    ///
+    /// DisplayName is meant to be a descriptive label, not necessarily an
+    /// alternate identifier; therefore there is no restriction on which
+    /// characters can appear in it.
+    USD_API
+    bool SetDisplayName(const std::string& name) const;
+
+    /// Clears this object's display name (metadata) in the current EditTarget
+    /// (only).  Returns true on success.
+    USD_API
+    bool ClearDisplayName() const;
+
+    /// Returns true if displayName was explicitly authored and GetMetadata()
+    /// will return a meaningful value for displayName. 
+    USD_API
+    bool HasAuthoredDisplayName() const;
 
     // --------------------------------------------------------------------- //
     /// @}

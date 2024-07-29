@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -129,6 +112,12 @@ class TestUsdGeomPurposeVisibility(unittest.TestCase):
         imageable = UsdGeom.Imageable(imageablePrim)
         self.assertTrue(imageable)
 
+        # VisibilityAPI is not applied to Imageable prims by default 
+        rootVisAPI = UsdGeom.VisibilityAPI(rootPrim)
+        self.assertFalse(rootVisAPI)
+        imageableVisAPI = UsdGeom.VisibilityAPI(imageablePrim)
+        self.assertFalse(imageableVisAPI)
+
         # Test that overall visibility is initially visible and that purpose
         # visibility gives use the expected fallback values.
         self.assertEqual(
@@ -149,21 +138,41 @@ class TestUsdGeomPurposeVisibility(unittest.TestCase):
         self.assertTrue(UsdGeom.VisibilityAPI.CanApply(imageablePrim))
         self.assertFalse(UsdGeom.VisibilityAPI.CanApply(nonImageablePrim))
         
+        # None of the purpose visibilty attributes exist yet when queried via
+        # either UsdGeomImageable or UsdGeomVisibilityAPI.
         self.assertTrue(
             imageable.GetPurposeVisibilityAttr())
+        # Note that UsdGeomVisibilityAPI does not allow "default" as an input
+        # purpose to GetPurposeVisibilityAttr even though UsdGeomImageable does
+        # allow it. This will likely change when all visibility properties are
+        # moved out of Imageable into VisibilityAPI.
+        with self.assertRaises(Tf.ErrorException):
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.default_)
+
         self.assertFalse(
             imageable.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide))
         self.assertFalse(
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide))
+
+        self.assertFalse(
             imageable.GetPurposeVisibilityAttr(UsdGeom.Tokens.proxy))
         self.assertFalse(
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.proxy))
+
+        self.assertFalse(
             imageable.GetPurposeVisibilityAttr(UsdGeom.Tokens.render))
+        self.assertFalse(
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.render))
 
         # Test that GeomVisibilityAPI adds the expected purpose
         # visibility attributes.
         UsdGeom.VisibilityAPI.Apply(imageablePrim)
+        self.assertTrue(imageableVisAPI)
 
         guideVisibility = \
             imageable.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide)
+        self.assertEqual(guideVisibility, 
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide))
         self.assertEqual(guideVisibility.Get(), UsdGeom.Tokens.invisible)
         self.assertEqual(
             imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
@@ -171,6 +180,8 @@ class TestUsdGeomPurposeVisibility(unittest.TestCase):
 
         proxyVisibility = \
             imageable.GetPurposeVisibilityAttr(UsdGeom.Tokens.proxy)
+        self.assertEqual(proxyVisibility, 
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.proxy))
         self.assertEqual(proxyVisibility.Get(), UsdGeom.Tokens.inherited)
         self.assertEqual(
             imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.proxy),
@@ -178,6 +189,8 @@ class TestUsdGeomPurposeVisibility(unittest.TestCase):
 
         renderVisibility = \
             imageable.GetPurposeVisibilityAttr(UsdGeom.Tokens.render)
+        self.assertEqual(renderVisibility, 
+            imageableVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.render))
         self.assertEqual(renderVisibility.Get(), UsdGeom.Tokens.inherited)
         self.assertEqual(
             imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
@@ -187,8 +200,11 @@ class TestUsdGeomPurposeVisibility(unittest.TestCase):
         # Set purpose visibility on the root and ensure that it inherits as
         # expected.
         UsdGeom.VisibilityAPI.Apply(rootPrim)
+        self.assertTrue(rootVisAPI)
 
         guideVisibility = root.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide)
+        self.assertEqual(guideVisibility, 
+            rootVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide))
         guideVisibility.Set(UsdGeom.Tokens.visible)
         self.assertEqual(
             root.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
@@ -214,7 +230,98 @@ class TestUsdGeomPurposeVisibility(unittest.TestCase):
         self.assertEqual(
             imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
             UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
+            UsdGeom.Tokens.invisible)
 
+        # Unapply the VisibilityAPI from the root prim.
+        rootPrim.RemoveAPI(UsdGeom.VisibilityAPI)
+        self.assertFalse(rootPrim.HasAPI(UsdGeom.VisibilityAPI))
+
+        # Since VisibilityAPI is no longer applied, there are no longer 
+        # fallback attributes from the VisibilityAPI schema for the purpose
+        # visibility.
+        self.assertFalse(rootVisAPI)
+        # However, note that the guideVisibility attribute was authored above 
+        # in this test so VisibilityAPI's GetPurposeVisibilityAttr still returns
+        # it even though it is no longer applied.
+        self.assertTrue(
+            rootVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide))
+        self.assertFalse(
+            rootVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.proxy))
+        self.assertFalse(
+            rootVisAPI.GetPurposeVisibilityAttr(UsdGeom.Tokens.render))
+
+        # UsdGeomImageable's GetPurposedVisibilityAttr still returns the
+        # overall visibility attribute for default purpose since it is not tied
+        # to VisibilityAPI. However it does not return valid atttributes for the
+        # other purposes without VisibilityAPI. Note that this includes 
+        # guideVisibility even though the attribute exists and is authored.
+        self.assertTrue(
+            root.GetPurposeVisibilityAttr())
+        self.assertFalse(
+            root.GetPurposeVisibilityAttr(UsdGeom.Tokens.guide))
+        self.assertFalse(
+            root.GetPurposeVisibilityAttr(UsdGeom.Tokens.proxy))
+        self.assertFalse(
+            root.GetPurposeVisibilityAttr(UsdGeom.Tokens.render))
+
+        # Even without VisibilityAPI applied to root, root still has overall
+        # visibility set to "invisible" which overrides all purpose visibility
+        # and is inherited by the child Imageable.
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
+            UsdGeom.Tokens.invisible)
+
+        # Set root's overall visibility back to visible.
+        overallVisibility.Set(UsdGeom.Tokens.visible)
+
+        # Default and render visibility are back to the inherited defaults 
+        # again.
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(),
+            UsdGeom.Tokens.visible)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(),
+            UsdGeom.Tokens.visible)
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
+            UsdGeom.Tokens.inherited)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.render),
+            UsdGeom.Tokens.inherited)
+
+        # Guide visibility is back to the default of "invisible" again even 
+        # though guideVisibility exists on the root and has a value of 
+        # "visible". An authored guideVisibility attribute is ignored when 
+        # VisibilityAPI is not applied.
+        guideVisibility = rootVisAPI.GetPurposeVisibilityAttr(
+            UsdGeom.Tokens.guide)
+        self.assertEqual(guideVisibility.Get(), UsdGeom.Tokens.visible)
+        self.assertEqual(
+            root.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
+            UsdGeom.Tokens.invisible)
+        self.assertEqual(
+            imageable.ComputeEffectiveVisibility(UsdGeom.Tokens.guide),
+            UsdGeom.Tokens.invisible)
 
     def test_ComputePurposeVisibilityWithInstancing(self):
         """

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/clipCache.h"
@@ -38,6 +21,7 @@
 #include "pxr/base/gf/vec2d.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/mallocTag.h"
 #include "pxr/base/tf/ostreamMethods.h"
 
@@ -84,13 +68,12 @@ public:
         {
             inline size_t operator()(const ManifestKey& key) const
             {
-                size_t hash = key.primPath.GetHash();
-                boost::hash_combine(hash, TfHash()(key.clipSetName));
-                boost::hash_combine(hash, key.clipPrimPath.GetHash());
-                for (const auto& p : key.clipAssetPaths) {
-                    boost::hash_combine(hash, p.GetHash());
-                }
-                return hash;
+                return TfHash::Combine(
+                    key.primPath,
+                    key.clipSetName,
+                    key.clipPrimPath,
+                    key.clipAssetPaths
+                );
             }
         };
     };
@@ -210,17 +193,17 @@ Usd_ClipCache::PopulateClipsForPrim(
     const SdfPath& path, const PcpPrimIndex& primIndex)
 {
     TRACE_FUNCTION();
-    TfAutoMallocTag2 tag("Usd", "Usd_ClipCache::PopulateClipsForPrim");
+    TfAutoMallocTag tag("Usd", "Usd_ClipCache::PopulateClipsForPrim");
 
     std::vector<Usd_ClipSetRefPtr> allClips;
     _ComputeClipsFromPrimIndex(path, primIndex, &allClips);
 
     const bool primHasClips = !allClips.empty();
     if (primHasClips) {
-        tbb::mutex::scoped_lock lock;
-        if (_concurrentPopulationContext) {
-            lock.acquire(_concurrentPopulationContext->_mutex);
-        }
+        TRACE_SCOPE("Usd_ClipCache::PopulateClipsForPrim (primHasClips)");
+        std::unique_lock<std::mutex> lock = (_concurrentPopulationContext) ?
+            std::unique_lock<std::mutex>(_concurrentPopulationContext->_mutex) :
+            std::unique_lock<std::mutex>();
 
         // Find nearest ancestor with clips specified.
         const std::vector<Usd_ClipSetRefPtr>* ancestralClips = nullptr;
@@ -259,10 +242,10 @@ Usd_ClipCache::PopulateClipsForPrim(
 SdfLayerHandleSet
 Usd_ClipCache::GetUsedLayers() const
 {
-    tbb::mutex::scoped_lock lock;
-    if (_concurrentPopulationContext) {
-        lock.acquire(_concurrentPopulationContext->_mutex);
-    }
+    std::unique_lock<std::mutex> lock = (_concurrentPopulationContext) ?
+            std::unique_lock<std::mutex>(_concurrentPopulationContext->_mutex) :
+            std::unique_lock<std::mutex>();
+            
     SdfLayerHandleSet layers;
     for (_ClipTable::iterator::value_type const &clipsListIter : _table){
         for (Usd_ClipSetRefPtr const &clipSet : clipsListIter.second){
@@ -341,10 +324,9 @@ const std::vector<Usd_ClipSetRefPtr>&
 Usd_ClipCache::GetClipsForPrim(const SdfPath& path) const
 {
     TRACE_FUNCTION();
-    tbb::mutex::scoped_lock lock;
-    if (_concurrentPopulationContext) {
-        lock.acquire(_concurrentPopulationContext->_mutex);
-    }
+    std::unique_lock<std::mutex> lock = (_concurrentPopulationContext) ?
+        std::unique_lock<std::mutex>(_concurrentPopulationContext->_mutex) :
+        std::unique_lock<std::mutex>();
     return _GetClipsForPrim_NoLock(path);
 }
 

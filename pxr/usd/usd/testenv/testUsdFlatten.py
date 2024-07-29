@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # pylint: disable=range-builtin-not-iterating
 
@@ -399,6 +382,68 @@ class TestUsdFlatten(unittest.TestCase):
             resultLayer.QueryTimeSample(resultSubAttrSpec.path, 12.0), 200.0)
         self.assertEqual(
             resultLayer.QueryTimeSample(resultSubAttrSpec.path, 24.0), 201.0)
+        
+    def test_FlattenPathsWithMissungUriResolvers(self):
+        """Tests that when flattening, asset paths that contain URI schemes
+        for which there is no registered resolver are left unmodified
+        """
+
+        rootLayer = Sdf.Layer.CreateAnonymous(".usda")
+        rootLayer.ImportFromString("""
+        #usda 1.0
+
+        def "TestPrim"(
+            assetInfo = {
+                asset identifier = @test123://1.2.3.4/file3.txt@
+                asset[] assetRefArr = [@test123://1.2.3.4/file6.txt@]
+            }
+        )
+        {
+            asset uriAssetRef = @test123://1.2.3.4/file1.txt@
+            asset[] uriAssetRefArray = [@test123://1.2.3.4/file2.txt@]
+
+            asset uriAssetRef.timeSamples = {
+                0: @test123://1.2.3.4/file4.txt@,
+                1: @test123://1.2.3.4/file5.txt@,
+            }
+                                   
+            asset[] uriAssetRefArray.timeSamples = {
+                0: [@test123://1.2.3.4/file6.txt@],
+                1: [@test123://1.2.3.4/file7.txt@],               
+            }
+        }
+        """.strip())
+        
+        stage = Usd.Stage.Open(rootLayer)
+        flatStage = Usd.Stage.Open(stage.Flatten())
+
+        propPath = "/TestPrim.uriAssetRef"
+        stageProp = stage.GetPropertyAtPath(propPath)
+        flatStageProp = flatStage.GetPropertyAtPath(propPath)
+        self.assertEqual(stageProp.Get(), flatStageProp.Get())
+        
+        self.assertEqual(stageProp.GetTimeSamples(), flatStageProp.GetTimeSamples())
+        for timeSample in stageProp.GetTimeSamples():
+            self.assertEqual(stageProp.Get(timeSample), flatStageProp.Get(timeSample))
+
+        arrayPath = "/TestPrim.uriAssetRefArray"
+        arrayProp = stage.GetPropertyAtPath(arrayPath)
+        flatArrayProp = flatStage.GetPropertyAtPath(arrayPath)
+        self.assertEqual(arrayProp.Get(), flatArrayProp.Get())
+            
+        self.assertEqual(arrayProp.GetTimeSamples(), flatArrayProp.GetTimeSamples())
+    
+        for timeSample in arrayProp.GetTimeSamples():
+            self.assertEqual(arrayProp.Get(timeSample), flatArrayProp.Get(timeSample))
+
+        primPath = "/TestPrim"
+        self.assertEqual(
+            stage.GetPrimAtPath(primPath).GetMetadata("assetInfo").get("identifier"), 
+            flatStage.GetPrimAtPath(primPath).GetMetadata("assetInfo").get("identifier"))
+        
+        self.assertEqual(
+            stage.GetPrimAtPath(primPath).GetMetadata("assetInfo").get("assetRefArr"), 
+            flatStage.GetPrimAtPath(primPath).GetMetadata("assetInfo").get("assetRefArr"))
 
 if __name__ == "__main__":
     unittest.main()

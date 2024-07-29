@@ -1,31 +1,14 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/aov.h"
-#include "pxr/imaging/hd/binding.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/renderBuffer.h"
 #include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hdSt/binding.h"
 #include "pxr/imaging/hdSt/package.h"
 #include "pxr/imaging/hdSt/materialParam.h"
 #include "pxr/imaging/hdSt/renderBuffer.h"
@@ -38,7 +21,7 @@
 
 #include "pxr/imaging/hio/glslfx.h"
 
-#include <boost/functional/hash.hpp>
+#include "pxr/base/tf/hash.h"
 
 #include <string>
 
@@ -126,8 +109,15 @@ HdStRenderPassShader::HdStRenderPassShader()
 
 HdStRenderPassShader::HdStRenderPassShader(TfToken const &glslfxFile)
     : HdStShaderCode()
-    , _glslfxFile(glslfxFile)   // user-defined
-    , _glslfx(std::make_unique<HioGlslfx>(glslfxFile))
+    , _glslfx(std::make_shared<HioGlslfx>(glslfxFile))
+    , _hash(0)
+    , _hashValid(false)
+{
+}
+
+HdStRenderPassShader::HdStRenderPassShader(HioGlslfxSharedPtr const &glslfx)
+    : HdStShaderCode()
+    , _glslfx(glslfx)
     , _hash(0)
     , _hashValid(false)
 {
@@ -157,7 +147,7 @@ HdStRenderPassShader::ComputeHash() const
     // Custom buffer bindings may vary over time, requiring invalidation
     // of down stream clients.
     TF_FOR_ALL(it, _customBuffers) {
-        boost::hash_combine(_hash, it->second.ComputeHash());
+        _hash = TfHash::Combine(_hash, it->second.ComputeHash());
     }
 
     for (const HdStShaderCode::NamedTextureHandle &namedHandle :
@@ -165,8 +155,7 @@ HdStRenderPassShader::ComputeHash() const
         
         // Use name and hash only - not the texture itself as this
         // does not affect the generated shader source.
-        boost::hash_combine(_hash, namedHandle.name);
-        boost::hash_combine(_hash, namedHandle.hash);
+        _hash = TfHash::Combine(_hash, namedHandle.name, namedHandle.hash);
     }
 
     _hashValid = true;
@@ -209,14 +198,9 @@ HdStRenderPassShader::UnbindResources(const int program,
 }
 
 void
-HdStRenderPassShader::AddBufferBinding(HdBindingRequest const& req)
+HdStRenderPassShader::AddBufferBinding(HdStBindingRequest const& req)
 {
-    auto it = _customBuffers.insert({req.GetName(), req});
-    // Entry already existed and was equal to what we want to set it.
-    if (!it.second && it.first->second == req) {
-        return;
-    }
-    it.first->second = req;
+    _customBuffers[req.GetName()] = req;
     _hashValid = false;
 }
 
@@ -236,7 +220,7 @@ HdStRenderPassShader::ClearBufferBindings()
 
 /*virtual*/
 void
-HdStRenderPassShader::AddBindings(HdBindingRequestVector *customBindings)
+HdStRenderPassShader::AddBindings(HdStBindingRequestVector *customBindings)
 {
     // note: be careful, the logic behind this function is tricky.
     //
@@ -319,7 +303,7 @@ HdStRenderPassShader::UpdateAovInputTextures(
         HdStTextureHandleSharedPtr textureHandle =
             resourceRegistry->AllocateTextureHandle(
                 namedTextureIdentifier.id,
-                HdTextureType::Uv,
+                HdStTextureType::Uv,
                 samplerParameters,
                 /* memoryRequest = */ 0,
                 shared_from_this());
@@ -328,7 +312,7 @@ HdStRenderPassShader::UpdateAovInputTextures(
         _namedTextureHandles.push_back(
             HdStShaderCode::NamedTextureHandle{
                 namedTextureIdentifier.name,
-                HdTextureType::Uv,
+                HdStTextureType::Uv,
                 std::move(textureHandle),
                 /* hash = */ 0});
         

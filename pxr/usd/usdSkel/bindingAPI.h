@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USDSKEL_GENERATED_BINDINGAPI_H
 #define USDSKEL_GENERATED_BINDINGAPI_H
@@ -63,6 +46,11 @@ class SdfAssetPath;
 /// See the extended \ref UsdSkel_BindingAPI "UsdSkelBindingAPI schema"
 /// documentation for more about bindings and how they apply in a scene graph.
 /// 
+///
+/// For any described attribute \em Fallback \em Value or \em Allowed \em Values below
+/// that are text/tokens, the actual token is published and defined in \ref UsdSkelTokens.
+/// So to set an attribute to the value "rightHanded", use UsdSkelTokens->rightHanded
+/// as the value.
 ///
 class UsdSkelBindingAPI : public UsdAPISchemaBase
 {
@@ -171,6 +159,30 @@ private:
     // override SchemaBase virtuals.
     USDSKEL_API
     const TfType &_GetTfType() const override;
+
+public:
+    // --------------------------------------------------------------------- //
+    // SKINNINGMETHOD 
+    // --------------------------------------------------------------------- //
+    /// The skinningMethod specifies the skinning method for the prim.
+    ///
+    /// | ||
+    /// | -- | -- |
+    /// | Declaration | `uniform token primvars:skel:skinningMethod = "classicLinear"` |
+    /// | C++ Type | TfToken |
+    /// | \ref Usd_Datatypes "Usd Type" | SdfValueTypeNames->Token |
+    /// | \ref SdfVariability "Variability" | SdfVariabilityUniform |
+    /// | \ref UsdSkelTokens "Allowed Values" | classicLinear, dualQuaternion |
+    USDSKEL_API
+    UsdAttribute GetSkinningMethodAttr() const;
+
+    /// See GetSkinningMethodAttr(), and also 
+    /// \ref Usd_Create_Or_Get_Property for when to use Get vs Create.
+    /// If specified, author \p defaultValue as the attribute's default,
+    /// sparsely (when it makes sense to do so) if \p writeSparsely is \c true -
+    /// the default for \p writeSparsely is \c false.
+    USDSKEL_API
+    UsdAttribute CreateSkinningMethodAttr(VtValue const &defaultValue = VtValue(), bool writeSparsely=false) const;
 
 public:
     // --------------------------------------------------------------------- //

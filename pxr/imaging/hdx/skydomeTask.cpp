@@ -1,25 +1,8 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdx/skydomeTask.h"
 
@@ -33,7 +16,9 @@
 #include "pxr/imaging/hdSt/textureHandle.h"
 #include "pxr/imaging/hdSt/textureObject.h"
 
+#include "pxr/imaging/hd/renderDelegate.h"
 #include "pxr/imaging/hd/tokens.h"
+
 #include "pxr/imaging/hgi/hgi.h"
 #include "pxr/imaging/hgi/tokens.h"
 
@@ -49,6 +34,8 @@ TF_DEFINE_PRIVATE_TOKENS(
 HdxSkydomeTask::HdxSkydomeTask(HdSceneDelegate* delegate, SdfPath const& id)
     : HdxTask(id)
     , _setupTask()
+    , _settingsVersion(0)
+    , _skydomeVisibility(true)
 {
 }
 
@@ -95,6 +82,18 @@ HdxSkydomeTask::Prepare(HdTaskContext* ctx, HdRenderIndex* renderIndex)
     if (_setupTask) {
         _setupTask->Prepare(ctx, renderIndex);
     }
+
+    const HdRenderDelegate* renderDelegate = renderIndex->GetRenderDelegate();
+    const unsigned int currentSettingsVersion =
+        renderDelegate->GetRenderSettingsVersion();
+    if (_settingsVersion != currentSettingsVersion) {
+        _settingsVersion = currentSettingsVersion;
+        _skydomeVisibility = renderDelegate->
+            GetRenderSetting<bool>(
+                HdRenderSettingsTokens->domeLightCameraVisibility,
+                true);
+    }
+
     _renderIndex = renderIndex;
 }
 
@@ -114,26 +113,35 @@ HdxSkydomeTask::Execute(HdTaskContext* ctx)
     HgiGraphicsCmdsDesc gfxCmdsDesc = 
         hdStRenderPassState->MakeGraphicsCmdsDesc(_renderIndex);
 
-    // Get the Domelight's transformation matrix from the lighting Context
+    // If the skydome is visible by the camera, get the Domelight's
+    // transformation matrix from the lighting Context
     bool haveDomeLight = false;
     GfMatrix4f lightTransform(1);
-    GlfSimpleLightingContextRefPtr lightingContext;
-    if (_GetTaskContextData(ctx, HdxTokens->lightingContext, &lightingContext)){
+    if (_skydomeVisibility) {
+        GlfSimpleLightingContextRefPtr lightingContext;
+        if (_GetTaskContextData(ctx, HdxTokens->lightingContext,
+                                &lightingContext)) {
 
-        GlfSimpleLightVector const& lights = lightingContext->GetLights();
-        for (int i = 0; i < lightingContext->GetNumLightsUsed(); ++i) {
+            GlfSimpleLightVector const& lights = lightingContext->GetLights();
+            for (int i = 0; i < lightingContext->GetNumLightsUsed(); ++i) {
 
-            GlfSimpleLight const &light = lights[i]; 
-            if (light.IsDomeLight()) {
-                lightTransform = GfMatrix4f(light.GetTransform().GetInverse());
-                haveDomeLight = true;
-                break;
+                GlfSimpleLight const &light = lights[i]; 
+                if (light.IsDomeLight()) {
+                    lightTransform = GfMatrix4f(
+                        light.GetTransform().GetInverse());
+                    haveDomeLight = true;
+                    break;
+                }
             }
         }
     }
 
-    // Without a domelight/skydomeTexture, clear the AOVs
-    if (!haveDomeLight || !_GetSkydomeTexture(ctx)) {
+    const bool haveColorAOV = !gfxCmdsDesc.colorTextures.empty();
+
+    // If the skydome is not camera visible in a colorAOV or there is no
+    // domelight/skydomeTexture, clear the AOVs
+    if (!_skydomeVisibility || !haveColorAOV ||
+        !haveDomeLight || !_GetSkydomeTexture(ctx)) {
         _GetHgi()->SubmitCmds(_GetHgi()->CreateGraphicsCmds(gfxCmdsDesc).get());
         return;
     }
@@ -154,11 +162,10 @@ HdxSkydomeTask::Execute(HdTaskContext* ctx)
     }
     
     // Bind the skydome texture 
-    _compositor->BindTextures( {_tokens->skydomeTexture}, {_skydomeTexture} );
+    _compositor->BindTextures({_skydomeTexture});
 
     // Get the viewport size
-    GfVec4i viewport = hdStRenderPassState->ComputeViewport(
-        gfxCmdsDesc, /* flip = */ _GetHgi()->GetAPIName() == HgiTokens->OpenGL);
+    GfVec4i viewport = hdStRenderPassState->ComputeViewport();
 
     // Get the Color/Depth and Color/Depth Resolve Textures from the gfxCmdsDesc
     // so that the fullscreenShader can use them to create the appropriate

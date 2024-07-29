@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USDSKEL_TOKENS_H
 #define USDSKEL_TOKENS_H
@@ -74,13 +57,21 @@ struct UsdSkelTokensType {
     /// 
     /// UsdSkelAnimation
     const TfToken blendShapeWeights;
+    /// \brief "classicLinear"
+    /// 
+    /// Fallback value for UsdSkelBindingAPI::GetSkinningMethodAttr()
+    const TfToken classicLinear;
+    /// \brief "dualQuaternion"
+    /// 
+    /// Possible value for UsdSkelBindingAPI::GetSkinningMethodAttr()
+    const TfToken dualQuaternion;
     /// \brief "jointNames"
     /// 
     /// UsdSkelSkeleton
     const TfToken jointNames;
     /// \brief "joints"
     /// 
-    /// UsdSkelAnimation, UsdSkelSkeleton
+    /// UsdSkelSkeleton, UsdSkelAnimation
     const TfToken joints;
     /// \brief "normalOffsets"
     /// 
@@ -106,6 +97,10 @@ struct UsdSkelTokensType {
     /// 
     /// UsdSkelBindingAPI
     const TfToken primvarsSkelJointWeights;
+    /// \brief "primvars:skel:skinningMethod"
+    /// 
+    /// UsdSkelBindingAPI
+    const TfToken primvarsSkelSkinningMethod;
     /// \brief "restTransforms"
     /// 
     /// UsdSkelSkeleton
@@ -146,6 +141,26 @@ struct UsdSkelTokensType {
     /// 
     /// UsdSkelInbetweenShape - The weight location at which the inbetween shape applies.
     const TfToken weight;
+    /// \brief "BlendShape"
+    /// 
+    /// Schema identifer and family for UsdSkelBlendShape
+    const TfToken BlendShape;
+    /// \brief "SkelAnimation"
+    /// 
+    /// Schema identifer and family for UsdSkelAnimation
+    const TfToken SkelAnimation;
+    /// \brief "SkelBindingAPI"
+    /// 
+    /// Schema identifer and family for UsdSkelBindingAPI
+    const TfToken SkelBindingAPI;
+    /// \brief "Skeleton"
+    /// 
+    /// Schema identifer and family for UsdSkelSkeleton
+    const TfToken Skeleton;
+    /// \brief "SkelRoot"
+    /// 
+    /// Schema identifer and family for UsdSkelRoot
+    const TfToken SkelRoot;
     /// A vector of all of the tokens listed above.
     const std::vector<TfToken> allTokens;
 };

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_ACCESSOR_HELPERS_H
 #define PXR_USD_SDF_ACCESSOR_HELPERS_H
@@ -30,6 +13,8 @@
 #include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdf/spec.h"
 #include "pxr/usd/sdf/types.h"
+
+#include <type_traits>
 
 // This file defines macros intended to reduce the amount of boilerplate code
 // associated with adding new metadata to SdfSpec subclasses.  There's still a
@@ -170,6 +155,13 @@ SDF_ACCESSOR_CLASS::name_(                                                     \
 
 // Convenience macros to provide common combinations of value accessors
 
+// Convert non-trivial types like `std::string` to `const std::string&` while
+// preserving the type for `int`, `bool`, `char`, etc.
+template <typename T>
+using Sdf_SetParameter = std::conditional<
+    std::is_arithmetic<T>::value, std::add_const_t<T>,
+    std::add_lvalue_reference_t<std::add_const_t<T>>>;
+
 #define SDF_DEFINE_TYPED_GET_SET(name_, key_, getType_, setType_)              \
 SDF_DEFINE_GET(name_, key_, getType_)                                          \
 SDF_DEFINE_SET(name_, key_, setType_)
@@ -181,11 +173,11 @@ SDF_DEFINE_CLEAR(name_, key_)
 
 #define SDF_DEFINE_GET_SET(name_, key_, type_)                                 \
 SDF_DEFINE_TYPED_GET_SET(name_, key_, type_,                                   \
-                         boost::call_traits<type_>::param_type)
+                         Sdf_SetParameter<type_>::type)
 
 #define SDF_DEFINE_GET_SET_HAS_CLEAR(name_, key_, type_)                       \
 SDF_DEFINE_TYPED_GET_SET_HAS_CLEAR(name_, key_, type_,                         \
-                                   boost::call_traits<type_>::param_type)
+                                   Sdf_SetParameter<type_>::type)
 
 #define SDF_DEFINE_IS_SET(name_, key_)                                         \
 SDF_DEFINE_IS(name_, key_)                                                     \
@@ -203,7 +195,7 @@ SDF_DEFINE_DICTIONARY_SET(setName_, key_)
 // spec. These templates capture those differences.
 
 template <class T,
-          bool IsForSpec = boost::is_base_of<SdfSpec, T>::value>
+          bool IsForSpec = std::is_base_of<SdfSpec, T>::value>
 struct Sdf_AccessorHelpers;
 
 template <class T>

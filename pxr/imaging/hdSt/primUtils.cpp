@@ -1,29 +1,13 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/imaging/hdSt/primUtils.h"
 
+#include "pxr/imaging/hdSt/computation.h"
 #include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/drawItem.h"
 #include "pxr/imaging/hdSt/glslfxShader.h"
@@ -40,7 +24,6 @@
 #include "pxr/imaging/hd/bufferArrayRange.h"
 #include "pxr/imaging/hd/bufferSpec.h"
 #include "pxr/imaging/hd/bufferSource.h"
-#include "pxr/imaging/hd/computation.h"
 #include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/renderDelegate.h"
 #include "pxr/imaging/hd/rprim.h"
@@ -51,6 +34,8 @@
 #include "pxr/imaging/hf/diagnostic.h"
 
 #include "pxr/imaging/hio/glslfx.h"
+
+#include "pxr/imaging/hgi/capabilities.h"
 
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/staticData.h"
@@ -396,7 +381,7 @@ HdStIsValidBAR(HdBufferArrayRangeSharedPtr const& range)
 bool
 HdStCanSkipBARAllocationOrUpdate(
     HdBufferSourceSharedPtrVector const& sources,
-    HdStComputationSharedPtrVector const& computations,
+    HdStComputationComputeQueuePairVector const& computations,
     HdBufferArrayRangeSharedPtr const& curRange,
     HdDirtyBits dirtyBits)
 {
@@ -422,21 +407,17 @@ HdStCanSkipBARAllocationOrUpdate(
     HdDirtyBits dirtyBits)
 {
     return HdStCanSkipBARAllocationOrUpdate(
-        sources, HdStComputationSharedPtrVector(), curRange, dirtyBits);
+        sources, HdStComputationComputeQueuePairVector(), curRange, dirtyBits);
 }
 
 HdBufferSpecVector
-HdStGetRemovedPrimvarBufferSpecs(
-    HdBufferArrayRangeSharedPtr const& curRange,
+_GetRemovedPrimvarBufferSpecs(
+    HdBufferSpecVector const& curBarSpecs,
     HdPrimvarDescriptorVector const& newPrimvarDescs,
     HdExtComputationPrimvarDescriptorVector const& newCompPrimvarDescs,
     TfTokenVector const& internallyGeneratedPrimvarNames,
     SdfPath const& rprimId)
 {
-    if (!HdStIsValidBAR(curRange)) {
-        return HdBufferSpecVector();
-    }
-
     HdBufferSpecVector removedPrimvarSpecs;
     // Get the new list of primvar sources for the BAR. We need to use both
     // the primvar descriptor list (that we get via the scene delegate), as
@@ -452,12 +433,8 @@ HdStGetRemovedPrimvarBufferSpecs(
         newPrimvarNames.emplace_back(desc.name);
     }
 
-    // Get the buffer specs for the existing BAR...
-    HdBufferSpecVector curBarSpecs;
-    curRange->GetBufferSpecs(&curBarSpecs);
-
-    // ... and check if it has buffers that are neither in the new source list
-    // nor are internally generated.
+    // Check if the existing BAR has buffers that are neither in the new source
+    // list nor are internally generated.
     for (auto const& spec : curBarSpecs) {
 
         bool isInNewList =
@@ -488,12 +465,95 @@ HdBufferSpecVector
 HdStGetRemovedPrimvarBufferSpecs(
     HdBufferArrayRangeSharedPtr const& curRange,
     HdPrimvarDescriptorVector const& newPrimvarDescs,
+    HdExtComputationPrimvarDescriptorVector const& newCompPrimvarDescs,
+    TfTokenVector const& internallyGeneratedPrimvarNames,
+    SdfPath const& rprimId)
+{
+    if (!HdStIsValidBAR(curRange)) {
+        return HdBufferSpecVector();
+    }
+
+    HdBufferSpecVector curBarSpecs;
+    curRange->GetBufferSpecs(&curBarSpecs);
+
+    return _GetRemovedPrimvarBufferSpecs(curBarSpecs, newPrimvarDescs,
+        newCompPrimvarDescs, internallyGeneratedPrimvarNames, rprimId);
+}
+
+HdBufferSpecVector
+HdStGetRemovedPrimvarBufferSpecs(
+    HdBufferArrayRangeSharedPtr const& curRange,
+    HdPrimvarDescriptorVector const& newPrimvarDescs,
     TfTokenVector const& internallyGeneratedPrimvarNames,
     SdfPath const& rprimId)
 {
     return HdStGetRemovedPrimvarBufferSpecs(curRange, newPrimvarDescs,
         HdExtComputationPrimvarDescriptorVector(),
         internallyGeneratedPrimvarNames, rprimId);
+}
+
+// XXX: Not currently exported; does anyone else need it?
+HdBufferSpecVector
+HdStGetRemovedOrReplacedPrimvarBufferSpecs(
+    HdBufferArrayRangeSharedPtr const& curRange,
+    HdPrimvarDescriptorVector const& newPrimvarDescs,
+    HdExtComputationPrimvarDescriptorVector const& newCompPrimvarDescs,
+    TfTokenVector const& internallyGeneratedPrimvarNames,
+    HdBufferSpecVector const& updatedSpecs,
+    SdfPath const& rprimId)
+{
+    if (!HdStIsValidBAR(curRange)) {
+        return HdBufferSpecVector();
+    }
+
+    HdBufferSpecVector curBarSpecs;
+    curRange->GetBufferSpecs(&curBarSpecs);
+
+    HdBufferSpecVector removedOrReplacedSpecs = _GetRemovedPrimvarBufferSpecs(
+        curBarSpecs, newPrimvarDescs, newCompPrimvarDescs,
+        internallyGeneratedPrimvarNames, rprimId);
+
+    // Sometimes the buffer spec for a given named primvar has changed, e.g.,
+    // when an array-valued primvar has changed size. Such specs are not
+    // in removedSpecs at this point, so we need to add them to ensure that
+    // the old spec gets removed. Otherwise we will get shader compilation
+    // errors after the new spec has been added because the primvar variable
+    // will be defined twice.
+
+    for (const auto& curSpec : curBarSpecs) {
+        const auto newSpec = std::find_if(updatedSpecs.begin(),
+            updatedSpecs.end(), 
+            [&](const auto& spec) { return spec.name == curSpec.name; });
+        // If we find a new spec that matches by name, we check if it is
+        // different from the old spec. If it is, it needs to be removed.
+        // The call to UpdateShaderStorageBufferArrayRange below will add
+        // the new spec regardless, but will only remove the old one if it
+        // is in removedSpecs. This fixes the case where resized array-valued
+        // constant primvars were being declared multiple times causing
+        // shader compilation failures.
+        if (newSpec != updatedSpecs.end() && 
+            curSpec != *newSpec) {
+                TF_DEBUG(HD_RPRIM_UPDATED).Msg(
+                    "%s: Found primvar %s that has been replaced\n",
+                    rprimId.GetText(), curSpec.name.GetText());
+                removedOrReplacedSpecs.push_back(curSpec);
+        }
+    }
+    return removedOrReplacedSpecs;
+}
+
+HdBufferSpecVector
+HdStGetRemovedOrReplacedPrimvarBufferSpecs(
+    HdBufferArrayRangeSharedPtr const& curRange,
+    HdPrimvarDescriptorVector const& newPrimvarDescs,
+    TfTokenVector const& internallyGeneratedPrimvarNames,
+    HdBufferSpecVector const& updatedSpecs,
+    SdfPath const& rprimId)
+{
+    return HdStGetRemovedOrReplacedPrimvarBufferSpecs(
+        curRange, newPrimvarDescs,
+        HdExtComputationPrimvarDescriptorVector(),
+        internallyGeneratedPrimvarNames, updatedSpecs, rprimId);
 }
 
 void
@@ -658,7 +718,7 @@ HdStPopulateConstantPrimvars(
     HdRprimSharedData *sharedData,
     HdSceneDelegate *delegate,
     HdRenderParam *renderParam,
-    HdDrawItem *drawItem,
+    HdStDrawItem *drawItem,
     HdDirtyBits *dirtyBits,
     HdPrimvarDescriptorVector const& constantPrimvars,
     bool *hasMirroredTransform)
@@ -680,13 +740,19 @@ HdStPopulateConstantPrimvars(
         const GfMatrix4d transform = delegate->GetTransform(id);
         sharedData->bounds.SetMatrix(transform); // for CPU frustum culling
 
-        sources.push_back(
-            std::make_shared<HdVtBufferSource>(
-                HdTokens->transform, transform));
+        HgiCapabilities const * capabilities =
+            hdStResourceRegistry->GetHgi()->GetCapabilities();
+        bool const doublesSupported = capabilities->IsSet(
+            HgiDeviceCapabilitiesBitsShaderDoublePrecision);
 
         sources.push_back(
             std::make_shared<HdVtBufferSource>(
-                HdTokens->transformInverse, transform.GetInverse()));
+                HdTokens->transform, transform, doublesSupported));
+
+        sources.push_back(
+            std::make_shared<HdVtBufferSource>(
+                HdTokens->transformInverse, transform.GetInverse(),
+                doublesSupported));
 
         bool leftHanded = transform.IsLeftHanded();
 
@@ -707,12 +773,14 @@ HdStPopulateConstantPrimvars(
                 std::make_shared<HdVtBufferSource>(
                     HdInstancerTokens->instancerTransform,
                     rootTransforms,
-                    rootTransforms.size()));
+                    rootTransforms.size(),
+                    doublesSupported));
             sources.push_back(
                 std::make_shared<HdVtBufferSource>(
                     HdInstancerTokens->instancerTransformInverse,
                     rootInverseTransforms,
-                    rootInverseTransforms.size()));
+                    rootInverseTransforms.size(),
+                    doublesSupported));
 
             // XXX: It might be worth to consider to have isFlipped
             // for non-instanced prims as well. It can improve
@@ -805,6 +873,9 @@ HdStPopulateConstantPrimvars(
         return;
     }
 
+    HdBufferSpecVector bufferSpecs;
+    HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
+
     // XXX: This should be based off the DirtyPrimvarDesc bit.
     bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
     HdBufferSpecVector removedSpecs;
@@ -820,17 +891,14 @@ HdStPopulateConstantPrimvars(
             HdTokens->bboxLocalMax,
             HdTokens->primID
         };
-        removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, constantPrimvars, 
-            internallyGeneratedPrimvars, id);
+        removedSpecs = HdStGetRemovedOrReplacedPrimvarBufferSpecs(bar,
+            constantPrimvars, internallyGeneratedPrimvars, bufferSpecs, id);
     }
-
-    HdBufferSpecVector bufferSpecs;
-    HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
 
     HdBufferArrayRangeSharedPtr range =
         hdStResourceRegistry->UpdateShaderStorageBufferArrayRange(
             HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHint());
+            HdBufferArrayUsageHintBitsStorage);
     
      HdStUpdateDrawItemBAR(
         range,
@@ -937,9 +1005,22 @@ HdStUpdateInstancerData(
             }
 
             // update instance indices
-            VtIntArray instanceIndices =
+            //
+            // We add a zero as the first value in instanceIndices. This is 
+            // added as a way of avoiding correctness issues in the instance
+            // frustum cull vertex shader. This issue happens when an instanced 
+            // prim has geom subsets resulting in multiple draw items. See
+            // ViewFrustumCull.VertexInstancing in frustumCull.glslfx for
+            // details.
+            VtIntArray const originalInstanceIndices =
                 static_cast<HdStInstancer*>(instancer)->
                 GetInstanceIndices(prim->GetId());
+            VtIntArray instanceIndices =
+                VtIntArray(originalInstanceIndices.size() + 1);
+            instanceIndices[0] = 0;
+            std::copy(originalInstanceIndices.cbegin(),
+                      originalInstanceIndices.cend(),
+                      instanceIndices.begin() + 1);
 
             HdStResourceRegistry* const resourceRegistry =
                 static_cast<HdStResourceRegistry*>(
@@ -959,11 +1040,15 @@ HdStUpdateInstancerData(
                     HdInstancerTokens->culledInstanceIndices,
                     HdTupleType {HdTypeInt32, 1});
 
+                HdBufferArrayUsageHint usageHint = 
+                    HdBufferArrayUsageHintBitsIndex | 
+                    HdBufferArrayUsageHintBitsStorage;
+
                 HdBufferArrayRangeSharedPtr const range =
                     resourceRegistry->AllocateNonUniformBufferArrayRange(
                         HdTokens->topology,
                         bufferSpecs,
-                        HdBufferArrayUsageHint());
+                        usageHint);
 
                 HdStUpdateDrawItemBAR(
                     range,
@@ -1130,7 +1215,7 @@ void HdStProcessTopologyVisibility(
             resourceRegistry->AllocateShaderStorageBufferArrayRange(
                 HdTokens->topologyVisibility,
                 bufferSpecs,
-                HdBufferArrayUsageHint());
+                HdBufferArrayUsageHintBitsStorage);
         sharedData->barContainer.Set(
             drawItem->GetDrawingCoord()->GetTopologyVisibilityIndex(), range);
 
@@ -1159,7 +1244,7 @@ uint64_t
 HdStComputeSharedPrimvarId(
     uint64_t baseId,
     HdBufferSourceSharedPtrVector const &sources,
-    HdStComputationSharedPtrVector const &computations)
+    HdStComputationComputeQueuePairVector const &computations)
 {
     size_t primvarId = baseId;
     for (HdBufferSourceSharedPtr const &bufferSource : sources) {
@@ -1196,11 +1281,11 @@ HdStComputeSharedPrimvarId(
 
 void 
 HdStGetBufferSpecsFromCompuations(
-    HdStComputationSharedPtrVector const& computations,
+    HdStComputationComputeQueuePairVector const& computations,
     HdBufferSpecVector *bufferSpecs) 
 {
     for (auto const &compQueuePair : computations) {
-        HdComputationSharedPtr const& comp = compQueuePair.first;
+        HdStComputationSharedPtr const& comp = compQueuePair.first;
         if (comp->IsValid()) {
             comp->GetBufferSpecs(bufferSpecs);
         }

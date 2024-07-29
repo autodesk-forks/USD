@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USDMEDIA_TOKENS_H
 #define USDMEDIA_TOKENS_H
@@ -66,6 +49,10 @@ struct UsdMediaTokensType {
     /// 
     /// UsdMediaSpatialAudio
     const TfToken auralMode;
+    /// \brief "defaultImage"
+    /// 
+    /// Dictionary key in a Thumbnails dictionary for the default thumbnail image. 
+    const TfToken defaultImage;
     /// \brief "endTime"
     /// 
     /// UsdMediaSpatialAudio
@@ -100,7 +87,7 @@ struct UsdMediaTokensType {
     const TfToken nonSpatial;
     /// \brief "onceFromStart"
     /// 
-    /// Possible value for UsdMediaSpatialAudio::GetPlaybackModeAttr(), Default value for UsdMediaSpatialAudio::GetPlaybackModeAttr()
+    /// Fallback value for UsdMediaSpatialAudio::GetPlaybackModeAttr()
     const TfToken onceFromStart;
     /// \brief "onceFromStartToEnd"
     /// 
@@ -110,14 +97,38 @@ struct UsdMediaTokensType {
     /// 
     /// UsdMediaSpatialAudio
     const TfToken playbackMode;
+    /// \brief "previews"
+    /// 
+    /// Dictionary key in the assetInfo dictionary for asset previews sub-dictionary. 
+    const TfToken previews;
+    /// \brief "previews:thumbnails"
+    /// 
+    /// Full key in the assetInfo dictionary for thumbnails previews dictionary. 
+    const TfToken previewThumbnails;
+    /// \brief "previews:thumbnails:default"
+    /// 
+    /// Full key in the assetInfo dictionary for the "default" thumbnails in the previews dictionary. 
+    const TfToken previewThumbnailsDefault;
     /// \brief "spatial"
     /// 
-    /// Possible value for UsdMediaSpatialAudio::GetAuralModeAttr(), Default value for UsdMediaSpatialAudio::GetAuralModeAttr()
+    /// Fallback value for UsdMediaSpatialAudio::GetAuralModeAttr()
     const TfToken spatial;
     /// \brief "startTime"
     /// 
     /// UsdMediaSpatialAudio
     const TfToken startTime;
+    /// \brief "thumbnails"
+    /// 
+    /// Dictionary key in the assetInfo["previews"]  dictionary for thumbnails previews sub-dictionary. 
+    const TfToken thumbnails;
+    /// \brief "AssetPreviewsAPI"
+    /// 
+    /// Schema identifer and family for UsdMediaAssetPreviewsAPI
+    const TfToken AssetPreviewsAPI;
+    /// \brief "SpatialAudio"
+    /// 
+    /// Schema identifer and family for UsdMediaSpatialAudio
+    const TfToken SpatialAudio;
     /// A vector of all of the tokens listed above.
     const std::vector<TfToken> allTokens;
 };

@@ -1,25 +1,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 
 """A module for creating groups of constants. This is similar to the enum
@@ -85,30 +68,10 @@ class _MetaConstantsGroup(type):
         return iter(self._all)
 
 # We want to define a ConstantsGroup class that uses _MetaConstantsGroup
-# as its metaclass. The syntax for doing so in Python 3 is not backwards
-# compatible for Python 2, so we cannot just conditionally define one
-# form or the other because that will cause syntax errors when compiling
-# this file. To avoid this we add a layer of indirection through exec().
-if sys.version_info.major >= 3:
-    defineConstantsGroup = '''
+# as its metaclass.
 class ConstantsGroup(object, metaclass=_MetaConstantsGroup):
     """The base constant group class, intended to be inherited by actual groups
     of constants.
     """
-
     def __new__(cls, *args, **kwargs):
         raise TypeError("ConstantsGroup objects cannot be created.")
-'''
-else:
-    defineConstantsGroup = '''
-class ConstantsGroup(object):
-    """The base constant group class, intended to be inherited by actual groups
-    of constants.
-    """
-    __metaclass__ = _MetaConstantsGroup
-
-    def __new__(cls, *args, **kwargs):
-        raise TypeError("ConstantsGroup objects cannot be created.")
-'''
-
-exec(defineConstantsGroup)

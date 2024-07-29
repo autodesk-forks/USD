@@ -1,33 +1,16 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_RESOURCE_BINDER_H
 #define PXR_IMAGING_HD_ST_RESOURCE_BINDER_H
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hdSt/api.h"
+#include "pxr/imaging/hdSt/binding.h"
 #include "pxr/imaging/hd/version.h"
-#include "pxr/imaging/hd/binding.h"
 #include "pxr/imaging/hgi/capabilities.h"
 #include "pxr/imaging/hgi/handle.h"
 #include "pxr/base/tf/token.h"
@@ -49,7 +32,7 @@ using HdStBufferArrayRangeSharedPtr =
 
 using HdStShaderCodeSharedPtr = std::shared_ptr<class HdStShaderCode>;
 using HdStShaderCodeSharedPtrVector = std::vector<HdStShaderCodeSharedPtr>;
-using HdBindingRequestVector = std::vector<class HdBindingRequest>;
+using HdStBindingRequestVector = std::vector<class HdStBindingRequest>;
 
 using HgiTextureHandle = HgiHandle<class HgiTexture>;
 using HgiSamplerHandle = HgiHandle<class HgiSampler>;
@@ -192,7 +175,7 @@ public:
             std::vector<StructEntry> entries;
             int arraySize;
         };
-        typedef std::map<HdBinding, StructBlock> StructBlockBinding;
+        using StructBlockBinding = std::map<HdStBinding, StructBlock>;
 
         // -------------------------------------------------------------------
         // for a primvar in non-interleaved buffer array (Vertex, Element, ...)
@@ -203,7 +186,7 @@ public:
             TfToken name;
             TfToken dataType;
         };
-        typedef std::map<HdBinding, Primvar> PrimvarBinding;
+        using PrimvarBinding = std::map<HdStBinding, Primvar>;
 
         // -------------------------------------------------------------------
         // for a face-varying primvar in non-interleaved buffer array
@@ -214,7 +197,7 @@ public:
                 : Primvar(name, dataType), channel(channel) {}
             int channel;
         };
-        typedef std::map<HdBinding, FvarPrimvar> FvarPrimvarBinding;
+        using FvarPrimvarBinding = std::map<HdStBinding, FvarPrimvar>;
 
         // -------------------------------------------------------------------
         // for instance primvars
@@ -227,7 +210,7 @@ public:
             TfToken dataType;
             int level;
         };
-        typedef std::map<HdBinding, NestedPrimvar> NestedPrimvarBinding;
+        using NestedPrimvarBinding = std::map<HdStBinding, NestedPrimvar>;
 
         // -------------------------------------------------------------------
         // for shader parameter accessors
@@ -259,12 +242,13 @@ public:
                                                // material shader and for uv
                                                // and field textures.
             size_t arrayOfTexturesSize; // If the shaderParameterAccessor is 
-                                     // associated with an HdBinding of type 
+                                     // associated with an HdStBinding of type 
                                      // ARRAY_OF_TEXTURE_2D or 
                                      // BINDLESS_ARRAY_OF_TEXTURE_2D, this will 
                                      // indicate the size of the array.
         };
-        typedef std::map<HdBinding, ShaderParameterAccessor> ShaderParameterBinding;
+        using ShaderParameterBinding =
+                std::map<HdStBinding, ShaderParameterAccessor>;
 
         // -------------------------------------------------------------------
         // for specific buffer array (drawing coordinate, instance indices)
@@ -272,7 +256,7 @@ public:
             BindingDeclaration() {}
             BindingDeclaration(TfToken const &name,
                                TfToken const &dataType,
-                               HdBinding binding,
+                               HdStBinding binding,
                                bool isWritable = false)
                 : name(name)
                 , dataType(dataType)
@@ -281,9 +265,28 @@ public:
 
             TfToken name;
             TfToken dataType;
-            HdBinding binding;
+            HdStBinding binding;
             bool isWritable;
         };
+
+        // -------------------------------------------------------------------
+        // for accessing drawingCoord directly from a buffer
+        struct DrawingCoordBufferBinding {
+            DrawingCoordBufferBinding()
+                : bufferName()
+                , offset(0)
+                , stride(0) { }
+            DrawingCoordBufferBinding(TfToken const &bufferName,
+                                      uint32_t offset,
+                                      uint32_t stride)
+                : bufferName(bufferName)
+                , offset(offset)
+                , stride(stride) { }
+            TfToken bufferName;
+            uint32_t offset;
+            uint32_t stride;
+        };
+        DrawingCoordBufferBinding drawingCoordBufferBinding;
 
         // -------------------------------------------------------------------
 
@@ -309,8 +312,10 @@ public:
         BindingDeclaration culledInstanceIndexArrayBinding;
         BindingDeclaration instanceIndexBaseBinding;
         BindingDeclaration primitiveParamBinding;
+        BindingDeclaration tessFactorsBinding;
         BindingDeclaration edgeIndexBinding;
         BindingDeclaration coarseFaceIndexBinding;
+        BindingDeclaration indexBufferBinding;
         std::vector<BindingDeclaration> fvarPatchParamBindings;
         std::vector<BindingDeclaration> fvarIndicesBindings;
 
@@ -328,8 +333,9 @@ public:
     void ResolveBindings(HdStDrawItem const *drawItem,
                          HdStShaderCodeSharedPtrVector const &shaders,
                          MetaData *metaDataOut,
+                         MetaData::DrawingCoordBufferBinding const &dcBinding,
                          bool instanceDraw,
-                         HdBindingRequestVector const &customBindings,
+                         HdStBindingRequestVector const &customBindings,
                          HgiCapabilities const *capabilities);
 
     /// Assign all binding points used in computation.
@@ -374,7 +380,7 @@ public:
     HDST_API
     void GetBindingRequestBindingDesc(
                 HgiResourceBindingsDesc * bindingsDesc,
-                HdBindingRequest const & req) const;
+                HdStBindingRequest const & req) const;
 
     HDST_API
     void GetTextureBindingDesc(
@@ -389,6 +395,7 @@ public:
                 TfToken const & name,
                 HgiSamplerHandle const & texelSampler,
                 HgiTextureHandle const & texelTexture,
+                HgiSamplerHandle const & layoutSampler,
                 HgiTextureHandle const & layoutTexture) const;
 
     ////////////////////////////////////////////////////////////
@@ -396,9 +403,9 @@ public:
     ////////////////////////////////////////////////////////////
 
     HDST_API
-    void Bind(HdBindingRequest const& req) const;
+    void Bind(HdStBindingRequest const& req) const;
     HDST_API
-    void Unbind(HdBindingRequest const& req) const;
+    void Unbind(HdStBindingRequest const& req) const;
 
     /// bind/unbind BufferArray
     HDST_API
@@ -431,12 +438,6 @@ public:
     HDST_API
     void UnbindInstanceBufferArray(
         HdStBufferArrayRangeSharedPtr const &bar, int level) const;
-
-    /// bind/unbind shader parameters and textures
-    HDST_API
-    void BindShaderResources(HdStShaderCode const *shader) const;
-    HDST_API
-    void UnbindShaderResources(HdStShaderCode const *shader) const;
 
     /// piecewise buffer binding utility
     /// (to be used for frustum culling, draw indirect result)
@@ -479,10 +480,8 @@ public:
     }
 
     /// Returns binding point.
-    /// XXX: exposed temporarily for drawIndirectResult
-    /// see Hd_IndirectDrawBatch::_BeginGPUCountVisibleInstances()
-    HdBinding GetBinding(TfToken const &name, int level=-1) const {
-        HdBinding binding;
+    HdStBinding GetBinding(TfToken const &name, int level=-1) const {
+        HdStBinding binding;
         TfMapLookup(_bindingMap, NameAndLevel(name, level), &binding);
         return binding;
     }
@@ -513,6 +512,7 @@ public:
     void BindTextureWithLayout(TfToken const &name,
                                HgiSamplerHandle const &texelSampler,
                                HgiTextureHandle const &texelTexture,
+                               HgiSamplerHandle const &layoutSampler,
                                HgiTextureHandle const &layoutTexture,
                                const bool bind) const;
 
@@ -529,7 +529,7 @@ private:
                   (name == other.name && level < other.level);
         }
     };
-    typedef std::map<NameAndLevel, HdBinding> _BindingMap;
+    using _BindingMap = std::map<NameAndLevel, HdStBinding>;
     _BindingMap _bindingMap;
 };
 

@@ -11,6 +11,10 @@ pxr_library(usdShade
         sdr
         usd
         usdGeom
+        ${TBB_tbb_LIBRARY}
+    
+    INCLUDE_DIRS
+        ${TBB_INCLUDE_DIRS}
 
     PUBLIC_CLASSES
         connectableAPI
@@ -26,11 +30,16 @@ pxr_library(usdShade
         shaderDefUtils
         nodeGraph
         tokens
+        validatorTokens
+        udimUtils
         utils
 
     PUBLIC_HEADERS
         api.h
         types.h
+
+    CPPFILES
+        validators.cpp
 
     PYTHON_CPPFILES
         moduleDeps.cpp
@@ -50,6 +59,7 @@ pxr_library(usdShade
         wrapShaderDefUtils.cpp
         wrapTokens.cpp
         wrapTypes.cpp
+        wrapUdimUtils.cpp
         wrapUtils.cpp
 
     PYMODULE_FILES
@@ -73,11 +83,22 @@ pxr_build_test(testUsdShadeHasConnectableAPI
         testenv/testUsdShadeHasConnectableAPI.cpp
 )
 
+pxr_build_test(testUsdShadeValidators
+    LIBRARIES
+        sdr
+        tf
+        usd
+        usdShade
+    CPPFILES
+        testenv/testUsdShadeValidators.cpp
+)
+
 pxr_test_scripts(
     testenv/testUsdShadeBinding.py
     testenv/testUsdShadeConnectability.py
     testenv/testUsdShadeConnectableAPIBehavior.py
     testenv/testUsdShadeCoordSysAPI.py
+    testenv/testUsdShadeCoordSysAPIDeprecated.py
     testenv/testUsdShadeGetValueProducingAttribute.py
     testenv/testUsdShadeInterfaceInputConsumers.py
     testenv/testUsdShadeMaterialBinding.py
@@ -89,6 +110,7 @@ pxr_test_scripts(
     testenv/testUsdShadeNodeGraphs.py
     testenv/testUsdShadeShaders.py
     testenv/testUsdShadeShaderDef.py
+    testenv/testUsdShadeUdimUtils.py
 )
 
 pxr_install_test_dir(
@@ -96,10 +118,16 @@ pxr_install_test_dir(
     DEST testUsdShadeConnectableAPIBehavior
 )
 
-
 pxr_install_test_dir(
     SRC testenv/testUsdShadeCoordSysAPI
     DEST testUsdShadeCoordSysAPI
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdShadeCoordSysAPIDeprecated
+    DEST testUsdShadeCoordSysAPIDeprecated
+    ENV
+        USD_SHADE_COORD_SYS_IS_MULTI_APPLY="False"
 )
 
 pxr_install_test_dir(
@@ -134,6 +162,16 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdShadeShaderDef
     DEST testUsdShadeShaderDef
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdShadeUdimUtils
+    DEST testUsdShadeUdimUtils
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdShadeValidators
+    DEST testUsdShadeValidators
 )
 
 pxr_register_test(testUsdShadeBinding
@@ -239,3 +277,15 @@ pxr_register_test(testUsdShadeConnectability_OldEncoding
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeConnectability"
     EXPECTED_RETURN_CODE 0
 )
+
+pxr_register_test(testUsdShadeUdimUtils
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeUdimUtils"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdShadeValidators
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeValidators"
+    EXPECTED_RETURN_CODE 0
+)
+

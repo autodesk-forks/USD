@@ -5,7 +5,9 @@
 
 def Xform "Geom"
 {
-    def Mesh "Plane"
+    def Mesh "Plane" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
     {
         float3[] extent = [(-2, -2, -2), (2, 2, 2)]
         int[] faceVertexCounts = [4]
@@ -58,7 +60,7 @@ def Scope "Materials"
         def Shader "Primvar"
         {
             uniform token info:id = "UsdPrimvarReader_float2"
-            token inputs:varname = "st"
+            string inputs:varname = "st"
             float2 outputs:result
         }
     }

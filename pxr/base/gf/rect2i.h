@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_GF_RECT2I_H
 #define PXR_BASE_GF_RECT2I_H
@@ -31,8 +14,7 @@
 #include "pxr/base/gf/math.h"
 #include "pxr/base/gf/vec2i.h"
 #include "pxr/base/gf/api.h"
-
-#include <boost/functional/hash.hpp>
+#include "pxr/base/tf/hash.h"
 
 #include <iosfwd>
 
@@ -267,10 +249,7 @@ public:
     }
 
     friend inline size_t hash_value(const GfRect2i &r) {
-        size_t h = 0;
-        boost::hash_combine(h, r._min);
-        boost::hash_combine(h, r._max);
-        return h;
+        return TfHash::Combine(r._min, r._max);
     }        
 
     /// Returns true if \p r1 and \p r2 are equal.

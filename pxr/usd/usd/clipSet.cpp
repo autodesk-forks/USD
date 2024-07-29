@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/clipSet.h"
@@ -29,6 +12,8 @@
 #include "pxr/usd/usd/debugCodes.h"
 #include "pxr/usd/usd/usdaFileFormat.h"
 #include "pxr/usd/usd/valueUtils.h"
+
+#include "pxr/usd/pcp/layerStack.h"
 
 #include "pxr/base/tf/staticTokens.h"
 
@@ -110,15 +95,25 @@ Usd_GenerateClipManifest(
                 if (!path.IsPropertyPath()) {
                     return;
                 }
-                SdfAttributeSpecHandle clipAttr = 
-                    clipLayer->GetAttributeAtPath(path);
-                if (clipAttr 
-                    && !manifestLayer->HasSpec(path)
+                // This code can be pretty hot so we want to 1, avoid the
+                // LayerHandle dereference cost more than once and 2, avoid the
+                // SdfSpec API (e.g. layer->GetAttributeAtPath()) since it has
+                // to take the layer's identity registry lock to produce the
+                // spec handle.
+                SdfLayer *layerPtr = get_pointer(clipLayer);
+                TfToken typeName;
+                SdfVariability variability;
+                if (!manifestLayer->HasSpec(path)
+                    && layerPtr->GetSpecType(path) == SdfSpecTypeAttribute
+                    && layerPtr->HasField(
+                        path, SdfFieldKeys->TypeName, &typeName)
+                    && layerPtr->HasField(
+                        path, SdfFieldKeys->Variability, &variability)
                     && clipLayer->GetNumTimeSamplesForPath(path) != 0) {
                     SdfJustCreatePrimAttributeInLayer(
-                        manifestLayer, path, 
-                        clipAttr->GetTypeName(),
-                        clipAttr->GetVariability());
+                        manifestLayer, path,
+                        layerPtr->GetSchema().FindType(typeName),
+                        variability);
                 }
             });
     }
@@ -295,7 +290,8 @@ Usd_ClipSet::New(
     //      message..
     if (!_ValidateClipFields(
             *clipDef.clipAssetPaths, *clipDef.clipPrimPath, 
-            *clipDef.clipActive, clipDef.clipTimes.get_ptr(), 
+            *clipDef.clipActive,
+            clipDef.clipTimes ? &(clipDef.clipTimes.value()) : nullptr,
             status)) {
         return nullptr;
     }
@@ -326,7 +322,9 @@ Usd_ClipSet::Usd_ClipSet(
     : name(name_)
     , sourceLayerStack(clipDef.sourceLayerStack)
     , sourcePrimPath(clipDef.sourcePrimPath)
-    , sourceLayerIndex(clipDef.indexOfLayerWhereAssetPathsFound)
+    , sourceLayer(
+        clipDef.sourceLayerStack->GetLayers()[
+            clipDef.indexOfLayerWhereAssetPathsFound])
     , clipPrimPath(SdfPath(*clipDef.clipPrimPath))
     , interpolateMissingClipValues(false)
 {

@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/textureBinder.h"
 #include "pxr/imaging/hdSt/ptexTextureObject.h"
@@ -53,31 +36,29 @@ HdSt_TextureBinder::GetBufferSpecs(
 
     for (const NamedTextureHandle & texture : textures) {
         switch (texture.type) {
-        case HdTextureType::Uv:
+        case HdStTextureType::Uv:
             if (useBindlessHandles) {
                 specs->emplace_back(
                     texture.name,
                     _bindlessHandleTupleType);
-            } else {
-                specs->emplace_back(
-                    _Concat(
-                        texture.name,
-                        HdSt_ResourceBindingSuffixTokens->valid),
-                    HdTupleType{HdTypeBool, 1});
             }
+            specs->emplace_back(
+                _Concat(
+                    texture.name,
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                HdTupleType{HdTypeBool, 1});
             break;
-        case HdTextureType::Field:
+        case HdStTextureType::Field:
             if (useBindlessHandles) {
                 specs->emplace_back(
                     texture.name,
                     _bindlessHandleTupleType);
-            } else {
-                specs->emplace_back(
-                    _Concat(
-                        texture.name,
-                        HdSt_ResourceBindingSuffixTokens->valid),
-                    HdTupleType{HdTypeBool, 1});
             }
+            specs->emplace_back(
+                _Concat(
+                    texture.name,
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                HdTupleType{HdTypeBool, 1});
             specs->emplace_back(
                 _Concat(
                     texture.name,
@@ -85,7 +66,7 @@ HdSt_TextureBinder::GetBufferSpecs(
                 HdTupleType{ (doublesSupported ?
                     HdTypeDoubleMat4 : HdTypeFloatMat4), 1});
             break;
-        case HdTextureType::Ptex:
+        case HdStTextureType::Ptex:
             if (useBindlessHandles) {
                 specs->emplace_back(
                     texture.name,
@@ -96,8 +77,13 @@ HdSt_TextureBinder::GetBufferSpecs(
                         HdSt_ResourceBindingSuffixTokens->layout),
                     _bindlessHandleTupleType);
             }
+            specs->emplace_back(
+                _Concat(
+                    texture.name,
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                HdTupleType{HdTypeBool, 1});
             break;
-        case HdTextureType::Udim:
+        case HdStTextureType::Udim:
             if (useBindlessHandles) {
                 specs->emplace_back(
                     texture.name,
@@ -108,6 +94,11 @@ HdSt_TextureBinder::GetBufferSpecs(
                         HdSt_ResourceBindingSuffixTokens->layout),
                     _bindlessHandleTupleType);
             }
+            specs->emplace_back(
+                _Concat(
+                    texture.name,
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                HdTupleType{HdTypeBool, 1});
             break;
         }
     }
@@ -177,14 +168,14 @@ public:
                     name,
                     HdSt_ResourceBinder::GetSamplerBindlessHandle(
                         sampler.GetSampler(), texture.GetTexture())));
-        } else {
-            sources->push_back(
-                std::make_shared<HdVtBufferSource>(
-                    _Concat(
-                        name,
-                        HdSt_ResourceBindingSuffixTokens->valid),
-                    VtValue(texture.IsValid())));
         }
+
+        sources->push_back(
+            std::make_shared<HdVtBufferSource>(
+                _Concat(
+                    name,
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                VtValue(texture.IsValid())));
     }
 
     static void Compute(
@@ -195,40 +186,27 @@ public:
         bool useBindlessHandles,
         bool doublesSupported)
     {
-        VtValue matrixVal;
-        if (doublesSupported) {
-            matrixVal = VtValue(texture.GetSamplingTransform());
-        } else {
-            GfMatrix4d dmatrix = texture.GetSamplingTransform();
-            GfMatrix4f fmatrix(
-                dmatrix[0][0], dmatrix[0][1], dmatrix[0][2], dmatrix[0][3],
-                dmatrix[1][0], dmatrix[1][1], dmatrix[1][2], dmatrix[1][3],
-                dmatrix[2][0], dmatrix[2][1], dmatrix[2][2], dmatrix[2][3],
-                dmatrix[3][0], dmatrix[3][1], dmatrix[3][2], dmatrix[3][3]);
-            matrixVal = VtValue(fmatrix);
-        }
-
-        sources->push_back(
-            std::make_shared<HdVtBufferSource>(
-                _Concat(
-                    name,
-                    HdSt_ResourceBindingSuffixTokens->samplingTransform),
-                matrixVal));
-
         if (useBindlessHandles) {
             sources->push_back(
                 std::make_shared<HdSt_BindlessSamplerBufferSource>(
                     name,
                     HdSt_ResourceBinder::GetSamplerBindlessHandle(
                         sampler.GetSampler(), texture.GetTexture())));
-        } else {
-            sources->push_back(
-                std::make_shared<HdVtBufferSource>(
-                    _Concat(
-                        name,
-                        HdSt_ResourceBindingSuffixTokens->valid),
-                    VtValue(texture.IsValid())));
         }
+        sources->push_back(
+            std::make_shared<HdVtBufferSource>(
+                _Concat(
+                    name,
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                VtValue(texture.IsValid())));
+        sources->push_back(
+            std::make_shared<HdVtBufferSource>(
+                _Concat(
+                    name,
+                    HdSt_ResourceBindingSuffixTokens->samplingTransform),
+                VtValue(texture.GetSamplingTransform()),
+                1,
+                doublesSupported));
     }
 
     static void Compute(
@@ -239,23 +217,27 @@ public:
         bool useBindlessHandles,
         bool doublesSupported)
     {
-        if (!useBindlessHandles) {
-            return;
+        if (useBindlessHandles) {
+            sources->push_back(
+                std::make_shared<HdSt_BindlessSamplerBufferSource>(
+                    name,
+                    HdSt_ResourceBinder::GetSamplerBindlessHandle(
+                        sampler.GetTexelsSampler(), texture.GetTexelTexture())));
+
+            sources->push_back(
+                std::make_shared<HdSt_BindlessSamplerBufferSource>(
+                    _Concat(
+                        name,
+                        HdSt_ResourceBindingSuffixTokens->layout),
+                    HdSt_ResourceBinder::GetTextureBindlessHandle(
+                        texture.GetLayoutTexture())));
         }
-
         sources->push_back(
-            std::make_shared<HdSt_BindlessSamplerBufferSource>(
-                name,
-                HdSt_ResourceBinder::GetSamplerBindlessHandle(
-                    sampler.GetTexelsSampler(), texture.GetTexelTexture())));
-
-        sources->push_back(
-            std::make_shared<HdSt_BindlessSamplerBufferSource>(
+            std::make_shared<HdVtBufferSource>(
                 _Concat(
                     name,
-                    HdSt_ResourceBindingSuffixTokens->layout),
-                HdSt_ResourceBinder::GetTextureBindlessHandle(
-                    texture.GetLayoutTexture())));
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                VtValue(texture.IsValid())));
     }
 
     static void Compute(
@@ -266,23 +248,27 @@ public:
         bool useBindlessHandles,
         bool doublesSupported)
     {
-        if (!useBindlessHandles) {
-            return;
+        if (useBindlessHandles) {
+            sources->push_back(
+                std::make_shared<HdSt_BindlessSamplerBufferSource>(
+                    name,
+                    HdSt_ResourceBinder::GetSamplerBindlessHandle(
+                        sampler.GetTexelsSampler(), texture.GetTexelTexture())));
+
+            sources->push_back(
+                std::make_shared<HdSt_BindlessSamplerBufferSource>(
+                    _Concat(
+                        name,
+                        HdSt_ResourceBindingSuffixTokens->layout),
+                    HdSt_ResourceBinder::GetTextureBindlessHandle(
+                        texture.GetLayoutTexture())));
         }
-
         sources->push_back(
-            std::make_shared<HdSt_BindlessSamplerBufferSource>(
-                name,
-                HdSt_ResourceBinder::GetSamplerBindlessHandle(
-                    sampler.GetTexelsSampler(), texture.GetTexelTexture())));
-
-        sources->push_back(
-            std::make_shared<HdSt_BindlessSamplerBufferSource>(
+            std::make_shared<HdVtBufferSource>(
                 _Concat(
                     name,
-                    HdSt_ResourceBindingSuffixTokens->layout),
-                HdSt_ResourceBinder::GetTextureBindlessHandle(
-                    texture.GetLayoutTexture())));
+                    HdSt_ResourceBindingSuffixTokens->valid),
+                VtValue(texture.IsValid())));
     }
 };
 
@@ -327,6 +313,7 @@ public:
             name,
             sampler.GetTexelsSampler(),
             texture.GetTexelTexture(),
+            sampler.GetLayoutSampler(),
             texture.GetLayoutTexture(),
             bind);
     }
@@ -342,6 +329,7 @@ public:
             name,
             sampler.GetTexelsSampler(),
             texture.GetTexelTexture(),
+            sampler.GetLayoutSampler(),
             texture.GetLayoutTexture(),
             bind);
     }
@@ -389,6 +377,7 @@ public:
                 name,
                 sampler.GetTexelsSampler(),
                 texture.GetTexelTexture(),
+                sampler.GetLayoutSampler(),
                 texture.GetLayoutTexture());
     }
 
@@ -404,11 +393,12 @@ public:
                 name,
                 sampler.GetTexelsSampler(),
                 texture.GetTexelTexture(),
+                sampler.GetLayoutSampler(),
                 texture.GetLayoutTexture());
     }
 };
 
-template<HdTextureType textureType, class Functor, typename ...Args>
+template<HdStTextureType textureType, class Functor, typename ...Args>
 void _CastAndCompute(
     HdStShaderCode::NamedTextureHandle const &namedTextureHandle,
     Args&& ...args)
@@ -449,20 +439,20 @@ void _Dispatch(
     Args&& ...args)
 {
     switch (namedTextureHandle.type) {
-    case HdTextureType::Uv:
-        _CastAndCompute<HdTextureType::Uv, Functor>(
+    case HdStTextureType::Uv:
+        _CastAndCompute<HdStTextureType::Uv, Functor>(
             namedTextureHandle, std::forward<Args>(args)...);
         break;
-    case HdTextureType::Field:
-        _CastAndCompute<HdTextureType::Field, Functor>(
+    case HdStTextureType::Field:
+        _CastAndCompute<HdStTextureType::Field, Functor>(
             namedTextureHandle, std::forward<Args>(args)...);
         break;
-    case HdTextureType::Ptex:
-        _CastAndCompute<HdTextureType::Ptex, Functor>(
+    case HdStTextureType::Ptex:
+        _CastAndCompute<HdStTextureType::Ptex, Functor>(
             namedTextureHandle, std::forward<Args>(args)...);
         break;
-    case HdTextureType::Udim:
-        _CastAndCompute<HdTextureType::Udim, Functor>(
+    case HdStTextureType::Udim:
+        _CastAndCompute<HdStTextureType::Udim, Functor>(
             namedTextureHandle, std::forward<Args>(args)...);
         break;
     }

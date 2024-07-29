@@ -1,39 +1,20 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
 
 #include "pxr/usd/usdUtils/coalescingDiagnosticDelegate.h"
+#include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/stackTrace.h"
 #include "pxr/base/arch/debugger.h"
 
 #include <memory>
 #include <tuple>
 #include <unordered_map>
-
-#include <boost/functional/hash.hpp>
-
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -45,11 +26,8 @@ namespace {
 
     struct _CoalescedItemHash {
         std::size_t operator()(const _CoalescedItem& i) const {
-            std::size_t hashVal = 0;
-            boost::hash_combine(hashVal, i.sourceLineNumber);
-            boost::hash_combine(hashVal, i.sourceFunction);
-            boost::hash_combine(hashVal, i.sourceFileName);
-            return hashVal;
+            return TfHash::Combine(
+                i.sourceLineNumber, i.sourceFunction, i.sourceFileName);
         }
     };
 
@@ -71,6 +49,13 @@ UsdUtilsCoalescingDiagnosticDelegate::UsdUtilsCoalescingDiagnosticDelegate()
 UsdUtilsCoalescingDiagnosticDelegate::~UsdUtilsCoalescingDiagnosticDelegate()
 {
     TfDiagnosticMgr::GetInstance().RemoveDelegate(this);
+
+    // Call TakeUncoalescedDiagnostics and then drop the result immediately
+    // to clean up any diagnostics that remain in the delegate. 
+    //
+    // This must be done after RemoveDelegate to ensure we don't enqueue
+    // more diagnostics after we've tried to clean up.
+    TakeUncoalescedDiagnostics();
 }
 
 void 
@@ -92,13 +77,13 @@ UsdUtilsCoalescingDiagnosticDelegate::IssueFatalError(const TfCallContext &ctx,
 void 
 UsdUtilsCoalescingDiagnosticDelegate::IssueStatus(const TfStatus &status)
 {
-    _diagnostics.push(new TfDiagnosticBase(status));
+    _diagnostics.push(new TfStatus(status));
 }
 
 void 
 UsdUtilsCoalescingDiagnosticDelegate::IssueWarning(const TfWarning &warning)
 {
-    _diagnostics.push(new TfDiagnosticBase(warning));
+    _diagnostics.push(new TfWarning(warning));
 }
 
 UsdUtilsCoalescingDiagnosticDelegateVector
@@ -114,9 +99,11 @@ UsdUtilsCoalescingDiagnosticDelegate::TakeCoalescedDiagnostics()
     // its position to maintain some sort of relative ordering.
     size_t vectorIndex = 0;
 
-    TfDiagnosticBase* handle;
+    TfDiagnosticBase* p = nullptr;
     while (!_diagnostics.empty()) {
-        if (_diagnostics.try_pop(handle)) {
+        if (_diagnostics.try_pop(p)) {
+            std::unique_ptr<TfDiagnosticBase> handle(p);
+            
             UsdUtilsCoalescingDiagnosticDelegateSharedItem sharedItem {
                 handle->GetSourceLineNumber(),
                 handle->GetSourceFunction(),
@@ -141,8 +128,6 @@ UsdUtilsCoalescingDiagnosticDelegate::TakeCoalescedDiagnostics()
             } else {
                 result[lookup->second].unsharedItems.push_back(unsharedItem);
             }
-
-            delete handle;
         }
     }
 
@@ -154,12 +139,10 @@ UsdUtilsCoalescingDiagnosticDelegate::TakeUncoalescedDiagnostics()
 {
     std::vector<std::unique_ptr<TfDiagnosticBase>> items;
 
-    TfDiagnosticBase* handle;
+    TfDiagnosticBase* p = nullptr;
     while (!_diagnostics.empty()) {
-        if (_diagnostics.try_pop(handle)) {
-            items.push_back(std::unique_ptr<TfDiagnosticBase>(
-                               new TfDiagnosticBase(*handle)));
-            delete handle;
+        if (_diagnostics.try_pop(p)) {
+            items.push_back(std::unique_ptr<TfDiagnosticBase>(p));
         }
     }
 

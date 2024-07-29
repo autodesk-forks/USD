@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_SCHEMA_TYPE_REGISTRATION_H
 #define PXR_USD_SDF_SCHEMA_TYPE_REGISTRATION_H
@@ -69,6 +52,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ((SdfFieldKeys->Documentation,           std::string))                   \
 ((SdfFieldKeys->EndFrame,                double))                        \
 ((SdfFieldKeys->EndTimeCode,             double))                        \
+((SdfFieldKeys->ExpressionVariables,     VtDictionary))                  \
 ((SdfFieldKeys->FramePrecision,          int))                           \
 ((SdfFieldKeys->FramesPerSecond,         double))                        \
 ((SdfFieldKeys->Hidden,                  bool))                          \
@@ -76,6 +60,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ((SdfFieldKeys->InheritPaths,            SdfPathListOp))                 \
 ((SdfFieldKeys->Instanceable,            bool))                          \
 ((SdfFieldKeys->Kind,                    TfToken))                       \
+((SdfFieldKeys->LayerRelocates,          SdfRelocates))                  \
 ((SdfFieldKeys->Owner,                   std::string))                   \
 ((SdfFieldKeys->PrimOrder,               std::vector<TfToken>))          \
 ((SdfFieldKeys->NoLoadHint,              bool))                          \
@@ -116,8 +101,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 ((SdfChildrenKeys->VariantChildren,            std::vector<TfToken>))    \
 ((SdfChildrenKeys->VariantSetChildren,         std::vector<TfToken>))
 
-#define _SDF_FIELDS_NAME(tup) BOOST_PP_TUPLE_ELEM(2, 0, tup)
-#define _SDF_FIELDS_TYPE(tup) BOOST_PP_TUPLE_ELEM(2, 1, tup)
+#define _SDF_FIELDS_NAME(tup) TF_PP_TUPLE_ELEM(0, tup)
+#define _SDF_FIELDS_TYPE(tup) TF_PP_TUPLE_ELEM(1, tup)
 
 /// Registers each built-in Sd field along with its C++ value type with
 /// \p reg. \p reg can be any type that has a member function:
@@ -129,10 +114,10 @@ template <class Registrar>
 inline void
 SdfRegisterFields(Registrar* reg)
 {
-#define _SDF_REGISTER_FIELDS(r, unused, elem)                        \
+#define _SDF_REGISTER_FIELDS(unused, elem)                                  \
     reg->template RegisterField< _SDF_FIELDS_TYPE(elem) >(_SDF_FIELDS_NAME(elem));
 
-    BOOST_PP_SEQ_FOR_EACH(_SDF_REGISTER_FIELDS, ~, _SDF_FIELDS)
+    TF_PP_SEQ_FOR_EACH(_SDF_REGISTER_FIELDS, ~, _SDF_FIELDS)
 #undef _SDF_REGISTER_FIELDS
 }
 
@@ -150,19 +135,19 @@ inline void
 SdfRegisterTypes(Registrar* reg)
 {
     // Register all of the C++ value types from the field list above.
-#define _SDF_REGISTER_TYPES(r, unused, elem)             \
+#define _SDF_REGISTER_TYPES(unused, elem)                                   \
     reg->template RegisterType< _SDF_FIELDS_TYPE(elem) >();
 
-    BOOST_PP_SEQ_FOR_EACH(_SDF_REGISTER_TYPES, ~, _SDF_FIELDS)
+    TF_PP_SEQ_FOR_EACH(_SDF_REGISTER_TYPES, ~, _SDF_FIELDS)
 #undef _SDF_REGISTER_TYPES
 
    // Also register all of the C++ value types for value types.
-#define _SDF_REGISTER_VALUE_TYPES(r, unused, elem)                     \
+#define _SDF_REGISTER_VALUE_TYPES(unused, elem)                        \
     {                                                                  \
         reg->template RegisterType<SDF_VALUE_CPP_TYPE(elem)>();        \
         reg->template RegisterType<SDF_VALUE_CPP_ARRAY_TYPE(elem)>();  \
     }
-    BOOST_PP_SEQ_FOR_EACH(_SDF_REGISTER_VALUE_TYPES, ~, SDF_VALUE_TYPES)
+    TF_PP_SEQ_FOR_EACH(_SDF_REGISTER_VALUE_TYPES, ~, SDF_VALUE_TYPES)
 #undef _SDF_REGISTER_VALUE_TYPES
 
     // Also register all of the C++ list op types supported for

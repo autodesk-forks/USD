@@ -2,28 +2,14 @@
 #
 # Copyright 2019 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 
 # positions and names of our variants
+# special case entry for 0, which represents a non-selection
+# in the variant selection combo box
+EMPTY = (0, '')
 CAPSULE = (1, 'capsule')
 CONE = (2, 'cone')
 CUBE = (3, 'cube')
@@ -36,7 +22,7 @@ VARIANT_INFO_NAME = 1
 FIRST_VARIANT = 'a_shapeVariant'
 SECOND_VARIANT = 'b_shapeVariant'
 
-from pxr.Usdviewq.qt import QtWidgets
+from pxr.Usdviewq.qt import QtWidgets, QtCore
 
 def _setupWidgets(appController):
     # Select our prim with the variant authored
@@ -128,6 +114,19 @@ def _testAllExpanded(appController):
     _selectVariant(appController, CAPSULE[VARIANT_INFO_POS], FIRST_VARIANT)
     _expandPrims(appController, ["/spheres", "/A", "/A/B", "/A/B/C"])
     initialExpandedPrims = _getExpandedPrims(appController)
+
+    # test to see if the display name of the capsule is showing
+    prim = appController._dataModel.stage.GetPrimAtPath("/Shapes/Pill")
+    item = appController._primToItemMap.get(prim)
+    assert item._nameData(QtCore.Qt.DisplayRole) == "CapsuleDisplayName"
+
+    # clear the a-variant and just select the b-variant
+    _selectVariant(appController, EMPTY[VARIANT_INFO_POS], FIRST_VARIANT)
+    _selectVariant(appController, CAPSULE[VARIANT_INFO_POS], SECOND_VARIANT)
+    prim = appController._dataModel.stage.GetPrimAtPath("/Shapes/Pill")
+    item = appController._primToItemMap.get(prim)
+    assert item._nameData(QtCore.Qt.DisplayRole) == "Pill"
+
     _selectVariant(appController, CAPSULE[VARIANT_INFO_POS], FIRST_VARIANT)
     _selectVariant(appController, CONE[VARIANT_INFO_POS], FIRST_VARIANT)
     expandedPrims = _getExpandedPrims(appController)

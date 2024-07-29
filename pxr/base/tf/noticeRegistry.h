@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_NOTICE_REGISTRY_H
 #define PXR_BASE_TF_NOTICE_REGISTRY_H
@@ -35,8 +18,6 @@
 #include "pxr/base/tf/notice.h"
 #include "pxr/base/tf/singleton.h"
 #include "pxr/base/tf/type.h"
-
-#include <boost/noncopyable.hpp>
 
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/spin_mutex.h>
@@ -68,9 +49,10 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// registry, since multiple active traversals (either by different threads,
 /// or because of reentrancy) should be rare.
 ///
-class Tf_NoticeRegistry : boost::noncopyable {
+class Tf_NoticeRegistry {
+    Tf_NoticeRegistry(const Tf_NoticeRegistry&) = delete;
+    Tf_NoticeRegistry& operator=(const Tf_NoticeRegistry&) = delete;
 public:
-    TF_API
     void _BeginDelivery(const TfNotice &notice,
                         const TfWeakBase *sender,
                         const std::type_info &senderType,
@@ -78,45 +60,35 @@ public:
                         const std::type_info &listenerType,
                         const std::vector<TfNotice::WeakProbePtr> &probes);
 
-    TF_API
     void _EndDelivery(const std::vector<TfNotice::WeakProbePtr> &probes);
     
     // Register a particular deliverer, return the key created for the
     // registration.
-    TF_API
     TfNotice::Key _Register(TfNotice::_DelivererBase* deliverer);
 
     // Send notice n to all interested listeners.
-    TF_API
     size_t _Send(const TfNotice &n, const TfType &noticeType,
                  const TfWeakBase *s, const void *senderUniqueId,
                  const std::type_info &senderType);
 
     // Remove listener instance indicated by \p key.  This is pass by
     // reference so we can mark the key as having been revoked.
-    TF_API
     void _Revoke(TfNotice::Key& key);
 
     // Abort if casting of a notice failed; warn if it succeeded but
     // TfSafeDynamic_cast was required.
-    TF_API
     void _VerifyFailedCast(const std::type_info& toType,
                            const TfNotice& notice, const TfNotice* castNotice);
     
     // Return reference to singleton object.
-    TF_API
     static Tf_NoticeRegistry& _GetInstance() {
         return TfSingleton<Tf_NoticeRegistry>::GetInstance();
     }
 
-    TF_API
     void _InsertProbe(const TfNotice::WeakProbePtr &probe);
-    TF_API
     void _RemoveProbe(const TfNotice::WeakProbePtr &probe);
 
-    TF_API
     void _IncrementBlockCount();
-    TF_API
     void _DecrementBlockCount();
 
 private:
@@ -254,8 +226,6 @@ private:
     std::atomic<size_t> _globalBlockCount;
     tbb::enumerable_thread_specific<size_t> _perThreadBlockCount;
 };
-
-TF_API_TEMPLATE_CLASS(TfSingleton<Tf_NoticeRegistry>);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

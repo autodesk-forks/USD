@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/garch/glApi.h"
 
@@ -68,13 +51,6 @@ HgiGLShaderGenerator::HgiGLShaderGenerator(
 {
     // Write out all GL shaders and add to shader sections
 
-    if (descriptor.shaderStage == HgiShaderStageFragment) {
-        if (descriptor.fragmentDescriptor.earlyFragmentTests) {
-            _shaderLayoutAttributes.emplace_back(
-                "layout (early_fragment_tests) in;\n");
-        }
-    }
-
     if (descriptor.shaderStage == HgiShaderStageCompute) {
 
         int workSizeX = descriptor.computeDescriptor.localSize[0];
@@ -115,6 +91,91 @@ HgiGLShaderGenerator::HgiGLShaderGenerator(
             "local_size_y = " + std::to_string(workSizeY) + ", "
             "local_size_z = " + std::to_string(workSizeZ) + ") in;\n"
         );
+    } else if (descriptor.shaderStage == HgiShaderStageTessellationControl) {
+        _shaderLayoutAttributes.emplace_back(
+            "layout (vertices = " +
+                descriptor.tessellationDescriptor.numVertsPerPatchOut +
+                ") out;\n");
+    } else if (descriptor.shaderStage == HgiShaderStageTessellationEval) {
+        if (descriptor.tessellationDescriptor.patchType ==
+                HgiShaderFunctionTessellationDesc::PatchType::Triangles) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (triangles) in;\n");
+        } else if (descriptor.tessellationDescriptor.patchType ==
+                HgiShaderFunctionTessellationDesc::PatchType::Quads) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (quads) in;\n");
+        } else if (descriptor.tessellationDescriptor.patchType ==
+                HgiShaderFunctionTessellationDesc::PatchType::Isolines) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (isolines) in;\n");
+        }
+        if (descriptor.tessellationDescriptor.spacing ==
+                HgiShaderFunctionTessellationDesc::Spacing::Equal) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (equal_spacing) in;\n");
+        } else if (descriptor.tessellationDescriptor.spacing ==
+                HgiShaderFunctionTessellationDesc::Spacing::FractionalEven) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (fractional_even_spacing) in;\n");
+        } else if (descriptor.tessellationDescriptor.spacing ==
+                HgiShaderFunctionTessellationDesc::Spacing::FractionalOdd) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (fractional_odd_spacing) in;\n");
+        }
+        if (descriptor.tessellationDescriptor.ordering ==
+                HgiShaderFunctionTessellationDesc::Ordering::CW) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (cw) in;\n");
+        } else if (descriptor.tessellationDescriptor.ordering ==
+                HgiShaderFunctionTessellationDesc::Ordering::CCW) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (ccw) in;\n");
+        }
+    } else if (descriptor.shaderStage == HgiShaderStageGeometry) {
+        if (descriptor.geometryDescriptor.inPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::InPrimitiveType::Points) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (points) in;\n");
+        } else if (descriptor.geometryDescriptor.inPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::InPrimitiveType::Lines) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (lines) in;\n");
+        } else if (descriptor.geometryDescriptor.inPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::InPrimitiveType::LinesAdjacency) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (lines_adjacency) in;\n");
+        } else if (descriptor.geometryDescriptor.inPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::InPrimitiveType::Triangles) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (triangles) in;\n");
+        } else if (descriptor.geometryDescriptor.inPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::InPrimitiveType::TrianglesAdjacency){
+            _shaderLayoutAttributes.emplace_back(
+                "layout (triangles_adjacency) in;\n");
+        }
+
+        if (descriptor.geometryDescriptor.outPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::OutPrimitiveType::Points) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (points, max_vertices = " +
+                descriptor.geometryDescriptor.outMaxVertices + ") out;\n");
+        } else if (descriptor.geometryDescriptor.outPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::OutPrimitiveType::LineStrip) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (line_strip, max_vertices = " +
+                descriptor.geometryDescriptor.outMaxVertices + ") out;\n");
+        } else if (descriptor.geometryDescriptor.outPrimitiveType ==
+            HgiShaderFunctionGeometryDesc::OutPrimitiveType::TriangleStrip) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (triangle_strip, max_vertices = " +
+                descriptor.geometryDescriptor.outMaxVertices + ") out;\n");
+        }
+    } else if (descriptor.shaderStage == HgiShaderStageFragment) {
+        if (descriptor.fragmentDescriptor.earlyFragmentTests) {
+            _shaderLayoutAttributes.emplace_back(
+                "layout (early_fragment_tests) in;\n");
+        }
     }
 
     _WriteTextures(descriptor.textures);
@@ -189,6 +250,8 @@ HgiGLShaderGenerator::_WriteMacros(std::ostream &ss)
           "#define ATOMIC_STORE(a, v) (a) = (v)\n"
           "#define ATOMIC_ADD(a, v) atomicAdd(a, v)\n"
           "#define ATOMIC_EXCHANGE(a, v) atomicExchange(a, v)\n"
+          "#define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, "
+          "expected, desired)\n"
           "#define atomic_int int\n"
           "#define atomic_uint uint\n";
 
@@ -196,9 +259,6 @@ HgiGLShaderGenerator::_WriteMacros(std::ostream &ss)
     ss << "\n"
         << "#define HGI_HAS_DOUBLE_TYPE 1\n"
         << "\n";
-
-    // Define platform independent baseInstance as 0
-    ss << "#define gl_BaseInstance 0\n";
 }
 
 void
@@ -311,8 +371,6 @@ HgiGLShaderGenerator::_WriteInOuts(
         "gl_FragColor",
         "gl_FragDepth",
         "gl_PointSize",
-        "gl_ClipDistance",
-        "gl_CullDistance",
     };
 
     const static std::unordered_map<std::string, std::string> takenInParams {
@@ -327,12 +385,12 @@ HgiGLShaderGenerator::_WriteInOuts(
         { HgiShaderKeywordTokens->hdSamplePosition, "gl_SamplePosition"},
         { HgiShaderKeywordTokens->hdFragCoord, "gl_FragCoord"},
         { HgiShaderKeywordTokens->hdBaseVertex, "gl_BaseVertex"},
-        { HgiShaderKeywordTokens->hdBaseInstance, "gl_BaseInstance"},
+        { HgiShaderKeywordTokens->hdBaseInstance, "0"},
         { HgiShaderKeywordTokens->hdFrontFacing, "gl_FrontFacing"},
         { HgiShaderKeywordTokens->hdLayer, "gl_Layer"},
         { HgiShaderKeywordTokens->hdViewportIndex, "gl_ViewportIndex"},
         { HgiShaderKeywordTokens->hdGlobalInvocationID, "gl_GlobalInvocationID"},
-        { HgiShaderKeywordTokens->hdBaryCoordNoPerspNV, "gl_BaryCoordNoPerspNV"},
+        { HgiShaderKeywordTokens->hdBaryCoordNoPersp, "gl_BaryCoordNoPerspNV"},
     };
 
     const bool in_qualifier = qualifier == "in";
@@ -348,7 +406,11 @@ HgiGLShaderGenerator::_WriteInOuts(
             const std::string &role = param.role;
             auto const& keyword = takenInParams.find(role);
             if (keyword != takenInParams.end()) {
-                if (role == HgiShaderKeywordTokens->hdGlobalInvocationID) {
+                if (role == HgiShaderKeywordTokens->hdGlobalInvocationID ||
+                    role == HgiShaderKeywordTokens->hdVertexID ||
+                    role == HgiShaderKeywordTokens->hdInstanceID ||
+                    role == HgiShaderKeywordTokens->hdBaseInstance ||
+                    role == HgiShaderKeywordTokens->hdBaryCoordNoPersp) {
                     CreateShaderSection<HgiGLKeywordShaderSection>(
                         paramName,
                         param.type,
@@ -375,6 +437,8 @@ HgiGLShaderGenerator::_WriteInOuts(
             paramName,
             param.type,
             param.interpolation,
+            param.sampling,
+            param.storage,
             attrs,
             qualifier,
             std::string(),
@@ -387,16 +451,18 @@ HgiGLShaderGenerator::_WriteInOutBlocks(
     const HgiShaderFunctionParamBlockDescVector &parameterBlocks,
     const std::string &qualifier)
 {
-    for(const HgiShaderFunctionParamBlockDesc &p : parameterBlocks) {
+    for (const HgiShaderFunctionParamBlockDesc &p : parameterBlocks) {
 
-        HgiGLShaderSectionPtrVector members;
+        HgiGLMemberShaderSectionPtrVector members;
         for(const HgiShaderFunctionParamBlockDesc::Member &member : p.members) {
 
             HgiGLMemberShaderSection *memberSection =
                 CreateShaderSection<HgiGLMemberShaderSection>(
                     member.name,
                     member.type,
-                    HgiInterpolationDefault,
+                    member.interpolation,
+                    member.sampling,
+                    HgiStorageDefault,
                     HgiShaderSectionAttributeVector(),
                     qualifier,
                     std::string(),

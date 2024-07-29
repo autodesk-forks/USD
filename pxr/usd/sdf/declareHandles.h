@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_DECLARE_HANDLES_H
 #define PXR_USD_SDF_DECLARE_HANDLES_H
@@ -30,6 +13,7 @@
 #include "pxr/usd/sdf/api.h"
 #include "pxr/base/arch/demangle.h"
 #include "pxr/base/arch/hints.h"
+#include "pxr/base/tf/delegatedCountPtr.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/weakPtrFacade.h"
 #include "pxr/base/tf/declarePtrs.h"
@@ -38,8 +22,6 @@
 #include <typeinfo>
 #include <type_traits>
 #include <vector>
-#include <boost/intrusive_ptr.hpp>
-#include <boost/operators.hpp>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -48,10 +30,10 @@ class SdfSpec;
 template <class T> class TfRefPtr;
 class Sdf_Identity;
 
-// Sdf_Identities are held via intrusive_ptr so that we can carefully
+// Sdf_Identities are held via TfDelegatedCountPtr so that we can carefully
 // manage the ref-count to avoid race conditions -- see
 // Sdf_IdentityRegistry::Identify().
-typedef boost::intrusive_ptr<Sdf_Identity> Sdf_IdentityRefPtr;
+using Sdf_IdentityRefPtr = TfDelegatedCountPtr<Sdf_Identity>;
 
 /// \class SdfHandle
 ///
@@ -60,7 +42,7 @@ typedef boost::intrusive_ptr<Sdf_Identity> Sdf_IdentityRefPtr;
 /// be expired.
 ///
 template <class T>
-class SdfHandle : private boost::totally_ordered<SdfHandle<T> > {
+class SdfHandle {
 public:
     typedef SdfHandle<T> This;
     typedef T SpecType;
@@ -135,12 +117,36 @@ public:
         return _spec == other._spec;
     }
 
+    /// \sa SdfHandle::operator==
+    friend bool operator!=(const SdfHandle& lhs, const SdfHandle& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
     /// Arranges handles in an arbitrary strict weak ordering.  Note that
     /// this ordering is stable across path changes.
     template <class U>
     bool operator<(const SdfHandle<U>& other) const
     {
         return _spec < other._spec;
+    }
+
+    /// \sa SdfHandle::operator<
+    friend bool operator>(const SdfHandle& lhs, const SdfHandle& rhs)
+    {
+        return rhs < lhs;
+    }
+
+    /// \sa SdfHandle::operator<
+    friend bool operator<=(const SdfHandle& lhs, const SdfHandle& rhs)
+    {
+        return !(rhs < lhs);
+    }
+
+    /// \sa SdfHandle::operator<
+    friend bool operator>=(const SdfHandle& lhs, const SdfHandle& rhs)
+    {
+        return !(lhs < rhs);
     }
 
     /// Hash.

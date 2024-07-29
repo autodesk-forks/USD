@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_USD_SKEL_UTILS_H
 #define PXR_USD_USD_SKEL_UTILS_H
@@ -468,12 +451,91 @@ UsdSkelInterleaveInfluences(const TfSpan<const int>& indices,
 /// @{
 
 
-/// Skin points using linear blend skinning (LBS).
+/// Skin points using linear blend skinning (LBS) or dual quaternion skinning (DQS).
 /// The \p jointXforms are \ref UsdSkel_Term_SkinningTransforms
 /// "skinning transforms", given in _skeleton space_, while the
 /// \p geomBindTransform provides the transform that transforms the initial
 /// \p points into the same _skeleton space_ that the skinning transforms
 /// were computed in.
+USDSKEL_API
+bool
+UsdSkelSkinPoints(const TfToken& skinningMethod,
+                  const GfMatrix4d& geomBindTransform,
+                  TfSpan<const GfMatrix4d> jointXforms,
+                  TfSpan<const int> jointIndices,
+                  TfSpan<const float> jointWeights,
+                  int numInfluencesPerPoint,
+                  TfSpan<GfVec3f> points,
+                  bool inSerial=false);
+
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinPoints(const TfToken& skinningMethod,
+                  const GfMatrix4f& geomBindTransform,
+                  TfSpan<const GfMatrix4f> jointXforms,
+                  TfSpan<const int> jointIndices,
+                  TfSpan<const float> jointWeights,
+                  int numInfluencesPerPoint,
+                  TfSpan<GfVec3f> points,
+                  bool inSerial=false);
+
+
+/// Skin points using linear blend skinning, with interleaved influences.
+USDSKEL_API
+bool
+UsdSkelSkinPoints(const TfToken& skinningMethod,
+                  const GfMatrix4d& geomBindTransform,
+                  TfSpan<const GfMatrix4d> jointXforms,
+                  TfSpan<const GfVec2f> influences,
+                  int numInfluencesPerPoint,
+                  TfSpan<GfVec3f> points,
+                  bool inSerial=false);
+
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinPoints(const TfToken& skinningMethod,
+                  const GfMatrix4f& geomBindTransform,
+                  TfSpan<const GfMatrix4f> jointXforms,
+                  TfSpan<const GfVec2f> influences,
+                  int numInfluencesPerPoint,
+                  TfSpan<GfVec3f> points,
+                  bool inSerial=false);
+
+
+/// \overload
+/// \deprecated Use form that takes TfSpan arguments.
+USDSKEL_API
+bool
+UsdSkelSkinPoints(const TfToken& skinningMethod,
+                  const GfMatrix4d& geomBindTransform,
+                  const VtMatrix4dArray& jointXforms,
+                  const VtIntArray& jointIndices,
+                  const VtFloatArray& jointWeights,
+                  int numInfluencesPerPoint,
+                  VtVec3fArray* points);
+
+
+/// \overload
+/// \deprecated Use form that takes TfSpan arguments.
+USDSKEL_API
+bool
+UsdSkelSkinPoints(const TfToken& skinningMethod,
+                  const GfMatrix4d& geomBindTransform,
+                  const GfMatrix4d* jointXforms,
+                  size_t numJoints,
+                  const int* jointIndices,
+                  const float* jointWeights,
+                  size_t numInfluences,
+                  int numInfluencesPerPoint,
+                  GfVec3f* points,
+                  size_t numPoints,
+                  bool inSerial=false);
+
+
 USDSKEL_API
 bool
 UsdSkelSkinPointsLBS(const GfMatrix4d& geomBindTransform,
@@ -545,9 +607,9 @@ UsdSkelSkinPointsLBS(const GfMatrix4d& geomBindTransform,
                      bool inSerial=false);
 
 
-/// Skin normals using linear blend skinning (LBS), for normals with _vertex_
-/// or _varying_ interpolation.
-/// Use UsdSkelSkinFaceVaryingNormalsLBS() for normals with _faceVarying__
+/// Skin normals using linear blend skinning (LBS) or dual quaternion skinning (DQS),
+/// for normals with _vertex_ or _varying_ interpolation.
+/// Use UsdSkelSkinFaceVaryingNormals() for normals with _faceVarying__
 /// interpolation.
 /// The \p jointXforms are the *inverse transposes* of the 3x3 component
 /// of the \ref UsdSkel_Term_SkinningTransforms" "skinning transforms",
@@ -555,6 +617,82 @@ UsdSkelSkinPointsLBS(const GfMatrix4d& geomBindTransform,
 /// *inverse transpose* of the matrix that transforms points from a
 /// bind pose ino the same _skeleton space_ that the skinning tranforms
 /// were computed in.
+USDSKEL_API
+bool
+UsdSkelSkinNormals(const TfToken& skinningMethod,
+                   const GfMatrix3d& geomBindTransform,
+                   TfSpan<const GfMatrix3d> jointXforms,
+                   TfSpan<const int> jointIndices,
+                   TfSpan<const float> jointWeights,
+                   int numInfluencesPerPoint,
+                   TfSpan<GfVec3f> normals,
+                   bool inSerial=false);
+
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinNormals(const TfToken& skinningMethod,
+                   const GfMatrix3f& geomBindTransform,
+                   TfSpan<const GfMatrix3f> jointXforms,
+                   TfSpan<const int> jointIndices,
+                   TfSpan<const float> jointWeights,
+                   int numInfluencesPerPoint,
+                   TfSpan<GfVec3f> normals,
+                   bool inSerial=false);
+
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinNormals(const TfToken& skinningMethod,
+                   const GfMatrix3d& geomBindTransform,
+                   TfSpan<const GfMatrix3d> jointXforms,
+                   TfSpan<const GfVec2f> influences,
+                   int numInfluencesPerPoint,
+                   TfSpan<GfVec3f> normals,
+                   bool inSerial=false);
+
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinNormals(const TfToken& skinningMethod,
+                   const GfMatrix3f& geomBindTransform,
+                   TfSpan<const GfMatrix3f> jointXforms,
+                   TfSpan<const GfVec2f> influences,
+                   int numInfluencesPerPoint,
+                   TfSpan<GfVec3f> normals,
+                   bool inSerial=false);
+
+
+/// Skin normals with _faceVarying_ interpolation using LBS or DQS
+USDSKEL_API
+bool
+UsdSkelSkinFaceVaryingNormals(const TfToken& skinningMethod,
+                              const GfMatrix3d& geomBindTransform,
+                              TfSpan<const GfMatrix3d> jointXforms,
+                              TfSpan<const int> jointIndices,
+                              TfSpan<const float> jointWeights,
+                              int numInfluencesPerPoint,
+                              TfSpan<const int> faceVertexIndices,
+                              TfSpan<GfVec3f> normals,
+                              bool inSerial=false);
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinFaceVaryingNormals(const TfToken& skinningMethod,
+                              const GfMatrix3f& geomBindTransform,
+                              TfSpan<const GfMatrix3f> jointXforms,
+                              TfSpan<const int> jointIndices,
+                              TfSpan<const float> jointWeights,
+                              int numInfluencesPerPoint,
+                              TfSpan<const int> faceVertexIndices,
+                              TfSpan<GfVec3f> normals,
+                              bool inSerial=false);
+
+
 USDSKEL_API
 bool
 UsdSkelSkinNormalsLBS(const GfMatrix3d& geomBindTransform,
@@ -624,11 +762,63 @@ UsdSkelSkinFaceVaryingNormalsLBS(const GfMatrix3f& geomBindTransform,
                                  bool inSerial=false);
 
 
-/// Skin a transform using linear blend skinning (LBS).
+/// Skin a transform using linear blend skinning (LBS) or dual quaternion skinning (DQS).
 /// The \p jointXforms are \ref UsdSkel_Term_SkinningTransforms
 /// "skinning transforms", given in _skeleton space_, while the
 /// \p geomBindTransform provides the transform that initially places
 /// a primitive in that same _skeleton space_.
+USDSKEL_API
+bool
+UsdSkelSkinTransform(const TfToken& skinningMethod,
+                     const GfMatrix4d& geomBindTransform,
+                     TfSpan<const GfMatrix4d> jointXforms,
+                     TfSpan<const int> jointIndices,
+                     TfSpan<const float> jointWeights,
+                     GfMatrix4d* xform);
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinTransform(const TfToken& skinningMethod,
+                     const GfMatrix4f& geomBindTransform,
+                     TfSpan<const GfMatrix4f> jointXforms,
+                     TfSpan<const int> jointIndices,
+                     TfSpan<const float> jointWeights,
+                     GfMatrix4f* xform);
+
+/// Overload taking interleaved joint influences.
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinTransform(const TfToken& skinningMethod,
+                     const GfMatrix4d& geomBindTransform,
+                     TfSpan<const GfMatrix4d> jointXforms,
+                     TfSpan<const GfVec2f> influences,
+                     GfMatrix4d* xform);
+
+/// \overload
+USDSKEL_API
+bool
+UsdSkelSkinTransform(const TfToken& skinningMethod,
+                     const GfMatrix4f& geomBindTransform,
+                     TfSpan<const GfMatrix4f> jointXforms,
+                     TfSpan<const GfVec2f> influences,
+                     GfMatrix4f* xform);
+
+/// \overload
+/// \deprecated Use form that takes TfSpan arguments.
+USDSKEL_API
+bool
+UsdSkelSkinTransform(const TfToken& skinningMethod,
+                     const GfMatrix4d& geomBindTransform,
+                     const GfMatrix4d* jointXforms,
+                     size_t numJoints,
+                     const int* jointIndices,
+                     const float* jointWeights,
+                     size_t numInfluences,
+                     GfMatrix4d* xform);
+
+
 USDSKEL_API
 bool
 UsdSkelSkinTransformLBS(const GfMatrix4d& geomBindTransform,

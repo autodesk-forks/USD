@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 
@@ -28,6 +11,7 @@
 #include "pxr/imaging/hdSt/basisCurvesShaderKey.h"
 #include "pxr/imaging/hdSt/basisCurvesTopology.h"
 #include "pxr/imaging/hdSt/bufferArrayRange.h"
+#include "pxr/imaging/hdSt/computation.h"
 #include "pxr/imaging/hdSt/drawItem.h"
 #include "pxr/imaging/hdSt/extCompGpuComputation.h"
 #include "pxr/imaging/hdSt/geometricShader.h"
@@ -47,9 +31,7 @@
 #include "pxr/base/gf/vec2i.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
-#include "pxr/imaging/hd/computation.h"
 #include "pxr/imaging/hd/repr.h"
-#include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hf/diagnostic.h"
 #include "pxr/base/vt/value.h"
 
@@ -289,16 +271,9 @@ HdStBasisCurves::_UpdateDrawItemGeometricShader(
         std::static_pointer_cast<HdStResourceRegistry>(
             renderIndex.GetResourceRegistry());
     
-    // For the time being, don't use complex curves on Metal. Support for this
-    // is planned for the future.
-    const bool hasMetalTessellation =
-        resourceRegistry->GetHgi()->GetCapabilities()->
-        IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
-    
     TfToken curveType = _topology->GetCurveType();
     TfToken curveBasis = _topology->GetCurveBasis();
-    bool supportsRefinement = _SupportsRefinement(_refineLevel) &&
-        !hasMetalTessellation;
+    bool supportsRefinement = _SupportsRefinement(_refineLevel);
     if (!supportsRefinement) {
         // XXX: Rendering non-linear (i.e., cubic) curves as linear segments
         // when unrefined can be confusing. Should we continue to do this?
@@ -329,8 +304,7 @@ HdStBasisCurves::_UpdateDrawItemGeometricShader(
     case HdBasisCurvesGeomStylePatch:
     {
         if (_SupportsRefinement(_refineLevel) &&
-            _SupportsUserWidths(drawItem) &&
-            !hasMetalTessellation) {
+            _SupportsUserWidths(drawItem)) {
             if (_SupportsUserNormals(drawItem)){
                 drawStyle = HdSt_BasisCurvesShaderKey::RIBBON;
                 normalStyle = HdSt_BasisCurvesShaderKey::ORIENTED;
@@ -381,6 +355,10 @@ HdStBasisCurves::_UpdateDrawItemGeometricShader(
         }
     }
 
+    bool const hasMetalTessellation =
+        resourceRegistry->GetHgi()->GetCapabilities()->
+            IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
+
     HdSt_BasisCurvesShaderKey shaderKey(curveType,
                                         curveBasis,
                                         drawStyle,
@@ -389,7 +367,8 @@ HdStBasisCurves::_UpdateDrawItemGeometricShader(
                                         _basisNormalInterpolation,
                                         shadingTerminal,
                                         hasAuthoredTopologicalVisiblity,
-                                        _pointsShadingEnabled);
+                                        _pointsShadingEnabled,
+                                        hasMetalTessellation);
 
     TF_DEBUG(HD_RPRIM_UPDATED).
             Msg("HdStBasisCurves(%s) - Shader Key PrimType: %s\n ",
@@ -730,10 +709,14 @@ HdStBasisCurves::_PopulateTopology(HdSceneDelegate *sceneDelegate,
 
             HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
 
+            HdBufferArrayUsageHint usageHint =
+                HdBufferArrayUsageHintBitsIndex |
+                HdBufferArrayUsageHintBitsStorage;
             // Set up the usage hints to mark topology as varying if
             // there is a previously set range.
-            HdBufferArrayUsageHint usageHint;
-            usageHint.bits.sizeVarying = drawItem->GetTopologyRange()? 1 : 0;
+            if (drawItem->GetTopologyRange()) {
+                usageHint |= HdBufferArrayUsageHintBitsSizeVarying;
+            }
 
             // allocate new range
             HdBufferArrayRangeSharedPtr range
@@ -786,10 +769,10 @@ void ProcessVertexOrVaryingPrimvar(
             id, name, interpolation, value, topology, sources, 1);
     } else if (value.IsHolding<VtVec2fArray>()) {
         AddVertexOrVaryingPrimvarSource<GfVec2f>(
-            id, name, interpolation, value, topology, sources, GfVec2f(1, 0));             
+            id, name, interpolation, value, topology, sources, GfVec2f(1, 0));
     } else if (value.IsHolding<VtVec3fArray>()) {
         AddVertexOrVaryingPrimvarSource<GfVec3f>(
-            id, name, interpolation, value, topology, sources, GfVec3f(1, 0, 0));   
+            id, name, interpolation, value, topology, sources, GfVec3f(1, 0, 0));
     } else if (value.IsHolding<VtVec4fArray>()) {
         AddVertexOrVaryingPrimvarSource<GfVec4f>(
             id, name, interpolation, value, topology, sources, GfVec4f(1, 0, 0, 1)); 
@@ -798,13 +781,13 @@ void ProcessVertexOrVaryingPrimvar(
             id, name, interpolation, value, topology, sources, 1);
     } else if (value.IsHolding<VtVec2dArray>()) {
         AddVertexOrVaryingPrimvarSource<GfVec2d>(
-            id, name, interpolation, value, topology, sources, GfVec2d(1, 0));            
+            id, name, interpolation, value, topology, sources, GfVec2d(1, 0));
     } else if (value.IsHolding<VtVec3dArray>()) {
         AddVertexOrVaryingPrimvarSource<GfVec3d>(
             id, name, interpolation, value, topology, sources, GfVec3d(1, 0, 0));
     } else if (value.IsHolding<VtVec4dArray>()) {
         AddVertexOrVaryingPrimvarSource<GfVec4d>(
-            id, name, interpolation, value, topology, sources, GfVec4d(1, 0, 0, 1));                
+            id, name, interpolation, value, topology, sources, GfVec4d(1, 0, 0, 1));
     } else if (value.IsHolding<VtIntArray>()) {
         AddVertexOrVaryingPrimvarSource<int>(
             id, name, interpolation, value, topology, sources, 1); 
@@ -869,7 +852,7 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferSourceSharedPtrVector sources;
     HdBufferSourceSharedPtrVector reserveOnlySources;
     HdBufferSourceSharedPtrVector separateComputationSources;
-    HdStComputationSharedPtrVector computations;
+    HdStComputationComputeQueuePairVector computations;
     sources.reserve(primvars.size());
 
     HdSt_GetExtComputationPrimvarsComputations(
@@ -936,7 +919,7 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
             HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHint());
+            HdBufferArrayUsageHintBitsVertex);
 
     HdStUpdateDrawItemBAR(
         range,
@@ -960,7 +943,7 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     }
     // add gpu computations to queue.
     for (auto const& compQueuePair : computations) {
-        HdComputationSharedPtr const& comp = compQueuePair.first;
+        HdStComputationSharedPtr const& comp = compQueuePair.first;
         HdStComputeQueue queue = compQueuePair.second;
         resourceRegistry->AddComputation(
             drawItem->GetVertexPrimvarRange(), comp, queue);
@@ -999,10 +982,6 @@ HdStBasisCurves::_PopulateVaryingPrimvars(HdSceneDelegate *sceneDelegate,
     // until we get can do a better pass on curve normals.)
     _basisNormalInterpolation = true;
 
-    if (primvars.empty()) {
-        return;
-    }
-    
     HdBufferSourceSharedPtrVector sources;
     sources.reserve(primvars.size());
 
@@ -1053,7 +1032,7 @@ HdStBasisCurves::_PopulateVaryingPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
             HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHint());
+            HdBufferArrayUsageHintBitsStorage);
 
     HdStUpdateDrawItemBAR(
         range,
@@ -1143,7 +1122,7 @@ HdStBasisCurves::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
             HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHint());
+            HdBufferArrayUsageHintBitsStorage);
 
     HdStUpdateDrawItemBAR(
         range,
@@ -1168,7 +1147,7 @@ static bool
 HdSt_HasResource(HdStDrawItem* drawItem, const TfToken& resourceToken){
     // Check for authored resource, we could leverage dirtyBits here as an
     // optimization, however the BAR is the ground truth, so until there is a
-    // known peformance issue, we just check them explicitly.
+    // known performance issue, we just check them explicitly.
     bool hasAuthoredResouce = false;
 
     typedef HdBufferArrayRangeSharedPtr HdBarPtr;

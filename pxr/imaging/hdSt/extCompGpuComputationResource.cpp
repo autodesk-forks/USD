@@ -1,41 +1,19 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hdSt/bufferArrayRange.h"
 #include "pxr/imaging/hdSt/codeGen.h"
+#include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/extCompGpuComputationResource.h"
 #include "pxr/imaging/hdSt/glslProgram.h"
 #include "pxr/imaging/hd/tokens.h"
 
-PXR_NAMESPACE_OPEN_SCOPE
+#include "pxr/base/tf/hash.h"
 
-static size_t _Hash(HdBufferSpecVector const &specs) {
-    size_t result = 0;
-    for (HdBufferSpec const &spec : specs) {
-        boost::hash_combine(result, spec.Hash());
-    }
-    return result;
-}
+PXR_NAMESPACE_OPEN_SCOPE
 
 HdStExtCompGpuComputationResource::HdStExtCompGpuComputationResource(
         HdBufferSpecVector const &outputBufferSpecs,
@@ -52,9 +30,20 @@ HdStExtCompGpuComputationResource::HdStExtCompGpuComputationResource(
 {
 }
 
+static HdSt_CodeGen::ID _ComputeProgramHash(
+    HdStShaderCodeSharedPtrVector const &shaders,
+    const HdSt_ResourceBinder::MetaData* metaData)
+{
+    HdSt_CodeGen::ID hash = 0;
+    return TfHash::Combine(hash,
+                           metaData->ComputeHash(),
+                           HdStShaderCode::ComputeHash(shaders));
+}
+
 bool
 HdStExtCompGpuComputationResource::_Resolve()
 {
+    HD_TRACE_FUNCTION();
     // Non-in-place sources should have been registered as resource registry
     // sources already and Resolved. They go to an internal buffer range that
     // was allocated in AllocateInternalRange
@@ -70,10 +59,11 @@ HdStExtCompGpuComputationResource::_Resolve()
     // We can shortcut the codegen by using a heuristic for determining that
     // the output source would be identical given a certain destination buffer
     // range.
-    size_t shaderSourceHash = 0;
-    boost::hash_combine(shaderSourceHash, _kernel->ComputeHash());
-    boost::hash_combine(shaderSourceHash, _Hash(_outputBufferSpecs));
-    boost::hash_combine(shaderSourceHash, _Hash(inputBufferSpecs));
+    size_t shaderSourceHash = TfHash::Combine(
+        _kernel->ComputeHash(),
+        _outputBufferSpecs,
+        inputBufferSpecs
+    );
     
     // XXX we'll need to test for hash collisions as they could be fatal in the
     // case of shader sources. Adjust based on pref vs correctness needs.
@@ -90,25 +80,34 @@ HdStExtCompGpuComputationResource::_Resolve()
     if (!_computeProgram || _shaderSourceHash != shaderSourceHash) {
         HdStShaderCodeSharedPtrVector shaders;
         shaders.push_back(_kernel);
-        HdSt_CodeGen codeGen(shaders);
-        
+
+        std::unique_ptr<HdSt_ResourceBinder::MetaData> metaData =
+            std::make_unique<HdSt_ResourceBinder::MetaData>();
+
         // let resourcebinder resolve bindings and populate metadata
         // which is owned by codegen.
         _resourceBinder.ResolveComputeBindings(_outputBufferSpecs,
                                                inputBufferSpecs,
                                                shaders,
-                                               codeGen.GetMetaData(),
+                                               metaData.get(),
                                                _registry->GetHgi()->
                                                    GetCapabilities());
 
-        HdStGLSLProgram::ID registryID = codeGen.ComputeHash();
-
+        HdStGLSLProgram::ID registryID =
+            _ComputeProgramHash(shaders, metaData.get());
         {
             // ask registry to see if there's already compiled program
             HdInstance<HdStGLSLProgramSharedPtr> programInstance =
                                 _registry->RegisterGLSLProgram(registryID);
 
             if (programInstance.IsFirstInstance()) {
+                TRACE_SCOPE("ExtComp Link");
+                HdSt_CodeGen codeGen(shaders, std::move(metaData));
+                TF_DEBUG(HDST_LOG_COMPUTE_SHADER_PROGRAM_MISSES).Msg(
+                    "(MISS) First ext comp program instance for %s "
+                    "(hash = %zu)\n",
+                    _kernel->GetExtComputationId().GetText(), registryID);
+
                 HdStGLSLProgramSharedPtr glslProgram =
                     codeGen.CompileComputeProgram(_registry.get());
                 if (!TF_VERIFY(glslProgram)) {
@@ -129,6 +128,11 @@ HdStExtCompGpuComputationResource::_Resolve()
                 TF_DEBUG(HD_EXT_COMPUTATION_UPDATED).Msg(
                     "Compiled and linked compute program for computation %s\n ",
                     _kernel->GetExtComputationId().GetText());
+            } else {
+                TF_DEBUG(HDST_LOG_COMPUTE_SHADER_PROGRAM_HITS).Msg(
+                    "(HIT) Found ext comp program instance for %s "
+                    "(hash = %zu)\n",
+                    _kernel->GetExtComputationId().GetText(), registryID);
             }
 
             _computeProgram = programInstance.GetValue();

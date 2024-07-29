@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_ARCH_REGEX_H
 #define PXR_BASE_ARCH_REGEX_H
@@ -34,16 +17,23 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class ArchRegex {
 public:
-    static constexpr unsigned int CASE_INSENSITIVE = 1u;
-    static constexpr unsigned int GLOB             = 2u;
+    enum : unsigned int {
+        CASE_INSENSITIVE = 1u,
+        GLOB             = 2u
+    };
 
     /// Create an empty regex.
-    ARCH_API ArchRegex();
+    ArchRegex() = default;
+
+    ArchRegex(ArchRegex &&) noexcept = default;
+    ArchRegex(ArchRegex const &) = default;
+    ArchRegex &operator=(ArchRegex &&) noexcept = default;
+    ArchRegex &operator=(ArchRegex const &) = default;
+
+    /// Create with pattern and optional flags.
     ARCH_API ArchRegex(const std::string& pattern, unsigned int flags = 0);
-    ArchRegex(const ArchRegex&) = delete;
-    ARCH_API ArchRegex(ArchRegex&&) noexcept;
-    ArchRegex& operator=(const ArchRegex&) = delete;
-    ARCH_API ArchRegex& operator=(ArchRegex&&) noexcept;
+
+    /// Destructor.
     ARCH_API ~ArchRegex();
 
     /// Returns \c true if the regex is valid.
@@ -64,7 +54,7 @@ private:
     class _Impl;
     unsigned int _flags = 0;
     std::string _error;
-    std::unique_ptr<_Impl> _impl;
+    std::shared_ptr<const _Impl> _impl;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

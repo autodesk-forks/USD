@@ -1,76 +1,245 @@
 //
 // Copyright 2021 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/flatteningSceneIndex.h"
-#include "pxr/imaging/hd/overlayContainerDataSource.h"
+#include "pxr/imaging/hd/flattenedDataSourceProvider.h"
+#include "pxr/imaging/hd/invalidatableContainerDataSource.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
-#include "pxr/imaging/hd/tokens.h"
-#include "pxr/imaging/hd/xformSchema.h"
-#include "pxr/imaging/hd/purposeSchema.h"
-#include "pxr/imaging/hd/visibilitySchema.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/work/utils.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_PRIVATE_TOKENS(
-    _tokens,
-    (model)
-    (drawMode)
-    (inherited)
-);
-
-static
-const HdDataSourceLocator &_GetDrawModeLocator()
+namespace HdFlatteningSceneIndex_Impl
 {
-    static const HdDataSourceLocator l(_tokens->model, _tokens->drawMode);
-    return l;
+
+/// wraps the input scene's prim-level data sources in order to deliver
+/// overriden value
+class _PrimLevelWrappingDataSource : public HdContainerDataSource
+{
+public:
+    HD_DECLARE_DATASOURCE(_PrimLevelWrappingDataSource);
+    
+    TfTokenVector GetNames() override;
+    HdDataSourceBaseHandle Get(const TfToken &name) override;
+
+    // Invalidate data sources for prim.
+    //
+    // The dirtied locators are given by going along
+    // HdFlatteningSceneIndex::GetFlattenedDataSourceNames() and
+    // relativeDirtyLocators in parallel and prepending the
+    // name to the locators in the set.
+    //
+    // Recall that this prim stores a flattened data source for
+    // each name in HdFlatteningSceneIndex::GetFlattenedDataSourceNames().
+    //
+    // If the corresponding set in relativeDirtyLocators is empty,
+    // that flattened data source is untouched.
+    // If it is the universal set, the flattened data source gets
+    // dropped.
+    // If the flattened data source supports invalidation, invalidation
+    // is applied. Otherwise, the data source gets dropped.
+    //
+    // Returns true if any flattened data source was dropped or
+    // invalidated.
+    bool PrimDirtied(
+        const _DataSourceLocatorSetVector &relativeDirtyLocators);
+    
+private:
+    _PrimLevelWrappingDataSource(
+        const HdFlatteningSceneIndex &flatteningSceneIndex,
+        const SdfPath &primPath,
+        const HdContainerDataSourceHandle &inputDataSource)
+      : _flatteningSceneIndex(flatteningSceneIndex)
+      , _primPath(primPath)
+      , _inputDataSource(inputDataSource)
+      , _computedDataSources(
+          _flatteningSceneIndex.GetFlattenedDataSourceNames().size())
+    {
+    }
+    
+    const HdFlatteningSceneIndex &_flatteningSceneIndex;
+    const SdfPath _primPath;
+    HdContainerDataSourceHandle const _inputDataSource;
+
+    // Parallel to HdFlatteningSceneIndex::GetFlattenedDataSourceNames()
+    TfSmallVector<HdDataSourceBaseAtomicHandle, _smallVectorSize>
+                                _computedDataSources;
+};
+    
+HD_DECLARE_DATASOURCE_HANDLES(_PrimLevelWrappingDataSource);
+
+bool
+_PrimLevelWrappingDataSource::PrimDirtied(
+    const _DataSourceLocatorSetVector &relativeDirtyLocators)
+{
+    bool anyDirtied = false;
+
+    for (size_t i = 0; i < relativeDirtyLocators.size(); i++) {
+        if (relativeDirtyLocators[i].IsEmpty()) {
+            continue;
+        }
+
+        HdDataSourceBaseAtomicHandle &dsAtomicHandle = _computedDataSources[i];
+        HdDataSourceBaseHandle const ds =
+            HdDataSourceBase::AtomicLoad(dsAtomicHandle);
+        if (!ds) {
+            continue;
+        }
+        if (!relativeDirtyLocators[i].Contains(
+                HdDataSourceLocator::EmptyLocator())) {
+            if (HdInvalidatableContainerDataSourceHandle const
+                    invalidatableDs =
+                        HdInvalidatableContainerDataSource::Cast(ds)) {
+                anyDirtied |=
+                    invalidatableDs->Invalidate(relativeDirtyLocators[i]);
+                continue;
+            }
+        }
+
+        HdDataSourceBase::AtomicStore(dsAtomicHandle, nullptr);
+        anyDirtied = true;
+    }
+
+    return anyDirtied;
 }
 
-HdFlatteningSceneIndex::HdFlatteningSceneIndex(
-        const HdSceneIndexBaseRefPtr &inputScene)
-    : HdSingleInputFilteringSceneIndexBase(inputScene)
-
-    , _identityXform(HdXformSchema::Builder()
-        .SetMatrix(
-            HdRetainedTypedSampledDataSource<GfMatrix4d>::New(
-                    GfMatrix4d().SetIdentity()))
-        .Build())
-
-    , _identityVis(HdVisibilitySchema::Builder()
-        .SetVisibility(
-            HdRetainedTypedSampledDataSource<bool>::New(true))
-        .Build())
-
-    , _identityPurpose(HdPurposeSchema::Builder()
-        .SetPurpose(
-            HdRetainedTypedSampledDataSource<TfToken>::New(
-                HdRenderTagTokens->geometry))
-        .Build())
-
-    , _identityDrawMode(
-        HdRetainedTypedSampledDataSource<TfToken>::New(TfToken()))
+void
+_Insert(const TfTokenVector &vec,
+        TfTokenVector * const result)
 {
+    if (vec.size() > 31) {
+        std::unordered_set<TfToken, TfHash> s(vec.begin(), vec.end());
+        for (const TfToken &t : *result) {
+            s.erase(t);
+        }
+        for (const TfToken &t : vec) {
+            if (s.find(t) != s.end()) {
+                result->push_back(t);
+            }
+        }
+    } else {
+        uint32_t mask = (1 << vec.size()) - 1;
+        for (const TfToken &t : *result) {
+            for (size_t i = 0; i < vec.size(); i++) {
+                if (vec[i] == t) {
+                    mask &= ~(1 << i);
+                }
+            }
+            if (!mask) {
+                return;
+            }
+        }
+        for (size_t i = 0; i < vec.size(); i++) {
+            if (mask & 1 << i) {
+                result->push_back(vec[i]);
+            }
+        }
+    }
+}
+
+TfTokenVector
+_PrimLevelWrappingDataSource::GetNames()
+{
+    if (!_inputDataSource) {
+        return _flatteningSceneIndex.GetFlattenedDataSourceNames();
+    }
+
+    TfTokenVector result = _inputDataSource->GetNames();
+    _Insert(_flatteningSceneIndex.GetFlattenedDataSourceNames(), &result);
+    return result;
+};        
+
+HdDataSourceBaseHandle
+_PrimLevelWrappingDataSource::Get(
+        const TfToken &name)
+{
+    const TfTokenVector &dataSourceNames =
+        _flatteningSceneIndex.GetFlattenedDataSourceNames();
+    const HdFlattenedDataSourceProviderSharedPtrVector &providers =
+        _flatteningSceneIndex.GetFlattenedDataSourceProviders();
+
+    for (size_t i = 0; i < dataSourceNames.size(); i++) {
+        if (name != dataSourceNames[i]) {
+            continue;
+        }
+
+        HdDataSourceBaseAtomicHandle &dsAtomicHandle =
+            _computedDataSources[i];
+        if (HdDataSourceBaseHandle const computedDs =
+                HdDataSourceBase::AtomicLoad(dsAtomicHandle)) {
+            return HdContainerDataSource::Cast(computedDs);
+        }
+        const HdFlattenedDataSourceProvider::Context ctx(
+            _flatteningSceneIndex,
+            _primPath,
+            name,
+            _inputDataSource);
+        HdDataSourceBaseHandle flattenedDs = 
+            providers[i]->GetFlattenedDataSource(ctx);
+        if (!flattenedDs) {
+            // A nullptr means cache miss. To distinguish a cache miss from
+            // the flattened data source being null, we store a bool
+            // data source.
+            flattenedDs = HdRetainedTypedSampledDataSource<bool>::New(false);
+        }
+
+        HdDataSourceBaseAtomicHandle existingDs;
+        // Make sure that we only set the flattened data source only once.
+        // Flattened data source can cache state and need to be invalidated.
+        //
+        // It would be bad if we return different flattened data sources
+        // on different calls and only invalidate the last one that was
+        // returned.
+        if (HdDataSourceBase::AtomicCompareExchange(
+                dsAtomicHandle, existingDs, flattenedDs)) {
+            return HdContainerDataSource::Cast(flattenedDs);
+        } else {
+            return HdContainerDataSource::Cast(existingDs);
+        }
+    }
+
+    if (_inputDataSource) {
+        return _inputDataSource->Get(name);
+    }
+    return nullptr;
+}
+
+}
+
+using namespace HdFlatteningSceneIndex_Impl;
+
+HdFlatteningSceneIndex::HdFlatteningSceneIndex(
+        HdSceneIndexBaseRefPtr const &inputScene,
+        HdContainerDataSourceHandle const &inputArgs)
+  : HdSingleInputFilteringSceneIndexBase(inputScene)
+{
+    if (!inputArgs) {
+        return;
+    }
+    for (const TfToken &name : inputArgs->GetNames()) {
+        using DataSource =
+            HdTypedSampledDataSource<HdFlattenedDataSourceProviderSharedPtr>;
+        DataSource::Handle const ds =
+            DataSource::Cast(inputArgs->Get(name));
+        if (!ds) {
+            continue;
+        }
+        HdFlattenedDataSourceProviderSharedPtr const provider =
+            ds->GetTypedValue(0.0f);
+        if (!provider) {
+            continue;
+        }
+        _dataSourceNames.push_back(name);
+        _dataSourceProviders.push_back(provider);
+        _dataSourceLocatorSet.insert(
+            HdDataSourceLocator(name));
+        _relativeDataSourceLocators.push_back(
+            HdDataSourceLocatorSet::UniversalSet());
+    }
 }
 
 HdFlatteningSceneIndex::~HdFlatteningSceneIndex() = default;
@@ -78,27 +247,57 @@ HdFlatteningSceneIndex::~HdFlatteningSceneIndex() = default;
 HdSceneIndexPrim
 HdFlatteningSceneIndex::GetPrim(const SdfPath &primPath) const
 {
-    const auto it = _prims.find(primPath);
-    if (it != _prims.end()) {
-        return it->second.prim;
+    // Check the hierarchy cache
+    const _PrimTable::const_iterator i = _prims.find(primPath);
+    // SdfPathTable will default-construct entries for ancestors
+    // as needed to represent hierarchy, so double-check the
+    // dataSource to confirm presence of a cached prim
+    if (i != _prims.end() && i->second.dataSource) {
+        return i->second;
     }
 
-    if (_GetInputSceneIndex()) {
-        return _GetInputSceneIndex()->GetPrim(primPath);
+    // Check the recent prims cache
+    {
+        // Use a scope to minimize lifetime of tbb accessor
+        // for maximum concurrency
+        _RecentPrimTable::const_accessor accessor;
+        if (_recentPrims.find(accessor, primPath)) {
+            return accessor->second;
+        }
     }
 
-    return {TfToken(), nullptr};
+    // No cache entry found; query input scene
+    HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
+
+    // If the input scene does not provide a data source, and there
+    // are no descendant prims either (as implied by the lack of a
+    // SdfPathTable entry in _prims), do not return anything.
+    if (!prim.dataSource && i == _prims.end()) {
+        return prim;
+    }
+
+    // Wrap the input datasource even when null, to support dirtying
+    // down non-contiguous hierarchy
+    prim.dataSource = _PrimLevelWrappingDataSource::New(
+        *this, primPath, prim.dataSource);
+
+    // Store in the recent prims cache
+    if (!_recentPrims.insert(std::make_pair(primPath, prim))) {
+        // Another thread inserted this entry.  Since dataSources
+        // are stateful, return that one.
+        _RecentPrimTable::accessor accessor;
+        if (TF_VERIFY(_recentPrims.find(accessor, primPath))) {
+            prim = accessor->second;
+        }
+    }
+    return prim;
 }
 
 SdfPathVector
 HdFlatteningSceneIndex::GetChildPrimPaths(const SdfPath &primPath) const
 {
     // we don't change topology so we can dispatch to input
-    if (_GetInputSceneIndex()) {
-        return _GetInputSceneIndex()->GetChildPrimPaths(primPath);
-    }
-
-    return {};
+    return _GetInputSceneIndex()->GetChildPrimPaths(primPath);
 }
 
 void
@@ -108,45 +307,24 @@ HdFlatteningSceneIndex::_PrimsAdded(
 {
     TRACE_FUNCTION();
 
+    _ConsolidateRecentPrims();
+
+    // Check the hierarchy for cached prims to dirty
     HdSceneIndexObserver::DirtiedPrimEntries dirtyEntries;
-
     for (const HdSceneIndexObserver::AddedPrimEntry &entry : entries) {
-        // XXX immediately calls GetPrim (for now)
-        HdContainerDataSourceHandle dataSource =
-            _GetInputSceneIndex()->GetPrim(entry.primPath).dataSource;
+        _DirtyHierarchy(
+            entry.primPath,
+            _relativeDataSourceLocators,
+            _dataSourceLocatorSet,
+            &dirtyEntries);
+    }
 
-        // Ensure the prim has an entry in the map.
-        auto iterBoolPair =
-            _prims.insert({entry.primPath, {HdSceneIndexPrim()}});
-        HdSceneIndexPrim &prim = iterBoolPair.first->second.prim;
-
-        // Always update the prim type.
-        prim.primType = entry.primType;
-
-        // If the wrapper exists, update the input datasource; otherwise,
-        // create it. This is both to save an allocation if the PrimsAdded
-        // message is resyncing a prim, and also to leave the cache intact for
-        // _DirtyHierarchy to invalidate (since it chooses what to invalidate
-        // based on what's been cached).
-        if (prim.dataSource) {
-            _PrimLevelWrappingDataSource::Cast(prim.dataSource)->
-                UpdateInputDataSource(dataSource);
-        } else {
-            prim.dataSource = _PrimLevelWrappingDataSource::New(
-                *this, entry.primPath, dataSource);
-        }
-
-        // If we're inserting somewhere in the existing hierarchy, we need to
-        // invalidate descendant flattened attributes.
-        if (!iterBoolPair.second) {
-            static HdDataSourceLocatorSet locators = {
-                HdXformSchema::GetDefaultLocator(),
-                HdVisibilitySchema::GetDefaultLocator(),
-                HdPurposeSchema::GetDefaultLocator(),
-                HdDataSourceLocator(_tokens->model)
-            };
-
-            _DirtyHierarchy(entry.primPath, locators, &dirtyEntries);
+    // Clear out any cached dataSources for prims that have been re-added.
+    // They will get updated dataSources in the next call to GetPrim().
+    for (const HdSceneIndexObserver::AddedPrimEntry &entry : entries) {
+        const _PrimTable::iterator i = _prims.find(entry.primPath);
+        if (i != _prims.end()) {
+            WorkSwapDestroyAsync(i->second.dataSource);
         }
     }
 
@@ -163,6 +341,8 @@ HdFlatteningSceneIndex::_PrimsRemoved(
 {
     TRACE_FUNCTION();
 
+    _ConsolidateRecentPrims();
+
     for (const HdSceneIndexObserver::RemovedPrimEntry &entry : entries) {
         if (entry.primPath.IsAbsoluteRootPath()) {
             // Special case removing the whole scene, since this is a common
@@ -172,7 +352,7 @@ HdFlatteningSceneIndex::_PrimsRemoved(
         } else {
             auto startEndIt = _prims.FindSubtreeRange(entry.primPath);
             for (auto it = startEndIt.first; it != startEndIt.second; ++it) {
-                WorkSwapDestroyAsync(it->second.prim.dataSource);
+                WorkSwapDestroyAsync(it->second.dataSource);
             }
             if (startEndIt.first != startEndIt.second) {
                 _prims.erase(startEndIt.first);
@@ -183,37 +363,89 @@ HdFlatteningSceneIndex::_PrimsRemoved(
 }
 
 void
+HdFlatteningSceneIndex::_PrimDirtied(
+    const HdSceneIndexObserver::DirtiedPrimEntry &entry,
+    HdSceneIndexObserver::DirtiedPrimEntries * const dirtyEntries)
+{
+    // Used to invalidate the data sources stored in the
+    // _PrimLevelWrappingDataSource.
+    _DataSourceLocatorSetVector relativeDirtyLocators(
+        _dataSourceNames.size());
+
+    // Used to send out DirtiedPrimEntry for descendants.
+    // Computed from relativeDirtyLocators.
+    HdDataSourceLocatorSet dirtyLocators;
+
+    for (size_t i = 0; i < _dataSourceNames.size(); i++) {
+        // Check data source at locator in prim data source.
+        const HdDataSourceLocator locator(_dataSourceNames[i]);
+        if (!entry.dirtyLocators.Intersects(locator)) {
+            // Nothing to do.
+            continue;
+        }
+
+        HdDataSourceLocatorSet &relativeDirtyLocatorSet =
+            relativeDirtyLocators[i];
+        if (entry.dirtyLocators.Contains(locator)) {
+            // Nuke the entire data source at locator.
+            relativeDirtyLocatorSet = HdDataSourceLocatorSet::UniversalSet();
+            dirtyLocators.insert(locator);
+            continue;
+        }
+        // Make intersection relation to locator.
+        for (const HdDataSourceLocator &dirtyLocator :
+                 entry.dirtyLocators.Intersection(locator)) {
+            relativeDirtyLocatorSet.insert(dirtyLocator.RemoveFirstElement());
+        }
+        // Let provider expand locators.
+        HdFlattenedDataSourceProviderSharedPtr const &provider =
+            _dataSourceProviders[i];
+        provider->ComputeDirtyLocatorsForDescendants(&relativeDirtyLocatorSet);
+        if (relativeDirtyLocatorSet.Contains(
+                HdDataSourceLocator::EmptyLocator())) {
+            // If provider expandede to the universal set, just
+            // nuke entire data source.
+            dirtyLocators.insert(locator);
+            continue;
+        }
+        // Make relative data source locators absolute.
+        for (const HdDataSourceLocator &relativeDirtyLocator :
+                 relativeDirtyLocatorSet) {
+            dirtyLocators.insert(
+                locator.Append(relativeDirtyLocator));
+        }
+    }
+
+    if (!dirtyLocators.IsEmpty()) {
+        _DirtyHierarchy(
+            entry.primPath, relativeDirtyLocators, dirtyLocators, dirtyEntries);
+    }
+
+    // Empty locator indicates that we need to pull the input data source
+    // again - which we achieve by destroying the data source wrapping the
+    // input data source.
+    // Note that we destroy it after calling _DirtyHierarchy to not prevent
+    // _DirtyHierarchy propagating the invalidation to the descendants.
+    if (entry.dirtyLocators.Contains(HdDataSourceLocator::EmptyLocator())) {
+        const _PrimTable::iterator it = _prims.find(entry.primPath);
+        if (it != _prims.end() && it->second.dataSource) {
+            WorkSwapDestroyAsync(it->second.dataSource);
+        }
+    }
+}
+
+void
 HdFlatteningSceneIndex::_PrimsDirtied(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::DirtiedPrimEntries &entries)
 {
     TRACE_FUNCTION();
 
+    _ConsolidateRecentPrims();
+
     HdSceneIndexObserver::DirtiedPrimEntries dirtyEntries;
-
     for (const HdSceneIndexObserver::DirtiedPrimEntry &entry : entries) {
-        HdDataSourceLocatorSet locators;
-        if (entry.dirtyLocators.Intersects(
-                    HdXformSchema::GetDefaultLocator())) {
-            locators.insert(HdXformSchema::GetDefaultLocator());
-        }
-        if (entry.dirtyLocators.Intersects(
-                    HdVisibilitySchema::GetDefaultLocator())) {
-            locators.insert(HdVisibilitySchema::GetDefaultLocator());
-        }
-        if (entry.dirtyLocators.Intersects(
-                    HdPurposeSchema::GetDefaultLocator())) {
-            locators.insert(HdPurposeSchema::GetDefaultLocator());
-        }
-        static const HdDataSourceLocator modelLocator(_tokens->model);
-        if (entry.dirtyLocators.Intersects(
-                    modelLocator)) {
-            locators.insert(modelLocator);
-        }
-
-        if (!locators.IsEmpty()) {
-            _DirtyHierarchy(entry.primPath, locators, &dirtyEntries);
-        }
+        _PrimDirtied(entry, &dirtyEntries);
     }
 
     _SendPrimsDirtied(entries);
@@ -223,30 +455,37 @@ HdFlatteningSceneIndex::_PrimsDirtied(
 }
 
 void
+HdFlatteningSceneIndex::_ConsolidateRecentPrims()
+{
+    for (auto &entry: _recentPrims) {
+        std::swap(_prims[entry.first], entry.second);
+    }
+    _recentPrims.clear();
+}
+
+void
 HdFlatteningSceneIndex::_DirtyHierarchy(
     const SdfPath &primPath,
+    const _DataSourceLocatorSetVector &relativeDirtyLocators,
     const HdDataSourceLocatorSet &dirtyLocators,
-    HdSceneIndexObserver::DirtiedPrimEntries *dirtyEntries)
+    HdSceneIndexObserver::DirtiedPrimEntries * const dirtyEntries)
 {
     // XXX: here and elsewhere, if a parent xform is dirtied and the child has
     // resetXformStack, we could skip dirtying the child...
 
     auto startEndIt = _prims.FindSubtreeRange(primPath);
-    auto it = startEndIt.first;
-    for (; it != startEndIt.second; ) {
-        _PrimEntry &entry = it->second;
+    for (auto it = startEndIt.first; it != startEndIt.second; ) {
+        HdSceneIndexPrim &prim = it->second;
 
         if (_PrimLevelWrappingDataSourceHandle dataSource =
-                _PrimLevelWrappingDataSource::Cast(
-                        entry.prim.dataSource)) {
-            if (dataSource->PrimDirtied(dirtyLocators)) {
+                _PrimLevelWrappingDataSource::Cast(prim.dataSource)) {
+            if (dataSource->PrimDirtied(relativeDirtyLocators)) {
                 // If we invalidated any data for any prim besides "primPath"
                 // (which already has a notice), generate a new PrimsDirtied
                 // notice.
                 if (it->first != primPath) {
                     dirtyEntries->emplace_back(it->first, dirtyLocators);
                 }
-                ++it;
             } else {
                 // If we didn't invalidate any data, we can safely assume that
                 // no downstream prims depended on this prim for their
@@ -254,398 +493,11 @@ HdFlatteningSceneIndex::_DirtyHierarchy(
                 // an important optimization for (e.g.) scene population,
                 // where no data is cached yet...
                 it = it.GetNextSubtree();
-            }
-        } else {
-            ++it;
-        }
-    }
-}
-
-HdFlatteningSceneIndex::
-_PrimLevelWrappingDataSource::_PrimLevelWrappingDataSource(
-        const HdFlatteningSceneIndex &scene,
-        const SdfPath &primPath,
-        HdContainerDataSourceHandle inputDataSource)
-    : _sceneIndex(scene)
-    , _primPath(primPath)
-    , _inputDataSource(inputDataSource)
-    , _computedXformDataSource(nullptr)
-    , _computedVisDataSource(nullptr)
-    , _computedPurposeDataSource(nullptr)
-{
-}
-
-void
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::UpdateInputDataSource(
-        HdContainerDataSourceHandle inputDataSource)
-{
-    _inputDataSource = inputDataSource;
-}
-
-bool
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::PrimDirtied(
-        const HdDataSourceLocatorSet &set)
-{
-    bool anyDirtied = false;
-    static const HdContainerDataSourceHandle containerNull(nullptr);
-    static const HdTokenDataSourceHandle tokenNull(nullptr);
-
-    if (set.Intersects(HdXformSchema::GetDefaultLocator())) {
-        if (HdContainerDataSource::AtomicLoad(_computedXformDataSource)) {
-            anyDirtied = true;
-        }
-        HdContainerDataSource::AtomicStore(
-            _computedXformDataSource, containerNull);
-    }
-    if (set.Intersects(HdVisibilitySchema::GetDefaultLocator())) {
-        if (HdContainerDataSource::AtomicLoad(_computedVisDataSource)) {
-            anyDirtied = true;
-        }
-        HdContainerDataSource::AtomicStore(
-            _computedVisDataSource, containerNull);
-    }
-    if (set.Intersects(HdPurposeSchema::GetDefaultLocator())) {
-        if (HdContainerDataSource::AtomicLoad(_computedPurposeDataSource)) {
-            anyDirtied = true;
-        }
-        HdContainerDataSource::AtomicStore(
-            _computedPurposeDataSource, containerNull);
-    }
-    if (set.Intersects(_GetDrawModeLocator())) {
-        anyDirtied = true;
-        HdTokenDataSource::AtomicStore(
-            _computedDrawModeDataSource, tokenNull);
-    }
-
-    return anyDirtied;
-}
-
-bool
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::Has(
-    const TfToken &name)
-{
-    if (name == HdXformSchemaTokens->xform) {
-        return true;
-    }
-    if (name == HdVisibilitySchemaTokens->visibility) {
-        return true;
-    }
-    if (name == HdPurposeSchemaTokens->purpose) {
-        return true;
-    }
-    if (name == _tokens->model) {
-        return true;
-    }
-
-    if (!_inputDataSource) {
-        return false;
-    }
-
-    return _inputDataSource->Has(name);
-}
-
-TfTokenVector
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::GetNames()
-{
-    TfTokenVector result;
-
-    if (_inputDataSource) {
-        result = _inputDataSource->GetNames();
-        
-        bool hasXform = false;
-        bool hasVis = false;
-        bool hasPurpose = false;
-        bool hasModel = false;
-        for (const TfToken &name : result) {
-            if (name == HdXformSchemaTokens->xform) {
-                hasXform = true;
-            }
-            if (name == HdVisibilitySchemaTokens->visibility) {
-                hasVis = true;
-            }
-            if (name == HdPurposeSchemaTokens->purpose) {
-                hasPurpose = true;
-            }
-            if (name == _tokens->model) {
-                hasModel = true;
-            }
-            if (hasXform && hasVis && hasPurpose && hasModel) {
-                break;
+                continue;
             }
         }
-
-        if (!hasXform) {
-            result.push_back(HdXformSchemaTokens->xform);
-        }
-        if (!hasVis) {
-            result.push_back(HdVisibilitySchemaTokens->visibility);
-        }
-        if (!hasPurpose) {
-            result.push_back(HdPurposeSchemaTokens->purpose);
-        }
-        if (!hasModel) {
-            result.push_back(_tokens->model);
-        }
-    } else {
-        result.push_back(HdXformSchemaTokens->xform);
-        result.push_back(HdVisibilitySchemaTokens->visibility);
-        result.push_back(HdPurposeSchemaTokens->purpose);
-        result.push_back(_tokens->model);
+        ++it;
     }
-
-    return result;
-}
-
-HdDataSourceBaseHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::Get(
-        const TfToken &name)
-{
-    if (name == HdXformSchemaTokens->xform) {
-        return _GetXform();
-    } else if (name == HdVisibilitySchemaTokens->visibility) {
-        return _GetVis();
-    } else if (name == HdPurposeSchemaTokens->purpose) {
-        return _GetPurpose();
-    } else if (name == _tokens->model) {
-        return _GetModel();
-    } else if (_inputDataSource) {
-        return _inputDataSource->Get(name);
-    } else {
-        return nullptr;
-    }
-}
-
-HdDataSourceBaseHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetPurpose()
-{
-    HdContainerDataSourceHandle computedPurposeDataSource =
-        HdContainerDataSource::AtomicLoad(_computedPurposeDataSource);
-
-    if (computedPurposeDataSource) {
-        return computedPurposeDataSource;
-    }
-
-    HdPurposeSchema inputPurpose =
-        HdPurposeSchema::GetFromParent(_inputDataSource);
-
-    if (inputPurpose) {
-        if (inputPurpose.GetPurpose()) {
-            computedPurposeDataSource = inputPurpose.GetContainer();
-        } else {
-            computedPurposeDataSource = _sceneIndex._identityPurpose;
-        }
-    } else {
-        HdPurposeSchema parentPurpose(nullptr);
-        if (_primPath.GetPathElementCount()) {
-            SdfPath parentPath = _primPath.GetParentPath();
-            const auto it = _sceneIndex._prims.find(parentPath);
-            if (it != _sceneIndex._prims.end()) {
-                parentPurpose = HdPurposeSchema::GetFromParent(
-                        it->second.prim.dataSource);
-            }
-        }
-        if (parentPurpose && parentPurpose.GetPurpose()) {
-            computedPurposeDataSource = parentPurpose.GetContainer();
-        } else {
-            computedPurposeDataSource = _sceneIndex._identityPurpose;
-        }
-    }
-
-    HdContainerDataSource::AtomicStore(
-            _computedPurposeDataSource, computedPurposeDataSource);
-
-    return computedPurposeDataSource;
-}
-
-HdDataSourceBaseHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetVis()
-{
-    HdContainerDataSourceHandle computedVisDataSource =
-        HdContainerDataSource::AtomicLoad(_computedVisDataSource);
-
-    if (computedVisDataSource) {
-        return computedVisDataSource;
-    }
-
-    HdVisibilitySchema inputVis =
-        HdVisibilitySchema::GetFromParent(_inputDataSource);
-
-    if (inputVis) {
-        if (inputVis.GetVisibility()) {
-            computedVisDataSource = inputVis.GetContainer();
-        } else {
-            computedVisDataSource = _sceneIndex._identityVis;
-        }
-    } else {
-        HdVisibilitySchema parentVis(nullptr);
-        if (_primPath.GetPathElementCount()) {
-            SdfPath parentPath = _primPath.GetParentPath();
-            const auto it = _sceneIndex._prims.find(parentPath);
-            if (it != _sceneIndex._prims.end()) {
-                parentVis = HdVisibilitySchema::GetFromParent(
-                        it->second.prim.dataSource);
-            }
-        }
-        if (parentVis && parentVis.GetVisibility()) {
-            computedVisDataSource = parentVis.GetContainer();
-        } else {
-            computedVisDataSource = _sceneIndex._identityVis;
-        }
-    }
-
-    HdContainerDataSource::AtomicStore(
-            _computedVisDataSource, computedVisDataSource);
-
-    return computedVisDataSource;
-}
-
-HdDataSourceBaseHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetXform()
-{
-    HdContainerDataSourceHandle computedXformDataSource =
-            HdContainerDataSource::AtomicLoad(_computedXformDataSource);
-
-    // previously cached value
-    if (computedXformDataSource) {
-        return computedXformDataSource;
-    }
-
-    HdXformSchema inputXform =
-            HdXformSchema::GetFromParent(_inputDataSource);
-
-    // If this xform is fully composed, early out.
-    if (inputXform) {
-        HdBoolDataSourceHandle resetXformStack =
-            inputXform.GetResetXformStack();
-        if (resetXformStack && resetXformStack->GetTypedValue(0.0f)) {
-            // Only use the local transform, or identity if no matrix was
-            // provided...
-            if (inputXform.GetMatrix()) {
-                computedXformDataSource = inputXform.GetContainer();
-            } else {
-                computedXformDataSource = _sceneIndex._identityXform;
-            }
-            HdContainerDataSource::AtomicStore(
-                _computedXformDataSource, computedXformDataSource);
-
-            return computedXformDataSource;
-        }
-    }
-
-    // Otherwise, we need to look at the parent value.
-    HdXformSchema parentXform(nullptr);
-    if (_primPath.GetPathElementCount()) {
-        SdfPath parentPath = _primPath.GetParentPath();
-        const auto it = _sceneIndex._prims.find(parentPath);
-        if (it != _sceneIndex._prims.end()) {
-            parentXform = HdXformSchema::GetFromParent(
-                    it->second.prim.dataSource);
-        }
-    }
-
-    // Attempt to compose the local matrix with the parent matrix;
-    // note that since we got the parent matrix from _prims instead of
-    // _inputDataSource, the parent matrix should be flattened already.
-    // If either of the local or parent matrix are missing, they are
-    // interpreted to be identity.
-    HdMatrixDataSourceHandle parentMatrixDataSource =
-        parentXform ? parentXform.GetMatrix() : nullptr;
-    HdMatrixDataSourceHandle inputMatrixDataSource =
-        inputXform ? inputXform.GetMatrix() : nullptr;
-
-    if (inputMatrixDataSource && parentMatrixDataSource) {
-        GfMatrix4d parentMatrix =
-            parentMatrixDataSource->GetTypedValue(0.0f);
-        GfMatrix4d inputMatrix =
-            inputMatrixDataSource->GetTypedValue(0.0f);
-
-        computedXformDataSource = HdXformSchema::Builder()
-            .SetMatrix(
-                    HdRetainedTypedSampledDataSource<GfMatrix4d>::New(
-                        inputMatrix * parentMatrix))
-            .Build();
-    } else if (inputMatrixDataSource) {
-        computedXformDataSource = inputXform.GetContainer();
-    } else if (parentMatrixDataSource) {
-        computedXformDataSource = parentXform.GetContainer();
-    } else {
-        computedXformDataSource = _sceneIndex._identityXform;
-    }
-
-    HdContainerDataSource::AtomicStore(
-            _computedXformDataSource, computedXformDataSource);
-
-    return computedXformDataSource;
-}
-
-HdDataSourceBaseHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetModel()
-{
-    HdContainerDataSourceHandle const modelContainer =
-        _inputDataSource
-            ? HdContainerDataSource::Cast(_inputDataSource->Get(_tokens->model))
-            : nullptr;
-    HdContainerDataSourceHandle const overrideContainer =
-        HdRetainedContainerDataSource::New(
-            _tokens->drawMode, _GetDrawMode(modelContainer));
-    if (!modelContainer) {
-        return overrideContainer;
-    }
-    return HdOverlayContainerDataSource::New(overrideContainer, modelContainer);
-}
-
-HdDataSourceBaseHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetDrawMode(
-    const HdContainerDataSourceHandle &modelContainer)
-{
-    HdTokenDataSource::AtomicHandle computedDrawModeDataSource =
-        HdTokenDataSource::AtomicLoad(_computedDrawModeDataSource);
-
-    if (computedDrawModeDataSource) {
-        return computedDrawModeDataSource;
-    }
-
-    computedDrawModeDataSource = _GetDrawModeUncached(modelContainer);
-
-    HdTokenDataSource::AtomicStore(
-        _computedDrawModeDataSource, computedDrawModeDataSource);
-
-    return computedDrawModeDataSource;
-}
-
-HdTokenDataSourceHandle
-HdFlatteningSceneIndex::_PrimLevelWrappingDataSource::_GetDrawModeUncached(
-    const HdContainerDataSourceHandle &modelContainer)
-{
-    if (modelContainer) {
-        if (const HdTokenDataSourceHandle src =
-                HdTokenDataSource::Cast(
-                    modelContainer->Get(_tokens->drawMode))) {
-            const TfToken drawMode = src->GetTypedValue(0.0f);
-            if (!drawMode.IsEmpty() && drawMode != _tokens->inherited) {
-                return src;
-            }
-        }
-    }
-
-    if (_primPath.GetPathElementCount() == 0) {
-        return _sceneIndex._identityDrawMode;
-    }
-
-    const SdfPath parentPath = _primPath.GetParentPath();
-    const auto it = _sceneIndex._prims.find(parentPath);
-    if (it == _sceneIndex._prims.end()) {
-        return _sceneIndex._identityDrawMode;
-    }
-
-    if (const HdTokenDataSourceHandle src =
-            HdTokenDataSource::Cast(
-                HdContainerDataSource::Get(
-                    it->second.prim.dataSource, _GetDrawModeLocator()))) {
-        return src;
-    }
-
-    return _sceneIndex._identityDrawMode;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

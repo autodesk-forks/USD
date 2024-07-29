@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/garch/glApi.h"
 
@@ -30,10 +13,14 @@
 #include "pxr/imaging/hdx/renderSetupTask.h"
 #include "pxr/imaging/hdx/tokens.h"
 
+#include "pxr/imaging/hd/instancedBySchema.h"
+#include "pxr/imaging/hd/instancerTopologySchema.h"
 #include "pxr/imaging/hd/renderDelegate.h"
 #include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/renderPass.h"
+#include "pxr/imaging/hd/primOriginSchema.h"
 #include "pxr/imaging/hd/types.h"
+#include "pxr/imaging/hd/vtBufferSource.h"
 
 #include "pxr/imaging/hdSt/renderBuffer.h"
 #include "pxr/imaging/hdSt/renderDelegate.h"
@@ -48,13 +35,27 @@
 #include "pxr/imaging/hgiGL/graphicsCmds.h"
 #include "pxr/imaging/glf/diagnostic.h"
 
-#include <boost/functional/hash.hpp>
+#include "pxr/base/tf/hash.h"
 
 #include <iostream>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PUBLIC_TOKENS(HdxPickTokens, HDX_PICK_TOKENS);
+
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+
+    (PickBuffer)
+    (PickBufferBinding)
+    (Picking)
+
+    (widgetDepthStencil)
+);
+
+static const int PICK_BUFFER_HEADER_SIZE = 8;
+static const int PICK_BUFFER_SUBBUFFER_CAPACITY = 32;
+static const int PICK_BUFFER_ENTRY_SIZE = 3;
 
 static HdRenderPassStateSharedPtr
 _InitIdRenderPassState(HdRenderIndex *index)
@@ -82,10 +83,6 @@ _IsStormRenderer(HdRenderDelegate *renderDelegate)
 
     return true;
 }
-
-TF_DEFINE_PRIVATE_TOKENS(_tokens,
-    (widgetDepthStencil)
-);
 
 static SdfPath 
 _GetAovPath(TfToken const& aovName)
@@ -117,6 +114,24 @@ HdxPickTask::~HdxPickTask()
 void
 HdxPickTask::_InitIfNeeded()
 {
+    // Init pick buffer
+    if (!_pickBuffer) {
+        HdStResourceRegistrySharedPtr const& hdStResourceRegistry =
+            std::dynamic_pointer_cast<HdStResourceRegistry>(
+                _index->GetResourceRegistry());
+
+        if (hdStResourceRegistry) {
+
+            HdBufferSpecVector bufferSpecs {
+                { _tokens->PickBuffer, HdTupleType{ HdTypeInt32, 1 } }       
+            };
+
+            _pickBuffer = hdStResourceRegistry->AllocateSingleBufferArrayRange(
+                        _tokens->Picking, 
+                        bufferSpecs, HdBufferArrayUsageHintBitsStorage);
+        }
+    }
+
     if (_pickableAovBuffers.empty()) {
         _CreateAovBindings();
     }
@@ -226,7 +241,7 @@ HdxPickTask::_CreateAovBindings()
 
         HdAovDescriptor depthDesc = renderDelegate->GetDefaultAovDescriptor(
             HdAovTokens->depth);
-        
+
         _widgetAovBindings = _pickableAovBindings;
         for (auto& binding : _widgetAovBindings) {
             binding.clearValue = VtValue();
@@ -338,7 +353,7 @@ HdxPickTask::_ConditionStencilWithGLCallback(
                         GL_KEEP,     // stencil passed, depth failed
                         GL_REPLACE); // stencil passed, depth passed
         }
-        
+
         //
         // Condition the stencil buffer.
         //
@@ -496,12 +511,19 @@ HdxPickTask::Sync(HdSceneDelegate* delegate,
             state->SetStencilEnabled(false);
         }
 
+        // disable depth write for the main pass when resolving 'deep'
+        bool enableDepthWrite =
+            (state == _occluderRenderPassState) ||
+            (_contextParams.resolveMode != HdxPickTokens->resolveDeep);
+
         state->SetEnableDepthTest(true);
-        state->SetEnableDepthMask(true);
+        state->SetEnableDepthMask(enableDepthWrite);
         state->SetDepthFunc(HdCmpFuncLEqual);
 
-        // Make sure translucent pixels can be picked by not discarding them
-        state->SetAlphaThreshold(0.0f);
+        // Set alpha threshold, to potentially discard translucent pixels.
+        // The default value of 0.0001 allow semi-transparent pixels to be picked, 
+        // but discards fully transparent ones.
+        state->SetAlphaThreshold(_contextParams.alphaThreshold);
         state->SetAlphaToCoverageEnabled(false);
         state->SetBlendEnabled(false);
         state->SetCullStyle(_params.cullStyle);
@@ -579,19 +601,120 @@ void
 HdxPickTask::Prepare(HdTaskContext* ctx,
                      HdRenderIndex* renderIndex)
 {
+    HdStResourceRegistrySharedPtr const& hdStResourceRegistry =
+        std::dynamic_pointer_cast<HdStResourceRegistry>(
+            _index->GetResourceRegistry());
+
+    if (!hdStResourceRegistry) {
+        return;
+    }
+
     if (_UseOcclusionPass()) {
         _occluderRenderPassState->Prepare(renderIndex->GetResourceRegistry());
     }
     _pickableRenderPassState->Prepare(renderIndex->GetResourceRegistry());
     if (_UseWidgetPass()) {
         _widgetRenderPassState->Prepare(renderIndex->GetResourceRegistry());
+    }  
+
+    _ClearPickBuffer();
+
+    // Prepare pick buffer binding
+    HdStRenderPassState* extendedState =
+        dynamic_cast<HdStRenderPassState*>(_pickableRenderPassState.get());
+
+    HdStRenderPassShaderSharedPtr renderPassShader = 
+        extendedState ? extendedState->GetRenderPassShader() : nullptr;
+
+    if (renderPassShader) {
+        if (_pickBuffer) {
+            renderPassShader->AddBufferBinding(
+                HdStBindingRequest(
+                    HdStBinding::SSBO,
+                    _tokens->PickBufferBinding, 
+                    _pickBuffer, 
+                    /*interleaved*/ false,
+                    /*writable*/ true));
+        }
+        else {
+            renderPassShader->RemoveBufferBinding(
+                _tokens->PickBufferBinding);
+        }
     }
+}
+
+void
+HdxPickTask::_ClearPickBuffer()
+{
+    if (!_pickBuffer) {
+        return;
+    }
+
+    HdStResourceRegistrySharedPtr const& hdStResourceRegistry =
+        std::dynamic_pointer_cast<HdStResourceRegistry>(
+            _index->GetResourceRegistry());
+
+    if (!hdStResourceRegistry) {
+        return;
+    }
+
+    // populate pick buffer source array
+    VtIntArray pickBufferInit;
+    if (_contextParams.resolveMode == HdxPickTokens->resolveDeep)
+    {
+        const int numSubBuffers =
+            _contextParams.maxNumDeepEntries / PICK_BUFFER_SUBBUFFER_CAPACITY;
+        const int entryStorageOffset =
+            PICK_BUFFER_HEADER_SIZE + numSubBuffers;
+        const int entryStorageSize =
+            numSubBuffers * PICK_BUFFER_SUBBUFFER_CAPACITY * PICK_BUFFER_ENTRY_SIZE;
+
+        pickBufferInit.reserve(entryStorageOffset + entryStorageSize);
+
+        // populate pick buffer header
+        pickBufferInit.push_back(numSubBuffers);
+        pickBufferInit.push_back(PICK_BUFFER_SUBBUFFER_CAPACITY);
+        pickBufferInit.push_back(PICK_BUFFER_HEADER_SIZE);
+        pickBufferInit.push_back(entryStorageOffset);
+
+        pickBufferInit.push_back(
+            _contextParams.pickTarget == HdxPickTokens->pickFaces ? 1 : 0);
+        pickBufferInit.push_back(
+            _contextParams.pickTarget == HdxPickTokens->pickEdges ? 1 : 0);
+        pickBufferInit.push_back(
+            _contextParams.pickTarget == HdxPickTokens->pickPoints ? 1 : 0);
+        pickBufferInit.push_back(0);
+
+        // populate pick buffer's sub-buffer size table with zeros
+        pickBufferInit.resize(pickBufferInit.size() + numSubBuffers, 
+            [](int* b, int* e) { std::uninitialized_fill(b, e, 0); });
+
+        // populate pick buffer's entry storage with -9s, meaning uninitialized
+        pickBufferInit.resize(pickBufferInit.size() + entryStorageSize,
+            [](int* b, int* e) { std::uninitialized_fill(b, e, -9); });
+    }
+    else
+    {
+        // set pick buffer to invalid state
+        pickBufferInit.push_back(0);
+    }
+
+    // set the source to the pick buffer
+    HdBufferSourceSharedPtr bufferSource =
+        std::make_shared<HdVtBufferSource>(
+            _tokens->PickBuffer,
+            VtValue(pickBufferInit));
+
+    hdStResourceRegistry->AddSource(_pickBuffer, bufferSource);
 }
 
 void
 HdxPickTask::Execute(HdTaskContext* ctx)
 {
     GLF_GROUP_FUNCTION();
+
+    // This is important for Hgi garbage collection to run.
+    _hgi->StartFrame();
 
     GfVec2i dimensions = _contextParams.resolution;
     GfVec4i viewport(0, 0, dimensions[0], dimensions[1]);
@@ -642,6 +765,13 @@ HdxPickTask::Execute(HdTaskContext* ctx)
             {HdxRenderTagTokens->widget});
     }
 
+    // For 'resolveDeep' mode, read hits from the pick buffer.
+    if (_contextParams.resolveMode == HdxPickTokens->resolveDeep) {
+        _ResolveDeep();
+        _hgi->EndFrame();
+        return;
+    }
+
     // Capture the result buffers and cast to the appropriate types.
     HdStTextureUtils::AlignedBuffer<int> primIds =
         _ReadAovBuffer<int>(HdAovTokens->primId);
@@ -688,6 +818,81 @@ HdxPickTask::Execute(HdTaskContext* ctx)
     } else {
         TF_CODING_ERROR("Unrecognized interesection mode '%s'",
             _contextParams.resolveMode.GetText());
+    }
+
+    // This is important for Hgi garbage collection to run.
+    _hgi->EndFrame();
+}
+
+void HdxPickTask::_ResolveDeep()
+{
+    if (!_pickBuffer) {
+        return;
+    }
+
+    VtValue pickData = _pickBuffer->ReadData(_tokens->PickBuffer);
+    if (pickData.IsEmpty()) {
+        return;
+    }
+
+    const auto& data = pickData.Get<VtIntArray>();
+
+    const int numSubBuffers =
+        _contextParams.maxNumDeepEntries / PICK_BUFFER_SUBBUFFER_CAPACITY;
+    const int entryStorageOffset =
+        PICK_BUFFER_HEADER_SIZE + numSubBuffers;
+
+    // loop through all the sub-buffers, populating outHits
+    for (int subBuffer = 0; subBuffer < numSubBuffers; ++subBuffer)
+    {
+        const int sizeOffset = PICK_BUFFER_HEADER_SIZE + subBuffer;
+        const int numEntries = data[sizeOffset];
+        const int subBufferOffset =
+            entryStorageOffset + 
+            subBuffer * PICK_BUFFER_SUBBUFFER_CAPACITY * PICK_BUFFER_ENTRY_SIZE;
+
+        // loop through sub-buffer entries
+        for (int j = 0; j < numEntries; ++j)
+        {
+            int entryOffset = subBufferOffset + (j * PICK_BUFFER_ENTRY_SIZE);
+
+            HdxPickHit hit;
+
+            int primId = data[entryOffset];
+            hit.objectId = _index->GetRprimPathFromPrimId(primId);
+
+            if (!hit.IsValid()) {
+                continue;
+            }
+
+            bool rprimValid = _index->GetSceneDelegateAndInstancerIds(
+                                hit.objectId,
+                                &(hit.delegateId),
+                                &(hit.instancerId));
+
+            if (!TF_VERIFY(rprimValid, "%s\n", hit.objectId.GetText())) {
+                continue;
+            }
+
+            int partIndex = data[entryOffset + 2];
+            hit.instanceIndex = data[entryOffset + 1];
+            hit.elementIndex = 
+                _contextParams.pickTarget == HdxPickTokens->pickFaces ? 
+                partIndex : -1;
+            hit.edgeIndex =
+                _contextParams.pickTarget == HdxPickTokens->pickEdges ?
+                partIndex : -1;
+            hit.pointIndex = 
+                _contextParams.pickTarget == HdxPickTokens->pickPoints ?
+                partIndex : -1;
+
+            // the following data is skipped in deep selection
+            hit.worldSpaceHitPoint = GfVec3f(0.f, 0.f, 0.f);
+            hit.worldSpaceHitNormal = GfVec3f(0.f, 0.f, 0.f);
+            hit.normalizedDepth = 0.f;
+
+            _contextParams.outHits->push_back(hit);
+        }
     }
 }
 
@@ -769,38 +974,38 @@ HdxPickResult::_GetNormal(int index) const
 }
 
 bool
-HdxPickResult::_ResolveHit(int index, int x, int y, float z,
-                           HdxPickHit* hit) const
+HdxPickResult::_ResolveHit(
+    const int index,
+    const int x,
+    const int y,
+    const float z,
+    HdxPickHit* const hit) const
 {
-    int primId = _GetPrimId(index);
+    const int primId = _GetPrimId(index);
     hit->objectId = _index->GetRprimPathFromPrimId(primId);
-
-    if (!hit->IsValid()) {
+    if (hit->objectId.IsEmpty()) {
         return false;
     }
 
-    bool rprimValid = _index->GetSceneDelegateAndInstancerIds(hit->objectId,
-                                                           &(hit->delegateId),
-                                                           &(hit->instancerId));
-
-    if (!TF_VERIFY(rprimValid, "%s\n", hit->objectId.GetText())) {
-        return false;
-    }
-
-    // Calculate the hit location in NDC, then transform to worldspace.
-    GfVec3d ndcHit(
-        ((double)x / _bufferSize[0]) * 2.0 - 1.0,
-        ((double)y / _bufferSize[1]) * 2.0 - 1.0,
-        ((z - _depthRange[0]) / (_depthRange[1] - _depthRange[0])) * 2.0 - 1.0);
-    hit->worldSpaceHitPoint = GfVec3f(_ndcToWorld.Transform(ndcHit));
-    hit->worldSpaceHitNormal = _GetNormal(index);
-    hit->normalizedDepth =
-        (z - _depthRange[0]) / (_depthRange[1] - _depthRange[0]);
+    _index->GetSceneDelegateAndInstancerIds(
+        hit->objectId,
+        &(hit->delegateId),
+        &(hit->instancerId));
 
     hit->instanceIndex = _GetInstanceId(index);
     hit->elementIndex = _GetElementId(index);
     hit->edgeIndex = _GetEdgeId(index);
     hit->pointIndex = _GetPointId(index);
+
+    // Calculate the hit location in NDC, then transform to worldspace.
+    const GfVec3d ndcHit(
+        ((double)x / _bufferSize[0]) * 2.0 - 1.0,
+        ((double)y / _bufferSize[1]) * 2.0 - 1.0,
+        ((z - _depthRange[0]) / (_depthRange[1] - _depthRange[0])) * 2.0 - 1.0);
+    hit->worldSpaceHitPoint = _ndcToWorld.Transform(ndcHit);
+    hit->worldSpaceHitNormal = _GetNormal(index);
+    hit->normalizedDepth =
+        (z - _depthRange[0]) / (_depthRange[1] - _depthRange[0]);
 
     if (TfDebug::IsEnabled(HDX_INTERSECT)) {
         std::cout << *hit << std::endl;
@@ -809,20 +1014,249 @@ HdxPickResult::_ResolveHit(int index, int x, int y, float z,
     return true;
 }
 
+// Extracts (first) instanced by path from primSource.
+static
+SdfPath
+_ComputeInstancedByPath(
+    HdContainerDataSourceHandle const &primSource)
+{
+    HdInstancedBySchema schema =
+        HdInstancedBySchema::GetFromParent(primSource);
+    HdPathArrayDataSourceHandle const ds = schema.GetPaths();
+    if (!ds) {
+        return SdfPath();
+    }
+    const VtArray<SdfPath> &paths = ds->GetTypedValue(0.0f);
+    if (paths.empty()) {
+        return SdfPath();
+    }
+    return paths[0];
+}
+
+// Given a prim (as primPath and data source in the given scene index)
+// returns the instancer instancing the prim (as primPath and data source).
+//
+// Also return the indices in the instancer that the prototype containing
+// the given prim corresponds to.
+//
+// For implicit instancing, give the paths of the implicit instances
+// instantiating the prototype containing the given prim.
+//
+static
+std::tuple<SdfPath, HdContainerDataSourceHandle, VtArray<int>, VtArray<SdfPath>>
+_ComputeInstancerAndInstanceIndicesAndLocations(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const SdfPath &primPath,
+    HdContainerDataSourceHandle const &primSource)
+{
+    const SdfPath instancerPath = _ComputeInstancedByPath(primSource);
+    if (instancerPath.IsEmpty()) {
+        return { SdfPath(), nullptr, {}, {} };
+    }
+
+    HdContainerDataSourceHandle const instancerSource =
+        sceneIndex->GetPrim(instancerPath).dataSource;
+    
+    HdInstancerTopologySchema schema =
+        HdInstancerTopologySchema::GetFromParent(instancerSource);
+    if (!schema) {
+        return { SdfPath(), nullptr, {}, {} };
+    }
+
+    HdPathArrayDataSourceHandle const instanceLocationsDs =
+        schema.GetInstanceLocations();
+
+    return { instancerPath,
+             instancerSource,
+             schema.ComputeInstanceIndicesForProto(primPath),
+             instanceLocationsDs
+                    ? instanceLocationsDs->GetTypedValue(0.0f)
+                    : VtArray<SdfPath>() };
+}
+
+HdxPrimOriginInfo
+HdxPrimOriginInfo::FromPickHit(HdRenderIndex * const renderIndex,
+                               const HdxPickHit &hit)
+{
+    HdxPrimOriginInfo result;
+
+    HdSceneIndexBaseRefPtr const sceneIndex =
+        renderIndex->GetTerminalSceneIndex();
+    // Fallback value.
+
+    if (!sceneIndex) {
+        return result;
+    }
+
+    SdfPath path = hit.objectId;
+    HdContainerDataSourceHandle primSource =
+        sceneIndex->GetPrim(path).dataSource;
+
+    // First, ask the prim itself for the prim origin data source.
+    // This will only be valid when scene indices are enabled.
+    result.primOrigin =
+        HdPrimOriginSchema::GetFromParent(primSource).GetContainer();
+
+    // instanceIndex encodes the index of the instance at each level of
+    // instancing.
+    //
+    // Example: we picked instance 6 of 10 in the outer most instancer
+    //                    instance 3 of 12 in the next instancer
+    //                    instance 7 of 15 in the inner most instancer,
+    // instanceIndex = 6 * 12 * 15 + 3 * 15 + 7.
+
+    int instanceIndex = hit.instanceIndex;
+
+    // Starting with the prim itself, ask for the instancer instancing
+    // it and the instancer instancing that instancer and so on.
+    while (true) {
+        VtArray<int> instanceIndices;
+        VtArray<SdfPath> instanceLocations;
+
+        // Get data from the instancer.
+        std::tie(path, primSource, instanceIndices, instanceLocations) =
+            _ComputeInstancerAndInstanceIndicesAndLocations(
+                sceneIndex, path, primSource);
+
+        if (!primSource) {
+            break;
+        }
+
+        // How often does the current instancer instantiate the
+        // prototype containing the given prim (or inner instancer).
+        const size_t n = instanceIndices.size();
+        if (n == 0) {
+            break;
+        }
+
+        HdxInstancerContext ctx;
+        ctx.instancerSceneIndexPath = path;
+        ctx.instancerPrimOrigin =
+            HdPrimOriginSchema::GetFromParent(primSource).GetContainer();
+
+        const size_t i = instanceIndex % n;
+        instanceIndex /= n;
+
+        ctx.instanceId = instanceIndices[i];
+
+        if ( ctx.instanceId >= 0 &&
+             ctx.instanceId < static_cast<int>(instanceLocations.size())) {
+            ctx.instanceSceneIndexPath = instanceLocations[ctx.instanceId];
+
+            HdPrimOriginSchema schema =
+                HdPrimOriginSchema::GetFromParent(
+                    sceneIndex->GetPrim(ctx.instanceSceneIndexPath).dataSource);
+            ctx.instancePrimOrigin = schema.GetContainer();
+        }
+
+        result.instancerContexts.push_back(std::move(ctx));
+    }
+    
+    // Bring it into the form so that outer most instancer is first.
+    std::reverse(result.instancerContexts.begin(),
+                 result.instancerContexts.end());
+
+    return result;
+}
+
+// Consults given prim source for origin path to either replace
+// the given path (if origin path is absolute) or append to given
+// path (if origin path is relative). If no prim origin data source,
+// leave path unchanged. Return whether the path was appended-to.
+static
+bool
+_AppendPrimOriginToPath(HdContainerDataSourceHandle const &primOriginDs,
+                        const TfToken &nameInPrimOrigin,
+                        SdfPath * const path)
+{
+    HdPrimOriginSchema schema = HdPrimOriginSchema(primOriginDs);
+    if (!schema) {
+        return false;
+    }
+    const SdfPath scenePath = schema.GetOriginPath(nameInPrimOrigin);
+    if (scenePath.IsEmpty()) {
+        return false;
+    }
+    if (scenePath.IsAbsolutePath()) {
+        *path = scenePath;
+    } else {
+        *path = path->AppendPath(scenePath);
+    }
+    return true;
+}
+
+SdfPath
+HdxPrimOriginInfo::GetFullPath(const TfToken &nameInPrimOrigin) const
+{
+    SdfPath path;
+
+    // Combine implicit instance paths.
+    //
+    // In case of USD, only native instancing (not point instancing)
+    // contributes instancers giving implicit instance paths.
+    // The first instancer coming from native instancing is outside
+    // any USD prototype and would give an absolute implicit instance path.
+    // The next (inner) instancer would be inside a USD prototype and
+    // gives an implicit instance path relative to the prototype root.
+    for (const HdxInstancerContext &ctx : instancerContexts) {
+        _AppendPrimOriginToPath(
+            ctx.instancePrimOrigin, nameInPrimOrigin, &path);
+    }
+    _AppendPrimOriginToPath(
+        primOrigin, nameInPrimOrigin, &path);
+    return path;
+}
+
+HdInstancerContext
+HdxPrimOriginInfo::ComputeInstancerContext(
+        const TfToken &nameInPrimOrigin) const
+{
+    HdInstancerContext outCtx;
+
+    // Loop through the instancer contexts from outermost to innermost, building
+    // up a path.
+
+    SdfPath prefix;
+    for (const HdxInstancerContext &ctx : instancerContexts) {
+        // First, check if instancerPrimOrigin has anything (via _Append
+        // return value); if so, this instancer is in the scene and needs to be
+        // added to outCtx.  We prepend the current prefix, since if the prefix
+        // is non-empty it indicates this instancer participated in instance
+        // aggregation.
+        SdfPath instancer = prefix;
+        if (_AppendPrimOriginToPath(ctx.instancerPrimOrigin,
+                nameInPrimOrigin, &instancer)) {
+            outCtx.push_back(std::make_pair(instancer, ctx.instanceId));
+        }
+
+        // If instancePrimOrigin has anything in it, that indicates this
+        // instancer participated in instance aggregation, and its contribution
+        // to the path of any later instancers needs to be added to the prefix.
+        _AppendPrimOriginToPath(
+            ctx.instancePrimOrigin, nameInPrimOrigin, &prefix);
+    }
+
+    return outCtx;
+}
+
 size_t
 HdxPickResult::_GetHash(int index) const
 {
     size_t hash = 0;
-    boost::hash_combine(hash, _GetPrimId(index));
-    boost::hash_combine(hash, _GetInstanceId(index));
+    hash = TfHash::Combine(
+        hash,
+        _GetPrimId(index),
+        _GetInstanceId(index)
+    );
     if (_pickTarget == HdxPickTokens->pickFaces) {
-        boost::hash_combine(hash, _GetElementId(index));
+        hash = TfHash::Combine(hash, _GetElementId(index));
     }
     if (_pickTarget == HdxPickTokens->pickEdges) {
-        boost::hash_combine(hash, _GetEdgeId(index));
+        hash = TfHash::Combine(hash, _GetEdgeId(index));
     }
-    if (_pickTarget == HdxPickTokens->pickPoints) {
-        boost::hash_combine(hash, _GetPointId(index));
+    if (_pickTarget == HdxPickTokens->pickPoints ||
+        _pickTarget == HdxPickTokens->pickPointsAndInstances) {
+        hash = TfHash::Combine(hash, _GetPointId(index));
     }
     return hash;
 }
@@ -833,15 +1267,37 @@ HdxPickResult::_IsValidHit(int index) const
     // Inspect the id buffers to determine if the pixel index is a valid hit
     // by accounting for the pick target when picking points and edges.
     // This allows the hit(s) returned to be relevant.
-    bool validPrim = (_GetPrimId(index) != -1);
-    bool invalidTargetEdgePick = (_pickTarget == HdxPickTokens->pickEdges)
-        && (_GetEdgeId(index) == -1);
-    bool invalidTargetPointPick = (_pickTarget == HdxPickTokens->pickPoints)
-        && (_GetPointId(index) == -1);
+    if (_GetPrimId(index) == -1) {
+        return false;
+    }
+    if (_pickTarget == HdxPickTokens->pickEdges) {
+        return (_GetEdgeId(index) != -1);
+    } else if (_pickTarget == HdxPickTokens->pickPoints) {
+        return (_GetPointId(index) != -1);
+    } else if (_pickTarget == HdxPickTokens->pickPointsAndInstances) {
+        if (_GetPointId(index) != -1) {
+            return true;
+        }
+        if (_GetInstanceId(index) != -1) {
+            SdfPath const primId =
+                _index->GetRprimPathFromPrimId(_GetPrimId(index));
+            if (!primId.IsEmpty()) {
+                SdfPath delegateId;
+                SdfPath instancerId;
+                _index->GetSceneDelegateAndInstancerIds(
+                    primId,
+                    &delegateId,
+                    &instancerId);
+            
+                if (!instancerId.IsEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
-    return validPrim
-           && !invalidTargetEdgePick
-           && !invalidTargetPointPick;
+    return true;
 }
 
 void
@@ -1008,20 +1464,23 @@ HdxPickHit::GetHash() const
 {
     size_t hash = 0;
 
-    boost::hash_combine(hash, delegateId.GetHash());
-    boost::hash_combine(hash, objectId.GetHash());
-    boost::hash_combine(hash, instancerId);
-    boost::hash_combine(hash, instanceIndex);
-    boost::hash_combine(hash, elementIndex);
-    boost::hash_combine(hash, edgeIndex);
-    boost::hash_combine(hash, pointIndex);
-    boost::hash_combine(hash, worldSpaceHitPoint[0]);
-    boost::hash_combine(hash, worldSpaceHitPoint[1]);
-    boost::hash_combine(hash, worldSpaceHitPoint[2]);
-    boost::hash_combine(hash, worldSpaceHitNormal[0]);
-    boost::hash_combine(hash, worldSpaceHitNormal[1]);
-    boost::hash_combine(hash, worldSpaceHitNormal[2]);
-    boost::hash_combine(hash, normalizedDepth);
+    hash = TfHash::Combine(
+        hash,
+        delegateId.GetHash(),
+        objectId.GetHash(),
+        instancerId,
+        instanceIndex,
+        elementIndex,
+        edgeIndex,
+        pointIndex,
+        worldSpaceHitPoint[0],
+        worldSpaceHitPoint[1],
+        worldSpaceHitPoint[2],
+        worldSpaceHitNormal[0],
+        worldSpaceHitNormal[1],
+        worldSpaceHitNormal[2],
+        normalizedDepth
+    );
     
     return hash;
 }
@@ -1061,14 +1520,15 @@ operator<<(std::ostream& out, HdxPickHit const& h)
 {
     out << "Delegate: <" << h.delegateId << "> "
         << "Object: <" << h.objectId << "> "
-        << "Instancer: <" << h.instancerId << "> "
-        << "Instance: [" << h.instanceIndex << "] "
+        << "LegacyInstancer: <" << h.instancerId << "> "
+        << "LegacyInstanceId: [" << h.instanceIndex << "] "
         << "Element: [" << h.elementIndex << "] "
         << "Edge: [" << h.edgeIndex  << "] "
         << "Point: [" << h.pointIndex  << "] "
-        << "HitPoint: (" << h.worldSpaceHitPoint << ") "
-        << "HitNormal: (" << h.worldSpaceHitNormal << ") "
-        << "Depth: (" << h.normalizedDepth << ") ";
+        << "HitPoint: " << h.worldSpaceHitPoint << " "
+        << "HitNormal: " << h.worldSpaceHitNormal << " "
+        << "Depth: " << h.normalizedDepth;
+
     return out;
 }
 

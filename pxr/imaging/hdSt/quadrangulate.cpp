@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 
@@ -34,6 +17,7 @@
 #include "pxr/imaging/hd/bufferArrayRange.h"
 #include "pxr/imaging/hd/meshUtil.h"
 #include "pxr/imaging/hd/perfLog.h"
+#include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 
@@ -73,6 +57,7 @@ _CreateResourceBindings(
         bufBind0.bindingIndex = BufferBinding_Primvar;
         bufBind0.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind0.stageUsage = HgiShaderStageCompute;
+        bufBind0.writable = true;
         bufBind0.offsets.push_back(0);
         bufBind0.buffers.push_back(primvar);
         resourceDesc.buffers.push_back(std::move(bufBind0));
@@ -83,6 +68,7 @@ _CreateResourceBindings(
         bufBind1.bindingIndex = BufferBinding_Quadinfo;
         bufBind1.resourceType = HgiBindResourceTypeStorageBuffer;
         bufBind1.stageUsage = HgiShaderStageCompute;
+        bufBind1.writable = true;
         bufBind1.offsets.push_back(0);
         bufBind1.buffers.push_back(quadrangulateTable);
         resourceDesc.buffers.push_back(std::move(bufBind1));
@@ -569,17 +555,13 @@ HdSt_QuadrangulateComputationGPU::Execute(
         std::static_pointer_cast<HdStBufferArrayRange> (range);
 
     // buffer resources for GPU computation
-    HdBufferResourceSharedPtr primvar_ = range_->GetResource(_name);
-    HdStBufferResourceSharedPtr primvar =
-        std::static_pointer_cast<HdStBufferResource> (primvar_);
+    HdStBufferResourceSharedPtr primvar = range_->GetResource(_name);
 
     HdStBufferArrayRangeSharedPtr quadrangulateTableRange_ =
         std::static_pointer_cast<HdStBufferArrayRange> (quadrangulateTableRange);
 
-    HdBufferResourceSharedPtr quadrangulateTable_ =
-        quadrangulateTableRange_->GetResource();
     HdStBufferResourceSharedPtr quadrangulateTable =
-        std::static_pointer_cast<HdStBufferResource> (quadrangulateTable_);
+        quadrangulateTableRange_->GetResource();
 
     // prepare uniform buffer for GPU computation
     int quadInfoStride = quadInfo->maxNumVert + 2;
@@ -610,8 +592,8 @@ HdSt_QuadrangulateComputationGPU::Execute(
     // Generate hash for resource bindings and pipeline.
     // XXX Needs fingerprint hash to avoid collisions
     uint64_t rbHash = (uint64_t) TfHash::Combine(
-        primvar->GetHandle().Get(),
-        quadrangulateTable->GetHandle().Get());
+        primvar->GetHandle().GetId(),
+        quadrangulateTable->GetHandle().GetId());
 
     uint64_t pHash = (uint64_t) TfHash::Combine(
         computeProgram->GetProgram().Get(),
@@ -626,9 +608,9 @@ HdSt_QuadrangulateComputationGPU::Execute(
         resourceBindingsInstance.SetValue(rb);
     }
 
-    HgiResourceBindingsSharedPtr const& resourceBindindsPtr =
+    HgiResourceBindingsSharedPtr const& resourceBindingsPtr =
         resourceBindingsInstance.GetValue();
-    HgiResourceBindingsHandle resourceBindings = *resourceBindindsPtr.get();
+    HgiResourceBindingsHandle resourceBindings = *resourceBindingsPtr.get();
 
     // Get or add pipeline in registry.
     HdInstance<HgiComputePipelineSharedPtr> computePipelineInstance =

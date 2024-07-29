@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/garch/glApi.h"
 
@@ -27,6 +10,7 @@
 // this temporarily until Storm has transitioned fully to Hgi.
 #include "pxr/imaging/hgiGL/graphicsCmds.h"
 
+#include "pxr/imaging/hdSt/binding.h"
 #include "pxr/imaging/hdSt/bufferArrayRange.h"
 #include "pxr/imaging/hdSt/commandBuffer.h"
 #include "pxr/imaging/hdSt/cullingShaderKey.h"
@@ -42,7 +26,6 @@
 #include "pxr/imaging/hdSt/shaderCode.h"
 #include "pxr/imaging/hdSt/shaderKey.h"
 
-#include "pxr/imaging/hd/binding.h"
 #include "pxr/imaging/hd/debugCodes.h"
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -51,6 +34,8 @@
 #include "pxr/imaging/hgi/blitCmdsOps.h"
 
 #include "pxr/imaging/glf/diagnostic.h"
+
+#include "pxr/base/gf/matrix4f.h"
 
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/envSetting.h"
@@ -87,8 +72,9 @@ TF_DEFINE_ENV_SETTING(HD_ENABLE_GPU_INSTANCE_FRUSTUM_CULLING, true,
 
 HdSt_IndirectDrawBatch::HdSt_IndirectDrawBatch(
     HdStDrawItemInstance * drawItemInstance,
-    bool const allowGpuFrustumCulling)
-    : HdSt_DrawBatch(drawItemInstance)
+    bool const allowGpuFrustumCulling,
+    bool const allowTextureResourceRebinding)
+    : HdSt_DrawBatch(drawItemInstance, allowTextureResourceRebinding)
     , _drawCommandBufferDirty(false)
     , _bufferArraysHash(0)
     , _barElementOffsetsHash(0)
@@ -107,6 +93,7 @@ HdSt_IndirectDrawBatch::HdSt_IndirectDrawBatch(
     , _allowGpuFrustumCulling(allowGpuFrustumCulling)
     , _instanceCountOffset(0)
     , _cullInstanceCountOffset(0)
+    , _needsTextureResourceRebinding(false)
 {
     _Init(drawItemInstance);
 }
@@ -470,6 +457,18 @@ _GetShaderBar(HdSt_MaterialNetworkShaderSharedPtr const & shader)
     return shader ? shader->GetShaderData() : nullptr;
 }
 
+using TextureResourceID = HdSt_MaterialNetworkShader::ID;
+
+TextureResourceID
+_GetTextureResourceID(HdStDrawItem const * drawItem)
+{
+    if (HdSt_MaterialNetworkShaderSharedPtr const &materialNetworkShader =
+            drawItem->GetMaterialNetworkShader()) {
+        return materialNetworkShader->ComputeTextureSourceHash();
+    }
+    return 0;
+}
+
 // Collection of resources for a drawItem
 struct _DrawItemState
 {
@@ -578,6 +577,13 @@ HdSt_IndirectDrawBatch::_CompileBatch(
     _numTotalElements = 0;
     _numTotalVertices = 0;
 
+    // We'll need to rebind textures while drawing if we have
+    // a draw item instance with a different texture resource id
+    // than the first draw item.
+    TextureResourceID const firstTextureResourceID =
+        _GetTextureResourceID(_drawItemInstances[0]->GetDrawItem());
+    _needsTextureResourceRebinding = false;
+
     TF_DEBUG(HDST_DRAW).Msg(" - Processing Items:\n");
     _barElementOffsetsHash = 0;
     for (size_t item = 0; item < numDrawItemInstances; ++item) {
@@ -589,6 +595,14 @@ HdSt_IndirectDrawBatch::_CompileBatch(
                             drawItem->GetElementOffsetsHash());
 
         _DrawItemState const dc(drawItem);
+
+        if (_allowTextureResourceRebinding && !_needsTextureResourceRebinding) {
+            TextureResourceID const textureResourceID =
+                                            _GetTextureResourceID(drawItem);
+            if (firstTextureResourceID != textureResourceID) {
+                _needsTextureResourceRebinding = true;
+            }
+        }
 
         // drawing coordinates.
         uint32_t const modelDC         = 0; // reserved for future extension
@@ -924,6 +938,15 @@ HdSt_IndirectDrawBatch::PrepareDraw(
     }
 }
 
+void
+HdSt_IndirectDrawBatch::EncodeDraw(
+    HdStRenderPassStateSharedPtr const & renderPassState,
+    HdStResourceRegistrySharedPtr const & resourceRegistry,
+    bool /*firstDrawBatch*/)
+{
+    // No implementation.
+}
+
 ////////////////////////////////////////////////////////////
 // GPU Resource Binding
 ////////////////////////////////////////////////////////////
@@ -1063,6 +1086,27 @@ _BindingState::UnbindResourcesForDrawing(
     renderPassState->Unbind(hgiCapabilities);
 }
 
+void
+_BindTextureResources(
+    HdStDrawItem const * drawItem,
+    HdSt_ResourceBinder const & binder,
+    HdStGLSLProgramSharedPtr const & glslProgram,
+    TextureResourceID * currentTextureResourceID)
+{
+    // Bind texture resources via the drawItem's materialNetworkShader
+    // when the currentTextureResourceID changes between draw items.
+    TextureResourceID textureResourceID = _GetTextureResourceID(drawItem);
+    if (*currentTextureResourceID != textureResourceID) {
+        *currentTextureResourceID = textureResourceID;
+        if (HdSt_MaterialNetworkShaderSharedPtr const &materialNetworkShader =
+                drawItem->GetMaterialNetworkShader()) {
+            materialNetworkShader->BindResources(
+                glslProgram->GetProgram()->GetRawResource(),
+                binder);
+        }
+    }
+}
+
 } // annonymous namespace
 
 ////////////////////////////////////////////////////////////
@@ -1073,7 +1117,8 @@ void
 HdSt_IndirectDrawBatch::ExecuteDraw(
     HgiGraphicsCmds * gfxCmds,
     HdStRenderPassStateSharedPtr const & renderPassState,
-    HdStResourceRegistrySharedPtr const & resourceRegistry)
+    HdStResourceRegistrySharedPtr const & resourceRegistry,
+    bool /*firstDrawBatch*/)
 {
     HgiGLGraphicsCmds* glGfxCmds = dynamic_cast<HgiGLGraphicsCmds*>(gfxCmds);
 
@@ -1110,6 +1155,7 @@ HdSt_IndirectDrawBatch::_ExecuteDraw(
     // the drawing batch and drawing program are prepared to resolve
     // drawing coordinate state indirectly, i.e. from buffer data.
     bool const drawIndirect =
+        !_needsTextureResourceRebinding &&
         capabilities->IsSet(HgiDeviceCapabilitiesBitsMultiDrawIndirect);
     _DrawingProgram & program = _GetDrawingProgram(renderPassState,
                                                    resourceRegistry);
@@ -1149,7 +1195,7 @@ HdSt_IndirectDrawBatch::_ExecuteDraw(
             geometricShader, _dispatchBuffer, state.indexBar);
     } else {
         _ExecuteDrawImmediate(
-            geometricShader, _dispatchBuffer, state.indexBar);
+            geometricShader, _dispatchBuffer, state.indexBar, program);
     }
 
     state.UnbindResourcesForDrawing(renderPassState, *capabilities);
@@ -1207,7 +1253,8 @@ void
 HdSt_IndirectDrawBatch::_ExecuteDrawImmediate(
     HdSt_GeometricShaderSharedPtr const & geometricShader,
     HdStDispatchBufferSharedPtr const & dispatchBuffer,
-    HdStBufferArrayRangeSharedPtr const & indexBar)
+    HdStBufferArrayRangeSharedPtr const & indexBar,
+    _DrawingProgram const & program)
 {
     TRACE_FUNCTION();
 
@@ -1216,6 +1263,17 @@ HdSt_IndirectDrawBatch::_ExecuteDrawImmediate(
     uint32_t const strideUInt32 = dispatchBuffer->GetCommandNumUints();
     uint32_t const stride = strideUInt32 * sizeof(uint32_t);
     uint32_t const drawCount = dispatchBuffer->GetCount();
+
+    // We'll rebind texture resources while drawing only if the drawing
+    // program's material network shader uses texture resources.
+    bool const programUsesTextureResources =
+        program.GetMaterialNetworkShader()->ComputeTextureSourceHash() != 0;
+
+    bool const rebindTextureResources =
+        _needsTextureResourceRebinding && programUsesTextureResources;
+
+    TextureResourceID currentTextureResourceID =
+        _GetTextureResourceID(_drawItemInstances[0]->GetDrawItem());
 
     if (!_useDrawIndexed) {
         TF_DEBUG(HDST_DRAW).Msg("Drawing Arrays:\n"
@@ -1230,6 +1288,14 @@ HdSt_IndirectDrawBatch::_ExecuteDrawImmediate(
             _DrawNonIndexedCommand const * cmd =
                 reinterpret_cast<_DrawNonIndexedCommand*>(
                     &_drawCommandBuffer[i*strideUInt32]);
+
+            if (rebindTextureResources) {
+                _BindTextureResources(
+                    _drawItemInstances[i]->GetDrawItem(),
+                    program.GetBinder(),
+                    program.GetGLSLProgram(),
+                    &currentTextureResourceID);
+            }
 
             glDrawArraysInstancedBaseInstance(
                 primitiveMode,
@@ -1252,6 +1318,14 @@ HdSt_IndirectDrawBatch::_ExecuteDrawImmediate(
             _DrawIndexedCommand const * cmd =
                 reinterpret_cast<_DrawIndexedCommand*>(
                     &_drawCommandBuffer[i*strideUInt32]);
+
+            if (rebindTextureResources) {
+                _BindTextureResources(
+                    _drawItemInstances[i]->GetDrawItem(),
+                    program.GetBinder(),
+                    program.GetGLSLProgram(),
+                    &currentTextureResourceID);
+            }
 
             uint32_t const indexBufferByteOffset =
                 static_cast<uint32_t>(cmd->baseIndex * sizeof(uint32_t));
@@ -1346,6 +1420,7 @@ HdSt_IndirectDrawBatch::_ExecuteFrustumCull(
         GfMatrix4f cullMatrix;
         GfVec2f drawRangeNDC;
         uint32_t drawCommandNumUints;
+        uint32_t drawBatchId;
         int32_t resetPass;
     };
 
@@ -1398,7 +1473,7 @@ HdSt_IndirectDrawBatch::_ExecuteFrustumCull(
     GfVec2f const &drawRangeNdc = renderPassState->GetDrawingRangeNDC();
 
     // Get the bind index for the 'cullParams' uniform block
-    HdBinding binding = state.binder.GetBinding(_tokens->ulocCullParams);
+    HdStBinding binding = state.binder.GetBinding(_tokens->ulocCullParams);
     int bindLoc = binding.GetLocation();
 
     if (_useInstanceCulling) {
@@ -1408,6 +1483,7 @@ HdSt_IndirectDrawBatch::_ExecuteFrustumCull(
                 _dispatchBuffer->GetCommandNumUints();
         cullParamsInstanced.cullMatrix = cullMatrix;
         cullParamsInstanced.drawRangeNDC = drawRangeNdc;
+        cullParamsInstanced.drawBatchId = reinterpret_cast<uintptr_t>(this);
 
         // Reset Pass
         cullParamsInstanced.resetPass = 1;
@@ -1423,7 +1499,7 @@ HdSt_IndirectDrawBatch::_ExecuteFrustumCull(
 
         // Make sure the reset-pass memory writes
         // are visible to the culling shader pass.
-        cullGfxCmds->MemoryBarrier(HgiMemoryBarrierAll);
+        cullGfxCmds->InsertMemoryBarrier(HgiMemoryBarrierAll);
 
         // Perform Culling Pass
         cullParamsInstanced.resetPass = 0;
@@ -1439,7 +1515,7 @@ HdSt_IndirectDrawBatch::_ExecuteFrustumCull(
 
         // Make sure culling memory writes are
         // visible to execute draw.
-        cullGfxCmds->MemoryBarrier(HgiMemoryBarrierAll);
+        cullGfxCmds->InsertMemoryBarrier(HgiMemoryBarrierAll);
     } else {
         // set cull parameters
         Uniforms cullParams;
@@ -1455,7 +1531,7 @@ HdSt_IndirectDrawBatch::_ExecuteFrustumCull(
         cullGfxCmds->Draw(_dispatchBufferCullInput->GetCount(), 0, 1, 0);
 
         // Make sure culling memory writes are visible to execute draw.
-        cullGfxCmds->MemoryBarrier(HgiMemoryBarrierAll);
+        cullGfxCmds->InsertMemoryBarrier(HgiMemoryBarrierAll);
     }
 
     cullGfxCmds->PopDebugGroup();
@@ -1529,7 +1605,7 @@ HdSt_IndirectDrawBatch::_BeginGPUCountVisibleInstances(
 
         _resultBuffer =
             resourceRegistry->RegisterBufferResource(
-                _tokens->drawIndirectResult, tupleType);
+                _tokens->drawIndirectResult, tupleType, HgiBufferUsageStorage);
     }
 
     // Reset visible item count
@@ -1621,30 +1697,30 @@ HdSt_IndirectDrawBatch::_CullingProgram::Initialize(
 /* virtual */
 void
 HdSt_IndirectDrawBatch::_CullingProgram::_GetCustomBindings(
-    HdBindingRequestVector *customBindings,
+    HdStBindingRequestVector *customBindings,
     bool *enableInstanceDraw) const
 {
     if (!TF_VERIFY(enableInstanceDraw) ||
         !TF_VERIFY(customBindings)) return;
 
-    customBindings->push_back(HdBindingRequest(HdBinding::SSBO,
+    customBindings->push_back(HdStBindingRequest(HdStBinding::SSBO,
                                   _tokens->drawIndirectResult));
-    customBindings->push_back(HdBindingRequest(HdBinding::SSBO,
+    customBindings->push_back(HdStBindingRequest(HdStBinding::SSBO,
                                   _tokens->dispatchBuffer));
-    customBindings->push_back(HdBindingRequest(HdBinding::UBO,
+    customBindings->push_back(HdStBindingRequest(HdStBinding::UBO,
                                   _tokens->ulocCullParams));
 
     if (_useInstanceCulling) {
         customBindings->push_back(
-            HdBindingRequest(HdBinding::DRAW_INDEX_INSTANCE,
+            HdStBindingRequest(HdStBinding::DRAW_INDEX_INSTANCE,
                 _tokens->drawCommandIndex));
     } else {
         // non-instance culling
         customBindings->push_back(
-            HdBindingRequest(HdBinding::DRAW_INDEX,
+            HdStBindingRequest(HdStBinding::DRAW_INDEX,
                 _tokens->drawCommandIndex));
         customBindings->push_back(
-            HdBindingRequest(HdBinding::DRAW_INDEX,
+            HdStBindingRequest(HdStBinding::DRAW_INDEX,
                 _tokens->instanceCountInput));
     }
 

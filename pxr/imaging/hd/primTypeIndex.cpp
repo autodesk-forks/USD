@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hd/primTypeIndex.h"
 #include "pxr/imaging/hd/bprim.h"
@@ -31,6 +14,8 @@
 #include "pxr/imaging/hd/sprim.h"
 
 #include "pxr/imaging/hf/perfLog.h"
+#include "pxr/base/work/loops.h"
+#include "pxr/base/work/withScopedParallelism.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -53,9 +38,11 @@ Hd_PrimTypeIndex<PrimType>::InitPrimTypes(const TfTokenVector &primTypes)
 {
     size_t primTypeCount = primTypes.size();
     _entries.resize(primTypeCount);
+    _primTypeNames.reserve(primTypeCount);
 
     for (size_t typeIdx = 0; typeIdx < primTypeCount; ++typeIdx) {
         _index.emplace(primTypes[typeIdx], typeIdx);
+        _primTypeNames.emplace_back(primTypes[typeIdx]);
     }
 }
 
@@ -354,42 +341,93 @@ Hd_PrimTypeIndex<PrimType>::DestroyFallbackPrims(HdRenderDelegate *renderDelegat
     }
 }
 
+
+template <class PrimType>
+struct _ParallelSyncHelper
+{
+    struct SyncEntry {
+        SdfPath  primPath;
+        PrimType *prim;
+        HdDirtyBits dirtyBits;
+        HdSceneDelegate *sceneDelegate;
+    };
+    
+    using SyncVector = std::vector<SyncEntry>;
+    SyncVector syncVector;
+    HdRenderParam *renderParam;
+    HdChangeTracker *tracker;
+    std::function<void (HdChangeTracker&,
+                        const SdfPath &,
+                        HdDirtyBits dirtyBits)> markPrimCleanF;
+
+    void Sync(size_t start, size_t end) {        
+        for (size_t i = start; i < end; ++i) {
+            syncVector[i].prim->Sync(
+                syncVector[i].sceneDelegate, renderParam,
+                &syncVector[i].dirtyBits);
+            markPrimCleanF(*tracker, syncVector[i].primPath,
+                           syncVector[i].dirtyBits);
+        }
+    }
+};
+
+
 template <class PrimType>
 void
 Hd_PrimTypeIndex<PrimType>::SyncPrims(HdChangeTracker  &tracker,
-                                      HdRenderParam    *renderParam)
+                                      HdRenderParam    *renderParam,
+                                      HdRenderDelegate *renderDelegate)
 {
+    TRACE_FUNCTION();
     size_t numTypes = _entries.size();
 
     _dirtyPrimDelegates.clear();
     HdSceneDelegate *prevDelegate = nullptr;
-
     for (size_t typeIdx = 0; typeIdx < numTypes; ++typeIdx) {
+
+        const bool parallelSyncEnabled =
+            renderDelegate->IsParallelSyncEnabled(_primTypeNames[typeIdx]);
         _PrimTypeEntry &typeEntry =  _entries[typeIdx];
+        _ParallelSyncHelper<PrimType> psyncHelper{
+            {}, renderParam, &tracker,
+            Hd_PrimTypeIndex<PrimType>::_TrackerMarkPrimClean};
+        psyncHelper.syncVector.reserve(typeEntry.primMap.size());
 
-        for (typename _PrimMap::iterator primIt  = typeEntry.primMap.begin();
-                                         primIt != typeEntry.primMap.end();
-                                       ++primIt) {
+        // Populate data for parallel sync and update dirty prim delegates
+        for (auto primIt  = typeEntry.primMap.begin();
+             primIt != typeEntry.primMap.end(); ++primIt) {
             const SdfPath &primPath = primIt->first;
-
-            HdDirtyBits dirtyBits = _TrackerGetPrimDirtyBits(tracker, primPath);
-
+            HdDirtyBits dirtyBits =
+                _TrackerGetPrimDirtyBits(tracker, primPath);
             if (dirtyBits != HdChangeTracker::Clean) {
-
                 _PrimInfo &primInfo = primIt->second;
-
-                primInfo.prim->Sync(primInfo.sceneDelegate,
-                                    renderParam,
-                                    &dirtyBits);
-
-                _TrackerMarkPrimClean(tracker, primPath, dirtyBits);
-
+                if (parallelSyncEnabled) {
+                    psyncHelper.syncVector.emplace_back(
+                        typename _ParallelSyncHelper<PrimType>::SyncEntry{
+                            primPath, primInfo.prim, dirtyBits,
+                                primInfo.sceneDelegate});
+                } else {
+                    primInfo.prim->Sync(
+                        primInfo.sceneDelegate, renderParam, &dirtyBits);
+                    _TrackerMarkPrimClean(tracker, primPath, dirtyBits);
+                }
                 if (prevDelegate != primInfo.sceneDelegate) {
                     _dirtyPrimDelegates.push_back(primInfo.sceneDelegate);
                     prevDelegate = primInfo.sceneDelegate;
                 }
             }
         }
+
+        if (!psyncHelper.syncVector.empty()) {
+            WorkWithScopedParallelism([&]()
+            {        
+                WorkParallelForN(psyncHelper.syncVector.size(),
+                                 std::bind(&_ParallelSyncHelper<PrimType>::Sync,
+                                           &psyncHelper,
+                                           std::placeholders::_1,
+                                           std::placeholders::_2));
+            });
+        }        
     }
 }
 

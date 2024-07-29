@@ -10,13 +10,44 @@ pxr_library(hdsi
         work
         sdf
         cameraUtil
+        geomUtil
         hf
         hd
         pxOsd
 
     PUBLIC_CLASSES
+        coordSysPrimSceneIndex
+        extComputationPrimvarPruningSceneIndex
         implicitSurfaceSceneIndex
+        legacyDisplayStyleOverrideSceneIndex
+        lightLinkingSceneIndex
+        materialBindingResolvingSceneIndex
+        materialPrimvarTransferSceneIndex
+        nurbsApproximatingSceneIndex
+        pinnedCurveExpandingSceneIndex
+        primManagingSceneIndexObserver
+        primTypeNoticeBatchingSceneIndex
+        primTypePruningSceneIndex
+        renderSettingsFilteringSceneIndex
+        sceneGlobalsSceneIndex
+        tetMeshConversionSceneIndex
+        utils
+        velocityMotionResolvingSceneIndex
 
     PUBLIC_HEADERS
         api.h
+        version.h
+)
+
+pxr_build_test(testHdsiPinnedCurveExpandingSceneIndex
+   LIBRARIES
+       hd
+       hdsi
+       tf
+
+   CPPFILES
+       testenv/testHdsiPinnedCurveExpandingSceneIndex.cpp
+)
+pxr_register_test(testHdsiPinnedCurveExpandingSceneIndex
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdsiPinnedCurveExpandingSceneIndex"
 )

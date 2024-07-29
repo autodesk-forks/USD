@@ -1,25 +1,8 @@
 //
 // Copyright 2019 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/garch/glApi.h"
 
@@ -182,31 +165,66 @@ HdxOitResolveTask::Sync(
     // So, the Sync step for the image shader render pass is skipped as well.
 }
 
-const HdRenderPassAovBindingVector&
-HdxOitResolveTask::_GetAovBindings(
-    HdTaskContext * const ctx) const
+HdRenderPassStateSharedPtr
+HdxOitResolveTask::_GetContextRenderPassState(
+    HdTaskContext* const ctx) const
 {
-    static HdRenderPassAovBindingVector empty;
-
     if (!_HasTaskContextData(ctx, HdxTokens->renderPassState)) {
-        return empty;
+        return nullptr;
     }
 
     HdRenderPassStateSharedPtr renderPassState;
     _GetTaskContextData(ctx, HdxTokens->renderPassState, &renderPassState);
-    if (!renderPassState) {
+    return renderPassState;
+}
+
+void
+HdxOitResolveTask::_UpdateCameraFraming(
+    HdTaskContext* const ctx)
+{
+    const HdRenderPassStateSharedPtr ctxRenderPassState =
+        _GetContextRenderPassState(ctx);
+    if (!ctxRenderPassState) {
+        TF_CODING_ERROR("Unable to set camera framing data due to missing "
+                        "render pass state on task context");
+        return;
+    }
+
+    _renderPassState->SetCamera(
+        ctxRenderPassState->GetCamera());
+    _renderPassState->SetOverrideWindowPolicy(
+        ctxRenderPassState->GetOverrideWindowPolicy());
+
+    const CameraUtilFraming& framing = ctxRenderPassState->GetFraming();
+    if (framing.IsValid()) {
+        _renderPassState->SetFraming(framing);
+    } else {
+        _renderPassState->SetViewport(
+            ctxRenderPassState->GetViewport());
+    }
+}
+
+const HdRenderPassAovBindingVector&
+HdxOitResolveTask::_GetAovBindings(
+    HdTaskContext* const ctx) const
+{
+    static HdRenderPassAovBindingVector empty;
+
+    const HdRenderPassStateSharedPtr ctxRenderPassState =
+        _GetContextRenderPassState(ctx);
+    if (!ctxRenderPassState) {
         return empty;
     }
 
-    return renderPassState->GetAovBindings();
+    return ctxRenderPassState->GetAovBindings();
 }
 
 GfVec2i
 HdxOitResolveTask::_ComputeScreenSize(
-    HdTaskContext *ctx,
+    HdTaskContext* ctx,
     HdRenderIndex* renderIndex) const
 {
-    const HdRenderPassAovBindingVector&aovBindings = _GetAovBindings(ctx);
+    const HdRenderPassAovBindingVector& aovBindings = _GetAovBindings(ctx);
     if (aovBindings.empty()) {
         return _GetScreenSize();
     }
@@ -242,7 +260,7 @@ HdxOitResolveTask::_PrepareOitBuffers(
             renderIndex->GetResourceRegistry());
     
     const bool createOitBuffers = !_counterBar;
-    if (createOitBuffers) { 
+    if (createOitBuffers) {
         //
         // Counter Buffer
         //
@@ -252,7 +270,7 @@ HdxOitResolveTask::_PrepareOitBuffers(
         _counterBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
                                             /*role*/HdxTokens->oitCounter,
                                             counterSpecs,
-                                            HdBufferArrayUsageHint());
+                                            HdBufferArrayUsageHintBitsStorage);
         //
         // Index Buffer
         //
@@ -262,7 +280,7 @@ HdxOitResolveTask::_PrepareOitBuffers(
         _indexBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
                                             /*role*/HdxTokens->oitIndices,
                                             indexSpecs,
-                                            HdBufferArrayUsageHint());
+                                            HdBufferArrayUsageHintBitsStorage);
 
         //
         // Data Buffer
@@ -273,7 +291,7 @@ HdxOitResolveTask::_PrepareOitBuffers(
         _dataBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
                                             /*role*/HdxTokens->oitData,
                                             dataSpecs,
-                                            HdBufferArrayUsageHint());
+                                            HdBufferArrayUsageHintBitsStorage);
 
         //
         // Depth Buffer
@@ -284,7 +302,7 @@ HdxOitResolveTask::_PrepareOitBuffers(
         _depthBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
                                             /*role*/HdxTokens->oitDepth,
                                             depthSpecs,
-                                            HdBufferArrayUsageHint());
+                                            HdBufferArrayUsageHintBitsStorage);
 
         //
         // Uniforms
@@ -295,7 +313,7 @@ HdxOitResolveTask::_PrepareOitBuffers(
         _uniformBar = hdStResourceRegistry->AllocateUniformBufferArrayRange(
                                             /*role*/HdxTokens->oitUniforms,
                                             uniformSpecs,
-                                            HdBufferArrayUsageHint());
+                                            HdBufferArrayUsageHintBitsUniform);
     }
 
     // Make sure task context has our buffer each frame (in case its cleared)
@@ -388,6 +406,7 @@ HdxOitResolveTask::Execute(HdTaskContext* ctx)
     if (!TF_VERIFY(_renderPassShader)) return;
 
     _renderPassState->SetAovBindings(_GetAovBindings(ctx));
+    _UpdateCameraFraming(ctx);
 
     HdxOitBufferAccessor oitBufferAccessor(ctx);
     if (!oitBufferAccessor.AddOitBufferBindings(_renderPassShader)) {

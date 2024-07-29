@@ -1,30 +1,12 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usd/usdGeom/modelAPI.h"
 #include "pxr/usd/usd/schemaRegistry.h"
 #include "pxr/usd/usd/typed.h"
-#include "pxr/usd/usd/tokens.h"
 
 #include "pxr/usd/sdf/types.h"
 #include "pxr/usd/sdf/assetPath.h"
@@ -38,11 +20,6 @@ TF_REGISTRY_FUNCTION(TfType)
         TfType::Bases< UsdAPISchemaBase > >();
     
 }
-
-TF_DEFINE_PRIVATE_TOKENS(
-    _schemaTokens,
-    (GeomModelAPI)
-);
 
 /* virtual */
 UsdGeomModelAPI::~UsdGeomModelAPI()
@@ -350,20 +327,23 @@ bool
 UsdGeomModelAPI::SetExtentsHint(VtVec3fArray const &extents, 
                                 const UsdTimeCode &time) const
 {
-    if (!TF_VERIFY(extents.size() >= 2 &&
-                      extents.size() <= (2 *
-                      UsdGeomImageable::GetOrderedPurposeTokens().size())))
+    const size_t extSize = extents.size();
+    const TfTokenVector &purposeTokens
+        = UsdGeomImageable::GetOrderedPurposeTokens();
+    if (extSize % 2 || extSize < 2 || extSize > 2 * purposeTokens.size()) {
+        TF_CODING_ERROR(
+            "invalid extents size (%zu) - must be an even number >= 2 and <= "
+            "2 * UsdGeomImageable::GetOrderedPurposeTokens().size() (%zu)",
+            extSize, 2 * purposeTokens.size());
         return false;
+    }
 
     UsdAttribute extentsHintAttr = 
         GetPrim().CreateAttribute(UsdGeomTokens->extentsHint, 
                                   SdfValueTypeNames->Float3Array,
                                   /* custom = */ false);
 
-    if (!extentsHintAttr)
-        return false;
-
-    return extentsHintAttr.Set(extents, time);
+    return extentsHintAttr && extentsHintAttr.Set(extents, time);
 }
 
 UsdAttribute 
@@ -373,53 +353,68 @@ UsdGeomModelAPI::GetExtentsHintAttr() const
 }
 
 VtVec3fArray
-UsdGeomModelAPI::ComputeExtentsHint(
-        UsdGeomBBoxCache& bboxCache) const
+UsdGeomModelAPI::ComputeExtentsHint(UsdGeomBBoxCache& bboxCache) const
 {
     static const TfTokenVector &purposeTokens =
         UsdGeomImageable::GetOrderedPurposeTokens();
 
-    VtVec3fArray extents(purposeTokens.size() * 2);
-    size_t lastNonEmptyBbox = std::numeric_limits<size_t>::max();
-
-    // We should be able execute this loop in parallel since the
-    // bounding box computation can be multi-threaded. However, most 
-    // conversion processes are run on the farm and are limited to one
-    // CPU, so there may not be a huge benefit from doing this. Also, 
-    // we expect purpose 'default' to be the most common purpose value 
-    // and in some cases the only purpose value. Computing bounds for 
-    // the rest of the purpose values should be very fast.
-    for(size_t bboxType = purposeTokens.size(); bboxType-- != 0; ) {
-
-        // Set the gprim purpose that we are interested in computing the 
-        // bbox for. This doesn't cause the cache to be blown.
-        bboxCache.SetIncludedPurposes(
-            std::vector<TfToken>(1, purposeTokens[bboxType]));
-
-        GfBBox3d bbox = bboxCache.
-            ComputeUntransformedBound(GetPrim());
-
-        const GfRange3d range = bbox.ComputeAlignedBox();
-
-        if (!range.IsEmpty() && lastNonEmptyBbox == std::numeric_limits<size_t>::max())
-            lastNonEmptyBbox = bboxType;
-        
-        const GfVec3d &min = range.GetMin();
-        const GfVec3d &max = range.GetMax();
-
-        size_t index = bboxType * 2;
-        extents[index] = GfVec3f(min[0], min[1], min[2]);
-        extents[index + 1] = GfVec3f(max[0], max[1], max[2]);
+    if (!TF_VERIFY(!purposeTokens.empty(), "we have no purpose!")) {
+        return {};
     }
 
-    // If all the extents are empty. Author a single empty range.
-    if (lastNonEmptyBbox == std::numeric_limits<size_t>::max())
-        lastNonEmptyBbox = 0;
+    VtVec3fArray extents;
+    
+    // If this model is itself a boundable, we call ComputeExtentFromPlugins().
+    UsdGeomBoundable boundable(GetPrim());
+    if (boundable) {
+        if (UsdGeomBoundable::ComputeExtentFromPlugins(
+                boundable, bboxCache.GetTime(), &extents) && extents.size()) {
+            // Replicate the bounds across all the purposes for now.  Seems like
+            // 'extent' for aggregate boundables should support per-purpose
+            // extent, like extentsHint.
+            extents.resize(2 * purposeTokens.size());
+            for (size_t i = 1; i != purposeTokens.size(); ++i) {
+                extents[2*i] = extents[0];
+                extents[2*i+1] = extents[1];
+            }
+        }
+        else {
+            // Leave a single empty range.
+            extents.resize(2);
+            extents[0] = GfRange3f().GetMin();
+            extents[1] = GfRange3f().GetMax();
+        }
+        return extents;
+    }
 
-    // Shrink the array to only include non-empty bounds. 
-    // If all the bounds are empty, we still need to author one empty 
-    // bound.
-    extents.resize(2 * (lastNonEmptyBbox + 1));
+    // This model is not a boundable, so use the bboxCache.
+    extents.resize(2 * purposeTokens.size());
+
+    // It would be possible to parallelize this loop in the future if it becomes
+    // a bottleneck.
+    std::vector<TfToken> purposeTokenVec(1);
+    size_t lastNotEmpty = 0;
+    for (size_t i = 0, end = purposeTokens.size(); i != end; ++i) {
+
+        // Set the gprim purpose that we are interested in computing the bbox
+        // for. This doesn't cause the cache to be blown.
+        purposeTokenVec[0] = purposeTokens[i];
+        bboxCache.SetIncludedPurposes(purposeTokenVec);
+
+        const GfRange3d range = bboxCache
+            .ComputeUntransformedBound(GetPrim())
+            .ComputeAlignedBox();
+
+        extents[2*i] = GfVec3f(range.GetMin());
+        extents[2*i+1] = GfVec3f(range.GetMax());
+
+        if (!range.IsEmpty()) {
+            lastNotEmpty = i;
+        }
+    }
+
+    // Trim any trailing empty boxes, but leave at least one.
+    extents.resize(2 * (lastNotEmpty + 1));
     return extents;
 }
 

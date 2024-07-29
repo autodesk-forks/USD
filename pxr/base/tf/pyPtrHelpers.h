@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_PY_PTR_HELPERS_H
 #define PXR_BASE_TF_PY_PTR_HELPERS_H
@@ -29,7 +12,6 @@
 
 #include "pxr/pxr.h"
 
-#include "pxr/base/tf/py3Compat.h"
 #include "pxr/base/tf/pyIdentity.h"
 #include "pxr/base/tf/pyObjectFinder.h"
 #include "pxr/base/tf/wrapTypeHelpers.h"
@@ -54,6 +36,7 @@
 #include <boost/python/to_python_converter.hpp>
 
 #include <memory>
+#include <type_traits>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -115,8 +98,8 @@ using namespace boost::python;
 template <typename Ptr>
 struct _PtrInterface {
     typedef typename Ptr::DataType Pointee;
-    typedef typename boost::add_const<Pointee>::type ConstPointee;
-    typedef typename boost::remove_const<Pointee>::type NonConstPointee;
+    using ConstPointee = std::add_const_t<Pointee>;
+    using NonConstPointee = std::remove_const_t<Pointee>;
     
     template <typename U>
     struct Rebind {
@@ -375,7 +358,7 @@ struct WeakPtr : def_visitor<WeakPtr> {
         c.add_property("expired", _IsPtrExpired<UnwrappedPtrType>,
                        (const char *)
                        "True if this object has expired, False otherwise.");
-        c.def(TfPyBoolBuiltinFuncName, _IsPtrValid<UnwrappedPtrType>,
+        c.def("__bool__", _IsPtrValid<UnwrappedPtrType>,
               (char const *)
               "True if this object has not expired.  False otherwise.");
         c.def("__eq__", _ArePtrsEqual<UnwrappedPtrType>,

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_VT_VALUE_H
 #define PXR_BASE_VT_VALUE_H
@@ -34,8 +17,11 @@
 
 #include "pxr/base/arch/demangle.h"
 #include "pxr/base/arch/hints.h"
+#include "pxr/base/arch/pragmas.h"
 #include "pxr/base/tf/anyUniquePtr.h"
+#include "pxr/base/tf/delegatedCountPtr.h"
 #include "pxr/base/tf/pointerAndBits.h"
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 #include "pxr/base/tf/safeTypeCompare.h"
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/tf.h"
@@ -46,12 +32,6 @@
 #include "pxr/base/vt/streamOut.h"
 #include "pxr/base/vt/traits.h"
 #include "pxr/base/vt/types.h"
-
-#include <boost/intrusive_ptr.hpp>
-#include <boost/type_traits/has_trivial_assign.hpp>
-#include <boost/type_traits/has_trivial_constructor.hpp>
-#include <boost/type_traits/has_trivial_copy.hpp>
-#include <boost/type_traits/has_trivial_destructor.hpp>
 
 #include <iosfwd>
 #include <typeinfo>
@@ -182,10 +162,10 @@ class VtValue
         T _obj;
         mutable std::atomic<int> _refCount;
 
-        friend inline void intrusive_ptr_add_ref(_Counted const *d) {
+        friend inline void TfDelegatedCountIncrement(_Counted const *d) {
             d->_refCount.fetch_add(1, std::memory_order_relaxed);
         }
-        friend inline void intrusive_ptr_release(_Counted const *d) {
+        friend inline void TfDelegatedCountDecrement(_Counted const *d) noexcept {
             if (d->_refCount.fetch_sub(1, std::memory_order_release) == 1) {
                 std::atomic_thread_fence(std::memory_order_acquire);
                 delete d;
@@ -202,10 +182,10 @@ class VtValue
 
     template <class T>
     using _IsTriviallyCopyable = std::integral_constant<bool,
-        boost::has_trivial_constructor<T>::value &&
-        boost::has_trivial_copy<T>::value &&
-        boost::has_trivial_assign<T>::value &&
-        boost::has_trivial_destructor<T>::value>;
+        std::is_trivially_default_constructible_v<T> &&
+        std::is_trivially_copyable_v<T> &&
+        std::is_trivially_copy_assignable_v<T> &&
+        std::is_trivially_destructible_v<T>>;
 
     // Metafunction that returns true if T should be stored locally, false if it
     // should be stored remotely.
@@ -246,6 +226,7 @@ class VtValue
     protected:
         constexpr _TypeInfo(const std::type_info &ti,
                             const std::type_info &elementTi,
+                            int knownTypeIndex,
                             bool isArray,
                             bool isHashable,
                             bool isProxy,
@@ -271,6 +252,7 @@ class VtValue
                             _GetProxiedAsVtValueFunc getProxiedAsVtValue)
             : typeInfo(ti)
             , elementTypeInfo(elementTi)
+            , knownTypeIndex(knownTypeIndex)
             , isProxy(isProxy)
             , isArray(isArray)
             , isHashable(isHashable)
@@ -363,6 +345,7 @@ class VtValue
 
         const std::type_info &typeInfo;
         const std::type_info &elementTypeInfo;
+        int knownTypeIndex;
         bool isProxy;
         bool isArray;
         bool isHashable;
@@ -581,6 +564,7 @@ class VtValue
         constexpr _TypeInfoImpl()
             : _TypeInfo(typeid(T),
                         _ArrayHelper<T>::GetElementTypeid(),
+                        Vt_KnownValueTypeDetail::GetIndex<T>(),
                         VtIsArray<T>::value,
                         VtIsHashable<T>(),
                         IsProxy,
@@ -762,30 +746,31 @@ class VtValue
 
     ////////////////////////////////////////////////////////////////////////
     // Remote-storage type info implementation.  The container is an
-    // intrusive_ptr to an object holder: _Counted<T>.
+    // TfDelegatedCountPtr to an object holder: _Counted<T>.
     template <class T>
     struct _RemoteTypeInfo : _TypeInfoImpl<
-        T,                                  // type
-        boost::intrusive_ptr<_Counted<T> >, // container
-        _RemoteTypeInfo<T>                  // CRTP
+        T,                                   // type
+        TfDelegatedCountPtr<_Counted<T>>, // container
+        _RemoteTypeInfo<T>                   // CRTP
         >
     {
         constexpr _RemoteTypeInfo()
             : _TypeInfoImpl<
-                  T, boost::intrusive_ptr<_Counted<T>>, _RemoteTypeInfo<T>>()
+                  T, TfDelegatedCountPtr<_Counted<T>>, _RemoteTypeInfo<T>>()
         {}
 
-        typedef boost::intrusive_ptr<_Counted<T> > Ptr;
+        using Ptr = TfDelegatedCountPtr<_Counted<T>>;
         // Get returns object stored in the pointed-to _Counted<T>.
         static T &_GetMutableObj(Ptr &ptr) {
-            if (!ptr->IsUnique())
-                ptr.reset(new _Counted<T>(ptr->Get()));
+            if (!ptr->IsUnique()) {
+                ptr = TfMakeDelegatedCountPtr<_Counted<T>>(ptr->Get());
+            }
             return ptr->GetMutable();
         }
         static T const &_GetObj(Ptr const &ptr) { return ptr->Get(); }
         // PlaceCopy() allocates a new _Counted<T> with a copy of the object.
         static void _PlaceCopy(Ptr *dst, T const &src) {
-            new (dst) Ptr(new _Counted<T>(src));
+            new (dst) Ptr(TfDelegatedCountIncrementTag, new _Counted<T>(src));
         }
     };
 
@@ -1043,6 +1028,36 @@ public:
         return result;
     }
 
+    /// If this value holds an object of type \p T, invoke \p mutateFn, passing
+    /// it a non-const reference to the held object and return true.  Otherwise
+    /// do nothing and return false.
+    template <class T, class Fn>
+    std::enable_if_t<
+        std::is_same<T, typename Vt_ValueGetStored<T>::Type>::value, bool>
+    Mutate(Fn &&mutateFn) {
+        if (!IsHolding<T>()) {
+            return false;
+        }
+        UncheckedMutate<T>(std::forward<Fn>(mutateFn));
+        return true;
+    }
+
+    /// Invoke \p mutateFn, it a non-const reference to the held object which
+    /// must be of type \p T.  If the held object is not of type \p T, this
+    /// function invokes undefined behavior.
+    template <class T, class Fn>
+    std::enable_if_t<
+        std::is_same<T, typename Vt_ValueGetStored<T>::Type>::value>
+    UncheckedMutate(Fn &&mutateFn) {
+        // We move to a temporary, mutate the temporary, then move back.  This
+        // prevents callers from escaping a mutable reference to the held object
+        // via a side-effect of mutateFn.
+        T &stored =_GetMutable<T>();
+        T tmp = std::move(stored);
+        std::forward<Fn>(mutateFn)(tmp);
+        stored = std::move(tmp);
+    }
+
     /// Return true if this value is holding an object of type \p T, false
     /// otherwise.
     template <class T>
@@ -1069,6 +1084,18 @@ public:
 
     /// Return the type name of the held typeid.
     VT_API std::string GetTypeName() const;
+
+    /// Return VtKnownValueTypeIndex<T> for the held type T.  If this value
+    /// holds a proxy type, resolve the proxy and return the proxied type's
+    /// index.  If this value is empty or holds a type that is not 'known',
+    /// return -1.
+    int GetKnownValueTypeIndex() const {
+        if (ARCH_UNLIKELY(_IsProxy())) {
+            return _info->GetProxiedAsVtValue(
+                _storage).GetKnownValueTypeIndex();
+        }
+        return _info.GetLiteral() ? _info->knownTypeIndex : -1;
+    }
 
     /// Returns a const reference to the held object if the held object
     /// is of type \a T.  Invokes undefined behavior otherwise.  This is the
@@ -1159,7 +1186,8 @@ public:
     template <typename T>
     static VtValue Cast(VtValue const &val) {
         VtValue ret = val;
-        return ret.Cast<T>();
+        ret.Cast<T>();
+        return ret;
     }
 
     /// Return a VtValue holding \c val cast to same type that \c other is
@@ -1342,10 +1370,16 @@ private:
     }
 
     template <class T>
-    inline bool _TypeIs() const {
-        std::type_info const &t = typeid(T);
-        bool cmp = TfSafeTypeCompare(_info->typeInfo, t);
-        return ARCH_UNLIKELY(_IsProxy() && !cmp) ? _TypeIsImpl(t) : cmp;
+    inline bool
+    _TypeIs() const {
+        if constexpr (VtIsKnownValueType_Workaround<T>::value) {
+            return _info->knownTypeIndex == VtGetKnownValueTypeIndex<T>() ||
+                ARCH_UNLIKELY(_IsProxy() && _TypeIsImpl(typeid(T)));
+        } else {
+            std::type_info const &t = typeid(T);
+            return TfSafeTypeCompare(_info->typeInfo, t) ||
+                ARCH_UNLIKELY(_IsProxy() && _TypeIsImpl(t));
+        }
     }
 
     VT_API bool _TypeIsImpl(std::type_info const &queriedType) const;
@@ -1399,8 +1433,12 @@ private:
 
     inline void _Clear() {
         // optimize for local types not to deref _info.
+ARCH_PRAGMA_PUSH
+// XXX: http://bug/DEV-16695
+ARCH_PRAGMA_MAYBE_UNINITIALIZED
         if (_info.GetLiteral() && !_IsLocalAndTriviallyCopyable())
             _info.Get()->Destroy(_storage);
+ARCH_PRAGMA_POP
         _info.Set(nullptr, 0);
     }
 
@@ -1481,16 +1519,15 @@ Vt_DefaultValueFactory<T>::Invoke() {
 // to construct zeroed out vectors, matrices, and quaternions by
 // explicitly instantiating the factory for these types. 
 //
-#define _VT_DECLARE_ZERO_VALUE_FACTORY(r, unused, elem)                 \
+#define _VT_DECLARE_ZERO_VALUE_FACTORY(unused, elem)                    \
 template <>                                                             \
 VT_API Vt_DefaultValueHolder Vt_DefaultValueFactory<VT_TYPE(elem)>::Invoke();
 
-BOOST_PP_SEQ_FOR_EACH(_VT_DECLARE_ZERO_VALUE_FACTORY,
-                      unused,
-                      VT_VEC_VALUE_TYPES
-                      VT_MATRIX_VALUE_TYPES
-                      VT_QUATERNION_VALUE_TYPES
-                      VT_DUALQUATERNION_VALUE_TYPES)
+TF_PP_SEQ_FOR_EACH(_VT_DECLARE_ZERO_VALUE_FACTORY, ~,
+                   VT_VEC_VALUE_TYPES
+                   VT_MATRIX_VALUE_TYPES
+                   VT_QUATERNION_VALUE_TYPES
+                   VT_DUALQUATERNION_VALUE_TYPES)
 
 #undef _VT_DECLARE_ZERO_VALUE_FACTORY
 

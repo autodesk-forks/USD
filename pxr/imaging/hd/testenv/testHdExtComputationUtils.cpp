@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 
@@ -36,13 +19,20 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 static const SdfPath pathA("/path/to/A");
-static const SdfPath compA("/path/to/A/computation");
+static const SdfPath compA("/path/to/A/computationA");
+static const SdfPath compB("/path/to/A/computationB");
+static const SdfPath compC("/path/to/A/computationC");
 static const TfToken input1("input1");
 static const TfToken input2("input2");
 static const TfToken primvarName("outputPV");
 static const TfToken compOutputName("compOutput");
 
-// Delegate that implements a simple computation (adding together two inputs).
+// Delegate that implements a simple computation, which adds together inputs
+// from two aggregate computations:
+//
+// computationA -> computationB -> input1
+//             \-> computationC -> input2
+//
 class ExtComputationTestDelegate : public HdUnitTestDelegate {
 public:
     ExtComputationTestDelegate(HdRenderIndex *parentIndex)
@@ -71,11 +61,24 @@ public:
 
     virtual TfTokenVector
     GetExtComputationSceneInputNames(SdfPath const& computationId) override {
-        if (computationId == compA) {
-            return {input1, input2};
+        if (computationId == compB) {
+            return {input1};
+        } else if (computationId == compC) {
+            return {input2};
         }
 
         return {};
+    }
+
+    virtual HdExtComputationInputDescriptorVector
+    GetExtComputationInputDescriptors(SdfPath const& computationId) override {
+        HdExtComputationInputDescriptorVector inputs;
+        if (computationId == compA) {
+            inputs.emplace_back(input1, compB, input1);
+            inputs.emplace_back(input2, compC, input2);
+        }
+
+        return inputs;
     }
 
     virtual HdExtComputationOutputDescriptorVector
@@ -96,21 +99,17 @@ public:
                                              size_t maxSampleCount,
                                              float *sampleTimes,
                                              VtValue *sampleValues) override {
-        if (computationId != compA) {
-            return 0;
-        }
-
         const size_t numSamples = std::min(size_t(4), maxSampleCount);
 
         // The two inputs have different sample times (0,1,2,3 and 0,2,4,6).
-        if (input == input1) {
+        if (computationId == compB && input == input1) {
             for (size_t i = 0; i < numSamples; ++i) {
                 sampleTimes[i] = i;
                 sampleValues[i] = VtValue(double(i));
             }
             return numSamples;
         }
-        else if (input == input2) {
+        else if (computationId == compC && input == input2) {
             for (size_t i = 0; i < numSamples; ++i) {
                 sampleTimes[i] = i * 2;
                 sampleValues[i] = VtValue(double(i));
@@ -218,11 +217,13 @@ void RunTest()
         HdRenderIndex::New(&renderDelegate, {}));
     ExtComputationTestDelegate delegate(index.get());
 
-    // Create an sprim for the computation.
-    index->InsertSprim(HdPrimTypeTokens->extComputation, &delegate, compA);
-    auto sprim = index->GetSprim(HdPrimTypeTokens->extComputation, compA);
-    HdDirtyBits dirty = HdExtComputation::DirtyBits::AllDirty;
-    sprim->Sync(&delegate, nullptr, &dirty);
+    // Create an sprim for each computation.
+    for (const SdfPath &comp : {compA, compB, compC}) {
+        index->InsertSprim(HdPrimTypeTokens->extComputation, &delegate, comp);
+        auto sprim = index->GetSprim(HdPrimTypeTokens->extComputation, comp);
+        HdDirtyBits dirty = HdExtComputation::DirtyBits::AllDirty;
+        sprim->Sync(&delegate, nullptr, &dirty);
+    }
 
     auto compPrimvars = delegate.GetExtComputationPrimvarDescriptors(
         pathA, HdInterpolationConstant);

@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef USDPHYSICS_TOKENS_H
 #define USDPHYSICS_TOKENS_H
@@ -124,7 +107,7 @@ struct UsdPhysicsTokensType {
     const TfToken drive_MultipleApplyTemplate_PhysicsType;
     /// \brief "force"
     /// 
-    /// Possible value for UsdPhysicsDriveAPI::GetTypeAttr(), Default value for UsdPhysicsDriveAPI::GetTypeAttr()
+    /// Fallback value for UsdPhysicsDriveAPI::GetTypeAttr()
     const TfToken force;
     /// \brief "kilogramsPerUnit"
     /// 
@@ -152,7 +135,7 @@ struct UsdPhysicsTokensType {
     const TfToken meshSimplification;
     /// \brief "none"
     /// 
-    /// Possible value for UsdPhysicsMeshCollisionAPI::GetApproximationAttr(), Default value for UsdPhysicsMeshCollisionAPI::GetApproximationAttr()
+    /// Fallback value for UsdPhysicsMeshCollisionAPI::GetApproximationAttr()
     const TfToken none;
     /// \brief "physics:angularVelocity"
     /// 
@@ -164,7 +147,7 @@ struct UsdPhysicsTokensType {
     const TfToken physicsApproximation;
     /// \brief "physics:axis"
     /// 
-    /// UsdPhysicsSphericalJoint, UsdPhysicsPrismaticJoint, UsdPhysicsRevoluteJoint
+    /// UsdPhysicsRevoluteJoint, UsdPhysicsPrismaticJoint, UsdPhysicsSphericalJoint
     const TfToken physicsAxis;
     /// \brief "physics:body0"
     /// 
@@ -188,7 +171,7 @@ struct UsdPhysicsTokensType {
     const TfToken physicsCenterOfMass;
     /// \brief "physics:collisionEnabled"
     /// 
-    /// UsdPhysicsJoint, UsdPhysicsCollisionAPI
+    /// UsdPhysicsCollisionAPI, UsdPhysicsJoint
     const TfToken physicsCollisionEnabled;
     /// \brief "physics:coneAngle0Limit"
     /// 
@@ -200,7 +183,7 @@ struct UsdPhysicsTokensType {
     const TfToken physicsConeAngle1Limit;
     /// \brief "physics:density"
     /// 
-    /// UsdPhysicsMaterialAPI, UsdPhysicsMassAPI
+    /// UsdPhysicsMassAPI, UsdPhysicsMaterialAPI
     const TfToken physicsDensity;
     /// \brief "physics:diagonalInertia"
     /// 
@@ -230,6 +213,10 @@ struct UsdPhysicsTokensType {
     /// 
     /// UsdPhysicsScene
     const TfToken physicsGravityMagnitude;
+    /// \brief "physics:invertFilteredGroups"
+    /// 
+    /// UsdPhysicsCollisionGroup
+    const TfToken physicsInvertFilteredGroups;
     /// \brief "physics:jointEnabled"
     /// 
     /// UsdPhysicsJoint
@@ -256,7 +243,7 @@ struct UsdPhysicsTokensType {
     const TfToken physicsLocalRot1;
     /// \brief "physics:lowerLimit"
     /// 
-    /// UsdPhysicsPrismaticJoint, UsdPhysicsRevoluteJoint
+    /// UsdPhysicsRevoluteJoint, UsdPhysicsPrismaticJoint
     const TfToken physicsLowerLimit;
     /// \brief "physics:mass"
     /// 
@@ -266,6 +253,10 @@ struct UsdPhysicsTokensType {
     /// 
     /// UsdPhysicsDistanceJoint
     const TfToken physicsMaxDistance;
+    /// \brief "physics:mergeGroup"
+    /// 
+    /// UsdPhysicsCollisionGroup
+    const TfToken physicsMergeGroup;
     /// \brief "physics:minDistance"
     /// 
     /// UsdPhysicsDistanceJoint
@@ -284,7 +275,7 @@ struct UsdPhysicsTokensType {
     const TfToken physicsRigidBodyEnabled;
     /// \brief "physics:simulationOwner"
     /// 
-    /// UsdPhysicsCollisionAPI, UsdPhysicsRigidBodyAPI
+    /// UsdPhysicsRigidBodyAPI, UsdPhysicsCollisionAPI
     const TfToken physicsSimulationOwner;
     /// \brief "physics:startsAsleep"
     /// 
@@ -296,7 +287,7 @@ struct UsdPhysicsTokensType {
     const TfToken physicsStaticFriction;
     /// \brief "physics:upperLimit"
     /// 
-    /// UsdPhysicsPrismaticJoint, UsdPhysicsRevoluteJoint
+    /// UsdPhysicsRevoluteJoint, UsdPhysicsPrismaticJoint
     const TfToken physicsUpperLimit;
     /// \brief "physics:velocity"
     /// 
@@ -328,16 +319,84 @@ struct UsdPhysicsTokensType {
     const TfToken transZ;
     /// \brief "X"
     /// 
-    /// Possible value for UsdPhysicsSphericalJoint::GetAxisAttr(), Default value for UsdPhysicsSphericalJoint::GetAxisAttr(), Possible value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Default value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Possible value for UsdPhysicsRevoluteJoint::GetAxisAttr(), Default value for UsdPhysicsRevoluteJoint::GetAxisAttr()
+    /// Fallback value for UsdPhysicsRevoluteJoint::GetAxisAttr(), Fallback value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Fallback value for UsdPhysicsSphericalJoint::GetAxisAttr()
     const TfToken x;
     /// \brief "Y"
     /// 
-    /// Possible value for UsdPhysicsSphericalJoint::GetAxisAttr(), Possible value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Possible value for UsdPhysicsRevoluteJoint::GetAxisAttr()
+    /// Possible value for UsdPhysicsRevoluteJoint::GetAxisAttr(), Possible value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Possible value for UsdPhysicsSphericalJoint::GetAxisAttr()
     const TfToken y;
     /// \brief "Z"
     /// 
-    /// Possible value for UsdPhysicsSphericalJoint::GetAxisAttr(), Possible value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Possible value for UsdPhysicsRevoluteJoint::GetAxisAttr()
+    /// Possible value for UsdPhysicsRevoluteJoint::GetAxisAttr(), Possible value for UsdPhysicsPrismaticJoint::GetAxisAttr(), Possible value for UsdPhysicsSphericalJoint::GetAxisAttr()
     const TfToken z;
+    /// \brief "PhysicsArticulationRootAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsArticulationRootAPI
+    const TfToken PhysicsArticulationRootAPI;
+    /// \brief "PhysicsCollisionAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsCollisionAPI
+    const TfToken PhysicsCollisionAPI;
+    /// \brief "PhysicsCollisionGroup"
+    /// 
+    /// Schema identifer and family for UsdPhysicsCollisionGroup
+    const TfToken PhysicsCollisionGroup;
+    /// \brief "PhysicsDistanceJoint"
+    /// 
+    /// Schema identifer and family for UsdPhysicsDistanceJoint
+    const TfToken PhysicsDistanceJoint;
+    /// \brief "PhysicsDriveAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsDriveAPI
+    const TfToken PhysicsDriveAPI;
+    /// \brief "PhysicsFilteredPairsAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsFilteredPairsAPI
+    const TfToken PhysicsFilteredPairsAPI;
+    /// \brief "PhysicsFixedJoint"
+    /// 
+    /// Schema identifer and family for UsdPhysicsFixedJoint
+    const TfToken PhysicsFixedJoint;
+    /// \brief "PhysicsJoint"
+    /// 
+    /// Schema identifer and family for UsdPhysicsJoint
+    const TfToken PhysicsJoint;
+    /// \brief "PhysicsLimitAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsLimitAPI
+    const TfToken PhysicsLimitAPI;
+    /// \brief "PhysicsMassAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsMassAPI
+    const TfToken PhysicsMassAPI;
+    /// \brief "PhysicsMaterialAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsMaterialAPI
+    const TfToken PhysicsMaterialAPI;
+    /// \brief "PhysicsMeshCollisionAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsMeshCollisionAPI
+    const TfToken PhysicsMeshCollisionAPI;
+    /// \brief "PhysicsPrismaticJoint"
+    /// 
+    /// Schema identifer and family for UsdPhysicsPrismaticJoint
+    const TfToken PhysicsPrismaticJoint;
+    /// \brief "PhysicsRevoluteJoint"
+    /// 
+    /// Schema identifer and family for UsdPhysicsRevoluteJoint
+    const TfToken PhysicsRevoluteJoint;
+    /// \brief "PhysicsRigidBodyAPI"
+    /// 
+    /// Schema identifer and family for UsdPhysicsRigidBodyAPI
+    const TfToken PhysicsRigidBodyAPI;
+    /// \brief "PhysicsScene"
+    /// 
+    /// Schema identifer and family for UsdPhysicsScene
+    const TfToken PhysicsScene;
+    /// \brief "PhysicsSphericalJoint"
+    /// 
+    /// Schema identifer and family for UsdPhysicsSphericalJoint
+    const TfToken PhysicsSphericalJoint;
     /// A vector of all of the tokens listed above.
     const std::vector<TfToken> allTokens;
 };

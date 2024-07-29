@@ -63,19 +63,32 @@ class "RiSplineAPI" (
 {
 }
 
-class "RiTextureAPI" (
+class "RiRenderPassAPI" (
+    apiSchemas = ["CollectionAPI:matte", "CollectionAPI:cameraVisibility"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["collection:cameraVisibility:includeRoot"]
+    }
     doc = """
-    \\deprecated This API schema will be removed in a future release.
+    RiRenderPassAPI is an API schema that provides a mechanism
+    to set certain Ri statements on each prim in a collection,
+    for a given RenderPass prim.
 
-    RiTextureAPI is an API schema that provides an interface
-    to add Renderman-specific attributes to adjust textures."""
+    \\anchor usdRi_cameraVisibility
+    The objects that are relevant to the render is specified via the 
+    cameraVisibility collection (UsdCollectionAPI) and can be accessed via 
+    GetCameraVisibilityCollectionAPI(). Each prim in the collection will have
+    ri:visible:camera set to 1.  By default everything in the scene should be 
+    visible to camera, so this collection sets includeRoot to 1.
+
+    \\anchor usdRi_matte
+    The objects that are relevant to the render is specified via the 
+    matte collection (UsdCollectionAPI) and can be accessed via 
+    GetMatteCollectionAPI().  Each prim in the collection will have
+    ri:matte set to 1.  By default everything in the scene should render
+    normally, so this collection sets includeRoot to 0.
+    """
 )
 {
-    float ri:texture:gamma (
-        doc = "Gamma-correct the texture"
-    )
-    float ri:texture:saturation (
-        doc = "Adjust the texture's saturation"
-    )
+    uniform bool collection:cameraVisibility:includeRoot = 1
 }
 

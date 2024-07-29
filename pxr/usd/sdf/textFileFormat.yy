@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 %{
@@ -53,10 +36,6 @@
 #include "pxr/base/gf/matrix4d.h"
 #include "pxr/base/tf/mallocTag.h"
 
-#include <boost/noncopyable.hpp>
-#include <boost/optional.hpp>
-#include <boost/variant.hpp>
-
 #include <functional>
 #include <sstream>
 #include <string>
@@ -69,7 +48,6 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 using Sdf_ParserHelpers::Value;
-using boost::get;
 
 //--------------------------------------------------------------------
 // Helper macros/functions for handling errors
@@ -230,6 +208,36 @@ _AppendVectorItem(const TfToken& key, const T& item,
 
     context->data->Set(context->path, key, VtValue(vec));
 }
+
+inline static void
+_SetDefault(const SdfPath& path, VtValue val,
+            Sdf_TextParserContext *context)
+{
+    // If is holding SdfPathExpression (or array of same), make absolute with
+    // path.GetPrimPath() as anchor.
+    if (val.IsHolding<SdfPathExpression>()) {
+        val.UncheckedMutate<SdfPathExpression>([&](SdfPathExpression &pe) {
+            pe = pe.MakeAbsolute(path.GetPrimPath());
+        });
+    }
+    else if (val.IsHolding<VtArray<SdfPathExpression>>()) {
+        val.UncheckedMutate<VtArray<SdfPathExpression>>(
+            [&](VtArray<SdfPathExpression> &peArr) {
+                for (SdfPathExpression &pe: peArr) {
+                    pe = pe.MakeAbsolute(path.GetPrimPath());
+                }
+            });
+    }
+    /*
+    else if (val.IsHolding<SdfPath>()) {
+        SdfPath valPath;
+        val.UncheckedSwap(valPath);
+        expr.MakeAbsolutePath(path.GetPrimPath());
+        val.UncheckedSwap(valPath);
+    }
+    */
+    context->data->Set(path, SdfFieldKeys->Default, val);
+}        
 
 template <class T>
 inline static void
@@ -549,7 +557,7 @@ _PrimSetVariantSelection(Sdf_TextParserContext *context)
             const std::string variantName = it->second.Get<std::string>();
             ERROR_AND_RETURN_IF_NOT_ALLOWED(
                 context, 
-                SdfSchema::IsValidVariantIdentifier(variantName));
+                SdfSchema::IsValidVariantSelection(variantName));
 
             refVars[it->first] = variantName;
         }
@@ -564,32 +572,41 @@ _RelocatesAdd(const Value& arg1, const Value& arg2,
               Sdf_TextParserContext *context)
 {
     const std::string& srcStr    = arg1.Get<std::string>();
-    const std::string& targetStr = arg2.Get<std::string>();
-
     SdfPath srcPath(srcStr);
-    SdfPath targetPath(targetStr);
 
-    if (!srcPath.IsPrimPath()) {
-        Err(context, "'%s' is not a valid prim path",
+    if (!SdfSchema::IsValidRelocatesSourcePath(srcPath)) {
+        Err(context, "'%s' is not a valid relocates path",
             srcStr.c_str());
         return;
     }
-    if (!targetPath.IsPrimPath()) {
-        Err(context, "'%s' is not a valid prim path",
-            targetStr.c_str());
-        return;
+
+    // The relocates map is expected to only hold absolute paths.
+    srcPath = srcPath.MakeAbsolutePath(context->path);
+
+    const std::string& targetStr = arg2.Get<std::string>();
+    if (targetStr.empty()) {
+        context->relocatesParsing.emplace_back(
+            std::move(srcPath), SdfPath());
+    } else {
+        SdfPath targetPath(targetStr);
+
+        // Target paths can be empty but the string must be explicitly empty
+        // which we would've caught in the if statement. An empty path here 
+        // indicates a malformed path which is never valid.
+        if (targetPath.IsEmpty() || 
+                !SdfSchema::IsValidRelocatesTargetPath(targetPath)) {
+            Err(context, "'%s' is not a valid relocates path",
+                targetStr.c_str());
+            return;
+        }
+
+        // The relocates map is expected to only hold absolute paths.
+        targetPath = targetPath.MakeAbsolutePath(context->path);
+
+        context->relocatesParsing.emplace_back(
+            std::move(srcPath), std::move(targetPath));
     }
 
-    // The relocates map is expected to only hold absolute paths. The
-    // SdRelocatesMapProxy ensures that all paths are made absolute when
-    // editing, but since we're bypassing that proxy and setting the map
-    // directly into the underlying SdfData, we need to explicitly absolutize
-    // paths here.
-    const SdfPath srcAbsPath = srcPath.MakeAbsolutePath(context->path);
-    const SdfPath targetAbsPath = targetPath.MakeAbsolutePath(context->path);
-
-    context->relocatesParsingMap.insert(std::make_pair(srcAbsPath, 
-                                                        targetAbsPath));
     context->layerHints.mightHaveRelocates = true;
 }
 
@@ -1450,6 +1467,14 @@ layer_metadata:
                 context->path, SdfFieldKeys->Documentation, 
                 $3.Get<std::string>(), context);
         }
+    // Not parsed with generic metadata because: uses special Python-like
+    // dictionary syntax with paths
+    | TOK_RELOCATES '=' relocates_map {
+            _SetField(
+                context->path, SdfFieldKeys->LayerRelocates,
+                context->relocatesParsing, context);
+            context->relocatesParsing.clear();
+        }      
     // Not parsed with generic metadata because: actually maps to two values
     // instead of one
     | TOK_SUBLAYERS '=' sublayer_list
@@ -1862,10 +1887,13 @@ prim_metadata:
     // Not parsed with generic metadata because: uses special Python-like
     // dictionary syntax with paths
     | TOK_RELOCATES '=' relocates_map {
+            SdfRelocatesMap relocatesParsingMap(
+                std::make_move_iterator(context->relocatesParsing.begin()),
+                std::make_move_iterator(context->relocatesParsing.end()));
+            context->relocatesParsing.clear();
             _SetField(
                 context->path, SdfFieldKeys->Relocates, 
-                context->relocatesParsingMap, context);
-            context->relocatesParsingMap.clear();
+                relocatesParsingMap, context);
         }
     // Not parsed with generic metadata because: multiple definitions are
     // merged into one dictionary instead of overwriting previous definitions
@@ -2572,14 +2600,10 @@ attribute_assignment_opt:
 
 attribute_value:
     typed_value {
-        _SetField(
-            context->path, SdfFieldKeys->Default,
-            context->currentValue, context);
+        _SetDefault(context->path, context->currentValue, context);
     }
     | TOK_NONE {
-        _SetField(
-            context->path, SdfFieldKeys->Default,
-            SdfValueBlock(), context);
+        _SetDefault(context->path, VtValue(SdfValueBlock()), context);
     }
     ;
 
@@ -2853,7 +2877,7 @@ prim_relationship_default:
             std::string pathString = $6.Get<std::string>();
             SdfPath path = pathString.empty() ? SdfPath() : SdfPath(pathString);
 
-            _SetField(context->path, SdfFieldKeys->Default, path, context);
+            _SetDefault(context->path, VtValue(path), context);
             _PrimEndRelationship(context);
         }
     ;
@@ -3179,8 +3203,10 @@ static void _ReportParseError(Sdf_TextParserContext *context,
 // blocks of 8KB, which leads to O(n^2) behavior when trying to match strings
 // that are over this size. Giving flex a pre-filled buffer avoids this
 // behavior.
-struct Sdf_MemoryFlexBuffer : public boost::noncopyable
+struct Sdf_MemoryFlexBuffer
 {
+    Sdf_MemoryFlexBuffer(const Sdf_MemoryFlexBuffer&) = delete;
+    Sdf_MemoryFlexBuffer& operator=(const Sdf_MemoryFlexBuffer&) = delete;
 public:
     Sdf_MemoryFlexBuffer(const std::shared_ptr<ArAsset>& asset,
                          const std::string& name, yyscan_t scanner);
@@ -3290,8 +3316,8 @@ Sdf_ParseLayer(
                 TRACE_SCOPE("textFileFormatYyParse");
                 status = textFileFormatYyparse(&context);
                 *hints = context.layerHints;
-            } catch (boost::bad_get) {
-                TF_CODING_ERROR("Bad boost:get<T>() in layer parser.");
+            } catch (std::bad_variant_access const &) {
+                TF_CODING_ERROR("Bad variant access in layer parser.");
                 Err(&context, "Internal layer parser error.");
             }
         }
@@ -3340,8 +3366,8 @@ Sdf_ParseLayerFromString(
         TRACE_SCOPE("textFileFormatYyParse");
         status = textFileFormatYyparse(&context);
         *hints = context.layerHints;
-    } catch (boost::bad_get) {
-        TF_CODING_ERROR("Bad boost:get<T>() in layer parser.");
+    } catch (std::bad_variant_access const &) {
+        TF_CODING_ERROR("Bad variant access in layer parser.");
         Err(&context, "Internal layer parser error.");
     }
 

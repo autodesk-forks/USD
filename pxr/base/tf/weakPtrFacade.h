@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_TF_WEAK_PTR_FACADE_H
 #define PXR_BASE_TF_WEAK_PTR_FACADE_H
@@ -33,10 +16,7 @@
 
 #include "pxr/base/arch/demangle.h"
 
-#include <boost/mpl/or.hpp>
-#include <boost/type_traits/is_base_of.hpp>
-#include <boost/type_traits/is_same.hpp>
-#include <boost/utility/enable_if.hpp>
+#include <type_traits>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -363,9 +343,9 @@ ToPtr TfConst_cast(TfWeakPtrFacade<X, Y> const &p) {
 template <class T>
 template <template <class> class X, class U>
 inline TfRefPtr<T>::TfRefPtr(const TfWeakPtrFacade<X, U>& p,
-                             typename boost::enable_if<
-                                 boost::is_convertible<U*, T*>
-                             >::type *dummy)
+                             typename std::enable_if<
+                                 std::is_convertible<U*, T*>::value
+                             >::type *)
     : _refBase(get_pointer(p))
 {
     _AddRef();
@@ -377,9 +357,9 @@ inline TfRefPtr<T>::TfRefPtr(const TfWeakPtrFacade<X, U>& p,
 //
 template <template <class> class Ptr, class T>
 struct TfTypeFunctions<Ptr<T>,
-                       typename boost::enable_if<
-                           boost::is_base_of<TfWeakPtrFacadeBase, Ptr<T> >
-                           >::type>
+                       std::enable_if_t<
+                           std::is_base_of<TfWeakPtrFacadeBase, Ptr<T>>::value
+                       >>
 {
     static T* GetRawPtr(const Ptr<T>& t) {
         return get_pointer(t);
@@ -399,9 +379,9 @@ struct TfTypeFunctions<Ptr<T>,
 
 template <template <class> class Ptr, class T>
 struct TfTypeFunctions<Ptr<const T>,
-                       typename boost::enable_if<
-                           boost::is_base_of<TfWeakPtrFacadeBase, Ptr<const T> >
-                           >::type>
+                       std::enable_if_t<
+                           std::is_base_of<TfWeakPtrFacadeBase, Ptr<const T>>::value
+                       >>
 {
     static const T* GetRawPtr(const Ptr<const T>& t) {
         return get_pointer(t);

@@ -2,25 +2,8 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
 
 from __future__ import print_function
@@ -295,7 +278,8 @@ class TestGfRange(unittest.TestCase):
             with self.assertRaises(Tf.ErrorException):
                 rf.GetOctant(8)
 
-        # now test comparisons between ranges of different types.
+        # now test comparisons between ranges of different types
+        # and constructors converting between different types.
         Ranges = [(Gf.Range1f, float,    Gf.Range1d, float),
                 (Gf.Range2f, Gf.Vec2f, Gf.Range2d, Gf.Vec2d),
                 (Gf.Range3f, Gf.Vec3f, Gf.Range3d, Gf.Vec3d)]
@@ -321,6 +305,20 @@ class TestGfRange(unittest.TestCase):
             self.assertEqual(Rangef.GetIntersection(r1f, r2f), Ranged(v1d, v4d))
             self.assertEqual(Ranged.GetIntersection(r1d, r2d), Rangef(v1f, v4f))
 
+            # Construct double from float type
+            self.assertEqual(Ranged(r1f), r1d)
+
+            # Construct float from double type
+            self.assertEqual(Rangef(r1d), r1f)
+
+    def test_Hash(self):
+        for RangeType, ValueType in self.Ranges:
+            r = RangeType(
+                makeValue(ValueType, [-1.0, -2.0, -3.0, -4.0]),
+                makeValue(ValueType, [4.0, 3.0, 2.0, 1.0])
+            )
+            self.assertEqual(hash(r), hash(r))
+            self.assertEqual(hash(r), hash(RangeType(r)))
 
 if __name__ == '__main__':
     unittest.main()

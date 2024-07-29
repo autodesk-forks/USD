@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/garch/glApi.h"
 
@@ -34,6 +17,7 @@
 #include "pxr/imaging/hgiGL/shaderProgram.h"
 #include "pxr/imaging/hgiGL/texture.h"
 #include "pxr/base/trace/trace.h"
+#include "pxr/base/tf/scopeDescription.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -103,6 +87,7 @@ HgiGLOps::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp)
         } else {
             HgiGLConversions::GetFormat(
                 texDesc.format,
+                texDesc.usage,
                 &glFormat,
                 &glPixelType);
         }
@@ -140,11 +125,10 @@ HgiGLOps::CopyTextureCpuToGpu(HgiTextureCpuToGpuOp const& copyOp)
         HgiTextureDesc const& desc =
             copyOp.gpuDestinationTexture->GetDescriptor();
 
-        GLenum internalFormat = 0;
         GLenum format = 0;
         GLenum type = 0;
 
-        HgiGLConversions::GetFormat(desc.format,&format,&type,&internalFormat);
+        HgiGLConversions::GetFormat(desc.format,desc.usage,&format,&type);
 
         const bool isCompressed = HgiIsCompressed(desc.format);
         GfVec3i const& offsets = copyOp.destinationTexelOffset;
@@ -361,7 +345,10 @@ HgiGLOps::CopyTextureToBuffer(HgiTextureToBufferOp const& copyOp)
         } else {
             GLenum format = 0;
             GLenum type = 0;
-            HgiGLConversions::GetFormat(texDesc.format, &format, &type);
+            HgiGLConversions::GetFormat(texDesc.format,
+                                        texDesc.usage,
+                                        &format,
+                                        &type);
             glGetTextureImage(srcTexture->GetTextureId(),
                               copyOp.mipLevel,
                               format,
@@ -404,14 +391,13 @@ HgiGLOps::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
 
         HgiTextureDesc const& texDesc = dstTexture->GetDescriptor();
 
-        GLenum internalFormat = 0;
         GLenum format = 0;
         GLenum type = 0;
 
         HgiGLConversions::GetFormat(texDesc.format,
+                                    texDesc.usage,
                                     &format,
-                                    &type,
-                                    &internalFormat);
+                                    &type);
 
         const bool isCompressed = HgiIsCompressed(texDesc.format);
         GfVec3i const& offsets = copyOp.destinationTexelOffset;
@@ -829,7 +815,7 @@ HgiGLOps::BindFramebufferOp(
                     GL_DEPTH_STENCIL,
                     0,
                     depthAttachment.clearValue[0],
-                    depthAttachment.clearValue[1]);
+                    static_cast<uint32_t>(depthAttachment.clearValue[1]));
             } else {
                 glClearBufferfv(
                     GL_DEPTH,
@@ -875,6 +861,13 @@ HgiGLOps::GenerateMipMaps(HgiTextureHandle const& texture)
 
         HgiGLTexture* glTex = static_cast<HgiGLTexture*>(texture.Get());
         if (glTex && glTex->GetTextureId()) {
+            // Note: the texture ID doesn't mean much to the end user, but
+            // making these descriptions unique helps make it clear how much
+            // time is spent on each one.
+            TF_DESCRIBE_SCOPE("Generating mipmaps (id %zu: %s)",
+                              glTex->GetTextureId(),
+                              glTex->GetDescriptor().debugName.c_str());
+
             glGenerateTextureMipmap(glTex->GetTextureId());
             HGIGL_POST_PENDING_GL_ERRORS();
         }
@@ -943,7 +936,7 @@ HgiGLOps::ResolveFramebuffer(
 }
 
 HgiGLOpsFn
-HgiGLOps::MemoryBarrier(HgiMemoryBarrier barrier)
+HgiGLOps::InsertMemoryBarrier(HgiMemoryBarrier barrier)
 {
     return [barrier] {
         if (TF_VERIFY(barrier == HgiMemoryBarrierAll)) {

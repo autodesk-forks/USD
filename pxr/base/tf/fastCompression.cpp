@@ -1,25 +1,8 @@
 //
 // Copyright 2017 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -29,6 +12,9 @@
 
 // XXX: Need to isolate symbols here?
 #include "pxrLZ4/lz4.h"
+
+#include <algorithm>
+#include <cstring>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -76,7 +62,7 @@ TfFastCompression::CompressToBuffer(
         compressed[0] = 0; // < zero byte means one chunk.
         compressed += 1 + LZ4_compress_default(
             input, compressed + 1, inputSize,
-            GetCompressedBufferSize(inputSize));
+            LZ4_compressBound(inputSize));
     } else {
         size_t nWholeChunks = inputSize / LZ4_MAX_INPUT_SIZE;
         size_t partChunkSz = inputSize % LZ4_MAX_INPUT_SIZE;
@@ -86,7 +72,7 @@ TfFastCompression::CompressToBuffer(
             output += sizeof(int32_t);
             int32_t n = LZ4_compress_default(
                 input, output, size, LZ4_compressBound(size));
-            memcpy(o, &n, sizeof(n));
+            std::memcpy(o, &n, sizeof(n));
             output += n;
             input += size;
         };
@@ -123,7 +109,7 @@ TfFastCompression::DecompressFromBuffer(
         size_t totalDecompressed = 0;
         for (int i = 0; i != nChunks; ++i) {
             int32_t chunkSize = 0;
-            memcpy(&chunkSize, compressed, sizeof(chunkSize));
+            std::memcpy(&chunkSize, compressed, sizeof(chunkSize));
             compressed += sizeof(chunkSize);
             int nDecompressed = LZ4_decompress_safe(
                 compressed, output, chunkSize,

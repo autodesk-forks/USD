@@ -2,25 +2,8 @@
 #                                                                                   
 # Copyright 2017 Pixar                                                              
 #                                                                                   
-# Licensed under the Apache License, Version 2.0 (the "Apache License")             
-# with the following modification; you may not use this file except in              
-# compliance with the Apache License and the following modification to it:          
-# Section 6. Trademarks. is deleted and replaced with:                              
-#                                                                                   
-# 6. Trademarks. This License does not grant permission to use the trade            
-#    names, trademarks, service marks, or product names of the Licensor             
-#    and its affiliates, except as required to comply with Section 4(c) of          
-#    the License and to reproduce the content of the NOTICE file.                   
-#                                                                                   
-# You may obtain a copy of the Apache License at                                    
-#                                                                                   
-#     http://www.apache.org/licenses/LICENSE-2.0                                    
-#                                                                                   
-# Unless required by applicable law or agreed to in writing, software               
-# distributed under the Apache License with the above modification is               
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY          
-# KIND, either express or implied. See the Apache License for the specific          
-# language governing permissions and limitations under the Apache License. 
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -379,6 +362,48 @@ class TestUsdShadeShaders(unittest.TestCase):
                 sourceType=sourceType))
             self.assertEqual(whiterPale.GetSourceAssetSubIdentifier(sourceType),
                              subId)
+
+    def testGetSourceTypes(self):
+        stage = self._SetupStage()
+
+        ################################
+        print ('Testing Get Source Types API')
+        ################################
+
+        pale = UsdShade.Shader.Get(stage, palePath)
+        self.assertTrue(pale)
+
+        self.assertEqual(pale.GetImplementationSource(), UsdShade.Tokens.id)
+
+        self.assertTrue(pale.SetShaderId('SharedFloat_1'))
+        self.assertEqual(pale.GetShaderId(), 'SharedFloat_1')
+
+        pale.GetImplementationSourceAttr().Set(UsdShade.Tokens.sourceCode)
+        self.assertTrue(pale.GetShaderId() is None)
+
+        self.assertEqual(pale.GetSourceTypes(), [])
+
+        # Set sourceType for a sourceCode implementation.
+        oslSource = "This is the shader source"
+        self.assertTrue(pale.SetSourceCode(sourceCode=oslSource, 
+                                           sourceType="osl"))
+        self.assertEqual(pale.GetSourceTypes(), ["osl"])
+
+        # Check if we can detect multiple sourceTypes per implementation
+        glslfxSource = "This is the shader source"
+        self.assertTrue(pale.SetSourceCode(sourceCode=glslfxSource,
+                                           sourceType="glslfx"))
+        self.assertEqual(sorted(pale.GetSourceTypes()),
+                         ["glslfx", "osl"])
+
+        # Set sourceType for sourceAsset implmentation.
+        pale.GetImplementationSourceAttr().Set(UsdShade.Tokens.sourceAsset)
+        glslfxAssetPath = Sdf.AssetPath("/source/asset.glslfx")
+        self.assertTrue(pale.SetSourceAsset(
+                sourceAsset=glslfxAssetPath, 
+                sourceType="glslfx"))
+        
+        self.assertEqual(pale.GetSourceTypes(), ["glslfx"])
 
 
 if __name__ == '__main__':

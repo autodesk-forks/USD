@@ -2,29 +2,13 @@
 #
 # Copyright 2016 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 #
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
-#
-from __future__ import print_function
 import os
-from pxr import Ar
+import pathlib
+import sys
+from pxr import Ar, Tf
 
 import unittest
 import shutil
@@ -37,26 +21,46 @@ class TestArDefaultResolver(unittest.TestCase):
         path1 = str(path1)
         path2 = str(path2)
 
-        # Flip backslashes to forward slashes and make sure path case doesn't
-        # cause test failures to accommodate platform differences. We don't use
-        # os.path.normpath since that might fix up other differences we'd want
-        # to catch in these tests.
-        self.assertEqual(os.path.normcase(path1), os.path.normcase(path2))
+        # Flip backslashes to forward slashes to accommodate platform
+        # differences. 
+        self.assertEqual(os.path.normpath(path1), os.path.normpath(path2))
+
+    def _CreateEmptyTestFile(self, path):
+        dir = os.path.dirname(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        pathlib.Path(path).touch()
+        return os.path.abspath(path)
 
     @classmethod
     def setUpClass(cls):
+        # configure the environment variable for testing the initial state of
+        # the default search path
+        os.environ["PXR_AR_DEFAULT_SEARCH_PATH"] = "env"
+
         # Force Ar to use the default resolver implementation.
         Ar.SetPreferredResolver('ArDefaultResolver')
 
-        # Set up default search path for test_ResolveSearchPaths below. This
-        # must be done before any calls to Ar.GetResolver()
-        Ar.DefaultResolver.SetDefaultSearchPath([
-            os.path.abspath('test1'),
-            os.path.abspath('test1/test2')
-        ])
-
         # Verify that the underlying resolver is an Ar.DefaultResolver.
         assert(isinstance(Ar.GetUnderlyingResolver(), Ar.DefaultResolver))
+
+    # Note: In order for this test to work correctly, it needs to execute before
+    # any other test which calls Ar.DefaultResolver.SetDefaultSearchPath.
+    # The reason for this is because after calling SetDefaultSearchPath, the
+    # search path specified in PXR_AR_DEFAULT_SEARCH_PATH will no longer be
+    # taken into account when computing all search directories.
+    def test_EnvironmentSearchPath(self):
+        """Tests that the default resolver initially contains the search path
+        from PXR_AR_DEFAULT_SEARCH_PATH and subsequent calls to 
+        SetDefaultSearchPath override it"""
+
+        fileC = self._CreateEmptyTestFile("env/envFile.txt")
+        resolvedC = Ar.GetResolver().Resolve("envFile.txt")
+        self.assertPathsEqual(resolvedC, fileC)
+
+        Ar.DefaultResolver.SetDefaultSearchPath(["env2"])
+        resolvedC = Ar.GetResolver().Resolve("envFile.txt")
+        self.assertFalse(resolvedC)
 
     def test_CreateIdentifier(self):
         r = Ar.GetResolver()
@@ -81,6 +85,16 @@ class TestArDefaultResolver(unittest.TestCase):
         self.assertPathsEqual(
             '/dir/AbsolutePath.txt',
             r.CreateIdentifier('/dir/.//AbsolutePath.txt', _RP('subdir/A.txt')))
+        
+        # Windows is case insensitive so ensuring that the drive letter of the 
+        # resulting identifier matches that of the original input path.
+        if sys.platform == "win32":
+            self.assertPathsEqual(
+                'C:\dir\AbsolutePath.txt',
+                r.CreateIdentifier('C:/dir/AbsolutePath.txt'))
+            self.assertPathsEqual(
+                'c:\dir\AbsolutePath.txt',
+                r.CreateIdentifier('c:/dir/AbsolutePath.txt'))
 
         # The identifier for a file-relative path (i.e. a relative path
         # starting with "./" or "../" is obtained by anchoring that path
@@ -142,9 +156,19 @@ class TestArDefaultResolver(unittest.TestCase):
             '/dir/AbsolutePath.txt',
             r.CreateIdentifierForNewAsset(
                 '/dir/.//AbsolutePath.txt', _RP('subdir/A.txt')))
+        
+        # Windows is case insensitive so ensuring that the drive letter of the 
+        # resulting identifier matches that of the original input path.
+        if sys.platform == "win32":
+            self.assertPathsEqual(
+                'C:\dir\AbsolutePath.txt',
+                r.CreateIdentifier('C:/dir/AbsolutePath.txt'))
+            self.assertPathsEqual(
+                'c:\dir\AbsolutePath.txt',
+                r.CreateIdentifier('c:/dir/AbsolutePath.txt'))
 
         # The identifier for a relative path (file-relative or search-relative)
-        # will always be the anchored abolute path.
+        # will always be the anchored absolute path.
         self.assertPathsEqual(
             os.path.abspath('subdir/FileRelative.txt'),
             r.CreateIdentifierForNewAsset(
@@ -189,6 +213,11 @@ class TestArDefaultResolver(unittest.TestCase):
         testFilePath = os.path.join(testDir, testFileName) 
         with open(testFilePath, 'w') as ofp:
             print('Garbage', file=ofp)
+
+        Ar.DefaultResolver.SetDefaultSearchPath([
+            os.path.abspath('test1'),
+            os.path.abspath('test1/test2')
+        ])
         
         resolver = Ar.GetResolver()
 
@@ -320,6 +349,30 @@ class TestArDefaultResolver(unittest.TestCase):
 
         self.assertNotEqual(emptyContext, context)
 
+    def test_ResolverRefreshSearchPaths(self):
+        fileA = self._CreateEmptyTestFile("dirA/file.txt")
+        fileB = self._CreateEmptyTestFile("dirB/file.txt")
+
+        Ar.DefaultResolver.SetDefaultSearchPath(["dirA"])
+        resolvedPath = Ar.GetResolver().Resolve("file.txt")
+        self.assertPathsEqual(resolvedPath, fileA)
+
+        Ar.DefaultResolver.SetDefaultSearchPath(["dirB"])
+        resolvedPath = Ar.GetResolver().Resolve("file.txt")
+        self.assertPathsEqual(resolvedPath, fileB)
+
+    def test_ResolverContextHash(self):
+        self.assertEqual(
+            hash(Ar.DefaultResolverContext()),
+            hash(Ar.DefaultResolverContext())
+        )
+
+        paths = ["/path1", "/path2", "/path3", "/path4"]
+        self.assertEqual(
+            hash(Ar.DefaultResolverContext(paths)),
+            hash(Ar.DefaultResolverContext(paths))
+        )
+
     def test_ResolveForNewAsset(self):
         resolver  = Ar.GetResolver()
 
@@ -371,6 +424,37 @@ class TestArDefaultResolver(unittest.TestCase):
         _TestWithPaths([])
         _TestWithPaths(["/a"])
         _TestWithPaths(["/a", "/b"])
+
+    def test_RefreshContextNotifications(self):
+        """Tests that ArDefaultResolver emits change notifications when
+           a ArDefaultResolverContext is refreshed"""
+
+        class _Listener(object):
+            def __init__(self):
+                self._key = Tf.Notice.RegisterGlobally(
+                    Ar.Notice.ResolverChanged, self._HandleNotice)
+                self.Reset()
+            
+            def Reset(self):
+                self.receivedNotice = False
+                self.affectsContext = False
+
+            def _HandleNotice(self, notice, sender):
+                self.receivedNotice = True
+                self.affectsContext = notice.AffectsContext(
+                    Ar.DefaultResolverContext())
+
+        l = _Listener()
+        # update default path which should trigger a notification
+        Ar.DefaultResolver.SetDefaultSearchPath(["newSearchDir"])
+        self.assertTrue(l.receivedNotice)
+        self.assertTrue(l.affectsContext)
+
+        # no changes here so we should not receive notification
+        l.Reset()
+        Ar.DefaultResolver.SetDefaultSearchPath(["newSearchDir"])
+        self.assertFalse(l.receivedNotice)
+        self.assertFalse(l.affectsContext)
 
 if __name__ == '__main__':
     unittest.main()

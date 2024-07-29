@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -150,7 +133,17 @@ _ReadPlugInfoObject(const std::string& pathname, JsObject* result)
 
     // The file may not exist or be readable.
     std::ifstream ifs;
+#if defined(ARCH_OS_WINDOWS)
+    // XXX: This is a MSVC specific overload to std::ifstream::open which
+    // supports std::wstring as an argument.
+    // Other compilers on Windows may fail here since it's not
+    // enforced by the C++ standard. If another compiler for Windows is needed
+    // we could use ArchOpenFile / ArchGetFileLength / ArchPRead instead
+    // of std::ifstream
+    ifs.open(ArchWindowsUtf8ToUtf16(pathname).c_str());
+#else
     ifs.open(pathname.c_str());
+#endif
     if (!ifs.is_open()) {
         TF_DEBUG(PLUG_INFO_SEARCH).
             Msg("Failed to open plugin info %s\n", pathname.c_str());
@@ -699,7 +692,11 @@ Plug_ReadPlugInfo(
     const AddPluginCallback& addPlugin,
     Plug_TaskArena* taskArena)
 {
-    TF_DEBUG(PLUG_INFO_SEARCH).Msg("Will check plugin info paths\n");
+    if (TfDebug::IsEnabled(PLUG_INFO_SEARCH)) {
+        TF_DEBUG(PLUG_INFO_SEARCH).Msg(
+            "Will check plugin info paths:\n    %s\n",
+            TfStringJoin(pathnames, "\n    ").c_str());
+    }
     TfStopwatch stopwatch;
     stopwatch.Start();
 

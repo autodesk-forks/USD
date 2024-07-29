@@ -20,7 +20,7 @@ def Material "Material"
     def Shader "Primvar"
     {
         uniform token info:id = "UsdPrimvarReader_float2"
-        token inputs:varname = "st"
+        string inputs:varname = "st"
         float2 outputs:result
     }
 
@@ -35,6 +35,7 @@ def Material "Material"
 
 over "Plane" (
     instancable = true
+    prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
     float3[] extent = [(-2, -2, -2), (2, 2, 2)]

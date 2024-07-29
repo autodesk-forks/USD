@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hgiMetal/shaderSection.h"
@@ -104,13 +87,15 @@ HgiMetalShaderSection::WriteAttributesWithIndex(std::ostream& ss) const
 HgiMetalMemberShaderSection::HgiMetalMemberShaderSection(
     const std::string &identifier,
     const std::string &type,
+    const std::string &qualifiers,
     const HgiShaderSectionAttributeVector &attributes,
     const std::string arraySize,
     const std::string &blockInstanceIdentifier)
   : HgiMetalShaderSection(identifier, attributes,
                           std::string(), arraySize,
                           blockInstanceIdentifier)
-  , _type{type}
+    , _type(type)
+    , _qualifiers(qualifiers)
 {
 }
 
@@ -120,6 +105,18 @@ void
 HgiMetalMemberShaderSection::WriteType(std::ostream &ss) const
 {
     ss << _type;
+}
+
+void
+HgiMetalMemberShaderSection::WriteParameter(std::ostream& ss) const
+{
+    WriteType(ss);
+    ss << " ";
+    WriteIdentifier(ss);
+    // Write the qualifiers, such as "flat" and "center_no_perspective".
+    if (!_qualifiers.empty()) {
+        ss << "[[" << _qualifiers << "]]";
+    }
 }
 
 bool
@@ -675,9 +672,10 @@ void
 HgiMetalBufferShaderSection::WriteParameter(std::ostream& ss) const
 {
     if (!_writable) {
-        ss << "const ";
+        ss << "constant ";
+    } else {
+        ss << "device ";
     }
-    ss << "device ";
     WriteType(ss);
     
     switch (_binding) {
@@ -701,9 +699,10 @@ HgiMetalBufferShaderSection::VisitScopeMemberDeclarations(std::ostream &ss)
     if (_unused) return false;
 
     if (!_writable) {
-        ss << "const ";
+        ss << "constant ";
+    } else {
+        ss << "device ";
     }
-    ss << "device ";
     WriteType(ss);
 
     switch (_binding) {
@@ -731,8 +730,10 @@ HgiMetalBufferShaderSection::VisitScopeConstructorDeclarations(
 
     if (!_writable) {
         ss << "const ";
+        ss << "constant ";
+    } else {
+        ss << "device ";
     }
-    ss << "device ";
     WriteType(ss);
     ss << "* _";
     WriteIdentifier(ss);
@@ -806,10 +807,33 @@ HgiMetalStructTypeDeclarationShaderSection::WriteDeclaration(
     ss << " ";
     WriteIdentifier(ss);
     ss << " {\n";
+
+    // For struct declaration of the post-tess control or post-tess vertex 
+    // shader input, don't shadergen the array size for the struct members. The 
+    // array size in THIS specific context refers to the number of structs, 
+    // not struct members.
+    // e.g. we DON'T want to generate:
+    // struct MSLTcInput {
+    //     vec3 points[[attribute(0)]][VERTEX_CONTROL_POINTS_PER_PATCH];
+    //};
+    // here since points is not actually array-valued within the PTCS shader 
+    // input struct. Rather, it is MSLTcInput that we have multiple of.
+    // Keep in mind that the struct members here might actually be array-valued 
+    // within their corresponding scope member declaration.
+    // e.g. In the PTCS scope member declaration, we want to shadergen:
+    // vec3 points[VERTEX_CONTROL_POINTS_PER_PATCH];
+
+    const std::string &identifier = GetIdentifier();
+    const bool PTCSOrPTVS =
+        identifier == "MSLTcInput" || identifier == "MSLTvInput";
+
     for (HgiMetalShaderSection* member : _members) {
         member->WriteParameter(ss);
         if (!member->HasBlockInstanceIdentifier()) {
             member->WriteAttributesWithIndex(ss);
+        }
+        if (!PTCSOrPTVS) {
+            member->WriteArraySize(ss);
         }
         ss << ";\n";
     }
@@ -1100,16 +1124,34 @@ HgiMetalStageOutputShaderSection::VisitEntryPointFunctionExecutions(
             ss << "\n";
         }
         HgiShaderSection *member = structTypeDeclMembers[i];
-        WriteIdentifier(ss);
-        ss << ".";
-        member->WriteIdentifier(ss);
-        ss << " = " << scopeInstanceName << ".";
-        if (member->HasBlockInstanceIdentifier()) {
-            member->WriteBlockInstanceIdentifier(ss);
+        
+        const std::string &arraySize = member->GetArraySize();
+        if (arraySize.empty()) {
+            WriteIdentifier(ss);
             ss << ".";
+            member->WriteIdentifier(ss);
+            ss << " = " << scopeInstanceName << ".";
+            if (member->HasBlockInstanceIdentifier()) {
+                member->WriteBlockInstanceIdentifier(ss);
+                ss << ".";
+            }
+            member->WriteIdentifier(ss);
+            ss << ";";
+        } else {
+            ss << "for (int arrInd = 0; arrInd < " << arraySize <<
+                "; arrInd++) {\n";
+            WriteIdentifier(ss);
+            ss << ".";
+            member->WriteIdentifier(ss);
+            ss << "[arrInd]";
+            ss << " = " << scopeInstanceName << ".";
+            if (member->HasBlockInstanceIdentifier()) {
+                member->WriteBlockInstanceIdentifier(ss);
+                ss << ".";
+            }
+            member->WriteIdentifier(ss);
+            ss << "[arrInd];\n}";
         }
-        member->WriteIdentifier(ss);
-        ss << ";";
     }
     return true;
 }

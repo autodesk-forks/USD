@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_INTERLEAVED_MEMORY_MANAGER_H
 #define PXR_IMAGING_HD_ST_INTERLEAVED_MEMORY_MANAGER_H
@@ -27,11 +10,11 @@
 #include "pxr/pxr.h"
 #include "pxr/imaging/hdSt/api.h"
 #include "pxr/imaging/hdSt/bufferArrayRange.h"
+#include "pxr/imaging/hdSt/strategyBase.h"
+
 #include "pxr/imaging/hd/bufferArray.h"
 #include "pxr/imaging/hd/bufferSpec.h"
 #include "pxr/imaging/hd/bufferSource.h"
-#include "pxr/imaging/hd/resource.h"
-#include "pxr/imaging/hd/strategyBase.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/version.h"
 #include "pxr/imaging/hgi/buffer.h"
@@ -51,7 +34,7 @@ struct HgiBufferCpuToGpuOp;
 ///
 /// Interleaved memory manager (base class).
 ///
-class HdStInterleavedMemoryManager : public HdAggregationStrategy {
+class HdStInterleavedMemoryManager : public HdStAggregationStrategy {
 protected:
     class _StripedInterleavedBuffer;
 
@@ -248,21 +231,16 @@ protected:
         }
 
         /// Returns the stride.
-        int GetStride() const {
+        size_t GetStride() const {
             return _stride;
         }
         
-        int GetElementStride() const {
+        size_t GetElementStride() const {
             return _elementStride;
         }
 
-        /// TODO: We need to distinguish between the primvar types here, we should
-        /// tag each HdBufferSource and HdBufferResource with Constant, Uniform,
-        /// Varying, Vertex, or FaceVarying and provide accessors for the specific
-        /// buffer types.
-
-        /// Returns the GPU resource. If the buffer array contains more than one
-        /// resource, this method raises a coding error.
+        /// Returns the GPU resource. If the buffer array contains more
+        /// than one resource, this method raises a coding error.
         HDST_API
         HdStBufferResourceSharedPtr GetResource() const;
 
@@ -300,7 +278,7 @@ protected:
         HdStInterleavedMemoryManager* _manager;
         HdStResourceRegistry* const _resourceRegistry;
         bool _needsCompaction;
-        int _stride;
+        size_t _stride;
         int _bufferOffsetAlignment;  // ranged binding offset alignment
         size_t _maxSize;             // maximum size of single buffer
 
@@ -314,7 +292,9 @@ protected:
         // +------------------------------------------------------------+
         // The _stride will be the size of a1 + b1 + c1 + padding, while the
         // _elementStride will be the size of a1 + b1 + c1.
-        size_t _elementStride; 
+        size_t _elementStride;
+
+        HgiBufferUsage _bufferUsage; 
 
         HdStBufferResourceNamedList _resourceList;
 

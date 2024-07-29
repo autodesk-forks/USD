@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/materialAdapter.h"
 #include "pxr/usdImaging/usdImaging/dataSourceMaterial.h"
@@ -27,9 +10,13 @@
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 #include "pxr/usdImaging/usdImaging/materialParamUtils.h"
+#include "pxr/usdImaging/usdImaging/dataSourcePrim.h"
 
 #include "pxr/imaging/hd/material.h"
+#include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
+
 #include "pxr/imaging/hd/perfLog.h"
 
 #include "pxr/usd/usdShade/material.h"
@@ -42,9 +29,24 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_REGISTRY_FUNCTION(TfType)
 {
+    {
     typedef UsdImagingMaterialAdapter Adapter;
     TfType t = TfType::Define<Adapter, TfType::Bases<Adapter::BaseAdapter> >();
     t.SetFactory< UsdImagingPrimAdapterFactory<Adapter> >();
+    }
+
+    {
+    typedef UsdImagingShaderAdapter Adapter;
+    TfType t = TfType::Define<Adapter, TfType::Bases<Adapter::BaseAdapter> >();
+    t.SetFactory< UsdImagingPrimAdapterFactory<Adapter> >();
+    }
+
+    {
+    typedef UsdImagingNodeGraphAdapter Adapter;
+    TfType t = TfType::Define<Adapter, TfType::Bases<Adapter::BaseAdapter> >();
+    t.SetFactory< UsdImagingPrimAdapterFactory<Adapter> >();
+    }
+
 }
 
 UsdImagingMaterialAdapter::~UsdImagingMaterialAdapter()
@@ -52,13 +54,15 @@ UsdImagingMaterialAdapter::~UsdImagingMaterialAdapter()
 }
 
 TfTokenVector
-UsdImagingMaterialAdapter::GetImagingSubprims()
+UsdImagingMaterialAdapter::GetImagingSubprims(UsdPrim const& prim)
 {
     return { TfToken() };
 }
 
 TfToken
-UsdImagingMaterialAdapter::GetImagingSubprimType(TfToken const& subprim)
+UsdImagingMaterialAdapter::GetImagingSubprimType(
+        UsdPrim const& prim,
+        TfToken const& subprim)
 {
     if (subprim.IsEmpty()) {
         return HdPrimTypeTokens->material;
@@ -68,18 +72,56 @@ UsdImagingMaterialAdapter::GetImagingSubprimType(TfToken const& subprim)
 
 HdContainerDataSourceHandle
 UsdImagingMaterialAdapter::GetImagingSubprimData(
-        TfToken const& subprim,
         UsdPrim const& prim,
+        TfToken const& subprim,
         const UsdImagingDataSourceStageGlobals &stageGlobals)
 {
     if (subprim.IsEmpty()) {
-        return HdRetainedContainerDataSource::New(
-            HdPrimTypeTokens->material,
-             UsdImagingDataSourceMaterial::New(
-                prim,
-                stageGlobals));
+        return UsdImagingDataSourceMaterialPrim::New(
+            prim.GetPath(),
+            prim,
+            stageGlobals);
     }
+
     return nullptr;
+}
+
+HdDataSourceLocatorSet
+UsdImagingMaterialAdapter::InvalidateImagingSubprim(
+        UsdPrim const& prim,
+        TfToken const& subprim,
+        TfTokenVector const& properties,
+        const UsdImagingPropertyInvalidationType invalidationType)
+{
+    if (subprim.IsEmpty()) {
+        return UsdImagingDataSourceMaterialPrim::Invalidate(
+            prim, subprim, properties, invalidationType);
+    }
+
+    return HdDataSourceLocatorSet();
+}
+
+HdDataSourceLocatorSet
+UsdImagingMaterialAdapter::InvalidateImagingSubprimFromDescendent(
+        UsdPrim const& prim,
+        UsdPrim const& descendentPrim,
+        TfToken const& subprim,
+        TfTokenVector const& properties,
+        const UsdImagingPropertyInvalidationType invalidationType)
+{
+    HdDataSourceLocatorSet result;
+
+    //TODO, Invalidating whole material until we figure out an efficient
+    //      way to determine which render context this node is in (if any)
+    result.insert(HdMaterialSchema::GetDefaultLocator());
+
+    return result;
+}
+
+UsdImagingPrimAdapter::PopulationMode
+UsdImagingMaterialAdapter::GetPopulationMode()
+{
+    return RepresentsSelfAndDescendents;
 }
 
 bool
@@ -123,14 +165,20 @@ UsdImagingMaterialAdapter::Populate(
 
     // Also register dependencies on behalf of any descendent
     // UsdShadeShader prims, since they are consumed to
-    // create the material network.
-    for (UsdPrim const& child: prim.GetDescendants()) {
+    // create the material network. Note that if the material is an instance
+    // prim we want dependencies on the descendants inside the prototype...
+    UsdPrim ancestor = prim;
+    if (prim.IsInstance()) {
+        ancestor = prim.GetPrototype();
+        index->AddDependency(cachePath, ancestor);
+    }
+    for (UsdPrim const& child: ancestor.GetDescendants()) {
         if (child.IsA<UsdShadeShader>()) {
             index->AddDependency(cachePath, child);
         }
     }
 
-    return prim.GetPath();
+    return cachePath;
 }
 
 /* virtual */
@@ -270,6 +318,11 @@ UsdImagingMaterialAdapter::GetMaterialResource(UsdPrim const &prim,
                                                UsdTimeCode time) const
 {
     TRACE_FUNCTION();
+    if (!prim) {
+        TF_RUNTIME_ERROR("Received prim is null.");
+        return VtValue();
+    }
+
     if (!_GetSceneMaterialsEnabled()) {
         return VtValue();
     }

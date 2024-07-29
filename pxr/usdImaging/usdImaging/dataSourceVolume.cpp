@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/dataSourceVolume.h"
 
@@ -37,12 +20,6 @@ UsdImagingDataSourceVolumeFieldBindings
     : _usdVolume(usdVolume)
     , _stageGlobals(stageGlobals)
 {
-}
-
-bool
-UsdImagingDataSourceVolumeFieldBindings::Has(const TfToken &name)
-{
-    return _usdVolume.HasFieldRelationship(name);
 }
 
 TfTokenVector
@@ -84,22 +61,11 @@ UsdImagingDataSourceVolumePrim::UsdImagingDataSourceVolumePrim(
 {
 }
 
-bool 
-UsdImagingDataSourceVolumePrim::Has(
-    const TfToken &name)
-{
-    if (name == HdVolumeFieldBindingSchemaTokens->volumeFieldBinding) {
-        return true;
-    }
-
-    return UsdImagingDataSourceGprim::Has(name);
-}
-
 TfTokenVector 
 UsdImagingDataSourceVolumePrim::GetNames()
 {
     TfTokenVector result = UsdImagingDataSourceGprim::GetNames();
-    result.push_back(HdVolumeFieldBindingSchemaTokens->volumeFieldBinding);
+    result.push_back(HdVolumeFieldBindingSchema::GetSchemaToken());
 
     return result;
 }
@@ -107,7 +73,7 @@ UsdImagingDataSourceVolumePrim::GetNames()
 HdDataSourceBaseHandle
 UsdImagingDataSourceVolumePrim::Get(const TfToken &name)
 {
-    if (name == HdVolumeFieldBindingSchemaTokens->volumeFieldBinding) {
+    if (name == HdVolumeFieldBindingSchema::GetSchemaToken()) {
         return UsdImagingDataSourceVolumeFieldBindings::New(
             UsdVolVolume(_GetUsdPrim()), _GetStageGlobals());
     } else {
@@ -117,10 +83,14 @@ UsdImagingDataSourceVolumePrim::Get(const TfToken &name)
 
 HdDataSourceLocatorSet
 UsdImagingDataSourceVolumePrim::Invalidate(
-    const TfToken &subprim, const TfTokenVector &properties)
+    UsdPrim const& prim,
+    const TfToken &subprim,
+    const TfTokenVector &properties,
+    const UsdImagingPropertyInvalidationType invalidationType)
 {
     HdDataSourceLocatorSet locators =
-        UsdImagingDataSourceGprim::Invalidate(subprim, properties);
+        UsdImagingDataSourceGprim::Invalidate(
+            prim, subprim, properties, invalidationType);
 
     static const std::string fieldPrefix =
         UsdVolTokens->field.GetString() + ":";

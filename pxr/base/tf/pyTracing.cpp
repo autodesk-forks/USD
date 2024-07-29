@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -35,8 +18,9 @@
 
 #include <tbb/spin_mutex.h>
 
-// This is from python, needed for PyFrameObject.
+// These are from python, needed for PyFrameObject.
 #include <frameobject.h>
+#include <patchlevel.h>
 
 #include <list>
 #include <mutex>
@@ -105,16 +89,29 @@ static void _SetTraceFnEnabled(bool enable) {
 }
 
 
+#if PY_VERSION_HEX < 0x030900B1
+// Define PyFrame_GetCode() on Python 3.8 and older:
+// https://docs.python.org/3.11/whatsnew/3.11.html#id6
+static inline PyCodeObject* PyFrame_GetCode(PyFrameObject *frame)
+{
+    Py_INCREF(frame->f_code);
+    return frame->f_code;
+}
+#endif
+
+
 static int _TracePythonFn(PyObject *, PyFrameObject *frame,
                           int what, PyObject *arg)
 {
     // Build up a trace info struct.
     TfPyTraceInfo info;
+    PyCodeObject * code = PyFrame_GetCode(frame);
     info.arg = arg;
-    info.funcName = TfPyString_AsString(frame->f_code->co_name);
-    info.fileName = TfPyString_AsString(frame->f_code->co_filename);
-    info.funcLine = frame->f_code->co_firstlineno;
+    info.funcName = PyUnicode_AsUTF8(code->co_name);
+    info.fileName = PyUnicode_AsUTF8(code->co_filename);
+    info.funcLine = code->co_firstlineno;
     info.what = what;
+    Py_DECREF(code);
 
     _InvokeTraceFns(info);
 

@@ -2,25 +2,8 @@
 #
 # Copyright 2017 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 from __future__ import print_function
 
@@ -426,7 +409,13 @@ class TestUsdLoadUnload(unittest.TestCase):
              '/other/child/none/child/all/two/prim'])
 
         self.assertEqual(testStage.GetLoadRules(), r)
-        
+
+    def test_HashLoadRules(self):
+        self.assertEqual(hash(Usd.StageLoadRules()), hash(Usd.StageLoadRules()))
+        self.assertEqual(hash(Usd.StageLoadRules.LoadAll()),
+                         hash(Usd.StageLoadRules.LoadAll()))
+        self.assertEqual(hash(Usd.StageLoadRules.LoadNone()),
+                         hash(Usd.StageLoadRules.LoadNone()))
 
     def test_LoadAndUnload(self):
         """Test Stage::LoadUnload thoroughly, as all other requests funnel into it.
@@ -974,5 +963,38 @@ class TestUsdLoadUnload(unittest.TestCase):
             if not (platform.system() == 'Windows' and fmt == 'usdc'):
                 _TestLayerReload(fmt)
 
+    def test_LoadResyncNotice(self):
+        for fmt in allFormats:
+            p = PayloadedScene(fmt)
+            sad = p.stage.GetPrimAtPath('/Sad')
+            with _AssertObjectsChanged(p.stage, {sad.GetPath()}):
+                sad.Load()
+            foobaz = p.stage.GetPrimAtPath('/Foo/Baz')
+            with _AssertObjectsChanged(p.stage, {foobaz.GetPath()}):
+                foobaz.Load()
+            foobazgarply = p.stage.GetPrimAtPath('/Foo/Baz/Garply')
+            # Should have been loaded already in previous step
+            with _AssertObjectsChanged(p.stage, {}):
+                foobazgarply.Load()
+            p.CleanupOnDiskAssets(fmt)
+
+class _AssertObjectsChanged(object):
+    def __init__(self, stage, expectedResyncedPaths):
+        self.stage = stage
+        self.expectedResyncedPaths = set(expectedResyncedPaths)
+        self.resyncedPaths = set()
+
+    def __enter__(self):
+        self.listener = Tf.Notice.Register(
+            Usd.Notice.ObjectsChanged, self.callback, self.stage)
+
+    def callback(self, notice, sender):
+        assert sender == self.stage
+        self.resyncedPaths.update(notice.GetResyncedPaths())
+
+    def __exit__(self, *args):
+        del self.listener
+        assert self.resyncedPaths == self.expectedResyncedPaths
+                
 if __name__ == "__main__":
     unittest.main()

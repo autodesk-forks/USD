@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_BASE_VT_ARRAY_H
 #define PXR_BASE_VT_ARRAY_H
@@ -29,7 +12,6 @@
 #include "pxr/pxr.h"
 #include "pxr/base/vt/api.h"
 #include "pxr/base/vt/hash.h"
-#include "pxr/base/vt/operators.h"
 #include "pxr/base/vt/streamOut.h"
 #include "pxr/base/vt/traits.h"
 #include "pxr/base/vt/types.h"
@@ -38,15 +20,16 @@
 #include "pxr/base/arch/pragmas.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/mallocTag.h"
-
-#include <boost/iterator_adaptors.hpp>
-#include <boost/iterator/reverse_iterator.hpp>
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdlib>
+#include <iterator>
+#include <limits>
 #include <memory>
+#include <new>
 #include <type_traits>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -232,45 +215,27 @@ class VtArray : public Vt_ArrayBase {
     typedef ELEM ElementType;
     typedef ELEM value_type;
 
-    template <typename Value>
-    class PointerIterator
-        : public boost::iterator_adaptor<PointerIterator<Value>, Value *> {
-    public:
-        PointerIterator() :
-            PointerIterator::iterator_adaptor_(0) {}
-        explicit PointerIterator(Value *p) :
-            PointerIterator::iterator_adaptor_(p) {}
-        template <typename OtherValue>
-        PointerIterator(PointerIterator<OtherValue> const &other,
-                        typename boost::enable_if_convertible
-                        <OtherValue*, Value*>::type* = 0) :
-            PointerIterator::iterator_adaptor_(other.base()) {}
-      private:
-        friend class boost::iterator_core_access;
-    };
-
     /// \defgroup STL_API STL-like API
     /// @{
 
     /// Iterator type.
-    typedef PointerIterator<ElementType> iterator;
+    using iterator = ElementType *;
     /// Const iterator type.
-    typedef PointerIterator<const ElementType> const_iterator;
+    using const_iterator = ElementType const *;
+    
     /// Reverse iterator type.
-    typedef boost::reverse_iterator<iterator> reverse_iterator;
+    typedef std::reverse_iterator<iterator> reverse_iterator;
     /// Reverse const iterator type.
-    typedef boost::reverse_iterator<const_iterator> const_reverse_iterator;
+    typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
     /// Reference type.
-    typedef typename PointerIterator<ElementType>::reference
-        reference;
+    typedef ElementType &reference;
     /// Const reference type.
-    typedef typename PointerIterator<const ElementType>::reference
-        const_reference;
+    typedef ElementType const &const_reference;
     /// Pointer type.
-    typedef typename PointerIterator<ElementType>::pointer pointer;
+    typedef ElementType *pointer;
     /// Const pointer type.
-    typedef typename PointerIterator<const ElementType>::pointer const_pointer;
+    typedef ElementType const *const_pointer;
 
     /// @}
 
@@ -457,12 +422,15 @@ class VtArray : public Vt_ArrayBase {
                 _foreignSource || !_IsUnique() || curSize == capacity())) {
             value_type *newData = _AllocateCopy(
                 _data, _CapacityForSize(curSize + 1), curSize);
+            ::new (static_cast<void*>(newData + curSize)) value_type(
+                std::forward<Args>(args)...);
             _DecRef();
             _data = newData;
         }
-        // Copy the value.
-        ::new (static_cast<void*>(_data + curSize)) value_type(
-            std::forward<Args>(args)...);
+        else {
+            ::new (static_cast<void*>(_data + curSize)) value_type(
+                std::forward<Args>(args)...);
+        }
         // Adjust size.
         ++_shapeData.totalSize;
     }
@@ -516,6 +484,16 @@ class VtArray : public Vt_ArrayBase {
         return ARCH_UNLIKELY(_foreignSource) ? size() : _GetCapacity(_data);
     }
 
+    /// Return a theoretical maximum size limit for the container.  In practice
+    /// this size is unachievable due to the amount of available memory or other
+    /// system limitations.
+    constexpr size_t max_size() const {
+        // The number of value_type elements that can be fit into maximum size_t
+        // bytes minus the size of _ControlBlock.
+        return (std::numeric_limits<size_t>::max() - sizeof(_ControlBlock))
+            / sizeof(value_type);
+    }
+
     /// Return true if this array contains no elements, false otherwise.
     bool empty() const { return size() == 0; }
     
@@ -561,12 +539,28 @@ class VtArray : public Vt_ArrayBase {
     /// 5 elements would be left unchanged and the last 5 elements would be
     /// value-initialized.
     void resize(size_t newSize) {
-        struct _Filler {
-            inline void operator()(pointer b, pointer e) const {
-                std::uninitialized_fill(b, e, value_type());
-            }
-        };
-        return resize(newSize, _Filler());
+        return resize(newSize, value_type());
+    }
+
+    /// Resize this array.  Preserve existing elements that remain, initialize
+    /// any newly added elements by copying \p value.
+    void resize(size_t newSize, value_type const &value) {
+        return resize(newSize,
+                      [&value](pointer b, pointer e) {
+                          std::uninitialized_fill(b, e, value);
+                      });
+    }
+
+    /// Resize this array.  Preserve existing elements that remain, initialize
+    /// any newly added elements by copying \p value.
+    void resize(size_t newSize, value_type &value) {
+        return resize(newSize, const_cast<value_type const &>(value));
+    }
+
+    /// Resize this array.  Preserve existing elements that remain, initialize
+    /// any newly added elements by copying \p value.
+    void resize(size_t newSize, value_type &&value) {
+        return resize(newSize, const_cast<value_type const &>(value));
     }
 
     /// Resize this array.  Preserve existing elements that remain, initialize
@@ -806,18 +800,6 @@ class VtArray : public Vt_ArrayBase {
         return !(*this == other);
     }
 
-ARCH_PRAGMA_PUSH
-ARCH_PRAGMA_FORCING_TO_BOOL
-ARCH_PRAGMA_UNSAFE_USE_OF_BOOL
-ARCH_PRAGMA_UNARY_MINUS_ON_UNSIGNED
-    VTOPERATOR_CPPARRAY(+)
-    VTOPERATOR_CPPARRAY(-)
-    VTOPERATOR_CPPARRAY(*)
-    VTOPERATOR_CPPARRAY(/)
-    VTOPERATOR_CPPARRAY(%)
-    VTOPERATOR_CPPARRAY_UNARY(-)
-ARCH_PRAGMA_POP
-
   public:
     // XXX -- Public so VtValue::_ArrayHelper<T,U>::GetShapeData() has access.
     Vt_ShapeData const *_GetShapeData() const {
@@ -828,23 +810,21 @@ ARCH_PRAGMA_POP
     }
 
   private:
-    class _Streamer : public VtStreamOutIterator {
+    class _Streamer {
     public:
-        _Streamer(const_pointer data) : _p(data) { }
-        virtual ~_Streamer() { }
-        virtual void Next(std::ostream &out)
-        {
+        explicit _Streamer(const_pointer data) : _p(data) { }
+        void operator()(std::ostream &out) const {
             VtStreamOut(*_p++, out);
         }
 
     private:
-        const_pointer _p;
+        mutable const_pointer _p;
     };
 
     /// Outputs a comma-separated list of the values in the array.
     friend std::ostream &operator <<(std::ostream &out, const VtArray &self) {
         VtArray::_Streamer streamer(self.cdata());
-        VtStreamOutArray(&streamer, self.size(), self._GetShapeData(), out);
+        VtStreamOutArray(out, self._GetShapeData(), streamer);
         return out;
     }
 
@@ -880,8 +860,13 @@ ARCH_PRAGMA_POP
     value_type *_AllocateNew(size_t capacity) {
         TfAutoMallocTag2 tag("VtArray::_AllocateNew", __ARCH_PRETTY_FUNCTION__);
         // Need space for the control block and capacity elements.
-        void *data = malloc(
-            sizeof(_ControlBlock) + capacity * sizeof(value_type));
+        // Exceptionally large capacity requests can overflow the arithmetic
+        // here.  If that happens we'll just attempt to allocate the max size_t
+        // value and let new() throw.
+        size_t numBytes = (capacity <= max_size())
+            ? sizeof(_ControlBlock) + capacity * sizeof(value_type)
+            : std::numeric_limits<size_t>::max();
+        void *data = ::operator new(numBytes);
         // Placement-new a control block.
         ::new (data) _ControlBlock(/*count=*/1, capacity);
         // Data starts after the block.
@@ -909,7 +894,8 @@ ARCH_PRAGMA_POP
                      p != e; ++p) {
                     p->~value_type();
                 }
-                free(std::addressof(_GetControlBlock(_data)));
+                ::operator delete(static_cast<void *>(
+                                      std::addressof(_GetControlBlock(_data))));
             }
         }
         else {
@@ -927,6 +913,12 @@ ARCH_PRAGMA_POP
     
     value_type *_data;
 };
+
+// Declare basic array instantiations as extern templates.  They are explicitly
+// instantiated in array.cpp.
+#define VT_ARRAY_EXTERN_TMPL(unused, elem) \
+    VT_API_TEMPLATE_CLASS(VtArray< VT_TYPE(elem) >);
+TF_PP_SEQ_FOR_EACH(VT_ARRAY_EXTERN_TMPL, ~, VT_SCALAR_VALUE_TYPES)
 
 template <class HashState, class ELEM>
 inline std::enable_if_t<VtIsHashable<ELEM>()>
@@ -946,18 +938,160 @@ hash_value(VtArray<ELEM> const &array) {
 template <typename T>
 struct VtIsArray< VtArray <T> > : public std::true_type {};
 
+template <class T>
+struct Vt_ArrayOpHelp {
+    static T Add(T l, T r) { return l + r; }
+    static T Sub(T l, T r) { return l - r; }
+    static T Mul(T l, T r) { return l * r; }
+    static T Div(T l, T r) { return l / r; }
+    static T Mod(T l, T r) { return l % r; }
+};
+
+template <class T>
+struct Vt_ArrayOpHelpScalar {
+    static T Mul(T l, double r) { return l * r; }
+    static T Mul(double l, T r) { return l * r; }
+    static T Div(T l, double r) { return l / r; }
+    static T Div(double l, T r) { return l / r; }
+};
+
+// These operations on bool-arrays are highly questionable, but this preserves
+// existing behavior in the name of Hyrum's Law.
+template <>
+struct Vt_ArrayOpHelp<bool> {
+    static bool Add(bool l, bool r) { return l | r; }
+    static bool Sub(bool l, bool r) { return l ^ r; }
+    static bool Mul(bool l, bool r) { return l & r; }
+    static bool Div(bool l, bool r) { return l; }
+    static bool Mod(bool l, bool r) { return false; }
+};
+
+template <>
+struct Vt_ArrayOpHelpScalar<bool> {
+    static bool Mul(bool l, double r) { return l && (r != 0.0); }
+    static bool Mul(double l, bool r) { return (l != 0.0) && r; }
+    static bool Div(bool l, double r) { return (r == 0.0) || l; }
+    static bool Div(double l, bool r) { return !r || (l != 0.0); }
+};
+
+#define VTOPERATOR_CPPARRAY(op, opName)                                        \
+    template <class T>                                                         \
+    VtArray<T>                                                                 \
+    operator op (VtArray<T> const &lhs, VtArray<T> const &rhs)                 \
+    {                                                                          \
+        using Op = Vt_ArrayOpHelp<T>;                                          \
+        /* accept empty vecs */                                                \
+        if (!lhs.empty() && !rhs.empty() && lhs.size() != rhs.size()) {        \
+            TF_CODING_ERROR("Non-conforming inputs for operator %s", #op);     \
+            return VtArray<T>();                                               \
+        }                                                                      \
+        /* promote empty vecs to vecs of zeros */                              \
+        const bool leftEmpty = lhs.size() == 0, rightEmpty = rhs.size() == 0;  \
+        VtArray<T> ret(leftEmpty ? rhs.size() : lhs.size());                   \
+        T zero = VtZero<T>();                                                  \
+        if (leftEmpty) {                                                       \
+            std::transform(                                                    \
+                rhs.begin(), rhs.end(), ret.begin(),                           \
+                [zero](T const &r) { return Op:: opName (zero, r); });         \
+        }                                                                      \
+        else if (rightEmpty) {                                                 \
+            std::transform(                                                    \
+                lhs.begin(), lhs.end(), ret.begin(),                           \
+                [zero](T const &l) { return Op:: opName (l, zero); });         \
+        }                                                                      \
+        else {                                                                 \
+            std::transform(                                                    \
+                lhs.begin(), lhs.end(), rhs.begin(), ret.begin(),              \
+                [](T const &l, T const &r) { return Op:: opName (l, r); });    \
+        }                                                                      \
+        return ret;                                                            \
+    }
+
+ARCH_PRAGMA_PUSH
+ARCH_PRAGMA_FORCING_TO_BOOL
+ARCH_PRAGMA_UNSAFE_USE_OF_BOOL
+ARCH_PRAGMA_UNARY_MINUS_ON_UNSIGNED
+
+VTOPERATOR_CPPARRAY(+, Add);
+VTOPERATOR_CPPARRAY(-, Sub);
+VTOPERATOR_CPPARRAY(*, Mul);
+VTOPERATOR_CPPARRAY(/, Div);
+VTOPERATOR_CPPARRAY(%, Mod);
+    
+template <class T>
+VtArray<T>
+operator-(VtArray<T> const &a) {
+    VtArray<T> ret(a.size());
+    std::transform(a.begin(), a.end(), ret.begin(),
+                   [](T const &x) { return -x; });
+    return ret;
+}
+
+ARCH_PRAGMA_POP
+
+// Operations on scalars and arrays
+// These are free functions defined in Array.h
+#define VTOPERATOR_CPPSCALAR(op,opName)                                 \
+    template<typename T>                                                \
+    VtArray<T> operator op (T const &scalar, VtArray<T> const &arr) {   \
+        using Op = Vt_ArrayOpHelp<T>;                                   \
+        VtArray<T> ret(arr.size());                                     \
+        std::transform(arr.begin(), arr.end(), ret.begin(),             \
+                       [&scalar](T const &aObj) {                       \
+                           return Op:: opName (scalar, aObj);           \
+                       });                                              \
+        return ret;                                                     \
+    }                                                                   \
+    template<typename T>                                                \
+    VtArray<T> operator op (VtArray<T> const &arr, T const &scalar) {   \
+        using Op = Vt_ArrayOpHelp<T>;                                   \
+        VtArray<T> ret(arr.size());                                     \
+        std::transform(arr.begin(), arr.end(), ret.begin(),             \
+                       [&scalar](T const &aObj) {                       \
+                           return Op:: opName (aObj, scalar);           \
+                       });                                              \
+        return ret;                                                     \
+    } 
+
+// define special-case operators on arrays and doubles - except if the array
+// holds doubles, in which case we already defined the operator (with
+// VTOPERATOR_CPPSCALAR above) so we can't do it again!
+#define VTOPERATOR_CPPSCALAR_DOUBLE(op,opName)                          \
+    template<typename T>                                                \
+    std::enable_if_t<!std::is_same<T, double>::value, VtArray<T>>       \
+    operator op (double const &scalar, VtArray<T> const &arr) {         \
+        using Op = Vt_ArrayOpHelpScalar<T>;                             \
+        VtArray<T> ret(arr.size());                                     \
+        std::transform(arr.begin(), arr.end(), ret.begin(),             \
+                       [&scalar](T const &aObj) {                       \
+                           return Op:: opName (scalar, aObj);           \
+                       });                                              \
+        return ret;                                                     \
+    }                                                                   \
+    template<typename T>                                                \
+    std::enable_if_t<!std::is_same<T, double>::value, VtArray<T>>       \
+    operator op (VtArray<T> const &arr, double const &scalar) {         \
+        using Op = Vt_ArrayOpHelpScalar<T>;                             \
+        VtArray<T> ret(arr.size());                                     \
+        std::transform(arr.begin(), arr.end(), ret.begin(),             \
+                       [&scalar](T const &aObj) {                       \
+                           return Op:: opName (aObj, scalar);           \
+                       });                                              \
+        return ret;                                                     \
+    } 
+
 // free functions for operators combining scalar and array types
 ARCH_PRAGMA_PUSH
 ARCH_PRAGMA_FORCING_TO_BOOL
 ARCH_PRAGMA_UNSAFE_USE_OF_BOOL
 ARCH_PRAGMA_UNARY_MINUS_ON_UNSIGNED
-VTOPERATOR_CPPSCALAR(+)
-VTOPERATOR_CPPSCALAR(-)
-VTOPERATOR_CPPSCALAR(*)
-VTOPERATOR_CPPSCALAR_DOUBLE(*)
-VTOPERATOR_CPPSCALAR(/)
-VTOPERATOR_CPPSCALAR_DOUBLE(/)
-VTOPERATOR_CPPSCALAR(%)
+VTOPERATOR_CPPSCALAR(+, Add)
+VTOPERATOR_CPPSCALAR(-, Sub)
+VTOPERATOR_CPPSCALAR(*, Mul)
+VTOPERATOR_CPPSCALAR_DOUBLE(*, Mul)
+VTOPERATOR_CPPSCALAR(/, Div)
+VTOPERATOR_CPPSCALAR_DOUBLE(/, Div)
+VTOPERATOR_CPPSCALAR(%, Mod)
 ARCH_PRAGMA_POP
 
 PXR_NAMESPACE_CLOSE_SCOPE

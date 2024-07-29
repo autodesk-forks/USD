@@ -1,31 +1,18 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/imaging/hgiMetal/shaderGenerator.h"
+#include "pxr/imaging/hgiMetal/hgi.h"
+#include "pxr/imaging/hgiMetal/conversions.h"
 #include "pxr/imaging/hgiMetal/resourceBindings.h"
 #include "pxr/imaging/hgi/tokens.h"
+#include "pxr/base/tf/getenv.h"
 
+#include <sstream>
 #include <unordered_map>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -49,6 +36,33 @@ HgiMetalShaderGenerator::CreateShaderSection(T && ...t)
 }
 
 namespace {
+
+// Convert the enums to the interpolation/sampling string in MSL.
+std::string
+_GetInterpolationString(
+    HgiInterpolationType interpolation, HgiSamplingType sampling)
+{
+    if (interpolation == HgiInterpolationFlat) {
+        return "flat";
+    } else if (interpolation == HgiInterpolationNoPerspective) {
+        if (sampling == HgiSamplingCentroid) {
+            return "centroid_no_perspective";
+        } else if (sampling == HgiSamplingSample) {
+            return "sample_no_perspective";
+        } else {
+            return "center_no_perspective";
+        }
+    } else {
+        if (sampling == HgiSamplingCentroid) {
+            return "centroid_perspective";
+        } else if (sampling == HgiSamplingSample) {
+            return "sample_perspective";
+        } else {
+            // Default behavior is "center_perspective"
+            return "";
+        }
+    }
+}
 
 //This is a conversion layer from descriptors into shader sections
 //In purity we don't want the shader generator to know how to
@@ -153,7 +167,8 @@ _GetBuiltinKeyword(HgiShaderFunctionParamDesc const &param,
        {HgiShaderKeywordTokens->hdPrimitiveID, "primitive_id"},
        {HgiShaderKeywordTokens->hdFrontFacing, "front_facing"},
        {HgiShaderKeywordTokens->hdPosition, "position"},
-       {HgiShaderKeywordTokens->hdBaryCoordNoPerspNV, "barycentric_coord"}
+       {HgiShaderKeywordTokens->hdBaryCoordNoPersp, "barycentric_coord"},
+       {HgiShaderKeywordTokens->hdFragCoord, "position"}
     };
 
     //check if has a role
@@ -272,6 +287,22 @@ _GetDeclarationDefinitions()
         " atomic_fetch_add_explicit(&a, v, memory_order_relaxed)\n"
         "#define ATOMIC_EXCHANGE(a, desired)"
         " atomic_exchange_explicit(&a, desired, memory_order_relaxed)\n"
+        "int atomicCompSwap(device atomic_int *a, int expected, int desired) {\n"
+        "    int found = expected;\n"
+        "    while(!atomic_compare_exchange_weak_explicit(a, &found, desired,\n"
+        "        memory_order_relaxed, memory_order_relaxed)) {\n"
+        "        if (found != expected) { return found; }\n"
+        "        else { found = expected; }\n"
+        "    } return expected; }\n"
+        "uint atomicCompSwap(device atomic_uint *a, uint expected, uint desired) {\n"
+        "    uint found = expected;\n"
+        "    while(!atomic_compare_exchange_weak_explicit(a, &found, desired,\n"
+        "        memory_order_relaxed, memory_order_relaxed)) {\n"
+        "        if (found != expected) { return found; }\n"
+        "        else { found = expected; }\n"
+        "    } return expected; }\n"
+        "#define ATOMIC_COMP_SWAP(a, expected, desired)"
+        " atomicCompSwap(&a, expected, desired)\n"
         "\n";
 }
 
@@ -368,7 +399,7 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
     }
 
     if (@available(macos 100.100, ios 12.0, *)) {
-        header  << "#define ARCH_OS_IOS\n";
+        header  << "#define ARCH_OS_IPHONE\n";
         // Define all iOS 12 feature set enums onwards
         if ([device supportsFeatureSet:MTLFeatureSet(12)])
             header << "#define METAL_FEATURESET_IOS_GPUFAMILY1_v5\n";
@@ -431,7 +462,6 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
     header  << _GetPackedTypeDefinitions();
 
     header << "#define in /*in*/\n"
-              "#define discard discard_fragment();\n"
               "#define radians(d) (d * 0.01745329252)\n"
               "#define noperspective /*center_no_perspective MTL_FIXME*/\n"
               "#define dFdx    dfdx\n"
@@ -581,7 +611,8 @@ _AccumulateParamsAndBlockParams(
 bool
 _IsTessFunction(const HgiShaderFunctionDesc &descriptor)
 {
-    return descriptor.shaderStage == HgiShaderStagePostTessellationVertex;
+    return descriptor.shaderStage == HgiShaderStagePostTessellationControl ||
+           descriptor.shaderStage == HgiShaderStagePostTessellationVertex;
 }
 
 ShaderStageData::ShaderStageData(
@@ -614,6 +645,8 @@ ShaderStageData::ShaderStageData(
                 descriptor.shaderStage,
                 descriptor.shaderStage == HgiShaderStageVertex
                 || descriptor.shaderStage ==
+                  HgiShaderStagePostTessellationControl
+                || descriptor.shaderStage ==
                   HgiShaderStagePostTessellationVertex)))
     , _outputs(
         _AccumulateParamsAndBlockParams(
@@ -642,6 +675,8 @@ ShaderStageData::AccumulateParams(
     HgiShaderStage stage,
     bool iterateAttrs)
 {
+    // Currently we don't add qualifiers for function parameters.
+    const static std::string emptyQualifiers("");
     HgiMetalShaderSectionPtrVector stageShaderSections;
     //only some roles have an index
     if(!iterateAttrs) {
@@ -675,24 +710,15 @@ ShaderStageData::AccumulateParams(
                 attributes.push_back(HgiShaderSectionAttribute{role, indexAsStr});
             }
 
-            switch (p.interpolation) {
-            case HgiInterpolationDefault:
-                break;
-            case HgiInterpolationFlat:
-                attributes.push_back(
-                    HgiShaderSectionAttribute{"flat", ""});
-                break;
-            case HgiInterpolationNoPerspective:
-                attributes.push_back(
-                    HgiShaderSectionAttribute{"center_no_perspective", ""});
-                break;
-            }
+            attributes.push_back(HgiShaderSectionAttribute{
+                _GetInterpolationString(p.interpolation, p.sampling), ""});
 
             HgiMetalMemberShaderSection * const section =
                 generator->CreateShaderSection<
                     HgiMetalMemberShaderSection>(
                         p.nameInShader,
                         p.type,
+                        emptyQualifiers,
                         attributes,
                         p.arraySize);
             stageShaderSections.push_back(section);
@@ -717,6 +743,7 @@ ShaderStageData::AccumulateParams(
                     HgiMetalMemberShaderSection>(
                         p.nameInShader,
                         p.type,
+                        emptyQualifiers,
                         attributes,
                         p.arraySize);
             stageShaderSections.push_back(section);
@@ -748,6 +775,8 @@ ShaderStageData::AccumulateParamBlocks(
                         HgiMetalMemberShaderSection>(
                             m.name,
                             m.type,
+                            _GetInterpolationString(
+                                m.interpolation, m.sampling),
                             attributes,
                             std::string(),
                             p.instanceName);
@@ -777,11 +806,11 @@ ShaderStageData::AccumulateBufferBindings(
     HgiMetalShaderGenerator *generator)
 {
     HgiMetalShaderSectionPtrVector stageShaderSections;
-    int maxBindIndex = 0;
+    uint32_t maxBindIndex = 0;
 
     std::vector<const HgiShaderFunctionBufferDesc*> slots(32, nullptr);
     for (size_t i = 0; i < buffers.size(); i++) {
-        int bindIndex = buffers[i].bindIndex;
+        uint32_t bindIndex = buffers[i].bindIndex;
         maxBindIndex = std::max(maxBindIndex, bindIndex);
         if (maxBindIndex >= slots.size()) {
             slots.resize(slots.size() + 32, nullptr);
@@ -1221,14 +1250,14 @@ _BuildTessAttribute(
 {
     ss << "[[patch(";
     switch (tessDesc.patchType) {
-        case HgiShaderFunctionTessellationDesc::PatchType::Triangle:
+        case HgiShaderFunctionTessellationDesc::PatchType::Triangles:
             ss << "triangle, ";
             break;
-        case HgiShaderFunctionTessellationDesc::PatchType::Quad:
+        case HgiShaderFunctionTessellationDesc::PatchType::Quads:
             ss << "quad, ";
             break;
-            default:
-                TF_CODING_ERROR("Unknown patch type");
+        default:
+            TF_CODING_ERROR("Unknown patch type");
             break;
     }
     ss << tessDesc.numVertsPerPatchIn << ")]]";
@@ -1325,6 +1354,19 @@ HgiMetalShaderGenerator::_BuildShaderStageEntryPoints(
                             "tvInput",
                             functionAttributesSS.str());
         }
+        case HgiShaderStagePostTessellationControl: {
+            _BuildTessAttribute(functionAttributesSS,
+                                descriptor.tessellationDescriptor);
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                            stageData,
+                            this,
+                            "ptc",
+                            "TessControl",
+                            "vertex",
+                            "tcInput",
+                            functionAttributesSS.str());
+        }
         case HgiShaderStageRayGen: {
             return std::make_unique
                     <HgiMetalShaderStageEntryPoint>(
@@ -1399,26 +1441,39 @@ HgiMetalShaderGenerator::_BuildShaderStageEntryPoints(
 }
 
 HgiMetalShaderGenerator::HgiMetalShaderGenerator(
-    const HgiShaderFunctionDesc &descriptor,
-    id<MTLDevice> device)
+    HgiMetal const *hgi,
+    const HgiShaderFunctionDesc &descriptor)
   : HgiShaderGenerator(descriptor)
+  , _hgi(hgi)
   , _generatorShaderSections(_BuildShaderStageEntryPoints(descriptor))
 {
+    // Currently we don't add qualifiers for global uniforms.
+    const static std::string emptyQualifiers("");
     for (const auto &member: descriptor.stageGlobalMembers) {
         HgiShaderSectionAttributeVector attrs;
         CreateShaderSection<
             HgiMetalMemberShaderSection>(
                 member.nameInShader,
                 member.type,
+                emptyQualifiers,
                 attrs,
                 member.arraySize);
     }
+
     std::stringstream macroSection;
-    macroSection << _GetHeader(device, descriptor.shaderStage);
+    macroSection << _GetHeader(hgi->GetPrimaryDevice(), descriptor.shaderStage);
+
     if (_IsTessFunction(descriptor)) {
         macroSection << "#define VERTEX_CONTROL_POINTS_PER_PATCH "
         << descriptor.tessellationDescriptor.numVertsPerPatchIn
         << "\n";
+    }
+
+    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+        macroSection << "#define discard discard_fragment(); "
+                        "discarded_fragment = true;\n";
+    } else {
+        macroSection << "#define discard discard_fragment();\n";
     }
     
     CreateShaderSection<HgiMetalMacroShaderSection>(
@@ -1429,315 +1484,77 @@ HgiMetalShaderGenerator::HgiMetalShaderGenerator(
 
 HgiMetalShaderGenerator::~HgiMetalShaderGenerator() = default;
 
-void HgiMetalShaderGenerator::_ReplaceSourceCode(std::ostream &ss)
-{
-    //Header
-    ss <<
-"#include <metal_stdlib>\n"
-"#include <simd/simd.h>\n"
-"\n"
-"using namespace metal;\n"
-"using namespace raytracing;\n"
-"\n"
-"float3 hsv2rgb(float3 c)\n"
-"{\n"
-"    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n"
-"    float3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n"
-"    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);\n"
-"}\n"
-"struct RayPayload\n"
-"{\n"
-"    int rayId;\n"
-"};\n"
-"using HandlerFuncSig = int(ray, thread RayPayload&);\n"
-"\n"
-"    // Structure representing a single distant light.\n"
-"    // Must match GPU struct in Frame.slang\n"
-"    struct DistantLight\n"
-"    {\n"
-"        // Light color (in RGB) and intensity (in alpha channel.)\n"
-"        float4 colorAndIntensity;\n"
-"        // Direction of light (inverted as expected by shaders.)\n"
-"        packed_float3 direction = packed_float3(0, 0, 1);\n"
-"        // The light size is converted from a diameter in radians to the cosine of the radius.\n"
-"        float cosRadius = 0.0f;\n"
-"    };\n"
-"\n"
-"    struct LightData\n"
-"    {\n"
-"        // Array of distant lights, only first distantLightCount are used.\n"
-"        DistantLight distantLights[4];\n"
-"\n"
-"        // Number of active distant lights.\n"
-"        int distantLightCount = 0;\n"
-"\n"
-"        // Explicitly pad struct to 16-byte boundary.\n"
-"        int pad[3];\n"
-"    };\n"
-"\n"
-"    struct FrameData\n"
-"    {\n"
-"        // The view-projection matrix.\n"
-"        float4x4 cameraViewProj;\n"
-"\n"
-"        // The inverse view matrix, also transposed. The *rows* must have the desired vectors:\n"
-"        // right, up, front, and eye position. HLSL array access with [] returns rows, not columns,\n"
-"        // hence the need for the matrix to be supplied transposed.\n"
-"        float4x4 cameraInvView;\n"
-"\n"
-"        // The dimensions of the view (in world units) at a distance of 1.0 from the camera, which\n"
-"        // is useful to build ray directions.\n"
-"        float2 viewSize;\n"
-"\n"
-"        // Whether the camera is using an orthographic projection. Otherwise a perspective\n"
-"        // projection is assumed.\n"
-"        int isOrthoProjection;\n"
-"\n"
-"        // The distance from the camera for sharpest focus, for depth of field.\n"
-"        float focalDistance;\n"
-"\n"
-"        // The diameter of the lens for depth of field. If this is zero, there is no depth of field,\n"
-"        // i.e. pinhole camera.\n"
-"        float lensRadius;\n"
-"\n"
-"        // The size of the scene, specifically the maximum distance between any two points in the\n"
-"        // scene.\n"
-"        float sceneSize;\n"
-"\n"
-"        // Whether shadow evaluation should treat all objects as opaque, as a performance\n"
-"        // optimization.\n"
-"        int isOpaqueShadowsEnabled;\n"
-"\n"
-"        // Whether to write the NDC depth result to an output texture.\n"
-"        int isDepthNDCEnabled;\n"
-"\n"
-"        // Whether to render the diffuse material component only.\n"
-"        int isDiffuseOnlyEnabled;\n"
-"\n"
-"        // Whether to display shading errors as bright colored samples.\n"
-"        int isDisplayErrorsEnabled;\n"
-"\n"
-"        // Whether denoising is enabled, which affects how path tracing is performed.\n"
-"        int isDenoisingEnabled;\n"
-"\n"
-"        // Whether to write the AOV data required for denoising.\n"
-"        int isDenoisingAOVsEnabled;\n"
-"\n"
-"        // The maximum recursion level (or path length) when tracing rays.\n"
-"        int traceDepth;\n"
-"\n"
-"        // The maximum luminance for path tracing samples, for simple firefly clamping.\n"
-"        float maxLuminance;\n"
-"\n"
-"        // Pad to 16 byte boundary.\n"
-"        float2 _padding1;\n"
-"\n"
-"        // Current light data for scene (duplicated each frame in flight.)\n"
-"        LightData lights;\n"
-"    };\n"
-"\n"
-"    // Sample settings GPU data.\n"
-"    struct SampleData\n"
-"    {\n"
-"        // The sample index (iteration) for the frame, for progressive rendering.\n"
-"        uint sampleIndex;\n"
-"\n"
-"        // An offset to apply to the sample index for seeding a random number generator.\n"
-"        uint seedOffset;\n"
-"    };\n"
-"\n"
-"    struct EnvironmentData\n"
-"    {\n"
-"        packed_float3 lightTop;\n"
-"        float _padding1;\n"
-"        packed_float3 lightBottom;\n"
-"        float lightTexLuminanceIntegral;\n"
-"        float4x4 lightTransform;\n"
-"        float4x4 lightTransformInv;\n"
-"        packed_float3 backgroundTop;\n"
-"        float _padding3;\n"
-"        packed_float3 backgroundBottom;\n"
-"        float _padding4;\n"
-"        float4x4 backgroundTransform;\n"
-"        int backgroundUseScreen;\n"
-"        int hasLightTex;\n"
-"        int hasBackgroundTex;\n"
-"    };\n";
-        
-    //Contents
-    if(_descriptor.debugName.compare("RayGenShader") == 0)
-    {
-//        HgiMetalArgumentIndexConstants = 27,
-//        HgiMetalArgumentIndexSamplers = 28,
-//        HgiMetalArgumentIndexTextures = 29,
-//        HgiMetalArgumentIndexBuffers = 30,
-        
-        ss <<
-"struct Uniforms\n"
-"{\n"
-"    unsigned int width, height, frameIndex;\n"
-"};\n"
-"\n"
-"struct Textures\n"
-"{\n"
-"    texture2d<float, access::read_write> tex_0;\n"
-"    texture2d<float, access::read_write> tex_1;\n"
-"    texture2d<float, access::read_write> tex_2;\n"
-"    texture2d<float, access::read_write> tex_3;\n"
-"    texture2d<float, access::read_write> tex_4;\n"
-"    texture2d<float, access::read_write> tex_5;\n"
-"    texture2d<float, access::read_write> tex_6;\n"
-"    texture2d<float, access::read_write> tex_7;\n"
-"    texture2d<float, access::read_write> tex_8;\n"
-"};\n"
-"\n"
-"struct Samplers\n"
-"{\n"
-"    sampler smp_0;\n"
-"};\n"
-"\n"
-"struct Buffers\n"
-"{\n"
-"    device void* buf_0;\n"
-"    device void* buf_1;\n"
-"    constant FrameData* frameData;\n"
-"    device void* buf_3;\n"
-"    constant SampleData* sampleData;\n"
-"    constant EnvironmentData* environmentData;\n"
-"    device void* buf_6;\n"
-//"    constant MTLAccelerationStructureInstanceDescriptor *instances;\n"
-"};\n"
-"\n"
-"        void computeCameraRay(float2 screenCoords, float2 screenSize, float4x4 invView, float2 viewSize,\n"
-"            bool isOrtho, float focalDistance, float lensRadius, float rng, thread float3& origin,\n"
-"            thread float3& direction)\n"
-"        {\n"
-"            // Apply a random offset to the screen coordinates, for antialiasing. Convert the screen\n"
-"            // coordinates to normalized device coordinates (NDC), i.e. the range [-1, 1] in X and Y. Also\n"
-"            // flip the Y component, so that +Y is up.\n"
-//"            screenCoords += random2D(rng);\n"
-"            float2 ndc = (screenCoords / screenSize) * 2.0f - 1.0f;\n"
-"            ndc.y      = -ndc.y;\n"
-"\n"
-"            // Get the world-space orientation vectors from the inverse view matrix.\n"
-"            float3 right = invView[0].xyz;  // right: row 0\n"
-"            float3 up    = invView[1].xyz;  // up: row 1\n"
-"            float3 front = -invView[2].xyz; // front: row 2, negated for RH coordinates\n"
-"\n"
-"            // Build a world-space offset on the view plane, based on the view size and the right and up\n"
-"            // vectors.\n"
-"            float2 size            = viewSize * 0.5f;\n"
-"            float3 offsetViewPlane = size.x * ndc.x * right + size.y * ndc.y * up;\n"
-"\n"
-"            // Compute the ray origin and direction:\n"
-"            // - Direction: For orthographic projection, this is just the front direction (i.e. all rays are\n"
-"            //   parallel). For perspective, it is the normalized combination of the front direction and the\n"
-"            //   view plane offset.\n"
-"            // - Origin: For orthographic projection, this is the eye position (row 3 of the view matrix),\n"
-"            //   translated by the view plane offset. For perspective, it is just the eye position.\n"
-"            //\n"
-"            // NOTE: It is common to \"unproject\" a NDC point using the view-projection matrix, and subtract\n"
-"            // that from the eye position to get a direction. However, this is numerically unstable when the\n"
-"            // eye position has very large coordinates and the projection matrix has small (nearby) clipping\n"
-"            // distances. Clipping is not relevant for ray tracing anyway.\n"
-"            if (isOrtho)\n"
-"            {\n"
-"                direction = front;\n"
-"                origin    = invView[3].xyz + offsetViewPlane;\n"
-"            }\n"
-"            else\n"
-"            {\n"
-"                direction = normalize(front + offsetViewPlane);\n"
-"                origin    = invView[3].xyz;\n"
-"            }\n"
-"\n"
-"            // Adjust the ray origin and direction if depth of field is enabled. The ray must pass through\n"
-"            // the focal point (along the original direction, at the focal distance), with an origin that\n"
-"            // is offset on the lens, represented as a disk.\n"
-//"            if (lensRadius > 0.0f)\n"
-//"            {\n"
-//"                float3 focalPoint   = origin + direction * focalDistance;\n"
-//"                float2 originOffset = sampleDisk(random2D(rng), lensRadius);\n"
-//"                origin              = origin + originOffset.x * right + originOffset.y * up;\n"
-//"                direction           = normalize(focalPoint - origin);\n"
-//"            }\n"
-"        }\n"
-"\n"
-"kernel void RayGenShader(\n"
-"     uint2                                                  tid                       [[thread_position_in_grid]],\n"
-"     instance_acceleration_structure                        accelerationStructure     [[buffer(0)]],\n"
-"     constant Uniforms&                                     uniformBuf                [[buffer(27)]],\n"
-"     constant Samplers&                                     samplerBuf                [[buffer(28)]],\n"
-"     constant Textures&                                     textureBuf                [[buffer(29)]],\n"
-"     constant Buffers&                                      bufferBuf                 [[buffer(30)]],\n"
-"     intersection_function_table<triangle_data, instancing> intersectionFunctionTable [[buffer(5)]],\n"
-"     visible_function_table<HandlerFuncSig>                 hitTable                  [[buffer(6)]],\n"
-"     visible_function_table<HandlerFuncSig>                 missTable                 [[buffer(7)]]\n"
-")\n"
-"{\n"
-"    texture2d<float, access::read_write> dstTex = textureBuf.tex_1;\n"
-"    constant Uniforms& uniforms = uniformBuf;\n"
-//"    if (tid.x < uniforms.width && tid.y < uniforms.height) {\n"
-"    {\n"
-"        ray testRay;\n"
-"        constant FrameData& gFrameData = *bufferBuf.frameData;\n"
-"        uint2 screenSize   = uint2(1280, 720);\n"
-"        uint2 screenCoords = tid.xy;\n"
-"        float rng = 0.f;\n"
-"        float3 origin;\n"
-"        float3 dir;\n"
-"        computeCameraRay(float2(screenCoords), float2(screenSize), gFrameData.cameraInvView, gFrameData.viewSize,\n"
-"            gFrameData.isOrthoProjection, gFrameData.focalDistance, gFrameData.lensRadius, rng, origin,\n"
-"            dir);\n"
-"        testRay.origin = origin;\n"
-"        testRay.direction = dir;\n"
-"        testRay.min_distance = 0.001f;\n"
-"        testRay.max_distance = 100.f;\n"
-"        intersector<triangle_data, instancing, max_levels<2>> i;\n"
-"        i.assume_geometry_type(geometry_type::triangle);\n"
-"        i.force_opacity(forced_opacity::opaque);\n"
-"        i.accept_any_intersection(false);\n"
-"        typename intersector<triangle_data, instancing, max_levels<2>>::result_type intersection;\n"
-"        intersection = i.intersect(testRay, accelerationStructure, 2);\n"
-"        if (intersection.type == intersection_type::triangle)\n"
-"            dstTex.write(float4(hsv2rgb(float3((float)(intersection.instance_id[0] * 23) / 200.f, 1.f, 1.f)), 1.f), tid);\n"
-"    }\n"
-"}\n";
+void HgiMetalShaderGenerator::_ReplaceSourceCode(std::ostream &ss) {
+
+    NSString* shaderDirectory = [NSHomeDirectory() stringByAppendingPathComponent:@"Desktop/hgi_ray_tracing_shader_dir"];
+    shaderDirectory = [NSString stringWithUTF8String:TfGetenv("HGI_TEMP_RAY_GEN_SHADER_DIR", shaderDirectory.UTF8String).c_str()];
+
+    NSString* shaderHeaderSourcePath    = [shaderDirectory stringByAppendingPathComponent:@"header.metal"];
+    NSData* shaderHeader = [NSData dataWithContentsOfFile:shaderHeaderSourcePath];
+
+    if(!shaderHeader) {
+        ss << "oh no: can't find shader header";
+        return;
     }
-    else if(_descriptor.debugName.compare("BackgroundMissShader") == 0)
-    {
+
+    NSString* shaderHeaderStr = [[NSString alloc] initWithData:shaderHeader encoding:NSUTF8StringEncoding];
+
+    if(!shaderHeaderStr) {
+        ss << "oh no: invalid UTF8 data";
+        return;
+    }
+
+    // Header
+    ss << [shaderHeaderStr UTF8String];
+        
+    // Contents
+    if(_descriptor.debugName.compare("RayGenShader") == 0) {
+
+        NSString* shaderRayGenSourcePath    = [shaderDirectory stringByAppendingPathComponent:@"ray_gen.metal"];
+        NSData* shaderRayGen = [NSData dataWithContentsOfFile:shaderRayGenSourcePath];
+        if(!shaderRayGen) {
+            ss << "oh no: can't find ray gen shader";
+            return;
+        }
+        NSString* shaderRayGenStr = [[NSString alloc] initWithData:shaderRayGen encoding:NSUTF8StringEncoding];
+        if(!shaderRayGenStr) {
+            ss << "oh no: invalid UTF8 data";
+            return;
+        }
+
+        ss << [shaderRayGenStr UTF8String];
+    }
+    else if(_descriptor.debugName.compare("BackgroundMissShader") == 0) {
         ss <<
 "[[visible]] int BackgroundMissShader(ray ray, thread RayPayload& rayPayload)\n"
 "{\n"
 "    return 1;\n"
 "}\n";
     }
-    else if(_descriptor.debugName.compare("RadianceMissShader") == 0)
-    {
+    else if(_descriptor.debugName.compare("RadianceMissShader") == 0) {
         ss <<
 "[[visible]] int RadianceMissShader(ray ray, thread RayPayload& rayPayload)\n"
 "{\n"
 "    return 2;\n"
 "}\n";
     }
-    else if(_descriptor.debugName.compare("ShadowMissShader") == 0)
-    {
+    else if(_descriptor.debugName.compare("ShadowMissShader") == 0) {
         ss <<
 "[[visible]] int ShadowMissShader(ray ray, thread RayPayload& rayPayload)\n"
 "{\n"
 "    return 3;\n"
 "}\n";
     }
-    else if(_descriptor.debugName.compare("ClosestHitShader") == 0)
-    {
+    else if(_descriptor.debugName.compare("ClosestHitShader") == 0) {
         ss <<
 "[[visible]] int ClosestHitShader(ray ray, thread RayPayload& rayPayload)\n"
 "{\n"
 "    return 4;\n"
 "}\n";
     }
-    else
+    else {
         ss << "oh no";
+    }
 }
 
 void HgiMetalShaderGenerator::_MergeSourceCode(std::ostream &ss)
@@ -1834,6 +1651,11 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
             section->VisitScopeStructs(ss);
         }
         ss << "\n// //////// Scope Member Declarations ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "bool discarded_fragment;\n";
+            }
+        }
         for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
             section->VisitScopeMemberDeclarations(ss);
         }
@@ -1889,22 +1711,23 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
         HgiMetalStageOutputShaderSection* const outputs =
         _generatorShaderSections->GetOutputs();
         std::stringstream returnSS;
-        if (outputs) {
+        if (outputs &&
+            (_GetShaderStage() != HgiShaderStagePostTessellationControl)) {
             const HgiMetalStructTypeDeclarationShaderSection* const decl =
-            outputs->GetStructTypeDeclaration();
+                outputs->GetStructTypeDeclaration();
             decl->WriteIdentifier(returnSS);
         }
         else {
             //handle compute
             returnSS << "void";
         }
-        
+
         ss << _generatorShaderSections->GetEntryPointAttributes();
-        
+
         ss << _generatorShaderSections->GetEntryPointStageName();
         ss << " " << returnSS.str() << " "
-        << _generatorShaderSections->GetEntryPointFunctionName() << "(\n";
-        
+            << _generatorShaderSections->GetEntryPointFunctionName() << "(\n";
+
         // Pass in all parameters declared by interested code sections into the
         // entry point of the shader
         firstParam = true;
@@ -1923,8 +1746,8 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
         }
         ss <<"){\n";
         ss << _generatorShaderSections->GetScopeTypeName() << " "
-        << _generatorShaderSections->GetScopeInstanceName();
-        
+            << _generatorShaderSections->GetScopeInstanceName();
+    
         if (hasContructorParams) {
             ss << "(\n";
             firstParam = true;
@@ -1944,20 +1767,40 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
             ss << ")";
         }
         ss << ";\n";
-        
+
         // Execute all code that hooks into the entry point function
         ss << "\n// //////// Entry Point Function Executions ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << _generatorShaderSections->GetScopeInstanceName()
+                    << ".discarded_fragment = false;\n";
+            }
+        }
         for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
             if (section->VisitEntryPointFunctionExecutions(
-                                                           ss, _generatorShaderSections->GetScopeInstanceName())) {
-                                                               ss << "\n";
-                                                           }
+                ss, _generatorShaderSections->GetScopeInstanceName())) {
+                ss << "\n";
+            }
+        }
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "if (" << _generatorShaderSections->GetScopeInstanceName()
+                    << ".discarded_fragment)\n";
+                ss << "{\n";
+                if (outputs) {
+                    ss << "    return {};\n";
+                } else {
+                    ss << "    return;\n";
+                }
+                ss << "}\n";
+            }
         }
         //return the instance of the shader entrypoint output type
-        if(outputs)
+        if(outputs &&
+            (_GetShaderStage() != HgiShaderStagePostTessellationControl))
         {
             const std::string outputInstanceName =
-            _generatorShaderSections->GetOutputInstanceName();
+                _generatorShaderSections->GetOutputInstanceName();
             ss << "return " << outputInstanceName << ";\n";
         }
         else {

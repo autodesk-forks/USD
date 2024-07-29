@@ -2,11 +2,13 @@ set(DIRS
     arch
     tf
     gf
+    pegtl
     js
     trace
     work
     plug
     vt
+    ts
 #    bin
 )
 

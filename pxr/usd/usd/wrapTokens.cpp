@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 // GENERATED FILE.  DO NOT EDIT.
 #include <boost/python/class.hpp>
@@ -68,13 +51,20 @@ void wrapUsdTokens()
     _AddToken(cls, "clips", UsdTokens->clips);
     _AddToken(cls, "clipSets", UsdTokens->clipSets);
     _AddToken(cls, "collection", UsdTokens->collection);
+    _AddToken(cls, "collection_MultipleApplyTemplate_", UsdTokens->collection_MultipleApplyTemplate_);
     _AddToken(cls, "collection_MultipleApplyTemplate_Excludes", UsdTokens->collection_MultipleApplyTemplate_Excludes);
     _AddToken(cls, "collection_MultipleApplyTemplate_ExpansionRule", UsdTokens->collection_MultipleApplyTemplate_ExpansionRule);
     _AddToken(cls, "collection_MultipleApplyTemplate_IncludeRoot", UsdTokens->collection_MultipleApplyTemplate_IncludeRoot);
     _AddToken(cls, "collection_MultipleApplyTemplate_Includes", UsdTokens->collection_MultipleApplyTemplate_Includes);
+    _AddToken(cls, "collection_MultipleApplyTemplate_MembershipExpression", UsdTokens->collection_MultipleApplyTemplate_MembershipExpression);
     _AddToken(cls, "exclude", UsdTokens->exclude);
     _AddToken(cls, "expandPrims", UsdTokens->expandPrims);
     _AddToken(cls, "expandPrimsAndProperties", UsdTokens->expandPrimsAndProperties);
     _AddToken(cls, "explicitOnly", UsdTokens->explicitOnly);
     _AddToken(cls, "fallbackPrimTypes", UsdTokens->fallbackPrimTypes);
+    _AddToken(cls, "APISchemaBase", UsdTokens->APISchemaBase);
+    _AddToken(cls, "ClipsAPI", UsdTokens->ClipsAPI);
+    _AddToken(cls, "CollectionAPI", UsdTokens->CollectionAPI);
+    _AddToken(cls, "ModelAPI", UsdTokens->ModelAPI);
+    _AddToken(cls, "Typed", UsdTokens->Typed);
 }

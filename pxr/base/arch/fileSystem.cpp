@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/base/arch/fileSystem.h"
@@ -75,8 +58,75 @@ static inline HANDLE _FileToWinHANDLE(FILE *file)
 FILE* ArchOpenFile(char const* fileName, char const* mode)
 {
 #if defined(ARCH_OS_WINDOWS)
-    return _wfopen(ArchWindowsUtf8ToUtf16(fileName).c_str(),
-                   ArchWindowsUtf8ToUtf16(mode).c_str());
+    bool hasPlus = strchr(mode, '+') != nullptr;
+    bool hasB = strchr(mode, 'b') != nullptr;
+
+    // Allow other processes to read/write/delete the file.  This emulates the
+    // unix-like behavior, which our code is primarily accustomed to.
+    DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    DWORD flagsAndAttributes = FILE_ATTRIBUTE_NORMAL;
+
+    DWORD desiredAccess;
+    DWORD creationDisposition;
+    int openFlags
+        = (hasB ? _O_BINARY : _O_TEXT)
+        | (hasPlus ? _O_RDWR : _O_RDONLY);
+    const char modeChar = mode[0];
+    if (modeChar == 'r') {
+        desiredAccess = GENERIC_READ | (hasPlus ? GENERIC_WRITE : 0);
+        creationDisposition = OPEN_EXISTING;
+    }
+    else if (modeChar == 'w') {
+        desiredAccess = GENERIC_WRITE | (hasPlus ? GENERIC_READ : 0);
+        creationDisposition = CREATE_ALWAYS;
+        openFlags |= _O_CREAT | _O_TRUNC;
+    }
+    else if (modeChar == 'a') {
+        // The GENERIC_WRITE - FILE_WRITE_DATA produces write permissions to all
+        // attributes, etc, but only APPEND permissions for file content.
+        desiredAccess =
+            (GENERIC_WRITE & ~FILE_WRITE_DATA) | (hasPlus ? GENERIC_READ : 0);
+        creationDisposition = OPEN_ALWAYS;
+        openFlags |= _O_CREAT | _O_APPEND;
+    }
+    else {
+        // invalid mode.
+        return nullptr;
+    }
+
+    // Call CreateFileW.
+    HANDLE hfile = CreateFileW(
+        ArchWindowsUtf8ToUtf16(fileName).c_str(),
+        desiredAccess,
+        shareMode,
+        /* securityAttributes=*/nullptr,
+        creationDisposition,
+        flagsAndAttributes,
+        /* templateFile=*/NULL);
+
+    if (hfile == INVALID_HANDLE_VALUE) {
+        // Failed to CreateFileW.
+        return nullptr;
+    }
+
+    // According to Win32 docs, a successful call to _open_osfhandle transfers
+    // ownership of hfile to the C runtime file descriptor, so a later _close()
+    // is sufficient to clean up.  There's no need to call CloseHandle().
+    int osfHandle = _open_osfhandle((intptr_t)hfile, openFlags);
+    if (osfHandle == -1) { 
+        CloseHandle(hfile);
+        return nullptr;
+    }
+
+    // According to Win32 docs, a successful call to _fdopen transfers ownership
+    // of the osfHandle to the FILE stream, so a later fclose() is sufficient to
+    // clean up.  There's no need to call _close.
+    FILE *filePtr = _fdopen(osfHandle, mode);
+    if (!filePtr) {
+        _close(osfHandle);
+    }
+
+    return filePtr;
 #else
     return fopen(fileName, mode);
 #endif
@@ -311,15 +361,10 @@ ArchNormPath(const string& inPath, bool stripDriveSpecifier)
 
     // Extract the drive specifier.  Note that we don't correctly handle
     // UNC paths or paths that start with \\? (which allow longer paths).
-    //
-    // Also make sure drive letters are always lower-case out of ArchNormPath
-    // on Windows -- this is so that we can be sure we can reliably use the
-    // paths as keys in tables, etc.
     string prefix;
     if (path.size() >= 2 && path[1] == ':') {
         if (!stripDriveSpecifier) {
-            prefix.assign(2, ':');
-            prefix[0] = std::tolower(path[0]);
+            prefix = path.substr(0,2);
         }
         path.erase(0, 2);
     }

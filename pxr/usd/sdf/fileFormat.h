@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_FILE_FORMAT_H
 #define PXR_USD_SDF_FILE_FORMAT_H
@@ -132,6 +115,12 @@ public:
     virtual SdfAbstractDataRefPtr
     InitData(const FileFormatArguments& args) const;
 
+    /// Returns a new SdfAbstractData providing access to the layer's data.
+    /// This data object is detached from any underlying storage.
+    SDF_API
+    SdfAbstractDataRefPtr InitDetachedData(
+        const FileFormatArguments& args) const;
+
     /// Instantiate a layer.
     SDF_API 
     SdfLayerRefPtr NewLayer(const SdfFileFormatConstPtr &fileFormat,
@@ -179,12 +168,57 @@ public:
         const std::string& resolvedPath,
         bool metadataOnly) const = 0;
 
+    /// Reads scene description from the asset specified by \p resolvedPath
+    /// into the detached layer \p layer. After reading is completed,
+    /// \p layer must be detached from any underlying storage.
+    ///
+    /// \p metadataOnly is a flag that asks for only the layer metadata
+    /// to be read in, which can be much faster if that is all that is
+    /// required.  Note that this is just a hint: some FileFormat readers
+    /// may disregard this flag and still fully populate the layer contents.
+    ///
+    /// Returns true if the asset is successfully read into \p layer,
+    /// false if the the asset could not be read or if the resulting
+    /// layer is not detached.
+    SDF_API
+    bool ReadDetached(
+        SdfLayer* layer,
+        const std::string& resolvedPath,
+        bool metadataOnly) const;
+
     /// Writes the content in \p layer into the file at \p filePath. If the
     /// content is successfully written, this method returns true. Otherwise,
     /// false is returned and errors are posted. The default implementation
     /// returns false.
+    ///
+    /// This member function makes no distinction between a "Save" operation
+    /// that updates the backing store for the \p layer itself and an "Export"
+    /// operation that writes the \p layer data to a distinct asset.  For file
+    /// formats that retain all data in memory this is typically fine.  But for
+    /// file formats that handle data requests by reading from the backing
+    /// store, this distinction can be important.  In that case, additionally
+    /// override the member function SaveToFile() to take different action.
     SDF_API
     virtual bool WriteToFile(
+        const SdfLayer& layer,
+        const std::string& filePath,
+        const std::string& comment = std::string(),
+        const FileFormatArguments& args = FileFormatArguments()) const;
+
+    /// Write the content in \p layer to the file at \p filePath, which is the
+    /// backing store for \p layer itself.  If the content is successfully
+    /// written, this method returns true. Otherwise, false is returned and
+    /// errors are posted. The default implementation just calls WriteToFile()
+    /// passing all the same arguments.
+    ///
+    /// The purpose of this member function is to provide a distinction between
+    /// a "Save" operation that updates the backing store for the \p layer
+    /// itself and an "Export" operation that writes the \p layer data to a
+    /// distinct asset.  File formats that retain all data in memory can
+    /// typically override only WriteToFile(), but formats that do not may need
+    /// to take different action on "Save" vs "Export".
+    SDF_API
+    virtual bool SaveToFile(
         const SdfLayer& layer,
         const std::string& filePath,
         const std::string& comment = std::string(),
@@ -230,6 +264,22 @@ public:
     virtual std::set<std::string> GetExternalAssetDependencies(
         const SdfLayer& layer) const;
 
+
+    /// Returns true if this file format supports reading.
+    /// This is a convenience method for invoking \ref FormatSupportsReading
+    /// with this format's extension and target
+    SDF_API bool SupportsReading() const;
+
+    // Returns true if this file format supports writing.
+    /// This is a convenience method for invoking \ref FormatSupportsWriting
+    /// with this format's extension and target
+    SDF_API bool SupportsWriting() const;
+
+    // Returns true if this file format supports editing.
+    /// This is a convenience method for invoking \ref FormatSupportsEditing
+    /// with this format's extension and target
+    SDF_API bool SupportsEditing() const;
+
     /// Returns the file extension for path or file name \p s, without the
     /// leading dot character.
     SDF_API static std::string GetFileExtension(const std::string& s);
@@ -237,6 +287,49 @@ public:
     /// Returns a set containing the extension(s) corresponding to 
     /// all registered file formats.
     SDF_API static std::set<std::string> FindAllFileFormatExtensions();
+
+    /// Returns a set containing the extension(s) corresponding to
+    /// all registered file formats that derive from \p baseType.
+    ///
+    /// \p baseType must derive from SdfFileFormat.
+    SDF_API static std::set<std::string> FindAllDerivedFileFormatExtensions(
+        const TfType& baseType);
+
+    /// Returns true if the file format for the supplied \p extension and
+    /// \p target pair supports reading.
+    /// This method will not load the plugin that provides the specified 
+    /// file format.
+    /// If the extension and target pair is invalid, this method will
+    /// return false.
+    /// \sa FormatSupportsWriting \sa FormatSupportsEditing
+    SDF_API
+    static bool FormatSupportsReading(
+        const std::string& extension,
+        const std::string& target = std::string());
+
+    /// Returns true if the file format for the supplied \p extension and 
+    /// \p target pair supports writing.
+    /// This method will not load the plugin that provides the specified 
+    /// file format.
+    /// If the extension and target pair is invalid, this method will return
+    /// false.
+    /// \sa FormatSupportsReading \sa FormatSupportsEditing
+    SDF_API
+    static bool FormatSupportsWriting(
+        const std::string& extension,
+        const std::string& target = std::string());
+
+    /// Returns true if the file format for the supplied \p extension and 
+    /// \p target pair supports editing.
+    /// This method will not load the plugin that provides the specified 
+    /// file format.
+    /// If the extension and target pair is invalid, this method will return
+    /// false.
+    /// \sa FormatSupportsReading \sa FormatSupportsWriting
+    SDF_API
+    static bool FormatSupportsEditing(
+        const std::string& extension,
+        const std::string& target = std::string());
 
     /// Returns the file format instance with the specified \p formatId
     /// identifier. If a format with a matching identifier is not found, this
@@ -349,6 +442,27 @@ protected:
     SDF_API
     static SdfAbstractDataConstPtr _GetLayerData(const SdfLayer& layer);
 
+    /// Helper function for _ReadDetached.
+    ///
+    /// Calls Read with the given parameters. If successful and \p layer is
+    /// not detached (i.e., SdfLayer::IsDetached returns false) copies the layer
+    /// data into an SdfData object and set that into \p layer. If this copy
+    /// occurs and \p didCopyData is given, it will be set to true.
+    ///
+    /// Note that the copying process is a simple spec-by-spec, field-by-field
+    /// value copy. This process may not produce detached layers if the data
+    /// object used by \p layer after the initial call to Read returns VtValues
+    /// that are not detached. One example is a VtValue holding a VtArray backed
+    /// by a foreign data source attached to a memory mapping.
+    ///
+    /// Returns true if Read was successful, false otherwise.
+    SDF_API
+    bool _ReadAndCopyLayerDataToMemory(
+        SdfLayer* layer,
+        const std::string& resolvedPath,
+        bool metadataOnly,
+        bool* didCopyData = nullptr) const;
+
 protected:
     SDF_API
     virtual SdfLayer *_InstantiateNewLayer(
@@ -369,6 +483,33 @@ protected:
     /// Default implementation returns false.
     SDF_API 
     virtual bool _ShouldReadAnonymousLayers() const;
+
+    /// \see InitDetachedData
+    ///
+    /// This function must return a new SdfAbstractData object that is
+    /// detached, i.e. SdfAbstractData::IsDetached returns false.
+    ///
+    /// The default implementation returns an SdfData object.
+    SDF_API
+    virtual SdfAbstractDataRefPtr _InitDetachedData(
+        const FileFormatArguments& args) const;
+
+    /// \see ReadDetached
+    ///
+    /// Upon completion, \p layer must have an SdfAbstractData object set that
+    /// is detached, i.e. SdfAbstractData::IsDetached returns false.
+    ///
+    /// The default implementation calls _ReadAndCopyLayerDataToMemory to read
+    /// the specified layer and copy its data into an SdfData object if it is
+    /// not detached. If data is copied, a warning will be issued since
+    /// this may be an expensive operation. If the above behavior is desired,
+    /// subclasses can just call _ReadAndCopyLayerDataToMemory to do the same
+    /// thing but without the warning.
+    SDF_API
+    virtual bool _ReadDetached(
+        SdfLayer* layer,
+        const std::string& resolvedPath,
+        bool metadataOnly) const;
 
 private:
     const SdfSchemaBase& _schema;

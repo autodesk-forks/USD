@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_IMAGING_HD_ST_INDIRECT_DRAW_BATCH_H
 #define PXR_IMAGING_HD_ST_INDIRECT_DRAW_BATCH_H
@@ -34,7 +17,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-using HdBindingRequestVector = std::vector<HdBindingRequest>;
+using HdStBindingRequestVector = std::vector<class HdStBindingRequest>;
 
 /// \class HdSt_IndirectDrawBatch
 ///
@@ -49,7 +32,8 @@ class HdSt_IndirectDrawBatch : public HdSt_DrawBatch
 public:
     HDST_API
     HdSt_IndirectDrawBatch(HdStDrawItemInstance * drawItemInstance,
-                           bool const allowGpuFrustumCulling = true);
+                           bool const allowGpuFrustumCulling = true,
+                           bool const allowTextureResourceRebinding = false);
     HDST_API
     ~HdSt_IndirectDrawBatch() override;
 
@@ -65,12 +49,20 @@ public:
         HdStRenderPassStateSharedPtr const &renderPassState,
         HdStResourceRegistrySharedPtr const &resourceRegistry) override;
 
+    /// Encode drawing commands for this batch.
+    HDST_API
+    void EncodeDraw(
+        HdStRenderPassStateSharedPtr const & renderPassState,
+        HdStResourceRegistrySharedPtr const & resourceRegistry,
+        bool firstDrawBatch) override;
+
     /// Executes the drawing commands for this batch.
     HDST_API
     void ExecuteDraw(
         HgiGraphicsCmds *gfxCmds,
         HdStRenderPassStateSharedPtr const &renderPassState,
-        HdStResourceRegistrySharedPtr const &resourceRegistry) override;
+        HdStResourceRegistrySharedPtr const &resourceRegistry,
+        bool firstDrawBatch) override;
 
     HDST_API
     void DrawItemInstanceChanged(
@@ -126,7 +118,7 @@ private:
     protected:
         // _DrawingProgram overrides
         void _GetCustomBindings(
-            HdBindingRequestVector *customBindings,
+            HdStBindingRequestVector *customBindings,
             bool *enableInstanceDraw) const override;
     private:
         bool _useDrawIndexed;
@@ -149,7 +141,8 @@ private:
     void _ExecuteDrawImmediate(
                 HdSt_GeometricShaderSharedPtr const & geometricShader,
                 HdStDispatchBufferSharedPtr const & dispatchBuffer,
-                HdStBufferArrayRangeSharedPtr const & indexBar);
+                HdStBufferArrayRangeSharedPtr const & indexBar,
+                _DrawingProgram const & program);
 
     void _ExecuteFrustumCull(
                 bool updateDispatchBuffer,
@@ -189,6 +182,8 @@ private:
 
     int _instanceCountOffset;
     int _cullInstanceCountOffset;
+
+    bool _needsTextureResourceRebinding;
 };
 
 

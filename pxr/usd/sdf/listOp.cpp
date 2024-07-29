@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -28,14 +11,13 @@
 #include "pxr/usd/sdf/payload.h"
 #include "pxr/usd/sdf/reference.h"
 #include "pxr/usd/sdf/types.h"
+#include "pxr/base/tf/denseHashSet.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/iterator.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/token.h"
 #include "pxr/base/trace/trace.h"
-
-#include <boost/optional.hpp>
 
 #include <ostream>
 
@@ -167,6 +149,15 @@ SdfListOp<T>::GetItems(SdfListOpType type) const
 
     TF_CODING_ERROR("Got out-of-range type value: %d", type);
     return _explicitItems;
+}
+
+template <typename T>
+typename SdfListOp<T>::ItemVector 
+SdfListOp<T>::GetAppliedItems() const
+{
+    ItemVector result;
+    ApplyOperations(&result);
+    return result;
 }
 
 template <typename T>
@@ -334,7 +325,7 @@ SdfListOp<T>::ApplyOperations(ItemVector* vec, const ApplyCallback& cb) const
 }
 
 template <typename T>
-boost::optional<SdfListOp<T>>
+std::optional<SdfListOp<T>>
 SdfListOp<T>::ApplyOperations(const SdfListOp<T> &inner) const
 {
     if (IsExplicit()) {
@@ -412,7 +403,7 @@ SdfListOp<T>::ApplyOperations(const SdfListOp<T> &inner) const
     // and there is no way to express the relative order dependency
     // between 0 and 1.
     //
-    return boost::optional<SdfListOp<T>>();
+    return std::optional<SdfListOp<T>>();
 }
 
 template <class ItemType, class ListType, class MapType>
@@ -458,7 +449,7 @@ SdfListOp<T>::_AddKeys(
 {
     TF_FOR_ALL(i, GetItems(op)) {
         if (callback) {
-            if (boost::optional<T> item = callback(op, *i)) {
+            if (std::optional<T> item = callback(op, *i)) {
                 // Only append if the item isn't already present.
                 _InsertIfUnique(*item, result, search);
             }
@@ -480,7 +471,7 @@ SdfListOp<T>::_PrependKeys(
     const ItemVector& items = GetItems(op);
     if (callback) {
         for (auto i = items.rbegin(), iEnd = items.rend(); i != iEnd; ++i) {
-            if (boost::optional<T> mappedItem = callback(op, *i)) {
+            if (std::optional<T> mappedItem = callback(op, *i)) {
                 _InsertOrMove(*mappedItem, result->begin(), result, search);
             }
         }
@@ -502,7 +493,7 @@ SdfListOp<T>::_AppendKeys(
     const ItemVector& items = GetItems(op);
     if (callback) {
         for (const T& item: items) {
-            if (boost::optional<T> mappedItem = callback(op, item)) {
+            if (std::optional<T> mappedItem = callback(op, item)) {
                 _InsertOrMove(*mappedItem, result->end(), result, search);
             }
         }
@@ -523,7 +514,7 @@ SdfListOp<T>::_DeleteKeys(
 {
     TF_FOR_ALL(i, GetItems(op)) {
         if (callback) {
-            if (boost::optional<T> item = callback(op, *i)) {
+            if (std::optional<T> item = callback(op, *i)) {
                 _RemoveIfPresent(*item, result, search);
             }
         }
@@ -546,7 +537,7 @@ SdfListOp<T>::_ReorderKeys(
     std::set<ItemType, _ItemComparator> orderSet;
     TF_FOR_ALL(i, GetItems(op)) {
         if (callback) {
-            if (boost::optional<T> item = callback(op, *i)) {
+            if (std::optional<T> item = callback(op, *i)) {
                 if (orderSet.insert(*item).second) {
                     order.push_back(*item);
                 }
@@ -594,21 +585,29 @@ template <typename T>
 static inline
 bool
 _ModifyCallbackHelper(const typename SdfListOp<T>::ModifyCallback& cb,
-                      std::vector<T>* itemVector)
+                      std::vector<T>* itemVector, bool removeDuplicates)
 {
     bool didModify = false;
 
     std::vector<T> modifiedVector;
-    TF_FOR_ALL(item, *itemVector) {
-        boost::optional<T> modifiedItem = cb(*item);
+    TfDenseHashSet<T, TfHash> existingSet;
+
+    for (const T& item : *itemVector) {
+        std::optional<T> modifiedItem = cb(item);
+        if (removeDuplicates && modifiedItem) {
+            if (!existingSet.insert(*modifiedItem).second) {
+                modifiedItem = std::nullopt;
+            }
+        }
+
         if (!modifiedItem) {
             didModify = true;
         }
-        else if (*modifiedItem != *item) {
-            modifiedVector.push_back(*modifiedItem);
+        else if (*modifiedItem != item) {
+            modifiedVector.push_back(std::move(*modifiedItem));
             didModify = true;
         } else {
-            modifiedVector.push_back(*item);
+            modifiedVector.push_back(item);
         }
     }
 
@@ -621,17 +620,24 @@ _ModifyCallbackHelper(const typename SdfListOp<T>::ModifyCallback& cb,
 
 template <typename T>
 bool 
-SdfListOp<T>::ModifyOperations(const ModifyCallback& callback)
+SdfListOp<T>::ModifyOperations(const ModifyCallback& callback,
+                               bool removeDuplicates)
 {
     bool didModify = false;
 
     if (callback) {
-        didModify |= _ModifyCallbackHelper(callback, &_explicitItems);
-        didModify |= _ModifyCallbackHelper(callback, &_addedItems);
-        didModify |= _ModifyCallbackHelper(callback, &_prependedItems);
-        didModify |= _ModifyCallbackHelper(callback, &_appendedItems);
-        didModify |= _ModifyCallbackHelper(callback, &_deletedItems);
-        didModify |= _ModifyCallbackHelper(callback, &_orderedItems);
+        didModify |= _ModifyCallbackHelper(
+            callback, &_explicitItems, removeDuplicates);
+        didModify |= _ModifyCallbackHelper(
+            callback, &_addedItems, removeDuplicates);
+        didModify |= _ModifyCallbackHelper(
+            callback, &_prependedItems, removeDuplicates);
+        didModify |= _ModifyCallbackHelper(
+            callback, &_appendedItems, removeDuplicates);
+        didModify |= _ModifyCallbackHelper(
+            callback, &_deletedItems, removeDuplicates);
+        didModify |= _ModifyCallbackHelper(
+            callback, &_orderedItems, removeDuplicates);
     }
 
     return didModify;
