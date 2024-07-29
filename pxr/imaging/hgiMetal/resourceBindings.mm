@@ -92,14 +92,19 @@ HgiMetalResourceBindings::BindResources(
         }
         if (metalTexture) {
             MTLResourceUsage usageFlags = MTLResourceUsageRead;
-            if (metalSampler) {
-                usageFlags |= MTLResourceUsageSample;
-            }
             if (texDesc.writable) {
                 usageFlags |= MTLResourceUsageWrite;
             }
+            MTLRenderStages stageFlags;
+            if (texDesc.stageUsage & HgiShaderStageVertex) {
+                stageFlags |= MTLRenderStageVertex;
+            }
+            if (texDesc.stageUsage & HgiShaderStageFragment) {
+                stageFlags |= MTLRenderStageFragment;
+            }
             [renderEncoder useResource:metalTexture
-                                 usage:usageFlags];
+                                 usage:usageFlags
+                                stages:stageFlags];
         }
     }
 
@@ -164,9 +169,16 @@ HgiMetalResourceBindings::BindResources(
         if (bufDesc.writable) {
             usageFlags |= MTLResourceUsageWrite;
         }
-
+        MTLRenderStages stageFlags;
+        if (bufDesc.stageUsage & HgiShaderStageVertex) {
+            stageFlags |= MTLRenderStageVertex;
+        }
+        if (bufDesc.stageUsage & HgiShaderStageFragment) {
+            stageFlags |= MTLRenderStageFragment;
+        }
         [renderEncoder useResource:bufferId
-                             usage:usageFlags];
+                             usage:usageFlags
+                            stages:stageFlags];
     }
     
 
@@ -207,8 +219,13 @@ HgiMetalResourceBindings::BindResources(
     //
 
     for (HgiTextureBindDesc const& texDesc : _descriptor.textures) {
-        if (!TF_VERIFY(texDesc.textures.size() == 1)) 
+        // Both 0 (sampler without texture) and 1 (one texture) are valid.
+        if (texDesc.textures.size() > 1)
+        {
+            TF_CODING_ERROR("Only one texture per binding can be supported. "
+                "Found %zu textures.", texDesc.textures.size());
             continue;
+        }
 
         HgiTextureHandle const& texHandle = texDesc.textures.front();
         HgiMetalTexture* metalTexture =
@@ -240,9 +257,6 @@ HgiMetalResourceBindings::BindResources(
                 usage |= MTLResourceUsageWrite;
             }
             [argEncoderTexture setTexture:metalTexture->GetTextureId() atIndex:0];
-            if (metalSmp) {
-                usage |= MTLResourceUsageSample;
-            }
             [computeEncoder useResource:metalTexture->GetTextureId()
                                   usage:usage];
         }
