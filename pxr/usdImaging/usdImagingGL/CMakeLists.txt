@@ -74,7 +74,7 @@ pxr_library(usdImagingGL
 # 
 set(TEST_LIBS "arch" "garch" "glf" "hd" "sdf" "tf" "usd" "usdUtils" "usdImaging" "usdImagingGL")
 if(PXR_ENABLE_JS_SUPPORT)
-    list(APPEND TEST_LIBS
+    add_definitions(
             "-s MAX_WEBGL_VERSION=3"
             "-s LEGACY_GL_EMULATION=1"
             "-s USE_GLFW=3"

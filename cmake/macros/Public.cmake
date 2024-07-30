@@ -633,7 +633,9 @@ function(pxr_build_test TEST_NAME)
         target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
         target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
         foreach(LIB ${bt_LIBRARIES})
-            set_target_properties(${LIB} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
+            if(TARGET ${LIB})
+                set_target_properties(${LIB} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
+            endif()
         endforeach()
         install(
             FILES

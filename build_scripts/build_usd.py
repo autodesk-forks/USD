@@ -1627,6 +1627,7 @@ def InstallGlslang(context, force, buildArgs):
                 cmakeOptions += [
                     '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                     '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
+                    '-DBUILD_SHARED_LIBS=ON',
                     '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
                     '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
                 ]
@@ -2591,7 +2592,7 @@ class InstallContext:
         self.prmanLocation = (os.path.abspath(args.prman_location)
                                if args.prman_location else None)                               
         self.buildOIIO = args.build_oiio or (self.buildUsdImaging
-                                             and self.buildTests)
+                                             and self.buildTests and not self.targetWasm)
         self.buildOCIO = args.build_ocio
 
         # - Alembic Plugin
@@ -2677,7 +2678,9 @@ if context.targetWasm:
 
 # Determine list of dependencies that are required based on options
 # user has selected.
-requiredDependencies = [BOOST, TBB, ZLIB]
+requiredDependencies = [BOOST, TBB]
+if not context.targetWasm:
+    requiredDependencies += [ZLIB]
 
 if context.targetWasm and context.buildTests:
     requiredDependencies += [THREE]
