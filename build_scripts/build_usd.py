@@ -1645,6 +1645,8 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DPXR_PREFER_SAFETY_OVER_SPEED={}'
                          .format('ON' if context.safetyFirst else 'OFF'))
 
+        extraArgs.append('-DPXR_LIB_PREFIX="3dsmax_"')
+
         if context.buildPython:
             extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=ON')
 
