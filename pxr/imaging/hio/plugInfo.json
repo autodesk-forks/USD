@@ -5,7 +5,7 @@
                 "Types": {
                    "Hio_OpenEXRImage" : {
                         "bases": ["HioImage"],
-                        "imageTypes": ["exr"],
+                        "imageTypes": [],
                         "precedence": 30
                     },
                     "Hio_StbImage" : {
