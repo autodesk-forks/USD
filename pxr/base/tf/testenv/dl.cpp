@@ -60,48 +60,62 @@ Test_TfDl()
     std::string dlErrorStr; // Renamed from dlerror
     // Check that opening a non-existing shared library fails
     #ifdef __EMSCRIPTEN__
-    void* handle = dlopen("nonexisting" ARCH_LIBRARY_SUFFIX, RTLD_NOW);
+    // Try to load side module
+    void* handle = dlopen("nonexisting.wasm", RTLD_NOW);
     if (!handle) {
-    char* errorStr = dlerror();
-    if (errorStr != nullptr) {
-        dlErrorStr = "Failed to open the dynamic library. Emscripten Error: " + std::string(errorStr);
-        }
+    char* error = dlerror();
+    if (error) 
+    {
+        dlErrorStr = std::string(error);
     }
-    //TF_AXIOM(!dlErrorStr.empty());
-    #endif   
+    else{
+        dlErrorStr = "Unknown error"; 
+    }
+        printf("Emscripten Side Module Loading Error: %s\n", error);
+    }
+    dlclose(handle);
+    #else
+    TfDlopen("nonexisting" ARCH_LIBRARY_SUFFIX, ARCH_LIBRARY_NOW, &dlErrorStr);    
+    #endif 
+    TF_AXIOM(!dlErrorStr.empty());
 
     // Compute path to test library.
     string dlname;
-    //TF_AXIOM(ArchGetAddressInfo((void*)Test_TfDl, &dlname, NULL, NULL, NULL));
+    #ifdef __EMSCRIPTEN__
+    dlname = "TestTf.wasm"; 
+    #else
+    TF_AXIOM(ArchGetAddressInfo((void*)Test_TfDl, &dlname, NULL, NULL, NULL));
     dlname = TfGetPathName(dlname) +
         "lib" ARCH_PATH_SEP
 #if !defined(ARCH_OS_WINDOWS)
         "lib"
 #endif
         "TestTfDl" ARCH_LIBRARY_SUFFIX;
+    #endif
 
     // Make sure that this .so does indeed exist first
     printf("Checking test shared lib: %s\n", dlname.c_str());
 
     #ifdef __EMSCRIPTEN__
-    // Check that we can open the existing library.
+    // Check that we can open the existing .wasm library.
     std::string errorStr;
-    handle = dlopen(dlname.c_str(), RTLD_LAZY|RTLD_LOCAL);
+    handle = dlopen(dlname.c_str(), RTLD_LAZY | RTLD_LOCAL);
     if (!handle) {
         char* errorCStr = dlerror();
         if (errorCStr) {
             errorStr = "Failed to open the dynamic library. Error: " + std::string(errorCStr);
         }
     }
-
-    //TF_AXIOM(handle != nullptr);
-    //TF_AXIOM(errorStr.empty());
-    //TF_AXIOM(dlclose(handle) == 0);
+    #else
+    void* handle = TfDlopen(dlname, ARCH_LIBRARY_LAZY | ARCH_LIBRARY_LOCAL, &errorStr);
+    #endif
+    TF_AXIOM(handle != nullptr);
+    TF_AXIOM(errorStr.empty());
+    TF_AXIOM(dlclose(handle) == 0);
 
     // we should not be in the process of opening/closing a DL now either
-    //TF_AXIOM(!Tf_DlOpenIsActive());
-    //TF_AXIOM(!Tf_DlCloseIsActive());
-    #endif
+    TF_AXIOM(!Tf_DlOpenIsActive());
+    TF_AXIOM(!Tf_DlCloseIsActive());
 
     return true;
 }
