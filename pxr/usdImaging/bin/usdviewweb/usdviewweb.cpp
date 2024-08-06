@@ -81,6 +81,9 @@ namespace {
     pxr::GfVec4f defaultAmbient = pxr::GfVec4f(0.01f, 0.01f, 0.01f, 1.0f);
     std::string filePath;
 
+    // Function pointer for side module function
+    typedef void (*InitGLEngineFunc)(const char*, pxr::UsdImagingGLEngine**, pxr::UsdStageRefPtr*);
+
     void main_loop() {
         loop();
     }
@@ -268,7 +271,24 @@ struct VertexOutput {
         filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
         TF_INFO(INFO).Msg("File: %s", filePath.c_str());
         TF_INFO(INFO).Msg("Starting GLEngine ");
-        initGLEngine();
+
+        // Load side module
+        void *sideModule = dlopen("side_module.wasm", RTLD_NOW);
+        if (!sideModule) {
+        TF_RUNTIME_ERROR("Failed to load side module");
+        exit(-1);
+        }
+
+        // Get function pointer
+        InitGLEngineFunc initGLEngineFunc = (InitGLEngineFunc)dlsym(sideModule, "initGLEngine");
+        if (!initGLEngineFunc) {
+        TF_RUNTIME_ERROR("Failed to find initGLEngine in side module");
+        exit(-1);
+        }
+
+        // Call side module function
+        initGLEngineFunc(filePath.c_str(), &glEngine, &stage);
+
         glfwSetErrorCallback(error_callback);
         if (!glfwInit())
             exit(EXIT_FAILURE);

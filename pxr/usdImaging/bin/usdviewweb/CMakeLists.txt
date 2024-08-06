@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-option(LINK_AS_SIDE_MODULE "Link libraries as side modules" OFF)
+option(LINK_AS_SIDE_MODULE "Link libraries as side modules" ON)
 
 set(PXR_PREFIX pxr/usdImaging)
 set(PXR_PACKAGE usdviewweb)
@@ -17,6 +17,13 @@ function(add_resources target)
         set_target_properties(${target} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
     endif()
 endfunction()
+
+# Define the side module
+add_library(side_module SHARED side_module.cpp)
+set_target_properties(side_module PROPERTIES
+    LINK_FLAGS "-s SIDE_MODULE=1"
+    OUTPUT_NAME "side_module"
+)
 
 pxr_cpp_bin(${PXR_PACKAGE}
     INCLUDE_DIRS
