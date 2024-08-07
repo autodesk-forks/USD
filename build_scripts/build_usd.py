@@ -1627,7 +1627,7 @@ def InstallGlslang(context, force, buildArgs):
                 cmakeOptions += [
                     '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                     '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
-                    '-DBUILD_SHARED_LIBS=ON',
+                    '-DBUILD_SHARED_LIBS=OFF',
                     '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
                     '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
                 ]
@@ -1696,7 +1696,7 @@ def InstallTint(context, force, buildArgs):
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
                     + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
-                '-DBUILD_SHARED_LIBS=ON'
+                '-DBUILD_SHARED_LIBS=OFF'
             ]
             cmakeOptions += buildArgs
             cmakeOptions += TINT_CMAKE_OPTIONS

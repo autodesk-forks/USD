@@ -1,29 +1,24 @@
 cmake_minimum_required(VERSION 3.12)
 
-option(LINK_AS_SIDE_MODULE "Link libraries as side modules" ON)
-
 set(PXR_PREFIX pxr/usdImaging)
 set(PXR_PACKAGE usdviewweb)
+set(PXR_SIDEMODULE side_module)
 
 set(RESOURCE_PARAMETERS "")
 function(add_resources target)
     add_dependencies(${PXR_PACKAGE} ${target})
     target_link_libraries(${PXR_PACKAGE} ${target})
+    add_dependencies(${PXR_SIDEMODULE} ${target})
+    target_link_libraries(${PXR_SIDEMODULE} ${target})
     set(LOCAL_VAR ${RESOURCE_PARAMETERS})
     get_property(RESOURCES TARGET ${target} PROPERTY EMSCRIPTEN_RESOURCES)
     list(APPEND LOCAL_VAR "${RESOURCES}")
     set(RESOURCE_PARAMETERS "${LOCAL_VAR}" PARENT_SCOPE)
-    if (LINK_AS_SIDE_MODULE)
-        set_target_properties(${target} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
-    endif()
 endfunction()
 
 # Define the side module
-add_library(side_module SHARED side_module.cpp)
-set_target_properties(side_module PROPERTIES
-    LINK_FLAGS "-s SIDE_MODULE=1"
-    OUTPUT_NAME "side_module"
-)
+add_executable(side_module side_module.cpp)
+set_target_properties(side_module PROPERTIES COMPILE_FLAGS "-s SIDE_MODULE=1")
 
 pxr_cpp_bin(${PXR_PACKAGE}
     INCLUDE_DIRS
@@ -91,6 +86,7 @@ if (EMSCRIPTEN)
     set(BUILD_FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.js
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm
+            ${CMAKE_CURRENT_BINARY_DIR}/${PXR_SIDEMODULE}.wasm
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.worker.js
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wasm-server.py

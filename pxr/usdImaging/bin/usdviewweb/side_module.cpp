@@ -21,11 +21,13 @@
 // KIND, either express or implied. See the Apache License for the specific
 // language governing permissions and limitations under the Apache License.
 //
-#include <pxr/imaging/hgiWebGPU/texture.h>
+
 #include <pxr/usd/usd/stage.h>
 #include <pxr/usdImaging/usdImagingGL/engine.h>
 #include <pxr/base/tf/diagnostic.h>
 #include <pxr/usd/sdf/path.h>
+
+PXR_NAMESPACE_OPEN_SCOPE
 
 extern "C" {
  void initGLEngine(const char* filePath, pxr::UsdImagingGLEngine** glEngine, pxr::UsdStageRefPtr* stage) {
@@ -50,3 +52,4 @@ extern "C" {
  }
  }
 }
+PXR_NAMESPACE_CLOSE_SCOPE
