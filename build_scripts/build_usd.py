@@ -2049,6 +2049,11 @@ def InstallUSD(context, force, buildArgs):
             else:
                 extraArgs.append('-DPXR_BUILD_OPENCOLORIO_PLUGIN=OFF')
 
+            if context.buildAVIF:
+                extraArgs.append('-DPXR_BUILD_AVIF_PLUGIN=ON')
+            else:
+                extraArgs.append('-DPXR_BUILD_AVIF_PLUGIN=OFF')
+
         else:
             extraArgs.append('-DPXR_BUILD_IMAGING=OFF')
 
@@ -2448,6 +2453,12 @@ subgroup.add_argument("--opencolorio", dest="build_ocio", action="store_true",
                       help="Build OpenColorIO plugin for USD")
 subgroup.add_argument("--no-opencolorio", dest="build_ocio", action="store_false",
                       help="Do not build OpenColorIO plugin for USD (default)")
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--avif", dest="build_avif", action="store_true",
+                      default=True,
+                      help="Build AVIF image files plugin for Hio (default)")
+subgroup.add_argument("--no-avif", dest="build_avif", action="store_false",
+                      help="Do not build AVIF image files plugin for Hio")
 
 group = parser.add_argument_group(title="Alembic Plugin Options")
 subgroup = group.add_mutually_exclusive_group()
@@ -2655,6 +2666,7 @@ class InstallContext:
         self.buildOIIO = args.build_oiio or (self.buildUsdImaging
                                              and self.buildTests and not self.targetWasm)
         self.buildOCIO = args.build_ocio
+        self.buildAVIF = self.buildImaging and args.build_avif
 
         # - Alembic Plugin
         self.buildAlembic = args.build_alembic
@@ -3012,6 +3024,8 @@ summaryMsg += """\
       OpenImageIO support:      {buildOIIO} 
       OpenColorIO support:      {buildOCIO} 
       PRMan support:            {buildPrman}
+      Embree support:           {buildEmbree}
+      AVIF support:             {buildAVIF}
     UsdImaging                  {buildUsdImaging}
       usdview:                  {buildUsdview}
     MaterialX support           {buildMaterialX}
@@ -3075,6 +3089,8 @@ summaryMsg = summaryMsg.format(
     buildOIIO=("On" if context.buildOIIO else "Off"),
     buildOCIO=("On" if context.buildOCIO else "Off"),
     buildPrman=("On" if context.buildPrman else "Off"),
+    buildEmbree=("On" if context.buildEmbree else "Off"),
+    buildAVIF=("On" if context.buildAVIF else "Off"),
     buildUsdImaging=("On" if context.buildUsdImaging else "Off"),
     buildUsdview=("On" if context.buildUsdview else "Off"),
     buildPython=("On" if context.buildPython else "Off"),
