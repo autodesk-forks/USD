@@ -278,7 +278,12 @@ HgiWebGPUGraphicsCmds::DrawIndexed(
     HgiWebGPUBuffer* ibo = static_cast<HgiWebGPUBuffer*>(indexBuffer.Get());
     uint32_t const baseIndex = indexBufferByteOffset / sizeof(uint32_t);
     _renderPassEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0, ibo->GetByteSizeOfResource());
-    _renderPassEncoder.DrawIndexed(indexCount, instanceCount, baseIndex, baseVertex, baseInstance);
+    // The baseInstance must be set to 0 for WebGPU as it is not passed into the shader. There is no matching builtin.
+    // Hydra computes the current instance index in the shader by subtracting the baseInstance from the instance index,
+    // resulting in range of 0 to instanceCount for accessing data in buffers.
+    // If baseInstance is passed here, the current instance index in the shader will be incorrect,
+    // as it will start from the baseInstance.
+    _renderPassEncoder.DrawIndexed(indexCount, instanceCount, baseIndex, baseVertex, 0);
 }
 
 void
