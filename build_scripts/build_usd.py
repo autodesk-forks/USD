@@ -59,13 +59,6 @@ EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
 TARGET_WASM='wasm'
 TARGET_WASM_NODE='node'
 
-# define sidemodule option
-sidemodule = True
-if sidemodule:
-    EMSCRIPTEN_CMAKE_CXX_FLAGS = EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1'
-else:
-    EMSCRIPTEN_CMAKE_CXX_FLAGS = EMSCRIPTEN_CMAKE_CXX_FLAGS
-
 def Print(msg):
     if verbosity > 0:
         print(msg)
@@ -1632,8 +1625,8 @@ def InstallGlslang(context, force, buildArgs):
             ]
             if context.targetWasm:
                 cmakeOptions += [
-                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
-                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                     '-DBUILD_SHARED_LIBS=OFF',
                     '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
                     '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
@@ -1701,8 +1694,8 @@ def InstallTint(context, force, buildArgs):
 
             cmakeOptions = [
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
-                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
-                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                 '-DBUILD_SHARED_LIBS=OFF'
             ]
             cmakeOptions += buildArgs
@@ -2081,9 +2074,6 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
             extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
-            
-            if sidemodule:
-                extraArgs.append('-DSIDE_MODULE=ON')
             # For some reason we have to manually specify path to boost
             extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
 

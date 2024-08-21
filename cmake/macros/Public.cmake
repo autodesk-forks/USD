@@ -388,7 +388,7 @@ function(pxr_library NAME)
         )
     endif()
     get_target_property(targetType ${NAME} TYPE)
-    if(${targetType} STREQUAL "INTERFACE_LIBRARY" AND PXR_ENABLE_JS_SUPPORT AND SIDE_MODULE)
+    if(${targetType} STREQUAL "INTERFACE_LIBRARY" AND PXR_ENABLE_JS_SUPPORT)
         target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
     endif()
     endfunction()
@@ -406,9 +406,7 @@ macro(pxr_plugin NAME)
         # Not ideal but dynamic linking is not supported yet in the usd build toolchain
         message(STATUS "Building ${NAME} plugin as static library for emscripten support")
         pxr_library(${NAME} TYPE "STATIC" ${ARGN})
-        if(SIDE_MODULE)
-            target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
-        endif()
+        target_link_options(${NAME} INTERFACE "-s SIDE_MODULE=1")
     else()
         pxr_library(${NAME} TYPE "PLUGIN" ${ARGN})
     endif()
@@ -517,7 +515,7 @@ function(pxr_build_test_shared_lib LIBRARY_NAME)
         SHARED
         ${bt_CPPFILES}
     )
-    if(PXR_ENABLE_JS_SUPPORT AND SIDE_MODULE)
+    if(PXR_ENABLE_JS_SUPPORT)
         set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
     endif()
     _pxr_target_link_libraries(${LIBRARY_NAME}
@@ -605,15 +603,9 @@ function(pxr_build_test TEST_NAME)
     )
 
     if (PXR_ENABLE_JS_BINDINGS_SUPPORT)
-        if (SIDE_MODULE)
-            target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
-            target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
-        else()
-            target_compile_options(${TEST_NAME} PRIVATE "SHELL:-lembind")
-            target_link_options(${TEST_NAME} PRIVATE "SHELL:-lembind")
-        endif()
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
     endif()
-
 
     # Turn PIC ON otherwise ArchGetAddressInfo() on Linux may yield
     # unexpected results.
@@ -638,15 +630,13 @@ function(pxr_build_test TEST_NAME)
 
     # XXX -- We shouldn't have to install to run tests.
     if(PXR_ENABLE_JS_SUPPORT)
-        if(SIDE_MODULE)
-            target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1")
-            target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1")
-            foreach(LIB ${bt_LIBRARIES})
-                if(TARGET ${LIB})
-                    set_target_properties(${LIB} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
-                endif()
-            endforeach()
-        endif()
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        target_link_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        foreach(LIB ${bt_LIBRARIES})
+            if(TARGET ${LIB})
+                set_target_properties(${LIB} PROPERTIES LINK_FLAGS "-s SIDE_MODULE=1")
+            endif()
+        endforeach()
         install(
             FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm
