@@ -7,7 +7,6 @@ if (NOT ${PXR_BUILD_GPU_SUPPORT} OR NOT ${PXR_ENABLE_WEBGPU_SUPPORT})
     return()
 endif()
 
-
 if(NOT EMSCRIPTEN)
     message(STATUS "DAWN WebGPU support is ON")
     set(PXR_ENABLE_PRECOMPILED_HEADERS OFF)

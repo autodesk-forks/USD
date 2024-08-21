@@ -58,6 +58,11 @@
 #include "camera.h"
 #include "window_state.h"
 
+#ifdef __EMSCRIPTEN__
+ #include <emscripten.h>
+ #include <dlfcn.h>
+ #endif // EMSCRIPTEN_SUPPORT
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEBUG_CODES(
@@ -285,10 +290,12 @@ struct VertexOutput {
         TF_RUNTIME_ERROR("Failed to find initGLEngine in side module");
         exit(-1);
         }
-
+        std::unique_ptr<pxr::UsdImagingGLEngine> glEngine;
+        pxr::UsdStageRefPtr stage;
+        pxr::UsdImagingGLEngine* glEnginePtr = glEngine.get();
         // Call side module function
-        initGLEngineFunc(filePath.c_str(), &glEngine, &stage);
-
+        initGLEngineFunc(filePath.c_str(), &glEnginePtr, &stage);
+        glEngine.reset(glEnginePtr);
         glfwSetErrorCallback(error_callback);
         if (!glfwInit())
             exit(EXIT_FAILURE);

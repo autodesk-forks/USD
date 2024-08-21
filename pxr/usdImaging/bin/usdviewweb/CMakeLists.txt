@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 set(PXR_PREFIX pxr/usdImaging)
 set(PXR_PACKAGE usdviewweb)
 set(PXR_SIDEMODULE side_module)

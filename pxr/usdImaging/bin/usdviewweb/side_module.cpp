@@ -30,26 +30,26 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 extern "C" {
- void initGLEngine(const char* filePath, pxr::UsdImagingGLEngine** glEngine, pxr::UsdStageRefPtr* stage) {
- *stage = pxr::UsdStage::Open(filePath);
+    void initGLEngine(const char* filePath, pxr::UsdImagingGLEngine** glEngine, pxr::UsdStageRefPtr* stage) {
+    *stage = pxr::UsdStage::Open(filePath);
 
- // Initialize usd imaging engine
- pxr::SdfPathVector excludedPaths;
- *glEngine = new pxr::UsdImagingGLEngine((*stage)->GetPseudoRoot().GetPath(), excludedPaths);
+    // Initialize usd imaging engine
+    pxr::SdfPathVector excludedPaths;
+    *glEngine = new pxr::UsdImagingGLEngine((*stage)->GetPseudoRoot().GetPath(), excludedPaths);
 
- pxr::TfToken renderer = pxr::TfToken("HdStormRendererPlugin");
- if (!(*glEngine)->SetRendererPlugin(renderer)) {
- TF_RUNTIME_ERROR("Couldn't set renderer plugin: %s", renderer.GetText());
- exit(-1);
- } else {
- TF_INFO(INFO).Msg("Renderer plugin: %s", renderer.GetText());
- }
- if (!(*glEngine)) {
- TF_RUNTIME_ERROR("Couldn't initialize UsdImagingGLEngine");
- exit(-1);
- } else {
- TF_INFO(INFO).Msg("UsdImagingGLEngine initialized successfully");
- }
+    pxr::TfToken renderer = pxr::TfToken("HdStormRendererPlugin");
+    if (!(*glEngine)->SetRendererPlugin(renderer)) {
+        TF_RUNTIME_ERROR("Couldn't set renderer plugin: %s", renderer.GetText());
+        exit(-1);
+    } else {
+        TF_INFO(INFO).Msg("Renderer plugin: %s", renderer.GetText());
+    }
+    if (!(*glEngine)) {
+        TF_RUNTIME_ERROR("Couldn't initialize UsdImagingGLEngine");
+        exit(-1);
+    } else {
+        TF_INFO(INFO).Msg("UsdImagingGLEngine initialized successfully");
+    }
  }
 }
 PXR_NAMESPACE_CLOSE_SCOPE
