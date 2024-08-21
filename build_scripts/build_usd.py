@@ -995,6 +995,7 @@ TBB_EMSCRIPTEN_URL = "https://github.com/sdunkel/wasmtbb/archive/refs/heads/mast
 
 def InstallTBB(context, force, buildArgs):
     if context.targetWasm:
+        buildArgs.append("CXXFLAGS=-fPIC")
         InstallTBB_Emscripten(context, force, buildArgs)
     elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
@@ -1129,6 +1130,15 @@ def InstallTBB_Emscripten(context, force, buildArgs):
         PatchFile("build/linux.emscripten.inc",
                   [("-DUSE_PTHREAD", "-DUSE_PTHREAD -pthread")],
                   multiLineMatches=True)
+        with open('build/big_iron.inc', 'r') as file:
+            lines = file.readlines()
+        # override CXXFLAGS += 
+        for i, line in enumerate(lines):
+            if line.strip().startswith('override CXXFLAGS +='):
+                lines[i] = 'override CXXFLAGS += -fPIC -D__TBB_DYNAMIC_LOAD_ENABLED=0 -D__TBB_SOURCE_DIRECTLY_INCLUDED=1\n'
+        with open('build/big_iron.inc', 'w') as file:
+            file.writelines(lines)
+            
         # By default no config for other platform is available, but the one for linux
         # seems to work fine
         if MacOS():
@@ -1138,10 +1148,10 @@ def InstallTBB_Emscripten(context, force, buildArgs):
 
         # Run the script from the "x64 Native Tools Command Prompt" of Visual Studio,
         # to get the correct compiler and arch for TBB Emscripten build on windows
-        Run('{emmake} make -j{procs} extra_inc=big_iron.inc tbb {buildArgs}'
-            .format(emmake="emmake.bat" if Windows() else "emmake",
-                    procs=context.numJobs,
-                    buildArgs=" ".join(buildArgs)))
+        Run('{emmake} make CXXFLAGS="-fPIC" -j{procs} extra_inc=big_iron.inc tbb {buildArgs}'.format(
+            emmake="emmake.bat" if Windows() else "emmake",
+            procs=context.numJobs,
+            buildArgs=" ".join(buildArgs)))
 
         # Install both release and debug builds. USD requires the debug
         # libraries when building in debug mode, and installing both
@@ -1615,8 +1625,8 @@ def InstallGlslang(context, force, buildArgs):
             ]
             if context.targetWasm:
                 cmakeOptions += [
-                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
-                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                     '-DBUILD_SHARED_LIBS=OFF',
                     '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
                     '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
@@ -1684,8 +1694,8 @@ def InstallTint(context, force, buildArgs):
 
             cmakeOptions = [
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
-                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
-                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                 '-DBUILD_SHARED_LIBS=OFF'
             ]
             cmakeOptions += buildArgs
@@ -2572,7 +2582,7 @@ class InstallContext:
         self.prmanLocation = (os.path.abspath(args.prman_location)
                                if args.prman_location else None)                               
         self.buildOIIO = args.build_oiio or (self.buildUsdImaging
-                                             and self.buildTests)
+                                             and self.buildTests and not self.targetWasm)
         self.buildOCIO = args.build_ocio
 
         # - Alembic Plugin
