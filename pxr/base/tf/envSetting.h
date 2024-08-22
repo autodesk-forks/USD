@@ -101,7 +101,6 @@
 #include "pxr/base/arch/hints.h"
 #include "pxr/base/tf/registryManager.h"
 
-#include <boost/variant/get.hpp>
 #include <atomic>
 #include <string>
 #include <variant>
