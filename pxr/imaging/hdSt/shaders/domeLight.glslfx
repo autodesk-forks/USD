@@ -49,7 +49,7 @@ vec3 SampleEnvMapLod(vec3 sampleVec, float sampleLod) {
                       acos(sampleVec.y) / PI);
     vec3 value = HgiTextureLod_inTexture(coord, sampleLod).rgb;
 
-    return mix(value, vec3(0.0, 0.0, 0.0), vec3(isnan(value)));
+    return max(value, vec3(0.0, 0.0, 0.0));
 }
 
 // compute world position from texture coords
