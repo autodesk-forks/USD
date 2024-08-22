@@ -20,10 +20,6 @@
 #include <unordered_set>
 #include <vector>
 
-#ifdef __EMSCRIPTEN__
-#include <boost/functional/hash.hpp>
-#endif // __EMSCRIPTEN__
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 class NdrNode;
@@ -114,15 +110,8 @@ public:
     NDR_API
     std::size_t GetHash() const
     {
-        #ifdef __EMSCRIPTEN__
-            size_t h = 0;
-            boost::hash_combine(h, _major);
-            boost::hash_combine(h, _minor);
-            return h;
-        #else
-            return (static_cast<std::size_t>(_major) << 32) +
-                    static_cast<std::size_t>(_minor);
-        #endif
+        return (static_cast<std::size_t>(_major) << 32) +
+                static_cast<std::size_t>(_minor);
     }
 
     /// Return true iff the version is valid.
