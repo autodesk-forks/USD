@@ -2749,6 +2749,10 @@ if context.targetWasm:
         context.buildMaterialX = False
         disabled.append('materialX')
 
+    if context.buildAVIF:
+        context.buildAVIF = False
+        disabled.append('HioAvif')
+
     if len(disabled) > 0:
         print("The following components were disabled because they are not compatible with target wasm: " + ", ".join(disabled))
 
