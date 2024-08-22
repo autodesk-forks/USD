@@ -1,25 +1,8 @@
 //
 // Copyright 2020 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hgiVulkan/commandBuffer.h"
 #include "pxr/imaging/hgiVulkan/device.h"
@@ -39,6 +22,7 @@ HgiVulkanCommandBuffer::HgiVulkanCommandBuffer(
     , _vkCommandBuffer(nullptr)
     , _vkFence(nullptr)
     , _vkSemaphore(nullptr)
+    , _isReset(true)
     , _isInFlight(false)
     , _isSubmitted(false)
     , _inflightId(0)
@@ -113,19 +97,27 @@ HgiVulkanCommandBuffer::~HgiVulkanCommandBuffer()
 void
 HgiVulkanCommandBuffer::BeginCommandBuffer(uint8_t inflightId)
 {
-    if (!_isInFlight) {
+    TF_VERIFY(_isReset);
+    TF_VERIFY(!_isInFlight);
+    TF_VERIFY(!_isSubmitted);
 
-        VkCommandBufferBeginInfo beginInfo =
-            {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-        beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBufferBeginInfo beginInfo =
+        {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        TF_VERIFY(
-            vkBeginCommandBuffer(_vkCommandBuffer, &beginInfo) == VK_SUCCESS
-        );
+    TF_VERIFY(
+        vkBeginCommandBuffer(_vkCommandBuffer, &beginInfo) == VK_SUCCESS
+    );
 
-        _inflightId = inflightId;
-        _isInFlight = true;
-    }
+    _inflightId = inflightId;
+    _isInFlight = true;
+    _isReset = false;
+}
+
+bool
+HgiVulkanCommandBuffer::IsReset() const
+{
+    return _isReset;
 }
 
 bool
@@ -137,28 +129,28 @@ HgiVulkanCommandBuffer::IsInFlight() const
 void
 HgiVulkanCommandBuffer::EndCommandBuffer()
 {
-    if (_isInFlight) {
-        TF_VERIFY(
-            vkEndCommandBuffer(_vkCommandBuffer) == VK_SUCCESS
-        );
+    TF_VERIFY(!_isReset);
+    TF_VERIFY(_isInFlight);
+    TF_VERIFY(!_isSubmitted);
 
-        _isSubmitted = true;
-    }
+    TF_VERIFY(
+        vkEndCommandBuffer(_vkCommandBuffer) == VK_SUCCESS
+    );
+
+    _isSubmitted = true;
 }
 
-bool
-HgiVulkanCommandBuffer::ResetIfConsumedByGPU(HgiSubmitWaitType wait)
+HgiVulkanCommandBuffer::InFlightUpdateResult
+HgiVulkanCommandBuffer::UpdateInFlightStatus(HgiSubmitWaitType wait)
 {
-    // Command buffer is already available (previously reset).
-    // We do not have to test the fence or reset the cmd buffer.
     if (!_isInFlight) {
-        return false;
+        return InFlightUpdateResultNotInFlight;
     }
 
     // The command buffer is still recording. We should not test its fence until
     // we have submitted the command buffer to the queue (vulkan requirement).
     if (!_isSubmitted) {
-        return false;
+        return InFlightUpdateResultStillInFlight;
     }
 
     VkDevice vkDevice = _device->GetVulkanDevice();
@@ -166,18 +158,37 @@ HgiVulkanCommandBuffer::ResetIfConsumedByGPU(HgiSubmitWaitType wait)
     // Check the fence to see if the GPU has consumed the command buffer.
     // We cannnot reuse a command buffer until the GPU is finished with it.
     if (vkGetFenceStatus(vkDevice, _vkFence) == VK_NOT_READY){
-        if (wait == HgiSubmitWaitTypeWaitUntilCompleted) {
-            static const uint64_t timeOut = 100000000000;
-            TF_VERIFY(vkWaitForFences(
-                vkDevice, 1, &_vkFence, VK_TRUE, timeOut) == VK_SUCCESS);
-        } else {
-            return false;
+        if (wait != HgiSubmitWaitTypeWaitUntilCompleted) {
+            return InFlightUpdateResultStillInFlight;
         }
+
+        static const uint64_t timeOut = 100000000000;
+        TF_VERIFY(vkWaitForFences(
+            vkDevice, 1, &_vkFence, VK_TRUE, timeOut) == VK_SUCCESS);
+    }
+
+    _isInFlight = false;
+    return InFlightUpdateResultFinishedFlight;
+}
+
+bool
+HgiVulkanCommandBuffer::ResetIfConsumedByGPU(HgiSubmitWaitType wait)
+{
+    // Command buffer is already available (previously reset).
+    // We do not have to test the fence or reset the cmd buffer.
+    if (_isReset) {
+        return false;
+    }
+
+    if (UpdateInFlightStatus(wait) == InFlightUpdateResultStillInFlight) {
+        return false;
     }
 
     // GPU is done with command buffer, execute the custom fns the client wants
     // to see executed when cmd buf is consumed.
     RunAndClearCompletedHandlers();
+
+    VkDevice vkDevice = _device->GetVulkanDevice();
 
     // GPU is done with command buffer, reset fence and command buffer.
     TF_VERIFY(
@@ -196,8 +207,8 @@ HgiVulkanCommandBuffer::ResetIfConsumedByGPU(HgiSubmitWaitType wait)
     );
 
     // Command buffer may now be reused for new recordings / resource creation.
-    _isInFlight = false;
     _isSubmitted = false;
+    _isReset = true;
     return true;
 }
 

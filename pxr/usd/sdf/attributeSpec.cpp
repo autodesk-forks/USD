@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 /// \file AttributeSpec.cpp
 
@@ -163,6 +146,63 @@ SdfAttributeSpec::ClearConnectionPaths()
 #define SDF_ACCESSOR_WRITE_PREDICATE(key_)   SDF_NO_PREDICATE
 
 // Attribute Value API
+
+SdfTimeSampleMap
+SdfAttributeSpec::GetTimeSampleMap() const
+{
+    return GetFieldAs<SdfTimeSampleMap>(SdfFieldKeys->TimeSamples);
+}
+
+std::set<double>
+SdfAttributeSpec::ListTimeSamples() const
+{
+    return GetLayer()->ListTimeSamplesForPath(GetPath());
+}
+
+size_t
+SdfAttributeSpec::GetNumTimeSamples() const
+{
+    return GetLayer()->GetNumTimeSamplesForPath(GetPath());
+}
+
+bool
+SdfAttributeSpec::GetBracketingTimeSamples(double time, double* tLower,
+                                          double* tUpper) const
+{
+    return GetLayer()->GetBracketingTimeSamplesForPath(GetPath(), time,
+                                                       tLower, tUpper);
+}
+
+bool
+SdfAttributeSpec::QueryTimeSample(double time, VtValue* value) const
+{
+    return GetLayer()->QueryTimeSample(GetPath(), time, value);
+}
+
+bool
+SdfAttributeSpec::QueryTimeSample(double time, SdfAbstractDataValue* value) const
+{
+    return GetLayer()->QueryTimeSample(GetPath(), time, value);
+}
+
+void
+SdfAttributeSpec::SetTimeSample(double time, const VtValue& value)
+{
+    GetLayer()->SetTimeSample(GetPath(), time, value);
+}
+
+void
+SdfAttributeSpec::SetTimeSample(double time,
+                               const SdfAbstractDataConstValue& value)
+{
+    GetLayer()->SetTimeSample(GetPath(), time, value);
+}
+
+void
+SdfAttributeSpec::EraseTimeSample(double time)
+{
+    GetLayer()->EraseTimeSample(GetPath(), time);
+}
 
 SDF_DEFINE_GET_SET_HAS_CLEAR(AllowedTokens, SdfFieldKeys->AllowedTokens, VtTokenArray)
 

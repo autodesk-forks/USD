@@ -17,6 +17,8 @@ pxr_library(gf
     PUBLIC_CLASSES
         bbox3d
         camera
+        color
+        colorSpace
         dualQuatd
         dualQuatf
         dualQuath
@@ -81,12 +83,16 @@ pxr_library(gf
         traits.h
         ${optionalHeaders}
 
+    CPPFILES
+        nc/nanocolor.c
+
     PRIVATE_CLASSES
         ostreamHelpers
 
     PRIVATE_HEADERS
         ilmbase_eLut.h
         ilmbase_toFloat.h
+        nc/nanocolor.h
 
     PYTHON_CPPFILES
         moduleDeps.cpp
@@ -176,7 +182,14 @@ pxr_build_test(testGfHardToReach
         gf
     CPPFILES
         testenv/testGfHardToReach.cpp
-) 
+)
+
+pxr_build_test(testGfColor
+    LIBRARIES
+        gf
+    CPPFILES
+        testenv/testGfColor.cpp
+)
 
 pxr_test_scripts(
     testenv/testGfBBox3d.py
@@ -206,6 +219,9 @@ pxr_test_scripts(
 pxr_register_test(testGfBBox3d
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfBBox3d"
+)
+pxr_register_test(testGfColor
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfColor"
 )
 pxr_register_test(testGfDecomposeRotation
     PYTHON

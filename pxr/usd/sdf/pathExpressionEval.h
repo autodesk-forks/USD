@@ -1,25 +1,8 @@
 //
 // Copyright 2023 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #ifndef PXR_USD_SDF_PATH_EXPRESSION_EVAL_H
 #define PXR_USD_SDF_PATH_EXPRESSION_EVAL_H
@@ -84,18 +67,10 @@ protected:
     class _PatternIncrSearchState {
         friend class _PatternImplBase;
     public:
-        void Pop(int newDepth) {
-            while (!_segmentMatchDepths.empty() &&
-                   _segmentMatchDepths.back() >= newDepth) {
-                _segmentMatchDepths.pop_back();
-            }
-            if (newDepth <= _constantDepth) {
-                _constantDepth = -1;
-            }
-        }
+        SDF_API void Pop(int newDepth);
     private:
         std::vector<int> _segmentMatchDepths;
-        int _constantDepth = -1; // 0 means constant at the _prefix level.
+        int _constantDepth = -1;
         bool _constantValue = false;
     };
 
@@ -151,7 +126,10 @@ protected:
 
         bool _stretchBegin;
         bool _stretchEnd;
-        bool _isProperty; // true if this pattern matches only properties.
+        enum : uint8_t {
+            // The kind of objects this pattern is capable of matching.
+            _MatchPrimOrProp, _MatchPrimOnly, _MatchPropOnly
+        } _matchObjType;
     };
 
 
@@ -293,16 +271,17 @@ public:
         Next(SdfPath const &objPath) {
             auto patternImplIter = _eval->_patternImpls.begin();
             auto stateIter = _incrSearchStates.begin();
-            int newDepth = objPath.GetPathElementCount();
-            const int popLevel = (newDepth <= _lastPathDepth) ? newDepth : 0;
+            const int newDepth = objPath.GetPathElementCount();
+            const bool pop = newDepth <= _lastPathDepth;
             auto patternStateNext = [&](bool skip) {
-                if (popLevel) {
-                    stateIter->Pop(popLevel);
+                if (pop) {
+                    stateIter->Pop(newDepth);
                 }
+                auto const &patternImpl = *patternImplIter++;
+                auto &state = *stateIter++;
                 return skip
-                    ? (++patternImplIter, SdfPredicateFunctionResult())
-                    : (*patternImplIter++).Next(objPath, *stateIter++,
-                                                _pathToObj);
+                    ? SdfPredicateFunctionResult {}
+                    : patternImpl.Next(objPath, state, _pathToObj);
             };
             _lastPathDepth = newDepth;
             return _eval->_EvalExpr(patternStateNext);

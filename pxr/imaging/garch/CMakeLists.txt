@@ -31,7 +31,7 @@ pxr_library(garch
         arch
         tf
         ${X11_LIBRARIES}
-        ${OPENGL_gl_LIBRARY}
+        OpenGL::GL
         ${GARCH_PLATFORM_LIBRARIES}
 
     INCLUDE_DIRS

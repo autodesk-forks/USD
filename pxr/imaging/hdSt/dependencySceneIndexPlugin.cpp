@@ -1,35 +1,22 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 
 #include "pxr/imaging/hdSt/dependencySceneIndexPlugin.h"
 
 #include "pxr/imaging/hd/containerDataSourceEditor.h"
 #include "pxr/imaging/hd/dependenciesSchema.h"
 #include "pxr/imaging/hd/filteringSceneIndex.h"
-#include "pxr/imaging/hd/mapContainerDataSource.h"
 #include "pxr/imaging/hd/lazyContainerDataSource.h"
+#include "pxr/imaging/hd/mapContainerDataSource.h"
+#include "pxr/imaging/hd/materialBindingsSchema.h"
+#include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/perfLog.h"
+#include "pxr/imaging/hd/primvarsSchema.h"
+
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneIndexPluginRegistry.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -41,6 +28,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     ((sceneIndexPluginName, "HdSt_DependencySceneIndexPlugin"))
+    (primvarsToMaterial)
+    (primvarsToMaterialDependencyToMaterialBindings)
+    (primvarsToMaterialBindings)
 );
 
 static const char * const _pluginDisplayName = "GL";
@@ -132,6 +122,90 @@ _ComputeVolumeFieldBindingDependencies(
         _ComputeVolumeFieldBindingDependency(primPath));
 }
 
+/// Given a material prim path data source, returns a dependency of primvars
+/// on material of that given prim.
+HdContainerDataSourceHandle
+_ComputePrimvarsToMaterialDependency(const SdfPath &materialPrimPath)
+{
+    HdDependencySchema::Builder builder;
+
+    builder.SetDependedOnPrimPath(
+        HdRetainedTypedSampledDataSource<SdfPath>::New(
+            materialPrimPath));
+
+    static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdMaterialSchema::GetDefaultLocator());
+    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
+
+    static HdLocatorDataSourceHandle affectedLocatorDataSource =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdPrimvarsSchema::GetDefaultLocator());
+    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
+
+    return
+        HdRetainedContainerDataSource::New(
+            _tokens->primvarsToMaterial,
+            builder.Build());
+}
+
+/// Returns a dependency of the above (primvars -> material) dependency 
+/// on material bindings.
+HdContainerDataSourceHandle
+_ComputeDependencyToMaterialBindingsDependency()
+{
+    HdDependencySchema::Builder builder;
+
+    static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdMaterialBindingsSchema::GetDefaultLocator());
+    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
+
+    static HdLocatorDataSourceHandle affectedLocatorDataSource =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdDependenciesSchema::GetDefaultLocator().Append(
+                _tokens->primvarsToMaterial));
+    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
+
+    return
+        HdRetainedContainerDataSource::New(
+            _tokens->primvarsToMaterialDependencyToMaterialBindings,
+            builder.Build());
+}
+
+/// Returns a dependency of primvars on material bindings.
+HdContainerDataSourceHandle
+_ComputePrimvarsToMaterialBindingsDependency()
+{
+    HdDependencySchema::Builder builder;
+
+    static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdMaterialBindingsSchema::GetDefaultLocator());
+    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
+
+    static HdLocatorDataSourceHandle affectedLocatorDataSource =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdPrimvarsSchema::GetDefaultLocator());
+    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
+
+    return
+        HdRetainedContainerDataSource::New(
+            _tokens->primvarsToMaterialBindings,
+            builder.Build());
+}
+
+HdContainerDataSourceHandle
+_ComputePrimvarsToMaterialDependencies(
+    const SdfPath &materialPrimPath,
+    const HdContainerDataSourceHandle &primSource)
+{
+    return HdOverlayContainerDataSource::New(
+        _ComputePrimvarsToMaterialDependency(materialPrimPath),
+        _ComputeDependencyToMaterialBindingsDependency(),
+        _ComputePrimvarsToMaterialBindingsDependency());
+}
+
 TF_DECLARE_REF_PTRS(_SceneIndex);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -153,18 +227,33 @@ public:
     HdSceneIndexPrim GetPrim(const SdfPath &primPath) const override
     {
         const HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
+
+        HdContainerDataSourceEditor editedDs =
+            HdContainerDataSourceEditor(prim.dataSource);
+
         if (prim.primType == HdPrimTypeTokens->volume) {
-            return
-                { prim.primType,
-                  HdContainerDataSourceEditor(prim.dataSource)
-                      .Overlay(
-                          HdDependenciesSchema::GetDefaultLocator(),
-                          HdLazyContainerDataSource::New(
-                              std::bind(_ComputeVolumeFieldBindingDependencies,
-                                        primPath, prim.dataSource)))
-                      .Finish() };
+            editedDs.Overlay(
+                HdDependenciesSchema::GetDefaultLocator(),
+                HdLazyContainerDataSource::New(
+                    std::bind(_ComputeVolumeFieldBindingDependencies,
+                              primPath, prim.dataSource)));
         }
-        return prim;
+    
+        // If prim has material binding, overlay dependencies from material to 
+        // prim's primvars.
+        if (HdPathDataSourceHandle materialPrimPathDs = _GetMaterialBindingPath(
+                prim.dataSource)) {
+            const SdfPath materialPrimPath =
+                materialPrimPathDs->GetTypedValue(0.f);
+            
+            editedDs.Overlay(
+                HdDependenciesSchema::GetDefaultLocator(),
+                HdLazyContainerDataSource::New(
+                    std::bind(_ComputePrimvarsToMaterialDependencies,
+                              materialPrimPath, prim.dataSource)));
+        }
+
+        return  { prim.primType, editedDs.Finish() };
     }
 
     SdfPathVector GetChildPrimPaths(const SdfPath &primPath) const override
@@ -213,6 +302,16 @@ protected:
         }
 
         _SendPrimsDirtied(entries);
+    }
+
+    HdPathDataSourceHandle
+    _GetMaterialBindingPath(const HdContainerDataSourceHandle &ds) const
+    {
+        HdMaterialBindingsSchema materialBindings =
+            HdMaterialBindingsSchema::GetFromParent(ds);
+        HdMaterialBindingSchema materialBinding =
+            materialBindings.GetMaterialBinding();
+        return materialBinding.GetPath();
     }
 };
 

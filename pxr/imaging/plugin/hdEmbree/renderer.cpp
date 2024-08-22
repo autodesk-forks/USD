@@ -1,25 +1,8 @@
 //
 // Copyright 2018 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/plugin/hdEmbree/renderer.h"
 
@@ -561,7 +544,7 @@ HdEmbreeRenderer::_RenderTiles(HdRenderThread *renderThread,
                     2 * ((x + jitter[0] - minX) / w) - 1,
                     2 * ((y + jitter[1] - minY) / h) - 1,
                     -1);
-                const GfVec3f nearPlaneTrace = _inverseProjMatrix.Transform(ndc);
+                const GfVec3f nearPlaneTrace(_inverseProjMatrix.Transform(ndc));
 
                 GfVec3f origin;
                 GfVec3f dir;
@@ -580,8 +563,9 @@ HdEmbreeRenderer::_RenderTiles(HdRenderThread *renderThread,
                     dir = nearPlaneTrace;
                 }
                 // Transform camera rays to world space.
-                origin = _inverseViewMatrix.Transform(origin);
-                dir = _inverseViewMatrix.TransformDir(dir).GetNormalized();
+                origin = GfVec3f(_inverseViewMatrix.Transform(origin));
+                dir = GfVec3f(
+                    _inverseViewMatrix.TransformDir(dir)).GetNormalized();
 
                 // Trace the ray.
                 _TraceRay(x, y, origin, dir, random);
@@ -770,8 +754,8 @@ HdEmbreeRenderer::_ComputeDepth(RTCRayHit const& rayHit,
             rayHit.ray.org_y + rayHit.ray.tfar * rayHit.ray.dir_y,
             rayHit.ray.org_z + rayHit.ray.tfar * rayHit.ray.dir_z);
 
-        hitPos = _viewMatrix.Transform(hitPos);
-        hitPos = _projMatrix.Transform(hitPos);
+        hitPos = GfVec3f(_viewMatrix.Transform(hitPos));
+        hitPos = GfVec3f(_projMatrix.Transform(hitPos));
 
         // For the depth range transform, we assume [0,1].
         *depth = (hitPos[2] + 1.0f) / 2.0f;
@@ -808,7 +792,7 @@ HdEmbreeRenderer::_ComputeNormal(RTCRayHit const& rayHit,
 
     n = instanceContext->objectToWorldMatrix.TransformDir(n);
     if (eye) {
-        n = _viewMatrix.TransformDir(n);
+        n = GfVec3f(_viewMatrix.TransformDir(n));
     }
     n.Normalize();
 

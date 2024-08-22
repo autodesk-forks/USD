@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/stage.h"
@@ -92,6 +75,7 @@
 #include "pxr/base/tf/span.h"
 #include "pxr/base/tf/stl.h"
 #include "pxr/base/tf/stringUtils.h"
+#include "pxr/base/ts/spline.h"
 #include "pxr/base/work/dispatcher.h"
 #include "pxr/base/work/loops.h"
 #include "pxr/base/work/utils.h"
@@ -343,20 +327,29 @@ _MapPathExpressionToPrim(
     
     auto mapPattern =
         [&stack, &map, &unmappedPatterns](PathPattern const &pattern) {
-        SdfPath mapped = map(pattern.GetPrefix());
-        // If the prefix path is outside the domain, push the Nothing()
-        // subexpression.
-        if (mapped.IsEmpty()) {
-            if (unmappedPatterns) {
-                unmappedPatterns->push_back(pattern);
-            }
-            stack.push_back(SdfPathExpression::Nothing());
+        // If the pattern starts with '//' we persist it unchanged, as we deem
+        // the intent to be "search everything" regardless of context.  This is
+        // as opposed to any kind of non-speculative prefix, which refers to a
+        // specific prim or property in the originating context.
+        if (pattern.HasLeadingStretch()) {
+            stack.push_back(SdfPathExpression::MakeAtom(pattern));
         }
-        // Otherwise push the mapped pattern.
         else {
-            PathPattern mappedPattern(pattern);
-            mappedPattern.SetPrefix(mapped);
-            stack.push_back(PathExpr::MakeAtom(mappedPattern));
+            SdfPath mapped = map(pattern.GetPrefix());
+            // If the prefix path is outside the domain, push the Nothing()
+            // subexpression.
+            if (mapped.IsEmpty()) {
+                if (unmappedPatterns) {
+                    unmappedPatterns->push_back(pattern);
+                }
+                stack.push_back(SdfPathExpression::Nothing());
+            }
+            // Otherwise push the mapped pattern.
+            else {
+                PathPattern mappedPattern(pattern);
+                mappedPattern.SetPrefix(mapped);
+                stack.push_back(PathExpr::MakeAtom(mappedPattern));
+            }
         }
     };
 
@@ -1826,6 +1819,94 @@ _SetMappedValueForEditTarget(UsdObject const &obj,
     return setValueImpl(in);
 }
 
+class Usd_TypeQueryAccess
+{
+public:
+    static TfType GetAttributeValueType(
+        const UsdAttribute &attr)
+    {
+        return attr.GetStage()->_GetAttributeValueType(attr);
+    }
+};
+
+// Set handler for splines.  Verifies that value types match, then applies layer
+// offsets to knot times, tangent widths, and (for timecode-valued attributes)
+// values.  Of these two jobs, type validation is unusual for a SetMappedValue
+// handler, but this is a convenient place for it.
+//
+template <typename Fn>
+static bool
+_SetMappedValueForEditTarget(UsdObject const &obj,
+                             const TsSpline &spline,
+                             const UsdEditTarget &editTarget,
+                             const Fn &setValueImpl)
+{
+    if (!obj.Is<UsdAttribute>()) {
+        TF_CODING_ERROR("Splines can only be set in attributes");
+        return false;
+    }
+
+    static const TfType doubleType = TfType::Find<double>();
+    static const TfType timecodeType = TfType::Find<SdfTimeCode>();
+
+    // Find the attribute's value type.
+    const UsdAttribute attr = obj.As<UsdAttribute>();
+    const TfType attrType = Usd_TypeQueryAccess::GetAttributeValueType(attr);
+    if (!attrType) {
+        return false;
+    }
+    const bool attrIsTimeValued = (attrType == timecodeType);
+
+    // Verify splines are supported for this value type.
+    if (!TsSpline::IsSupportedValueType(attrType)
+            && attrType != timecodeType) {
+        TF_CODING_ERROR("Can't set spline on <%s>: splines are only "
+                        "supported on scalar floating-point attributes",
+                        attr.GetPath().GetText());
+        return false;
+    }
+
+    // Verify a spline of the correct value type has been provided.
+    const TfType expectedSplineValueType =
+        (attrIsTimeValued ? doubleType : attrType);
+    if (spline.GetValueType() != expectedSplineValueType) {
+        TF_CODING_ERROR("Can't set spline of type '%s' on <%s>, "
+                        "which requires splines of type '%s'",
+                        spline.GetValueType().GetTypeName().c_str(),
+                        attr.GetPath().GetText(),
+                        expectedSplineValueType.GetTypeName().c_str());
+        return false;
+    }
+
+    // Verify we don't have a mismatch in time-valued-ness.
+    if (attrIsTimeValued && !spline.IsTimeValued()) {
+        TF_CODING_ERROR("Can't set non-time-valued spline on <%s>, "
+                        "which is time-valued",
+                        attr.GetPath().GetText());
+        return false;
+    }
+    if (!attrIsTimeValued && spline.IsTimeValued()) {
+        TF_CODING_ERROR("Can't non-time-valued spline on <%s>, "
+                        "which is not time-valued",
+                        attr.GetPath().GetText());
+        return false;
+    }
+
+    // Make a copy of the spline to modify.
+    TsSpline mappedSpline = spline;
+
+    // Apply layer offset.
+    const SdfLayerOffset &layerOffset =
+        editTarget.GetMapFunction().GetTimeOffset();
+    if (!layerOffset.IsIdentity()) {
+        Usd_ApplyLayerOffsetToValue(&mappedSpline, layerOffset.GetInverse());
+    }
+
+    // Pass to setter.
+    SdfAbstractDataConstTypedValue<TsSpline> splineValue(&mappedSpline);
+    return setValueImpl(splineValue);
+}
+
 template <class T>
 bool UsdStage::_SetEditTargetMappedMetadata(
     const UsdObject &obj, const TfToken& fieldName,
@@ -2092,6 +2173,7 @@ _IsPrivateFieldKey(const TfToken& fieldKey)
         // Value keys.
         ignoredKeys.insert(SdfFieldKeys->Default);
         ignoredKeys.insert(SdfFieldKeys->TimeSamples);
+        ignoredKeys.insert(SdfFieldKeys->Spline);
     });
 
     // First look-up the field in the exclude/ignore table.
@@ -2118,16 +2200,20 @@ UsdStage::GetPseudoRoot() const
 UsdPrim
 UsdStage::GetDefaultPrim() const
 {
-    TfToken name = GetRootLayer()->GetDefaultPrim();
-    return SdfPath::IsValidIdentifier(name)
-        ? GetPrimAtPath(SdfPath::AbsoluteRootPath().AppendChild(name))
-        : UsdPrim();
+    SdfPath path = GetRootLayer()->GetDefaultPrimAsPath();
+    return path.IsEmpty() 
+        ? UsdPrim()
+        : GetPrimAtPath(path);
 }
 
 void
 UsdStage::SetDefaultPrim(const UsdPrim &prim)
 {
-    GetRootLayer()->SetDefaultPrim(prim.GetName());
+    if (prim){
+        prim.GetParent() == GetPseudoRoot()
+            ? GetRootLayer()->SetDefaultPrim(prim.GetName())
+            : GetRootLayer()->SetDefaultPrim(prim.GetPath().GetAsToken());
+    }
 }
 
 void
@@ -3878,6 +3964,27 @@ UsdStage::GetPathResolverContext() const
         return empty;
     }
     return _GetPcpCache()->GetLayerStackIdentifier().pathResolverContext;
+}
+
+PcpErrorVector 
+UsdStage::GetCompositionErrors() const
+{
+    PcpErrorVector errors;
+
+    auto _ExtractErrorsFromPrimIndices = [&errors](
+        const PcpPrimIndex &primIndex) {
+            const PcpErrorVector &localErrors = primIndex.GetLocalErrors();
+            errors.insert(errors.end(), localErrors.begin(), localErrors.end());
+    };
+    _GetPcpCache()->ForEachPrimIndex(_ExtractErrorsFromPrimIndices);
+
+    auto _ExtractErrorsFromPcpLayerStack = [&errors](
+        const PcpLayerStackPtr layerStackPtr) {
+            const PcpErrorVector &localErrors = layerStackPtr->GetLocalErrors();
+            errors.insert(errors.end(), localErrors.begin(), localErrors.end());
+    };
+    _GetPcpCache()->ForEachLayerStack(_ExtractErrorsFromPcpLayerStack);
+    return errors;
 }
 
 SdfLayerHandleVector
@@ -6345,6 +6452,8 @@ protected:
             // types.
             _TryApplyLayerOffsetToValue<SdfTimeSampleMap>(
                 this->_value, layerOffsetAccess) ||
+            _TryApplyLayerOffsetToValue<TsSpline>(
+                this->_value, layerOffsetAccess) ||
             _TryResolveAssetPaths(
                 this->_value, context,
                 { &stage, layer, specPath, node },
@@ -6524,6 +6633,18 @@ TypeSpecificValueComposer<SdfTimeSampleMap>::_ResolveValue(
     _UncheckedApplyLayerOffsetToValue<SdfTimeSampleMap>(_value, offset);
 }
 
+template <>
+void 
+TypeSpecificValueComposer<TsSpline>::_ResolveValue(
+    const UsdStage &stage,
+    const PcpNodeRef &node,
+    const SdfLayerRefPtr &layer,
+    const SdfPath &specPath)
+{
+    SdfLayerOffset offset = _GetLayerToStageOffset(node, layer);
+    _UncheckedApplyLayerOffsetToValue<TsSpline>(_value, offset);
+}
+
 // The TypeSpecificValueComposer for SdfPathExpression has additional
 // specialization for consuming values as it merges in weaker values unlike most
 // types that only consume the strongest value.
@@ -6684,6 +6805,34 @@ protected:
 
 }
 
+TfType
+UsdStage::_GetAttributeValueType(
+    const UsdAttribute &attr) const
+{
+    // Obtain typeName.
+    TfToken typeName;
+    SdfAbstractDataTypedValue<TfToken> abstrToken(&typeName);
+    TypeSpecificValueComposer<TfToken> composer(&abstrToken, attr);
+    _GetMetadataImpl(attr, SdfFieldKeys->TypeName, TfToken(),
+                     /*useFallbacks=*/true, &composer);
+
+    if (typeName.IsEmpty()) {
+        TF_RUNTIME_ERROR("Empty typeName for <%s>",
+                         attr.GetPath().GetText());
+        return TfType();
+    }
+
+    // Emit an error if this typeName is not known to our schema.
+    const TfType valType =
+        SdfSchema::GetInstance().FindType(typeName).GetType();
+    if (valType.IsUnknown()) {
+        TF_RUNTIME_ERROR("Unknown typename for <%s>: '%s'",
+                         typeName.GetText(), attr.GetPath().GetText());
+    }
+
+    return valType;
+}
+
 template <class T>
 bool
 UsdStage::_SetValueImpl(
@@ -6691,30 +6840,16 @@ UsdStage::_SetValueImpl(
 {
     // if we are setting a value block, we don't want type checking
     if (!Usd_ValueContainsBlock(&newValue)) {
-        // Do a type check.  Obtain typeName.
-        TfToken typeName;
-        SdfAbstractDataTypedValue<TfToken> abstrToken(&typeName);
-        TypeSpecificValueComposer<TfToken> composer(&abstrToken, attr);
-        _GetMetadataImpl(attr, SdfFieldKeys->TypeName, TfToken(), 
-                         /*useFallbacks=*/true, &composer);
-
-        if (typeName.IsEmpty()) {
-                TF_RUNTIME_ERROR("Empty typeName for <%s>", 
-                                 attr.GetPath().GetText());
-            return false;
-        }
-        // Ensure this typeName is known to our schema.
-        TfType valType = SdfSchema::GetInstance().FindType(typeName).GetType();
-        if (valType.IsUnknown()) {
-            TF_RUNTIME_ERROR("Unknown typename for <%s>: '%s'",
-                             typeName.GetText(), attr.GetPath().GetText());
+        // Find the attribute's value type.
+        const TfType valType = _GetAttributeValueType(attr);
+        if (!valType) {
             return false;
         }
         static const TfType opaqueType = TfType::Find<SdfOpaqueValue>();
         if (valType == opaqueType) {
-            TF_CODING_ERROR("Can't set value on <%s>: %s-typed attributes "
+            TF_CODING_ERROR("Can't set value on <%s>: opaque-typed attributes "
                             "cannot have an authored default value",
-                            attr.GetPath().GetText(), typeName.GetText());
+                            attr.GetPath().GetText());
             return false;
         }
         // Check that the passed value is the expected type.
@@ -9501,7 +9636,7 @@ double
 UsdStage::GetEndTimeCode() const
 {
     // Look for 'endTimeCode' first. If it is not available, then look for 
-    // the deprecated field 'startFrame'.
+    // the deprecated field 'endFrame'.
     const SdfLayerConstHandle sessionLayer = GetSessionLayer();
     if (sessionLayer) {
         if (sessionLayer->HasEndTimeCode())
@@ -9770,6 +9905,7 @@ INSTANTIATE_GET_TYPE_RESOLVED_AND_SET_MAPPED_METADATA(
 // SdfTimeSampleMap because we provide a specialization instead.
 INSTANTIATE_SET_MAPPED_METADATA(SdfTimeSampleMap);
 INSTANTIATE_GET_TYPE_RESOLVED_AND_SET_MAPPED_METADATA(VtDictionary);
+INSTANTIATE_GET_TYPE_RESOLVED_AND_SET_MAPPED_METADATA(TsSpline);
 
 #undef INSTANTIATE_GET_TYPE_RESOLVED_AND_SET_MAPPED_METADATA
 #undef INSTANTIATE_GET_TYPE_RESOLVED_METADATA
