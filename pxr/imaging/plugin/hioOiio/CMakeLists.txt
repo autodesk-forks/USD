@@ -21,7 +21,7 @@ pxr_plugin(hioOiio
         gf
         hio
         tf
-        OpenImageIO::OpenImageIO
+        ${OIIO_LIBRARIES}
         ${__OIIO_IMATH_LIBS}
 
     CPPFILES

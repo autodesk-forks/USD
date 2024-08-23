@@ -79,9 +79,9 @@ Test_TfDl()
     // Make sure that this .so does indeed exist first
     printf("Checking test shared lib: %s\n", dlname.c_str());
 
+    std::string errorStr;
     #ifdef __EMSCRIPTEN__
     // Check that we can open the existing .wasm library.
-    std::string errorStr;
     handle = dlopen(dlname.c_str(), RTLD_LAZY | RTLD_LOCAL);
     if (!handle) {
         char* errorCStr = dlerror();
