@@ -11,6 +11,10 @@ pxr_library(usdShade
         sdr
         usd
         usdGeom
+        ${TBB_tbb_LIBRARY}
+    
+    INCLUDE_DIRS
+        ${TBB_INCLUDE_DIRS}
 
     PUBLIC_CLASSES
         connectableAPI
@@ -26,6 +30,7 @@ pxr_library(usdShade
         shaderDefUtils
         nodeGraph
         tokens
+        validatorTokens
         udimUtils
         utils
 
@@ -33,10 +38,14 @@ pxr_library(usdShade
         api.h
         types.h
 
+
     JS_CPPFILES
         wrapShaderJs.cpp
         wrapInputJs.cpp
         wrapOutputJs.cpp
+
+    CPPFILES
+        validators.cpp
 
     PYTHON_CPPFILES
         moduleDeps.cpp
@@ -78,6 +87,16 @@ pxr_build_test(testUsdShadeHasConnectableAPI
         usdGeom
     CPPFILES
         testenv/testUsdShadeHasConnectableAPI.cpp
+)
+
+pxr_build_test(testUsdShadeValidators
+    LIBRARIES
+        sdr
+        tf
+        usd
+        usdShade
+    CPPFILES
+        testenv/testUsdShadeValidators.cpp
 )
 
 pxr_test_scripts(
@@ -154,6 +173,11 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdShadeUdimUtils
     DEST testUsdShadeUdimUtils
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdShadeValidators
+    DEST testUsdShadeValidators
 )
 
 pxr_register_test(testUsdShadeBinding
@@ -265,3 +289,9 @@ pxr_register_test(testUsdShadeUdimUtils
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeUdimUtils"
     EXPECTED_RETURN_CODE 0
 )
+
+pxr_register_test(testUsdShadeValidators
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeValidators"
+    EXPECTED_RETURN_CODE 0
+)
+

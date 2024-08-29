@@ -2,25 +2,8 @@
 #
 # Copyright 2020 Pixar
 #
-# Licensed under the Apache License, Version 2.0 (the "Apache License")
-# with the following modification; you may not use this file except in
-# compliance with the Apache License and the following modification to it:
-# Section 6. Trademarks. is deleted and replaced with:
-#
-# 6. Trademarks. This License does not grant permission to use the trade
-#    names, trademarks, service marks, or product names of the Licensor
-#    and its affiliates, except as required to comply with Section 4(c) of
-#    the License and to reproduce the content of the NOTICE file.
-#
-# You may obtain a copy of the Apache License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the Apache License with the above modification is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied. See the Apache License for the specific
-# language governing permissions and limitations under the Apache License.
+# Licensed under the terms set forth in the LICENSE.txt file available at
+# https://openusd.org/license.
 
 # pylint: disable=range-builtin-not-iterating
 
@@ -30,7 +13,7 @@ import sys, unittest
 class TestSdfAttribute(unittest.TestCase):
 
     def test_Creation(self):
-        
+
         # Test SdPropertySpec abstractness
         with self.assertRaises(RuntimeError):
             nullProp = Sdf.PropertySpec()
@@ -48,7 +31,7 @@ class TestSdfAttribute(unittest.TestCase):
         self.assertEqual(prim.properties[0], attr)
         self.assertEqual(prim.properties[ attr.name ], attr)
         self.assertEqual(prim.properties[0].custom, False)
-        
+
         # Test SdfJustCreatePrimAttributeInLayer
         self.assertTrue(Sdf.JustCreatePrimAttributeInLayer(
             layer=layer, attrPath='/just/an.attributeSpec',
@@ -87,7 +70,7 @@ class TestSdfAttribute(unittest.TestCase):
             dupe = Sdf.AttributeSpec(
                 attr.owner, attr.name, Sdf.ValueTypeNames.Int)
             self.assertEqual(len(prim.properties), 1)
-            
+
         # create a duplicate attribute via renaming: error expected
         dupe = Sdf.AttributeSpec(attr.owner, 'dupe', Sdf.ValueTypeNames.Int)
         self.assertTrue(dupe)
@@ -385,7 +368,7 @@ def Sphere "Foo"
         attr.connectionPathList.addedItems[:] = [testPath1, testPath2]
         attr.connectionPathList.deletedItems[:] = [testPath3, testPath4]
         attr.connectionPathList.orderedItems[:] = [testPath2, testPath1]
-        
+
         attr.connectionPathList.ReplaceItemEdits(testPath2, testPath_shlep)
         attr.connectionPathList.ReplaceItemEdits(testPath3, testPath_shlep2)
         self.assertEqual(
@@ -406,18 +389,18 @@ def Sphere "Foo"
         attr.connectionPathList.explicitItems[:] = [testPath1, testPath2]
         attr.connectionPathList.RemoveItemEdits( testPath2 )
         self.assertEqual(attr.connectionPathList.explicitItems, [testPath1])
-        
+
         attr.connectionPathList.ClearEdits()
 
         attr.connectionPathList.addedItems[:] = [testPath1, testPath2]
         attr.connectionPathList.deletedItems[:] = [testPath1, testPath2]
         attr.connectionPathList.orderedItems[:] = [testPath1, testPath2]
-        
+
         attr.connectionPathList.RemoveItemEdits( testPath1 )
         self.assertEqual(attr.connectionPathList.addedItems, [testPath2])
         self.assertEqual(attr.connectionPathList.deletedItems, [testPath2])
         self.assertEqual(attr.connectionPathList.orderedItems, [testPath2])
-        
+
         attr.connectionPathList.ClearEdits()
 
     def test_Path(self):
@@ -443,7 +426,7 @@ def Sphere "Foo"
     def test_Inertness(self):
         # Test attribute-specific 'IsInert()' and 'hasOnlyRequiredFields'
         # behavior.
-        # 
+        #
         # Having any connections render the spec non-inert and having more than
         # only required fields. This is important due to the 'remove if inert'
         # cleanup step that automatically runs after any call to ClearInfo.
@@ -457,14 +440,14 @@ def Sphere "Foo"
         attr.connectionPathList.explicitItems.append('/connection.path')
         self.assertFalse(attr.IsInert())
         self.assertFalse(attr.hasOnlyRequiredFields)
-        
+
         attr.connectionPathList.ClearEdits()
         self.assertEqual(len(attr.connectionPathList.explicitItems), 0)
         self.assertFalse(attr.IsInert())
         self.assertTrue(attr.hasOnlyRequiredFields)
 
     def test_TimeSamples(self):
-        # Test querying time samples on an attribute
+        # Test interaction with time samples on an attribute
         timeSamplesLayer = Sdf.Layer.CreateAnonymous()
         timeSamplesLayer.ImportFromString(
 '''#sdf 1.4.32
@@ -495,6 +478,16 @@ def Scope "Scope"
                          {1.23: 5, 3.23: 10, 6: 5})
         self.assertEqual(prim.attributes['desc'].GetInfo('timeSamples'),
                          {1.23: 'foo', 3.23: 'bar', 6: 'baz'})
+
+        prim.attributes['radius'].SetTimeSample(4.0, 2.0)
+        self.assertEqual(prim.attributes['radius'].QueryTimeSample(4.0), 2.0)
+
+        prim.attributes['desc'].SetTimeSample(10, 'boom')
+        self.assertEqual(prim.attributes['desc'].GetNumTimeSamples(), 4)
+        self.assertEqual(prim.attributes['desc'].ListTimeSamples(), [1.23, 3.23, 6, 10])
+        prim.attributes['desc'].EraseTimeSample(10)
+        self.assertEqual(prim.attributes['desc'].GetNumTimeSamples(), 3)
+        self.assertEqual(prim.attributes['desc'].GetBracketingTimeSamples(2.0), (True, 1.23, 3.23))
 
     def test_OpaqueNoAuthoredDefault(self):
         """

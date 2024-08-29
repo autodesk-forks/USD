@@ -2,25 +2,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 #include "pxr/pxr.h"
@@ -125,9 +108,11 @@ UTF8UDB     {UTF8UD}|{BAR}
        can make use of it. */
 "add"                 { (*yylval_param) = std::string(yytext, yyleng); return TOK_ADD; }
 "append"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_APPEND; }
+"bezier"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_BEZIER; }
 "class"               { (*yylval_param) = std::string(yytext, yyleng); return TOK_CLASS; }
 "config"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_CONFIG; }
 "connect"             { (*yylval_param) = std::string(yytext, yyleng); return TOK_CONNECT; }
+"curve"               { (*yylval_param) = std::string(yytext, yyleng); return TOK_CURVE; }
 "custom"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_CUSTOM; }
 "customData"          { (*yylval_param) = std::string(yytext, yyleng); return TOK_CUSTOMDATA; }
 "default"             { (*yylval_param) = std::string(yytext, yyleng); return TOK_DEFAULT; }
@@ -136,14 +121,22 @@ UTF8UDB     {UTF8UD}|{BAR}
 "dictionary"          { (*yylval_param) = std::string(yytext, yyleng); return TOK_DICTIONARY; }
 "displayUnit"         { (*yylval_param) = std::string(yytext, yyleng); return TOK_DISPLAYUNIT; }
 "doc"                 { (*yylval_param) = std::string(yytext, yyleng); return TOK_DOC; }
+"held"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_HELD; }
+"hermite"             { (*yylval_param) = std::string(yytext, yyleng); return TOK_HERMITE; }
 "inherits"            { (*yylval_param) = std::string(yytext, yyleng); return TOK_INHERITS; }
 "kind"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_KIND; }
+"linear"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_LINEAR; }
+"loop"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_LOOP; }
 "nameChildren"        { (*yylval_param) = std::string(yytext, yyleng); return TOK_NAMECHILDREN; }
 "None"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_NONE; }
+"none"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_NONE_LC; }
 "offset"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_OFFSET; }
+"oscillate"           { (*yylval_param) = std::string(yytext, yyleng); return TOK_OSCILLATE; }
 "over"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_OVER; }
 "payload"             { (*yylval_param) = std::string(yytext, yyleng); return TOK_PAYLOAD; }
 "permission"          { (*yylval_param) = std::string(yytext, yyleng); return TOK_PERMISSION; }
+"post"                { (*yylval_param) = std::string(yytext, yyleng); return TOK_POST; }
+"pre"                 { (*yylval_param) = std::string(yytext, yyleng); return TOK_PRE; }
 "prefixSubstitutions" { (*yylval_param) = std::string(yytext, yyleng); return TOK_PREFIX_SUBSTITUTIONS; }
 "prepend"             { (*yylval_param) = std::string(yytext, yyleng); return TOK_PREPEND; }
 "properties"          { (*yylval_param) = std::string(yytext, yyleng); return TOK_PROPERTIES; }
@@ -152,10 +145,14 @@ UTF8UDB     {UTF8UD}|{BAR}
 "rel"                 { (*yylval_param) = std::string(yytext, yyleng); return TOK_REL; }
 "reorder"             { (*yylval_param) = std::string(yytext, yyleng); return TOK_REORDER; }
 "rootPrims"           { (*yylval_param) = std::string(yytext, yyleng); return TOK_ROOTPRIMS; }
+"repeat"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_REPEAT; }
+"reset"               { (*yylval_param) = std::string(yytext, yyleng); return TOK_RESET; }
 "scale"               { (*yylval_param) = std::string(yytext, yyleng); return TOK_SCALE; }
+"sloped"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_SLOPED; }
 "subLayers"           { (*yylval_param) = std::string(yytext, yyleng); return TOK_SUBLAYERS; }
 "suffixSubstitutions" { (*yylval_param) = std::string(yytext, yyleng); return TOK_SUFFIX_SUBSTITUTIONS; }
 "specializes"         { (*yylval_param) = std::string(yytext, yyleng); return TOK_SPECIALIZES; }
+"spline"              { (*yylval_param) = std::string(yytext, yyleng); return TOK_SPLINE; }
 "symmetryArguments"   { (*yylval_param) = std::string(yytext, yyleng); return TOK_SYMMETRYARGUMENTS; }
 "symmetryFunction"    { (*yylval_param) = std::string(yytext, yyleng); return TOK_SYMMETRYFUNCTION; }
 "timeSamples"         { (*yylval_param) = std::string(yytext, yyleng); return TOK_TIME_SAMPLES; }

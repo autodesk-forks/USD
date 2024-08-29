@@ -379,6 +379,12 @@ ctest -C Release -R testUsdShade -V
 
 See the [ctest documentation](https://cmake.org/cmake/help/latest/manual/ctest.1.html) for more options.
 
+##### Test Run Directories
+
+Each test is run out of an automatically-created temporary directory containing any additional files required by the test. Set the cmake
+option `PXR_TEST_RUN_TEMP_DIR_PREFIX` to prepend a prefix string to the name of these directories. For example, setting this option to
+"foo-" will create test run directories named "foo-<test dir>"
+
 ##### Diagnosing Failed Tests
 
 In order to aid with diagnosing of failing tests, test generated files for failing test are explicitly put in the following directories, where
@@ -688,6 +694,31 @@ compatibility.
 Note that this flag has no effect on Windows, see 
 [here for more info](https://docs.python.org/3/extending/windows.html)
     
+
+## Spline Options
+
+Splines (keyframe animation) are implemented by the library `pxr/base/ts`.
+
+#### Default Anti-Regression Authoring Mode
+
+A `Ts` spline provides a function from time to attribute value.  Bezier math
+permits long tangents to create shapes that go backwards in time, resulting in
+non-functions.  This is typically prevented at authoring time, and there are
+several strategies available.  See
+[pxr/base/ts/doxygen/regression.md](./pxr/base/ts/doxygen/regression.md) for
+details of the different choices.
+
+The hard-coded default is `TsAntiRegressionKeepRatio`.  To set a different
+default:
+
+* With `build_usd.py`:
+`--build-args USD,"-DPXR_TS_DEFAULT_ANTI_REGRESSION_AUTHORING_MODE=TsAntiRegression..."`
+
+* With cmake:
+`-DPXR_TS_DEFAULT_ANTI_REGRESSION_AUTHORING_MODE=TsAntiRegression...`
+
+Client code can also override the default as needed.
+
 
 ## Build Issues FAQ
 

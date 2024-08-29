@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 /* A Bison parser, made by GNU Bison 2.4.1.  */
@@ -75,46 +58,60 @@
      TOK_ABSTRACT = 268,
      TOK_ADD = 269,
      TOK_APPEND = 270,
-     TOK_CLASS = 271,
-     TOK_CONFIG = 272,
-     TOK_CONNECT = 273,
-     TOK_CUSTOM = 274,
-     TOK_CUSTOMDATA = 275,
-     TOK_DEF = 276,
-     TOK_DEFAULT = 277,
-     TOK_DELETE = 278,
-     TOK_DICTIONARY = 279,
-     TOK_DISPLAYUNIT = 280,
-     TOK_DOC = 281,
-     TOK_INHERITS = 282,
-     TOK_KIND = 283,
-     TOK_NAMECHILDREN = 284,
-     TOK_NONE = 285,
-     TOK_OFFSET = 286,
-     TOK_OVER = 287,
-     TOK_PERMISSION = 288,
-     TOK_PAYLOAD = 289,
-     TOK_PREFIX_SUBSTITUTIONS = 290,
-     TOK_SUFFIX_SUBSTITUTIONS = 291,
-     TOK_PREPEND = 292,
-     TOK_PROPERTIES = 293,
-     TOK_REFERENCES = 294,
-     TOK_RELOCATES = 295,
-     TOK_REL = 296,
-     TOK_RENAMES = 297,
-     TOK_REORDER = 298,
-     TOK_ROOTPRIMS = 299,
-     TOK_SCALE = 300,
-     TOK_SPECIALIZES = 301,
-     TOK_SUBLAYERS = 302,
-     TOK_SYMMETRYARGUMENTS = 303,
-     TOK_SYMMETRYFUNCTION = 304,
-     TOK_TIME_SAMPLES = 305,
-     TOK_UNIFORM = 306,
-     TOK_VARIANTS = 307,
-     TOK_VARIANTSET = 308,
-     TOK_VARIANTSETS = 309,
-     TOK_VARYING = 310
+     TOK_BEZIER = 271,
+     TOK_CLASS = 272,
+     TOK_CONFIG = 273,
+     TOK_CONNECT = 274,
+     TOK_CURVE = 275,
+     TOK_CUSTOM = 276,
+     TOK_CUSTOMDATA = 277,
+     TOK_DEF = 278,
+     TOK_DEFAULT = 279,
+     TOK_DELETE = 280,
+     TOK_DICTIONARY = 281,
+     TOK_DISPLAYUNIT = 282,
+     TOK_DOC = 283,
+     TOK_HELD = 284,
+     TOK_HERMITE = 285,
+     TOK_INHERITS = 286,
+     TOK_KIND = 287,
+     TOK_LINEAR = 288,
+     TOK_LOOP = 289,
+     TOK_NAMECHILDREN = 290,
+     TOK_NONE = 291,
+     TOK_NONE_LC = 292,
+     TOK_OFFSET = 293,
+     TOK_OSCILLATE = 294,
+     TOK_OVER = 295,
+     TOK_PERMISSION = 296,
+     TOK_POST = 297,
+     TOK_PRE = 298,
+     TOK_PAYLOAD = 299,
+     TOK_PREFIX_SUBSTITUTIONS = 300,
+     TOK_SUFFIX_SUBSTITUTIONS = 301,
+     TOK_PREPEND = 302,
+     TOK_PROPERTIES = 303,
+     TOK_REFERENCES = 304,
+     TOK_RELOCATES = 305,
+     TOK_REL = 306,
+     TOK_RENAMES = 307,
+     TOK_REORDER = 308,
+     TOK_ROOTPRIMS = 309,
+     TOK_REPEAT = 310,
+     TOK_RESET = 311,
+     TOK_SCALE = 312,
+     TOK_SLOPED = 313,
+     TOK_SPECIALIZES = 314,
+     TOK_SPLINE = 315,
+     TOK_SUBLAYERS = 316,
+     TOK_SYMMETRYARGUMENTS = 317,
+     TOK_SYMMETRYFUNCTION = 318,
+     TOK_TIME_SAMPLES = 319,
+     TOK_UNIFORM = 320,
+     TOK_VARIANTS = 321,
+     TOK_VARIANTSET = 322,
+     TOK_VARIANTSETS = 323,
+     TOK_VARYING = 324
    };
 #endif
 

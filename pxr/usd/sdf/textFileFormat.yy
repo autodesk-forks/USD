@@ -1,25 +1,8 @@
 //
 // Copyright 2016 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 
 %{
@@ -52,10 +35,11 @@
 #include "pxr/base/tf/type.h"
 #include "pxr/base/gf/matrix4d.h"
 #include "pxr/base/tf/mallocTag.h"
+#include "pxr/base/ts/raii.h"
+#include "pxr/base/ts/spline.h"
+#include "pxr/base/ts/valueTypeDispatch.h"
 
-#include <boost/optional.hpp>
-#include <boost/variant.hpp>
-
+#include <cmath>
 #include <functional>
 #include <sstream>
 #include <string>
@@ -68,7 +52,6 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 using Sdf_ParserHelpers::Value;
-using boost::get;
 
 //--------------------------------------------------------------------
 // Helper macros/functions for handling errors
@@ -593,32 +576,40 @@ _RelocatesAdd(const Value& arg1, const Value& arg2,
               Sdf_TextParserContext *context)
 {
     const std::string& srcStr    = arg1.Get<std::string>();
-    const std::string& targetStr = arg2.Get<std::string>();
-
     SdfPath srcPath(srcStr);
-    SdfPath targetPath(targetStr);
 
-    if (!SdfSchema::IsValidRelocatesPath(srcPath)) {
+    if (!SdfSchema::IsValidRelocatesSourcePath(srcPath)) {
         Err(context, "'%s' is not a valid relocates path",
             srcStr.c_str());
         return;
     }
-    if (!SdfSchema::IsValidRelocatesPath(targetPath)) {
-        Err(context, "'%s' is not a valid relocates path",
-            targetStr.c_str());
-        return;
-    }
 
-    // The relocates map is expected to only hold absolute paths. The
-    // SdRelocatesMapProxy ensures that all paths are made absolute when
-    // editing, but since we're bypassing that proxy and setting the map
-    // directly into the underlying SdfData, we need to explicitly absolutize
-    // paths here.
+    // The relocates map is expected to only hold absolute paths.
     srcPath = srcPath.MakeAbsolutePath(context->path);
-    targetPath = targetPath.MakeAbsolutePath(context->path);
 
-    context->relocatesParsing.emplace_back(
-        std::move(srcPath), std::move(targetPath));
+    const std::string& targetStr = arg2.Get<std::string>();
+    if (targetStr.empty()) {
+        context->relocatesParsing.emplace_back(
+            std::move(srcPath), SdfPath());
+    } else {
+        SdfPath targetPath(targetStr);
+
+        // Target paths can be empty but the string must be explicitly empty
+        // which we would've caught in the if statement. An empty path here 
+        // indicates a malformed path which is never valid.
+        if (targetPath.IsEmpty() || 
+                !SdfSchema::IsValidRelocatesTargetPath(targetPath)) {
+            Err(context, "'%s' is not a valid relocates path",
+                targetStr.c_str());
+            return;
+        }
+
+        // The relocates map is expected to only hold absolute paths.
+        targetPath = targetPath.MakeAbsolutePath(context->path);
+
+        context->relocatesParsing.emplace_back(
+            std::move(srcPath), std::move(targetPath));
+    }
 
     context->layerHints.mightHaveRelocates = true;
 }
@@ -1232,6 +1223,138 @@ _GenericMetadataEnd(SdfSpecType specType, Sdf_TextParserContext *context)
     context->currentValue = VtValue();
 }
 
+static void
+_BeginSpline(Sdf_TextParserContext *context)
+{
+    // What is the attribute's value type?
+    const TfType valueType =
+        SdfGetTypeForValueTypeName(
+            TfToken(context->values.valueTypeName));
+
+    if (valueType == TfType::Find<SdfTimeCode>()) {
+        // Special case for timecode-valued attributes: physically use double,
+        // but set the flag that causes layer offsets to be applied to values as
+        // well as times.
+        context->splineValid = true;
+        context->spline = TsSpline(TfType::Find<double>());
+        context->spline.SetTimeValued(true);
+    }
+    else {
+        // Are splines valid for this value type?
+        context->splineValid = TsSpline::IsSupportedValueType(valueType);
+        if (context->splineValid) {
+            // Normal case.  Set up a spline to parse into.
+            context->spline = TsSpline(valueType);
+        }
+        else {
+            // Emit an error.  Also set up to safely build a double-typed
+            // spline, which we will then ignore.
+            Err(context, "Unsupported spline value type '%s'",
+                valueType.GetTypeName().c_str());
+            context->spline = TsSpline(TfType::Find<double>());
+        }
+    }
+
+    // This is where our knots will land.
+    context->splineKnotMap.clear();
+}
+
+static void
+_EndSpline(Sdf_TextParserContext *context)
+{
+    if (!context->splineValid) {
+        return;
+    }
+
+    // Transfer knots to spline.  Don't de-regress on read.
+    if (!context->splineKnotMap.empty()) {
+        TsAntiRegressionAuthoringSelector selector(TsAntiRegressionNone);
+        context->spline.SetKnots(context->splineKnotMap);
+    }
+
+    // Transfer spline to field.
+    _SetField(
+        context->path, SdfFieldKeys->Spline,
+        context->spline, context);
+}
+
+template <typename T>
+struct _Bundler
+{
+    void operator()(
+        const double valueIn,
+        VtValue* const valueOut)
+    {
+        *valueOut = VtValue(static_cast<T>(valueIn));
+    }
+};
+
+static VtValue
+_BundleSplineValue(
+    Sdf_TextParserContext *context,
+    const Value &value)
+{
+    VtValue result;
+    TsDispatchToValueTypeTemplate<_Bundler>(
+        context->spline.GetValueType(),
+        value.Get<double>(),
+        &result);
+    return result;
+}
+
+static void
+_SetSplineTanWithWidth(
+    Sdf_TextParserContext *context,
+    const std::string &encoding,
+    const double width,
+    const VtValue &slopeOrHeight)
+{
+    if (encoding == "ws") {
+        if (context->splineTanIsPre) {
+            context->splineKnot.SetPreTanWidth(width);
+            context->splineKnot.SetPreTanSlope(slopeOrHeight);
+        } else {
+            context->splineKnot.SetPostTanWidth(width);
+            context->splineKnot.SetPostTanSlope(slopeOrHeight);
+        }
+    } else if (encoding == "wh") {
+        if (context->splineTanIsPre) {
+            context->splineKnot.SetMayaPreTanWidth(width);
+            context->splineKnot.SetMayaPreTanHeight(slopeOrHeight);
+        } else {
+            context->splineKnot.SetMayaPostTanWidth(width);
+            context->splineKnot.SetMayaPostTanHeight(slopeOrHeight);
+        }
+    } else {
+        Err(context, "Unrecognized spline tangent encoding '%s'",
+            encoding.c_str());
+    }
+}
+
+static void
+_SetSplineTanWithoutWidth(
+    Sdf_TextParserContext *context,
+    const std::string &encoding,
+    const VtValue &slopeOrHeight)
+{
+    if (encoding == "s") {
+        if (context->splineTanIsPre) {
+            context->splineKnot.SetPreTanSlope(slopeOrHeight);
+        } else {
+            context->splineKnot.SetPostTanSlope(slopeOrHeight);
+        }
+    } else if (encoding == "h") {
+        if (context->splineTanIsPre) {
+            context->splineKnot.SetMayaPreTanHeight(slopeOrHeight);
+        } else {
+            context->splineKnot.SetMayaPostTanHeight(slopeOrHeight);
+        }
+    } else {
+        Err(context, "Unrecognized spline tangent encoding '%s'",
+            encoding.c_str());
+    }
+}
+
 //--------------------------------------------------------------------
 // The following are used to configure bison
 //--------------------------------------------------------------------
@@ -1275,9 +1398,11 @@ _GenericMetadataEnd(SdfSpecType specType, Sdf_TextParserContext *context)
 %token TOK_ABSTRACT
 %token TOK_ADD
 %token TOK_APPEND
+%token TOK_BEZIER
 %token TOK_CLASS
 %token TOK_CONFIG
 %token TOK_CONNECT
+%token TOK_CURVE
 %token TOK_CUSTOM
 %token TOK_CUSTOMDATA
 %token TOK_DEF
@@ -1286,13 +1411,21 @@ _GenericMetadataEnd(SdfSpecType specType, Sdf_TextParserContext *context)
 %token TOK_DICTIONARY
 %token TOK_DISPLAYUNIT
 %token TOK_DOC
+%token TOK_HELD
+%token TOK_HERMITE
 %token TOK_INHERITS
 %token TOK_KIND
+%token TOK_LINEAR
+%token TOK_LOOP
 %token TOK_NAMECHILDREN
 %token TOK_NONE
+%token TOK_NONE_LC
 %token TOK_OFFSET
+%token TOK_OSCILLATE
 %token TOK_OVER
 %token TOK_PERMISSION
+%token TOK_POST
+%token TOK_PRE
 %token TOK_PAYLOAD
 %token TOK_PREFIX_SUBSTITUTIONS
 %token TOK_SUFFIX_SUBSTITUTIONS
@@ -1304,8 +1437,12 @@ _GenericMetadataEnd(SdfSpecType specType, Sdf_TextParserContext *context)
 %token TOK_RENAMES
 %token TOK_REORDER
 %token TOK_ROOTPRIMS
+%token TOK_REPEAT
+%token TOK_RESET
 %token TOK_SCALE
+%token TOK_SLOPED
 %token TOK_SPECIALIZES
+%token TOK_SPLINE
 %token TOK_SUBLAYERS
 %token TOK_SYMMETRYARGUMENTS
 %token TOK_SYMMETRYFUNCTION
@@ -1326,9 +1463,11 @@ keyword:
       TOK_ABSTRACT
     | TOK_ADD
     | TOK_APPEND
+    | TOK_BEZIER
     | TOK_CLASS
     | TOK_CONFIG
     | TOK_CONNECT
+    | TOK_CURVE
     | TOK_CUSTOM
     | TOK_CUSTOMDATA
     | TOK_DEF
@@ -1337,14 +1476,22 @@ keyword:
     | TOK_DICTIONARY
     | TOK_DISPLAYUNIT
     | TOK_DOC
+    | TOK_HELD
+    | TOK_HERMITE
     | TOK_INHERITS
     | TOK_KIND
+    | TOK_LINEAR
+    | TOK_LOOP
     | TOK_NAMECHILDREN
     | TOK_NONE
+    | TOK_NONE_LC
     | TOK_OFFSET
+    | TOK_OSCILLATE
     | TOK_OVER
     | TOK_PAYLOAD
     | TOK_PERMISSION
+    | TOK_POST
+    | TOK_PRE
     | TOK_PREFIX_SUBSTITUTIONS
     | TOK_SUFFIX_SUBSTITUTIONS
     | TOK_PREPEND
@@ -1355,8 +1502,12 @@ keyword:
     | TOK_RENAMES
     | TOK_REORDER
     | TOK_ROOTPRIMS
+    | TOK_REPEAT
+    | TOK_RESET
     | TOK_SCALE
+    | TOK_SLOPED
     | TOK_SPECIALIZES
+    | TOK_SPLINE
     | TOK_SUBLAYERS
     | TOK_SYMMETRYARGUMENTS
     | TOK_SYMMETRYFUNCTION
@@ -2439,11 +2590,23 @@ prim_attribute_time_samples:
         }
     ;
 
+prim_attribute_spline:
+    prim_attribute_full_type namespaced_name '.' TOK_SPLINE '=' {
+        _PrimInitAttribute($2, context);
+        _BeginSpline(context);
+    }
+    spline_rhs {
+        _EndSpline(context);
+        context->path = context->path.GetParentPath(); // pop attr
+    }
+    ;
+
 prim_attribute:
     prim_attribute_fallback
     | prim_attribute_default
     | prim_attribute_connect
     | prim_attribute_time_samples
+    | prim_attribute_spline
     ;
 
 //--------------------------------------------------------------------
@@ -2502,6 +2665,196 @@ time_sample:
             = VtValue(SdfValueBlock());  
     }
 
+    ;
+
+//--------------------------------------------------------------------
+// Splines
+//--------------------------------------------------------------------
+
+spline_rhs:
+    '{' newlines_opt spline_item_list '}'
+    ;
+
+spline_item_list:
+    // empty
+    | spline_item_list_body listsep_opt
+    ;
+
+spline_item_list_body:
+    spline_item
+    | spline_item_list_body listsep spline_item
+    ;
+
+spline_item:
+    spline_curve_type_item
+    | spline_pre_extrap_item
+    | spline_post_extrap_item
+    | spline_loop_item
+    | spline_knot_item
+    ;
+
+spline_curve_type_item:
+    TOK_BEZIER {
+        context->spline.SetCurveType(TsCurveTypeBezier);
+    }
+    | TOK_HERMITE {
+        context->spline.SetCurveType(TsCurveTypeHermite);
+    }
+    ;
+
+spline_pre_extrap_item:
+    TOK_PRE ':' spline_extrapolation {
+        context->spline.SetPreExtrapolation(context->splineExtrap);
+    }
+    ;
+
+spline_post_extrap_item:
+    TOK_POST ':' spline_extrapolation {
+        context->spline.SetPostExtrapolation(context->splineExtrap);
+    }
+    ;
+
+spline_extrapolation:
+    TOK_NONE_LC {
+        context->splineExtrap = TsExtrapolation(TsExtrapValueBlock);
+    }
+    | TOK_HELD {
+        context->splineExtrap = TsExtrapolation(TsExtrapHeld);
+    }
+    | TOK_LINEAR {
+        context->splineExtrap = TsExtrapolation(TsExtrapLinear);
+    }
+    | TOK_SLOPED '(' TOK_NUMBER ')' {
+        context->splineExtrap = TsExtrapolation(TsExtrapSloped);
+        context->splineExtrap.slope = $3.Get<double>();
+    }
+    | TOK_LOOP TOK_REPEAT {
+        context->splineExtrap = TsExtrapolation(TsExtrapLoopRepeat);
+    }
+    | TOK_LOOP TOK_RESET {
+        context->splineExtrap = TsExtrapolation(TsExtrapLoopReset);
+    }
+    | TOK_LOOP TOK_OSCILLATE {
+        context->splineExtrap = TsExtrapolation(TsExtrapLoopOscillate);
+    }
+    ;
+
+spline_loop_item:
+    TOK_LOOP ':' '('
+        TOK_NUMBER ',' TOK_NUMBER ',' TOK_NUMBER ',' TOK_NUMBER ',' TOK_NUMBER
+        ')'
+    {
+        const double numPreLoops = $8.Get<double>();
+        const double numPostLoops = $10.Get<double>();
+
+        if (std::trunc(numPreLoops) != numPreLoops
+                || std::trunc(numPostLoops) != numPostLoops) {
+            Err(context, "Non-integer loop count");
+        }
+        else {
+            TsLoopParams lp;
+            lp.protoStart = $4.Get<double>();
+            lp.protoEnd = $6.Get<double>();
+            lp.numPreLoops = $8.Get<int>();
+            lp.numPostLoops = $10.Get<int>();
+            lp.valueOffset = $12.Get<double>();
+            context->spline.SetInnerLoopParams(lp);
+        }
+    }
+    ;
+
+spline_knot_item:
+    TOK_NUMBER ':' {
+        context->splineKnot = TsKnot(
+            context->spline.GetValueType(),
+            context->spline.GetCurveType());
+        context->splineKnot.SetTime($1.Get<double>());
+    }
+    spline_knot_values spline_knot_param_list {
+        context->splineKnotMap.insert(context->splineKnot);
+    }
+    ;
+
+spline_knot_values:
+    TOK_NUMBER {
+        context->splineKnot.SetValue(_BundleSplineValue(context, $1));
+    }
+    | TOK_NUMBER '&' TOK_NUMBER {
+        context->splineKnot.SetPreValue(_BundleSplineValue(context, $1));
+        context->splineKnot.SetValue(_BundleSplineValue(context, $3));
+    }
+    ;
+
+spline_knot_param_list:
+    // empty
+    | ';' spline_knot_param_list_body
+    ;
+
+spline_knot_param_list_body:
+    spline_knot_param
+    | spline_knot_param_list_body ';' spline_knot_param
+    ;
+
+spline_knot_param:
+    spline_pre_tan
+    | spline_post_shaping
+    | spline_custom_data
+    ;
+
+spline_pre_tan:
+    TOK_PRE {
+        context->splineTanIsPre = true;
+    } spline_tangent
+    ;
+
+spline_post_shaping:
+    TOK_POST spline_interp_mode {
+        context->splineKnot.SetNextInterpolation(context->splineInterp);
+        context->splineTanIsPre = false;
+    } spline_post_tan
+    ;
+
+spline_post_tan:
+    // empty
+    | spline_tangent
+    ;
+
+spline_interp_mode:
+    TOK_NONE_LC {
+        context->splineInterp = TsInterpValueBlock;
+    }
+    | TOK_HELD {
+        context->splineInterp = TsInterpHeld;
+    }
+    | TOK_LINEAR {
+        context->splineInterp = TsInterpLinear;
+    }
+    | TOK_CURVE {
+        context->splineInterp = TsInterpCurve;
+    }
+    ;
+
+spline_tangent:
+    identifier '(' TOK_NUMBER ',' TOK_NUMBER ')' {
+        _SetSplineTanWithWidth(
+            context,
+            $1.Get<std::string>(),
+            $3.Get<double>(),
+            _BundleSplineValue(context, $5));
+    }
+    | identifier '(' TOK_NUMBER ')' {
+        _SetSplineTanWithoutWidth(
+            context,
+            $1.Get<std::string>(),
+            _BundleSplineValue(context, $3));
+    }
+    ;
+
+spline_custom_data:
+    typed_dictionary {
+        context->splineKnot.SetCustomData(context->currentDictionaries[0]);
+        context->currentDictionaries[0].clear();
+    }
     ;
 
 //--------------------------------------------------------------------
@@ -2867,18 +3220,6 @@ prim_relationship_type :
         context->variability = VtValue(SdfVariabilityVarying);
     }
     ;
-    
-prim_relationship_time_samples:
-    prim_relationship_type namespaced_name '.' TOK_TIME_SAMPLES '=' {
-            _PrimInitRelationship($2, context); 
-        } 
-    time_samples_rhs {
-            _SetField(
-                context->path, SdfFieldKeys->TimeSamples,
-                context->timeSamples, context);
-            _PrimEndRelationship(context);
-        }
-    ;
 
 prim_relationship_default:
     prim_relationship_type namespaced_name '.' TOK_DEFAULT '=' TOK_PATHREF { 
@@ -2954,7 +3295,6 @@ prim_relationship:
             _RelationshipInitTarget(context->relParsingTargetPaths->back(),
                                     context);
         }
-    | prim_relationship_time_samples
     | prim_relationship_default
     ;
 
@@ -3329,8 +3669,8 @@ Sdf_ParseLayer(
                 TRACE_SCOPE("textFileFormatYyParse");
                 status = textFileFormatYyparse(&context);
                 *hints = context.layerHints;
-            } catch (boost::bad_get const &) {
-                TF_CODING_ERROR("Bad boost:get<T>() in layer parser.");
+            } catch (std::bad_variant_access const &) {
+                TF_CODING_ERROR("Bad variant access in layer parser.");
                 Err(&context, "Internal layer parser error.");
             }
         }
@@ -3379,8 +3719,8 @@ Sdf_ParseLayerFromString(
         TRACE_SCOPE("textFileFormatYyParse");
         status = textFileFormatYyparse(&context);
         *hints = context.layerHints;
-    } catch (boost::bad_get const &) {
-        TF_CODING_ERROR("Bad boost:get<T>() in layer parser.");
+    } catch (std::bad_variant_access const &) {
+        TF_CODING_ERROR("Bad variant access in layer parser.");
         Err(&context, "Internal layer parser error.");
     }
 
