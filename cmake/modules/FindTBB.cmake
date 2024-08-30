@@ -223,11 +223,20 @@ if(NOT TBB_FOUND)
   # Find TBB components
   ##################################
 
-  # oneTBB on Windows has interface version in the name.
-  if(WIN32 AND TBB_INTERFACE_VERSION GREATER_EQUAL 12000)
+  # Autodesk: only support OneTBB
+  # oneTBB has interface version in the name.
+  if(TBB_INTERFACE_VERSION LESS 12000)
+    message(FATAL_ERROR "Only OneTBB is supported.")
+  endif()
+  if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(_tbb_library_name tbb12)
-  else()
-    set(_tbb_library_name tbb)
+    set(_tbb_library_version "")
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(_tbb_library_name libtbb)
+    set(_tbb_library_version ".12.dylib")
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_tbb_library_name libtbb)
+    set(_tbb_library_version ".so.12")
   endif()
 
   if(TBB_VERSION VERSION_LESS 4.3)
@@ -242,17 +251,19 @@ if(NOT TBB_FOUND)
 
       if(${_comp} STREQUAL tbb)
         set(_lib_name ${_tbb_library_name})
+	set(_lib_ver  ${_tbb_library_version})
       else()
         set(_lib_name ${_comp})
+	set(_lib_ver "")
       endif()
 
       # Search for the libraries
-      find_library(TBB_${_comp}_LIBRARY_RELEASE ${_lib_name}
+      find_library(TBB_${_comp}_LIBRARY_RELEASE "${_lib_name}${_lib_ver}"
           HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
           PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
           PATH_SUFFIXES ${TBB_LIB_PATH_SUFFIX})
 
-      find_library(TBB_${_comp}_LIBRARY_DEBUG ${_lib_name}_debug
+      find_library(TBB_${_comp}_LIBRARY_DEBUG "${_lib_name}_debug${_lib_ver}"
           HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
           PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
           PATH_SUFFIXES ${TBB_LIB_PATH_SUFFIX})
