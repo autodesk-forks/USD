@@ -65,6 +65,10 @@ HdxColorCorrectionTask::~HdxColorCorrectionTask()
     _workDispatcher->Cancel();
     _workDispatcher->Wait();
 
+    if (_screenSizeBuffer) {
+        _GetHgi()->DestroyBuffer(&_screenSizeBuffer);
+    }
+
     if (_aovSampler) {
         _GetHgi()->DestroySampler(&_aovSampler);
     }
