@@ -145,6 +145,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
     _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, true);
     _SetFlag(HgiDeviceCapabilitiesBitsClipDistanceSupport, true);
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, true);
 }
 
 HgiVulkanCapabilities::~HgiVulkanCapabilities() = default;

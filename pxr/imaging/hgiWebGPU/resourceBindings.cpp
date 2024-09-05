@@ -63,8 +63,7 @@ _CreateBindGroupEntries(HgiBufferBindDescVector const &buffers)
         if (!TF_VERIFY(b.buffers.size() == 1)) continue;
         auto *buf = static_cast<HgiWebGPUBuffer *>(b.buffers.front().Get());
         wgpu::BindGroupEntry d;
-        uint32_t bi = b.bindingIndex;
-        d.binding = bi;
+        d.binding = b.bindingIndex;
         d.buffer = buf->GetBufferHandle();
         d.offset = b.offsets.front();
         bindings.push_back(d);
@@ -79,13 +78,12 @@ _CreateTextureBindGroupEntries(HgiTextureBindDescVector const &textures) {
     // Textures
     for (HgiTextureBindDesc const &t : textures)
     {
-        uint32_t bi = t.bindingIndex;
         // TODO: What should be done with t.resourceType
         // WebGPU only supports textures in combination with samplers
         TF_VERIFY(t.textures.size() == t.samplers.size());
         HgiWebGPUTexture *texture = static_cast<HgiWebGPUTexture *>(t.textures.front().Get());
         wgpu::BindGroupEntry texEntry;
-        texEntry.binding = bi;
+        texEntry.binding = t.bindingIndex;
         texEntry.textureView = texture->GetTextureView();
         textureBindings.push_back(texEntry);
     }
@@ -98,13 +96,12 @@ _CreateSamplerBindGroupEntries(HgiTextureBindDescVector const &textures) {
     // Samplers
     for (HgiTextureBindDesc const &t : textures)
     {
-        uint32_t bi = t.bindingIndex;
         // TODO: What should be done with t.resourceType
         // WebGPU only supports textures in combination with samplers
         TF_VERIFY(t.textures.size() == t.samplers.size());
         HgiWebGPUSampler *sampler = static_cast<HgiWebGPUSampler *>(t.samplers.front().Get());
         wgpu::BindGroupEntry samplerEntry;
-        samplerEntry.binding = bi;
+        samplerEntry.binding = t.bindingIndex;
         samplerEntry.sampler = sampler->GetSamplerHandle();
         samplerBindings.push_back(samplerEntry);
     }

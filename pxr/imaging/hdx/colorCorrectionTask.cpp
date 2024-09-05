@@ -10,10 +10,13 @@
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/renderBuffer.h"
 #include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hf/perfLog.h"
 #include "pxr/imaging/hio/glslfx.h"
 #include "pxr/base/tf/getenv.h"
 
+#include "pxr/imaging/hgi/blitCmdsOps.h"
+#include "pxr/imaging/hgi/capabilities.h"
 #include "pxr/imaging/hgi/graphicsCmds.h"
 #include "pxr/imaging/hgi/graphicsCmdsDesc.h"
 #include "pxr/imaging/hgi/hgi.h"
@@ -764,6 +767,9 @@ HdxColorCorrectionTask::_CreateShaderResources()
     const HioGlslfx glslfx(
             HdxPackageColorCorrectionShader(), HioGlslfxTokens->defVal);
 
+    const HgiCapabilities *capabilities = _GetHgi()->GetCapabilities();
+    const bool pushConstantsEnabled =
+            capabilities->IsSet(HgiDeviceCapabilitiesBitsPushConstants);
     // Setup the vertex shader
     std::string vsCode;
     HgiShaderFunctionDesc vertDesc;
@@ -796,8 +802,15 @@ HdxColorCorrectionTask::_CreateShaderResources()
 #endif
     HgiShaderFunctionAddStageOutput(
         &fragDesc, "hd_FragColor", "vec4", "color");
-    HgiShaderFunctionAddConstantParam(
-        &fragDesc, "screenSize", "vec2");
+
+    if (pushConstantsEnabled) {
+        HgiShaderFunctionAddConstantParam(
+                &fragDesc, "screenSize", "vec2");
+    } else {
+        HgiShaderFunctionAddBuffer(
+                &fragDesc, "screenSize", "vec2",
+                /*bindIndex = */0,  HgiBindingTypeUniformValue);
+    }
     fragDesc.debugName = _tokens->colorCorrectionFragment.GetString();
     fragDesc.shaderStage = HgiShaderStageFragment;
     if (useOCIO) {
@@ -881,7 +894,7 @@ HdxColorCorrectionTask::_CreateShaderResources()
 }
 
 bool
-HdxColorCorrectionTask::_CreateBufferResources()
+HdxColorCorrectionTask::_CreateBufferResources(HgiTextureHandle const &aovTexture)
 {
     if (_vertexBuffer) {
         return true;
@@ -909,6 +922,22 @@ HdxColorCorrectionTask::_CreateBufferResources()
     iboDesc.initialData = indices;
     iboDesc.byteSize = sizeof(indices);
     _indexBuffer = _GetHgi()->CreateBuffer(iboDesc);
+
+    const HgiCapabilities *capabilities = _GetHgi()->GetCapabilities();
+    const bool pushConstantsEnabled =
+            capabilities->IsSet(HgiDeviceCapabilitiesBitsPushConstants);
+    if(!pushConstantsEnabled) {
+        GfVec3i const& dimensions = aovTexture->GetDescriptor().dimensions;
+        float screenSize[2];
+        screenSize[0] = static_cast<float>(dimensions[0]);
+        screenSize[1] = static_cast<float>(dimensions[1]);
+        HgiBufferDesc uboDesc;
+        uboDesc.debugName = "HdxColorCorrectionTask screenSize";
+        uboDesc.usage = HgiBufferUsageUniform;
+        uboDesc.initialData = screenSize;
+        uboDesc.byteSize = sizeof(screenSize);
+        _screenSizeBuffer = _GetHgi()->CreateBuffer(uboDesc);
+    }
     return true;
 }
 
@@ -930,6 +959,19 @@ HdxColorCorrectionTask::_CreateResourceBindings(
     texBind0.textures.push_back(aovTexture);
     texBind0.samplers.push_back(_aovSampler);
     resourceDesc.textures.push_back(std::move(texBind0));
+
+    const HgiCapabilities *capabilities = _GetHgi()->GetCapabilities();
+    const bool pushConstantsEnabled =
+            capabilities->IsSet(HgiDeviceCapabilitiesBitsPushConstants);
+    if(!pushConstantsEnabled) {
+        HgiBufferBindDesc screenSizeBindDesc;
+        screenSizeBindDesc.bindingIndex = 0;
+        screenSizeBindDesc.stageUsage = HgiShaderStageFragment;
+        screenSizeBindDesc.writable = false;
+        screenSizeBindDesc.offsets.push_back(0);
+        screenSizeBindDesc.buffers.push_back(_screenSizeBuffer);
+        resourceDesc.buffers.push_back(std::move(screenSizeBindDesc));
+    }
 
     if (useOCIO) {
         _CreateOpenColorIOLUTBindings(resourceDesc);
@@ -1062,9 +1104,33 @@ HdxColorCorrectionTask::_ApplyColorCorrection(
 
     // Update viewport/screen size
     const GfVec4i vp(0, 0, dimensions[0], dimensions[1]);
-    _screenSize[0] = static_cast<float>(dimensions[0]);
-    _screenSize[1] = static_cast<float>(dimensions[1]);
-    _SetConstants(gfxCmds.get());
+
+    const HgiCapabilities *capabilities = _GetHgi()->GetCapabilities();
+    const bool pushConstantsEnabled =
+            capabilities->IsSet(HgiDeviceCapabilitiesBitsPushConstants);
+    if (pushConstantsEnabled) {
+        _screenSize[0] = static_cast<float>(dimensions[0]);
+        _screenSize[1] = static_cast<float>(dimensions[1]);
+        _SetConstants(gfxCmds.get());
+    } else {
+        if (_screenSize[0] != static_cast<float>(dimensions[0]) || _screenSize[1] != static_cast<float>(dimensions[1])) {
+            _screenSize[0] = static_cast<float>(dimensions[0]);
+            _screenSize[1] = static_cast<float>(dimensions[1]);
+            HgiBufferCpuToGpuOp blitOp;
+            blitOp.cpuSourceBuffer = _screenSize;
+            blitOp.gpuDestinationBuffer = _screenSizeBuffer;
+
+            blitOp.sourceByteOffset = 0;
+            blitOp.byteSize = sizeof(_screenSize);
+            blitOp.destinationByteOffset = 0;
+
+            HgiBlitCmdsUniquePtr blitCmds = _GetHgi()->CreateBlitCmds();
+            blitCmds->PushDebugGroup("Update colorCorrection screensize");
+            blitCmds->CopyBufferCpuToGpu(blitOp);
+            blitCmds->PopDebugGroup();
+            _GetHgi()->SubmitCmds(blitCmds.get());
+        }
+    }
     gfxCmds->SetViewport(vp);
 
     gfxCmds->DrawIndexed(_indexBuffer, 3, 0, 0, 1, 0);
@@ -1153,7 +1219,7 @@ HdxColorCorrectionTask::Execute(HdTaskContext* ctx)
     // So, no layout transition there.
     aovTexture->SubmitLayoutChange(HgiTextureUsageBitsShaderRead);
 
-    if (!TF_VERIFY(_CreateBufferResources())) {
+    if (!TF_VERIFY(_CreateBufferResources(aovTexture))) {
         return;
     }
     if (!TF_VERIFY(_CreateAovSampler())) {

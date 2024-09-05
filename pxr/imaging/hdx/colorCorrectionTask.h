@@ -146,7 +146,7 @@ private:
                                              HgiShaderFunctionDesc &fragDesc);
 
     // Utility function to create buffer resources.
-    bool _CreateBufferResources();
+    bool _CreateBufferResources(HgiTextureHandle const &aovTexture);
 
     // Utility to create resource bindings
     bool _CreateResourceBindings(HgiTextureHandle const& aovTexture);
@@ -180,6 +180,7 @@ private: // data
     HgiAttachmentDesc _attachment0;
     HgiBufferHandle _indexBuffer;
     HgiBufferHandle _vertexBuffer;
+    HgiBufferHandle _screenSizeBuffer;
     HgiSamplerHandle _aovSampler;
 
     struct TextureSamplerInfo

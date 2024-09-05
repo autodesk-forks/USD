@@ -47,7 +47,7 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device)
     _SetFlag(HgiDeviceCapabilitiesBitsClipDistanceSupport, false);
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, true);
-
+    _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, false);
 }
 
 HgiWebGPUCapabilities::~HgiWebGPUCapabilities() = default;

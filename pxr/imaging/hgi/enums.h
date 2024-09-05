@@ -64,6 +64,8 @@ using HgiBits = uint32_t;
 ///   Support for clips distance planes</li>
 /// <li>HgiDeviceCapabilitiesBitsTriangulatedQuads:
 ///   Rendering support for triangulated quads</li>
+/// <li>HgiDeviceCapabilitiesBitsPushConstants:
+///   Support for push constants</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
@@ -89,6 +91,7 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsGeometricStage          = 1 << 18,
     HgiDeviceCapabilitiesBitsClipDistanceSupport     = 1 << 19,
     HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 20,
+    HgiDeviceCapabilitiesBitsPushConstants           = 1 << 21,
 };
 
 using HgiDeviceCapabilities = HgiBits;
