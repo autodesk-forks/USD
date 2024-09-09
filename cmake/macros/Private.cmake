@@ -7,6 +7,26 @@
 include(Version)
 include(${CMAKE_CURRENT_LIST_DIR}/pxrStaticConfig.cmake)
 
+function(_get_all_dependencies target result)
+    get_target_property(dependencies ${target} INTERFACE_LINK_LIBRARIES)
+    # Split core libraries from non-core libraries.
+    _pxr_split_libraries("${dependencies}" internalDeps externalDeps)
+    if(NOT internalDeps)
+        return()
+    endif()
+
+    foreach(dependency IN LISTS internalDeps)
+        if(NOT ${dependency} IN_LIST ${result})
+            list(APPEND ${result} ${dependency})
+            _get_final_package_name("${dependency}" dependency_internal)
+            _get_all_dependencies(${dependency_internal} ${result})
+        endif()
+    endforeach()
+
+    # Set the result variable in the parent scope
+    set(${result} "${${result}}" PARENT_SCOPE)
+endfunction()
+
 # Copy headers to the build tree.  Under pxr/ the include paths match the
 # source tree paths but elsewhere they do not. Instead we use include
 # paths like rmanArgsParser/rmanArgsParser.h.  So if /pxr/ is not in the

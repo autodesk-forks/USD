@@ -198,6 +198,17 @@ function(pxr_cpp_bin BIN_NAME)
         ${PXR_MALLOC_LIBRARY}
     )
 
+    if (PXR_ENABLE_JS_SUPPORT)
+        _get_all_dependencies(${BIN_NAME} all_dependencies)
+        set(RESOURCES_LIST "")
+        foreach(dep ${all_dependencies})
+            get_property(RESOURCES TARGET ${dep} PROPERTY EMSCRIPTEN_RESOURCES)
+            list(APPEND RESOURCES_LIST "${RESOURCES}")
+        endforeach ()
+
+        target_link_libraries(${BIN_NAME} ${RESOURCES_LIST})
+    endif()
+
     install(
         TARGETS ${BIN_NAME}
         DESTINATION ${installDir}

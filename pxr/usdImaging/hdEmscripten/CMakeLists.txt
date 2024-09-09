@@ -26,26 +26,6 @@ target_link_options(hdEmscripten_internal PRIVATE "SHELL: -sEXPORT_NAME=getUsdMo
 target_compile_options(hdEmscripten_internal PRIVATE "SHELL: -lembind")
 
 set(RESOURCE_PARAMETERS "")
-function(add_resources target)
-    # This local var is needed since list append cannot update the PARENT_SCOPE
-    set(LOCAL_VAR ${RESOURCE_PARAMETERS})
-    get_property(RESSOURCES TARGET ${target} PROPERTY EMSCRIPTEN_RESOURCES)
-    list(APPEND LOCAL_VAR "${RESSOURCES}")
-    set(RESOURCE_PARAMETERS "${LOCAL_VAR}" PARENT_SCOPE)
-endfunction()
-
-add_resources(usdShade)
-add_resources(sdf)
-add_resources(hd)
-add_resources(usdHydra)
-add_resources(usdRender)
-add_resources(usdVol)
-add_resources(usdImaging)
-add_resources(usd)
-add_resources(usdLux)
-add_resources(ar)
-add_resources(usdGeom)
-add_resources(ndr)
 
 list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
 
