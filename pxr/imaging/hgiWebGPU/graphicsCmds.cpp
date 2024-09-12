@@ -170,7 +170,12 @@ HgiWebGPUGraphicsCmds::BindPipeline(HgiGraphicsPipelineHandle pipeline)
 {
     _stepFunctions.Init(pipeline->GetDescriptor());
 
-    _pipeline = static_cast<HgiWebGPUGraphicsPipeline *>(pipeline.Get());
+    auto newPipeline = static_cast<HgiWebGPUGraphicsPipeline *>(pipeline.Get());
+    if (_pipeline && newPipeline != _pipeline) {
+        // pending changes are dependent on bound pipeline, so we have to invalidate when a new pipeline is bound
+        _pendingUpdates.clear();
+    }
+    _pipeline = newPipeline;
 
     _renderPassEncoder.SetPipeline(_pipeline->GetPipeline());
 }

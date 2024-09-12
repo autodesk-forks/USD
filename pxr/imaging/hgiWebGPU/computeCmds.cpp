@@ -74,7 +74,13 @@ HgiWebGPUComputeCmds::BindPipeline(HgiComputePipelineHandle pipeline)
 {
     _CreateCommandEncoder();
 
-    _pipeline = static_cast<HgiWebGPUComputePipeline *>(pipeline.Get());
+    auto newPipeline = static_cast<HgiWebGPUComputePipeline *>(pipeline.Get());
+    if (_pipeline && newPipeline != _pipeline) {
+        // pending changes are dependent on bound pipeline, so we have to invalidate when a new pipeline is bound
+        _pendingUpdates.clear();
+    }
+    _pipeline = newPipeline;
+
     _computePassEncoder.SetPipeline(_pipeline->GetPipeline());
 
     const HgiComputePipelineDesc pipelineDesc = pipeline.Get()->GetDescriptor();
