@@ -32,7 +32,7 @@ if (EMSCRIPTEN)
 
     set(MODEL "Knife")
     set(MODEL_EXT "usda")
-    set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB " --tracing ${DEBUG_OPTIONS} -s DISABLE_EXCEPTION_CATCHING=0 \
+    set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB " --tracing ${DEBUG_OPTIONS} \
         -s ENVIRONMENT=web,worker \
         -pthread \
         -s MAXIMUM_MEMORY=4GB \
