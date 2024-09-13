@@ -1786,7 +1786,7 @@ TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6549"
+DAWN_CHROMIUM_VERSION = "6560"
 
 def InstallDawn(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):

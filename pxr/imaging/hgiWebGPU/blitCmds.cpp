@@ -81,22 +81,24 @@ HgiWebGPUBlitCmds::_MapAsyncAndWait(const wgpu::Buffer &buffer,
                                     size_t offset,
                                     size_t size) {
     bool done = false;
-    buffer.MapAsync(
-            mode, offset, size,
-            [](WGPUBufferMapAsyncStatus status, void *userdata) {
-                if (status != WGPUBufferMapAsyncStatus_Success) {
-                    TF_WARN("Failed to call MapAsync");
-                }
-                // Make sure we dont need to wait for it anymore. 
-                *static_cast<bool *>(userdata) = true;
-            },
-            &done);
+
+    buffer.MapAsync(mode, offset, size,
+                    wgpu::CallbackMode::AllowProcessEvents,
+                    [&done](wgpu::MapAsyncStatus status, const char*) {
+                        if (status != wgpu::MapAsyncStatus::Success) {
+                            TF_WARN("Failed to call MapAsync");
+                        }
+                        // Make sure we dont need to wait for it anymore.
+                        done = true;
+
+    });
 
     while (!done) {
 #if defined(EMSCRIPTEN)
         emscripten_sleep(1);
 #else
-        _hgi->GetPrimaryDevice().Tick();
+        _hgi->EndFrame();
+
 #endif
     }
 }

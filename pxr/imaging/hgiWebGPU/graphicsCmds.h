@@ -132,7 +132,8 @@ private:
     void _CreateCommandEncoder();
     void _EndRenderPass();
     void _ApplyPendingUpdates();
-    
+    bool _IsTimestampsEnabled();
+
     HgiWebGPU* _hgi;
     wgpu::BindGroupEntry _constantBindGroupEntry;
     HgiGraphicsCmdsDesc _descriptor;
@@ -148,6 +149,8 @@ private:
     std::vector<std::function<void(void)>> _pendingUpdates;
     HgiWebGPUStepFunctions _stepFunctions;
     bool _hasWork;
+    std::vector<std::string > _debugGroupLabels;
+    std::string _lastDrawLabel;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -66,6 +66,8 @@ using HgiBits = uint32_t;
 ///   Rendering support for triangulated quads</li>
 /// <li>HgiDeviceCapabilitiesBitsPushConstants:
 ///   Support for push constants</li>
+/// <li>HgiDeviceCapabilitiesBitsTimestamps:
+///   Supports GPU timestamps</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
@@ -92,6 +94,7 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsClipDistanceSupport     = 1 << 19,
     HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 20,
     HgiDeviceCapabilitiesBitsPushConstants           = 1 << 21,
+    HgiDeviceCapabilitiesBitsTimestamps              = 1 << 22,
 };
 
 using HgiDeviceCapabilities = HgiBits;

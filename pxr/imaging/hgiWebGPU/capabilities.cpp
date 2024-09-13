@@ -28,7 +28,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device)
+HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 {
     _maxUniformBlockSize          = 64 * 1024;
     _maxShaderStorageBlockSize    = 1 * 1024 * 1024 * 1024;
@@ -48,6 +48,7 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device)
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, true);
     _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsTimestamps, device.HasFeature(wgpu::FeatureName::TimestampQuery));
 }
 
 HgiWebGPUCapabilities::~HgiWebGPUCapabilities() = default;

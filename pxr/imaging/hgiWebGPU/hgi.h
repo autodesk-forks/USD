@@ -31,11 +31,22 @@
 #include "pxr/imaging/hgiWebGPU/mipmapGenerator.h"
 #include "pxr/imaging/hgi/hgi.h"
 #include "pxr/imaging/hgi/tokens.h"
+#include <unordered_map>
+
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 using HgiWebGPUCallback = std::function<void(void)>;
 
+struct QueryFrame {
+    wgpu::Buffer resultBuffer;
+    wgpu::Buffer resolveBuffer;
+    wgpu::QuerySet querySet;
+    std::shared_ptr<uint64_t> id;
+    std::string label;
+};
+
+    static size_t queryFrameCounter = 0;
 /// \class HgiWebGPU
 ///
 /// WebGPU implementation of the Hydra Graphics Interface.
@@ -43,6 +54,7 @@ using HgiWebGPUCallback = std::function<void(void)>;
 class HgiWebGPU final : public Hgi
 {
 public:
+
     HGIWEBGPU_API
     HgiWebGPU();
 
@@ -163,6 +175,14 @@ public:
     void ResolveDepth(wgpu::CommandEncoder const &commandEncoder, HgiWebGPUTexture &sourceTexture,
                                               HgiWebGPUTexture &destinationTexture);
 
+    HGIWEBGPU_API
+    void QueryValue();
+
+    HGIWEBGPU_API
+    wgpu::RenderPassTimestampWrites GetRenderTimestampWrites();
+
+    HGIWEBGPU_API
+    void ResolveQuery(wgpu::CommandEncoder &commandEncoder, const std::string &label);
 protected:
     HGIWEBGPU_API
     bool _SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait) override;
@@ -179,6 +199,9 @@ private:
         *handle = HgiHandle<T>();
     }
 
+    QueryFrame _CreateQueryObjects();
+    void _ProcessNextInflightQuery();
+
     wgpu::Device _device;
     wgpu::Queue _commandQueue;
     HgiCmds* _currentCmds;
@@ -191,6 +214,11 @@ private:
     std::vector<wgpu::CommandBuffer> _commandBuffers;
 
     bool _workToFlush;
+
+    std::vector<QueryFrame> _availableQueries;
+    std::shared_ptr<QueryFrame> _inflightQuery = nullptr;
+    std::unordered_map<uint64_t, QueryFrame> _pendingQueries;
+
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -24,6 +24,7 @@
 #include "pxr/imaging/hgi/graphicsCmdsDesc.h"
 #include "pxr/imaging/hgiWebGPU/buffer.h"
 #include "pxr/imaging/hgiWebGPU/conversions.h"
+#include "pxr/imaging/hgiWebGPU/debugCodes.h"
 #include "pxr/imaging/hgiWebGPU/diagnostic.h"
 #include "pxr/imaging/hgiWebGPU/graphicsCmds.h"
 #include "pxr/imaging/hgiWebGPU/hgi.h"
@@ -51,8 +52,12 @@ HgiWebGPUGraphicsCmds::HgiWebGPUGraphicsCmds(
 {
     _constantBindGroupEntry = {};
     _constantBindGroupEntry.size = 0;
-
     wgpu::RenderPassDescriptor renderPass;
+
+    if (_IsTimestampsEnabled()) {
+        wgpu::RenderPassTimestampWrites timestampWrites = _hgi->GetRenderTimestampWrites();
+        renderPass.timestampWrites = &timestampWrites;
+    }
 
     std::vector<wgpu::RenderPassColorAttachment> colorAttachments;
     for( size_t i=0; i<_descriptor.colorTextures.size(); ++i )
@@ -120,6 +125,11 @@ HgiWebGPUGraphicsCmds::~HgiWebGPUGraphicsCmds()
     _commandBuffer = nullptr;
 }
 
+bool HgiWebGPUGraphicsCmds::_IsTimestampsEnabled() {
+    return _hgi->GetCapabilities()->IsSet(HgiDeviceCapabilitiesBitsCppShaderPadding) &&
+    TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS);
+
+}
 void HgiWebGPUGraphicsCmds::_CreateCommandEncoder() {
     if (!_commandEncoder) {
         wgpu::Device device = _hgi->GetPrimaryDevice();
@@ -132,6 +142,7 @@ HgiWebGPUGraphicsCmds::PushDebugGroup(const char* label)
 {
     _CreateCommandEncoder();
     HgiWebGPUBeginLabel(_commandEncoder, label);
+    _debugGroupLabels.push_back(label);
 }
 
 void
@@ -139,6 +150,7 @@ HgiWebGPUGraphicsCmds::PopDebugGroup()
 {
     _CreateCommandEncoder();
     HgiWebGPUEndLabel(_commandEncoder);
+    _debugGroupLabels.pop_back();
 }
 
 void
@@ -312,8 +324,7 @@ HgiWebGPUGraphicsCmds::DrawIndexedIndirect(
 }
 
 bool
-HgiWebGPUGraphicsCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
-{
+HgiWebGPUGraphicsCmds::_Submit(Hgi *hgi, HgiSubmitWaitType wait) {
     // End render pass
     _EndRenderPass();
 
@@ -321,6 +332,9 @@ HgiWebGPUGraphicsCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
 
     wgpuHgi->EnqueueCommandBuffer(_commandBuffer);
     wgpuHgi->QueueSubmit();
+    if (_hasWork && _IsTimestampsEnabled()) {
+        wgpuHgi->QueryValue();
+    }
 
     _pendingUpdates.clear();
     _commandBuffer = nullptr;
@@ -342,6 +356,7 @@ HgiWebGPUGraphicsCmds::_ApplyPendingUpdates()
 
     _hasWork = true;
     _pendingUpdates.clear();
+    _lastDrawLabel = _debugGroupLabels.back();
 }
 
 void
@@ -353,6 +368,10 @@ HgiWebGPUGraphicsCmds::_EndRenderPass()
         _renderPassEncoder = nullptr;
 
         if (_hasWork)  {
+            if (_IsTimestampsEnabled()) {
+                _hgi->ResolveQuery(_commandEncoder,
+                                   _lastDrawLabel.empty() ? _pipeline->GetDescriptor().debugName : _lastDrawLabel);
+            }
             auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
             if (depthTarget) {
                 HgiTextureDesc depthDesc = depthTarget->GetDescriptor();

@@ -106,7 +106,9 @@ wgpu::Device GetDevice() {
     static std::unique_ptr<dawn::native::Instance> instance;
 
     wgpu::Device GetDevice() {
-        instance = std::make_unique<dawn::native::Instance>();
+        if (!instance) {
+            instance = std::make_unique<dawn::native::Instance>();
+        }
 
         // Simply pick the first adapter in the sorted list.
         dawn::native::Adapter backendAdapter = instance->EnumerateAdapters()[0];
@@ -116,6 +118,10 @@ wgpu::Device GetDevice() {
                 wgpu::FeatureName::Depth32FloatStencil8,
                 wgpu::FeatureName::Float32Filterable
         };
+
+        if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS)) {
+            requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
+        }
 
         #ifndef EMSCRIPTEN
             // toggles are handled by chrome itself, so we only enable it for the desktop version where we have direct
@@ -367,13 +373,15 @@ HgiWebGPU::GetIndirectCommandEncoder() const
 void
 HgiWebGPU::StartFrame()
 {
-    // TODO
+
 }
 
 void
 HgiWebGPU::EndFrame()
 {
-    // TODO
+#ifndef EMSCRIPTEN
+    dawn::native::InstanceProcessEvents(instance->Get());
+#endif
 }
 
 wgpu::Queue
@@ -387,6 +395,122 @@ HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const &commandBuffer)
 {
     _commandBuffers.push_back(commandBuffer);
 }
+
+void
+HgiWebGPU::QueryValue()
+{
+    if (_inflightQuery->resultBuffer.GetMapState() == wgpu::BufferMapState::Unmapped) {
+        std::shared_ptr<uint64_t> idPtr = std::make_shared<uint64_t>(0);
+        auto future = _inflightQuery->resultBuffer.MapAsync(
+                wgpu::MapMode::Read,
+                0,
+                _inflightQuery->resultBuffer.GetSize(),
+                wgpu::CallbackMode::AllowProcessEvents,
+                [this,idPtr](wgpu::MapAsyncStatus status, char const * message) {
+                    uint64_t id = *idPtr;
+                    if (status != wgpu::MapAsyncStatus::Success) {
+                        TF_WARN("Failed to call MapAsync for query ");
+                        _pendingQueries.erase(id);
+                        return;
+                    }
+
+
+                    if (_pendingQueries.count(id) > 0) {
+                        std::vector<uint64_t> times(2);
+                        memcpy(times.data(),
+                               _pendingQueries[id].resultBuffer.GetConstMappedRange(),
+                               _pendingQueries[id].resultBuffer.GetSize());
+                        uint64_t nanoseconds = (times[1] - times[0]);
+                        float milliseconds = (float) nanoseconds * 1e-6;
+                        TF_STATUS(_pendingQueries[id].label + " took: " + std::to_string(milliseconds) + "ms");
+                        _pendingQueries[id].resultBuffer.Unmap();
+                        _availableQueries.push_back(_pendingQueries[id]);
+                        _pendingQueries.erase(id);
+                    } else {
+                        TF_RUNTIME_ERROR("Failed to find pending query");
+                    }
+                });
+        _pendingQueries[future.id] = std::move(*_inflightQuery);
+        _pendingQueries[future.id].id = idPtr;
+        *idPtr = future.id;
+        _inflightQuery = nullptr;
+    }
+}
+
+    QueryFrame HgiWebGPU::_CreateQueryObjects() {
+        QueryFrame queryFrame{};
+        const int capacity = 2; // Max number of timestamps we can store
+
+        wgpu::QuerySetDescriptor querySetDescriptor;
+        querySetDescriptor.count = capacity;
+        querySetDescriptor.type = wgpu::QueryType::Timestamp;
+        queryFrame.querySet = _device.CreateQuerySet(&querySetDescriptor);
+
+        {
+            wgpu::BufferDescriptor bufferDescriptor;
+            bufferDescriptor.size = capacity * sizeof(uint64_t);
+            bufferDescriptor.label = ("queryResolve" + std::to_string(queryFrameCounter)).c_str();
+            bufferDescriptor.usage =
+                    wgpu::BufferUsage::QueryResolve | wgpu::BufferUsage::CopySrc;
+            queryFrame.resolveBuffer =
+                    _device.CreateBuffer(&bufferDescriptor);
+        }
+
+        {
+            wgpu::BufferDescriptor bufferDescriptor;
+            bufferDescriptor.size = capacity * sizeof(uint64_t);
+            bufferDescriptor.label = ("queryResult" + std::to_string(queryFrameCounter++)).c_str();
+            bufferDescriptor.usage =
+                    wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
+            queryFrame.resultBuffer =
+                    _device.CreateBuffer(&bufferDescriptor);
+        }
+        return queryFrame;
+    }
+
+    void HgiWebGPU::ResolveQuery(wgpu::CommandEncoder &commandEncoder, const std::string &label) {
+
+        commandEncoder.ResolveQuerySet(
+                _inflightQuery->querySet,
+                0,
+                _inflightQuery->querySet.GetCount(),
+                _inflightQuery->resolveBuffer,
+                0);
+
+        if (_inflightQuery->resultBuffer.GetMapState() == wgpu::BufferMapState::Unmapped) {
+            commandEncoder.CopyBufferToBuffer(_inflightQuery->resolveBuffer,
+                                              0,
+                                              _inflightQuery->resultBuffer,
+                                              0,
+                                              _inflightQuery->resolveBuffer.GetSize());
+        }
+        _inflightQuery->label = label;
+    }
+
+
+    void HgiWebGPU::_ProcessNextInflightQuery() {
+        // There could be an empty graphics cmds that request a query but never submits work to the queue.
+        // In these cases, we want to reuse the current _inflightQuery
+        if (!_inflightQuery) {
+            if (!_availableQueries.empty()) {
+                _inflightQuery = std::make_shared<QueryFrame>(std::move(_availableQueries.back()));
+                _availableQueries.pop_back();
+            } else {
+                _inflightQuery = std::make_shared<QueryFrame>(_CreateQueryObjects());
+            }
+        }
+    }
+
+    wgpu::RenderPassTimestampWrites HgiWebGPU::GetRenderTimestampWrites() {
+        _ProcessNextInflightQuery();
+
+        wgpu::RenderPassTimestampWrites timestampWrites;
+        timestampWrites.querySet = _inflightQuery->querySet;
+        timestampWrites.beginningOfPassWriteIndex = 0;
+        timestampWrites.endOfPassWriteIndex = 1;
+
+        return timestampWrites;
+    }
 
 void
 HgiWebGPU::QueueSubmit()

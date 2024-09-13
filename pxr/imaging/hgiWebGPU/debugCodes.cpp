@@ -35,6 +35,8 @@ PXR_NAMESPACE_OPEN_SCOPE
                                     "HgiWebGPU report graphics pipeline attributes descriptors.");
         TF_DEBUG_ENVIRONMENT_SYMBOL(HGIWEBGPU_DEBUG_SHADER_CODE,
                                     "HgiWebGPU report graphics pipeline attributes descriptors.");
+        TF_DEBUG_ENVIRONMENT_SYMBOL(HGIWEBGPU_DEBUG_TIMESTAMPS,
+                                    "HgiWebGPU report commands timestamps.");
 
     }
 
