@@ -66,9 +66,6 @@ TF_DEFINE_PRIVATE_TOKENS(
 TF_DEFINE_ENV_SETTING(HDST_ENABLE_PIPELINE_DRAW_BATCH_GPU_FRUSTUM_CULLING, true,
                       "Enable pipeline draw batching GPU frustum culling");
 
-static int counter = 0;
-static int counterBindings = 0;
-
 HdSt_PipelineDrawBatch::HdSt_PipelineDrawBatch(
     HdStDrawItemInstance * drawItemInstance,
     bool const allowGpuFrustumCulling,
@@ -1067,7 +1064,7 @@ _BindingState::GetBindingsForDrawing(
 {
     GetBindingsForViewTransformation(bindingsDesc);
 
-    bindingsDesc->debugName = "PipelineDrawBatch.Drawing" + std::to_string(counterBindings++);
+    bindingsDesc->debugName = "PipelineDrawBatch.Drawing";
 
     binder.GetInterleavedBufferArrayBindingDesc(
         bindingsDesc, topVisBar, HdTokens->topologyVisibility);
@@ -1268,7 +1265,6 @@ _GetDrawPipeline(
 
     if (pipelineInstance.IsFirstInstance()) {
         HgiGraphicsPipelineDesc pipeDesc;
-        pipeDesc.debugName = "geometric" + std::to_string(counter++);
 
         renderPassState->InitGraphicsPipelineDesc(&pipeDesc,
                                                   state.geometricShader,
