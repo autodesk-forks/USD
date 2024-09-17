@@ -128,7 +128,11 @@ pxr_library(ts
 )
 
 if (${PXR_BUILD_TESTS})
-    target_compile_definitions(ts PRIVATE TS_BUILD_TEST_FRAMEWORK)
+    if (PXR_ENABLE_JS_SUPPORT)
+        target_compile_definitions(ts INTERFACE TS_BUILD_TEST_FRAMEWORK)
+    else()
+        target_compile_definitions(ts PRIVATE TS_BUILD_TEST_FRAMEWORK)
+    endif()
     if (TARGET _ts)
         target_compile_definitions(_ts PRIVATE TS_BUILD_TEST_FRAMEWORK)
     endif()

@@ -395,7 +395,7 @@ HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const &commandBuffer)
 {
     _commandBuffers.push_back(commandBuffer);
 }
-
+#if !defined(EMSCRIPTEN)
 void
 HgiWebGPU::QueryValue()
 {
@@ -511,6 +511,7 @@ HgiWebGPU::QueryValue()
 
         return timestampWrites;
     }
+#endif
 
 void
 HgiWebGPU::QueueSubmit()

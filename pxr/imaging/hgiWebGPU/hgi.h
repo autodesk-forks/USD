@@ -174,7 +174,7 @@ public:
     HGIWEBGPU_API
     void ResolveDepth(wgpu::CommandEncoder const &commandEncoder, HgiWebGPUTexture &sourceTexture,
                                               HgiWebGPUTexture &destinationTexture);
-
+#if !defined(EMSCRIPTEN)
     HGIWEBGPU_API
     void QueryValue();
 
@@ -183,6 +183,7 @@ public:
 
     HGIWEBGPU_API
     void ResolveQuery(wgpu::CommandEncoder &commandEncoder, const std::string &label);
+#endif
 protected:
     HGIWEBGPU_API
     bool _SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait) override;
@@ -198,9 +199,10 @@ private:
         delete handle->Get();
         *handle = HgiHandle<T>();
     }
-
+#if !defined(EMSCRIPTEN)
     QueryFrame _CreateQueryObjects();
     void _ProcessNextInflightQuery();
+#endif
 
     wgpu::Device _device;
     wgpu::Queue _commandQueue;

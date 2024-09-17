@@ -53,12 +53,12 @@ HgiWebGPUGraphicsCmds::HgiWebGPUGraphicsCmds(
     _constantBindGroupEntry = {};
     _constantBindGroupEntry.size = 0;
     wgpu::RenderPassDescriptor renderPass;
-
+#if !defined(EMSCRIPTEN)
     if (_IsTimestampsEnabled()) {
         wgpu::RenderPassTimestampWrites timestampWrites = _hgi->GetRenderTimestampWrites();
         renderPass.timestampWrites = &timestampWrites;
     }
-
+#endif
     std::vector<wgpu::RenderPassColorAttachment> colorAttachments;
     for( size_t i=0; i<_descriptor.colorTextures.size(); ++i )
     {
@@ -332,9 +332,11 @@ HgiWebGPUGraphicsCmds::_Submit(Hgi *hgi, HgiSubmitWaitType wait) {
 
     wgpuHgi->EnqueueCommandBuffer(_commandBuffer);
     wgpuHgi->QueueSubmit();
+#if !defined(EMSCRIPTEN)
     if (_hasWork && _IsTimestampsEnabled()) {
         wgpuHgi->QueryValue();
     }
+#endif
 
     _pendingUpdates.clear();
     _commandBuffer = nullptr;
@@ -368,10 +370,12 @@ HgiWebGPUGraphicsCmds::_EndRenderPass()
         _renderPassEncoder = nullptr;
 
         if (_hasWork)  {
+#if !defined(EMSCRIPTEN)
             if (_IsTimestampsEnabled()) {
                 _hgi->ResolveQuery(_commandEncoder,
                                    _lastDrawLabel.empty() ? _pipeline->GetDescriptor().debugName : _lastDrawLabel);
             }
+#endif
             auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
             if (depthTarget) {
                 HgiTextureDesc depthDesc = depthTarget->GetDescriptor();
