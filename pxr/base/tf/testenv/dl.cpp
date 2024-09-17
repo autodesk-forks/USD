@@ -94,7 +94,11 @@ Test_TfDl()
     #endif
     TF_AXIOM(handle != nullptr);
     TF_AXIOM(errorStr.empty());
+#ifdef __EMSCRIPTEN__
     TF_AXIOM(dlclose(handle) == 0);
+#else
+    TF_AXIOM(!TfDlclose(handle));
+#endif
 
     // we should not be in the process of opening/closing a DL now either
     TF_AXIOM(!Tf_DlOpenIsActive());
