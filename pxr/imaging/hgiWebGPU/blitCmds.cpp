@@ -304,10 +304,16 @@ HgiWebGPUBlitCmds::FillBuffer(HgiBufferHandle const& buffer, uint8_t value)
 {
     auto wgpuBuffer = dynamic_cast<HgiWebGPUBuffer*>(buffer.Get());
     if (wgpuBuffer) {
-        HgiBufferDesc const& desc = wgpuBuffer->GetDescriptor();
-        std::vector<uint8_t> fillVector(desc.byteSize, value);
-
-        _hgi->GetQueue().WriteBuffer(wgpuBuffer->GetBufferHandle(), 0, fillVector.data(), desc.byteSize);
+        if (value == 0) {
+            // We can use ClearBuffer to clear the buffer to 0
+            // This is faster than writing the buffer with a value in the case of WebGPU
+            _CreateEncoder();
+            _blitEncoder.ClearBuffer(wgpuBuffer->GetBufferHandle(), 0, wgpuBuffer->GetDescriptor().byteSize);
+        } else {
+            HgiBufferDesc const& desc = wgpuBuffer->GetDescriptor();
+            std::vector<uint8_t> fillVector(desc.byteSize, value);
+            _hgi->GetQueue().WriteBuffer(wgpuBuffer->GetBufferHandle(), 0, fillVector.data(), desc.byteSize);
+        }
     }
 }
 
