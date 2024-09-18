@@ -298,9 +298,9 @@ if (PXR_BUILD_IMAGING)
         )
         if (WIN32)
             list(APPEND TINT_COMPONENTS
-                lang_hsl
-                lang_hsl_intrinsic
-                lang_hsl_ir
+                lang_hlsl
+                lang_hlsl_intrinsic
+                lang_hlsl_ir
                 lang_hlsl_writer
                 lang_hlsl_writer_printer
                 lang_hlsl_writer_raise
