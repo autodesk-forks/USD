@@ -182,12 +182,7 @@ HgiWebGPUGraphicsCmds::BindPipeline(HgiGraphicsPipelineHandle pipeline)
 {
     _stepFunctions.Init(pipeline->GetDescriptor());
 
-    auto newPipeline = static_cast<HgiWebGPUGraphicsPipeline *>(pipeline.Get());
-    if (_pipeline && newPipeline != _pipeline) {
-        // pending changes are dependent on bound pipeline, so we have to invalidate when a new pipeline is bound
-        _pendingUpdates.clear();
-    }
-    _pipeline = newPipeline;
+    _pipeline = static_cast<HgiWebGPUGraphicsPipeline *>(pipeline.Get());
 
     _renderPassEncoder.SetPipeline(_pipeline->GetPipeline());
 }
@@ -196,15 +191,7 @@ void
 HgiWebGPUGraphicsCmds::BindResources(HgiResourceBindingsHandle res)
 {
     // delay until the pipeline is set and the render pass has begun
-    _pendingUpdates.push_back(
-            [this, res] {
-                HgiWebGPUResourceBindings * resourceBinding =
-                        static_cast<HgiWebGPUResourceBindings*>(res.Get());
-                wgpu::RenderPipeline pipelineHandle = _pipeline->GetPipeline();
-                resourceBinding->BindResources(_hgi->GetPrimaryDevice(), _renderPassEncoder, _pipeline->GetBindGroupLayoutList(), _constantBindGroupEntry, _pushConstantsDirty);
-                _pushConstantsDirty = false;
-            }
-    );
+    _resourceBindings = res;
 }
 
 void
@@ -259,7 +246,7 @@ HgiWebGPUGraphicsCmds::Draw(
         uint32_t instanceCount,
         uint32_t baseInstance)
 {
-    _ApplyPendingUpdates();
+    _BindResources();
 
     _renderPassEncoder.Draw(vertexCount, instanceCount, baseVertex, 0);
 }
@@ -271,7 +258,7 @@ HgiWebGPUGraphicsCmds::DrawIndirect(
         uint32_t drawCount,
         uint32_t stride)
 {
-    _ApplyPendingUpdates();
+    _BindResources();
 
     HgiWebGPUBuffer* drawBuf =
             static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
@@ -290,7 +277,7 @@ HgiWebGPUGraphicsCmds::DrawIndexed(
 {
     TF_VERIFY(instanceCount>0);
 
-    _ApplyPendingUpdates();
+    _BindResources();
     _stepFunctions.SetVertexBufferOffsets(_renderPassEncoder, baseInstance);
     HgiWebGPUBuffer* ibo = static_cast<HgiWebGPUBuffer*>(indexBuffer.Get());
     uint32_t const baseIndex = indexBufferByteOffset / sizeof(uint32_t);
@@ -313,7 +300,7 @@ HgiWebGPUGraphicsCmds::DrawIndexedIndirect(
         std::vector<uint32_t> const& drawParameterBufferUInt32,
         uint32_t patchBaseVertexByteOffset)
 {
-    _ApplyPendingUpdates();
+    _BindResources();
 
     HgiWebGPUBuffer* ibo = static_cast<HgiWebGPUBuffer*>(indexBuffer.Get());
     HgiWebGPUBuffer* drawBuf =
@@ -338,26 +325,31 @@ HgiWebGPUGraphicsCmds::_Submit(Hgi *hgi, HgiSubmitWaitType wait) {
     }
 #endif
 
-    _pendingUpdates.clear();
     _commandBuffer = nullptr;
 
     return _hasWork;
 }
 
 void
-HgiWebGPUGraphicsCmds::_ApplyPendingUpdates()
+HgiWebGPUGraphicsCmds::_BindResources()
 {
     if (!_pipeline) {
         TF_CODING_ERROR("No pipeline bound");
         return;
     }
 
-    // now that the render pass has begun we can execute any commands that require a render pass to be active
-    for (auto const& fn : _pendingUpdates)
-        fn();
+    if (_resourceBindings) {
+        HgiWebGPUResourceBindings *resourceBinding =
+                static_cast<HgiWebGPUResourceBindings *>(_resourceBindings.Get());
+        wgpu::RenderPipeline pipelineHandle = _pipeline->GetPipeline();
+        resourceBinding->BindResources(_hgi->GetPrimaryDevice(), _renderPassEncoder,
+                                       _pipeline->GetBindGroupLayoutList(), _constantBindGroupEntry,
+                                       _pushConstantsDirty);
+        _pushConstantsDirty = false;
+        _resourceBindings = HgiResourceBindingsHandle();
+    }
 
     _hasWork = true;
-    _pendingUpdates.clear();
     _lastDrawLabel = _debugGroupLabels.back();
 }
 

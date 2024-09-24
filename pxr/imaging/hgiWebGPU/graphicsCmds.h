@@ -30,7 +30,6 @@
 #include "pxr/imaging/hgiWebGPU/stepFunctions.h"
 #include "pxr/imaging/hgi/graphicsCmds.h"
 #include <cstdint>
-#include <functional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -131,7 +130,7 @@ private:
 
     void _CreateCommandEncoder();
     void _EndRenderPass();
-    void _ApplyPendingUpdates();
+    void _BindResources();
     bool _IsTimestampsEnabled();
 
     HgiWebGPU* _hgi;
@@ -146,7 +145,7 @@ private:
     bool _pushConstantsDirty;
     bool _viewportSet;
     bool _scissorSet;
-    std::vector<std::function<void(void)>> _pendingUpdates;
+    HgiResourceBindingsHandle _resourceBindings;
     HgiWebGPUStepFunctions _stepFunctions;
     bool _hasWork;
     std::vector<std::string > _debugGroupLabels;

@@ -28,7 +28,7 @@
 #include "pxr/imaging/hgi/computeCmds.h"
 #include "pxr/imaging/hgi/computePipeline.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
-#include <functional>
+#include "pxr/imaging/hgiWebGPU/resourceBindings.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -88,7 +88,7 @@ private:
     HgiWebGPUComputeCmds & operator=(const HgiWebGPUComputeCmds&) = delete;
     HgiWebGPUComputeCmds(const HgiWebGPUComputeCmds&) = delete;
 
-    void _ApplyPendingUpdates();
+    void _BindResources();
     void _CreateCommandEncoder();
     void _EndComputePass();
 
@@ -101,12 +101,9 @@ private:
     std::string _debugLabel;
     bool _computePassStarted;
     bool _pushConstantsDirty;
-    std::vector<std::function<void(void)>> _pendingUpdates;
     HgiComputeDispatch _dispatchMethod;
     GfVec3i _localWorkGroupSize;
-
-    // Cmds is used only one frame so storing multi-frame state on will not
-    // survive.
+    HgiResourceBindingsHandle _resourceBindings;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

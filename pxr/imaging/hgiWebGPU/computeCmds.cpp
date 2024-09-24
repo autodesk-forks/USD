@@ -74,12 +74,7 @@ HgiWebGPUComputeCmds::BindPipeline(HgiComputePipelineHandle pipeline)
 {
     _CreateCommandEncoder();
 
-    auto newPipeline = static_cast<HgiWebGPUComputePipeline *>(pipeline.Get());
-    if (_pipeline && newPipeline != _pipeline) {
-        // pending changes are dependent on bound pipeline, so we have to invalidate when a new pipeline is bound
-        _pendingUpdates.clear();
-    }
-    _pipeline = newPipeline;
+    _pipeline = static_cast<HgiWebGPUComputePipeline *>(pipeline.Get());
 
     _computePassEncoder.SetPipeline(_pipeline->GetPipeline());
 
@@ -103,15 +98,7 @@ void
 HgiWebGPUComputeCmds::BindResources(HgiResourceBindingsHandle res)
 {
     // delay until the pipeline is set, the compute pass has begun and constant buffer has been created
-    _pendingUpdates.push_back(
-        [this, res] {
-            HgiWebGPUResourceBindings * resourceBinding =
-                static_cast<HgiWebGPUResourceBindings*>(res.Get());
-            wgpu::ComputePipeline pipelineHandle = _pipeline->GetPipeline();
-            resourceBinding->BindResources(_hgi->GetPrimaryDevice(), _computePassEncoder, _pipeline->GetBindGroupLayoutList(), _constantBindGroupEntry, _pushConstantsDirty);
-            _pushConstantsDirty = false;
-        }
-    );
+    _resourceBindings = res;
 }
 
 void
@@ -141,7 +128,7 @@ HgiWebGPUComputeCmds::SetConstantValues(
 void
 HgiWebGPUComputeCmds::Dispatch(int dimX, int dimY)
 {
-    _ApplyPendingUpdates();
+    _BindResources();
 
     const int workgroupSizeX = _localWorkGroupSize[0];
     const int workgroupSizeY = _localWorkGroupSize[1];
@@ -160,7 +147,6 @@ HgiWebGPUComputeCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
     wgpuHgi->EnqueueCommandBuffer(_commandBuffer);
     wgpuHgi->QueueSubmit();
 
-    _pendingUpdates.clear();
     _commandBuffer = nullptr;
 
     return true;
@@ -179,7 +165,7 @@ HgiWebGPUComputeCmds::GetDispatchMethod() const
 }
 
 void
-HgiWebGPUComputeCmds::_ApplyPendingUpdates()
+HgiWebGPUComputeCmds::_BindResources()
 {
     if (!_pipeline) {
         TF_CODING_ERROR("No pipeline bound");
@@ -187,11 +173,15 @@ HgiWebGPUComputeCmds::_ApplyPendingUpdates()
     }
 
     _computePassStarted = true;
-    // now that the pipeline has been set we can execute any commands that require the pipeline information
-    for (auto const& fn : _pendingUpdates)
-        fn();
-
-    _pendingUpdates.clear();
+    if (_resourceBindings) {
+        // now that the pipeline has been set we can bind resources
+        HgiWebGPUResourceBindings * resourceBinding =
+                static_cast<HgiWebGPUResourceBindings*>(_resourceBindings.Get());
+        wgpu::ComputePipeline pipelineHandle = _pipeline->GetPipeline();
+        resourceBinding->BindResources(_hgi->GetPrimaryDevice(), _computePassEncoder, _pipeline->GetBindGroupLayoutList(), _constantBindGroupEntry, _pushConstantsDirty);
+        _pushConstantsDirty = false;
+        _resourceBindings = HgiResourceBindingsHandle();
+    }
 }
 
 void
