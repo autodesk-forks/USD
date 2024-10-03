@@ -1021,6 +1021,7 @@ HdxColorCorrectionTask::_CreatePipeline(HgiTextureHandle const& aovTexture)
 
     desc.shaderConstantsDesc.stageUsage = HgiShaderStageFragment;
     desc.shaderConstantsDesc.byteSize = sizeof(_screenSize);
+    desc.debugName = "Color Correction Pipeline";
 
     _pipeline = _GetHgi()->CreateGraphicsPipeline(desc);
 
