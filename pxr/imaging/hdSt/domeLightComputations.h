@@ -46,6 +46,10 @@ public:
         const TfToken & shaderToken, 
         // Lighting shader that remembers the GL texture names
         HdStSimpleLightingShaderPtr const &lightingShader,
+        // Width of output textures.
+        unsigned int outputWidth,
+        // Height of output textures.
+        unsigned int outputHeight,
         // Number of mip levels.
         unsigned int numLevels = 1,
         // Level to be filled (0 means also to allocate texture)
@@ -67,6 +71,8 @@ public:
 private:
     const TfToken _shaderToken;
     HdStSimpleLightingShaderPtr const _lightingShader;
+    const unsigned int _outputWidth;
+    const unsigned int _outputHeight;
     const unsigned int _numLevels;
     const unsigned int _level;
     const float _roughness;

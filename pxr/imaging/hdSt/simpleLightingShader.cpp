@@ -49,6 +49,7 @@ HdStSimpleLightingShader::HdStSimpleLightingShader()
     : _lightingContext(GlfSimpleLightingContext::New())
     , _useLighting(true)
     , _glslfx(std::make_unique<HioGlslfx>(HdStPackageSimpleLightingShader()))
+    , _domeLightTexturesMaxResolution(8192)
     , _renderParam(nullptr)
 {
 }
@@ -593,14 +594,6 @@ HdStSimpleLightingShader::AddResourcesFromTextures(ResourceContext &ctx) const
             std::const_pointer_cast<HdStShaderCode, const HdStShaderCode>(
                 shared_from_this()));
 
-    // Irriadiance map computations.
-    ctx.AddComputation(
-        nullptr,
-        std::make_shared<HdSt_DomeLightComputationGPU>(
-            _tokens->domeLightIrradiance,
-            thisShader),
-        HdStComputeQueueZero);
-    
     // Calculate the number of mips for the prefilter texture
     // Note that the size of the prefilter texture is half the size of the 
     // original Environment Map (srcTextureObject)
@@ -619,8 +612,36 @@ HdStSimpleLightingShader::AddResourcesFromTextures(ResourceContext &ctx) const
     }
     const GfVec3i srcDim = srcTexture->GetDescriptor().dimensions;
 
-    const unsigned int numPrefilterLevels = 
-        std::max((unsigned int)(std::log2(std::max(srcDim[0], srcDim[1]))), 1u);
+    // Size of texture to be created.
+    unsigned int outputWidth = srcDim[0];
+    unsigned int outputHeight = srcDim[1];
+
+    // Check max resolution.
+    unsigned int maxDim = std::max(outputWidth, outputHeight);
+    if (maxDim > _domeLightTexturesMaxResolution) {
+        float ratio = outputWidth / outputHeight;
+        if (outputWidth >= outputHeight) {
+            outputWidth = _domeLightTexturesMaxResolution;
+            outputHeight = outputWidth / ratio;
+        }
+        else {
+            outputHeight = _domeLightTexturesMaxResolution;
+            outputWidth = outputHeight * ratio;
+        }
+    }
+
+    // Irriadiance map computations.
+    ctx.AddComputation(
+        nullptr,
+        std::make_shared<HdSt_DomeLightComputationGPU>(
+            _tokens->domeLightIrradiance,
+            thisShader,
+            outputWidth,
+            outputHeight),
+        HdStComputeQueueZero);
+
+    const unsigned int numPrefilterLevels =
+        std::max(static_cast<unsigned int>(std::log2(std::max(outputWidth, outputHeight))), 1u);
 
     // Prefilter map computations. mipLevel = 0 allocates texture.
     for (unsigned int mipLevel = 0; mipLevel < numPrefilterLevels; ++mipLevel) {
@@ -632,6 +653,8 @@ HdStSimpleLightingShader::AddResourcesFromTextures(ResourceContext &ctx) const
             std::make_shared<HdSt_DomeLightComputationGPU>(
                 _tokens->domeLightPrefilter, 
                 thisShader,
+                outputWidth,
+                outputHeight,
                 numPrefilterLevels,
                 mipLevel,
                 roughness),
@@ -643,7 +666,9 @@ HdStSimpleLightingShader::AddResourcesFromTextures(ResourceContext &ctx) const
         nullptr,
         std::make_shared<HdSt_DomeLightComputationGPU>(
             _tokens->domeLightBRDF,
-            thisShader),
+            thisShader,
+            outputWidth,
+            outputHeight),
         HdStComputeQueueZero);
 }
 
@@ -651,6 +676,16 @@ HdStShaderCode::NamedTextureHandleVector const &
 HdStSimpleLightingShader::GetNamedTextureHandles() const
 {
     return _namedTextureHandles;
+}
+
+void 
+HdStSimpleLightingShader::SetDomeLightTexturesMaxResolution(unsigned int maxRes)
+{
+    if (_domeLightTexturesMaxResolution != maxRes) {
+        _domeLightTexturesMaxResolution = maxRes;
+        _domeLightEnvironmentTextureHandle = nullptr;
+        _domeLightTextureHandles.clear();
+    }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
