@@ -32,11 +32,15 @@ PXR_NAMESPACE_OPEN_SCOPE
 HdSt_DomeLightComputationGPU::HdSt_DomeLightComputationGPU(
     const TfToken &shaderToken,
     HdStSimpleLightingShaderPtr const &lightingShader,
+    const unsigned int outputWidth,
+    const unsigned int outputHeight,
     const unsigned int numLevels,
     const unsigned int level, 
     const float roughness) 
   : _shaderToken(shaderToken), 
     _lightingShader(lightingShader),
+    _outputWidth(outputWidth),
+    _outputHeight(outputHeight),
     _numLevels(numLevels), 
     _level(level), 
     _roughness(roughness)
@@ -167,10 +171,10 @@ HdSt_DomeLightComputationGPU::Execute(
 
     // Size of texture to be created.
     // Downsize larger textures
-    bool downsize = (srcDim[0] > 256 && srcDim[1] > 256);
-    int width  = downsize ? srcDim[0] / 2 : srcDim[0];
-    int height = downsize ? srcDim[1] / 2 : srcDim[1];
-    
+    bool downsize = (_outputWidth > 256 && _outputHeight > 256);
+    int width = downsize ? _outputWidth / 2 : _outputWidth;
+    int height = downsize ? _outputHeight / 2 : _outputHeight;
+
     // Make sure dimensions align with the local size used in the Compute Shader
     width = _MakeMultipleOf(width, localSize);
     height = _MakeMultipleOf(height, localSize);
