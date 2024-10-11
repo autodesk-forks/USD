@@ -220,10 +220,6 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         extensions.push_back(VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME);
     }
 
-    // This extension is needed to allow the viewport to be flipped in Y so that
-    // shaders and vertex data can remain the same between opengl and vulkan.
-    extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
-
     // Enabling certain features may incure a performance hit
     // (e.g. robustBufferAccess), so only enable the features we will use.
     VkPhysicalDeviceVulkan11Features vulkan11Features =

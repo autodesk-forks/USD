@@ -165,8 +165,4 @@ HgiVulkanCapabilities::GetShaderVersion() const
     return 450;
 }
 
-bool HgiVulkanCapabilities::IsViewportYUp() const {
-    return false;
-}
-
 PXR_NAMESPACE_CLOSE_SCOPE

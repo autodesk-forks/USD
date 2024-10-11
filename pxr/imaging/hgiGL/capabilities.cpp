@@ -247,8 +247,4 @@ HgiGLCapabilities::GetShaderVersion() const {
     return _glslVersion;
 }
 
-bool HgiGLCapabilities::IsViewportYUp() const {
-    return true;
-}
-
 PXR_NAMESPACE_CLOSE_SCOPE

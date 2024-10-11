@@ -35,9 +35,6 @@ public:
     HGIGL_API
     int GetShaderVersion() const override;
 
-    HGIGL_API
-    bool IsViewportYUp() const override;
-
 private:
     void _LoadCapabilities();
 

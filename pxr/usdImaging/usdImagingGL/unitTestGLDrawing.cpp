@@ -327,11 +327,10 @@ UsdImagingGL_UnitTestGLDrawing::WriteAovToFile(
             hgi, texture, &bufferSize);
 
     HgiTextureDesc const textureDesc = texture.Get()->GetDescriptor();
-    const HgiCapabilities *capabilities = hgi->GetCapabilities();
     HioImage::StorageSpec storage;
     storage.width = textureDesc.dimensions[0];
     storage.height = textureDesc.dimensions[1];
-    storage.flipped = capabilities->IsViewportYUp();
+    storage.flipped = true;
     storage.data = buffer.get();
 
     if (textureDesc.format == HgiFormatUNorm8Vec4) {
