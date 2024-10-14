@@ -68,6 +68,9 @@ using HgiBits = uint32_t;
 ///   Support for push constants</li>
 /// <li>HgiDeviceCapabilitiesBitsTimestamps:
 ///   Supports GPU timestamps</li>
+/// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
+///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
+///   regardless of the body of the shader</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
@@ -95,6 +98,7 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 20,
     HgiDeviceCapabilitiesBitsPushConstants           = 1 << 21,
     HgiDeviceCapabilitiesBitsTimestamps              = 1 << 22,
+    HgiDeviceCapabilitiesForceEarlyFragmentTest      = 1 << 23,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -803,13 +807,16 @@ enum HgiStorageType
 ///   Indicates a shadow texture.</li>
 /// <li>HgiShaderTextureTypeArrayTexture:
 ///   Indicates an array texture.</li>
+/// <li>HgiShaderTextureTypeDepth:
+///   Indicates a depth texture.</li>
 /// </ul>
 ///
 enum HgiShaderTextureType
 {
     HgiShaderTextureTypeTexture = 0,
     HgiShaderTextureTypeShadowTexture,
-    HgiShaderTextureTypeArrayTexture
+    HgiShaderTextureTypeArrayTexture,
+    HgiShaderTextureTypeDepth
 };
 
 /// \enum HgiComputeDispatch

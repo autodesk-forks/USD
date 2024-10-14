@@ -653,6 +653,11 @@ pxr_install_test_dir(
     DEST testUsdImagingGLVelocityMotion_SceneIndex
 )
 
+pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLOIT
+    DEST testUsdImagingGLOIT
+)
+
 #
 # Register tests that don't depend on build configuration or external libraries
 # (such as MaterialX, OpenVDB, PTEX).
@@ -4575,6 +4580,18 @@ pxr_register_test(testUsdImagingGLVelocityMotion_SceneIndex
     TESTENV testUsdImagingGLVelocityMotion_SceneIndex
     ENV
         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1)
+
+pxr_register_test(testUsdImagingGLOIT
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -camlight -frameAll -camera /Root/FrontCamera -stage scene.usda -write testUsdImagingGLOIT.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLOIT.png
+    FAIL 0.005
+    FAIL_PERCENT 0.001
+    WARN 0.005
+    WARN_PERCENT 0.0005
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLOIT
+)
 
 #
 # Conditionally install and register MaterialX tests

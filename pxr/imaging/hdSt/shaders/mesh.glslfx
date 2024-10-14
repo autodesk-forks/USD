@@ -1509,6 +1509,17 @@ vec3 ComputeScreenSpaceNeye()
 
 void main(void)
 {
+#ifdef HD_HAS_depthReadback
+    // Sample the z-Buffer at the frag coordinate.
+    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
+                                       ivec2(gl_FragCoord.xy),
+                                       /* lod = */ 0).x;
+    // reject fragments behind opaque objects
+    if (gl_FragCoord.z >= bufferVal.x) {
+      discard;
+    }
+#endif
+
     bool isFlipped = IsFlipped();
 
     DiscardBasedOnShading(gl_FrontFacing, isFlipped);

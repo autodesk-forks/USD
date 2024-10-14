@@ -16,6 +16,7 @@
 #include "pxr/imaging/hdSt/shaderCode.h"
 #include "pxr/imaging/hdSt/tokens.h"
 
+#include "pxr/imaging/hd/aov.h"
 #include "pxr/imaging/hd/instanceRegistry.h"
 #include "pxr/imaging/hd/resourceRegistry.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -1009,6 +1010,13 @@ _ResourceGenerator::_GenerateHgiResources(
     }
 }
 
+static std::unordered_map<TextureType, HgiShaderTextureType> _textureTypeMap = {
+    {TextureType::TEXTURE,           HgiShaderTextureTypeTexture},
+    {TextureType::SHADOW_TEXTURE,    HgiShaderTextureTypeShadowTexture},
+    {TextureType::ARRAY_TEXTURE,     HgiShaderTextureTypeArrayTexture},
+    {TextureType::DEPTH_TEXTURE,     HgiShaderTextureTypeDepth},
+};
+
 void
 _ResourceGenerator::_GenerateHgiTextureResources(
     HgiShaderFunctionDesc *funcDesc,
@@ -1019,12 +1027,7 @@ _ResourceGenerator::_GenerateHgiTextureResources(
     using TextureType = HioGlslfxResourceLayout::TextureType;
 
     for (auto const & texture : textureElements) {
-        HgiShaderTextureType const textureType =
-            texture.textureType == TextureType::SHADOW_TEXTURE
-                ? HgiShaderTextureTypeShadowTexture
-                : texture.textureType == TextureType::ARRAY_TEXTURE
-                    ? HgiShaderTextureTypeArrayTexture
-                    : HgiShaderTextureTypeTexture;
+        HgiShaderTextureType const textureType = _textureTypeMap[texture.textureType];
         HdFormat const hdTextureFormat =
             HdStHioConversions::GetHdFormat(texture.format);
         if (texture.arraySize > 0) {
@@ -6094,10 +6097,13 @@ HdSt_CodeGen::_GenerateShaderParameters(bool bindlessTextureEnabled)
                 /* isShadowSampler = */ isShadowTexture);
 
         } else if (bindingType == HdStBinding::TEXTURE_2D) {
+            bool isDepthTexture = HdAovHasDepthSemantic(it->second.name);
 
             _AddTextureElement(&_resTextures,
                                it->second.name, 2,
-                               binding.GetTextureUnit());
+                               binding.GetTextureUnit(),
+                               HioFormatFloat32Vec4,
+                               isDepthTexture ? TextureType::DEPTH_TEXTURE : TextureType::TEXTURE);
 
             _EmitTextureAccessors(
                 accessors, it->second, swizzle, fallbackSwizzle,

@@ -60,8 +60,12 @@ HgiWebGPUSampler::HgiWebGPUSampler(
     //samplerDesc.compare = HgiWebGPUConversions::GetCompareFunction(desc.compareFunction);
     samplerDesc.compare = wgpu::CompareFunction::Undefined;
 
-    // TODO: this should probably come from an appropriate place
-    samplerDesc.maxAnisotropy = 4;
+    if ((desc.minFilter != HgiSamplerFilterNearest ||
+         desc.mipFilter == HgiMipFilterLinear) &&
+        desc.magFilter != HgiSamplerFilterNearest) {
+        // WebGPU will clamp the value by the max supported in the platform
+        samplerDesc.maxAnisotropy = 16;
+    }
     wgpu::Device device = hgi->GetPrimaryDevice();
     _sampler = device.CreateSampler(&samplerDesc);
 }

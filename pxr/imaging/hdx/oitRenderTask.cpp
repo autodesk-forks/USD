@@ -13,6 +13,8 @@
 #include "pxr/imaging/hd/rprimCollection.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
 
+#include "pxr/imaging/hgi/capabilities.h"
+
 #include "pxr/imaging/hdSt/renderPassShader.h"
 
 #include "pxr/imaging/glf/diagnostic.h"
@@ -75,6 +77,16 @@ HdxOitRenderTask::Prepare(HdTaskContext* ctx,
     if (_isOitEnabled && HdxRenderTask::_HasDrawItems()) {
         HdxRenderTask::Prepare(ctx, renderIndex);
         HdxOitBufferAccessor(ctx).RequestOitBuffers();
+    }
+
+    const HgiCapabilities* capabilities = _GetHgi()->GetCapabilities();
+    HdRenderPassStateSharedPtr const state = _GetRenderPassState(ctx);
+    if (!capabilities->IsSet(HgiDeviceCapabilitiesForceEarlyFragmentTest) && state) {
+        // We need to bind the depth texture if the platform doesn't allow early fragment test to be forced.
+        // This works in tandem with the TaskController setting the depth as input textures for the translucent task
+        _oitTranslucentRenderPassShader->UpdateAovInputTextures(
+                state->GetAovInputBindings(),
+                renderIndex);
     }
 }
 
@@ -140,7 +152,6 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
         renderPassState->SetEnableDepthMask(true);
         renderPassState->SetColorMaskUseDefault(false);
         renderPassState->SetColorMasks({HdRenderPassState::ColorMaskRGBA});
-
         HdxRenderTask::Execute(ctx);
     }
 
@@ -153,9 +164,22 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
         extendedState->SetRenderPassShader(_oitTranslucentRenderPassShader);
         renderPassState->SetEnableDepthMask(false);
         renderPassState->SetColorMasks({HdRenderPassState::ColorMaskNone});
+        const HgiCapabilities* capabilities = _GetHgi()->GetCapabilities();
+        if (!capabilities->IsSet(HgiDeviceCapabilitiesForceEarlyFragmentTest)) {
+            // In case we don't have support for early fragment test, we need to skip the depth texture
+            // for the second pass to avoid reading and writing to the same depth texture.
+            auto noDepthAovs = renderPassState->GetAovBindings();
+            noDepthAovs.erase(
+                    std::remove_if(noDepthAovs.begin(), noDepthAovs.end(),
+                                   [](const HdRenderPassAovBinding &aov) {
+                                       return HdAovHasDepthSemantic(aov.aovName) ||
+                                              HdAovHasDepthStencilSemantic(aov.aovName);
+                                   }),
+                    noDepthAovs.end());
+            renderPassState->SetAovBindings(noDepthAovs);
+        }
         HdxRenderTask::Execute(ctx);
     }
 }
-
 
 PXR_NAMESPACE_CLOSE_SCOPE

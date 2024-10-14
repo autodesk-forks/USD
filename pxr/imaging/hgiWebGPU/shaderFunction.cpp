@@ -101,6 +101,9 @@ void HgiWebGPUShaderFunction::_CreateTexturesGroupLayoutEntries(
         } else {
             textureEntry.texture.viewDimension = HgiWebGPUConversions::GetTextureViewDimension(t.dimensions);
             textureEntry.texture.sampleType = HgiWebGPUConversions::GetTextureSampleType(t.format);
+            if (t.textureType == HgiShaderTextureTypeDepth) {
+                textureEntry.texture.sampleType = wgpu::TextureSampleType::UnfilterableFloat;
+            }
         }
         samplerEntry.visibility = stage;
         textureEntry.binding = i;

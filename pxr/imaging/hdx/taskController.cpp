@@ -1091,6 +1091,7 @@ HdxTaskController::SetRenderOutputs(TfTokenVector const& outputs)
     }
 
     const SdfPath volumeId = _GetRenderTaskPath(HdStMaterialTagTokens->volume);
+    const SdfPath translucentId = _GetRenderTaskPath(HdStMaterialTagTokens->translucent);
 
     // Set AOV bindings on render tasks
     for (SdfPath const& renderTaskId : _renderTaskIds) {
@@ -1106,7 +1107,7 @@ HdxTaskController::SetRenderOutputs(TfTokenVector const& outputs)
                 HdTokens->params);
 
         rParams.aovBindings = aovBindings;
-        if (renderTaskId == volumeId) {
+        if (renderTaskId == volumeId || renderTaskId == translucentId) {
             rParams.aovInputBindings = aovInputBindings;
         }
 
