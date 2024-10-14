@@ -87,6 +87,10 @@ public:
     HDX_API
     void Execute(HdTaskContext* ctx) override;
 
+    HDX_API
+    static void SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPassState,
+                           HdxRenderTaskParams const &params);
+
 private:
     HdRenderPassStateSharedPtr _renderPassState;
     HdStRenderPassShaderSharedPtr _colorRenderPassShader;

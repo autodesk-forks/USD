@@ -231,6 +231,10 @@ static void _EmitDeclaration(HioGlslfxResourceLayout::ElementVector *elements,
                              bool isWritable=false,
                              int arraySize=0);
 
+static void _EmitDeclaration(HioGlslfxResourceLayout::ElementVector *elements,
+                             HdSt_ResourceBinder::MetaData::BindingDeclaration const &bindingDeclaration,
+                             int arraySize=0);
+
 static void _EmitStructAccessor(std::stringstream &str,
                                 TfToken const &structName,
                                 TfToken const &name,
@@ -2043,12 +2047,7 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
             continue;
         }
 
-        _EmitDeclaration(&_resCommon,
-                         binDecl->name,
-                         binDecl->dataType,
-                         binDecl->binding,
-                         binDecl->isWritable);
-
+        _EmitDeclaration(&_resCommon, *binDecl);
         _EmitAccessor(_genAccessors,
                       binDecl->name,
                       binDecl->dataType,
@@ -2066,6 +2065,7 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
         HdStBinding binding = it->first;
         TfToken typeName(TfStringPrintf("CustomBlockData%d", binding.GetValue()));
         TfToken varName = it->second.blockName;
+        bool isIndexed = it->second.arraySize > 0 || (binding.GetType() != HdStBinding::UNIFORM && binding.GetType() != HdStBinding::UBO);
 
         _genDecl << "struct " << typeName << " {\n";
         // dbIt is StructEntry { name, dataType, offset, numElements }
@@ -2081,15 +2081,9 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
             }
             _genDecl <<  ";\n";
 
-            if (it->second.arraySize > 0) {
-                _EmitStructAccessor(_genAccessors, varName, 
-                                    dbIt->name, dbIt->dataType, dbIt->arraySize,
-                                    "localIndex", dbIt->concatenateNames);
-            } else {
-                _EmitStructAccessor(_genAccessors, varName, 
-                                    dbIt->name, dbIt->dataType, dbIt->arraySize,
-                                    NULL,  dbIt->concatenateNames);
-            }
+            _EmitStructAccessor(_genAccessors, varName, 
+                                dbIt->name, dbIt->dataType, dbIt->arraySize,
+                                isIndexed ? "localIndex" : NULL, dbIt->concatenateNames);
 
             if (dbIt->name == HdShaderTokens->clipPlanes) {
                 _hasClipPlanes = true;
@@ -2098,7 +2092,7 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
 
         _genDecl << "};\n";
         _EmitDeclaration(&_resCommon, varName, typeName, binding,
-                         /*isWritable=*/false, it->second.arraySize);
+                         /*isWritable=*/it->second.isWritable, it->second.arraySize);
     }
 
     // HD_NUM_PATCH_VERTS, HD_NUM_PRIMTIIVE_VERTS
@@ -3452,7 +3446,7 @@ static void _EmitDeclaration(
 static void _EmitDeclaration(
     HioGlslfxResourceLayout::ElementVector *elements,
     HdSt_ResourceBinder::MetaData::BindingDeclaration const &bindingDeclaration,
-    int arraySize=0)
+    int arraySize)
 {
     _EmitDeclaration(elements,
                      bindingDeclaration.name,

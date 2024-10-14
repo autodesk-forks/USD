@@ -13,6 +13,9 @@
 #include "pxr/imaging/hd/rprimCollection.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
 
+#include "pxr/imaging/hgi/capabilities.h"
+
+#include "pxr/imaging/hdSt/renderPass.h"
 #include "pxr/imaging/hdSt/renderPassShader.h"
 
 #include "pxr/imaging/glf/diagnostic.h"
@@ -59,7 +62,63 @@ HdxOitRenderTask::_Sync(
     HF_MALLOC_TAG_FUNCTION();
 
     if (_isOitEnabled) {
-        HdxRenderTask::_Sync(delegate, ctx, dirtyBits);
+        if (!_translucentRenderPassState) {
+            _translucentRenderPassState = std::make_shared<HdStRenderPassState>(
+                    _oitTranslucentRenderPassShader);
+        }
+
+        if ((*dirtyBits) & HdChangeTracker::DirtyParams) {
+            HdxRenderTaskParams params;
+
+            VtValue valueVt = delegate->Get(GetId(), HdTokens->params);
+            if (valueVt.IsHolding<HdxRenderTaskParams>()) {
+                params = valueVt.UncheckedGet<HdxRenderTaskParams>();
+                HdxRenderSetupTask::SyncParamsHelper(_translucentRenderPassState, params);
+            }
+
+            HdxRenderTask::_Sync(delegate, ctx, dirtyBits);
+            HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
+            if (!TF_VERIFY(renderPassState)) return;
+
+            auto extendedState =
+                    dynamic_cast<HdStRenderPassState*>(renderPassState.get());
+            if (!TF_VERIFY(extendedState, "OIT only works with HdSt")) {
+                return;
+            }
+
+            {
+                // blending is relevant only for the oitResolve task.
+                extendedState->SetBlendEnabled(false);
+                extendedState->SetAlphaToCoverageEnabled(false);
+                extendedState->SetAlphaThreshold(0.f);
+            }
+            // We render into an SSBO -- not MSAA compatible
+            renderPassState->SetMultiSampleEnabled(false);
+
+            renderPassState->SetEnableDepthMask(true);
+            renderPassState->SetColorMaskUseDefault(false);
+            renderPassState->SetColorMasks({HdRenderPassState::ColorMaskRGBA});
+
+            // Render pass state overrides
+            _translucentRenderPassState->SetBlendEnabled(false);
+            _translucentRenderPassState->SetAlphaToCoverageEnabled(false);
+            _translucentRenderPassState->SetAlphaThreshold(renderPassState->GetAlphaThreshold());
+            _translucentRenderPassState->SetMultiSampleEnabled(renderPassState->GetMultiSampleEnabled());
+            _translucentRenderPassState->SetEnableDepthMask(false);
+            _translucentRenderPassState->SetColorMaskUseDefault(false);
+            _translucentRenderPassState->SetColorMasks({HdRenderPassState::ColorMaskNone});
+        }
+
+        if (!_translucentPass) {
+            HdRenderIndex &renderIndex = delegate->GetRenderIndex();
+            HdRenderDelegate *renderDelegate = renderIndex.GetRenderDelegate();
+            VtValue val = delegate->Get(GetId(), HdTokens->collection);
+            HdRprimCollection collection = val.Get<HdRprimCollection>();
+            _translucentPass = renderDelegate->CreateRenderPass(&renderIndex, collection);
+        }
+
+        // sync render pass
+        _translucentPass->Sync();
     }
 }
 
@@ -69,11 +128,43 @@ HdxOitRenderTask::Prepare(HdTaskContext* ctx,
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
- 
+
     // OIT buffers take up significant GPU resources. Skip if there are no
     // oit draw items (i.e. no translucent draw items)
     if (_isOitEnabled && HdxRenderTask::_HasDrawItems()) {
         HdxRenderTask::Prepare(ctx, renderIndex);
+        HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
+        HdStRenderPassState* extendedState =
+                dynamic_cast<HdStRenderPassState*>(renderPassState.get());
+        extendedState->SetRenderPassShader(_oitOpaqueRenderPassShader);
+        _translucentRenderPassState->SetViewport(extendedState->GetViewport());
+        _translucentRenderPassState->SetCamera(extendedState->GetCamera());
+        _translucentRenderPassState->SetOverrideWindowPolicy(extendedState->GetOverrideWindowPolicy());
+        _translucentRenderPassState->SetFraming(extendedState->GetFraming());
+        _translucentRenderPassState->SetAovBindings(renderPassState->GetAovBindings());
+        _translucentRenderPassState->SetAovInputBindings(renderPassState->GetAovInputBindings());
+        _translucentRenderPassState->Prepare(renderIndex->GetResourceRegistry());
+
+        const HgiCapabilities* capabilities = _GetHgi()->GetCapabilities();
+        if (!capabilities->IsSet(HgiDeviceCapabilitiesForceEarlyFragmentTest)) {
+            // In case we don't have support for early fragment test, we need to skip the depth texture
+            // for the second pass to avoid reading and writing to the same depth texture.
+            auto noDepthAovs = renderPassState->GetAovBindings();
+            noDepthAovs.erase(
+                    std::remove_if(noDepthAovs.begin(), noDepthAovs.end(),
+                                   [](const HdRenderPassAovBinding &aov) {
+                                       return HdAovHasDepthSemantic(aov.aovName) ||
+                                              HdAovHasDepthStencilSemantic(aov.aovName);
+                                   }),
+                    noDepthAovs.end());
+            _translucentRenderPassState->SetAovBindings(noDepthAovs);
+            // We need to bind the depth texture if the platform doesn't allow early fragment test to be forced.
+            // This works in tandem with the TaskController setting the depth as input textures for the translucent task
+            _oitTranslucentRenderPassShader->UpdateAovInputTextures(
+                    _translucentRenderPassState->GetAovInputBindings(),
+                    renderIndex);
+        }
+
         HdxOitBufferAccessor(ctx).RequestOitBuffers();
     }
 }
@@ -99,7 +190,9 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
     if (!_isOitEnabled || !HdxRenderTask::_HasDrawItems()) {
         return;
     }
-    
+
+    if (!TF_VERIFY(_translucentRenderPassState)) return;
+
     HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
     if (!TF_VERIFY(renderPassState)) return;
 
@@ -133,46 +226,29 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
         }
     }
 
-    // Render pass state overrides
-    {
-        // blending is relevant only for the oitResolve task.
-        extendedState->SetBlendEnabled(false);
-        extendedState->SetAlphaToCoverageEnabled(false);
-        extendedState->SetAlphaThreshold(0.f);
-    }
-
-    // We render into an SSBO -- not MSAA compatible
-    renderPassState->SetMultiSampleEnabled(false);
-
     //
     // 1. Opaque pixels pass
-    // 
+    //
     // Fragments that are opaque (alpha > 1.0) are rendered to the active
     // framebuffer. Translucent fragments are discarded.
     // This can reduce the data written to the OIT SSBO buffers because of
     // improved depth testing.
     //
     {
-        extendedState->SetRenderPassShader(_oitOpaqueRenderPassShader);
-        renderPassState->SetEnableDepthMask(true);
-        renderPassState->SetColorMaskUseDefault(false);
-        renderPassState->SetColorMasks({HdRenderPassState::ColorMaskRGBA});
-
         HdxRenderTask::Execute(ctx);
     }
 
     //
     // 2. Translucent pixels pass
     //
-    // Fill OIT SSBO buffers for the translucent fragments.  
+    // Fill OIT SSBO buffers for the translucent fragments.
     //
     {
-        extendedState->SetRenderPassShader(_oitTranslucentRenderPassShader);
-        renderPassState->SetEnableDepthMask(false);
-        renderPassState->SetColorMasks({HdRenderPassState::ColorMaskNone});
-        HdxRenderTask::Execute(ctx);
+        auto extendedState =
+                dynamic_cast<HdStRenderPassState*>(_translucentRenderPassState.get());
+        HdxRenderTask::_SetHdStRenderPassState(ctx, extendedState);
+        _translucentPass->Execute(_translucentRenderPassState, GetRenderTags());
     }
 }
-
 
 PXR_NAMESPACE_CLOSE_SCOPE

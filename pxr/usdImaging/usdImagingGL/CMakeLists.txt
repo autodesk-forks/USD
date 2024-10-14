@@ -694,6 +694,11 @@ pxr_install_test_dir(
     DEST testUsdImagingGLTextureResync
 )
 
+pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLOIT
+    DEST testUsdImagingGLOIT
+)
+
 #
 # Register tests that don't depend on build configuration or external libraries
 # (such as MaterialX, OpenVDB, PTEX).
@@ -5106,6 +5111,30 @@ pxr_register_test(testUsdImagingGLTextureResync
     TESTENV testUsdImagingGLTextureResync
     ENV
         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true)
+
+pxr_register_test(testUsdImagingGLOIT
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -camlight -frameAll -camera /Root/FrontCamera -stage scene.usda -write testUsdImagingGLOIT.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLOIT.png
+    FAIL 0.005
+    FAIL_PERCENT 0.001
+    WARN 0.005
+    WARN_PERCENT 0.0005
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLOIT)
+
+    pxr_register_test(testUsdImagingGLOITPacked
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -camlight -frameAll -camera /Root/FrontCamera -stage scene.usda -write testUsdImagingGLOITPacked.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLOITPacked.png
+    FAIL 0.005
+    FAIL_PERCENT 0.001
+    WARN 0.005
+    WARN_PERCENT 0.0005
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLOIT
+    ENV
+        HDX_ENABLE_OIT_PACKED_DATA=1)
 
 #
 # Conditionally install and register MaterialX tests

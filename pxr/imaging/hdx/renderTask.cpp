@@ -82,7 +82,7 @@ HdxRenderTask::_Sync(HdSceneDelegate* delegate,
         // if HdxRenderTaskParams is set on this task, create an
         // HdxRenderSetupTask to unpack them internally.
         //
-        // As params is optional, the base class helpper can't be used.
+        // As params is optional, the base class helper can't be used.
         VtValue valueVt = delegate->Get(GetId(), HdTokens->params);
         if (valueVt.IsHolding<HdxRenderTaskParams>()) {
             params = valueVt.UncheckedGet<HdxRenderTaskParams>();

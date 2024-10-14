@@ -159,18 +159,26 @@ HdxRenderSetupTask::SyncParams(HdSceneDelegate* delegate,
     _aovBindings = params.aovBindings;
     _aovInputBindings = params.aovInputBindings;
 
-    // Inspect AOVs to see if we're doing color or id rendering.
-    const bool usingIdAov = std::find_if(_aovBindings.begin(),
-        _aovBindings.end(), &_AovHasIdSemantic) !=
-        _aovBindings.end();
-    const bool usingColorAov = std::find_if(_aovBindings.begin(),
-        _aovBindings.end(), &_AovHasColorSemantic) !=
-        _aovBindings.end();
-    const bool usingNoAovs = _aovBindings.empty();
-
     HdRenderIndex &renderIndex = delegate->GetRenderIndex();
     HdRenderPassStateSharedPtr &renderPassState =
             _GetRenderPassState(&renderIndex);
+
+    SyncParamsHelper(renderPassState, params);
+}
+
+void
+HdxRenderSetupTask::SyncParamsHelper(
+    HdRenderPassStateSharedPtr const& renderPassState,
+    HdxRenderTaskParams const &params)
+{
+    // Inspect AOVs to see if we're doing color or id rendering.
+    const bool usingIdAov = std::find_if(params.aovBindings.begin(),
+        params.aovBindings.end(), &_AovHasIdSemantic) !=
+        params.aovBindings.end();
+    const bool usingColorAov = std::find_if(params.aovBindings.begin(),
+        params.aovBindings.end(), &_AovHasColorSemantic) !=
+        params.aovBindings.end();
+    const bool usingNoAovs = params.aovBindings.empty();
 
     renderPassState->SetOverrideColor(params.overrideColor);
     renderPassState->SetWireframeColor(params.wireframeColor);

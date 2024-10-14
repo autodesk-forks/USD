@@ -95,17 +95,17 @@ protected:
     HDX_API
     bool _HasDrawItems() const;
 
+    // XXX: Storm specific API
+    // Setup additional state that HdStRenderPassState requires.
+    void _SetHdStRenderPassState(HdTaskContext *ctx,
+                                 HdStRenderPassState *renderPassState);
+
 private:
     HdRenderPassSharedPtr _pass;
     TfTokenVector _renderTags;
 
     // Optional internal render setup task, for params unpacking.
     HdxRenderSetupTaskSharedPtr _setupTask;
-
-    // XXX: Storm specific API
-    // Setup additional state that HdStRenderPassState requires.
-    void _SetHdStRenderPassState(HdTaskContext *ctx,
-                                 HdStRenderPassState *renderPassState);
     
     // Inspect the AOV bindings to determine if any of them need to be cleared.
     bool _NeedToClearAovs(HdRenderPassStateSharedPtr const &renderPassState)

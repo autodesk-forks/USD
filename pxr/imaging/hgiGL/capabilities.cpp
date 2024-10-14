@@ -199,6 +199,7 @@ HgiGLCapabilities::_LoadCapabilities()
         true);
     _SetFlag(HgiDeviceCapabilitiesBitsRoundPoints,
         nativeRoundPointsEnabled);
+    _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, true);
 
     if (TfDebug::IsEnabled(HGI_DEBUG_DEVICE_CAPABILITIES)) {
         std::cout

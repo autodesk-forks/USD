@@ -22,11 +22,21 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_ENV_SETTING(HDX_ENABLE_OIT, true, 
                       "Enable order independent translucency");
 
+TF_DEFINE_ENV_SETTING(HDX_ENABLE_OIT_PACKED_DATA, false,
+    "Pack color, transmission and depth into smaller buffers, trading accuracy for memory.");
+
 /* static */
 bool
 HdxOitBufferAccessor::IsOitEnabled()
 {
     return TfGetEnvSetting(HDX_ENABLE_OIT);
+}
+
+/* static */
+bool
+HdxOitBufferAccessor::IsOitPackedDepthEnabled()
+{
+    return TfGetEnvSetting(HDX_ENABLE_OIT_PACKED_DATA);
 }
 
 HdxOitBufferAccessor::HdxOitBufferAccessor(HdTaskContext *ctx)
@@ -57,18 +67,23 @@ bool
 HdxOitBufferAccessor::AddOitBufferBindings(
     const HdStRenderPassShaderSharedPtr &shader)
 {
+    HdBufferArrayRangeSharedPtr const & jointBar =
+            _GetBar(HdxTokens->oitJointBufferBar);
     HdBufferArrayRangeSharedPtr const & counterBar =
         _GetBar(HdxTokens->oitCounterBufferBar);
     HdBufferArrayRangeSharedPtr const & dataBar =
         _GetBar(HdxTokens->oitDataBufferBar);
-    HdBufferArrayRangeSharedPtr const & depthBar =
-        _GetBar(HdxTokens->oitDepthBufferBar);
-    HdBufferArrayRangeSharedPtr const & indexBar =
-        _GetBar(HdxTokens->oitIndexBufferBar);
     HdBufferArrayRangeSharedPtr const & uniformBar =
         _GetBar(HdxTokens->oitUniformBar);
 
-    if (counterBar && dataBar && depthBar && indexBar && uniformBar) {
+    if (counterBar && dataBar && jointBar && uniformBar) {
+        shader->AddBufferBinding(
+                HdStBindingRequest(HdStBinding::SSBO,
+                                   HdxTokens->oitJointBufferBar,
+                                   jointBar,
+                        /*interleave = */ true,
+                        /*writable = */ true));
+
         shader->AddBufferBinding(
             HdStBindingRequest(HdStBinding::SSBO,
                                HdxTokens->oitCounterBufferBar,
@@ -82,21 +97,7 @@ HdxOitBufferAccessor::AddOitBufferBindings(
                                dataBar,
                                /*interleave = */ false,
                                /*writable = */ true));
-        
-        shader->AddBufferBinding(
-            HdStBindingRequest(HdStBinding::SSBO,
-                               HdxTokens->oitDepthBufferBar,
-                               depthBar,
-                               /*interleave = */ false,
-                               /*writable = */ true));
-        
-        shader->AddBufferBinding(
-            HdStBindingRequest(HdStBinding::SSBO,
-                               HdxTokens->oitIndexBufferBar,
-                               indexBar,
-                               /*interleave = */ false,
-                               /*writable = */ true));
-        
+
         shader->AddBufferBinding(
             HdStBindingRequest(HdStBinding::UBO, 
                                HdxTokens->oitUniformBar,
@@ -104,10 +105,9 @@ HdxOitBufferAccessor::AddOitBufferBindings(
                                /*interleave = */ true));
         return true;
     } else {
+        shader->RemoveBufferBinding(HdxTokens->oitJointBufferBar);
         shader->RemoveBufferBinding(HdxTokens->oitCounterBufferBar);
         shader->RemoveBufferBinding(HdxTokens->oitDataBufferBar);
-        shader->RemoveBufferBinding(HdxTokens->oitDepthBufferBar);
-        shader->RemoveBufferBinding(HdxTokens->oitIndexBufferBar);
         shader->RemoveBufferBinding(HdxTokens->oitUniformBar);
         return false;
     }

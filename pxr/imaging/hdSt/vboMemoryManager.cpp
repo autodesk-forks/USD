@@ -489,6 +489,7 @@ HdStBufferResourceSharedPtr
 HdStVBOMemoryManager::_StripedBufferArray::GetResource(TfToken const& name)
 {
     HD_TRACE_FUNCTION();
+    if (name.IsEmpty()) return GetResource();
 
     // linear search.
     // The number of buffer resources should be small (<10 or so).

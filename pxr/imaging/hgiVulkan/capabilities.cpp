@@ -325,6 +325,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         shaderDrawParametersEnabled);
      _SetFlag(HgiDeviceCapabilitiesBitsMultiDrawIndirect,
         multiDrawIndirectEnabled);
+    _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, true);
 }
 
 HgiVulkanCapabilities::~HgiVulkanCapabilities() = default;
