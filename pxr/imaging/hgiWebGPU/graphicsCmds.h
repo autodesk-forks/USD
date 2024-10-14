@@ -139,6 +139,7 @@ private:
     wgpu::RenderPassEncoder _renderPassEncoder;
     wgpu::CommandEncoder _commandEncoder;
     wgpu::CommandBuffer _commandBuffer;
+    wgpu::Buffer _lastIndexBuffer;
     HgiWebGPUGraphicsPipeline *_pipeline;
     std::string _debugLabel;
     bool _renderPassStarted;

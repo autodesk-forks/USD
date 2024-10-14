@@ -393,7 +393,9 @@ HgiWebGPU::GetQueue() const
 void
 HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const &commandBuffer)
 {
-    _commandBuffers.push_back(commandBuffer);
+    if (commandBuffer) {
+        _commandBuffers.push_back(commandBuffer);
+    }
 }
 #if !defined(EMSCRIPTEN)
 void
@@ -516,26 +518,10 @@ HgiWebGPU::QueryValue()
 void
 HgiWebGPU::QueueSubmit()
 {
-    if( _commandBuffers.size() > 0)
+    if(!_commandBuffers.empty())
     {
-        // submit enqueued command buffers
-        for (auto commandBuffer : _commandBuffers)
-        {
-            if (commandBuffer == nullptr)
-                continue;
-
-            _commandQueue.Submit(1, &commandBuffer);
-
-            // free command buffers
-            commandBuffer = nullptr;
-        }
+        _commandQueue.Submit(_commandBuffers.size(), _commandBuffers.data());
         _commandBuffers.clear();
-
-        struct CompletedUserData
-        {
-            std::vector<HgiWebGPUCallback> completedHandlers;
-            bool done;
-        };
     }
 }
 

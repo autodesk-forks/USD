@@ -207,7 +207,7 @@ HgiWebGPUGraphicsPipeline::HgiWebGPUGraphicsPipeline(
     pipelineDesc.primitive.cullMode = HgiWebGPUConversions::GetCullMode(desc.rasterizationState.cullMode);
 
     wgpu::MultisampleState multisampleState;
-    if (desc.multiSampleState.multiSampleEnable) {
+    if (desc.multiSampleState.multiSampleEnable && desc.multiSampleState.sampleCount > 1) {
         multisampleState.count = desc.multiSampleState.sampleCount;
         multisampleState.alphaToCoverageEnabled = desc.multiSampleState.alphaToCoverageEnable;
         pipelineDesc.multisample = multisampleState;
