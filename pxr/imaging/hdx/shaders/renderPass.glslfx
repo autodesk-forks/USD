@@ -54,8 +54,8 @@ void RenderOutputImpl(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
     const int dataBufferSize = screenWidth * screenHeight * numSamples;
     const int counterBufferSize = screenWidth * screenHeight + 1;
 
-    // +1 because the counter buffer is cleared with -1, but we want the
-    // first index to start at 0.
+    // +1 because the counter buffer is cleared with 0, but we want the
+    // first index to start at 1.
     int writeIndex = ATOMIC_ADD(hdxOitCounterBuffer[0], 1) + 1;
     
     if (writeIndex < dataBufferSize) {

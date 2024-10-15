@@ -142,7 +142,7 @@ HdxOitBufferAccessor::InitializeOitBuffersIfNecessary(Hgi *hgi)
     // Clear counter buffer.
     
     // The shader determines what elements in each buffer are used based on
-    // finding -1 in the counter buffer. We can skip clearing the other buffers.
+    // finding 0 in the counter buffer. We can skip clearing the other buffers.
 
     HdStBufferArrayRangeSharedPtr stCounterBar =
         std::dynamic_pointer_cast<HdStBufferArrayRange>(
@@ -157,11 +157,9 @@ HdxOitBufferAccessor::InitializeOitBuffersIfNecessary(Hgi *hgi)
     HdStBufferResourceSharedPtr stCounterResource = 
         stCounterBar->GetResource(HdxTokens->hdxOitCounterBuffer);
 
-    // We want to fill the buffer with int -1 but the FillBuffer interface 
-    // supports uint8_t (due to a limitation in the Metal API which we can later
-    // revisit to find a workaround). A buffer filled with uint8_t 0xff is the 
-    // same as a buffer filled with int 0xffffffff.
-    const uint8_t clearCounter = -1;
+    // We want to fill the buffer with 0. Clearing to 0 allows HgiWebGpu
+    // to be more efficient when clearing the buffer.
+    const uint8_t clearCounter = 0;
 
     HgiBlitCmdsUniquePtr blitCmds = hgi->CreateBlitCmds();
     blitCmds->PushDebugGroup("Clear OIT buffers");

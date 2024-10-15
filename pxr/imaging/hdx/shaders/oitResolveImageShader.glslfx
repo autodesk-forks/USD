@@ -56,7 +56,7 @@ vec4 imageShader(vec2 uv)
     vec4 sortedColor[maxSamples];
     float sortedDepth[maxSamples];
 
-    while (nodeIndex != -1 && 
+    while (nodeIndex != 0 && 
            numDepths < maxSamples && 
            nodeIndex < dataBufferSize) 
     {
