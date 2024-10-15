@@ -100,6 +100,7 @@ public:
 
 protected:
     float _GetComplexity() const { return _complexity; }
+    float _GetMSAACount() const { return _msaaCount; }
     bool _ShouldFrameAll() const { return _shouldFrameAll; }
     TfToken _GetRenderer() const { return _renderer; }
 
@@ -131,6 +132,7 @@ private:
     std::string _outputFilePath;
 
     float _complexity;
+    long _msaaCount;
     TfToken _renderer;
 
     std::vector<double> _times;

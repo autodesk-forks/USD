@@ -265,6 +265,7 @@ UsdImagingGL_UnitTestGLDrawing::UsdImagingGL_UnitTestGLDrawing()
     , _enableSceneMaterials(true)
     , _unloadedAsBounds(false)
     , _complexity(1.0f)
+    , _msaaCount(4)
     , _drawMode(UsdImagingGLDrawMode::DRAW_SHADED_SMOOTH)
     , _shouldFrameAll(false)
     , _cullStyle(UsdImagingGLCullStyle::CULL_STYLE_NOTHING)
@@ -425,6 +426,7 @@ static void Usage(int argc, char *argv[])
 "                           [-disableSceneMaterials]\n"
 "                           [-camera pathToCamera]\n"
 "                           [-complexity complexity]\n"
+"                           [-msaaCount sampleCount]\n"
 "                           [-renderer rendererName]\n"
 "                           [-shading [flat|smooth|wire|wireOnSurface|points]]\n"
 "                           [-frameAll]\n"
@@ -453,6 +455,8 @@ static void Usage(int argc, char *argv[])
 "                      Disable scene materials\n"
 "  -complexity complexity\n"
 "                      Set the fallback complexity [1]\n"
+"  -msaaCount sampleCount\n"
+"                      Set the multisample count [4]\n"
 "  -renderer rendererName\n"
 "                      use the specified renderer plugin []\n"
 "  -shading [flat|smooth|wire|wireOnSurface|points]\n"
@@ -525,6 +529,33 @@ static double ParseDouble(int& i, int argc, char *argv[],
     }
     char* end;
     double result = strtod(argv[i + 1], &end);
+    if (end == argv[i + 1] || *end != '\0') {
+        if (invalid) {
+            *invalid = true;
+            return 0.0;
+        }
+        ParseError(argv[0], "invalid parameter for '%s': %s",
+                   argv[i], argv[i + 1]);
+    }
+    ++i;
+    if (invalid) {
+        *invalid = false;
+    }
+    return result;
+}
+
+static long ParseInt(int& i, int argc, char *argv[],
+                          bool* invalid = nullptr)
+{
+    if (i + 1 == argc) {
+        if (invalid) {
+            *invalid = true;
+            return 0.0;
+        }
+        ParseError(argv[0], "missing parameter for '%s'", argv[i]);
+    }
+    char* end;
+    long result = strtol(argv[i + 1], &end, 10);
     if (end == argv[i + 1] || *end != '\0') {
         if (invalid) {
             *invalid = true;
@@ -662,6 +693,10 @@ UsdImagingGL_UnitTestGLDrawing::_Parse(int argc, char *argv[], _Args* args)
         else if (strcmp(argv[i], "-complexity") == 0) {
             CheckForMissingArguments(i, 1, argc, argv);
             _complexity = ParseDouble(i, argc, argv);
+        }
+        else if (strcmp(argv[i], "-msaaCount") == 0) {
+            CheckForMissingArguments(i, 1, argc, argv);
+            _msaaCount = ParseInt(i, argc, argv);
         }
         else if (strcmp(argv[i], "-renderer") == 0) {
             CheckForMissingArguments(i, 1, argc, argv);

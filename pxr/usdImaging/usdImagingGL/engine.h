@@ -222,6 +222,11 @@ public:
     USDIMAGINGGL_API
     void SetRenderBufferSize(GfVec2i const& size);
 
+    /// Set multi sampling configuration
+    ///
+    USDIMAGINGGL_API
+    void SetMultisampleState(const size_t &msaaSampleCount, bool enableMultisampling);
+
     /// Set the viewport to use for rendering as (x,y,w,h), where (x,y)
     /// represents the lower left corner of the viewport rectangle, and (w,h)
     /// is the width and height of the viewport in pixels.

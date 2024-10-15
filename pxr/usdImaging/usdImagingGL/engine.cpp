@@ -571,6 +571,16 @@ UsdImagingGLEngine::SetRenderBufferSize(GfVec2i const& size)
 }
 
 void
+UsdImagingGLEngine::SetMultisampleState(const size_t &msaaSampleCount, bool enableMultisampling)
+{
+    if (ARCH_UNLIKELY(!_renderDelegate)) {
+        return;
+    }
+
+    _taskController->SetMultisampleState(msaaSampleCount, enableMultisampling);
+}
+
+void
 UsdImagingGLEngine::SetWindowPolicy(CameraUtilConformWindowPolicy policy)
 {
     if (ARCH_UNLIKELY(!_renderDelegate)) {

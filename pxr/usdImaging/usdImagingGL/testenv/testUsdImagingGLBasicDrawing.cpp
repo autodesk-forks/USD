@@ -249,6 +249,7 @@ My_TestGLDrawing::DrawTest(bool offscreen)
     params.clearColor = GetClearColor();
 
     _engine->SetRendererAov(GetRendererAov());
+    _engine->SetMultisampleState(_GetMSAACount(), _GetMSAACount() > 1);
 
     if(IsEnabledTestLighting()) {
         _engine->SetLightingState(_lightingContext);

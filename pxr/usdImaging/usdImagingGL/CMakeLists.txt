@@ -658,6 +658,11 @@ pxr_install_test_dir(
     DEST testUsdImagingGLOIT
 )
 
+pxr_install_test_dir(
+    SRC SRC testenv/testUsdImagingGLMSAADisabled
+    DEST testUsdImagingGLMSAADisabled
+)
+
 #
 # Register tests that don't depend on build configuration or external libraries
 # (such as MaterialX, OpenVDB, PTEX).
@@ -4591,6 +4596,18 @@ pxr_register_test(testUsdImagingGLOIT
     WARN_PERCENT 0.0005
     EXPECTED_RETURN_CODE 0
     TESTENV testUsdImagingGLOIT
+)
+
+pxr_register_test(testUsdImagingGLMSAADisabled
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -shading smooth -frameAll -msaaCount 1 -stage sphere.usda -camera /main_cam -write testUsdImagingGLMSAADisabled.png"
+        IMAGE_DIFF_COMPARE
+        testUsdImagingGLMSAADisabled.png
+        FAIL 0.05
+        FAIL_PERCENT 0.3
+        WARN 0.05
+        WARN_PERCENT 0.005
+        EXPECTED_RETURN_CODE 0
+        TESTENV testUsdImagingGLMSAADisabled
 )
 
 #

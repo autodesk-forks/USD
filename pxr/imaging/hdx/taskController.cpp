@@ -73,9 +73,6 @@ TF_DEFINE_PRIVATE_TOKENS(
     (PxrDomeLight)
 );
 
-// XXX: WBN to expose this to the application.
-static const uint32_t MSAA_SAMPLE_COUNT = 4;
-
 // Distant Light values
 static const float DISTANT_LIGHT_ANGLE = 0.53;
 static const float DISTANT_LIGHT_INTENSITY = 15000.0;
@@ -1057,11 +1054,11 @@ HdxTaskController::SetRenderOutputs(TfTokenVector const& outputs)
         HdRenderBufferDescriptor desc;
         desc.dimensions = dimensions3;
         desc.format = outputDescs[i].format;
-        desc.multiSampled = outputDescs[i].multiSampled;
+        desc.multiSampled = _enableMultisampling;
         _delegate.SetParameter(aovId, _tokens->renderBufferDescriptor,desc);
         _delegate.SetParameter(aovId,
                                HdStRenderBufferTokens->stormMsaaSampleCount,
-                               MSAA_SAMPLE_COUNT);
+                               desc.multiSampled ? _msaaSampleCount : 1);
         GetRenderIndex()->GetChangeTracker().MarkBprimDirty(aovId,
             HdRenderBuffer::DirtyDescription);
         _aovBufferIds.push_back(aovId);
@@ -1295,6 +1292,9 @@ HdxTaskController::SetRenderOutputSettings(TfToken const& name,
         rbDesc.format = desc.format;
         rbDesc.multiSampled = desc.multiSampled;
         _delegate.SetParameter(renderBufferId,
+           HdStRenderBufferTokens->stormMsaaSampleCount,
+           rbDesc.multiSampled ? _msaaSampleCount : 1);
+        _delegate.SetParameter(renderBufferId,
             _tokens->renderBufferDescriptor, rbDesc);
         GetRenderIndex()->GetChangeTracker().MarkBprimDirty(renderBufferId,
             HdRenderBuffer::DirtyDescription);
@@ -1421,8 +1421,9 @@ HdxTaskController::SetRenderParams(HdxRenderTaskParams const& params)
         mergedParams.overrideWindowPolicy = oldParams.overrideWindowPolicy;
         mergedParams.aovBindings = oldParams.aovBindings;
         mergedParams.aovInputBindings = oldParams.aovInputBindings;
-        mergedParams.useAovMultiSample = oldParams.useAovMultiSample;
-        mergedParams.resolveAovMultiSample = oldParams.resolveAovMultiSample;
+        // We need to preserve the most restrictive configuration for multisampling
+        mergedParams.useAovMultiSample = oldParams.useAovMultiSample && mergedParams.useAovMultiSample;
+        mergedParams.resolveAovMultiSample = oldParams.resolveAovMultiSample && mergedParams.resolveAovMultiSample;
 
         // We also explicitly manage blend params, based on the material tag.
         // XXX: Note: if params.enableIdRender is set, we want to use default
@@ -1827,7 +1828,8 @@ HdxTaskController::SetRenderViewport(GfVec4d const& viewport)
     _SetCameraFramingForTasks();
     
     // Update all of the render buffer sizes as well.
-    _UpdateAovDimensions(_ViewportToAovDimensions(viewport));
+    _renderBufferSize = _ViewportToAovDimensions(viewport);
+    _UpdateAovBufferDescriptor();
 }
 
 void
@@ -1839,7 +1841,7 @@ HdxTaskController::SetRenderBufferSize(const GfVec2i &size)
     
     _renderBufferSize = size;
 
-    _UpdateAovDimensions(size);
+    _UpdateAovBufferDescriptor();
 }
 
 void
@@ -2116,9 +2118,9 @@ HdxTaskController::_SetCameraFramingForTasks()
 }
 
 void
-HdxTaskController::_UpdateAovDimensions(GfVec2i const& dimensions)
+HdxTaskController::_UpdateAovBufferDescriptor()
 {
-    const GfVec3i dimensions3(dimensions[0], dimensions[1], 1);
+    const GfVec3i dimensions3(_renderBufferSize[0], _renderBufferSize[1], 1);
 
     HdChangeTracker &changeTracker = GetRenderIndex()->GetChangeTracker();
 
@@ -2126,12 +2128,39 @@ HdxTaskController::_UpdateAovDimensions(GfVec2i const& dimensions)
         HdRenderBufferDescriptor desc =
             _delegate.GetParameter<HdRenderBufferDescriptor>(id,
                 _tokens->renderBufferDescriptor);
-        if (desc.dimensions != dimensions3) {
+        if (desc.dimensions != dimensions3 || desc.multiSampled != _enableMultisampling) {
             desc.dimensions = dimensions3;
+            desc.multiSampled = _enableMultisampling;
             _delegate.SetParameter(id, _tokens->renderBufferDescriptor, desc);
             changeTracker.MarkBprimDirty(id,
                 HdRenderBuffer::DirtyDescription);
         }
+    }
+}
+
+void
+HdxTaskController::_UpdateAovMSAASampleCount()
+{
+    HdChangeTracker &changeTracker = GetRenderIndex()->GetChangeTracker();
+
+    for (auto const& id : _aovBufferIds) {
+        _delegate.SetParameter(id, HdStRenderBufferTokens->stormMsaaSampleCount, _msaaSampleCount);
+        changeTracker.MarkBprimDirty(id,
+                                     HdRenderBuffer::DirtyDescription);
+    }
+}
+
+void
+HdxTaskController::SetMultisampleState(const size_t &msaaSampleCount, bool enableMultisampling)
+{
+    if (_enableMultisampling != enableMultisampling) {
+        _enableMultisampling = enableMultisampling;
+        _UpdateAovBufferDescriptor();
+    }
+
+    if (_msaaSampleCount != msaaSampleCount) {
+        _msaaSampleCount = msaaSampleCount;
+        _UpdateAovMSAASampleCount();
     }
 }
 

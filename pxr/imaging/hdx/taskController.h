@@ -246,6 +246,10 @@ public:
     HDX_API
     void SetEnablePresentation(bool enabled);
 
+    /// Set multi sampling configuration
+    HDX_API
+    void SetMultisampleState(const size_t &msaaSampleCount, bool enableMultisampling);
+
 private:
     ///
     /// This class is not intended to be copied.
@@ -278,7 +282,8 @@ private:
 
     void _SetCameraParamForTasks(SdfPath const& id);
     void _SetCameraFramingForTasks();
-    void _UpdateAovDimensions(GfVec2i const& dimensions);
+    void _UpdateAovBufferDescriptor();
+    void _UpdateAovMSAASampleCount();
 
     void _SetBlendStateForMaterialTag(TfToken const& materialTag,
                                       HdxRenderTaskParams *renderParams) const;
@@ -405,6 +410,12 @@ private:
     std::optional<CameraUtilConformWindowPolicy> _overrideWindowPolicy;
 
     GfVec4d _viewport;
+
+    // Multisampling enabled or not.
+    bool _enableMultisampling { true };
+
+    // Number of samples for multisampling.
+    size_t _msaaSampleCount { 4 };
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
