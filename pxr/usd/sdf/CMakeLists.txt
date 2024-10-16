@@ -11,6 +11,7 @@ pxr_library(sdf
         ts
         vt
         work
+        usd
         ar
         ${Boost_PYTHON_LIBRARY}
         ${TBB_tbb_LIBRARY}

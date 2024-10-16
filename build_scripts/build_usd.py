@@ -91,6 +91,8 @@ def GetBuildTargets():
         return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM_NODE]
     elif Linux():
         return [TARGET_WASM, TARGET_WASM_NODE]
+    elif Windows():
+        return [TARGET_WASM, TARGET_WASM_NODE]        
     else:
         return []
 
@@ -987,6 +989,10 @@ ONETBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.9.0.z
 
 def InstallOneTBB(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ONETBB_URL, context, force)):
+        if context.targetWasm:
+            PatchFile("cmake/compilers/Clang.cmake",
+                [("if (CMAKE_SYSTEM_PROCESSOR MATCHES \"(AMD64|amd64|i.86|x86)\")",
+                  "if (CMAKE_SYSTEM_PROCESSOR MATCHES \"(AMD64|amd64|i.86|x86)\" AND NOT EMSCRIPTEN)")])
         RunCMake(context, force, 
                  ['-DTBB_TEST=OFF',
                   '-DTBB_STRICT=OFF'] + buildArgs)

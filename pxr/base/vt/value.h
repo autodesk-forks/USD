@@ -14,9 +14,7 @@
 #include "pxr/base/tf/pyObjWrapper.h"
 
 #if PXR_JS_BINDINGS_SUPPORT_ENABLED
-#include "pxr/usd/sdf/wrapPathJs.h"
 #include "pxr/base/tf/wrapTokenJs.h"
-#include "pxr/usd/sdf/wrapAssetPathJs.h"
 
 #include <emscripten/bind.h>
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED

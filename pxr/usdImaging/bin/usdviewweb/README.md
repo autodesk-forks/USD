@@ -29,9 +29,21 @@ source ./emsdk_env.sh
 # Download and install the latest SDK tools.
 emsdk install 3.1.66
 
-# Make the specific SDK for the current user. (writes .emscripten file)
+# Activate the specific SDK for the current user. (writes .emscripten file)
 emsdk activate 3.1.66
 ```
+
+Depending on your current system configuration additional build tools may be required, for example
+
+```
+# Download and install MinGW.
+emsdk install mingw-4.6.2-32bit
+
+# Activate a specific MinGW installation. 
+emsdk activate mingw-4.6.2-32bit
+```
+
+Note! Run emsdk activate every time you open a new powershell. The above commands will not update the system PATH permanently.
 
 ## Build USD to WebAssembly
 
@@ -39,11 +51,11 @@ emsdk activate 3.1.66
 # Clone the USD source code
 git clone --recursive https://git.autodesk.com/autodesk-forks/usd/tree/adsk/feature/webgpu
 
-# Go into the root of usd source repo, if the folder name is "usd_repo"
-cd usd_repo
+# Go into the root of usd source repo, if the folder name is "USD"
+cd USD
 
 # Build USD with --build-target wasm , where "../build_dir" is your local build folder
-python3 ./build_scripts/build_usd.py --build-target wasm ../build_dir
+python3 ./build_scripts/build_usd.py --build-target wasm --onetbb ../build_dir
 ```
 
 This also builds the UsdViewWeb application, which you can use to test Hydra Storm with the WebGPU backend.
@@ -54,7 +66,7 @@ Start a web server in the build dir with the appropriate flags.
 Go into the <build_dir>/bin folder first.
 
 ```
-python ./wasm-server.py
+python3 ./wasm-server.py
 ```
 
 ## Browser Requirements
