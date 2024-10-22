@@ -158,10 +158,10 @@ HgiWebGPUGraphicsCmds::SetViewport(GfVec4i const& vp)
 {
     _viewportSet = true;
 
-    float offsetX = (float) vp[0];
-    float offsetY = (float) vp[1];
-    float width = (float) vp[2];
-    float height = (float) vp[3];
+    const auto offsetX = static_cast<float>(vp[0]);
+    const auto offsetY = static_cast<float>(vp[1]);
+    const auto width = static_cast<float>(vp[2]);
+    const auto height = static_cast<float>(vp[3]);
 
     _renderPassEncoder.SetViewport(offsetX, offsetY, width, height, 0.f, 1.f);
 }

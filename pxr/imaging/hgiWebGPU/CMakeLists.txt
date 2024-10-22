@@ -73,6 +73,7 @@ pxr_library(hgiWebGPU
 
     PRIVATE_CLASSES
         debugCodes
+        spirvTransforms
 
     RESOURCE_FILES
         plugInfo.json

@@ -48,6 +48,7 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, true);
     _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne, false);
     // This might be available in the future https://github.com/gpuweb/gpuweb/issues/4891
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, false);
 #if defined(EMSCRIPTEN)

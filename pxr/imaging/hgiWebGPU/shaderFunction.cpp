@@ -21,13 +21,14 @@
 // KIND, either express or implied. See the Apache License for the specific
 // language governing permissions and limitations under the Apache License.
 //
-#include "pxr/imaging/hgiWebGPU/shaderCompiler.h"
 #include "pxr/imaging/hgiWebGPU/shaderFunction.h"
-#include "pxr/imaging/hgiWebGPU/shaderGenerator.h"
-#include "pxr/imaging/hgiWebGPU/conversions.h"
+
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/imaging/hgiWebGPU/hgi.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
-#include "pxr/base/tf/envSetting.h"
+#include "pxr/imaging/hgiWebGPU/conversions.h"
+#include "pxr/imaging/hgiWebGPU/shaderCompiler.h"
+#include "pxr/imaging/hgiWebGPU/shaderGenerator.h"
 
 #include <sstream>
 
@@ -156,7 +157,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
                 &shaderCode,
                 1,
                 desc.shaderStage,
-                &spirvData,
+                spirvData,
                 &_errors);
 
         if (result) {
@@ -167,7 +168,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
             if (!program.IsValid()) {
                 TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + program.Diagnostics().Str() + "\n");
                 return;
-            };
+            }
 
             tint::wgsl::writer::Options options{};
             auto tintResult = tint::wgsl::writer::Generate(program, options);

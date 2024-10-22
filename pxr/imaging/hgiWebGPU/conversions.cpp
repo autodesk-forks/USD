@@ -332,8 +332,9 @@ struct {
     wgpu::FrontFace webGPUWinding;
 } static const _windingTable[] =
 {
-    {HgiWindingClockwise,           wgpu::FrontFace::CW},
-    {HgiWindingCounterClockwise,    wgpu::FrontFace::CCW},
+    // We flip the winding order like in HgiMetal. See HgiWebGPUCompileGLSL().
+    {HgiWindingClockwise,           wgpu::FrontFace::CCW},
+    {HgiWindingCounterClockwise,    wgpu::FrontFace::CW},
 };
 
 static_assert(TfArraySize(_windingTable) == HgiWindingCount,

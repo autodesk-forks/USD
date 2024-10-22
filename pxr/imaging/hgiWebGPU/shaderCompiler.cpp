@@ -21,11 +21,17 @@
 // KIND, either express or implied. See the Apache License for the specific
 // language governing permissions and limitations under the Apache License.
 //
-#include "pxr/base/tf/diagnostic.h"
+
 #include "pxr/imaging/hgiWebGPU/shaderCompiler.h"
-#include "glslang/SPIRV/GlslangToSpv.h"
-#include "glslang/Public/ResourceLimits.h"
-#include "glslang/Public/ShaderLang.h"
+
+#include "pxr/base/tf/diagnostic.h"
+#include "pxr/imaging/hgiWebGPU/spirvTransforms.h"
+
+#include <glslang/SPIRV/GlslangToSpv.h>
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/Public/ShaderLang.h>
+
+#include <unordered_set>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -57,10 +63,10 @@ HgiWebGPUCompileGLSL(
     const char* shaderCodes[],
     uint8_t numShaderCodes,
     HgiShaderStage stage,
-    std::vector<unsigned int>* spirvOUT,
+    std::vector<uint32_t>& spirvOUT,
     std::string* errors)
 {
-    if (numShaderCodes==0 || !spirvOUT) {
+    if (numShaderCodes == 0) {
         if (errors) {
             errors->append("No shader to compile %s", name);
         }
@@ -113,13 +119,29 @@ HgiWebGPUCompileGLSL(
     }
 
     spv::SpvBuildLogger logger;
-    glslang::GlslangToSpv(*program.getIntermediate(glslangStage), *spirvOUT, &logger, &options);
+    glslang::GlslangToSpv(*program.getIntermediate(glslangStage), spirvOUT, &logger, &options);
 
     std::string warningErrors = logger.getAllMessages();
 
     if (!warningErrors.empty()) {
         errors->append(warningErrors);
         return false;
+    }
+
+    if (stage == HgiShaderStageVertex) {
+        // Since the WebGPU coordinate convention is inverted for
+        // framebuffers and textures compared to the expected OpenGL
+        // convention, Hgi wants us to render upside down, which we
+        // do by negating the gl_Position.y value. Metal has the
+        // same issue, and it solves it by using a negative viewport
+        // height, which isn't supported by WebGPU, so we have to take
+        // a more complicate approach... Flipping Y also changes
+        // the handedness of the coordinate system, which reverses
+        // the winding order. For that we solve it the same way as
+        // Metal does: return the opposite in HgiWebGPUConversions::GetWinding().
+        if (!ApplySpirvViewportFlip(spirvOUT)) {
+            return false;
+        }
     }
 
     return true;

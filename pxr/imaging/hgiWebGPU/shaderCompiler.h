@@ -28,8 +28,7 @@
 #include "pxr/imaging/hgi/enums.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
 
-#include <stdint.h>
-#include <stdlib.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -46,7 +45,7 @@ bool HgiWebGPUCompileGLSL(
     const char* shaderCodes[],
     uint8_t numShaderCodes,
     HgiShaderStage stage,
-    std::vector<unsigned int>* spirvOUT,
+    std::vector<uint32_t>& spirvOUT,
     std::string* errors = nullptr);
 
 PXR_NAMESPACE_CLOSE_SCOPE
