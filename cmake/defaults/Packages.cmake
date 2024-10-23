@@ -282,13 +282,7 @@ if (PXR_BUILD_IMAGING)
 
     if (PXR_ENABLE_WEBGPU_SUPPORT)
         if (NOT EMSCRIPTEN)
-            find_package(Dawn REQUIRED
-                COMPONENTS
-                    native
-                    wire
-                    platform
-                    cpp
-            )
+            find_package(Dawn REQUIRED)
         endif ()
         set(TINT_COMPONENTS
             lang_spirv_reader

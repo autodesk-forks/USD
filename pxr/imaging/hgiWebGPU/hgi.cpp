@@ -57,9 +57,8 @@
 #define DAWN_ENABLE_BACKEND_VULKAN
 #endif
 
-#include <dawn/dawn_proc.h>
-#include <dawn/webgpu_cpp.h>
-#include <dawn/native/NullBackend.h>
+#include <webgpu/webgpu_cpp.h>
+
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -103,21 +102,41 @@ wgpu::Device GetDevice() {
         }
         TF_CODING_ERROR(errorTypeName + " error: " + message);
     }
-    static std::unique_ptr<dawn::native::Instance> instance;
+    static wgpu::Instance instance;
 
     wgpu::Device GetDevice() {
         if (!instance) {
-            instance = std::make_unique<dawn::native::Instance>();
+            wgpu::InstanceDescriptor instanceDescriptor{};
+            instanceDescriptor.features.timedWaitAnyEnable = true;
+            instance = wgpu::CreateInstance(&instanceDescriptor);
         }
 
         // Simply pick the first adapter in the sorted list.
-        dawn::native::Adapter backendAdapter = instance->EnumerateAdapters()[0];
+        wgpu::RequestAdapterOptions options = {};
+        wgpu::Adapter adapter;
+        wgpu::RequestAdapterCallbackInfo callbackInfo = {};
+        callbackInfo.nextInChain = nullptr;
+        callbackInfo.mode = wgpu::CallbackMode::WaitAnyOnly;
+        callbackInfo.callback = [](WGPURequestAdapterStatus status,
+                                   WGPUAdapter adapter, const char *message,
+                                   void *userdata) {
+            if (status != WGPURequestAdapterStatus_Success) {
+                TF_CODING_ERROR("Failed to get an adapter: %s", message);
+                return;
+            }
+            *static_cast<wgpu::Adapter *>(userdata) = wgpu::Adapter::Acquire(adapter);
+        };
 
         wgpu::DeviceDescriptor descriptor;
         std::vector<wgpu::FeatureName> requiredFeatures = {
                 wgpu::FeatureName::Depth32FloatStencil8,
                 wgpu::FeatureName::Float32Filterable
         };
+        callbackInfo.userdata = &adapter;
+        instance.WaitAny(instance.RequestAdapter(&options, callbackInfo), UINT64_MAX);
+        if (adapter == nullptr) {
+            TF_CODING_ERROR("RequestAdapter failed!");
+        }
 
         if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS)) {
             requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
@@ -139,9 +158,8 @@ wgpu::Device GetDevice() {
 
         #endif
 
-        WGPUSupportedLimits supportedLimits = {};
-        backendAdapter.GetLimits(&supportedLimits);
-        backendAdapter.SetUseTieredLimits(true);
+        wgpu::SupportedLimits supportedLimits = {};
+        adapter.GetLimits(&supportedLimits);
 
         // If the requirements are not met, dawn will throw a warning
         wgpu::RequiredLimits limits = {};
@@ -153,12 +171,8 @@ wgpu::Device GetDevice() {
         descriptor.requiredFeatures = requiredFeatures.data();
         descriptor.requiredFeatureCount = requiredFeatures.size();
 
-        WGPUDevice cDevice = backendAdapter.CreateDevice(&descriptor);
-        wgpu::Device device = wgpu::Device::Acquire(cDevice);
-        DawnProcTable procs = dawn::native::GetProcs();
+        wgpu::Device device = adapter.CreateDevice(&descriptor);
 
-        dawnProcSetProcs(&procs);
-        procs.deviceSetUncapturedErrorCallback(cDevice, PrintDeviceError, nullptr);
         return device;
     }
 #endif  // __EMSCRIPTEN__
@@ -380,7 +394,7 @@ void
 HgiWebGPU::EndFrame()
 {
 #ifndef EMSCRIPTEN
-    dawn::native::InstanceProcessEvents(instance->Get());
+    instance.ProcessEvents();
 #endif
 }
 

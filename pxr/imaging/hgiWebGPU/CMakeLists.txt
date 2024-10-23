@@ -13,16 +13,16 @@ if(NOT EMSCRIPTEN)
     set(PXR_ENABLE_PRECOMPILED_HEADERS_PREV ${PXR_ENABLE_PRECOMPILED_HEADERS})
     set(PXR_ENABLE_PRECOMPILED_HEADERS OFF)
     message("Storing PXR_ENABLE_PRECOMPILED_HEADERS:${PXR_ENABLE_PRECOMPILED_HEADERS_PREV}")
-    set(HGI_WEBGPU_LIBRARIES)
+    set(HGI_WEBGPU_NATIVE_LIBRARIES dawn::webgpu_dawn)
     if (APPLE)
-        list(APPEND HGI_WEBGPU_LIBRARIES
+        list(APPEND HGI_WEBGPU_NATIVE_LIBRARIES
             "-framework IOKit"
             "-framework IOSurface"
             "-framework Metal"
             "-framework QuartzCore"
         )
     elseif (WIN32)
-        list(APPEND HGI_WEBGPU_LIBRARIES
+        list(APPEND HGI_WEBGPU_NATIVE_LIBRARIES
             dxguid.lib
         )
     endif()
@@ -35,9 +35,8 @@ pxr_library(hgiWebGPU
         tf
         trace
         hgiGL
-        ${HGI_WEBGPU_LIBRARIES}
+        ${HGI_WEBGPU_NATIVE_LIBRARIES}
         ${OPENSUBDIV_LIBRARIES}
-        ${Dawn_LIBRARIES}
         glslang::glslang
         glslang::glslang-default-resource-limits
         glslang::MachineIndependent

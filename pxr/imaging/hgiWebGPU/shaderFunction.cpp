@@ -135,7 +135,11 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
 
     wgpu::ShaderModuleWGSLDescriptor wgslDesc;
     wgpu::ShaderModuleDescriptor shaderModuleDesc;
+#if defined(EMSCRIPTEN)
     wgslDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
+#else
+    wgslDesc.sType = wgpu::SType::ShaderSourceWGSL;
+#endif
     shaderModuleDesc.label = _descriptor.debugName.c_str();
     shaderModuleDesc.nextInChain = &wgslDesc;
     std::string wgslCode;
@@ -195,7 +199,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
                         std::stringstream errorss;
                         for (uint32_t i = 0; i < compilationInfo->messageCount; ++i) {
                             auto &compilationMessage = compilationInfo->messages[i];
-                            errorss << compilationMessage.lineNum << ": " << compilationMessage.message << std::endl;
+                            errorss << compilationMessage.lineNum << ": " << compilationMessage.message.data << std::endl;
                         }
                         _errors = errorss.str();
                     }

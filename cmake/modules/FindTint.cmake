@@ -98,7 +98,6 @@ set(TINT_COMMON_COMPONENTS
         lang_core_intrinsic
         lang_core_ir
         lang_core_ir_transform
-        lang_core_ir_transform_common
         lang_core_type
         # TODO: Are all these libraries required in all cases?
         lang_wgsl

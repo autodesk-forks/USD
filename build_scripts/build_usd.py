@@ -1701,7 +1701,7 @@ GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangTo
 # Tint
 
 TINT_REPO = "https://dawn.googlesource.com/tint"
-TINT_COMMIT = "5b68c1266eb91bd29c26751a820919f1afa31260"
+TINT_COMMIT = "3cb3f4a22006b39e08dfda6b1dc4d01fafb2f7a5"
 
 TINT_CMAKE_OPTIONS = [
     '-DTINT_BUILD_SPV_READER=ON',
@@ -1792,7 +1792,7 @@ TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6560"
+DAWN_CHROMIUM_VERSION = "6778"
 
 def InstallDawn(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):
@@ -1842,10 +1842,6 @@ def InstallDawn(context, force, buildArgs):
                 '-DDAWN_USE_GLFW=OFF',
                 '-DABSL_ENABLE_INSTALL=ON'
             ]
-            if Windows():
-                cmakeOptions.append('-DBUILD_SHARED_LIBS=OFF')
-            else:
-                cmakeOptions.append('-DBUILD_SHARED_LIBS=ON')
 
             cmakeOptions += TINT_CMAKE_OPTIONS
             cmakeOptions += buildArgs
@@ -1855,6 +1851,7 @@ def InstallDawn(context, force, buildArgs):
     with CurrentWorkingDirectory(srcDir):
         CopyDirectory(context, "include/tint", "include/tint")
         CopyDirectory(context, "src/tint", "include/src/tint")
+        CopyFiles(context, "src/utils/compiler.h", "include/src/utils/")
 
     with CurrentWorkingDirectory(buildDir):
 
@@ -1866,12 +1863,9 @@ def InstallDawn(context, force, buildArgs):
             buildConfigFolder = ''
 
         # Lib files
-        CopyFiles(context, "src/dawn/common/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/spirv-tools/source/{buildConfig}*SPIRV-Tools.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "third_party/spirv-tools/source/opt/{buildConfig}*SPIRV-Tools-opt.*".format(buildConfig=buildConfigFolder), "lib")
         CopyFiles(context, "src/tint/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-        # Extra include files
-        CopyFiles(context, "gen/include/dawn/*.*", "include/dawn")
 
 
 DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
