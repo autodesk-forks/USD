@@ -54,6 +54,9 @@ TF_DEFINE_ENV_SETTING(HD_ENABLE_GPU_TINY_PRIM_CULLING, false,
 TF_DEFINE_ENV_SETTING(HDST_MAX_LIGHTS, 16,
                       "Maximum number of lights to render with");
 
+TF_DEFINE_ENV_SETTING(HDST_DOME_LIGHT_TEXTURES_MAX_RES, 8192,
+                      "Maximum resolution of processed textures for dome light");
+
 const TfTokenVector HdStRenderDelegate::SUPPORTED_RPRIM_TYPES =
 {
     HdPrimTypeTokens->mesh,
@@ -192,6 +195,10 @@ HdStRenderDelegate::HdStRenderDelegate(HdRenderSettingsMap const& settingsMap)
             "Maximum number of lights",
             HdStRenderSettingsTokens->maxLights,
             VtValue(int(TfGetEnvSetting(HDST_MAX_LIGHTS))) },
+        HdRenderSettingDescriptor{
+            "Maximum resolution of processed textures for dome light",
+            HdStRenderSettingsTokens->domeLightTexturesMaxResolution,
+            VtValue(static_cast<int>(TfGetEnvSetting(HDST_DOME_LIGHT_TEXTURES_MAX_RES))) },
     };
 
     _PopulateDefaultSettings(_settingDescriptors);

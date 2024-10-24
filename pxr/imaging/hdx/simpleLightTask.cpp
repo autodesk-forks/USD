@@ -155,6 +155,12 @@ HdxSimpleLightTask::Sync(HdSceneDelegate* delegate,
         _maxLights = size_t(
             renderIndex.GetRenderDelegate()->GetRenderSetting<int>(
                 HdStRenderSettingsTokens->maxLights, 16));
+
+        // Update dome light textures max resolution.
+        _lightingShader->SetDomeLightTexturesMaxResolution(static_cast<unsigned int>(
+            renderIndex.GetRenderDelegate()->GetRenderSetting<unsigned int>(
+                HdStRenderSettingsTokens->domeLightTexturesMaxResolution, 8192)));
+
         _settingsVersion = renderDelegate->GetRenderSettingsVersion();
         verifyNumLights = true;
     }

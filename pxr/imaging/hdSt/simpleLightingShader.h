@@ -121,6 +121,9 @@ public:
         return _shadowAovBindings;
     }
 
+    HDST_API
+    void SetDomeLightTexturesMaxResolution(unsigned int maxRes);
+
 private:
     SdfPath _GetAovPath(TfToken const &aov, size_t shadowIndex) const;
     void _ResizeOrCreateBufferForAov(size_t shadowIndex) const;
@@ -143,6 +146,9 @@ private:
     NamedTextureHandleVector _namedTextureHandles;
 
     NamedTextureHandleVector _domeLightTextureHandles;
+    // Maximum resolution of processed textures for dome light
+    unsigned int _domeLightTexturesMaxResolution;
+
     NamedTextureHandleVector _shadowTextureHandles;
     
     HdSt_MaterialParamVector _lightTextureParams;
