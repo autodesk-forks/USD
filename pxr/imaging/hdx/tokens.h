@@ -16,6 +16,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 
 #define HDX_TOKENS              \
+    (hdxWboitBufferOne)         \
+    (hdxWboitBufferTwo)         \
     (hdxOitCounterBuffer)       \
     (hdxOitDataBuffer)          \
     (hdxOitDepthBuffer)         \

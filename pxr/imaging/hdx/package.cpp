@@ -140,6 +140,20 @@ HdxPackageOitResolveImageShader()
 }
 
 TfToken
+HdxPackageRenderPassWbOitShader()
+{
+    static TfToken shader = _GetShaderPath("renderPassWbOitShader.glslfx");
+    return shader;
+}
+
+TfToken
+HdxPackageWbOitResolveShader()
+{
+    static TfToken shader = _GetShaderPath("wboitResolve.glslfx");
+    return shader;
+}
+
+TfToken
 HdxPackageOutlineShader()
 {
     static TfToken shader = _GetShaderPath("outline.glslfx");

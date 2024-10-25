@@ -12,6 +12,32 @@
 
 --- --------------------------------------------------------------------------
 
+-- layout HdxRenderPass.RenderWbOit
+
+[
+    ["out", "vec4", "accumColorAndTotalTransmittance"],
+    ["out", "float", "accumWeight"]
+]
+
+-- glsl HdxRenderPass.RenderWbOit
+
+float computeWbOitWeight(float depth, float alpha) {
+    // Equation 10 of "Weighted Blended Order-Independent Transparency"
+    float d = (1.0 - depth);
+    return alpha * max(1e-2, 3e3 * d * d * d);
+}
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    vec3 Ci = color.rgb;
+    float ai = color.a;
+    float wi = computeWbOitWeight(gl_FragCoord.z, ai);
+
+    accumColorAndTotalTransmittance = vec4(Ci * wi, ai);
+    accumWeight = ai * wi;
+}
+
+
 -- layout HdxRenderPass.RenderOitOpaquePixels
 
 [

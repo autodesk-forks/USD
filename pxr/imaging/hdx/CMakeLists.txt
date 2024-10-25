@@ -51,6 +51,8 @@ pxr_library(hdx
         oitRenderTask
         oitResolveTask
         oitVolumeRenderTask
+        wboitRenderTask
+        wboitResolveTask
         package
         pickTask
         pickFromRenderBufferTask
@@ -98,6 +100,8 @@ pxr_library(hdx
         shaders/renderPassOitShader.glslfx
         shaders/renderPassOitOpaqueShader.glslfx
         shaders/renderPassOitVolumeShader.glslfx
+        shaders/renderPassWbOitShader.glslfx
+        shaders/wboitResolve.glslfx
         shaders/renderPassShadowShader.glslfx
         shaders/selection.glslfx
         shaders/skydome.glslfx

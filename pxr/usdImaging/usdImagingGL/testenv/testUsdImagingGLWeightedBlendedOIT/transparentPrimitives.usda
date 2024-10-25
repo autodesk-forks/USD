@@ -1,0 +1,144 @@
+#usda 1.0
+(
+    doc = "A scene with a cylinder, sphere, cylinder, and capsule, each with different transparent materials"
+    defaultPrim = "Root"
+)
+
+def Xform "Root"
+{
+    def Cylinder "Table" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+        customData = {
+            float3 rotationEulerHint = (1.5707964, 0, 0)
+        }
+    )
+    {
+        rel material:binding = </Root/Table/TableMaterial>
+        double height = 0.1
+        double radius = 3
+        quatf xformOp:orient = (0.70710677, 0.70710677, 0, 0)
+        double3 xformOp:rotateXYZ = (45, 0, 0)
+        float3 xformOp:scale = (1, 0.99999994, 0.99999994)
+        float3 xformOp:translate = (0, -2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Material "TableMaterial"
+        {
+            token outputs:surface.connect = </Root/Table/TableMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.25, 0.25, 0.25)
+                float inputs:opacity = 1
+                float inputs:roughness = 1
+                color3f inputs:specularColor = (0, 0, 0)
+                int inputs:useSpecularWorkflow = 1
+                token outputs:surface
+            }
+        }
+    }
+
+    def Cylinder "Tube" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Root/Tube/TubeMaterial>
+        float3 xformOp:scale = (1.5, 1.5, 1.5)
+        uniform token axis = "Y"
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+
+        def Material "TubeMaterial"
+        {
+            token outputs:surface.connect = </Root/Tube/TubeMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 0, 0)
+                float inputs:opacity = 0.25
+                float inputs:roughness = 1
+                color3f inputs:specularColor = (0, 0, 0)
+                int inputs:useSpecularWorkflow = 1
+                token outputs:surface
+            }
+        }
+    }
+
+    def Sphere "Sphere" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Root/Sphere/SphereMaterial>
+        float3 xformOp:scale = (1.5, 1.5, 1.5)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+
+        def Material "SphereMaterial"
+        {
+            token outputs:surface.connect = </Root/Sphere/SphereMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0, 1, 0)
+                float inputs:opacity = 0.25
+                float inputs:roughness = 1
+                color3f inputs:specularColor = (0, 0, 0)
+                int inputs:useSpecularWorkflow = 1
+                token outputs:surface
+            }
+        }
+    }
+
+    def Cylinder "Cylinder" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Root/Cylinder/CylinderMaterial>
+        float3 xformOp:scale = (1, 1, 1)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+
+        def Material "CylinderMaterial"
+        {
+            token outputs:surface.connect = </Root/Cylinder/CylinderMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0, 0, 1)
+                float inputs:opacity = 0.25
+                float inputs:roughness = 1
+                color3f inputs:specularColor = (0, 0, 0)
+                int inputs:useSpecularWorkflow = 1
+                token outputs:surface
+            }
+        }
+    }
+
+    def Capsule "Capsule" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Root/Capsule/CapsuleMaterial>
+        uniform token axis = "Y"
+        double height = 0.5
+        double radius = 0.5
+
+        def Material "CapsuleMaterial"
+        {
+            token outputs:surface.connect = </Root/Capsule/CapsuleMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 0, 1)
+                float inputs:opacity = 0.25
+                float inputs:roughness = 1
+                color3f inputs:specularColor = (0, 0, 0)
+                int inputs:useSpecularWorkflow = 1
+                token outputs:surface
+            }
+        }
+    }
+}
+

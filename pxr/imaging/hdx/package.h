@@ -28,6 +28,8 @@ TfToken HdxPackageRenderPassOitShader();
 TfToken HdxPackageRenderPassOitOpaqueShader();
 TfToken HdxPackageRenderPassOitVolumeShader();
 TfToken HdxPackageOitResolveImageShader();
+TfToken HdxPackageRenderPassWbOitShader();
+TfToken HdxPackageWbOitResolveShader();
 TfToken HdxPackageOutlineShader();
 TfToken HdxPackageSkydomeShader();
 TfToken HdxPackageBoundingBoxShader();

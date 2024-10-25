@@ -659,6 +659,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLWeightedBlendedOIT
+    DEST testUsdImagingGLWeightedBlendedOIT
+)
+
+pxr_install_test_dir(
     SRC SRC testenv/testUsdImagingGLMSAADisabled
     DEST testUsdImagingGLMSAADisabled
 )
@@ -4596,6 +4601,19 @@ pxr_register_test(testUsdImagingGLOIT
     WARN_PERCENT 0.0005
     EXPECTED_RETURN_CODE 0
     TESTENV testUsdImagingGLOIT
+)
+
+pxr_register_test(testUsdImagingGLWeightedBlendedOIT
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -frameAll -offscreen -lighting -camlight -stage transparentPrimitives.usda -clear 0.2 0.2 0.2 1  -write testUsdImagingGLWeightedBlendedOIT.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLWeightedBlendedOIT.png
+    FAIL 0.01
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLWeightedBlendedOIT
+    ENV
+        HDX_ENABLE_WBOIT=1
 )
 
 pxr_register_test(testUsdImagingGLMSAADisabled

@@ -18,6 +18,8 @@
 #include "pxr/imaging/hdx/oitRenderTask.h"
 #include "pxr/imaging/hdx/oitResolveTask.h"
 #include "pxr/imaging/hdx/oitVolumeRenderTask.h"
+#include "pxr/imaging/hdx/wboitRenderTask.h"
+#include "pxr/imaging/hdx/wboitResolveTask.h"
 #include "pxr/imaging/hdx/package.h"
 #include "pxr/imaging/hdx/pickTask.h"
 #include "pxr/imaging/hdx/pickFromRenderBufferTask.h"
@@ -255,8 +257,10 @@ HdxTaskController::_CreateRenderGraph()
             HdStMaterialTagTokens->additive));
         _renderTaskIds.push_back(_CreateRenderTask(
             HdStMaterialTagTokens->translucent));
-        _renderTaskIds.push_back(_CreateRenderTask(
-            HdStMaterialTagTokens->volume));
+        if (!HdxWbOitRenderTask::IsEnabled()) {
+            _renderTaskIds.push_back(_CreateRenderTask(
+                HdStMaterialTagTokens->volume));
+        }
 
         if (_AovsSupported()) {
             _CreateAovInputTask();
@@ -332,15 +336,23 @@ HdxTaskController::_CreateRenderTask(TfToken const& materialTag)
         materialTag.IsEmpty()) {
         GetRenderIndex()->InsertTask<HdxRenderTask>(&_delegate, taskId);
     } else if (materialTag == HdStMaterialTagTokens->translucent) {
-        GetRenderIndex()->InsertTask<HdxOitRenderTask>(&_delegate, taskId);
+        if (HdxWbOitRenderTask::IsEnabled()) {
+            GetRenderIndex()->InsertTask<HdxWbOitRenderTask>(&_delegate, taskId);
+        } else {
+            GetRenderIndex()->InsertTask<HdxOitRenderTask>(&_delegate, taskId);
+        }
         // OIT is using its own buffers which are only per pixel and not per
         // sample. Thus, we resolve the AOVs before starting to render any
         // OIT geometry and only use the resolved AOVs from then on.
         renderParams.useAovMultiSample = false;
     } else if (materialTag == HdStMaterialTagTokens->volume) {
-        GetRenderIndex()->InsertTask<HdxOitVolumeRenderTask>(&_delegate, taskId);
-        // See above comment about OIT.
-        renderParams.useAovMultiSample = false;
+        if (HdxWbOitRenderTask::IsEnabled()) {
+            TF_WARN("Volume rendering is not supported with WBOIT.");
+        } else {
+            GetRenderIndex()->InsertTask<HdxOitVolumeRenderTask>(&_delegate, taskId);
+            // See above comment about OIT.
+            renderParams.useAovMultiSample = false;
+        }
     }
 
     // Create an initial set of render tags in case the user doesn't set any
@@ -410,18 +422,21 @@ HdxTaskController::_SetBlendStateForMaterialTag(TfToken const& materialTag,
 void
 HdxTaskController::_CreateOitResolveTask()
 {
-    HdxOitResolveTaskParams resolveParams;
-    // OIT is using its own buffers which are only per pixel and not per
-    // sample. Thus, we resolve the AOVs before starting to render any
-    // OIT geometry and only use the resolved AOVs from then on.
-    resolveParams.useAovMultiSample = false;
-
     _oitResolveTaskId = GetControllerId().AppendChild(_tokens->oitResolveTask);
 
-    GetRenderIndex()->InsertTask<HdxOitResolveTask>(&_delegate,
-        _oitResolveTaskId);
-
-    _delegate.SetParameter(_oitResolveTaskId, HdTokens->params, resolveParams);
+    if (HdxWbOitRenderTask::IsEnabled()) {
+        GetRenderIndex()->InsertTask<HdxWbOitResolveTask>(&_delegate,
+            _oitResolveTaskId);
+    } else {
+        HdxOitResolveTaskParams renderParams;
+        // OIT is using its own buffers which are only per pixel and not per
+        // sample. Thus, we resolve the AOVs before starting to render any
+        // OIT geometry and only use the resolved AOVs from then on.
+        renderParams.useAovMultiSample = false;
+        GetRenderIndex()->InsertTask<HdxOitResolveTask>(&_delegate,
+            _oitResolveTaskId);
+        _delegate.SetParameter(_oitResolveTaskId, HdTokens->params, renderParams);
+    }
 }
 
 void
@@ -750,9 +765,11 @@ HdxTaskController::GetRenderingTasks() const
         }
 
         // Render volume prims
-        if (std::find(_renderTaskIds.begin(), _renderTaskIds.end(), volumeId) 
-                != _renderTaskIds.end()) {
-            tasks.push_back(GetRenderIndex()->GetTask(volumeId));
+        if (!HdxWbOitRenderTask::IsEnabled()) {
+            if (std::find(_renderTaskIds.begin(), _renderTaskIds.end(), volumeId) 
+                    != _renderTaskIds.end()) {
+                tasks.push_back(GetRenderIndex()->GetTask(volumeId));
+            }
         }
     }
 
