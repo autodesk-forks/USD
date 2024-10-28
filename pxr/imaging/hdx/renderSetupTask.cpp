@@ -130,7 +130,24 @@ HdxRenderSetupTask::SyncParams(HdSceneDelegate* delegate,
     HdRenderIndex &renderIndex = delegate->GetRenderIndex();
     HdRenderPassStateSharedPtr &renderPassState =
             _GetRenderPassState(&renderIndex);
+    SyncParamsHelper(renderPassState, params);
+    if (HdStRenderPassState * const hdStRenderPassState =
+            dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
+        _SetRenderpassShadersForStorm(
+                params, hdStRenderPassState);
+    }
+    _viewport = params.viewport;
+    _framing = params.framing;
+    _overrideWindowPolicy = params.overrideWindowPolicy;
+    _cameraId = params.camera;
+    _aovBindings = params.aovBindings;
+    _aovInputBindings = params.aovInputBindings;
+}
 
+void
+HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPassState,
+                               HdxRenderTaskParams const &params)
+{
     renderPassState->SetOverrideColor(params.overrideColor);
     renderPassState->SetWireframeColor(params.wireframeColor);
     renderPassState->SetPointColor(params.pointColor);
@@ -183,18 +200,8 @@ HdxRenderSetupTask::SyncParams(HdSceneDelegate* delegate,
                 params.useAovMultiSample && !params.enableIdRender);
             hdStRenderPassState->SetResolveAovMultiSample(
                 params.resolveAovMultiSample);
-            
-            _SetRenderpassShadersForStorm(
-                params, hdStRenderPassState);
         }
     }
-
-    _viewport = params.viewport;
-    _framing = params.framing;
-    _overrideWindowPolicy = params.overrideWindowPolicy;
-    _cameraId = params.camera;
-    _aovBindings = params.aovBindings;
-    _aovInputBindings = params.aovInputBindings;
 }
 
 void
