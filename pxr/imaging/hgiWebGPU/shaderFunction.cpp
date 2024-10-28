@@ -157,7 +157,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
                 &shaderCode,
                 1,
                 desc.shaderStage,
-                spirvData,
+                &spirvData,
                 &_errors);
 
         if (result) {

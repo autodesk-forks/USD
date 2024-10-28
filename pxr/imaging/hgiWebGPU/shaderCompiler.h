@@ -45,7 +45,7 @@ bool HgiWebGPUCompileGLSL(
     const char* shaderCodes[],
     uint8_t numShaderCodes,
     HgiShaderStage stage,
-    std::vector<uint32_t>& spirvOUT,
+    std::vector<uint32_t>* spirvOut,
     std::string* errors = nullptr);
 
 PXR_NAMESPACE_CLOSE_SCOPE

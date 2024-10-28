@@ -1,3 +1,27 @@
+//
+// Copyright 2024 Pixar
+//
+// Licensed under the Apache License, Version 2.0 (the "Apache License")
+// with the following modification; you may not use this file except in
+// compliance with the Apache License and the following modification to it:
+// Section 6. Trademarks. is deleted and replaced with:
+//
+// 6. Trademarks. This License does not grant permission to use the trade
+//    names, trademarks, service marks, or product names of the Licensor
+//    and its affiliates, except as required to comply with Section 4(c) of
+//    the License and to reproduce the content of the NOTICE file.
+//
+// You may obtain a copy of the Apache License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the Apache License with the above modification is
+// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. See the Apache License for the specific
+// language governing permissions and limitations under the Apache License.
+//
+
 #include "spirvTransforms.h"
 
 #include <iostream>
@@ -29,12 +53,12 @@ class _SpvByteCode;
 /// instructions from a SPIR-V module. The functions are called in
 /// order following the logical layout rules. Keep the functions
 /// sorted this way too. See:
-///   https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#_logical_layout_of_a_module
+/// https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#_logical_layout_of_a_module
 /// This only covers the opcode we use now, add more when necessary.
 class _SpvVisitor
 {
 public:
-    _SpvVisitor(_SpvByteCode& byteCode)
+    explicit _SpvVisitor(_SpvByteCode& byteCode)
         : _byteCode{byteCode}
     {
     }
@@ -42,17 +66,20 @@ public:
     virtual ~_SpvVisitor() = default;
 
     virtual void
-    OpEntryPoint(SpvExecutionModel executionModel, Id entryPoint, std::string_view name, TfSpan<const Operand> variables)
+    OpEntryPoint(SpvExecutionModel executionModel, Id entryPoint,
+        std::string_view name, TfSpan<const Operand> variables)
     {
     }
 
     virtual void
-    OpDecorate(Id target, SpvDecoration decoration, const std::vector<Literal>& extra)
+    OpDecorate(Id target, SpvDecoration decoration,
+        const std::vector<Literal>& extra)
     {
     }
 
     virtual void
-    OpMemberDecorate(Id structType, Word member, SpvDecoration decoration, const std::vector<Literal>& extra)
+    OpMemberDecorate(Id structType, Word member, SpvDecoration decoration,
+        const std::vector<Literal>& extra)
     {
     }
 
@@ -77,7 +104,8 @@ public:
     }
 
     virtual void
-    OpVariable(Id resultType, Id result, SpvStorageClass storageClass, std::optional<Operand> initializer)
+    OpVariable(Id resultType, Id result, SpvStorageClass storageClass,
+        std::optional<Operand> initializer)
     {
     }
 
@@ -88,7 +116,8 @@ public:
     }
 
     virtual void
-    OpFunction(Id resultType, Id result, SpvFunctionControlMask functionControl, Id functionType)
+    OpFunction(Id resultType, Id result, SpvFunctionControlMask functionControl,
+        Id functionType)
     {
     }
 
@@ -114,158 +143,49 @@ protected:
 class _SpvByteCode
 {
 public:
-    _SpvByteCode(const std::vector<Word>& spirv)
+    explicit _SpvByteCode(const std::vector<Word>& spirv)
         : _oldSpirv{spirv}
     {
         _newSpirv.reserve(_oldSpirv.size());
         _spvTools.SetMessageConsumer(&PrintMessage);
     }
 
+    /// Convenience overload.
+    template<typename VisitorType>
+    bool
+    Apply()
+    {
+        VisitorType visitor{*this};
+        return Apply(visitor);
+    }
+
     /// Parse the bytecode an apply a transformation.
     /// Copies the instructions one at a time, and calls
     /// the _SpvVisitor function after each supported
     /// instruction is copied.
-    template<typename VisitorType>
-    bool Apply()
+    bool
+    Apply(_SpvVisitor& visitor)
     {
-        static_assert(std::is_base_of_v<_SpvVisitor, VisitorType>,
-                "VisitorType must be an _SpvVisitor");
-        VisitorType visitor{*this};
-
         _firstFunctionSeen = false;
         _spvTools.Parse(_oldSpirv,
-            [&](const spv_endianness_t, const spv_parsed_header_t& header)
-            {
-                _nextId = header.bound;
-                _newSpirv.resize(sizeof(header) / sizeof(Word));
-                std::memcpy(_newSpirv.data(), &header, sizeof(header));
-                return SPV_SUCCESS;
+            [this](const spv_endianness_t endianness,
+                    const spv_parsed_header_t& header) {
+                return _ParseHeader(endianness, header);
             },
-            [&](const spv_parsed_instruction_t& inst)
-            {
-                if (!_firstFunctionSeen && inst.opcode == SpvOpFunction) {
-                    _firstFunctionSeen = true;
-                    visitor.BeginFunctions();
-                }
-
-                _offset = _newSpirv.size();
-                _newSpirv.insert(_newSpirv.end(), inst.words, inst.words + inst.num_words);
-
-                size_t opIndex = 0;
-                const auto nextOperand = [&inst, &opIndex] {
-                    return inst.words[inst.operands[opIndex++].offset];
-                };
-                const auto optionalOperand = [&inst, &opIndex, &nextOperand] {
-                    return opIndex < inst.num_operands ?
-                        std::optional<Operand>{nextOperand()} : std::nullopt;
-                };
-                const auto remainingOperands = [&inst, &opIndex] {
-                    // One word per operand
-                    const auto firstWordOffset = static_cast<size_t>(inst.operands[opIndex].offset);
-                    opIndex = inst.num_operands;
-                    return TfSpan{inst.words + firstWordOffset, inst.num_words - firstWordOffset};
-                };
-                const auto nextLiteral = [&inst, &opIndex] {
-                    const auto& operand = inst.operands[opIndex++];
-                    return Literal{inst.words + operand.offset, operand.num_words};
-                };
-                const auto remainingLiterals = [&inst, &opIndex, &nextLiteral] {
-                    std::vector<Literal> literals;
-                    for (size_t i = opIndex; i < inst.num_operands; i++) {
-                        literals.push_back(nextLiteral());
-                    }
-                    return literals;
-                };
-                const auto skipInstruction = [&inst, &opIndex] {
-                    opIndex = inst.num_operands;
-                };
-
-                switch (inst.opcode) {
-                    case SpvOpEntryPoint:
-                        visitor.OpEntryPoint(
-                            static_cast<SpvExecutionModel>(nextOperand()),
-                            nextOperand(),
-                            LiteralAsString(nextLiteral()),
-                            remainingOperands());
-                        break;
-                    case SpvOpDecorate:
-                        visitor.OpDecorate(
-                            nextOperand(),
-                            static_cast<SpvDecoration>(nextOperand()),
-                            remainingLiterals());
-                        break;
-                    case SpvOpMemberDecorate:
-                        visitor.OpMemberDecorate(
-                            nextOperand(),
-                            LiteralAsInt(nextLiteral()),
-                            static_cast<SpvDecoration>(nextOperand()),
-                            remainingLiterals());
-                        break;
-                    case SpvOpTypeInt:
-                        visitor.OpTypeInt(
-                            nextOperand(),
-                            LiteralAsInt(nextLiteral()),
-                            LiteralAsInt(nextLiteral()));
-                        break;
-                    case SpvOpTypeFloat:
-                        visitor.OpTypeFloat(
-                            nextOperand(),
-                            LiteralAsInt(nextLiteral()),
-                            optionalOperand());
-                        break;
-                    case SpvOpTypePointer:
-                        visitor.OpTypePointer(
-                            nextOperand(),
-                            static_cast<SpvStorageClass>(nextOperand()),
-                            nextOperand());
-                        break;
-                    case SpvOpConstant:
-                        visitor.OpConstant(
-                            nextOperand(),
-                            nextOperand(),
-                            nextLiteral());
-                        break;
-                    case SpvOpVariable:
-                        visitor.OpVariable(
-                            nextOperand(),
-                            nextOperand(),
-                            static_cast<SpvStorageClass>(nextOperand()),
-                            optionalOperand());
-                        break;
-                    case SpvOpFunction:
-                        visitor.OpFunction(
-                            nextOperand(),
-                            nextOperand(),
-                            static_cast<SpvFunctionControlMask>(nextOperand()),
-                            nextOperand());
-                        break;
-                    case SpvOpFunctionEnd:
-                        visitor.OpFunctionEnd();
-                        break;
-                    case SpvOpLabel:
-                        visitor.OpLabel(nextOperand());
-                        break;
-                    default:
-                        skipInstruction();
-                        break;
-                }
-
-                if (ARCH_UNLIKELY(opIndex != inst.num_operands)) {
-                    TF_CODING_ERROR("Operands were not evaluated correctly");
-                }
-
-                return SPV_SUCCESS;
-            }
-        );
+            [this, &visitor](const spv_parsed_instruction_t& inst) {
+                return _ParseInstruction(visitor, inst);
+            });
 
         _newSpirv[offsetof(spv_parsed_header_t, bound) / sizeof(Word)] = _nextId;
 
-        if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_SPIRV_TRANSFORM)) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(
+                HGIWEBGPU_DEBUG_SPIRV_TRANSFORM))) {
             std::string disassembly;
             _spvTools.Disassemble(_newSpirv, &disassembly);
-            std::cout << "--- BEGIN SPIR-V DISASSEMBLY ---\n";
-            std::cout << disassembly << std::endl;
-            std::cout << "---- END SPIR-V DISASSEMBLY ----\n";
+            TF_DEBUG(HGIWEBGPU_DEBUG_SPIRV_TRANSFORM).Msg(
+                "--- BEGIN SPIR-V DISASSEMBLY ---\n%s"
+                "\n---- END SPIR-V DISASSEMBLY ----\n",
+                disassembly.c_str());
         }
 
         if (ARCH_UNLIKELY(!_spvTools.Validate(_newSpirv))) {
@@ -352,19 +272,152 @@ private:
     {
         switch (level) {
             case SPV_MSG_FATAL:
-                TF_FATAL_ERROR("%s:%lu -- %s", source, position.index, message);
+                TF_FATAL_ERROR("%s:%lu -- %s",
+                    source, position.index, message);
             break;
             case SPV_MSG_INTERNAL_ERROR:
             case SPV_MSG_ERROR:
-                TF_RUNTIME_ERROR("%s:%lu -- %s", source, position.index, message);
+                TF_RUNTIME_ERROR("%s:%lu -- %s",
+                    source, position.index, message);
             break;
             case SPV_MSG_WARNING:
-                TF_WARN("%s:%lu -- %s", source, position.index, message);
+                TF_WARN("%s:%lu -- %s",
+                    source, position.index, message);
             break;
             case SPV_MSG_INFO:
             case SPV_MSG_DEBUG:
                 break;
         }
+    }
+
+    spv_result_t
+    _ParseHeader(const spv_endianness_t, const spv_parsed_header_t& header)
+    {
+        _nextId = header.bound;
+        _newSpirv.resize(sizeof(header) / sizeof(Word));
+        std::memcpy(_newSpirv.data(), &header, sizeof(header));
+        return SPV_SUCCESS;
+    }
+
+    spv_result_t
+    _ParseInstruction(_SpvVisitor& visitor,
+        const spv_parsed_instruction_t& inst)
+    {
+        if (!_firstFunctionSeen && inst.opcode == SpvOpFunction) {
+            _firstFunctionSeen = true;
+            visitor.BeginFunctions();
+        }
+
+        _offset = _newSpirv.size();
+        _newSpirv.insert(_newSpirv.end(), inst.words,
+            inst.words + inst.num_words);
+
+        size_t opIndex = 0;
+        const auto nextOperand = [&inst, &opIndex] {
+            return inst.words[inst.operands[opIndex++].offset];
+        };
+        const auto optionalOperand = [&inst, &opIndex, &nextOperand] {
+            return opIndex < inst.num_operands ?
+                std::optional{nextOperand()} : std::nullopt;
+        };
+        const auto remainingOperands = [&inst, &opIndex] {
+            // One word per operand
+            const auto firstWordOffset =
+                static_cast<size_t>(inst.operands[opIndex].offset);
+            opIndex = inst.num_operands;
+            return TfSpan{inst.words + firstWordOffset,
+                inst.num_words - firstWordOffset};
+        };
+        const auto nextLiteral = [&inst, &opIndex] {
+            const auto& operand = inst.operands[opIndex++];
+            return Literal{inst.words + operand.offset, operand.num_words};
+        };
+        const auto remainingLiterals = [&inst, &opIndex, &nextLiteral] {
+            std::vector<Literal> literals;
+            for (size_t i = opIndex; i < inst.num_operands; i++) {
+                literals.push_back(nextLiteral());
+            }
+            return literals;
+        };
+        const auto skipInstruction = [&inst, &opIndex] {
+            opIndex = inst.num_operands;
+        };
+
+        switch (inst.opcode) {
+            case SpvOpEntryPoint:
+                visitor.OpEntryPoint(
+                    static_cast<SpvExecutionModel>(nextOperand()),
+                    nextOperand(),
+                    LiteralAsString(nextLiteral()),
+                    remainingOperands());
+                break;
+            case SpvOpDecorate:
+                visitor.OpDecorate(
+                    nextOperand(),
+                    static_cast<SpvDecoration>(nextOperand()),
+                    remainingLiterals());
+                break;
+            case SpvOpMemberDecorate:
+                visitor.OpMemberDecorate(
+                    nextOperand(),
+                    LiteralAsInt(nextLiteral()),
+                    static_cast<SpvDecoration>(nextOperand()),
+                    remainingLiterals());
+                break;
+            case SpvOpTypeInt:
+                visitor.OpTypeInt(
+                    nextOperand(),
+                    LiteralAsInt(nextLiteral()),
+                    LiteralAsInt(nextLiteral()));
+                break;
+            case SpvOpTypeFloat:
+                visitor.OpTypeFloat(
+                    nextOperand(),
+                    LiteralAsInt(nextLiteral()),
+                    optionalOperand());
+                break;
+            case SpvOpTypePointer:
+                visitor.OpTypePointer(
+                    nextOperand(),
+                    static_cast<SpvStorageClass>(nextOperand()),
+                    nextOperand());
+                break;
+            case SpvOpConstant:
+                visitor.OpConstant(
+                    nextOperand(),
+                    nextOperand(),
+                    nextLiteral());
+                break;
+            case SpvOpVariable:
+                visitor.OpVariable(
+                    nextOperand(),
+                    nextOperand(),
+                    static_cast<SpvStorageClass>(nextOperand()),
+                    optionalOperand());
+                break;
+            case SpvOpFunction:
+                visitor.OpFunction(
+                    nextOperand(),
+                    nextOperand(),
+                    static_cast<SpvFunctionControlMask>(nextOperand()),
+                    nextOperand());
+                break;
+            case SpvOpFunctionEnd:
+                visitor.OpFunctionEnd();
+                break;
+            case SpvOpLabel:
+                visitor.OpLabel(nextOperand());
+                break;
+            default:
+                skipInstruction();
+                break;
+        }
+
+        if (ARCH_UNLIKELY(opIndex != inst.num_operands)) {
+            TF_CODING_ERROR("Operands were not evaluated correctly");
+        }
+
+        return SPV_SUCCESS;
     }
 
     const std::vector<Word>& _oldSpirv;
@@ -377,11 +430,11 @@ private:
     bool _firstFunctionSeen = false;
 };
 
-/// Negate the output vertex position Y coordinate, at the very end of the shader.
-/// This is achieved by redirecting the current vertex entry point to a new one,
-/// which is injected right after the original one. This new entry point calls
-/// the original one, negates the output vertex position Y coordinate, then returns.
-/// In GLSL, it looks like this:
+/// Negate the output vertex position Y coordinate, at the very end of the
+/// shader. This is achieved by redirecting the current vertex entry point to a
+/// new one, which is injected right after the original one. This new entry
+/// point calls the original one, negates the output vertex position Y
+/// coordinate, then returns. In GLSL, it looks like this:
 ///     out gl_PerVertex
 ///     {
 ///         vec4 gl_Position;
@@ -395,8 +448,9 @@ private:
 ///         gl_PerVertex.gl_Position.y = -gl_PerVertex.gl_Position.y;
 ///     }
 ///
-/// In SPIR-V, gl_PerVertex is compiled to a "Block" struct. It's value is exposed
-/// as an "Output" pointer variable to the struct. In pseudo C++, it looks like this:
+/// In SPIR-V, gl_PerVertex is compiled to a "Block" struct. Its value is
+/// exposed as an "Output" pointer variable to the struct. In pseudo C++, it
+/// looks like this:
 ///     [[Block]] struct gl_PerVertex
 ///     {
 ///         [[BuiltIn(Position)]] vec4 gl_Position;
@@ -413,37 +467,37 @@ private:
 ///     }
 ///
 /// To do the transformation, we locate all structs annotated (decorated)
-/// with Block and with a BuiltIn Position member. We look for an output variable
-/// having such a struct pointer type, and also belonging to the entry point
-/// interface variable list. Then after the original entry point has been
+/// with Block and with a BuiltIn Position member. We look for an output
+/// variable having such a struct pointer type, and also belonging to the entry
+/// point interface variable list. Then after the original entry point has been
 /// parsed, we write our new entry point, using the information we collected
 /// about the variables and structs to negate gl_Position.y in the output.
 ///
 /// Finally, in SPIR-V it looks like this (some code omitted):
-///                             OpEntryPoint Vertex %main "main" %gl_PerVertex_var
-///                             ; bytecode omitted...
-///                             OpMemberDecorate %gl_PerVertex 0 BuiltIn Position
-///                             OpDecorate %gl_PerVertex Block
-///                             ; bytecode omitted...
-///             %gl_PerVertex = OpTypeStruct %vec4
-///     %gl_PerVertex_out_ptr = OpTypePointer Output %gl_PerVertex
-///         %gl_PerVertex_var = OpVariable %gl_PerVertex_out_ptr Output
-///                             ; bytecode omitted...
-///                             ; \/ our injected entry point \/
-///                     %main = OpFunction %void None %main_func
-///                   %unused = OpLabel
-///              %void_return = OpFunctionCall %void %old_main
-///           %position_y_ptr = OpAccessChain %out_float_ptr %gl_PerVertex_var %int_0 %int_1
-///               %position_y = OpLoad %float %position_y_ptr
-///         %minus_position_y = OpFNegate %float %position_y
-///                             OpStore %position_y_ptr %minus_position_y
-///                             OpReturn
-///                             OpFunctionEnd
+///                          OpEntryPoint Vertex %main "main" %gl_PerVertex_var
+///                          ; bytecode omitted...
+///                          OpMemberDecorate %gl_PerVertex 0 BuiltIn Position
+///                          OpDecorate %gl_PerVertex Block
+///                          ; bytecode omitted...
+///          %gl_PerVertex = OpTypeStruct %vec4
+///  %gl_PerVertex_out_ptr = OpTypePointer Output %gl_PerVertex
+///      %gl_PerVertex_var = OpVariable %gl_PerVertex_out_ptr Output
+///                          ; bytecode omitted...
+///                          ; \/ our injected entry point \/
+///                  %main = OpFunction %void None %main_func
+///                %unused = OpLabel
+///           %void_return = OpFunctionCall %void %old_main
+///        %position_y_ptr = OpAccessChain %out_float_ptr %gl_PerVertex_var %int_0 %int_1
+///            %position_y = OpLoad %float %position_y_ptr
+///      %minus_position_y = OpFNegate %float %position_y
+///                          OpStore %position_y_ptr %minus_position_y
+///                          OpReturn
+///                          OpFunctionEnd
 ///
 /// Note that shader interface with Block structs is defined in the Vulkan spec,
 /// so we can assume GLSL is always compiled this way. See:
-///   https://registry.khronos.org/vulkan/specs/1.3/html/vkspec.html#interfaces-iointerfaces
-class _FlipYVisitor final : _SpvVisitor
+/// https://registry.khronos.org/vulkan/specs/1.3/html/vkspec.html#interfaces-iointerfaces
+class _FlipYVisitor final : public _SpvVisitor
 {
 public:
     using _SpvVisitor::_SpvVisitor;
@@ -451,39 +505,45 @@ public:
     ~_FlipYVisitor() override = default;
 
     void
-    OpEntryPoint(SpvExecutionModel executionModel, Id entryPoint, std::string_view name, TfSpan<const Operand> variables) override
+    OpEntryPoint(SpvExecutionModel executionModel, Id entryPoint,
+        std::string_view name, TfSpan<const Operand> variables) override
     {
         if (executionModel == SpvExecutionModelVertex) {
             _entryPointsById.try_emplace(entryPoint,
-                _EntryPoint{_byteCode.CurrentOffset(), {variables.begin(), variables.end()}});
+                _EntryPoint{_byteCode.CurrentOffset(),
+                    {variables.begin(), variables.end()}});
         }
     }
 
     void
-    OpDecorate(Id target, SpvDecoration decoration, const std::vector<Literal>& extra) override
+    OpDecorate(Id target, SpvDecoration decoration,
+        const std::vector<Literal>& extra) override
     {
         // OpDecorate and OpMemberDecorate are un-sequenced,
         // so record all structs that are Block or with a
         // BuiltIn Position member. We'll filter those with only
         // both in OpVariable, when all decoration are complete.
         if (decoration == SpvDecorationBlock) {
-            if (const auto iter = _structByTypeId.find(target);
-                    iter != _structByTypeId.end()) {
-                iter->second._isBlock = true;
+            if (const auto it = _structByTypeId.find(target);
+                    it != _structByTypeId.end()) {
+                it->second._isBlock = true;
             } else {
-                _structByTypeId.try_emplace(target, _Struct{std::nullopt, true});
+                _structByTypeId.try_emplace(target,
+                    _Struct{std::nullopt, true});
             }
         }
     }
 
     void
-    OpMemberDecorate(Id structType, Word member, SpvDecoration decoration, const std::vector<Literal>& extra) override
+    OpMemberDecorate(Id structType, Word member, SpvDecoration decoration,
+        const std::vector<Literal>& extra) override
     {
         if (decoration == SpvDecorationBuiltIn &&
-                _SpvByteCode::LiteralAsEnum<SpvBuiltIn>(extra.front()) == SpvBuiltInPosition) {
-            if (const auto iter = _structByTypeId.find(structType);
-                    iter != _structByTypeId.end()) {
-                iter->second._positionBuiltInMember = member;
+                _SpvByteCode::LiteralAsEnum<SpvBuiltIn>(extra.front()) ==
+                SpvBuiltInPosition) {
+            if (const auto it = _structByTypeId.find(structType);
+                    it != _structByTypeId.end()) {
+                it->second._positionBuiltInMember = member;
             } else {
                 _structByTypeId.try_emplace(structType, _Struct{member, false});
             }
@@ -493,6 +553,10 @@ public:
     void
     OpTypeInt(Id result, Word width, Word isSigned) override
     {
+        // Looks for the types we'll need to write
+        // our new entry point. We'll declare any
+        // missing ones in BeginFunctions().
+
         if (width == 32 && isSigned == 1) {
             _intTypeId = result;
         }
@@ -501,25 +565,22 @@ public:
     void
     OpTypeFloat(Id result, Word width, std::optional<Operand> encoding) override
     {
-        // Looks for the types we'll need to write
-        // our new entry point. We'll declare any
-        // missing ones in BeginFunctions().
-
         if (width == 32) {
             _floatTypeId = result;
         }
     }
 
     void
-    OpTypePointer(Id result, SpvStorageClass storageClass, Id pointeeType) override
+    OpTypePointer(Id result, SpvStorageClass storageClass,
+        Id pointeeType) override
     {
         if (storageClass == SpvStorageClassOutput) {
             if (pointeeType == _floatTypeId) {
                 _floatPointerTypeId = result;
-            } else if (const auto iter = _structByTypeId.find(pointeeType);
-                    iter != _structByTypeId.end()) {
+            } else if (const auto it = _structByTypeId.find(pointeeType);
+                    it != _structByTypeId.end()) {
                 // Variables are always pointer types, so record those.
-                _structByPointerTypeId.try_emplace(result, &iter->second);
+                _structByPointerTypeId.try_emplace(result, &it->second);
             }
         }
     }
@@ -531,23 +592,27 @@ public:
         // members using indices.
 
         if (resultType == _intTypeId) {
-            _intConstantIds.try_emplace(_SpvByteCode::LiteralAsInt(value), result);
+            _intConstantIds.try_emplace(_SpvByteCode::LiteralAsInt(value),
+                result);
         }
     }
 
     void
-    OpVariable(Id resultType, Id result, SpvStorageClass storageClass, std::optional<Operand> initializer) override
+    OpVariable(Id resultType, Id result, SpvStorageClass storageClass,
+        std::optional<Operand> initializer) override
     {
         if (storageClass != SpvStorageClassOutput) {
             return;
         }
 
-        // If a variable has uses vertex output block struct, record it.
-        if (const auto iter = _structByPointerTypeId.find(resultType);
-                iter != _structByPointerTypeId.end()) {
-            if (const auto* struct_ = iter->second;
+        // If a variable has a vertex output
+        // block struct type, then record it.
+        if (const auto it = _structByPointerTypeId.find(resultType);
+                it != _structByPointerTypeId.end()) {
+            if (const auto* struct_ = it->second;
                 struct_->_isBlock && struct_->_positionBuiltInMember) {
-                _vertexOutByVariableId.try_emplace(result, _VertexOutStruct{*struct_->_positionBuiltInMember});
+                _vertexOutByVariableId.try_emplace(result,
+                    _VertexOutStruct{*struct_->_positionBuiltInMember});
             }
         }
     }
@@ -569,7 +634,8 @@ public:
         }
         if (!_floatPointerTypeId) {
             _floatPointerTypeId = _byteCode.NextId();
-            _byteCode.Inject(SpvOpTypePointer, {_floatPointerTypeId, SpvStorageClassOutput, _floatTypeId});
+            _byteCode.Inject(SpvOpTypePointer,
+                {_floatPointerTypeId, SpvStorageClassOutput, _floatTypeId});
         }
 
         static constexpr Word yMember = 1;
@@ -585,24 +651,26 @@ public:
     }
 
     void
-    OpFunction(Id resultType, Id result, SpvFunctionControlMask functionControl, Id functionType) override
+    OpFunction(Id resultType, Id result, SpvFunctionControlMask functionControl,
+        Id functionType) override
     {
         // Look for the vertex entry points to override,
         // by using the interface variable list.
-        if (const auto entryIter = _entryPointsById.find(result);
-                entryIter != _entryPointsById.end()) {
-            for (Id variable : entryIter->second._intefaceVariables) {
-                if (const auto structIter = _vertexOutByVariableId.find(variable);
-                        structIter != _vertexOutByVariableId.end()) {
+        if (const auto entryIt = _entryPointsById.find(result);
+                entryIt != _entryPointsById.end()) {
+            for (Id variable : entryIt->second._interfaceVariables) {
+                if (const auto structIt = _vertexOutByVariableId.find(variable);
+                        structIt != _vertexOutByVariableId.end()) {
                     // Record all the data we need to define
                     // the new entry point and call the old one.
-                    entryIter->second._functionId = result;
-                    entryIter->second._functionTypeId = functionType;
-                    entryIter->second._resultTypeId = resultType;
-                    entryIter->second._outputVariableId = variable;
-                    entryIter->second._vertexOut = &structIter->second;
-                    // It's a declaration unless we see a label before OpFunctionEnd
-                    _currentEntryPointDeclaration = &entryIter->second;
+                    entryIt->second._functionId = result;
+                    entryIt->second._functionTypeId = functionType;
+                    entryIt->second._resultTypeId = resultType;
+                    entryIt->second._outputVariableId = variable;
+                    entryIt->second._vertexOut = &structIt->second;
+                    // It's a declaration unless we
+                    // see a label before OpFunctionEnd
+                    _currentEntryPointDeclaration = &entryIt->second;
                     break;
                 }
             }
@@ -618,7 +686,9 @@ public:
 
         // See the class documentation for an explanation of this code.
         const Id newEntryPointId = _byteCode.NextId();
-        _byteCode.Modify(_currentEntryPointDefinition->_instructionOffset + 2, newEntryPointId);
+        _byteCode.Modify(
+            _currentEntryPointDefinition->_instructionOffset + 2,
+            newEntryPointId);
 
         _byteCode.Inject(SpvOpFunction, {
             _currentEntryPointDefinition->_resultTypeId,
@@ -628,20 +698,23 @@ public:
         });
         _byteCode.Inject(SpvOpLabel, {_byteCode.NextId()});
 
-        _byteCode.Inject(SpvOpFunctionCall, {_currentEntryPointDefinition->_resultTypeId,
+        _byteCode.Inject(SpvOpFunctionCall,
+            {_currentEntryPointDefinition->_resultTypeId,
             _byteCode.NextId(), _currentEntryPointDefinition->_functionId});
 
         const Id positionYPtr = _byteCode.NextId();
         _byteCode.Inject(SpvOpAccessChain, {
             _floatPointerTypeId, positionYPtr,
             _currentEntryPointDefinition->_outputVariableId,
-            _intConstantIds.at(_currentEntryPointDefinition->_vertexOut->_positionBuiltInMember),
+            _intConstantIds.at(_currentEntryPointDefinition->_vertexOut->
+                _positionBuiltInMember),
             _intConstantIds.at(1)
         });
         const Id positionY = _byteCode.NextId();
         _byteCode.Inject(SpvOpLoad, {_floatTypeId, positionY, positionYPtr});
         const Id minusPositionY = _byteCode.NextId();
-        _byteCode.Inject(SpvOpFNegate, {_floatTypeId, minusPositionY, positionY});
+        _byteCode.Inject(SpvOpFNegate,
+            {_floatTypeId, minusPositionY, positionY});
         _byteCode.Inject(SpvOpStore, {positionYPtr, minusPositionY});
 
         _byteCode.Inject(SpvOpReturn, {});
@@ -661,7 +734,8 @@ public:
     }
 
 private:
-    void _InjectConstInt(Word value)
+    void
+    _InjectConstInt(Word value)
     {
         const Id constIntId = _byteCode.NextId();
         _byteCode.Inject(SpvOpConstant, {_intTypeId, constIntId, value});
@@ -686,7 +760,7 @@ private:
     /// A vertex entry point to redirect
     struct _EntryPoint {
         size_t _instructionOffset = 0;
-        std::unordered_set<Id> _intefaceVariables;
+        std::unordered_set<Id> _interfaceVariables;
         Id _functionId = 0;
         Id _functionTypeId = 0;
         Id _resultTypeId = 0;
@@ -710,7 +784,7 @@ bool
 ApplySpirvViewportFlip(std::vector<uint32_t>& spirv)
 {
     _SpvByteCode byteCode{spirv};
-    if (!byteCode.Apply<_FlipYVisitor>()) {
+    if (ARCH_UNLIKELY(!byteCode.Apply<_FlipYVisitor>())) {
         return false;
     }
 

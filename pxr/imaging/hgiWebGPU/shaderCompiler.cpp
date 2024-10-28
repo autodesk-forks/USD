@@ -63,10 +63,15 @@ HgiWebGPUCompileGLSL(
     const char* shaderCodes[],
     uint8_t numShaderCodes,
     HgiShaderStage stage,
-    std::vector<uint32_t>& spirvOUT,
+    std::vector<uint32_t>* spirvOut,
     std::string* errors)
 {
-    if (numShaderCodes == 0) {
+    if (ARCH_UNLIKELY(!spirvOut)) {
+        TF_CODING_ERROR("spirvOut is null");
+        return false;
+    }
+
+    if (ARCH_UNLIKELY(numShaderCodes == 0)) {
         if (errors) {
             errors->append("No shader to compile %s", name);
         }
@@ -96,10 +101,12 @@ HgiWebGPUCompileGLSL(
 
     glslang::TProgram program;
     program.addShader(&shader);
-    auto controls = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules | EShMsgCascadingErrors);
+    auto controls = static_cast<EShMessages>(EShMsgSpvRules |
+        EShMsgVulkanRules | EShMsgCascadingErrors);
     const int defaultVersion = 110;
     const bool forwardCompatible = false;
-    bool success = shader.parse(GetDefaultResources(),  defaultVersion, forwardCompatible ,controls);
+    bool success = shader.parse(GetDefaultResources(),
+        defaultVersion, forwardCompatible, controls);
 
     if (!success) {
         errors->append(shader.getInfoLog());
@@ -119,7 +126,8 @@ HgiWebGPUCompileGLSL(
     }
 
     spv::SpvBuildLogger logger;
-    glslang::GlslangToSpv(*program.getIntermediate(glslangStage), spirvOUT, &logger, &options);
+    glslang::GlslangToSpv(*program.getIntermediate(glslangStage),
+        *spirvOut, &logger, &options);
 
     std::string warningErrors = logger.getAllMessages();
 
@@ -138,8 +146,9 @@ HgiWebGPUCompileGLSL(
         // a more complicate approach... Flipping Y also changes
         // the handedness of the coordinate system, which reverses
         // the winding order. For that we solve it the same way as
-        // Metal does: return the opposite in HgiWebGPUConversions::GetWinding().
-        if (!ApplySpirvViewportFlip(spirvOUT)) {
+        // Metal does: return the opposite in
+        // HgiWebGPUConversions::GetWinding().
+        if (ARCH_UNLIKELY(!ApplySpirvViewportFlip(*spirvOut))) {
             return false;
         }
     }
