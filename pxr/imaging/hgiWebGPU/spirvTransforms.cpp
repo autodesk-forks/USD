@@ -24,10 +24,8 @@
 
 #include "spirvTransforms.h"
 
-#include <iostream>
-#include <ostream>
-
 #include "pxr/base/tf/span.h"
+#include "pxr/base/trace/trace.h"
 
 #include <spirv-tools/libspirv.hpp>
 #include <spirv/unified1/spirv.h>
@@ -147,7 +145,7 @@ public:
         : _oldSpirv{spirv}
     {
         _newSpirv.reserve(_oldSpirv.size());
-        _spvTools.SetMessageConsumer(&PrintMessage);
+        _spvTools.SetMessageConsumer(&_PrintMessage);
     }
 
     /// Convenience overload.
@@ -159,10 +157,10 @@ public:
         return Apply(visitor);
     }
 
-    /// Parse the bytecode an apply a transformation.
+    /// Parse the bytecode and apply a transformation.
     /// Copies the instructions one at a time, and calls
-    /// the _SpvVisitor function after each supported
-    /// instruction is copied.
+    /// the corresponding _SpvVisitor virtual member function
+    /// after each supported instruction is copied.
     bool
     Apply(_SpvVisitor& visitor)
     {
@@ -267,7 +265,7 @@ public:
 
 private:
     static void
-    PrintMessage(spv_message_level_t level, const char *source,
+    _PrintMessage(spv_message_level_t level, const char *source,
         const spv_position_t &position, const char *message)
     {
         switch (level) {
@@ -769,7 +767,7 @@ private:
     };
     std::unordered_map<Id, _EntryPoint> _entryPointsById;
 
-    /// Types and constants we needs
+    /// Types and constants we need
     Id _intTypeId = 0;
     Id _floatTypeId = 0;
     Id _floatPointerTypeId = 0;
@@ -783,6 +781,8 @@ private:
 bool
 ApplySpirvViewportFlip(std::vector<uint32_t>& spirv)
 {
+    TRACE_FUNCTION();
+
     _SpvByteCode byteCode{spirv};
     if (ARCH_UNLIKELY(!byteCode.Apply<_FlipYVisitor>())) {
         return false;
