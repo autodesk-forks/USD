@@ -21,45 +21,19 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///
 /// Base class for Vulkan code sections. The generator holds these
 ///
-class HgiVulkanShaderSection : public HgiShaderSection
+class HgiVulkanShaderSection : public HgiBaseGLShaderSection
 {
 public:
     HGIVULKAN_API
     explicit HgiVulkanShaderSection(
-        const std::string &identifier,
-        const HgiShaderSectionAttributeVector &attributes = {},
-        const std::string &storageQualifier = std::string(),
-        const std::string &defaultValue = std::string(),
-        const std::string &arraySize = std::string(),
-        const std::string &blockInstanceIdentifier = std::string());
-
-    HGIVULKAN_API
-    ~HgiVulkanShaderSection() override;
-
-    HGIVULKAN_API
-    void WriteDeclaration(std::ostream &ss) const override;
-    HGIVULKAN_API
-    void WriteParameter(std::ostream &ss) const override;
-
-    HGIVULKAN_API
-    virtual bool VisitGlobalIncludes(std::ostream &ss);
-    HGIVULKAN_API
-    virtual bool VisitGlobalMacros(std::ostream &ss);
-    HGIVULKAN_API
-    virtual bool VisitGlobalStructs(std::ostream &ss);
-    HGIVULKAN_API
-    virtual bool VisitGlobalMemberDeclarations(std::ostream &ss);
-    HGIVULKAN_API
-    virtual bool VisitGlobalFunctionDefinitions(std::ostream &ss);
-
-protected:
-    const std::string _storageQualifier;
-    const std::string _arraySize;
-
-private:
-    HgiVulkanShaderSection() = delete;
-    HgiVulkanShaderSection & operator=(const HgiVulkanShaderSection&) = delete;
-    HgiVulkanShaderSection(const HgiVulkanShaderSection&) = delete;
+            const std::string &identifier,
+            const HgiShaderSectionAttributeVector &attributes = {},
+            const std::string &storageQualifier = std::string(),
+            const std::string &defaultValue = std::string(),
+            const std::string &arraySize = std::string(),
+            const std::string &blockInstanceIdentifier = std::string())
+    : HgiBaseGLShaderSection(identifier, attributes, storageQualifier,
+            defaultValue, arraySize, blockInstanceIdentifier) {}
 };
 
 using HgiVulkanShaderSectionPtrVector = 
