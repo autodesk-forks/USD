@@ -69,6 +69,7 @@ pxr_library(hdSt
         dependencySceneIndexPlugin
         dispatchBuffer
         domeLightComputations
+        drawBatch
         drawItem
         drawItemInstance
         drawTarget
@@ -93,6 +94,7 @@ pxr_library(hdSt
         hioConversions
         imageShaderRenderPass
         implicitSurfaceSceneIndexPlugin
+        indirectDrawBatch
         nurbsApproximatingSceneIndexPlugin
         instancer
         interleavedMemoryManager
@@ -100,8 +102,10 @@ pxr_library(hdSt
         lightingShader
         material
         materialNetwork
+        materialNetworkShader
         mesh
         package
+        pipelineDrawBatch
         points
         primUtils
         ptexTextureObject
@@ -111,10 +115,12 @@ pxr_library(hdSt
         renderPass
         renderPassShader
         renderPassState
+        resourceBinder
         resourceRegistry
         samplerObject
         samplerObjectRegistry
         shaderCode
+        shaderKey
         simpleLightingShader
         smoothNormals
         stagingBuffer
@@ -150,7 +156,6 @@ pxr_library(hdSt
         basisCurvesTopology
         codeGen
         cullingShaderKey
-        drawBatch
         drawItemsCache
         extCompComputeShader
         extCompComputedInputSource
@@ -158,8 +163,6 @@ pxr_library(hdSt
         extCompSceneInputSource
         fieldTextureCpuData
         imageShaderShaderKey
-        indirectDrawBatch
-        materialNetworkShader
         materialBindingResolvingSceneIndexPlugin
         materialPrimvarTransferSceneIndexPlugin
         materialParam
@@ -167,12 +170,9 @@ pxr_library(hdSt
         meshTopology 
         nodeIdentifierResolvingSceneIndex
         nodeIdentifierResolvingSceneIndexPlugin
-        pipelineDrawBatch
         pointsShaderKey
         quadrangulate
         renderPassShaderKey
-        resourceBinder
-        shaderKey
         subdivision
         triangulate
         unitTestHelper
