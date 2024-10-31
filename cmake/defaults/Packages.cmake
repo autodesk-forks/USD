@@ -323,6 +323,7 @@ if (PXR_BUILD_IMAGING)
         get_target_property(GLSLANG_INCLUDE_DIRECTORY glslang::glslang INTERFACE_INCLUDE_DIRECTORIES)
         set_target_properties(glslang::SPIRV PROPERTIES
                 INTERFACE_INCLUDE_DIRECTORIES "${GLSLANG_INCLUDE_DIRECTORY}")
+        find_package(SPIRV-Headers REQUIRED NO_CMAKE_FIND_ROOT_PATH)
         find_package(SPIRV-Tools REQUIRED NO_CMAKE_FIND_ROOT_PATH)
         find_package(SPIRV-Tools-opt REQUIRED NO_CMAKE_FIND_ROOT_PATH)
     endif ()

@@ -1818,6 +1818,12 @@ def InstallDawn(context, force, buildArgs):
             ]
 
             PatchFile("third_party/CMakeLists.txt",
+              [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
+              '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
+              ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
+              '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
+              ]) 
+            PatchFile("third_party/CMakeLists.txt",
               [('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
                 '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
                ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',

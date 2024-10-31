@@ -43,6 +43,7 @@ pxr_library(hgiWebGPU
         glslang::SPIRV
         glslang::GenericCodeGen
         ${SPIRV-Tools-opt_LIBRARIES}
+        SPIRV-Headers::SPIRV-Headers
         ${Tint_LIBRARIES}
 
     PUBLIC_CLASSES
