@@ -296,7 +296,7 @@ HdxEffectsShader::_CreateAndSubmitGraphicsCmds(
     const HgiTextureHandle& depthTexture,
     const HgiTextureHandle& depthResolveTexture,
     const GfVec4i& viewport)
-{
+{   
     // Ensure the pipeline is ready to be used and the attachment descriptors
     // are correct.
     _CreatePipeline(colorTextures, colorResolveTextures, depthTexture,
@@ -477,17 +477,33 @@ HdxEffectsShader::_CreatePipeline(
     const HgiTextureHandle& depthTexture,
     const HgiTextureHandle& depthResolveTexture)
 {
+    const bool needResolveAttachments = (!colorResolveTextures.empty() && colorResolveTextures[0]) ||
+        depthResolveTexture;
+
     if (_pipeline) {
         const HgiSampleCount sampleCount =
             _pipelineDesc.multiSampleState.sampleCount;
-        if (_MatchesFormatAndSampleCount(colorTextures,
+
+        bool combinedMatches = _MatchesFormatAndSampleCount(colorTextures,
                 _pipelineDesc.colorAttachmentDescs, sampleCount) &&
-            _MatchesFormatAndSampleCount(colorResolveTextures,
-                _pipelineDesc.colorAttachmentDescs, HgiSampleCount1) &&
             _MatchesFormatAndSampleCount(depthTexture,
-                _pipelineDesc.depthAttachmentDesc, sampleCount) &&
-            _MatchesFormatAndSampleCount(depthResolveTexture,
-                _pipelineDesc.depthAttachmentDesc, HgiSampleCount1)) {
+                _pipelineDesc.depthAttachmentDesc, sampleCount);
+       
+        // We need to check here if we actually have any resolve attachments
+        // Otherwise, the check for the color resolve textures will fail
+        // and trigger an unwanted pipeline recreation.
+        if (needResolveAttachments) {
+            combinedMatches = combinedMatches && 
+                _MatchesFormatAndSampleCount(colorResolveTextures,
+                    _pipelineDesc.colorAttachmentDescs, HgiSampleCount1) &&
+                _MatchesFormatAndSampleCount(depthResolveTexture,
+                _pipelineDesc.depthAttachmentDesc, sampleCount);
+
+                // In case needResolveAttachments is true but was false before
+                // ensure that the pipeline is recreated.
+                combinedMatches = combinedMatches &&  _pipelineDesc.resolveAttachments;
+        }
+        if (combinedMatches) {
             return;
         }
 
@@ -501,8 +517,7 @@ HdxEffectsShader::_CreatePipeline(
     _UpdateFormatAndUsage(depthTexture,
                           &_pipelineDesc.depthAttachmentDesc);
     
-    if ((!colorResolveTextures.empty() && colorResolveTextures[0]) ||
-        depthResolveTexture) {
+    if (needResolveAttachments) {
         _pipelineDesc.resolveAttachments = true;
     }
     
@@ -511,7 +526,7 @@ HdxEffectsShader::_CreatePipeline(
 
 void
 HdxEffectsShader::_DestroyPipeline()
-{
+{   
     if (_pipeline) {
         _hgi->DestroyGraphicsPipeline(&_pipeline);
     }
