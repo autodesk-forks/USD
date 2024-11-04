@@ -180,6 +180,10 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
 
     GLF_GROUP_FUNCTION();
 
+    if (!_isOitEnabled || !HdxRenderTask::_HasDrawItems()) {
+        return;
+    }
+
     if (!TF_VERIFY(_translucentRenderPassState)) return;
 
     HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
