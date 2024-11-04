@@ -40,11 +40,10 @@ void HdxWbOitResolveTask::_Sync(HdSceneDelegate* delegate, HdTaskContext* ctx, H
         shaderDesc.debugName   = _tokens->shader.GetString();
         shaderDesc.shaderStage = HgiShaderStageFragment;
         HgiShaderFunctionAddStageInput(&shaderDesc, "uvOut", "vec2");
-        HgiShaderFunctionAddTexture(&shaderDesc, "colorIn", 0);
         // accumulated color and total transmittance
-        HgiShaderFunctionAddTexture(&shaderDesc, "buffer0", 1);
+        HgiShaderFunctionAddTexture(&shaderDesc, "buffer0", 0);
         // depth weights
-        HgiShaderFunctionAddTexture(&shaderDesc, "buffer1", 2);
+        HgiShaderFunctionAddTexture(&shaderDesc, "buffer1", 1);
         HgiShaderFunctionAddStageOutput(&shaderDesc, "hd_FragColor", "vec4", "color");
 
         _shader->SetProgram(HdxPackageWbOitResolveShader(),
@@ -67,12 +66,8 @@ void HdxWbOitResolveTask::Execute(HdTaskContext* ctx)
         return;
     }
 
-    HgiTextureHandle aovTexture;
+    HgiTextureHandle aovTexture, buffer0, buffer1;
     _GetTaskContextData(ctx, HdAovTokens->color, &aovTexture);
-    HgiTextureHandle aovTextureIntermediate;
-    _GetTaskContextData(ctx, HdxAovTokens->colorIntermediate, &aovTextureIntermediate);
-
-    HgiTextureHandle buffer0, buffer1;
     _GetTaskContextData(ctx, HdxTokens->hdxWboitBufferOne, &buffer0);
     _GetTaskContextData(ctx, HdxTokens->hdxWboitBufferTwo, &buffer1);
 
@@ -80,31 +75,24 @@ void HdxWbOitResolveTask::Execute(HdTaskContext* ctx)
         return;
     }
 
-    aovTexture->SubmitLayoutChange(HgiTextureUsageBitsShaderRead);
     buffer0->SubmitLayoutChange(HgiTextureUsageBitsShaderRead);
     buffer1->SubmitLayoutChange(HgiTextureUsageBitsShaderRead);
 
-    _shader->BindTextures({ aovTexture, buffer0, buffer1 });
-    // TODO: Use blending to composite the transparency over the background. 
-    // currently this causes issues on the WebGpu backend due to flipping problems.
-    // The transparency buffer would be composited y flipped over the background.
-    // _shader->SetBlendState(
-    //     true,
-    //     HgiBlendFactor::HgiBlendFactorOneMinusSrcAlpha,
-    //     HgiBlendFactor::HgiBlendFactorSrcAlpha,
-    //     HgiBlendOp::HgiBlendOpAdd,
-    //     HgiBlendFactor::HgiBlendFactorOne,
-    //     HgiBlendFactor::HgiBlendFactorOneMinusSrcAlpha,
-    //     HgiBlendOp::HgiBlendOpAdd
-    // );
-    // _shader->SetAttachmentLoadStoreOp(HgiAttachmentLoadOp::HgiAttachmentLoadOpLoad, HgiAttachmentStoreOp::HgiAttachmentStoreOpStore);
-    _shader->Draw(aovTextureIntermediate, HgiTextureHandle());
+    _shader->BindTextures({ buffer0, buffer1 });
+    _shader->SetBlendState(
+        true,
+        HgiBlendFactor::HgiBlendFactorSrcAlpha,
+        HgiBlendFactor::HgiBlendFactorOneMinusSrcAlpha,
+        HgiBlendOp::HgiBlendOpAdd,
+        HgiBlendFactor::HgiBlendFactorOne,
+        HgiBlendFactor::HgiBlendFactorOneMinusSrcAlpha,
+        HgiBlendOp::HgiBlendOpAdd
+    );
+    _shader->SetAttachmentLoadStoreOp(HgiAttachmentLoadOp::HgiAttachmentLoadOpLoad, HgiAttachmentStoreOp::HgiAttachmentStoreOpStore);
+    _shader->Draw(aovTexture, {});
 
-    aovTexture->SubmitLayoutChange(HgiTextureUsageBitsColorTarget);
     buffer0->SubmitLayoutChange(HgiTextureUsageBitsColorTarget);
     buffer1->SubmitLayoutChange(HgiTextureUsageBitsColorTarget);
-
-    _ToggleRenderTarget(ctx);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -21,16 +21,10 @@
 
 void main(void)
 {   
-    vec4 bkg = HgiGet_colorIn(uvOut);
     vec4 accumColorAndTotalTransmittance = HgiGet_buffer0(uvOut);
     float weight = HgiGet_buffer1(uvOut).r;
 
     // Blend together background and transparency
     float opacity = 1.0 - accumColorAndTotalTransmittance.a;
     hd_FragColor = vec4(accumColorAndTotalTransmittance.rgb / clamp(weight, 1e-4, 5e4), opacity);
-
-    // Manual blending
-    hd_FragColor = vec4(bkg.rgb * accumColorAndTotalTransmittance.a + hd_FragColor.rgb * opacity, 
-        opacity + (bkg.a * accumColorAndTotalTransmittance.a)
-    );
 }
