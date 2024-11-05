@@ -340,7 +340,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
                 _plugInfo_subst(${NAME} "${pluginToLibraryPath}" 
                     ${resourceFile} ${plugInfoFile})
             endif()
-            et(resourceFile "${plugInfoFile}")
+            set(resourceFile "${plugInfoFile}")
             set(EMSCRIPTEN_RESOURCE_FILE ${resourceFile})
         else()
             set(EMSCRIPTEN_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
