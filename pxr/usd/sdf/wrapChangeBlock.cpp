@@ -10,13 +10,13 @@
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/pyUtils.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python.hpp"
 
 #include <memory>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -52,7 +52,7 @@ wrapChangeBlock()
     // This allows SdfChangeBlocks to be used in an RAII fashion in Python 
     // with the 'with' statement.
     typedef Sdf_PythonChangeBlock This;
-    class_<This, boost::noncopyable>("ChangeBlock",
+    class_<This, noncopyable>("ChangeBlock",
                                      init<bool>(arg("enabled")=true))
         .def("__enter__", &This::Open)
         .def("__exit__", &This::Close)

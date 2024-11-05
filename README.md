@@ -82,6 +82,8 @@ visit our [forum](https://groups.google.com/forum/#!forum/usd-interest).
 
 If you are experiencing undocumented problems with the software, please 
 [file a bug](https://github.com/PixarAnimationStudios/OpenUSD/issues/new).
+If you need to report a security issue with the software, please review the 
+[Security Policy](SECURITY.md).
 
 Supported Platforms
 -------------------
@@ -124,7 +126,6 @@ Optional:
 
 Required:
  - [Python](https://python.org)
- - [Boost](https://boost.org)
 
 **usdview**
 
@@ -208,8 +209,6 @@ to use a monolithic build when embedding USD
 (see [Advanced Build Configuration](BUILDING.md)).
 
 These builds do not support Python bindings or command line tools.
-
-Currently, these builds also do not support Imaging or USD Imaging.
 
 For example, the following will download, build, and install USD's dependencies,
 then build and install USD for iOS into `/path/to/my_usd_install_dir`.

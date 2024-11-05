@@ -8,20 +8,27 @@
 //  accompanying file LICENSE_1_0.txt or copy at
 //  http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef INDEXING_SUITE_JDG20036_HPP
-# define INDEXING_SUITE_JDG20036_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_INDEXING_SUITE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_INDEXING_SUITE_HPP
 
-# include <boost/python/class.hpp>
-# include <boost/python/def_visitor.hpp>
-# include <boost/python/register_ptr_to_python.hpp>
-# include <boost/python/suite/indexing/detail/indexing_suite_detail.hpp>
-# include <boost/python/return_internal_reference.hpp>
-# include <boost/python/iterator.hpp>
-# include <boost/mpl/or.hpp>
-# include <boost/mpl/not.hpp>
-# include <boost/python/detail/type_traits.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python {
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/suite/indexing/indexing_suite.hpp>
+#else
+
+# include "pxr/external/boost/python/class.hpp"
+# include "pxr/external/boost/python/def_visitor.hpp"
+# include "pxr/external/boost/python/register_ptr_to_python.hpp"
+# include "pxr/external/boost/python/suite/indexing/detail/indexing_suite_detail.hpp"
+# include "pxr/external/boost/python/return_internal_reference.hpp"
+# include "pxr/external/boost/python/iterator.hpp"
+# include "pxr/external/boost/python/detail/mpl2/or.hpp"
+# include "pxr/external/boost/python/detail/mpl2/not.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
     // indexing_suite class. This class is the facade class for
     // the management of C++ containers intended to be integrated
@@ -123,10 +130,10 @@ namespace boost { namespace python {
     {
     private:
 
-        typedef mpl::or_<
-            mpl::bool_<NoProxy>
-          , mpl::not_<is_class<Data> >
-          , typename mpl::or_<
+        typedef detail::mpl2::or_<
+            detail::mpl2::bool_<NoProxy>
+          , detail::mpl2::not_<std::is_class<Data> >
+          , typename detail::mpl2::or_<
                 detail::is_same<Data, std::string>
               , detail::is_same<Data, std::complex<float> >
               , detail::is_same<Data, std::complex<double> >
@@ -138,13 +145,13 @@ namespace boost { namespace python {
 
         typedef return_internal_reference<> return_policy;
 
-        typedef typename mpl::if_<
+        typedef typename detail::mpl2::if_<
             no_proxy
           , iterator<Container>
           , iterator<Container, return_policy> >::type
         def_iterator;
 
-        typedef typename mpl::if_<
+        typedef typename detail::mpl2::if_<
             no_proxy
           , detail::no_proxy_helper<
                 Container
@@ -158,8 +165,8 @@ namespace boost { namespace python {
               , Index> >::type
         proxy_handler;
 
-        typedef typename mpl::if_<
-            mpl::bool_<NoSlice>
+        typedef typename detail::mpl2::if_<
+            detail::mpl2::bool_<NoSlice>
           , detail::no_slice_helper<
                 Container
               , DerivedPolicies
@@ -264,7 +271,7 @@ namespace boost { namespace python {
             }
 
             Index index = DerivedPolicies::convert_index(container, i);
-            proxy_handler::base_erase_index(container, index, mpl::bool_<NoSlice>());
+            proxy_handler::base_erase_index(container, index, detail::mpl2::bool_<NoSlice>());
             DerivedPolicies::delete_item(container, index);
         }
 
@@ -295,6 +302,7 @@ namespace boost { namespace python {
         }
     };
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // INDEXING_SUITE_JDG20036_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_INDEXING_SUITE_HPP

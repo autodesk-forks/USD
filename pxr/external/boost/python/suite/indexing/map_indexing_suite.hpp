@@ -8,15 +8,22 @@
 //  accompanying file LICENSE_1_0.txt or copy at
 //  http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef MAP_INDEXING_SUITE_JDG20038_HPP
-# define MAP_INDEXING_SUITE_JDG20038_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_MAP_INDEXING_SUITE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_MAP_INDEXING_SUITE_HPP
 
-# include <boost/python/suite/indexing/indexing_suite.hpp>
-# include <boost/python/iterator.hpp>
-# include <boost/python/call_method.hpp>
-# include <boost/python/tuple.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python {
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/suite/indexing/map_indexing_suite.hpp>
+#else
+
+# include "pxr/external/boost/python/suite/indexing/indexing_suite.hpp"
+# include "pxr/external/boost/python/iterator.hpp"
+# include "pxr/external/boost/python/call_method.hpp"
+# include "pxr/external/boost/python/tuple.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
     // Forward declaration
     template <class Container, bool NoProxy, class DerivedPolicies>
@@ -82,8 +89,9 @@ namespace boost { namespace python {
             elem_name += class_name_extractor();
             elem_name += "_entry";
 
-            typedef typename mpl::if_<
-                mpl::and_<is_class<data_type>, mpl::bool_<!NoProxy> >
+
+            typedef typename detail::mpl2::if_<
+                detail::mpl2::and_<std::is_class<data_type>, detail::mpl2::bool_<!NoProxy> >
               , return_internal_reference<>
               , default_call_policies
             >::type get_data_return_policy;
@@ -102,8 +110,8 @@ namespace boost { namespace python {
         }
 
         static
-        typename mpl::if_<
-            mpl::and_<is_class<data_type>, mpl::bool_<!NoProxy> >
+        typename detail::mpl2::if_<
+            detail::mpl2::and_<std::is_class<data_type>, detail::mpl2::bool_<!NoProxy> >
           , data_type&
           , data_type
         >::type
@@ -181,6 +189,7 @@ namespace boost { namespace python {
         }
     };
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // MAP_INDEXING_SUITE_JDG20038_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_MAP_INDEXING_SUITE_HPP

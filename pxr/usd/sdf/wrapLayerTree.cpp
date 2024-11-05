@@ -11,11 +11,11 @@
 #include "pxr/base/tf/pyContainerConversions.h"
 #include "pxr/base/tf/pyPtrHelpers.h"
 #include "pxr/base/tf/pyResultConversions.h"
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -53,7 +53,7 @@ void wrapLayerTree()
         TfPyContainerConversions::
             variable_capacity_all_items_convertible_policy >();
 
-    class_<SdfLayerTree, TfWeakPtr<SdfLayerTree>, boost::noncopyable>
+    class_<SdfLayerTree, TfWeakPtr<SdfLayerTree>, noncopyable>
         ("LayerTree", "", no_init)
         .def(TfPyRefAndWeakPtr())
         .def(TfMakePyConstructor(&_NewEmpty))

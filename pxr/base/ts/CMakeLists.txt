@@ -5,11 +5,10 @@ set(libs
     vt
     gf
     tf
-    ${Boost_PYTHON_LIBRARY}
 )
 
 set(include
-    ${Boost_INCLUDE_DIRS}
+    ""
 )
 
 set(classes
@@ -23,6 +22,7 @@ set(classes
     regressionPreventer
     spline
     splineData
+    tangentConversions
     typeHelpers
     types
 )
@@ -43,6 +43,7 @@ set(pycpp
     wrapRaii.cpp
     wrapRegressionPreventer.cpp
     wrapSpline.cpp
+    wrapTangentConversions.cpp
     wrapTypes.cpp
 )
 
@@ -170,6 +171,16 @@ pxr_build_test(
         tf
 )
 
+pxr_build_test(
+    testTsTangentConversion
+    CPPFILES
+        testenv/testTsTangentConversion.cpp
+    LIBRARIES
+        ts
+        vt
+        tf
+)
+
 pxr_test_scripts(
     testenv/testTsDerivatives.py
     testenv/testTsRegressionPreventer.py
@@ -207,6 +218,11 @@ pxr_register_test(
 pxr_register_test(
     testTsSplineAPI
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineAPI"
+)
+
+pxr_register_test(
+    testTsTangentConversion
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsTangentConversion"
 )
 
 pxr_register_test(

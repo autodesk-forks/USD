@@ -161,15 +161,30 @@ function(_get_python_module_name LIBRARY_FILENAME MODULE_NAME)
     )
 endfunction() # _get_python_module_name
 
-function(_plugInfo_subst libTarget pluginToLibraryPath plugInfoPath)
+# For scenarios where we are bunding resource paths from an absolute path,
+# like in the case of getting plugInfo.json from renderman bundled schemas,
+# extract just the file name from resourceFile, and use it to determine our
+# plugInfoFile, which will be then used to install the file to the intended
+# destination directory.
+function(_get_plugInfo_file resourceFile plugInfoFile)
+    if (IS_ABSOLUTE ${resourceFile})
+        get_filename_component(resourceFileName ${resourceFile} NAME)
+        set(${plugInfoFile} "${CMAKE_CURRENT_BINARY_DIR}/${resourceFileName}" 
+            PARENT_SCOPE)
+    else()
+        set(${plugInfoFile} "${CMAKE_CURRENT_BINARY_DIR}/${resourceFile}" 
+            PARENT_SCOPE)
+    endif()
+endfunction() # _get_plugInfo_file
+
+function(_plugInfo_subst libTarget pluginToLibraryPath plugInfoPath destFile)
     _get_resources_dir_name(PLUG_INFO_RESOURCE_PATH)
     set(PLUG_INFO_ROOT "..")
     set(PLUG_INFO_PLUGIN_NAME "pxr.${libTarget}")
     set(PLUG_INFO_LIBRARY_PATH "${pluginToLibraryPath}")
-
     configure_file(
         ${plugInfoPath}
-        ${CMAKE_CURRENT_BINARY_DIR}/${plugInfoPath}
+        ${destFile}
     )
 endfunction() # _plugInfo_subst
 
@@ -245,7 +260,7 @@ function(_install_python LIBRARY_NAME)
     add_custom_target(${LIBRARY_NAME}_pythonfiles
         DEPENDS ${files_copied}
     )
-    add_dependencies(python ${LIBRARY_NAME}_pythonfiles)
+    add_dependencies(python_modules ${LIBRARY_NAME}_pythonfiles)
 
     _get_folder("_python" folder)
     set_target_properties(${LIBRARY_NAME}_pythonfiles
@@ -275,7 +290,18 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
         # A resource file may be specified like <src file>:<dst file> to
         # indicate that it should be installed to a different location in
         # the resources area. Check if this is the case.
-        string(REPLACE ":" ";" resourceFile "${resourceFile}")
+        set(plugInfoNoSubstitution)
+
+        # Normalize path to use forward slashes on all platforms
+        file(TO_CMAKE_PATH "${resourceFile}" resourceFile)
+
+        # Perform regex match to extract both source resource path and
+        # destination resource path.
+        # Regex match appropriately takes care of windows drive letter followed
+        # by a ":", which is also the token we use to separate the source and
+        # destination resource paths.
+        string(REGEX MATCHALL "([A-Za-z]:)?([^:]+)" resourceFile "${resourceFile}")
+        
         list(LENGTH resourceFile n)
         if (n EQUAL 1)
            set(resourceDestFile ${resourceFile})
@@ -302,17 +328,19 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
         # path. Otherwise, use the original relative path which is relative to
         # the source directory.
         if (${destFileName} STREQUAL "plugInfo.json")
+            _get_plugInfo_file(${resourceFile} plugInfoFile)
             if (DEFINED plugInfoNoSubstitution)
                 # Do not substitute variables and only copy the plugInfo file
                 configure_file(
                     ${resourceFile}
-                    ${CMAKE_CURRENT_BINARY_DIR}/${resourceFile}
+                    ${plugInfoFile}
                     COPYONLY
                 )
             else()
-                _plugInfo_subst(${NAME} "${pluginToLibraryPath}" ${resourceFile})
+                _plugInfo_subst(${NAME} "${pluginToLibraryPath}" 
+                    ${resourceFile} ${plugInfoFile})
             endif()
-            set(resourceFile "${CMAKE_CURRENT_BINARY_DIR}/${resourceFile}")
+            et(resourceFile "${plugInfoFile}")
             set(EMSCRIPTEN_RESOURCE_FILE ${resourceFile})
         else()
             set(EMSCRIPTEN_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
@@ -363,7 +391,7 @@ function(_install_pyside_ui_files LIBRARY_NAME)
     add_custom_target(${LIBRARY_NAME}_pysideuifiles
         DEPENDS ${uiFiles}
     )
-    add_dependencies(python ${LIBRARY_NAME}_pythonfiles)
+    add_dependencies(python_modules ${LIBRARY_NAME}_pythonfiles)
 
     _get_folder("_pysideuifiles" folder)
     set_target_properties(
@@ -1045,7 +1073,7 @@ function(_pxr_python_module NAME)
         SHARED
         ${args_CPPFILES}
     )
-    add_dependencies(python ${LIBRARY_NAME})
+    add_dependencies(python_modules ${LIBRARY_NAME})
     if(args_PYTHON_FILES)
         add_dependencies(${LIBRARY_NAME} ${LIBRARY_NAME}_pythonfiles)
     endif()

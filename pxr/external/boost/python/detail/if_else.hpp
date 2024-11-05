@@ -7,11 +7,17 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef IF_ELSE_DWA2002322_HPP
-# define IF_ELSE_DWA2002322_HPP
-# include <boost/config.hpp>
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_IF_ELSE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_IF_ELSE_HPP
 
-namespace boost { namespace python { namespace detail { 
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/if_else.hpp>
+#else
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail { 
 
 template <class T> struct elif_selected;
 
@@ -81,6 +87,7 @@ struct if_<false>
     };
 };
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // IF_ELSE_DWA2002322_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_IF_ELSE_HPP

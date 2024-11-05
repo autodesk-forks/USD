@@ -7,19 +7,27 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef TO_PYTHON_CONVERTER_DWA200221_HPP
-# define TO_PYTHON_CONVERTER_DWA200221_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_TO_PYTHON_CONVERTER_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_TO_PYTHON_CONVERTER_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/converter/registry.hpp>
-# include <boost/python/converter/as_to_python_function.hpp>
-#ifndef BOOST_PYTHON_NO_PY_SIGNATURES
-# include <boost/python/converter/pytype_function.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/to_python_converter.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+# include "pxr/external/boost/python/converter/registry.hpp"
+# include "pxr/external/boost/python/converter/as_to_python_function.hpp"
+#ifndef PXR_BOOST_PYTHON_NO_PY_SIGNATURES
+# include "pxr/external/boost/python/converter/pytype_function.hpp"
 #endif
-# include <boost/python/type_id.hpp>
+# include "pxr/external/boost/python/type_id.hpp"
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
 
-namespace boost { namespace python { 
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 #if 0 //get_pytype member detection
 namespace detail
@@ -38,11 +46,11 @@ namespace detail
     template<class T>
     struct test_get_pytype_base  
     {
-        BOOST_STATIC_CONSTANT(bool, value= (sizeof(detail::tester<T>(0)) == sizeof(yes_type)));
+        static constexpr bool value= (sizeof(detail::tester<T>(0) == sizeof(yes_type)));
     };
 
     template<class T>
-    struct test_get_pytype : boost::mpl::bool_<test_get_pytype_base<T>::value> 
+    struct test_get_pytype : python::detail::mpl2::bool_<test_get_pytype_base<T>::value> 
     {
     };
 
@@ -52,15 +60,15 @@ namespace detail
 template < class T, class Conversion, bool has_get_pytype=false >
 struct to_python_converter 
 {
-#ifndef BOOST_PYTHON_NO_PY_SIGNATURES
-    typedef boost::mpl::bool_<has_get_pytype> HasGetPytype;
+#ifndef PXR_BOOST_PYTHON_NO_PY_SIGNATURES
+    typedef python::detail::mpl2::bool_<has_get_pytype> HasGetPytype;
 
-    static PyTypeObject const* get_pytype_1(boost::mpl::true_ *)
+    static PyTypeObject const* get_pytype_1(PXR_BOOST_NAMESPACE::python::detail::mpl2::true_ *)
     {
         return Conversion::get_pytype();
     }
 
-    static PyTypeObject const* get_pytype_1(boost::mpl::false_ *)
+    static PyTypeObject const* get_pytype_1(PXR_BOOST_NAMESPACE::python::detail::mpl2::false_ *)
     {
         return 0;
     }
@@ -87,13 +95,14 @@ to_python_converter<T,Conversion, has_get_pytype>::to_python_converter()
     converter::registry::insert(
         &normalized::convert
         , type_id<T>()
-#ifndef BOOST_PYTHON_NO_PY_SIGNATURES
+#ifndef PXR_BOOST_PYTHON_NO_PY_SIGNATURES
         , &get_pytype_impl
 #endif
         );
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // TO_PYTHON_CONVERTER_DWA200221_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_TO_PYTHON_CONVERTER_HPP
 

@@ -14,12 +14,12 @@
 #include "pxr/usd/sdr/shaderNode.h"
 #include "pxr/usd/sdr/shaderProperty.h"
 
-#include <boost/python.hpp>
-#include <boost/python/return_internal_reference.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
+#include "pxr/external/boost/python/return_internal_reference.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 // Boost treats a const ptr differently than a non-const ptr, so a custom
 // converter is needed to deal with the const-ness
@@ -52,7 +52,7 @@ void wrapShaderNode()
     to_python_converter<SdrShaderNodeConstPtr,
                         SdrShaderNodeConstPtrToPythonConverter>();
 
-    class_<This, ThisPtr, bases<NdrNode>, boost::noncopyable>("ShaderNode", no_init)
+    class_<This, ThisPtr, bases<NdrNode>, noncopyable>("ShaderNode", no_init)
         .def("GetShaderInput", &This::GetShaderInput,
             return_internal_reference<>())
         .def("GetShaderOutput", &This::GetShaderOutput,

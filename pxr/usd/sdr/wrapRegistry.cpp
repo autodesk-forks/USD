@@ -13,13 +13,13 @@
 #include "pxr/usd/sdr/registry.h"
 #include "pxr/usd/sdr/shaderNode.h"
 
-#include <boost/python.hpp>
-#include <boost/python/return_internal_reference.hpp>
-#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
+#include "pxr/external/boost/python/return_internal_reference.hpp"
+#include "pxr/external/boost/python/suite/indexing/vector_indexing_suite.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapRegistry()
 {
@@ -30,7 +30,7 @@ void wrapRegistry()
         .def(vector_indexing_suite<std::vector<SdrShaderNodeConstPtr>>())
         ;
 
-    class_<This, ThisPtr, bases<NdrRegistry>, boost::noncopyable>("Registry", no_init)
+    class_<This, ThisPtr, bases<NdrRegistry>, noncopyable>("Registry", no_init)
         .def(TfPySingleton())
         .def("GetShaderNodeByIdentifier", &This::GetShaderNodeByIdentifier,
             (args("identifier"),

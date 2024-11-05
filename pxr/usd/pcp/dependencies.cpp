@@ -537,9 +537,10 @@ Pcp_AddCulledDependency(
 
     PcpCulledDependency dep;
     dep.flags = depFlags;
+    dep.arcType = node.GetArcType();
     dep.layerStack = node.GetLayerStack();
     dep.sitePath = node.GetPath();
-    if (node.GetArcType() == PcpArcTypeRelocate) {
+    if (dep.arcType == PcpArcTypeRelocate) {
         // See _ProcessDependentNode in pcp/cache.cpp for the similar code
         // we use to handle non-culled dependency
         //

@@ -7,11 +7,18 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef MSVC_TYPEINFO_DWA200222_HPP
-# define MSVC_TYPEINFO_DWA200222_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_MSVC_TYPEINFO_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_MSVC_TYPEINFO_HPP
+
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/msvc_typeinfo.hpp>
+#else
 
 #include <typeinfo>
-#include <boost/type.hpp>
+#include "pxr/external/boost/python/type.hpp"
 
 //
 // Fix for icc's broken typeid() implementation which doesn't strip
@@ -25,7 +32,7 @@
 
 # if defined(BOOST_INTEL_CXX_VERSION) && BOOST_INTEL_CXX_VERSION <= 700
 
-namespace boost { namespace python { namespace detail { 
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail { 
 
 typedef std::type_info const& typeinfo;
 
@@ -62,15 +69,15 @@ template< typename T > T&(* is_ref_tester1(type<T>) )(type<T>) { return 0; }
 inline char BOOST_PYTT_DECL is_ref_tester1(...) { return 0; }
 
 template <class T>
-inline typeinfo msvc_typeid(boost::type<T>*)
+inline typeinfo msvc_typeid(type<T>*)
 {
     return detail::typeid_ref(
-        (boost::type<T>*)0, detail::is_ref_tester1(type<T>())
+        (type<T>*)0, detail::is_ref_tester1(type<T>())
         );
 }
 
 template <>
-inline typeinfo msvc_typeid<void>(boost::type<void>*)
+inline typeinfo msvc_typeid<void>(type<void>*)
 {
     return typeid(void);
 }
@@ -78,12 +85,13 @@ inline typeinfo msvc_typeid<void>(boost::type<void>*)
 #  ifndef NDEBUG
 inline typeinfo assert_array_typeid_compiles()
 {
-    return msvc_typeid((boost::type<char const[3]>*)0)
-        , msvc_typeid((boost::type<char[3]>*)0);
+    return msvc_typeid((type<char const[3]>*)0)
+        , msvc_typeid((type<char[3]>*)0);
 }
 #  endif
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
 # endif // BOOST_INTEL_CXX_VERSION
-#endif // MSVC_TYPEINFO_DWA200222_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_MSVC_TYPEINFO_HPP

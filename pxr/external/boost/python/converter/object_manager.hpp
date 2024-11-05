@@ -7,16 +7,23 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef OBJECT_MANAGER_DWA2002614_HPP
-# define OBJECT_MANAGER_DWA2002614_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_OBJECT_MANAGER_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_OBJECT_MANAGER_HPP
 
-# include <boost/python/handle.hpp>
-# include <boost/python/cast.hpp>
-# include <boost/python/converter/pyobject_traits.hpp>
-# include <boost/python/detail/type_traits.hpp>
-# include <boost/mpl/if.hpp>
-# include <boost/python/detail/indirect_traits.hpp>
-# include <boost/mpl/bool.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/converter/object_manager.hpp>
+#else
+
+# include "pxr/external/boost/python/handle.hpp"
+# include "pxr/external/boost/python/cast.hpp"
+# include "pxr/external/boost/python/converter/pyobject_traits.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+# include "pxr/external/boost/python/detail/mpl2/if.hpp"
+# include "pxr/external/boost/python/detail/indirect_traits.hpp"
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
 
 // Facilities for dealing with types which always manage Python
 // objects. Some examples are object, list, str, et. al. Different
@@ -52,7 +59,7 @@
 //    * T(detail::borrowed_reference(p))
 //        Manages p without checking its type
 //
-//    * get_managed_object(x, boost::python::tag)
+//    * get_managed_object(x, PXR_BOOST_NAMESPACE::python::tag)
 //        Convertible to PyObject*
 //
 // Additional requirements if T can be converted from_python:
@@ -67,7 +74,7 @@
 
 // Forward declarations
 //
-namespace boost { namespace python
+namespace PXR_BOOST_NAMESPACE { namespace python
 {
   namespace api
   {
@@ -75,7 +82,7 @@ namespace boost { namespace python
   }
 }}
 
-namespace boost { namespace python { namespace converter { 
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace converter { 
 
 
 // Specializations for handle<T>
@@ -87,7 +94,7 @@ struct handle_object_manager_traits
   typedef pyobject_traits<typename T::element_type> base;
   
  public:
-  BOOST_STATIC_CONSTANT(bool, is_specialized = true);
+  static constexpr bool is_specialized = true;
 
   // Initialize with a null_ok pointer for efficiency, bypassing the
   // null check since the source is always non-null.
@@ -100,14 +107,14 @@ struct handle_object_manager_traits
 template <class T>
 struct default_object_manager_traits
 {
-    BOOST_STATIC_CONSTANT(
-        bool, is_specialized = python::detail::is_borrowed_ptr<T>::value
-        );
+    static constexpr 
+        bool is_specialized = python::detail::is_borrowed_ptr<T>::value
+        ;
 };
 
 template <class T>
 struct object_manager_traits
-    : mpl::if_c<
+    : python::detail::mpl2::if_c<
          is_handle<T>::value
        , handle_object_manager_traits<T>
        , default_object_manager_traits<T>
@@ -122,13 +129,13 @@ struct object_manager_traits
 
 template <class T>
 struct is_object_manager
-    : mpl::bool_<object_manager_traits<T>::is_specialized>
+    : python::detail::mpl2::bool_<object_manager_traits<T>::is_specialized>
 {
 };
 
 template <class T>
 struct is_reference_to_object_manager
-    : mpl::false_
+    : python::detail::mpl2::false_
 {
 };
 
@@ -156,6 +163,7 @@ struct is_reference_to_object_manager<T const volatile&>
 {
 };
 
-}}} // namespace boost::python::converter
+}}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
-#endif // OBJECT_MANAGER_DWA2002614_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_OBJECT_MANAGER_HPP

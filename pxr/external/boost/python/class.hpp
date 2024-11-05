@@ -7,57 +7,51 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef CLASS_DWA200216_HPP
-# define CLASS_DWA200216_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CLASS_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_CLASS_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/noncopyable.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include "pxr/external/boost/python/noncopyable.hpp"
+#include <boost/python/class.hpp>
+#else
 
-# include <boost/python/class_fwd.hpp>
-# include <boost/python/object/class.hpp>
+# include "pxr/external/boost/python/detail/prefix.hpp"
 
-# include <boost/python/object.hpp>
-# include <boost/python/type_id.hpp>
-# include <boost/python/data_members.hpp>
-# include <boost/python/make_function.hpp>
-# include <boost/python/signature.hpp>
-# include <boost/python/init.hpp>
-# include <boost/python/args_fwd.hpp>
+# include "pxr/external/boost/python/noncopyable.hpp"
 
-# include <boost/python/object/class_metadata.hpp>
-# include <boost/python/object/pickle_support.hpp>
-# include <boost/python/object/add_to_namespace.hpp>
+# include "pxr/external/boost/python/class_fwd.hpp"
+# include "pxr/external/boost/python/object/class.hpp"
 
-# include <boost/python/detail/overloads_fwd.hpp>
-# include <boost/python/detail/operator_id.hpp>
-# include <boost/python/detail/def_helper.hpp>
-# include <boost/python/detail/force_instantiate.hpp>
-# include <boost/python/detail/type_traits.hpp>
-# include <boost/python/detail/unwrap_type_id.hpp>
-# include <boost/python/detail/unwrap_wrapper.hpp>
+# include "pxr/external/boost/python/object.hpp"
+# include "pxr/external/boost/python/type_id.hpp"
+# include "pxr/external/boost/python/data_members.hpp"
+# include "pxr/external/boost/python/make_function.hpp"
+# include "pxr/external/boost/python/signature.hpp"
+# include "pxr/external/boost/python/init.hpp"
+# include "pxr/external/boost/python/args_fwd.hpp"
 
-# include <boost/mpl/size.hpp>
-# include <boost/mpl/for_each.hpp>
-# include <boost/mpl/bool.hpp>
-# include <boost/mpl/not.hpp>
+# include "pxr/external/boost/python/object/class_metadata.hpp"
+# include "pxr/external/boost/python/object/pickle_support.hpp"
+# include "pxr/external/boost/python/object/add_to_namespace.hpp"
 
-# include <boost/detail/workaround.hpp>
+# include "pxr/external/boost/python/detail/overloads_fwd.hpp"
+# include "pxr/external/boost/python/detail/operator_id.hpp"
+# include "pxr/external/boost/python/detail/def_helper.hpp"
+# include "pxr/external/boost/python/detail/force_instantiate.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+# include "pxr/external/boost/python/detail/unwrap_type_id.hpp"
+# include "pxr/external/boost/python/detail/unwrap_wrapper.hpp"
 
-# if BOOST_WORKAROUND(__MWERKS__, <= 0x3004)                        \
-    /* pro9 reintroduced the bug */                                 \
-    || (BOOST_WORKAROUND(__MWERKS__, > 0x3100)                      \
-        && BOOST_WORKAROUND(__MWERKS__, BOOST_TESTED_AT(0x3201)))
+# include "pxr/external/boost/python/detail/mpl2/at.hpp"
+# include "pxr/external/boost/python/detail/mpl2/size.hpp"
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
+# include "pxr/external/boost/python/detail/mpl2/not.hpp"
+# include "pxr/external/boost/python/detail/mpl2/and.hpp"
 
-#  define BOOST_PYTHON_NO_MEMBER_POINTER_ORDERING 1
-
-# endif
-
-# ifdef BOOST_PYTHON_NO_MEMBER_POINTER_ORDERING
-#  include <boost/mpl/and.hpp>
-# endif
-
-namespace boost { namespace python {
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
 template <class DerivedVisitor> class def_visitor;
 
@@ -65,44 +59,13 @@ enum no_init_t { no_init };
 
 namespace detail
 {
-  // This function object is used with mpl::for_each to write the id
-  // of the type a pointer to which is passed as its 2nd compile-time
-  // argument. into the iterator pointed to by its runtime argument
-  struct write_type_id
-  {
-      write_type_id(type_info**p) : p(p) {}
-
-      // Here's the runtime behavior
-      template <class T>
-      void operator()(T*) const
-      {
-          *(*p)++ = type_id<T>();
-      }
-
-      type_info** p;
-  };
-
   template <class T>
   struct is_data_member_pointer
-      : mpl::and_<
+      : detail::mpl2::and_<
             detail::is_member_pointer<T>
-          , mpl::not_<detail::is_member_function_pointer<T> >
+          , detail::mpl2::not_<detail::is_member_function_pointer<T> >
         >
   {};
-  
-# ifdef BOOST_PYTHON_NO_MEMBER_POINTER_ORDERING
-#  define BOOST_PYTHON_DATA_MEMBER_HELPER(D) , detail::is_data_member_pointer<D>()
-#  define BOOST_PYTHON_YES_DATA_MEMBER , mpl::true_
-#  define BOOST_PYTHON_NO_DATA_MEMBER , mpl::false_
-# elif defined(BOOST_NO_FUNCTION_TEMPLATE_ORDERING)
-#  define BOOST_PYTHON_DATA_MEMBER_HELPER(D) , 0
-#  define BOOST_PYTHON_YES_DATA_MEMBER , int
-#  define BOOST_PYTHON_NO_DATA_MEMBER , ...
-# else 
-#  define BOOST_PYTHON_DATA_MEMBER_HELPER(D)
-#  define BOOST_PYTHON_YES_DATA_MEMBER
-#  define BOOST_PYTHON_NO_DATA_MEMBER
-# endif
   
   namespace error
   {
@@ -120,7 +83,7 @@ namespace detail
 
     template <class C>
     struct assertion
-        : mpl::if_<C, assertion_ok<C>, assertion_failed<C> >::type
+        : detail::mpl2::if_<C, assertion_ok<C>, assertion_failed<C> >::type
     {};
 
     //
@@ -139,11 +102,8 @@ namespace detail
         must_be_derived_class_member(Default const&)
         {
             // https://svn.boost.org/trac/boost/ticket/5803
-            //typedef typename assertion<mpl::not_<detail::is_same<Default,Fn> > >::failed test0;
-# if !BOOST_WORKAROUND(__MWERKS__, <= 0x2407)
-            typedef typename assertion<detail::is_polymorphic<T> >::failed test1 BOOST_ATTRIBUTE_UNUSED;
-# endif 
-            typedef typename assertion<detail::is_member_function_pointer<Fn> >::failed test2 BOOST_ATTRIBUTE_UNUSED;
+            //typedef typename assertion<detail::mpl2::not_<detail::is_same<Default,Fn> > >::failed test0;
+            [[maybe_unused]] typedef typename assertion<detail::is_member_function_pointer<Fn> >::failed test2;
             not_a_derived_class_member<Default>(Fn());
         }
     };
@@ -180,12 +140,17 @@ class class_ : public objects::class_base
             ids[0] = detail::unwrap_type_id((W*)0, (W*)0);
 
             // Write the rest of the elements into succeeding positions.
-            type_info* p = ids + 1;
-            mpl::for_each(detail::write_type_id(&p), (bases*)0, (add_pointer<mpl::_>*)0);
+            insert_bases(std::make_index_sequence<detail::mpl2::size<bases>::value>());
         }
 
-        BOOST_STATIC_CONSTANT(
-            std::size_t, size = mpl::size<bases>::value + 1);
+        template <size_t ...I>
+        void insert_bases(std::index_sequence<I...>)
+        {
+            ((ids[I+1] = type_id<typename detail::mpl2::at_c<bases, I>::type>()), ...);
+        }
+
+        static constexpr 
+            std::size_t size = detail::mpl2::size<bases>::value + 1;
         type_info ids[size];
     };
     friend struct id_vector;
@@ -280,25 +245,25 @@ class class_ : public objects::class_base
     template <class D>
     self& def_readonly(char const* name, D const& d, char const* doc=0)
     {
-        return this->def_readonly_impl(name, d, doc BOOST_PYTHON_DATA_MEMBER_HELPER(D));
+        return this->def_readonly_impl(name, d, doc);
     }
 
     template <class D>
     self& def_readwrite(char const* name, D const& d, char const* doc=0)
     {
-        return this->def_readwrite_impl(name, d, doc BOOST_PYTHON_DATA_MEMBER_HELPER(D));
+        return this->def_readwrite_impl(name, d, doc);
     }
     
     template <class D>
     self& def_readonly(char const* name, D& d, char const* doc=0)
     {
-        return this->def_readonly_impl(name, d, doc BOOST_PYTHON_DATA_MEMBER_HELPER(D));
+        return this->def_readonly_impl(name, d, doc);
     }
 
     template <class D>
     self& def_readwrite(char const* name, D& d, char const* doc=0)
     {
-        return this->def_readwrite_impl(name, d, doc BOOST_PYTHON_DATA_MEMBER_HELPER(D));
+        return this->def_readwrite_impl(name, d, doc);
     }
 
     // Property creation
@@ -395,27 +360,27 @@ class class_ : public objects::class_base
     }
     
     template <class T, class F>
-    object make_fn_impl(T*, F const& f, mpl::false_, void*, mpl::false_)
+    object make_fn_impl(T*, F const& f, detail::mpl2::false_, void*, detail::mpl2::false_)
     {
         return python::make_function(f, default_call_policies(), detail::get_signature(f, (T*)0));
     }
 
     template <class T, class D, class B>
-    object make_fn_impl(T*, D B::*pm_, mpl::false_, char*, mpl::true_)
+    object make_fn_impl(T*, D B::*pm_, detail::mpl2::false_, char*, detail::mpl2::true_)
     {
         D T::*pm = pm_;
         return python::make_getter(pm);
     }
 
     template <class T, class D, class B>
-    object make_fn_impl(T*, D B::*pm_, mpl::false_, int*, mpl::true_)
+    object make_fn_impl(T*, D B::*pm_, detail::mpl2::false_, int*, detail::mpl2::true_)
     {
         D T::*pm = pm_;
         return python::make_setter(pm);
     }
 
     template <class T, class F>
-    object make_fn_impl(T*, F const& x, mpl::true_, void*, mpl::false_)
+    object make_fn_impl(T*, F const& x, detail::mpl2::true_, void*, detail::mpl2::false_)
     {
         return x;
     }
@@ -423,28 +388,28 @@ class class_ : public objects::class_base
     
     template <class D, class B>
     self& def_readonly_impl(
-        char const* name, D B::*pm_, char const* doc BOOST_PYTHON_YES_DATA_MEMBER)
+        char const* name, D B::*pm_, char const* doc)
     {
         return this->add_property(name, pm_, doc);
     }
 
     template <class D, class B>
     self& def_readwrite_impl(
-        char const* name, D B::*pm_, char const* doc BOOST_PYTHON_YES_DATA_MEMBER)
+        char const* name, D B::*pm_, char const* doc)
     {
         return this->add_property(name, pm_, pm_, doc);
     }
 
     template <class D>
     self& def_readonly_impl(
-        char const* name, D& d, char const* BOOST_PYTHON_NO_DATA_MEMBER)
+        char const* name, D& d, char const*)
     {
         return this->add_static_property(name, python::make_getter(d));
     }
 
     template <class D>
     self& def_readwrite_impl(
-        char const* name, D& d, char const* BOOST_PYTHON_NO_DATA_MEMBER)
+        char const* name, D& d, char const*)
     {
         return this->add_static_property(name, python::make_getter(d), python::make_setter(d));
     }
@@ -504,7 +469,7 @@ class class_ : public objects::class_base
           , helper.doc()
         );
 
-        this->def_default(name, fn, helper, mpl::bool_<Helper::has_default_implementation>());
+        this->def_default(name, fn, helper, detail::mpl2::bool_<Helper::has_default_implementation>());
     }
     // }
 
@@ -519,7 +484,7 @@ class class_ : public objects::class_base
         char const* name
         , Fn
         , Helper const& helper
-        , mpl::bool_<true>)
+        , detail::mpl2::bool_<true>)
     {
         detail::error::virtual_function_default<W,Fn>::must_be_derived_class_member(
             helper.default_implementation());
@@ -532,14 +497,14 @@ class class_ : public objects::class_base
     }
     
     template <class Fn, class Helper>
-    inline void def_default(char const*, Fn, Helper const&, mpl::bool_<false>)
+    inline void def_default(char const*, Fn, Helper const&, detail::mpl2::bool_<false>)
     { }
     // }
     
     //
     // These two overloads discriminate between def() as applied to
     // regular functions and def() as applied to the result of
-    // BOOST_PYTHON_FUNCTION_OVERLOADS(). The final argument is used to
+    // PXR_BOOST_PYTHON_FUNCTION_OVERLOADS(). The final argument is used to
     // discriminate.
     //
     // @group def_maybe_overloads {
@@ -603,11 +568,7 @@ inline class_<W,X1,X2,X3>::class_(char const* name, char const* doc, no_init_t)
     this->initialize(no_init);
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-# undef BOOST_PYTHON_DATA_MEMBER_HELPER
-# undef BOOST_PYTHON_YES_DATA_MEMBER
-# undef BOOST_PYTHON_NO_DATA_MEMBER
-# undef BOOST_PYTHON_NO_MEMBER_POINTER_ORDERING
-
-#endif // CLASS_DWA200216_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_CLASS_HPP

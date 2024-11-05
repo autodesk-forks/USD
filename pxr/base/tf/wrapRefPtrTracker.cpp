@@ -13,12 +13,12 @@
 #include "pxr/base/tf/refPtrTracker.h"
 #include "pxr/base/tf/pySingleton.h"
 
-#include <boost/python/class.hpp>
+#include "pxr/external/boost/python/class.hpp"
 #include <sstream>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -57,7 +57,7 @@ wrapRefPtrTracker()
      typedef TfRefPtrTracker This;
      typedef TfWeakPtr<TfRefPtrTracker> ThisPtr;
      
-     class_<This, ThisPtr, boost::noncopyable>("RefPtrTracker", no_init)
+     class_<This, ThisPtr, noncopyable>("RefPtrTracker", no_init)
         .def(TfPySingleton())
 
         .def("GetAllWatchedCountsReport", _ReportAllWatchedCounts)

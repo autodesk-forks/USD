@@ -8,44 +8,42 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/docstring_options.hpp>
-#include <boost/python/object/function_object.hpp>
-#include <boost/python/object/function_handle.hpp>
-#include <boost/python/object/function_doc_signature.hpp>
-#include <boost/python/errors.hpp>
-#include <boost/python/str.hpp>
-#include <boost/python/object_attributes.hpp>
-#include <boost/python/args.hpp>
-#include <boost/python/refcount.hpp>
-#include <boost/python/extract.hpp>
-#include <boost/python/tuple.hpp>
-#include <boost/python/list.hpp>
-#include <boost/python/ssize_t.hpp>
+#include "pxr/external/boost/python/docstring_options.hpp"
+#include "pxr/external/boost/python/object/function_object.hpp"
+#include "pxr/external/boost/python/object/function_handle.hpp"
+#include "pxr/external/boost/python/object/function_doc_signature.hpp"
+#include "pxr/external/boost/python/errors.hpp"
+#include "pxr/external/boost/python/str.hpp"
+#include "pxr/external/boost/python/object_attributes.hpp"
+#include "pxr/external/boost/python/args.hpp"
+#include "pxr/external/boost/python/refcount.hpp"
+#include "pxr/external/boost/python/extract.hpp"
+#include "pxr/external/boost/python/tuple.hpp"
+#include "pxr/external/boost/python/list.hpp"
+#include "pxr/external/boost/python/ssize_t.hpp"
+#include "pxr/external/boost/python/type_list.hpp"
 
-#include <boost/python/detail/signature.hpp>
-#include <boost/python/detail/none.hpp>
-#include <boost/mpl/vector/vector10.hpp>
-
-#include <boost/bind/bind.hpp>
+#include "pxr/external/boost/python/detail/signature.hpp"
+#include "pxr/external/boost/python/detail/none.hpp"
 
 #include <algorithm>
 #include <cstring>
 
-#if BOOST_PYTHON_DEBUG_ERROR_MESSAGES
+#if PXR_BOOST_PYTHON_DEBUG_ERROR_MESSAGES
 # include <cstdio>
 #endif
 
-namespace boost { namespace python {
+namespace PXR_BOOST_NAMESPACE { namespace python {
   volatile bool docstring_options::show_user_defined_ = true;
   volatile bool docstring_options::show_cpp_signatures_ = true;
-#ifndef BOOST_PYTHON_NO_PY_SIGNATURES
+#ifndef PXR_BOOST_PYTHON_NO_PY_SIGNATURES
   volatile bool docstring_options::show_py_signatures_ = true;
 #else
   volatile bool docstring_options::show_py_signatures_ = false;
 #endif
 }}
 
-namespace boost { namespace python { namespace objects { 
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace objects { 
 
 py_function_impl_base::~py_function_impl_base()
 {
@@ -60,11 +58,7 @@ extern PyTypeObject function_type;
 
 function::function(
     py_function const& implementation
-#if BOOST_WORKAROUND(__EDG_VERSION__, == 245)
-    , python::detail::keyword const*       names_and_defaults
-#else
     , python::detail::keyword const* const names_and_defaults
-#endif
     , unsigned num_keywords
     )
     : m_fn(implementation)
@@ -181,6 +175,16 @@ PyObject* function::call(PyObject* args, PyObject* keywords) const
                         {
                             // Get the keyword[, value pair] corresponding
                             PyObject* kv = PyTuple_GET_ITEM(f->m_arg_names.ptr(), arg_pos);
+
+                            // If kv is None, this overload does not accept a
+                            // keyword argument in this position, meaning that
+                            // the caller did not supply enough positional
+                            // arguments.  Reject the overload.
+                            if (kv == Py_None) {
+                                PyErr_Clear();
+                                inner_args = handle<>();
+                                break;
+                            }
 
                             // If there were any keyword arguments,
                             // look up the one we need for this
@@ -312,7 +316,7 @@ void function::argument_error(PyObject* args, PyObject* /*keywords*/) const
     message += ")\ndid not match C++ signature:\n    ";
     message += str("\n    ").join(signatures());
 
-#if BOOST_PYTHON_DEBUG_ERROR_MESSAGES
+#if PXR_BOOST_PYTHON_DEBUG_ERROR_MESSAGES
     std::printf("\n--------\n%s\n--------\n", extract<const char*>(message)());
 #endif 
     PyErr_SetObject(exception.get(), message.ptr());
@@ -377,7 +381,7 @@ namespace
   {
       bool operator()(char const* x, char const* y) const
       {
-          return BOOST_CSTD_::strcmp(x,y) < 0;
+          return std::strcmp(x,y) < 0;
       }
   };
   
@@ -405,7 +409,7 @@ namespace
       
       static object keeper(
           function_object(
-              py_function(&not_implemented, mpl::vector1<void>(), 2)
+              py_function(&not_implemented, type_list<void>(), 2)
             , python::detail::keyword_range())
           );
       return handle<function>(borrowed(downcast<function>(keeper.ptr())));
@@ -557,13 +561,13 @@ void function::add_to_namespace(
     }
 }
 
-BOOST_PYTHON_DECL void add_to_namespace(
+PXR_BOOST_PYTHON_DECL void add_to_namespace(
     object const& name_space, char const* name, object const& attribute)
 {
     function::add_to_namespace(name_space, name, attribute, 0);
 }
 
-BOOST_PYTHON_DECL void add_to_namespace(
+PXR_BOOST_PYTHON_DECL void add_to_namespace(
     object const& name_space, char const* name, object const& attribute, char const* doc)
 {
     function::add_to_namespace(name_space, name, attribute, doc);
@@ -775,7 +779,7 @@ handle<> function_handle_impl(py_function const& f)
 
 namespace detail
 {
-  object BOOST_PYTHON_DECL make_raw_function(objects::py_function f)
+  object PXR_BOOST_PYTHON_DECL make_raw_function(objects::py_function f)
   {
       static keyword k;
     
@@ -783,7 +787,7 @@ namespace detail
           f
           , keyword_range(&k,&k));
   }
-  void BOOST_PYTHON_DECL pure_virtual_called()
+  void PXR_BOOST_PYTHON_DECL pure_virtual_called()
   {
       PyErr_SetString(
           PyExc_RuntimeError, const_cast<char*>("Pure virtual function called"));
@@ -791,4 +795,4 @@ namespace detail
   }
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python

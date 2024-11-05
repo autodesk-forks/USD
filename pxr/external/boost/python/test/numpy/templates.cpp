@@ -9,18 +9,16 @@
 // (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/numpy.hpp>
-#include <boost/mpl/vector.hpp>
-#include <boost/mpl/vector_c.hpp>
+#include "pxr/external/boost/python/numpy.hpp"
 
-namespace p = boost::python;
-namespace np = boost::python::numpy;
+namespace p = PXR_BOOST_NAMESPACE::python;
+namespace np = PXR_BOOST_NAMESPACE::python::numpy;
 
 struct ArrayFiller
 {
 
-  typedef boost::mpl::vector< short, int, float, std::complex<double> > TypeSequence;
-  typedef boost::mpl::vector_c< int, 1, 2 > DimSequence;
+  typedef p::type_list< short, int, float, std::complex<double> > TypeSequence;
+  typedef std::integer_sequence<int, 1, 2> DimSequence;
 
   explicit ArrayFiller(np::ndarray const & arg) : argument(arg) {}
 
@@ -61,7 +59,7 @@ void fill(np::ndarray const & arg)
   np::invoke_matching_array<ArrayFiller::TypeSequence, ArrayFiller::DimSequence >(arg, filler);
 }
 
-BOOST_PYTHON_MODULE(templates_ext)
+PXR_BOOST_PYTHON_MODULE(templates_ext)
 {
   np::initialize();
   p::def("fill", fill);

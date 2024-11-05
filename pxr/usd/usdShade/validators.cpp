@@ -18,7 +18,6 @@
 #include "pxr/usd/usdGeom/imageable.h"
 #include "pxr/usd/usdGeom/subset.h"
 #include "pxr/usd/usdGeom/tokens.h"
-#include "pxr/usd/usdShade/materialBindingAPI.h"
 #include "pxr/usd/usdShade/shader.h"
 #include "pxr/usd/usdShade/tokens.h"
 #include "pxr/usd/usdShade/validatorTokens.h"
@@ -29,6 +28,83 @@
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+static
+UsdValidationErrorVector
+_EncapsulationValidator(const UsdPrim& usdPrim)
+{
+    const UsdShadeConnectableAPI& connectable =
+            UsdShadeConnectableAPI(usdPrim);
+
+    if (!connectable){
+        return {};
+    }
+
+    const UsdPrim& parentPrim = usdPrim.GetParent();
+
+    if (!parentPrim || parentPrim.IsPseudoRoot()){
+        return {};
+    }
+
+    UsdShadeConnectableAPI parentConnectable =
+            UsdShadeConnectableAPI(parentPrim);
+    UsdValidationErrorVector errors;
+    if (parentConnectable && !parentConnectable.IsContainer()) {
+        // It is a violation of the UsdShade OM which enforces
+        // encapsulation of connectable prims under a Container-type
+        // connectable prim.
+        errors.emplace_back(
+            UsdShadeValidationErrorNameTokens->connectableInNonContainer,
+            UsdValidationErrorType::Error,
+            UsdValidationErrorSites{
+                    UsdValidationErrorSite(usdPrim.GetStage(),
+                                           usdPrim.GetPath())
+            },
+            TfStringPrintf("Connectable %s <%s> cannot reside "
+                           "under a non-Container Connectable %s",
+                           usdPrim.GetTypeName().GetText(),
+                           usdPrim.GetPath().GetText(),
+                           parentPrim.GetTypeName().GetText()));
+    }
+    else if (!parentConnectable) {
+        std::function<void(const UsdPrim&)> _VerifyValidAncestor =
+                [&](const UsdPrim& currentAncestor) -> void {
+            if (!currentAncestor || currentAncestor.IsPseudoRoot()) {
+                return;
+            }
+            const UsdShadeConnectableAPI& ancestorConnectable =
+                    UsdShadeConnectableAPI(currentAncestor);
+            if (ancestorConnectable) {
+                // it's only OK to have a non-connectable parent if all
+                // the rest of your ancestors are also non-connectable.
+                // The error message we give is targeted at the most common
+                // infraction, using Scope or other grouping prims inside
+                // a Container like a Material
+                errors.emplace_back(
+                    UsdShadeValidationErrorNameTokens->
+                        invalidConnectableHierarchy,
+                    UsdValidationErrorType::Error,
+                    UsdValidationErrorSites {
+                        UsdValidationErrorSite(usdPrim.GetStage(),
+                                               usdPrim.GetPath()) },
+                    TfStringPrintf("Connectable %s <%s> can only have "
+                                   "Connectable Container ancestors up to %s "
+                                   "ancestor <%s>, but its parent %s is a %s.",
+                                   usdPrim.GetTypeName().GetText(),
+                                   usdPrim.GetPath().GetText(),
+                                   currentAncestor.GetTypeName().GetText(),
+                                   currentAncestor.GetPath().GetText(),
+                                   parentPrim.GetName().GetText(),
+                                   parentPrim.GetTypeName().GetText()));
+                return;
+            }
+            _VerifyValidAncestor(currentAncestor.GetParent());
+        };
+        _VerifyValidAncestor(parentPrim.GetParent());
+    }
+
+    return errors;
+}
 
 static
 UsdValidationErrorVector
@@ -53,14 +129,15 @@ _MaterialBindingApiAppliedValidator(const UsdPrim &usdPrim)
     if (!usdPrim.HasAPI<UsdShadeMaterialBindingAPI>() &&
         hasMaterialBindingRelationship(usdPrim)) {
         errors.emplace_back(
-                UsdValidationErrorType::Error,
-                UsdValidationErrorSites{
-                        UsdValidationErrorSite(usdPrim.GetStage(),
-                                               usdPrim.GetPath())
-                },
-                TfStringPrintf("Found material bindings but no " \
-                    "MaterialBindingAPI applied on the prim <%s>.",
-                               usdPrim.GetPath().GetText()));
+            UsdShadeValidationErrorNameTokens->missingMaterialBindingAPI,
+            UsdValidationErrorType::Error,
+            UsdValidationErrorSites{
+                    UsdValidationErrorSite(usdPrim.GetStage(),
+                                           usdPrim.GetPath())
+            },
+            TfStringPrintf("Found material bindings but no MaterialBindingAPI "
+                           "applied on the prim <%s>.", 
+                           usdPrim.GetPath().GetText()));
     }
 
     return errors;
@@ -96,6 +173,7 @@ _MaterialBindingRelationships(const UsdPrim& usdPrim)
         };
 
         errors.emplace_back(
+            UsdShadeValidationErrorNameTokens->materialBindingPropNotARel,
             UsdValidationErrorType::Error,
             propertyErrorSites,
             TfStringPrintf(
@@ -107,6 +185,119 @@ _MaterialBindingRelationships(const UsdPrim& usdPrim)
     }
 
     return errors;
+}
+
+void
+_MaterialBindingCheckCollection(
+    const UsdPrim& prim,
+    const UsdRelationship& rel,
+    UsdValidationErrorVector& outErrors)
+{
+    SdfPathVector targets;
+    rel.GetTargets(&targets);
+
+    if (targets.size() == 1) {
+        if (UsdShadeMaterialBindingAPI::CollectionBinding
+                ::IsCollectionBindingRel(rel)) {
+            outErrors.emplace_back(
+                UsdShadeValidationErrorNameTokens->invalidMaterialCollection,
+                UsdValidationErrorType::Error,
+                UsdValidationErrorSites{
+                        UsdValidationErrorSite(prim.GetStage(),
+                                               rel.GetPath())
+                },
+                TfStringPrintf("Collection-based material binding on <%s> "
+                               "has 1 target <%s>, needs 2: a collection path "
+                               "and a UsdShadeMaterial path.",
+                               prim.GetPath().GetText(),
+                               targets[0].GetText()));
+        } else {
+            UsdShadeMaterialBindingAPI::DirectBinding directBinding =
+                UsdShadeMaterialBindingAPI::DirectBinding(rel);
+            if (!directBinding.GetMaterial()) {
+                outErrors.emplace_back(
+                    UsdShadeValidationErrorNameTokens->invalidResourcePath,
+                    UsdValidationErrorType::Error,
+                    UsdValidationErrorSites{
+                            UsdValidationErrorSite(prim.GetStage(),
+                                                   rel.GetPath())
+                    },
+                    TfStringPrintf("Direct material binding <%s> targets "
+                                   "an invalid material <%s>.",
+                                   rel.GetPath().GetText(),
+                                   directBinding.GetMaterialPath().GetText()));
+            }
+        }
+    } else if (targets.size() == 2) {
+        UsdShadeMaterialBindingAPI::CollectionBinding collBinding =
+            UsdShadeMaterialBindingAPI::CollectionBinding(rel);
+        if (!collBinding.GetMaterial()) {
+            outErrors.emplace_back(
+                UsdShadeValidationErrorNameTokens->invalidResourcePath,
+                UsdValidationErrorType::Error,
+                UsdValidationErrorSites{
+                        UsdValidationErrorSite(prim.GetStage(),
+                                               rel.GetPath())
+                },
+                TfStringPrintf("Collection-based material binding "
+                               "<%s> targets an invalid material <%s>.",
+                               rel.GetPath().GetText(),
+                               collBinding.GetMaterialPath().GetText()));
+        }
+        if (!collBinding.GetCollection()) {
+            outErrors.emplace_back(
+                UsdShadeValidationErrorNameTokens->invalidResourcePath,
+                UsdValidationErrorType::Error,
+                UsdValidationErrorSites{
+                        UsdValidationErrorSite(prim.GetStage(),
+                                               rel.GetPath())
+                },
+                TfStringPrintf("Collection-based material binding "
+                               "<%s> targets an invalid collection <%s>.",
+                               rel.GetPath().GetText(),
+                               collBinding.GetCollectionPath().GetText()));
+        }
+    } else {
+        outErrors.emplace_back(
+            UsdShadeValidationErrorNameTokens->invalidMaterialCollection,
+            UsdValidationErrorType::Error,
+            UsdValidationErrorSites{
+                    UsdValidationErrorSite(prim.GetStage(),
+                                           rel.GetPath())
+            },
+            TfStringPrintf("Invalid number of targets on "
+                            "material binding <%s>",
+                            rel.GetPath().GetText()));
+    }
+}
+
+static
+UsdValidationErrorVector
+_MaterialBindingCollectionValidator(const UsdPrim& usdPrim)
+{
+    if (!usdPrim || !usdPrim.HasAPI<UsdShadeMaterialBindingAPI>()) {
+        return {};
+    }
+
+    const std::vector<UsdProperty> matBindingProperties =
+        usdPrim.GetProperties(
+            /* predicate = */ [](const TfToken& name) {
+                return UsdShadeMaterialBindingAPI::CanContainPropertyName(
+                    name);
+            }
+        );
+
+    UsdValidationErrorVector outErrors;
+
+    for (const UsdProperty& matBindingProperty : matBindingProperties) {
+        if (const UsdRelationship& matBindingRel =
+                matBindingProperty.As<UsdRelationship>()) {
+            _MaterialBindingCheckCollection(
+                usdPrim, matBindingRel, outErrors);
+        }
+    }
+
+    return outErrors;
 }
 
 static
@@ -133,12 +324,12 @@ _ShaderPropertyTypeConformance(const UsdPrim &usdPrim)
             UsdValidationErrorSite(
                 usdPrim.GetStage(), 
                 shader.GetImplementationSourceAttr().GetPath()) };
-        return {UsdValidationError(UsdValidationErrorType::Error, 
-                            implSourceErrorSite,
-                            TfStringPrintf("Shader <%s> has invalid "
-                                           "implementation source '%s'.", 
-                                           usdPrim.GetPath().GetText(), 
-                                           implSource.GetText()))};
+        return {UsdValidationError(
+            UsdShadeValidationErrorNameTokens->invalidImplSource,
+            UsdValidationErrorType::Error, implSourceErrorSite,
+            TfStringPrintf("Shader <%s> has invalid implementation source "
+                           "'%s'.", usdPrim.GetPath().GetText(), 
+                           implSource.GetText()))};
     }
 
     const std::vector<std::string> sourceTypes = shader.GetSourceTypes();
@@ -147,6 +338,7 @@ _ShaderPropertyTypeConformance(const UsdPrim &usdPrim)
             UsdValidationErrorSite(usdPrim.GetStage(), 
                                    usdPrim.GetPath()) };
         return {UsdValidationError(
+            UsdShadeValidationErrorNameTokens->missingSourceType,
             UsdValidationErrorType::Error, 
             primErrorSite, 
             TfStringPrintf("Shader <%s> has no sourceType.", 
@@ -175,6 +367,8 @@ _ShaderPropertyTypeConformance(const UsdPrim &usdPrim)
                     UsdValidationErrorSite(usdPrim.GetStage(), 
                                            shader.GetIdAttr().GetPath()) };
                 return {UsdValidationError(
+                    UsdShadeValidationErrorNameTokens->
+                        missingShaderIdInRegistry,
                     UsdValidationErrorType::Error,
                     shaderIdErrorSite,
                     TfStringPrintf("shaderId '%s' specified on shader prim "
@@ -215,6 +409,8 @@ _ShaderPropertyTypeConformance(const UsdPrim &usdPrim)
                                                  sourceTypeProp.GetPath());
                 }
                 errors.emplace_back(
+                    UsdShadeValidationErrorNameTokens->
+                        missingSourceTypeInRegistry,
                     UsdValidationErrorType::Error,
                     sourceTypeSites,
                     TfStringPrintf("sourceType '%s' specified on shader prim "
@@ -236,6 +432,8 @@ _ShaderPropertyTypeConformance(const UsdPrim &usdPrim)
                 shaderNames.push_back(shaderName.GetString());
             }
             errors.emplace_back(
+                UsdShadeValidationErrorNameTokens->
+                    incompatShaderPropertyWarning,
                 UsdValidationErrorType::Warn, sdrWarnSite,
                 TfStringPrintf("Shader nodes '%s' have incompatible property "
                                "'%s'.", TfStringJoin(shaderNames).c_str(), 
@@ -267,6 +465,7 @@ _ShaderPropertyTypeConformance(const UsdPrim &usdPrim)
                                                input.GetAttr().GetPath())
                     };
                 errors.emplace_back(
+                    UsdShadeValidationErrorNameTokens->mismatchPropertyType,
                     UsdValidationErrorType::Error,
                     inputErrorSite,
                     TfStringPrintf("Incorrect type for %s. "
@@ -323,6 +522,7 @@ _SubsetMaterialBindFamilyName(const UsdPrim& usdPrim)
 
     return {
         UsdValidationError(
+            UsdShadeValidationErrorNameTokens->missingFamilyNameOnGeomSubset,
             UsdValidationErrorType::Error,
             primErrorSites,
             TfStringPrintf(
@@ -372,6 +572,7 @@ _SubsetsMaterialBindFamily(const UsdPrim& usdPrim)
         };
 
         errors.emplace_back(
+            UsdShadeValidationErrorNameTokens->invalidFamilyType,
             UsdValidationErrorType::Error,
             primErrorSites,
             TfStringPrintf(
@@ -402,6 +603,10 @@ TF_REGISTRY_FUNCTION(UsdValidationRegistry)
         _MaterialBindingRelationships);
 
     registry.RegisterPluginValidator(
+        UsdShadeValidatorNameTokens->materialBindingCollectionValidator,
+        _MaterialBindingCollectionValidator);
+
+    registry.RegisterPluginValidator(
         UsdShadeValidatorNameTokens->shaderSdrCompliance, 
         _ShaderPropertyTypeConformance);
 
@@ -412,6 +617,10 @@ TF_REGISTRY_FUNCTION(UsdValidationRegistry)
     registry.RegisterPluginValidator(
         UsdShadeValidatorNameTokens->subsetsMaterialBindFamily,
         _SubsetsMaterialBindFamily);
+
+    registry.RegisterPluginValidator(
+            UsdShadeValidatorNameTokens->encapsulationValidator,
+            _EncapsulationValidator);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -7,16 +7,15 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#include <boost/python/operators.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
+#include "pxr/external/boost/python/operators.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/def.hpp"
 #include "test_class.hpp"
-#include <boost/python/module.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/operators.hpp>
-#include <boost/operators.hpp>
-//#include <boost/python/str.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/operators.hpp"
+//#include "pxr/external/boost/python/str.hpp"
 // Just use math.h here; trying to use std::pow() causes too much
 // trouble for non-conforming compilers and libraries.
 #include <math.h>
@@ -27,10 +26,10 @@
 # include <ostream.h>
 #endif
 
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 struct X : test_class<>
 {
@@ -78,10 +77,29 @@ std::ostream& operator<<(std::ostream& s, X const& x)
 }
 
 struct number
-  : boost::integer_arithmetic<number>
 {
     explicit number(long x_) : x(x_) {}
     operator long() const { return x; }
+
+    template <class T>
+    number operator+(T const& rhs)
+    { return number(x + rhs); }
+
+    template <class T>
+    number operator-(T const& rhs)
+    { return number(x - rhs); }
+
+    template <class T>
+    number operator*(T const& rhs)
+    { return number(x * rhs); }
+
+    template <class T>
+    number operator/(T const& rhs)
+    { return number(x / rhs); }
+
+    template <class T>
+    number operator%(T const& rhs)
+    { return number(x % rhs); }
 
     template <class T>
     number& operator+=(T const& rhs)
@@ -106,7 +124,7 @@ struct number
    long x;
 };
 
-BOOST_PYTHON_MODULE(operators_ext)
+PXR_BOOST_PYTHON_MODULE(operators_ext)
 {
     class_<X>("X", init<int>())
         .def("value", &X::value)

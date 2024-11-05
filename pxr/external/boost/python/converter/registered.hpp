@@ -9,27 +9,39 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef boost_python_converter_registered_hpp_
-#define boost_python_converter_registered_hpp_
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_REGISTERED_HPP
+#define PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_REGISTERED_HPP
 
-#include <boost/python/type_id.hpp>
-#include <boost/python/converter/registry.hpp>
-#include <boost/python/converter/registrations.hpp>
-#include <boost/python/detail/type_traits.hpp>
-#include <boost/detail/workaround.hpp>
-#include <boost/type.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/converter/registered.hpp>
+#else
+
+#include "pxr/external/boost/python/type_id.hpp"
+#include "pxr/external/boost/python/converter/registry.hpp"
+#include "pxr/external/boost/python/converter/registrations.hpp"
+#include "pxr/external/boost/python/detail/type_traits.hpp"
+#include "pxr/external/boost/python/type.hpp"
 #include <memory>
-#if defined(BOOST_PYTHON_TRACE_REGISTRY) \
- || defined(BOOST_PYTHON_CONVERTER_REGISTRY_APPLE_MACH_WORKAROUND)
+#if defined(PXR_BOOST_PYTHON_TRACE_REGISTRY) \
+ || defined(PXR_BOOST_PYTHON_CONVERTER_REGISTRY_APPLE_MACH_WORKAROUND)
 # include <iostream>
 #endif
 
+#ifdef PXR_BOOST_PYTHON_HAS_BOOST_SHARED_PTR
 namespace boost {
 
 // You'll see shared_ptr mentioned in this header because we need to
 // note which types are shared_ptrs in their registrations, to
 // implement special shared_ptr handling for rvalue conversions.
 template <class T> class shared_ptr;
+
+}
+#endif
+
+namespace PXR_BOOST_NAMESPACE {
 
 namespace python { namespace converter { 
 
@@ -47,14 +59,13 @@ namespace detail
 template <class T>
 struct registered
   : detail::registered_base<
-        typename boost::python::detail::add_lvalue_reference<
-            typename boost::python::detail::add_cv<T>::type
+        typename PXR_BOOST_NAMESPACE::python::detail::add_lvalue_reference<
+            typename PXR_BOOST_NAMESPACE::python::detail::add_cv<T>::type
         >::type
     >
 {
 };
 
-# if !BOOST_WORKAROUND(BOOST_MSVC, BOOST_TESTED_AT(1310))
 // collapses a few more types to the same static instance.  MSVC7.1
 // fails to strip cv-qualification from array types in typeid.  For
 // some reason we can't use this collapse there or array converters
@@ -62,7 +73,6 @@ struct registered
 template <class T>
 struct registered<T&>
   : registered<T> {};
-# endif
 
 //
 // implementations
@@ -73,22 +83,22 @@ namespace detail
   register_shared_ptr0(...)
   {
   }
-  
+
+#ifdef PXR_BOOST_PYTHON_HAS_BOOST_SHARED_PTR
   template <class T>
   inline void
-  register_shared_ptr0(shared_ptr<T>*)
+  register_shared_ptr0(boost::shared_ptr<T>*)
   {
-      registry::lookup_shared_ptr(type_id<shared_ptr<T> >());
+      registry::lookup_shared_ptr(type_id<boost::shared_ptr<T> >());
   }
+#endif
 
-#if !defined(BOOST_NO_CXX11_SMART_PTR)
   template <class T>
   inline void
   register_shared_ptr0(std::shared_ptr<T>*)
   {
       registry::lookup_shared_ptr(type_id<std::shared_ptr<T> >());
   }
-#endif
 
   template <class T>
   inline void
@@ -124,6 +134,7 @@ namespace detail
 
 }
 
-}}} // namespace boost::python::converter
+}}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
 #endif

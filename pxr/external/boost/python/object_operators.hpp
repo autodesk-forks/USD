@@ -7,19 +7,25 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef OBJECT_OPERATORS_DWA2002617_HPP
-# define OBJECT_OPERATORS_DWA2002617_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_OBJECT_OPERATORS_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_OBJECT_OPERATORS_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/object_core.hpp>
-# include <boost/python/call.hpp>
-# include <boost/iterator/detail/enable_if.hpp>
-# include <boost/mpl/bool.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/object_operators.hpp>
+#else
 
-# include <boost/iterator/detail/config_def.hpp>
+# include "pxr/external/boost/python/detail/prefix.hpp"
 
-namespace boost { namespace python { namespace api {
+# include "pxr/external/boost/python/object_core.hpp"
+# include "pxr/external/boost/python/call.hpp"
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
+
+# include <type_traits>
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace api {
 
 template <class X>
 char is_object_operators_helper(object_operators<X> const*);
@@ -39,18 +45,14 @@ struct is_object_operators
            < 4
         )
     };
-    typedef mpl::bool_<value> type;
+    typedef python::detail::mpl2::bool_<value> type;
 };
 
-# if !defined(BOOST_NO_SFINAE) && !defined(BOOST_NO_IS_CONVERTIBLE)
 template <class L, class R, class T>
 struct enable_binary
-  : boost::iterators::enable_if<is_object_operators<L,R>, T>
+  : std::enable_if<is_object_operators<L,R>::value, T>
 {};
-#  define BOOST_PYTHON_BINARY_RETURN(T) typename enable_binary<L,R,T>::type
-# else
-#  define BOOST_PYTHON_BINARY_RETURN(T) T
-# endif
+#  define PXR_BOOST_PYTHON_BINARY_RETURN(T) typename enable_binary<L,R,T>::type
 
 template <class U>
 object object_operators<U>::operator()() const
@@ -59,6 +61,15 @@ object object_operators<U>::operator()() const
     return call<object>(f.ptr());
 }
 
+template <class U>
+template <class A0, class... A>
+typename detail::dependent<object, A0>::type
+object_operators<U>::operator()(A0 const& a0, A const&... a) const
+{
+    typedef typename detail::dependent<object, A0>::type obj;
+    U const& self = *static_cast<U const*>(this);
+    return call<obj>(get_managed_object(self, tag), a0, a...);
+}
 
 template <class U>
 inline
@@ -80,62 +91,61 @@ object_operators<U>::operator!() const
     return !is_true;
 }
 
-# define BOOST_PYTHON_COMPARE_OP(op, opid)                              \
+# define PXR_BOOST_PYTHON_COMPARE_OP(op, opid)                              \
 template <class L, class R>                                             \
-BOOST_PYTHON_BINARY_RETURN(object) operator op(L const& l, R const& r)    \
+PXR_BOOST_PYTHON_BINARY_RETURN(object) operator op(L const& l, R const& r)    \
 {                                                                       \
     return PyObject_RichCompare(                                    \
         object(l).ptr(), object(r).ptr(), opid);                        \
 }
-# undef BOOST_PYTHON_COMPARE_OP
+# undef PXR_BOOST_PYTHON_COMPARE_OP
     
-# define BOOST_PYTHON_BINARY_OPERATOR(op)                               \
-BOOST_PYTHON_DECL object operator op(object const& l, object const& r); \
+# define PXR_BOOST_PYTHON_BINARY_OPERATOR(op)                               \
+PXR_BOOST_PYTHON_DECL object operator op(object const& l, object const& r); \
 template <class L, class R>                                             \
-BOOST_PYTHON_BINARY_RETURN(object) operator op(L const& l, R const& r)  \
+PXR_BOOST_PYTHON_BINARY_RETURN(object) operator op(L const& l, R const& r)  \
 {                                                                       \
     return object(l) op object(r);                                      \
 }
-BOOST_PYTHON_BINARY_OPERATOR(>)
-BOOST_PYTHON_BINARY_OPERATOR(>=)
-BOOST_PYTHON_BINARY_OPERATOR(<)
-BOOST_PYTHON_BINARY_OPERATOR(<=)
-BOOST_PYTHON_BINARY_OPERATOR(==)
-BOOST_PYTHON_BINARY_OPERATOR(!=)
-BOOST_PYTHON_BINARY_OPERATOR(+)
-BOOST_PYTHON_BINARY_OPERATOR(-)
-BOOST_PYTHON_BINARY_OPERATOR(*)
-BOOST_PYTHON_BINARY_OPERATOR(/)
-BOOST_PYTHON_BINARY_OPERATOR(%)
-BOOST_PYTHON_BINARY_OPERATOR(<<)
-BOOST_PYTHON_BINARY_OPERATOR(>>)
-BOOST_PYTHON_BINARY_OPERATOR(&)
-BOOST_PYTHON_BINARY_OPERATOR(^)
-BOOST_PYTHON_BINARY_OPERATOR(|)
-# undef BOOST_PYTHON_BINARY_OPERATOR
+PXR_BOOST_PYTHON_BINARY_OPERATOR(>)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(>=)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(<)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(<=)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(==)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(!=)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(+)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(-)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(*)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(/)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(%)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(<<)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(>>)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(&)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(^)
+PXR_BOOST_PYTHON_BINARY_OPERATOR(|)
+# undef PXR_BOOST_PYTHON_BINARY_OPERATOR
 
         
-# define BOOST_PYTHON_INPLACE_OPERATOR(op)                              \
-BOOST_PYTHON_DECL object& operator op(object& l, object const& r);      \
+# define PXR_BOOST_PYTHON_INPLACE_OPERATOR(op)                              \
+PXR_BOOST_PYTHON_DECL object& operator op(object& l, object const& r);      \
 template <class R>                                                      \
 object& operator op(object& l, R const& r)                              \
 {                                                                       \
     return l op object(r);                                              \
 }
-BOOST_PYTHON_INPLACE_OPERATOR(+=)
-BOOST_PYTHON_INPLACE_OPERATOR(-=)
-BOOST_PYTHON_INPLACE_OPERATOR(*=)
-BOOST_PYTHON_INPLACE_OPERATOR(/=)
-BOOST_PYTHON_INPLACE_OPERATOR(%=)
-BOOST_PYTHON_INPLACE_OPERATOR(<<=)
-BOOST_PYTHON_INPLACE_OPERATOR(>>=)
-BOOST_PYTHON_INPLACE_OPERATOR(&=)
-BOOST_PYTHON_INPLACE_OPERATOR(^=)
-BOOST_PYTHON_INPLACE_OPERATOR(|=)
-# undef BOOST_PYTHON_INPLACE_OPERATOR
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(+=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(-=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(*=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(/=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(%=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(<<=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(>>=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(&=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(^=)
+PXR_BOOST_PYTHON_INPLACE_OPERATOR(|=)
+# undef PXR_BOOST_PYTHON_INPLACE_OPERATOR
 
-}}} // namespace boost::python
+}}} // namespace PXR_BOOST_NAMESPACE::python
 
-#include <boost/iterator/detail/config_undef.hpp>
-
-#endif // OBJECT_OPERATORS_DWA2002617_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_OBJECT_OPERATORS_HPP

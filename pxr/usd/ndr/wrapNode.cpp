@@ -12,11 +12,11 @@
 #include "pxr/base/tf/weakPtr.h"
 #include "pxr/usd/ndr/node.h"
 
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapNode()
 {
@@ -25,7 +25,7 @@ void wrapNode()
 
     return_value_policy<copy_const_reference> copyRefPolicy;
 
-    class_<This, ThisPtr, boost::noncopyable>("Node", no_init)
+    class_<This, ThisPtr, noncopyable>("Node", no_init)
         .def("__repr__", &This::GetInfoString)
         .def("__bool__", &This::IsValid)
         .def("GetIdentifier", &This::GetIdentifier, copyRefPolicy)

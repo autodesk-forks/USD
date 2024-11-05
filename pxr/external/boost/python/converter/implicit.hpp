@@ -7,16 +7,23 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef IMPLICIT_DWA2002326_HPP
-# define IMPLICIT_DWA2002326_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_IMPLICIT_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_IMPLICIT_HPP
 
-# include <boost/python/converter/rvalue_from_python_data.hpp>
-# include <boost/python/converter/registrations.hpp>
-# include <boost/python/converter/registered.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/extract.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/converter/implicit.hpp>
+#else
 
-namespace boost { namespace python { namespace converter { 
+# include "pxr/external/boost/python/converter/rvalue_from_python_data.hpp"
+# include "pxr/external/boost/python/converter/registrations.hpp"
+# include "pxr/external/boost/python/converter/registered.hpp"
+
+# include "pxr/external/boost/python/extract.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace converter { 
 
 template <class Source, class Target>
 struct implicit
@@ -36,8 +43,8 @@ struct implicit
         void* storage = ((rvalue_from_python_storage<Target>*)data)->storage.bytes;
 
         arg_from_python<Source> get_source(obj);
-        bool convertible = get_source.convertible();
-        BOOST_VERIFY(convertible);
+        [[maybe_unused]] bool convertible = get_source.convertible();
+        assert(convertible);
         
         new (storage) Target(get_source());
         
@@ -46,6 +53,7 @@ struct implicit
     }
 };
 
-}}} // namespace boost::python::converter
+}}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
-#endif // IMPLICIT_DWA2002326_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_IMPLICIT_HPP

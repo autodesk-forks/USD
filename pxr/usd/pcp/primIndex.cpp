@@ -9,6 +9,7 @@
 #include "pxr/usd/pcp/primIndex.h"
 #include "pxr/usd/pcp/arc.h"
 #include "pxr/usd/pcp/cache.h"
+#include "pxr/usd/pcp/changes.h"
 #include "pxr/usd/pcp/dynamicFileFormatContext.h"
 #include "pxr/usd/pcp/composeSite.h"
 #include "pxr/usd/pcp/debugCodes.h"
@@ -2763,11 +2764,15 @@ _EvalNodeRelocations(
         Pcp_FormatSite(node.GetSite()).c_str());
 
     // Unlike other tasks, we skip processing if this node can't contribute 
-    // specs, but only if this node was introduced at this level at namespace.
-    // This additional check is needed because a descendant node might not
-    // have any specs and thus be marked as culled, but still have relocates
-    // that affect that node.
-    if (!node.CanContributeSpecs() && node.GetDepthBelowIntroduction() == 0) {
+    // specs.
+    //
+    // Note that this check relies on the fact that descendant nodes without any
+    // specs are not marked as culled until we're done building the prim index,
+    // as nodes without specs can still have relocates that affect that node.
+    // This fact makes sure that we are only skipping nodes that are truly 
+    // culled for reasons such as being elided due to another relocates node
+    // that throws away ancestral opinions.
+    if (!node.CanContributeSpecs()) {
         return;
     }
 
@@ -4715,7 +4720,11 @@ _EnforcePermissions(
 }
 
 void
-Pcp_RescanForSpecs(PcpPrimIndex *index, bool usd, bool updateHasSpecs)
+Pcp_RescanForSpecs(
+    PcpPrimIndex *index,
+    bool usd,
+    bool updateHasSpecs,
+    const PcpCacheChanges *cacheChanges = nullptr)
 {
     TfAutoMallocTag2 tag("Pcp", "Pcp_RescanForSpecs");
 
@@ -4724,7 +4733,10 @@ Pcp_RescanForSpecs(PcpPrimIndex *index, bool usd, bool updateHasSpecs)
         // We do need to update the HasSpecs flag on nodes, however.
         if (updateHasSpecs) {
             TF_FOR_ALL(nodeIt, index->GetNodeRange()) {
-                nodeIt->SetHasSpecs(PcpComposeSiteHasPrimSpecs(*nodeIt));
+                auto node = *nodeIt;
+                nodeIt->SetHasSpecs(PcpComposeSiteHasPrimSpecs(
+                    node.GetLayerStack(), node.GetPath(), 
+                    cacheChanges->layersAffectedByMutingOrRemoval));
             }
         }
     } else {
@@ -4738,7 +4750,10 @@ Pcp_RescanForSpecs(PcpPrimIndex *index, bool usd, bool updateHasSpecs)
                     node.GetLayerStack()->GetLayers();
                 const SdfPath& path = node.GetPath();
                 for (size_t i = 0, n = layers.size(); i != n; ++i) {
-                    if (layers[i]->HasSpec(path)) {
+                    if (layers[i]->HasSpec(path) &&
+                        (!cacheChanges ||
+                          cacheChanges->layersAffectedByMutingOrRemoval
+                            .count(layers[i]) == 0)) {
                         nodeHasSpecs = true;
                         primSites.push_back(node.GetCompressedSdSite(i));
                     }
@@ -5786,13 +5801,14 @@ private:
 
 static void
 _ComposePrimChildNamesForInstance( const PcpPrimIndex& primIndex,
+                                   const PcpNodeRef &subtreeStartNode,
                                    TfTokenVector *nameOrder,
                                    PcpTokenSet *nameSet,
                                    PcpTokenSet *prohibitedNameSet )
 {
     Pcp_PrimChildNameVisitor visitor(
         primIndex, nameOrder, nameSet, prohibitedNameSet);
-    Pcp_TraverseInstanceableWeakToStrong(primIndex, &visitor);
+    Pcp_TraverseInstanceableWeakToStrong(subtreeStartNode, &visitor);
 }
 
 static void
@@ -5821,27 +5837,26 @@ _ComposePrimPropertyNames( const PcpPrimIndex& primIndex,
     }
 }
 
-void
-PcpPrimIndex::ComputePrimChildNames( TfTokenVector *nameOrder,
-                                     PcpTokenSet *prohibitedNameSet ) const
+static void 
+_ComputePrimChildNamesInSubtreeImpl(
+    const PcpPrimIndex &primIndex,
+    const PcpNodeRef &subtreeRootNode,
+    TfTokenVector *nameOrder,
+    PcpTokenSet *prohibitedNameSet)
 {
-    if (!_graph) {
-        return;
-    }
-
     TRACE_FUNCTION();
 
     // Provide a set with any existing nameOrder contents.
     PcpTokenSet nameSet(nameOrder->begin(), nameOrder->end());
 
     // Walk the graph to compose prim child names.
-    if (IsInstanceable()) {
+    if (primIndex.IsInstanceable()) {
         _ComposePrimChildNamesForInstance(
-            *this, nameOrder, &nameSet, prohibitedNameSet);
+            primIndex, subtreeRootNode, nameOrder, &nameSet, prohibitedNameSet);
     }
     else {
         _ComposePrimChildNames(
-            *this, GetRootNode(), nameOrder, &nameSet, prohibitedNameSet);
+            primIndex, subtreeRootNode, nameOrder, &nameSet, prohibitedNameSet);
     }
 
     // Remove prohibited names from the composed prim child names.
@@ -5854,6 +5869,34 @@ PcpPrimIndex::ComputePrimChildNames( TfTokenVector *nameOrder,
                 }),
             nameOrder->end());
     }
+}    
+
+void
+PcpPrimIndex::ComputePrimChildNames( TfTokenVector *nameOrder,
+                                     PcpTokenSet *prohibitedNameSet ) const
+{
+    if (!_graph) {
+        return;
+    }
+    _ComputePrimChildNamesInSubtreeImpl(
+        *this, GetRootNode(), nameOrder, prohibitedNameSet);
+}
+
+void 
+PcpPrimIndex::ComputePrimChildNamesInSubtree(
+    const PcpNodeRef &subtreeRootNode,
+    TfTokenVector *nameOrder,
+    PcpTokenSet *prohibitedNameSet) const
+{
+    if (!_graph) {
+        return;
+    }
+    if (subtreeRootNode.GetOwningGraph() != get_pointer(_graph)) {
+        TF_CODING_ERROR("Subtree root node is not a node in this prim index");
+        return;
+    }
+    _ComputePrimChildNamesInSubtreeImpl(
+        *this, subtreeRootNode, nameOrder, prohibitedNameSet);
 }
 
 void

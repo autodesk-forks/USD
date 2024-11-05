@@ -10,11 +10,11 @@
 #include "pxr/usd/usd/prim.h"
 
 #include "pxr/base/tf/pyResultConversions.h"
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 static TfPyObjWrapper
 _WrapGetAttributeFallbackValue(const UsdPrimDefinition &self, 
@@ -118,7 +118,7 @@ __getattribute__Impl(object selfObj, const char *name, const object &getattribut
 void wrapUsdPrimDefinition()
 {
     typedef UsdPrimDefinition This;
-    scope s = class_<This, boost::noncopyable>("PrimDefinition", no_init)
+    scope s = class_<This, noncopyable>("PrimDefinition", no_init)
         .def("GetPropertyNames", &This::GetPropertyNames,
              return_value_policy<TfPySequenceToList>())
         .def("GetAppliedAPISchemas", &This::GetAppliedAPISchemas,

@@ -15,14 +15,14 @@
 #include "pxr/base/tf/pyResultConversions.h"
 #include "pxr/base/tf/pySingleton.h"
 
-#include <boost/python.hpp>
-#include <boost/python/enum.hpp>
+#include "pxr/external/boost/python.hpp"
+#include "pxr/external/boost/python/enum.hpp"
 
 using std::string;
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 static UsdPrimDefinition *
 _WrapBuildComposedPrimDefinition(const UsdSchemaRegistry &self,
@@ -39,7 +39,7 @@ void wrapUsdSchemaRegistry()
     using This = UsdSchemaRegistry;
     using ThisPtr = TfWeakPtr<UsdSchemaRegistry>;
 
-    scope s = class_<This, ThisPtr, boost::noncopyable>("SchemaRegistry", no_init)
+    scope s = class_<This, ThisPtr, noncopyable>("SchemaRegistry", no_init)
         .def(TfPySingleton())
         .def("ParseSchemaFamilyAndVersionFromIdentifier",
              &This::ParseSchemaFamilyAndVersionFromIdentifier,

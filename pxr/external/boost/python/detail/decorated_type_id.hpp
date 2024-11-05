@@ -7,16 +7,23 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef DECORATED_TYPE_ID_DWA2002517_HPP
-# define DECORATED_TYPE_ID_DWA2002517_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_DECORATED_TYPE_ID_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_DECORATED_TYPE_ID_HPP
 
-# include <boost/python/type_id.hpp>
-# include <boost/python/detail/indirect_traits.hpp>
-# include <boost/python/detail/type_traits.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python { namespace detail { 
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/decorated_type_id.hpp>
+#else
 
-struct decorated_type_info : totally_ordered<decorated_type_info>
+# include "pxr/external/boost/python/type_id.hpp"
+# include "pxr/external/boost/python/detail/indirect_traits.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail { 
+
+struct decorated_type_info
 {
     enum decoration { const_ = 0x1, volatile_ = 0x2, reference = 0x4 };
     
@@ -25,7 +32,12 @@ struct decorated_type_info : totally_ordered<decorated_type_info>
     inline bool operator<(decorated_type_info const& rhs) const;
     inline bool operator==(decorated_type_info const& rhs) const;
 
-    friend BOOST_PYTHON_DECL std::ostream& operator<<(std::ostream&, decorated_type_info const&);
+    inline bool operator>(decorated_type_info const& rhs) const;
+    inline bool operator<=(decorated_type_info const& rhs) const;
+    inline bool operator>=(decorated_type_info const& rhs) const;
+    inline bool operator!=(decorated_type_info const& rhs) const;
+
+    friend PXR_BOOST_PYTHON_DECL std::ostream& operator<<(std::ostream&, decorated_type_info const&);
 
     operator type_info const&() const;
  private: // type
@@ -37,7 +49,7 @@ struct decorated_type_info : totally_ordered<decorated_type_info>
 };
 
 template <class T>
-inline decorated_type_info decorated_type_id(boost::type<T>* = 0)
+inline decorated_type_info decorated_type_id(type<T>* = 0)
 {
     return decorated_type_info(
         type_id<T>()
@@ -69,13 +81,34 @@ inline bool decorated_type_info::operator==(decorated_type_info const& rhs) cons
     return m_decoration == rhs.m_decoration && m_base_type == rhs.m_base_type;
 }
 
+inline bool decorated_type_info::operator>(decorated_type_info const& rhs) const
+{
+    return rhs < *this;
+}
+
+inline bool decorated_type_info::operator<=(decorated_type_info const& rhs) const
+{
+    return !(rhs < *this);
+}
+
+inline bool decorated_type_info::operator>=(decorated_type_info const& rhs) const
+{
+    return !(*this < rhs);
+}
+
+inline bool decorated_type_info::operator!=(decorated_type_info const& rhs) const
+{
+    return !(*this == rhs);
+}
+
 inline decorated_type_info::operator type_info const&() const
 {
     return m_base_type;
 }
 
-BOOST_PYTHON_DECL std::ostream& operator<<(std::ostream&, decorated_type_info const&);
+PXR_BOOST_PYTHON_DECL std::ostream& operator<<(std::ostream&, decorated_type_info const&);
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // DECORATED_TYPE_ID_DWA2002517_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_DECORATED_TYPE_ID_HPP

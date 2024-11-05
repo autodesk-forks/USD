@@ -9,28 +9,34 @@
 // (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef boost_python_numpy_dtype_hpp_
-#define boost_python_numpy_dtype_hpp_
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_NUMPY_DTYPE_HPP
+#define PXR_EXTERNAL_BOOST_PYTHON_NUMPY_DTYPE_HPP
+
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/numpy/dtype.hpp>
+#else
 
 /**
  *  @file boost/python/numpy/dtype.hpp
  *  @brief Object manager for Python's numpy.dtype class.
  */
 
-#include <boost/python.hpp>
-#include <boost/python/numpy/config.hpp>
-#include <boost/python/numpy/numpy_object_mgr_traits.hpp>
-#include <boost/mpl/for_each.hpp>
-#include <boost/python/detail/type_traits.hpp>
+#include "pxr/external/boost/python.hpp"
+#include "pxr/external/boost/python/numpy/config.hpp"
+#include "pxr/external/boost/python/numpy/numpy_object_mgr_traits.hpp"
+#include "pxr/external/boost/python/detail/type_traits.hpp"
 
-namespace boost { namespace python { namespace numpy {
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace numpy {
 
 /**
  *  @brief A boost.python "object manager" (subclass of object) for numpy.dtype.
  *
  *  @todo This could have a lot more interesting accessors.
  */
-class BOOST_NUMPY_DECL dtype : public object {
+class PXR_BOOST_NUMPY_DECL dtype : public object {
   static python::detail::new_reference convert(object::object_cref arg, bool align);
 public:
 
@@ -60,7 +66,7 @@ public:
    *  This is more permissive than equality tests.  For instance, if long and int are the same
    *  size, the dtypes corresponding to each will be equivalent, but not equal.
    */
-  friend BOOST_NUMPY_DECL bool equivalent(dtype const & a, dtype const & b);
+  friend PXR_BOOST_NUMPY_DECL bool equivalent(dtype const & a, dtype const & b);
 
   /**
    *  @brief Register from-Python converters for NumPy's built-in array scalar types.
@@ -70,11 +76,11 @@ public:
    */
   static void register_scalar_converters();
 
-  BOOST_PYTHON_FORWARD_OBJECT_CONSTRUCTORS(dtype, object);
+  PXR_BOOST_PYTHON_FORWARD_OBJECT_CONSTRUCTORS(dtype, object);
 
 };
 
-BOOST_NUMPY_DECL bool equivalent(dtype const & a, dtype const & b);
+PXR_BOOST_NUMPY_DECL bool equivalent(dtype const & a, dtype const & b);
 
 namespace detail
 {
@@ -85,16 +91,16 @@ template <int bits> dtype get_float_dtype();
 
 template <int bits> dtype get_complex_dtype();
 
-template <typename T, bool isInt=boost::is_integral<T>::value>
+template <typename T, bool isInt=std::is_integral<T>::value>
 struct builtin_dtype;
 
 template <typename T>
 struct builtin_dtype<T,true> {
-  static dtype get() { return get_int_dtype< 8*sizeof(T), boost::is_unsigned<T>::value >(); }
+  static dtype get() { return get_int_dtype< 8*sizeof(T), std::is_unsigned<T>::value >(); }
 };
 
 template <>
-struct BOOST_NUMPY_DECL builtin_dtype<bool,true> {
+struct PXR_BOOST_NUMPY_DECL builtin_dtype<bool,true> {
   static dtype get();
 };
 
@@ -113,10 +119,11 @@ struct builtin_dtype< std::complex<T>, false > {
 template <typename T>
 inline dtype dtype::get_builtin() { return detail::builtin_dtype<T>::get(); }
 
-} // namespace boost::python::numpy
+} // namespace PXR_BOOST_NAMESPACE::python::numpy
 
 namespace converter {
 NUMPY_OBJECT_MANAGER_TRAITS(numpy::dtype);
-}}} // namespace boost::python::converter
+}}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
 #endif

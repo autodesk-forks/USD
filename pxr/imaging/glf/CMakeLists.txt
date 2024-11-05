@@ -12,9 +12,6 @@ if (X11_FOUND)
     list(APPEND optionalPublicClasses testGLContext)
 endif()
 
-set(optionalLibs "")
-set(optionalIncludeDirs "")
-
 pxr_library(glf
     LIBRARIES
         ar
@@ -59,9 +56,6 @@ pxr_library(glf
 
     PUBLIC_HEADERS
         api.h
-
-    CPPFILES
-        ${optionalCppFiles}
 
     PYTHON_CPPFILES
         moduleDeps.cpp

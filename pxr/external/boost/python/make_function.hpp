@@ -7,21 +7,28 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef MAKE_FUNCTION_DWA20011221_HPP
-# define MAKE_FUNCTION_DWA20011221_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_MAKE_FUNCTION_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_MAKE_FUNCTION_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/default_call_policies.hpp>
-# include <boost/python/args.hpp>
-# include <boost/python/detail/caller.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/make_function.hpp>
+#else
 
-# include <boost/python/object/function_object.hpp>
+# include "pxr/external/boost/python/detail/prefix.hpp"
 
-# include <boost/mpl/size.hpp>
-# include <boost/mpl/int.hpp>
+# include "pxr/external/boost/python/default_call_policies.hpp"
+# include "pxr/external/boost/python/args.hpp"
+# include "pxr/external/boost/python/detail/caller.hpp"
 
-namespace boost { namespace python {
+# include "pxr/external/boost/python/object/function_object.hpp"
+
+# include "pxr/external/boost/python/detail/mpl2/size.hpp"
+# include "pxr/external/boost/python/detail/mpl2/int.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
 namespace detail
 {
@@ -29,7 +36,7 @@ namespace detail
   //
   // These helper functions for make_function (below) do the raw work
   // of constructing a Python object from some invokable entity. See
-  // <boost/python/detail/caller.hpp> for more information about how
+  // "pxr/external/boost/python/detail/caller.hpp" for more information about how
   // the Sig arguments is used.
   template <class F, class CallPolicies, class Sig>
   object make_function_aux(
@@ -46,7 +53,7 @@ namespace detail
   // As above, except that it accepts argument keywords. NumKeywords
   // is used only for a compile-time assertion to make sure the user
   // doesn't pass more keywords than the function can accept. To
-  // disable all checking, pass mpl::int_<0> for NumKeywords.
+  // disable all checking, pass detail::mpl2::int_<0> for NumKeywords.
   template <class F, class CallPolicies, class Sig, class NumKeywords>
   object make_function_aux(
       F f
@@ -56,11 +63,11 @@ namespace detail
       , NumKeywords                     // An MPL integral type wrapper: the size of kw
       )
   {
-      enum { arity = mpl::size<Sig>::value - 1 };
+      enum { arity = detail::mpl2::size<Sig>::value - 1 };
       
-      typedef typename detail::error::more_keywords_than_function_arguments<
+      [[maybe_unused]] typedef typename detail::error::more_keywords_than_function_arguments<
           NumKeywords::value, arity
-          >::too_many_keywords assertion BOOST_ATTRIBUTE_UNUSED;
+          >::too_many_keywords assertion;
     
       return objects::function_object(
           detail::caller<F,CallPolicies,Sig>(f, p)
@@ -73,19 +80,19 @@ namespace detail
   //
   // @group {
   template <class F, class CallPolicies, class Keywords>
-  object make_function_dispatch(F f, CallPolicies const& policies, Keywords const& kw, mpl::true_)
+  object make_function_dispatch(F f, CallPolicies const& policies, Keywords const& kw, detail::mpl2::true_)
   {
       return detail::make_function_aux(
           f
         , policies
         , detail::get_signature(f)
         , kw.range()
-        , mpl::int_<Keywords::size>()
+        , detail::mpl2::int_<Keywords::size>()
       );
   }
 
   template <class F, class CallPolicies, class Signature>
-  object make_function_dispatch(F f, CallPolicies const& policies, Signature const& sig, mpl::false_)
+  object make_function_dispatch(F f, CallPolicies const& policies, Signature const& sig, detail::mpl2::false_)
   {
       return detail::make_function_aux(
           f
@@ -147,7 +154,7 @@ object make_function(
         , policies
         , sig
         , kw.range()
-        , mpl::int_<Keywords::size>()
+        , detail::mpl2::int_<Keywords::size>()
       );
 }
 // }
@@ -155,4 +162,5 @@ object make_function(
 }} 
 
 
-#endif // MAKE_FUNCTION_DWA20011221_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_MAKE_FUNCTION_HPP

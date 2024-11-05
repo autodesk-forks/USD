@@ -7,14 +7,21 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef UNWIND_TYPE_DWA200222_HPP
-# define UNWIND_TYPE_DWA200222_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_UNWIND_TYPE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_UNWIND_TYPE_HPP
 
-# include <boost/python/detail/cv_category.hpp>
-# include <boost/python/detail/indirect_traits.hpp>
-# include <boost/python/detail/type_traits.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python { namespace detail {
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/unwind_type.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/cv_category.hpp"
+# include "pxr/external/boost/python/detail/indirect_traits.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail {
 
 #if (!defined(_MSC_VER) || _MSC_VER >= 1915)
 // If forward declared, msvc6.5 does not recognize them as inline.
@@ -27,7 +34,7 @@ unwind_type(U const& p, Generator* = 0);
 // forward declaration, required (at least) by Tru64 cxx V6.5-042 and msvc14.15
 template <class Generator, class U>
 inline typename Generator::result_type
-unwind_type(boost::type<U>*p = 0, Generator* = 0);
+unwind_type(type<U>*p = 0, Generator* = 0);
 #endif
 
 template <class Generator, class U>
@@ -96,7 +103,7 @@ unwind_type(U const& p, Generator*)
 unwind_type(U const& p, Generator* = 0)
 #endif
 {
-    return unwind_helper<is_pointer<U>::value>::execute(p, (Generator*)0);
+    return unwind_helper<detail::is_pointer<U>::value>::execute(p, (Generator*)0);
 }
 
 enum { direct_ = 0, pointer_ = 1, reference_ = 2, reference_to_pointer_ = 3 };
@@ -156,22 +163,23 @@ struct unwind_helper2<reference_to_pointer_>
 template <class Generator, class U>
 inline typename Generator::result_type
 #if (!defined(_MSC_VER) || _MSC_VER >= 1915)
-unwind_type(boost::type<U>*, Generator*)
+unwind_type(type<U>*, Generator*)
 #else
-unwind_type(boost::type<U>*p =0, Generator* =0)
+unwind_type(type<U>*p =0, Generator* =0)
 #endif
 {
-    BOOST_STATIC_CONSTANT(int, indirection
-        = (is_pointer<U>::value ? pointer_ : 0)
+    static constexpr int indirection
+        = (detail::is_pointer<U>::value ? pointer_ : 0
                              + (indirect_traits::is_reference_to_pointer<U>::value
                              ? reference_to_pointer_
-                             : is_lvalue_reference<U>::value
+                             : detail::is_lvalue_reference<U>::value
                              ? reference_
                              : 0));
 
     return unwind_helper2<indirection>::execute((U(*)())0,(Generator*)0);
 }
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // UNWIND_TYPE_DWA200222_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_UNWIND_TYPE_HPP

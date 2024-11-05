@@ -7,33 +7,43 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef MODULE_INIT_DWA20020722_HPP
-# define MODULE_INIT_DWA20020722_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_MODULE_INIT_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_MODULE_INIT_HPP
 
-# include <boost/python/detail/prefix.hpp>
-# include <boost/preprocessor/cat.hpp>
-# include <boost/preprocessor/stringize.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# ifndef BOOST_PYTHON_MODULE_INIT
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/module_init.hpp>
+#else
 
-namespace boost { namespace python { namespace detail {
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+# ifndef PXR_BOOST_PYTHON_MODULE_INIT
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail {
 
 #  if PY_VERSION_HEX >= 0x03000000
 
-BOOST_PYTHON_DECL PyObject* init_module(PyModuleDef&, void(*)());
+PXR_BOOST_PYTHON_DECL PyObject* init_module(PyModuleDef&, void(*)());
 
 #else
 
-BOOST_PYTHON_DECL PyObject* init_module(char const* name, void(*)());
+PXR_BOOST_PYTHON_DECL PyObject* init_module(char const* name, void(*)());
 
 #endif
 
 }}}
 
+#define PXR_BOOST_PYTHON_PP_CAT_IMPL(x, y) x ## y
+#define PXR_BOOST_PYTHON_PP_CAT(x, y) PXR_BOOST_PYTHON_PP_CAT_IMPL(x, y)
+#define PXR_BOOST_PYTHON_PP_STRINGIZE_IMPL(x) #x
+#define PXR_BOOST_PYTHON_PP_STRINGIZE(x) PXR_BOOST_PYTHON_PP_STRINGIZE_IMPL(x)
+
 #  if PY_VERSION_HEX >= 0x03000000
 
-#   define _BOOST_PYTHON_MODULE_INIT(name) \
-  PyObject* BOOST_PP_CAT(PyInit_, name)()  \
+#   define _PXR_BOOST_PYTHON_MODULE_INIT(name) \
+  PyObject* PXR_BOOST_PYTHON_PP_CAT(PyInit_, name)()  \
   { \
     static PyModuleDef_Base initial_m_base = { \
         PyObject_HEAD_INIT(NULL) \
@@ -44,7 +54,7 @@ BOOST_PYTHON_DECL PyObject* init_module(char const* name, void(*)());
  \
     static struct PyModuleDef moduledef = { \
         initial_m_base, \
-        BOOST_PP_STRINGIZE(name), \
+        PXR_BOOST_PYTHON_PP_STRINGIZE(name), \
         0, /* m_doc */ \
         -1, /* m_size */ \
         initial_methods, \
@@ -54,27 +64,28 @@ BOOST_PYTHON_DECL PyObject* init_module(char const* name, void(*)());
         0,  /* m_free */ \
     }; \
  \
-    return boost::python::detail::init_module( \
-        moduledef, BOOST_PP_CAT(init_module_, name) ); \
+    return PXR_BOOST_NAMESPACE::python::detail::init_module( \
+        moduledef, PXR_BOOST_PYTHON_PP_CAT(init_module_, name) ); \
   } \
-  void BOOST_PP_CAT(init_module_, name)()
+  void PXR_BOOST_PYTHON_PP_CAT(init_module_, name)()
 
 #  else
 
-#   define _BOOST_PYTHON_MODULE_INIT(name)              \
-  void BOOST_PP_CAT(init,name)()                        \
+#   define _PXR_BOOST_PYTHON_MODULE_INIT(name)              \
+  void PXR_BOOST_PYTHON_PP_CAT(init,name)()                        \
 {                                                       \
-    boost::python::detail::init_module(                 \
-        BOOST_PP_STRINGIZE(name),&BOOST_PP_CAT(init_module_,name)); \
+    PXR_BOOST_NAMESPACE::python::detail::init_module(                 \
+        PXR_BOOST_PYTHON_PP_STRINGIZE(name),&PXR_BOOST_PYTHON_PP_CAT(init_module_,name)); \
 }                                                       \
-  void BOOST_PP_CAT(init_module_,name)()
+  void PXR_BOOST_PYTHON_PP_CAT(init_module_,name)()
 
 #  endif
 
-#  define BOOST_PYTHON_MODULE_INIT(name)                       \
-  void BOOST_PP_CAT(init_module_,name)();                      \
-extern "C" BOOST_SYMBOL_EXPORT _BOOST_PYTHON_MODULE_INIT(name)
+#  define PXR_BOOST_PYTHON_MODULE_INIT(name)                       \
+  void PXR_BOOST_PYTHON_PP_CAT(init_module_,name)();                      \
+extern "C" PXR_BOOST_PYTHON_SYMBOL_EXPORT _PXR_BOOST_PYTHON_MODULE_INIT(name)
 
 # endif
 
-#endif // MODULE_INIT_DWA20020722_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_MODULE_INIT_HPP

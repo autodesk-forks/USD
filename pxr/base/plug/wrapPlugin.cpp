@@ -13,15 +13,15 @@
 #include "pxr/base/tf/pyResultConversions.h"
 #include "pxr/base/tf/iterator.h"
 
-#include <boost/python.hpp>
-#include <boost/noncopyable.hpp>
+#include "pxr/external/boost/python.hpp"
 #include <string>
 
-using namespace boost::python;
 using std::string;
 using std::vector;
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -57,7 +57,7 @@ void wrapPlugin()
     typedef PlugPlugin This;
     typedef PlugPluginPtr ThisPtr;
 
-    class_<This, ThisPtr, boost::noncopyable> ( "Plugin", no_init )
+    class_<This, ThisPtr, noncopyable> ( "Plugin", no_init )
         .def(TfPyWeakPtr())
         .def("Load", &This::Load)
 
@@ -89,8 +89,8 @@ void wrapPlugin()
         ;
 
     // The call to JsConvertToContainerType in _ConvertDict creates
-    // vectors of boost::python::objects for array values, so register
+    // vectors of pxr_boost::python::objects for array values, so register
     // a converter that turns that vector into a Python list.
-    boost::python::to_python_converter<std::vector<object>,
+    pxr_boost::python::to_python_converter<std::vector<object>,
         TfPySequenceToPython<std::vector<object> > >();
 }

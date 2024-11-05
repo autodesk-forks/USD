@@ -7,29 +7,35 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef EXCEPTION_HANDLER_DWA2002810_HPP
-# define EXCEPTION_HANDLER_DWA2002810_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_EXCEPTION_HANDLER_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_EXCEPTION_HANDLER_HPP
 
-# include <boost/python/detail/config.hpp>
-# include <boost/function/function0.hpp>
-# include <boost/function/function2.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python { namespace detail {
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/exception_handler.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/config.hpp"
+#include <functional>
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail {
 
 struct exception_handler;
 
-typedef function2<bool, exception_handler const&, function0<void> const&> handler_function;
+typedef std::function<bool(exception_handler const&, std::function<void()> const&)> handler_function;
 
-struct BOOST_PYTHON_DECL exception_handler
+struct PXR_BOOST_PYTHON_DECL exception_handler
 {
  private: // types
     
  public:
     explicit exception_handler(handler_function const& impl);
 
-    inline bool handle(function0<void> const& f) const;
+    inline bool handle(std::function<void()> const& f) const;
     
-    bool operator()(function0<void> const& f) const;
+    bool operator()(std::function<void()> const& f) const;
  
     static exception_handler* chain;
     
@@ -41,13 +47,14 @@ struct BOOST_PYTHON_DECL exception_handler
 };
 
 
-inline bool exception_handler::handle(function0<void> const& f) const
+inline bool exception_handler::handle(std::function<void()> const& f) const
 {
     return this->m_impl(*this, f);
 }
 
-BOOST_PYTHON_DECL void register_exception_handler(handler_function const& f);
+PXR_BOOST_PYTHON_DECL void register_exception_handler(handler_function const& f);
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // EXCEPTION_HANDLER_DWA2002810_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_EXCEPTION_HANDLER_HPP

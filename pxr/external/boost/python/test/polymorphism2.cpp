@@ -7,26 +7,19 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#include <boost/python/module.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/return_value_policy.hpp>
-#include <boost/python/manage_new_object.hpp>
-#include <boost/python/reference_existing_object.hpp>
-#include <boost/python/pure_virtual.hpp>
-#include <boost/python/wrapper.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/call.hpp>
-#include <boost/utility.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/return_value_policy.hpp"
+#include "pxr/external/boost/python/manage_new_object.hpp"
+#include "pxr/external/boost/python/reference_existing_object.hpp"
+#include "pxr/external/boost/python/pure_virtual.hpp"
+#include "pxr/external/boost/python/wrapper.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/call.hpp"
 
 #include <memory>
 
-#ifdef HELD_BY_AUTO_PTR
-# define HELD_PTR(X) , std::auto_ptr< X >
-#else
-# define HELD_PTR(X)
-#endif 
-
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 struct P
 {
@@ -39,11 +32,7 @@ struct PCallback : P, wrapper<P>
 {
     char const* f()
     {
-#if BOOST_WORKAROUND(BOOST_MSVC, <= 1300)
-        return call<char const*>(this->get_override("f").ptr());
-#else 
         return this->get_override("f")();
-#endif 
     }
 };
 
@@ -63,11 +52,7 @@ struct ACallback :  A, wrapper<A>
     char const* f()
     {
         if (override f = this->get_override("f"))
-#if BOOST_WORKAROUND(BOOST_MSVC, <= 1300)
-            return call<char const*>(f.ptr());
-#else 
             return f();
-#endif 
 
         return A::f();
     }
@@ -96,11 +81,7 @@ struct DCallback :  D,  wrapper<D>
     char const* f()
     {
         if (override f = this->get_override("f"))
-#if BOOST_WORKAROUND(BOOST_MSVC, <= 1300)
-            return call<char const*>(f.ptr());
-#else 
             return f();
-#endif 
         //else
             return D::f();
     }
@@ -136,23 +117,19 @@ C& getCCppObj ()
 
 A* pass_a(A* x) { return x; }
 
-#ifdef HELD_BY_AUTO_PTR
-BOOST_PYTHON_MODULE_INIT(polymorphism2_auto_ptr_ext)
-#else
-BOOST_PYTHON_MODULE_INIT(polymorphism2_ext)
-#endif 
+PXR_BOOST_PYTHON_MODULE_INIT(polymorphism2_ext)
 {
-    class_<ACallback HELD_PTR(A),boost::noncopyable>("A")
+    class_<ACallback,noncopyable>("A")
         .def("f", &A::f, &ACallback::default_f)
         ;
     
     def("getBCppObj", getBCppObj, return_value_policy<reference_existing_object>());
 
-    class_<C HELD_PTR(C),bases<A>,boost::noncopyable>("C")
+    class_<C,bases<A>,noncopyable>("C")
         .def("f", &C::f)
         ;
     
-    class_<DCallback HELD_PTR(D),bases<A>,boost::noncopyable>("D")
+    class_<DCallback,bases<A>,noncopyable>("D")
         .def("f", &D::f)
         .def("g", &D::g)
         ;
@@ -165,11 +142,11 @@ BOOST_PYTHON_MODULE_INIT(polymorphism2_ext)
 
     def("call_f", call_f);
 
-    class_<PCallback,boost::noncopyable>("P")
+    class_<PCallback,noncopyable>("P")
         .def("f", pure_virtual(&P::f))
         ;
 
-    class_<Q HELD_PTR(Q), bases<P> >("Q")
+    class_<Q, bases<P> >("Q")
         .def("g", &P::g) // make sure virtual inheritance doesn't interfere
         ;
 }

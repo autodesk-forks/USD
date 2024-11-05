@@ -7,37 +7,33 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef STRING_LITERAL_DWA2002629_HPP
-# define STRING_LITERAL_DWA2002629_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_STRING_LITERAL_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_STRING_LITERAL_HPP
+
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/string_literal.hpp>
+#else
 
 # include <cstddef>
-# include <boost/type.hpp>
-# include <boost/python/detail/type_traits.hpp>
-# include <boost/mpl/bool.hpp>
-# include <boost/detail/workaround.hpp>
+# include "pxr/external/boost/python/type.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
 
-namespace boost { namespace python { namespace detail { 
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail { 
 
 template <class T>
-struct is_string_literal : mpl::false_
+struct is_string_literal : mpl2::false_
 {
 };
 
 #  if !defined(__MWERKS__) || __MWERKS__ > 0x2407
 template <std::size_t n>
-struct is_string_literal<char const[n]> : mpl::true_
+struct is_string_literal<char const[n]> : mpl2::true_
 {
 };
-
-#   if BOOST_WORKAROUND(__DECCXX_VER, BOOST_TESTED_AT(60590040)) \
-  || (defined(__sgi) && defined(_COMPILER_VERSION) && _COMPILER_VERSION <= 730)
-// This compiler mistakenly gets the type of string literals as char*
-// instead of char[NN].
-template <>
-struct is_string_literal<char* const> : mpl::true_
-{
-};
-#   endif
 
 #  else
 
@@ -49,6 +45,7 @@ struct is_string_literal<T[n]>
 };
 #  endif 
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // STRING_LITERAL_DWA2002629_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_STRING_LITERAL_HPP

@@ -16,6 +16,10 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
+TF_DEFINE_PRIVATE_TOKENS(_tokens,
+    ((usdGeomPlugin, "usdGeom"))
+);
+
 void
 TestUsdGeomValidators()
 {
@@ -24,14 +28,7 @@ TestUsdGeomValidators()
     const std::set<TfToken> expectedUsdGeomValidatorNames = {
         UsdGeomValidatorNameTokens->subsetFamilies,
         UsdGeomValidatorNameTokens->subsetParentIsImageable,
-        UsdGeomValidatorNameTokens->stageMetadataChecker
-    };
-
-    // This should be updated with every new validator added with the
-    // UsdGeomSubset keyword.
-    const std::set<TfToken> expectedUsdGeomSubsetNames = {
-        UsdGeomValidatorNameTokens->subsetFamilies,
-        UsdGeomValidatorNameTokens->subsetParentIsImageable
+        UsdGeomValidatorNameTokens->stageMetadataChecker,
     };
 
     const UsdValidationRegistry& registry =
@@ -43,30 +40,13 @@ TestUsdGeomValidators()
     std::set<TfToken> validatorMetadataNameSet;
 
     UsdValidatorMetadataVector metadata =
-        registry.GetValidatorMetadataForKeyword(
-            UsdGeomValidatorKeywordTokens->UsdGeomValidators);
+        registry.GetValidatorMetadataForPlugin(_tokens->usdGeomPlugin);
+    TF_AXIOM(metadata.size() == 3);
     for (const UsdValidatorMetadata& metadata : metadata) {
         validatorMetadataNameSet.insert(metadata.name);
     }
 
-    TF_AXIOM(std::includes(validatorMetadataNameSet.begin(),
-                           validatorMetadataNameSet.end(),
-                           expectedUsdGeomValidatorNames.begin(),
-                           expectedUsdGeomValidatorNames.end()));
-
-    // Repeat the test using a different keyword.
-    validatorMetadataNameSet.clear();
-
-    metadata = registry.GetValidatorMetadataForKeyword(
-        UsdGeomValidatorKeywordTokens->UsdGeomSubset);
-    for (const UsdValidatorMetadata& metadata : metadata) {
-        validatorMetadataNameSet.insert(metadata.name);
-    }
-
-    TF_AXIOM(std::includes(validatorMetadataNameSet.begin(),
-                           validatorMetadataNameSet.end(),
-                           expectedUsdGeomSubsetNames.begin(),
-                           expectedUsdGeomSubsetNames.end()));
+    TF_AXIOM(validatorMetadataNameSet == expectedUsdGeomValidatorNames);
 }
 
 static const std::string subsetsLayerContents =
@@ -198,17 +178,38 @@ TestUsdGeomSubsetFamilies()
     UsdStageRefPtr usdStage = UsdStage::Open(layer);
     TF_AXIOM(usdStage);
 
+    const TfToken expectedErrorIdentifier(
+        "usdGeom:SubsetFamilies.InvalidSubsetFamily");
     {
         const UsdPrim usdPrim = usdStage->GetPrimAtPath(
             SdfPath("/SubsetsTest/Geom/Cube"));
 
         const std::vector<std::string> expectedErrorMsgs = {
-            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family 'emptyIndicesAtAllTimes': No indices in family at any time.",
-            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family 'incompletePartition': Number of unique indices at time DEFAULT does not match the element count 6.",
-            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family 'mixedElementTypes': GeomSubset at path </SubsetsTest/Geom/Cube/mixedElementTypes_2> has elementType 'point', which does not match 'face'.",
-            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family 'nonOverlappingWithDuplicates': Found duplicate index 3 in GeomSubset at path </SubsetsTest/Geom/Cube/nonOverlappingWithDuplicates_2> at time DEFAULT.",
-            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family 'onlyNegativeIndices': Found one or more indices that are less than 0 at time DEFAULT.",
-            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family 'outOfRangeIndices': Found one or more indices that are greater than the element count 6 at time DEFAULT."
+            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family "
+            "'emptyIndicesAtAllTimes': No indices in family at any time.",
+
+            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family "
+            "'incompletePartition': Number of unique indices at time DEFAULT "
+            "does not match the element count 6.",
+
+            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family "
+            "'mixedElementTypes': GeomSubset at path "
+            "</SubsetsTest/Geom/Cube/mixedElementTypes_2> has elementType "
+            "'point', which does not match 'face'.",
+
+            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family "
+            "'nonOverlappingWithDuplicates': Found duplicate index 3 in "
+            "GeomSubset at path "
+            "</SubsetsTest/Geom/Cube/nonOverlappingWithDuplicates_2> at time "
+            "DEFAULT.",
+
+            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family "
+            "'onlyNegativeIndices': Found one or more indices that are less "
+            "than 0 at time DEFAULT.",
+
+            "Imageable prim </SubsetsTest/Geom/Cube> has invalid subset family "
+            "'outOfRangeIndices': Found one or more indices that are greater "
+            "than the element count 6 at time DEFAULT."
         };
 
         const UsdValidationErrorVector errors = validator->Validate(usdPrim);
@@ -218,6 +219,7 @@ TestUsdGeomSubsetFamilies()
                 errorIndex < expectedErrorMsgs.size();
                 ++errorIndex) {
             const UsdValidationError& error = errors[errorIndex];
+            TF_AXIOM(error.GetIdentifier() == expectedErrorIdentifier);
             TF_AXIOM(error.GetType() == UsdValidationErrorType::Error);
             TF_AXIOM(error.GetSites().size() == 1u);
             const UsdValidationErrorSite& errorSite = error.GetSites()[0u];
@@ -235,6 +237,7 @@ TestUsdGeomSubsetFamilies()
         const UsdValidationErrorVector errors = validator->Validate(usdPrim);
         TF_AXIOM(errors.size() == 1u);
         const UsdValidationError& error = errors[0u];
+        TF_AXIOM(error.GetIdentifier() == expectedErrorIdentifier);
         TF_AXIOM(error.GetType() == UsdValidationErrorType::Error);
         TF_AXIOM(error.GetSites().size() == 1u);
         const UsdValidationErrorSite& errorSite = error.GetSites()[0u];
@@ -255,6 +258,7 @@ TestUsdGeomSubsetFamilies()
         const UsdValidationErrorVector errors = validator->Validate(usdPrim);
         TF_AXIOM(errors.size() == 1u);
         const UsdValidationError& error = errors[0u];
+        TF_AXIOM(error.GetIdentifier() == expectedErrorIdentifier);
         TF_AXIOM(error.GetType() == UsdValidationErrorType::Error);
         TF_AXIOM(error.GetSites().size() == 1u);
         const UsdValidationErrorSite& errorSite = error.GetSites()[0u];
@@ -284,6 +288,9 @@ TestUsdGeomSubsetParentIsImageable()
     UsdStageRefPtr usdStage = UsdStage::Open(layer);
     TF_AXIOM(usdStage);
 
+    const TfToken expectedErrorIdentifier =
+        TfToken("usdGeom:SubsetParentIsImageable.NotImageableSubsetParent");
+
     {
         const UsdPrim usdPrim = usdStage->GetPrimAtPath(
             SdfPath("/SubsetsTest/Geom/NonImageable/parentIsNotImageable"));
@@ -291,6 +298,7 @@ TestUsdGeomSubsetParentIsImageable()
         const UsdValidationErrorVector errors = validator->Validate(usdPrim);
         TF_AXIOM(errors.size() == 1u);
         const UsdValidationError& error = errors[0u];
+        TF_AXIOM(error.GetIdentifier() == expectedErrorIdentifier);
         TF_AXIOM(error.GetType() == UsdValidationErrorType::Error);
         TF_AXIOM(error.GetSites().size() == 1u);
         const UsdValidationErrorSite& errorSite = error.GetSites()[0u];
@@ -324,14 +332,22 @@ void TestUsdStageMetadata()
     // Verify both metersPerUnit and upAxis errors are present
     TF_AXIOM(errors.size() == 2);
     auto rootLayerIdentifier = rootLayer->GetIdentifier().c_str();
-    std::vector<std::string> expectedErrorMessages = {
-            TfStringPrintf("Stage with root layer <%s> does not specify its linear scale in metersPerUnit.", rootLayerIdentifier),
-            TfStringPrintf("Stage with root layer <%s> does not specify an upAxis.", rootLayerIdentifier)
+    const std::vector<std::string> expectedErrorMessages = {
+        TfStringPrintf("Stage with root layer <%s> does not specify its linear "
+                       "scale in metersPerUnit.", rootLayerIdentifier),
+        TfStringPrintf("Stage with root layer <%s> does not specify an upAxis.", 
+                       rootLayerIdentifier)
+    };
+
+    const std::vector<TfToken> expectedErrorIdentifiers = {
+        TfToken("usdGeom:StageMetadataChecker.MissingMetersPerUnitMetadata"),
+        TfToken("usdGeom:StageMetadataChecker.MissingUpAxisMetadata")
     };
 
     for(size_t i = 0; i < errors.size(); ++i)
     {
         TF_AXIOM(errors[i].GetType() == UsdValidationErrorType::Error);
+        TF_AXIOM(errors[i].GetIdentifier() == expectedErrorIdentifiers[i]);
         TF_AXIOM(errors[i].GetSites().size() == 1);
         TF_AXIOM(errors[i].GetSites()[0].IsValid());
         TF_AXIOM(errors[i].GetMessage() == expectedErrorMessages[i]);
@@ -344,7 +360,7 @@ void TestUsdStageMetadata()
     errors = validator->Validate(usdStage);
 
     // Verify the errors are fixed
-    TF_AXIOM(errors.size() == 0);
+    TF_AXIOM(errors.empty());
 }
 
 int

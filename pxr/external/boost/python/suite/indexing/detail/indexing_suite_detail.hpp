@@ -8,25 +8,31 @@
 //  accompanying file LICENSE_1_0.txt or copy at
 //  http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef INDEXING_SUITE_DETAIL_JDG20036_HPP
-# define INDEXING_SUITE_DETAIL_JDG20036_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_DETAIL_INDEXING_SUITE_DETAIL_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_DETAIL_INDEXING_SUITE_DETAIL_HPP
 
-# include <boost/python/extract.hpp>
-# include <boost/scoped_ptr.hpp>
-# include <boost/get_pointer.hpp>
-# include <boost/detail/binary_search.hpp>
-# include <boost/numeric/conversion/cast.hpp>
-# include <boost/python/detail/type_traits.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/suite/indexing/detail/indexing_suite_detail.hpp>
+#else
+
+# include "pxr/external/boost/python/extract.hpp"
+# include "pxr/external/boost/python/detail/integer_cast.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
 # include <vector>
 # include <map>
+#include <algorithm>
 #include <iostream>
+#include <memory>
 
-namespace boost { namespace python { namespace detail {
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail {
 
 #if defined(NDEBUG)
-#define BOOST_PYTHON_INDEXING_CHECK_INVARIANT
+#define PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT
 #else
-#define BOOST_PYTHON_INDEXING_CHECK_INVARIANT check_invariant()
+#define PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT check_invariant()
 #endif
     
     template <class Proxy>
@@ -69,7 +75,7 @@ namespace boost { namespace python { namespace detail {
         first_proxy(index_type i)
         {
             // Return the first proxy with index <= i
-            return boost::detail::lower_bound(
+            return std::lower_bound(
                 proxies.begin(), proxies.end(), 
                 i, compare_proxy_index<Proxy>());
         }
@@ -87,32 +93,32 @@ namespace boost { namespace python { namespace detail {
                     break;
                 }
             }
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
         }
 
         void
         add(PyObject* prox)
         {
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // Add a proxy
             proxies.insert(
                 first_proxy(extract<Proxy&>(prox)().get_index()), prox);
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
         }
 
         void
-        erase(index_type i, mpl::false_)
+        erase(index_type i, detail::mpl2::false_)
         {
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // Erase the proxy with index i 
             replace(i, i+1, 0);
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
         }
 
         void
-        erase(index_type i, mpl::true_)
+        erase(index_type i, detail::mpl2::true_)
         {
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // Erase the proxy with index i 
             
             iterator iter = first_proxy(i);
@@ -124,7 +130,7 @@ namespace boost { namespace python { namespace detail {
                 p().detach();
                 proxies.erase(iter);
             }
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
         }
 
         void
@@ -132,10 +138,10 @@ namespace boost { namespace python { namespace detail {
         {
             // note: this cannot be called when container is not sliceable
             
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // Erase all proxies with indexes from..to 
             replace(from, to, 0);
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
         }
 
         void
@@ -146,7 +152,7 @@ namespace boost { namespace python { namespace detail {
         {
             // note: this cannot be called when container is not sliceable
 
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // Erase all proxies with indexes from..to.
             // Adjust the displaced indexes such that the
             // final effect is that we have inserted *len*
@@ -184,13 +190,13 @@ namespace boost { namespace python { namespace detail {
                     
                 ++right;
             }
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
         }
         
         PyObject*
         find(index_type i)
         {
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // Find the proxy with *exact* index i.
             // Return 0 (null) if no proxy with the 
             // given index is found.
@@ -198,17 +204,17 @@ namespace boost { namespace python { namespace detail {
             if (iter != proxies.end()
                 && extract<Proxy&>(*iter)().get_index() == i)
             {
-                BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+                PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
                 return *iter;
             }
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             return 0;
         }
 
         typename std::vector<PyObject*>::size_type 
         size() const
         {
-            BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
+            PXR_BOOST_PYTHON_INDEXING_CHECK_INVARIANT;
             // How many proxies are there so far?
             return proxies.size();
         } 
@@ -388,14 +394,14 @@ namespace boost { namespace python { namespace detail {
         element_type& operator*() const
         {
             if (is_detached())
-                return *get_pointer(ptr);
+                return *ptr;
             return Policies::get_item(get_container(), index);
         }
         
         element_type* get() const
         {
             if (is_detached())
-                return get_pointer(ptr);
+                return ptr.get();
             return &Policies::get_item(get_container(), index);
         }
         
@@ -414,7 +420,7 @@ namespace boost { namespace python { namespace detail {
         bool
         is_detached() const
         {
-            return get_pointer(ptr) != 0;
+            return ptr.get() != 0;
         }
 
         Container& 
@@ -450,7 +456,7 @@ namespace boost { namespace python { namespace detail {
             
         container_element& operator=(container_element const& ce);
 
-        scoped_ptr<element_type> ptr;
+        std::unique_ptr<element_type> ptr;
         object container;
         Index index;
     };
@@ -489,7 +495,7 @@ namespace boost { namespace python { namespace detail {
                 DerivedPolicies::get_item(
                     container.get(), DerivedPolicies::
                         convert_index(container.get(), i))
-              , is_pointer<BOOST_DEDUCED_TYPENAME Container::value_type>()
+              , is_pointer<typename Container::value_type>()
             );
         }
 
@@ -610,7 +616,7 @@ namespace boost { namespace python { namespace detail {
                     from += max_index;
                 if (from < 0) // Clip lower bounds to zero
                     from = 0;
-                from_ = boost::numeric_cast<Index>(from);
+                from_ = integer_cast<Index>(from);
                 if (from_ > max_index) // Clip upper bounds to max_index.
                     from_ = max_index;
             }
@@ -624,7 +630,7 @@ namespace boost { namespace python { namespace detail {
                     to += max_index;
                 if (to < 0)
                     to = 0;
-                to_ = boost::numeric_cast<Index>(to);
+                to_ = integer_cast<Index>(to);
                 if (to_ > max_index)
                     to_ = max_index;
             }
@@ -739,10 +745,6 @@ namespace boost { namespace python { namespace detail {
         }  
     };
 
-#ifdef BOOST_NO_ARGUMENT_DEPENDENT_LOOKUP
-}} // namespace python::detail
-#endif
-
     template <class Container, class Index, class Policies>
     inline typename Policies::data_type* 
     get_pointer(
@@ -752,13 +754,11 @@ namespace boost { namespace python { namespace detail {
         return p.get();
     }
 
-#ifndef BOOST_NO_ARGUMENT_DEPENDENT_LOOKUP
     // Don't hide these other get_pointer overloads
-    using boost::python::get_pointer;
-    using boost::get_pointer;
+    using PXR_BOOST_NAMESPACE::python::get_pointer;
 }} // namespace python::detail
-#endif
 
-} // namespace boost
+} // namespace PXR_BOOST_NAMESPACE
 
-#endif // INDEXING_SUITE_DETAIL_JDG20036_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_SUITE_INDEXING_DETAIL_INDEXING_SUITE_DETAIL_HPP
