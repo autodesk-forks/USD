@@ -4,27 +4,29 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#include <boost/python/class.hpp>
-#include <boost/python/object.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/object.hpp"
 
 #include "pxr/pxr.h"
 #include "pxr/usd/ar/resolverScopedCache.h"
 
 #include <memory>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
 class _PyResolverScopedCache
-    : public boost::noncopyable
 {
 public:
     _PyResolverScopedCache()
     {
     }
+
+    _PyResolverScopedCache(const _PyResolverScopedCache&) = delete;
+    _PyResolverScopedCache& operator=(const _PyResolverScopedCache&) = delete;
 
     void Enter()
     {
@@ -32,9 +34,9 @@ public:
     }
 
     bool Exit(
-        boost::python::object& /* exc_type */,
-        boost::python::object& /* exc_val  */,
-        boost::python::object& /* exc_tb   */)
+        pxr_boost::python::object& /* exc_type */,
+        pxr_boost::python::object& /* exc_val  */,
+        pxr_boost::python::object& /* exc_tb   */)
     {
         _scopedCache.reset(0);
         // Re-raise exceptions.
@@ -52,7 +54,7 @@ wrapResolverScopedCache()
 {
     typedef _PyResolverScopedCache This;
 
-    class_<This, boost::noncopyable>
+    class_<This, noncopyable>
         ("ResolverScopedCache")
         .def("__enter__", &This::Enter)
         .def("__exit__", &This::Exit)

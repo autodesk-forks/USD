@@ -13,12 +13,13 @@
 #include "pxr/base/tf/pyPtrHelpers.h"
 #include "pxr/base/tf/pyResultConversions.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python.hpp"
 
-using namespace boost::python;
 using std::string;
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -47,7 +48,7 @@ _GetLayerOffsets(const PcpLayerStack &layerStack)
 
 void wrapLayerStack()
 {
-    class_<PcpLayerStack, PcpLayerStackPtr, boost::noncopyable>
+    class_<PcpLayerStack, PcpLayerStackPtr, noncopyable>
         ("LayerStack", no_init)
         .def(TfPyRefAndWeakPtr())
         .add_property("identifier", 

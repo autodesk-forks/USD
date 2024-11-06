@@ -7,17 +7,24 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef RETURN_INTERNAL_REFERENCE_DWA2002131_HPP
-# define RETURN_INTERNAL_REFERENCE_DWA2002131_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_RETURN_INTERNAL_REFERENCE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_RETURN_INTERNAL_REFERENCE_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/default_call_policies.hpp>
-# include <boost/python/reference_existing_object.hpp>
-# include <boost/python/with_custodian_and_ward.hpp>
-# include <boost/mpl/if.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/return_internal_reference.hpp>
+#else
 
-namespace boost { namespace python { 
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+# include "pxr/external/boost/python/default_call_policies.hpp"
+# include "pxr/external/boost/python/reference_existing_object.hpp"
+# include "pxr/external/boost/python/with_custodian_and_ward.hpp"
+# include "pxr/external/boost/python/detail/mpl2/if.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 namespace detail
 {
@@ -34,15 +41,16 @@ struct return_internal_reference
     : with_custodian_and_ward_postcall<0, owner_arg, BasePolicy_>
 {
  private:
-    BOOST_STATIC_CONSTANT(bool, legal = owner_arg > 0);
+    static constexpr bool legal = owner_arg > 0;
  public:
-    typedef typename mpl::if_c<
+    typedef typename detail::mpl2::if_c<
         legal
         , reference_existing_object
         , detail::return_internal_reference_owner_arg_must_be_greater_than_zero<owner_arg>
     >::type result_converter;
 };
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // RETURN_INTERNAL_REFERENCE_DWA2002131_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_RETURN_INTERNAL_REFERENCE_HPP

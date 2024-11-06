@@ -10,17 +10,16 @@
 #include "pxr/base/tf/pyInterpreter.h"
 #include "pxr/base/tf/pyUtils.h"
 
-#include <boost/function.hpp>
-
-#include <boost/python/def.hpp>
-#include <boost/python/dict.hpp>
-#include <boost/python/extract.hpp>
-#include <boost/python/import.hpp>
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/dict.hpp"
+#include "pxr/external/boost/python/extract.hpp"
+#include "pxr/external/boost/python/import.hpp"
 
 #include <functional>
 
-using namespace boost::python;
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 static const char VoidFuncSource[] = "def VoidFunc(): pass\n";
 static const char BoolFuncSource[] = "def BoolFunc(): return True\n";
@@ -36,10 +35,6 @@ AssertCallResult(object callable, T const &expected)
     extract<std::function<T()>> stdFunc(callable);
     TF_AXIOM(stdFunc.check());
     TF_AXIOM(stdFunc()() == expected);
-
-    extract<boost::function<T()>> boostFunc(callable);
-    TF_AXIOM(boostFunc.check());
-    TF_AXIOM(boostFunc()() == expected);
 }
 
 static void
@@ -50,10 +45,6 @@ AssertCallVoid(object callable)
     extract<std::function<void()>> stdFunc(callable);
     TF_AXIOM(stdFunc.check());
     stdFunc()();
-
-    extract<boost::function<void()>> boostFunc(callable);
-    TF_AXIOM(boostFunc.check());
-    boostFunc()();
 }
 
 static object

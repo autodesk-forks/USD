@@ -9,16 +9,16 @@
 #include "pxr/usd/usd/pyConversions.h"
 
 #include "pxr/base/tf/pyResultConversions.h"
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapUsdPrimTypeInfo()
 {
     typedef UsdPrimTypeInfo This;
-    class_<This, boost::noncopyable>("PrimTypeInfo", no_init)
+    class_<This, noncopyable>("PrimTypeInfo", no_init)
         .def("GetTypeName", &This::GetTypeName,
              return_value_policy<return_by_value>())
         .def("GetAppliedAPISchemas", &This::GetAppliedAPISchemas,

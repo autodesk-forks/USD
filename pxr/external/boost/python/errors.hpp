@@ -11,27 +11,34 @@
 //  The author gratefully acknowleges the support of Dragon Systems, Inc., in
 //  producing this work.
 
-#ifndef ERRORS_DWA052500_H_
-# define ERRORS_DWA052500_H_
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_ERRORS_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_ERRORS_HPP
 
-# include <boost/python/detail/prefix.hpp>
-# include <boost/function/function0.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python {
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/errors.hpp>
+#else
 
-struct BOOST_PYTHON_DECL error_already_set
+# include "pxr/external/boost/python/detail/prefix.hpp"
+#include <functional>
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
+
+struct PXR_BOOST_PYTHON_DECL error_already_set
 {
   virtual ~error_already_set();
 };
 
 // Handles exceptions caught just before returning to Python code.
 // Returns true iff an exception was caught.
-BOOST_PYTHON_DECL bool handle_exception_impl(function0<void>);
+PXR_BOOST_PYTHON_DECL bool handle_exception_impl(std::function<void()>);
 
 template <class T>
 bool handle_exception(T f)
 {
-    return handle_exception_impl(function0<void>(boost::ref(f)));
+    return handle_exception_impl(std::function<void()>(std::ref(f)));
 }
 
 namespace detail { inline void rethrow() { throw; } }
@@ -41,7 +48,7 @@ inline void handle_exception()
     handle_exception(detail::rethrow);
 }
 
-BOOST_PYTHON_DECL void throw_error_already_set();
+PXR_BOOST_PYTHON_DECL void throw_error_already_set();
 
 template <class T>
 inline T* expect_non_null(T* x)
@@ -53,8 +60,9 @@ inline T* expect_non_null(T* x)
 
 // Return source if it is an instance of pytype; throw an appropriate
 // exception otherwise.
-BOOST_PYTHON_DECL PyObject* pytype_check(PyTypeObject* pytype, PyObject* source);
+PXR_BOOST_PYTHON_DECL PyObject* pytype_check(PyTypeObject* pytype, PyObject* source);
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // ERRORS_DWA052500_H_
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_ERRORS_HPP

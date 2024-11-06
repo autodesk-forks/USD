@@ -7,30 +7,36 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef MAKE_CONSTRUCTOR_DWA20011221_HPP
-# define MAKE_CONSTRUCTOR_DWA20011221_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_MAKE_CONSTRUCTOR_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_MAKE_CONSTRUCTOR_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/default_call_policies.hpp>
-# include <boost/python/args.hpp>
-# include <boost/python/object_fwd.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/make_constructor.hpp>
+#else
 
-# include <boost/python/object/function_object.hpp>
-# include <boost/python/object/make_holder.hpp>
-# include <boost/python/object/pointer_holder.hpp>
-# include <boost/python/converter/context_result_converter.hpp>
+# include "pxr/external/boost/python/detail/prefix.hpp"
 
-# include <boost/python/detail/caller.hpp>
-# include <boost/python/detail/none.hpp>
+# include "pxr/external/boost/python/default_call_policies.hpp"
+# include "pxr/external/boost/python/args.hpp"
+# include "pxr/external/boost/python/object_fwd.hpp"
 
-# include <boost/mpl/size.hpp>
-# include <boost/mpl/int.hpp>
-# include <boost/mpl/push_front.hpp>
-# include <boost/mpl/pop_front.hpp>
-# include <boost/mpl/assert.hpp>
+# include "pxr/external/boost/python/object/function_object.hpp"
+# include "pxr/external/boost/python/object/make_holder.hpp"
+# include "pxr/external/boost/python/object/pointer_holder.hpp"
+# include "pxr/external/boost/python/converter/context_result_converter.hpp"
 
-namespace boost { namespace python {
+# include "pxr/external/boost/python/detail/caller.hpp"
+# include "pxr/external/boost/python/detail/none.hpp"
+
+# include "pxr/external/boost/python/detail/mpl2/size.hpp"
+# include "pxr/external/boost/python/detail/mpl2/int.hpp"
+# include "pxr/external/boost/python/detail/mpl2/push_front.hpp"
+# include "pxr/external/boost/python/detail/mpl2/pop_front.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
 namespace detail
 {
@@ -50,13 +56,8 @@ namespace detail
       template <class U>
       void dispatch(U* x, detail::true_) const
       {
-#if defined(BOOST_NO_CXX11_SMART_PTR)
-	std::auto_ptr<U> owner(x);
-	dispatch(owner, detail::false_());
-#else
 	std::unique_ptr<U> owner(x);
 	dispatch(std::move(owner), detail::false_());
-#endif
       }
       
       template <class Ptr>
@@ -68,11 +69,7 @@ namespace detail
 
           void* memory = holder::allocate(this->m_self, offsetof(instance_t, storage), sizeof(holder));
           try {
-#if defined(BOOST_NO_CXX11_SMART_PTR)
-              (new (memory) holder(x))->install(this->m_self);
-#else
               (new (memory) holder(std::move(x)))->install(this->m_self);
-#endif
           }
           catch(...) {
               holder::deallocate(this->m_self, memory);
@@ -100,9 +97,9 @@ namespace detail
   };
 
   template <int N, class BaseArgs, class Offset>
-  inline PyObject* get(mpl::int_<N>, offset_args<BaseArgs,Offset> const& args_)
+  inline PyObject* get(detail::mpl2::int_<N>, offset_args<BaseArgs,Offset> const& args_)
   {
-      return get(mpl::int_<(N+Offset::value)>(), args_.base);
+      return get(detail::mpl2::int_<(N+Offset::value)>(), args_.base);
   }
   
   template <class BaseArgs, class Offset>
@@ -118,24 +115,23 @@ namespace detail
       
       // If the BasePolicy_ supplied a result converter it would be
       // ignored; issue an error if it's not the default.
-      BOOST_MPL_ASSERT_MSG(
+      static_assert(
          (is_same<
               typename BasePolicy_::result_converter
             , default_result_converter
           >::value)
-        , MAKE_CONSTRUCTOR_SUPPLIES_ITS_OWN_RESULT_CONVERTER_THAT_WOULD_OVERRIDE_YOURS
-        , (typename BasePolicy_::result_converter)
+        , "MAKE_CONSTRUCTOR_SUPPLIES_ITS_OWN_RESULT_CONVERTER_THAT_WOULD_OVERRIDE_YOURS"
       );
       typedef constructor_result_converter result_converter;
-      typedef offset_args<typename BasePolicy_::argument_package, mpl::int_<1> > argument_package;
+      typedef offset_args<typename BasePolicy_::argument_package, detail::mpl2::int_<1> > argument_package;
   };
 
   template <class InnerSignature>
   struct outer_constructor_signature
   {
-      typedef typename mpl::pop_front<InnerSignature>::type inner_args;
-      typedef typename mpl::push_front<inner_args,object>::type outer_args;
-      typedef typename mpl::push_front<outer_args,void>::type type;
+      typedef typename detail::mpl2::pop_front<InnerSignature>::type inner_args;
+      typedef typename detail::mpl2::push_front<inner_args,object>::type outer_args;
+      typedef typename detail::mpl2::push_front<outer_args,void>::type type;
   };
 
   // ETI workaround
@@ -148,7 +144,7 @@ namespace detail
   //
   // These helper functions for make_constructor (below) do the raw work
   // of constructing a Python object from some invokable entity. See
-  // <boost/python/detail/caller.hpp> for more information about how
+  // "pxr/external/boost/python/detail/caller.hpp" for more information about how
   // the Sig arguments is used.
   //
   // @group make_constructor_aux {
@@ -174,7 +170,7 @@ namespace detail
   // As above, except that it accepts argument keywords. NumKeywords
   // is used only for a compile-time assertion to make sure the user
   // doesn't pass more keywords than the function can accept. To
-  // disable all checking, pass mpl::int_<0> for NumKeywords.
+  // disable all checking, pass detail::mpl2::int_<0> for NumKeywords.
   template <class F, class CallPolicies, class Sig, class NumKeywords>
   object make_constructor_aux(
       F f
@@ -184,11 +180,11 @@ namespace detail
       , NumKeywords                     // An MPL integral type wrapper: the size of kw
       )
   {
-      enum { arity = mpl::size<Sig>::value - 1 };
+      enum { arity = detail::mpl2::size<Sig>::value - 1 };
       
-      typedef typename detail::error::more_keywords_than_function_arguments<
+      [[maybe_unused]] typedef typename detail::error::more_keywords_than_function_arguments<
           NumKeywords::value, arity
-          >::too_many_keywords assertion BOOST_ATTRIBUTE_UNUSED;
+          >::too_many_keywords assertion;
     
       typedef typename outer_constructor_signature<Sig>::type outer_signature;
 
@@ -212,19 +208,19 @@ namespace detail
   //   @group Helpers for make_constructor when called with 3 arguments. {
   //
   template <class F, class CallPolicies, class Keywords>
-  object make_constructor_dispatch(F f, CallPolicies const& policies, Keywords const& kw, mpl::true_)
+  object make_constructor_dispatch(F f, CallPolicies const& policies, Keywords const& kw, detail::mpl2::true_)
   {
       return detail::make_constructor_aux(
           f
         , policies
         , detail::get_signature(f)
         , kw.range()
-        , mpl::int_<Keywords::size>()
+        , detail::mpl2::int_<Keywords::size>()
       );
   }
 
   template <class F, class CallPolicies, class Signature>
-  object make_constructor_dispatch(F f, CallPolicies const& policies, Signature const& sig, mpl::false_)
+  object make_constructor_dispatch(F f, CallPolicies const& policies, Signature const& sig, detail::mpl2::false_)
   {
       return detail::make_constructor_aux(
           f
@@ -284,7 +280,7 @@ object make_constructor(
         , policies
         , sig
         , kw.range()
-        , mpl::int_<Keywords::size>()
+        , detail::mpl2::int_<Keywords::size>()
       );
 }
 // }
@@ -292,4 +288,5 @@ object make_constructor(
 }} 
 
 
-#endif // MAKE_CONSTRUCTOR_DWA20011221_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_MAKE_CONSTRUCTOR_HPP

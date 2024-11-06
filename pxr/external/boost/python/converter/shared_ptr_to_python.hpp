@@ -9,40 +9,50 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef boost_python_converter_shared_ptr_to_python_hpp_
-#define boost_python_converter_shared_ptr_to_python_hpp_
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_SHARED_PTR_TO_PYTHON_HPP
+#define PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_SHARED_PTR_TO_PYTHON_HPP
 
-#include <boost/python/refcount.hpp>
-#include <boost/python/converter/shared_ptr_deleter.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/converter/shared_ptr_to_python.hpp>
+#else
+
+#include "pxr/external/boost/python/refcount.hpp"
+#include "pxr/external/boost/python/converter/shared_ptr_deleter.hpp"
+#ifdef PXR_BOOST_PYTHON_HAS_BOOST_SHARED_PTR
 #include <boost/shared_ptr.hpp>
-#include <boost/get_pointer.hpp>
+#endif
+#include <memory>
 
-namespace boost { namespace python { namespace converter { 
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace converter { 
 
+#ifdef PXR_BOOST_PYTHON_HAS_BOOST_SHARED_PTR
 template <class T>
-PyObject* shared_ptr_to_python(shared_ptr<T> const& x)
+PyObject* shared_ptr_to_python(boost::shared_ptr<T> const& x)
 {
     if (!x)
         return python::detail::none();
     else if (shared_ptr_deleter* d = boost::get_deleter<shared_ptr_deleter>(x))
-        return incref( get_pointer( d->owner ) );
+        return incref(d->owner.get());
     else
-        return converter::registered<shared_ptr<T> const&>::converters.to_python(&x);
+        return converter::registered<boost::shared_ptr<T> const&>::converters.to_python(&x);
 }
+#endif
 
-#if !defined(BOOST_NO_CXX11_SMART_PTR)
 template <class T>
 PyObject* shared_ptr_to_python(std::shared_ptr<T> const& x)
 {
   if (!x)
     return python::detail::none();
   else if (shared_ptr_deleter* d = std::get_deleter<shared_ptr_deleter>(x))
-    return incref(get_pointer(d->owner));
+    return incref(d->owner.get());
   else
     return converter::registered<std::shared_ptr<T> const&>::converters.to_python(&x);
 }
-#endif
 
-}}} // namespace boost::python::converter
+}}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
 #endif

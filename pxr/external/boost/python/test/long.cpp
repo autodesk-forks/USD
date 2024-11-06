@@ -8,14 +8,13 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/long.hpp>
-#include <boost/python/class.hpp>
-#define BOOST_ENABLE_ASSERT_HANDLER
-#include <boost/assert.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/long.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include <cassert>
 
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 object new_long()
 {
@@ -36,7 +35,7 @@ char const* is_long1(long_& x)
 {
     long_ y = x;
     x += 50;
-    BOOST_ASSERT(x == y + 50);
+    assert(x == y + 50);
     return "yes";
 }
 
@@ -50,10 +49,10 @@ int is_long2(char const*)
 
 struct Y
 {
-    Y(boost::python::long_) {}
+    Y(PXR_BOOST_NAMESPACE::python::long_) {}
 };
 
-BOOST_PYTHON_MODULE(long_ext)
+PXR_BOOST_PYTHON_MODULE(long_ext)
 {
     def("new_long", new_long);
     def("longify", longify);
@@ -61,7 +60,7 @@ BOOST_PYTHON_MODULE(long_ext)
     def("is_long", is_long1);
     def("is_long", is_long2);
     
-    class_< Y >("Y", init< boost::python::long_ >())
+    class_< Y >("Y", init< PXR_BOOST_NAMESPACE::python::long_ >())
         ;
 }
 

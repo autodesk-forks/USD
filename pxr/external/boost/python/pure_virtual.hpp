@@ -7,17 +7,24 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef PURE_VIRTUAL_DWA2003810_HPP
-# define PURE_VIRTUAL_DWA2003810_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_PURE_VIRTUAL_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_PURE_VIRTUAL_HPP
 
-# include <boost/python/def_visitor.hpp>
-# include <boost/python/default_call_policies.hpp>
-# include <boost/mpl/push_front.hpp>
-# include <boost/mpl/pop_front.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/detail/nullary_function_adaptor.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/pure_virtual.hpp>
+#else
 
-namespace boost { namespace python { 
+# include "pxr/external/boost/python/def_visitor.hpp"
+# include "pxr/external/boost/python/default_call_policies.hpp"
+# include "pxr/external/boost/python/detail/mpl2/push_front.hpp"
+# include "pxr/external/boost/python/detail/mpl2/pop_front.hpp"
+
+# include "pxr/external/boost/python/detail/nullary_function_adaptor.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 namespace detail
 {
@@ -27,17 +34,17 @@ namespace detail
   
   // Raises a Python RuntimeError reporting that a pure virtual
   // function was called.
-  void BOOST_PYTHON_DECL pure_virtual_called();
+  void PXR_BOOST_PYTHON_DECL pure_virtual_called();
 
   // Replace the two front elements of S with T1 and T2
   template <class S, class T1, class T2>
   struct replace_front2
   {
       // Metafunction forwarding seemed to confound vc6 
-      typedef typename mpl::push_front<
-          typename mpl::push_front<
-              typename mpl::pop_front<
-                  typename mpl::pop_front<
+      typedef typename detail::mpl2::push_front<
+          typename detail::mpl2::push_front<
+              typename detail::mpl2::pop_front<
+                  typename detail::mpl2::pop_front<
                       S
                   >::type
               >::type
@@ -82,7 +89,7 @@ namespace detail
       void visit(C_& c, char const* name, Options& options) const
       {
           // This should probably be a nicer error message
-          BOOST_STATIC_ASSERT(!Options::has_default_implementation);
+          static_assert(!Options::has_default_implementation);
 
           // Add the virtual function dispatcher
           c.def(
@@ -93,7 +100,7 @@ namespace detail
             , options.policies()
           );
 
-          typedef BOOST_DEDUCED_TYPENAME C_::metadata::held_type held_type;
+          typedef typename C_::metadata::held_type held_type;
           
           // Add the default implementation which raises the exception
           c.def(
@@ -124,6 +131,7 @@ pure_virtual(PointerToMemberFunction pmf)
     return detail::pure_virtual_visitor<PointerToMemberFunction>(pmf);
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // PURE_VIRTUAL_DWA2003810_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_PURE_VIRTUAL_HPP

@@ -11,11 +11,11 @@
 #include "pxr/base/tf/pyContainerConversions.h"
 #include "pxr/base/tf/pyResultConversions.h"
 
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -52,7 +52,7 @@ void wrapLayerRelocatesEditBuilder()
         ::Wrap<Pcp_LayerRelocatesEditBuilderRelocateResult>(
             "_LayerRelocatesEditBuilderRelocateResult", "whyNot");
 
-    class_<PcpLayerRelocatesEditBuilder, boost::noncopyable>(
+    class_<PcpLayerRelocatesEditBuilder, noncopyable>(
         "LayerRelocatesEditBuilder", no_init)
         .def(init<const PcpLayerStackPtr &>())
         .def(init<const PcpLayerStackPtr &, const SdfLayerHandle &>())

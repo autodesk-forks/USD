@@ -16,11 +16,11 @@
 #include "pxr/base/tf/pyPtrHelpers.h"
 #include "pxr/base/tf/pyResultConversions.h"
 
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -82,7 +82,7 @@ void wrapPropertySpec()
         TfPyContainerConversions::variable_capacity_policy >();
 
     class_<This, SdfHandle<This>, 
-           bases<SdfSpec>, boost::noncopyable>
+           bases<SdfSpec>, noncopyable>
         ("PropertySpec", no_init)
         .def(SdfPyAbstractSpec())
 

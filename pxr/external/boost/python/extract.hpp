@@ -7,32 +7,33 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef EXTRACT_DWA200265_HPP
-# define EXTRACT_DWA200265_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_EXTRACT_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_EXTRACT_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/converter/object_manager.hpp>
-# include <boost/python/converter/from_python.hpp>
-# include <boost/python/converter/rvalue_from_python_data.hpp>
-# include <boost/python/converter/registered.hpp>
-# include <boost/python/converter/registered_pointee.hpp>
-
-# include <boost/python/object_core.hpp>
-# include <boost/python/refcount.hpp>
-
-# include <boost/python/detail/copy_ctor_mutates_rhs.hpp>
-# include <boost/python/detail/void_ptr.hpp>
-# include <boost/python/detail/void_return.hpp>
-# include <boost/call_traits.hpp>
-
-#if BOOST_WORKAROUND(BOOST_INTEL_WIN, <= 900)
-# define BOOST_EXTRACT_WORKAROUND ()
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/extract.hpp>
 #else
-# define BOOST_EXTRACT_WORKAROUND
-#endif
 
-namespace boost { namespace python {
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+# include "pxr/external/boost/python/converter/object_manager.hpp"
+# include "pxr/external/boost/python/converter/from_python.hpp"
+# include "pxr/external/boost/python/converter/rvalue_from_python_data.hpp"
+# include "pxr/external/boost/python/converter/registered.hpp"
+# include "pxr/external/boost/python/converter/registered_pointee.hpp"
+
+# include "pxr/external/boost/python/object_core.hpp"
+# include "pxr/external/boost/python/refcount.hpp"
+
+# include "pxr/external/boost/python/detail/copy_ctor_mutates_rhs.hpp"
+# include "pxr/external/boost/python/detail/void_ptr.hpp"
+# include "pxr/external/boost/python/detail/void_return.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
 namespace api
 {
@@ -70,15 +71,18 @@ namespace converter
   };
   
   template <class T>
-  struct extract_rvalue : private noncopyable
+  struct extract_rvalue
   {
-      typedef typename mpl::if_<
+      typedef typename python::detail::mpl2::if_<
           python::detail::copy_ctor_mutates_rhs<T>
         , T&
-        , typename call_traits<T>::param_type
+        , typename python::detail::param_type<T>::type
       >::type result_type;
 
       extract_rvalue(PyObject*);
+
+      extract_rvalue(extract_rvalue const&) = delete;
+      extract_rvalue& operator=(extract_rvalue const&) = delete;
 
       bool check() const;
       result_type operator()() const;
@@ -102,22 +106,22 @@ namespace converter
   template <class T>
   struct select_extract
   {
-      BOOST_STATIC_CONSTANT(
-          bool, obj_mgr = is_object_manager<T>::value);
+      static constexpr 
+          bool obj_mgr = is_object_manager<T>::value;
 
-      BOOST_STATIC_CONSTANT(
-          bool, ptr = is_pointer<T>::value);
+      static constexpr 
+          bool ptr = python::detail::is_pointer<T>::value;
     
-      BOOST_STATIC_CONSTANT(
-          bool, ref = is_reference<T>::value);
+      static constexpr 
+          bool ref = python::detail::is_reference<T>::value;
 
-      typedef typename mpl::if_c<
+      typedef typename python::detail::mpl2::if_c<
           obj_mgr
           , extract_object_manager<T>
-          , typename mpl::if_c<
+          , typename python::detail::mpl2::if_c<
               ptr
               , extract_pointer<T>
-              , typename mpl::if_c<
+              , typename python::detail::mpl2::if_c<
                   ref
                   , extract_reference<T>
                   , extract_rvalue<T>
@@ -259,6 +263,7 @@ namespace converter
   }
 }
   
-}} // namespace boost::python::converter
+}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
-#endif // EXTRACT_DWA200265_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_EXTRACT_HPP

@@ -1,7 +1,14 @@
-#ifndef BOOST_PYTHON_OTHER_HPP
-# define BOOST_PYTHON_OTHER_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_OTHER_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_OTHER_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/other.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/prefix.hpp"
 //
 // Copyright 2024 Pixar
 // Licensed under the terms set forth in the LICENSE.txt file available at
@@ -12,9 +19,7 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-# include <boost/config.hpp>
-
-namespace boost { namespace python {
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
 template<class T> struct other
 { 
@@ -27,14 +32,14 @@ namespace detail
   class is_other
   {
    public:
-      BOOST_STATIC_CONSTANT(bool, value = false); 
+      static constexpr bool value = false; 
   };
 
   template<typename T>
   class is_other<other<T> >
   {
    public:
-      BOOST_STATIC_CONSTANT(bool, value = true);
+      static constexpr bool value = true;
   };
 
   template<typename T>
@@ -52,6 +57,7 @@ namespace detail
   };
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
 #endif

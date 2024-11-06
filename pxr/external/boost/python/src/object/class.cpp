@@ -8,34 +8,32 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/detail/prefix.hpp>
-#include <boost/mpl/lambda.hpp> // #including this first is an intel6 workaround
-#include <boost/cstdint.hpp>
+#include "pxr/external/boost/python/detail/prefix.hpp"
 
-#include <boost/python/object/class.hpp>
-#include <boost/python/object/instance.hpp>
-#include <boost/python/object/class_detail.hpp>
-#include <boost/python/scope.hpp>
-#include <boost/python/converter/registry.hpp>
-#include <boost/python/object/find_instance.hpp>
-#include <boost/python/object/pickle_support.hpp>
-#include <boost/python/detail/map_entry.hpp>
-#include <boost/python/object.hpp>
-#include <boost/python/object_protocol.hpp>
-#include <boost/detail/binary_search.hpp>
-#include <boost/python/self.hpp>
-#include <boost/python/dict.hpp>
-#include <boost/python/str.hpp>
-#include <boost/python/ssize_t.hpp>
+#include "pxr/external/boost/python/object/class.hpp"
+#include "pxr/external/boost/python/object/instance.hpp"
+#include "pxr/external/boost/python/object/class_detail.hpp"
+#include "pxr/external/boost/python/scope.hpp"
+#include "pxr/external/boost/python/converter/registry.hpp"
+#include "pxr/external/boost/python/object/find_instance.hpp"
+#include "pxr/external/boost/python/object/pickle_support.hpp"
+#include "pxr/external/boost/python/detail/map_entry.hpp"
+#include "pxr/external/boost/python/object.hpp"
+#include "pxr/external/boost/python/object_protocol.hpp"
+#include "pxr/external/boost/python/self.hpp"
+#include "pxr/external/boost/python/dict.hpp"
+#include "pxr/external/boost/python/str.hpp"
+#include "pxr/external/boost/python/ssize_t.hpp"
 #include <functional>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <new>
 #include <structmember.h>
 
-namespace boost { namespace python {
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
-# ifdef BOOST_PYTHON_SELF_IS_CLASS
+# ifdef PXR_BOOST_PYTHON_SELF_IS_CLASS
 namespace self_ns
 {
   self_t self;
@@ -210,7 +208,7 @@ namespace objects
   }
 #endif
 
-  BOOST_PYTHON_DECL PyObject* static_data()
+  PXR_BOOST_PYTHON_DECL PyObject* static_data()
   {
       if (static_data_object.tp_dict == 0)
       {
@@ -318,7 +316,7 @@ void instance_holder::install(PyObject* self) throw()
 namespace objects
 {
 // Get the metatype object for all extension classes.
-  BOOST_PYTHON_DECL type_handle class_metatype()
+  PXR_BOOST_PYTHON_DECL type_handle class_metatype()
   {
       if (class_metatype_object.tp_dict == 0)
       {
@@ -467,7 +465,7 @@ namespace objects
 #endif
   };
 
-  BOOST_PYTHON_DECL type_handle class_type()
+  PXR_BOOST_PYTHON_DECL type_handle class_type()
   {
       if (class_type_object.tp_dict == 0)
       {
@@ -480,7 +478,7 @@ namespace objects
       return type_handle(borrowed(&class_type_object));
   }
 
-  BOOST_PYTHON_DECL void*
+  PXR_BOOST_PYTHON_DECL void*
   find_instance_impl(PyObject* inst, type_info type, bool null_shared_ptr_only)
   {
       if (!Py_TYPE(Py_TYPE(inst)) ||
@@ -599,7 +597,7 @@ namespace objects
       converters.m_class_object = (PyTypeObject*)incref(this->ptr());
   }
 
-  BOOST_PYTHON_DECL void copy_class_object(type_info const& src, type_info const& dst)
+  PXR_BOOST_PYTHON_DECL void copy_class_object(type_info const& src, type_info const& dst)
   {
       converter::registration& dst_converters
           = const_cast<converter::registration&>(converter::registry::lookup(dst));
@@ -720,7 +718,7 @@ namespace objects
               ));
   }
 
-  BOOST_PYTHON_DECL type_handle registered_class_object(type_info id)
+  PXR_BOOST_PYTHON_DECL type_handle registered_class_object(type_info id)
   {
       return query_class(id);
   }
@@ -743,7 +741,7 @@ void* instance_holder::allocate(PyObject* self_, std::size_t holder_offset, std:
 
         size_t allocated = holder_size + alignment;
         void* storage = (char*)self + holder_offset;
-        void* aligned_storage = ::boost::alignment::align(alignment, holder_size, storage, allocated);
+        void* aligned_storage = std::align(alignment, holder_size, storage, allocated);
 
         // Record the fact that the storage is occupied, noting where it starts
         const size_t offset = reinterpret_cast<uintptr_t>(aligned_storage) - reinterpret_cast<uintptr_t>(storage) + holder_offset;
@@ -764,7 +762,7 @@ void* instance_holder::allocate(PyObject* self_, std::size_t holder_offset, std:
         const uintptr_t padding = alignment == 1 ? 0 : ( alignment - (x & (alignment - 1)) );
         const size_t aligned_offset = sizeof(alignment_marker_t) + padding;
         void* const aligned_storage = (char *)base_storage + aligned_offset;
-        BOOST_ASSERT((char *) aligned_storage + holder_size <= (char *)base_storage + base_allocation);
+        assert((char *) aligned_storage + holder_size <= (char *)base_storage + base_allocation);
         alignment_marker_t* const marker_storage = reinterpret_cast<alignment_marker_t *>((char *)aligned_storage - sizeof(alignment_marker_t));
         *marker_storage = static_cast<alignment_marker_t>(padding);
         return aligned_storage;
@@ -783,4 +781,4 @@ void instance_holder::deallocate(PyObject* self_, void* storage) throw()
     }
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python

@@ -7,12 +7,12 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/object.hpp>
-#include <boost/python/class.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/object.hpp"
+#include "pxr/external/boost/python/class.hpp"
 
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 class NotCopyable
 {
@@ -20,7 +20,7 @@ class NotCopyable
 
 object ref_to_noncopyable()
 {
-  return object(boost::ref(not_copyable));
+  return object(std::ref(not_copyable));
 }
 
 object call_object_3(object f)
@@ -346,9 +346,9 @@ bool check_inplace(object l, object o)
     return true;
 }
 
-BOOST_PYTHON_MODULE(object_ext)
+PXR_BOOST_PYTHON_MODULE(object_ext)
 {
-    class_<NotCopyable, boost::noncopyable>("NotCopyable", no_init);
+    class_<NotCopyable, noncopyable>("NotCopyable", no_init);
 
     def("ref_to_noncopyable", ref_to_noncopyable);
     def("call_object_3", call_object_3);

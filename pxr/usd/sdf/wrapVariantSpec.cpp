@@ -12,11 +12,11 @@
 #include "pxr/usd/sdf/pySpec.h"
 #include "pxr/usd/sdf/variantSetSpec.h"
 #include "pxr/usd/sdf/pyChildrenProxy.h"
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -37,7 +37,7 @@ void wrapVariantSpec()
 
     typedef SdfVariantSpec This;
 
-    class_<This, SdfHandle<This>, bases<SdfSpec>, boost::noncopyable>
+    class_<This, SdfHandle<This>, bases<SdfSpec>, noncopyable>
         ("VariantSpec", no_init)
         .def(SdfPySpec())
         .def(SdfMakePySpecConstructor(&This::New))

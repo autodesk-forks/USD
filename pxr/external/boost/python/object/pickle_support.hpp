@@ -7,12 +7,19 @@
 //  Distributed under the Boost Software License, Version 1.0. (See
 //  accompanying file LICENSE_1_0.txt or copy at
 //  http://www.boost.org/LICENSE_1_0.txt)
-#ifndef BOOST_PYTHON_OBJECT_PICKLE_SUPPORT_RWGK20020603_HPP
-# define BOOST_PYTHON_OBJECT_PICKLE_SUPPORT_RWGK20020603_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_OBJECT_PICKLE_SUPPORT_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_OBJECT_PICKLE_SUPPORT_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python {
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/object/pickle_support.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
 namespace api
 {
@@ -21,7 +28,7 @@ namespace api
 using api::object;
 class tuple;
 
-BOOST_PYTHON_DECL object const& make_instance_reduce_function();
+PXR_BOOST_PYTHON_DECL object const& make_instance_reduce_function();
 
 struct pickle_suite;
 
@@ -110,9 +117,9 @@ namespace detail {
       Class_&,
       ...)
     {
-      typedef typename
+      [[maybe_unused]] typedef typename
         error_messages::missing_pickle_suite_function_or_incorrect_signature<
-          Class_>::error_type error_type BOOST_ATTRIBUTE_UNUSED;
+          Class_>::error_type error_type;
     }
   };
 
@@ -124,6 +131,7 @@ namespace detail {
 
 } // namespace detail
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // BOOST_PYTHON_OBJECT_PICKLE_SUPPORT_RWGK20020603_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_OBJECT_PICKLE_SUPPORT_HPP

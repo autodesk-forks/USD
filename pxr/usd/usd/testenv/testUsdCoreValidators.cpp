@@ -14,6 +14,10 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
+TF_DEFINE_PRIVATE_TOKENS(_tokens,
+    ((usdPlugin, "usd"))
+);
+
 static
 void
 TestUsdValidators()
@@ -24,8 +28,7 @@ TestUsdValidators()
     // UsdCoreValidators keyword, hence as new validators are added under
     // this keyword this unit test will have to be updated.
     const UsdValidatorMetadataVector coreValidatorMetadata =
-            registry.GetValidatorMetadataForKeyword(
-                    UsdValidatorKeywordTokens->UsdCoreValidators);
+            registry.GetValidatorMetadataForPlugin(_tokens->usdPlugin);
     TF_AXIOM(coreValidatorMetadata.size() == 2);
 
     std::set<TfToken> validatorMetadataNameSet;
@@ -37,10 +40,7 @@ TestUsdValidators()
             {UsdValidatorNameTokens->compositionErrorTest,
              UsdValidatorNameTokens->stageMetadataChecker};
 
-    TF_AXIOM(std::includes(validatorMetadataNameSet.begin(),
-                           validatorMetadataNameSet.end(),
-                           expectedValidatorNames.begin(),
-                           expectedValidatorNames.end()));
+    TF_AXIOM(validatorMetadataNameSet == expectedValidatorNames);
 }
 
 static
@@ -64,10 +64,16 @@ TestCoreUsdStageMetadata()
 
     // Verify the correct error is returned
     TF_AXIOM(errors.size() == 1);
+    const TfToken expectedErrorIdentifier(
+            "usd:StageMetadataChecker.MissingDefaultPrim");
+    TF_AXIOM(errors[0].GetValidator() == validator);
+    TF_AXIOM(errors[0].GetIdentifier() == expectedErrorIdentifier);
     TF_AXIOM(errors[0].GetType() == UsdValidationErrorType::Error);
     TF_AXIOM(errors[0].GetSites().size() == 1);
     TF_AXIOM(errors[0].GetSites()[0].IsValid());
-    const std::string expectedErrorMsg = TfStringPrintf("Stage with root layer <%s> has an invalid or missing defaultPrim.", rootLayer->GetIdentifier().c_str());
+    const std::string expectedErrorMsg = 
+        TfStringPrintf("Stage with root layer <%s> has an invalid or missing "
+                       "defaultPrim.", rootLayer->GetIdentifier().c_str());
     const std::string error = errors[0].GetMessage();
     TF_AXIOM(errors[0].GetMessage() == expectedErrorMsg);
 
@@ -77,7 +83,7 @@ TestCoreUsdStageMetadata()
     errors = validator->Validate(usdStage);
 
     // Verify the error is gone
-    TF_AXIOM(errors.size() == 0);
+    TF_AXIOM(errors.empty());
 }
 
 static
@@ -145,8 +151,11 @@ TestUsdCompositionErrorTest()
     TF_AXIOM(errors.size() == 5);
 
     // Lets make sure pcpErrors and validationErrors match
+    const TfToken expectedErrorIdentifier =
+        TfToken("usd:CompositionErrorTest.CompositionError");
     for (size_t index = 0; index < errors.size(); ++index) {
         TF_AXIOM(errors[index].GetValidator() == compositionErrorValidator);
+        TF_AXIOM(errors[index].GetIdentifier() == expectedErrorIdentifier);
         TF_AXIOM(errors[index].GetMessage() == 
                  expectedPcpErrors[index]->ToString());
         TF_AXIOM(errors[index].GetSites().size() == 1);

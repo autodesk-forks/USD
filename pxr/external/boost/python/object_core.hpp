@@ -7,38 +7,43 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef OBJECT_CORE_DWA2002615_HPP
-# define OBJECT_CORE_DWA2002615_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_OBJECT_CORE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_OBJECT_CORE_HPP
 
-# define BOOST_PYTHON_OBJECT_HAS_IS_NONE // added 2010-03-15 by rwgk
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/detail/prefix.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/object_core.hpp>
+#else
 
-# include <boost/type.hpp>
+# define PXR_BOOST_PYTHON_OBJECT_HAS_IS_NONE // added 2010-03-15 by rwgk
 
-# include <boost/python/call.hpp>
-# include <boost/python/handle_fwd.hpp>
-# include <boost/python/errors.hpp>
-# include <boost/python/refcount.hpp>
-# include <boost/python/detail/preprocessor.hpp>
-# include <boost/python/tag.hpp>
-# include <boost/python/def_visitor.hpp>
+# include "pxr/external/boost/python/detail/prefix.hpp"
 
-# include <boost/python/detail/raw_pyobject.hpp>
-# include <boost/python/detail/dependent.hpp>
+# include "pxr/external/boost/python/type.hpp"
 
-# include <boost/python/object/forward.hpp>
-# include <boost/python/object/add_to_namespace.hpp>
+# include "pxr/external/boost/python/call.hpp"
+# include "pxr/external/boost/python/handle_fwd.hpp"
+# include "pxr/external/boost/python/errors.hpp"
+# include "pxr/external/boost/python/ref.hpp"
+# include "pxr/external/boost/python/refcount.hpp"
+# include "pxr/external/boost/python/detail/preprocessor.hpp"
+# include "pxr/external/boost/python/tag.hpp"
+# include "pxr/external/boost/python/def_visitor.hpp"
 
-# include <boost/preprocessor/iterate.hpp>
-# include <boost/preprocessor/debug/line.hpp>
+# include "pxr/external/boost/python/detail/raw_pyobject.hpp"
+# include "pxr/external/boost/python/detail/dependent.hpp"
 
-# include <boost/python/detail/is_xxx.hpp>
-# include <boost/python/detail/string_literal.hpp>
-# include <boost/python/detail/def_helper_fwd.hpp>
-# include <boost/python/detail/type_traits.hpp>
+# include "pxr/external/boost/python/object/forward.hpp"
+# include "pxr/external/boost/python/object/add_to_namespace.hpp"
 
-namespace boost { namespace python { 
+# include "pxr/external/boost/python/detail/is_xxx.hpp"
+# include "pxr/external/boost/python/detail/string_literal.hpp"
+# include "pxr/external/boost/python/detail/def_helper_fwd.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 namespace detail
 {
@@ -83,7 +88,7 @@ namespace api
   //
   // is_proxy -- proxy type detection
   //
-  BOOST_PYTHON_IS_XXX_DEF(proxy, boost::python::api::proxy, 1)
+  PXR_BOOST_PYTHON_IS_XXX_DEF(proxy, PXR_BOOST_NAMESPACE::python::api::proxy, 1)
 
   template <class T> struct object_initializer;
   
@@ -100,8 +105,9 @@ namespace api
       //
       object operator()() const;
 
-# define BOOST_PP_ITERATION_PARAMS_1 (3, (1, BOOST_PYTHON_MAX_ARITY, <boost/python/object_call.hpp>))
-# include BOOST_PP_ITERATE()
+      template <class A0, class... A>
+      typename detail::dependent<object, A0>::type
+      operator()(A0 const& a0, A const&... a) const;
     
       detail::args_proxy operator* () const; 
       object operator()(detail::args_proxy const &args) const; 
@@ -166,7 +172,7 @@ namespace api
       {
           // It's too late to specify anything other than docstrings if
           // the callable object is already wrapped.
-          BOOST_STATIC_ASSERT(
+          static_assert(
               (detail::is_same<char const*,DocStringT>::value
                || detail::is_string_literal<DocStringT const>::value));
         
@@ -210,7 +216,7 @@ namespace api
 
   template <class T, class U>
   struct is_derived
-    : boost::python::detail::is_convertible<
+    : PXR_BOOST_NAMESPACE::python::detail::is_convertible<
           typename detail::remove_reference<T>::type*
         , U const*
       >
@@ -228,12 +234,12 @@ namespace api
   PyObject* object_base_initializer(T const& x)
   {
       typedef typename is_derived<
-          BOOST_DEDUCED_TYPENAME objects::unforward_cref<T>::type
+          typename objects::unforward_cref<T>::type
         , object
       >::type is_obj;
 
       return object_initializer<
-          BOOST_DEDUCED_TYPENAME unwrap_reference<T>::type
+          typename unwrap_reference<T>::type
       >::get(
             x
           , is_obj()
@@ -254,7 +260,7 @@ namespace api
       }
 
       // Throw error_already_set() if the handle is null.
-      BOOST_PYTHON_DECL explicit object(handle<> const&);
+      PXR_BOOST_PYTHON_DECL explicit object(handle<> const&);
    private:
       
    public: // implementation detail -- for internal use only
@@ -266,12 +272,12 @@ namespace api
   // Macros for forwarding constructors in classes derived from
   // object. Derived classes will usually want these as an
   // implementation detail
-# define BOOST_PYTHON_FORWARD_OBJECT_CONSTRUCTORS(derived, base)               \
-    inline explicit derived(::boost::python::detail::borrowed_reference p)     \
+# define PXR_BOOST_PYTHON_FORWARD_OBJECT_CONSTRUCTORS(derived, base)               \
+    inline explicit derived(::PXR_BOOST_NAMESPACE::python::detail::borrowed_reference p)     \
         : base(p) {}                                                           \
-    inline explicit derived(::boost::python::detail::new_reference p)          \
+    inline explicit derived(::PXR_BOOST_NAMESPACE::python::detail::new_reference p)          \
         : base(p) {}                                                           \
-    inline explicit derived(::boost::python::detail::new_non_null_reference p) \
+    inline explicit derived(::PXR_BOOST_NAMESPACE::python::detail::new_non_null_reference p) \
         : base(p) {}
 
   //
@@ -313,7 +319,7 @@ namespace api
       static PyObject*
       get(T const& x, U)
       {
-          return python::incref(get_managed_object(x, boost::python::tag));
+          return python::incref(get_managed_object(x, PXR_BOOST_NAMESPACE::python::tag));
       }
   };
 
@@ -366,17 +372,17 @@ template <typename U>
 detail::args_proxy api::object_operators<U>::operator* () const 
 { 
   object_cref2 x = *static_cast<U const*>(this); 
-  return boost::python::detail::args_proxy(x); 
+  return PXR_BOOST_NAMESPACE::python::detail::args_proxy(x); 
 } 
  
 template <typename U> 
 object api::object_operators<U>::operator()(detail::args_proxy const &args) const 
 { 
   U const& self = *static_cast<U const*>(this); 
-  PyObject *result = PyObject_Call(get_managed_object(self, boost::python::tag), 
+  PyObject *result = PyObject_Call(get_managed_object(self, PXR_BOOST_NAMESPACE::python::tag), 
                                    args.operator object().ptr(), 
                                    0); 
-  return object(boost::python::detail::new_reference(result)); 
+  return object(PXR_BOOST_NAMESPACE::python::detail::new_reference(result)); 
  
 } 
  
@@ -385,10 +391,10 @@ object api::object_operators<U>::operator()(detail::args_proxy const &args,
                                             detail::kwds_proxy const &kwds) const 
 { 
   U const& self = *static_cast<U const*>(this); 
-  PyObject *result = PyObject_Call(get_managed_object(self, boost::python::tag), 
+  PyObject *result = PyObject_Call(get_managed_object(self, PXR_BOOST_NAMESPACE::python::tag), 
                                    args.operator object().ptr(), 
                                    kwds.operator object().ptr()); 
-  return object(boost::python::detail::new_reference(result)); 
+  return object(PXR_BOOST_NAMESPACE::python::detail::new_reference(result)); 
  
 }  
 
@@ -460,14 +466,14 @@ namespace converter
   template <>
   struct object_manager_traits<object>
   {
-      BOOST_STATIC_CONSTANT(bool, is_specialized = true);
+      static constexpr bool is_specialized = true;
       static bool check(PyObject*) { return true; }
       
       static python::detail::new_non_null_reference adopt(PyObject* x)
       {
           return python::detail::new_non_null_reference(x);
       }
-#ifndef BOOST_PYTHON_NO_PY_SIGNATURES
+#ifndef PXR_BOOST_PYTHON_NO_PY_SIGNATURES
       static PyTypeObject const *get_pytype() {return 0;}
 #endif
   };
@@ -478,8 +484,9 @@ inline PyObject* get_managed_object(object const& x, tag_t)
     return x.ptr();
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-# include <boost/python/slice_nil.hpp>
+# include "pxr/external/boost/python/slice_nil.hpp"
 
-#endif // OBJECT_CORE_DWA2002615_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_OBJECT_CORE_HPP

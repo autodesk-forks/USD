@@ -8,27 +8,25 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/class.hpp>
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/return_internal_reference.hpp>
-#include <boost/python/call_method.hpp>
-#include <boost/ref.hpp>
-#include <boost/utility.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/return_internal_reference.hpp"
+#include "pxr/external/boost/python/call_method.hpp"
 
-#define BOOST_ENABLE_ASSERT_HANDLER
-#include <boost/assert.hpp>
+#include <cassert>
+#include <functional>
 
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 struct X
 {
     explicit X(int x) : x(x), magic(7654321) { ++counter; }
     X(X const& rhs) : x(rhs.x), magic(7654321) { ++counter; }
-    virtual ~X() { BOOST_ASSERT(magic == 7654321); magic = 6666666; x = 9999; --counter; }
+    virtual ~X() { assert(magic == 7654321); magic = 6666666; x = 9999; --counter; }
 
-    void set(int _x) { BOOST_ASSERT(magic == 7654321); this->x = _x; }
-    int value() const { BOOST_ASSERT(magic == 7654321); return x; }
+    void set(int _x) { assert(magic == 7654321); this->x = _x; }
+    int value() const { assert(magic == 7654321); return x; }
     static int count() { return counter; }
  private:
     void operator=(X const&);
@@ -67,12 +65,12 @@ struct abstract_callback : abstract
 
     int f(Y const& y)
     {
-        return call_method<int>(self, "f", boost::ref(y));
+        return call_method<int>(self, "f", std::ref(y));
     }
 
     abstract& g(Y const& y)
     {
-        return call_method<abstract&>(self, "g", boost::ref(y));
+        return call_method<abstract&>(self, "g", std::ref(y));
     }
 
     PyObject* self;
@@ -90,7 +88,7 @@ struct concrete_callback : concrete
 
     int f(Y const& y)
     {
-        return call_method<int>(self, "f", boost::ref(y));
+        return call_method<int>(self, "f", std::ref(y));
     }
 
     int f_impl(Y const& y)
@@ -103,7 +101,7 @@ struct concrete_callback : concrete
 
 int X::counter;
 
-BOOST_PYTHON_MODULE(virtual_functions_ext)
+PXR_BOOST_PYTHON_MODULE(virtual_functions_ext)
 {
     class_<concrete, concrete_callback>("concrete", init<int>())
         .def("value", &concrete::value)
@@ -112,7 +110,7 @@ BOOST_PYTHON_MODULE(virtual_functions_ext)
         .def("f", &concrete_callback::f_impl)
         ;
         
-    class_<abstract, boost::noncopyable, abstract_callback
+    class_<abstract, noncopyable, abstract_callback
         >("abstract", init<int>())
             
         .def("value", &abstract::value)

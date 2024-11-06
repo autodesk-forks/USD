@@ -7,17 +7,24 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef CAST_DWA200269_HPP
-# define CAST_DWA200269_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CAST_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_CAST_HPP
 
-# include <boost/python/detail/prefix.hpp>
-# include <boost/python/detail/type_traits.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/type.hpp>
-# include <boost/python/base_type_traits.hpp>
-# include <boost/python/detail/convertible.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/cast.hpp>
+#else
 
-namespace boost { namespace python { 
+# include "pxr/external/boost/python/detail/prefix.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+
+# include "pxr/external/boost/python/type.hpp"
+# include "pxr/external/boost/python/base_type_traits.hpp"
+# include "pxr/external/boost/python/detail/convertible.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 namespace detail
 {
@@ -65,16 +72,16 @@ namespace detail
   }
 
   template <class Target, class Source>
-  inline Target* downcast(Source* p, no_convertible, boost::type<Target>* = 0)
+  inline Target* downcast(Source* p, no_convertible, type<Target>* = 0)
   {
       typedef typename base_type_traits<Source>::type base;
       return (Target*)detail::downcast<base>(p, convertible<Source*>::check((base*)0));
   }
 
   template <class T>
-  inline void assert_castable(boost::type<T>* = 0)
+  inline void assert_castable(type<T>* = 0)
   {
-      typedef char must_be_a_complete_type[sizeof(T)] BOOST_ATTRIBUTE_UNUSED;
+      [[maybe_unused]] typedef char must_be_a_complete_type[sizeof(T)];
   }
 
   template <class Source, class Target>
@@ -105,6 +112,7 @@ inline Target* downcast(Source* x, Target* = 0)
     return detail::downcast<Target>(x, detail::convertible<Source*>::check((Target*)0));
 }
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // CAST_DWA200269_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_CAST_HPP

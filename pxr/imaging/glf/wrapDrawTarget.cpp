@@ -11,13 +11,13 @@
 #include "pxr/base/tf/pyResultConversions.h"
 #include "pxr/base/tf/pyEnum.h"
 
-#include <boost/python/bases.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/overloads.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python/bases.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/overloads.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -40,7 +40,7 @@ void wrapDrawTarget()
     typedef GlfDrawTarget This;
     typedef GlfDrawTargetPtr ThisPtr;
     
-    class_<This, ThisPtr, boost::noncopyable>("DrawTarget", no_init)
+    class_<This, ThisPtr, noncopyable>("DrawTarget", no_init)
         .def(TfPyRefAndWeakPtr())
         .def("__init__",TfMakePyConstructor(&_NewDrawTarget))
         .def("__init__",TfMakePyConstructor(&_NewDrawTarget2))

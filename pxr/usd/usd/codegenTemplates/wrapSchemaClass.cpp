@@ -18,16 +18,19 @@
 #include "pxr/base/tf/pyUtils.h"
 #include "pxr/base/tf/wrapTypeHelpers.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python.hpp"
 
 #include <string>
-
-using namespace boost::python;
 
 {% if useExportAPI %}
 {{ namespaceUsing }}
 
+using namespace pxr_boost::python;
+
 namespace {
+
+{% else %}
+using namespace pxr_boost::python;
 
 {% endif %}
 #define WRAP_CUSTOM                                                     \
@@ -117,7 +120,7 @@ void wrap{{ cls.cppClassName }}()
 
 {% endif %}
 {% if cls.isAPISchemaBase %}
-    class_< This , bases<{{ cls.parentCppClassName }}>, boost::noncopyable> cls ("APISchemaBase", "", no_init);
+    class_< This , bases<{{ cls.parentCppClassName }}>, noncopyable> cls ("APISchemaBase", "", no_init);
 {% else %}
     class_<This, bases<{{ cls.parentCppClassName }}> >
         cls("{{ cls.className }}");

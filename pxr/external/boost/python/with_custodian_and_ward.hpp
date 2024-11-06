@@ -7,16 +7,23 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef WITH_CUSTODIAN_AND_WARD_DWA2002131_HPP
-# define WITH_CUSTODIAN_AND_WARD_DWA2002131_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_WITH_CUSTODIAN_AND_WARD_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_WITH_CUSTODIAN_AND_WARD_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/default_call_policies.hpp>
-# include <boost/python/object/life_support.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/with_custodian_and_ward.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+# include "pxr/external/boost/python/default_call_policies.hpp"
+# include "pxr/external/boost/python/object/life_support.hpp"
 # include <algorithm>
 
-namespace boost { namespace python { 
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 namespace detail
 {
@@ -27,7 +34,7 @@ namespace detail
       static PyObject* execute(ArgumentPackage const& args, PyObject* = 0)
       {
           int const pre_n = static_cast<int>(N) - 1; // separate line is gcc-2.96 workaround
-          return detail::get(mpl::int_<pre_n>(), args);
+          return detail::get(detail::mpl2::int_<pre_n>(), args);
       }
   };
   template <>
@@ -47,9 +54,9 @@ template <
 >
 struct with_custodian_and_ward : BasePolicy_
 {
-    BOOST_STATIC_ASSERT(custodian != ward);
-    BOOST_STATIC_ASSERT(custodian > 0);
-    BOOST_STATIC_ASSERT(ward > 0);
+    static_assert(custodian != ward);
+    static_assert(custodian > 0);
+    static_assert(ward > 0);
 
     template <class ArgumentPackage>
     static bool precall(ArgumentPackage const& args_)
@@ -59,7 +66,7 @@ struct with_custodian_and_ward : BasePolicy_
         {
             PyErr_SetString(
                 PyExc_IndexError
-              , "boost::python::with_custodian_and_ward: argument index out of range"
+              , "PXR_BOOST_NAMESPACE::python::with_custodian_and_ward: argument index out of range"
             );
             return false;
         }
@@ -84,7 +91,7 @@ struct with_custodian_and_ward : BasePolicy_
 template <std::size_t custodian, std::size_t ward, class BasePolicy_ = default_call_policies>
 struct with_custodian_and_ward_postcall : BasePolicy_
 {
-    BOOST_STATIC_ASSERT(custodian != ward);
+    static_assert(custodian != ward);
     
     template <class ArgumentPackage>
     static PyObject* postcall(ArgumentPackage const& args_, PyObject* result)
@@ -97,7 +104,7 @@ struct with_custodian_and_ward_postcall : BasePolicy_
         {
             PyErr_SetString(
                 PyExc_IndexError
-              , "boost::python::with_custodian_and_ward_postcall: argument index out of range"
+              , "PXR_BOOST_NAMESPACE::python::with_custodian_and_ward_postcall: argument index out of range"
             );
             return 0;
         }
@@ -121,6 +128,7 @@ struct with_custodian_and_ward_postcall : BasePolicy_
 };
 
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // WITH_CUSTODIAN_AND_WARD_DWA2002131_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_WITH_CUSTODIAN_AND_WARD_HPP

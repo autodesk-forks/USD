@@ -7,17 +7,16 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#include <boost/python/module.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/return_value_policy.hpp>
-#include <boost/python/manage_new_object.hpp>
-#include <boost/python/reference_existing_object.hpp>
-#include <boost/python/call_method.hpp>
-#include <boost/python/pure_virtual.hpp>
-#include <boost/python/def.hpp>
-#include <boost/utility.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/return_value_policy.hpp"
+#include "pxr/external/boost/python/manage_new_object.hpp"
+#include "pxr/external/boost/python/reference_existing_object.hpp"
+#include "pxr/external/boost/python/call_method.hpp"
+#include "pxr/external/boost/python/pure_virtual.hpp"
+#include "pxr/external/boost/python/def.hpp"
 
-using namespace boost::python;
+using namespace PXR_BOOST_NAMESPACE::python;
 
 struct Callback
 {
@@ -130,19 +129,19 @@ C& getCCppObj ()
 
 A* pass_a(A* x) { return x; }
 
-BOOST_PYTHON_MODULE_INIT(polymorphism_ext)
+PXR_BOOST_PYTHON_MODULE_INIT(polymorphism_ext)
 {
-    class_<A,boost::noncopyable,ACallback>("A")
+    class_<A,noncopyable,ACallback>("A")
         .def("f", &A::f, &ACallback::default_f)
         ;
     
     def("getBCppObj", getBCppObj, return_value_policy<reference_existing_object>());
 
-    class_<C,bases<A>,boost::noncopyable>("C")
+    class_<C,bases<A>,noncopyable>("C")
         .def("f", &C::f)
         ;
     
-    class_<D,bases<A>,DCallback,boost::noncopyable>("D")
+    class_<D,bases<A>,DCallback,noncopyable>("D")
         .def("f", &D::f, &DCallback::default_f)
         .def("g", &D::g)
         ;
@@ -155,7 +154,7 @@ BOOST_PYTHON_MODULE_INIT(polymorphism_ext)
 
     def("call_f", call_f);
 
-    class_<P,boost::noncopyable,PCallback>("P")
+    class_<P,noncopyable,PCallback>("P")
         .def("f", pure_virtual(&P::f))
         ;
 

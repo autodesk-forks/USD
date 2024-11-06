@@ -16,21 +16,20 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/type.h"
 
-#include <boost/noncopyable.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/handle.hpp>
-#include <boost/python/manage_new_object.hpp>
-#include <boost/python/return_value_policy.hpp>
-#include <boost/python/scope.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/handle.hpp"
+#include "pxr/external/boost/python/manage_new_object.hpp"
+#include "pxr/external/boost/python/return_value_policy.hpp"
+#include "pxr/external/boost/python/scope.hpp"
 
 #include <functional>
 
 using std::string;
 
-using namespace boost::python;
-
 PXR_NAMESPACE_OPEN_SCOPE
+
+using namespace pxr_boost::python;
 
 class Tf_PyNotice {
 public:
@@ -59,7 +58,7 @@ class Tf_PyNoticeInternal
 {
   public:
 
-    struct Listener : public TfWeakBase, public boost::noncopyable {
+    struct Listener : public TfWeakBase {
 
         typedef void CallbackSig(object const &, handle<> const &);
         typedef std::function<CallbackSig> Callback;
@@ -283,7 +282,7 @@ void wrapNotice()
     "A Listener object is returned from the Register() and  "
     "RegisterGlobally() functions. ";
     class_<Tf_PyNoticeInternal::Listener,
-           boost::noncopyable>("Listener", Listener_string, no_init)
+           noncopyable>("Listener", Listener_string, no_init)
         .def("Revoke", &Tf_PyNoticeInternal::Listener::Revoke,
             "Revoke() \n\n"
             "Revoke interest by a notice listener. "

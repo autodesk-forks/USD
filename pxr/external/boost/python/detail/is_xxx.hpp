@@ -7,12 +7,27 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef IS_XXX_DWA2003224_HPP
-# define IS_XXX_DWA2003224_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_IS_XXX_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_IS_XXX_HPP
 
-# include <boost/detail/is_xxx.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-#  define BOOST_PYTHON_IS_XXX_DEF(name, qualified_name, nargs) \
-    BOOST_DETAIL_IS_XXX_DEF(name, qualified_name, nargs)
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/is_xxx.hpp>
+#else
 
-#endif // IS_XXX_DWA2003224_HPP
+# include <type_traits>
+
+#  define PXR_BOOST_PYTHON_IS_XXX_DEF(name, qualified_name, nargs) \
+template <class T>                                                 \
+struct is_##name : std::false_type { };                            \
+                                                                   \
+template <class... T>                                              \
+struct is_##name<qualified_name<T...>>                             \
+    : std::bool_constant<nargs == sizeof...(T)>                    \
+{                                                                  \
+};
+
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_IS_XXX_HPP

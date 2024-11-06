@@ -68,6 +68,7 @@ pxr_library(hd
         extComputation
         extComputationContext
         extComputationContextInternal
+        extComputationCpuCallback
         extComputationInputComputationSchema
         extComputationOutputSchema
         extComputationPrimvarSchema
@@ -130,6 +131,7 @@ pxr_library(hd
         nurbsPatchTrimCurveSchema
         overlayContainerDataSource
         perfLog
+        planeSchema
         pluginRenderDelegateUniqueHandle
         points
         prefixingSceneIndex

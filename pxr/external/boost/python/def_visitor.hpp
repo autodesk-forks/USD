@@ -7,27 +7,26 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef DEF_VISITOR_DWA2003810_HPP
-# define DEF_VISITOR_DWA2003810_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DEF_VISITOR_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DEF_VISITOR_HPP
 
-# include <boost/python/detail/prefix.hpp>
-# include <boost/detail/workaround.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python { 
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/def_visitor.hpp>
+#else
+
+# include "pxr/external/boost/python/detail/prefix.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { 
 
 template <class DerivedVisitor> class def_visitor;
 template <class T, class X1, class X2, class X3> class class_;
 
 class def_visitor_access
 {
-# if defined(BOOST_NO_MEMBER_TEMPLATE_FRIENDS)                  \
-    || BOOST_WORKAROUND(BOOST_BORLANDC, BOOST_TESTED_AT(0x551))
-    // Tasteless as this may seem, making all members public allows member templates
-    // to work in the absence of member template friends.
- public:
-# else      
     template <class Derived> friend class def_visitor;
-# endif
     
     // unnamed visit, c.f. init<...>, container suites
     template <class V, class classT>
@@ -56,14 +55,7 @@ class def_visitor
 {
     friend class def_visitor_access;
     
-# if defined(BOOST_NO_MEMBER_TEMPLATE_FRIENDS)                  \
-    || BOOST_WORKAROUND(BOOST_BORLANDC, BOOST_TESTED_AT(0x551))
-    // Tasteless as this may seem, making all members public allows member templates
-    // to work in the absence of member template friends.
- public:
-# else      
     template <class T, class X1, class X2, class X3> friend class class_;
-# endif
     
     // unnamed visit, c.f. init<...>, container suites
     template <class classT>
@@ -86,6 +78,7 @@ class def_visitor
     }
 };
 
-}} // namespace boost::python
+}} // namespace PXR_BOOST_NAMESPACE::python
 
-#endif // DEF_VISITOR_DWA2003810_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DEF_VISITOR_HPP

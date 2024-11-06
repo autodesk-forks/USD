@@ -9,20 +9,20 @@
 #include "pxr/base/tf/makePyConstructor.h"
 #include "pxr/base/tf/pyPtrHelpers.h"
 
-#include <boost/python/bases.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/overloads.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python/bases.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/overloads.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapTexture()
 {    
     typedef GlfTexture This;
     typedef GlfTexturePtr ThisPtr;
 
-    class_<This, ThisPtr, boost::noncopyable>(
+    class_<This, ThisPtr, noncopyable>(
         "Texture", no_init)
         .def("GetTextureMemoryAllocated", &This::GetTextureMemoryAllocated)
         .staticmethod("GetTextureMemoryAllocated")

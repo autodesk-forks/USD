@@ -10,59 +10,41 @@
 // http://www.boost.org/LICENSE_1_0.txt)
 //
 ///////////////////////////////////////////////////////////////////////////////
-#ifndef INIT_JDG20020820_HPP
-#define INIT_JDG20020820_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_INIT_HPP
+#define PXR_EXTERNAL_BOOST_PYTHON_INIT_HPP
 
-# include <boost/python/detail/prefix.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-#include <boost/python/detail/type_list.hpp>
-#include <boost/python/args_fwd.hpp>
-#include <boost/python/detail/make_keyword_range_fn.hpp>
-#include <boost/python/def_visitor.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/init.hpp>
+#else
 
-#include <boost/mpl/if.hpp>
-#include <boost/mpl/eval_if.hpp>
-#include <boost/mpl/size.hpp>
-#include <boost/mpl/iterator_range.hpp>
-#include <boost/mpl/empty.hpp>
-#include <boost/mpl/begin_end.hpp>
-#include <boost/mpl/bool.hpp>
-#include <boost/mpl/prior.hpp>
-#include <boost/mpl/joint_view.hpp>
-#include <boost/mpl/back.hpp>
+# include "pxr/external/boost/python/detail/prefix.hpp"
 
-#include <boost/python/detail/type_traits.hpp>
+#include "pxr/external/boost/python/detail/type_list.hpp"
+#include "pxr/external/boost/python/args_fwd.hpp"
+#include "pxr/external/boost/python/detail/make_keyword_range_fn.hpp"
+#include "pxr/external/boost/python/def_visitor.hpp"
 
-#include <boost/preprocessor/enum_params_with_a_default.hpp>
-#include <boost/preprocessor/enum_params.hpp>
+#include "pxr/external/boost/python/detail/mpl2/at.hpp"
+#include "pxr/external/boost/python/detail/mpl2/if.hpp"
+#include "pxr/external/boost/python/detail/mpl2/int.hpp"
+#include "pxr/external/boost/python/detail/mpl2/eval_if.hpp"
+#include "pxr/external/boost/python/detail/mpl2/size.hpp"
+#include "pxr/external/boost/python/detail/mpl2/bool.hpp"
+
+#include "pxr/external/boost/python/detail/type_traits.hpp"
 
 #include <utility>
 
-///////////////////////////////////////////////////////////////////////////////
-#define BOOST_PYTHON_OVERLOAD_TYPES_WITH_DEFAULT                                \
-    BOOST_PP_ENUM_PARAMS_WITH_A_DEFAULT(                                        \
-        BOOST_PYTHON_MAX_ARITY,                                                 \
-        class T,                                                                \
-        mpl::void_)                                                             \
+namespace PXR_BOOST_NAMESPACE { namespace python {
 
-#define BOOST_PYTHON_OVERLOAD_TYPES                                             \
-    BOOST_PP_ENUM_PARAMS_Z(1,                                                   \
-        BOOST_PYTHON_MAX_ARITY,                                                 \
-        class T)                                                                \
-
-#define BOOST_PYTHON_OVERLOAD_ARGS                                              \
-    BOOST_PP_ENUM_PARAMS_Z(1,                                                   \
-        BOOST_PYTHON_MAX_ARITY,                                                 \
-        T)                                                                      \
-
-///////////////////////////////////////////////////////////////////////////////
-namespace boost { namespace python {
-
-template <BOOST_PYTHON_OVERLOAD_TYPES_WITH_DEFAULT>
+template <class... T>
 class init; // forward declaration
 
 
-template <BOOST_PYTHON_OVERLOAD_TYPES_WITH_DEFAULT>
+template <class... T>
 struct optional; // forward declaration
 
 namespace detail
@@ -72,7 +54,7 @@ namespace detail
     template <int keywords, int init_args>
     struct more_keywords_than_init_arguments
     {
-        typedef char too_many_keywords[init_args - keywords >= 0 ? 1 : -1] BOOST_ATTRIBUTE_UNUSED;
+        [[maybe_unused]] typedef char too_many_keywords[init_args - keywords >= 0 ? 1 : -1];
     };
   }
 
@@ -83,12 +65,12 @@ namespace detail
 
     template <class T>
     struct is_optional
-      : mpl::false_
+      : detail::mpl2::false_
     {};
 
-    template <BOOST_PYTHON_OVERLOAD_TYPES>
-    struct is_optional<optional<BOOST_PYTHON_OVERLOAD_ARGS> >
-      : mpl::true_
+    template <class... T>
+    struct is_optional<optional<T...> >
+      : detail::mpl2::true_
     {};
   
 
@@ -196,26 +178,74 @@ class init_with_call_policies
 
 //
 // drop1<S> is the initial length(S) elements of S
+// empty<S> is whether S has no elements
+// back<S> is the last element of S
+// joint_view<S1, S2> is a type_list with all elements in S1 and S2.
 //
 namespace detail
 {
   template <class S>
+  struct drop1_base;
+
+  template <>
+  struct drop1_base<detail::type_list<>>
+  {
+      using type = detail::type_list<>;
+  };
+
+  template <class S>
+  struct drop1_base
+  {
+      template <class Idxs>
+      struct impl;
+
+      template <size_t ...I>
+      struct impl<std::index_sequence<I...>>
+      {
+          using type = detail::type_list<
+              typename detail::mpl2::at_c<S, I>::type...
+          >;
+      };
+
+      using type = typename impl<
+          std::make_index_sequence<detail::mpl2::size<S>::value - 1>
+      >::type;
+  };
+
+  template <class S>
   struct drop1
-    : mpl::iterator_range<
-          typename mpl::begin<S>::type
-        , typename mpl::prior<
-              typename mpl::end<S>::type
-          >::type
-      >
+      : drop1_base<S>::type
   {};
+
+  template <class S>
+  struct empty
+      : std::bool_constant<detail::mpl2::size<S>::value == 0>
+  {};
+
+  template <class S>
+  struct back
+      : detail::mpl2::at_c<S, detail::mpl2::size<S>::value - 1>
+  {};
+
+  template <class T, class U>
+  struct joint_view
+      : joint_view<typename T::type, typename U::type>
+  {
+  };
+
+  template <class... T, class... U>
+  struct joint_view<detail::type_list<T...>, detail::type_list<U...>>
+      : detail::type_list<T..., U...>
+  {
+  };  
 }
 
-template <BOOST_PYTHON_OVERLOAD_TYPES>
-class init : public init_base<init<BOOST_PYTHON_OVERLOAD_ARGS> >
+template <class... T>
+class init : public init_base<init<T...> >
 {
-    typedef init_base<init<BOOST_PYTHON_OVERLOAD_ARGS> > base;
+    typedef init_base<init<T...> > base;
  public:
-    typedef init<BOOST_PYTHON_OVERLOAD_ARGS> self_t;
+    typedef init<T...> self_t;
 
     init(char const* doc_ = 0)
         : base(doc_)
@@ -226,18 +256,18 @@ class init : public init_base<init<BOOST_PYTHON_OVERLOAD_ARGS> >
     init(char const* doc_, detail::keywords<N> const& kw)
         : base(doc_, kw.range())
     {
-        typedef typename detail::error::more_keywords_than_init_arguments<
+        [[maybe_unused]] typedef typename detail::error::more_keywords_than_init_arguments<
             N, n_arguments::value + 1
-            >::too_many_keywords assertion BOOST_ATTRIBUTE_UNUSED;
+            >::too_many_keywords assertion;
     }
 
     template <std::size_t N>
     init(detail::keywords<N> const& kw, char const* doc_ = 0)
         : base(doc_, kw.range())
     {
-        typedef typename detail::error::more_keywords_than_init_arguments<
+        [[maybe_unused]] typedef typename detail::error::more_keywords_than_init_arguments<
             N, n_arguments::value + 1
-            >::too_many_keywords assertion BOOST_ATTRIBUTE_UNUSED;
+            >::too_many_keywords assertion;
     }
 
     template <class CallPoliciesT>
@@ -248,28 +278,28 @@ class init : public init_base<init<BOOST_PYTHON_OVERLOAD_ARGS> >
             policies, this->doc_string(), this->keywords());
     }
 
-    typedef detail::type_list<BOOST_PYTHON_OVERLOAD_ARGS> signature_;
+    typedef detail::type_list<T...> signature_;
 
     typedef detail::is_optional<
-        typename mpl::eval_if<
-            mpl::empty<signature_>
-          , mpl::false_
-          , mpl::back<signature_>
+        typename detail::mpl2::eval_if<
+            detail::empty<signature_>
+          , detail::mpl2::false_
+          , detail::back<signature_>
         >::type
     > back_is_optional;
     
-    typedef typename mpl::eval_if<
+    typedef typename detail::mpl2::eval_if<
         back_is_optional
-      , mpl::back<signature_>
-      , mpl::vector0<>
+      , detail::back<signature_>
+      , detail::type_list<>
     >::type optional_args;
 
-    typedef typename mpl::eval_if<
+    typedef typename detail::mpl2::eval_if<
         back_is_optional
-      , mpl::if_<
-            mpl::empty<optional_args>
+      , detail::mpl2::if_<
+            detail::empty<optional_args>
           , detail::drop1<signature_>
-          , mpl::joint_view<
+          , detail::joint_view<
                 detail::drop1<signature_>
               , optional_args
             >
@@ -280,8 +310,8 @@ class init : public init_base<init<BOOST_PYTHON_OVERLOAD_ARGS> >
     // TODO: static assert to make sure there are no other optional elements
 
     // Count the number of default args
-    typedef mpl::size<optional_args> n_defaults;
-    typedef mpl::size<signature> n_arguments;
+    typedef detail::mpl2::size<optional_args> n_defaults;
+    typedef detail::mpl2::size<signature> n_arguments;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -291,9 +321,9 @@ class init : public init_base<init<BOOST_PYTHON_OVERLOAD_ARGS> >
 //      optional<T0...TN>::type returns a typelist.
 //
 ///////////////////////////////////////////////////////////////////////////////
-template <BOOST_PYTHON_OVERLOAD_TYPES>
+template <class... T>
 struct optional
-    : detail::type_list<BOOST_PYTHON_OVERLOAD_ARGS>
+    : detail::type_list<T...>
 {
 };
 
@@ -350,7 +380,7 @@ namespace detail
           if (keywords.second > keywords.first)
               --keywords.second;
 
-          typedef typename mpl::prior<NArgs>::type next_nargs;
+          typedef typename detail::mpl2::int_<NArgs::value - 1> next_nargs;
           define_class_init_helper<NDefaults-1>::apply(
               cl, policies, Signature(), next_nargs(), doc, keywords);
       }
@@ -383,16 +413,11 @@ namespace detail
   };
 }
 
-}} // namespace boost::python
-
-#undef BOOST_PYTHON_OVERLOAD_TYPES_WITH_DEFAULT
-#undef BOOST_PYTHON_OVERLOAD_TYPES
-#undef BOOST_PYTHON_OVERLOAD_ARGS
-#undef BOOST_PYTHON_IS_OPTIONAL_VALUE
-#undef BOOST_PYTHON_APPEND_TO_INIT
+}} // namespace PXR_BOOST_NAMESPACE::python
 
 ///////////////////////////////////////////////////////////////////////////////
-#endif // INIT_JDG20020820_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_INIT_HPP
 
 
 

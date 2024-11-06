@@ -7,21 +7,29 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef REFERENT_STORAGE_DWA200278_HPP
-# define REFERENT_STORAGE_DWA200278_HPP
-# include <boost/mpl/if.hpp>
-# include <boost/type_traits/aligned_storage.hpp>
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_REFERENT_STORAGE_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_REFERENT_STORAGE_HPP
+
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
+
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/referent_storage.hpp>
+#else
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+# include "pxr/external/boost/python/detail/mpl2/if.hpp"
 # include <cstddef>
 
-namespace boost { namespace python { namespace detail {
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail {
 
-template <std::size_t size, std::size_t alignment = std::size_t(-1)>
+// This is equivalent to std::aligned_storage from C++11, but that's
+// deprecated in C++23 so we just roll our own here.
+template <std::size_t size, std::size_t alignment>
 struct aligned_storage
 {
   union type
   {
-    typename ::boost::aligned_storage<size, alignment>::type data;
-    char bytes[size];
+    alignas(alignment) char bytes[size];
   };
 };
       
@@ -33,8 +41,8 @@ struct aligned_storage
   template <class T>
   struct referent_size<T&>
   {
-      BOOST_STATIC_CONSTANT(
-          std::size_t, value = sizeof(T));
+      static constexpr 
+          std::size_t value = sizeof(T);
   };
 
 // A metafunction returning a POD type which can store U, where T ==
@@ -42,9 +50,13 @@ struct aligned_storage
 template <class T>
 struct referent_storage
 {
-    typedef typename aligned_storage<referent_size<T>::value, alignment_of<T>::value>::type type;
+    typedef typename aligned_storage<
+        ::PXR_BOOST_NAMESPACE::python::detail::referent_size<T>::value, 
+        alignment_of<T>::value
+    >::type type;
 };
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // REFERENT_STORAGE_DWA200278_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_REFERENT_STORAGE_HPP

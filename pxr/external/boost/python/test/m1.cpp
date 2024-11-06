@@ -8,17 +8,23 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
+// If PXR_BOOST_PYTHON_NO_PY_SIGNATURES was defined when building this module,
+// boost::python will generate simplified docstrings that break the associated
+// test unless we undefine it before including any headers.
+#undef PXR_BOOST_PYTHON_NO_PY_SIGNATURES
 
-#include <boost/python/def.hpp>
-#include <boost/python/module.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/lvalue_from_pytype.hpp>
-#include <boost/python/copy_const_reference.hpp>
-#include <boost/python/return_value_policy.hpp>
-#include <boost/python/to_python_converter.hpp>
-#include <boost/python/errors.hpp>
-#include <boost/python/manage_new_object.hpp>
-#include <boost/python/converter/pytype_function.hpp>
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/docstring_options.hpp"
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/lvalue_from_pytype.hpp"
+#include "pxr/external/boost/python/copy_const_reference.hpp"
+#include "pxr/external/boost/python/return_value_policy.hpp"
+#include "pxr/external/boost/python/to_python_converter.hpp"
+#include "pxr/external/boost/python/errors.hpp"
+#include "pxr/external/boost/python/manage_new_object.hpp"
+#include "pxr/external/boost/python/converter/pytype_function.hpp"
+#include <memory>
 #include <string.h>
 #include "simple_type.hpp"
 #include "complicated.hpp"
@@ -170,12 +176,12 @@ PyObject* new_simple()
 // Declare some wrappers/unwrappers to test the low-level conversion
 // mechanism. 
 //
-using boost::python::to_python_converter;
+using PXR_BOOST_NAMESPACE::python::to_python_converter;
 
 // Wrap a simple by copying it into a Simple
 struct simple_to_python
     : to_python_converter<simple, simple_to_python, true>
-    //, boost::python::converter::wrap_pytype<&SimpleType>
+    //, PXR_BOOST_NAMESPACE::python::converter::wrap_pytype<&SimpleType>
 {
     static PyObject* convert(simple const& x)
     {
@@ -265,30 +271,32 @@ B take_b(B& b) { return b; }
 C take_c(C* c) { return *c; }
 D take_d(D* const& d) { return *d; }
 
-D take_d_shared_ptr(boost::shared_ptr<D> d) { return *d; }
+D take_d_shared_ptr(std::shared_ptr<D> d) { return *d; }
 
-boost::shared_ptr<A> d_factory() { return boost::shared_ptr<B>(new D); }
+std::shared_ptr<A> d_factory() { return std::shared_ptr<B>(new D); }
 
 struct Unregistered {};
 Unregistered make_unregistered(int) { return Unregistered(); }
 
 Unregistered* make_unregistered2(int) { return new Unregistered; }
 
-BOOST_PYTHON_MODULE(m1)
+PXR_BOOST_PYTHON_MODULE(m1)
 {
-    using namespace boost::python;
-    using boost::shared_ptr;
+    using namespace PXR_BOOST_NAMESPACE::python;
+    using std::shared_ptr;
+
+    // Explicitly enable Python signatures in docstrings in case boost::python
+    // was built with PXR_BOOST_PYTHON_NO_PY_SIGNATURES, which disables those
+    // signatures by default.
+    docstring_options doc_options;
+    doc_options.enable_py_signatures();
     
     simple_to_python();
 
     lvalue_from_pytype<int_from_noddy,&NoddyType>();
 
     lvalue_from_pytype<
-#if !defined(BOOST_MSVC) || BOOST_MSVC > 1300 // doesn't support non-type member pointer parameters
         extract_member<SimpleObject, simple, &SimpleObject::x>
-#else 
-        extract_simple_object
-#endif 
         , &SimpleType
         >();
 

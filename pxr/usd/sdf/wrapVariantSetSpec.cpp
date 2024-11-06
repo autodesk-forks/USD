@@ -13,11 +13,11 @@
 #include "pxr/usd/sdf/variantSpec.h"
 #include "pxr/base/tf/pyContainerConversions.h"
 #include "pxr/base/tf/pyResultConversions.h"
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -46,7 +46,7 @@ void wrapVariantSetSpec()
                         TfPySequenceToPython<SdfVariantSetSpecHandleVector> >();
 
     class_<This, SdfHandle<This>, 
-           bases<SdfSpec>, boost::noncopyable>
+           bases<SdfSpec>, noncopyable>
         ("VariantSetSpec", no_init)
         .def(SdfPySpec())
         .def(SdfMakePySpecConstructor(&_NewUnderPrim))

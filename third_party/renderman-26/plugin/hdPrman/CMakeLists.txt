@@ -18,6 +18,11 @@ set(PXR_PACKAGE hdPrman)
 # This is only temporary and will be removed shortly
 add_definitions(-DPRMANBUILDINGAPI)
 
+# Needed to prevent YY files trying to include unistd.h
+if (WIN32)
+    add_compile_definitions("YY_NO_UNISTD_H")
+endif()
+
 # TODO The pxr cmake macros don't provide a good way to link prman with link_directories
 # on Linux/OSX without resorting to absolute rpath. For now, simply avoid linking
 # libprman on Linux/OSX.
@@ -89,6 +94,7 @@ pxr_plugin(${PXR_PACKAGE}
         coordSysPrimSceneIndexPlugin
         cylinder
         debugCodes
+        dependencySceneIndexPlugin
         dependencyForwardingSceneIndexPlugin
         displayFilter
         gprim
@@ -149,6 +155,7 @@ pxr_plugin(${PXR_PACKAGE}
         matfiltSceneIndexPlugins
         motionBlurSceneIndexPlugin
         pinnedCurveExpandingSceneIndexPlugin
+        projectionParams
         renderBuffer
         renderParam
         renderPass
@@ -157,6 +164,7 @@ pxr_plugin(${PXR_PACKAGE}
         renderSettingsFilteringSceneIndexPlugin
         renderViewContext
         resourceRegistry
+        retesselationSceneIndexPlugin
         rileyCameraPrim
         rileyCoordinateSystemPrim
         rileyClippingPlanePrim

@@ -9,31 +9,31 @@
 // (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/numpy.hpp>
-#include <boost/cstdint.hpp>
+#include "pxr/external/boost/python/numpy.hpp"
+#include <cstdint>
 
-namespace p = boost::python;
-namespace np = boost::python::numpy;
+namespace p = PXR_BOOST_NAMESPACE::python;
+namespace np = PXR_BOOST_NAMESPACE::python::numpy;
 
 template <typename T>
 np::dtype accept(T) {
   return np::dtype::get_builtin<T>();
 }
 
-BOOST_PYTHON_MODULE(dtype_ext)
+PXR_BOOST_PYTHON_MODULE(dtype_ext)
 {
   np::initialize();
   // wrap dtype equivalence test, since it isn't available in Python API.
   p::def("equivalent", np::equivalent);
   // integers, by number of bits
-  p::def("accept_int8", accept<boost::int8_t>);
-  p::def("accept_uint8", accept<boost::uint8_t>);
-  p::def("accept_int16", accept<boost::int16_t>);
-  p::def("accept_uint16", accept<boost::uint16_t>);
-  p::def("accept_int32", accept<boost::int32_t>);
-  p::def("accept_uint32", accept<boost::uint32_t>);
-  p::def("accept_int64", accept<boost::int64_t>);
-  p::def("accept_uint64", accept<boost::uint64_t>);
+  p::def("accept_int8", accept<int8_t>);
+  p::def("accept_uint8", accept<uint8_t>);
+  p::def("accept_int16", accept<int16_t>);
+  p::def("accept_uint16", accept<uint16_t>);
+  p::def("accept_int32", accept<int32_t>);
+  p::def("accept_uint32", accept<uint32_t>);
+  p::def("accept_int64", accept<int64_t>);
+  p::def("accept_uint64", accept<uint64_t>);
   // integers, by C name according to NumPy
   p::def("accept_bool_", accept<bool>);
   p::def("accept_byte", accept<signed char>);

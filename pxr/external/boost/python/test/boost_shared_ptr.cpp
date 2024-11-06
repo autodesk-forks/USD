@@ -8,12 +8,13 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
+#define PXR_BOOST_PYTHON_HAS_BOOST_SHARED_PTR
 
-#include <boost/python/module.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/call_method.hpp>
-#include <boost/python/extract.hpp>
-#include <boost/python/def.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/call_method.hpp"
+#include "pxr/external/boost/python/extract.hpp"
+#include "pxr/external/boost/python/def.hpp"
 #include <boost/shared_ptr.hpp>
 #include <memory>
 

@@ -7,10 +7,9 @@
 // Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/class.hpp>
-#include <boost/utility.hpp>
+#include "pxr/external/boost/python/module.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/class.hpp"
 
 /*  Non-modifiable definitions */
 
@@ -53,25 +52,25 @@ public:
   }
 
   // This constructor is introduced only because cannot use
-  // boost::noncopyable, see below.
+  // noncopyable, see below.
   variable_wrapper(PyObject* /*self*/,variable v): variable(v) {} 
 
 };
 
-BOOST_PYTHON_MODULE(cltree)
+PXR_BOOST_PYTHON_MODULE(cltree)
 {
-    boost::python::class_<basic>("basic")
+    PXR_BOOST_NAMESPACE::python::class_<basic>("basic")
         .def("__repr__",&basic::repr)
         ;
 
-    boost::python::class_<constant, boost::python::bases<basic>, boost::noncopyable>("constant")
+    PXR_BOOST_NAMESPACE::python::class_<constant, PXR_BOOST_NAMESPACE::python::bases<basic>, PXR_BOOST_NAMESPACE::python::noncopyable>("constant")
         ;
 
 
-    boost::python::class_<symbol, symbol_wrapper, boost::noncopyable>("symbol")
+    PXR_BOOST_NAMESPACE::python::class_<symbol, symbol_wrapper, PXR_BOOST_NAMESPACE::python::noncopyable>("symbol")
         ;
 
-    boost::python::class_<variable, boost::python::bases<basic>, variable_wrapper>("variable")
+    PXR_BOOST_NAMESPACE::python::class_<variable, PXR_BOOST_NAMESPACE::python::bases<basic>, variable_wrapper>("variable")
         ;
 }
 

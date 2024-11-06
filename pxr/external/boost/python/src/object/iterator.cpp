@@ -8,12 +8,11 @@
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#include <boost/python/object/iterator_core.hpp>
-#include <boost/python/object/function_object.hpp>
-#include <boost/bind/bind.hpp>
-#include <boost/mpl/vector/vector10.hpp>
+#include "pxr/external/boost/python/object/iterator_core.hpp"
+#include "pxr/external/boost/python/object/function_object.hpp"
+#include "pxr/external/boost/python/type_list.hpp"
 
-namespace boost { namespace python { namespace objects { 
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace objects { 
 
 namespace
 {
@@ -25,11 +24,11 @@ namespace
   }
 }
 
-BOOST_PYTHON_DECL object const& identity_function()
+PXR_BOOST_PYTHON_DECL object const& identity_function()
 {
     static object result(
         function_object(
-            py_function(&identity, mpl::vector2<PyObject*,PyObject*>())
+            py_function(&identity, python::type_list<PyObject*,PyObject*>())
         )
     );
     return result;
@@ -41,4 +40,4 @@ void stop_iteration_error()
     throw_error_already_set();
 }
 
-}}} // namespace boost::python::objects
+}}} // namespace PXR_BOOST_NAMESPACE::python::objects

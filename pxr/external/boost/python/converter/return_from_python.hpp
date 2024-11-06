@@ -7,23 +7,30 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef RETURN_FROM_PYTHON_DWA200265_HPP
-# define RETURN_FROM_PYTHON_DWA200265_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_RETURN_FROM_PYTHON_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_RETURN_FROM_PYTHON_HPP
 
-# include <boost/python/converter/from_python.hpp>
-# include <boost/python/converter/rvalue_from_python_data.hpp>
-# include <boost/python/converter/registered.hpp>
-# include <boost/python/converter/registered_pointee.hpp>
-# include <boost/python/converter/object_manager.hpp>
-# include <boost/python/detail/void_ptr.hpp>
-# include <boost/python/detail/void_return.hpp>
-# include <boost/python/errors.hpp>
-# include <boost/python/handle.hpp>
-# include <boost/python/detail/type_traits.hpp>
-# include <boost/mpl/and.hpp>
-# include <boost/mpl/bool.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-namespace boost { namespace python { namespace converter { 
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/converter/return_from_python.hpp>
+#else
+
+# include "pxr/external/boost/python/converter/from_python.hpp"
+# include "pxr/external/boost/python/converter/rvalue_from_python_data.hpp"
+# include "pxr/external/boost/python/converter/registered.hpp"
+# include "pxr/external/boost/python/converter/registered_pointee.hpp"
+# include "pxr/external/boost/python/converter/object_manager.hpp"
+# include "pxr/external/boost/python/detail/void_ptr.hpp"
+# include "pxr/external/boost/python/detail/void_return.hpp"
+# include "pxr/external/boost/python/errors.hpp"
+# include "pxr/external/boost/python/handle.hpp"
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+# include "pxr/external/boost/python/detail/mpl2/and.hpp"
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace converter { 
 
 template <class T> struct is_object_manager;
 
@@ -64,22 +71,22 @@ namespace detail
   template <class T>
   struct select_return_from_python
   {
-      BOOST_STATIC_CONSTANT(
-          bool, obj_mgr = is_object_manager<T>::value);
+      static constexpr 
+          bool obj_mgr = is_object_manager<T>::value;
 
-      BOOST_STATIC_CONSTANT(
-          bool, ptr = is_pointer<T>::value);
+      static constexpr 
+          bool ptr = python::detail::is_pointer<T>::value;
     
-      BOOST_STATIC_CONSTANT(
-          bool, ref = is_reference<T>::value);
+      static constexpr 
+          bool ref = python::detail::is_reference<T>::value;
 
-      typedef typename mpl::if_c<
+      typedef typename python::detail::mpl2::if_c<
           obj_mgr
           , return_object_manager_from_python<T>
-          , typename mpl::if_c<
+          , typename python::detail::mpl2::if_c<
               ptr
               , return_pointer_from_python<T>
-              , typename mpl::if_c<
+              , typename python::detail::mpl2::if_c<
                   ref
                   , return_reference_from_python<T>
                   , return_rvalue_from_python<T>
@@ -104,9 +111,6 @@ struct return_from_python<void>
     result_type operator()(PyObject* x) const
     {
         (void_result_from_python)(x);
-# ifdef BOOST_NO_VOID_RETURNS
-        return result_type();
-# endif 
     }
 };
 
@@ -162,6 +166,7 @@ namespace detail
   }
 }
   
-}}} // namespace boost::python::converter
+}}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
-#endif // RETURN_FROM_PYTHON_DWA200265_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_RETURN_FROM_PYTHON_HPP

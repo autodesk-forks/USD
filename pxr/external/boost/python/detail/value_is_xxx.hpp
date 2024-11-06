@@ -7,32 +7,38 @@
 // Distributed under the Boost Software License, Version 1.0. (See
 // accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
-#ifndef VALUE_IS_XXX_DWA2003224_HPP
-# define VALUE_IS_XXX_DWA2003224_HPP
+#ifndef PXR_EXTERNAL_BOOST_PYTHON_DETAIL_VALUE_IS_XXX_HPP
+# define PXR_EXTERNAL_BOOST_PYTHON_DETAIL_VALUE_IS_XXX_HPP
 
-# include <boost/config.hpp>
-# include <boost/mpl/bool.hpp>
-# include <boost/preprocessor/enum_params.hpp>
+#include "pxr/pxr.h"
+#include "pxr/external/boost/python/common.hpp"
 
-# include <boost/python/detail/type_traits.hpp>
-#  include <boost/python/detail/is_xxx.hpp>
+#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
+#include <boost/python/detail/value_is_xxx.hpp>
+#else
 
-namespace boost { namespace python { namespace detail {
+# include "pxr/external/boost/python/detail/mpl2/bool.hpp"
 
-#  define BOOST_PYTHON_VALUE_IS_XXX_DEF(name, qualified_name, nargs)    \
+# include "pxr/external/boost/python/detail/type_traits.hpp"
+#  include "pxr/external/boost/python/detail/is_xxx.hpp"
+
+namespace PXR_BOOST_NAMESPACE { namespace python { namespace detail {
+
+#  define PXR_BOOST_PYTHON_VALUE_IS_XXX_DEF(name, qualified_name, nargs) \
 template <class X_>                                                     \
 struct value_is_##name                                                  \
 {                                                                       \
-    BOOST_PYTHON_IS_XXX_DEF(name,qualified_name,nargs)                  \
-    BOOST_STATIC_CONSTANT(bool, value = is_##name<                      \
+    PXR_BOOST_PYTHON_IS_XXX_DEF(name,qualified_name,nargs)              \
+    static constexpr bool value = is_##name<                            \
                                typename remove_cv<                      \
                                   typename remove_reference<X_>::type   \
                                >::type                                  \
-                           >::value);                                   \
-    typedef mpl::bool_<value> type;                                     \
+                           >::value;                                    \
+    typedef mpl2::bool_<value> type;                                    \
                                                                         \
 };                                                              
 
-}}} // namespace boost::python::detail
+}}} // namespace PXR_BOOST_NAMESPACE::python::detail
 
-#endif // VALUE_IS_XXX_DWA2003224_HPP
+#endif // PXR_USE_INTERNAL_BOOST_PYTHON
+#endif // PXR_EXTERNAL_BOOST_PYTHON_DETAIL_VALUE_IS_XXX_HPP
