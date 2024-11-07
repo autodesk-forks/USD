@@ -25,7 +25,6 @@ if (EMSCRIPTEN)
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.js
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data
-            ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.worker.js
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wasm-server.py
             ${CMAKE_CURRENT_SOURCE_DIR}/usdviewweb.html
         )

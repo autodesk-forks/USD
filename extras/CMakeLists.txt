@@ -1,4 +1,6 @@
-add_subdirectory(performance)
+if (${PXR_BUILD_PERFORMANCE})
+    add_subdirectory(performance)
+endif()
 add_subdirectory(usd)
 if (${PXR_BUILD_IMAGING})
     add_subdirectory(imaging)

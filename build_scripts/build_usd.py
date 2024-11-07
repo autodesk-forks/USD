@@ -1751,11 +1751,15 @@ def InstallTint(context, force, buildArgs):
 
             # This will allow us to install the already built spirv-tools library
 
+            PatchFile("third_party/vulkan-deps/spirv-headers/src/CMakeLists.txt", [
+                ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
+            ])
+
             PatchFile("third_party/CMakeLists.txt", [
             ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
             '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
             ('    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
-            '    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n'),
+            '    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
             ])
 
             PatchFile("src/tint/utils/system/terminal_posix.cc", [
@@ -1770,7 +1774,8 @@ def InstallTint(context, force, buildArgs):
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
                     + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
-                '-DBUILD_SHARED_LIBS=OFF'
+                '-DBUILD_SHARED_LIBS=OFF',
+                '-DCMAKE_INSTALL_DATADIR=' + os.path.join(context.instDir, 'lib')
             ]
             cmakeOptions += buildArgs
             cmakeOptions += TINT_CMAKE_OPTIONS
@@ -2160,6 +2165,7 @@ def InstallUSD(context, force, buildArgs):
 
             extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=ON')
             extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
+            extraArgs.append('-DPXR_BUILD_PERFORMANCE=OFF')
 
             if context.targetWasmNode:
                 extraArgs.append('-DPXR_WASM_NODE=ON')
