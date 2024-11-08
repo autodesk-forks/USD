@@ -30,6 +30,7 @@ class HdStRenderPassState;
 class HdxWbOitRenderTask : public HdxRenderTask 
 {
 public:
+    HDX_API
     static bool IsEnabled();
 
     HDX_API

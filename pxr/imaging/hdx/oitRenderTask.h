@@ -55,9 +55,9 @@ private:
 
     HdStRenderPassShaderSharedPtr _oitTranslucentRenderPassShader;
     HdStRenderPassShaderSharedPtr _oitOpaqueRenderPassShader;
-    const bool _isOitEnabled;
     HdStRenderPassStateSharedPtr _translucentRenderPassState;
     HdRenderPassSharedPtr _translucentPass;
+    const bool _isOitEnabled;
 };
 
 

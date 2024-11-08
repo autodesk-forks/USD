@@ -94,6 +94,7 @@ protected:
 
     // XXX: Storm specific API
     // Setup additional state that HdStRenderPassState requires.
+    HDX_API
     void _SetHdStRenderPassState(HdTaskContext *ctx,
                                  HdStRenderPassState *renderPassState);
 

@@ -17,14 +17,21 @@ PXR_NAMESPACE_OPEN_SCOPE
 class HdxWbOitResolveTask : public pxr::HdxTask
 {
 public:
+    HDX_API
     HdxWbOitResolveTask(pxr::HdSceneDelegate* delegate, pxr::SdfPath const& id);
+
+    HDX_API
     ~HdxWbOitResolveTask() override;
 
+    HDX_API
     void Prepare(pxr::HdTaskContext* ctx, pxr::HdRenderIndex* renderIndex) override;
+
+    HDX_API
     void Execute(pxr::HdTaskContext* ctx) override;
 
 protected:
 
+    HDX_API
     void _Sync(pxr::HdSceneDelegate* delegate, pxr::HdTaskContext* ctx,
         pxr::HdDirtyBits* dirtyBits) override;
 
