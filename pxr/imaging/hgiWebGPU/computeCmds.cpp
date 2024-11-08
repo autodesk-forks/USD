@@ -46,13 +46,11 @@ HgiWebGPUComputeCmds::HgiWebGPUComputeCmds(HgiWebGPU* hgi, HgiComputeCmdsDesc co
     _constantBindGroupEntry.size = 0;
     _CreateCommandEncoder();
 
-    // begin compute pass
-    _computePassEncoder = _commandEncoder.BeginComputePass();
-
 }
 
 HgiWebGPUComputeCmds::~HgiWebGPUComputeCmds()
 {
+    _commandBuffer = nullptr;
 }
 
 void
@@ -191,6 +189,8 @@ HgiWebGPUComputeCmds::_CreateCommandEncoder()
         wgpu::Device device = _hgi->GetPrimaryDevice();
 	    _commandEncoder = device.CreateCommandEncoder();
         TF_VERIFY(_commandEncoder);
+        // begin compute pass
+        _computePassEncoder = _commandEncoder.BeginComputePass();
     }
 }
 

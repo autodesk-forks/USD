@@ -206,7 +206,6 @@ private:
 
     wgpu::Device _device;
     wgpu::Queue _commandQueue;
-    HgiCmds* _currentCmds;
     HgiWebGPUDepthResolver _depthResolver;
     HgiWebGPUMipmapGenerator _mipmapGenerator;
 

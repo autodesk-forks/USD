@@ -179,7 +179,6 @@ wgpu::Device GetDevice() {
 
 HgiWebGPU::HgiWebGPU()
 : _device(GetDevice())
-, _currentCmds(nullptr)
 ,_depthResolver(_device)
 ,_mipmapGenerator(_device)
 , _workToFlush(false)
@@ -220,9 +219,6 @@ HgiComputeCmdsUniquePtr
 HgiWebGPU::CreateComputeCmds(HgiComputeCmdsDesc const& desc)
 {
     HgiWebGPUComputeCmds* computeCmds = new HgiWebGPUComputeCmds(this, desc);
-    if (!_currentCmds) {
-        _currentCmds = computeCmds;
-    }
     return HgiComputeCmdsUniquePtr(computeCmds);
 }
 
@@ -230,9 +226,6 @@ HgiBlitCmdsUniquePtr
 HgiWebGPU::CreateBlitCmds()
 {
     HgiWebGPUBlitCmds* blitCmds = new HgiWebGPUBlitCmds(this);
-    if (!_currentCmds) {
-        _currentCmds = blitCmds;
-    }
     return HgiBlitCmdsUniquePtr(blitCmds);
 }
 
@@ -562,9 +555,6 @@ HgiWebGPU::_SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait)
         _workToFlush = Hgi::_SubmitCmds(cmds, wait);
         if (_workToFlush) {
             _PerformGarbageCollection();
-        }
-        if (cmds == _currentCmds) {
-            _currentCmds = nullptr;
         }
     }
 
