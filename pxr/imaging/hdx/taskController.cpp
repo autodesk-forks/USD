@@ -1853,7 +1853,6 @@ HdxTaskController::SetRenderViewport(GfVec4d const& viewport)
     
     // Update all of the render buffer sizes as well.
     _UpdateAovDimensions(_ViewportToAovDimensions(viewport));
-    GetRenderIndex()->SetRenderViewport(viewport);
 }
 
 void
@@ -2142,7 +2141,7 @@ HdxTaskController::_SetCameraFramingForTasks()
 }
 
 void
-HdxTaskController::_UpdateAovDimensions()
+HdxTaskController::_UpdateAovDimensions(GfVec2i const& dimensions)
 {
     const GfVec3i dimensions3(dimensions[0], dimensions[1], 1);
 
