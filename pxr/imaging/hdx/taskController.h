@@ -282,7 +282,8 @@ private:
 
     void _SetCameraParamForTasks(SdfPath const& id);
     void _SetCameraFramingForTasks();
-    void _UpdateAovBufferDescriptor();
+    void _UpdateAovDimensions(GfVec2i const& dimensions);
+    void _UpdateAovMSAADescriptor();
     void _UpdateAovMSAASampleCount();
 
     void _SetBlendStateForMaterialTag(TfToken const& materialTag,

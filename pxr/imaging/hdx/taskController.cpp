@@ -1852,8 +1852,8 @@ HdxTaskController::SetRenderViewport(GfVec4d const& viewport)
     _SetCameraFramingForTasks();
     
     // Update all of the render buffer sizes as well.
-    _renderBufferSize = _ViewportToAovDimensions(viewport);
-    _UpdateAovBufferDescriptor();
+    _UpdateAovDimensions(_ViewportToAovDimensions(viewport));
+    GetRenderIndex()->SetRenderViewport(viewport);
 }
 
 void
@@ -1865,7 +1865,7 @@ HdxTaskController::SetRenderBufferSize(const GfVec2i &size)
     
     _renderBufferSize = size;
 
-    _UpdateAovBufferDescriptor();
+    _UpdateAovDimensions();
 }
 
 void
@@ -2142,9 +2142,9 @@ HdxTaskController::_SetCameraFramingForTasks()
 }
 
 void
-HdxTaskController::_UpdateAovBufferDescriptor()
+HdxTaskController::_UpdateAovDimensions()
 {
-    const GfVec3i dimensions3(_renderBufferSize[0], _renderBufferSize[1], 1);
+    const GfVec3i dimensions3(dimensions[0], dimensions[1], 1);
 
     HdChangeTracker &changeTracker = GetRenderIndex()->GetChangeTracker();
 
@@ -2152,8 +2152,25 @@ HdxTaskController::_UpdateAovBufferDescriptor()
         HdRenderBufferDescriptor desc =
             _delegate.GetParameter<HdRenderBufferDescriptor>(id,
                 _tokens->renderBufferDescriptor);
-        if (desc.dimensions != dimensions3 || desc.multiSampled != _enableMultisampling) {
+        if (desc.dimensions != dimensions3) {
             desc.dimensions = dimensions3;
+            _delegate.SetParameter(id, _tokens->renderBufferDescriptor, desc);
+            changeTracker.MarkBprimDirty(id,
+                HdRenderBuffer::DirtyDescription);
+        }
+    }
+}
+
+void
+HdxTaskController::_UpdateAovMSAADescriptor()
+{
+    HdChangeTracker &changeTracker = GetRenderIndex()->GetChangeTracker();
+
+    for (auto const& id : _aovBufferIds) {
+        HdRenderBufferDescriptor desc =
+            _delegate.GetParameter<HdRenderBufferDescriptor>(id,
+                _tokens->renderBufferDescriptor);
+        if (desc.multiSampled != _enableMultisampling) {
             desc.multiSampled = _enableMultisampling;
             _delegate.SetParameter(id, _tokens->renderBufferDescriptor, desc);
             changeTracker.MarkBprimDirty(id,
@@ -2179,7 +2196,7 @@ HdxTaskController::SetMultisampleState(const size_t &msaaSampleCount, bool enabl
 {
     if (_enableMultisampling != enableMultisampling) {
         _enableMultisampling = enableMultisampling;
-        _UpdateAovBufferDescriptor();
+        _UpdateAovMSAADescriptor();
     }
 
     if (_msaaSampleCount != msaaSampleCount) {

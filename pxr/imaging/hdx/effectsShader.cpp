@@ -526,7 +526,7 @@ HdxEffectsShader::_CreatePipeline(
 
 void
 HdxEffectsShader::_DestroyPipeline()
-{   
+{
     if (_pipeline) {
         _hgi->DestroyGraphicsPipeline(&_pipeline);
     }
