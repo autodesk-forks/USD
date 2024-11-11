@@ -41,6 +41,8 @@ TF_REGISTRY_FUNCTION(TfDebug)
         "Print generated shader source code");
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_DUMP_SHADER_SOURCEFILE,
         "Write out generated shader source code to files");
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_DUMP_SHADER_KEYS,
+        "Write out generated shader keys");
 
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_LOG_COMPUTE_SHADER_PROGRAM_HITS,
         "Log compute shader program hits in the resource registry.");
