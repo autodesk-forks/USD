@@ -1865,7 +1865,7 @@ HdxTaskController::SetRenderBufferSize(const GfVec2i &size)
     
     _renderBufferSize = size;
 
-    _UpdateAovDimensions();
+    _UpdateAovDimensions(size);
 }
 
 void
