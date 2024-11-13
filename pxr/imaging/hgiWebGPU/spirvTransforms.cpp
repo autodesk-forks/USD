@@ -324,64 +324,87 @@ private:
             opIndex = inst.num_operands;
         };
 
+        // The order of evaluation of arguments in a C++ function call is
+        // unspecified. We need the operands to be parsed in order from the
+        // word stream. Order of evaluation is guaranteed for list-init, so
+        // we can wrap the arguments in a std::tuple using braces (important!),
+        // which will parse the operands in the order they appear in the list,
+        // then call the visitor function using std::apply, which unwraps the
+        // tuple and forwards the arguments.
+        // https://en.cppreference.com/w/cpp/language/eval_order
+        const auto visitWithOperands = [&visitor](auto&& func, auto&& args) {
+            std::apply(std::forward<decltype(func)>(func),
+                std::tuple_cat(std::forward_as_tuple(visitor),
+                    std::forward<decltype(args)>(args)));
+        };
+
         switch (inst.opcode) {
             case SpvOpEntryPoint:
-                visitor.OpEntryPoint(
+                visitWithOperands(&_SpvVisitor::OpEntryPoint, std::tuple{
                     static_cast<SpvExecutionModel>(nextOperand()),
                     nextOperand(),
                     LiteralAsString(nextLiteral()),
-                    remainingOperands());
+                    remainingOperands()
+                });
                 break;
             case SpvOpDecorate:
-                visitor.OpDecorate(
+                 visitWithOperands(&_SpvVisitor::OpDecorate, std::tuple{
                     nextOperand(),
                     static_cast<SpvDecoration>(nextOperand()),
-                    remainingLiterals());
+                    remainingLiterals()
+                 });
                 break;
             case SpvOpMemberDecorate:
-                visitor.OpMemberDecorate(
+                 visitWithOperands(&_SpvVisitor::OpMemberDecorate, std::tuple{
                     nextOperand(),
                     LiteralAsInt(nextLiteral()),
                     static_cast<SpvDecoration>(nextOperand()),
-                    remainingLiterals());
+                    remainingLiterals()
+                 });
                 break;
             case SpvOpTypeInt:
-                visitor.OpTypeInt(
+                 visitWithOperands(&_SpvVisitor::OpTypeInt, std::tuple{
                     nextOperand(),
                     LiteralAsInt(nextLiteral()),
-                    LiteralAsInt(nextLiteral()));
+                    LiteralAsInt(nextLiteral())
+                 });
                 break;
             case SpvOpTypeFloat:
-                visitor.OpTypeFloat(
+                 visitWithOperands(&_SpvVisitor::OpTypeFloat, std::tuple{
                     nextOperand(),
                     LiteralAsInt(nextLiteral()),
-                    optionalOperand());
+                    optionalOperand()
+                 });
                 break;
             case SpvOpTypePointer:
-                visitor.OpTypePointer(
+                 visitWithOperands(&_SpvVisitor::OpTypePointer, std::tuple{
                     nextOperand(),
                     static_cast<SpvStorageClass>(nextOperand()),
-                    nextOperand());
+                    nextOperand()
+                 });
                 break;
             case SpvOpConstant:
-                visitor.OpConstant(
+                 visitWithOperands(&_SpvVisitor::OpConstant, std::tuple{
                     nextOperand(),
                     nextOperand(),
-                    nextLiteral());
+                    nextLiteral()
+                 });
                 break;
             case SpvOpVariable:
-                visitor.OpVariable(
+                 visitWithOperands(&_SpvVisitor::OpVariable, std::tuple{
                     nextOperand(),
                     nextOperand(),
                     static_cast<SpvStorageClass>(nextOperand()),
-                    optionalOperand());
+                    optionalOperand()
+                });
                 break;
             case SpvOpFunction:
-                visitor.OpFunction(
+                 visitWithOperands(&_SpvVisitor::OpFunction, std::tuple{
                     nextOperand(),
                     nextOperand(),
                     static_cast<SpvFunctionControlMask>(nextOperand()),
-                    nextOperand());
+                    nextOperand()
+                });
                 break;
             case SpvOpFunctionEnd:
                 visitor.OpFunctionEnd();
@@ -395,7 +418,9 @@ private:
         }
 
         if (ARCH_UNLIKELY(opIndex != inst.num_operands)) {
-            TF_CODING_ERROR("Operands were not evaluated correctly");
+            TF_CODING_ERROR("Operands were not evaluated correctly, "
+                "parsed %lu operands instead of %u",
+                opIndex, inst.num_operands);
         }
 
         return SPV_SUCCESS;
