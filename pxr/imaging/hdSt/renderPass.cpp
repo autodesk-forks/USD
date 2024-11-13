@@ -149,25 +149,38 @@ HdSt_RenderPass::_Execute(HdRenderPassStateSharedPtr const &renderPassState,
     // Create graphics work to render into aovs.
     const HgiGraphicsCmdsDesc desc =
         stRenderPassState->MakeGraphicsCmdsDesc(GetRenderIndex());
-    HgiGraphicsCmdsUniquePtr gfxCmds = _hgi->CreateGraphicsCmds(desc);
-    if (!TF_VERIFY(gfxCmds)) {
+    HgiGraphicsCmdsUniquePtr primaryGfxCmds = _hgi->CreateGraphicsCmds(desc);
+    if (!_recordedCmds) {
+        _recordedCmds = _hgi->MakeCmdsRecorder(desc);
+    }
+
+    if (!TF_VERIFY(primaryGfxCmds)) {
         return;
     }
 
     std::string passName = "HdSt_RenderPass: " +
         collection.GetMaterialTag().GetString();
 
-    gfxCmds->PushDebugGroup(passName.c_str());
+    primaryGfxCmds->PushDebugGroup(passName.c_str());
 
-    gfxCmds->SetViewport(stRenderPassState->ComputeViewport());
+    primaryGfxCmds->SetViewport(stRenderPassState->ComputeViewport());
 
     // Camera state needs to be updated once per pass (not per batch).
     stRenderPassState->ApplyStateFromCamera();
 
-    _cmdBuffer.ExecuteDraw(gfxCmds.get(), stRenderPassState, resourceRegistry);
+    if (_recordedCmds) {
+        if (!_recordedCmds->IsSubmitted()) {
+            _cmdBuffer.ExecuteDraw(_recordedCmds.get(), stRenderPassState, resourceRegistry);
+            _hgi->SubmitCmds(_recordedCmds.get());
+        }
+        primaryGfxCmds->ExecutePrerecordedCmds(_recordedCmds.get());
+    } else {
+        _cmdBuffer.ExecuteDraw(primaryGfxCmds.get(), stRenderPassState, resourceRegistry);
+    }
 
-    gfxCmds->PopDebugGroup();
-    _hgi->SubmitCmds(gfxCmds.get());
+
+    primaryGfxCmds->PopDebugGroup();
+    _hgi->SubmitCmds(primaryGfxCmds.get());
 }
 
 void
@@ -323,6 +336,7 @@ HdSt_RenderPass::_UpdateCommandBuffer(TfTokenVector const& renderTags)
     // Rebuild draw batches based on new draw items
     if (_drawItemsChanged) {
         _cmdBuffer.SetDrawItems(_drawItems, batchVersion, _hgi);
+        _recordedCmds.reset();
 
         _drawItemsChanged = false;
         size_t itemCount = _cmdBuffer.GetTotalSize();

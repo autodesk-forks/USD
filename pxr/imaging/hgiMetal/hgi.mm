@@ -350,6 +350,10 @@ HgiMetal::GetIndirectCommandEncoder() const
     return _indirectCommandEncoder.get();
 }
 
+HgiGraphicsCmdsUniquePtr HgiMetal::MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) {
+    return nullptr;
+}
+
 void
 HgiMetal::StartFrame()
 {

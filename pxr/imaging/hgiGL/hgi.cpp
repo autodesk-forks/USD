@@ -256,6 +256,10 @@ HgiGL::GetIndirectCommandEncoder() const
     return nullptr;
 }
 
+HgiGraphicsCmdsUniquePtr HgiGL::MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) {
+    return nullptr;
+}
+
 void
 HgiGL::StartFrame()
 {

@@ -56,6 +56,7 @@ pxr_library(hgiWebGPU
         depthResolver
         diagnostic
         graphicsCmds
+        recordGraphicsCmds
         graphicsPipeline
         hgi
         mipmapGenerator
@@ -71,6 +72,9 @@ pxr_library(hgiWebGPU
 
     PUBLIC_HEADERS
         api.h
+
+    PRIVATE_HEADERS
+        baseGraphicsCmds.h
 
     PRIVATE_CLASSES
         debugCodes

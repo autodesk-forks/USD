@@ -103,6 +103,9 @@ public:
     HGIVULKAN_API
     void InsertMemoryBarrier(HgiMemoryBarrier barrier) override;
 
+    HGIVULKAN_API
+    void ExecutePrerecordedCmds(HgiCmds* cmds) override;
+
     /// Returns the command buffer used inside this cmds.
     HGIVULKAN_API
     HgiVulkanCommandBuffer* GetCommandBuffer();

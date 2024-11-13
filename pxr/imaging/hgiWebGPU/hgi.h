@@ -33,7 +33,6 @@
 #include "pxr/imaging/hgi/tokens.h"
 #include <unordered_map>
 
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 using HgiWebGPUCallback = std::function<void(void)>;
@@ -146,6 +145,9 @@ public:
 
     HGIWEBGPU_API
     HgiIndirectCommandEncoder* GetIndirectCommandEncoder() const override;
+
+    HGIWEBGPU_API
+    HgiGraphicsCmdsUniquePtr MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) override;
 
     HGIWEBGPU_API
     void StartFrame() override;

@@ -27,6 +27,7 @@
 #include "pxr/pxr.h"
 #include "pxr/imaging/hgi/resourceBindings.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
+#include "pxr/imaging/hgiWebGPU/shaderSection.h"
 
 #include <type_traits>
 
@@ -44,13 +45,25 @@ public:
     HGIWEBGPU_API
     ~HgiWebGPUResourceBindings() override;
 
-    template <typename PassEncoder, typename = std::enable_if_t<std::is_same_v<PassEncoder, wgpu::RenderPassEncoder> || std::is_same_v<PassEncoder, wgpu::ComputePassEncoder>>>
+    template<typename PassEncoder, typename = std::enable_if_t<std::is_same_v<PassEncoder, wgpu::RenderPassEncoder> ||
+                                                               std::is_same_v<PassEncoder, wgpu::ComputePassEncoder> ||
+                                                               std::is_same_v<PassEncoder, wgpu::RenderBundleEncoder>
+                                                               >>
     void BindResources(
         wgpu::Device const &device,
         PassEncoder const &passEncoder,
         std::vector<wgpu::BindGroupLayout> const &bindGroupLayoutList,
         wgpu::BindGroupEntry const &constantBindGroupEntry,
-        bool isConstantDirty);
+        bool isConstantDirty) {
+        _CreateBindGroups(device, bindGroupLayoutList, constantBindGroupEntry, isConstantDirty);
+        if (_bindGroup && _textureBindGroup && _samplerBindGroup) {
+            passEncoder.SetBindGroup(HgiWebGPUBufferShaderSection::bindingSet, _bindGroup, 0, nullptr);
+            passEncoder.SetBindGroup(HgiWebGPUTextureShaderSection::bindingSet, _textureBindGroup, 0, nullptr);
+            passEncoder.SetBindGroup(HgiWebGPUSamplerShaderSection::bindingSet, _samplerBindGroup, 0, nullptr);
+        } else if (_bindGroup || _textureBindGroup || _samplerBindGroup ) {
+            TF_CODING_ERROR("All binding groups should have been initialized at the same time");
+        }
+    }
 
 protected:
     friend class HgiWebGPU;

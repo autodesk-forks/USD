@@ -86,10 +86,22 @@ public:
     HGIWEBGPU_API
     void Bind(HgiVertexBufferBindingVector const &bindings);
 
+    template<typename PassEncoder>
     HGIWEBGPU_API
     void SetVertexBufferOffsets(
-        wgpu::RenderPassEncoder const &encoder,
-        uint32_t baseInstance);
+        PassEncoder const &encoder,
+        uint32_t baseInstance) {
+        static_assert(std::is_same_v<PassEncoder, wgpu::RenderPassEncoder> ||
+                      std::is_same_v<PassEncoder, wgpu::RenderBundleEncoder>,
+                      "encoder parameter must be wgpu::RenderPassEncoder,"
+                      "or wgpu::RenderBundleEncoder");
+        for (auto const & stepFunction : _vertexBufferDescs) {
+            uint32_t const offset = stepFunction.vertexStride * baseInstance +
+                                    stepFunction.byteOffset;
+
+            encoder.SetVertexBuffer(stepFunction.bindingIndex, stepFunction.buffer, offset, WGPU_WHOLE_SIZE);
+        }
+    }
 
     HGIWEBGPU_API
     HgiWebGPUStepFunctionDescVector const &GetPatchBaseDescs() const

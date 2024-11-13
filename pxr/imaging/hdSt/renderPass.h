@@ -15,6 +15,8 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 class Hgi;
+class HgiGraphicsCmds;
+using HgiGraphicsCmdsUniquePtr = std::unique_ptr<class HgiGraphicsCmds>;
 
 /// \class HdSt_RenderPass
 ///
@@ -87,7 +89,7 @@ private:
     HdDrawItemConstPtrVectorSharedPtr _drawItems;
     size_t _drawItemCount;
     bool _drawItemsChanged;
-
+    HgiGraphicsCmdsUniquePtr _recordedCmds;
     Hgi* _hgi;
 };
 

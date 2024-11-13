@@ -86,17 +86,4 @@ HgiWebGPUStepFunctions::Bind(HgiVertexBufferBindingVector const &bindings)
     }
 }
 
-void
-HgiWebGPUStepFunctions::SetVertexBufferOffsets(
-    wgpu::RenderPassEncoder const &encoder,
-    uint32_t baseInstance)
-{
-    for (auto const & stepFunction : _vertexBufferDescs) {
-        uint32_t const offset = stepFunction.vertexStride * baseInstance +
-                                stepFunction.byteOffset;
-
-        encoder.SetVertexBuffer(stepFunction.bindingIndex, stepFunction.buffer, offset, WGPU_WHOLE_SIZE);
-     }
-}
-
 PXR_NAMESPACE_CLOSE_SCOPE

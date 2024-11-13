@@ -186,6 +186,10 @@ public:
     HGI_API
     virtual void InsertMemoryBarrier(HgiMemoryBarrier barrier) = 0;
 
+    /// Execute a pre-recorded set of commands.
+    HGI_API
+    virtual void ExecutePrerecordedCmds(HgiCmds* cmds) = 0;
+
 protected:
     HGI_API
     HgiGraphicsCmds();

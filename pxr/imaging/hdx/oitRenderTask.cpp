@@ -189,10 +189,6 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
     HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
     if (!TF_VERIFY(renderPassState)) return;
 
-    if (!_isOitEnabled || !HdxRenderTask::_HasDrawItems()) {
-        return;
-    }
-
     //
     // Pre Execute Setup
     //

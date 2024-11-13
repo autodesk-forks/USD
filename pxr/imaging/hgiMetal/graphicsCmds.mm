@@ -823,6 +823,12 @@ HgiMetalGraphicsCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
 #endif
 }
 
+void
+HgiMetalGraphicsCmds::ExecutePrerecordedCmds(HgiCmds* cmds)
+{
+    TF_CODING_ERROR("Not implemented");
+}
+
 static
 HgiMetal::CommitCommandBufferWaitType
 _ToHgiMetal(const HgiSubmitWaitType wait)

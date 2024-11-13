@@ -31,6 +31,7 @@
 #include "pxr/imaging/hgiWebGPU/capabilities.h"
 #include "pxr/imaging/hgiWebGPU/conversions.h"
 #include "pxr/imaging/hgiWebGPU/graphicsCmds.h"
+#include "pxr/imaging/hgiWebGPU/recordGraphicsCmds.h"
 #include "pxr/imaging/hgiWebGPU/graphicsPipeline.h"
 #include "pxr/imaging/hgiWebGPU/resourceBindings.h"
 #include "pxr/imaging/hgiWebGPU/sampler.h"
@@ -39,6 +40,7 @@
 #include "pxr/imaging/hgiWebGPU/texture.h"
 #include "pxr/imaging/hgiWebGPU/debugCodes.h"
 
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/trace/trace.h"
 
 #include "pxr/base/tf/getenv.h"
@@ -68,6 +70,10 @@ TF_REGISTRY_FUNCTION(TfType)
     TfType t = TfType::Define<HgiWebGPU, TfType::Bases<Hgi> >();
     t.SetFactory<HgiFactory<HgiWebGPU>>();
 }
+
+
+TF_DEFINE_ENV_SETTING(HGIWEBGPU_ENABLE_RENDER_BUNDLES, true,
+"Enable indirect command buffers");
 
 // GetDevice code based on https://github.com/kainino0x/webgpu-cross-platform-demo/blob/main/main.cpp
 #if defined EMSCRIPTEN
@@ -377,10 +383,19 @@ HgiWebGPU::GetIndirectCommandEncoder() const
     return nullptr;
 }
 
+HgiGraphicsCmdsUniquePtr HgiWebGPU::MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) {
+
+    if (TfGetEnvSetting(HGIWEBGPU_ENABLE_RENDER_BUNDLES)) {
+        HgiWebGPURecordGraphicsCmds* recordGraphicsCmds(new HgiWebGPURecordGraphicsCmds(this, desc));
+        return HgiGraphicsCmdsUniquePtr(recordGraphicsCmds);
+    } else {
+        return nullptr;
+    }
+}
+
 void
 HgiWebGPU::StartFrame()
 {
-
 }
 
 void

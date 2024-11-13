@@ -1,25 +1,8 @@
 //
 // Copyright 2022 Pixar
 //
-// Licensed under the Apache License, Version 2.0 (the "Apache License")
-// with the following modification; you may not use this file except in
-// compliance with the Apache License and the following modification to it:
-// Section 6. Trademarks. is deleted and replaced with:
-//
-// 6. Trademarks. This License does not grant permission to use the trade
-//    names, trademarks, service marks, or product names of the Licensor
-//    and its affiliates, except as required to comply with Section 4(c) of
-//    the License and to reproduce the content of the NOTICE file.
-//
-// You may obtain a copy of the Apache License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the Apache License with the above modification is
-// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the Apache License for the specific
-// language governing permissions and limitations under the Apache License.
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
 //
 #include "pxr/imaging/hgi/graphicsCmdsDesc.h"
 #include "pxr/imaging/hgiWebGPU/buffer.h"
@@ -27,6 +10,7 @@
 #include "pxr/imaging/hgiWebGPU/debugCodes.h"
 #include "pxr/imaging/hgiWebGPU/diagnostic.h"
 #include "pxr/imaging/hgiWebGPU/graphicsCmds.h"
+#include "pxr/imaging/hgiWebGPU/recordGraphicsCmds.h"
 #include "pxr/imaging/hgiWebGPU/hgi.h"
 #include "pxr/imaging/hgiWebGPU/graphicsPipeline.h"
 #include "pxr/imaging/hgiWebGPU/resourceBindings.h"
@@ -38,27 +22,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 HgiWebGPUGraphicsCmds::HgiWebGPUGraphicsCmds(
         HgiWebGPU* hgi,
         HgiGraphicsCmdsDesc const& desc)
-        : _hgi(hgi)
-        , _descriptor(desc)
-        , _renderPassEncoder(nullptr)
-        , _commandEncoder(nullptr)
-        , _commandBuffer(nullptr)
-        , _pipeline(nullptr)
-        , _renderPassStarted(false)
-        , _pushConstantsDirty(false)
-        , _viewportSet(false)
-        , _scissorSet(false)
-        , _hasWork(false)
+        : HgiWebGPUBaseGraphicsCmds<wgpu::RenderPassEncoder>(hgi, desc)
 {
-    _constantBindGroupEntry = {};
-    _constantBindGroupEntry.size = 0;
-    wgpu::RenderPassDescriptor renderPass;
-#if !defined(EMSCRIPTEN)
-    if (_IsTimestampsEnabled()) {
-        wgpu::RenderPassTimestampWrites timestampWrites = _hgi->GetRenderTimestampWrites();
-        renderPass.timestampWrites = &timestampWrites;
-    }
-#endif
+    wgpu::RenderPassDescriptor renderPassDesc;
     std::vector<wgpu::RenderPassColorAttachment> colorAttachments;
     for( size_t i=0; i<_descriptor.colorTextures.size(); ++i )
     {
@@ -79,11 +45,10 @@ HgiWebGPUGraphicsCmds::HgiWebGPUGraphicsCmds(
         }
         colorAttachments.push_back(colorDesc);
     }
-    renderPass.colorAttachmentCount = colorAttachments.size();
-    renderPass.colorAttachments = colorAttachments.data();
+    renderPassDesc.colorAttachmentCount = colorAttachments.size();
+    renderPassDesc.colorAttachments = colorAttachments.data();
 
-    auto depthTarget = static_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
-    _renderPassStarted = depthTarget || _descriptor.colorTextures.size() > 0;
+    auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
     wgpu::RenderPassDepthStencilAttachment depthStencilDesc;
     if( depthTarget )
     {
@@ -95,34 +60,28 @@ HgiWebGPUGraphicsCmds::HgiWebGPUGraphicsCmds(
             depthStencilDesc.stencilStoreOp = depthStencilDesc.depthStoreOp;
         }
 
-         // Webgpu doesn't support depth resolution with multisampling. We will do the depth resolution
-         //  from _descriptor.depthResolveTexture after finishing the render pass if applicable
+        // Webgpu doesn't support depth resolution with multisampling. We will do the depth resolution
+        //  from _descriptor.depthResolveTexture after finishing the render pass if applicable
         depthStencilDesc.view = depthTarget->GetTextureView();
         // depth is a single channel, using first component
         depthStencilDesc.depthClearValue = _descriptor.depthAttachmentDesc.clearValue[0];
 
-        renderPass.depthStencilAttachment = &depthStencilDesc;
+        renderPassDesc.depthStencilAttachment = &depthStencilDesc;
     }
-
-    _CreateCommandEncoder();
-
-    if (_renderPassStarted) {
-        _renderPassEncoder = _commandEncoder.BeginRenderPass(&renderPass);
+#if !defined(EMSCRIPTEN)
+    if (_IsTimestampsEnabled()) {
+        wgpu::RenderPassTimestampWrites timestampWrites = _hgi->GetRenderTimestampWrites();
+        renderPassDesc.timestampWrites = &timestampWrites;
     }
+#endif
+
+    _passEncoder = _commandEncoder.BeginRenderPass(&renderPassDesc);
+
     if (!_descriptor.colorTextures.empty()) {
         auto size = _descriptor.colorTextures[0]->GetDescriptor().dimensions;
-        if (!_viewportSet) {
-            SetViewport(GfVec4i(0, 0, size[0], size[1]));
-        }
-        if (!_scissorSet) {
-            SetScissor(GfVec4i(0, 0, size[0], size[1]));
-        }
+        SetViewport(GfVec4i(0, 0, size[0], size[1]));
+        SetScissor(GfVec4i(0, 0, size[0], size[1]));
     }
-}
-
-HgiWebGPUGraphicsCmds::~HgiWebGPUGraphicsCmds()
-{
-    _commandBuffer = nullptr;
 }
 
 bool HgiWebGPUGraphicsCmds::_IsTimestampsEnabled() {
@@ -130,189 +89,33 @@ bool HgiWebGPUGraphicsCmds::_IsTimestampsEnabled() {
     TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS);
 
 }
-void HgiWebGPUGraphicsCmds::_CreateCommandEncoder() {
-    if (!_commandEncoder) {
-        wgpu::Device device = _hgi->GetPrimaryDevice();
-        _commandEncoder = device.CreateCommandEncoder();
-        TF_VERIFY(_commandEncoder);
-    }
-}
-void
-HgiWebGPUGraphicsCmds::PushDebugGroup(const char* label)
-{
-    _CreateCommandEncoder();
-    HgiWebGPUBeginLabel(_commandEncoder, label);
-    _debugGroupLabels.push_back(label);
-}
-
-void
-HgiWebGPUGraphicsCmds::PopDebugGroup()
-{
-    _CreateCommandEncoder();
-    HgiWebGPUEndLabel(_commandEncoder);
-    _debugGroupLabels.pop_back();
-}
 
 void
 HgiWebGPUGraphicsCmds::SetViewport(GfVec4i const& vp)
 {
-    _viewportSet = true;
-
     const auto offsetX = static_cast<float>(vp[0]);
     const auto offsetY = static_cast<float>(vp[1]);
     const auto width = static_cast<float>(vp[2]);
     const auto height = static_cast<float>(vp[3]);
 
-    _renderPassEncoder.SetViewport(offsetX, offsetY, width, height, 0.f, 1.f);
+    _passEncoder.SetViewport(offsetX, offsetY, width, height, 0.f, 1.f);
+}
+
+void
+HgiWebGPUGraphicsCmds::ExecutePrerecordedCmds(HgiCmds* cmds) {
+    auto recordGraphicsCmds = dynamic_cast<HgiWebGPURecordGraphicsCmds *>(cmds);
+    wgpu::RenderBundle renderBundle = recordGraphicsCmds->GetPreRecordedCmds();
+    _passEncoder.ExecuteBundles(1, &renderBundle);
+    _hasWork = true;
 }
 
 void
 HgiWebGPUGraphicsCmds::SetScissor(GfVec4i const& sc)
 {
-    _scissorSet = true;
-
     uint32_t w(sc[2]);
     uint32_t h(sc[3]);
 
-    _renderPassEncoder.SetScissorRect(sc[0], sc[1], w, h);
-}
-
-void
-HgiWebGPUGraphicsCmds::BindPipeline(HgiGraphicsPipelineHandle pipeline)
-{
-    _stepFunctions.Init(pipeline->GetDescriptor());
-
-    _pipeline = static_cast<HgiWebGPUGraphicsPipeline *>(pipeline.Get());
-
-    _renderPassEncoder.SetPipeline(_pipeline->GetPipeline());
-}
-
-void
-HgiWebGPUGraphicsCmds::BindResources(HgiResourceBindingsHandle res)
-{
-    // delay until the pipeline is set and the render pass has begun
-    _resourceBindings = res;
-}
-
-void
-HgiWebGPUGraphicsCmds::SetConstantValues(
-        HgiGraphicsPipelineHandle ,
-        HgiShaderStage ,
-        uint32_t bindIndex,
-        uint32_t byteSize,
-        const void* data)
-{
-    // This is a simplified assumption, since at this point we don't know the structure of the uniform
-    static const size_t alignment = 16;
-    wgpu::Device device = _hgi->GetPrimaryDevice();
-    wgpu::BufferDescriptor bufferDesc;
-    bufferDesc.label = static_cast<std::string>("uniform").c_str();
-    bufferDesc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
-    bufferDesc.size = ((byteSize + alignment - 1) / alignment) * alignment;;
-    wgpu::Buffer constantBuffer = device.CreateBuffer(&bufferDesc);
-    wgpu::Queue queue = device.GetQueue();
-    queue.WriteBuffer(constantBuffer, 0, data, byteSize);
-
-    _constantBindGroupEntry.binding = bindIndex;
-    _constantBindGroupEntry.buffer = constantBuffer;
-    _constantBindGroupEntry.size = bufferDesc.size;
-    _pushConstantsDirty = true;
-}
-
-void
-HgiWebGPUGraphicsCmds::BindVertexBuffers(
-        HgiVertexBufferBindingVector const &bindings)
-{
-    _stepFunctions.Bind(bindings);
-    std::vector<wgpu::Buffer> buffers;
-    std::vector<uint32_t> bufferOffsets;
-    for (HgiVertexBufferBinding const &binding : bindings) {
-        HgiWebGPUBuffer* buf=static_cast<HgiWebGPUBuffer*>(binding.buffer.Get());
-        wgpu::Buffer wgpuBuf = buf->GetBufferHandle();
-        if (wgpuBuf) {
-            buffers.push_back(wgpuBuf);
-            bufferOffsets.push_back(binding.byteOffset);
-        }
-    }
-    for( uint32_t i=0; i<buffers.size(); i++ ) {
-        _renderPassEncoder.SetVertexBuffer(i, buffers[i], bufferOffsets[i]);
-    }
-}
-
-void
-HgiWebGPUGraphicsCmds::Draw(
-        uint32_t vertexCount,
-        uint32_t baseVertex,
-        uint32_t instanceCount,
-        uint32_t baseInstance)
-{
-    _BindResources();
-
-    _renderPassEncoder.Draw(vertexCount, instanceCount, baseVertex, 0);
-}
-
-void
-HgiWebGPUGraphicsCmds::DrawIndirect(
-        HgiBufferHandle const& drawParameterBuffer,
-        uint32_t drawBufferOffset,
-        uint32_t drawCount,
-        uint32_t stride)
-{
-    _BindResources();
-
-    HgiWebGPUBuffer* drawBuf =
-            static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
-
-    _renderPassEncoder.DrawIndirect(drawBuf->GetBufferHandle(), drawBufferOffset);
-}
-
-void
-HgiWebGPUGraphicsCmds::DrawIndexed(
-        HgiBufferHandle const& indexBuffer,
-        uint32_t indexCount,
-        uint32_t indexBufferByteOffset,
-        uint32_t baseVertex,
-        uint32_t instanceCount,
-        uint32_t baseInstance)
-{
-    TF_VERIFY(instanceCount>0);
-
-    _BindResources();
-    _stepFunctions.SetVertexBufferOffsets(_renderPassEncoder, baseInstance);
-    HgiWebGPUBuffer* ibo = static_cast<HgiWebGPUBuffer*>(indexBuffer.Get());
-    uint32_t const baseIndex = indexBufferByteOffset / sizeof(uint32_t);
-    if (!_lastIndexBuffer || _lastIndexBuffer.Get() != ibo->GetBufferHandle().Get())
-    {
-        _renderPassEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0,
-                                          ibo->GetByteSizeOfResource());
-        _lastIndexBuffer = ibo->GetBufferHandle();
-    }
-    // The baseInstance must be set to 0 for WebGPU as it is not passed into the shader. There is no matching builtin.
-    // Hydra computes the current instance index in the shader by subtracting the baseInstance from the instance index,
-    // resulting in range of 0 to instanceCount for accessing data in buffers.
-    // If baseInstance is passed here, the current instance index in the shader will be incorrect,
-    // as it will start from the baseInstance.
-    _renderPassEncoder.DrawIndexed(indexCount, instanceCount, baseIndex, baseVertex, 0);
-}
-
-void
-HgiWebGPUGraphicsCmds::DrawIndexedIndirect(
-        HgiBufferHandle const& indexBuffer,
-        HgiBufferHandle const& drawParameterBuffer,
-        uint32_t drawBufferByteOffset,
-        uint32_t drawCount,
-        uint32_t stride,
-        std::vector<uint32_t> const& drawParameterBufferUInt32,
-        uint32_t patchBaseVertexByteOffset)
-{
-    _BindResources();
-
-    HgiWebGPUBuffer* ibo = static_cast<HgiWebGPUBuffer*>(indexBuffer.Get());
-    HgiWebGPUBuffer* drawBuf =
-            static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
-
-    _renderPassEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0, ibo->GetByteSizeOfResource() - drawBufferByteOffset);
-    _renderPassEncoder.DrawIndexedIndirect(drawBuf->GetBufferHandle(), drawBufferByteOffset);
+    _passEncoder.SetScissorRect(sc[0], sc[1], w, h);
 }
 
 bool
@@ -336,35 +139,12 @@ HgiWebGPUGraphicsCmds::_Submit(Hgi *hgi, HgiSubmitWaitType wait) {
 }
 
 void
-HgiWebGPUGraphicsCmds::_BindResources()
-{
-    if (!_pipeline) {
-        TF_CODING_ERROR("No pipeline bound");
-        return;
-    }
-
-    if (_resourceBindings) {
-        HgiWebGPUResourceBindings *resourceBinding =
-                static_cast<HgiWebGPUResourceBindings *>(_resourceBindings.Get());
-        wgpu::RenderPipeline pipelineHandle = _pipeline->GetPipeline();
-        resourceBinding->BindResources(_hgi->GetPrimaryDevice(), _renderPassEncoder,
-                                       _pipeline->GetBindGroupLayoutList(), _constantBindGroupEntry,
-                                       _pushConstantsDirty);
-        _pushConstantsDirty = false;
-        _resourceBindings = HgiResourceBindingsHandle();
-    }
-
-    _hasWork = true;
-    _lastDrawLabel = _debugGroupLabels.back();
-}
-
-void
 HgiWebGPUGraphicsCmds::_EndRenderPass()
 {
     if (_renderPassStarted) {
         // release any resources
-        _renderPassEncoder.End();
-        _renderPassEncoder = nullptr;
+        _passEncoder.End();
+        _passEncoder = nullptr;
         _lastIndexBuffer = nullptr;
 
         if (_hasWork)  {
@@ -386,9 +166,6 @@ HgiWebGPUGraphicsCmds::_EndRenderPass()
 
         _commandBuffer = _commandEncoder.Finish();
         _commandEncoder = nullptr;
-
-        _viewportSet = false;
-        _scissorSet = false;
     }
 }
 

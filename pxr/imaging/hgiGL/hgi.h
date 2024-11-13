@@ -151,6 +151,9 @@ public:
     HgiIndirectCommandEncoder* GetIndirectCommandEncoder() const override;
 
     HGIGL_API
+    HgiGraphicsCmdsUniquePtr MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) override;
+
+    HGIGL_API
     void StartFrame() override;
 
     HGIGL_API

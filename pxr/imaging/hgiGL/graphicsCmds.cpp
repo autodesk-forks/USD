@@ -220,6 +220,12 @@ HgiGLGraphicsCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
     _ops.push_back( HgiGLOps::InsertMemoryBarrier(barrier) );
 }
 
+void
+HgiGLGraphicsCmds::ExecutePrerecordedCmds(HgiCmds* cmds)
+{
+    TF_CODING_ERROR("Not implemented");
+}
+
 bool
 HgiGLGraphicsCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
 {

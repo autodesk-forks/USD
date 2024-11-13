@@ -152,36 +152,4 @@ HgiWebGPUResourceBindings::_CreateBindGroups(
     }
 }
 
-template <typename PassEncoder, typename>
-void HgiWebGPUResourceBindings::BindResources(
-        wgpu::Device const &device,
-        PassEncoder const &passEncoder,
-        std::vector<wgpu::BindGroupLayout> const &bindGroupLayoutList,
-        wgpu::BindGroupEntry const &constantBindGroupEntry,
-        bool isConstantDirty)
-{
-    _CreateBindGroups(device, bindGroupLayoutList, constantBindGroupEntry, isConstantDirty);
-    if (_bindGroup && _textureBindGroup && _samplerBindGroup) {
-        passEncoder.SetBindGroup(HgiWebGPUBufferShaderSection::bindingSet, _bindGroup, 0, nullptr);
-        passEncoder.SetBindGroup(HgiWebGPUTextureShaderSection::bindingSet, _textureBindGroup, 0, nullptr);
-        passEncoder.SetBindGroup(HgiWebGPUSamplerShaderSection::bindingSet, _samplerBindGroup, 0, nullptr);
-    } else if (_bindGroup || _textureBindGroup || _samplerBindGroup ) {
-        TF_CODING_ERROR("All binding groups should have been initialized at the same time");
-    }
-}
-
-template void HgiWebGPUResourceBindings::BindResources(
-        wgpu::Device const &device,
-        wgpu::RenderPassEncoder const &passEncoder,
-        std::vector<wgpu::BindGroupLayout> const &bindGroupLayoutList,
-        wgpu::BindGroupEntry const &constantBindGroupEntry,
-        bool isConstantDirty);
-
-template void HgiWebGPUResourceBindings::BindResources(
-        wgpu::Device const &device,
-        wgpu::ComputePassEncoder const &passEncoder,
-        std::vector<wgpu::BindGroupLayout> const &bindGroupLayoutList,
-        wgpu::BindGroupEntry const &constantBindGroupEntry,
-        bool isConstantDirty);
-
 PXR_NAMESPACE_CLOSE_SCOPE

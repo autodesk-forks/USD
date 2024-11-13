@@ -359,6 +359,12 @@ HgiVulkanGraphicsCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
     _commandBuffer->InsertMemoryBarrier(barrier);
 }
 
+void
+HgiVulkanGraphicsCmds::ExecutePrerecordedCmds(HgiCmds* cmds)
+{
+    TF_CODING_ERROR("Not implemented");
+}
+
 HgiVulkanCommandBuffer*
 HgiVulkanGraphicsCmds::GetCommandBuffer()
 {

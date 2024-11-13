@@ -132,6 +132,9 @@ public:
     HgiMetalIndirectCommandEncoder* GetIndirectCommandEncoder() const override;
 
     HGIMETAL_API
+    HgiGraphicsCmdsUniquePtr MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) override;
+
+    HGIMETAL_API
     void StartFrame() override;
 
     HGIMETAL_API

@@ -324,6 +324,12 @@ public:
     HGI_API
     virtual void EndFrame() = 0;
 
+    /// Returns a graphics command buffer that can be reused across frames.
+    /// or nullptr if not supported.
+    /// Thread safety: This call is thread safe.
+    HGI_API
+    virtual HgiGraphicsCmdsUniquePtr MakeCmdsRecorder(HgiGraphicsCmdsDesc const& des) = 0;
+
 protected:
     // Returns a unique id for handle creation.
     // Thread safety: Thread-safe atomic increment.

@@ -103,6 +103,9 @@ public:
     HGIGL_API
     void InsertMemoryBarrier(HgiMemoryBarrier barrier) override;
 
+    HGIGL_API
+    void ExecutePrerecordedCmds(HgiCmds* cmds) override;
+
 protected:
     friend class HgiGL;
 

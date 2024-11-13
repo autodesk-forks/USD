@@ -97,6 +97,9 @@ public:
 
     HGIMETAL_API
     void InsertMemoryBarrier(HgiMemoryBarrier barrier) override;
+
+    HGIMETAL_API
+    void ExecutePrerecordedCmds(HgiCmds* cmds) override;
     
     HGIMETAL_API
     void EnableParallelEncoder(bool enable);
