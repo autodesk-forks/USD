@@ -126,6 +126,9 @@ public:
     HgiIndirectCommandEncoder* GetIndirectCommandEncoder() const override;
 
     HGIVULKAN_API
+    HgiGraphicsCmdsUniquePtr MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) override;
+
+    HGIVULKAN_API
     void StartFrame() override;
 
     HGIVULKAN_API

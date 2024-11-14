@@ -277,6 +277,11 @@ HgiVulkan::GetIndirectCommandEncoder() const
     return nullptr;
 }
 
+HgiGraphicsCmdsUniquePtr
+HgiVulkan::MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) {
+    return nullptr;
+}
+
 /* Single threaded */
 void
 HgiVulkan::StartFrame()
