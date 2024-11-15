@@ -74,9 +74,11 @@ HdSt_RenderPass::HdSt_RenderPass(HdRenderIndex *index,
     , _taskRenderTagsVersion(0)
     , _materialTagsVersion(0)
     , _geomSubsetDrawItemsVersion(0)
+    , _drawBatchesVersion(0)
     , _collectionChanged(false)
-    , _drawItemCount(0)
     , _drawItemsChanged(false)
+    , _visibleSize(0)
+    , _recordedCmds(nullptr)
     , _hgi(nullptr)
 {
     HdStRenderDelegate* renderDelegate =
@@ -142,6 +144,14 @@ HdSt_RenderPass::_Execute(HdRenderPassStateSharedPtr const &renderPassState,
 
     _cmdBuffer.PrepareDraw(prepareGfxCmds.get(),
                            stRenderPassState, GetRenderIndex());
+
+    unsigned int currentVisSize = _cmdBuffer.GetVisibleSize();
+
+    // Check if visibility has changed
+    if (_visibleSize != currentVisSize) {
+        _recordedCmds.reset();
+        _visibleSize = currentVisSize;
+    }
 
     prepareGfxCmds->PopDebugGroup();
     _hgi->SubmitCmds(prepareGfxCmds.get());
@@ -216,7 +226,6 @@ HdSt_RenderPass::_UpdateDrawItems(TfTokenVector const& renderTags)
         if (_drawItems != cachedEntry) {
             _drawItems = cachedEntry;
             _drawItemsChanged = true;
-            _drawItemCount = _drawItems->size();
         }
         // We don't rely on this state when using the cache. Reset always.
         _collectionChanged = false;
@@ -248,6 +257,10 @@ HdSt_RenderPass::_UpdateDrawItems(TfTokenVector const& renderTags)
     const bool geomSubsetDrawItemsChanged =
         _geomSubsetDrawItemsVersion != geomSubsetDrawItemsVersion;
 
+    const unsigned int batchVersion = _GetDrawBatchesVersion(GetRenderIndex());
+    const bool drawBatchesChanged =
+            _drawBatchesVersion != batchVersion;
+
     const int taskRenderTagsVersion = tracker.GetTaskRenderTagsVersion();
     bool taskRenderTagsChanged = false;
     if (_taskRenderTagsVersion != taskRenderTagsVersion) {
@@ -262,7 +275,8 @@ HdSt_RenderPass::_UpdateDrawItems(TfTokenVector const& renderTags)
         rprimRenderTagChanged ||
         materialTagsChanged ||
         geomSubsetDrawItemsChanged ||
-        taskRenderTagsChanged) {
+        taskRenderTagsChanged ||
+        drawBatchesChanged) {
 
         if (TfDebug::IsEnabled(HDST_DRAW_ITEM_GATHER)) {
             if (collectionChanged) {
@@ -305,7 +319,6 @@ HdSt_RenderPass::_UpdateDrawItems(TfTokenVector const& renderTags)
             // there is no prim with the desired material tag.
             _drawItems = std::make_shared<HdDrawItemConstPtrVector>();
         }
-        _drawItemCount = _drawItems->size();
         _drawItemsChanged = true;
 
         _collectionVersion = collectionVersion;
@@ -314,6 +327,7 @@ HdSt_RenderPass::_UpdateDrawItems(TfTokenVector const& renderTags)
         _rprimRenderTagVersion = rprimRenderTagVersion;
         _materialTagsVersion = materialTagsVersion;
         _geomSubsetDrawItemsVersion = geomSubsetDrawItemsVersion;
+        _drawBatchesVersion = batchVersion;
     }
 }
 
@@ -332,7 +346,7 @@ HdSt_RenderPass::_UpdateCommandBuffer(TfTokenVector const& renderTags)
     // command buffers.
     _UpdateDrawItems(renderTags);
 
-    const int batchVersion = _GetDrawBatchesVersion(GetRenderIndex());
+    const unsigned int batchVersion = _GetDrawBatchesVersion(GetRenderIndex());
     // Rebuild draw batches based on new draw items
     if (_drawItemsChanged) {
         _cmdBuffer.SetDrawItems(_drawItems, batchVersion, _hgi);

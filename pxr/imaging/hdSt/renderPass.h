@@ -75,6 +75,7 @@ private:
 
     // The version number of the geom subset draw items.
     unsigned int _geomSubsetDrawItemsVersion;
+    unsigned int _drawBatchesVersion;
 
     // A flag indicating that the held collection changed since this renderPass
     // was last drawn.
@@ -87,8 +88,8 @@ private:
     // -----------------------------------------------------------------------
     // DrawItems that are used to build the draw batches.
     HdDrawItemConstPtrVectorSharedPtr _drawItems;
-    size_t _drawItemCount;
     bool _drawItemsChanged;
+    unsigned int _visibleSize;
     HgiGraphicsCmdsUniquePtr _recordedCmds;
     Hgi* _hgi;
 };
