@@ -26,7 +26,7 @@
 
 #include "pxr/base/tf/declarePtrs.h"
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include <emscripten/bind.h>
 #include "pxr/base/tf/emscriptenTypeRegistration.h"
 
@@ -84,5 +84,5 @@
         return pxr::TfWeakPtr<pxr::TYPE>(BindingType<val>::fromWireType(value).as<pxr::TfRefPtr<pxr::TYPE>>()); \
     EMSCRIPTEN_REGISTER_TYPE_CONVERSION_END(pxr::TfWeakPtr<pxr::TYPE>)
 
-#endif // __EMSCRIPTEN__
+#endif // ARCH_OS_WASM_VM
 #endif // PXR_USD_USD_EMSCRIPTEN_PTR_REGISTRATION_HELPER_H

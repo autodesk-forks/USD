@@ -16,7 +16,7 @@
 #include "pxr/base/arch/library.h"
 #include "pxr/base/arch/symbols.h"
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include <emscripten.h>
 #include <dlfcn.h>
 #include <iostream>
@@ -42,7 +42,7 @@ Test_TfDl()
     // Check that TfDlopen fills in our error string with something
     std::string dlErrorStr; // Renamed from dlerror
     // Check that opening a non-existing shared library fails
-    #ifdef __EMSCRIPTEN__
+    #ifdef ARCH_OS_WASM_VM
     // Try to load side module
     void* handle = dlopen("nonexisting.wasm", RTLD_NOW);
     if (!handle) {
@@ -64,7 +64,7 @@ Test_TfDl()
 
     // Compute path to test library.
     string dlname;
-    #ifdef __EMSCRIPTEN__
+    #ifdef ARCH_OS_WASM_VM
     dlname = "TestTf.wasm"; 
     #else
     TF_AXIOM(ArchGetAddressInfo((void*)Test_TfDl, &dlname, NULL, NULL, NULL));
@@ -80,7 +80,7 @@ Test_TfDl()
     printf("Checking test shared lib: %s\n", dlname.c_str());
 
     std::string errorStr;
-    #ifdef __EMSCRIPTEN__
+    #ifdef ARCH_OS_WASM_VM
     // Check that we can open the existing .wasm library.
     handle = dlopen(dlname.c_str(), RTLD_LAZY | RTLD_LOCAL);
     if (!handle) {
@@ -94,7 +94,7 @@ Test_TfDl()
     #endif
     TF_AXIOM(handle != nullptr);
     TF_AXIOM(errorStr.empty());
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
     TF_AXIOM(dlclose(handle) == 0);
 #else
     TF_AXIOM(!TfDlclose(handle));

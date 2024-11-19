@@ -21,7 +21,7 @@
 #include "pxr/base/gf/traits.h"
 #include "pxr/base/gf/math.h"
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include "pxr/base/gf/emscriptenRegistrationHelper.h"
 #endif
 
@@ -409,7 +409,7 @@ GfIsClose(GfVec4f const &v1, GfVec4f const &v2, double tolerance)
  
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 REGISTER_GLVECTOR(pxr::GfVec4f)
 #endif
 

@@ -24,7 +24,7 @@
 #ifndef PXR_BASE_TF_WRAPTOKEN_H
 #define PXR_BASE_TF_WRAPTOKEN_H
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 
 #include <emscripten/bind.h>
 #include "pxr/base/tf/token.h"
@@ -41,6 +41,6 @@ EMSCRIPTEN_REGISTER_TYPE_CONVERSION_END(pxr::TfToken)
 EMSCRIPTEN_REGISTER_VECTOR_TO_ARRAY_CONVERSION(pxr::TfToken)
 EMSCRIPTEN_REGISTER_TYPE(std::vector<pxr::TfToken>)
 
-#endif // __EMSCRIPTEN__
+#endif // ARCH_OS_WASM_VM
 
 #endif // PXR_BASE_TF_WRAPTOKEN_H

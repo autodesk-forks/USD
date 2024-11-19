@@ -21,7 +21,7 @@
 #include "pxr/base/gf/traits.h"
 #include "pxr/base/gf/math.h"
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include "pxr/base/gf/emscriptenRegistrationHelper.h"
 #endif
 
@@ -449,7 +449,7 @@ GfSlerp(double alpha, GfVec3d const &v0, GfVec3d const &v1);
  
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 REGISTER_GLVECTOR(pxr::GfVec3d)
 #endif
 #endif // PXR_BASE_GF_VEC3D_H

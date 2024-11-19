@@ -21,7 +21,7 @@
 
 #if defined(ARCH_OS_LINUX) && defined(ARCH_CPU_INTEL)
 #include <x86intrin.h>
-#elif defined(__EMSCRIPTEN__)
+#elif defined(ARCH_OS_WASM_VM)
 #include <emscripten.h>
 #elif defined(ARCH_OS_DARWIN)
 #include <mach/mach_time.h>
@@ -56,7 +56,7 @@ ArchGetTickTime()
     uint64_t result;
     __asm __volatile("mrs	%0, CNTVCT_EL0" : "=&r" (result));
     return result;
-#elif defined(__EMSCRIPTEN__)
+#elif defined(ARCH_OS_WASM_VM)
     return static_cast<int64_t>(emscripten_get_now() * 1e+6);
 #else
 #error Unknown architecture.
@@ -72,7 +72,7 @@ inline uint64_t
 ArchGetStartTickTime()
 {
     uint64_t t;
-#if defined (ARCH_OS_DARWIN) || defined(__EMSCRIPTEN__)
+#if defined (ARCH_OS_DARWIN) || defined(ARCH_OS_WASM_VM)
     return ArchGetTickTime();
 #elif defined (ARCH_CPU_ARM)
     std::atomic_signal_fence(std::memory_order_seq_cst);
@@ -113,7 +113,7 @@ inline uint64_t
 ArchGetStopTickTime()
 {
     uint64_t t;
-#if defined (ARCH_OS_DARWIN) || defined(__EMSCRIPTEN__)
+#if defined (ARCH_OS_DARWIN) || defined(ARCH_OS_WASM_VM)
     return ArchGetTickTime();
 #elif defined (ARCH_CPU_ARM)
     std::atomic_signal_fence(std::memory_order_seq_cst);

@@ -27,7 +27,7 @@
 
 #include "pxr/imaging/garch/glPlatformContextWindows.h"
 
-#elif defined(__EMSCRIPTEN__)
+#elif defined(ARCH_OS_WASM_VM)
 
 #include "pxr/imaging/garch/glPlatformContextEmscripten.h"
 

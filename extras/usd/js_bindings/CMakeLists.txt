@@ -36,7 +36,6 @@ set_target_properties(${BINDINGS_NAME}
 set(BUILD_FILES
     ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.js
     ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.wasm
-    ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.worker.js
     ${CMAKE_SOURCE_DIR}/js/test.html
 )
 

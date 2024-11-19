@@ -44,7 +44,7 @@
     #define PXR_OSD_WITH_GL_SUPPORT_ENABLED
 #endif // PXR_METAL_SUPPORT_ENABLED
 
-#if defined(ARCH_OS_ANDROID) || defined(__EMSCRIPTEN__)
+#if defined(ARCH_OS_ANDROID) || defined(ARCH_OS_WASM_VM)
 #define PXR_DISABLE_OSD
 #endif
 

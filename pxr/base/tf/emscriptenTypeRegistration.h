@@ -24,7 +24,7 @@
 #ifndef PXR_BASE_TF_EMSCRIPTEN_TYPE_REGISTRATION_H
 #define PXR_BASE_TF_EMSCRIPTEN_TYPE_REGISTRATION_H
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include <emscripten/bind.h>
 // Use this define to make a type without bindings known to Emscripten
 #define EMSCRIPTEN_REGISTER_TYPE(TYPE) \
@@ -99,5 +99,5 @@ namespace emscripten { \
     } \
 }
 
-#endif // __EMSCRIPTEN__
+#endif // ARCH_OS_WASM_VM
 #endif // PXR_BASE_TF_EMSCRIPTEN_TYPE_REGISTRATION_H

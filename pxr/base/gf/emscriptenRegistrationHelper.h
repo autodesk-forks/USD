@@ -22,7 +22,7 @@
       } \
       return vec; \
     EMSCRIPTEN_REGISTER_TYPE_CONVERSION_END(VectorType)
-#else // __EMSCRIPTEN__
+#else // ARCH_OS_WASM_VM
   #define REGISTER_GLVECTOR(VectorType)
-#endif // __EMSCRIPTEN__
+#endif // ARCH_OS_WASM_VM
 #endif // PXR_BASE_GF_EMSCRIPTEN_REGISTRATION_HELPER_H

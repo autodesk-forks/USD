@@ -188,7 +188,7 @@ PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // ARCH_OS_WINDOWS
 
-#if defined(__EMSCRIPTEN__)
+#if defined(ARCH_OS_WASM_VM)
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -210,7 +210,7 @@ void *GarchSelectCoreProfileMacVisual()
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // __EMSCRIPTEN__
+#endif // ARCH_OS_WASM_VM
 
 ////////////////////////////////////////////////////////////
 

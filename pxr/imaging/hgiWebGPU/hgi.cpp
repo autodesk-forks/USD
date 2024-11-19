@@ -181,7 +181,7 @@ wgpu::Device GetDevice() {
 
         return device;
     }
-#endif  // __EMSCRIPTEN__
+#endif  // ARCH_OS_WASM_VM
 
 HgiWebGPU::HgiWebGPU()
 : _device(GetDevice())

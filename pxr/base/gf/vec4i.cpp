@@ -15,7 +15,7 @@
 #include "pxr/base/gf/ostreamHelpers.h"
 #include "pxr/base/tf/type.h"
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include "pxr/base/gf/emscriptenRegistrationHelper.h"
 #endif
 

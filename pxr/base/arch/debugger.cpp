@@ -37,7 +37,7 @@
 #if defined(ARCH_OS_WINDOWS)
 #include <Windows.h>
 #endif
-#if defined(__EMSCRIPTEN__)
+#if defined(ARCH_OS_WASM_VM)
 #include <emscripten.h>
 #endif
 #include <atomic>
@@ -579,7 +579,7 @@ ArchDebuggerTrap()
             DebugBreak();
 #elif defined(ARCH_CPU_INTEL)
             asm("int $3");
-#elif defined(__EMSCRIPTEN__)
+#elif defined(ARCH_OS_WASM_VM)
             emscripten_debugger();
 #else
             raise(SIGTRAP);
@@ -628,7 +628,7 @@ ArchAbort(bool logging)
 {
     if (!_ArchAvoidJIT() || ArchDebuggerIsAttached()) {
         if (!logging) {
-#if !defined(ARCH_OS_WINDOWS) && !defined(__EMSCRIPTEN__)
+#if !defined(ARCH_OS_WINDOWS) && !defined(ARCH_OS_WASM_VM)
             // Remove signal handler.
             struct sigaction act;
             act.sa_handler = SIG_DFL;
@@ -642,7 +642,7 @@ ArchAbort(bool logging)
     }
 
     // The exit code for abort() (128 + SIGABRT).
-    #if defined(__EMSCRIPTEN__)
+    #if defined(ARCH_OS_WASM_VM)
         emscripten_force_exit(134);
     #else
         _exit(134);

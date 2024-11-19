@@ -32,7 +32,6 @@ list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_pl
 set(BUILD_FILES
     ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.js
     ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.wasm
-    ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.worker.js
     ${CMAKE_CURRENT_SOURCE_DIR}/static/hdEmscripten.html
     ${CMAKE_CURRENT_SOURCE_DIR}/static/simpleShading.usda
     ${CMAKE_CURRENT_SOURCE_DIR}/js/ThreeJsRenderDelegate.js

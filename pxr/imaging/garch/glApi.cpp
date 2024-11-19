@@ -3185,7 +3185,7 @@ static bool hasExt(const char * ext,
     return false;
 }
 
-#if defined(__EMSCRIPTEN__)
+#if defined(ARCH_OS_WASM_VM)
 // Emscripten handles mapping OpeGL functions and the implementation of WebGL is handled by the browser
 static bool loadSymbols()
 {

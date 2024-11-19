@@ -19,7 +19,7 @@
 #include <type_traits>
 #include <thread>
 
-#if defined(ARCH_OS_LINUX) || defined(__EMSCRIPTEN__)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -89,7 +89,7 @@ Arch_ComputeNanosecondsPerTick()
     return static_cast<double>(info.numer) / info.denom;
 }
 
-#elif defined(ARCH_OS_LINUX) || defined(__EMSCRIPTEN__)
+#elif defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 
 static
 double
@@ -270,7 +270,7 @@ Arch_MeasureExecutionTime(uint64_t maxTicks, bool *reachedConsensus,
     // Since measured times are +/- 1 quantum, we multiply by 2000 to get the
     // desired runtime, and from there figure number of iterations for a sample.
     const uint64_t minTicksPerSample = 2000 * ArchGetTickQuantum();
-    #if defined(__EMSCRIPTEN__)
+    #if defined(ARCH_OS_WASM_VM)
     const int sampleIters = 1; // FIXME
     #else
     const int sampleIters = (estTicksPer < minTicksPerSample)

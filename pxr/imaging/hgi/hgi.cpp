@@ -62,7 +62,7 @@ _MakeNewPlatformDefaultHgi()
             "HgiMetal";
         #elif defined(ARCH_OS_WINDOWS)
             "HgiGL";
-        #elif defined(__EMSCRIPTEN__)
+        #elif defined(ARCH_OS_WASM_VM)
             "HgiWebGPU";
         #else
             ""; 

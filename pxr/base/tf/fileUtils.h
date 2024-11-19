@@ -235,7 +235,7 @@ TfReadDir(std::string const &dirPath,
 TF_API
 bool TfTouchFile(std::string const &fileName, bool create=true);
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
     #define ACCESSPERMS 0777
     #define DEFFILEMODE 0777
 #endif

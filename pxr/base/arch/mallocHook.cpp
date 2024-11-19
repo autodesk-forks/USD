@@ -116,7 +116,7 @@ static bool
 _MallocProvidedBySameLibraryAs(const char* functionName,
                                bool skipMallocCheck)
 {
-#if defined(__EMSCRIPTEN__)
+#if defined(ARCH_OS_WASM_VM)
     // For EMSCRIPTEN everything is linked statically, so we return true
     return true;
 #elif !defined(ARCH_OS_WINDOWS)

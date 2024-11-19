@@ -24,7 +24,7 @@
 #ifndef PXR_USD_SDF_WRAPPATH_H
 #define PXR_USD_SDF_WRAPPATH_H
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 
 #include "pxr/usd/sdf/path.h"
 
@@ -37,6 +37,6 @@ static pxr::SdfPath fromWireType(WireType value) {
     return pxr::SdfPath(BindingType<val>::fromWireType(value).as<std::string>());
 EMSCRIPTEN_REGISTER_TYPE_CONVERSION_END(pxr::SdfPath)
 
-#endif // __EMSCRIPTEN__
+#endif // ARCH_OS_WASM_VM
 
 #endif // PXR_USD_SDF_WRAPPATH_H

@@ -238,7 +238,7 @@ _fatalSignalHandler(int signo)
     fflush(stderr);
 
     // Simulate the exit status of being killed by signal signo
-    #ifdef __EMSCRIPTEN__
+    #ifdef ARCH_OS_WASM_VM
         emscripten_force_exit(128 + signo);
     #else
         _exit(128 + signo);

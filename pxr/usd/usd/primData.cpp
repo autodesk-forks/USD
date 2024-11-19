@@ -28,7 +28,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 // Static assertion on PrimData size.  We want to be warned when its size
 // changes.
-#ifndef __EMSCRIPTEN__
+#ifndef ARCH_OS_WASM_VM
 static_assert(sizeof(Usd_PrimData) == 64,
               "Expected sizeof(Usd_PrimData) == 64");
 #else

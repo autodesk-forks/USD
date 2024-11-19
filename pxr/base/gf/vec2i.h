@@ -20,7 +20,7 @@
 #include "pxr/base/gf/limits.h"
 #include "pxr/base/gf/traits.h"
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 #include "pxr/base/gf/emscriptenRegistrationHelper.h"
 #endif
 
@@ -254,7 +254,7 @@ GfDot(GfVec2i const &v1, GfVec2i const &v2) {
  
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#ifdef __EMSCRIPTEN__
+#ifdef ARCH_OS_WASM_VM
 REGISTER_GLVECTOR(pxr::GfVec2i)
 #endif
 

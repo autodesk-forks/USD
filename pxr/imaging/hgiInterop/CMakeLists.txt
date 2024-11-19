@@ -21,14 +21,14 @@ endif()
 
 if (PXR_ENABLE_VULKAN_SUPPORT)
     list(APPEND optionalLibraries hgiVulkan)
-    list(APPEND optionalCppFiles cpu.cpp)
-    list(APPEND optionalPrivateHeaders cpu.h)
+    list(APPEND optionalCppFiles vulkan.cpp)
+    list(APPEND optionalPrivateHeaders vulkan.h)
 endif()
 
 if (PXR_ENABLE_WEBGPU_SUPPORT)
     list(APPEND optionalLibraries hgiWebGPU)
-    list(APPEND optionalCppFiles cpu.cpp)
-    list(APPEND optionalPrivateHeaders cpu.h)
+    list(APPEND optionalCppFiles webgpu.cpp)
+    list(APPEND optionalPrivateHeaders webgpu.h)
 endif()
 
 if (PXR_ENABLE_METAL_SUPPORT)
