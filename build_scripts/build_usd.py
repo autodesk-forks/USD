@@ -985,17 +985,22 @@ BOOST = Dependency("boost", InstallBoost, *BOOST_VERSION_FILES)
 ############################################################
 # Intel oneTBB
 
-ONETBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.9.0.zip"
+ONETBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.12.0.zip"
 
 def InstallOneTBB(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ONETBB_URL, context, force)):
+        SHARED_LIBS = 'OFF' if context.targetWasm else 'ON'
+        cmakeOptions = [
+            '-DTBB_TEST=OFF',
+            '-DTBB_STRICT=OFF',
+            '-DBUILD_SHARED_LIBS={shared}'.format(shared=SHARED_LIBS)
+        ]
         if context.targetWasm:
-            PatchFile("cmake/compilers/Clang.cmake",
-                [("if (CMAKE_SYSTEM_PROCESSOR MATCHES \"(AMD64|amd64|i.86|x86)\")",
-                  "if (CMAKE_SYSTEM_PROCESSOR MATCHES \"(AMD64|amd64|i.86|x86)\" AND NOT EMSCRIPTEN)")])
-        RunCMake(context, force, 
-                 ['-DTBB_TEST=OFF',
-                  '-DTBB_STRICT=OFF'] + buildArgs)
+            cmakeOptions += [
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"'
+            ]
+        cmakeOptions += buildArgs
+        RunCMake(context, force, cmakeOptions)
 
 ONETBB = Dependency("oneTBB", InstallOneTBB, "include/oneapi/tbb.h")
 
@@ -1015,13 +1020,10 @@ else:
     # Use point release with fix https://github.com/oneapi-src/oneTBB/pull/833
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2020.3.1.zip"
 
-# Note: this refers to a fork of tbb for wasm. Is this maintained?
-TBB_EMSCRIPTEN_URL = "https://github.com/sdunkel/wasmtbb/archive/refs/heads/master.zip"
 
 def InstallTBB(context, force, buildArgs):
     if context.targetWasm:
-        buildArgs.append("CXXFLAGS=-fPIC")
-        InstallTBB_Emscripten(context, force, buildArgs)
+        raise RuntimeError("TBB is no longed used for WebAssembly builds. Use oneTBB instead.")
     elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
     elif MacOS():
@@ -1173,45 +1175,6 @@ def InstallTBB_Linux(context, force, buildArgs):
         PatchFile("Makefile", [("release", "debug")])
         Run(makeTBBCmd)
 
-        CopyFiles(context, "build/*_release/libtbb*.*", "lib")
-        CopyFiles(context, "build/*_debug/libtbb*.*", "lib")
-        CopyDirectory(context, "include/serial", "include/serial")
-        CopyDirectory(context, "include/tbb", "include/tbb")
-
-def InstallTBB_Emscripten(context, force, buildArgs):
-
-    with CurrentWorkingDirectory(DownloadURL(TBB_EMSCRIPTEN_URL, context, force)):
-        PatchFile("build/linux.emscripten.inc",
-                  [("-DUSE_PTHREAD", "-DUSE_PTHREAD -pthread")],
-                  multiLineMatches=True)
-        with open('build/big_iron.inc', 'r') as file:
-            lines = file.readlines()
-        # override CXXFLAGS += 
-        for i, line in enumerate(lines):
-            if line.strip().startswith('override CXXFLAGS +='):
-                lines[i] = 'override CXXFLAGS += -fPIC -D__TBB_DYNAMIC_LOAD_ENABLED=0 -D__TBB_SOURCE_DIRECTLY_INCLUDED=1\n'
-        with open('build/big_iron.inc', 'w') as file:
-            file.writelines(lines)
-            
-        # By default no config for other platform is available, but the one for linux
-        # seems to work fine
-        if MacOS():
-            shutil.copy('build/linux.emscripten.inc', 'build/macos.emscripten.inc')
-        elif Windows():
-            shutil.copy('build/linux.emscripten.inc', 'build/windows.emscripten.inc')
-
-        # Run the script from the "x64 Native Tools Command Prompt" of Visual Studio,
-        # to get the correct compiler and arch for TBB Emscripten build on windows
-        Run('{emmake} make CXXFLAGS="-fPIC" -j{procs} extra_inc=big_iron.inc tbb {buildArgs}'.format(
-            emmake="emmake.bat" if Windows() else "emmake",
-            procs=context.numJobs,
-            buildArgs=" ".join(buildArgs)))
-
-        # Install both release and debug builds. USD requires the debug
-        # libraries when building in debug mode, and installing both
-        # makes it easier for users to install dependencies in some
-        # location that can be shared by both release and debug USD
-        # builds. Plus, the TBB build system builds both versions anyway.
         CopyFiles(context, "build/*_release/libtbb*.*", "lib")
         CopyFiles(context, "build/*_debug/libtbb*.*", "lib")
         CopyDirectory(context, "include/serial", "include/serial")
@@ -2795,7 +2758,7 @@ if context.targetWasm:
 
 # Determine list of dependencies that are required based on options
 # user has selected.
-if context.buildOneTBB:
+if context.buildOneTBB or context.targetWasm:
     TBB = ONETBB
 
 requiredDependencies = [TBB]
