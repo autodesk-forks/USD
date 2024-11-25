@@ -7,11 +7,8 @@
 #include "pxr/pxr.h"
 
 #include "pxr/imaging/hd/mesh.h"
-#include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/meshShaderKey.h"
 #include "pxr/base/tf/staticTokens.h"
-
-#include <iostream>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -675,34 +672,6 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
 
     FS[fsIndex++] = _tokens->mainFS;
     FS[fsIndex] = TfToken();
-
-    if (TfDebug::IsEnabled(HDST_DUMP_SHADER_KEYS)) {
-        
-        auto DumpTokens = [](auto& tokens, const char* stage) {
-            if (tokens[0].IsEmpty())
-                return;
-            
-            std::cout << stage;
-            for (auto& token : tokens) {
-                if (!token.IsEmpty())
-                    std::cout << token.GetText() << ", ";
-                else
-                    break;
-            }
-            
-            std::cout << std::endl;
-        };
-
-        std::cout << "MeshShaderKey" << std::endl;
-        DumpTokens(VS, "VS:\t");
-        DumpTokens(TCS, "TCS:\t");
-        DumpTokens(TES, "TES:\t");
-        DumpTokens(PTCS, "PTCS:\t");
-        DumpTokens(PTVS, "PTVS:\t");
-        DumpTokens(GS, "GS:\t");
-        DumpTokens(FS, "FS:\t");
-        std::cout << std::flush;
-    }
 }
 
 HdSt_MeshShaderKey::~HdSt_MeshShaderKey()
