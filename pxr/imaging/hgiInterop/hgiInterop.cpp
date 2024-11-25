@@ -13,11 +13,11 @@
 #endif
 
 #if defined(PXR_VULKAN_SUPPORT_ENABLED)
-#include "pxr/imaging/hgiInterop/cpu.h"
+#include "pxr/imaging/hgiInterop/vulkan.h"
 #endif
 
 #if defined(PXR_WEBGPU_SUPPORT_ENABLED)
-    #include "pxr/imaging/hgiInterop/cpu.h"
+    #include "pxr/imaging/hgiInterop/webgpu.h"
 #endif
 
 #if defined(PXR_METAL_SUPPORT_ENABLED)

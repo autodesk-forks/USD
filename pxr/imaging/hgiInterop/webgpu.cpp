@@ -9,7 +9,7 @@
 #include "pxr/pxr.h"
 #include "pxr/imaging/hgi/blitCmdsOps.h"
 #include "pxr/imaging/hgi/hgi.h"
-#include "pxr/imaging/hgiInterop/cpu.h"
+#include "pxr/imaging/hgiInterop/webgpu.h"
 #include "pxr/base/vt/value.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
