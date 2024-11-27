@@ -19,11 +19,12 @@
 #define {{ HEADER_GUARD|snake }}_{{ FILE_NAME|snake }}_H
 
 /// \file
-
+{% if LIBRARY_API %}
 #include "{{ INCLUDE_PATH }}/api.h"
+{%- endif -%}
 
 {%- if SCHEMA_INCLUDES is defined -%}
-{%- for t in SCHEMA_INCLUDES %}
+{% for t in SCHEMA_INCLUDES %}
 #include "{{ t | expand }}.h"
 {%- endfor -%}
 {%- endif %}
@@ -75,7 +76,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 {%- endfor -%}
 {%- endif %}
 
-TF_DECLARE_PUBLIC_TOKENS({{SCHEMA_CLASS_NAME}}Tokens, {{ LIBRARY_API }},
+TF_DECLARE_PUBLIC_TOKENS({{SCHEMA_CLASS_NAME}}Tokens,{% if LIBRARY_API%} {{ LIBRARY_API }},{% endif %}
     {{ SCHEMA_CLASS_NAME|snake }}_TOKENS);
 
 //-----------------------------------------------------------------------------

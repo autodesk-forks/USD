@@ -8,18 +8,23 @@
 #include "pxr/imaging/hdSt/flatNormals.h"
 #include "pxr/imaging/hdSt/meshTopology.h"
 #include "pxr/imaging/hdSt/quadrangulate.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
+#include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/smoothNormals.h"
 #include "pxr/imaging/hdSt/triangulate.h"
 #include "pxr/imaging/hdSt/vertexAdjacency.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/smoothNormals.h"
 #include "pxr/imaging/hd/flatNormals.h"
+#include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
-#include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/glf/testGLContext.h"
+
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/usd/sdf/path.h"
 
@@ -977,7 +982,12 @@ int main()
     TfErrorMark mark;
 
     static HgiUniquePtr _hgi = Hgi::CreatePlatformDefaultHgi();
-    registry = std::make_shared<HdStResourceRegistry>(_hgi.get());
+    HdDriver driver{HgiTokens->renderDriver, VtValue(_hgi.get())};
+    HdStRenderDelegate renderDelegate;
+    std::unique_ptr<HdRenderIndex> index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    registry = std::static_pointer_cast<HdStResourceRegistry>(
+        index->GetResourceRegistry());
 
     bool success = true;
     success &= BasicTest();

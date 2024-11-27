@@ -6,7 +6,7 @@
 
 #include "hdPrman/renderPassSceneIndexPlugin.h"
 
-#if PXR_VERSION >= 2405
+#if PXR_VERSION >= 2408
 
 #include "hdPrman/tokens.h"
 
@@ -56,4 +56,4 @@ HdPrman_RenderPassSceneIndexPlugin::_AppendSceneIndex(
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // PXR_VERSION >= 2405
+#endif // PXR_VERSION >= 2408

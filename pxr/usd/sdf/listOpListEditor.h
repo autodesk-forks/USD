@@ -238,7 +238,7 @@ Sdf_ListOpListEditor<TP>::ModifyItemEdits(const ModifyCallback& cb)
     modifiedListOp.ModifyOperations(
         [this, &cb](const value_type &t) {
             return _ModifyCallbackHelper(cb, _GetTypePolicy(), t);
-        }, /* removeDuplicates = */ true);
+        });
 
     _UpdateListOp(modifiedListOp);
 }

@@ -20,7 +20,14 @@ class TestSchemaConcrete "TestSchemaConcrete" (
               photographic measurements.
                 """
             string userDocBrief = """
-              exposure:  Specify the intensity of the light source as a power of 2 (in stops)."""
+              exposure:  Specify the intensity of the light source as a power of 2 (in stops).
+              Increasing the exposure by 1 will double the energy emitted by the light source.
+              A value of 0 produces an intensity of 1, -1 produces .5. You may wonder why you
+              might use Exposure, and the answer is that real world lighting has high energies
+              and typical exposures are low values while you may have to type a really large
+              number for equivalent Intensity. This is also comfortable to artists familiar with
+              photographic measurements.
+                """
         }
         displayGroup = "Basic"
         displayName = "Exposure"

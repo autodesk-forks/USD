@@ -58,6 +58,13 @@ struct object_manager_ref_arg_from_python
     typedef Ref result_type;
     
     object_manager_ref_arg_from_python(PyObject*);
+
+    // Disallow copies to avoid double-destruction of object in m_result.
+    object_manager_ref_arg_from_python(
+        object_manager_ref_arg_from_python const&) = delete;
+    object_manager_ref_arg_from_python& operator=(
+        object_manager_ref_arg_from_python const&) = delete;
+
     bool convertible() const;
     Ref operator()() const;
     ~object_manager_ref_arg_from_python();

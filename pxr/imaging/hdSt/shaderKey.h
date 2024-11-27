@@ -20,7 +20,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 // Abstract interface for geometric shader keys that may be used to
 // construct a geometric shader.
 struct HdSt_ShaderKey {
-    typedef size_t ID;
+    using ID = size_t;
 
     HDST_API
     virtual ~HdSt_ShaderKey();
@@ -29,11 +29,6 @@ struct HdSt_ShaderKey {
     // for deduplication in the resource registry.
     HDST_API
     ID ComputeHash() const;
-
-    // Stitches the glslfx filename and the shader stage mixin names into
-    // a string for consumption by HioGlslfx.
-    HDST_API
-    std::string GetGlslfxString() const;
 
     // -------------------------------------------------------------------------
     // Virtual interface
@@ -44,6 +39,11 @@ struct HdSt_ShaderKey {
     // The expectation is that this file includes the glslfx files that
     // define any functions it uses.
     virtual TfToken const &GetGlslfxFilename() const = 0;
+
+    // Stitches the glslfx filename and the shader stage mixin names into
+    // a string for consumption by HioGlslfx.
+    HDST_API
+    virtual std::string GetGlslfxString() const;
 
     // Each shader stage specifies the various mixins to stitch together
     // via their token names. The Get* flavor of methods return the first
@@ -96,8 +96,13 @@ struct HdSt_ShaderKey {
     // of the face-varying primvar accessors. Only relevant for mesh prims with 
     // face-varying primvars.
     HDST_API
-    virtual HdSt_GeometricShader::FvarPatchType GetFvarPatchType() const; 
+    virtual HdSt_GeometricShader::FvarPatchType GetFvarPatchType() const;
 
+protected:
+    
+    HDST_API
+    static std::string _JoinTokens(
+        const char *stage, TfToken const *tokens, bool *firstStage);
 };
 
 

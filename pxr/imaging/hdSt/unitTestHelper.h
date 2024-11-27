@@ -550,6 +550,11 @@ public:
 
     HDST_API
     const HdRenderPassSharedPtr &GetRenderPass();
+    
+    HDST_API
+    Hgi* GetHgi() {
+        return _GetHgi();
+    }
 
 private:
     void _CreateRenderPassState();
@@ -631,6 +636,9 @@ public:
 
     HDST_API
     Hgi * GetHgi() { return _hgi.get(); }
+    
+    HDST_API
+    HdStResourceRegistrySharedPtr const & GetResourceRegistry();
 
 private:
     void _CreateShaderProgram();
@@ -643,6 +651,11 @@ private:
     void _PrintCompileErrors();
 
     HgiUniquePtr _hgi;
+    HdDriver _hgiDriver;
+    HdStRenderDelegate _renderDelegate;
+    std::unique_ptr<HdRenderIndex> _renderIndex;
+    HdStResourceRegistrySharedPtr _resourceRegistry;
+
     HgiBufferHandle _indexBuffer;
     HgiBufferHandle _vertexBuffer;
     HgiShaderProgramHandle _shaderProgram;

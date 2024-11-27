@@ -866,6 +866,7 @@
         SCHEMA_NAME = 'RenderBuffer',
         SCHEMA_TOKEN = 'renderBuffer',
         MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
             ('dimensions', T_VEC3I, {}),
             ('format', T_FORMAT, {}),
             ('multiSampled', T_BOOL, {}),
@@ -1382,5 +1383,25 @@
         ],
         ADD_DEFAULT_LOCATOR = True,
     ),
+
     #--------------------------------------------------------------------------
+    # legacyTask
+    dict(
+        SCHEMA_NAME = 'LegacyTask',
+        DOC = '''The {{ SCHEMA_CLASS_NAME }} specifies a Hydra task by providing
+                 a task factory and data.''',
+        SCHEMA_TOKEN = 'task',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
+            ('factory', 'HdLegacyTaskFactoryDataSource', {}),
+            ('parameters', T_SAMPLED,
+             dict(DOC = '''
+                Parameters for task. Type depends on task type.
+                E.g. HdxRenderTaskParams if the factory produces HdxRenderTask
+                instances.''')),
+            ('collection', 'HdRprimCollectionDataSource', {}),
+            ('renderTags', 'HdTokenVectorDataSource', {}),
+        ],
+    ),
 ]

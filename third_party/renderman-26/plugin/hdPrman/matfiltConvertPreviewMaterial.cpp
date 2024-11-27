@@ -66,13 +66,13 @@ TF_DEFINE_PRIVATE_TOKENS(
     (dispScalarOut)
     (glassIor)
     (glassIorOut)
+    (glassRoughness)
+    (glassRoughnessOut)
     (glowGain)
     (glowGainOut)
     (glowColor)
     (glowColorOut)
     (normalIn)
-    (refractionGain)
-    (refractionGainOut)
     (specularEdgeColor)
     (specularEdgeColorOut)
     (specularFaceColor)
@@ -225,6 +225,7 @@ _ProcessPreviewSurfaceNode(
             {_tokens->diffuseColor, _tokens->diffuseColorOut},
             {_tokens->diffuseGain, _tokens->diffuseGainOut},
             {_tokens->glassIor, _tokens->glassIorOut},
+            {_tokens->glassRoughness, _tokens->glassRoughnessOut},
             {_tokens->glowColor, _tokens->glowColorOut},
             {_tokens->glowGain, _tokens->glowGainOut},
             {_tokens->specularFaceColor, _tokens->specularFaceColorOut},
@@ -241,19 +242,6 @@ _ProcessPreviewSurfaceNode(
             netInterface->SetNodeInputConnection(
                 pxrSurfaceNodeName, inOutPair.first,
                 {{nodeName, inOutPair.second}});
-        }
-
-        // If opacityThreshold is > 0, do *not* use refraction.
-        VtValue vtOpThres;
-        if (_GetParameter(
-                netInterface, nodeName, _tokens->opacityThreshold,
-                &vtOpThres)) {
-
-            if (vtOpThres.Get<float>() <= 0.0f) {
-                netInterface->SetNodeInputConnection(
-                    pxrSurfaceNodeName, _tokens->refractionGain,
-                    {{nodeName, _tokens->refractionGainOut}});
-            }
         }
     }
 

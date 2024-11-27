@@ -415,3 +415,7 @@ class "MultipleApplyAPI_1"
     double testNewVersion:__INSTANCE_NAME__:testAttrTwo
 }
 
+class UsdContrivedNoAlias "UsdContrivedNoAlias"
+{
+}
+

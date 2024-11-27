@@ -755,10 +755,11 @@ _BuildDependenciesDataSource(
     const HdPathArrayDataSourceHandle instancePathsDs =
         topologySchema.GetInstanceLocations();
     
-    if (!instancePathsDs) {
-        // XXX Point instancer. Per-instance categories does not make sense for
-        //     point instancers. Should we use categories to reflect that they
-        //     apply to all instances (of all prototypes)?
+    const bool isPointInstancer =
+        !instancePathsDs || instancePathsDs->GetTypedValue(0.0).empty();
+
+    if (isPointInstancer) {
+        // instanceCategories is not relevant to point instancers.
         return nullptr;
     }
 
@@ -781,7 +782,9 @@ _BuildDependenciesDataSource(
     //     on all prims targeted by the collection, including instance prims.
     //     
     //     We publish categories only for geometry prims and not instance
-    //     prims. See HdsiLightLinkingSceneIndex::GetPrim.
+    //     prims.  See HdsiLightLinkingSceneIndex::GetPrim.
+    //     Note: categories is relevant for instancer prims corresponding
+    //     to point instancers.
     //
     size_t idx = 0;
     for (const SdfPath &instancePath : instancePaths) {
@@ -964,7 +967,7 @@ public:
                 : name;
             
             // Note: Since this scene index relies on linking collections to
-            //       be transported, use an overlay only when we have a
+            //       be transported, provide an override only when we have a
             //       collections data source on the prim to provide the category
             //       ID for the collections, including an empty token for the
             //       trivial case.
@@ -1025,7 +1028,10 @@ public:
 
     TfTokenVector GetNames() override
     {
-        return _inputPrimDs->GetNames();
+        // 'light' may be absent.
+        TfTokenVector names = _inputPrimDs->GetNames();
+        _AddIfAbsent(HdLightSchemaTokens->light, &names);
+        return names;
     }
 
     HdDataSourceBaseHandle Get(const TfToken &name) override

@@ -18,6 +18,16 @@ class TestUsdSchemaRegistry(unittest.TestCase):
         assert testPlugins[0].name == "testUsdSchemaRegistry", \
             "Failed to load expected test plugin"
     
+        # This checks an invalid case for test_SchemaIdentifier that throws a
+        # coding error on schema registry construction
+        try:
+            Usd.SchemaRegistry()
+            assert False, "Coding error expected on schema registry initialization."
+        except Tf.ErrorException as e:
+            assert 'Registration failed for schema type ' \
+                   'TestUsdSchemaRegistryNoIdentifierAndNoAlias.' in str(e)
+            assert len(str(e).strip().split('\n')) == 1
+    
     def test_PrimMetadata(self):
         primDef = Usd.SchemaRegistry().FindConcretePrimDefinition(
             "MetadataTest")

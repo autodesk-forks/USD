@@ -239,7 +239,6 @@ My_TestGLDrawing::DrawTest(bool offscreen)
     UsdImagingGLRenderParams params;
     params.drawMode = GetDrawMode();
     params.enableLighting = IsEnabledTestLighting();
-    params.enableIdRender = IsEnabledIdRender();
     params.enableSceneMaterials = IsEnabledSceneMaterials();
     params.complexity = _GetComplexity();
     params.cullStyle = GetCullStyle();
@@ -294,7 +293,9 @@ My_TestGLDrawing::DrawTest(bool offscreen)
             renderTime.Stop();            
         }
 
-        TF_VERIFY(mark.IsClean(), "Errors occurred while rendering!");
+        // Note that we do not confirm that mark.IsClear() here, since
+        // in some tests we do expect to encounter broken materials
+        // that will fail to compile, ex: testUsdImagingGLInvalidMaterial
 
         std::cout << "Iterations to convergence: " << convergenceIterations << std::endl;
         std::cout << "itemsDrawn " << perfLog.GetCounter(HdTokens->itemsDrawn) << std::endl;

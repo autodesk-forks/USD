@@ -327,7 +327,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     HD_SPRIMTYPE_TOKENS                         \
     HD_BPRIMTYPE_TOKENS                         \
     /* Scene-index-only prim types */           \
-    (renderPass)
+    (renderPass)                                \
+    (task)
 
 HD_API
 bool HdPrimTypeIsGprim(TfToken const& primType);

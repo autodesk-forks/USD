@@ -46,7 +46,6 @@ class PropertyDefiningKeys(ConstantsGroup):
 class UserDocConstants(ConstantsGroup):
     USERDOC_FULL = "userDoc"
     USERDOC_BRIEF = "userDocBrief"
-    MAX_LENGTH_FOR_BRIEF = 500
 
 def _IsNSPrefixConnectableAPICompliant(nsPrefix):
     return (nsPrefix == UsdShade.Tokens.inputs[:1] or \
@@ -177,17 +176,8 @@ def _SetSchemaUserDocFields(spec, doc):
     and attribute specs. 
     """
     # Set the "brief" user doc, used for in-context help, e.g. in DCC tools.
-    # If the doc string exceeds a certain length, just use the first sentence.
-    workDoc = ""
-    if len(doc) > UserDocConstants.MAX_LENGTH_FOR_BRIEF:
-        workDoc = doc.partition('.')[0] + '.'
-        # If '.' wasn't found, workDoc will be the entire doc string, so 
-        # instead use the first MAX_LENGTH_FOR_BRIEF chars and append '...'
-        if len(workDoc) > UserDocConstants.MAX_LENGTH_FOR_BRIEF:
-            workDoc = workDoc[:UserDocConstants.MAX_LENGTH_FOR_BRIEF] + "..."
-    else:
-        workDoc = doc
-    spec.customData[UserDocConstants.USERDOC_BRIEF] = workDoc
+    # We currently want the full content, so we don't shorten userDocBrief.
+    spec.customData[UserDocConstants.USERDOC_BRIEF] = doc
     # Set the "long-form" user doc, used when generating HTML schema docs
     # (example: https://openusd.org/release/user_guides/schemas/index.html)
     spec.customData[UserDocConstants.USERDOC_FULL] = doc

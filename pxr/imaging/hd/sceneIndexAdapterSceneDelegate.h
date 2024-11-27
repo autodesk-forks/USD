@@ -199,11 +199,12 @@ public:
     void InvokeExtComputation(SdfPath const &computationId,
                               HdExtComputationContext *context) override;
 
+    TfTokenVector GetTaskRenderTags(SdfPath const &taskId) override;
+    
     void Sync(HdSyncRequestVector* request) override;
     void PostSyncCleanup() override;
 
     // NOTE: The remaining scene delegate functions aren't used for emulation:
-    // - GetTaskRenderTags
     // - GetScenePrimPath
     // - IsEnabled
 

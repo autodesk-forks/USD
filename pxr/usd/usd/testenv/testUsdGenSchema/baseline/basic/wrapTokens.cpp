@@ -171,4 +171,5 @@ void wrapUsdContrivedTokens()
     _ADD_TOKEN(cls, TestNoVersion0_2);
     _ADD_TOKEN(cls, TestPxHairman);
     _ADD_TOKEN(cls, TestPxHairman_1);
+    _ADD_TOKEN(cls, UsdContrivedNoAlias);
 }

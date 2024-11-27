@@ -77,11 +77,11 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     const uint32_t maxDevices = 64;
     VkPhysicalDevice physicalDevices[maxDevices];
     uint32_t physicalDeviceCount = maxDevices;
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkEnumeratePhysicalDevices(
             instance->GetVulkanInstance(),
             &physicalDeviceCount,
-            physicalDevices) == VK_SUCCESS
+            physicalDevices)
     );
 
     for (uint32_t i = 0; i < physicalDeviceCount; i++) {
@@ -123,22 +123,22 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     //
 
     uint32_t extensionCount = 0;
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkEnumerateDeviceExtensionProperties(
             _vkPhysicalDevice,
             nullptr,
             &extensionCount,
-            nullptr) == VK_SUCCESS
+            nullptr)
     );
 
     _vkExtensions.resize(extensionCount);
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkEnumerateDeviceExtensionProperties(
             _vkPhysicalDevice,
             nullptr,
             &extensionCount,
-            _vkExtensions.data()) == VK_SUCCESS
+            _vkExtensions.data())
     );
 
     //
@@ -278,12 +278,12 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     createInfo.enabledExtensionCount = (uint32_t) extensions.size();
     createInfo.pNext = &features;
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateDevice(
             _vkPhysicalDevice,
             &createInfo,
             HgiVulkanAllocator(),
-            &_vkDevice) == VK_SUCCESS
+            &_vkDevice)
     );
 
     HgiVulkanSetupDeviceDebug(instance, this);
@@ -311,8 +311,8 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     }
 
-    TF_VERIFY(
-        vmaCreateAllocator(&allocatorInfo, &_vmaAllocator) == VK_SUCCESS
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vmaCreateAllocator(&allocatorInfo, &_vmaAllocator)
     );
 
     //
@@ -331,7 +331,9 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
 HgiVulkanDevice::~HgiVulkanDevice()
 {
     // Make sure device is idle before destroying objects.
-    TF_VERIFY(vkDeviceWaitIdle(_vkDevice) == VK_SUCCESS);
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vkDeviceWaitIdle(_vkDevice)
+    );
 
     delete _pipelineCache;
     delete _commandQueue;
@@ -385,8 +387,8 @@ HgiVulkanDevice::GetPipelineCache() const
 void
 HgiVulkanDevice::WaitForIdle()
 {
-    TF_VERIFY(
-        vkDeviceWaitIdle(_vkDevice) == VK_SUCCESS
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vkDeviceWaitIdle(_vkDevice)
     );
 }
 

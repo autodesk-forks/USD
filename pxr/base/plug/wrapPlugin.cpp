@@ -87,6 +87,7 @@ void wrapPlugin()
              (arg("path"), 
               arg("verify") = true))
         ;
+        TfPyRegisterStlSequencesFromPython<PlugPluginPtr>();
 
     // The call to JsConvertToContainerType in _ConvertDict creates
     // vectors of pxr_boost::python::objects for array values, so register

@@ -16,14 +16,19 @@
 #include "pxr/imaging/hdSt/meshShaderKey.h"
 #include "pxr/imaging/hdSt/package.h"
 #include "pxr/imaging/hdSt/pointsShaderKey.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/hdSt/renderPassShader.h"
 #include "pxr/imaging/hdSt/resourceBinder.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 
 #include "pxr/imaging/hd/drawingCoord.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/basisCurves.h"
+#include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/rprimSharedData.h"
 #include "pxr/imaging/hd/tokens.h"
+
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/imaging/glf/testGLContext.h"
 #include "pxr/imaging/hio/glslfx.h"
@@ -60,8 +65,7 @@ TF_DEFINE_PRIVATE_TOKENS(
 );
 
 static bool
-CodeGenTest(HdSt_ShaderKey const &key, bool useBindlessBuffer,
-            bool instance, bool smoothNormals)
+CodeGenTest(HdSt_ShaderKey const &key, bool instance, bool smoothNormals)
 {
     TfErrorMark mark;
 
@@ -71,8 +75,13 @@ CodeGenTest(HdSt_ShaderKey const &key, bool useBindlessBuffer,
     HdStDrawItem drawItem(&sharedData);
 
     static HgiUniquePtr hgi = Hgi::CreatePlatformDefaultHgi();
-    static HdStResourceRegistrySharedPtr registry(
-        new HdStResourceRegistry(hgi.get()));
+    static HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
+    static HdStRenderDelegate renderDelegate;
+    static std::unique_ptr<HdRenderIndex> index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    HdStResourceRegistrySharedPtr const & registry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            index->GetResourceRegistry());
 
     HdDrawingCoord *drawingCoord = drawItem.GetDrawingCoord();
 
@@ -301,11 +310,10 @@ CodeGenTest(HdSt_ShaderKey const &key, bool useBindlessBuffer,
 }
 
 bool
-TestShader(HdSt_ShaderKey const &key, bool bindless, 
-           bool instance, bool smoothNormals)
+TestShader(HdSt_ShaderKey const &key, bool instance, bool smoothNormals)
 {
     bool success = true;
-    success &= CodeGenTest(key, bindless, instance, smoothNormals);
+    success &= CodeGenTest(key, instance, smoothNormals);
     return success;
 }
 
@@ -325,7 +333,6 @@ int main(int argc, char *argv[])
     bool mesh = false;
     bool curves = false;
     bool points = false;
-    bool bindless = false;
     HdMeshGeomStyle geomStyle = HdMeshGeomStyleSurf;
 
     for (int i=0; i<argc; ++i) {
@@ -341,8 +348,6 @@ int main(int argc, char *argv[])
             blendWireframeColor = true;
         } else if (arg == "--instance") {
             instance = true;
-        } else if (arg == "--bindless") {
-            bindless = true;
         } else if (arg == "--mesh") {
             mesh = true;
         } else if (arg == "--curves") {
@@ -381,7 +386,7 @@ int main(int argc, char *argv[])
                 /* isWidget */ false,
                 /* forceOpaqueEdges */ true,
                 /* surfaceEdgeIds */ true),
-                bindless, instance, smoothNormals);
+                instance, smoothNormals);
         success &= TestShader(
             HdSt_MeshShaderKey(
                 HdSt_GeometricShader::PrimitiveType::PRIM_MESH_COARSE_QUADS, 
@@ -406,7 +411,7 @@ int main(int argc, char *argv[])
                 /* isWidget */ false,
                 /* forceOpaqueEdges */ true,
                 /* surfaceEdgeIds */ true),
-                bindless, instance, smoothNormals);
+                instance, smoothNormals);
     }
 
     // curves
@@ -420,13 +425,13 @@ int main(int argc, char *argv[])
                             HdBasisCurvesReprDescTokens->surfaceShader,
                             topologicalVisibility,
                             /* isWidget */ false, false),
-                            bindless, instance, false);
+                            instance, false);
     }
 
     // points
     if (points) {
         success &= TestShader(HdSt_PointsShaderKey(),
-                              bindless, instance, false);
+                              instance, false);
     }
 
     if (success) {

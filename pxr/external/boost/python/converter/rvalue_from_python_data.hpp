@@ -118,6 +118,10 @@ struct rvalue_from_python_data : rvalue_from_python_storage<T>
     // conversion, where the construct() function is already known.
     rvalue_from_python_data(void* convertible);
 
+    // Disallow copies to avoid double-destruction of object in storage.
+    rvalue_from_python_data(rvalue_from_python_data const&) = delete;
+    rvalue_from_python_data& operator=(rvalue_from_python_data const&) = delete;
+
     // Destroys any object constructed in the storage.
     ~rvalue_from_python_data();
  private:

@@ -159,22 +159,14 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
+out flat ivec4 vs_interstageDrawingCoord0;
+out flat ivec4 vs_interstageDrawingCoord1;
+out flat ivec4 vs_interstageDrawingCoord2;
 layout (location = 2) in ivec4 drawingCoord0;
 layout (location = 3) in ivec4 drawingCoord1;
 layout (location = 4) in ivec2 drawingCoord2;
 layout (location = 0) in vec3 points;
 layout (location = 1) in vec3 normals;
-out flat int vs_dc_modelCoord;
-out flat int vs_dc_constantCoord;
-out flat int vs_dc_elementCoord;
-out flat int vs_dc_primitiveCoord;
-out flat int vs_dc_fvarCoord;
-out flat int vs_dc_shaderCoord;
-out flat int vs_dc_vertexCoord;
-out flat int vs_dc_topologyVisibilityCoord;
-out flat int vs_dc_varyingCoord;
-out flat int vs_dc_instanceIndexI0;
-out flat int vs_dc_instanceCoordsI0;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
 out VertexData {
     vec4 Peye;
@@ -250,16 +242,16 @@ float HdGetScalar_normals() { return HdGet_normals(0).x; }
 // //////// Codegen Proc VS //////// 
 void ProcessPrimvarsIn() {
   hd_drawingCoord dc = GetDrawingCoord();
-  vs_dc_modelCoord = dc.modelCoord;
-  vs_dc_constantCoord = dc.constantCoord;
-  vs_dc_elementCoord = dc.elementCoord;
-  vs_dc_primitiveCoord = dc.primitiveCoord;
-  vs_dc_fvarCoord = dc.fvarCoord;
-  vs_dc_shaderCoord = dc.shaderCoord;
-  vs_dc_vertexCoord = dc.vertexCoord;
-  vs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  vs_dc_varyingCoord = dc.varyingCoord;
-  vs_dc_instanceIndexI0 = dc.instanceIndex[0];
+  vs_interstageDrawingCoord0[0] = dc.modelCoord;
+  vs_interstageDrawingCoord0[1] = dc.constantCoord;
+  vs_interstageDrawingCoord0[2] = dc.elementCoord;
+  vs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  vs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  vs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  vs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  vs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  vs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  vs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = points;
   outPrimvars.normals = normals;
 }
@@ -1248,21 +1240,13 @@ in VertexData {
 } inData;
 in flat int vsPointId;
 layout (location = 0) out vec4 colorOut;
+in flat ivec4 vs_interstageDrawingCoord0;
+in flat ivec4 vs_interstageDrawingCoord1;
+in flat ivec4 vs_interstageDrawingCoord2;
 in PrimvarData {
     vec3 points;
     vec3 normals;
 } inPrimvars;
-in flat int vs_dc_modelCoord;
-in flat int vs_dc_constantCoord;
-in flat int vs_dc_elementCoord;
-in flat int vs_dc_primitiveCoord;
-in flat int vs_dc_fvarCoord;
-in flat int vs_dc_shaderCoord;
-in flat int vs_dc_vertexCoord;
-in flat int vs_dc_topologyVisibilityCoord;
-in flat int vs_dc_varyingCoord;
-in flat int vs_dc_instanceIndexI0;
-in flat int vs_dc_instanceCoordsI0;
 
 // //////// Codegen Accessors //////// 
 mat4 HdGet_transform(int localIndex) {
@@ -1311,16 +1295,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = vs_dc_modelCoord;
-  dc.constantCoord = vs_dc_constantCoord;
-  dc.elementCoord = vs_dc_elementCoord;
-  dc.primitiveCoord = vs_dc_primitiveCoord;
-  dc.fvarCoord = vs_dc_fvarCoord;
-  dc.shaderCoord = vs_dc_shaderCoord;
-  dc.vertexCoord = vs_dc_vertexCoord;
-  dc.topologyVisibilityCoord = vs_dc_topologyVisibilityCoord;
-  dc.varyingCoord = vs_dc_varyingCoord;
-  dc.instanceIndex[0] = vs_dc_instanceIndexI0;
+  dc.modelCoord = vs_interstageDrawingCoord0[0];
+  dc.constantCoord = vs_interstageDrawingCoord0[1];
+  dc.elementCoord = vs_interstageDrawingCoord0[2];
+  dc.primitiveCoord = vs_interstageDrawingCoord0[3];
+  dc.fvarCoord = vs_interstageDrawingCoord1[0];
+  dc.shaderCoord = vs_interstageDrawingCoord1[1];
+  dc.vertexCoord = vs_interstageDrawingCoord1[2];
+  dc.topologyVisibilityCoord = vs_interstageDrawingCoord1[3];
+  dc.varyingCoord = vs_interstageDrawingCoord2[0];
+  dc.instanceIndex[0] = vs_interstageDrawingCoord2[1];
   return dc; 
 }
 int GetElementID() {
@@ -1548,9 +1532,34 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
+}
+
+
+
+void RenderId()
+{
+    // do nothing
+}
+
+
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
 }
 
 

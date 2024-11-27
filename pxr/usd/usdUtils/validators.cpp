@@ -45,6 +45,19 @@ _PackageEncapsulationValidator(const UsdStagePtr& usdStage) {
 
     if (!packagePath.empty()) {
         for (const SdfLayerRefPtr& referencedLayer : layers) {
+            if (!referencedLayer) {
+                errors.emplace_back(
+                    UsdUtilsValidationErrorNameTokens->invalidLayerInPackage,
+                    UsdValidationErrorType::Error,
+                    UsdValidationErrorSites {
+                        UsdValidationErrorSite(
+                            rootLayer, SdfPath())
+                    },
+                    "Found invalid layer reference in package. This could be "
+                    "due to a layer that failed to load or a layer that is not "
+                    "a valid layer to be bundled in a package.");
+                continue;
+            }
             const std::string& realPath = referencedLayer->GetRealPath();
 
             // We don't want to validate in-memory or session layers

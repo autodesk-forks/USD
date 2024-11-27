@@ -13,6 +13,7 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/weakBase.h"
+#include "pxr/base/plug/plugin.h"
 
 #include <string>
 
@@ -34,6 +35,10 @@ class _TestPlugBase : public TfRefBase, public TfWeakBase {
 
     static RefPtr New() {
         return TfCreateRefPtr(new This());
+    }
+
+    bool TestAcceptPluginSequence(const PlugPluginPtrVector &plugins) {
+        return true;
     }
 
     PLUG_API

@@ -49,6 +49,8 @@ using HdStShaderCodePtr =
     std::weak_ptr<class HdStShaderCode>;
 using HdSt_GeometricShaderSharedPtr =
     std::shared_ptr<class HdSt_GeometricShader>;
+using HdStRenderPassShaderSharedPtr =
+    std::shared_ptr<class HdStRenderPassShader>;
 
 using HdStTextureHandleSharedPtr =
     std::shared_ptr<class HdStTextureHandle>;
@@ -396,6 +398,11 @@ public:
     HdInstance<HdSt_GeometricShaderSharedPtr>
     RegisterGeometricShader(HdInstance<HdSt_GeometricShaderSharedPtr>::ID id);
 
+    /// Register a render pass shader.
+    HDST_API
+    HdInstance<HdStRenderPassShaderSharedPtr>
+    RegisterRenderPassShader(HdInstance<HdStRenderPassShaderSharedPtr>::ID id);
+
     /// Register a GLSL program into the program registry.
     HDST_API
     HdInstance<HdStGLSLProgramSharedPtr>
@@ -661,6 +668,10 @@ private:
     // geometric shader registry
     HdInstanceRegistry<HdSt_GeometricShaderSharedPtr>
         _geometricShaderRegistry;
+    
+    // render pass shader registry
+    HdInstanceRegistry<HdStRenderPassShaderSharedPtr>
+        _renderPassShaderRegistry;
 
     // glsl shader program registry
     HdInstanceRegistry<HdStGLSLProgramSharedPtr>

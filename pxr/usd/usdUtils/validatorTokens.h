@@ -25,7 +25,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define USD_UTILS_VALIDATION_ERROR_NAME_TOKENS                          \
     ((layerNotInPackage, "LayerNotInPackage"))                          \
-    ((assetNotInPackage, "AssetNotInPackage"))                          
+    ((assetNotInPackage, "AssetNotInPackage"))                          \
+    ((invalidLayerInPackage, "InvalidLayerInPackage"))
 
 ///\def
 /// Tokens representing validator names. Note that for plugin provided

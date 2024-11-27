@@ -218,12 +218,17 @@ struct caller
 
 };
 
-template <size_t ...N>
+template <size_t... N>
 struct caller_arity<std::index_sequence<N...>>
 {
     template <class F, class Policies, class Sig>
-    struct impl
+    struct impl;
+
+    template <class F, class Policies, class Ret, class... Args>
+    struct impl<F, Policies, python::type_list<Ret, Args...>>
     {
+        using Sig = python::type_list<Ret, Args...>;
+
         impl(F f, Policies p) : m_data(f,p) {}
 
         PyObject* operator()(PyObject* args_, PyObject*) // eliminate
@@ -231,39 +236,33 @@ struct caller_arity<std::index_sequence<N...>>
                                                          // trailing
                                                          // keyword dict
         {
-            typedef typename detail::mpl2::front<Sig>::type result_t;
+            typedef Ret result_t;
             typedef typename select_result_converter<Policies, result_t>::type result_converter;
             typedef typename Policies::argument_package argument_package;
             
             argument_package inner_args(args_);
 
-            // N... is a 0-based sequence of indexes corresponding to the
-            // expected arguments in args_. However, this must be offset by
-            // 1 to retrieve the corresponding argument type from Sig, since
-            // that type sequence begins with an additional entry representing
-            // the function's return type.
-            using arg_from_python_tuple = std::tuple<
-                arg_from_python<typename detail::mpl2::at_c<Sig, N+1>::type>...
-            >;
-            arg_from_python_tuple t{ get(detail::mpl2::int_<N>(), inner_args)... };
+            return [&](auto... arg) -> PyObject*
+            {
+                if ((!arg.convertible() || ...)) {
+                    return 0;
+                }
 
-            if ( (... || !std::get<N>(t).convertible()) ) {
-                return 0;
-            }            
+                // all converters have been checked. Now we can do the
+                // precall part of the policy
+                if (!m_data.second().precall(inner_args))
+                    return 0;
 
-            // all converters have been checked. Now we can do the
-            // precall part of the policy
-            if (!m_data.second().precall(inner_args))
-                return 0;
-
-            PyObject* result = detail::invoke(
-                detail::invoke_tag<result_t,F>()
-              , create_result_converter(args_, (result_converter*)0, (result_converter*)0)
-              , m_data.first()
-              , std::get<N>(t)...
-            );
+                PyObject* result = detail::invoke(
+                    detail::invoke_tag<result_t,F>()
+                  , create_result_converter(args_, (result_converter*)0, (result_converter*)0)
+                  , m_data.first()
+                  , arg...
+                );
             
-            return m_data.second().postcall(inner_args, result);
+                return m_data.second().postcall(inner_args, result);
+
+            }(arg_from_python<Args>(get(detail::mpl2::int_<N>(), inner_args))...);
         }
 
         static unsigned min_arity() { return sizeof...(N); }

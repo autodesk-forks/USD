@@ -454,7 +454,6 @@ My_TestGLDrawing::DeepSelect(GfVec2i const& startPos, GfVec2i const& endPos,
 
     // XXX: For a timevarying test need to set timecode for frame param
     UsdImagingGLRenderParams params;
-    params.enableIdRender = true;
 
     SdfPathVector selection;
 
@@ -505,7 +504,6 @@ My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos,
 
     // XXX: For a timevarying test need to set timecode for frame param
     UsdImagingGLRenderParams params;
-    params.enableIdRender = true;
 
     UsdImagingGLEngine::IntersectionResultVector outResults;
 

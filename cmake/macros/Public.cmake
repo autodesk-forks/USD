@@ -728,7 +728,24 @@ function(pxr_test_scripts)
     endif()
 
     foreach(file ${ARGN})
-        get_filename_component(destFile ${file} NAME_WE)
+        # Perform regex match to extract both source resource path and
+        # destination resource path.
+        # Regex match appropriately takes care of windows drive letter followed
+        # by a ":", which is also the token we use to separate the source and
+        # destination resource paths.
+        string(REGEX MATCHALL "([A-Za-z]:)?([^:]+)" file "${file}")
+
+        list(LENGTH file n)
+        if (n EQUAL 1)
+            get_filename_component(destFile ${file} NAME_WE)
+        elseif (n EQUAL 2)
+           list(GET file 1 destFile)
+           list(GET file 0 file)
+        else()
+           message(FATAL_ERROR
+               "Failed to parse test file path ${file}")
+        endif()        
+
         # XXX -- We shouldn't have to install to run tests.
         install(
             PROGRAMS ${file}

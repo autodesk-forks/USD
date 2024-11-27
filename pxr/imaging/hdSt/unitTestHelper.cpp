@@ -325,6 +325,11 @@ HdSt_TestLightingShader::SetLight(int light,
 
 HdSt_TextureTestDriver::HdSt_TextureTestDriver() :
     _hgi(Hgi::CreatePlatformDefaultHgi())
+  , _hgiDriver{HgiTokens->renderDriver, VtValue(_hgi.get())}
+  , _renderDelegate()
+  , _renderIndex(HdRenderIndex::New(&_renderDelegate, {&_hgiDriver}))
+  , _resourceRegistry(std::static_pointer_cast<HdStResourceRegistry>(
+        _renderIndex->GetResourceRegistry()))
   , _indexBuffer()
   , _vertexBuffer()
   , _shaderProgram()
@@ -351,6 +356,12 @@ HdSt_TextureTestDriver::~HdSt_TextureTestDriver()
     if (_pipeline) {
         _hgi->DestroyGraphicsPipeline(&_pipeline);
     }
+}
+
+HdStResourceRegistrySharedPtr const &
+HdSt_TextureTestDriver::GetResourceRegistry()
+{
+    return _resourceRegistry;
 }
 
 void
