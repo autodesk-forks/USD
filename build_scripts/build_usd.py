@@ -525,9 +525,11 @@ def PatchFile(filename, patches, multiLineMatches=False):
     """Applies patches to the specified file. patches is a list of tuples
     (old string, new string)."""
     if multiLineMatches:
-        oldLines = [open(filename, 'r').read()]
+        with open(filename, 'r') as f:
+            oldLines = [f.read()]
     else:
-        oldLines = open(filename, 'r').readlines()
+        with open(filename, 'r') as f:
+            oldLines = f.readlines()
     newLines = oldLines
     for (oldString, newString) in patches:
         newLines = [s.replace(oldString, newString) for s in newLines]
@@ -535,7 +537,8 @@ def PatchFile(filename, patches, multiLineMatches=False):
         PrintInfo("Patching file {filename} (original in {oldFilename})..."
                   .format(filename=filename, oldFilename=filename + ".old"))
         shutil.copy(filename, filename + ".old")
-        open(filename, 'w').writelines(newLines)
+        with open(filename, 'w') as f:
+            f.writelines(newLines)
 
 def DownloadFileWithCurl(url, outputFilename):
     # Don't log command output so that curl's progress
