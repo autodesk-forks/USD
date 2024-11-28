@@ -96,7 +96,7 @@ HdxOitRenderTask::_Sync(
             // We render into an SSBO -- not MSAA compatible
             renderPassState->SetMultiSampleEnabled(false);
 
-            extendedState->SetRenderPassShader(_oitOpaqueRenderPassShader);
+
             renderPassState->SetEnableDepthMask(true);
             renderPassState->SetColorMaskUseDefault(false);
             renderPassState->SetColorMasks({HdRenderPassState::ColorMaskRGBA});
@@ -139,6 +139,7 @@ HdxOitRenderTask::Prepare(HdTaskContext* ctx,
         HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
         HdStRenderPassState* extendedState =
                 dynamic_cast<HdStRenderPassState*>(renderPassState.get());
+        extendedState->SetRenderPassShader(_oitOpaqueRenderPassShader);
         _translucentRenderPassState->SetViewport(extendedState->GetViewport());
         _translucentRenderPassState->SetCamera(extendedState->GetCamera());
         _translucentRenderPassState->SetOverrideWindowPolicy(extendedState->GetOverrideWindowPolicy());
