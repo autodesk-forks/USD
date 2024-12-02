@@ -1,4 +1,4 @@
-# To be sure our VtVisitValue polyfill works correctly, the preprocessor must 
+# To be sure our VtVisitValue polyfill works correctly, the preprocessor must
 # resolve the #include <pxr/base/vt/visitValue.h> in our identically-named
 # polyfill to the real one in libpxr. But CMAKE_INCLUDE_CURRENT_DIR injects the
 # cpp source directory as the first include search path. The preprocessor
@@ -155,7 +155,6 @@ pxr_plugin(${PXR_PACKAGE}
         matfiltSceneIndexPlugins
         motionBlurSceneIndexPlugin
         pinnedCurveExpandingSceneIndexPlugin
-        projectionParams
         renderBuffer
         renderParam
         renderPass

@@ -77,8 +77,17 @@ UsdValidationError::GetIdentifier() const
 std::string
 UsdValidationError::GetErrorAsString() const
 {
-    return _errorType == UsdValidationErrorType::None ? _errorMsg : TfStringPrintf(
-        "%s: %s", TfEnum::GetDisplayName(_errorType).c_str(), _errorMsg.c_str());
+    if (_validator) {
+        return _errorType == UsdValidationErrorType::None ? _errorMsg : 
+            TfStringPrintf(
+                "%s: (%s) %s", TfEnum::GetDisplayName(_errorType).c_str(), 
+                GetIdentifier().GetString().c_str(), _errorMsg.c_str());
+    } else {
+        return _errorType == UsdValidationErrorType::None ? _errorMsg : 
+            TfStringPrintf(
+                "%s: %s", TfEnum::GetDisplayName(_errorType).c_str(), 
+                _errorMsg.c_str());
+    }
 }
 
 void

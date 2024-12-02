@@ -378,9 +378,6 @@ class TestPcpChanges(unittest.TestCase):
         _ChangeAndVerify({'tcps' : 24.0, 'fps' : 24.0}, True, 24.0)
         _ChangeAndVerify({'tcps' : None, 'fps' : None}, False, 24.0)
 
-    @unittest.skipIf(
-        Tf.GetEnvSetting('PCP_DISABLE_TIME_SCALING_BY_LAYER_TCPS'),
-        "Test requires layer TCPS time scaling enabled")
     def test_TcpsChanges(self):
         """
         Tests change processing for changes that affect the time codes per

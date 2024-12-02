@@ -11,6 +11,13 @@ set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /EHsc")
 # Standards compliant.
 set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:rvalueCast /Zc:strictStrings")
 
+# Visual Studio sets the value of __cplusplus to 199711L regardless of
+# the C++ standard actually being used, unless /Zc:__cplusplus is enabled.
+#
+# For more details, see:
+# https://learn.microsoft.com/en-us/cpp/build/reference/zc-cplusplus
+set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:__cplusplus")
+
 # The /Zc:inline option strips out the "arch_ctor_<name>" symbols used for
 # library initialization by ARCH_CONSTRUCTOR starting in Visual Studio 2019, 
 # causing release builds to fail. Disable the option for this and later 

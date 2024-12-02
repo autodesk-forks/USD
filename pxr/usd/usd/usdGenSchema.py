@@ -1508,8 +1508,10 @@ def GeneratePlugInfo(templatePath, codeGenPath, classes, validate, env,
             # for multiple apply schemas.
             _UpdatePlugInfoWithAPISchemaApplyInfo(clsDict, cls)
 
-            # Write out alias/primdefs for all schemas
-            clsDict['alias'] = {'UsdSchemaBase': cls.usdPrimTypeName}
+            # Write out aliases for schemas where the cpp class name and 
+            # prim type name do not match.
+            if cls.usdPrimTypeName != cls.cppClassName:
+                clsDict['alias'] = {'UsdSchemaBase': cls.usdPrimTypeName}
 
             # Write out schema identifier
             clsDict['schemaIdentifier'] = cls.usdPrimTypeName

@@ -45,23 +45,12 @@ TF_DEFINE_ENV_SETTING(
     "Enables parallel, threaded pre-fetch of sublayers.");
 
 TF_DEFINE_ENV_SETTING(
-    PCP_DISABLE_TIME_SCALING_BY_LAYER_TCPS, false,
-    "Disables automatic layer offset scaling from time codes per second "
-    "metadata in layers.");
-
-TF_DEFINE_ENV_SETTING(
     PCP_ENABLE_LEGACY_RELOCATES_BEHAVIOR, true,
     "Enables the legacy behavior of ignoring composition errors that would "
     "cause us to reject conflicting relocates that are invalid within the "
     "context of all other relocates on the layer stack. This only applies to "
     "non-USD caches/layer stacks; the legacy behavior cannot be enabled in USD "
     "mode");
-
-bool
-PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled()
-{
-    return TfGetEnvSetting(PCP_DISABLE_TIME_SCALING_BY_LAYER_TCPS);
-}
 
 struct Pcp_SublayerInfo {
     Pcp_SublayerInfo() = default;
@@ -1557,10 +1546,6 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
     // Build the layer stack.
     std::set<SdfLayerHandle> seenLayers;
 
-    // Env setting for disabling TCPS scaling.
-    const bool scaleLayerOffsetByTcps = 
-        !PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled();
-
     const double rootTcps = _identifier.rootLayer->GetTimeCodesPerSecond();
     SdfLayerOffset rootLayerOffset;
 
@@ -1599,13 +1584,9 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
             if (_ShouldUseSessionTcps(_identifier.sessionLayer, 
                                       _identifier.rootLayer)) {
                 _timeCodesPerSecond = sessionTcps;
-                if (scaleLayerOffsetByTcps) {
-                    rootLayerOffset.SetScale(_timeCodesPerSecond / rootTcps);
-                }
+                rootLayerOffset.SetScale(_timeCodesPerSecond / rootTcps);
             } else {
-                if (scaleLayerOffsetByTcps) {
-                    sessionLayerOffset.SetScale(_timeCodesPerSecond / sessionTcps);
-                }
+                sessionLayerOffset.SetScale(_timeCodesPerSecond / sessionTcps);
             }
 
             _sessionLayerTree = 
@@ -1821,8 +1802,7 @@ PcpLayerStack::_BuildLayerStack(
         // Apply the scale from computed layer TCPS to sublayer TCPS to sublayer
         // layer offset.
         const double sublayerTcps = sublayerRefPtrs[i]->GetTimeCodesPerSecond();
-        if (!PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled() &&
-            layerTcps != sublayerTcps) {
+        if (layerTcps != sublayerTcps) {
             sublayerOffset.SetScale(sublayerOffset.GetScale() * 
                                     layerTcps / sublayerTcps);
         }

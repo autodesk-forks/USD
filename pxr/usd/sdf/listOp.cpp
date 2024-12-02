@@ -161,11 +161,34 @@ SdfListOp<T>::GetAppliedItems() const
 }
 
 template <typename T>
+std::vector<T> _MakeUnique(const std::vector<T> items, bool reverse=false)
+{
+    TfDenseHashSet<T, TfHash> existingSet;
+    std::vector<T> uniqueItems;
+
+    if (reverse) {
+        for (auto it = items.rbegin(); it != items.rend(); it++) {
+            if (existingSet.insert(*it).second) {
+                uniqueItems.push_back(*it);
+            }
+        }
+        std::reverse(uniqueItems.begin(), uniqueItems.end());
+    } else {
+        for (auto it = items.cbegin(); it != items.cend(); it++) {
+            if (existingSet.insert(*it).second) {
+                uniqueItems.push_back(*it);
+            }
+        }
+    }
+    return uniqueItems;
+}
+
+template <typename T>
 void 
 SdfListOp<T>::SetExplicitItems(const ItemVector &items)
 {
     _SetExplicit(true);
-    _explicitItems = items;
+    _explicitItems = _MakeUnique(items);
 }
 
 template <typename T>
@@ -181,7 +204,7 @@ void
 SdfListOp<T>::SetPrependedItems(const ItemVector &items)
 {
     _SetExplicit(false);
-    _prependedItems = items;
+    _prependedItems = _MakeUnique(items);
 }
 
 template <typename T>
@@ -189,7 +212,7 @@ void
 SdfListOp<T>::SetAppendedItems(const ItemVector &items)
 {
     _SetExplicit(false);
-    _appendedItems = items;
+    _appendedItems = _MakeUnique(items, true);
 }
 
 template <typename T>
@@ -197,7 +220,7 @@ void
 SdfListOp<T>::SetDeletedItems(const ItemVector &items)
 {
     _SetExplicit(false);
-    _deletedItems = items;
+    _deletedItems = _MakeUnique(items);
 }
 
 template <typename T>
@@ -312,11 +335,11 @@ SdfListOp<T>::ApplyOperations(ItemVector* vec, const ApplyCallback& cb) const
             search[*i] = i;
         }
 
-        _DeleteKeys (SdfListOpTypeDeleted, cb, &result, &search);
+        _DeleteKeys (cb, &result, &search);
         _AddKeys(SdfListOpTypeAdded, cb, &result, &search);
-        _PrependKeys(SdfListOpTypePrepended, cb, &result, &search);
-        _AppendKeys(SdfListOpTypeAppended, cb, &result, &search);
-        _ReorderKeys(SdfListOpTypeOrdered, cb, &result, &search);
+        _PrependKeys(cb, &result, &search);
+        _AppendKeys(cb, &result, &search);
+        _ReorderKeys(cb, &result, &search);
     }
 
     // Copy the result back to vec.
@@ -463,15 +486,14 @@ SdfListOp<T>::_AddKeys(
 template <class T>
 void
 SdfListOp<T>::_PrependKeys(
-    SdfListOpType op,
     const ApplyCallback& callback,
     _ApplyList* result,
     _ApplyMap* search) const
 {
-    const ItemVector& items = GetItems(op);
+    const ItemVector& items = GetItems(SdfListOpTypePrepended);
     if (callback) {
         for (auto i = items.rbegin(), iEnd = items.rend(); i != iEnd; ++i) {
-            if (std::optional<T> mappedItem = callback(op, *i)) {
+            if (std::optional<T> mappedItem = callback(SdfListOpTypePrepended, *i)) {
                 _InsertOrMove(*mappedItem, result->begin(), result, search);
             }
         }
@@ -485,15 +507,14 @@ SdfListOp<T>::_PrependKeys(
 template <class T>
 void
 SdfListOp<T>::_AppendKeys(
-    SdfListOpType op,
     const ApplyCallback& callback,
     _ApplyList* result,
     _ApplyMap* search) const
 {
-    const ItemVector& items = GetItems(op);
+    const ItemVector& items = GetItems(SdfListOpTypeAppended);
     if (callback) {
         for (const T& item: items) {
-            if (std::optional<T> mappedItem = callback(op, item)) {
+            if (std::optional<T> mappedItem = callback(SdfListOpTypeAppended, item)) {
                 _InsertOrMove(*mappedItem, result->end(), result, search);
             }
         }
@@ -507,14 +528,13 @@ SdfListOp<T>::_AppendKeys(
 template <class T>
 void
 SdfListOp<T>::_DeleteKeys(
-    SdfListOpType op,
     const ApplyCallback& callback,
     _ApplyList* result,
     _ApplyMap* search) const
 {
-    TF_FOR_ALL(i, GetItems(op)) {
+    TF_FOR_ALL(i, GetItems(SdfListOpTypeDeleted)) {
         if (callback) {
-            if (std::optional<T> item = callback(op, *i)) {
+            if (std::optional<T> item = callback(SdfListOpTypeDeleted, *i)) {
                 _RemoveIfPresent(*item, result, search);
             }
         }
@@ -527,29 +547,36 @@ SdfListOp<T>::_DeleteKeys(
 template <class T>
 void
 SdfListOp<T>::_ReorderKeys(
-    SdfListOpType op,
     const ApplyCallback& callback,
     _ApplyList* result,
     _ApplyMap* search) const
 {
+    _ReorderKeysHelper(GetItems(SdfListOpTypeOrdered), callback, result, search);
+}
+
+template <class T>
+void
+SdfListOp<T>::_ReorderKeysHelper(ItemVector order, const ApplyCallback& callback,
+    _ApplyList* result, _ApplyMap* search) {
+    
     // Make a vector and set of the source items.
-    ItemVector order;
+    ItemVector uniqueOrder;
     std::set<ItemType, _ItemComparator> orderSet;
-    TF_FOR_ALL(i, GetItems(op)) {
+    TF_FOR_ALL(i, order) {
         if (callback) {
-            if (std::optional<T> item = callback(op, *i)) {
+            if (std::optional<T> item = callback(SdfListOpTypeOrdered, *i)) {
                 if (orderSet.insert(*item).second) {
-                    order.push_back(*item);
+                    uniqueOrder.push_back(*item);
                 }
             }
         }
         else {
             if (orderSet.insert(*i).second) {
-                order.push_back(*i);
+                uniqueOrder.push_back(*i);
             }
         }
     }
-    if (order.empty()) {
+    if (uniqueOrder.empty()) {
         return;
     }
 
@@ -559,9 +586,9 @@ SdfListOp<T>::_ReorderKeys(
 
     // Find each item from the order vector in the scratch list.
     // Then find the next item in the scratch list that's also in
-    // in the order vector.  All of these items except the last
+    // in the uniqueOrder vector.  All of these items except the last
     // form the next continuous sequence in the result.
-    TF_FOR_ALL(i, order) {
+    TF_FOR_ALL(i, uniqueOrder) {
         typename _ApplyMap::const_iterator j = search->find(*i);
         if (j != search->end()) {
             // Find the next item in both scratch and order.
@@ -585,16 +612,17 @@ template <typename T>
 static inline
 bool
 _ModifyCallbackHelper(const typename SdfListOp<T>::ModifyCallback& cb,
-                      std::vector<T>* itemVector, bool removeDuplicates)
+                      std::vector<T>* itemVector)
 {
     bool didModify = false;
 
     std::vector<T> modifiedVector;
+    modifiedVector.reserve(itemVector->size());
     TfDenseHashSet<T, TfHash> existingSet;
 
     for (const T& item : *itemVector) {
         std::optional<T> modifiedItem = cb(item);
-        if (removeDuplicates && modifiedItem) {
+        if (modifiedItem) {
             if (!existingSet.insert(*modifiedItem).second) {
                 modifiedItem = std::nullopt;
             }
@@ -620,27 +648,34 @@ _ModifyCallbackHelper(const typename SdfListOp<T>::ModifyCallback& cb,
 
 template <typename T>
 bool 
-SdfListOp<T>::ModifyOperations(const ModifyCallback& callback,
-                               bool removeDuplicates)
+SdfListOp<T>::ModifyOperations(const ModifyCallback& callback)
 {
     bool didModify = false;
 
     if (callback) {
         didModify |= _ModifyCallbackHelper(
-            callback, &_explicitItems, removeDuplicates);
+            callback, &_explicitItems);
         didModify |= _ModifyCallbackHelper(
-            callback, &_addedItems, removeDuplicates);
+            callback, &_addedItems);
         didModify |= _ModifyCallbackHelper(
-            callback, &_prependedItems, removeDuplicates);
+            callback, &_prependedItems);
         didModify |= _ModifyCallbackHelper(
-            callback, &_appendedItems, removeDuplicates);
+            callback, &_appendedItems);
         didModify |= _ModifyCallbackHelper(
-            callback, &_deletedItems, removeDuplicates);
+            callback, &_deletedItems);
         didModify |= _ModifyCallbackHelper(
-            callback, &_orderedItems, removeDuplicates);
+            callback, &_orderedItems);
     }
 
     return didModify;
+}
+
+template <typename T>
+bool 
+SdfListOp<T>::ModifyOperations(const ModifyCallback& callback,
+                               bool unusedRemoveDuplicates)
+{
+    return ModifyOperations(callback);
 }
 
 template <typename T>
@@ -713,7 +748,7 @@ SdfListOp<T>::ComposeOperations(const SdfListOp<T>& stronger, SdfListOpType op)
         if (op == SdfListOpTypeOrdered) {
             stronger._AddKeys(op, ApplyCallback(), 
                                  &weakerList, &weakerSearch);
-            stronger._ReorderKeys(op, ApplyCallback(), 
+            stronger._ReorderKeys(ApplyCallback(), 
                                   &weakerList, &weakerSearch);
         } else if (op == SdfListOpTypeAdded) {
             stronger._AddKeys(op,
@@ -726,13 +761,11 @@ SdfListOp<T>::ComposeOperations(const SdfListOp<T>& stronger, SdfListOpType op)
                                  &weakerList,
                                  &weakerSearch);
         } else if (op == SdfListOpTypePrepended) {
-            stronger._PrependKeys(op,
-                                 ApplyCallback(),
+            stronger._PrependKeys(ApplyCallback(),
                                  &weakerList,
                                  &weakerSearch);
         } else if (op == SdfListOpTypeAppended) {
-            stronger._AppendKeys(op,
-                                 ApplyCallback(),
+            stronger._AppendKeys(ApplyCallback(),
                                  &weakerList,
                                  &weakerSearch);
         }
@@ -749,10 +782,24 @@ void SdfApplyListOrdering(std::vector<ItemType>* v,
                          const std::vector<ItemType>& order)
 {
     if (!order.empty() && !v->empty()) {
-        // XXX: This is lame, but just for now...
-        SdfListOp<ItemType> tmp;
-        tmp.SetOrderedItems(order);
-        tmp.ApplyOperations(v);
+        // Make a list of the inputs.  We can efficiently (O(1)) splice
+        // these elements later.
+        typename SdfListOp<ItemType>::_ApplyList result;
+        result.insert(result.end(), v->begin(), v->end());
+
+        // Make a map of keys to list iterators.  This avoids O(n)
+        // searches within O(n) loops below.
+        typename SdfListOp<ItemType>::_ApplyMap search;
+        typename SdfListOp<ItemType>::_ApplyList::iterator i = result.begin();
+        for (;
+             i != result.end(); ++i) {
+            search[*i] = i;
+        }
+        SdfListOp<ItemType>::_ReorderKeysHelper(order, nullptr, &result, &search);
+
+        // Copy the result back to vec.
+        v->clear();
+        v->insert(v->end(), result.begin(), result.end());
     }
 }
 

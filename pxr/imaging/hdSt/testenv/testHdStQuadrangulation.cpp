@@ -9,12 +9,16 @@
 #include "pxr/imaging/hdSt/meshTopology.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/types.h"
+#include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/glf/testGLContext.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/gf/math.h"
 #include "pxr/base/gf/vec3d.h"
@@ -75,8 +79,13 @@ _CompareQuadPoints(std::string const & name,
     std::cout << "GPU quadrangulate = " << gpu << "\n";
 
     static HgiUniquePtr _hgi = Hgi::CreatePlatformDefaultHgi();
-    static HdStResourceRegistrySharedPtr registry(
-        new HdStResourceRegistry(_hgi.get()));
+    static HdDriver driver{HgiTokens->renderDriver, VtValue(_hgi.get())};
+    static HdStRenderDelegate renderDelegate;
+    static std::unique_ptr<HdRenderIndex> index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    HdStResourceRegistrySharedPtr const& registry = 
+        std::static_pointer_cast<HdStResourceRegistry>(
+        index->GetResourceRegistry());
 
     HdMeshTopology m(_tokens->bilinear, TfToken(orientation), numVerts, verts);
 

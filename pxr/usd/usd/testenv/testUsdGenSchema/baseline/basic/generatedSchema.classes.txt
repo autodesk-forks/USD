@@ -7,6 +7,7 @@ derivedNonAppliedAPI
 emptyMultipleApplyAPI
 multipleApplyAPI
 multipleApplyAPI_1
+noAlias
 nonAppliedAPI
 publicMultipleApplyAPI
 singleApplyAPI
@@ -24,6 +25,7 @@ wrapDerivedNonAppliedAPI.cpp
 wrapEmptyMultipleApplyAPI.cpp
 wrapMultipleApplyAPI.cpp
 wrapMultipleApplyAPI_1.cpp
+wrapNoAlias.cpp
 wrapNonAppliedAPI.cpp
 wrapPublicMultipleApplyAPI.cpp
 wrapSingleApplyAPI.cpp

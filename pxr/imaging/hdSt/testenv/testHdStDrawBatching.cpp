@@ -15,16 +15,21 @@
 #include "pxr/imaging/hdSt/renderPass.h"
 #include "pxr/imaging/hdSt/renderPassShader.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hdSt/unitTestHelper.h"
 
 #include "pxr/imaging/hdSt/geometricShader.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/perfLog.h"
+#include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/renderPassState.h"
 #include "pxr/imaging/hd/rprimSharedData.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
+
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/imaging/hio/glslfx.h"
 #include "pxr/imaging/glf/testGLContext.h"
@@ -55,10 +60,13 @@ static HdSt_MaterialNetworkShaderSharedPtr _GetFallbackShader()
 static HdStResourceRegistrySharedPtr _GetResourceRegistry()
 {
     static HgiUniquePtr _hgi = Hgi::CreatePlatformDefaultHgi();
-    static HdStResourceRegistrySharedPtr _resourceRegistry = 
-        std::make_shared<HdStResourceRegistry>(_hgi.get());
+    static HdDriver _driver{HgiTokens->renderDriver, VtValue(_hgi.get())};
+    static HdStRenderDelegate _renderDelegate;
+    static std::unique_ptr<HdRenderIndex> _index(
+        HdRenderIndex::New(&_renderDelegate, {&_driver}));
 
-    return _resourceRegistry;
+    return std::static_pointer_cast<HdStResourceRegistry>(
+        _index->GetResourceRegistry());
 }
 
 template <typename T>

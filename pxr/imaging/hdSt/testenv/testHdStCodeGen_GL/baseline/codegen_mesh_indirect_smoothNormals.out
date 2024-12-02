@@ -3,8 +3,8 @@
 #import $TOOLS/hdSt/shaders/mesh.glslfx
 -- configuration
 {"techniques": {"default": {
-"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "PointId.Vertex.None", "Mesh.Vertex"] }
-, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Flat", "MeshNormal.Geometry.NoFlat", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Triangle"] }
+"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Smooth", "PointId.Vertex.None", "Mesh.Vertex"] }
+, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Geometry.NoFlat", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Triangle"] }
 , "fragmentShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Fragment.SingleSided", "MeshFaceCull.Fragment.None", "MeshWire.Fragment.NoEdge", "MeshWire.Fragment.EdgeParam", "Fragment.CommonTerminals", "Fragment.Surface", "Fragment.ScalarOverride", "EdgeId.Fragment.Common", "EdgeId.Fragment.TriangleSurface", "EdgeId.Fragment.TriangleParam", "PointId.Fragment.Fallback", "Visibility.Fragment.Fallback", "Mesh.Fragment.PatchCoord", "Mesh.Fragment"] }
 }}}
 -------------------------------------------------------
@@ -112,14 +112,12 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_color 1
 #define HD_HAS_primID 1
 #define HD_HAS_widths 1
-#define HD_HAS_INSTANCE_hydra_instanceTranslations 1
-#define HD_HAS_hydra_instanceTranslations_0 1
-#define HD_INSTANCER_NUM_LEVELS 1
-#define HD_INSTANCE_INDEX_WIDTH 2
+#define HD_INSTANCER_NUM_LEVELS 0
+#define HD_INSTANCE_INDEX_WIDTH 1
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
-#define HD_HAS_normals 1
+#define HD_HAS_smoothNormals 1
 
 
 // //////// Global Includes ////////
@@ -164,39 +162,25 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
+out flat ivec4 vs_interstageDrawingCoord0;
+out flat ivec4 vs_interstageDrawingCoord1;
+out flat ivec4 vs_interstageDrawingCoord2;
 layout (location = 2) in ivec4 drawingCoord0;
 layout (location = 3) in ivec4 drawingCoord1;
 layout (location = 4) in ivec2 drawingCoord2;
-layout (location = 5) in int drawingCoordI0;
 layout (location = 0) in vec3 points;
-layout (location = 1) in vec3 normals;
-out flat int vs_dc_modelCoord;
-out flat int vs_dc_constantCoord;
-out flat int vs_dc_elementCoord;
-out flat int vs_dc_primitiveCoord;
-out flat int vs_dc_fvarCoord;
-out flat int vs_dc_shaderCoord;
-out flat int vs_dc_vertexCoord;
-out flat int vs_dc_topologyVisibilityCoord;
-out flat int vs_dc_varyingCoord;
-out flat int vs_dc_instanceIndexI0;
-out flat int vs_dc_instanceIndexI1;
-out flat int vs_dc_instanceCoordsI0;
-out flat int vs_dc_instanceCoordsI1;
-layout(location = 6) uniform int *instanceIndices;
-layout(location = 7) uniform int *culledInstanceIndices;
+layout (location = 1) in vec3 smoothNormals;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
-layout(location = 1) uniform hd_vec3 *hydra_instanceTranslations_0;
-layout(location = 2) uniform int *primitiveParam;
-layout(location = 3) uniform int *edgeIndices;
-layout(location = 4) uniform float *faceVisibility;
+layout(location = 1) uniform int *primitiveParam;
+layout(location = 2) uniform int *edgeIndices;
+layout(location = 3) uniform float *faceVisibility;
 out VertexData {
     vec4 Peye;
     vec3 Neye;
 } outData;
 out PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
 } outPrimvars;
 
 // //////// Codegen Accessors //////// 
@@ -231,52 +215,13 @@ float HdGet_widths(int localIndex) {
 float HdGet_widths() { return HdGet_widths(0); }
 float HdGetScalar_widths(int localIndex) { return HdGet_widths(localIndex); }
 float HdGetScalar_widths() { return HdGet_widths(0); }
-vec3 HdGet_hydra_instanceTranslations_0(int localIndex) {
-  int index = GetDrawingCoord().instanceCoords[0];
-  return hd_vec3_get(hydra_instanceTranslations_0[index]);
-}
-vec3 HdGet_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0); }
-float HdGetScalar_hydra_instanceTranslations_0(int localIndex) { return HdGet_hydra_instanceTranslations_0(localIndex).x; }
-float HdGetScalar_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0).x; }
-vec3 HdGetInstance_hydra_instanceTranslations(int level, vec3 defaultValue) {
-  if (level == 0) return HdGet_hydra_instanceTranslations_0();
-  return defaultValue;
-}
-#if !defined(HD_HAS_hydra_instanceTranslations)
-#define HD_HAS_hydra_instanceTranslations 1
-vec3 HdGet_hydra_instanceTranslations(int localIndex) {
-  return HdGet_hydra_instanceTranslations_0();
-}
-vec3 HdGet_hydra_instanceTranslations() { return HdGet_hydra_instanceTranslations(0); }
-#endif
 
 // //////// Codegen VS Source //////// 
 #define HD_BINDLESS_BUFFERS_ENABLED
-int GetBaseInstanceIndexCoord() {
-  return drawingCoord1.y;
-}
-int GetCurrentInstance() {
-  return int(hd_InstanceID - hd_BaseInstance);
-}
-int GetInstanceIndexCoord() {
-  return GetBaseInstanceIndexCoord() + GetCurrentInstance() * HD_INSTANCE_INDEX_WIDTH;
-}
-int HdGet_culledInstanceIndices(int localIndex) {
-  int index = GetInstanceIndexCoord()+localIndex + 1;
-  return int(culledInstanceIndices[index]);
-}
-int HdGet_culledInstanceIndices() { return HdGet_culledInstanceIndices(0); }
-int HdGetScalar_culledInstanceIndices(int localIndex) { return HdGet_culledInstanceIndices(localIndex); }
-int HdGetScalar_culledInstanceIndices() { return HdGet_culledInstanceIndices(0); }
 int GetBaseVertexOffset() {
   return HgiGetBaseVertex();
 }
-hd_instanceIndex GetInstanceIndex() {
-  hd_instanceIndex r;
-  for (int i = 0; i < HD_INSTANCE_INDEX_WIDTH; ++i)
-    r.indices[i] = HdGet_culledInstanceIndices(/*localIndex=*/i);
-  return r;
-}
+hd_instanceIndex GetInstanceIndex() {  hd_instanceIndex r; r.indices[0] = 0; return r; }
 hd_drawingCoord GetDrawingCoord() { hd_drawingCoord dc;
   dc.modelCoord              = drawingCoord0.x;
   dc.constantCoord           = drawingCoord0.y;
@@ -289,36 +234,32 @@ hd_drawingCoord GetDrawingCoord() { hd_drawingCoord dc;
   dc.varyingCoord            = drawingCoord2.y;
   hd_instanceIndex r = GetInstanceIndex();
   dc.instanceIndex[0] = r.indices[0];
-  dc.instanceIndex[1] = r.indices[1];
-  dc.instanceCoords[0] = drawingCoordI0 + dc.instanceIndex[1];
   return dc;
 }
 vec3 HdGet_points(int localIndex) { return hd_vec3_get(points);}
 vec3 HdGet_points() { return HdGet_points(0); }
 float HdGetScalar_points(int localIndex) { return HdGet_points(localIndex).x; }
 float HdGetScalar_points() { return HdGet_points(0).x; }
-vec3 HdGet_normals(int localIndex) { return hd_vec3_get(normals);}
-vec3 HdGet_normals() { return HdGet_normals(0); }
-float HdGetScalar_normals(int localIndex) { return HdGet_normals(localIndex).x; }
-float HdGetScalar_normals() { return HdGet_normals(0).x; }
+vec3 HdGet_smoothNormals(int localIndex) { return hd_vec3_get(smoothNormals);}
+vec3 HdGet_smoothNormals() { return HdGet_smoothNormals(0); }
+float HdGetScalar_smoothNormals(int localIndex) { return HdGet_smoothNormals(localIndex).x; }
+float HdGetScalar_smoothNormals() { return HdGet_smoothNormals(0).x; }
 
 // //////// Codegen Proc VS //////// 
 void ProcessPrimvarsIn() {
   hd_drawingCoord dc = GetDrawingCoord();
-  vs_dc_modelCoord = dc.modelCoord;
-  vs_dc_constantCoord = dc.constantCoord;
-  vs_dc_elementCoord = dc.elementCoord;
-  vs_dc_primitiveCoord = dc.primitiveCoord;
-  vs_dc_fvarCoord = dc.fvarCoord;
-  vs_dc_shaderCoord = dc.shaderCoord;
-  vs_dc_vertexCoord = dc.vertexCoord;
-  vs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  vs_dc_varyingCoord = dc.varyingCoord;
-  vs_dc_instanceIndexI0 = dc.instanceIndex[0];
-  vs_dc_instanceIndexI1 = dc.instanceIndex[1];
-  vs_dc_instanceCoordsI0 = dc.instanceCoords[0];
+  vs_interstageDrawingCoord0[0] = dc.modelCoord;
+  vs_interstageDrawingCoord0[1] = dc.constantCoord;
+  vs_interstageDrawingCoord0[2] = dc.elementCoord;
+  vs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  vs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  vs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  vs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  vs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  vs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  vs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = points;
-  outPrimvars.normals = normals;
+  outPrimvars.smoothNormals = smoothNormals;
 }
 
 // ---------------------------------------------------------------------------
@@ -673,7 +614,20 @@ bool IsFlipped()
 
 vec3 GetNormal(vec3 Neye, int index)
 {
-    return Neye;
+    vec3 normal = vec3(0);
+#if defined(HD_HAS_smoothNormals)
+    normal = vec3(HdGet_smoothNormals(index).xyz);
+#elif defined(HD_HAS_packedSmoothNormals)
+    normal = vec3(HdGet_packedSmoothNormals(index).xyz);
+#endif
+
+    MAT4 transformInv = ApplyInstanceTransformInverse(HdGet_transformInverse());
+    normal = vec4(transpose(transformInv * GetWorldToViewInverseMatrix()) *
+                  vec4(normal,0)).xyz;
+
+    if (length(normal) > 0.0)
+        normal = normalize(normal);
+    return normal;
 }
 
 vec3 GetNormal(vec3 Neye, int index, vec2 localST)
@@ -830,14 +784,12 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_color 1
 #define HD_HAS_primID 1
 #define HD_HAS_widths 1
-#define HD_HAS_INSTANCE_hydra_instanceTranslations 1
-#define HD_HAS_hydra_instanceTranslations_0 1
-#define HD_INSTANCER_NUM_LEVELS 1
-#define HD_INSTANCE_INDEX_WIDTH 2
+#define HD_INSTANCER_NUM_LEVELS 0
+#define HD_INSTANCE_INDEX_WIDTH 1
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
-#define HD_HAS_normals 1
+#define HD_HAS_smoothNormals 1
 vec4 InterpolatePatchCoord(vec2 uv, ivec3 patchParam)
 {
     // add 0.5 to integer values for more robust interpolation
@@ -890,13 +842,10 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
-layout(location = 6) uniform int *instanceIndices;
-layout(location = 7) uniform int *culledInstanceIndices;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
-layout(location = 1) uniform hd_vec3 *hydra_instanceTranslations_0;
-layout(location = 2) uniform int *primitiveParam;
-layout(location = 3) uniform int *edgeIndices;
-layout(location = 4) uniform float *faceVisibility;
+layout(location = 1) uniform int *primitiveParam;
+layout(location = 2) uniform int *edgeIndices;
+layout(location = 3) uniform float *faceVisibility;
 in VertexData {
     vec4 Peye;
     vec3 Neye;
@@ -907,42 +856,22 @@ out VertexData {
 } outData;
 out vec4 gsPatchCoord;
 out noperspective vec3 hd_barycentricCoord;
+in flat ivec4 vs_interstageDrawingCoord0[HD_NUM_PRIMITIVE_VERTS];
+out flat ivec4 gs_interstageDrawingCoord0;
+in flat ivec4 vs_interstageDrawingCoord1[HD_NUM_PRIMITIVE_VERTS];
+out flat ivec4 gs_interstageDrawingCoord1;
+in flat ivec4 vs_interstageDrawingCoord2[HD_NUM_PRIMITIVE_VERTS];
+out flat ivec4 gs_interstageDrawingCoord2;
 in PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
 } inPrimvars[HD_NUM_PRIMITIVE_VERTS];
 out PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
     vec2 dispTextureCoord;
 } outPrimvars;
-in flat int vs_dc_modelCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_modelCoord;
-in flat int vs_dc_constantCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_constantCoord;
-in flat int vs_dc_elementCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_elementCoord;
-in flat int vs_dc_primitiveCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_primitiveCoord;
-in flat int vs_dc_fvarCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_fvarCoord;
-in flat int vs_dc_shaderCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_shaderCoord;
-in flat int vs_dc_vertexCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_vertexCoord;
-in flat int vs_dc_topologyVisibilityCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_topologyVisibilityCoord;
-in flat int vs_dc_varyingCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_varyingCoord;
-in flat int vs_dc_instanceIndexI0[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceIndexI0;
-in flat int vs_dc_instanceIndexI1[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceIndexI1;
-in flat int vs_dc_instanceCoordsI0[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceCoordsI0;
-in flat int vs_dc_instanceCoordsI1[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceCoordsI1;
-layout(location = 5) uniform vec2 *dispTextureCoord;
+layout(location = 4) uniform vec2 *dispTextureCoord;
 
 // //////// Codegen Accessors //////// 
 mat4 HdGet_transform(int localIndex) {
@@ -976,24 +905,6 @@ float HdGet_widths(int localIndex) {
 float HdGet_widths() { return HdGet_widths(0); }
 float HdGetScalar_widths(int localIndex) { return HdGet_widths(localIndex); }
 float HdGetScalar_widths() { return HdGet_widths(0); }
-vec3 HdGet_hydra_instanceTranslations_0(int localIndex) {
-  int index = GetDrawingCoord().instanceCoords[0];
-  return hd_vec3_get(hydra_instanceTranslations_0[index]);
-}
-vec3 HdGet_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0); }
-float HdGetScalar_hydra_instanceTranslations_0(int localIndex) { return HdGet_hydra_instanceTranslations_0(localIndex).x; }
-float HdGetScalar_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0).x; }
-vec3 HdGetInstance_hydra_instanceTranslations(int level, vec3 defaultValue) {
-  if (level == 0) return HdGet_hydra_instanceTranslations_0();
-  return defaultValue;
-}
-#if !defined(HD_HAS_hydra_instanceTranslations)
-#define HD_HAS_hydra_instanceTranslations 1
-vec3 HdGet_hydra_instanceTranslations(int localIndex) {
-  return HdGet_hydra_instanceTranslations_0();
-}
-vec3 HdGet_hydra_instanceTranslations() { return HdGet_hydra_instanceTranslations(0); }
-#endif
 
 // //////// Codegen GS Source //////// 
 int GetPrimitiveID() {
@@ -1004,18 +915,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = vs_dc_modelCoord[0];
-  dc.constantCoord = vs_dc_constantCoord[0];
-  dc.elementCoord = vs_dc_elementCoord[0];
-  dc.primitiveCoord = vs_dc_primitiveCoord[0];
-  dc.fvarCoord = vs_dc_fvarCoord[0];
-  dc.shaderCoord = vs_dc_shaderCoord[0];
-  dc.vertexCoord = vs_dc_vertexCoord[0];
-  dc.topologyVisibilityCoord = vs_dc_topologyVisibilityCoord[0];
-  dc.varyingCoord = vs_dc_varyingCoord[0];
-  dc.instanceIndex[0] = vs_dc_instanceIndexI0[0];
-  dc.instanceIndex[1] = vs_dc_instanceIndexI1[0];
-  dc.instanceCoords[0] = vs_dc_instanceCoordsI0[0];
+  dc.modelCoord = vs_interstageDrawingCoord0[0][0];
+  dc.constantCoord = vs_interstageDrawingCoord0[0][1];
+  dc.elementCoord = vs_interstageDrawingCoord0[0][2];
+  dc.primitiveCoord = vs_interstageDrawingCoord0[0][3];
+  dc.fvarCoord = vs_interstageDrawingCoord1[0][0];
+  dc.shaderCoord = vs_interstageDrawingCoord1[0][1];
+  dc.vertexCoord = vs_interstageDrawingCoord1[0][2];
+  dc.topologyVisibilityCoord = vs_interstageDrawingCoord1[0][3];
+  dc.varyingCoord = vs_interstageDrawingCoord2[0][0];
+  dc.instanceIndex[0] = vs_interstageDrawingCoord2[0][1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -1074,13 +983,13 @@ vec3 HdGet_points(int localIndex) {
 vec3 HdGet_points() { return HdGet_points(0); }
 float HdGetScalar_points(int localIndex) { return HdGet_points(localIndex).x; }
 float HdGetScalar_points() { return HdGet_points(0).x; }
-vec3 HdGet_normals(int localIndex) {
+vec3 HdGet_smoothNormals(int localIndex) {
   int index = localIndex;
-  return vec3(inPrimvars[index].normals);
+  return vec3(inPrimvars[index].smoothNormals);
 }
-vec3 HdGet_normals() { return HdGet_normals(0); }
-float HdGetScalar_normals(int localIndex) { return HdGet_normals(localIndex).x; }
-float HdGetScalar_normals() { return HdGet_normals(0).x; }
+vec3 HdGet_smoothNormals() { return HdGet_smoothNormals(0); }
+float HdGetScalar_smoothNormals(int localIndex) { return HdGet_smoothNormals(localIndex).x; }
+float HdGetScalar_smoothNormals() { return HdGet_smoothNormals(0).x; }
 vec2 HdGet_dispTextureCoord_Coarse(int localIndex) {
   int fvarIndex = GetFVarIndex(localIndex);
   return vec2(dispTextureCoord[fvarIndex]);
@@ -1108,20 +1017,18 @@ void ProcessPrimvarsOut(int index) {
   );
   hd_barycentricCoord = coords[index];
   hd_drawingCoord dc = GetDrawingCoord();
-  gs_dc_modelCoord = dc.modelCoord;
-  gs_dc_constantCoord = dc.constantCoord;
-  gs_dc_elementCoord = dc.elementCoord;
-  gs_dc_primitiveCoord = dc.primitiveCoord;
-  gs_dc_fvarCoord = dc.fvarCoord;
-  gs_dc_shaderCoord = dc.shaderCoord;
-  gs_dc_vertexCoord = dc.vertexCoord;
-  gs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  gs_dc_varyingCoord = dc.varyingCoord;
-  gs_dc_instanceIndexI0 = dc.instanceIndex[0];
-  gs_dc_instanceIndexI1 = dc.instanceIndex[1];
-  gs_dc_instanceCoordsI0 = dc.instanceCoords[0];
+  gs_interstageDrawingCoord0[0] = dc.modelCoord;
+  gs_interstageDrawingCoord0[1] = dc.constantCoord;
+  gs_interstageDrawingCoord0[2] = dc.elementCoord;
+  gs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  gs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  gs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  gs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  gs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  gs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  gs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = inPrimvars[index].points;
-  outPrimvars.normals = inPrimvars[index].normals;
+  outPrimvars.smoothNormals = inPrimvars[index].smoothNormals;
   outPrimvars.dispTextureCoord = HdGet_dispTextureCoord(index);
 }
 
@@ -1483,20 +1390,7 @@ bool IsFlipped()
 
 vec3 GetNormal(vec3 Neye, int index)
 {
-    vec3 normal = vec3(0);
-#if defined(HD_HAS_flatNormals)
-    normal = vec3(HdGet_flatNormals(index).xyz);
-#elif defined(HD_HAS_packedFlatNormals)
-    normal = vec3(HdGet_packedFlatNormals(index).xyz);
-#endif
-
-    MAT4 transformInv = ApplyInstanceTransformInverse(HdGet_transformInverse());
-    normal = vec4(transpose(transformInv * GetWorldToViewInverseMatrix()) *
-                  vec4(normal,0)).xyz;
-
-    if (length(normal) > 0.0)
-        normal = normalize(normal);
-    return normal;
+    return Neye;
 }
 
 vec3 GetNormal(vec3 Neye, int index, vec2 localST)
@@ -1698,14 +1592,12 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_color 1
 #define HD_HAS_primID 1
 #define HD_HAS_widths 1
-#define HD_HAS_INSTANCE_hydra_instanceTranslations 1
-#define HD_HAS_hydra_instanceTranslations_0 1
-#define HD_INSTANCER_NUM_LEVELS 1
-#define HD_INSTANCE_INDEX_WIDTH 2
+#define HD_INSTANCER_NUM_LEVELS 0
+#define HD_INSTANCE_INDEX_WIDTH 1
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
-#define HD_HAS_normals 1
+#define HD_HAS_smoothNormals 1
 
 // //////// Codegen Decl //////// 
 struct hd_drawingCoord {                       
@@ -1735,13 +1627,10 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
-layout(location = 6) uniform int *instanceIndices;
-layout(location = 7) uniform int *culledInstanceIndices;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
-layout(location = 1) uniform hd_vec3 *hydra_instanceTranslations_0;
-layout(location = 2) uniform int *primitiveParam;
-layout(location = 3) uniform int *edgeIndices;
-layout(location = 4) uniform float *faceVisibility;
+layout(location = 1) uniform int *primitiveParam;
+layout(location = 2) uniform int *edgeIndices;
+layout(location = 3) uniform float *faceVisibility;
 in vec4 gsPatchCoord;
 in VertexData {
     vec4 Peye;
@@ -1749,25 +1638,15 @@ in VertexData {
 } inData;
 layout (location = 0) out vec4 colorOut;
 in noperspective vec3 hd_barycentricCoord;
+in flat ivec4 gs_interstageDrawingCoord0;
+in flat ivec4 gs_interstageDrawingCoord1;
+in flat ivec4 gs_interstageDrawingCoord2;
 in PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
     vec2 dispTextureCoord;
 } inPrimvars;
-in flat int gs_dc_modelCoord;
-in flat int gs_dc_constantCoord;
-in flat int gs_dc_elementCoord;
-in flat int gs_dc_primitiveCoord;
-in flat int gs_dc_fvarCoord;
-in flat int gs_dc_shaderCoord;
-in flat int gs_dc_vertexCoord;
-in flat int gs_dc_topologyVisibilityCoord;
-in flat int gs_dc_varyingCoord;
-in flat int gs_dc_instanceIndexI0;
-in flat int gs_dc_instanceIndexI1;
-in flat int gs_dc_instanceCoordsI0;
-in flat int gs_dc_instanceCoordsI1;
-layout(location = 5) uniform vec2 *dispTextureCoord;
+layout(location = 4) uniform vec2 *dispTextureCoord;
 vec4 InterpolatePatchCoord(vec2 uv, ivec3 patchParam)
 {
     // add 0.5 to integer values for more robust interpolation
@@ -1810,24 +1689,6 @@ float HdGet_widths(int localIndex) {
 float HdGet_widths() { return HdGet_widths(0); }
 float HdGetScalar_widths(int localIndex) { return HdGet_widths(localIndex); }
 float HdGetScalar_widths() { return HdGet_widths(0); }
-vec3 HdGet_hydra_instanceTranslations_0(int localIndex) {
-  int index = GetDrawingCoord().instanceCoords[0];
-  return hd_vec3_get(hydra_instanceTranslations_0[index]);
-}
-vec3 HdGet_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0); }
-float HdGetScalar_hydra_instanceTranslations_0(int localIndex) { return HdGet_hydra_instanceTranslations_0(localIndex).x; }
-float HdGetScalar_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0).x; }
-vec3 HdGetInstance_hydra_instanceTranslations(int level, vec3 defaultValue) {
-  if (level == 0) return HdGet_hydra_instanceTranslations_0();
-  return defaultValue;
-}
-#if !defined(HD_HAS_hydra_instanceTranslations)
-#define HD_HAS_hydra_instanceTranslations 1
-vec3 HdGet_hydra_instanceTranslations(int localIndex) {
-  return HdGet_hydra_instanceTranslations_0();
-}
-vec3 HdGet_hydra_instanceTranslations() { return HdGet_hydra_instanceTranslations(0); }
-#endif
 
 // //////// Codegen FS Source //////// 
 #define HD_SHADER_SUPPORTS_DOUBLE_PRECISION
@@ -1843,18 +1704,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = gs_dc_modelCoord;
-  dc.constantCoord = gs_dc_constantCoord;
-  dc.elementCoord = gs_dc_elementCoord;
-  dc.primitiveCoord = gs_dc_primitiveCoord;
-  dc.fvarCoord = gs_dc_fvarCoord;
-  dc.shaderCoord = gs_dc_shaderCoord;
-  dc.vertexCoord = gs_dc_vertexCoord;
-  dc.topologyVisibilityCoord = gs_dc_topologyVisibilityCoord;
-  dc.varyingCoord = gs_dc_varyingCoord;
-  dc.instanceIndex[0] = gs_dc_instanceIndexI0;
-  dc.instanceIndex[1] = gs_dc_instanceIndexI1;
-  dc.instanceCoords[0] = gs_dc_instanceCoordsI0;
+  dc.modelCoord = gs_interstageDrawingCoord0[0];
+  dc.constantCoord = gs_interstageDrawingCoord0[1];
+  dc.elementCoord = gs_interstageDrawingCoord0[2];
+  dc.primitiveCoord = gs_interstageDrawingCoord0[3];
+  dc.fvarCoord = gs_interstageDrawingCoord1[0];
+  dc.shaderCoord = gs_interstageDrawingCoord1[1];
+  dc.vertexCoord = gs_interstageDrawingCoord1[2];
+  dc.topologyVisibilityCoord = gs_interstageDrawingCoord1[3];
+  dc.varyingCoord = gs_interstageDrawingCoord2[0];
+  dc.instanceIndex[0] = gs_interstageDrawingCoord2[1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -1910,10 +1769,10 @@ vec3 HdGet_points(int localIndex) { return vec3(inPrimvars.points);}
 vec3 HdGet_points() { return HdGet_points(0); }
 float HdGetScalar_points(int localIndex) { return HdGet_points(localIndex).x; }
 float HdGetScalar_points() { return HdGet_points(0).x; }
-vec3 HdGet_normals(int localIndex) { return vec3(inPrimvars.normals);}
-vec3 HdGet_normals() { return HdGet_normals(0); }
-float HdGetScalar_normals(int localIndex) { return HdGet_normals(localIndex).x; }
-float HdGetScalar_normals() { return HdGet_normals(0).x; }
+vec3 HdGet_smoothNormals(int localIndex) { return vec3(inPrimvars.smoothNormals);}
+vec3 HdGet_smoothNormals() { return HdGet_smoothNormals(0); }
+float HdGetScalar_smoothNormals(int localIndex) { return HdGet_smoothNormals(localIndex).x; }
+float HdGetScalar_smoothNormals() { return HdGet_smoothNormals(0).x; }
 vec2 HdGet_dispTextureCoord(int localIndex) { return vec2(inPrimvars.dispTextureCoord);}
 vec2 HdGet_dispTextureCoord() { return HdGet_dispTextureCoord(0); }
 float HdGetScalar_dispTextureCoord(int localIndex) { return HdGet_dispTextureCoord(localIndex).x; }
@@ -2108,9 +1967,34 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
+}
+
+
+
+void RenderId()
+{
+    // do nothing
+}
+
+
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
 }
 
 
@@ -2788,8 +2672,8 @@ void main(void)
 #import $TOOLS/hdSt/shaders/mesh.glslfx
 -- configuration
 {"techniques": {"default": {
-"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "PointId.Vertex.None", "Mesh.Vertex"] }
-, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Flat", "MeshNormal.Geometry.NoFlat", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Quad"] }
+"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Smooth", "PointId.Vertex.None", "Mesh.Vertex"] }
+, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Geometry.NoFlat", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Quad"] }
 , "fragmentShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Fragment.SingleSided", "MeshFaceCull.Fragment.None", "MeshWire.Fragment.NoEdge", "MeshWire.Fragment.EdgeParam", "Fragment.CommonTerminals", "Fragment.Surface", "Fragment.ScalarOverride", "EdgeId.Fragment.Common", "EdgeId.Fragment.QuadSurface", "EdgeId.Fragment.QuadParam", "PointId.Fragment.Fallback", "Visibility.Fragment.Fallback", "Mesh.Fragment.PatchCoord", "Mesh.Fragment"] }
 }}}
 -------------------------------------------------------
@@ -2897,14 +2781,12 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_color 1
 #define HD_HAS_primID 1
 #define HD_HAS_widths 1
-#define HD_HAS_INSTANCE_hydra_instanceTranslations 1
-#define HD_HAS_hydra_instanceTranslations_0 1
-#define HD_INSTANCER_NUM_LEVELS 1
-#define HD_INSTANCE_INDEX_WIDTH 2
+#define HD_INSTANCER_NUM_LEVELS 0
+#define HD_INSTANCE_INDEX_WIDTH 1
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
-#define HD_HAS_normals 1
+#define HD_HAS_smoothNormals 1
 
 
 // //////// Global Includes ////////
@@ -2949,39 +2831,25 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
+out flat ivec4 vs_interstageDrawingCoord0;
+out flat ivec4 vs_interstageDrawingCoord1;
+out flat ivec4 vs_interstageDrawingCoord2;
 layout (location = 2) in ivec4 drawingCoord0;
 layout (location = 3) in ivec4 drawingCoord1;
 layout (location = 4) in ivec2 drawingCoord2;
-layout (location = 5) in int drawingCoordI0;
 layout (location = 0) in vec3 points;
-layout (location = 1) in vec3 normals;
-out flat int vs_dc_modelCoord;
-out flat int vs_dc_constantCoord;
-out flat int vs_dc_elementCoord;
-out flat int vs_dc_primitiveCoord;
-out flat int vs_dc_fvarCoord;
-out flat int vs_dc_shaderCoord;
-out flat int vs_dc_vertexCoord;
-out flat int vs_dc_topologyVisibilityCoord;
-out flat int vs_dc_varyingCoord;
-out flat int vs_dc_instanceIndexI0;
-out flat int vs_dc_instanceIndexI1;
-out flat int vs_dc_instanceCoordsI0;
-out flat int vs_dc_instanceCoordsI1;
-layout(location = 6) uniform int *instanceIndices;
-layout(location = 7) uniform int *culledInstanceIndices;
+layout (location = 1) in vec3 smoothNormals;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
-layout(location = 1) uniform hd_vec3 *hydra_instanceTranslations_0;
-layout(location = 2) uniform int *primitiveParam;
-layout(location = 3) uniform ivec2 *edgeIndices;
-layout(location = 4) uniform float *faceVisibility;
+layout(location = 1) uniform int *primitiveParam;
+layout(location = 2) uniform ivec2 *edgeIndices;
+layout(location = 3) uniform float *faceVisibility;
 out VertexData {
     vec4 Peye;
     vec3 Neye;
 } outData;
 out PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
 } outPrimvars;
 
 // //////// Codegen Accessors //////// 
@@ -3016,52 +2884,13 @@ float HdGet_widths(int localIndex) {
 float HdGet_widths() { return HdGet_widths(0); }
 float HdGetScalar_widths(int localIndex) { return HdGet_widths(localIndex); }
 float HdGetScalar_widths() { return HdGet_widths(0); }
-vec3 HdGet_hydra_instanceTranslations_0(int localIndex) {
-  int index = GetDrawingCoord().instanceCoords[0];
-  return hd_vec3_get(hydra_instanceTranslations_0[index]);
-}
-vec3 HdGet_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0); }
-float HdGetScalar_hydra_instanceTranslations_0(int localIndex) { return HdGet_hydra_instanceTranslations_0(localIndex).x; }
-float HdGetScalar_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0).x; }
-vec3 HdGetInstance_hydra_instanceTranslations(int level, vec3 defaultValue) {
-  if (level == 0) return HdGet_hydra_instanceTranslations_0();
-  return defaultValue;
-}
-#if !defined(HD_HAS_hydra_instanceTranslations)
-#define HD_HAS_hydra_instanceTranslations 1
-vec3 HdGet_hydra_instanceTranslations(int localIndex) {
-  return HdGet_hydra_instanceTranslations_0();
-}
-vec3 HdGet_hydra_instanceTranslations() { return HdGet_hydra_instanceTranslations(0); }
-#endif
 
 // //////// Codegen VS Source //////// 
 #define HD_BINDLESS_BUFFERS_ENABLED
-int GetBaseInstanceIndexCoord() {
-  return drawingCoord1.y;
-}
-int GetCurrentInstance() {
-  return int(hd_InstanceID - hd_BaseInstance);
-}
-int GetInstanceIndexCoord() {
-  return GetBaseInstanceIndexCoord() + GetCurrentInstance() * HD_INSTANCE_INDEX_WIDTH;
-}
-int HdGet_culledInstanceIndices(int localIndex) {
-  int index = GetInstanceIndexCoord()+localIndex + 1;
-  return int(culledInstanceIndices[index]);
-}
-int HdGet_culledInstanceIndices() { return HdGet_culledInstanceIndices(0); }
-int HdGetScalar_culledInstanceIndices(int localIndex) { return HdGet_culledInstanceIndices(localIndex); }
-int HdGetScalar_culledInstanceIndices() { return HdGet_culledInstanceIndices(0); }
 int GetBaseVertexOffset() {
   return HgiGetBaseVertex();
 }
-hd_instanceIndex GetInstanceIndex() {
-  hd_instanceIndex r;
-  for (int i = 0; i < HD_INSTANCE_INDEX_WIDTH; ++i)
-    r.indices[i] = HdGet_culledInstanceIndices(/*localIndex=*/i);
-  return r;
-}
+hd_instanceIndex GetInstanceIndex() {  hd_instanceIndex r; r.indices[0] = 0; return r; }
 hd_drawingCoord GetDrawingCoord() { hd_drawingCoord dc;
   dc.modelCoord              = drawingCoord0.x;
   dc.constantCoord           = drawingCoord0.y;
@@ -3074,36 +2903,32 @@ hd_drawingCoord GetDrawingCoord() { hd_drawingCoord dc;
   dc.varyingCoord            = drawingCoord2.y;
   hd_instanceIndex r = GetInstanceIndex();
   dc.instanceIndex[0] = r.indices[0];
-  dc.instanceIndex[1] = r.indices[1];
-  dc.instanceCoords[0] = drawingCoordI0 + dc.instanceIndex[1];
   return dc;
 }
 vec3 HdGet_points(int localIndex) { return hd_vec3_get(points);}
 vec3 HdGet_points() { return HdGet_points(0); }
 float HdGetScalar_points(int localIndex) { return HdGet_points(localIndex).x; }
 float HdGetScalar_points() { return HdGet_points(0).x; }
-vec3 HdGet_normals(int localIndex) { return hd_vec3_get(normals);}
-vec3 HdGet_normals() { return HdGet_normals(0); }
-float HdGetScalar_normals(int localIndex) { return HdGet_normals(localIndex).x; }
-float HdGetScalar_normals() { return HdGet_normals(0).x; }
+vec3 HdGet_smoothNormals(int localIndex) { return hd_vec3_get(smoothNormals);}
+vec3 HdGet_smoothNormals() { return HdGet_smoothNormals(0); }
+float HdGetScalar_smoothNormals(int localIndex) { return HdGet_smoothNormals(localIndex).x; }
+float HdGetScalar_smoothNormals() { return HdGet_smoothNormals(0).x; }
 
 // //////// Codegen Proc VS //////// 
 void ProcessPrimvarsIn() {
   hd_drawingCoord dc = GetDrawingCoord();
-  vs_dc_modelCoord = dc.modelCoord;
-  vs_dc_constantCoord = dc.constantCoord;
-  vs_dc_elementCoord = dc.elementCoord;
-  vs_dc_primitiveCoord = dc.primitiveCoord;
-  vs_dc_fvarCoord = dc.fvarCoord;
-  vs_dc_shaderCoord = dc.shaderCoord;
-  vs_dc_vertexCoord = dc.vertexCoord;
-  vs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  vs_dc_varyingCoord = dc.varyingCoord;
-  vs_dc_instanceIndexI0 = dc.instanceIndex[0];
-  vs_dc_instanceIndexI1 = dc.instanceIndex[1];
-  vs_dc_instanceCoordsI0 = dc.instanceCoords[0];
+  vs_interstageDrawingCoord0[0] = dc.modelCoord;
+  vs_interstageDrawingCoord0[1] = dc.constantCoord;
+  vs_interstageDrawingCoord0[2] = dc.elementCoord;
+  vs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  vs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  vs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  vs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  vs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  vs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  vs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = points;
-  outPrimvars.normals = normals;
+  outPrimvars.smoothNormals = smoothNormals;
 }
 
 // ---------------------------------------------------------------------------
@@ -3458,7 +3283,20 @@ bool IsFlipped()
 
 vec3 GetNormal(vec3 Neye, int index)
 {
-    return Neye;
+    vec3 normal = vec3(0);
+#if defined(HD_HAS_smoothNormals)
+    normal = vec3(HdGet_smoothNormals(index).xyz);
+#elif defined(HD_HAS_packedSmoothNormals)
+    normal = vec3(HdGet_packedSmoothNormals(index).xyz);
+#endif
+
+    MAT4 transformInv = ApplyInstanceTransformInverse(HdGet_transformInverse());
+    normal = vec4(transpose(transformInv * GetWorldToViewInverseMatrix()) *
+                  vec4(normal,0)).xyz;
+
+    if (length(normal) > 0.0)
+        normal = normalize(normal);
+    return normal;
 }
 
 vec3 GetNormal(vec3 Neye, int index, vec2 localST)
@@ -3615,14 +3453,12 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_color 1
 #define HD_HAS_primID 1
 #define HD_HAS_widths 1
-#define HD_HAS_INSTANCE_hydra_instanceTranslations 1
-#define HD_HAS_hydra_instanceTranslations_0 1
-#define HD_INSTANCER_NUM_LEVELS 1
-#define HD_INSTANCE_INDEX_WIDTH 2
+#define HD_INSTANCER_NUM_LEVELS 0
+#define HD_INSTANCE_INDEX_WIDTH 1
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
-#define HD_HAS_normals 1
+#define HD_HAS_smoothNormals 1
 vec4 InterpolatePatchCoord(vec2 uv, ivec3 patchParam)
 {
     // add 0.5 to integer values for more robust interpolation
@@ -3675,13 +3511,10 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
-layout(location = 6) uniform int *instanceIndices;
-layout(location = 7) uniform int *culledInstanceIndices;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
-layout(location = 1) uniform hd_vec3 *hydra_instanceTranslations_0;
-layout(location = 2) uniform int *primitiveParam;
-layout(location = 3) uniform ivec2 *edgeIndices;
-layout(location = 4) uniform float *faceVisibility;
+layout(location = 1) uniform int *primitiveParam;
+layout(location = 2) uniform ivec2 *edgeIndices;
+layout(location = 3) uniform float *faceVisibility;
 in VertexData {
     vec4 Peye;
     vec3 Neye;
@@ -3692,42 +3525,22 @@ out VertexData {
 } outData;
 out vec4 gsPatchCoord;
 out noperspective vec3 hd_barycentricCoord;
+in flat ivec4 vs_interstageDrawingCoord0[HD_NUM_PRIMITIVE_VERTS];
+out flat ivec4 gs_interstageDrawingCoord0;
+in flat ivec4 vs_interstageDrawingCoord1[HD_NUM_PRIMITIVE_VERTS];
+out flat ivec4 gs_interstageDrawingCoord1;
+in flat ivec4 vs_interstageDrawingCoord2[HD_NUM_PRIMITIVE_VERTS];
+out flat ivec4 gs_interstageDrawingCoord2;
 in PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
 } inPrimvars[HD_NUM_PRIMITIVE_VERTS];
 out PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
     vec2 dispTextureCoord;
 } outPrimvars;
-in flat int vs_dc_modelCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_modelCoord;
-in flat int vs_dc_constantCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_constantCoord;
-in flat int vs_dc_elementCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_elementCoord;
-in flat int vs_dc_primitiveCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_primitiveCoord;
-in flat int vs_dc_fvarCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_fvarCoord;
-in flat int vs_dc_shaderCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_shaderCoord;
-in flat int vs_dc_vertexCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_vertexCoord;
-in flat int vs_dc_topologyVisibilityCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_topologyVisibilityCoord;
-in flat int vs_dc_varyingCoord[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_varyingCoord;
-in flat int vs_dc_instanceIndexI0[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceIndexI0;
-in flat int vs_dc_instanceIndexI1[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceIndexI1;
-in flat int vs_dc_instanceCoordsI0[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceCoordsI0;
-in flat int vs_dc_instanceCoordsI1[HD_NUM_PRIMITIVE_VERTS];
-out flat int gs_dc_instanceCoordsI1;
-layout(location = 5) uniform vec2 *dispTextureCoord;
+layout(location = 4) uniform vec2 *dispTextureCoord;
 
 // //////// Codegen Accessors //////// 
 mat4 HdGet_transform(int localIndex) {
@@ -3761,24 +3574,6 @@ float HdGet_widths(int localIndex) {
 float HdGet_widths() { return HdGet_widths(0); }
 float HdGetScalar_widths(int localIndex) { return HdGet_widths(localIndex); }
 float HdGetScalar_widths() { return HdGet_widths(0); }
-vec3 HdGet_hydra_instanceTranslations_0(int localIndex) {
-  int index = GetDrawingCoord().instanceCoords[0];
-  return hd_vec3_get(hydra_instanceTranslations_0[index]);
-}
-vec3 HdGet_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0); }
-float HdGetScalar_hydra_instanceTranslations_0(int localIndex) { return HdGet_hydra_instanceTranslations_0(localIndex).x; }
-float HdGetScalar_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0).x; }
-vec3 HdGetInstance_hydra_instanceTranslations(int level, vec3 defaultValue) {
-  if (level == 0) return HdGet_hydra_instanceTranslations_0();
-  return defaultValue;
-}
-#if !defined(HD_HAS_hydra_instanceTranslations)
-#define HD_HAS_hydra_instanceTranslations 1
-vec3 HdGet_hydra_instanceTranslations(int localIndex) {
-  return HdGet_hydra_instanceTranslations_0();
-}
-vec3 HdGet_hydra_instanceTranslations() { return HdGet_hydra_instanceTranslations(0); }
-#endif
 
 // //////// Codegen GS Source //////// 
 int GetPrimitiveID() {
@@ -3789,18 +3584,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = vs_dc_modelCoord[0];
-  dc.constantCoord = vs_dc_constantCoord[0];
-  dc.elementCoord = vs_dc_elementCoord[0];
-  dc.primitiveCoord = vs_dc_primitiveCoord[0];
-  dc.fvarCoord = vs_dc_fvarCoord[0];
-  dc.shaderCoord = vs_dc_shaderCoord[0];
-  dc.vertexCoord = vs_dc_vertexCoord[0];
-  dc.topologyVisibilityCoord = vs_dc_topologyVisibilityCoord[0];
-  dc.varyingCoord = vs_dc_varyingCoord[0];
-  dc.instanceIndex[0] = vs_dc_instanceIndexI0[0];
-  dc.instanceIndex[1] = vs_dc_instanceIndexI1[0];
-  dc.instanceCoords[0] = vs_dc_instanceCoordsI0[0];
+  dc.modelCoord = vs_interstageDrawingCoord0[0][0];
+  dc.constantCoord = vs_interstageDrawingCoord0[0][1];
+  dc.elementCoord = vs_interstageDrawingCoord0[0][2];
+  dc.primitiveCoord = vs_interstageDrawingCoord0[0][3];
+  dc.fvarCoord = vs_interstageDrawingCoord1[0][0];
+  dc.shaderCoord = vs_interstageDrawingCoord1[0][1];
+  dc.vertexCoord = vs_interstageDrawingCoord1[0][2];
+  dc.topologyVisibilityCoord = vs_interstageDrawingCoord1[0][3];
+  dc.varyingCoord = vs_interstageDrawingCoord2[0][0];
+  dc.instanceIndex[0] = vs_interstageDrawingCoord2[0][1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -3859,13 +3652,13 @@ vec3 HdGet_points(int localIndex) {
 vec3 HdGet_points() { return HdGet_points(0); }
 float HdGetScalar_points(int localIndex) { return HdGet_points(localIndex).x; }
 float HdGetScalar_points() { return HdGet_points(0).x; }
-vec3 HdGet_normals(int localIndex) {
+vec3 HdGet_smoothNormals(int localIndex) {
   int index = localIndex;
-  return vec3(inPrimvars[index].normals);
+  return vec3(inPrimvars[index].smoothNormals);
 }
-vec3 HdGet_normals() { return HdGet_normals(0); }
-float HdGetScalar_normals(int localIndex) { return HdGet_normals(localIndex).x; }
-float HdGetScalar_normals() { return HdGet_normals(0).x; }
+vec3 HdGet_smoothNormals() { return HdGet_smoothNormals(0); }
+float HdGetScalar_smoothNormals(int localIndex) { return HdGet_smoothNormals(localIndex).x; }
+float HdGetScalar_smoothNormals() { return HdGet_smoothNormals(0).x; }
 vec2 HdGet_dispTextureCoord_Coarse(int localIndex) {
   int fvarIndex = GetFVarIndex(localIndex);
   return vec2(dispTextureCoord[fvarIndex]);
@@ -3893,20 +3686,18 @@ void ProcessPrimvarsOut(int index) {
   );
   hd_barycentricCoord = coords[index];
   hd_drawingCoord dc = GetDrawingCoord();
-  gs_dc_modelCoord = dc.modelCoord;
-  gs_dc_constantCoord = dc.constantCoord;
-  gs_dc_elementCoord = dc.elementCoord;
-  gs_dc_primitiveCoord = dc.primitiveCoord;
-  gs_dc_fvarCoord = dc.fvarCoord;
-  gs_dc_shaderCoord = dc.shaderCoord;
-  gs_dc_vertexCoord = dc.vertexCoord;
-  gs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  gs_dc_varyingCoord = dc.varyingCoord;
-  gs_dc_instanceIndexI0 = dc.instanceIndex[0];
-  gs_dc_instanceIndexI1 = dc.instanceIndex[1];
-  gs_dc_instanceCoordsI0 = dc.instanceCoords[0];
+  gs_interstageDrawingCoord0[0] = dc.modelCoord;
+  gs_interstageDrawingCoord0[1] = dc.constantCoord;
+  gs_interstageDrawingCoord0[2] = dc.elementCoord;
+  gs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  gs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  gs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  gs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  gs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  gs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  gs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = inPrimvars[index].points;
-  outPrimvars.normals = inPrimvars[index].normals;
+  outPrimvars.smoothNormals = inPrimvars[index].smoothNormals;
   outPrimvars.dispTextureCoord = HdGet_dispTextureCoord(index);
 }
 
@@ -4268,20 +4059,7 @@ bool IsFlipped()
 
 vec3 GetNormal(vec3 Neye, int index)
 {
-    vec3 normal = vec3(0);
-#if defined(HD_HAS_flatNormals)
-    normal = vec3(HdGet_flatNormals(index).xyz);
-#elif defined(HD_HAS_packedFlatNormals)
-    normal = vec3(HdGet_packedFlatNormals(index).xyz);
-#endif
-
-    MAT4 transformInv = ApplyInstanceTransformInverse(HdGet_transformInverse());
-    normal = vec4(transpose(transformInv * GetWorldToViewInverseMatrix()) *
-                  vec4(normal,0)).xyz;
-
-    if (length(normal) > 0.0)
-        normal = normalize(normal);
-    return normal;
+    return Neye;
 }
 
 vec3 GetNormal(vec3 Neye, int index, vec2 localST)
@@ -4512,14 +4290,12 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_color 1
 #define HD_HAS_primID 1
 #define HD_HAS_widths 1
-#define HD_HAS_INSTANCE_hydra_instanceTranslations 1
-#define HD_HAS_hydra_instanceTranslations_0 1
-#define HD_INSTANCER_NUM_LEVELS 1
-#define HD_INSTANCE_INDEX_WIDTH 2
+#define HD_INSTANCER_NUM_LEVELS 0
+#define HD_INSTANCE_INDEX_WIDTH 1
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
-#define HD_HAS_normals 1
+#define HD_HAS_smoothNormals 1
 
 // //////// Codegen Decl //////// 
 struct hd_drawingCoord {                       
@@ -4549,13 +4325,10 @@ FORWARD_DECL(int GetElementID());
 FORWARD_DECL(int GetAggregatedElementID());
 FORWARD_DECL(int GetPrimitiveEdgeId());
 FORWARD_DECL(float GetSelectedEdgeOpacity());
-layout(location = 6) uniform int *instanceIndices;
-layout(location = 7) uniform int *culledInstanceIndices;
 layout(location = 0) uniform ConstantData10 *constantPrimvars;
-layout(location = 1) uniform hd_vec3 *hydra_instanceTranslations_0;
-layout(location = 2) uniform int *primitiveParam;
-layout(location = 3) uniform ivec2 *edgeIndices;
-layout(location = 4) uniform float *faceVisibility;
+layout(location = 1) uniform int *primitiveParam;
+layout(location = 2) uniform ivec2 *edgeIndices;
+layout(location = 3) uniform float *faceVisibility;
 in vec4 gsPatchCoord;
 in VertexData {
     vec4 Peye;
@@ -4563,25 +4336,15 @@ in VertexData {
 } inData;
 layout (location = 0) out vec4 colorOut;
 in noperspective vec3 hd_barycentricCoord;
+in flat ivec4 gs_interstageDrawingCoord0;
+in flat ivec4 gs_interstageDrawingCoord1;
+in flat ivec4 gs_interstageDrawingCoord2;
 in PrimvarData {
     vec3 points;
-    vec3 normals;
+    vec3 smoothNormals;
     vec2 dispTextureCoord;
 } inPrimvars;
-in flat int gs_dc_modelCoord;
-in flat int gs_dc_constantCoord;
-in flat int gs_dc_elementCoord;
-in flat int gs_dc_primitiveCoord;
-in flat int gs_dc_fvarCoord;
-in flat int gs_dc_shaderCoord;
-in flat int gs_dc_vertexCoord;
-in flat int gs_dc_topologyVisibilityCoord;
-in flat int gs_dc_varyingCoord;
-in flat int gs_dc_instanceIndexI0;
-in flat int gs_dc_instanceIndexI1;
-in flat int gs_dc_instanceCoordsI0;
-in flat int gs_dc_instanceCoordsI1;
-layout(location = 5) uniform vec2 *dispTextureCoord;
+layout(location = 4) uniform vec2 *dispTextureCoord;
 vec4 InterpolatePatchCoord(vec2 uv, ivec3 patchParam)
 {
     // add 0.5 to integer values for more robust interpolation
@@ -4624,24 +4387,6 @@ float HdGet_widths(int localIndex) {
 float HdGet_widths() { return HdGet_widths(0); }
 float HdGetScalar_widths(int localIndex) { return HdGet_widths(localIndex); }
 float HdGetScalar_widths() { return HdGet_widths(0); }
-vec3 HdGet_hydra_instanceTranslations_0(int localIndex) {
-  int index = GetDrawingCoord().instanceCoords[0];
-  return hd_vec3_get(hydra_instanceTranslations_0[index]);
-}
-vec3 HdGet_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0); }
-float HdGetScalar_hydra_instanceTranslations_0(int localIndex) { return HdGet_hydra_instanceTranslations_0(localIndex).x; }
-float HdGetScalar_hydra_instanceTranslations_0() { return HdGet_hydra_instanceTranslations_0(0).x; }
-vec3 HdGetInstance_hydra_instanceTranslations(int level, vec3 defaultValue) {
-  if (level == 0) return HdGet_hydra_instanceTranslations_0();
-  return defaultValue;
-}
-#if !defined(HD_HAS_hydra_instanceTranslations)
-#define HD_HAS_hydra_instanceTranslations 1
-vec3 HdGet_hydra_instanceTranslations(int localIndex) {
-  return HdGet_hydra_instanceTranslations_0();
-}
-vec3 HdGet_hydra_instanceTranslations() { return HdGet_hydra_instanceTranslations(0); }
-#endif
 
 // //////// Codegen FS Source //////// 
 #define HD_SHADER_SUPPORTS_DOUBLE_PRECISION
@@ -4657,18 +4402,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = gs_dc_modelCoord;
-  dc.constantCoord = gs_dc_constantCoord;
-  dc.elementCoord = gs_dc_elementCoord;
-  dc.primitiveCoord = gs_dc_primitiveCoord;
-  dc.fvarCoord = gs_dc_fvarCoord;
-  dc.shaderCoord = gs_dc_shaderCoord;
-  dc.vertexCoord = gs_dc_vertexCoord;
-  dc.topologyVisibilityCoord = gs_dc_topologyVisibilityCoord;
-  dc.varyingCoord = gs_dc_varyingCoord;
-  dc.instanceIndex[0] = gs_dc_instanceIndexI0;
-  dc.instanceIndex[1] = gs_dc_instanceIndexI1;
-  dc.instanceCoords[0] = gs_dc_instanceCoordsI0;
+  dc.modelCoord = gs_interstageDrawingCoord0[0];
+  dc.constantCoord = gs_interstageDrawingCoord0[1];
+  dc.elementCoord = gs_interstageDrawingCoord0[2];
+  dc.primitiveCoord = gs_interstageDrawingCoord0[3];
+  dc.fvarCoord = gs_interstageDrawingCoord1[0];
+  dc.shaderCoord = gs_interstageDrawingCoord1[1];
+  dc.vertexCoord = gs_interstageDrawingCoord1[2];
+  dc.topologyVisibilityCoord = gs_interstageDrawingCoord1[3];
+  dc.varyingCoord = gs_interstageDrawingCoord2[0];
+  dc.instanceIndex[0] = gs_interstageDrawingCoord2[1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -4724,10 +4467,10 @@ vec3 HdGet_points(int localIndex) { return vec3(inPrimvars.points);}
 vec3 HdGet_points() { return HdGet_points(0); }
 float HdGetScalar_points(int localIndex) { return HdGet_points(localIndex).x; }
 float HdGetScalar_points() { return HdGet_points(0).x; }
-vec3 HdGet_normals(int localIndex) { return vec3(inPrimvars.normals);}
-vec3 HdGet_normals() { return HdGet_normals(0); }
-float HdGetScalar_normals(int localIndex) { return HdGet_normals(localIndex).x; }
-float HdGetScalar_normals() { return HdGet_normals(0).x; }
+vec3 HdGet_smoothNormals(int localIndex) { return vec3(inPrimvars.smoothNormals);}
+vec3 HdGet_smoothNormals() { return HdGet_smoothNormals(0); }
+float HdGetScalar_smoothNormals(int localIndex) { return HdGet_smoothNormals(localIndex).x; }
+float HdGetScalar_smoothNormals() { return HdGet_smoothNormals(0).x; }
 vec2 HdGet_dispTextureCoord(int localIndex) { return vec2(inPrimvars.dispTextureCoord);}
 vec2 HdGet_dispTextureCoord() { return HdGet_dispTextureCoord(0); }
 float HdGetScalar_dispTextureCoord(int localIndex) { return HdGet_dispTextureCoord(localIndex).x; }
@@ -4922,9 +4665,34 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
+}
+
+
+
+void RenderId()
+{
+    // do nothing
+}
+
+
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
 }
 
 

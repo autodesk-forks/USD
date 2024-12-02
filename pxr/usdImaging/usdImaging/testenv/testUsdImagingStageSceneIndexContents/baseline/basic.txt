@@ -14,6 +14,8 @@
 			1
 		[specifier]
 			def
+		[typeName]
+			Xform
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/CoordSys)
@@ -24,6 +26,8 @@
 			1
 		[specifier]
 			def
+		[typeName]
+			Xform
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/CoordSys/modelSpace)
@@ -34,6 +38,8 @@
 			1
 		[specifier]
 			def
+		[typeName]
+			Xform
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/CoordSys/worldSpace)
@@ -49,16 +55,22 @@
 			1
 		[specifier]
 			def
+		[typeName]
+			Xform
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/Geom)
 	[primvars]
 </Geom/Subdiv> type = mesh
 	[__usdPrimInfo]
+		[apiSchemas]
+			[MaterialBindingAPI, CoordSysAPI:worldSpace, CoordSysAPI:modelSpace]
 		[isLoaded]
 			1
 		[specifier]
 			def
+		[typeName]
+			Mesh
 	[coordSysBinding]
 		[modelSpace]
 			/CoordSys/modelSpace
@@ -137,6 +149,8 @@
 			1
 		[specifier]
 			def
+		[typeName]
+			Scope
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/Materials)
@@ -147,6 +161,8 @@
 			1
 		[specifier]
 			def
+		[typeName]
+			Material
 	[material]
 		[]
 			[interfaceMappings]

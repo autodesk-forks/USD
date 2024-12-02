@@ -96,9 +96,10 @@ HdSt_ShaderKey::ComputeHash() const
     return hash;
 }
 
-static
+/*static*/
 std::string
-_JoinTokens(const char *stage, TfToken const *tokens, bool *firstStage)
+HdSt_ShaderKey::_JoinTokens(
+    const char *stage, TfToken const *tokens, bool *firstStage)
 {
     if ((!tokens) || tokens->IsEmpty()) return std::string();
 

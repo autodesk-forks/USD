@@ -485,6 +485,9 @@ private:
                       SdfPath const& bprimId);
     void _InsertInstancer(HdSceneDelegate* delegate,
                           SdfPath const &id);
+    void _InsertTask(HdSceneDelegate* delegate,
+                     SdfPath const &id,
+                     HdTaskSharedPtr const &task);
 
     void _RemoveRprim(SdfPath const& id);
     void _RemoveSprim(TfToken const& typeId, SdfPath const& id);

@@ -137,9 +137,7 @@ UsdUtils_WritableLocalizationDelegate::_ProcessReferencesOrPayloads(
             return 
                 _ProcessRefOrPayload <typename ListOpType::ItemType, DEP_TYPE>(
                     layer, item, &dependencies);
-        },
-        /*removeDuplicates*/ true
-    );
+        });
 
     if (!modified) {
         return dependencies;
@@ -216,7 +214,9 @@ UsdUtils_WritableLocalizationDelegate::ProcessValuePath(
     const SdfLayerRefPtr &layer,
     const std::string &keyPath,
     const std::string &authoredPath,
-    const std::vector<std::string> &dependencies)
+    const std::vector<std::string> &dependencies,
+    const bool processingMetadata,
+    const bool processingDictionary)
 {
     if (authoredPath.empty()) {
         return {};
@@ -228,7 +228,10 @@ UsdUtils_WritableLocalizationDelegate::ProcessValuePath(
 
     const std::string relativeKeyPath = _GetRelativeKeyPath(keyPath);
 
-    if (relativeKeyPath.empty()) {
+    if (relativeKeyPath.empty() || (
+            processingMetadata &&
+            !processingDictionary &&
+            !info.GetAssetPath().empty())) {
         _currentValuePath = SdfAssetPath(info.GetAssetPath());
     }
     else if (info.GetAssetPath().empty()){
@@ -567,7 +570,9 @@ UsdUtils_ReadOnlyLocalizationDelegate::ProcessValuePath(
     const SdfLayerRefPtr &layer,
     const std::string &keyPath,
     const std::string &authoredPath,
-    const std::vector<std::string> &dependencies)
+    const std::vector<std::string> &dependencies,
+    const bool processingMetadata,
+    const bool processingDictionary)
 {
     if (authoredPath.empty()) {
         return {};

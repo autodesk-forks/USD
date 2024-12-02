@@ -14,6 +14,8 @@
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/envSetting.h"
 
+#include <vulkan/vk_enum_string_helper.h>
+
 #include <cstring>
 
 
@@ -21,7 +23,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 
 TF_DEFINE_ENV_SETTING(HGIVULKAN_DEBUG, 0, "Enable debugging for HgiVulkan");
-TF_DEFINE_ENV_SETTING(HGIVULKAN_DEBUG_VERBOSE, 0, 
+TF_DEFINE_ENV_SETTING(HGIVULKAN_DEBUG_VERBOSE, 0,
     "Enable verbose debugging for HgiVulkan");
 
 bool
@@ -108,12 +110,12 @@ HgiVulkanCreateDebug(HgiVulkanInstance* instance)
     dbgMsgCreateInfo.pfnUserCallback = _VulkanDebugCallback;
     dbgMsgCreateInfo.pUserData = nullptr;
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         instance->vkCreateDebugUtilsMessengerEXT(
             vkInstance,
             &dbgMsgCreateInfo,
             HgiVulkanAllocator(),
-            &instance->vkDebugMessenger) == VK_SUCCESS
+            &instance->vkDebugMessenger)
     );
 }
 
@@ -248,6 +250,12 @@ HgiVulkanEndQueueLabel(HgiVulkanDevice* device)
 
     VkQueue gfxQueue = device->GetCommandQueue()->GetVulkanGraphicsQueue();
     device->vkQueueEndDebugUtilsLabelEXT(gfxQueue);
+}
+
+const char*
+HgiVulkanResultString(VkResult result)
+{
+    return string_VkResult(result);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

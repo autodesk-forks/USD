@@ -348,6 +348,7 @@ HdRenderIndex::_RemoveSubtree(
     _sprimIndex.RemoveSubtree(root, sceneDelegate, _tracker, _renderDelegate);
     _bprimIndex.RemoveSubtree(root, sceneDelegate, _tracker, _renderDelegate);
     _RemoveInstancerSubtree(root, sceneDelegate);
+    _RemoveTaskSubtree(root, sceneDelegate);
 }
 
 
@@ -587,6 +588,7 @@ HdRenderIndex::_Clear()
 
     // Clear instancers.
     _RemoveInstancerSubtree(SdfPath::AbsoluteRootPath(), nullptr);
+    _RemoveTaskSubtree(SdfPath::AbsoluteRootPath(), nullptr);
     _instancerMap.clear();
 }
 
@@ -606,9 +608,20 @@ HdRenderIndex::_TrackDelegateTask(HdSceneDelegate* delegate,
         return;
     }
 
-    HdTaskSharedPtr task = taskCreateFnc(delegate, taskId);
-    _tracker.TaskInserted(taskId, task->GetInitialDirtyBitsMask());
-    _taskMap.emplace(taskId, _TaskInfo{delegate, task});
+    HdTaskSharedPtr const task = taskCreateFnc(delegate, taskId);
+    _InsertTask(delegate, taskId, task);
+}
+
+void
+HdRenderIndex::_InsertTask(HdSceneDelegate* delegate,
+                           SdfPath const &id,
+                           HdTaskSharedPtr const &task)
+{
+    HD_TRACE_FUNCTION();
+    HF_MALLOC_TAG_FUNCTION();
+
+    _tracker.TaskInserted(id, task->GetInitialDirtyBitsMask());
+    _taskMap.emplace(id, _TaskInfo{delegate, task});
 }
 
 HdTaskSharedPtr const&
@@ -650,7 +663,7 @@ HdRenderIndex::_RemoveTaskSubtree(const SdfPath &root,
         const SdfPath &id = it->first;
         const _TaskInfo &taskInfo = it->second;
 
-        if ((taskInfo.sceneDelegate == sceneDelegate) &&
+        if ((sceneDelegate == nullptr || taskInfo.sceneDelegate == sceneDelegate ) &&
             (id.HasPrefix(root))) {
             _tracker.TaskRemoved(id);
 

@@ -25,6 +25,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class TfType;
 class WorkDispatcher;
+class Usd_PrimFlagsPredicate;
 
 /// \class UsdValidationContext
 ///
@@ -181,7 +182,7 @@ public:
     /// the layers reachable from the stage. In addition to that any Stage
     /// validators will also be run on the given stage. The stage will also be
     /// traversed to run prim and schema type validators on all the prims in the
-    /// stage.
+    /// stage. \p predicate will be used to traverse the prims to be validated.
     ///
     /// All the validators run in parallel. Any resulting errors are collected
     /// in the returned vector.
@@ -192,6 +193,19 @@ public:
     /// and hence are valid only as long as the stage is valid.
     ///
     /// A coding error is issued if the stage being validated is not valid.
+    USD_API
+    UsdValidationErrorVector Validate(
+        const UsdStageWeakPtr &stage, 
+        const Usd_PrimFlagsPredicate &predicate) const;
+
+    /// Run validation on the given valid \p stage by executing the selected
+    /// validators for this UsdValidationContext; Returns a vector of errors
+    ///
+    /// \ref UsdTraverseInstanceProxies "Instance Proxy predicate" is used to 
+    /// traverse the prims to be validated in this overload.
+    ///
+    /// \sa UsdValidationContext::Validate(const UsdStageWeakPtr &stage, 
+    /// const Usd_PrimFlagsPredicate &predicate) const
     USD_API
     UsdValidationErrorVector Validate(const UsdStagePtr &stage) const;
 
@@ -253,7 +267,8 @@ private:
     void _ValidateStage(WorkDispatcher &dispatcher, 
                         const UsdStagePtr &stage,
                         UsdValidationErrorVector *errors,
-                        std::mutex *errorsMutex) const;
+                        std::mutex *errorsMutex,
+                        const Usd_PrimFlagsPredicate &predicate) const;
 
     // Helper function to validate prims. Generalized for UsdPrimRange and
     // vector of UsdPrims.

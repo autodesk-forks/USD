@@ -23,6 +23,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 using HdStRenderPassShaderSharedPtr =
     std::shared_ptr<class HdStRenderPassShader>;
+class HdStRenderPassState;
 class HdRenderIndex;
 using HdRenderPassAovBindingVector =
     std::vector<struct HdRenderPassAovBinding>;
@@ -83,6 +84,14 @@ public:
     void UpdateAovInputTextures(
         HdRenderPassAovBindingVector const &aovInputBindings,
         HdRenderIndex * const renderIndex);
+
+    HDST_API
+    static
+    HdStRenderPassShaderSharedPtr
+    CreateRenderPassShaderFromAovs(
+        HdStRenderPassState *renderPassState,
+        HdStResourceRegistrySharedPtr const &resourceRegistry,
+        HdRenderPassAovBindingVector const &aovBindings);
 
 private:
     HioGlslfxSharedPtr _glslfx;

@@ -474,28 +474,28 @@ PXR_NAMESPACE_CLOSE_SCOPE
 
 #define TF_MALLOC_TAG_NEW(name1, name2)                                       \
     /* this is for STL purposes */                                            \
-    inline void* operator new(::std::size_t, void* ptr) {                     \
+    ARCH_ALWAYS_INLINE inline void* operator new(::std::size_t, void* ptr) {  \
         return ptr;                                                           \
     }                                                                         \
                                                                               \
-    inline void* operator new(::std::size_t s) {                              \
+    ARCH_ALWAYS_INLINE inline void* operator new(::std::size_t s) {           \
         PXR_NS::TfAutoMallocTag tag(name1, name2);                            \
         return malloc(s);                                                     \
     }                                                                         \
                                                                               \
-    inline void* operator new[](::std::size_t s) {                            \
+    ARCH_ALWAYS_INLINE inline void* operator new[](::std::size_t s) {         \
         PXR_NS::TfAutoMallocTag tag(name1, name2);                            \
         return malloc(s);                                                     \
     }                                                                         \
                                                                               \
     /* Required due to the placement-new override above. */                   \
-    inline void operator delete(void* ptr, void* place) {}                    \
+    ARCH_ALWAYS_INLINE inline void operator delete(void* ptr, void* place) {} \
                                                                               \
-    inline void operator delete(void* ptr, size_t) {                          \
+    ARCH_ALWAYS_INLINE inline void operator delete(void* ptr, size_t) {       \
         free(ptr);                                                            \
     }                                                                         \
                                                                               \
-    inline void operator delete[] (void* ptr, size_t) {                       \
+    ARCH_ALWAYS_INLINE inline void operator delete[] (void* ptr, size_t) {    \
         free(ptr);                                                            \
     }                                                                         \
 

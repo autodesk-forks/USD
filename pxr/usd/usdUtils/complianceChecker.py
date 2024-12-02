@@ -1073,7 +1073,16 @@ class ComplianceChecker(object):
 
         # Collect all warnings using a diagnostic delegate.
         delegate = UsdUtils.CoalescingDiagnosticDelegate()
-        usdStage = Usd.Stage.Open(inputFile)
+        from pxr import Tf
+        try:
+            # It is possible Usd.Stage.Open will raise a TF_RUNTIME_ERROR
+            # (example via usdAbc plugin) which should be appropriately handled.
+            usdStage = Usd.Stage.Open(inputFile)
+        except Tf.ErrorException as e:
+            self._AddError("Failed to open USD stage from file '%s': %s" % 
+                    (inputFile, str(e)))
+            return
+
         stageOpenDiagnostics = delegate.TakeUncoalescedDiagnostics()
 
         for rule in self._rules:
@@ -1083,8 +1092,15 @@ class ComplianceChecker(object):
         with Ar.ResolverContextBinder(usdStage.GetPathResolverContext()):
             # This recursively computes all of inputFiles's external 
             # dependencies.
-            (allLayers, allAssets, unresolvedPaths) = \
+            from pxr import Tf
+            try:
+                (allLayers, allAssets, unresolvedPaths) = \
                     UsdUtils.ComputeAllDependencies(Sdf.AssetPath(inputFile))
+            except Tf.ErrorException as e:
+                self._AddError(
+                    "Failed to compute dependencies for file '%s': %s" % 
+                        (inputFile, str(e)))
+                return
             for rule in self._rules:
                 rule.CheckUnresolvedPaths(unresolvedPaths)
                 rule.CheckDependencies(usdStage, allLayers, allAssets)

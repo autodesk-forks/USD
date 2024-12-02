@@ -24,8 +24,6 @@ void wrapScriptModuleLoader() {
     class_<This, TfWeakPtr<This>,
         noncopyable>("ScriptModuleLoader", no_init)
         .def(TfPySingleton())
-        .def("GetModuleNames", &This::GetModuleNames,
-             return_value_policy<TfPySequenceToList>())
         .def("GetModulesDict", &This::GetModulesDict)
         .def("WriteDotFile", &This::WriteDotFile)
 

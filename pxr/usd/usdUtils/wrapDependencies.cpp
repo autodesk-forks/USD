@@ -27,11 +27,12 @@ namespace {
 
 static bp::tuple
 _ExtractExternalReferences(
-    const std::string& filePath)
+    const std::string& filePath,
+    const UsdUtilsExtractExternalReferencesParams& params = {})
 {
     std::vector<std::string> subLayers, references, payloads;
     UsdUtilsExtractExternalReferences(filePath,
-        &subLayers, &references, &payloads);
+        &subLayers, &references, &payloads, params);
     return bp::make_tuple(subLayers, references, payloads);
 }
 
@@ -65,8 +66,15 @@ _ComputeAllDependencies(
 
 void wrapDependencies()
 {
+    typedef UsdUtilsExtractExternalReferencesParams ExtractRefParams;
+    bp::class_<ExtractRefParams>("ExtractExternalReferencesParams")
+        .def("SetResolveUdimPaths", &ExtractRefParams::SetResolveUdimPaths)
+        .def("GetResolveUdimPaths", &ExtractRefParams::GetResolveUdimPaths)
+        ;
+
     bp::def("ExtractExternalReferences", _ExtractExternalReferences,
-            bp::arg("filePath"));
+            (bp::arg("filePath"),
+             bp::arg("parameters") = ExtractRefParams()));
 
     bp::def("CreateNewUsdzPackage", UsdUtilsCreateNewUsdzPackage,
             (bp::arg("assetPath"),

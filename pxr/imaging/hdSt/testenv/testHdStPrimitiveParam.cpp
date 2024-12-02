@@ -7,15 +7,19 @@
 
 #include "pxr/imaging/hdSt/meshTopology.h"
 #include "pxr/imaging/hdSt/quadrangulate.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
+#include "pxr/imaging/hdSt/resourceRegistry.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/meshUtil.h"
 #include "pxr/imaging/hd/perfLog.h"
+#include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
-#include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/glf/testGLContext.h"
 #include "pxr/imaging/hgi/hgi.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/gf/math.h"
 #include "pxr/base/gf/vec2i.h"
@@ -349,8 +353,13 @@ int main()
 
     TfErrorMark mark;
 
-    std::unique_ptr<Hgi> hgi = Hgi::CreatePlatformDefaultHgi();
-    registry = std::make_shared<HdStResourceRegistry>(hgi.get());
+    HgiUniquePtr hgi = Hgi::CreatePlatformDefaultHgi();
+    HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
+    HdStRenderDelegate renderDelegate;
+    std::unique_ptr<HdRenderIndex> index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    registry = std::static_pointer_cast<HdStResourceRegistry>(
+        index->GetResourceRegistry());
 
     bool success = true;
     success &= PrimitiveIDMapTest();

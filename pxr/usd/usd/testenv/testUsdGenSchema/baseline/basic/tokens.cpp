@@ -163,6 +163,7 @@ UsdContrivedTokensType::UsdContrivedTokensType() :
     TestNoVersion0_2("TestNoVersion0_2", TfToken::Immortal),
     TestPxHairman("TestPxHairman", TfToken::Immortal),
     TestPxHairman_1("TestPxHairman_1", TfToken::Immortal),
+    UsdContrivedNoAlias("UsdContrivedNoAlias", TfToken::Immortal),
     allTokens({
         asset,
         assetArray,
@@ -317,7 +318,8 @@ UsdContrivedTokensType::UsdContrivedTokensType() :
         TestNoVersion0,
         TestNoVersion0_2,
         TestPxHairman,
-        TestPxHairman_1
+        TestPxHairman_1,
+        UsdContrivedNoAlias
     })
 {
 }

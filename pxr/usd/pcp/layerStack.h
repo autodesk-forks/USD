@@ -381,14 +381,6 @@ bool
 Pcp_NeedToRecomputeLayerStackTimeCodesPerSecond(
     const PcpLayerStackPtr& layerStack, const SdfLayerHandle &changedLayer);
 
-/// Returns true when the environment variable has been set to disable the 
-/// behavior where differing time codes per second metadata in layers sublayered
-/// or referenced by another layer are used to apply a layer offset scale to the
-/// map function.
-PCP_API
-bool
-PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled();
-
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // PXR_USD_PCP_LAYER_STACK_H

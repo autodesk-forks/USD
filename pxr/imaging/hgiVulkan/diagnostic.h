@@ -66,6 +66,20 @@ void HgiVulkanBeginQueueLabel(
 HGIVULKAN_API
 void HgiVulkanEndQueueLabel(HgiVulkanDevice* device);
 
+/// Returns a string representation of VkResult
+HGIVULKAN_API
+const char* HgiVulkanResultString(VkResult result);
+
+#define HGIVULKAN_VERIFY_VK_RESULT(cmd)                                 \
+  {                                                                     \
+    const VkResult result = cmd;                                        \
+    TF_VERIFY(                                                          \
+        result == VK_SUCCESS,                                           \
+        "%s: %s",                                                       \
+        #cmd,                                                           \
+        HgiVulkanResultString(result));                                 \
+  } while(0)
+
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif

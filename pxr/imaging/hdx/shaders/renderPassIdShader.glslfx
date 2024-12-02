@@ -11,7 +11,6 @@
 --- #import $TOOLS/hdx/shaders/renderPassIdShader.glslfx
 
 #import $TOOLS/hdSt/shaders/renderPass.glslfx
-#import $TOOLS/hdx/shaders/renderPass.glslfx
 
 -- configuration
 {
@@ -44,7 +43,7 @@
                             "RenderPass.CameraFS",
                             "RenderPass.NoSelection",
                             "RenderPass.NoColorOverrides",
-                            "RenderPass.RenderId" ]
+                            "RenderPass.RenderIdNoIdAov"]
             }
         }
     }

@@ -473,19 +473,34 @@ HdPrman_Gprim<BASE>::Sync(HdSceneDelegate* sceneDelegate,
                   "size mismatch (%lu, %lu, %lu)\n", _prototypeIds.size(),
                   subsetMaterialIds.size(), subsetPaths.size());
 
-        // next, tell the hdprman instancer to sync the riley instances
-        HdPrmanInstancer *instancer = static_cast<HdPrmanInstancer*>(
-            renderIndex.GetInstancer(instancerId));
-        if (instancer) {
-            instancer->Populate(
-                renderParam,
-                dirtyBits,
-                id,
-                _prototypeIds,
-                coordSysList,
-                attrs, xf,
-                subsetMaterialIds,
-                subsetPaths);
+        // XXX: To avoid a failed verify inside Populate(), we will check the
+        // prototype ids for validity here. We don't usually do this, relying on
+        // Riley to report invalid prototype ids on instance creation. But
+        // Populate() allows and expects an invalid prototype id when instancing
+        // lights, so doing this check here lets us make a more informative
+        // warning. HYD-3206
+        if (std::any_of(_prototypeIds.begin(), _prototypeIds.end(),
+            [](const auto& id){
+                return id == riley::GeometryPrototypeId::InvalidId();
+            })) {
+            TF_WARN("Riley geometry prototype creation failed for "
+                "instanced gprim <%s>; the prim will not be instanced.",
+                id.GetText());
+        } else {
+            // next, tell the hdprman instancer to sync the riley instances
+            HdPrmanInstancer *instancer = static_cast<HdPrmanInstancer*>(
+                renderIndex.GetInstancer(instancerId));
+            if (instancer) {
+                instancer->Populate(
+                    renderParam,
+                    dirtyBits,
+                    id,
+                    _prototypeIds,
+                    coordSysList,
+                    attrs, xf,
+                    subsetMaterialIds,
+                    subsetPaths);
+            }
         }
     }
     *dirtyBits &= ~HdChangeTracker::AllSceneDirtyBits;

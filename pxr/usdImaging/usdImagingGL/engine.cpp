@@ -896,14 +896,27 @@ UsdImagingGLEngine::DecodeIntersection(
     int *outHitInstanceIndex,
     HdInstancerContext *outInstancerContext)
 {
+    const int primIdx = HdxPickTask::DecodeIDRenderColor(primIdColor);
+    const int instanceIdx = HdxPickTask::DecodeIDRenderColor(instanceIdColor);
+
+    return DecodeIntersection(primIdx, instanceIdx, outHitPrimPath,
+        outHitInstancerPath, outHitInstanceIndex, outInstancerContext);
+}
+
+bool
+UsdImagingGLEngine::DecodeIntersection(
+    int primIdx,
+    int instanceIdx,
+    SdfPath *outHitPrimPath,
+    SdfPath *outHitInstancerPath,
+    int *outHitInstanceIndex,
+    HdInstancerContext *outInstancerContext)
+{
     if (ARCH_UNLIKELY(!_renderDelegate)) {
         return false;
     }
 
-    const int primId = HdxPickTask::DecodeIDRenderColor(primIdColor);
-    const int instanceIdx = HdxPickTask::DecodeIDRenderColor(instanceIdColor);
-
-    SdfPath primPath = _renderIndex->GetRprimPathFromPrimId(primId);
+    SdfPath primPath = _renderIndex->GetRprimPathFromPrimId(primIdx);
     if (primPath.IsEmpty()) {
         return false;
     }
@@ -1295,6 +1308,7 @@ UsdImagingGLEngine::GetRendererAovs() const
             { HdAovTokens->primId,
               HdAovTokens->depth,
               HdAovTokens->normal,
+              HdAovTokens->Neye,
               HdAovTokensMakePrimvar(TfToken("st")) };
 
         TfTokenVector aovs = { HdAovTokens->color };
@@ -1318,6 +1332,20 @@ UsdImagingGLEngine::SetRendererAov(TfToken const &id)
 
     if (_renderIndex->IsBprimTypeSupported(HdPrimTypeTokens->renderBuffer)) {
         _taskController->SetRenderOutputs({id});
+        return true;
+    }
+    return false;
+}
+
+bool
+UsdImagingGLEngine::SetRendererAovs(TfTokenVector const &ids)
+{
+    if (ARCH_UNLIKELY(!_renderDelegate)) {
+        return false;
+    }
+
+    if (_renderIndex->IsBprimTypeSupported(HdPrimTypeTokens->renderBuffer)) {
+        _taskController->SetRenderOutputs(ids);
         return true;
     }
     return false;

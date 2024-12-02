@@ -490,11 +490,11 @@ HdStRenderPassState::SetLightingShader(HdStLightingShaderSharedPtr const &lighti
 }
 
 void 
-HdStRenderPassState::SetRenderPassShader(HdStRenderPassShaderSharedPtr const &renderPassShader)
+HdStRenderPassState::SetRenderPassShader(
+    HdStRenderPassShaderSharedPtr const &renderPassShader)
 {
     _renderPassShader = renderPassShader;
     if (_renderPassStateBar) {
-
         HdStBufferArrayRangeSharedPtr _renderPassStateBar_ =
             std::static_pointer_cast<HdStBufferArrayRange> (_renderPassStateBar);
 
@@ -854,6 +854,10 @@ GfVec4f _ToVec4f(const VtValue &v)
     }
     if (v.IsHolding<double>()) {
         const double val = v.UncheckedGet<double>();
+        return GfVec4f(val);
+    }
+    if (v.IsHolding<int>()) {
+        const double val = v.UncheckedGet<int>();
         return GfVec4f(val);
     }
     if (v.IsHolding<GfVec2f>()) {

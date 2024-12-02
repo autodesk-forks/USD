@@ -327,5 +327,10 @@ class TestPlug(unittest.TestCase):
         self.assertTrue('PLUG_INFO_SEARCH' in debugCodes)
         self.assertTrue('PLUG_REGISTRATION' in debugCodes)
 
+    def test_StlSequencesForPlugPluginPtr(self):
+        pd1 = Plug.Registry().GetPluginForType('TestPlugDerived1')
+        td1 = Plug._TestPlugBase1('TestPlugDerived1')
+        self.assertTrue(td1.TestAcceptPluginSequence([pd1]))
+
 if __name__ == '__main__':
     unittest.main()

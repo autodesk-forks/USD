@@ -233,6 +233,17 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
     return color;
 }
 
+-- glsl RenderPass.RenderOutput
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation 
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
+}
+
 -- layout RenderPass.RenderColor
 
 [
@@ -241,23 +252,76 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 -- glsl RenderPass.RenderColor
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
 }
 
+-- glsl RenderPass.RenderColorNoOp
+
+void RenderColor(vec4 color)
+{
+    // do nothing
+}
+
 -- layout RenderPass.RenderId
+
+[
+    ["out", "int", "primIdOut"],
+    ["out", "int", "instanceIdOut"]
+]
+
+-- glsl RenderPass.RenderId
+
+void RenderId()
+{
+    primIdOut = HdGet_primID();
+
+    // instanceIndex is a tuple of integers (num nested levels).
+    // for picking, we store global instanceId (instanceIndex[0]) in the
+    // selection framebuffer and then reconstruct the tuple in postprocess.
+    instanceIdOut = GetDrawingCoord().instanceIndex[0];
+}
+
+-- glsl RenderPass.RenderIdNoOp
+
+void RenderId()
+{
+    // do nothing
+}
+
+-- layout RenderPass.RenderNeye
+
+[
+    ["out", "vec4", "NeyeOut"]
+]
+
+-- glsl RenderPass.RenderNeye
+
+void RenderNeye(vec3 Neye)
+{
+    NeyeOut = vec4(Neye, 1.0);
+}
+
+-- glsl RenderPass.RenderNeyeNoOp
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+-- layout RenderPass.RenderIdNoIdAov
 
 [
     ["out", "vec4", "primIdOut"],
     ["out", "vec4", "instanceIdOut"]
 ]
 
--- glsl RenderPass.RenderId
+-- glsl RenderPass.RenderIdNoIdAov
 
-// XXX: This whole snippet is a little sketchy and should ideally be replaced
-// with AoVs.  We generate "primId" and "instanceId", and depending on how
-// the client called glDrawBuffers, they will get one or both.
+// XXX: This snippet is legacy code soon to be deprecated. It is used when the 
+// client asks for an id render using HdxRenderTaskParams rather than via an id 
+// aov.
 
 vec4 IntToVec4(int id)
 {

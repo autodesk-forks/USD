@@ -231,7 +231,7 @@ _UpdateRileyCamera(
     }
 }
 
-#if PXR_VERSION >= 2405
+#if PXR_VERSION >= 2407
 // Update the Frame number from the Stage Global Scene Index
 void
 _UpdateFrame(
@@ -563,7 +563,7 @@ void HdPrman_RenderSettings::_Sync(
     }
 #endif
 
-#if PXR_VERSION >= 2405
+#if PXR_VERSION >= 2407
     if (*dirtyBits & HdRenderSettings::DirtyFrameNumber ||
         *dirtyBits & HdRenderSettings::DirtyNamespacedSettings) {
         _UpdateFrame(terminalSi, &_settingsOptions);
@@ -587,7 +587,7 @@ void HdPrman_RenderSettings::_Sync(
 
         param->SetDrivingRenderSettingsPrimPath(GetId());
 
-#if PXR_VERSION >= 2405
+#if PXR_VERSION >= 2407
         if (*dirtyBits & HdRenderSettings::DirtyNamespacedSettings ||
             *dirtyBits & HdRenderSettings::DirtyActive ||
             *dirtyBits & HdRenderSettings::DirtyShutterInterval ||

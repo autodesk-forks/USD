@@ -315,12 +315,11 @@ def Sphere "Foo"
         self.assertTrue(
             testPath_dead not in attr.connectionPathList.explicitItems)
 
-        # adding duplicate connection path: error expected
+        # adding duplicate connection path
         testPath = attr.connectionPathList.explicitItems[0]
         self.assertEqual(
             attr.connectionPathList.explicitItems.count(testPath), 1)
-        with self.assertRaises(Tf.ErrorException):
-            attr.connectionPathList.explicitItems.append(testPath)
+        attr.connectionPathList.explicitItems.append(testPath)
         self.assertEqual(
             attr.connectionPathList.explicitItems.count(testPath), 1)
 

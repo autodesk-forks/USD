@@ -217,9 +217,7 @@ HdxPickTask::_CreateAovBindings()
         binding.renderBufferId = aovId;
         binding.aovSettings = aovDesc.aovSettings;
         binding.renderBuffer = _pickableAovBuffers.back().get();
-        // Clear all color channels to 1, so when cast as int, an unwritten
-        // pixel is encoded as -1.
-        binding.clearValue = VtValue(GfVec4f(1));
+        binding.clearValue = aovDesc.clearValue;
 
         _pickableAovBindings.push_back(binding);
 

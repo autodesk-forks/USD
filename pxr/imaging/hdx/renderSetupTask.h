@@ -101,10 +101,11 @@ private:
     GfVec4d _viewport;
     HdRenderPassAovBindingVector _aovBindings;
     HdRenderPassAovBindingVector _aovInputBindings;
+    bool _enableIdRenderFromParams;
 
     void _SetRenderpassShadersForStorm(
-        HdxRenderTaskParams const& params,
-        HdStRenderPassState *renderPassState);
+        HdStRenderPassState *renderPassState,
+        HdResourceRegistrySharedPtr const &resourceRegistry);
 
     HdRenderPassStateSharedPtr &_GetRenderPassState(HdRenderIndex* renderIndex);
 

@@ -40,8 +40,6 @@ public:
 
 private:
     std::unique_ptr<HdSt_TextureTestDriver> _driver;
-
-    std::unique_ptr<HdStResourceRegistry> _hdStRegistry;
     std::unique_ptr<HdSt_TextureHandleRegistry> _textureHandleRegistry;
 };
 
@@ -49,9 +47,9 @@ void
 My_TestGLDrawing::InitTest()
 {
     _driver = std::make_unique<HdSt_TextureTestDriver>();
-    _hdStRegistry = std::make_unique<HdStResourceRegistry>(_driver->GetHgi());
     _textureHandleRegistry =
-        std::make_unique<HdSt_TextureHandleRegistry>(_hdStRegistry.get());
+        std::make_unique<HdSt_TextureHandleRegistry>(
+            _driver->GetResourceRegistry().get());
 }
 
 template<typename T>

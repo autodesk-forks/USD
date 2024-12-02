@@ -84,6 +84,7 @@ void wrapUsdValidator()
              +[](const UsdValidatorMetadata &self) {
                  return self.schemaTypes;
              });
+        TfPyRegisterStlSequencesFromPython<UsdValidatorMetadata>();
 
     TfPyRegisterStlSequencesFromPython<UsdValidationError>();
     class_<UsdValidator, noncopyable>("Validator", no_init)
@@ -118,6 +119,7 @@ void wrapUsdValidator()
                  return left == right;
              })
         .def("__repr__", &_Repr);
+        TfPyRegisterStlSequencesFromPython<const UsdValidator*>();
 
     class_<UsdValidatorSuite, noncopyable>("ValidatorSuite", no_init)
         .def("GetMetadata", 
@@ -130,4 +132,5 @@ void wrapUsdValidator()
              +[](const UsdValidatorSuite *left, const UsdValidatorSuite *right) {
                  return left == right;
              });
+        TfPyRegisterStlSequencesFromPython<const UsdValidatorSuite*>();
 }

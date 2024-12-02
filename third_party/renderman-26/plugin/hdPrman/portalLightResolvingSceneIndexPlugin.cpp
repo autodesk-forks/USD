@@ -52,6 +52,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (exposure)
     (intensity)
     ((intensityMult,           "ri:light:intensityMult"))
+    ((exposureAdjust,          "ri:light:exposureAdjust"))
     ((portalName,              "ri:light:portalName"))
     ((portalToDome,            "ri:light:portalToDome"))
     ((tint,                    "ri:light:tint"))
@@ -313,9 +314,11 @@ _BuildPortalLightDataSource(
 
     const VtValue portalTintVal    = getPortalMatVal(_tokens->tint);
     const VtValue portalIntMultVal = getPortalMatVal(_tokens->intensityMult);
+    const VtValue portalExpAdjtVal = getPortalMatVal(_tokens->exposureAdjust);
 
     const auto portalTint    = portalTintVal.GetWithDefault(GfVec3f(1.0f));
     const auto portalIntMult = portalIntMultVal.GetWithDefault(1.0f);
+    const auto portalExpAdj  = portalExpAdjtVal.GetWithDefault(0.0f);
 
     GfMatrix4d portalXform;
     if (const auto origPortalXform = portalXformSchema.GetMatrix()) {
@@ -346,7 +349,7 @@ _BuildPortalLightDataSource(
 
     const auto computedPortalColor = GfCompMult(portalTint, domeColor);
     const auto computedPortalIntensity = portalIntMult * domeIntensity *
-                                         powf(2.0f, domeExposure);
+                                         powf(2.0f, domeExposure+portalExpAdj);
     const auto computedPortalToDome = portalXform * domeXform.GetInverse();
     const auto computedPortalName = _GetPortalName(domeColorMap, domeXform,
                                                    portalXform);

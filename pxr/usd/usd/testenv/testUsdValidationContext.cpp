@@ -15,154 +15,6 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
-TF_REGISTRY_FUNCTION(UsdValidationRegistry)
-{
-    UsdValidationRegistry& registry = UsdValidationRegistry::GetInstance();
-
-    // Register test plugin validators here
-    // Test validators simply just return errors, we need to make sure various
-    // UsdValidationContext APIs work and get the expected errors back, when
-    // Validate is called in various scenarios on a validation context instance.
-    {
-        const TfToken validatorName("testUsdValidationContext:Test1");
-        const UsdValidateStageTaskFn stageTaskFn = [](
-            const UsdStagePtr & usdStage)
-        {
-            const TfToken validationErrorId("Test1Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(usdStage, 
-                                            SdfPath::AbsoluteRootPath())},
-                    "A stage validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, stageTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken validatorName("testUsdValidationContext:Test2");
-        const UsdValidateLayerTaskFn layerTaskFn = [](
-            const SdfLayerHandle & layer)
-        {
-            const TfToken validationErrorId("Test2Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(layer, 
-                                            SdfPath::AbsoluteRootPath())},
-                    "A layer validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, layerTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken validatorName("testUsdValidationContext:Test3");
-        const UsdValidatePrimTaskFn primTaskFn = [](
-            const UsdPrim & prim)
-        {
-            const TfToken validationErrorId("Test3Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(prim.GetStage(), 
-                                            prim.GetPath())},
-                    "A generic prim validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, primTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken validatorName("testUsdValidationContext:Test4");
-        const UsdValidatePrimTaskFn primTaskFn = [](
-            const UsdPrim & prim)
-        {
-            const TfToken validationErrorId("Test4Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(prim.GetStage(), 
-                                            prim.GetPath())},
-                    "A testBaseType prim type validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, primTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken validatorName("testUsdValidationContext:Test5");
-        const UsdValidatePrimTaskFn primTaskFn = [](
-            const UsdPrim & prim)
-        {
-            const TfToken validationErrorId("Test5Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(prim.GetStage(), 
-                                            prim.GetPath())},
-                    "A testDerivedType prim type validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, primTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken validatorName("testUsdValidationContext:Test6");
-        const UsdValidatePrimTaskFn primTaskFn = [](
-            const UsdPrim & prim)
-        {
-            const TfToken validationErrorId("Test6Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(prim.GetStage(), 
-                                            prim.GetPath())},
-                    "A testNestedDerivedType prim type validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, primTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken validatorName("testUsdValidationContext:Test7");
-        const UsdValidatePrimTaskFn primTaskFn = [](
-            const UsdPrim & prim)
-        {
-            const TfToken validationErrorId("Test7Error");
-            return UsdValidationErrorVector{
-                UsdValidationError(
-                    validationErrorId, UsdValidationErrorType::Error, 
-                    {UsdValidationErrorSite(prim.GetStage(), 
-                                            prim.GetPath())},
-                    "A testAPISchema prim type validator error")};
-        };
-
-        TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, primTaskFn);
-        TF_AXIOM(m.IsClean());
-    }
-    {
-        const TfToken suiteName("testUsdValidationContext:TestSuite");
-        const std::vector<const UsdValidator*> containedValidators =
-            registry.GetOrLoadValidatorsByName(
-                {TfToken("testUsdValidationContext:Test1"),
-                 TfToken("testUsdValidationContext:Test2"),
-                 TfToken("testUsdValidationContext:Test3")});
-
-        TfErrorMark m;
-        registry.RegisterPluginValidatorSuite(suiteName, containedValidators);
-        TF_AXIOM(m.IsClean());
-    }
-}
-
 static
 std::string _LayerContents() 
 {
@@ -202,7 +54,7 @@ void
 _TestError1(const UsdValidationError &error) {
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test1"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test1"));
     TF_AXIOM(error.GetSites().size() == 1);
     TF_AXIOM(error.GetSites()[0].IsPrim());
     TF_AXIOM(error.GetSites()[0].GetPrim().GetPath() == 
@@ -214,7 +66,7 @@ void
 _TestError2(const UsdValidationError &error) {
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test2"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test2"));
     TF_AXIOM(error.GetSites().size() == 1);
     TF_AXIOM(error.GetSites()[0].IsValidSpecInLayer());
 }
@@ -224,7 +76,7 @@ void
 _TestError3(const UsdValidationError &error) {
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test3"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test3"));
     const std::set<SdfPath> expectedPrimPaths = {
         SdfPath("/World"),
         SdfPath("/World/baseType"),
@@ -241,7 +93,7 @@ void
 _TestError4(const UsdValidationError &error) {
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test4"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test4"));
     const std::set<SdfPath> expectedPrimPaths = {
         SdfPath("/World/baseType"),
         SdfPath("/World/derivedType"),
@@ -256,7 +108,7 @@ void
 _TestError5(const UsdValidationError &error) {
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test5"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test5"));
     const std::set<SdfPath> expectedPrimPaths = {
         SdfPath("/World/derivedType"),
         SdfPath("/World/nestedDerivedType")};
@@ -270,7 +122,7 @@ void
 _TestError6(const UsdValidationError &error) {
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test6"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test6"));
     TF_AXIOM(error.GetSites().size() == 1);
     TF_AXIOM(error.GetSites()[0].IsPrim());
     TF_AXIOM(error.GetSites()[0].GetPrim().GetName() == 
@@ -283,7 +135,7 @@ _TestError7(const UsdValidationError &error) {
     TF_AXIOM(error.GetName() == TfToken("Test7Error"));
     TF_AXIOM(
         error.GetValidator()->GetMetadata().name == 
-        TfToken("testUsdValidationContext:Test7"));
+        TfToken("testUsdValidationContextValidatorsPlugin:Test7"));
     TF_AXIOM(error.GetSites().size() == 1);
     TF_AXIOM(error.GetSites()[0].IsPrim());
     TF_AXIOM(error.GetSites()[0].GetPrim().GetName() == 
@@ -309,7 +161,7 @@ _TestUsdValidationContext()
         // Create a ValidationContext with a suite
         const UsdValidatorSuite* suite = 
             UsdValidationRegistry::GetInstance().GetOrLoadValidatorSuiteByName(
-                TfToken("testUsdValidationContext:TestSuite"));
+                TfToken("testUsdValidationContextValidatorsPlugin:TestSuite"));
         UsdValidationContext context({suite});
         SdfLayerRefPtr testLayer = _CreateTestLayer();
         // Run Validate(layer)
@@ -494,7 +346,7 @@ _TestUsdValidationContext()
         // Create a ValidationContext with plugins
         UsdValidationContext context({
             PlugRegistry::GetInstance().GetPluginWithName(
-                "testUsdValidationContext")});
+                "testUsdValidationContextValidatorsPlugin")});
         SdfLayerRefPtr testLayer = _CreateTestLayer();
         UsdStageRefPtr stage = UsdStage::Open(testLayer);
         UsdValidationErrorVector errors = context.Validate(stage);
@@ -536,9 +388,19 @@ _TestUsdValidationContext()
 int 
 main()
 {
-    // Register the test plugin
-    const std::string pluginPath = ArchGetCwd() + "/resources";
-    TF_AXIOM(!PlugRegistry::GetInstance().RegisterPlugins(pluginPath).empty());
+    // Register the test plugins
+    // Plugin which provides test usd schema types
+    const std::string testTypePluginPath = ArchGetCwd() + "/resources";
+    TF_AXIOM(!PlugRegistry::GetInstance().RegisterPlugins(
+        testTypePluginPath).empty());
+    // Plugin which provides test validators
+    const std::string testValidatorPluginPath =
+        TfStringCatPaths(
+            TfGetPathName(ArchGetExecutablePath()),
+            "UsdPlugins/lib/TestUsdValidationContextValidators*/Resources/") + 
+            "/";
+    TF_AXIOM(!PlugRegistry::GetInstance().RegisterPlugins(
+        testValidatorPluginPath).empty());
 
     // Add a non-plugin based validator here.
     {

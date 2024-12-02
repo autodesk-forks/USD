@@ -553,3 +553,12 @@ class "MultipleApplyAPI_1" (
     int testAttrOne
     double testAttrTwo
 }
+
+class UsdContrivedNoAlias "UsdContrivedNoAlias" (
+    inherits = </Typed>
+    customData = {
+        string className = "NoAlias"
+    }
+)
+{
+}

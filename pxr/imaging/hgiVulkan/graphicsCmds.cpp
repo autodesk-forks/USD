@@ -19,6 +19,16 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+static
+bool
+_IsInt32Format(HgiFormat format)
+{
+    return (format == HgiFormatInt32) ||
+           (format == HgiFormatInt32Vec2) ||
+           (format == HgiFormatInt32Vec3) ||
+           (format == HgiFormatInt32Vec4);
+}
+
 HgiVulkanGraphicsCmds::HgiVulkanGraphicsCmds(
     HgiVulkan* hgi,
     HgiGraphicsCmdsDesc const& desc)
@@ -38,10 +48,19 @@ HgiVulkanGraphicsCmds::HgiVulkanGraphicsCmds(
     for (HgiAttachmentDesc const& attachmentDesc :
         _descriptor.colorAttachmentDescs) {
         VkClearValue vkClearValue;
-        vkClearValue.color.float32[0] = attachmentDesc.clearValue[0];
-        vkClearValue.color.float32[1] = attachmentDesc.clearValue[1];
-        vkClearValue.color.float32[2] = attachmentDesc.clearValue[2];
-        vkClearValue.color.float32[3] = attachmentDesc.clearValue[3];
+
+        // Special handling for int format used by id renders.
+        if (_IsInt32Format(attachmentDesc.format)) {
+            vkClearValue.color.int32[0] = attachmentDesc.clearValue[0];
+            vkClearValue.color.int32[1] = attachmentDesc.clearValue[1];
+            vkClearValue.color.int32[2] = attachmentDesc.clearValue[2];
+            vkClearValue.color.int32[3] = attachmentDesc.clearValue[3];
+        } else {
+            vkClearValue.color.float32[0] = attachmentDesc.clearValue[0];
+            vkClearValue.color.float32[1] = attachmentDesc.clearValue[1];
+            vkClearValue.color.float32[2] = attachmentDesc.clearValue[2];
+            vkClearValue.color.float32[3] = attachmentDesc.clearValue[3];
+        }
         _vkClearValues.push_back(vkClearValue);
     }
 

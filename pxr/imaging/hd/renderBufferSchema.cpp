@@ -142,6 +142,36 @@ HdRenderBufferSchema::GetDefaultLocator()
 {
     static const HdDataSourceLocator locator(GetSchemaToken());
     return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdRenderBufferSchema::GetDimensionsLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdRenderBufferSchemaTokens->dimensions);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdRenderBufferSchema::GetFormatLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdRenderBufferSchemaTokens->format);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdRenderBufferSchema::GetMultiSampledLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdRenderBufferSchemaTokens->multiSampled);
+    return locator;
 } 
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -94,6 +94,8 @@ class HdxSelectionTracker
 public:
     HDX_API
     HdxSelectionTracker();
+
+    HDX_API
     virtual ~HdxSelectionTracker();
 
     /// Optional override to update the selection (either compute HdSelection and

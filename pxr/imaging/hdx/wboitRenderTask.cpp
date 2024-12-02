@@ -110,7 +110,6 @@ HdxWbOitRenderTask::_Sync(
             renderPassState->SetEnableDepthMask(false);
             renderPassState->SetColorMaskUseDefault(false);
             renderPassState->SetColorMasks({HdRenderPassState::ColorMaskRGBA});
-            extendedState->SetRenderPassShader(_wboitTranslucentRenderPassShader);
         }
     }
 }
@@ -130,7 +129,10 @@ HdxWbOitRenderTask::Prepare(HdTaskContext* ctx,
         HdRenderPassStateSharedPtr renderPassState =
             _GetRenderPassState(ctx);
         if (!TF_VERIFY(renderPassState)) return;
+        HdStRenderPassState* extendedState =
+            dynamic_cast<HdStRenderPassState*>(renderPassState.get());
 
+        extendedState->SetRenderPassShader(_wboitTranslucentRenderPassShader);
         // Initialize the render buffers and setup bindings
         InitTextures(ctx, renderPassState);
         renderPassState->SetAovBindings(_wboitAovBindings);

@@ -740,6 +740,16 @@ HgiGLOps::Dispatch(int dimX, int dimY)
     };
 }
 
+static
+bool
+_IsInt32Format(HgiFormat format)
+{
+    return (format == HgiFormatInt32) ||
+           (format == HgiFormatInt32Vec2) ||
+           (format == HgiFormatInt32Vec3) ||
+           (format == HgiFormatInt32Vec4);
+}
+
 HgiGLOpsFn
 HgiGLOps::BindFramebufferOp(
     HgiGLDevice* device,
@@ -769,7 +779,19 @@ HgiGLOps::BindFramebufferOp(
             }
 
             if (colorAttachment.loadOp == HgiAttachmentLoadOpClear) {
-                glClearBufferfv(GL_COLOR, i, colorAttachment.clearValue.data());
+                // Special handling for int format used by id renders.
+                if (_IsInt32Format(colorAttachment.format)) {
+                    GLint clearValue[4] = {
+                        static_cast<GLint>(colorAttachment.clearValue[0]),
+                        static_cast<GLint>(colorAttachment.clearValue[1]),
+                        static_cast<GLint>(colorAttachment.clearValue[2]),
+                        static_cast<GLint>(colorAttachment.clearValue[3])
+                    };
+                    glClearBufferiv(GL_COLOR, i, clearValue);
+                } else {
+                    glClearBufferfv(
+                        GL_COLOR, i, colorAttachment.clearValue.data());
+                }
             }
 
             blendEnabled |= colorAttachment.blendEnabled;

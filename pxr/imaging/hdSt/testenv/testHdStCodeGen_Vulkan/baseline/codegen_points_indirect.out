@@ -160,22 +160,14 @@ layout(location = 1) in vec3 normals;
 uint hd_VertexID = gl_VertexIndex;
 uint hd_InstanceID = gl_InstanceIndex;
 uint hd_BaseInstance = HgiGetBaseInstance();
-flat layout(location = 0) out int vs_dc_modelCoord;
-flat layout(location = 1) out int vs_dc_constantCoord;
-flat layout(location = 2) out int vs_dc_elementCoord;
-flat layout(location = 3) out int vs_dc_primitiveCoord;
-flat layout(location = 4) out int vs_dc_fvarCoord;
-flat layout(location = 5) out int vs_dc_shaderCoord;
-flat layout(location = 6) out int vs_dc_vertexCoord;
-flat layout(location = 7) out int vs_dc_topologyVisibilityCoord;
-flat layout(location = 8) out int vs_dc_varyingCoord;
-flat layout(location = 9) out int vs_dc_instanceIndexI0;
-flat layout(location = 10) out int vs_dc_instanceCoordsI0;
-flat layout(location = 12) out int vsPointId;
-layout(location = 11) out VertexData {
+flat layout(location = 0) out ivec4 vs_interstageDrawingCoord0;
+flat layout(location = 1) out ivec4 vs_interstageDrawingCoord1;
+flat layout(location = 2) out ivec4 vs_interstageDrawingCoord2;
+flat layout(location = 4) out int vsPointId;
+layout(location = 3) out VertexData {
   vec4 Peye;
 } outData;
-layout(location = 13) out PrimvarData {
+layout(location = 5) out PrimvarData {
   vec3 points;
   vec3 normals;
 } outPrimvars;
@@ -247,16 +239,16 @@ float HdGetScalar_normals() { return HdGet_normals(0).x; }
 // //////// Codegen Proc VS //////// 
 void ProcessPrimvarsIn() {
   hd_drawingCoord dc = GetDrawingCoord();
-  vs_dc_modelCoord = dc.modelCoord;
-  vs_dc_constantCoord = dc.constantCoord;
-  vs_dc_elementCoord = dc.elementCoord;
-  vs_dc_primitiveCoord = dc.primitiveCoord;
-  vs_dc_fvarCoord = dc.fvarCoord;
-  vs_dc_shaderCoord = dc.shaderCoord;
-  vs_dc_vertexCoord = dc.vertexCoord;
-  vs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  vs_dc_varyingCoord = dc.varyingCoord;
-  vs_dc_instanceIndexI0 = dc.instanceIndex[0];
+  vs_interstageDrawingCoord0[0] = dc.modelCoord;
+  vs_interstageDrawingCoord0[1] = dc.constantCoord;
+  vs_interstageDrawingCoord0[2] = dc.elementCoord;
+  vs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  vs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  vs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  vs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  vs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  vs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  vs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = points;
   outPrimvars.normals = normals;
 }
@@ -1232,22 +1224,14 @@ FORWARD_DECL(float GetSelectedEdgeOpacity());
 
 // //////// Global Member Declarations ////////
 layout(std430, binding = 0) readonly buffer ssbo_constantPrimvars { ConstantData7 constantPrimvars[]; };
-flat layout(location = 12) in int vsPointId;
-flat layout(location = 0) in int vs_dc_modelCoord;
-flat layout(location = 1) in int vs_dc_constantCoord;
-flat layout(location = 2) in int vs_dc_elementCoord;
-flat layout(location = 3) in int vs_dc_primitiveCoord;
-flat layout(location = 4) in int vs_dc_fvarCoord;
-flat layout(location = 5) in int vs_dc_shaderCoord;
-flat layout(location = 6) in int vs_dc_vertexCoord;
-flat layout(location = 7) in int vs_dc_topologyVisibilityCoord;
-flat layout(location = 8) in int vs_dc_varyingCoord;
-flat layout(location = 9) in int vs_dc_instanceIndexI0;
-flat layout(location = 10) in int vs_dc_instanceCoordsI0;
-layout(location = 11) in VertexData {
+flat layout(location = 4) in int vsPointId;
+flat layout(location = 0) in ivec4 vs_interstageDrawingCoord0;
+flat layout(location = 1) in ivec4 vs_interstageDrawingCoord1;
+flat layout(location = 2) in ivec4 vs_interstageDrawingCoord2;
+layout(location = 3) in VertexData {
   vec4 Peye;
 } inData;
-layout(location = 13) in PrimvarData {
+layout(location = 5) in PrimvarData {
   vec3 points;
   vec3 normals;
 } inPrimvars;
@@ -1302,16 +1286,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = vs_dc_modelCoord;
-  dc.constantCoord = vs_dc_constantCoord;
-  dc.elementCoord = vs_dc_elementCoord;
-  dc.primitiveCoord = vs_dc_primitiveCoord;
-  dc.fvarCoord = vs_dc_fvarCoord;
-  dc.shaderCoord = vs_dc_shaderCoord;
-  dc.vertexCoord = vs_dc_vertexCoord;
-  dc.topologyVisibilityCoord = vs_dc_topologyVisibilityCoord;
-  dc.varyingCoord = vs_dc_varyingCoord;
-  dc.instanceIndex[0] = vs_dc_instanceIndexI0;
+  dc.modelCoord = vs_interstageDrawingCoord0[0];
+  dc.constantCoord = vs_interstageDrawingCoord0[1];
+  dc.elementCoord = vs_interstageDrawingCoord0[2];
+  dc.primitiveCoord = vs_interstageDrawingCoord0[3];
+  dc.fvarCoord = vs_interstageDrawingCoord1[0];
+  dc.shaderCoord = vs_interstageDrawingCoord1[1];
+  dc.vertexCoord = vs_interstageDrawingCoord1[2];
+  dc.topologyVisibilityCoord = vs_interstageDrawingCoord1[3];
+  dc.varyingCoord = vs_interstageDrawingCoord2[0];
+  dc.instanceIndex[0] = vs_interstageDrawingCoord2[1];
   return dc; 
 }
 int GetElementID() {
@@ -1539,9 +1523,34 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
+}
+
+
+
+void RenderId()
+{
+    // do nothing
+}
+
+
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
 }
 
 

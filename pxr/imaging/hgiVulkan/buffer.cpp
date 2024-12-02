@@ -40,7 +40,7 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     VkBufferCreateInfo bi = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     bi.size = _descriptor.byteSize;
     bi.usage = HgiVulkanConversions::GetBufferUsage(_descriptor.usage);
-    bi.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | 
+    bi.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // gfx queue only
 
@@ -52,8 +52,8 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     VmaAllocationCreateInfo ai = {};
     ai.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT; // GPU efficient
 
-    TF_VERIFY(
-        vmaCreateBuffer(vma,&bi,&ai,&_vkBuffer,&_vmaAllocation,0) == VK_SUCCESS
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vmaCreateBuffer(vma,&bi,&ai,&_vkBuffer,&_vmaAllocation,0)
     );
 
     // Debug label
@@ -71,10 +71,12 @@ HgiVulkanBuffer::HgiVulkanBuffer(
         // the device-local GPU buffer.
         HgiBufferDesc stagingDesc = _descriptor;
         if (!stagingDesc.debugName.empty()) {
-            stagingDesc.debugName = "Staging Buffer for " + stagingDesc.debugName;
+            stagingDesc.debugName =
+                "Staging Buffer for " + stagingDesc.debugName;
         }
 
-        HgiVulkanBuffer* stagingBuffer = CreateStagingBuffer(_device, stagingDesc);
+        HgiVulkanBuffer* stagingBuffer = CreateStagingBuffer(
+            _device, stagingDesc);
         VkBuffer vkStagingBuf = stagingBuffer->GetVulkanBuffer();
 
         HgiVulkanCommandQueue* queue = device->GetCommandQueue();
@@ -152,18 +154,19 @@ HgiVulkanBuffer::GetCPUStagingAddress()
         HgiBufferDesc stagingDesc = _descriptor;
         stagingDesc.initialData = nullptr;
         if (!stagingDesc.debugName.empty()) {
-            stagingDesc.debugName = "Staging Buffer for " + stagingDesc.debugName;
+            stagingDesc.debugName =
+                "Staging Buffer for " + stagingDesc.debugName;
         }
 
         _stagingBuffer = CreateStagingBuffer(_device, stagingDesc);
     }
 
     if (!_cpuStagingAddress) {
-        TF_VERIFY(
+        HGIVULKAN_VERIFY_VK_RESULT(
             vmaMapMemory(
-                _device->GetVulkanMemoryAllocator(), 
-                _stagingBuffer->GetVulkanMemoryAllocation(), 
-                &_cpuStagingAddress) == VK_SUCCESS
+                _device->GetVulkanMemoryAllocator(),
+                _stagingBuffer->GetVulkanMemoryAllocation(),
+                &_cpuStagingAddress)
         );
     }
 
@@ -219,7 +222,7 @@ HgiVulkanBuffer::CreateStagingBuffer(
     VkBufferCreateInfo bi = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     bi.size = desc.byteSize;
     bi.usage = HgiVulkanConversions::GetBufferUsage(desc.usage);
-    bi.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | 
+    bi.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // gfx queue only
 
@@ -230,14 +233,16 @@ HgiVulkanBuffer::CreateStagingBuffer(
 
     VkBuffer buffer = 0;
     VmaAllocation alloc = 0;
-    TF_VERIFY(
-        vmaCreateBuffer(vma, &bi, &ai, &buffer, &alloc, 0) == VK_SUCCESS
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vmaCreateBuffer(vma, &bi, &ai, &buffer, &alloc, 0)
     );
 
     // Map the (HOST_VISIBLE) buffer and upload data
     if (desc.initialData) {
         void* map;
-        TF_VERIFY(vmaMapMemory(vma, alloc, &map) == VK_SUCCESS);
+        HGIVULKAN_VERIFY_VK_RESULT(
+            vmaMapMemory(vma, alloc, &map)
+        );
         memcpy(map, desc.initialData, desc.byteSize);
         vmaUnmapMemory(vma, alloc);
     }

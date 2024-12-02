@@ -18,12 +18,11 @@
 #include "pxr/imaging/hd/camera.h"
 #include "pxr/imaging/hdSt/renderPassShader.h"
 #include "pxr/imaging/hdSt/renderPassState.h"
+#include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hdSt/volume.h"
 
 #include "pxr/imaging/cameraUtil/conformWindow.h"
-
-#include <mutex>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -43,13 +42,15 @@ _GetRenderPassIdGlslfx()
     return glslfx;
 }
 
-HdxRenderSetupTask::HdxRenderSetupTask(HdSceneDelegate* delegate, SdfPath const& id)
+HdxRenderSetupTask::HdxRenderSetupTask(
+    HdSceneDelegate* delegate, SdfPath const& id)
     : HdTask(id)
     , _colorRenderPassShader(
         std::make_shared<HdStRenderPassShader>(_GetRenderPassColorGlslfx()))
     , _idRenderPassShader(
         std::make_shared<HdStRenderPassShader>(_GetRenderPassIdGlslfx()))
     , _viewport(0)
+    , _enableIdRenderFromParams(false)
 {
 }
 
@@ -96,6 +97,12 @@ HdxRenderSetupTask::Prepare(HdTaskContext* ctx,
             HdStVolume::defaultStepSizeLighting);
     renderPassState->SetVolumeRenderingConstants(stepSize, stepSizeLighting);
 
+    if (HdStRenderPassState * const hdStRenderPassState =
+            dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
+        _SetRenderpassShadersForStorm(hdStRenderPassState,
+            renderIndex->GetResourceRegistry());
+    }
+
     renderPassState->Prepare(renderIndex->GetResourceRegistry());
     (*ctx)[HdxTokens->renderPassState] = VtValue(_renderPassState);
 }
@@ -110,44 +117,78 @@ HdxRenderSetupTask::Execute(HdTaskContext* ctx)
     (*ctx)[HdxTokens->renderPassState] = VtValue(_renderPassState);
 }
 
+static
+bool
+_AovHasIdSemantic(TfToken const &name)
+{
+    // For now id render only means primId or instanceId.
+    return name == HdAovTokens->primId ||
+           name == HdAovTokens->instanceId;
+}
+
 void
 HdxRenderSetupTask::_SetRenderpassShadersForStorm(
-    HdxRenderTaskParams const &params,
-    HdStRenderPassState *renderPassState)
+    HdStRenderPassState *renderPassState,
+    HdResourceRegistrySharedPtr const &resourceRegistry)
 {
-    renderPassState->SetUseSceneMaterials(params.enableSceneMaterials);
-    if (params.enableIdRender) {
+    // XXX: This id render codepath will be deprecated soon.
+    if (_enableIdRenderFromParams) {
         renderPassState->SetRenderPassShader(_idRenderPassShader);
-    } else {
+        return;
+    // If no aovs are bound, use pre-assembled color render pass shader.
+    } else if (_aovBindings.empty()) {
         renderPassState->SetRenderPassShader(_colorRenderPassShader);
+        return;
     }
+
+    HdStResourceRegistrySharedPtr const& hdStResourceRegistry =
+        std::static_pointer_cast<HdStResourceRegistry>(resourceRegistry);
+
+    renderPassState->SetRenderPassShader(
+        HdStRenderPassShader::CreateRenderPassShaderFromAovs(
+            renderPassState,
+            hdStResourceRegistry,
+            _aovBindings));
 }
 
 void
 HdxRenderSetupTask::SyncParams(HdSceneDelegate* delegate,
                                HdxRenderTaskParams const &params)
 {
-    HdRenderIndex &renderIndex = delegate->GetRenderIndex();
-    HdRenderPassStateSharedPtr &renderPassState =
-            _GetRenderPassState(&renderIndex);
-    SyncParamsHelper(renderPassState, params);
-    if (HdStRenderPassState * const hdStRenderPassState =
-            dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
-        _SetRenderpassShadersForStorm(
-                params, hdStRenderPassState);
-    }
     _viewport = params.viewport;
     _framing = params.framing;
     _overrideWindowPolicy = params.overrideWindowPolicy;
     _cameraId = params.camera;
     _aovBindings = params.aovBindings;
     _aovInputBindings = params.aovInputBindings;
+
+    // XXX: For now, we track enabling an id render via params vs. AOV bindings
+    // as two slightly different states regarding MSAA. We will soon deprecate
+    // "enableIdRender" as an option, though.
+    _enableIdRenderFromParams = params.enableIdRender;
+
+    HdRenderIndex &renderIndex = delegate->GetRenderIndex();
+    HdRenderPassStateSharedPtr &renderPassState =
+            _GetRenderPassState(&renderIndex);
+    SyncParamsHelper(renderPassState, params);
 }
 
 void
 HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPassState,
                                HdxRenderTaskParams const &params)
 {
+    // Inspect aovs to see if we're doing an id render.
+    bool usingIdAov = false;
+    for (size_t i = 0; i < params.aovBindings.size(); ++i) {
+        if (_AovHasIdSemantic(params.aovBindings[i].aovName)) {
+            usingIdAov = true;
+            break;
+        }
+    }
+
+    const bool enableIdRender = params.enableIdRender || usingIdAov;
+    const bool enableIdRenderNoIdAov = params.enableIdRender && !usingIdAov;
+
     renderPassState->SetOverrideColor(params.overrideColor);
     renderPassState->SetWireframeColor(params.wireframeColor);
     renderPassState->SetPointColor(params.pointColor);
@@ -184,20 +225,30 @@ HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPas
         renderPassState->SetBlendConstantColor(params.blendConstantColor);
         
         // Don't enable alpha to coverage for id renders.
+        // XXX: If the list of aovs includes both color and an id aov (such as 
+        // primdId), we still disable alpha to coverage for the render pass, 
+        // which may result in different behavior for the color output compared 
+        // to if the user didn't request an id aov at the same time.
+        // If this becomes an issue, we'll need to reconsider this approach.
         renderPassState->SetAlphaToCoverageEnabled(
             params.enableAlphaToCoverage &&
-            !params.enableIdRender &&
+            !enableIdRender &&
             !TfDebug::IsEnabled(HDX_DISABLE_ALPHA_TO_COVERAGE));
 
+        // For id renders that use an id aov (which use an int format), it's ok
+        // to have multi-sampling enabled. During the MSAA resolve for integer
+        // types, a single sample will be selected.
         renderPassState->SetMultiSampleEnabled(
-            params.useAovMultiSample && !params.enableIdRender);
+            params.useAovMultiSample && !enableIdRenderNoIdAov);
 
         if (HdStRenderPassState * const hdStRenderPassState =
                     dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
-
+            hdStRenderPassState->SetUseSceneMaterials(
+                params.enableSceneMaterials);
+            
             // Don't enable multisample for id renders.
             hdStRenderPassState->SetUseAovMultiSample(
-                params.useAovMultiSample && !params.enableIdRender);
+                params.useAovMultiSample && !enableIdRenderNoIdAov);
             hdStRenderPassState->SetResolveAovMultiSample(
                 params.resolveAovMultiSample);
         }

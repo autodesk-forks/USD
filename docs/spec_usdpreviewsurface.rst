@@ -151,12 +151,14 @@ and :usda:`opacity`.
   Roughness for the second specular lobe. Clearcoat results are 
   calculated using the same normal map data used by the primary specular lobe.
 
+.. _updateopacity:
+
 * **opacity - float - 1.0** 
 
   When *opacity* is 1.0 then the gprim is fully opaque, if it is smaller than
-  1.0 then the prim is translucent, when it is 0 the gprim is transparent. Note
-  that even a fully transparent object still receives lighting as, for example,
-  perfectly clear glass still has a specular response.
+  1.0 then the prim is translucent, when it is 0 the gprim is fully transparent.
+  Fully transparent objects receive no lighting response, thus they always 
+  serve as cutouts, even in "transparency mode".
 
 .. _addopacitythreshold:
 
@@ -176,8 +178,8 @@ and :usda:`opacity`.
   interpreted; this "translucent or masked" behavior is common in engines and
   renderers, and makes the UsdPreviewSurface easier to interchange. It does
   imply, however, that it is not possible to faithfully recreate a
-  glassy/translucent material that also provides an opacity-based mask... so no
-  single-polygon glass leaves.
+  translucent material that also provides an opacity-based mask with a
+  non-zero opacityThreshold. 
 
 .. _updateior:
 
@@ -1073,10 +1075,20 @@ From version 2.3...
       of specular components, including the clearcoat when
       :math:`UsdPreviewSurface.clearcoat > 0`.
 
-Version 2.5 - Current Head
-##########################
+Version 2.5
+###########
 
 From version 2.4...
     * :ref:`Updates UDIM specification to include tile 1100.<updateudim>`
       Changes the baseline UDIM tile support from 1001-1099, inclusive, to 
       1001-1100.  This allows for a 10x10 grid of UDIM tiles.
+
+Version 2.6 - Current Head
+##########################
+
+From version 2.5...
+    * :ref:`Updates description of UsdPreviewSurface behavior when opacity is 0.
+      <updateopacity>`
+      Removes the statement that materials with opacity = 0 still receive a 
+      specular reflection, instead indicating that fully transparent materials
+      receive no lighting response.
