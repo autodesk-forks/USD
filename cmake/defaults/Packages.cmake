@@ -307,6 +307,8 @@ if (PXR_BUILD_IMAGING)
         endif ()
 
         find_package(Tint REQUIRED COMPONENTS ${TINT_COMPONENTS} QUIET)
+        find_package(SPIRV-Tools REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+        find_package(SPIRV-Tools-opt REQUIRED NO_CMAKE_FIND_ROOT_PATH)
         find_package(GLSLang REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 
         # glslangConfig.cmake defined INTERFACE_INCLUDE_DIRECTORIES incorrectly
@@ -315,8 +317,7 @@ if (PXR_BUILD_IMAGING)
         set_target_properties(glslang::SPIRV PROPERTIES
                 INTERFACE_INCLUDE_DIRECTORIES "${GLSLANG_INCLUDE_DIRECTORY}")
         find_package(SPIRV-Headers REQUIRED NO_CMAKE_FIND_ROOT_PATH)
-        find_package(SPIRV-Tools REQUIRED NO_CMAKE_FIND_ROOT_PATH)
-        find_package(SPIRV-Tools-opt REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+
     endif ()
     # --Opensubdiv
     set(OPENSUBDIV_USE_GPU ${PXR_BUILD_GPU_SUPPORT})

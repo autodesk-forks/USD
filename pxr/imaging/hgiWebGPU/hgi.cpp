@@ -119,27 +119,22 @@ wgpu::Device GetDevice() {
 
         // Simply pick the first adapter in the sorted list.
         wgpu::RequestAdapterOptions options = {};
-        wgpu::Adapter adapter;
-        wgpu::RequestAdapterCallbackInfo callbackInfo = {};
-        callbackInfo.nextInChain = nullptr;
-        callbackInfo.mode = wgpu::CallbackMode::WaitAnyOnly;
-        callbackInfo.callback = [](WGPURequestAdapterStatus status,
-                                   WGPUAdapter adapter, const char *message,
-                                   void *userdata) {
-            if (status != WGPURequestAdapterStatus_Success) {
-                TF_CODING_ERROR("Failed to get an adapter: %s", message);
-                return;
-            }
-            *static_cast<wgpu::Adapter *>(userdata) = wgpu::Adapter::Acquire(adapter);
-        };
+        wgpu::Adapter adapter;;
 
         wgpu::DeviceDescriptor descriptor;
         std::vector<wgpu::FeatureName> requiredFeatures = {
                 wgpu::FeatureName::Depth32FloatStencil8,
                 wgpu::FeatureName::Float32Filterable
         };
-        callbackInfo.userdata = &adapter;
-        instance.WaitAny(instance.RequestAdapter(&options, callbackInfo), UINT64_MAX);
+        instance.WaitAny(instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly,
+            [&adapter](wgpu::RequestAdapterStatus status, wgpu::Adapter reqAdapter,
+            wgpu::StringView message) {
+             if (status != wgpu::RequestAdapterStatus::Success) {
+                 TF_CODING_ERROR("Failed to get an adapter: %s", message.data);
+                 return;
+             }
+             adapter = std::move(reqAdapter);
+            }), UINT64_MAX);
         if (adapter == nullptr) {
             TF_CODING_ERROR("RequestAdapter failed!");
         }

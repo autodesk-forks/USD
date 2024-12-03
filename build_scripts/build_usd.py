@@ -1636,18 +1636,132 @@ def InstallThreeJs(context, force, buildArgs):
 THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 
 ############################################################
+# DAWN and 3rd parties
+DAWN_REPO = "https://dawn.googlesource.com/dawn"
+DAWN_CHROMIUM_VERSION = "6858"
+
+DAWN_CMAKE_OPTIONS = [
+    '-DTINT_BUILD_SPV_READER=ON',
+    '-DTINT_BUILD_SPV_WRITER=OFF',
+    '-DTINT_BUILD_WGSL_WRITER=ON',
+    '-DTINT_BUILD_TESTS=OFF',
+    '-DTINT_BUILD_CMD_TOOLS=OFF',
+    '-DTINT_BUILD_BENCHMARKS=OFF',
+    '-DDAWN_BUILD_TESTS=OFF',
+    '-DDAWN_BUILD_SAMPLES=OFF',
+    '-DDAWN_USE_GLFW=OFF',
+]
+
+def PrepareDawn(context, force):
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn")
+        if force and os.path.isdir(srcDir):
+            shutil.rmtree(srcDir)
+
+        if not os.path.isdir(srcDir):
+            Run("git clone " + DAWN_REPO + " --branch chromium/" + DAWN_CHROMIUM_VERSION + " --depth 1 --single-branch")
+
+        with CurrentWorkingDirectory(srcDir):
+            required_submodules = [
+                'third_party/protobuf',
+                'third_party/vulkan-utility-libraries/src',
+                'third_party/spirv-headers/src',
+                'third_party/spirv-tools/src',
+                'third_party/abseil-cpp',
+                'third_party/libprotobuf-mutator/src',
+                'third_party/vulkan-headers/src',
+                'third_party/glslang/src',
+                'third_party/jinja2',
+                'third_party/markupsafe',
+            ]
+
+            if Windows() and not context.targetWasm:
+                required_submodules += [
+                    'third_party/dxheaders'
+                ]
+
+            google_depot_tools.fetch_dependecies(required_submodules)
+
+            PatchFile("third_party/CMakeLists.txt",
+                      [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
+                        '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
+                       ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
+                        '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
+                       ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
+                        '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
+                       ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
+                        '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
+                       ])
+
+            if context.targetWasm:
+                # We need to resolve spirv dependencies even when dawn is disabled, so we skip the return() statement
+                PatchFile("third_party/CMakeLists.txt",[('    return()','    #return()')])
+                # If we are building for wasm, we only want to build tint. Currently, there is no way to build tint
+                # as a standalone library, so we disable it by skipping the dawn folder through a patch
+                PatchFile("CMakeLists.txt",
+                          [('if (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12 OR DAWN_ENABLE_METAL OR DAWN_ENABLE_NULL OR DAWN_ENABLE_DESKTOP_GL OR DAWN_ENABLE_OPENGLES OR DAWN_ENABLE_VULKAN OR DAWN_ENABLE_EMSCRIPTEN)',
+                            'if (False)')])
+                # This will allow us to install the already built spirv-tools library
+                PatchFile("third_party/spirv-headers/src/CMakeLists.txt", [
+                    ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
+                ])
+
+            elif Windows():
+                # Dawn native cmake needs revise for DX12
+                PatchFile("src/dawn/native/CMakeLists.txt",
+                          [('    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n',
+                            '    target_include_directories(dawn_native PRIVATE ${DAWN_THIRD_PARTY_DIR}/dxheaders/include/directx)\n' +
+                            '    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n')])
+
+
+def InstallDawn(context, force, buildArgs):
+    PrepareDawn(context, force)
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn")
+        with CurrentWorkingDirectory(srcDir):
+            cmakeOptions = [
+                '-DDAWN_ENABLE_INSTALL=ON',
+                '-DABSL_ENABLE_INSTALL=ON'
+            ]
+
+            cmakeOptions += DAWN_CMAKE_OPTIONS
+            cmakeOptions += buildArgs
+            buildDir = RunCMake(context, force, cmakeOptions)
+        
+    # installation scripts are missing in dawn. Doing it manually until addressed
+    with CurrentWorkingDirectory(srcDir):
+        CopyDirectory(context, "include/tint", "include/tint")
+        CopyDirectory(context, "src/tint", "include/src/tint")
+        CopyFiles(context, "src/utils/compiler.h", "include/src/utils/")
+
+    with CurrentWorkingDirectory(buildDir):
+
+        # Simply copy headers and pre-built binaries to the appropriate location.
+        # For Windows, Dawn has Release or Debug folders; For macOS, there is not
+        if Windows() and context.cmakeGenerator != 'Ninja':
+            buildConfigFolder = "Debug/" if context.buildDebug else "RelWithDebInfo/" if context.buildRelWithDebug else "Release/"
+        else:
+            buildConfigFolder = ''
+
+        # Lib files
+        CopyFiles(context, "third_party/spirv-tools/source/{buildConfig}*SPIRV-Tools.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "third_party/spirv-tools/source/opt/{buildConfig}*SPIRV-Tools-opt.*".format(buildConfig=buildConfigFolder), "lib")
+        CopyFiles(context, "src/tint/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
+
+
+DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
+
+
+############################################################
 # glslang
 
 def InstallGlslang(context, force, buildArgs):
     with CurrentWorkingDirectory(context.srcDir):
-        if context.targetWasm:
-            srcDir = os.path.join(os.getcwd(), "tint", "third_party", "vulkan-deps", "glslang", "src")
-        else:
-            srcDir = os.path.join(os.getcwd(), "dawn", "third_party", "glslang", "src")
+        srcDir = os.path.join(os.getcwd(), "dawn", "third_party", "glslang", "src")
 
         if not os.path.isdir(srcDir):
             raise RuntimeError("glslang not found at " + srcDir + ". This is probably because dawn or " +
-               "tint installation was not executed firts")
+                               "tint installation was not executed firts")
 
         with CurrentWorkingDirectory(srcDir):
 
@@ -1676,72 +1790,21 @@ GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangTo
 ############################################################
 # Tint
 
-TINT_REPO = "https://dawn.googlesource.com/tint"
-TINT_COMMIT = "3cb3f4a22006b39e08dfda6b1dc4d01fafb2f7a5"
-
-TINT_CMAKE_OPTIONS = [
-    '-DTINT_BUILD_SPV_READER=ON',
-    '-DTINT_BUILD_SPV_WRITER=OFF',
-    '-DTINT_BUILD_WGSL_WRITER=ON',
-    '-DTINT_BUILD_TESTS=OFF',
-    '-DTINT_BUILD_CMD_TOOLS=OFF',
-    '-DTINT_BUILD_BENCHMARKS=OFF'
-]
-
 def InstallTint(context, force, buildArgs):
+    PrepareDawn(context, force)
     with CurrentWorkingDirectory(context.srcDir):
-        srcDir = os.path.join(os.getcwd(), "tint")
-        if force and os.path.isdir(srcDir):
-            shutil.rmtree(srcDir)
-
-        if not os.path.exists(srcDir):
-            os.makedirs(srcDir)
-            with CurrentWorkingDirectory(srcDir):
-                Run('git init')
-                Run('git remote add origin '+ TINT_REPO)
-                Run('git fetch origin ' + TINT_COMMIT + ' --depth 1')
-                Run("git checkout " + TINT_COMMIT)
+        srcDir = os.path.join(os.getcwd(), "dawn")
 
         with CurrentWorkingDirectory(srcDir):
-            required_submodules = [
-                'third_party/vulkan-deps',
-                'third_party/vulkan-deps/spirv-headers/src',
-                'third_party/vulkan-deps/spirv-tools/src',
-                'third_party/vulkan-deps/glslang/src',
-                'third_party/abseil-cpp',
-            ]
-            google_depot_tools.fetch_dependecies(required_submodules)
-
-            # This will allow us to install the already built spirv-tools library
-
-            PatchFile("third_party/vulkan-deps/spirv-headers/src/CMakeLists.txt", [
-                ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
-            ])
-
-            PatchFile("third_party/CMakeLists.txt", [
-            ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
-            '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
-            ('    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
-            '    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
-            ])
-
-            PatchFile("src/tint/utils/system/terminal_posix.cc", [
-                ('#include "src/tint/utils/system/terminal.h"\n',
-                 """#include "src/tint/utils/system/terminal.h"
-                 #ifdef EMSCRIPTEN
-                 #include <sys/select.h>
-                 #endif\n""")
-            ])
-
             cmakeOptions = [
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
-                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                 '-DBUILD_SHARED_LIBS=OFF',
                 '-DCMAKE_INSTALL_DATADIR=' + os.path.join(context.instDir, 'lib')
             ]
             cmakeOptions += buildArgs
-            cmakeOptions += TINT_CMAKE_OPTIONS
+            cmakeOptions += DAWN_CMAKE_OPTIONS
             # In the case of the desktop build, we need to let tint specify the value of the readers and writers for
             # the current platform, so that it also matches the corresponding Dawn backend (e.g. Metal).
             # In contrast, the emscripten build just needs to process the glsl to wgsl and the browser implementation
@@ -1763,99 +1826,16 @@ def InstallTint(context, force, buildArgs):
         with CurrentWorkingDirectory(srcDir):
             CopyDirectory(context, "include/tint", "include/tint")
             CopyDirectory(context, "src/tint", "include/src/tint")
+            CopyFiles(context, "src/utils/compiler.h", "include/src/utils/")
 
         with CurrentWorkingDirectory(buildDir):
-            CopyFiles(context, "src/tint/libtint*.a", "lib")
+            # Lib files
+            CopyFiles(context, "third_party/spirv-tools/source/*SPIRV-Tools.*", "lib")
+            CopyFiles(context, "third_party/spirv-tools/source/opt/*SPIRV-Tools-opt.*", "lib")
+            CopyFiles(context, "src/tint/*.*", "lib")
 
 
 TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
-
-############################################################
-# DAWN and 3rd parties
-DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6778"
-
-def InstallDawn(context, force, buildArgs):
-    with CurrentWorkingDirectory(context.srcDir):
-        srcDir = os.path.join(os.getcwd(), "dawn")
-        if force and os.path.isdir(srcDir):
-            shutil.rmtree(srcDir)
-
-        if not os.path.isdir(srcDir):
-            Run("git clone " + DAWN_REPO + " --branch chromium/" + DAWN_CHROMIUM_VERSION + " --depth 1 --single-branch")
-
-        with CurrentWorkingDirectory(srcDir):
-            required_submodules = [
-                'third_party/protobuf',
-                'third_party/vulkan-utility-libraries/src',
-                'third_party/spirv-headers/src',
-                'third_party/spirv-tools/src',
-                'third_party/abseil-cpp',
-                'third_party/libprotobuf-mutator/src',
-                'third_party/vulkan-headers/src',
-                'third_party/glslang/src',
-                'third_party/jinja2',
-                'third_party/markupsafe',
-            ]
-
-            PatchFile("third_party/CMakeLists.txt",
-              [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
-              '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
-              ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
-              '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
-              ]) 
-            PatchFile("third_party/CMakeLists.txt",
-              [('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
-                '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
-               ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
-                '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n'),
-               ])
-
-            if Windows():
-                required_submodules += [
-                    'third_party/dxheaders'
-                ]
-
-                # Dawn native cmake needs revise for DX12
-                PatchFile("src/dawn/native/CMakeLists.txt",
-                    [('    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n',
-                     '    target_include_directories(dawn_native PRIVATE ${DAWN_THIRD_PARTY_DIR}/dxheaders/include/directx)\n' +
-                     '    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n')])
-
-            google_depot_tools.fetch_dependecies(required_submodules)
-            cmakeOptions = [
-                '-DDAWN_BUILD_SAMPLES=OFF',
-                '-DDAWN_ENABLE_INSTALL=ON',
-                '-DDAWN_USE_GLFW=OFF',
-                '-DABSL_ENABLE_INSTALL=ON'
-            ]
-
-            cmakeOptions += TINT_CMAKE_OPTIONS
-            cmakeOptions += buildArgs
-            buildDir = RunCMake(context, force, cmakeOptions)
-        
-    # installation scripts are missing in dawn. Doing it manually until addressed
-    with CurrentWorkingDirectory(srcDir):
-        CopyDirectory(context, "include/tint", "include/tint")
-        CopyDirectory(context, "src/tint", "include/src/tint")
-        CopyFiles(context, "src/utils/compiler.h", "include/src/utils/")
-
-    with CurrentWorkingDirectory(buildDir):
-
-        # Simply copy headers and pre-built binaries to the appropriate location.
-        # For Windows, Dawn has Release or Debug folders; For macOS, there is not
-        if Windows() and context.cmakeGenerator != 'Ninja':
-            buildConfigFolder = "Debug/" if context.buildDebug else "RelWithDebInfo/" if context.buildRelWithDebug else "Release/"
-        else:
-            buildConfigFolder = ''
-
-        # Lib files
-        CopyFiles(context, "third_party/spirv-tools/source/{buildConfig}*SPIRV-Tools.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "third_party/spirv-tools/source/opt/{buildConfig}*SPIRV-Tools-opt.*".format(buildConfig=buildConfigFolder), "lib")
-        CopyFiles(context, "src/tint/{buildConfig}*.*".format(buildConfig=buildConfigFolder), "lib")
-
-
-DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
 
 ############################################################
 # Embree
