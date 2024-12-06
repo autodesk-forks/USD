@@ -6,6 +6,7 @@
 //
 #include "pxr/imaging/hdSt/materialParam.h"
 #include "pxr/imaging/hdSt/materialXFilter.h"
+#include "pxr/imaging/hdSt/materialXLobePruner.h"
 #include "pxr/imaging/hdSt/materialXShaderGen.h"
 #include "pxr/imaging/hdSt/package.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
@@ -1242,6 +1243,9 @@ _GenerateMaterialXShader(
     const mx::DocumentPtr& stdLibraries = HdMtlxStdLibraries();
     const mx::FileSearchPath& searchPaths = HdMtlxSearchPaths();
 
+    // Import LobePruned
+    stdLibraries->importLibrary(HdSt_GetLobePrunerLibrary());
+
     // Create the MaterialX Document from the HdMaterialNetwork
     HdSt_MxShaderGenInfo mxHdInfo;
     HdMtlxTexturePrimvarData hdMtlxData;
@@ -1310,6 +1314,10 @@ size_t _BuildEquivalentMaterialNetwork(
     // shader that has default values for all parameters and can be re-used.
     annonNodePathMap->clear();
 
+    // We will also ask our friend the LobePruner to help generate the fastest
+    // shader possible.
+    HdSt_InitializeLobePruner(HdMtlxStdLibraries());
+
     // Annonymized paths will be of the form:
     //   /NG_Anonymized/N0, /NG_Anonymized/N1, /NG_Anonymized/N2...
     SdfPath annonBaseName(_tokens->NG_Anonymized);
@@ -1357,7 +1365,12 @@ size_t _BuildEquivalentMaterialNetwork(
         const HdMaterialNode2& inNode = nodePair.second;
 
         HdMaterialNode2 outNode;
-        outNode.nodeTypeId = inNode.nodeTypeId;
+        const auto optimizedNodeId = HdSt_GetLobePrunedNodeId(inNode);
+        if (optimizedNodeId.IsEmpty()) {
+            outNode.nodeTypeId = inNode.nodeTypeId;
+        } else {
+            outNode.nodeTypeId = optimizedNodeId;
+        }
         if (_IsTopologicalShader(inNode.nodeTypeId)) {
             // Topological nodes have parameters that affect topology. 
             // We can not strip them.

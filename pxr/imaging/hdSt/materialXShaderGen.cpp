@@ -6,6 +6,7 @@
 //
 #include "pxr/imaging/hdSt/materialXShaderGen.h"
 #include "pxr/imaging/hdSt/materialXFilter.h"
+#include "pxr/imaging/hdSt/materialXLobePruner.h"
 #include "pxr/base/tf/stringUtils.h"
 
 #include <MaterialXCore/Value.h>
@@ -907,6 +908,14 @@ HdStMaterialXShaderGenGlsl::HdStMaterialXShaderGenGlsl(
     // Register the customized version of the Surface node generator
     registerImplementation("IM_surface_" + mx::GlslShaderGenerator::TARGET,
         HdStMaterialXSurfaceNodeGenGlsl::create);
+
+    // Register LobePruner custom nodes:
+    registerImplementation(
+        HdSt_GetDarkBaseImplementationName(),
+        HdStDarkClosureNode::create);
+    registerImplementation(
+        HdSt_GetDarkLayerImplementationName(),
+        HdStDarkClosureNode::create);    
 }
 
 // Based on GlslShaderGenerator::generate()
@@ -1066,6 +1075,14 @@ HdStMaterialXShaderGenVkGlsl::HdStMaterialXShaderGenVkGlsl(
     // Register the customized version of the Surface node generator
     registerImplementation("IM_surface_" + mx::VkShaderGenerator::TARGET,
         HdStMaterialXSurfaceNodeGenVkGlsl::create);
+
+    // Register LobePruner custom nodes:
+    registerImplementation(
+        HdSt_GetDarkBaseImplementationName(),
+        HdStDarkClosureNode::create);
+    registerImplementation(
+        HdSt_GetDarkLayerImplementationName(),
+        HdStDarkClosureNode::create);    
 }
 
 // Based on GlslShaderGenerator::generate()
@@ -1223,6 +1240,14 @@ HdStMaterialXShaderGenMsl::HdStMaterialXShaderGenMsl(
     // Register the customized version of the Surface node generator
     registerImplementation("IM_surface_" + mx::MslShaderGenerator::TARGET,
         HdStMaterialXSurfaceNodeGenMsl::create);
+
+    // Register LobePruner custom nodes:
+    registerImplementation(
+        HdSt_GetDarkBaseImplementationName(),
+        HdStDarkClosureNode::create);
+    registerImplementation(
+        HdSt_GetDarkLayerImplementationName(),
+        HdStDarkClosureNode::create);    
 }
 
 // Based on MslShaderGenerator::generate()
