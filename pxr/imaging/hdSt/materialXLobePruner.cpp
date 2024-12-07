@@ -1,5 +1,5 @@
 //
-// Copyright 2020 Pixar
+// Copyright 2024 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
@@ -177,12 +177,23 @@ void LobePrunerImpl::Initialize(const mx::DocumentPtr& library)
         for (const auto& node : ng->getNodes()) {
             if (node->getCategory() == "mix") {
                 const auto nodeInput = node->getActiveInput("mix");
+                // A mix node, especially one that mixes two BSDF subgraphs
+                // is the best optimization point available in MaterialX.
+                // If the value is zero, then we can promote the subgraph
+                // connected to the bg input into the upstream node, and
+                // if the value is 1 we can do the same for the fg subgraph.
+                // The subgraph that was not promoted will be completely
+                // ignored by the shader generator.
                 if (nodeInput && _IsLobeInput(nodeInput, nd)) {
                     _AddOptimizableValue(0.0F, nodeInput, ng, nd);
                     _AddOptimizableValue(1.0F, nodeInput, ng, nd);
                 }
             } else if (node->getCategory() == "multiply") {
                 for (const auto& nodeInput : node->getActiveInputs()) {
+                    // A multiply node can also be optimized because zeroing
+                    // one input means the output will be zero as well and can
+                    // be directly written into the upstream nodes. They rarely
+                    // affect BSDF directly though, so are of limited value.
                     if (nodeInput && _IsLobeInput(nodeInput, nd)) {
                         _AddOptimizableValue(0.0F, nodeInput, ng, nd);
                     }
@@ -191,6 +202,14 @@ void LobePrunerImpl::Initialize(const mx::DocumentPtr& library)
                 kBasePbrNodes.count(node->getCategory())
                 || kLayerPbrNodes.count(node->getCategory())) {
                 const auto nodeInput = node->getActiveInput("weight");
+                // A PBR node with a weight of zero will always produce a black
+                // result which will either be completely opaque in the base
+                // layers, or fully transparent in the coat layers. This means
+                // we can replace the node directly with one that generates these
+                // return values. Also means that the whole subgraph below that
+                // PBR node can be ignored, but, more importantly, it means that
+                // we can skip including whole swaths of MaterialX library if any
+                // PBR node category becomes fully unused.
                 if (nodeInput && _IsLobeInput(nodeInput, nd)) {
                     _AddOptimizableValue(0.0F, nodeInput, ng, nd);
                 }
