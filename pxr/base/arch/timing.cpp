@@ -19,7 +19,7 @@
 #include <type_traits>
 #include <thread>
 
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -37,15 +37,15 @@ constexpr static T UninitializedState = -1;
 template <class T>
 constexpr static T InitializingState = -2;
 
-static std::atomic<double> 
+static std::atomic<double>
 Arch_NanosecondsPerTick{UninitializedState<double>};
 
 // Tick measurement granularity.
-static std::atomic<int64_t> 
+static std::atomic<int64_t>
 Arch_TickQuantum{UninitializedState<int64_t>};
 
 // Cost to take a measurement with ArchIntervalTimer.
-static std::atomic<int64_t>  
+static std::atomic<int64_t>
 Arch_IntervalTimerTickOverhead{UninitializedState<int64_t>};
 
 template <typename T>
@@ -54,16 +54,16 @@ T
 GetAtomicVar(std::atomic<T> &atomicVar, T (*computeVal)())
 {
     T state = atomicVar.load(std::memory_order_relaxed);
-    
+
     // Value has beeen initialized and can be read immediately.
     if (state >= 0) {
         return state;
     }
 
     // First thread that needs the value will start computing it.
-    if (state == UninitializedState<T> && 
+    if (state == UninitializedState<T> &&
         atomicVar.compare_exchange_strong(state, InitializingState<T>)) {
-        
+
         T newVal = computeVal();
         atomicVar.store(newVal,std::memory_order_relaxed);
         return newVal;
@@ -89,7 +89,7 @@ Arch_ComputeNanosecondsPerTick()
     return static_cast<double>(info.numer) / info.denom;
 }
 
-#elif defined(ARCH_OS_LINUX)
+#elif defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 
 static
 double
@@ -168,7 +168,7 @@ Arch_ComputeNanosecondsPerTick()
     return nanosPerSecond * durationInSeconds / (t2 - t1);
 }
 
-#else    
+#else
 #error Unknown architecture.
 #endif
 
@@ -177,7 +177,7 @@ Arch_ComputeNanosecondsPerTick()
 uint64_t testTimeAccum;
 
 static
-int64_t 
+int64_t
 Arch_ComputeTickQuantum()
 {
     constexpr int NumTrials = 64;
@@ -220,7 +220,7 @@ Arch_ComputeIntervalTimerTickOverhead()
 uint64_t
 ArchGetIntervalTimerTickOverhead()
 {
-    return GetAtomicVar(Arch_IntervalTimerTickOverhead, 
+    return GetAtomicVar(Arch_IntervalTimerTickOverhead,
         Arch_ComputeIntervalTimerTickOverhead);
 }
 
@@ -245,10 +245,10 @@ ArchSecondsToTicks(double seconds)
         std::llround(1.0e9 * seconds / ArchGetNanosecondsPerTick()));
 }
 
-double 
-ArchGetNanosecondsPerTick() 
+double
+ArchGetNanosecondsPerTick()
 {
-    return GetAtomicVar(Arch_NanosecondsPerTick,           
+    return GetAtomicVar(Arch_NanosecondsPerTick,
         Arch_ComputeNanosecondsPerTick);
 }
 
@@ -257,7 +257,7 @@ Arch_MeasureExecutionTime(uint64_t maxTicks, bool *reachedConsensus,
                           void const *m, uint64_t (*callM)(void const *, int))
 {
     auto measureN = [m, callM](int nTimes) { return callM(m, nTimes); };
-    
+
     // XXX pin to a certain cpu?  (not possible on macos)
 
     // Run 10 times upfront to estimate how many runs to include in each sample.
@@ -270,9 +270,13 @@ Arch_MeasureExecutionTime(uint64_t maxTicks, bool *reachedConsensus,
     // Since measured times are +/- 1 quantum, we multiply by 2000 to get the
     // desired runtime, and from there figure number of iterations for a sample.
     const uint64_t minTicksPerSample = 2000 * ArchGetTickQuantum();
+    #if defined(ARCH_OS_WASM_VM)
+    const int sampleIters = 1; // FIXME
+    #else
     const int sampleIters = (estTicksPer < minTicksPerSample)
         ? (minTicksPerSample + estTicksPer/2) / estTicksPer
         : 1;
+    #endif
 
     auto measureSample = [&measureN, sampleIters]() {
         return (measureN(sampleIters) + sampleIters/2) / sampleIters;
@@ -294,7 +298,7 @@ Arch_MeasureExecutionTime(uint64_t maxTicks, bool *reachedConsensus,
     if (maxTicks > 5.e9) {
         maxTicks = 5.e9;
     }
-    
+
     ArchIntervalTimer limitTimer;
 
     uint64_t bestMedian = ~0;

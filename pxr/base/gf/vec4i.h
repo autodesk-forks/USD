@@ -19,6 +19,11 @@
 #include "pxr/base/gf/api.h"
 #include "pxr/base/gf/limits.h"
 #include "pxr/base/gf/traits.h"
+
+#ifdef ARCH_OS_WASM_VM
+#include "pxr/base/gf/emscriptenRegistrationHelper.h"
+#endif
+
 #include "pxr/base/tf/hash.h"
 
 #include <cstddef>
@@ -276,5 +281,9 @@ GfDot(GfVec4i const &v1, GfVec4i const &v2) {
 
  
 PXR_NAMESPACE_CLOSE_SCOPE
+
+#ifdef ARCH_OS_WASM_VM
+REGISTER_GLVECTOR(pxr::GfVec4i)
+#endif
 
 #endif // PXR_BASE_GF_VEC4I_H

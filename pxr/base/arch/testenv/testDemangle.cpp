@@ -112,7 +112,7 @@ int main()
 
     TestDemangle<unsigned long>("unsigned long");
     TestDemangle<MangledAlso<int> >("MangledAlso<int>");
-
+    
     TestDemangle<MangledAlso<MangledAlso<int> > >(
             "MangledAlso<MangledAlso<int> >");
     TestDemangle<MangledAlso<MangledAlso<MangledAlso<int> > > >(

@@ -27,6 +27,12 @@ option(PXR_BUILD_DOCUMENTATION "Generate doxygen documentation" OFF)
 option(PXR_BUILD_PYTHON_DOCUMENTATION "Generate Python documentation" OFF)
 option(PXR_BUILD_HTML_DOCUMENTATION "Generate HTML documentation if PXR_BUILD_DOCUMENTATION is ON" ON)
 option(PXR_ENABLE_PYTHON_SUPPORT "Enable Python based components for USD" ON)
+option(PXR_ENABLE_JS_SUPPORT "Enable Javascript based components for USD" OFF)
+option(PXR_ENABLE_JS_BINDINGS_SUPPORT "Enable Javascript bindings for USD" ON)
+if (NOT EMSCRIPTEN)
+    set(PXR_ENABLE_JS_BINDINGS_SUPPORT OFF)
+endif()
+option(PXR_USE_PYTHON_3 "Build Python bindings for Python 3" ON)
 option(PXR_USE_DEBUG_PYTHON "Build with debug python" OFF)
 option(PXR_ENABLE_HDF5_SUPPORT "Enable HDF5 backend in the Alembic plugin for USD" OFF)
 option(PXR_ENABLE_OSL_SUPPORT "Enable OSL (OpenShadingLanguage) based components" OFF)
@@ -38,6 +44,7 @@ option(PXR_ENABLE_NAMESPACES "Enable C++ namespaces." ON)
 option(PXR_PREFER_SAFETY_OVER_SPEED
        "Enable certain checks designed to avoid crashes or out-of-bounds memory reads with malformed input files.  These checks may negatively impact performance."
         ON)
+option(PXR_BUILD_PERFORMANCE "Build Performance Component." ON)
 
 if(APPLE)
     # Cross Compilation detection as defined in CMake docs

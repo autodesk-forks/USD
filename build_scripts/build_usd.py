@@ -37,6 +37,10 @@ from shutil import which
 
 # Helpers for printing output
 verbosity = 1
+EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB'
+EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
+TARGET_WASM='wasm'
+TARGET_WASM_NODE='node'
 
 def Print(msg):
     if verbosity > 0:
@@ -74,6 +78,23 @@ def MacOS():
 
 if MacOS():
     import apple_utils
+
+def GetBuildTargetDefault():
+    if MacOS():
+        return apple_utils.GetBuildTargetDefault()
+    else:
+        return ''
+
+def GetBuildTargets():
+    # The wasm build has been tested only in MacOS so far
+    if MacOS():
+        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM_NODE]
+    elif Linux():
+        return [TARGET_WASM, TARGET_WASM_NODE]
+    elif Windows():
+        return [TARGET_WASM, TARGET_WASM_NODE]        
+    else:
+        return []
 
 def MacOSTargetEmbedded(context):
     return MacOS() and apple_utils.TargetEmbeddedOS(context)
@@ -393,8 +414,9 @@ def RunCMake(context, force, extraArgs = None):
     if generator is not None:
         generator = '-G "{gen}"'.format(gen=generator)
 
+    # EMSCRIPTEN doesn't use VS On Windows
     # Note - don't want to add -A (architecture flag) if generator is, ie, Ninja
-    if IsVisualStudio2019OrGreater() and "Visual Studio" in generator:
+    if not context.targetWasm and IsVisualStudio2019OrGreater() and "Visual Studio" in generator:
         generator = generator + " -A " + GetWindowsHostArch()
 
     toolset = context.cmakeToolset
@@ -403,7 +425,7 @@ def RunCMake(context, force, extraArgs = None):
 
     # On MacOS, enable the use of @rpath for relocatable builds.
     osx_rpath = None
-    if MacOS():
+    if MacOS() and not context.targetWasm:
         osx_rpath = "-DCMAKE_MACOSX_RPATH=ON"
 
         # For macOS cross compilation, set the Xcode architecture flags.
@@ -438,7 +460,8 @@ def RunCMake(context, force, extraArgs = None):
     AppendCXX11ABIArg("-DCMAKE_CXX_FLAGS", context, extraArgs)
 
     with CurrentWorkingDirectory(buildDir):
-        Run('cmake '
+        Run(('{} '.format('emcmake.bat' if Windows() else 'emcmake') if context.targetWasm else '') +
+            'cmake '
             '-DCMAKE_INSTALL_PREFIX="{instDir}" '
             '-DCMAKE_PREFIX_PATH="{depsInstDir}" '
             '-DCMAKE_BUILD_TYPE={config} '
@@ -459,7 +482,8 @@ def RunCMake(context, force, extraArgs = None):
         # As of CMake 3.12, the -j parameter for `cmake --build` allows
         # specifying the number of parallel build jobs, forwarding it to the
         # underlying native build tool.
-        Run("cmake --build . --config {config} --target install -j {numJobs}"
+        Run(('{} '.format('emmake.bat' if Windows() else 'emmake') if context.targetWasm else '') +
+            "cmake --build . --config {config} --target install -j {numJobs}"
             .format(config=config, numJobs=context.numJobs))
 
 def GetCMakeVersion():
@@ -637,6 +661,8 @@ def DownloadURL(url, context, force, extractDir = None,
                     members = (m for m in archive.namelist() 
                                if not any((fnmatch.fnmatch(m, p)
                                            for p in dontExtract)))
+            elif filename.endswith('.js'):
+                return os.path.abspath(filename)
             else:
                 raise RuntimeError("unrecognized archive file type")
 
@@ -771,7 +797,10 @@ def InstallBoost_Helper(context, force, buildArgs):
     #   simplicity.
     # - Building on MacOS requires v1.82.0 or later for C++17 support starting
     #   with Xcode 15.
-    if IsVisualStudio2022OrGreater():
+    if context.targetWasm:
+        BOOST_VERSION = (1, 82, 0)
+        BOOST_SHA256 = "f7c9e28d242abcd7a2c1b962039fcdd463ca149d1883c3a950bbcc0ce6f7c6d9"
+    elif IsVisualStudio2022OrGreater():
         BOOST_VERSION = (1, 86, 0)
         BOOST_SHA256 = "cd20a5694e753683e1dc2ee10e2d1bb11704e65893ebcc6ced234ba68e5d8646"
     elif MacOS():
@@ -836,7 +865,7 @@ def InstallBoost_Helper(context, force, buildArgs):
 
         macOSArch = ""
 
-        if MacOS():
+        if MacOS() and not context.targetWasm:
             if apple_utils.GetTargetArch(context) == \
                         apple_utils.TARGET_X86:
                 macOSArch = "-arch {0}".format(apple_utils.TARGET_X86)
@@ -966,6 +995,7 @@ def InstallBoost(context, force, buildArgs):
     # dependency to build the next time it's run.
     try:
         InstallBoost_Helper(context, force, buildArgs)
+
     except:
         for versionHeader in [
             os.path.join(context.instDir, f) for f in BOOST_VERSION_FILES
@@ -980,13 +1010,22 @@ BOOST = Dependency("boost", InstallBoost, *BOOST_VERSION_FILES)
 ############################################################
 # Intel oneTBB
 
-ONETBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.9.0.zip"
+ONETBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.12.0.zip"
 
 def InstallOneTBB(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ONETBB_URL, context, force)):
-        RunCMake(context, force,
-                 ['-DTBB_TEST=OFF',
-                  '-DTBB_STRICT=OFF'] + buildArgs)
+        SHARED_LIBS = 'OFF' if context.targetWasm else 'ON'
+        cmakeOptions = [
+            '-DTBB_TEST=OFF',
+            '-DTBB_STRICT=OFF',
+            '-DBUILD_SHARED_LIBS={shared}'.format(shared=SHARED_LIBS)
+        ]
+        if context.targetWasm:
+            cmakeOptions += [
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"'
+            ]
+        cmakeOptions += buildArgs
+        RunCMake(context, force, cmakeOptions)
 
 ONETBB = Dependency("oneTBB", InstallOneTBB, "include/oneapi/tbb.h")
 
@@ -1007,7 +1046,9 @@ else:
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2020.3.1.zip"
 
 def InstallTBB(context, force, buildArgs):
-    if Windows():
+    if context.targetWasm:
+        raise RuntimeError("TBB is no longed used for WebAssembly builds. Use oneTBB instead.")
+    elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
     elif MacOS():
         InstallTBB_MacOS(context, force, buildArgs)
@@ -1354,7 +1395,8 @@ def InstallOpenImageIO(context, force, buildArgs):
         # purposes. Libraries such as usdImagingGL might need to use tools like
         # idiff to compare the output images from their tests
         buildOIIOTools = 'ON' if (context.buildUsdImaging
-                                  and context.buildTests) else 'OFF'
+                                  and context.buildTests
+                                  and not context.targetWasm) else 'OFF'
         extraArgs = ['-DOIIO_BUILD_TOOLS={}'.format(buildOIIOTools),
                      '-DOIIO_BUILD_TESTS=OFF',
                      '-DBUILD_DOCS=OFF',
@@ -1443,6 +1485,11 @@ def InstallOpenSubdiv(context, force, buildArgs):
             '-DNO_PTEX=ON',
             '-DNO_TBB=ON',
         ]
+        if context.targetWasm:
+            extraArgs.append('-DBUILD_SHARED_LIB=OFF')
+            extraArgs.append('-DCMAKE_CXX_FLAGS="-pthread"')
+            extraArgs.append('-DCMAKE_C_FLAGS="-pthread"')
+            extraArgs.append('-DNO_METAL=ON')
 
         # Use Metal for macOS and all Apple embedded systems.
         if MacOS():
@@ -1832,7 +1879,7 @@ def InstallUSD(context, force, buildArgs):
         else:
             extraArgs.append('-DPXR_BUILD_ANIMX_TESTS=OFF')
 
-        if Windows():
+        if Windows() and not context.targetWasm:
             # Increase the precompiled header buffer limit.
             extraArgs.append('-DCMAKE_CXX_FLAGS="/Zm150"')
 
@@ -1841,6 +1888,37 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DBoost_NO_SYSTEM_PATHS=ON')
 
         extraArgs += buildArgs
+
+        if context.targetWasm:
+
+            if context.buildJsBindings:
+                extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=ON')
+            else:
+                extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
+
+            extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
+            # For some reason we have to manually specify path to boost
+            extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
+
+            extraArgs.append('-DTBB_INCLUDE_DIRS="{}"'.format(os.path.join(context.usdInstDir, 'include')))
+            extraArgs.append('-DTBB_tbb_LIBRARY_DEBUG="{}"'.format(os.path.join(context.usdInstDir, 'lib/libtbb_debug.a')))
+            extraArgs.append('-DTBB_tbb_LIBRARY_RELEASE="{}"'.format(os.path.join(context.usdInstDir, 'lib/libtbb.a')))
+
+            extraArgs.append('-DOPENSUBDIV_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, 'include')))
+            extraArgs.append('-DOPENSUBDIV_OSDCPU_LIBRARY="{}"'.format(os.path.join(context.usdInstDir, 'lib/libosdCPU.a')))
+
+            extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=ON')
+            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
+            extraArgs.append('-DPXR_BUILD_PERFORMANCE=OFF')
+
+            if context.targetWasmNode:
+                extraArgs.append('-DPXR_WASM_NODE=ON')
+            else:
+                extraArgs.append('-DPXR_WASM_NODE=OFF')
+
+        else:
+            # JS binding is only possibly enabled for webassembly build
+            extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
         RunCMake(context, force, extraArgs)
 
@@ -1955,13 +2033,15 @@ group.add_argument("--build-variant", default=BUILD_RELEASE,
 
 group.add_argument("--ignore-paths", type=str, nargs="*", default=[],
                    help="Paths for CMake to ignore when configuring projects.")
+
+group.add_argument("--build-target",
+                    default=GetBuildTargetDefault(),
+                    choices=GetBuildTargets(),
+                    help=("Build target for cross compilation. "
+                            "(default: {})".format(
+                            GetBuildTargetDefault())))
+
 if MacOS():
-    group.add_argument("--build-target",
-                       default=apple_utils.GetBuildTargetDefault(),
-                       choices=apple_utils.GetBuildTargets(),
-                       help=("Build target for macOS cross compilation. "
-                             "(default: {})".format(
-                                apple_utils.GetBuildTargetDefault())))
     if apple_utils.IsHostArm():
         # Intel Homebrew stores packages in /usr/local which unfortunately can
         # be where a lot of other things are too. So we only add this flag on arm macs.
@@ -1997,6 +2077,12 @@ if MacOS():
                        default=codesignDefault, action="store_true",
                        help=("Enable code signing for macOS builds "
                              "(defaults to enabled on Apple Silicon)"))
+
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_true",
+                    default=True, help="Build with JavaScript bindings")
+subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
+                    help="Do not build with JavaScript bindings")
 
 if Linux():
     group.add_argument("--use-cxx11-abi", type=int, choices=[0, 1],
@@ -2301,8 +2387,10 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
+        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM_NODE)
+        self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
+        self.buildTarget = args.build_target
         if MacOS():
-            self.buildTarget = args.build_target
             apple_utils.SetTarget(self, self.buildTarget)
 
             self.macOSCodesign = \
@@ -2313,6 +2401,11 @@ class InstallContext:
         else:
             self.buildTarget = ""
 
+        # Emscripten only supports MinGW on Windows
+        if self.targetWasm and Windows():
+            self.cmakeGenerator = 'MinGW Makefiles'
+
+        self.buildJsBindings = args.buildJsBindings
         self.useCXX11ABI = \
             (args.use_cxx11_abi if hasattr(args, "use_cxx11_abi") else None)
         self.safetyFirst = args.safety_first
@@ -2363,10 +2456,10 @@ class InstallContext:
         self.buildEmbree = self.buildImaging and args.build_embree
         self.buildPrman = self.buildImaging and args.build_prman
         self.prmanLocation = (os.path.abspath(args.prman_location)
-                               if args.prman_location else None)                               
+                               if args.prman_location else None)
         self.buildOIIO = ((args.build_oiio or (self.buildUsdImaging
                                                and self.buildTests))
-                          and not embedded)
+                          and not embedded and not self.targetWasm)
         self.buildOCIO = args.build_ocio and not embedded
 
         # - Alembic Plugin
@@ -2423,9 +2516,34 @@ if extraPythonPaths:
     paths = os.environ.get('PYTHONPATH', '').split(os.pathsep) + extraPythonPaths
     os.environ['PYTHONPATH'] = os.pathsep.join(paths)
 
+# Disable incompatible options if target is wasm
+if context.targetWasm:
+    disabled = []
+    components = [
+        ('buildPython', 'Python'),
+        ('buildTools', 'tools'),
+        ('buildExamples', 'examples'),
+        ('buildTutorials', 'tutorials'),
+        ('buildUsdview', 'usdview'),
+        ('buildMaterialX', 'materialX'),
+        ('buildImaging', 'Imaging'),
+        ('buildUsdImaging', 'UsdImaging'),
+        ('buildUsdValidation', 'UsdValidation')
+    ]
+
+    for attr, name in components:
+        if getattr(context, attr):
+            setattr(context, attr, False)
+            disabled.append(name)
+
+    if len(disabled) > 0:
+        print("The following components were disabled because they are not compatible with target wasm: "
+              + ", ".join(disabled))
+
+
 # Determine list of dependencies that are required based on options
 # user has selected.
-if context.buildOneTBB:
+if context.buildOneTBB or context.targetWasm:
     TBB = ONETBB
 
 requiredDependencies = [TBB]
@@ -2465,12 +2583,12 @@ if context.buildUsdview:
 if context.buildAnimXTests:
     requiredDependencies += [ANIMX]
 
-# Linux provides zlib. Skipping it here avoids issues where a host 
+# Linux and wasm provides zlib. Skipping it here avoids issues where a host
 # application loads a different version of zlib than the one we build against.
 # Building zlib is the default when a dependency requires it, although OpenUSD
 # itself does not require it. The --no-zlib flag can be passed to the build
 # script to allow the dependency to find zlib in the build environment.
-if (Linux() or not context.buildZlib) and ZLIB in requiredDependencies:
+if (Linux() or context.targetWasm or not context.buildZlib) and ZLIB in requiredDependencies:
     requiredDependencies = [r for r in requiredDependencies if r != ZLIB]
 
 # Error out if user is building monolithic library on windows with draco plugin
@@ -2548,12 +2666,17 @@ for dep in requiredDependencies:
             dependenciesToBuild.append(dep)
 
 # Verify toolchain needed to build required dependencies
-if (not which("g++") and
-    not which("clang") and
-    not GetXcodeDeveloperDirectory() and
-    not GetVisualStudioCompilerAndVersion()):
-    PrintError("C++ compiler not found -- please install a compiler")
-    sys.exit(1)
+if context.targetWasm:
+    if not which("emcc"):
+        PrintError(" Wasm compiler emcc not found -- please install a compiler")
+        sys.exit(1)
+else:
+    if (not which("g++") and
+        not which("clang") and
+        not GetXcodeDeveloperDirectory() and
+        not GetVisualStudioCompilerAndVersion()):
+        PrintError(" C++ compiler not found -- please install a compiler")
+        sys.exit(1)
 
 # Error out if a 64bit version of python interpreter is not being used
 isPython64Bit = (ctypes.sizeof(ctypes.c_voidp) == 8)
@@ -2731,8 +2854,7 @@ summaryMsg = summaryMsg.format(
                   else "Debug" if context.buildDebug
                   else "Release w/ Debug Info" if context.buildRelWithDebug
                   else ""),
-    buildTarget=(apple_utils.GetTargetName(context) if context.buildTarget
-                 else ""),
+    buildTarget=(context.buildTarget),
     buildImaging=("On" if context.buildImaging else "Off"),
     enablePtex=("On" if context.enablePtex else "Off"),
     enableOpenVDB=("On" if context.enableOpenVDB else "Off"),
@@ -2754,6 +2876,7 @@ summaryMsg = summaryMsg.format(
     buildAlembic=("On" if context.buildAlembic else "Off"),
     buildDraco=("On" if context.buildDraco else "Off"),
     buildMaterialX=("On" if context.buildMaterialX else "Off"),
+    buildJsBindings=("On" if context.buildJsBindings else "Off"),
     buildMayapyTests=("On" if context.buildMayapyTests else "Off"),
     buildAnimXTests=("On" if context.buildAnimXTests else "Off"),
     enableHDF5=("On" if context.enableHDF5 else "Off"))

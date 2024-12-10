@@ -198,6 +198,17 @@ function(pxr_cpp_bin BIN_NAME)
         ${PXR_MALLOC_LIBRARY}
     )
 
+    if (PXR_ENABLE_JS_SUPPORT)
+        _get_all_dependencies(${BIN_NAME} all_dependencies)
+        set(RESOURCES_LIST "")
+        foreach(dep ${all_dependencies})
+            get_property(RESOURCES TARGET ${dep} PROPERTY EMSCRIPTEN_RESOURCES)
+            list(APPEND RESOURCES_LIST "${RESOURCES}")
+        endforeach ()
+
+        target_link_libraries(${BIN_NAME} ${RESOURCES_LIST})
+    endif()
+
     install(
         TARGETS ${BIN_NAME}
         DESTINATION ${installDir}
@@ -231,6 +242,11 @@ function(pxr_library NAME)
         PYMODULE_CPPFILES
         PYMODULE_FILES
         PYSIDE_UI_FILES
+        JS_PUBLIC_CLASSES
+        JS_PRIVATE_CLASSES
+        JS_PUBLIC_HEADERS
+        JS_PRIVATE_HEADERS
+        JS_CPPFILES
     )
 
     cmake_parse_arguments(args
@@ -325,6 +341,24 @@ function(pxr_library NAME)
                 list(APPEND args_RESOURCE_FILES ${line})
             endif()
         endforeach()
+    endif()
+
+    if(PXR_ENABLE_JS_BINDINGS_SUPPORT)
+        if(args_JS_PUBLIC_CLASSES)
+            list(APPEND args_PUBLIC_CLASSES ${args_JS_PUBLIC_CLASSES})
+        endif()
+        if(args_JS_PUBLIC_HEADERS)
+            list(APPEND args_PUBLIC_HEADERS ${args_JS_PUBLIC_HEADERS})
+        endif()
+        if(args_JS_PRIVATE_CLASSES)
+            list(APPEND args_PRIVATE_CLASSES ${args_JS_PRIVATE_CLASSES})
+        endif()
+        if(args_JS_PRIVATE_HEADERS)
+            list(APPEND args_PRIVATE_HEADERS ${args_JS_PRIVATE_HEADERS})
+        endif()
+        if(args_JS_CPPFILES)
+            list(APPEND args_CPPFILES ${args_JS_CPPFILES})
+        endif()
     endif()
 
     # Collect libraries.
@@ -452,7 +486,13 @@ macro(pxr_static_library NAME)
 endmacro(pxr_static_library)
 
 macro(pxr_plugin NAME)
-    pxr_library(${NAME} TYPE "PLUGIN" ${ARGN})
+    if(PXR_ENABLE_JS_SUPPORT)
+        # Not ideal but dynamic linking is not supported yet in the usd build toolchain
+        message(STATUS "Building ${NAME} plugin as static library for emscripten support")
+        pxr_library(${NAME} TYPE "STATIC" ${ARGN})
+    else()
+        pxr_library(${NAME} TYPE "PLUGIN" ${ARGN})
+    endif()
 endmacro(pxr_plugin)
 
 function(pxr_setup_python)
@@ -486,7 +526,7 @@ function (pxr_create_test_module MODULE_NAME)
         return()
     endif()
 
-    if (NOT PXR_BUILD_TESTS) 
+    if (NOT PXR_BUILD_TESTS)
         return()
     endif()
 
@@ -545,6 +585,8 @@ function(pxr_build_test_shared_lib LIBRARY_NAME)
         return()
     endif()
 
+    _get_final_package_name("${PXR_PACKAGE}" FINAL_NAME)
+
     cmake_parse_arguments(bt
         ""
         "INSTALL_PREFIX;SOURCE_DIR"
@@ -600,12 +642,12 @@ function(pxr_build_test_shared_lib LIBRARY_NAME)
     # We always want this test to build after the package it's under, even if
     # it doesn't link directly. This ensures that this test is able to include
     # headers from its parent package.
-    add_dependencies(${LIBRARY_NAME} ${PXR_PACKAGE})
+    add_dependencies(${LIBRARY_NAME} ${FINAL_NAME})
 
     # Test libraries can include the private headers of their parent PXR_PACKAGE
     # library
     target_include_directories(${LIBRARY_NAME}
-        PRIVATE $<TARGET_PROPERTY:${PXR_PACKAGE},INCLUDE_DIRECTORIES>
+        PRIVATE $<TARGET_PROPERTY:${FINAL_NAME},INCLUDE_DIRECTORIES>
     )
 
     # XXX -- We shouldn't have to install to run tests.
@@ -628,6 +670,8 @@ function(pxr_build_test TEST_NAME)
         return()
     endif()
 
+    _get_final_package_name("${PXR_PACKAGE}" FINAL_NAME)
+
     cmake_parse_arguments(bt
         "" ""
         "LIBRARIES;CPPFILES"
@@ -638,6 +682,11 @@ function(pxr_build_test TEST_NAME)
         ${bt_CPPFILES}
     )
 
+    if (PXR_ENABLE_JS_BINDINGS_SUPPORT)
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-lembind")
+        target_link_options(${TEST_NAME} PRIVATE "SHELL:-lembind")
+    endif()
+
     # Turn PIC ON otherwise ArchGetAddressInfo() on Linux may yield
     # unexpected results.
     _get_folder("tests/bin" folder)
@@ -647,7 +696,7 @@ function(pxr_build_test TEST_NAME)
         	POSITION_INDEPENDENT_CODE ON
     )
     target_include_directories(${TEST_NAME}
-        PRIVATE $<TARGET_PROPERTY:${PXR_PACKAGE},INCLUDE_DIRECTORIES>
+        PRIVATE $<TARGET_PROPERTY:${FINAL_NAME},INCLUDE_DIRECTORIES>
     )
     _pxr_target_link_libraries(${TEST_NAME}
         ${bt_LIBRARIES}
@@ -660,9 +709,30 @@ function(pxr_build_test TEST_NAME)
     _pxr_install_rpath(rpath ${TEST_NAME})
 
     # XXX -- We shouldn't have to install to run tests.
-    install(TARGETS ${TEST_NAME}
-        RUNTIME DESTINATION "tests"
-    )
+    if(PXR_ENABLE_JS_SUPPORT)
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        install(
+            FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm
+            DESTINATION "tests"
+        )
+        install(CODE " \n
+            file(REMOVE ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME}) \n\
+            execute_process(\
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake \
+            COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/cmake/macros/prepend_line.py \
+                ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.js ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME} \
+            ) \n\
+            file(CHMOD ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME} \
+                PERMISSIONS \
+                    OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE \
+                    OWNER_READ GROUP_READ WORLD_READ \
+                    )")
+    else()
+        install(TARGETS ${TEST_NAME}
+                RUNTIME DESTINATION "tests"
+        )
+    endif()
 endfunction() # pxr_build_test
 
 function(pxr_test_scripts)

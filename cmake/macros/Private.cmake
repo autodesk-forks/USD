@@ -5,6 +5,27 @@
 # https://openusd.org/license.
 #
 include(Version)
+include(${CMAKE_CURRENT_LIST_DIR}/pxrStaticConfig.cmake)
+
+function(_get_all_dependencies target result)
+    get_target_property(dependencies ${target} INTERFACE_LINK_LIBRARIES)
+    # Split core libraries from non-core libraries.
+    _pxr_split_libraries("${dependencies}" internalDeps externalDeps)
+    if(NOT internalDeps)
+        return()
+    endif()
+
+    foreach(dependency IN LISTS internalDeps)
+        if(NOT ${dependency} IN_LIST ${result})
+            list(APPEND ${result} ${dependency})
+            _get_final_package_name("${dependency}" dependency_internal)
+            _get_all_dependencies(${dependency_internal} ${result})
+        endif()
+    endforeach()
+
+    # Set the result variable in the parent scope
+    set(${result} "${${result}}" PARENT_SCOPE)
+endfunction()
 
 # Copy headers to the build tree.  Under pxr/ the include paths match the
 # source tree paths but elsewhere they do not. Instead we use include
@@ -320,14 +341,26 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
                     ${resourceFile} ${plugInfoFile})
             endif()
             set(resourceFile "${plugInfoFile}")
+            set(EMSCRIPTEN_RESOURCE_FILE ${resourceFile})
+        else()
+            set(EMSCRIPTEN_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
         endif()
 
+        if (PXR_ENABLE_JS_SUPPORT)
+            string(REGEX REPLACE "^lib\\/" "/" LOCAL_PATH "${resourcesPath}")
+
+            list(APPEND EMSCRIPTEN_RESOURCE_FILES "--preload-file ${EMSCRIPTEN_RESOURCE_FILE}@${LOCAL_PATH}/${dirPath}/${destFileName}")
+        endif()
         install(
             FILES ${resourceFile}
             DESTINATION ${resourcesPath}/${dirPath}
             RENAME ${destFileName}
         )
     endforeach()
+
+    if (PXR_ENABLE_JS_SUPPORT)
+        set_property(TARGET ${NAME} PROPERTY EMSCRIPTEN_RESOURCES ${EMSCRIPTEN_RESOURCE_FILES})
+    endif()
 endfunction() # _install_resource_files
 
 function(_install_pyside_ui_files LIBRARY_NAME)
@@ -807,8 +840,27 @@ endfunction()
 #      always want those.
 #
 function(_pxr_target_link_libraries NAME)
+    set(options
+        IS_STATIC_PLUGIN
+    )
+    set(oneValueArgs
+    )
+    set(multiValueArgs
+    )
+    cmake_parse_arguments(args
+        "${options}"
+        "${oneValueArgs}"
+        "${multiValueArgs}"
+        ${ARGN}
+    )
+
     # Split core libraries from non-core libraries.
-    _pxr_split_libraries("${ARGN}" internal external)
+    _pxr_split_libraries("${args_UNPARSED_ARGUMENTS}" internal external)
+
+    set(NAME_INTERNAL "${NAME}")
+    if (args_IS_STATIC_PLUGIN)
+        set(NAME_INTERNAL "${NAME}_internal")
+    endif()
 
     get_property(type TARGET ${NAME} PROPERTY TYPE)
     if("${type}" STREQUAL "OBJECT_LIBRARY")
@@ -945,7 +997,9 @@ function(_pxr_target_link_libraries NAME)
                     list(APPEND final -WHOLEARCHIVE:$<TARGET_FILE:${lib}>)
                     list(APPEND final ${lib})
                 elseif(CMAKE_COMPILER_IS_GNUCXX)
-                    list(APPEND final -Wl,--whole-archive ${lib} -Wl,--no-whole-archive)
+                    list(APPEND final "$<LINK_LIBARAY:WHOLE_ARCHIVE,${lib}")
+                elseif(PXR_ENABLE_JS_SUPPORT)
+                    list(APPEND final ${lib})
                 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
                     list(APPEND final -Wl,-force_load ${lib})
                 else()
@@ -955,7 +1009,7 @@ function(_pxr_target_link_libraries NAME)
             endforeach()
             set(internal ${final})
         endif()
-        target_link_libraries(${NAME}
+        target_link_libraries(${NAME_INTERNAL}
             ${internal}
             ${external}
             ${PXR_MALLOC_LIBRARY}
@@ -1180,6 +1234,8 @@ function(_pxr_library NAME)
         ${ARGN}
     )
 
+    _get_final_package_name("${NAME}" NAME_INTERNAL)
+
     #
     # Set up the target.
     #
@@ -1254,6 +1310,19 @@ function(_pxr_library NAME)
             ${args_PUBLIC_HEADERS}
             ${args_PRIVATE_HEADERS}
         )
+
+    elseif(args_TYPE STREQUAL "STATIC" AND PXR_ENABLE_JS_SUPPORT)
+        # Building an explicitly static library.
+        add_library(${NAME_INTERNAL}
+            STATIC
+            ${args_CPPFILES}
+            ${args_PUBLIC_HEADERS}
+            ${args_PRIVATE_HEADERS}
+        )
+        add_library(${NAME}
+            INTERFACE
+        )
+        target_link_libraries(${NAME} INTERFACE "$<LINK_LIBRARY:LOAD_PLUGIN,${NAME}_internal>")
 
     elseif(args_TYPE STREQUAL "STATIC")
         # Building an explicitly static library.
@@ -1365,16 +1434,17 @@ function(_pxr_library NAME)
     # PIC is required by shared libraries. It's on for static libraries
     # because we'll likely link them into a shared library.
     _get_folder("" folder)
-    set_target_properties(${NAME}
+    set_target_properties(${NAME_INTERNAL}
         PROPERTIES
             FOLDER "${folder}"
             POSITION_INDEPENDENT_CODE ON
             IMPORT_PREFIX "${args_PREFIX}"            
             PREFIX "${args_PREFIX}"
             SUFFIX "${args_SUFFIX}"
+            OUTPUT_NAME ${NAME}
     )
 
-    target_compile_definitions(${NAME}
+    target_compile_definitions(${NAME_INTERNAL}
         PUBLIC
             ${apiPublic}
         PRIVATE
@@ -1397,7 +1467,7 @@ function(_pxr_library NAME)
             ${PXR_PREFIX}
     )
 
-    target_include_directories(${NAME}
+    target_include_directories(${NAME_INTERNAL}
         PRIVATE
             "${PROJECT_BINARY_DIR}/include"
             "${PROJECT_BINARY_DIR}/${PXR_INSTALL_SUBDIR}/include"
@@ -1410,7 +1480,7 @@ function(_pxr_library NAME)
     # as system include directories so that compiler warnings from these
     # headers are ignored, since we have no control over the contents
     # of those headers.
-    target_include_directories(${NAME}
+    target_include_directories(${NAME_INTERNAL}
         SYSTEM
         PUBLIC
             ${args_INCLUDE_DIRS}
@@ -1432,7 +1502,11 @@ function(_pxr_library NAME)
     endif()
 
     # XXX -- May want some plugins to be baked into monolithic.
-    _pxr_target_link_libraries(${NAME} ${args_LIBRARIES})
+    set(ADDITIONAL_ARGS )
+    if(PXR_ENABLE_JS_SUPPORT)
+        list(APPEND ADDITIONAL_ARGS IS_STATIC_PLUGIN)
+    endif()
+    _pxr_target_link_libraries(${NAME} ${ADDITIONAL_ARGS} ${args_LIBRARIES})
 
     # Rpath has libraries under the third party prefix and the install prefix.
     # The former is for helper libraries for a third party application and
@@ -1440,7 +1514,7 @@ function(_pxr_library NAME)
     _pxr_init_rpath(rpath "${libInstallPrefix}")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/${PXR_INSTALL_SUBDIR}/lib")
     _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
-    _pxr_install_rpath(rpath ${NAME})
+    _pxr_install_rpath(rpath ${NAME_INTERNAL})
 
     #
     # Set up the install.
@@ -1484,6 +1558,14 @@ function(_pxr_library NAME)
                 ARCHIVE DESTINATION ${libInstallPrefix}
                 RUNTIME DESTINATION ${libInstallPrefix}
             )
+            if (PXR_ENABLE_JS_SUPPORT)
+                install(
+                    TARGETS ${NAME_INTERNAL}
+                    LIBRARY DESTINATION ${libInstallPrefix}
+                    ARCHIVE DESTINATION ${libInstallPrefix}
+                    RUNTIME DESTINATION ${libInstallPrefix}
+                )
+            endif()
             if(WIN32)
                 install(
                     FILES $<TARGET_PDB_FILE:${NAME}>
@@ -1515,6 +1597,15 @@ function(_pxr_library NAME)
                 ARCHIVE DESTINATION ${libInstallPrefix}
                 RUNTIME DESTINATION ${libInstallPrefix}
             )
+            if (PXR_ENABLE_JS_SUPPORT)
+                install(
+                    TARGETS ${NAME_INTERNAL}
+                    EXPORT pxrTargets
+                    LIBRARY DESTINATION ${libInstallPrefix}
+                    ARCHIVE DESTINATION ${libInstallPrefix}
+                    RUNTIME DESTINATION ${libInstallPrefix}
+                )
+            endif()
         endif()
     
         if(NOT isPlugin)
@@ -1538,3 +1629,10 @@ function(_pxr_library NAME)
         endif()
     endif()
 endfunction() # _pxr_library
+
+function(_get_final_package_name PXR_PACKAGE FINAL_PXR_PACKAGE)
+    set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}" PARENT_SCOPE)
+    if(PXR_ENABLE_JS_SUPPORT)
+        set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}_internal" PARENT_SCOPE)
+    endif ()
+endfunction()
