@@ -483,8 +483,6 @@ ArchGetFileLength(FILE *file)
     struct stat buf;
     return fstat(fileno(file), &buf) < 0 ? -1 :
         static_cast<int64_t>(buf.st_size);
-#elif defined (ARCH_OS_WINDOWS)
-    return _GetFileLength(_FileToWinHANDLE(file));
 #else
 #error Unknown system architecture
 #endif

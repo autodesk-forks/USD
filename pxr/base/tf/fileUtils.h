@@ -235,6 +235,11 @@ TfReadDir(std::string const &dirPath,
 TF_API
 bool TfTouchFile(std::string const &fileName, bool create=true);
 
+#ifdef ARCH_OS_WASM_VM
+    #define ACCESSPERMS 0666
+    #define DEFFILEMODE 0666
+#endif
+
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // PXR_BASE_TF_FILE_UTILS_H

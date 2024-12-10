@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 
 project(usd)
 
-if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT EMSCRIPTEN)
     if (WIN32)
         message(FATAL_ERROR "Compiler does not support 64-bit builds. "
                 "If you are using Visual Studio, make sure you are in the "

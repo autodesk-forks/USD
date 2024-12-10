@@ -250,3 +250,8 @@ if (${PXR_BUILD_PYTHON_DOCUMENTATION})
         set(PXR_BUILD_PYTHON_DOCUMENTATION "OFF" CACHE BOOL "" FORCE)
     endif()
 endif()
+
+if (EMSCRIPTEN)
+    MESSAGE(STATUS "Setting PXR_BUILD_EXEC=OFF because they are not supported on Wasm")
+    set(PXR_BUILD_EXEC "OFF")
+endif()

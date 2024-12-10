@@ -27,6 +27,12 @@ if(APPLE)
     endif()
 endif()
 
+if(EMSCRIPTEN)
+    set(EMSCRIPTEN_COMPILE_FLAGS "-sMAXIMUM_MEMORY=4GB -fexceptions")
+    add_compile_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS}")
+    add_link_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS} -sALLOW_MEMORY_GROWTH=1")
+endif()
+
 # Allow local includes from source directory.
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
