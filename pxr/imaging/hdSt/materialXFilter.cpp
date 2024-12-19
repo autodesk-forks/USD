@@ -1275,16 +1275,18 @@ _GenerateMaterialXShader(
         (bindlessTexturesEnabled ? "" : "not"), apiName.GetText(),
         materialTagToken.GetText());
 
-    // Import LobePruned
-    stdLibraries->importLibrary(HdSt_GetLobePrunerLibrary());
-
     // Create the MaterialX Document from the HdMaterialNetwork
     const mx::DocumentPtr& stdLibraries = HdMtlxStdLibraries();
+
+    const auto libraries = mx::createDocument();
+    libraries->importLibrary(HdSt_GetLobePrunerLibrary());
+    libraries->importLibrary(stdLibraries);
+
     HdMtlxTexturePrimvarData hdMtlxData;
     const mx::DocumentPtr mtlxDoc =
         HdMtlxCreateMtlxDocumentFromHdNetwork(
             hdNetwork, terminalNode, terminalNodePath, materialPath,
-            stdLibraries, &hdMtlxData);
+            libraries, &hdMtlxData);
 
     // Add domelight and other textures to mxHdInfo so the proper entry points
     // get generated in MaterialXShaderGen
