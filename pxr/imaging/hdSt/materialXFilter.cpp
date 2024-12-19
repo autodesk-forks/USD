@@ -1243,8 +1243,9 @@ _GenerateMaterialXShader(
     const mx::DocumentPtr& stdLibraries = HdMtlxStdLibraries();
     const mx::FileSearchPath& searchPaths = HdMtlxSearchPaths();
 
-    // Import LobePruned
-    stdLibraries->importLibrary(HdSt_GetLobePrunerLibrary());
+    const auto libraries = mx::createDocument();
+    libraries->importLibrary(HdSt_GetLobePrunerLibrary());
+    libraries->importLibrary(stdLibraries);
 
     // Create the MaterialX Document from the HdMaterialNetwork
     HdSt_MxShaderGenInfo mxHdInfo;
@@ -1252,7 +1253,7 @@ _GenerateMaterialXShader(
     const mx::DocumentPtr mtlxDoc =
         HdMtlxCreateMtlxDocumentFromHdNetwork(
             hdNetwork, terminalNode, terminalNodePath, materialPath,
-            stdLibraries, &hdMtlxData);
+            libraries, &hdMtlxData);
 
     // Add domelight and other textures to mxHdInfo so the proper entry points
     // get generated in MaterialXShaderGen

@@ -51,6 +51,7 @@ const auto kZeroMultiplyValueMap = std::map<std::string, std::string> {
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     ((ND_PREFIX, "LPOPTIND_"))
+    ((NG_PREFIX, "LPOPTING_"))
     ((DARK_BASE, "lobe_pruner_optimization_dark_base_bsdf"))
     ((DARK_LAYER, "lobe_pruner_optimization_dark_layer_bsdf"))
     ((ND_DARK_BASE, "ND_lobe_pruner_optimization_dark_base_bsdf"))
@@ -105,13 +106,14 @@ public:
     TfToken GetOptimizedNodeId(const HdMaterialNode2& node);
 
 private:
+    void _OptimizeLibrary(const MaterialX::DocumentPtr& library);
     bool _IsLobeInput(const mx::InputPtr& input, const mx::NodeDefPtr& nd) const;
     void _AddOptimizableValue(
         float                   value,
         const mx::InputPtr&     input,
         const mx::NodeGraphPtr& ng,
         const mx::NodeDefPtr&   nd);
-    void
+    TfToken
          _EnsureLibraryHasOptimizedShader(const TfToken& nodeDefName, const std::string& flags);
     void _OptimizeZeroValue(
         mx::NodeGraphPtr&          optimizedNodeGraph,
@@ -216,6 +218,9 @@ void LobePrunerImpl::Initialize(const mx::DocumentPtr& library)
             }
         }
     }
+
+    // See if we can optimize deeper into NodeGraphs containing optimizable nodes.
+    _OptimizeLibrary(_library);
 }
 
 bool LobePrunerImpl::_IsLobeInput(const mx::InputPtr& input, const mx::NodeDefPtr& nd) const
@@ -236,6 +241,91 @@ bool LobePrunerImpl::_IsLobeInput(const mx::InputPtr& input, const mx::NodeDefPt
         return false;
     }
     return true;
+}
+
+void LobePrunerImpl::_OptimizeLibrary(const MaterialX::DocumentPtr& library)
+{
+    if (!_library || _prunerData.empty()) {
+        return;
+    }
+
+    std::set<std::string> allDefinedNodeGraphs;
+    // Go thru all NodeGraphs found in the library that have an associated NodeDef:
+    for (const auto& ng : library->getNodeGraphs()) {
+        if (ng->hasNodeDefString()) {
+            allDefinedNodeGraphs.insert(ng->getName());
+        }
+    }
+    for (const auto& impl : library->getImplementations()) {
+        if (impl->hasNodeGraph()) {
+            allDefinedNodeGraphs.insert(impl->getNodeGraph());
+        }
+    }
+
+    for (const auto& ngName : allDefinedNodeGraphs) {
+        const auto ng = library->getNodeGraph(ngName);
+        // Go thru all the nodes of that NodeGraph
+        for (const auto& node : ng->getNodes()) {
+            // Can this node be optimized?
+            const auto& nd = node->getNodeDef();
+            if (!nd) {
+                continue;
+            }
+
+            const auto ndName = PXR_NS::TfToken(nd->getName());
+            const auto ndIt = _prunerData.find(ndName);
+            if (ndIt == _prunerData.end()) {
+                continue;
+            }
+
+            // This NodeGraph contains an optimizable embedded surface shader node.
+            std::string flags(ndIt->second._attributeData.size(), 'x');
+
+            bool canOptimize = false;
+
+            auto attrIt = ndIt->second._attributeData.cbegin();
+            for (size_t i = 0; attrIt != ndIt->second._attributeData.cend(); ++attrIt, ++i) {
+                const auto nodeinput = node->getActiveInput(attrIt->first);
+                float      inputValue = 0.5F;
+                if (nodeinput) {
+                    // Can not optimize if connected in any way.
+                    if (nodeinput->hasNodeName() || nodeinput->hasOutputString()
+                        || nodeinput->hasInterfaceName()) {
+                        continue;
+                    }
+                    inputValue = nodeinput->getValue()->asA<float>();
+                } else {
+                    const auto defInput = nd->getActiveInput(attrIt->first);
+                    inputValue = defInput->getValue()->asA<float>();
+                }
+
+                for (const auto& optimizableValue : attrIt->second) {
+                    if (optimizableValue.first == inputValue) {
+                        if (inputValue == 0.0F) {
+                            flags[i] = '0';
+                        } else {
+                            flags[i] = '1';
+                        }
+                        canOptimize = true;
+                    }
+                }
+            }
+
+            if (canOptimize) {
+                const auto optimizedNodeId = _EnsureLibraryHasOptimizedShader(ndName, flags);
+                const auto optimizedNodeDef = _library->getNodeDef(optimizedNodeId);
+                // Replace the node with an optimized one:
+                const auto nsPrefix = optimizedNodeDef->hasNamespace()
+                    ? optimizedNodeDef->getNamespace() + ":"
+                    : std::string {};
+
+                node->setCategory(nsPrefix + optimizedNodeDef->getNodeString());
+                if (node->hasNodeDefString()) {
+                    node->setNodeDefString(optimizedNodeDef->getName());
+                }
+            }
+        }
+    }
 }
 
 void LobePrunerImpl::_AddOptimizableValue(
@@ -307,30 +397,36 @@ TfToken LobePrunerImpl::GetOptimizedNodeId(const HdMaterialNode2& node)
     }
 
     if (canOptimize) {
-        _EnsureLibraryHasOptimizedShader(node.nodeTypeId, flags);
-        return TfToken(
-            _tokens->ND_PREFIX.GetString() + nodeDef->GetFamily().GetString() + "_" + flags + "_surfaceshader");
+        return _EnsureLibraryHasOptimizedShader(node.nodeTypeId, flags);
     }
 
     return retVal;
 }
 
-void LobePrunerImpl::_EnsureLibraryHasOptimizedShader(
+TfToken LobePrunerImpl::_EnsureLibraryHasOptimizedShader(
     const TfToken& nodeDefName,
     const std::string&     flags)
 {
     const auto ndIt = _prunerData.find(nodeDefName);
     if (ndIt == _prunerData.end()) {
-        return;
+        return {};
     }
 
-    const auto        originalNodeDef = _library->getNodeDef(nodeDefName.GetString());
-    const auto        originalNodeGraph = _library->getNodeGraph(ndIt->second._nodeGraphName);
-    const std::string optimizedNodeName = originalNodeDef->getNodeString() + "_" + flags;
-    const std::string optimizedNodeDefName = _tokens->ND_PREFIX.GetString() + optimizedNodeName + "_surfaceshader";
+    const auto originalNodeDef = _library->getNodeDef(nodeDefName.GetString());
+    const auto originalNodeGraph = _library->getNodeGraph(ndIt->second._nodeGraphName);
+    const auto nsPrefix = originalNodeDef->hasNamespace()
+        ? originalNodeDef->getNamespace() + mx::NAME_PREFIX_SEPARATOR
+        : std::string {};
+    auto optimizedNodeName = originalNodeDef->getNodeString() + "_" + flags;
+    if (!nsPrefix.empty() && optimizedNodeName.rfind(nsPrefix, 0) == 0) {
+        optimizedNodeName = optimizedNodeName.substr(nsPrefix.size());
+    }
+    const auto        optimizedNodeNameWithNS = nsPrefix + optimizedNodeName;
+    const std::string optimizedNodeDefName
+        = nsPrefix + _tokens->ND_PREFIX.GetString() + optimizedNodeName + "_surfaceshader";
     if (_library->getNodeDef(optimizedNodeDefName)) {
         // Already there
-        return;
+        return TfToken{optimizedNodeDefName};
     }
 
     auto optimizedNodeDef
@@ -339,7 +435,8 @@ void LobePrunerImpl::_EnsureLibraryHasOptimizedShader(
     optimizedNodeDef->setSourceUri("");
     optimizedNodeDef->setNodeString(optimizedNodeName);
 
-    auto optimizedNodeGraph = _library->addNodeGraph("NG_" + optimizedNodeName + "_surfaceshader");
+    auto optimizedNodeGraph
+        = _library->addNodeGraph(nsPrefix + _tokens->NG_PREFIX.GetString() + optimizedNodeName + "_surfaceshader");
     optimizedNodeGraph->copyContentFrom(originalNodeGraph);
     optimizedNodeGraph->setSourceUri("");
     optimizedNodeGraph->setNodeDefString(optimizedNodeDefName);
@@ -365,6 +462,7 @@ void LobePrunerImpl::_EnsureLibraryHasOptimizedShader(
         default: continue;
         }
     }
+    return TfToken{optimizedNodeDefName};
 }
 
 void LobePrunerImpl::_OptimizeZeroValue(
