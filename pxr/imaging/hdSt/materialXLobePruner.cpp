@@ -68,13 +68,13 @@ class LobePrunerImpl
     //            nodeGraphName,
     //            map< attributeName,       // AttributeMap
     //                map< attributeValue,  // OptimizableValueMap
-    //                     NodeVector
+    //                     NodeSet
     //                >
     //            >
     //        }
     //    >
-    using NodeVector = std::vector<TfToken>;
-    using OptimizableValueMap = std::map<float, NodeVector>;
+    using NodeSet = TfToken::HashSet;
+    using OptimizableValueMap = std::map<float, NodeSet>;
     // We want attributes alphabetically sorted:
     using AttributeMap = std::map<TfToken, OptimizableValueMap>;
     struct NodeDefData
@@ -84,7 +84,7 @@ class LobePrunerImpl
     };
 
     // Also helps if we have a reverse connection map from source node to dest node:
-    using Destinations = std::vector<std::string>;
+    using Destinations = std::set<std::string>;
     using ReverseCnxMap = std::map<std::string, Destinations>;
 
 public:
@@ -137,7 +137,7 @@ private:
         mx::NodePtr&       node,
         const std::string& darkNodeName,
         const std::string& darkNodeDefName) const;
-
+    void _UpdateReverseMap(ReverseCnxMap& reverseMap, const std::string& nameToRemove) const;
     std::unordered_map<TfToken, NodeDefData, TfToken::HashFunctor> _prunerData;
     mx::DocumentPtr                                                _library;
 };
@@ -348,10 +348,10 @@ void LobePrunerImpl::_AddOptimizableValue(
     auto& valueMap = attrMap._attributeData.find(interfaceName)->second;
 
     if (!valueMap.count(value)) {
-        valueMap.emplace(value, NodeVector {});
+        valueMap.emplace(value, NodeSet {});
     }
 
-    valueMap.find(value)->second.push_back(TfToken(input->getParent()->getName()));
+    valueMap.find(value)->second.insert(TfToken(input->getParent()->getName()));
 }
 
 TfToken LobePrunerImpl::GetOptimizedNodeId(const HdMaterialNode2& node)
@@ -449,7 +449,7 @@ TfToken LobePrunerImpl::_EnsureLibraryHasOptimizedShader(
                 if (!reverseMap.count(sourceNodeName)) {
                     reverseMap.emplace(sourceNodeName, Destinations {});
                 }
-                reverseMap.find(sourceNodeName)->second.push_back(node->getName());
+                reverseMap.find(sourceNodeName)->second.insert(node->getName());
             }
         }
     }
@@ -533,38 +533,38 @@ void LobePrunerImpl::_OptimizeMixNode(
     if (!bgInput) {
         return;
     }
-    for (const auto& destNodeName : reverseMap.find(mixNode->getName())->second) {
-        auto destNode = optimizedNodeGraph->getNode(destNodeName);
-        if (!destNode) {
-            return;
-        }
-        for (auto input : destNode->getInputs()) {
-            if (input->getNodeName() == mixNode->getName()) {
-                input->removeAttribute(mx::PortElement::NODE_NAME_ATTRIBUTE);
-                if (bgInput->hasNodeName()) {
-                    input->setNodeName(bgInput->getNodeName());
-                    auto& nodeVector = reverseMap.find(bgInput->getNodeName())->second;
-                    nodeVector.push_back(destNodeName);
-                    nodeVector.erase(
-                        std::remove_if(
-                            nodeVector.begin(),
-                            nodeVector.end(),
-                            [mixNode](const std::string& s) { return s == mixNode->getName(); }),
-                        nodeVector.end());
-                }
-                if (bgInput->hasInterfaceName()) {
-                    input->setInterfaceName(bgInput->getInterfaceName());
-                }
-                if (bgInput->hasOutputString()) {
-                    input->setOutputString(bgInput->getOutputString());
-                }
-                if (bgInput->hasValueString()) {
-                    input->setValueString(bgInput->getValueString());
+    const auto nodesToUpdateIt = reverseMap.find(mixNode->getName());
+    if (nodesToUpdateIt != reverseMap.end()) {
+        for (const auto& destNodeName : nodesToUpdateIt->second) {
+            auto destNode = optimizedNodeGraph->getNode(destNodeName);
+            if (!destNode) {
+                return;
+            }
+            for (auto input : destNode->getInputs()) {
+                if (input->getNodeName() == mixNode->getName()) {
+                    input->removeAttribute(mx::PortElement::NODE_NAME_ATTRIBUTE);
+                    if (bgInput->hasNodeName()) {
+                        input->setNodeName(bgInput->getNodeName());
+                        const auto bgInputsToUpdateIt = reverseMap.find(bgInput->getNodeName());
+                        if (bgInputsToUpdateIt != reverseMap.end()) {
+                            bgInputsToUpdateIt->second.insert(destNodeName);
+                        }
+                    }
+                    if (bgInput->hasInterfaceName()) {
+                        input->setInterfaceName(bgInput->getInterfaceName());
+                    }
+                    if (bgInput->hasOutputString()) {
+                        input->setOutputString(bgInput->getOutputString());
+                    }
+                    if (bgInput->hasValueString()) {
+                        input->setValueString(bgInput->getValueString());
+                    }
                 }
             }
         }
     }
     optimizedNodeGraph->removeNode(mixNode->getName());
+    _UpdateReverseMap(reverseMap, mixNode->getName());
 }
 
 void LobePrunerImpl::_OptimizeMultiplyNode(
@@ -573,19 +573,23 @@ void LobePrunerImpl::_OptimizeMultiplyNode(
     ReverseCnxMap&    reverseMap) const
 {
     // Result will be a zero value of the type it requests:
-    for (const auto& destNodeName : reverseMap.find(node->getName())->second) {
-        auto destNode = optimizedNodeGraph->getNode(destNodeName);
-        for (auto input : destNode->getInputs()) {
-            if (input->getNodeName() == node->getName()) {
-                input->removeAttribute(mx::PortElement::NODE_NAME_ATTRIBUTE);
-                const auto defaultValueIt = kZeroMultiplyValueMap.find(input->getType());
-                if (defaultValueIt != kZeroMultiplyValueMap.end()) {
-                    input->setValueString(defaultValueIt->second);
+    const auto nodesToUpdateIt = reverseMap.find(node->getName());
+    if (nodesToUpdateIt != reverseMap.end()) {
+        for (const auto& destNodeName : nodesToUpdateIt->second) {
+            auto destNode = optimizedNodeGraph->getNode(destNodeName);
+            for (auto input : destNode->getInputs()) {
+                if (input->getNodeName() == node->getName()) {
+                    input->removeAttribute(mx::PortElement::NODE_NAME_ATTRIBUTE);
+                    const auto defaultValueIt = kZeroMultiplyValueMap.find(input->getType());
+                    if (defaultValueIt != kZeroMultiplyValueMap.end()) {
+                        input->setValueString(defaultValueIt->second);
+                    }
                 }
             }
         }
     }
     optimizedNodeGraph->removeNode(node->getName());
+    _UpdateReverseMap(reverseMap, node->getName());
 }
 
 void LobePrunerImpl::_OptimizePbrNode(
@@ -601,6 +605,22 @@ void LobePrunerImpl::_OptimizePbrNode(
     node->setCategory(darkNodeName);
     if (node->hasNodeDefString()) {
         node->setNodeDefString(darkNodeDefName);
+    }
+}
+
+void LobePrunerImpl::_UpdateReverseMap(ReverseCnxMap& reverseMap, const std::string& nameToRemove)
+    const
+{
+    // Need to remove anything leading to that deleted node:
+    std::vector<std::string> emptyEntries;
+    for (auto& mapEntry : reverseMap) {
+        mapEntry.second.erase(nameToRemove);
+        if (mapEntry.second.empty()) {
+            emptyEntries.push_back(mapEntry.first);
+        }
+    }
+    for (const auto& emptyEntry : emptyEntries) {
+        reverseMap.erase(emptyEntry);
     }
 }
 
