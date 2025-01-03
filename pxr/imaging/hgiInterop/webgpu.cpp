@@ -147,7 +147,7 @@ _ConvertHgiTextureToOpenGL(
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-HgiInteropCpu::HgiInteropCpu(Hgi* hgi)
+HgiInteropWebGPU::HgiInteropWebGPU(Hgi* hgi)
     : _hgi(static_cast<Hgi*>(hgi))
     , _vs(0)
     , _fsNoDepth(0)
@@ -168,7 +168,7 @@ HgiInteropCpu::HgiInteropCpu(Hgi* hgi)
     TF_VERIFY(glGetError() == GL_NO_ERROR);
 }
 
-HgiInteropCpu::~HgiInteropCpu()
+HgiInteropWebGPU::~HgiInteropWebGPU()
 {
     glDeleteShader(_vs);
     glDeleteShader(_fsNoDepth);
@@ -186,7 +186,7 @@ HgiInteropCpu::~HgiInteropCpu()
 }
 
 void
-HgiInteropCpu::CompositeToInterop(
+HgiInteropWebGPU::CompositeToInterop(
     HgiTextureHandle const &color,
     HgiTextureHandle const &depth,
     VtValue const &framebuffer,

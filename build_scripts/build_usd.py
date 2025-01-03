@@ -2742,8 +2742,6 @@ if context.buildOneTBB or context.targetWasm:
     TBB = ONETBB
 
 requiredDependencies = [TBB]
-if not context.targetWasm:
-    requiredDependencies += [ZLIB]
 
 if context.targetWasm and context.buildTests:
     requiredDependencies += [THREE]
@@ -2799,7 +2797,7 @@ if context.buildAnimXTests:
 # our own. This avoids potential issues where a host application
 # loads an older version of zlib than the one we'd build and link
 # our libraries against.
-if Linux() and ZLIB in requiredDependencies:
+if (Linux() or context.targetWasm) and ZLIB in requiredDependencies:
     requiredDependencies.remove(ZLIB)
 
 # TODO: support to DAWN on Linux

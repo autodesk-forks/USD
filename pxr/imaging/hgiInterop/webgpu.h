@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef PXR_IMAGING_HGIINTEROP_HGIINTEROPCPU_H
-#define PXR_IMAGING_HGIINTEROP_HGIINTEROPCPU_H
+#ifndef PXR_IMAGING_HGIINTEROP_HgiInteropWebGPU_H
+#define PXR_IMAGING_HGIINTEROP_HgiInteropWebGPU_H
 
 #include "pxr/pxr.h"
 #include "pxr/base/gf/vec4i.h"
@@ -22,14 +22,14 @@ class VtValue;
 ///
 /// Provides Some other graphic backend to copy texture to the CPU and then map it to GL.
 ///
-class HgiInteropCpu final
+class HgiInteropWebGPU final
 {
 public:
     HGIINTEROP_API
-    HgiInteropCpu(Hgi* hgi);
+    HgiInteropWebGPU(Hgi* hgi);
 
     HGIINTEROP_API
-    ~HgiInteropCpu();
+    ~HgiInteropWebGPU();
 
     /// Composite provided color (and optional depth) textures over app's
     /// framebuffer contents.
@@ -41,7 +41,7 @@ public:
         GfVec4i const& viewport);
 
 private:
-    HgiInteropCpu() = delete;
+    HgiInteropWebGPU() = delete;
 
     Hgi* _hgi;
     uint32_t _vs;
