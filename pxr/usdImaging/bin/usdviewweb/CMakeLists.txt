@@ -38,6 +38,7 @@ if (EMSCRIPTEN)
         -s PTHREAD_POOL_SIZE=8 \
         -s WASM_BIGINT \
         -s NO_EXIT_RUNTIME=1 \
+        -lidbfs.js \
     ")
     if(PXR_WASM_NODE)
         target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:-s NODERAWFS=0")

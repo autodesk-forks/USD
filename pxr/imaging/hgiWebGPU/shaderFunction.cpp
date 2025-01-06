@@ -22,7 +22,6 @@
 // language governing permissions and limitations under the Apache License.
 //
 #include "pxr/imaging/hgiWebGPU/shaderFunction.h"
-
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/imaging/hgiWebGPU/hgi.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
@@ -31,10 +30,7 @@
 #include "pxr/imaging/hgiWebGPU/shaderGenerator.h"
 
 #include <sstream>
-
-#if defined EMSCRIPTEN
-#include <emscripten.h>
-#endif
+#include <fstream>
 
 // tint include depends on this defines to populate the appropriate namespace
 #define TINT_BUILD_SPV_READER 1
@@ -43,8 +39,59 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_ENV_SETTING(HGIWEBGPU_ENABLE_WGSL, 0,
-    "Enable WGSL shader code compilation");
+TF_DEFINE_ENV_SETTING(HGIWEBGPU_SHADER_CACHE_DIR, "",
+    "Define a directory to cache shaders transpiled from GLSL to WGSL."
+    "If not set, the shaders will be compiled at runtime."
+    "In the case of emscripten, the application is responsible for"
+    "mounting the directory to the virtual filesystem."
+    "A use case that persists sessions is to use the indexedDB."
+    "For example, in the preload.js script:"
+    "FS.mkdir(\"/<HGIWEBGPU_SHADER_CACHE_DIR>\");\n"
+    "    FS.mount(IDBFS, {autoPersist: true}, \"/<HGIWEBGPU_SHADER_CACHE_DIR>\");\n"
+    "    return FS.syncfs(true, function (err) {\n"
+    "        if (err) {\n"
+    "            console.error(\"Error syncing filesystem:\", err);\n"
+    "        } else {\n"
+    "            console.log(\"Filesystem synced.\");\n"
+    "        }\n"
+    "    });"
+    "Notice that the directory must match the one defined in the env setting."
+    "In case of using this method, you also need to pass the -lidbfs.js linked flag to the application.");
+
+std::string GlslToWgsl(
+        const char *shaderCode, HgiShaderStage stage, std::string *errors, const char* debugLbl)
+{
+    std::string wgslCode;
+    // Compile shader and capture errors
+    std::vector<unsigned int> spirvData;
+    bool result = HgiWebGPUCompileGLSL(
+            debugLbl,
+            &shaderCode,
+            1,
+            stage,
+            &spirvData,
+            errors);
+
+    if (result) {
+        //// SPIR-V
+        tint::spirv::reader::Options readerOptions{};
+        readerOptions.allow_non_uniform_derivatives = true;
+        tint::Program program = tint::spirv::reader::Read(spirvData, readerOptions);
+        if (!program.IsValid()) {
+            TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + program.Diagnostics().Str() + "\n");
+            return wgslCode;
+        }
+
+        tint::wgsl::writer::Options options{};
+        auto tintResult = tint::wgsl::writer::Generate(program, options);
+        if (tintResult == tint::Success) {
+            wgslCode = tintResult->wgsl;
+        } else {
+            *errors = tintResult.Failure().reason.Str();
+        }
+    }
+    return wgslCode;
+}
 
 void HgiWebGPUShaderFunction::_CreateBuffersBindingGroupLayoutEntries(
         std::vector<HgiShaderFunctionBufferDesc> const &buffers,
@@ -136,7 +183,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
 
     wgpu::ShaderModuleWGSLDescriptor wgslDesc;
     wgpu::ShaderModuleDescriptor shaderModuleDesc;
-#if defined(EMSCRIPTEN)
+#if defined(ARCH_OS_WASM_VM)
     wgslDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
 #else
     wgslDesc.sType = wgpu::SType::ShaderSourceWGSL;
@@ -145,53 +192,55 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     shaderModuleDesc.nextInChain = &wgslDesc;
     std::string wgslCode;
 
-    if (TfGetEnvSetting(HGIWEBGPU_ENABLE_WGSL)) {
-        wgslDesc.code = desc.shaderCode;
+    size_t wgslHash = 0;
+    std::string wgslCachePath;
+    std::filesystem::path cacheDir = TfGetEnvSetting(HGIWEBGPU_SHADER_CACHE_DIR);
+    const char* debugLbl = _descriptor.debugName.empty() ?
+                           "unknown" : _descriptor.debugName.c_str();
+
+    if (cacheDir.empty()) {
+        wgslCode = GlslToWgsl(shaderCode, desc.shaderStage, &_errors, debugLbl);
     } else {
-        const char* debugLbl = _descriptor.debugName.empty() ?
-            "unknown" : _descriptor.debugName.c_str();
-        // Compile shader and capture errors
-        std::vector<unsigned int> spirvData;
-        bool result = HgiWebGPUCompileGLSL(
-                debugLbl,
-                &shaderCode,
-                1,
-                desc.shaderStage,
-                &spirvData,
-                &_errors);
-
-        if (result) {
-            //// SPIR-V
-            tint::spirv::reader::Options readerOptions{};
-            readerOptions.allow_non_uniform_derivatives = true;
-            tint::Program program = tint::spirv::reader::Read(spirvData, readerOptions);
-            if (!program.IsValid()) {
-                TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + program.Diagnostics().Str() + "\n");
-                return;
-            }
-
-            tint::wgsl::writer::Options options{};
-            auto tintResult = tint::wgsl::writer::Generate(program, options);
-            if (tintResult == tint::Success) {
-                wgslCode = tintResult->wgsl;
+        wgslHash = TfHashCString()(shaderCode);
+        std::filesystem::path wgslFileName = std::to_string(wgslHash) + "_" + _descriptor.debugName + ".wgsl";
+        wgslCachePath = cacheDir / wgslFileName;
+        try {
+            if (std::filesystem::exists(wgslCachePath)) {
+                std::ifstream wgslFile(wgslCachePath);
+                if (wgslFile.is_open()) {
+                    std::stringstream buffer;
+                    buffer << wgslFile.rdbuf();
+                    wgslCode = buffer.str();
+                } else {
+                    throw std::runtime_error("Failed to open WGSL cache file.");
+                }
             } else {
-                _errors = tintResult.Failure().reason.Str();
+                wgslCode = GlslToWgsl(shaderCode, desc.shaderStage, &_errors, debugLbl);
+                std::ofstream wgslFile(wgslCachePath);
+                if (wgslFile.is_open()) {
+                    wgslFile << wgslCode;
+                    wgslFile.close();
+                } else {
+                    throw std::runtime_error("Failed to create WGSL cache file.");
+                }
             }
-
-            wgslDesc.code = wgslCode.c_str();
+        } catch (const std::exception &e) {
+            wgslCode = GlslToWgsl(shaderCode, desc.shaderStage, &_errors, debugLbl);
+            TF_RUNTIME_ERROR("%s", e.what());
         }
     }
+    wgslDesc.code = wgslCode.c_str();
 
     if (_errors.empty()) {
         _shaderModule = hgi->GetPrimaryDevice().CreateShaderModule(&shaderModuleDesc);
         // Get the compilation details
 #if defined EMSCRIPTEN
         // Getting unimplemented in Chrome
-    if( !_shaderModule )
-    {
-        printf("Failed to create shader module\n");
-        _errors = "Failed.";
-    }
+        if( !_shaderModule )
+        {
+            printf("Failed to create shader module\n");
+            _errors = "Failed.";
+        }
 #else
         _shaderModule.GetCompilationInfo(
                 wgpu::CallbackMode::AllowSpontaneous,
