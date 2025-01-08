@@ -224,10 +224,8 @@ HdSt_GenMaterialXShader(
     cms->loadLibrary(stdLibraries);
     mxContext.getShaderGenerator().setColorManagementSystem(cms);
 
-    // Set the colorspace
-    // XXX: This is the equivalent of the default source colorSpace, which does
-    // not yet have a schema and is therefore not yet accessable here 
-    mxDoc->setColorSpace("lin_rec709");
+    // Set the target colorspace
+    mxContext.getOptions().targetColorSpaceOverride = "lin_rec709";
 
     // Add the Direct Light mtlx file to the mxDoc 
     mx::DocumentPtr lightDoc = mx::createDocument();
