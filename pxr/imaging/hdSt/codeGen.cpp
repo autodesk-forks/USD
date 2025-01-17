@@ -4731,12 +4731,18 @@ HdSt_CodeGen::_GenerateDrawingCoord(
 
     if (_metaData->instanceIndexArrayBinding.binding.IsValid()) {
         // << layout (location=x) uniform (int|ivec[234]) *instanceIndices;
-        _EmitDeclaration(&_resCommon, _metaData->instanceIndexArrayBinding);
+        _EmitDeclaration(&_resVS, _metaData->instanceIndexArrayBinding);
+        _EmitDeclaration(&_resPTCS, _metaData->instanceIndexArrayBinding);
+        _EmitDeclaration(&_resPTVS, _metaData->instanceIndexArrayBinding);
+        _EmitDeclaration(&_resCS, _metaData->instanceIndexArrayBinding);
 
         // << layout (location=x) uniform (int|ivec[234]) *culledInstanceIndices;
         HdSt_ResourceBinder::MetaData::BindingDeclaration const &
                 bindingDecl = _metaData->culledInstanceIndexArrayBinding;
-        _EmitDeclaration(&_resCommon, bindingDecl);
+        _EmitDeclaration(&_resVS, bindingDecl);
+        _EmitDeclaration(&_resPTCS, bindingDecl);
+        _EmitDeclaration(&_resPTVS, bindingDecl);
+        _EmitDeclaration(&_resCS, bindingDecl);
 
         /// if \p cullingPass is true, CodeGen generates GetInstanceIndex()
         /// such that it refers instanceIndices buffer (before culling).

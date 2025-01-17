@@ -615,7 +615,9 @@ HdSt_ResourceBinder::ResolveBindings(
                 MetaData::BindingDeclaration(
                     /*name=*/HdInstancerTokens->instanceIndices,
                     /*type=*/glType,
-                    /*binding=*/instanceIndexArrayBinding);
+                    /*binding=*/instanceIndexArrayBinding,
+                    /*isWritable=*/false,
+                    /*stageVisibility=*/InputShaderStageBits);
         }
         if (culledInstanceIndices) {
             HdStBinding culledInstanceIndexArrayBinding =
@@ -633,7 +635,8 @@ HdSt_ResourceBinder::ResolveBindings(
                     /*name=*/HdInstancerTokens->culledInstanceIndices,
                     /*type=*/glType,
                     /*binding=*/culledInstanceIndexArrayBinding,
-                    /*isWritable=*/!isWebGPU);
+                    /*isWritable=*/!isWebGPU,
+                    /*stageVisibility=*/InputShaderStageBits);
         }
     }
 
