@@ -309,7 +309,7 @@ if (PXR_BUILD_IMAGING)
         find_package(Tint REQUIRED COMPONENTS ${TINT_COMPONENTS} QUIET)
         find_package(SPIRV-Tools REQUIRED NO_CMAKE_FIND_ROOT_PATH)
         find_package(SPIRV-Tools-opt REQUIRED NO_CMAKE_FIND_ROOT_PATH)
-        find_package(GLSLang REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+        find_package(glslang REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 
         # glslangConfig.cmake defined INTERFACE_INCLUDE_DIRECTORIES incorrectly
         # so we need to override the property

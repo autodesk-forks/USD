@@ -88,25 +88,26 @@ wgpu::Device GetDevice() {
 #else
 #include <dawn/native/DawnNative.h>
 
-    void PrintDeviceError(WGPUErrorType errorType, const char* message, void*) {
-        std::string errorTypeName = "";
-        switch (errorType) {
-            case WGPUErrorType_Validation:
+    void PrintDeviceError(const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView message) {
+        std::string errorTypeName;
+        switch (type) {
+            case wgpu::ErrorType::Validation:
                 errorTypeName = "Validation";
                 break;
-            case WGPUErrorType_OutOfMemory:
+            case wgpu::ErrorType::OutOfMemory:
                 errorTypeName = "Out of memory";
                 break;
-            case WGPUErrorType_Unknown:
+            case wgpu::ErrorType::Unknown:
                 errorTypeName = "Unknown";
                 break;
-            case WGPUErrorType_DeviceLost:
+            case wgpu::ErrorType::DeviceLost:
                 errorTypeName = "Device lost";
                 break;
             default:
-                return;
+                errorTypeName = "Other";
+                break;
         }
-        TF_CODING_ERROR(errorTypeName + " error: " + message);
+        TF_CODING_ERROR(errorTypeName + " error: " + message.data);
     }
     static wgpu::Instance instance;
 
@@ -171,6 +172,12 @@ wgpu::Device GetDevice() {
 
         descriptor.requiredFeatures = requiredFeatures.data();
         descriptor.requiredFeatureCount = requiredFeatures.size();
+        descriptor.SetDeviceLostCallback(
+                wgpu::CallbackMode::AllowSpontaneous,
+                [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message) {
+                    TF_CODING_ERROR("Device lost error: %s", message.data);
+                });
+        descriptor.SetUncapturedErrorCallback(PrintDeviceError);
 
         wgpu::Device device = adapter.CreateDevice(&descriptor);
 

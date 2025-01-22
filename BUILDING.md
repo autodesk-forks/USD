@@ -128,6 +128,20 @@ glslang compiler headers must be locatable during the build process.
 Support for Vulkan can optionally be enabled by specifying the cmake flag
 `PXR_ENABLE_VULKAN_SUPPORT=TRUE`.
 
+##### WebGPU
+
+Enable WebGPU support in the
+build by specifying the cmake flag `PXR_ENABLE_WEBGPU_SUPPORT=TRUE` when
+invoking cmake. Note that Dawn and glslang support is required.
+
+When building via build_usd.py, WebGPU can be enabled using the --webgpu flag.
+
+The additional dependencies that must be supplied when invoking cmake are:
+
+| Dependency Name | Description                                          |
+|-----------------|------------------------------------------------------|
+| Dawn_DIR        | Path to the CMake package config of a Dawn install.  |
+
 ##### MaterialX
 
 Enable [MaterialX](https://github.com/materialx/materialx) support in the 
