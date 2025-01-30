@@ -66,6 +66,9 @@ private:
 
     // The version number of the render tags opinion of tasks.
     int _taskRenderTagsVersion;
+
+    // Version of the Buffer Array Range used for the render pass state.
+    size_t _renderPassStateBarVersion;
     
     // The renderTags passed to _Execute(), for comparison next _Execute().
     TfTokenVector _prevRenderTags;

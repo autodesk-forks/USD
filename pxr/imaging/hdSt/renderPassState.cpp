@@ -828,6 +828,12 @@ HdStRenderPassState::GetShaderHash() const
     );
 }
 
+size_t
+HdStRenderPassState::GetRenderPassStateBarVersion() const
+{
+    return _renderPassStateBar->GetVersion();
+}
+
 static
 HdRenderBuffer *
 _GetRenderBuffer(const HdRenderPassAovBinding& aov,

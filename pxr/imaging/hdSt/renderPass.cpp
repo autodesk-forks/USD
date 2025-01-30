@@ -361,6 +361,12 @@ HdSt_RenderPass::_UpdateCommandBuffer(TfTokenVector const& renderTags)
         _cmdBuffer.RebuildDrawBatchesIfNeeded(batchVersion, _hgi);
     }
 
+    size_t renderPassStateBarVersion = renderPassState->GetRenderPassStateBarVersion();
+    if (_renderPassStateBarVersion != renderPassStateBarVersion) {
+        renderPassStateBarVersion = _renderPassStateBarVersion;
+        _recordedCmds.reset();
+    }
+
     // -------------------------------------------------------------------
     // RENDER SETTINGS
     // -------------------------------------------------------------------
