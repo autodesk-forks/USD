@@ -411,9 +411,15 @@ public:
     USDIMAGINGGL_API
     static TfTokenVector GetRendererPlugins();
 
-    /// Return the user-friendly description of a renderer plugin.
+    /// Return the user-friendly name of a renderer plugin.
     USDIMAGINGGL_API
     static std::string GetRendererDisplayName(TfToken const &id);
+
+    /// Return the user-friendly name of the Hgi implementation.
+    /// For example: OpenGL, Metal, Vulkan. This is only available
+    /// if a render plugin was set and it uses Hgi.
+    USDIMAGINGGL_API
+    std::string GetRendererHgiDisplayName() const;
 
     /// Return if the GPU is enabled and can be used for any rendering tasks.
     USDIMAGINGGL_API

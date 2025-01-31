@@ -809,6 +809,10 @@ class StageView(QGLWidget):
         return self._rendererDisplayName
 
     @property
+    def rendererHgiDisplayName(self):
+        return self._rendererHgiDisplayName
+
+    @property
     def rendererAovName(self):
         return self._rendererAovName
 
@@ -872,7 +876,7 @@ class StageView(QGLWidget):
         # prep HUD regions
         self._hud = HUD()
         self._hud.addGroup("TopLeft",     250, 160)  # subtree
-        self._hud.addGroup("TopRight",    140, 32)   # Hydra: Enabled
+        self._hud.addGroup("TopRight",    140, 48)   # Hydra: Enabled
         self._hud.addGroup("BottomLeft",  250, 160)  # GPU stats
         self._hud.addGroup("BottomRight", 210, 32)   # Camera, Complexity
 
@@ -962,6 +966,8 @@ class StageView(QGLWidget):
 
     def _handleRendererChanged(self, rendererId):
         self._rendererDisplayName = self.GetRendererDisplayName(rendererId)
+        self._rendererHgiDisplayName = (
+            self.GetRendererHgiDisplayName())
         self._rendererAovName = "color"
         self._renderPauseState = False
         self._renderStopState = False
@@ -987,6 +993,12 @@ class StageView(QGLWidget):
     def GetRendererDisplayName(self, plugId):
         if self._renderer:
             return self._renderer.GetRendererDisplayName(plugId)
+        else:
+            return ""
+
+    def GetRendererHgiDisplayName(self):
+        if self._renderer:
+            return self._renderer.GetRendererHgiDisplayName()
         else:
             return ""
 
@@ -1906,7 +1918,10 @@ class StageView(QGLWidget):
             toPrint = {"Hydra": "(stopped)"}
         else:
             toPrint = {"Hydra": self._rendererDisplayName}
-            
+
+        if self._rendererHgiDisplayName:
+            toPrint["  Hgi"] = self._rendererHgiDisplayName
+
         if self._rendererAovName != "color":
             toPrint["  AOV"] = self._rendererAovName
         self._hud.updateGroup("TopRight", self.width()-160, 14, col,
