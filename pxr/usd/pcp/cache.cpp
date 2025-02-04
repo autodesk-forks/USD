@@ -1058,7 +1058,7 @@ PcpCache::Apply(const PcpCacheChanges& changes, PcpLifeboat* lifeboat)
                 _RemovePropertyCache(path, lifeboat);
             }
             else if (path.IsTargetPath()) {
-                // We have potentially aded or removed a relationship target
+                // We have potentially added or removed a relationship target
                 // spec.  This invalidates the property stack for any
                 // relational attributes for this target.
                 _RemovePropertyCaches(path, lifeboat);
@@ -1073,10 +1073,16 @@ PcpCache::Apply(const PcpCacheChanges& changes, PcpLifeboat* lifeboat)
             updateSpecStacks(*i);
         }
 
-        TF_FOR_ALL(i, changes._didChangeSpecsAndChildrenInternal) {
+        // Ensure that all relevant paths that have been affected by
+        // sublayer operations have their prim stacks updated
+        TF_FOR_ALL(i, changes._didChangePrimSpecsAndChildrenInternal) {
             auto range = _primIndexCache.FindSubtreeRange(*i);
             for (auto i = range.first; i != range.second; ++i) {
-                updateSpecStacks(i->first);
+                if (PcpPrimIndex* primIndex = _GetPrimIndex(i->first)) {
+                    Pcp_RescanForSpecs(primIndex, IsUsd(),
+                                       /* updateHasSpecs */ true,
+                                       &changes);
+                }
             }
         }
 

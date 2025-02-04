@@ -48,6 +48,9 @@
     #define ARCH_PRAGMA_UNUSED_FUNCTION \
         _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
 
+    #define ARCH_PRAGMA_STRINGOP_OVERFLOW \
+        _Pragma("GCC diagnostic ignored \"-Wstringop-overflow=\"")
+
 #elif defined(ARCH_COMPILER_CLANG)
 
     #define ARCH_PRAGMA_PUSH \
@@ -179,6 +182,10 @@
 
 #if !defined ARCH_PRAGMA_UNUSED_FUNCTION
     #define ARCH_PRAGMA_UNUSED_FUNCTION
+#endif
+
+#if !defined ARCH_PRAGMA_STRINGOP_OVERFLOW
+    #define ARCH_PRAGMA_STRINGOP_OVERFLOW
 #endif
 
 #if !defined ARCH_PRAGMA_UNUSED_PRIVATE_FIELD

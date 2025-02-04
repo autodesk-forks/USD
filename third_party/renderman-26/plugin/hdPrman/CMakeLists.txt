@@ -155,6 +155,7 @@ pxr_plugin(${PXR_PACKAGE}
         matfiltSceneIndexPlugins
         motionBlurSceneIndexPlugin
         pinnedCurveExpandingSceneIndexPlugin
+        previewSurfacePrimvarsSceneIndexPlugin
         renderBuffer
         renderParam
         renderPass

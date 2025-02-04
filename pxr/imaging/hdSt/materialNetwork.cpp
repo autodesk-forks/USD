@@ -38,7 +38,10 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
+    (UsdPreviewSurface)
     (opacity)
+    (opacityMode)
+    (transparent)
     (opacityThreshold)
     (isPtex)
     (st)
@@ -1043,6 +1046,22 @@ _GatherMaterialParams(
         if (p.paramType != HdSt_MaterialParam::ParamTypeAdditionalPrimvar &&
             p.fallbackValue.IsEmpty()) {
             p.fallbackValue = _GetParamFallbackValue(network, node, p.name);
+            // The opacityMode input on a PreviewSurface material is a token
+            // input, this needs to be updated to an int VtValue for codegen.
+            // The values are updated such that transparent = 1 and presence = 0. 
+            if (node.nodeTypeId == _tokens->UsdPreviewSurface &&
+                p.name == _tokens->opacityMode) {
+                int paramInt = 1;
+                if (p.fallbackValue.IsHolding<std::string>()) {
+                    const std::string param = p.fallbackValue.Get<std::string>();
+                    paramInt = param == _tokens->transparent;
+                }
+                else if (p.fallbackValue.IsHolding<TfToken>()) {
+                    const TfToken param = p.fallbackValue.Get<TfToken>();
+                    paramInt = param == _tokens->transparent;
+                }
+                p.fallbackValue = VtValue(paramInt);
+            }
         }
     }
 

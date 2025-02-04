@@ -289,7 +289,7 @@ _FindAttribute(ImageSpec const & spec, std::string const & metadataKey)
     bool convertMatrixTypes = false;
     std::string key = _TranslateMetadataKey(metadataKey, &convertMatrixTypes);
 
-    ImageIOParameter const * param = spec.find_attribute(key);
+    ParamValue const * param = spec.find_attribute(key);
     if (!param) {
         return VtValue();
     }
@@ -711,21 +711,21 @@ HioOIIO_Image::ReadCropped(int const cropTop,
     // Read Image into pixels, flipping upon load so that
     // origin is at lower left corner
     // If needed, convert double precision images to float
-    bool res = false;
-    if (imageInput->spec().format == TypeDesc::DOUBLE) {
-        res = imageInput->read_image(TypeDesc::FLOAT,
-            start,
-            AutoStride,
-            readStride,
-            AutoStride);
-    } else{
-        res = imageInput->read_image(imageInput->spec().format,
-            start,
-            AutoStride,
-            readStride,
-            AutoStride);
+    TypeDesc format = imageInput->spec().format;
+    if (format == TypeDesc::DOUBLE) {
+        format = TypeDesc::FLOAT;
     }
 
+    bool res = imageInput->read_image(
+        imageInput->current_subimage(),
+        imageInput->current_miplevel(),
+        0,
+        -1,
+        format,
+        start,
+        AutoStride,
+        readStride,
+        AutoStride);
     if (!res)
     {
         TF_RUNTIME_ERROR("Failed to read image pixel from \"%s\", error = %s",
@@ -805,7 +805,7 @@ HioOIIO_Image::Write(StorageSpec const & storage,
     TypeDesc format = _GetOIIOBaseType(storage.format);
     ImageSpec spec(storage.width, storage.height, nchannels, format);
 
-    for (const std::pair<std::string, VtValue>& m : metadata) {
+    for (const auto& m : metadata) {
         _SetAttribute(&spec, m.first, m.second);
     }
 

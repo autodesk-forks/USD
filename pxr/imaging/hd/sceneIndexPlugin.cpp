@@ -28,7 +28,20 @@ TF_REGISTRY_FUNCTION(TfType)
 // in this compilation unit.
 HdSceneIndexPlugin::~HdSceneIndexPlugin() = default;
 
-// base implementation is a no-op which returns the input
+// base implementation is a no-op which returns the input. Note that calls the
+// _AppendSceneIndex virtual with no renderInstanceId as a shim in order to
+// support the old plugin API that didn't get a renderInstanceId. That way,
+// plugin implementers can override either method and will get invoked either
+// way.
+HdSceneIndexBaseRefPtr
+HdSceneIndexPlugin::_AppendSceneIndex(
+    const std::string &renderInstanceId,
+    const HdSceneIndexBaseRefPtr &inputScene,
+    const HdContainerDataSourceHandle &inputArgs)
+{
+    return _AppendSceneIndex(inputScene, inputArgs);
+}
+
 HdSceneIndexBaseRefPtr
 HdSceneIndexPlugin::_AppendSceneIndex(
     const HdSceneIndexBaseRefPtr &inputScene,
@@ -40,10 +53,11 @@ HdSceneIndexPlugin::_AppendSceneIndex(
 
 HdSceneIndexBaseRefPtr
 HdSceneIndexPlugin::AppendSceneIndex(
+    const std::string &renderInstanceId,
     const HdSceneIndexBaseRefPtr &inputScene,
     const HdContainerDataSourceHandle &inputArgs)
 {
-    return _AppendSceneIndex(inputScene, inputArgs);
+    return _AppendSceneIndex(renderInstanceId, inputScene, inputArgs);
 }
 
 

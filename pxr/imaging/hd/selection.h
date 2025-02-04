@@ -72,7 +72,8 @@ public:
                    VtIntArray const &pointIndices);
 
     // Special handling for points: we allow a set of selected point indices to
-    // also specify a color to use for highlighting.
+    // also specify a color to use for highlighting in the render's working
+    // color space.
     HD_API
     void AddPoints(HighlightMode const &mode,
                    SdfPath const &renderIndexPath,

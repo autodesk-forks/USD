@@ -1,6 +1,6 @@
-# UsdSemantics : Semantic Labeling for Model Hierarchy {#usd_semantics_overview}
+# UsdSemantics : Semantic Labeling of Scenes {#usd_semantics_overview}
 \if ( PIXAR_MFB_BUILD )
-\mainpage UsdSemantics : Semantic Labeling for Model Hierarchy
+\mainpage UsdSemantics : Semantic Labeling of Scenes
 \endif
 
 While prims have a unique name and hierarchical identifier, it is sometimes
@@ -172,3 +172,7 @@ don't yield discrete segmentations.
 A common application of semantics is for downstream labeling and segmentation
 of renderer output. Semantics may make their way into outputs as
 either additional metadata or as matte channels.
+
+## Examples
+See `extras/usd/examples/usdSemanticsExamples/bookshelf.usda` for an example 
+layer that uses semantic labels.

@@ -50,8 +50,14 @@ class SdfAssetPath;
 /// UsdGeomXformable currently supports arbitrary sequences of the following
 /// operations, each of which can be encoded in an attribute of the proper
 /// shape in any supported precision:
+/// \li translateX - 1D
+/// \li translateY - 1D
+/// \li translateZ - 1D
 /// \li translate - 3D
 /// \li scale     - 3D
+/// \li scaleX   - 1D
+/// \li scaleY   - 1D
+/// \li scaleZ   - 1D
 /// \li rotateX   - 1D angle in degrees
 /// \li rotateY   - 1D angle in degrees
 /// \li rotateZ   - 1D angle in degrees
@@ -73,7 +79,7 @@ class SdfAssetPath;
 /// round-tripping logic.
 /// 
 /// We also provide specific "Add" API for each type, for clarity and 
-/// conciseness, e.g. AddTranslateOp(), AddRotateXYZOp() etc.
+/// conciseness, e.g. AddTranslateOp(), AddTranslateXOp(), AddRotateXYZOp() etc.
 /// 
 /// AddXformOp() will return a UsdGeomXformOp object, which is a schema on a 
 /// newly created UsdAttribute that provides convenience API for authoring
@@ -486,6 +492,33 @@ public:
                               TfToken const &opSuffix = TfToken(), 
                               bool isInverseOp=false) const;
     
+    /// Add a translation about the X-axis to the local stack represented by
+    /// this xformable.
+    ///
+    /// \sa AddXformOp()
+    USDGEOM_API
+    UsdGeomXformOp AddTranslateXOp(
+        UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionDouble,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Add a translation about the Y-axis to the local stack represented by
+    /// this xformable.
+    ///
+    /// \sa AddXformOp()
+    USDGEOM_API
+    UsdGeomXformOp AddTranslateYOp(
+        UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionDouble,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Add a translation about the Z-axis to the local stack represented by
+    /// this xformable.
+    ///
+    /// \sa AddXformOp()
+    USDGEOM_API
+    UsdGeomXformOp AddTranslateZOp(
+        UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionDouble,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
     /// Add a translate operation to the local stack represented by this 
     /// xformable.
     /// 
@@ -493,6 +526,30 @@ public:
     USDGEOM_API
     UsdGeomXformOp AddTranslateOp(
         UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionDouble,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Get a translation about the X-axis from the local stack represented by
+    /// this xformable.
+    /// 
+    /// \sa GetXformOp()
+    USDGEOM_API
+    UsdGeomXformOp GetTranslateXOp(
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Get a translation about the Y-axis from the local stack represented by
+    /// this xformable.
+    /// 
+    /// \sa GetXformOp()
+    USDGEOM_API
+    UsdGeomXformOp GetTranslateYOp(
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Get a translation about the Z-axis from the local stack represented by
+    /// this xformable.
+    /// 
+    /// \sa GetXformOp()
+    USDGEOM_API
+    UsdGeomXformOp GetTranslateZOp(
         TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
 
     /// Get a translate operation from the local stack represented by this 
@@ -503,6 +560,33 @@ public:
     UsdGeomXformOp GetTranslateOp(
         TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
 
+    /// Add a scale operation about the X-axis to the local stack represented by
+    /// this xformable.
+    ///
+    /// \sa AddXformOp()
+    USDGEOM_API
+    UsdGeomXformOp AddScaleXOp(
+        UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionFloat,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Add a scale operation about the Y-axis to the local stack represented by
+    /// this xformable.
+    ///
+    /// \sa AddXformOp()
+    USDGEOM_API
+    UsdGeomXformOp AddScaleYOp(
+        UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionFloat,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Add a scale operation about the Z-axis to the local stack represented by
+    /// this xformable.
+    ///
+    /// \sa AddXformOp()
+    USDGEOM_API
+    UsdGeomXformOp AddScaleZOp(
+        UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionFloat,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
     /// Add a scale operation to the local stack represented by this 
     /// xformable.
     /// 
@@ -510,6 +594,30 @@ public:
     USDGEOM_API
     UsdGeomXformOp AddScaleOp(
         UsdGeomXformOp::Precision const precision=UsdGeomXformOp::PrecisionFloat,
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Get a scale operation about the X-axis from the local stack represented 
+    /// by this xformable.
+    /// 
+    /// \sa GetXformOp()
+    USDGEOM_API
+    UsdGeomXformOp GetScaleXOp(
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Get a scale operation about the Y-axis from the local stack represented 
+    /// by this xformable.
+    /// 
+    /// \sa GetXformOp()
+    USDGEOM_API
+    UsdGeomXformOp GetScaleYOp(
+        TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
+
+    /// Get a scale operation about the Z-axis from the local stack represented 
+    /// by this xformable.
+    /// 
+    /// \sa GetXformOp()
+    USDGEOM_API
+    UsdGeomXformOp GetScaleZOp(
         TfToken const &opSuffix = TfToken(), bool isInverseOp=false) const;
 
     /// Get a scale operation from the local stack represented by this 

@@ -129,6 +129,34 @@ public:
     /// HdDataSourceLocatorSet sent with HdDataSourceObserver::PrimsDirtied.
     /// @{
 
+    /// Prim-level relative data source locator to locate refineLevel.
+    HD_API
+    static const HdDataSourceLocator &GetRefineLevelLocator();
+
+    /// Prim-level relative data source locator to locate flatShadingEnabled.
+    HD_API
+    static const HdDataSourceLocator &GetFlatShadingEnabledLocator();
+
+    /// Prim-level relative data source locator to locate displacementEnabled.
+    HD_API
+    static const HdDataSourceLocator &GetDisplacementEnabledLocator();
+
+    /// Prim-level relative data source locator to locate occludedSelectionShowsThrough.
+    HD_API
+    static const HdDataSourceLocator &GetOccludedSelectionShowsThroughLocator();
+
+    /// Prim-level relative data source locator to locate pointsShadingEnabled.
+    HD_API
+    static const HdDataSourceLocator &GetPointsShadingEnabledLocator();
+
+    /// Prim-level relative data source locator to locate materialIsFinal.
+    HD_API
+    static const HdDataSourceLocator &GetMaterialIsFinalLocator();
+
+    /// Prim-level relative data source locator to locate shadingStyle.
+    HD_API
+    static const HdDataSourceLocator &GetShadingStyleLocator();
+
     /// Prim-level relative data source locator to locate reprSelector.
     HD_API
     static const HdDataSourceLocator &GetReprSelectorLocator();

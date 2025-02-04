@@ -59,23 +59,10 @@ private:
     TfWeakPtrFacadeAccess();
 };
 
-// Provide an overload of get_pointer for WeakPtrFacade.  Boost libraries do
-// unqualified calls to get_pointer to get the underlying pointer from a smart
-// pointer, expecting the right overload will be found by ADL.
 template <template <class> class X, class Y>
 Y *get_pointer(TfWeakPtrFacade<X, Y> const &p) {
     return TfWeakPtrFacadeAccess::FetchPointer(p);
 }
-
-PXR_NAMESPACE_CLOSE_SCOPE
-
-// Inject the global-scope operator for clients that make qualified calls to our
-// previous overload in the boost namespace.
-namespace boost {
-    using PXR_NS::get_pointer;
-};
-
-PXR_NAMESPACE_OPEN_SCOPE
 
 // Common base class, used to identify subtypes in enable_if expressions.
 class TfWeakPtrFacadeBase {};

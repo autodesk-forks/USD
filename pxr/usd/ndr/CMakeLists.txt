@@ -26,9 +26,6 @@ pxr_library(ndr
         api.h
         nodeDiscoveryResult.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapDeclare.cpp

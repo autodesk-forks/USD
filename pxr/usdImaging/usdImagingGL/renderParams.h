@@ -69,6 +69,8 @@ public:
     bool forceRefresh;
     bool flipFrontFacing;
     UsdImagingGLCullStyle cullStyle;
+    // Note: enableIdRender is deprecated in favor of using the primId AOV, and 
+    // will be removed as a param soon.
     bool enableIdRender;
     bool enableLighting;
     bool enableSampleAlphaToCoverage;

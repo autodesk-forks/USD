@@ -15,9 +15,6 @@ pxr_library(usdviewq
     PUBLIC_CLASSES
         hydraObserver
         utils
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
         
     PUBLIC_HEADERS
         api.h

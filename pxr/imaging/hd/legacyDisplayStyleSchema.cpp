@@ -278,6 +278,76 @@ HdLegacyDisplayStyleSchema::GetDefaultLocator()
 
 /* static */
 const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetRefineLevelLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->refineLevel);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetFlatShadingEnabledLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->flatShadingEnabled);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetDisplacementEnabledLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->displacementEnabled);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetOccludedSelectionShowsThroughLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->occludedSelectionShowsThrough);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetPointsShadingEnabledLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->pointsShadingEnabled);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetMaterialIsFinalLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->materialIsFinal);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdLegacyDisplayStyleSchema::GetShadingStyleLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdLegacyDisplayStyleSchemaTokens->shadingStyle);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
 HdLegacyDisplayStyleSchema::GetReprSelectorLocator()
 {
     static const HdDataSourceLocator locator =

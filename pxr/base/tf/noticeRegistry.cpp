@@ -176,17 +176,32 @@ Tf_NoticeRegistry::_Register(TfNotice::_DelivererBase* deliverer)
 }
 
 void
-Tf_NoticeRegistry::_Revoke(TfNotice::Key& key)
+Tf_NoticeRegistry::_Revoke(TfNotice::Key& key, bool wait)
 {
-    _Lock lock(_userCountMutex);
+    {
+        _Lock lock(_userCountMutex);
 
-    if (_userCount == 0) {
-        // If no other execution context is traversing the registry, we
-        // can remove the deliverer immediately.
-        _FreeDeliverer(key._deliverer);
-    } else {
-        // Otherwise deactivate it.
-        key._deliverer->_Deactivate();
+        if (_userCount == 0) {
+            // If no other execution context is traversing the registry, we
+            // can remove the deliverer immediately.
+            _FreeDeliverer(key._deliverer);
+
+            // No need to wait because nothing can be invoking the handler.
+            wait = false;
+        } else {
+            // Otherwise deactivate it.
+            key._deliverer->_Deactivate();
+            // If we're waiting, we need to ensure that the deliverer survives
+            // after we drop the lock above, so it can do the waiting.
+            if (wait) {
+                ++_userCount;
+            }
+        }
+    }
+
+    if (wait) {
+        key._deliverer->_WaitForSendsToFinish();
+        _IncrementUserCount(-1);
     }
 }
 

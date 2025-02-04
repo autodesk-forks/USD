@@ -1194,7 +1194,7 @@ A good way to understand inherits is to start by understanding `references
 the results will be indistinguishable from each other! Within a `layerStack
 <#usdglossary-layerstack>`_ (and ignoring any interaction with `variantSets
 <#usdglossary-variantset>`_ since VariantSets come between Inherits and
-References in `LIVRPS <#usdglossary-livrpsstrengthordering>`_) inherits are
+References in `LIVERPS <#usdglossary-livrpsstrengthordering>`_) inherits are
 indistinguishable in effect from *local* references. **The key difference
 between references and inherits** is that references fully encapsulate their
 targets, and therefore "disappear" when composed through another layer of
@@ -1729,35 +1729,36 @@ applied to references. See also the FAQ on deleting items with list ops:
 
 .. _usdglossary-livrpsstrengthordering:
 
-LIVRPS Strength Ordering
-************************
+LIVERPS Strength Ordering
+*************************
 
-LIVRPS is an acronym for **Local, Inherits, VariantSets, References, Payload,
-Specializes**, and is the fundamental rubric for understanding how `opinions
-<#usdglossary-opinions>`_ and `namespace <#usdglossary-namespace>`_ compose in
-USD. **LIVRPS** describes the strength ordering in which the various composition
-arcs combine, **within each** `LayerStack <#usdglossary-layerstack>`_. For
-example, when we are trying to determine the value of an `attribute
-<#usdglossary-attribute>`_ or `metadatum <#usdglossary-metadata>`_ on a stage at
-*path* that subscribes to the `value resolution <#usdglossary-valueresolution>`_
-policy that "strongest opinion wins" (which is all attributes and most
-metadata), we iterate through `PrimSpecs <#usdglossary-primspec>`_ in the
-following order looking for an opinion for the requested datum:
+LIVERPS is an acronym for **Local, Inherits, VariantSets, Relocates, References, 
+Payload, Specializes**, and is the fundamental rubric for understanding how 
+:ref:`opinions <usdglossary-opinions>` and 
+:ref:`namespace <usdglossary-namespace>` compose in USD. **LIVERPS** describes 
+the strength ordering in which the various composition arcs combine, 
+**within each** :ref:`LayerStack <usdglossary-layerstack>`. For example, when we 
+are trying to determine the value of an :ref:`attribute <usdglossary-attribute>` 
+or :ref:`metadatum <usdglossary-metadata>` on a stage at *path* that subscribes 
+to the :ref:`value resolution <usdglossary-valueresolution>` policy that 
+"strongest opinion wins" (which is all attributes and most metadata), we iterate 
+through :ref:`PrimSpecs <usdglossary-primspec>` in the following order looking 
+for an opinion for the requested datum:
 
     #. **Local**: 
 
        Iterate through all the layers in the local LayerStack
        looking for opinions on the PrimSpec at *path* in each layer - recall
        that according to the definition of LayerStack, this is where the effect
-       of direct opinions in all `SubLayers <#usdglossary-sublayers>`_ of the
+       of direct opinions in all :ref:`SubLayers <usdglossary-sublayers>` of the
        root layer of the LayerStack will be consulted. If no opinion is found,
        then...
 
     #. **Inherits**: 
        
-       Resolve the `Inherits <#usdglossary-inherits>`_ affecting
+       Resolve the :ref:`Inherits <usdglossary-inherits>` affecting
        the prim at *path*, and iterate through the resulting targets. For
-       each target, **recursively apply** **LIVRP** **evaluation** on
+       each target, **recursively apply** **LIVERP** **evaluation** on
        the targeted LayerStack - **Note that the "S" is not present** - we
        ignore Specializes arcs while recursing . If no opinion is found,
        then...
@@ -1765,33 +1766,42 @@ following order looking for an opinion for the requested datum:
     #. **VariantSets**: 
 
        Apply the resolved variant selections to all
-       `VariantSets <#usdglossary-variantset>`_ that affect the PrimSpec at
-       *path* in the LayerStack, and iterate through the selected `Variants
-       <#usdglossary-variant>`_ on each VariantSet. For each target,
-       **recursively apply** **LIVRP** **evaluation** on the targeted
+       :ref:`VariantSets <usdglossary-variantset>` that affect the PrimSpec at
+       *path* in the LayerStack, and iterate through the selected 
+       :ref:`Variants <usdglossary-variant>` on each VariantSet. For each 
+       target, **recursively apply** **LIVERP** **evaluation** on the targeted
        LayerStack - **Note that the "S" is not present** - we ignore Specializes
        arcs while recursing. If no opinion is found, then...
 
+    #. **r(E)locates**:
+
+       Resolve any :ref:`Relocates <usdglossary-relocates>` target path 
+       affecting the prim at *path*, and iterate through the resulting relocates 
+       source. For each source, **recursively apply** **LIVERP** **evaluation** 
+       on the source's remote LayerStack - **Note that the "S" is not present** 
+       - we ignore Specializes arcs while recursing. If no opinion is found, 
+       then...
+
     #. **References**:
 
-       Resolve the `References <#usdglossary-references>`_
+       Resolve the :ref:`References <usdglossary-references>`
        affecting the prim at *path*, and iterate through the resulting
-       targets. For each target, **recursively apply** **LIVRP** **evaluation**
+       targets. For each target, **recursively apply** **LIVERP** **evaluation**
        on the targeted LayerStack - **Note that the "S" is not present** - we
        ignore Specializes arcs while recursing. If no opinion is found, then...
 
     #. **Payload**: 
 
-       Resolve the `Payload <#usdglossary-payload>`_
+       Resolve the :ref:`Payload <usdglossary-payload>`
        arcs affecting the prim at *path*; if *path* has been **loaded on
        the stage,** iterate through the resulting targets just as we would
        references from step 4. If no opinion is found, then...
 
     #. **Specializes**: 
 
-       Resolve the `Specializes <#usdglossary-specializes>`_
+       Resolve the :ref:`Specializes <usdglossary-specializes>`
        affecting the prim at *path*, and iterate through the resulting
-       targets, **recursively applying *full* LIVRPS evaluation** on each target
+       targets, **recursively applying *full* LIVERPS evaluation** on each target
        prim. If no opinion is found, then...
 
     #. Indicate that we could find no authored opinion
@@ -1799,21 +1809,18 @@ following order looking for an opinion for the requested datum:
 We have omitted some details, such as how, for any composition arc in the above
 recipe, we order arcs applied directly on the PrimSpec in relation to the same
 kind of arc authored on an *ancestral* PrimSpec in the LayerStack - the short
-answer is that `"ancestral arcs" are weaker than "direct arcs"
-<#usdglossary-directopinion>`_, and why we ignore the "S" when we recurse for
-the other arcs, which we discuss more in the entry for `Specializes
-<#usdglossary-specializes>`_. It may sound like a great deal of work to need
-to perform for every value lookup, and it absolutely would be if we followed all
-the steps as described above, during `value resolution
-<#usdglossary-valueresolution>`_. This is the reason that we compute and cache
-an `Index <#usdglossary-index>`_ for every prim on the Stage: the Index
-"pre-applies" the above algorithm to find all the PrimSpecs that contribute any
-opinions to the prim, and caches the list in a recursive data structure that can
-be very efficiently processed whenever we need to resolve some value on the
-prim.
+answer is that "ancestral arcs" are weaker than "direct arcs" (see 
+:ref:`usdglossary-directopinion`). Additionally, we skip over "S" during 
+recursion for other arcs, as explained further in the entry for 
+:ref:`Specializes <usdglossary-specializes>`. Performing every step as described 
+above for each value lookup would be very costly. This is why we compute and 
+cache an :ref:`Index <usdglossary-index>` for every prim on the Stage. The Index 
+"pre-applies" the full algorithm to gather all PrimSpecs contributing opinions 
+to a prim, caching the list in a recursive data structure that allows efficient 
+processing whenever a value on the prim needs to be resolved.
 
 The algorithm for computing the namespace of the stage (i.e. what prims are
-present and where) are slightly more involved, but still follows the LIVRPS
+present and where) are slightly more involved, but still follows the LIVERPS
 recipe.
 
 .. _usdglossary-load-unload:
@@ -1961,7 +1968,7 @@ Opinions
 Metadatum, Attribute, or Relationship, you are expressing an *opinion* for that
 object in a PrimSpec in a particular Layer. On a composed Stage, any object
 may be affected by multiple opinions from different layers; the ordering of
-these opinions is determined by the `LIVRPS strength ordering
+these opinions is determined by the `LIVERPS strength ordering
 <#usdglossary-livrpsstrengthordering>`_.
 
 .. _usdglossary-over:
@@ -2679,6 +2686,451 @@ we will get:
    :sdfpath:`/MarbleCollection/Marble_Green/GlassMaterial` 
 
 as the result, even though that was not the authored value in :filename:`Marble.usd`.
+
+.. _usdglossary-relocates:
+
+Relocates
+*********
+
+*Relocates* is a :ref:`composition arc <usdglossary-compositionarcs>` that maps 
+a prim :ref:`path <usdglossary-path>` defined in a remote 
+:ref:`LayerStack <usdglossary-layerstack>` (i.e. across a composition arc) to a 
+new path location in the local namespace. 
+
+Relocates are defined in layer metadata, as a list of source path to target
+path mappings. Note that these paths can only be prim paths, not property paths.
+
+.. code-block:: usda
+    :caption: example relocates defined in layer metadata
+
+    #usda 1.0
+    (
+        relocates = {
+            </CharANewVersion/Clothing> : </CharACurrent/TestClothing>, 
+            </EnvA/Trees> : </AlternateEnv/ParkA/Trees>
+        }
+    )    
+
+Relocates let you rename or reparent prims in situations where you would not be 
+able to edit the prims directly. Normally, prims with underlying PrimSpecs from 
+composition arcs cannot be directly reparented. While it's possible to reparent 
+the underlying "composition source" prims directly, such a change would be a 
+destructive change that would affect all other instances that share that scene 
+description. Relocates provides a way to *non-destructively* reparent or rename 
+prims by specifying a mapping of source namespace paths to target namespace 
+paths in the local namespace, ensuring that the source of the composition arc is 
+not modified.
+
+As an example, if you had layer :filename:`refLayer.usda` with the following 
+prims:
+
+.. code-block:: usda
+    :caption: refLayer.usda
+
+    def "PrimA" ()
+    {
+        def "PrimAChild" ()
+        {
+            uniform string testString = "test"
+            float childValue = 3.5
+        }
+    }
+
+In another layer, :filename:`main.usda`, "PrimA" is referenced:
+
+.. code-block:: usda
+    :caption: main.usda
+
+    def "MainPrim" (
+        prepend references = @refLayer.usda@</PrimA>
+    )
+    {
+    }
+
+You cannot directly rename or reparent :sdfpath:`/MainPrim/PrimAChild`. However, 
+you can provide a relocates mapping (in :filename:`main.usda`) of 
+:sdfpath:`MainPrim/PrimAChild` to another path in the local namespace:
+
+.. code-block:: usda
+    :caption: relocates added to main.usda
+
+    #usda 1.0
+    (
+        relocates = {
+            </MainPrim/PrimAChild> : </MainPrim/RenamedPrimAChild>
+        }
+    )
+
+This renames :sdfpath:`/MainPrim/PrimAChild` to 
+:sdfpath:`/MainPrim/RenamedPrimAChild` without affecting the 
+:filename:`refLayer.usda` layer.
+
+You could then add an override for :sdfpath:`/MainPrim/RenamedPrimAChild` in 
+:filename:`main.usda`. Note that the override uses the *relocated path*:
+
+.. code-block:: usda
+    :caption: override added to main.usda
+
+    def "MainPrim" (
+        prepend references = @refLayer.usda@</PrimA>
+    )
+    {
+        over RenamedPrimAChild 
+        {
+            float childValue = 5.2
+        }
+    }
+
+The resulting stage composition will apply the override to the relocated prim
+reference:
+
+.. code-block:: usda
+    :caption: flattened main.usda
+ 
+    def "MainPrim"
+    {
+        def "RenamedPrimAChild"
+        {
+            float childValue = 5.2
+            uniform string testString = "test"
+        }
+    }
+
+**Things to note:**
+
+    * You cannot relocate a root prim. In other words, the source path for a 
+      relocates cannot be a root prim. This is because it's impossible for a 
+      root prim to be introduced by an ancestral composition arc, and relocates
+      can only used to map prims introduced via composition arcs. 
+
+    * When a source path is relocated, that original source path is considered 
+      *no longer valid in the current namespace*. Any local opinions authored
+      on a source path will generate a "invalid option at relocation source
+      path" error. See 
+      :ref:`local opinions not allowed at source paths <usdglossary-relocates-source-invalid>` 
+      below for more details.
+
+    * Source and target paths must be complete scene paths. Paths with variant 
+      selections (e.g. :sdfpath:`/Prim{var=sel}Child`) are not supported.  
+
+    * Relocates that would create invalid or conflicting namespace paths are not 
+      allowed, such as:
+
+        * Relocating a prim to an existing ancestor: 
+          :sdfpath:`Prim/Child/Grandchild` : :sdfpath:`Prim/Child` is not 
+          allowed.
+
+        * Relocating a prim to a descendant of the source path: 
+          :sdfpath:`/Prim/Child` : :sdfpath:`/Prim/Child/Grandchild` is not 
+          allowed.
+
+        * Relocating the same source path to multiple targets, or relocating 
+          multiple source paths to the same target.
+
+        * Relocating a prim to the source path of a different relocate in the
+          same namespace: 
+          :sdfpath:`/Prim/Prim1` : :sdfpath:`/Prim/Prim2`, 
+          :sdfpath:`/Prim/Prim2` : :sdfpath:`/Prim/Prim3` is not allowed. 
+          "Transitive" relocates must be collapsed into the smallest relocation,
+          e.g. for the previous example, 
+          :sdfpath:`/Prim/Prim1` : :sdfpath:`/Prim/Prim3` should be used instead.
+          This applies to relocates in the same LayerStack.
+
+    * If a relocate has "ancestral relocates" (e.g. an ancestor prim that has 
+      also been relocated), the relocate source path must use the ancestral 
+      relocated path. For example, if you have :sdfpath:`/Root` referencing 
+      :sdfpath:`/Ref`, and :sdfpath:`/Ref` also references :sdfpath:`/Ref2`, 
+      if :sdfpath:`/Root/Ref` is relocated to :sdfpath:`/Root/RefRelocated`, 
+      any additional relocate that would use :sdfpath:`/Root/Ref/Ref2` as a 
+      source path must use the relocated path 
+      :sdfpath:`/Root/RefRelocated/Ref2`.
+
+With respect to 
+:ref:`composition strength ordering <usdglossary-livrpsstrengthordering>`, 
+relocates is stronger than :ref:`usdglossary-references`, but weaker than 
+:ref:`usdglossary-variantset`. In the previous example, if we had an authored 
+opinion at a relocates target location that used the :ref:`usdglossary-inherits` 
+composition arc (which is stronger than relocates) we might have a 
+:filename:`main.usda` layer that looks like the following: 
+
+.. code-block:: usda
+    :caption: main.usda with added class and inherits
+
+    #usda 1.0
+    (
+        relocates = {
+            </MainPrim/PrimAChild> : </MainPrim/RenamedPrimAChild>
+        }
+    )
+
+    class "WorkClass"
+    {
+        float childValue = 20.5
+        uniform string testString = "from WorkClass"
+    }
+
+    def "MainPrim" (
+        prepend references = @refLayer.usda@</PrimA>
+    )
+    {
+        def "RenamedPrimAChild"
+        (
+            inherits = </WorkClass>
+        )
+        {
+        }
+    }
+
+When the stage is composed, the inherited opinions for 
+:sdfpath:`MainPrim/RenamedPrimAChild` will be stronger:
+
+.. code-block:: usda
+    :caption: flattened main.usda with inherits and relocates applied
+
+    def "MainPrim"
+    {
+        def "RenamedPrimAChild"
+        {
+            float childValue = 20.5
+            uniform string testString = "from WorkClass"
+        }
+    }
+
+**Relocates and inherits**
+
+A relocated prim will still inherit the same opinions it would have had it not 
+been relocated. This can result in some subtle composition behavior.
+
+For example, we have a layer :filename:`model.usda` that defines 
+:sdfpath:`/ClassA` and has prim :sdfpath:`/Model` that inherits from 
+:sdfpath:`/ClassA`. It also has a relocate for :sdfpath:`/Model/Rig/LRig` to 
+:sdfpath:`/Model/Anim/LAnim`:
+
+.. code-block:: usda
+    :caption: model.usda with ClassA and Model that inherits from ClassA
+
+    #usda 1.0
+    (
+        relocates = {
+            </Model/Rig/LRig>: </Model/Anim/LAnim>
+        }    
+    )
+
+    class "ClassA"
+    {
+        def "Rig"
+        {
+            def "LRig"
+            {
+                uniform token modelClassALRig = "test"          
+            }
+        }
+
+        def "Anim"
+        {
+            def "LAnim"
+            {
+                uniform token modelClassALAnim = "test"                     
+            }
+        }    
+    }
+
+    def "Model" (
+        inherits = </ClassA>
+    )
+    {
+    }
+
+We reference :sdfpath:`/Model` in another layer, :filename:`root.usda`, which
+also has a :sdfpath:`/ClassA` class:
+
+.. code-block:: usda
+    :caption: root.usda
+
+    def "Model_1" (
+        references = @./model.usda@</Model>
+    )
+    {
+    }
+
+    class "ClassA"
+    {
+        def "Rig"
+        {
+            def "LRig"
+            {
+                uniform token rootClassALRig = "test"
+            }
+        }
+
+        def "Anim"
+        {
+            def "LAnim"
+            {
+                uniform token rootClassALAnim = "test"
+            }
+        }
+    }  
+
+If we load :filename:`root.usda` and inspect the flattened stage,
+:sdfpath:`/Model/Rig/LRig` in :filename:`model.usda` has inherited from 
+:sdfpath:`/ClassA/Rig/LRig` even though it was relocated to 
+:sdfpath:`/Model/Anim/LAnim` in that layer, and does *not* inherit opinions from
+:sdfpath:`/ClassA/Anim/LAnim`. However, note that :sdfpath:`/Model_1/Anim/LAnim`
+in the :filename:`root.usda` layer does inherit from the layer's 
+:sdfpath:`/ClassA/Anim/LAnim`.
+
+.. code-block:: usda
+    :caption: flattened root.usda
+
+    def "Model_1"
+    {
+        def "Rig"
+        {
+        }
+
+        def "Anim"
+        {
+            def "LAnim"
+            {
+                uniform token modelClassALRig = "test"
+                uniform token rootClassALAnim = "test"
+                uniform token rootClassALRig = "test"
+            }
+        }
+    }
+
+
+**Relocates and ancestral arcs during composition**
+
+One aspect of relocates and composition is that relocates will *ignore* 
+all ancestral arcs *except variant arcs* when we build the 
+:ref:`PrimIndex <usdglossary-index>` for a prim. So, if you had a layer that
+relocates a prim to be the child of a prim with an ancestral inherits arc:
+
+.. code-block:: usda
+    :caption: layer with ancestral inherits and relocates
+
+    #usda 1.0
+    (
+        relocates = {
+            </PrimA/Child>: </PrimWithInherits/Child>
+        }    
+    )
+
+    def "ClassA"
+    (
+    )
+    {
+        def "Child"
+        {
+            uniform token testString = "from ClassA/Child"
+            uniform token classAChildString = "test"
+        }
+    }
+
+    def "RefPrim"
+    (
+    )
+    {
+        def "Child"
+        {
+            uniform token testString = "from RefPrim/Child"
+            uniform token refPrimChildString = "test"
+        }
+    }
+
+    def "PrimA"
+    (
+        prepend references = </RefPrim>
+    )
+    {
+    }
+
+
+    def "PrimWithInherits"
+    (
+        inherits = </ClassA>
+    )
+    {
+    }
+
+With the relocates for :sdfpath:`/PrimA/Child` to 
+:sdfpath:`/PrimWithInherits/Child`, the ancestral opinions from 
+:sdfpath:`/ClassA/Child` are ignored. 
+
+.. code-block:: usda
+    :caption: flattened PrimWithInherits
+
+    def "PrimWithInherits"
+    {
+        def "Child"
+        {
+            uniform token refPrimChildString = "test"
+            uniform token testString = "from RefPrim/Child"
+        }
+    }
+
+However, as mentioned earlier, ancestral *variant* arcs will still compose with
+relocates. If we introduce ancestral opinions from a variant in 
+:sdfpath:`/PrimWithInherits` instead of using inherits:
+
+.. code-block:: usda
+    :caption: replace inherits with variantset in PrimWithInherits
+
+    def "PrimWithInherits"
+    (
+        # Removed inherits of ClassA
+        # Added variantSet and selection with authored Child opinions
+        variants = {
+            string varSet = "Set1"
+        }
+        prepend variantSets = "varSet"    
+    )
+    {
+        variantSet "varSet" = {
+            "Set1" ()
+            {
+                def "Child"
+                {                
+                    uniform token testString = "from varSet Child"
+                    uniform token varChildString = "test"
+                }
+            }
+            "Set2" ()
+            {
+            }
+        }
+    }
+
+The ancestral opinions from the selected variant will be applied:
+
+.. code-block:: usda
+    :caption: flattened PrimWithInherits with ancestral variant opinions
+
+    def "PrimWithInherits"
+    {
+        def "Child"
+        {
+            uniform token refPrimChildString = "test"
+            uniform token testString = "from varSet Child"
+            uniform token varChildString = "test"
+        }
+    }
+
+See :ref:`composition strength ordering <usdglossary-livrpsstrengthordering>` 
+for more details on relocates and composition.
+
+**Local opinions not allowed at source paths**
+
+.. _usdglossary-relocates-source-invalid:
+
+When a source path is relocated, that original source path is considered 
+no longer valid in the current namespace. So, if you relocated 
+:sdfpath:`/PrimA/Child` to :sdfpath:`/PrimA/NewChild`, you cannot have any 
+local opinions authored at :sdfpath:`/PrimA/Child`. This avoids ambiguity and
+ensures there's exactly one location (the target path) in the namespace to 
+express opinions about a given object.
 
 .. _usdglossary-rootlayerstack:
 

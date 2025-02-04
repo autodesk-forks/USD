@@ -233,12 +233,6 @@ SdfPropertySpec::SetDefaultValue(const VtValue &defaultValue)
     return false;
 }
 
-SdfTimeSampleMap
-SdfPropertySpec::GetTimeSampleMap() const
-{
-    return GetFieldAs<SdfTimeSampleMap>(SdfFieldKeys->TimeSamples);
-}
-
 TfType
 SdfPropertySpec::GetValueType() const
 {

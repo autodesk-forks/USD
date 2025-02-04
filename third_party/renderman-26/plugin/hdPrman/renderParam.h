@@ -678,12 +678,19 @@ HdPrman_ConvertPrimvars(
     const GfVec2d &shutterInterval,
     float time = 0.f);
 
+// In 2302 and beyond, we can use
+// HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin.
+#if PXR_VERSION < 2302
+
 /// Check for any primvar opinions on the material that should be Riley primvars.
 void
 HdPrman_TransferMaterialPrimvarOpinions(
     HdSceneDelegate *sceneDelegate,
     SdfPath const& hdMaterialId,
     RtPrimVarList& primvars);
+
+#endif // PXR_VERSION >= 2302
+
 
 /// Resolve Hd material ID to the corresponding Riley material & displacement
 bool

@@ -23,9 +23,6 @@ pxr_library(work
         api.h
         sort.h
         withScopedParallelism.h
-        
-    PYTHON_CPPFILES
-        moduleDeps.cpp
 
     PYMODULE_CPPFILES
         module.cpp

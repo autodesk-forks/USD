@@ -13,10 +13,19 @@ By default, all metrics from `usdview --timing` and EXPLICIT_METRICS
 any additional custom scripts to `testusdview` in addition to the default
 EXPLICIT_METRICS, please provide the "--custom-metrics" command line argument.
 See the --help documentation for more info on `--custom-metrics` format.
+
+If there exists a file ending in `overrides.usda` in the same directory as the
+given asset file, the file will be supplied as `--sessionLayer` to usdview and
+testusdview invocations. This allows provision of specific variant selections,
+for example. The first file found by os.listdir will be used. Ensure there is
+only one file ending in `overrides.usda` in the asset directory to remove
+ambiguity.
 """
 import argparse
 import functools
+import re
 import os
+import shutil
 import statistics
 import subprocess
 import sys
@@ -39,17 +48,18 @@ EXPLICIT_METRICS = {
 }
 
 
-def parseOutput(output, parseFn):
+def parseOutput(output, parseFn, traceFile = None):
     """
     Invokes `parseFn` and converts the returned tuples of
     (success, metric_identifier, time) to a dictionary of
-    (metric_identifier, time).
+    (metric_identifier, (time, traceFile)) if traces are being collected,
+    (metric_identifier, (time, None)) otherwise.
     """
     metrics = {}
     for line in output.splitlines():
         res = parseFn(line)
         if res[0]:
-            metrics[res[1]] = res[2]
+            metrics[res[1]] = (res[2], traceFile)
 
     return metrics
 
@@ -70,11 +80,23 @@ def warmCache(assetPath):
         raise
 
 
-def measurePerformance(assetPath):
+def measurePerformance(assetPath, traceDir, iteration, sessionLayer):
     """
     Run usdview to produce native timing information.
     """
-    command = f"usdview --quitAfterStartup --timing {assetPath}"
+    traceArgs = ""
+    traceFile = None
+    if traceDir is not None:
+        traceFile = os.path.join(traceDir, f"usdview_{iteration}.trace")
+        traceArgs = f"--traceToFile {traceFile} --traceFormat trace"
+
+    if sessionLayer:
+        sessionLayer = f"--sessionLayer {sessionLayer}"
+    else:
+        sessionLayer = ""
+
+    command = (f"usdview --quitAfterStartup --timing {sessionLayer} "
+               f"{assetPath} {traceArgs}")
     try:
         result = subprocess.run(command,
                                 shell=True,
@@ -85,17 +107,34 @@ def measurePerformance(assetPath):
         raise
 
     output = result.stdout.decode()
-    return parseOutput(output, parseTiming)
+    return parseOutput(output, parseTiming, traceFile)
 
 
-def measureTestusdviewPerf(assetPath, testusdviewMetrics):
+def measureTestusdviewPerf(assetPath,
+                           testusdviewMetrics,
+                           traceDir,
+                           iteration,
+                           sessionLayer):
     """
     Run timing scripts for metrics registered in `testusdviewMetrics`.
     """
+    if sessionLayer:
+        sessionLayer = f"--sessionLayer {sessionLayer}"
+    else:
+        sessionLayer = ""
+
     metrics = {}
     for script, metricExpressions in testusdviewMetrics.items():
-        command = ("testusdview --norender --testScript "
-                   f"{script} {assetPath}")
+        traceArgs = ""
+        traceFile = None
+        if traceDir is not None:
+            scriptRep = re.sub(r'\W+', '_', os.path.basename(script))
+            traceFile = os.path.join(traceDir,
+                f"testusdview_{scriptRep}_{iteration}.trace")
+            traceArgs = f"--traceToFile {traceFile} --traceFormat trace"
+
+        command = (f"testusdview --norender {traceArgs} --testScript "
+                   f"{script} {sessionLayer} {assetPath}")
         try:
             result = subprocess.run(command,
                                     shell=True,
@@ -107,58 +146,76 @@ def measureTestusdviewPerf(assetPath, testusdviewMetrics):
 
         output = result.stdout.decode()
         parseFn = functools.partial(parseTimingGeneric, metricExpressions)
-        currMetrics = parseOutput(output, parseFn)
+        currMetrics = parseOutput(output, parseFn, traceFile)
         metrics.update(currMetrics)
 
     return metrics
 
 
-def export(metricsList, outputPath, aggregations):
+def export(metricsList, outputPath, aggregations, traceDir):
     """
     Write `metrics` to the given `outputPath`. If zero aggregations,
     the reported yaml has form { name : list of times }. If one aggregation,
     the reported yaml has form { name_<agg> : aggregated time }. If multiple,
-    the reported yaml has form { name : { agg1 : time, agg2 : time, ... }}
+    the reported yaml has form { name : { agg1 : time, agg2 : time, ... }}.
+
+    In addition, if traces have been requested, copy source trace files for
+    min/max metrics to <metric name>_<aggregation>.trace
     """
+    # All original trace files from all iterations, to be deleted.
+    pendingDeletes = set()
+
     # Transpose list of metrics to dict of (metric name, list of values)
     metricsDict = {}
     for metric in metricsList:
-        for name, time in metric.items():
+        for name, (time, traceFile) in metric.items():
             if name not in metricsDict:
                 metricsDict[name] = []
 
-            metricsDict[name].append(time)
+            if traceFile is not None:
+                pendingDeletes.add(traceFile)
+
+            metricsDict[name].append((time, traceFile))
+
+    # Trace file source to destination filenames, relevant only when
+    # traceDir is not None
+    pendingCopies = {}
+
+    # Dict to output to metrics.yaml
+    resultDict = {}
 
     if len(aggregations) == 0:
-        resultDict = metricsDict
-    elif len(aggregations) == 1:
-        resultDict = {}
-        agg = aggregations[0]
-        for name, times in metricsDict.items():
-            aggName = f"{name}_{agg}"
-            if agg == "min":
-                resultDict[aggName] = min(times)
-            elif agg == "mean":
-                resultDict[aggName] = statistics.mean(times)
-            elif agg == "max":
-                resultDict[aggName] = max(times)
-            else:
-                raise ValueError(f"Internal error -- aggregation {agg}"
-                                 " not implemented")
+        for name, timeTuples in metricsDict.items():
+            resultDict[name] = [t[0] for t in timeTuples]
     else:
-        resultDict = {}
-        for name, times in metricsDict.items():
+        for name, timeTuples in metricsDict.items():
             resultDict[name] = {}
             for agg in aggregations:
                 if agg == "min":
-                    resultDict[name][agg] = min(times)
+                    time, traceFile = min(timeTuples)
+                    pendingCopies[f"{name}_{agg}.trace"] = traceFile
                 elif agg == "mean":
-                    resultDict[name][agg] = statistics.mean(times)
+                    times = [t[0] for t in timeTuples]
+                    time = statistics.mean(times)
                 elif agg == "max":
-                    resultDict[name][agg] = max(times)
+                    time, traceFile = max(timeTuples)
+                    pendingCopies[f"{name}_{agg}.trace"] = traceFile
                 else:
                     raise ValueError("Internal error -- aggregation "
                                      f"{agg} not implemented")
+
+                resultDict[name][agg] = time
+
+    # Collapse { name : { agg : time }} to { name_agg : time } when
+    # only one aggregation is given.
+    if len(aggregations) == 1:
+        collapsedDict = {}
+        for name, aggDict in resultDict.items():
+            for agg, time in aggDict.items():
+                aggName = f"{name}_{agg}"
+                collapsedDict[aggName] = time
+
+        resultDict = collapsedDict
 
     if outputPath.endswith(".yaml"):
         with open(outputPath, "w") as f:
@@ -169,17 +226,43 @@ def export(metricsList, outputPath, aggregations):
 
     print(f"Performance metrics have been output to {outputPath}")
 
+    # If traces are requested, any min/max metric's associated trace file
+    # will be copied to a file that looks like
+    # <metric name>_<aggregation>.trace
+    if traceDir is not None:
+        for filename, src in pendingCopies.items():
+            dest = os.path.join(traceDir, filename)
+            shutil.copyfile(src, dest)
 
-def run(assetPath, testusdviewMetrics):
+    # Delete original per-iteration trace files
+    for trace in pendingDeletes:
+        os.remove(trace)
+
+
+def run(assetPath, testusdviewMetrics, traceDir, iteration):
     """
     Collect performance metrics.
     """
+    # Supply session layer overrides, if found
+    assetDir = os.path.dirname(assetPath)
+    sessionLayer = None
+    for fname in os.listdir(assetDir):
+        if fname.endswith("overrides.usda"):
+            sessionLayer = os.path.join(assetDir, fname)
+            break
+
     # Measure `usdview --timing` native metrics
-    usdviewMetrics = measurePerformance(assetPath)
+    usdviewMetrics = measurePerformance(assetPath,
+                                        traceDir,
+                                        iteration,
+                                        sessionLayer)
 
     # Measure custom `testusdview` metrics
     customMetrics = measureTestusdviewPerf(assetPath,
-                                           testusdviewMetrics)
+                                           testusdviewMetrics,
+                                           traceDir,
+                                           iteration,
+                                           sessionLayer)
 
     metrics = {}
     metrics.update(usdviewMetrics)
@@ -265,11 +348,19 @@ def parseArgs():
                              "will be a key value dictionary with "
                              "<metric_name>_<aggregation> to aggregated "
                              "time value. If multiple aggregations are "
-                             "requested, the output yaml format will be"
+                             "requested, the output yaml format will be "
                              "<metric_name>: {<agg1>: <value1>, <agg2>:...}."
                              "When no aggregation is set, the output format "
                              "will be <metric_name>: [<val1>, <val2>, ...] or "
                              "one measured value for each iteration.")
+    parser.add_argument("-t", "--tracedir", type=str,
+                        help="Outputs a trace file for each run of usdview in "
+                             "the given directory if provided and if "
+                             "'aggregation' includes min or max. A trace file "
+                             "for the iteration of testusdview or usdview "
+                             "from which the aggregated value of each metric "
+                             "was observed will be output in the form "
+                             "<metric name>_<aggregation>.trace")
 
     args = parser.parse_args()
 
@@ -288,6 +379,17 @@ def parseArgs():
     if args.aggregation and args.iterations == 1:
         print(f"WARNING: aggregation {args.aggregation} is set but "
               "iterations is 1")
+    
+    aggs = args.aggregation
+    if args.tracedir and ("min" in aggs or "max" in aggs):
+        if not os.path.exists(args.tracedir):
+            os.makedirs(args.tracedir, exist_ok=True)
+            print(f"Created trace output directory {args.tracedir}")
+
+        print(f"Trace files will be output to the '{args.tracedir}' dir")
+    else:
+        print("Trace files will not be output, missing --tracedir ",
+              "or --aggregation that includes min or max")
 
     return args
 
@@ -298,11 +400,11 @@ def main():
     warmCache(args.asset)
 
     metricsList = []
-    for _ in range(args.iterations):
-        metrics = run(args.asset, customMetrics)
+    for i in range(args.iterations):
+        metrics = run(args.asset, customMetrics, args.tracedir, i)
         metricsList.append(metrics)
 
-    export(metricsList, args.output, args.aggregation)
+    export(metricsList, args.output, args.aggregation, args.tracedir)
 
 
 if __name__ == "__main__":

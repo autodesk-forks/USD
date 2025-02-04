@@ -37,8 +37,6 @@ namespace mx = MaterialX;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_PUBLIC_TOKENS(UsdMtlxTokens, USD_MTLX_TOKENS);
-
 namespace {
 
 using DocumentCache = std::map<std::string, mx::DocumentPtr>;
@@ -510,8 +508,6 @@ UsdMtlxGetUsdType(const std::string& mtlxTypeName)
     static const auto table =
         std::unordered_map<std::string, UsdMtlxUsdTypeInfo>{
            { "boolean",       TUPLEX(Bool,          true,  noMatch) },
-           { "color2array",   TUPLEX(Float2Array,   false, noMatch) },
-           { "color2",        TUPLEN(Float2,        false, Float, 2)},
            { "color3array",   TUPLE3(Color3fArray,  true,  Color)   },
            { "color3",        TUPLE3(Color3f,       true,  Color)   },
            { "color4array",   TUPLE3(Color4fArray,  true,  Color4)  },

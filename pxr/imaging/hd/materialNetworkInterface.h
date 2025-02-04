@@ -35,6 +35,14 @@ public:
 
     virtual SdfPath GetMaterialPrimPath() const = 0;
 
+    /// Material config is a collection of data related to the entire material,
+    /// e.g. material definition version, etc.
+    ///
+    /// Similarly to GetNodeTypeInfoXXX() below, only getters are provided, as
+    /// we don't intend to mutate this config data.
+    virtual TfTokenVector GetMaterialConfigKeys() const = 0;
+    virtual VtValue GetMaterialConfigValue(const TfToken& key) const = 0;
+
     /// Returns the nearest enclosing model asset name, as described by
     /// the model schema, or empty string if none is available.
     virtual std::string GetModelAssetName() const = 0;
@@ -63,6 +71,7 @@ public:
     {
         VtValue value;
         TfToken colorSpace;
+        TfToken typeName;
     };
 
     virtual NodeParamData GetNodeParameterData(

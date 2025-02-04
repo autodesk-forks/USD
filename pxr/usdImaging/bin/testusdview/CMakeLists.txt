@@ -1066,6 +1066,8 @@ pxr_register_test(testUsdviewPrimvarEdits
         remove_fallback_primvar_wireOnSurf.png
         add_unused_primvars.png
         remove_unused_primvars.png
+        add_primvars_for_varname_edit.png
+        primvar_reader_varname_edit.png
     FAIL 0.05
     FAIL_PERCENT 0.03
     PERCEPTUAL

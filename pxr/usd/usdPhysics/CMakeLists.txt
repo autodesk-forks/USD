@@ -26,9 +26,6 @@ pxr_library(usdPhysics
         api.h
         massProperties.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         wrapMetrics.cpp
 

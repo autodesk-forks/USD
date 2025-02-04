@@ -1,6 +1,7 @@
 #usda 1.0
 (
     upAxis = "Y"
+    renderSettingsPrimPath = "/Render/RenderSettings"
 )
 
 def Scope "World"
@@ -61,6 +62,7 @@ def Scope "World"
             double3 xformOp:rotateXYZ = (-60, 31.5, 0)
             double3 xformOp:translate = (3.6, 11.4, 6)
             token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+            int inputs:ri:light:fixedSampleCount = 1
         }
     }
 }
@@ -140,6 +142,7 @@ def Scope "Render"
     def RenderSettings "RenderSettings"
     {
         token outputs:ri:displayFilters.connect = </Render/DisplayFilter1.outputs:result>
+        bool ri:hider:jitter = 0
         float ri:Ri:PixelVariance = 0.0
         int ri:hider:minsamples = 32
         int ri:hider:maxsamples = 32

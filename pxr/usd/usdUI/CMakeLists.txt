@@ -12,9 +12,6 @@ pxr_library(usdUI
 
     PUBLIC_HEADERS
         api.h
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
     
     PYMODULE_FILES
         __init__.py

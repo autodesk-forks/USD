@@ -20,6 +20,34 @@ TF_DEFINE_PRIVATE_TOKENS(
     (assetName)
     );
 
+TfTokenVector
+HdDataSourceMaterialNetworkInterface::GetMaterialConfigKeys() const
+{
+    HdSampledDataSourceContainerSchema configDs = _networkSchema.GetConfig();
+    if (!configDs) {
+        return {};
+    }
+
+    return configDs.GetNames();
+}
+
+VtValue
+HdDataSourceMaterialNetworkInterface::GetMaterialConfigValue(
+    const TfToken& key) const
+{
+    HdSampledDataSourceContainerSchema configDs = _networkSchema.GetConfig();
+    if (!configDs) {
+        return {};
+    }
+    
+    HdSampledDataSourceHandle keyDs =
+        HdSampledDataSource::Cast(configDs.Get(key));
+    if (!keyDs) {
+        return {};
+    }
+    return keyDs->GetValue(0.0f);
+}
+
 std::string
 HdDataSourceMaterialNetworkInterface::GetModelAssetName() const
 {

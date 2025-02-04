@@ -238,6 +238,21 @@ SDF_DEFINE_CLEAR(DisplayUnit, SdfFieldKeys->DisplayUnit)
 bool
 Sdf_UncheckedCreatePrimInLayer(SdfLayer *layer, SdfPath const &primPath);
 
+SdfAttributeSpecHandle
+SdfCreatePrimAttributeInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &attrPath,
+    const SdfValueTypeName &typeName,
+    SdfVariability variability,
+    bool isCustom)
+{
+    if (SdfJustCreatePrimAttributeInLayer(layer, attrPath, typeName,
+                                          variability, isCustom)) {
+        return layer->GetAttributeAtPath(attrPath);
+    }
+    return TfNullPtr;
+}
+
 bool
 SdfJustCreatePrimAttributeInLayer(
     const SdfLayerHandle &layer,

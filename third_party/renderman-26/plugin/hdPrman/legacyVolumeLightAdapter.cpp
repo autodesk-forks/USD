@@ -105,47 +105,6 @@ HdPrman_LegacyVolumeLightAdapter::GetMaterialResource(
     return VtValue(networkMap);
 }
 
-HdVolumeFieldDescriptorVector
-HdPrman_LegacyVolumeLightAdapter::GetVolumeFieldDescriptors(UsdPrim const& usdPrim,
-                                                    SdfPath const &id,
-                                                    UsdTimeCode time) const
-{
-    HdVolumeFieldDescriptorVector descriptors;
-    UsdVolVolume::FieldMap fieldMap;
-
-    UsdVolVolume volume(usdPrim);
-    fieldMap = volume.GetFieldPaths();
-
-    if (!fieldMap.empty()) {
-        for (auto it = fieldMap.begin(); it != fieldMap.end(); ++it) {
-            UsdPrim fieldUsdPrim(_GetPrim(it->second));
-            UsdVolFieldBase fieldPrim(fieldUsdPrim);
-
-            if (fieldPrim) {
-                TfToken fieldPrimType;
-                UsdImagingPrimAdapterSharedPtr adapter
-                    = _GetPrimAdapter(fieldUsdPrim);
-                UsdImagingFieldAdapter *fieldAdapter;
-
-                fieldAdapter = dynamic_cast<UsdImagingFieldAdapter *>(
-                    adapter.get());
-                if (TF_VERIFY(fieldAdapter)) {
-                    fieldPrimType = fieldAdapter->GetPrimTypeToken();
-                    // XXX(UsdImagingPaths): Using usdPath directly
-                    // as cachePath here -- we should do the correct
-                    // mapping in order for instancing to work.
-                    SdfPath const& cachePath = fieldUsdPrim.GetPath();
-                    descriptors.push_back(
-                        HdVolumeFieldDescriptor(it->first, fieldPrimType,
-                            _ConvertCachePathToIndexPath(cachePath)));
-                }
-            }
-        }
-    }
-
-    return descriptors;
-}
-
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // !defined(ARCH_OS_WINDOWS)

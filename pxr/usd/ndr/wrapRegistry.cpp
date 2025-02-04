@@ -95,6 +95,9 @@ void wrapRegistry()
     class_<This, ThisPtr, noncopyable>("Registry", no_init)
         .def("SetExtraDiscoveryPlugins", &_SetExtraDiscoveryPlugins)
         .def("SetExtraParserPlugins", &This::SetExtraParserPlugins)
+        .def("AddDiscoveryResult", 
+            (void(NdrRegistry::*)(const NdrNodeDiscoveryResult&))
+            &This::AddDiscoveryResult)
         .def("GetSearchURIs", &This::GetSearchURIs)
         .def("GetNodeIdentifiers", &This::GetNodeIdentifiers,
             (args("family") = TfToken(),

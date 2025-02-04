@@ -1174,9 +1174,6 @@ _InitializePrimDefsAndSchematicsForPluginSchemas()
         });
 
     for (const SdfLayerRefPtr& generatedSchema : generatedSchemas) {
-        VtDictionary customDataDict = generatedSchema->GetCustomLayerData();
-
-        bool hasErrors = false;
 
         // Schema generation will have added any defined fallback prim 
         // types as a dictionary in layer metadata which will be composed
@@ -1196,13 +1193,6 @@ _InitializePrimDefsAndSchematicsForPluginSchemas()
                         generatedSchema->GetRealPath().c_str());
                 }
             }
-        }
-
-        if (hasErrors) {
-            TF_CODING_ERROR(
-                "Encountered errors in layer metadata from generated "
-                "schema file '%s'. This schema must be regenerated.",
-                generatedSchema->GetRealPath().c_str());
         }
     }
 }

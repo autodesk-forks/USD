@@ -11,9 +11,6 @@ pxr_plugin(sdrGlslfx
     PRIVATE_CLASSES
         parserPlugin
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_FILES
         __init__.py
 

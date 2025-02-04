@@ -98,6 +98,8 @@ HgiGLOps::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp)
             return;
         }
 
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
         glGetTextureSubImage(
             srcTexture->GetTextureId(),
             copyOp.mipLevel,
@@ -136,6 +138,8 @@ HgiGLOps::CopyTextureCpuToGpu(HgiTextureCpuToGpuOp const& copyOp)
 
         HgiGLTexture* dstTexture = static_cast<HgiGLTexture*>(
             copyOp.gpuDestinationTexture.Get());
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         switch(desc.type) {
         case HgiTextureType2D:

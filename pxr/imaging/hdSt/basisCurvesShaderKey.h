@@ -51,6 +51,7 @@ struct HdSt_BasisCurvesShaderKey : public HdSt_ShaderKey
         ROUND         // Generated camera oriented normal as a tube
     };
 
+    HDST_API
     HdSt_BasisCurvesShaderKey(TfToken const &type, TfToken const &basis,                              
                               DrawStyle drawStyle, NormalStyle normalStyle,
                               bool basisWidthInterpolation,
@@ -60,6 +61,7 @@ struct HdSt_BasisCurvesShaderKey : public HdSt_ShaderKey
                               bool pointsShadingEnabled,
                               bool hasMetalTessellation);
 
+    HDST_API
     ~HdSt_BasisCurvesShaderKey();
 
     TfToken const &GetGlslfxFilename() const override { return glslfx; }

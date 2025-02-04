@@ -620,7 +620,7 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
     //
     //   /Prim1 (references = @layer1@</Instance1>)
     // 
-    // If were to start with an edit in layer1 to move /Class/Child to 
+    // If we were to start with an edit in layer1 to move /Class/Child to 
     // /MovedChild, that means we move the original spec outside of the scope of 
     // /Instance1's inherit to /Class. When we then process the implied class
     // dependency of /Class/Child in layer2, we *could* process it as a move 
@@ -634,8 +634,8 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
     //   /Prim2 (references = @layer1@</Instance2>)
     // 
     // Now, a move of /Class/Child to /MovedChild in layer1 would process 
-    // additional edits to ones already stated above. First, the inherits path
-    // in /Instance2 would be updated to point at /MovedChild instead of 
+    // additional edits to the ones already stated above. First, the inherits
+    // path in /Instance2 would be updated to point at /MovedChild instead of 
     // /Class/Child. Second, we'd also process an implied class dependendency in
     // layer2 to move /Class/Child to /MovedChild so that /Prim2 still composes
     // those implied class specs.
@@ -645,7 +645,7 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
     // move it to /MovedChild. But as was indicated, the deletion of 
     // /Class/Child wasn't strictly necessary so another edit wanting to move it
     // to /MovedChild is acceptable and preferred. Thus, we mark any deletes 
-    // that come from implied class task as optional so that they can be 
+    // that come from implied class tasks as optional so that they can be 
     // overridden if another edit should take precedence.
     const bool isOptionalDelete = 
         nodeTask.isImpliedClassTask && nodeTask.newPath.IsEmpty();
@@ -701,6 +701,39 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
             specMovesScratch.optionalSpecDeletes.push_back(oldSpecPath);
         } else {
             specMovesScratch.specMoves.push_back({oldSpecPath, newSpecPath});
+        }
+    }
+
+    // Also check every layer in the stack to see if it has its defaultPrim
+    // set to the old path or any descendant of that path; we need to update
+    // these to the new path. 
+    for (const auto &layer : node.GetLayerStack()->GetLayers()) {
+        SdfPath defaultPrimPath = layer->GetDefaultPrimAsPath();
+        if (defaultPrimPath.HasPrefix(oldSpecPath)) {
+            if (newSpecPath.IsEmpty()) {
+                // For a delete we clear the defaultPrim field
+                _edits->compositionFieldEdits.push_back(
+                    {layer, SdfPath::AbsoluteRootPath(), 
+                     SdfFieldKeys->DefaultPrim, VtValue()});
+            } else {
+                // Get the new defaultPrim path and set it. We set the field
+                // differently depending on whether the path is a root prim
+                // or not. For root prims we use the root relative path, which
+                // is just the prim name, because this allows the layer to be 
+                // backwards compatible with earlier versions of USD which 
+                // expected this field to only be the name token of a root prim.
+                // For non-root prims, we use the absolute path as it's more
+                // clear than a root relative path (which would be just the path 
+                // without the initial forward slash).
+                const SdfPath newDefaultPrimPath = 
+                    defaultPrimPath.ReplacePrefix(oldSpecPath, newSpecPath);
+                TfToken newDefaultPrim = newDefaultPrimPath.IsRootPrimPath() ?
+                    newDefaultPrimPath.GetNameToken() :
+                    newDefaultPrimPath.GetAsToken();
+                _edits->compositionFieldEdits.push_back(
+                    {layer, SdfPath::AbsoluteRootPath(), 
+                    SdfFieldKeys->DefaultPrim, VtValue::Take(newDefaultPrim)});
+            }
         }
     }
 }

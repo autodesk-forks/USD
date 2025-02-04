@@ -13,11 +13,8 @@
 #include <vector>
 #include <list>
 #include <algorithm>
-#include <cstring>
-#include <cassert>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
 
 // sample neighbor pixels and populate around blocks
 void
@@ -1003,8 +1000,8 @@ HdStPtexMipmapTextureLoader::optimizePacking(int maxNumPages,
             } else {
                 openPages.push_back(page);
             }
-            // XXX -- Should not use assert().
-            assert(added);
+
+            TF_VERIFY(added);
         }
     }
 

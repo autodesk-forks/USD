@@ -44,6 +44,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (texcoord)
     (geompropvalue)
     (filename)
+    (ND_surface)
 );
 
 static mx::FileSearchPath
@@ -248,7 +249,12 @@ _AddMaterialXNode(
     mx::NodeDefPtr mxNodeDef = mxDoc->getNodeDef(hdNodeType.GetString());
     if (!mxNodeDef) {
         TF_WARN("NodeDef not found for Node '%s'", hdNodeType.GetText());
-        return mx::NodePtr();
+        // Instead of returning here, use a ND_surface definition so that the
+        // rest of the network can be processed without errors.
+        // This allows networks that might have non mtlx nodes next to
+        // the terminal node to come through, and those nodes will be kept
+        // out of the shader compile in hdPrman.
+        mxNodeDef = mxDoc->getNodeDef(_tokens->ND_surface);
     }
     const SdfPath hdNodePath(hdNodeName.GetString());
     const std::string mxNodeCategory = _GetMxNodeString(mxNodeDef);

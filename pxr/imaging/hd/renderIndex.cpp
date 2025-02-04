@@ -139,7 +139,8 @@ HdRenderIndex::IsSceneIndexEmulationEnabled()
 HdRenderIndex::HdRenderIndex(
     HdRenderDelegate *renderDelegate,
     HdDriverVector const& drivers,
-    const std::string &instanceName)
+    const std::string &instanceName,
+    const std::string &appName)
     : _emulationBatchingCtx(std::make_unique<_NoticeBatchingContext>(
         _noticeBatchingTokens->postEmulation))
     , _mergingBatchingCtx(std::make_unique<_NoticeBatchingContext>(
@@ -197,7 +198,8 @@ HdRenderIndex::HdRenderIndex(
             _terminalSceneIndex =
                 HdSceneIndexPluginRegistry::GetInstance()
                     .AppendSceneIndicesForRenderer(
-                        rendererDisplayName, _terminalSceneIndex, instanceName);
+                        rendererDisplayName, _terminalSceneIndex,
+                        instanceName, appName);
         }
 
         _siSd = std::make_unique<HdSceneIndexAdapterSceneDelegate>(
@@ -232,14 +234,15 @@ HdRenderIndex*
 HdRenderIndex::New(
     HdRenderDelegate *renderDelegate,
     HdDriverVector const& drivers,
-    const std::string &instanceName)
+    const std::string &instanceName,
+    const std::string &appName)
 {
     if (renderDelegate == nullptr) {
         TF_CODING_ERROR(
             "Null Render Delegate provided to create render index");
         return nullptr;
     }
-    return new HdRenderIndex(renderDelegate, drivers, instanceName);
+    return new HdRenderIndex(renderDelegate, drivers, instanceName, appName);
 }
 
 void
@@ -597,9 +600,10 @@ HdRenderIndex::_Clear()
 // -------------------------------------------------------------------------- //
 
 void
-HdRenderIndex::_TrackDelegateTask(HdSceneDelegate* delegate,
-                                  SdfPath const& taskId,
-                                  HdTaskCreateFnc taskCreateFnc)
+HdRenderIndex::_InsertSceneDelegateTask(
+        HdSceneDelegate* const delegate, 
+        SdfPath const& taskId,
+        HdLegacyTaskFactorySharedPtr factory)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -608,7 +612,13 @@ HdRenderIndex::_TrackDelegateTask(HdSceneDelegate* delegate,
         return;
     }
 
-    HdTaskSharedPtr const task = taskCreateFnc(delegate, taskId);
+    if (_IsEnabledSceneIndexEmulation()) {
+        _emulationSceneIndex->AddLegacyTask(
+            taskId, delegate, std::move(factory));
+        return;
+    }
+
+    HdTaskSharedPtr const task = factory->Create(delegate, taskId);
     _InsertTask(delegate, taskId, task);
 }
 
@@ -637,6 +647,17 @@ HdRenderIndex::GetTask(SdfPath const& id) const {
 
 void
 HdRenderIndex::RemoveTask(SdfPath const& id)
+{
+    if (_IsEnabledSceneIndexEmulation()) {
+        _emulationSceneIndex->RemovePrim(id);
+        return;
+    }
+
+    _RemoveTask(id);
+}
+
+void
+HdRenderIndex::_RemoveTask(SdfPath const& id)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();

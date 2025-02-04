@@ -11,6 +11,8 @@
 #include "pxr/base/tf/noticeRegistry.h"
 #include "pxr/base/tf/type.h"
 
+#include <thread>
+
 using std::type_info;
 using std::vector;
 
@@ -47,6 +49,16 @@ TfNotice::_DelivererBase::
 _EndDelivery(const vector<TfNotice::WeakProbePtr> &probes)
 {
     Tf_NoticeRegistry::_GetInstance()._EndDelivery(probes);
+}
+
+void
+TfNotice::_DelivererBase::_WaitUntilNotSending()
+{
+    // Spin wait until no sends are in progress.  This presumes
+    // _WaitForSendsToFinish() has been called.
+    do {
+        std::this_thread::yield();
+    } while (_busy.load(std::memory_order_acquire) != _waitBit);
 }
 
 TfNotice::Probe::~Probe()
@@ -127,6 +139,27 @@ TfNotice::Revoke(Keys* keys)
 {
     TF_FOR_ALL(i, *keys) {
         Revoke(*i);
+    }
+    keys->clear();
+}
+
+bool
+TfNotice::RevokeAndWait(Key& key)
+{
+    if (!key) {
+        return false;
+    }
+    
+    Tf_NoticeRegistry::_GetInstance()._Revoke(key, true);
+
+    return true;
+}
+
+void
+TfNotice::RevokeAndWait(Keys* keys)
+{
+    TF_FOR_ALL(i, *keys) {
+        RevokeAndWait(*i);
     }
     keys->clear();
 }

@@ -194,7 +194,7 @@ def _GetSendMailInfo(usdviewApi, allowScreenCapSel):
 
     # set field defaults
     dialog.emailInfo = _GenerateDefaultInfo(usdviewApi, dialog)
-    dialog.setMinimumWidth((window.size().width()/2))
+    dialog.setMinimumWidth(window.size().width()//2)
 
     # add layout to dialog and launch
     dialog.setLayout(_GenerateLayout(dialog, allowScreenCapSel))

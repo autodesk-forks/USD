@@ -8,10 +8,13 @@
 #include "pxr/imaging/hdSt/basisCurvesComputations.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/glf/testGLContext.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/usd/sdf/path.h"
 
@@ -333,16 +336,18 @@ int main()
 
     TfErrorMark mark;
 
-    static HgiUniquePtr _hgi = Hgi::CreatePlatformDefaultHgi();
-    HdStResourceRegistrySharedPtr registry =
-        std::make_shared<HdStResourceRegistry>(_hgi.get());
+    HgiUniquePtr const hgi = Hgi::CreatePlatformDefaultHgi();
+    HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
+    HdStRenderDelegate renderDelegate;
+    std::unique_ptr<HdRenderIndex> const index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    HdStResourceRegistrySharedPtr const registry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            index->GetResourceRegistry());
 
     bool success = true;
     success &= TopologyWithIndicesTest(registry);
 
-    registry->GarbageCollect();
-    registry.reset();
-    
     TF_VERIFY(mark.IsClean());
 
     if (success && mark.IsClean()) {

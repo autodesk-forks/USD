@@ -32,9 +32,6 @@ pxr_library(plug
     CPPFILES
         initConfig.cpp
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapNotice.cpp

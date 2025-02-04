@@ -208,8 +208,14 @@ class "Xformable" (
     UsdGeomXformable currently supports arbitrary sequences of the following
     operations, each of which can be encoded in an attribute of the proper
     shape in any supported precision:
+    - translateX - 1D
+    - translateY - 1D
+    - translateZ - 1D
     - translate - 3D
     - scale     - 3D
+    - scaleX   - 1D
+    - scaleY   - 1D
+    - scaleZ   - 1D
     - rotateX   - 1D angle in degrees
     - rotateY   - 1D angle in degrees
     - rotateZ   - 1D angle in degrees
@@ -231,7 +237,7 @@ class "Xformable" (
     round-tripping logic.
     
     We also provide specific \"Add\" API for each type, for clarity and 
-    conciseness, e.g. AddTranslateOp(), AddRotateXYZOp() etc.
+    conciseness, e.g. AddTranslateOp(), AddTranslateXOp(), AddRotateXYZOp() etc.
     
     AddXformOp() will return a UsdGeomXformOp object, which is a schema on a 
     newly created UsdAttribute that provides convenience API for authoring

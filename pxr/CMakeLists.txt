@@ -8,6 +8,10 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/pxr/exec")
     add_subdirectory(exec)
 endif()
 
+if (${PXR_BUILD_USD_VALIDATION})
+    add_subdirectory(usdValidation)
+endif()
+
 if (${PXR_BUILD_IMAGING})
     add_subdirectory(imaging)
     if (${PXR_BUILD_USD_IMAGING})

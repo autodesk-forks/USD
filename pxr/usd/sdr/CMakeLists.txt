@@ -20,9 +20,6 @@ pxr_library(sdr
         shaderNode
         shaderProperty
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapRegistry.cpp

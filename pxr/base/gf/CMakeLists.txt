@@ -94,9 +94,6 @@ pxr_library(gf
         ilmbase_toFloat.h
         nc/nanocolor.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapBBox3d.cpp

@@ -48,9 +48,6 @@ pxr_library(usdImagingGL
     PRIVATE_HEADERS
         unitTestGLDrawing.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapEngine.cpp
@@ -67,17 +64,27 @@ pxr_library(usdImagingGL
 
 #
 # C++ tests - Only build on all platforms for now.
-# 
-set(TEST_LIBS "arch" "garch" "glf" "hd" "sdf" "tf" "usd" "usdUtils" "usdImaging" "usdImagingGL")
+#
+set(TEST_LIBS
+        "arch"
+        "garch"
+        "glf"
+        "hd"
+        "sdf"
+        "tf"
+        "usd"
+        "usdUtils"
+        "usdImaging"
+        "usdImagingGL")
+
 if(PXR_ENABLE_JS_SUPPORT)
     list(APPEND TEST_LIBS
-            "-s MAX_WEBGL_VERSION=3"
-            "-s LEGACY_GL_EMULATION=1"
-            "-s USE_GLFW=3"
-            "-s MAX_WEBGL_VERSION=3"
-            )
+    "-s MAX_WEBGL_VERSION=3"
+    "-s LEGACY_GL_EMULATION=1"
+    "-s USE_GLFW=3"
+    "-s MAX_WEBGL_VERSION=3"
+    )
 endif()
-
 
 pxr_build_test(testUsdImagingGLBasicDrawing
     LIBRARIES
@@ -135,6 +142,14 @@ pxr_build_test(testUsdImagingGLResync
         testenv/testUsdImagingGLResync.cpp
 )
 
+pxr_build_test(testUsdImagingGLSublayerOperations
+    LIBRARIES
+        ${TEST_LIBS}
+    CPPFILES
+        unitTestGLDrawing.cpp
+        testenv/testUsdImagingGLSublayerOperations.cpp
+)
+
 pxr_build_test(testUsdImagingGLSurfaceShader
     LIBRARIES
         ${TEST_LIBS}
@@ -167,7 +182,7 @@ if (WIN32)
 endif()
 
 # usdImagingGL tests require plugin mechanism to find different renderer
-# plugins, which we do not support for static build configurations due to 
+# plugins, which we do not support for static build configurations due to
 # potential conflict in client applications linking against static build USD
 if (NOT BUILD_SHARED_LIBS)
     message(STATUS "Skipping ${PXR_PACKAGE} tests on static build configuration")
@@ -395,6 +410,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLSublayerOperations
+    DEST testUsdImagingGLSublayerOperations
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdImagingGLPurpose
     DEST testUsdImagingGLPurpose
 )
@@ -422,6 +442,11 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdImagingGLCards
     DEST testUsdImagingGLCards
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLCards
+    DEST testUsdImagingGLCards_SceneIndex
 )
 
 pxr_install_test_dir(
@@ -720,7 +745,7 @@ pxr_register_test(testUsdImagingGLBasicDrawing_clipped
 )
 
 pxr_register_test(testUsdImagingGLBasicDrawing_id
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -idRender -stage basicDrawing/shaders.usd -frameAll -write testUsdImagingGLBasicDrawing_id.png"
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -rendererAov primId -stage basicDrawing/shaders.usd -frameAll -write testUsdImagingGLBasicDrawing_id.png"
     IMAGE_DIFF_COMPARE
         testUsdImagingGLBasicDrawing_id.png
     FAIL 1
@@ -2408,6 +2433,20 @@ pxr_register_test(testUsdImagingGLResync_instancer
     TESTENV testUsdImagingGLResync
 )
 
+pxr_register_test(testUsdImagingGLSublayerOperations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLSublayerOperations"
+    IMAGE_DIFF_COMPARE
+        initial.png
+        mute_attr.png
+        remove_sublayer_with_sub.png
+        unmute_attr.png
+        add_sublayer_with_sub.png
+    FAIL .05
+    FAIL_PERCENT .03
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLSublayerOperations
+)
+
 pxr_register_test(testUsdImagingGLPurpose
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLPurpose --stage world.usda --purpose /World/Model --write world.png"
     IMAGE_DIFF_COMPARE
@@ -2550,6 +2589,51 @@ pxr_register_test(testUsdImagingGLCards_bounds
     WARN_PERCENT 0.05
     EXPECTED_RETURN_CODE 0
     TESTENV testUsdImagingGLCards
+)
+
+# XXX: Commenting out while failures are being investigated.
+# 
+# pxr_register_test(testUsdImagingGLCards_SceneIndex
+#     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -shading smooth -frameAll -stage testCards.usda -write testCards.png"
+#     IMAGE_DIFF_COMPARE
+#         testCards.png
+#     FAIL 0.01
+#     FAIL_PERCENT 0.1
+#     WARN 0.02
+#     WARN_PERCENT 0.05
+#     EXPECTED_RETURN_CODE 0
+#     TESTENV testUsdImagingGLCards
+#     ENV
+#         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
+# )
+
+pxr_register_test(testUsdImagingGLCards_SceneIndex_anim
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -shading smooth -frameAll -stage testAnim.usda -times 1 2 -write testAnim.png"
+    IMAGE_DIFF_COMPARE
+        testAnim_001.png
+        testAnim_002.png
+    FAIL 0.01
+    FAIL_PERCENT 0.1
+    WARN 0.02
+    WARN_PERCENT 0.05
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLCards
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
+)
+
+pxr_register_test(testUsdImagingGLCards_SceneIndex_bounds
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -unloadedAsBounds -offscreen -lighting -shading smooth -frameAll -stage testUnloadedAsBounds.usda -write testUnloadedAsBounds.png"
+    IMAGE_DIFF_COMPARE
+        testUnloadedAsBounds.png
+    FAIL 0.01
+    FAIL_PERCENT 0.1
+    WARN 0.02
+    WARN_PERCENT 0.05
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLCards
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
 
 pxr_register_test(testUsdImagingGLMeshQuadrangulation
@@ -4617,6 +4701,30 @@ pxr_register_test(testUsdImagingGLAovVisualization_Storm_depth
     TESTENV testUsdImagingGLAovVisualization
 )
 
+pxr_register_test(testUsdImagingGLAovVisualization_Storm_primId
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -stage viz_aov.usda -rendererAov primId -clear 0 0 0 1 -lighting -camera /main_cam -write testUsdImagingGLAovVisualization_Storm_primId.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLAovVisualization_Storm_primId.png
+    FAIL 0.05
+    FAIL_PERCENT 0.02
+    WARN 0.025
+    WARN_PERCENT 0.002
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLAovVisualization
+)
+
+pxr_register_test(testUsdImagingGLAovVisualization_Storm_Neye
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -stage viz_aov.usda -rendererAov Neye -clear 0 0 0 1 -lighting -camera /main_cam -write testUsdImagingGLAovVisualization_Storm_Neye.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLAovVisualization_Storm_Neye.png
+    FAIL 0.05
+    FAIL_PERCENT 0.02
+    WARN 0.025
+    WARN_PERCENT 0.002
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLAovVisualization
+)
+
 pxr_register_test(testUsdImagingGLInvalidMaterial
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -shading smooth  -frameAll -stage invalidMaterial.usda -write testUsdImagingGLInvalidMaterial.png"
     IMAGE_DIFF_COMPARE
@@ -4855,7 +4963,7 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
         EXPECTED_RETURN_CODE 0
         TESTENV testUsdImagingGLMaterialXBasic
     )
-    
+
     # MaterialX materials using texture, texture coordinates, and geompropvalues.
     pxr_install_test_dir(
         SRC testenv/testUsdImagingGLMaterialXTextured
@@ -4970,12 +5078,12 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
         EXPECTED_RETURN_CODE 0
         TESTENV testUsdImagingGLMaterialXTextured
     )
-    
-# These two tests are to provide direct comparisons between the Native and  
-# MaterialX implementations of PreviewSurface Materials. 
-# The first test is using purely Native PreviewSurface materials. 
+
+# These two tests are to provide direct comparisons between the Native and
+# MaterialX implementations of PreviewSurface Materials.
+# The first test is using purely Native PreviewSurface materials.
 # The second uses identical scenes with equivalent MaterialX PreviewSurface
-# materials. 
+# materials.
 # Native UsdPreviewSurface Materials:
     # pxr_install_test_dir(
     #     SRC testenv/testUsdImagingGLMaterialXvsNative
@@ -5066,12 +5174,12 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
     #     TESTENV testUsdImagingGLMaterialXvsNative
     # )
 
-# MaterialX UsdPreviewSurface Materials: 
+# MaterialX UsdPreviewSurface Materials:
     # pxr_install_test_dir(
     #     SRC testenv/testUsdImagingGLMaterialXvsNative
     #     DEST testUsdImagingGLMaterialXvsNative_materialX
     # )
-    
+
     # pxr_register_test(testUsdImagingGLMaterialXvsNative_materialXdefault
     #     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage materialXdefault.usda -write materialXdefault.png"
     #     IMAGE_DIFF_COMPARE
@@ -5160,7 +5268,7 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
         SRC testenv/testUsdImagingGLMaterialXCustomNodes
         DEST testUsdImagingGLMaterialXCustomNodes
     )
-        
+
     pxr_register_test(testUsdImagingGLMaterialXCustomNodes_customTexNode
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage customTexNode.usda -write customTexNode.png"
         IMAGE_DIFF_COMPARE
@@ -5202,10 +5310,10 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
         ENV
             PXR_MTLX_PLUGIN_SEARCH_PATHS=./customNodeDefs
     )
-    
+
     # Not a MaterialX test as such, but requires MaterialX support
     pxr_register_test(testUsdImagingGLGeomSubsets_Primvars_SceneIndex
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -shading wireOnSurface -stage primvars.usda -write testUsdImagingGLGeomSubsets_Primvars.png"
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -sceneLights -shading wireOnSurface -stage primvars.usda -camera /World/main_cam -write testUsdImagingGLGeomSubsets_Primvars.png"
         IMAGE_DIFF_COMPARE
             testUsdImagingGLGeomSubsets_Primvars.png
         FAIL 1
@@ -5665,7 +5773,7 @@ if (OPENVDB_FOUND AND ${PXR_ENABLE_OPENVDB_SUPPORT})
         SRC testenv/testUsdImagingGLVdbVolume
         DEST testUsdImagingGLVdbVolume
     )
-    
+
     pxr_register_test(testUsdImagingGLVdbVolume
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -stage vdbVolume.usda -clear 0 0 0 1 -lighting -camera /main_cam -write testUsdImagingGLVdbVolume.png"
         IMAGE_DIFF_COMPARE

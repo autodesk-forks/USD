@@ -34,9 +34,6 @@ pxr_library(vt
     PYTHON_PUBLIC_HEADERS
         pyOperators.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapArrayBase.cpp

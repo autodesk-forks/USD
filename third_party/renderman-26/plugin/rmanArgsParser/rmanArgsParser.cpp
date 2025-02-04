@@ -66,6 +66,7 @@ namespace {
     const char* apiSchemaCanOnlyApplyToStr = "apiSchemaCanOnlyApplyTo";
     const char* apiSchemasForAttrPruningStr = "apiSchemasForAttrPruning";
     const char* sdrGlobalConfigStr = "sdrGlobalConfig";
+    const char* sdrIgnoreStr = "sdrIgnore";
 
     // Helper to make comparisons of `const char*` easier to read; there are
     // lots of these comparisons
@@ -96,6 +97,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((tagAttr, "tag"))
     ((vstructmemberAttr, "vstructmember"))
     ((sdrDefinitionNameAttr, "sdrDefinitionName"))
+    ((sdrUsdDefaultAttr, "sdrUsdDefault"))
 );
 
 // Data that represents an SdrShaderNode before it is turned into one. The
@@ -567,19 +569,28 @@ _Parse(
         // <param> and <output>
         // ---------------------------------------------------------------------
         if (isInput || isOutput) {
-            shaderRep.properties.emplace_back(
-                _ParseChildElem(shaderRep, isOutput, childElement, parentPage)
-            );
-            // Query the emplaced property to see if ImplementationName metadata
-            // is added, which would imply sdrDefinitionName was set for this
-            // property, if so save the information in shaderRep. 
-            const NdrTokenMap& propMetadata = 
-                shaderRep.properties.back()->GetMetadata();
-            if (propMetadata.find(SdrPropertyMetadata->ImplementationName) != 
-                    propMetadata.end()) {
-                // We do this here so as to maintain constness for shaderRep in
-                // _ParseChildElem
-                shaderRep.hasSdrDefinitionNameProperty = true;
+            // If we have an ignore flag skip this property. Certain settings like 
+            // CropWindow and FormatResolution exist already in USD.
+            bool ignore = false;
+            if (xml_attribute ignoreAttr = childElement.attribute(sdrIgnoreStr)) {
+                ignore = EQUALS(ignoreAttr.value(), "True");
+            }
+
+            if (!ignore) {
+                shaderRep.properties.emplace_back(
+                    _ParseChildElem(shaderRep, isOutput, childElement, parentPage)
+                );
+                // Query the emplaced property to see if ImplementationName metadata
+                // is added, which would imply sdrDefinitionName was set for this
+                // property, if so save the information in shaderRep. 
+                const NdrTokenMap& propMetadata = 
+                    shaderRep.properties.back()->GetMetadata();
+                if (propMetadata.find(SdrPropertyMetadata->ImplementationName) != 
+                        propMetadata.end()) {
+                    // We do this here so as to maintain constness for shaderRep in
+                    // _ParseChildElem
+                    shaderRep.hasSdrDefinitionNameProperty = true;
+                }
             }
         }
 
@@ -779,14 +790,14 @@ _GetVtValue(
     if (type == SdrPropertyTypes->Int) {
         if (!isArray) {
             // If the conversion fails, we get zero
-            return VtValue(atoi(stringValue.c_str()));
+            return VtValue(std::stoi(stringValue.c_str()));
         } else {
             NdrStringVec parts = TfStringTokenize(stringValue, " ,");
             int numValues = parts.size();
             VtIntArray ints(numValues);
 
             for (int i = 0; i < numValues; ++i) {
-                ints[i] = atoi(parts[i].c_str());
+                ints[i] = std::stoi(parts[i].c_str());
             }
 
             return VtValue::Take(ints);
@@ -819,14 +830,14 @@ _GetVtValue(
     else if (type == SdrPropertyTypes->Float) {
         if (!isArray) {
             // If the conversion fails, we get zero
-            return VtValue(static_cast<float>(atof(stringValue.c_str())));
+            return VtValue(std::stof(stringValue.c_str()));
         } else {
             NdrStringVec parts = TfStringTokenize(stringValue, " ,");
             int numValues = parts.size();
 
             VtFloatArray floats(numValues);
             for (int i = 0; i < numValues; ++i) {
-                floats[i] = static_cast<float>(atof(parts[i].c_str()));
+                floats[i] = std::stof(parts[i].c_str());
             }
 
             return VtValue::Take(floats);
@@ -845,9 +856,9 @@ _GetVtValue(
         if (!isArray) {
             if (parts.size() == 3) {
                 return VtValue(
-                    GfVec3f(atof(parts[0].c_str()),
-                            atof(parts[1].c_str()),
-                            atof(parts[2].c_str()))
+                    GfVec3f(std::stof(parts[0].c_str()),
+                            std::stof(parts[1].c_str()),
+                            std::stof(parts[2].c_str()))
                 );
             } else {
                 TF_DEBUG(NDR_PARSING).Msg(
@@ -861,9 +872,9 @@ _GetVtValue(
             VtVec3fArray array(numElements);
 
             for (int i = 0; i < numElements; ++i) {
-                array[i] = GfVec3f(atof(parts[3*i + 0].c_str()),
-                                   atof(parts[3*i + 1].c_str()),
-                                   atof(parts[3*i + 2].c_str()));
+                array[i] = GfVec3f(std::stof(parts[3*i + 0].c_str()),
+                                   std::stof(parts[3*i + 1].c_str()),
+                                   std::stof(parts[3*i + 2].c_str()));
             }
 
             return VtValue::Take(array);
@@ -881,7 +892,7 @@ _GetVtValue(
             double* values = mat.GetArray();
 
             for (int i = 0; i < 16; ++i) {
-                values[i] = atof(parts[i].c_str());
+                values[i] = std::stof(parts[i].c_str());
             }
 
             return VtValue::Take(mat);
@@ -1050,13 +1061,23 @@ _CreateProperty(
 
     // Determine the default value; leave empty if a default isn't found
     // -------------------------------------------------------------------------
-    const VtValue defaultValue =
-        attributes.count(_xmlAttributeNames->defaultAttr)
-        ? _GetVtValue(attributes.at(_xmlAttributeNames->defaultAttr),
-                      typeName,
-                      arraySize,
-                      attributes)
-        : VtValue();
+    VtValue defaultValue = VtValue();
+    // Use sdrUsdDefault over regular default if it exists
+    if (attributes.count(_xmlAttributeNames->sdrUsdDefaultAttr)) {
+        defaultValue = _GetVtValue(
+            attributes.at(_xmlAttributeNames->sdrUsdDefaultAttr),
+            typeName,
+            arraySize,
+            attributes
+        );
+    } else if (attributes.count(_xmlAttributeNames->defaultAttr)) {
+        defaultValue = _GetVtValue(
+            attributes.at(_xmlAttributeNames->defaultAttr),
+            typeName,
+            arraySize,
+            attributes
+        );
+    }
 
     return SdrShaderPropertyUniquePtr(
         new SdrShaderProperty(

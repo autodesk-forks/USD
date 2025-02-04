@@ -48,9 +48,6 @@ pxr_library(trace
         stringHash.h
         trace.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapAggregateNode.cpp

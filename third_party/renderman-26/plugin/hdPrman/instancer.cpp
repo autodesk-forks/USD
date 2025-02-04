@@ -405,7 +405,15 @@ void HdPrmanInstancer::Populate(
     // This public Populate signature does not accept the last two arguments
     // that the private _PopulateInstances does; those are only available to 
     // HdPrmanInstancer. This lets us keep their messy types private.
-    
+
+    HdTimeSampleArray<GfMatrix4d, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+        convertedPrototypeXform;
+    convertedPrototypeXform.Resize(prototypeXform.count);
+    for (size_t i=0; i < convertedPrototypeXform.count; ++i) {
+        convertedPrototypeXform.times[i] = prototypeXform.times[i];
+        convertedPrototypeXform.values[i] = prototypeXform.values[i];
+    }
+
     _PopulateInstances(
         renderParam,
         dirtyBits,
@@ -414,7 +422,7 @@ void HdPrmanInstancer::Populate(
         rileyPrototypeIds,
         coordSysList,
         prototypeParams,
-        prototypeXform,
+        convertedPrototypeXform,
         rileyMaterialIds,
         prototypePaths,
         lightShaderId,
@@ -536,10 +544,11 @@ void HdPrmanInstancer::_SyncPrimvars(const HdDirtyBits* dirtyBits)
 }
 
 bool UnboxOrientations(
-    HdTimeSampleArray<VtValue, HDPRMAN_MAX_TIME_SAMPLES> const& box,
-    HdTimeSampleArray<VtQuatfArray, HDPRMAN_MAX_TIME_SAMPLES> *outRotates)
+    HdTimeSampleArray<VtValue, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES> const& box,
+    HdTimeSampleArray<VtQuatfArray, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>*
+        outRotates)
 {
-    HdTimeSampleArray<VtQuathArray, HDPRMAN_MAX_TIME_SAMPLES> rotates;
+    HdTimeSampleArray<VtQuathArray, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES> rotates;
     if (outRotates->UnboxFrom(box)) {
         if (outRotates->count > 0 && outRotates->values[0].size() > 0){
             return true;
@@ -563,11 +572,13 @@ bool UnboxOrientations(
 
 template <typename T>
 void
-_ValidateSamplesTimes(HdTimeSampleArray<T, HDPRMAN_MAX_TIME_SAMPLES>& samples)
+_ValidateSamplesTimes(
+    HdTimeSampleArray<T, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>& samples)
 {
     for (size_t i = 0; i < samples.count; ++i) {
         if (samples.values[i].size() != samples.values[0].size()) {
-            HdTimeSampleArray<T, HDPRMAN_MAX_TIME_SAMPLES> new_samples;
+            HdTimeSampleArray<T, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+                new_samples;
             new_samples.Resize(1);
             new_samples.times[0] = 0.f;
             new_samples.values[0] = samples.Resample(0.f);
@@ -623,12 +634,16 @@ HdPrmanInstancer::_SyncTransforms(const HdDirtyBits* dirtyBits,
         HdChangeTracker::IsPrimvarDirty(*dirtyBits, id,
             instanceScalesToken)) {
 
-        HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> instancerXform;
-        HdTimeSampleArray<VtValue, HDPRMAN_MAX_TIME_SAMPLES>
+        HdTimeSampleArray<GfMatrix4d, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            instancerXform;
+        HdTimeSampleArray<VtValue, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
             boxedInstanceXforms;
-        HdTimeSampleArray<VtValue, HDPRMAN_MAX_TIME_SAMPLES> boxedTranslates;
-        HdTimeSampleArray<VtValue, HDPRMAN_MAX_TIME_SAMPLES> boxedRotates;
-        HdTimeSampleArray<VtValue, HDPRMAN_MAX_TIME_SAMPLES> boxedScales;
+        HdTimeSampleArray<VtValue, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            boxedTranslates;
+        HdTimeSampleArray<VtValue, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            boxedRotates;
+        HdTimeSampleArray<VtValue, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            boxedScales;
         if (includeInstancerXform) {
             delegate->SampleInstancerTransform(id,
 #if HD_API_VERSION >= 68
@@ -664,11 +679,14 @@ HdPrmanInstancer::_SyncTransforms(const HdDirtyBits* dirtyBits,
                                 &boxedRotates);
 
         // Unbox samples held as VtValues
-        HdTimeSampleArray<VtMatrix4dArray, HDPRMAN_MAX_TIME_SAMPLES>
+        HdTimeSampleArray<VtMatrix4dArray, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
             instanceXforms;
-        HdTimeSampleArray<VtVec3fArray, HDPRMAN_MAX_TIME_SAMPLES> translates;
-        HdTimeSampleArray<VtQuatfArray, HDPRMAN_MAX_TIME_SAMPLES> rotates;
-        HdTimeSampleArray<VtVec3fArray, HDPRMAN_MAX_TIME_SAMPLES> scales;
+        HdTimeSampleArray<VtVec3fArray, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            translates;
+        HdTimeSampleArray<VtQuatfArray, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            rotates;
+        HdTimeSampleArray<VtVec3fArray, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>
+            scales;
         if (!instanceXforms.UnboxFrom(boxedInstanceXforms)) {
             TF_WARN("<%s> %s did not have expected type matrix4d[]",
                 instanceTransformsToken.GetText(), id.GetText());
@@ -880,7 +898,7 @@ HdPrmanInstancer::_PopulateInstancesFromChild(
     const std::vector<riley::GeometryPrototypeId>& rileyPrototypeIds,
     const riley::CoordinateSystemList& coordSysList,
     const RtParamList& prototypeParams,
-    const HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES>&
+    const HdTimeSampleArray<GfMatrix4d, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>&
         prototypeXform,
     const std::vector<riley::MaterialId>& rileyMaterialIds,
     const SdfPathVector& prototypePaths,
@@ -915,7 +933,7 @@ HdPrmanInstancer::_PopulateInstances(
     const std::vector<riley::GeometryPrototypeId>& rileyPrototypeIds,
     const riley::CoordinateSystemList& coordSysList,
     const RtParamList& prototypeParams,
-    const HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES>&
+    const HdTimeSampleArray<GfMatrix4d, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES>&
         prototypeXform,
     const std::vector<riley::MaterialId>& rileyMaterialIds,
     const SdfPathVector& prototypePaths,
@@ -1103,7 +1121,7 @@ HdPrmanInstancer::_PopulateInstances(
         // Sample this instancer's transform. The instance transforms do not
         // include it. We must multiply the instance transforms by this
         // instancer's transform.
-        HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> xf;
+        HdTimeSampleArray<GfMatrix4d, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES> xf;
         delegate->SampleInstancerTransform(instancerId,
 #if HD_API_VERSION >= 68
                                            param->GetShutterInterval()[0],
@@ -1368,7 +1386,7 @@ HdPrmanInstancer::_PopulateInstances(
         // Sample this instancer's transform. The instance transforms did not
         // include it. The parent instancer will instead include it on the
         // instances it makes of this instancer's prototype groups.
-        HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> xf;
+        HdTimeSampleArray<GfMatrix4d, HDPRMAN_INSTANCER_MAX_TIME_SAMPLES> xf;
         delegate->SampleInstancerTransform(instancerId,
 #if HD_API_VERSION >= 68
                                            param->GetShutterInterval()[0],
