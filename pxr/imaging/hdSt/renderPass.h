@@ -45,7 +45,8 @@ protected:
 
 private:
     void _UpdateDrawItems(TfTokenVector const& renderTags);
-    void _UpdateCommandBuffer(TfTokenVector const& renderTags);
+    void _UpdateCommandBuffer(HdStRenderPassStateSharedPtr const& renderPassState,
+                              TfTokenVector const& renderTags);
 
     // -----------------------------------------------------------------------
     // Drawing state
