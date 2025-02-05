@@ -50,7 +50,7 @@ using UsdSchemaVersion = unsigned int;
 /// classes, to enumerate all properties for a given schema class, and finally 
 /// to provide fallback values for unauthored built-in properties.
 ///
-class UsdSchemaRegistry : public TfWeakBase {
+class ARCH_EXPORT_TYPE UsdSchemaRegistry : public TfWeakBase {
     UsdSchemaRegistry(const UsdSchemaRegistry&) = delete;
     UsdSchemaRegistry& operator=(const UsdSchemaRegistry&) = delete;
 public:

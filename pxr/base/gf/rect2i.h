@@ -40,7 +40,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// Specifically, <em> width = maxX - minX + 1</em> and
 /// <em>height = maxY - minY + 1.</em> 
 ///
-class GfRect2i {
+class ARCH_EXPORT_TYPE GfRect2i {
 public:
     /// Constructs an empty rectangle.
     GfRect2i(): _min(0,0), _max(-1,-1)

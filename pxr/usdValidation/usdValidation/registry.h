@@ -146,7 +146,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///
 /// \sa UsdValidationValidator
 /// \sa UsdValidationValidatorSuite
-class UsdValidationRegistry
+class ARCH_EXPORT_TYPE UsdValidationRegistry
 {
     UsdValidationRegistry(const UsdValidationRegistry &) = delete;
     UsdValidationRegistry &operator=(const UsdValidationRegistry &) = delete;

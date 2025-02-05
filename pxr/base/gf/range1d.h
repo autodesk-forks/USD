@@ -41,7 +41,7 @@ struct GfIsGfRange<class GfRange1d> { static const bool value = true; };
 /// operations are component-wise and conform to interval mathematics. An
 /// empty range is one where max < min.
 /// The default empty is [FLT_MAX,-FLT_MAX]
-class GfRange1d
+class ARCH_EXPORT_TYPE GfRange1d
 {
 public:
 

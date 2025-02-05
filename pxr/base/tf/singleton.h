@@ -88,6 +88,7 @@
 /// to the sole instance of the registry.
 
 #include "pxr/pxr.h"
+#include "pxr/base/arch/export.h"
 #include "pxr/base/arch/pragmas.h"
 
 #include <atomic>
@@ -102,7 +103,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// \ref TfSingleton_typicalUse "Typical Use" for a canonical example).
 ///
 template <class T>
-class TfSingleton {
+class ARCH_EXPORT_TYPE TfSingleton {
 public:
     /// Return a reference to an object of type \c T, creating it if
     /// necessary.

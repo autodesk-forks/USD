@@ -29,7 +29,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// Can represent intervals with either open or closed boundary
 /// conditions.
 ///
-class GfInterval
+class ARCH_EXPORT_TYPE GfInterval
 {
 public:
     /// \name Constructors

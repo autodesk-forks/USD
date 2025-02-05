@@ -76,7 +76,7 @@ class HdResourceRegistry;
 ///
 /// Performance counter monitoring.
 ///
-class HdPerfLog
+class ARCH_EXPORT_TYPE HdPerfLog
 {
 public:
     HD_API

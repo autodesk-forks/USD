@@ -36,7 +36,7 @@ class SdfSpec;
 ///
 /// For now this class uses TfNotices to represent invalidations.
 ///
-class Sdf_ChangeManager {
+class ARCH_EXPORT_TYPE Sdf_ChangeManager {
     Sdf_ChangeManager(const Sdf_ChangeManager&) = delete;
     Sdf_ChangeManager& operator=(const Sdf_ChangeManager&) = delete;
 public:
