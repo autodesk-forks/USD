@@ -55,7 +55,10 @@ protected:
     HGIMETAL_API
     HgiMetalTexture(HgiMetal *hgi,
                     HgiTextureViewDesc const & desc);
-    
+
+    HGIMETAL_API
+    HgiMetalTexture(id<MTLTexture> texture, std::string debugName);
+
 private:
     HgiMetalTexture() = delete;
     HgiMetalTexture & operator=(const HgiMetalTexture&) = delete;

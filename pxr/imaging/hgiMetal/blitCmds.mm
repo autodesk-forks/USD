@@ -40,24 +40,38 @@ HgiMetalBlitCmds::~HgiMetalBlitCmds()
 }
 
 void
-HgiMetalBlitCmds::_CreateEncoder()
+HgiMetalBlitCmds::_CreateCommandBuffer()
 {
-    if (!_blitEncoder) {
-        _commandBuffer = _hgi->GetPrimaryCommandBuffer(this);
-        if (_commandBuffer == nil) {
-            _commandBuffer = _hgi->GetSecondaryCommandBuffer();
-            _secondaryCommandBuffer = true;
-        }
-        _blitEncoder = [_commandBuffer blitCommandEncoder];
+    if (_commandBuffer) {
+        return;
+    }
 
-        if (_label) {
-            [_blitEncoder pushDebugGroup:_label];
-            [_label release];
-            _label = nil;
-        }
-        if (!_secondaryCommandBuffer) {
-            _hgi->SetHasWork();
-        }
+    _commandBuffer = _hgi->GetPrimaryCommandBuffer(this);
+    if (_commandBuffer == nil) {
+        _commandBuffer = _hgi->GetSecondaryCommandBuffer();
+        _secondaryCommandBuffer = true;
+    }
+
+    if (!_secondaryCommandBuffer) {
+        _hgi->SetHasWork();
+    }
+}
+
+void
+HgiMetalBlitCmds::_CreateBlitEncoder()
+{
+    if (_blitEncoder) {
+        return;
+    }
+
+    _CreateCommandBuffer();
+
+    _blitEncoder = [_commandBuffer blitCommandEncoder];
+
+    if (_label) {
+        [_blitEncoder pushDebugGroup:_label];
+        [_label release];
+        _label = nil;
     }
 }
 
@@ -136,7 +150,7 @@ HgiMetalBlitCmds::CopyTextureGpuToCpu(
     
     MTLBlitOption blitOptions = MTLBlitOptionNone;
 
-    _CreateEncoder();
+    _CreateBlitEncoder();
 
     [_blitEncoder copyFromTexture:srcTexture->GetTextureId()
                       sourceSlice:isTexArray ? copyOp.sourceTexelOffset[2] : 0
@@ -296,7 +310,7 @@ HgiMetalBlitCmds::CopyBufferGpuToGpu(
         return;
     }
 
-    _CreateEncoder();
+    _CreateBlitEncoder();
 
     [_blitEncoder copyFromBuffer:srcBuffer->GetBufferId()
                     sourceOffset:copyOp.sourceByteOffset
@@ -381,7 +395,7 @@ HgiMetalBlitCmds::CopyBufferGpuToCpu(HgiBufferGpuToCpuOp const& copyOp)
     HgiMetalBuffer* metalBuffer = static_cast<HgiMetalBuffer*>(
         copyOp.gpuSourceBuffer.Get());
 
-    _CreateEncoder();
+    _CreateBlitEncoder();
 #if defined(ARCH_OS_OSX)
     if ([metalBuffer->GetBufferId() storageMode] == MTLStorageModeManaged) {
         [_blitEncoder performSelector:@selector(synchronizeResource:)
@@ -423,7 +437,7 @@ HgiMetalBlitCmds::FillBuffer(HgiBufferHandle const& buffer, uint8_t value)
 {
     HgiMetalBuffer* metalBuf = static_cast<HgiMetalBuffer*>(buffer.Get());
     if (metalBuf) {
-        _CreateEncoder();
+        _CreateBlitEncoder();
         
         size_t length = metalBuf->GetDescriptor().byteSize;
         [_blitEncoder fillBuffer:metalBuf->GetBufferId()
@@ -473,13 +487,83 @@ _HgiTextureCanBeFiltered(HgiTextureDesc const &descriptor)
 }
 
 void
+HgiMetalBlitCmds::BlitTexture(HgiTextureHandle const& src,
+    GfRect2i const& maybeSrcRegion, HgiTextureHandle const& dst,
+    GfRect2i const& maybeDstRegion, HgiSamplerFilter filter)
+{
+    const auto srcTexture = dynamic_cast<HgiMetalTexture*>(src.Get());
+    if (!srcTexture) {
+        TF_CODING_ERROR("src must be a valid HgiMetalTexture pointer");
+        return;
+    }
+    const auto dstTexture = dynamic_cast<HgiMetalTexture*>(dst.Get());
+    if (!dstTexture) {
+        TF_CODING_ERROR("dst must be a valid HgiMetalTexture pointer");
+        return;
+    }
+
+    id<MTLComputePipelineState> blitPipeline =
+        filter == HgiSamplerFilterLinear ? _hgi->GetBlitLinearPipeline() :
+        _hgi->GetBlitNearestPipeline();
+    if (!TF_VERIFY(blitPipeline)) {
+        return;
+    }
+
+    GfRect2i srcRegion = maybeSrcRegion;
+    if (srcRegion.IsNull()) {
+        HgiTextureDesc const& srcDesc = srcTexture->GetDescriptor();
+        srcRegion = {{0, 0}, srcDesc.dimensions[0], srcDesc.dimensions[1]};
+    }
+
+    GfRect2i dstRegion = maybeDstRegion;
+    if (dstRegion.IsNull()) {
+        HgiTextureDesc const& dstDesc = dstTexture->GetDescriptor();
+        dstRegion = {{0, 0}, dstDesc.dimensions[0], dstDesc.dimensions[1]};
+    }
+
+    NSUInteger preferredThreadsPerGroup = [blitPipeline threadExecutionWidth];
+    NSUInteger maxThreadsPerGroup =
+        [blitPipeline maxTotalThreadsPerThreadgroup];
+
+    MTLSize groupSize = MTLSizeMake(preferredThreadsPerGroup,
+        maxThreadsPerGroup / preferredThreadsPerGroup, 1);
+    MTLSize dispatchGroups =
+        MTLSizeMake((static_cast<NSUInteger>(std::abs(dstRegion.GetWidth())) +
+            groupSize.width - 1) / groupSize.width,
+            (static_cast<NSUInteger>(std::abs(dstRegion.GetHeight())) +
+                groupSize.height - 1) / groupSize.height,
+            1);
+
+    _CreateCommandBuffer();
+
+    // Only one encoder at a time!
+    if (_blitEncoder) {
+        [_blitEncoder endEncoding];
+        _blitEncoder = nil;
+    }
+
+    id<MTLComputeCommandEncoder> computeEncoder =
+        [_commandBuffer computeCommandEncoder];
+
+    [computeEncoder setComputePipelineState:blitPipeline];
+    [computeEncoder setTexture:srcTexture->GetTextureId() atIndex:0];
+    [computeEncoder setBytes:&srcRegion length:sizeof(srcRegion) atIndex:0];
+    [computeEncoder setTexture:dstTexture->GetTextureId() atIndex:1];
+    [computeEncoder setBytes:&dstRegion length:sizeof(dstRegion) atIndex:1];
+
+    [computeEncoder dispatchThreadgroups:dispatchGroups
+                   threadsPerThreadgroup:groupSize];
+
+    [computeEncoder endEncoding];
+}
+
+void
 HgiMetalBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
 {
-    HgiMetalTexture* metalTex = static_cast<HgiMetalTexture*>(texture.Get());
-
-    if (metalTex) {
+    if (HgiMetalTexture* metalTex =
+        dynamic_cast<HgiMetalTexture*>(texture.Get())) {
         if (_HgiTextureCanBeFiltered(metalTex->GetDescriptor())) {
-            _CreateEncoder();
+            _CreateBlitEncoder();
             [_blitEncoder generateMipmapsForTexture:metalTex->GetTextureId()];
         }
     }
@@ -488,50 +572,51 @@ HgiMetalBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
 void
 HgiMetalBlitCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
 {
-    TF_VERIFY(barrier==HgiMemoryBarrierAll, "Unknown barrier");
+    TF_VERIFY(barrier == HgiMemoryBarrierAll, "Unknown barrier");
     // Do nothing. All blit encoder work will be visible to next encoder.
 }
 
 bool
 HgiMetalBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
 {
-    bool submittedWork = false;
+    if (!_commandBuffer) {
+        return false;
+    }
+
     if (_blitEncoder) {
         [_blitEncoder endEncoding];
         _blitEncoder = nil;
-        submittedWork = true;
-
-        HgiMetal::CommitCommandBufferWaitType waitType;
-        switch(wait) {
-            case HgiSubmitWaitTypeNoWait:
-                waitType = HgiMetal::CommitCommandBuffer_NoWait;
-                break;
-            case HgiSubmitWaitTypeWaitUntilCompleted:
-                waitType = HgiMetal::CommitCommandBuffer_WaitUntilCompleted;
-                break;
-        }
-
-        if (_secondaryCommandBuffer) {
-            _hgi->CommitSecondaryCommandBuffer(_commandBuffer, waitType);
-        }
-        else {
-            if (waitType != HgiMetal::CommitCommandBuffer_WaitUntilCompleted) {
-                // Ordering problems between CPU updates and GPU updates to a buffer
-                // result in incorrect buffer contents. This is avoided by waiting
-                // until work is scheduled, before future calls to didModifyRange
-                // are made
-                waitType = HgiMetal::CommitCommandBuffer_WaitUntilScheduled;
-            }
-            _hgi->CommitPrimaryCommandBuffer(waitType);
-        }
     }
-    
+
+    HgiMetal::CommitCommandBufferWaitType waitType{};
+    switch (wait) {
+    case HgiSubmitWaitTypeNoWait:
+        waitType = HgiMetal::CommitCommandBuffer_NoWait;
+        break;
+    case HgiSubmitWaitTypeWaitUntilCompleted:
+        waitType = HgiMetal::CommitCommandBuffer_WaitUntilCompleted;
+        break;
+    }
+
+    if (_secondaryCommandBuffer) {
+        _hgi->CommitSecondaryCommandBuffer(_commandBuffer, waitType);
+    } else {
+        if (waitType != HgiMetal::CommitCommandBuffer_WaitUntilCompleted) {
+            // Ordering problems between CPU updates and GPU updates to a buffer
+            // result in incorrect buffer contents. This is avoided by waiting
+            // until work is scheduled, before future calls to didModifyRange
+            // are made
+            waitType = HgiMetal::CommitCommandBuffer_WaitUntilScheduled;
+        }
+        _hgi->CommitPrimaryCommandBuffer(waitType);
+    }
+
     if (_secondaryCommandBuffer) {
         _hgi->ReleaseSecondaryCommandBuffer(_commandBuffer);
     }
     _commandBuffer = nil;
 
-    return submittedWork;
+    return true;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

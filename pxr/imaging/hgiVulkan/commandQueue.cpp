@@ -91,25 +91,32 @@ HgiVulkanCommandQueue::~HgiVulkanCommandQueue()
 void
 HgiVulkanCommandQueue::SubmitToQueue(
     HgiVulkanCommandBuffer* cb,
-    HgiSubmitWaitType wait)
+    HgiSubmitWaitType wait,
+    VkSemaphore waitSemaphore,
+    VkSemaphore signalSemaphore)
 {
-    VkSemaphore semaphore = nullptr;
-
+    const VkPipelineStageFlags waitMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     // If we have resource commands submit those before work commands.
     // It would be more performant to submit both command buffers to the queue
     // at the same time, but we have to signal the fence for each since we use
     // the fence to determine when a command buffer can be reused.
+    VkSemaphore resourceSemaphore = nullptr;
     if (_resourceCommandBuffer) {
         _resourceCommandBuffer->EndCommandBuffer();
         VkCommandBuffer rcb = _resourceCommandBuffer->GetVulkanCommandBuffer();
-        semaphore = _resourceCommandBuffer->GetVulkanSemaphore();
+        resourceSemaphore = _resourceCommandBuffer->GetVulkanSemaphore();
         VkFence rFence = _resourceCommandBuffer->GetVulkanFence();
 
         VkSubmitInfo resourceInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
         resourceInfo.commandBufferCount = 1;
         resourceInfo.pCommandBuffers = &rcb;
+        if (waitSemaphore) {
+            resourceInfo.pWaitSemaphores = &waitSemaphore;
+            resourceInfo.waitSemaphoreCount = 1;
+            resourceInfo.pWaitDstStageMask = &waitMask;
+        }
+        resourceInfo.pSignalSemaphores = &resourceSemaphore;
         resourceInfo.signalSemaphoreCount = 1;
-        resourceInfo.pSignalSemaphores = &semaphore;
 
         HGIVULKAN_VERIFY_VK_RESULT(
             vkQueueSubmit(_vkGfxQueue, 1, &resourceInfo, rFence)
@@ -128,12 +135,20 @@ HgiVulkanCommandQueue::SubmitToQueue(
     VkSubmitInfo workInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     workInfo.commandBufferCount = 1;
     workInfo.pCommandBuffers = &wcb;
-    VkPipelineStageFlags waitMask;
-    if (semaphore) {
+    if (resourceSemaphore) {
+        // Input waitSemaphore was waited on by resource submit.
+        workInfo.pWaitSemaphores = &resourceSemaphore;
         workInfo.waitSemaphoreCount = 1;
-        workInfo.pWaitSemaphores = &semaphore;
-        waitMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         workInfo.pWaitDstStageMask = &waitMask;
+    } else if (waitSemaphore) {
+        workInfo.pWaitSemaphores = &waitSemaphore;
+        workInfo.waitSemaphoreCount = 1;
+        workInfo.pWaitDstStageMask = &waitMask;
+    }
+
+    if (signalSemaphore) {
+        workInfo.pSignalSemaphores = &signalSemaphore;
+        workInfo.signalSemaphoreCount = 1;
     }
 
     // Submit provided command buffers to GPU queue.

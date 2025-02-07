@@ -1986,6 +1986,60 @@ void UsdImagingGLEngine::_SetSceneGlobalsCurrentFrame(UsdTimeCode const &time)
 }
 
 void
+UsdImagingGLEngine::DisablePresentation()
+{
+    if (ARCH_UNLIKELY(!_HasRenderer())) {
+        return;
+    }
+
+    TF_PY_ALLOW_THREADS_IN_SCOPE();
+
+    if (_taskControllerSceneIndex) {
+        _taskControllerSceneIndex->DisablePresentation();
+    } else if (_taskController) {
+        _taskController->DisablePresentation();
+    } else {
+        TF_CODING_ERROR("No task controller or task controller scene index.");
+    }
+}
+
+void
+UsdImagingGLEngine::EnablePresentation(HgiPresent2 presentation)
+{
+    if (ARCH_UNLIKELY(!_HasRenderer())) {
+        return;
+    }
+
+    TF_PY_ALLOW_THREADS_IN_SCOPE();
+
+    if (_taskControllerSceneIndex) {
+        _taskControllerSceneIndex->EnablePresentation(std::move(presentation));
+    } else if (_taskController) {
+        _taskController->EnablePresentation(std::move(presentation));
+    } else {
+        TF_CODING_ERROR("No task controller or task controller scene index.");
+    }
+}
+
+void
+UsdImagingGLEngine::EnableVsync(bool vsync)
+{
+    if (ARCH_UNLIKELY(!_HasRenderer())) {
+        return;
+    }
+
+    TF_PY_ALLOW_THREADS_IN_SCOPE();
+
+    if (_taskControllerSceneIndex) {
+        _taskControllerSceneIndex->EnableVsync(vsync);
+    } else if (_taskController) {
+        _taskController->EnableVsync(vsync);
+    } else {
+        TF_CODING_ERROR("No task controller or task controller scene index.");
+    }
+}
+
+void
 UsdImagingGLEngine::SetEnablePresentation(bool enabled)
 {
     if (ARCH_UNLIKELY(!_HasRenderer())) {
@@ -2001,7 +2055,6 @@ UsdImagingGLEngine::SetEnablePresentation(bool enabled)
     } else {
         TF_CODING_ERROR("No task controller or task controller scene index.");
     }
-    
 }
 
 void
@@ -2015,7 +2068,6 @@ UsdImagingGLEngine::SetPresentationOutput(
 
     TF_PY_ALLOW_THREADS_IN_SCOPE();
 
-    _userFramebuffer = framebuffer;
     if (_taskControllerSceneIndex) {
         _taskControllerSceneIndex->SetPresentationOutput(api, framebuffer);
     } else if (_taskController) {

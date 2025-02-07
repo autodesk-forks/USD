@@ -9,6 +9,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hgiVulkan/api.h"
+#include "pxr/imaging/hgiVulkan/cmds.h"
 #include "pxr/imaging/hgi/blitCmds.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -21,7 +22,8 @@ class HgiVulkanCommandBuffer;
 ///
 /// Vulkan implementation of HgiBlitCmds.
 ///
-class HgiVulkanBlitCmds final : public HgiBlitCmds
+class HgiVulkanBlitCmds final :
+    public HgiBlitCmds, public HgiVulkanCmds
 {
 public:
     HGIVULKAN_API
@@ -43,9 +45,6 @@ public:
     void CopyBufferGpuToGpu(HgiBufferGpuToGpuOp const& copyOp) override;
 
     HGIVULKAN_API
-    void BlitTexture(HgiTextureHandle src, HgiTextureHandle dst);
-
-    HGIVULKAN_API
     void CopyBufferCpuToGpu(HgiBufferCpuToGpuOp const& copyOp) override;
 
     HGIVULKAN_API
@@ -58,6 +57,11 @@ public:
     void CopyBufferToTexture(HgiBufferToTextureOp const& copyOp) override;
 
     HGIVULKAN_API
+    void BlitTexture(HgiTextureHandle const& src,
+        GfRect2i const& srcRegion, HgiTextureHandle const& dst,
+        GfRect2i const& dstRegion, HgiSamplerFilter filter) override;
+
+    HGIVULKAN_API
     void GenerateMipMaps(HgiTextureHandle const& texture) override;
 
     HGIVULKAN_API
@@ -65,10 +69,9 @@ public:
 
     HGIVULKAN_API
     void InsertMemoryBarrier(HgiMemoryBarrier barrier) override;
-        
-    /// Returns the command buffer used inside this cmds.
+
     HGIVULKAN_API
-    HgiVulkanCommandBuffer* GetCommandBuffer();
+    HgiVulkanCommandBuffer* GetCommandBuffer() override;
 
 protected:
     friend class HgiVulkan;

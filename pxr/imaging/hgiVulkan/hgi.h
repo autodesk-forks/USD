@@ -61,6 +61,18 @@ public:
         HgiTextureDesc const & desc,
         bool optimalTiling);
 
+    /// Create an HgiVulkan texture from an existing Vulkan image.
+    /// It's up to the caller to ensure that the texture descriptor matches
+    /// the Vulkan image. Additionally, more information not supported by
+    /// HgiTextureDesc can be passed, such as the current layout and detailed
+    /// usage flags. The image format can usually be derived from the descriptor,
+    // but in case of ambiguity in can instead be passed directly.
+    HGIVULKAN_API
+    HgiTextureHandle CreateTextureFromExisting(HgiTextureDesc const& desc,
+        VkImage image, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED,
+        VkFormat exactFormat = VK_FORMAT_UNDEFINED,
+        VkImageUsageFlags additionalUsages = 0);
+
     HGIVULKAN_API
     void DestroyTexture(HgiTextureHandle* texHandle) override;
 

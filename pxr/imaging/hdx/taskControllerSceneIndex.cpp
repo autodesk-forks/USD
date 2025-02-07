@@ -25,6 +25,7 @@
 #include "pxr/imaging/hdx/shadowTask.h"
 #include "pxr/imaging/hdx/visualizeAovTask.h"
 
+#include "pxr/imaging/hdSt/hgiConversions.h"
 #include "pxr/imaging/hdSt/tokens.h"
 
 #include "pxr/imaging/hd/light.h"
@@ -39,6 +40,8 @@
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/retainedSceneIndex.h"
 #include "pxr/imaging/hd/xformSchema.h"
+
+#include "pxr/imaging/hgi/tokens.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -1805,6 +1808,23 @@ HdxTaskControllerSceneIndex::SetRenderOutputSettings(
         clearValue = VtValue();
     }
 
+    {
+        using Task = HdxPresentTask;
+
+        if (HdxPresentTaskParams * const params =
+            _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
+            bool dirtyParams = false;
+            const auto hgiFormat = HdStHgiConversions::GetHgiFormat(desc.format);
+            if (params->params.surface.preferredDstFormat != hgiFormat) {
+                params->params.surface.preferredDstFormat = hgiFormat;
+                dirtyParams = true;
+            }
+            if (dirtyParams) {
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
+            }
+        }
+    }
+
     if (!dirtiedPrimEntries.empty()) {
         _retainedSceneIndex->DirtyPrims(dirtiedPrimEntries);
     }
@@ -2412,22 +2432,68 @@ void
 HdxTaskControllerSceneIndex::SetColorCorrectionParams(
     const HdxColorCorrectionTaskParams &params)
 {
-    using Task = HdxColorCorrectionTask;
+    HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
-    HdxColorCorrectionTaskParams * const taskParams =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
-    if (!taskParams) {
-        return;
+    {
+        using Task = HdxColorCorrectionTask;
+
+        HdxColorCorrectionTaskParams * const taskParams =
+            _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
+        if (taskParams) {
+            HdxColorCorrectionTaskParams newParams = params;
+            newParams.aovName = taskParams->aovName;
+            if (*taskParams != newParams) {
+                *taskParams = newParams;
+
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
+            }
+        }
     }
 
-    HdxColorCorrectionTaskParams newParams = params;
-    newParams.aovName = taskParams->aovName;
-    if (*taskParams == newParams) {
-        return;
-    }
-    *taskParams = newParams;
+    {
+        using Task = HdxPresentTask;
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
+        if (HdxPresentTaskParams* const presentParams =
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
+            bool dirtyPresentParams = false;
+            TfToken srcColorSpace;
+            TfToken dstColorSpace;
+            if (params.colorCorrectionMode.IsEmpty() ||
+                params.colorCorrectionMode ==
+                    HdxColorCorrectionTokens->disabled) {
+                // Linear sRGB present to sRGB texture
+                srcColorSpace = GfColorSpaceNames->LinearRec709;
+                dstColorSpace = GfColorSpaceNames->SRGBRec709;
+            } else if (params.colorCorrectionMode ==
+                HdxColorCorrectionTokens->sRGB) {
+                // sRGB present to sRGB texture
+                srcColorSpace = GfColorSpaceNames->SRGBRec709;
+                dstColorSpace = GfColorSpaceNames->SRGBRec709;
+            } else if (params.colorCorrectionMode ==
+                HdxColorCorrectionTokens->openColorIO) {
+                // Pass-through
+                srcColorSpace = GfColorSpaceNames->Raw;
+                dstColorSpace = GfColorSpaceNames->Raw;
+            } else {
+                TF_CODING_ERROR("Unknown colorCorrectionMode token");
+            }
+            if (presentParams->params.surface.srcColorSpace != srcColorSpace ||
+                presentParams->params.surface.preferredDstColorSpace !=
+                    dstColorSpace) {
+                presentParams->params.surface.srcColorSpace = srcColorSpace;
+                presentParams->params.surface.preferredDstColorSpace =
+                    dstColorSpace;
+                dirtyPresentParams = true;
+            }
+            if (dirtyPresentParams) {
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
+            }
+        }
+    }
+
+    if (!dirtiedPrimEntries.empty()) {
+        _retainedSceneIndex->DirtyPrims(dirtiedPrimEntries);
+    }
 }
 
 void
@@ -2457,6 +2523,58 @@ HdxTaskControllerSceneIndex::SetBBoxParams(
     _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
+void 
+HdxTaskControllerSceneIndex::DisablePresentation()
+{
+    using Task = HdxPresentTask;
+
+    HdxPresentTaskParams * const params =
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
+    if (!params) {
+        return;
+    }
+
+    if (params->enabled) {
+        params->enabled = false;
+        if (params->present2) {
+            params->present2->Destroy();
+            params->present2 = nullptr;
+        }
+        _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
+    }
+}
+
+void
+HdxTaskControllerSceneIndex::EnablePresentation(HgiPresent2 presentation)
+{
+    using Task = HdxPresentTask;
+
+    HdxPresentTaskParams * const params =
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
+    if (!params) {
+        return;
+    }
+
+    params->enabled = true;
+    params->present2 = std::make_shared<HgiPresent2>(std::move(presentation));
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
+}
+
+void
+HdxTaskControllerSceneIndex::EnableVsync(bool vsync)
+{
+    using Task = HdxPresentTask;
+
+    HdxPresentTaskParams * const params =
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
+    if (!params) {
+        return;
+    }
+
+    params->params.surface.wantVsync = vsync;
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
+}
+
 void
 HdxTaskControllerSceneIndex::SetEnablePresentation(const bool enabled)
 {
@@ -2470,8 +2588,8 @@ HdxTaskControllerSceneIndex::SetEnablePresentation(const bool enabled)
     if (params->enabled == enabled) {
         return;
     }
-    params->enabled = enabled;
 
+    params->enabled = enabled;
     _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
@@ -2486,13 +2604,38 @@ HdxTaskControllerSceneIndex::SetPresentationOutput(
     if (!params) {
         return;
     }
-    if (params->dstApi == api && params->dstFramebuffer == framebuffer) {
+
+    if (api != HgiTokens->OpenGL) {
+        TF_CODING_ERROR("API must be OpenGL, not: %s",
+            api.GetText());
         return;
     }
-    params->dstApi = api;
-    params->dstFramebuffer = framebuffer;
 
+#if defined(PXR_GL_SUPPORT_ENABLED)
+    uint32_t fboName = 0;
+    if (!framebuffer.IsEmpty()) {
+        if (framebuffer.IsHolding<uint32_t>()) {
+            fboName = framebuffer.UncheckedGet<uint32_t>();
+        } else {
+            TF_CODING_ERROR("framebuffer must hold uint32_t");
+        }
+    }
+
+    params->enabled = true;
+    params->present2 = nullptr;
+    params->fboName = fboName;
+    HgiPresent2CompositionParams& compositionParams = params->params.composition;
+    compositionParams.colorSrcBlendFactor = HgiBlendFactorOne;
+    compositionParams.colorDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
+    compositionParams.colorBlendOp = HgiBlendOpAdd;
+    compositionParams.alphaSrcBlendFactor = HgiBlendFactorOne;
+    compositionParams.alphaDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
+    compositionParams.alphaBlendOp = HgiBlendOpAdd;
+    compositionParams.depthFunc = HgiCompareFunctionLEqual;
     _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
+#else
+    TF_CODING_ERROR("API not supported: %s", api.GetText());
+#endif
 }
 
 void
@@ -2556,10 +2699,11 @@ _UsingAovs(HdSceneIndexBaseRefPtr const sceneIndex,
 }
 
 static
-GfVec4i
-_ToVec4i(const GfVec4d &v)
+GfRect2i
+_ToRect2i(const GfVec4d& v)
 {
-    return GfVec4i(int(v[0]), int(v[1]), int(v[2]), int(v[3]));
+    return { { static_cast<int>(v[0]), static_cast<int>(v[1]) },
+        static_cast<int>(v[2]), static_cast<int>(v[3]) };
 }
 
 void
@@ -2620,19 +2764,21 @@ HdxTaskControllerSceneIndex::_SetCameraFramingForTasks()
     {
         using Task = HdxPresentTask;
 
-        if (HdxPresentTaskParams * const params =
+        if (HdxPresentTaskParams* const params =
                 _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
+            bool dirtyParams = false;
             // The composition step uses the viewport passed in by the
             // application, which may have a non-zero offset for things like
             // camera masking.
-            const GfVec4i dstRegion =
-                _framing.IsValid()
-                    ? GfVec4i(0, 0, _renderBufferSize[0], _renderBufferSize[1])
-                    : _ToVec4i(_viewport);
-
-            if (params->dstRegion != dstRegion) {
-                params->dstRegion = dstRegion;
-
+            const GfRect2i dstRegion = _framing.IsValid() ?
+                GfRect2i(
+                    {0, 0}, _renderBufferSize[0], _renderBufferSize[1]) :
+                _ToRect2i(_viewport);
+            if (params->params.composition.dstRegion != dstRegion) {
+                params->params.composition.dstRegion = dstRegion;
+                dirtyParams = true;
+            }
+            if (dirtyParams) {
                 _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }

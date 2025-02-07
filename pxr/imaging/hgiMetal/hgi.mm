@@ -138,7 +138,9 @@ HgiMetal::~HgiMetal()
     [_argEncoderBuffer release];
     [_argEncoderSampler release];
     [_argEncoderTexture release];
-    
+    [_blitLinearPipeline release];
+    [_blitNearestPipeline release];
+
     {
         std::lock_guard<std::mutex> lock(_freeArgMutex);
         while(_freeArgBuffers.size()) {
@@ -201,6 +203,14 @@ HgiTextureHandle
 HgiMetal::CreateTexture(HgiTextureDesc const & desc)
 {
     return HgiTextureHandle(new HgiMetalTexture(this, desc), GetUniqueId());
+}
+
+
+HgiTextureHandle
+HgiMetal::CreateTextureFromExisting(id<MTLTexture> texture,
+    std::string debugName)
+{
+    return HgiTextureHandle(new HgiMetalTexture(texture, std::move(debugName)), GetUniqueId());
 }
 
 void
@@ -520,6 +530,109 @@ HgiMetal::GetArgBuffer()
     _activeArgBuffers.push_back(buffer);
 
     return buffer;
+}
+
+static id<MTLComputePipelineState>
+_CreateBlitPipeline(id<MTLDevice> device, bool linear)
+{
+    NSMutableString* shaderSource = [NSMutableString stringWithCapacity:1024];
+    [shaderSource appendString:@R"(
+#include <metal_stdlib>
+
+using namespace metal;
+
+constexpr sampler srcSampler(address::clamp_to_zero, filter::)"];
+    [shaderSource appendString:(linear ? @"linear" : @"nearest")];
+    [shaderSource appendString:@R"();
+
+kernel void blitTexture(
+    texture2d<float, access::sample> srcTexture, constant int4& srcRegion,
+    texture2d<float, access::write> dstTexture, constant int4& dstRegion,
+    uint2 threadCoord [[thread_position_in_grid]])
+{
+    int2 dstCoord = static_cast<int2>(threadCoord) + dstRegion.xy;
+    if (dstCoord.x < 0 || dstCoord.y < 0 ||
+        dstCoord.x >= static_cast<int>(dstTexture.get_width()) ||
+        dstCoord.y >= static_cast<int>(dstTexture.get_height())) {
+        return;
+    }
+
+    float2 pixelCoord = static_cast<float2>(threadCoord) + 0.5f;
+    float2 coordScale = static_cast<float2>(srcRegion.zw - srcRegion.xy + 1) /
+        static_cast<float2>(dstRegion.zw - dstRegion.xy + 1);
+    float2 srcCoord = (pixelCoord * coordScale +
+        static_cast<float2>(srcRegion.xy)) /
+        float2(srcTexture.get_width(), srcTexture.get_height());
+
+    float4 value = srcTexture.sample(srcSampler, srcCoord);
+    dstTexture.write(value, static_cast<uint2>(dstCoord));
+}
+)"];
+
+    MTLCompileOptions* options = [[MTLCompileOptions alloc] init];
+    options.fastMathEnabled = YES;
+    NSError* error = nil;
+    id<MTLLibrary> library = [device newLibraryWithSource:shaderSource
+                                                  options:options
+                                                    error:&error];
+    [options release];
+    options = nil;
+
+    if (!library) {
+        NSString* errStr = [error localizedDescription];
+        TF_FATAL_CODING_ERROR(
+            "Failed to compile present shader: %s", [errStr UTF8String]);
+    }
+
+    id<MTLFunction> blitTextureFunction =
+        [library newFunctionWithName:@"blitTexture"];
+    id<MTLComputePipelineState> blitPipeline =
+        [device newComputePipelineStateWithFunction:blitTextureFunction
+                                              error:&error];
+
+    if (!blitPipeline) {
+        NSString* errStr = [error localizedDescription];
+        TF_FATAL_CODING_ERROR(
+            "Failed to create blit pipeline: %s", [errStr UTF8String]);
+        return nil;
+    }
+
+    [blitPipeline retain];
+    return blitPipeline;
+}
+
+id<MTLComputePipelineState>
+HgiMetal::GetBlitLinearPipeline()
+{
+    if (_blitLinearPipelineCreationFailed) {
+        return nil;
+    }
+
+    if (!_blitLinearPipeline) {
+        _blitLinearPipeline = _CreateBlitPipeline(_device, true);
+        if (!_blitLinearPipeline) {
+            _blitLinearPipelineCreationFailed = true;
+        }
+    }
+
+    return _blitLinearPipeline;
+}
+
+id<MTLComputePipelineState>
+HgiMetal::GetBlitNearestPipeline()
+{
+    if (_blitNearestPipelineCreationFailed) {
+        return nil;
+    }
+
+    if (!_blitNearestPipeline) {
+        _blitNearestPipeline = _CreateBlitPipeline(_device, false);
+        if (!_blitNearestPipeline) {
+            _blitNearestPipelineCreationFailed = true;
+        }
+    }
+
+    return _blitNearestPipeline;
 }
 
 bool

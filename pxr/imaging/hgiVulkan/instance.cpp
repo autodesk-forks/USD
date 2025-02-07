@@ -118,6 +118,9 @@ HgiVulkanInstance::HgiVulkanInstance()
             "VK_EXT_metal_surface",
         #endif
 
+        // More color spaces for presentation
+        VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME,
+
         // Extensions for interop with OpenGL
         VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,

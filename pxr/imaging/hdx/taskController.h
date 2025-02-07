@@ -21,6 +21,8 @@
 #include "pxr/imaging/hd/sceneDelegate.h"
 #include "pxr/imaging/hd/task.h"
 
+#include "pxr/imaging/hgiPresent2/present.h"
+
 #include "pxr/imaging/cameraUtil/framing.h"
 #include "pxr/imaging/glf/simpleLightingContext.h"
 #include "pxr/usd/sdf/path.h"
@@ -132,14 +134,6 @@ public:
     /// Get parameters for an AOV.
     HDX_API
     HdAovDescriptor GetRenderOutputSettings(TfToken const& name) const;
-
-    /// The destination API (e.g., OpenGL, see hgiInterop for details) and
-    /// framebuffer that the AOVs are presented into. The framebuffer
-    /// is a VtValue that encoding a framebuffer in a destination API
-    /// specific way.
-    /// E.g., a uint32_t (aka GLuint) for framebuffer object for OpenGL.
-    HDX_API
-    void SetPresentationOutput(TfToken const &api, VtValue const &framebuffer);
 
     /// -------------------------------------------------------
     /// Lighting API
@@ -265,11 +259,38 @@ public:
     /// -------------------------------------------------------
     /// Present API
 
+    /// Disable the presentation task. An application may choose to manage the
+    /// AOVs that are rendered into itself and skip the task controller's
+    /// presentation.
+    HDX_API
+    void DisablePresentation();
+
+    /// Enable the presentation task, and configure it with the given
+    /// presentation implementation.
+    HDX_API
+    void EnablePresentation(HgiPresent2 presentation);
+
+    /// Enable or disable display refresh rate synchronization for presentation,
+    /// if supported.
+    HDX_API
+    void EnableVsync(bool vsync);
+
     /// Enable / disable presenting the render to bound framebuffer.
     /// An application may choose to manage the AOVs that are rendered into
     /// itself and skip the task controller's presentation.
+    /// \deprecated Use DisablePresentation() or EnablePresentation(HgiPresent2)
+    /// instead.
     HDX_API
     void SetEnablePresentation(bool enabled);
+
+    /// The destination API (e.g., OpenGL, see hgiInterop for details) and
+    /// framebuffer that the AOVs are presented into. The framebuffer
+    /// is a VtValue that encoding a framebuffer in a destination API
+    /// specific way.
+    /// E.g., a uint32_t (aka GLuint) for framebuffer object for OpenGL.
+    /// \deprecated Use EnablePresentation(HgiPresent2) instead.
+    HDX_API
+    void SetPresentationOutput(TfToken const &api, VtValue const &framebuffer);
 
 private:
     ///

@@ -62,6 +62,12 @@ public:
     HGIMETAL_API
     HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) override;
 
+    /// Create an HgiMetal texture from an existing Metal texture.
+    /// The texture descriptor is derived from the Metal texture properties.
+    HGIMETAL_API
+    HgiTextureHandle CreateTextureFromExisting(id<MTLTexture> texture,
+        std::string debugName);
+
     HGIMETAL_API
     void DestroyTexture(HgiTextureHandle* texHandle) override;
 
@@ -195,6 +201,11 @@ public:
     HGIMETAL_API
     id<MTLBuffer> GetArgBuffer();
 
+    HGIMETAL_API
+    id<MTLComputePipelineState> GetBlitLinearPipeline();
+    HGIMETAL_API
+    id<MTLComputePipelineState> GetBlitNearestPipeline();
+
 protected:
     HGIMETAL_API
     bool _SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait) override;
@@ -235,6 +246,11 @@ private:
 
     struct AutoReleasePool;
     std::unique_ptr<AutoReleasePool> _pool;
+
+    id<MTLComputePipelineState> _blitLinearPipeline;
+    id<MTLComputePipelineState> _blitNearestPipeline;
+    bool _blitLinearPipelineCreationFailed = false;
+    bool _blitNearestPipelineCreationFailed = false;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -33,7 +33,7 @@
 #include "pxr/imaging/glf/simpleLight.h"
 #include "pxr/imaging/glf/simpleMaterial.h"
 
-#include "pxr/imaging/hgi/hgi.h"
+#include "pxr/imaging/hgiPresent2/present.h"
 
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/usd/timeCode.h"
@@ -524,9 +524,27 @@ public:
     /// @{
     // ---------------------------------------------------------------------
     
+    /// Disable the presentation task. An application may choose to manage the
+    /// AOVs that are rendered into itself and skip the task controller's
+    /// presentation.
+    USDIMAGINGGL_API
+    void DisablePresentation();
+
+    /// Enable the presentation task, and configure it with the given
+    /// presentation implementation.
+    USDIMAGINGGL_API
+    void EnablePresentation(HgiPresent2 presentation);
+
+    /// Enable or disable display refresh rate synchronization for presentation,
+    /// if supported.
+    USDIMAGINGGL_API
+    void EnableVsync(bool vsync);
+
     /// Enable / disable presenting the render to bound framebuffer.
     /// An application may choose to manage the AOVs that are rendered into
     /// itself and skip the engine's presentation.
+    /// \deprecated Use DisablePresentation() or EnablePresentation(HgiPresent2)
+    /// instead.
     USDIMAGINGGL_API
     void SetEnablePresentation(bool enabled);
 
@@ -535,6 +553,7 @@ public:
     /// is a VtValue that encoding a framebuffer in a destination API
     /// specific way.
     /// E.g., a uint32_t (aka GLuint) for framebuffer object for OpenGL.
+    /// \deprecated Use EnablePresentation(HgiPresent2) instead.
     USDIMAGINGGL_API
     void SetPresentationOutput(TfToken const &api, VtValue const &framebuffer);
 
@@ -781,8 +800,6 @@ protected:
     HgiUniquePtr _hgi;
     // Similar for HdDriver.
     HdDriver _hgiDriver;
-
-    VtValue _userFramebuffer;
 
 protected:
     bool _displayUnloadedPrimsWithBounds;

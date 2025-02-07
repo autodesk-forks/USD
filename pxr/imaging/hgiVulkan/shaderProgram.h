@@ -7,8 +7,6 @@
 #ifndef PXR_IMAGING_HGIVULKAN_SHADERPROGRAM_H
 #define PXR_IMAGING_HGIVULKAN_SHADERPROGRAM_H
 
-#include <vector>
-
 #include "pxr/imaging/hgi/shaderProgram.h"
 
 #include "pxr/imaging/hgiVulkan/api.h"
@@ -44,7 +42,7 @@ public:
 
     /// Returns the shader functions that are part of this program.
     HGIVULKAN_API
-    HgiShaderFunctionHandleVector const& GetShaderFunctions() const;
+    HgiShaderFunctionHandleVector const& GetShaderFunctions() const override;
 
     /// Returns the device used to create this object.
     HGIVULKAN_API

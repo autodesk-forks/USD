@@ -135,6 +135,17 @@ HgiVulkan::CreateTextureForInterop(
 }
 
 /* Multi threaded */
+HgiTextureHandle
+HgiVulkan::CreateTextureFromExisting(HgiTextureDesc const& desc, VkImage image,
+    VkImageLayout layout, VkFormat exactFormat,
+    VkImageUsageFlags additionalUsages)
+{
+    return HgiTextureHandle(new HgiVulkanTexture(this, GetPrimaryDevice(),
+        desc, image, layout, exactFormat, additionalUsages),
+        GetUniqueId());
+}
+
+/* Multi threaded */
 void
 HgiVulkan::DestroyTexture(HgiTextureHandle* texHandle)
 {

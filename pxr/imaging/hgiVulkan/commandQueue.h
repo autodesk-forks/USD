@@ -52,12 +52,15 @@ public:
 
     /// Commits the provided command buffer to GPU queue for processing.
     /// After submission the command buffer must not be re-used by client.
-    /// Thread safety: Submission must be externally synchronized. Clients
-    /// should call HgiVulkan::SubmitToQueue.
+    /// Optionally wait and signal semaphores can be provided to synchronize
+    /// with external Vulkan calls, for example for WSI presentation.
+    /// Thread safety: Submission must be externally synchronized.
     HGIVULKAN_API
     void SubmitToQueue(
         HgiVulkanCommandBuffer* cmdBuffer,
-        HgiSubmitWaitType wait = HgiSubmitWaitTypeNoWait);
+        HgiSubmitWaitType wait = HgiSubmitWaitTypeNoWait,
+        VkSemaphore waitSemaphore = nullptr,
+        VkSemaphore signalSemaphore = nullptr);
 
     /// Returns a command buffer that is ready to record commands.
     /// The ownership of the command buffer (ptr) remains with this queue. The

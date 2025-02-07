@@ -258,6 +258,38 @@ HgiMetalTexture::HgiMetalTexture(HgiMetal *hgi, HgiTextureViewDesc const & desc)
     _descriptor.mipLevels = desc.mipLevels;
 }
 
+HgiMetalTexture::HgiMetalTexture(id<MTLTexture> texture, std::string debugName)
+    : HgiTexture(HgiTextureDesc{})
+    , _textureId(texture)
+{
+    [_textureId retain];
+
+    _descriptor.debugName = std::move(debugName);
+    _descriptor.usage = HgiMetalConversions::GetTextureUsage(texture.usage);
+    _descriptor.format = HgiMetalConversions::GetFormat(texture.pixelFormat);
+#if (defined(__MAC_10_15) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_10_15) || \
+    __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
+    if (@available(macOS 10.15, ios 13.0, *)) {
+        _descriptor.componentMapping.r =
+            HgiMetalConversions::GetComponentSwizzle(texture.swizzle.red);
+        _descriptor.componentMapping.g =
+            HgiMetalConversions::GetComponentSwizzle(texture.swizzle.green);
+        _descriptor.componentMapping.b =
+            HgiMetalConversions::GetComponentSwizzle(texture.swizzle.blue);
+        _descriptor.componentMapping.a =
+            HgiMetalConversions::GetComponentSwizzle(texture.swizzle.alpha);
+    }
+#endif
+    _descriptor.type = HgiMetalConversions::GetTextureType(texture.textureType);
+    _descriptor.dimensions = {static_cast<int>(texture.width),
+        static_cast<int>(texture.height), static_cast<int>(texture.depth)};
+    _descriptor.layerCount = texture.arrayLength;
+    _descriptor.mipLevels = texture.mipmapLevelCount;
+    _descriptor.sampleCount = static_cast<HgiSampleCount>(texture.sampleCount);
+
+    HGIMETAL_DEBUG_LABEL(_textureId, _descriptor.debugName.c_str());
+}
+
 HgiMetalTexture::~HgiMetalTexture()
 {
     if (_textureId != nil) {

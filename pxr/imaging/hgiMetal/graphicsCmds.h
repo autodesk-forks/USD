@@ -19,6 +19,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 struct HgiGraphicsCmdsDesc;
+class HgiMetal;
 class HgiMetalResourceBindings;
 class HgiMetalGraphicsPipeline;
 

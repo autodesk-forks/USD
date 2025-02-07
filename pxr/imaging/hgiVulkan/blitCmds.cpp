@@ -288,116 +288,6 @@ void HgiVulkanBlitCmds::CopyBufferGpuToGpu(
         &copyRegion);
 }
 
-void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
-{
-    _CreateCommandBuffer();
-
-    HgiVulkanTexture* srcTexture =
-        static_cast<HgiVulkanTexture*>(src.Get());
-
-    if (!TF_VERIFY(srcTexture && srcTexture->GetImage(),
-        "Invalid texture handle")) {
-        return;
-    }
-
-    HgiVulkanTexture* dstTexture =
-        static_cast<HgiVulkanTexture*>(dst.Get());
-
-    if (!TF_VERIFY(srcTexture && srcTexture->GetImage(),
-        "Invalid texture handle")) {
-        return;
-    }
-
-    HgiTextureDesc const& texDesc = srcTexture->GetDescriptor();
-
-    VkOffset3D origin;
-    origin.x = 0;
-    origin.y = 0;
-    origin.z = 0;
-
-    VkOffset3D size;
-    size.x = texDesc.dimensions[0];
-    size.y = texDesc.dimensions[1];
-    size.z = texDesc.dimensions[2];
-
-    VkImageSubresourceLayers imageSub;
-    imageSub.baseArrayLayer = 0;
-    imageSub.layerCount = 1;
-    imageSub.mipLevel = 0;
-    imageSub.aspectMask = _GetImageAspectMaskForCopy(texDesc.usage);
-
-    VkImageBlit region;
-    region.srcOffsets[0] = origin;
-    region.srcOffsets[1] = size;
-    region.srcSubresource = imageSub;
-    region.dstOffsets[0] = origin;
-    region.dstOffsets[1] = size;
-    region.dstSubresource = imageSub;
-
-    // Transition src image to TRANSFER_READ
-    const VkImageLayout oldLayoutSrc = srcTexture->GetImageLayout();
-    const auto [srcAccessSrc, srcStageSrc] =
-        _GetOldAccessAndPipelineStageFlags(oldLayoutSrc);
-    HgiVulkanTexture::TransitionImageBarrier(
-        _commandBuffer,
-        srcTexture,
-        oldLayoutSrc,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        srcAccessSrc,
-        VK_ACCESS_TRANSFER_READ_BIT,
-        srcStageSrc,
-        VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-    // Transition dst image to TRANSFER_WRITE
-    const VkImageLayout oldLayoutDst = dstTexture->GetImageLayout();
-    const auto [srcAccessDst, srcStageDst] =
-        _GetOldAccessAndPipelineStageFlags(oldLayoutDst);
-    HgiVulkanTexture::TransitionImageBarrier(
-        _commandBuffer,
-        dstTexture,
-        oldLayoutDst,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        srcAccessDst,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        srcStageDst,
-        VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-    vkCmdBlitImage(_commandBuffer->GetVulkanCommandBuffer(),
-        srcTexture->GetImage(),
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dstTexture->GetImage(),
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &region,
-        VK_FILTER_NEAREST);
-
-    // Transition src image back to what it was.
-    const VkAccessFlags accessSrc = HgiVulkanTexture::GetDefaultAccessFlags(
-        srcTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
-        _commandBuffer,
-        srcTexture,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        oldLayoutSrc,
-        HgiVulkanTexture::NO_PENDING_WRITES,
-        accessSrc,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
-
-    // Transition dst image back to what it was.
-    const VkAccessFlags accessDst = HgiVulkanTexture::GetDefaultAccessFlags(
-        dstTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
-        _commandBuffer,
-        dstTexture,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        oldLayoutDst,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        accessDst,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
-}
-
 void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
     HgiBufferCpuToGpuOp const& copyOp)
 {
@@ -693,6 +583,91 @@ HgiVulkanBlitCmds::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
 }
 
 void
+HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle const& src,
+    GfRect2i const& srcRegion, HgiTextureHandle const& dst,
+    GfRect2i const& dstRegion, HgiSamplerFilter filter)
+{
+    _CreateCommandBuffer();
+
+    const auto srcTexture = dynamic_cast<HgiVulkanTexture*>(src.Get());
+    if (!TF_VERIFY(
+            srcTexture && srcTexture->GetImage(), "Invalid texture handle")) {
+        return;
+    }
+
+    const auto dstTexture = dynamic_cast<HgiVulkanTexture*>(dst.Get());
+    if (!TF_VERIFY(
+            srcTexture && srcTexture->GetImage(), "Invalid texture handle")) {
+        return;
+    }
+
+    VkImageBlit blit{};
+
+    HgiTextureDesc const& srcDesc = srcTexture->GetDescriptor();
+    if (!srcRegion.IsNull()) {
+        blit.srcOffsets[0] = {srcRegion.GetMinX(), srcRegion.GetMinY(), 0};
+        blit.srcOffsets[1] = {
+            srcRegion.GetMaxX() + 1, srcRegion.GetMaxY() + 1, 1};
+    } else {
+        blit.srcOffsets[0] = {0, 0, 0};
+        blit.srcOffsets[1] = {srcDesc.dimensions[0], srcDesc.dimensions[1], 1};
+    }
+    blit.srcSubresource.layerCount = 1;
+    blit.srcSubresource.aspectMask = _GetImageAspectMaskForCopy(srcDesc.usage);
+
+    HgiTextureDesc const& dstDesc = dstTexture->GetDescriptor();
+    if (!dstRegion.IsNull()) {
+        blit.dstOffsets[0] = {dstRegion.GetMinX(), dstRegion.GetMinY(), 0};
+        blit.dstOffsets[1] = {
+            dstRegion.GetMaxX() + 1, dstRegion.GetMaxY() + 1, 1};
+    } else {
+        blit.dstOffsets[0] = {0, 0, 0};
+        blit.dstOffsets[1] = {dstDesc.dimensions[0], dstDesc.dimensions[1], 1};
+    }
+    blit.dstSubresource.layerCount = 1;
+    blit.dstSubresource.aspectMask = _GetImageAspectMaskForCopy(dstDesc.usage);
+
+    // Transition src image to TRANSFER_READ
+    const VkImageLayout oldLayoutSrc = srcTexture->GetImageLayout();
+    const auto [srcAccessSrc, srcStageSrc] =
+        _GetOldAccessAndPipelineStageFlags(oldLayoutSrc);
+    HgiVulkanTexture::TransitionImageBarrier(_commandBuffer, srcTexture,
+        oldLayoutSrc, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcAccessSrc,
+        VK_ACCESS_TRANSFER_READ_BIT, srcStageSrc,
+        VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    // Transition dst image to TRANSFER_WRITE
+    const VkImageLayout oldLayoutDst = dstTexture->GetImageLayout();
+    const auto [srcAccessDst, srcStageDst] =
+        _GetOldAccessAndPipelineStageFlags(oldLayoutDst);
+    HgiVulkanTexture::TransitionImageBarrier(_commandBuffer, dstTexture,
+        oldLayoutDst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, srcAccessDst,
+        VK_ACCESS_TRANSFER_WRITE_BIT, srcStageDst,
+        VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    vkCmdBlitImage(_commandBuffer->GetVulkanCommandBuffer(),
+        srcTexture->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dstTexture->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+        HgiVulkanConversions::GetMinMagFilter(filter));
+
+    // Transition src image back to what it was.
+    const VkAccessFlags accessSrc = HgiVulkanTexture::GetDefaultAccessFlags(
+        srcTexture->GetDescriptor().usage);
+    HgiVulkanTexture::TransitionImageBarrier(_commandBuffer, srcTexture,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, oldLayoutSrc,
+        HgiVulkanTexture::NO_PENDING_WRITES, accessSrc,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+
+    // Transition dst image back to what it was.
+    const VkAccessFlags accessDst = HgiVulkanTexture::GetDefaultAccessFlags(
+        dstTexture->GetDescriptor().usage);
+    HgiVulkanTexture::TransitionImageBarrier(_commandBuffer, dstTexture,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, oldLayoutDst,
+        VK_ACCESS_TRANSFER_WRITE_BIT, accessDst, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+}
+
+void
 HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
 {
     _CreateCommandBuffer();
@@ -839,6 +814,7 @@ HgiVulkanBlitCmds::InsertMemoryBarrier(HgiMemoryBarrier barrier)
 HgiVulkanCommandBuffer*
 HgiVulkanBlitCmds::GetCommandBuffer()
 {
+    _CreateCommandBuffer();
     return _commandBuffer;
 }
 

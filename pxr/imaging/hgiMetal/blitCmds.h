@@ -56,6 +56,11 @@ public:
     void CopyBufferToTexture(HgiBufferToTextureOp const& copyOp) override;
 
     HGIMETAL_API
+    void BlitTexture(HgiTextureHandle const& src,
+        GfRect2i const& srcRegion, HgiTextureHandle const& dst,
+        GfRect2i const& dstRegion, HgiSamplerFilter filter) override;
+
+    HGIMETAL_API
     void GenerateMipMaps(HgiTextureHandle const& texture) override;
 
     HGIMETAL_API
@@ -78,7 +83,9 @@ private:
     HgiMetalBlitCmds & operator=(const HgiMetalBlitCmds&) = delete;
     HgiMetalBlitCmds(const HgiMetalBlitCmds&) = delete;
 
-    void _CreateEncoder();
+    void _CreateCommandBuffer();
+
+    void _CreateBlitEncoder();
 
     HgiMetal* _hgi;
     id<MTLCommandBuffer> _commandBuffer;

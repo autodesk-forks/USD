@@ -33,7 +33,10 @@ public:
 
     HGIMETAL_API
     static MTLVertexFormat GetVertexFormat(HgiFormat inFormat);
-    
+
+    HGIMETAL_API
+    static HgiFormat GetFormat(MTLPixelFormat format);
+
     HGIMETAL_API
     static MTLCullMode GetCullMode(HgiCullMode cm);
 
@@ -63,6 +66,9 @@ public:
     
     HGIMETAL_API
     static MTLTextureType GetTextureType(HgiTextureType tt);
+    
+    HGIMETAL_API
+    static HgiTextureType GetTextureType(MTLTextureType tt);
 
     HGIMETAL_API
     static MTLSamplerAddressMode GetSamplerAddressMode(HgiSamplerAddressMode a);
@@ -79,7 +85,10 @@ public:
 #if (defined(__MAC_10_15) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_10_15) \
     || __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
     HGIMETAL_API
-    static MTLTextureSwizzle GetComponentSwizzle(HgiComponentSwizzle);
+    static MTLTextureSwizzle GetComponentSwizzle(HgiComponentSwizzle swizzle);
+
+    HGIMETAL_API
+    static HgiComponentSwizzle GetComponentSwizzle(MTLTextureSwizzle swizzle);
 #endif
 
     HGIMETAL_API
@@ -90,10 +99,15 @@ public:
 
     HGIMETAL_API
     static MTLColorWriteMask GetColorWriteMask(HgiColorMask mask);
+
+    HGIMETAL_API
+    static MTLTextureUsage GetTextureUsage(HgiTextureUsage usage);
+
+    HGIMETAL_API
+    static HgiTextureUsage GetTextureUsage(MTLTextureUsage usage);
 };
 
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif
-

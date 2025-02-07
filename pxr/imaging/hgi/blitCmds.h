@@ -8,10 +8,12 @@
 #define PXR_IMAGING_HGI_BLIT_CMDS_H
 
 #include "pxr/pxr.h"
+#include "pxr/base/gf/rect2i.h"
 #include "pxr/imaging/hgi/api.h"
 #include "pxr/imaging/hgi/buffer.h"
 #include "pxr/imaging/hgi/cmds.h"
 #include "pxr/imaging/hgi/texture.h"
+
 #include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -80,6 +82,23 @@ public:
     /// Copy a buffer resource into a texture resource from GPU to GPU.
     HGI_API
     virtual void CopyBufferToTexture(HgiBufferToTextureOp const& copyOp) = 0;
+
+    /// Copy a source texture to destination texture with more flexibility
+    /// compared to a simple byte-per-byte copy. This supports:
+    /// - Rescaling a source region into a destination region, using the given
+    ///   filter type.
+    /// - Flipping a region either horizontally or vertically by using negative
+    ///   sizes (maxX < minX and/or maxY < minY).
+    /// - Converting a float convertible format to a different float convertible
+    ///   format, including converting to and from sRGB formats.
+    /// This operation will most likely be more expensive compared to a simple
+    /// copy. It may be implemented using a compute or render pass, so the
+    /// source texture should have HgiTextureUsageBitsShaderRead, and the
+    /// destination texture HgiTextureUsageBitsColorTarget (or Depth/Stencil).
+    HGI_API
+    virtual void BlitTexture(HgiTextureHandle const& src,
+        GfRect2i const& srcRegion, HgiTextureHandle const& dst,
+        GfRect2i const& dstRegion, HgiSamplerFilter filter) = 0;
 
     /// Generate mip maps for a texture
     HGI_API

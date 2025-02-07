@@ -21,6 +21,7 @@
 #include "pxr/imaging/garch/glDebugWindow.h"
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hgi/tokens.h"
 #include "pxr/imaging/hdx/pickTask.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usdGeom/bboxCache.h"
@@ -193,6 +194,12 @@ My_TestGLDrawing::InitTest()
         _translate[0] = 0.0;
         _translate[1] = -1000.0;
         _translate[2] = -2500.0;
+    }
+
+    if (PresentDisabled()) {
+        _engine->DisablePresentation();
+    } else {
+        _engine->SetPresentationOutput(HgiTokens->OpenGL, VtValue{0u});
     }
 }
 

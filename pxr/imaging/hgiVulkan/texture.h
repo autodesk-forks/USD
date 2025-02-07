@@ -112,6 +112,12 @@ public:
         VkPipelineStageFlags consumerStage,
         int32_t mipLevel=-1);
 
+    /// Transition the image from VK_IMAGE_LAYOUT_UNDEFINED to its default
+    /// layout (as given by GetDefaultImageLayout()). This is an efficient way
+    /// to return the image to its default layout when its contents don't
+    /// matter.
+    void DiscardContents(HgiVulkanCommandBuffer* cb);
+
     /// Returns the layout for a texture based on its usage flags.
     HGIVULKAN_API
     static VkImageLayout GetDefaultImageLayout(HgiTextureUsage usage);
@@ -138,10 +144,23 @@ protected:
         HgiVulkanDevice* device,
         HgiTextureViewDesc const & desc);
 
+    // Construct from an existing VkImage.
+    HGIVULKAN_API
+    HgiVulkanTexture(
+        HgiVulkan* hgi,
+        HgiVulkanDevice* device,
+        HgiTextureDesc const & desc,
+        VkImage image,
+        VkImageLayout layout,
+        VkFormat exactFormat,
+        VkImageUsageFlags additionalUsages);
+
 private:
     HgiVulkanTexture() = delete;
     HgiVulkanTexture & operator=(const HgiVulkanTexture&) = delete;
     HgiVulkanTexture(const HgiVulkanTexture&) = delete;
+
+    void _CommonInit(HgiVulkan* hgi, HgiVulkanDevice* device, VkFormat format);
 
     VkImage _vkImage;
     VkImageView _vkImageView;
@@ -151,7 +170,7 @@ private:
     uint64_t _inflightBits;
     std::unique_ptr<HgiVulkanBuffer> _stagingBuffer;
     void* _cpuStagingAddress;
-    bool _isTextureView;
+    bool _isImageOwner;
 };
 
 

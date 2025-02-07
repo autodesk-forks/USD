@@ -54,6 +54,11 @@ public:
 
     HGIGL_API
     void GenerateMipMaps(HgiTextureHandle const& texture) override;
+
+    HGIGL_API
+    void BlitTexture(HgiTextureHandle const& src,
+        GfRect2i const& srcRegion, HgiTextureHandle const& dst,
+        GfRect2i const& dstRegion, HgiSamplerFilter filter) override;
     
     HGIGL_API
     void FillBuffer(HgiBufferHandle const& buffer, uint8_t value) override;

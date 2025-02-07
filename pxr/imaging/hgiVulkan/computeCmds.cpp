@@ -206,6 +206,13 @@ HgiVulkanComputeCmds::GetDispatchMethod() const
     return HgiComputeDispatchSerial;
 }
 
+HgiVulkanCommandBuffer*
+HgiVulkanComputeCmds::GetCommandBuffer()
+{
+    _CreateCommandBuffer();
+    return _commandBuffer;
+}
+
 void
 HgiVulkanComputeCmds::_CreateCommandBuffer()
 {

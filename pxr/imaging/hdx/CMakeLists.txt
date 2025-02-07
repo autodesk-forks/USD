@@ -28,7 +28,7 @@ pxr_library(hdx
         hd
         hdSt
         hgi
-        hgiInterop
+        hgiPresent2
         cameraUtil
         sdf
         ${optionalLibs}

@@ -34,7 +34,10 @@ public:
     static VkImageAspectFlags GetImageAspectFlag(HgiTextureUsage usage);
 
     HGIVULKAN_API
-    static VkImageUsageFlags GetTextureUsage(HgiTextureUsage tu);
+    static VkImageUsageFlags GetImageUsage(HgiTextureUsage tu);
+
+    HGIVULKAN_API
+    static HgiTextureUsage GetTextureUsage(VkImageUsageFlags iu);
 
     HGIVULKAN_API
     static VkFormatFeatureFlags GetFormatFeature(HgiTextureUsage tu);
@@ -100,7 +103,7 @@ public:
     static VkPrimitiveTopology GetPrimitiveType(HgiPrimitiveType pt);
 
     HGIVULKAN_API
-    static std::string GetImageLayoutFormatQualifier(HgiFormat inFormat);
+    static const std::string& GetImageLayoutFormatQualifier(HgiFormat inFormat);
 };
 
 

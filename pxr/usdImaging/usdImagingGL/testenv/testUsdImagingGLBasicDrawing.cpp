@@ -23,6 +23,7 @@
 #include "pxr/imaging/glf/simpleLightingContext.h"
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hgi/tokens.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usdGeom/bboxCache.h"
 #include "pxr/usd/usdGeom/metrics.h"
@@ -173,6 +174,12 @@ My_TestGLDrawing::InitTest()
         _lightingContext->SetMaterial(material);
         _lightingContext->SetSceneAmbient(GfVec4f(0.2,0.2,0.2,1.0));
     }
+
+    if (PresentDisabled()) {
+        _engine->DisablePresentation();
+    } else {
+        _engine->SetPresentationOutput(HgiTokens->OpenGL, VtValue{0u});
+    }
 }
 
 void
@@ -252,10 +259,6 @@ My_TestGLDrawing::DrawTest(bool offscreen)
 
     if(IsEnabledTestLighting()) {
         _engine->SetLightingState(_lightingContext);
-    }
-
-    if (PresentDisabled()) {
-        _engine->SetEnablePresentation(false);
     }
 
     params.clipPlanes = GetClipPlanes();

@@ -11,6 +11,7 @@
 #include "pxr/base/gf/vec4i.h"
 #include "pxr/imaging/hgiVulkan/api.h"
 #include "pxr/imaging/hgiVulkan/vulkan.h"
+#include "pxr/imaging/hgiVulkan/cmds.h"
 #include "pxr/imaging/hgi/graphicsCmds.h"
 #include <cstdint>
 #include <functional>
@@ -31,7 +32,8 @@ using VkClearValueVector = std::vector<VkClearValue>;
 ///
 /// Vulkan implementation of HgiGraphicsEncoder.
 ///
-class HgiVulkanGraphicsCmds final : public HgiGraphicsCmds
+class HgiVulkanGraphicsCmds final :
+    public HgiGraphicsCmds, public HgiVulkanCmds
 {
 public:
     HGIVULKAN_API
@@ -103,9 +105,8 @@ public:
     HGIVULKAN_API
     void InsertMemoryBarrier(HgiMemoryBarrier barrier) override;
 
-    /// Returns the command buffer used inside this cmds.
     HGIVULKAN_API
-    HgiVulkanCommandBuffer* GetCommandBuffer();
+    HgiVulkanCommandBuffer* GetCommandBuffer() override;
 
 protected:
     friend class HgiVulkan;

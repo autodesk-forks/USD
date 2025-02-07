@@ -11,6 +11,7 @@
 #include "pxr/imaging/hgi/computeCmds.h"
 #include "pxr/imaging/hgi/computePipeline.h"
 #include "pxr/imaging/hgiVulkan/api.h"
+#include "pxr/imaging/hgiVulkan/cmds.h"
 #include "pxr/imaging/hgiVulkan/vulkan.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -24,7 +25,8 @@ class HgiVulkanCommandBuffer;
 ///
 /// OpenGL implementation of HgiComputeCmds.
 ///
-class HgiVulkanComputeCmds final : public HgiComputeCmds
+class HgiVulkanComputeCmds final :
+    public HgiComputeCmds, public HgiVulkanCmds
 {
 public:
     HGIVULKAN_API
@@ -57,6 +59,9 @@ public:
 
     HGIVULKAN_API
     HgiComputeDispatch GetDispatchMethod() const override;
+
+    HGIVULKAN_API
+    HgiVulkanCommandBuffer* GetCommandBuffer() override;
 
 protected:
     friend class HgiVulkan;

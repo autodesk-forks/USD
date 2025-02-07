@@ -11,8 +11,8 @@
 #include "pxr/external/boost/python/converter/from_python.hpp"
 
 #include "pxr/usdImaging/usdImagingGL/engine.h"
-
 #include "pxr/usdImaging/usdImaging/delegate.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/usd/usd/prim.h"
 #include "pxr/base/tf/pyContainerConversions.h"
@@ -83,7 +83,15 @@ void _SetOverrideWindowPolicy(UsdImagingGLEngine & self,
     }
 }
 
-} // anonymous namespace
+void _SetInteropGLPresentation(UsdImagingGLEngine &self, bool enable)
+{
+    if (enable) {
+        self.SetPresentationOutput(HgiTokens->OpenGL, VtValue{0u});
+    } else {
+        self.DisablePresentation();
+    }
+}
+} // anonymous namespace 
 
 void wrapEngine()
 {
@@ -169,7 +177,8 @@ void wrapEngine()
             .def("SetOverrideWindowPolicy", _SetOverrideWindowPolicy)
             .def("PollForAsynchronousUpdates",
                 &UsdImagingGLEngine::PollForAsynchronousUpdates)
-
+            .def("SetInteropGLPresentation", _SetInteropGLPresentation)
+            
         ;
 
 

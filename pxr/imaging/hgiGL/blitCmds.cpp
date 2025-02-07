@@ -95,6 +95,13 @@ HgiGLBlitCmds::FillBuffer(HgiBufferHandle const& buffer, uint8_t value)
     _ops.push_back( HgiGLOps::FillBuffer(buffer, value) );
 }
 
+void HgiGLBlitCmds::BlitTexture(HgiTextureHandle const& src,
+    GfRect2i const& srcRegion, HgiTextureHandle const& dst,
+    GfRect2i const& dstRegion, HgiSamplerFilter filter)
+{
+    TF_RUNTIME_ERROR("Unimplemented");
+}
+
 void
 HgiGLBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
 {

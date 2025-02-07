@@ -435,6 +435,24 @@ struct {
                                    MTLPrimitiveTypeTriangle /*Invalid*/}
 };
 
+static const std::set<MTLPixelFormat> unfilterableIosFormats =
+{
+    MTLPixelFormatRGBA32Float
+};
+
+struct {
+    HgiTextureUsage hgiUsage;
+    MTLTextureUsage metalUsage;
+} static const _textureUsageTable[] =
+{
+    {HgiTextureUsageBitsColorTarget,   MTLTextureUsageRenderTarget},
+    {HgiTextureUsageBitsDepthTarget,   MTLTextureUsageRenderTarget},
+    {HgiTextureUsageBitsStencilTarget, MTLTextureUsageRenderTarget},
+    {HgiTextureUsageBitsShaderRead,    MTLTextureUsageShaderRead},
+    {HgiTextureUsageBitsShaderWrite,   MTLTextureUsageShaderWrite}
+};
+static_assert(HgiTextureUsageCustomBitsBegin == 1 << 5, "");
+
 MTLPixelFormat
 HgiMetalConversions::GetPixelFormat(HgiFormat inFormat, HgiTextureUsage inUsage)
 {
@@ -481,6 +499,35 @@ HgiMetalConversions::GetVertexFormat(HgiFormat inFormat)
         return MTLVertexFormatFloat4;
     }
     return outFormat;
+}
+
+HgiFormat
+HgiMetalConversions::GetFormat(MTLPixelFormat format)
+{
+    if (!TF_VERIFY(format != MTLPixelFormatInvalid)) {
+        return HgiFormatInvalid;
+    }
+
+    // While HdFormat/HgiFormat does not support BGRA ordering,
+    // it is required by CAMetalLayer.
+    switch (format) {
+    case MTLPixelFormatBGRA8Unorm:
+        return HgiFormatUNorm8Vec4;
+    case MTLPixelFormatBGRA8Unorm_sRGB:
+        return HgiFormatUNorm8Vec4srgb;
+    default: {
+        const auto iter = std::find(std::begin(_PIXEL_FORMAT_DESC),
+            std::end(_PIXEL_FORMAT_DESC), format);
+        if (iter == std::end(_PIXEL_FORMAT_DESC)) {
+            TF_CODING_ERROR(
+                "Unsupported MTLPixelFormat %d", static_cast<int>(format));
+            return HgiFormatInvalid;
+        }
+
+        return static_cast<HgiFormat>(
+            std::distance(std::begin(_PIXEL_FORMAT_DESC), iter));
+    }
+    }
 }
 
 MTLCullMode
@@ -543,6 +590,21 @@ HgiMetalConversions::GetTextureType(HgiTextureType tt)
     return _textureTypeTable[tt].metalTT;
 }
 
+HgiTextureType
+HgiMetalConversions::GetTextureType(MTLTextureType tt)
+{
+    const auto iter =
+        std::find_if(std::begin(_textureTypeTable), std::end(_textureTypeTable),
+            [tt](const auto entry) { return tt == entry.metalTT; });
+    if (iter == std::end(_textureTypeTable)) {
+        TF_CODING_ERROR(
+            "Unsupported MTLTextureSwizzle %d", static_cast<int>(tt));
+        return HgiTextureType2D;
+    }
+
+    return iter->hgiTextureType;
+}
+
 MTLSamplerAddressMode
 HgiMetalConversions::GetSamplerAddressMode(HgiSamplerAddressMode a)
 {
@@ -574,6 +636,21 @@ HgiMetalConversions::GetComponentSwizzle(HgiComponentSwizzle componentSwizzle)
 {
     return _componentSwizzleTable[componentSwizzle].metalCS;
 }
+
+HgiComponentSwizzle
+HgiMetalConversions::GetComponentSwizzle(MTLTextureSwizzle swizzle)
+{
+    const auto iter = std::find_if(std::begin(_componentSwizzleTable),
+        std::end(_componentSwizzleTable),
+        [swizzle](const auto entry) { return swizzle == entry.metalCS; });
+    if (iter == std::end(_componentSwizzleTable)) {
+        TF_CODING_ERROR(
+            "Unsupported MTLTextureSwizzle %d", static_cast<int>(swizzle));
+        return HgiComponentSwizzleZero;
+    }
+
+    return iter->hgiComponentSwizzle;
+}
 #endif
 
 MTLPrimitiveTopologyClass
@@ -599,6 +676,38 @@ HgiMetalConversions::GetColorWriteMask(HgiColorMask mask)
             | ((mask & HgiColorMaskAlpha) ? MTLColorWriteMaskAlpha : 0);
     
     return mtlMask;
+}
+
+MTLTextureUsage
+HgiMetalConversions::GetTextureUsage(HgiTextureUsage usage)
+{
+    MTLTextureUsage mtlUsages = 0;
+    for (const auto usages : _textureUsageTable) {
+        if (usage & usages.hgiUsage) {
+            mtlUsages |= usages.metalUsage;
+        }
+    }
+
+    if (!mtlUsages) {
+        TF_CODING_ERROR("Missing texture usage table entry");
+    }
+    return mtlUsages;
+}
+
+HgiTextureUsage
+HgiMetalConversions::GetTextureUsage(MTLTextureUsage usage)
+{
+    HgiTextureUsage hgiUsages = 0;
+    for (const auto usages : _textureUsageTable) {
+        if (usage & usages.metalUsage) {
+            hgiUsages |= usages.hgiUsage;
+        }
+    }
+
+    if (!hgiUsages) {
+        TF_CODING_ERROR("Missing texture usage table entry");
+    }
+    return hgiUsages;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

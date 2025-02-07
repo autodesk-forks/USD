@@ -18,6 +18,7 @@
 
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hgi/tokens.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usd/primRange.h"
 #include "pxr/base/work/threadLimits.h"
@@ -156,6 +157,12 @@ My_TestGLDrawing::InitTest()
     _translate[0] = 0.0;
     _translate[1] = -1000.0;
     _translate[2] = -2500.0;
+
+    if (PresentDisabled()) {
+        _engine->DisablePresentation();
+    } else {
+        _engine->SetPresentationOutput(HgiTokens->OpenGL, VtValue{0u});
+    }
 }
 
 void
@@ -422,4 +429,3 @@ int main(int argc, char *argv[])
     else
         std::cout << "FAILED" << std::endl;
 }
-

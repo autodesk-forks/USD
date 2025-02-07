@@ -81,6 +81,7 @@ public:
     void WaitForIdle();
 
     /// Returns true if the provided extension is supported by the device
+    HGIVULKAN_API
     bool IsSupportedExtension(const char* extensionName) const;
 
     /// Device extension function pointers
@@ -118,6 +119,7 @@ private:
     std::unordered_map<VkDeviceMemory, HANDLE> _vmaInteropWin32HandleForMemory;
 #endif
     uint32_t _vkGfxsQueueFamilyIndex;
+
     HgiVulkanCommandQueue* _commandQueue;
     HgiVulkanCapabilities* _capabilities;
     HgiVulkanPipelineCache* _pipelineCache;
