@@ -470,11 +470,17 @@ HdSt_TestDriverBase<SceneDelegate>::Present(
 
     _interop.TransferToApp(
         _hgi.get(),
-        colorTexture, 
+        colorTexture,
+        HgiBlendFactorOne,
+        HgiBlendFactorOneMinusSrcAlpha,
+        HgiBlendOpAdd,
+        HgiBlendFactorOne,
+        HgiBlendFactorOneMinusSrcAlpha,
+        HgiBlendOpAdd,
         /*srcDepth*/HgiTextureHandle(),
-        HgiTokens->OpenGL,
-        VtValue(framebuffer), 
-        GfVec4i(0, 0, width, height));
+        HgiCompareFunctionLEqual,
+        framebuffer,
+        GfRect2i({0, 0}, width, height));
 }
 
 // --------------------------------------------------------------------------

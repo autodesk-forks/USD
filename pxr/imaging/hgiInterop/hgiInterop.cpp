@@ -47,18 +47,18 @@ HgiInterop::~HgiInterop() = default;
 void HgiInterop::TransferToApp(
     Hgi *srcHgi,
     HgiTextureHandle const &srcColor,
+    HgiBlendFactor colorSrcBlendFactor,
+    HgiBlendFactor colorDstBlendFactor,
+    HgiBlendOp colorBlendOp,
+    HgiBlendFactor alphaSrcBlendFactor,
+    HgiBlendFactor alphaDstBlendFactor,
+    HgiBlendOp alphaBlendOp,
     HgiTextureHandle const &srcDepth,
-    TfToken const &dstApi,
-    VtValue const &dstFramebuffer,
-    GfVec4i const &dstRegion)
+    HgiCompareFunction depthFunc,
+    uint32_t dstFramebuffer,
+    GfRect2i const &dstRegion)
 {
     TfToken const& srcApi = srcHgi->GetAPIName();
-
-    if (dstApi != HgiTokens->OpenGL) {
-        TF_CODING_ERROR("Unsupported destination Hgi backend: %s",
-                        dstApi.GetText());
-        return;
-    }
 
 #if defined(PXR_GL_SUPPORT_ENABLED) && !defined(ARCH_OS_IPHONE)
     if (srcApi == HgiTokens->OpenGL) {
@@ -68,7 +68,9 @@ void HgiInterop::TransferToApp(
                 std::make_unique<HgiInteropOpenGL>();
         }
         return _hgiInteropImpl->_openGLToOpenGL->CompositeToInterop(
-            srcColor, srcDepth, dstFramebuffer, dstRegion);
+            srcColor, colorSrcBlendFactor, colorDstBlendFactor, colorBlendOp,
+            alphaSrcBlendFactor, alphaDstBlendFactor, alphaBlendOp,
+            srcDepth, depthFunc, dstFramebuffer, dstRegion);
     }
 #endif
 
@@ -84,7 +86,9 @@ void HgiInterop::TransferToApp(
                 std::make_unique<HgiInteropVulkan>(srcHgi);
         }
         return _hgiInteropImpl->_vulkanToOpenGL->CompositeToInterop(
-            srcColor, srcDepth, dstFramebuffer, dstRegion);
+            srcColor, colorSrcBlendFactor, colorDstBlendFactor, colorBlendOp,
+            alphaSrcBlendFactor, alphaDstBlendFactor, alphaBlendOp,
+            srcDepth, depthFunc, dstFramebuffer, dstRegion);
     }
 #endif
 
@@ -100,7 +104,9 @@ void HgiInterop::TransferToApp(
                 std::make_unique<HgiInteropMetal>(srcHgi);
         }
         return _hgiInteropImpl->_metalToOpenGL->CompositeToInterop(
-            srcColor, srcDepth, dstFramebuffer, dstRegion);
+            srcColor, colorSrcBlendFactor, colorDstBlendFactor, colorBlendOp,
+            alphaSrcBlendFactor, alphaDstBlendFactor, alphaBlendOp,
+            srcDepth, depthFunc, dstFramebuffer, dstRegion);
     }
 #endif
 

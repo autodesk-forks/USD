@@ -33,7 +33,7 @@
 #include "pxr/imaging/glf/simpleLight.h"
 #include "pxr/imaging/glf/simpleMaterial.h"
 
-#include "pxr/imaging/hgi/hgi.h"
+#include "pxr/imaging/hgiPresent/present.h"
 
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/usd/timeCode.h"
@@ -507,19 +507,22 @@ public:
     /// @{
     // ---------------------------------------------------------------------
     
-    /// Enable / disable presenting the render to bound framebuffer.
-    /// An application may choose to manage the AOVs that are rendered into
-    /// itself and skip the engine's presentation.
+    /// Disable the presentation task. An application may choose to manage the
+    /// AOVs that are rendered into itself and skip the task controller's
+    /// presentation.
     USDIMAGINGGL_API
-    void SetEnablePresentation(bool enabled);
+    void DisablePresentation();
 
-    /// The destination API (e.g., OpenGL, see hgiInterop for details) and
-    /// framebuffer that the AOVs are presented into. The framebuffer
-    /// is a VtValue that encoding a framebuffer in a destination API
-    /// specific way.
-    /// E.g., a uint32_t (aka GLuint) for framebuffer object for OpenGL.
+    /// Enable the presentation task, and configure it to present to a window.
     USDIMAGINGGL_API
-    void SetPresentationOutput(TfToken const &api, VtValue const &framebuffer);
+    void EnableWindowPresentation(HgiWindowHandle const &window,
+        bool vsync = true);
+
+    /// Enable the presentation task, and configure it to "present" to an
+    /// externally managed framebuffer. See \struct HgiInteropPresentParams.
+    USDIMAGINGGL_API
+    void EnableInteropPresentation(const HgiInteropHandle& destination,
+        HgiCompositionParams composition = {});
 
     /// @}
     
@@ -761,8 +764,6 @@ protected:
     HgiUniquePtr _hgi;
     // Similar for HdDriver.
     HdDriver _hgiDriver;
-
-    VtValue _userFramebuffer;
 
 protected:
     bool _displayUnloadedPrimsWithBounds;

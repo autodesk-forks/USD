@@ -9,6 +9,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/token.h"
+#include "pxr/base/gf/rect2i.h"
 #include "pxr/base/gf/vec4i.h"
 #include "pxr/imaging/hgiInterop/api.h"
 #include "pxr/imaging/hgi/texture.h"
@@ -16,7 +17,6 @@
 #include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
 class Hgi;
 class VtValue;
 
@@ -45,17 +45,11 @@ public:
     ///     Eg. if hgi is of type HgiMetal, the textures are HgiMetalTexture.
     /// `srcColor`: is the source color aov texture to composite to screen.
     /// `srcDepth`: (optional) is the depth aov texture to composite to screen.
-    /// `dstApi`: 
-    ///     Determines what target format/platform the application is using.
-    ///     E.g. If hgi==HgiMetal and dstApi==OpenGL then TransferToApp
-    ///     will present the metal textures to the gl application.
     /// `dstFramebuffer`:
-    ///     The framebuffer that the source textures are presented into. This
-    ///     is a VtValue that encoding a framebuffer in a dstApi specific way.
-    ///     E.g., a uint32_t (aka GLuint) for framebuffer object for
-    ///     dstApi==OpenGL. For backwards compatibility, the currently bound
-    ///     framebuffer is used when the VtValue is empty.
-    ///     
+    ///     The framebuffer that the source textures are presented into.
+    ///     An uint32_t (aka GLuint) FBO name. For backwards compatibility,
+    ///     the currently bound framebuffer is used when the value is 0.
+    ///
     /// `dstRegion`:
     ///     Subrect region of the framebuffer over which to composite.
     ///     Coordinates are (left, BOTTOM, width, height) which is the same
@@ -73,10 +67,16 @@ public:
     void TransferToApp(
         Hgi *srcHgi,
         HgiTextureHandle const &srcColor,
+        HgiBlendFactor colorSrcBlendFactor,
+        HgiBlendFactor colorDstBlendFactor,
+        HgiBlendOp colorBlendOp,
+        HgiBlendFactor alphaSrcBlendFactor,
+        HgiBlendFactor alphaDstBlendFactor,
+        HgiBlendOp alphaBlendOp,
         HgiTextureHandle const &srcDepth,
-        TfToken const &dstApi,
-        VtValue const &dstFramebuffer,
-        GfVec4i const &dstRegion);
+        HgiCompareFunction depthFunc,
+        uint32_t dstFramebuffer,
+        GfRect2i const &dstRegion);
 
 private:
     HgiInterop & operator=(const HgiInterop&) = delete;

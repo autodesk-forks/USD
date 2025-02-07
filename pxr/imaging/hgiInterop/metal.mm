@@ -9,6 +9,8 @@
 
 #include "pxr/imaging/hgiInterop/metal.h"
 
+#include "pxr/imaging/hgiGL/conversions.h"
+
 #include "pxr/imaging/hgiMetal/capabilities.h"
 #include "pxr/imaging/hgiMetal/diagnostic.h"
 #include "pxr/imaging/hgiMetal/hgi.h"
@@ -679,41 +681,48 @@ HgiInteropMetal::_RestoreOpenGlState()
 }
 
 void
-HgiInteropMetal::_BlitToOpenGL(VtValue const &framebuffer,
-                               GfVec4i const &compRegion,
-                               int shaderIndex)
+HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer,
+    GfRect2i const &compRegion,
+    int shaderIndex,
+    HgiBlendFactor colorSrcBlendFactor,
+    HgiBlendFactor colorDstBlendFactor,
+    HgiBlendOp colorBlendOp,
+    HgiBlendFactor alphaSrcBlendFactor,
+    HgiBlendFactor alphaDstBlendFactor,
+    HgiBlendOp alphaBlendOp,
+    HgiCompareFunction depthFunc)
 {
     // Clear GL error state
     _ProcessGLErrors(true);
 
     _CaptureOpenGlState();
 
-    if (!framebuffer.IsEmpty()) {
-        if (framebuffer.IsHolding<uint32_t>()) {
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER,
-                              framebuffer.UncheckedGet<uint32_t>());
-        } else {
-            TF_CODING_ERROR(
-                "dstFramebuffer must hold uint32_t when targeting OpenGL");
-        }
+    // When no destination framebuffer is specified, composite into
+    // the currently bound framebuffer.
+    if (framebuffer) {
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
     }
     
-    // XXX: This doesn't support "optional" depth. Enabling depth writes without
-    // a depth aov to xfer would mean that the bound depth buffer is overwritten
-    // with the fullscreen tri's depth (i.e., the near plane).
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
+    if (shaderIndex == ShaderContextColorDepth) {
+        glEnable(GL_DEPTH_TEST);
+        glDepthMask(GL_TRUE);
+        glDepthFunc(HgiGLConversions::GetCompareFunction(depthFunc));
+    } else {
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+    }
+
     glFrontFace(GL_CCW);
     glDisable(GL_CULL_FACE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     glEnable(GL_BLEND);
-    glBlendFuncSeparate(/*srcColor*/GL_ONE,
-                        /*dstColor*/GL_ONE_MINUS_SRC_ALPHA,
-                        /*srcAlpha*/GL_ONE,
-                        /*dstAlpha*/GL_ONE_MINUS_SRC_ALPHA);
-    glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+    glBlendFuncSeparate(HgiGLConversions::GetBlendFactor(colorSrcBlendFactor),
+                        HgiGLConversions::GetBlendFactor(colorDstBlendFactor),
+                        HgiGLConversions::GetBlendFactor(alphaSrcBlendFactor),
+                        HgiGLConversions::GetBlendFactor(alphaDstBlendFactor));
+    glBlendEquationSeparate(HgiGLConversions::GetBlendEquation(colorBlendOp),
+        HgiGLConversions::GetBlendEquation(alphaBlendOp));
     
     ShaderContext &shader = _shaderProgramContext[shaderIndex];
     glUseProgram(shader.program);
@@ -752,7 +761,8 @@ HgiInteropMetal::_BlitToOpenGL(VtValue const &framebuffer,
                 _mtlAliasedColorTexture.height);
     
     // Region of the framebuffer over which to composite.
-    glViewport(compRegion[0], compRegion[1], compRegion[2], compRegion[3]);
+    glViewport(compRegion.GetMinX(), compRegion.GetMinY(),
+        compRegion.GetWidth(), compRegion.GetHeight());
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -763,9 +773,16 @@ HgiInteropMetal::_BlitToOpenGL(VtValue const &framebuffer,
 void
 HgiInteropMetal::CompositeToInterop(
     HgiTextureHandle const &color,
+    HgiBlendFactor colorSrcBlendFactor,
+    HgiBlendFactor colorDstBlendFactor,
+    HgiBlendOp colorBlendOp,
+    HgiBlendFactor alphaSrcBlendFactor,
+    HgiBlendFactor alphaDstBlendFactor,
+    HgiBlendOp alphaBlendOp,
     HgiTextureHandle const &depth,
-    VtValue const &framebuffer,
-    GfVec4i const &compRegion)
+    HgiCompareFunction depthFunc,
+    uint32_t framebuffer,
+    GfRect2i const &compRegion)
 {
     if (!ARCH_UNLIKELY(color)) {
         TF_CODING_ERROR("No valid color texture provided");
@@ -875,11 +892,19 @@ HgiInteropMetal::CompositeToInterop(
         HgiMetal::CommitCommandBuffer_WaitUntilScheduled);
 
     if (glShaderIndex != -1) {
-        _BlitToOpenGL(framebuffer, compRegion, glShaderIndex);
+        _BlitToOpenGL(framebuffer,
+            compRegion,
+            glShaderIndex,
+            colorSrcBlendFactor,
+            colorDstBlendFactor,
+            colorBlendOp,
+            alphaSrcBlendFactor,
+            alphaDstBlendFactor,
+            alphaBlendOp,
+            depthFunc);
 
         _ProcessGLErrors();
     }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-
