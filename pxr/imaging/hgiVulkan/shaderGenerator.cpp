@@ -231,8 +231,10 @@ HgiVulkanShaderGenerator::_WriteMacros(std::ostream &ss)
           "#define atomic_uint uint\n";
 
     // Advertise to shader code that we support double precision math
+    // and IEEE float special values (NaN, +-Inf).
     ss << "\n"
         << "#define HGI_HAS_DOUBLE_TYPE 1\n"
+        << "#define HGI_HAS_IEEE_FLOAT_SPECIAL_VALUES 1\n"
         << "\n";
 }
 

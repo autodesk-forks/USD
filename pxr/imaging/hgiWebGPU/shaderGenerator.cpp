@@ -160,8 +160,10 @@ HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
           "#define atomic_uint uint\n";
 
     // Advertise to shader code that we support double precision math
+    // and don't support IEEE float special values (NaN, +-Inf).
     ss << "\n"
         << "#define HGI_HAS_DOUBLE_TYPE 1\n"
+        << "#define HGI_HAS_IEEE_FLOAT_SPECIAL_VALUES 0\n"
         << "\n";
 
     // Define platform independent baseInstance as 0
