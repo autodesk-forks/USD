@@ -22,20 +22,19 @@ PXR_NAMESPACE_OPEN_SCOPE
     (hdxOitDataBuffer)          \
     (hdxOitDepthBuffer)         \
     (hdxOitIndexBuffer)         \
+    (hdxOitJointBuffer)         \
     (hdxSelectionBuffer)        \
     (imagerVersion)             \
     (lightingContext)           \
     (lightingShader)            \
     (occludedSelectionOpacity)  \
     (oitCounter)                \
+    (oitJointBuffer)            \
     (oitData)                   \
-    (oitDepth)                  \
-    (oitIndices)                \
     (oitUniforms)               \
     (oitCounterBufferBar)       \
     (oitDataBufferBar)          \
-    (oitDepthBufferBar)         \
-    (oitIndexBufferBar)         \
+    (oitJointBufferBar)         \
     (oitUniformBar)             \
     (oitRenderPassState)        \
     (oitScreenSize)             \

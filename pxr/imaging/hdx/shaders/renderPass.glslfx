@@ -113,8 +113,8 @@ void RenderOutputImpl(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
             // OIT resolve shader cannot compare depths in the OIT list
             // against the depth buffer unless it takes the perspective
             // transform into account.
-            hdxOitDepthBuffer[writeIndex] = Peye.z / Peye.w;
-            hdxOitIndexBuffer[writeIndex] = prevIndex;
+            oitJointBufferBar[writeIndex].hdxOitDepthBuffer = Peye.z / Peye.w;
+            oitJointBufferBar[writeIndex].hdxOitIndexBuffer = prevIndex;
         }
     } else {
         // We may overrun the counter buffer integer and wrap back to 0 if

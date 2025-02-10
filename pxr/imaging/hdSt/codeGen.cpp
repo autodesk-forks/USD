@@ -274,6 +274,11 @@ static void _EmitDeclaration(HioGlslfxResourceLayout::ElementVector *elements,
                              int arraySize=0,
                              HgiShaderStage const &stageVisibility = HgiShaderStageAll);
 
+static void _EmitDeclaration(
+        HioGlslfxResourceLayout::ElementVector *elements,
+        HdSt_ResourceBinder::MetaData::BindingDeclaration const &bindingDeclaration,
+        int arraySize=0);
+
 static void _EmitStructAccessor(std::stringstream &str,
                                 TfToken const &structName,
                                 TfToken const &name,
@@ -2032,15 +2037,8 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
             continue;
         }
 
-
         if (binDecl->stageVisibility == HgiShaderStageAll) {
-            _EmitDeclaration(&_resCommon,
-                             binDecl->name,
-                             binDecl->dataType,
-                             binDecl->binding,
-                             binDecl->isWritable,
-                             binDecl->stageVisibility);
-
+            _EmitDeclaration(&_resCommon, *binDecl);
             _EmitAccessor(_genAccessors,
                           binDecl->name,
                           binDecl->dataType,
@@ -2054,14 +2052,8 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
                 HgiShaderStage stageVisibility;
                 std::tie(targetRes, targetAccessors, stageVisibility) = _resourceLayoutMap[shaderStage];
 
-                if (targetRes && targetAccessors && binDecl->stageVisibility == stageVisibility) {
-                    _EmitDeclaration(targetRes,
-                                     binDecl->name,
-                                     binDecl->dataType,
-                                     binDecl->binding,
-                                     binDecl->isWritable,
-                                     binDecl->stageVisibility);
-
+                if (targetRes && targetAccessors && binDecl->stageVisibility & stageVisibility) {
+                    _EmitDeclaration(targetRes, *binDecl);
                     _EmitAccessor(*targetAccessors,
                                   binDecl->name,
                                   binDecl->dataType,
@@ -2071,8 +2063,6 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
                 }
             }
         }
-
-
     }
 
     TF_FOR_ALL(it, _metaData->customInterleavedBindings) {
@@ -2084,6 +2074,7 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
         HdStBinding binding = it->first;
         TfToken typeName(TfStringPrintf("CustomBlockData%d", binding.GetValue()));
         TfToken varName = it->second.blockName;
+        bool isIndexed = it->second.arraySize > 0 || (binding.GetType() != HdStBinding::UNIFORM && binding.GetType() != HdStBinding::UBO);
 
         _genDecl << "struct " << typeName << " {\n";
         // dbIt is StructEntry { name, dataType, offset, numElements }
@@ -2103,14 +2094,23 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
             }
             _genDecl <<  ";\n";
 
-            if (it->second.arraySize > 0) {
-                _EmitStructAccessor(_genAccessors, varName, 
+            if (it->second.stageVisibility == HgiShaderStageAll) {
+                _EmitStructAccessor(_genAccessors, varName,
                                     dbIt->name, dbIt->dataType, dbIt->arraySize,
-                                    "localIndex", dbIt->concatenateNames);
+                                    isIndexed ? "localIndex" : nullptr, dbIt->concatenateNames);
             } else {
-                _EmitStructAccessor(_genAccessors, varName, 
-                                    dbIt->name, dbIt->dataType, dbIt->arraySize,
-                                    NULL,  dbIt->concatenateNames);
+                for (auto const &shaderStage : shaderStages) {
+                    ElementVector *targetRes = nullptr;
+                    std::stringstream *targetAccessors = nullptr;
+                    HgiShaderStage stageVisibility;
+                    std::tie(targetRes, targetAccessors, stageVisibility) = _resourceLayoutMap[shaderStage];
+
+                    if (targetRes && targetAccessors && it->second.stageVisibility & stageVisibility) {
+                        _EmitStructAccessor(*targetAccessors, varName,
+                                            dbIt->name, dbIt->dataType, dbIt->arraySize,
+                                            isIndexed ? "localIndex" : nullptr, dbIt->concatenateNames);
+                    }
+                }
             }
 
             if (dbIt->name == HdShaderTokens->clipPlanes) {
@@ -2119,8 +2119,22 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
         }
 
         _genDecl << "};\n";
-        _EmitDeclaration(&_resCommon, varName, typeName, binding,
-                         /*isWritable=*/false, it->second.arraySize);
+        if (it->second.stageVisibility == HgiShaderStageAll) {
+            _EmitDeclaration(&_resCommon, varName, typeName, binding,
+                         it->second.isWritable, it->second.arraySize);
+        } else {
+            for (auto const &shaderStage : shaderStages) {
+                ElementVector *targetRes = nullptr;
+                std::stringstream *targetAccessors = nullptr;
+                HgiShaderStage stageVisibility;
+                std::tie(targetRes, targetAccessors, stageVisibility) = _resourceLayoutMap[shaderStage];
+
+                if (targetRes && targetAccessors && it->second.stageVisibility & stageVisibility) {
+                    _EmitDeclaration(targetRes, varName, typeName, binding,
+                                     it->second.isWritable, it->second.arraySize);
+                }
+            }
+        }
     }
 
     // HD_NUM_PATCH_VERTS, HD_NUM_PRIMTIIVE_VERTS
@@ -3449,7 +3463,7 @@ static void _EmitDeclaration(
 static void _EmitDeclaration(
     HioGlslfxResourceLayout::ElementVector *elements,
     HdSt_ResourceBinder::MetaData::BindingDeclaration const &bindingDeclaration,
-    int arraySize=0)
+    int arraySize)
 {
     _EmitDeclaration(elements,
                      bindingDeclaration.name,

@@ -272,15 +272,17 @@ HdxOitResolveTask::_PrepareOitBuffers(
                                             counterSpecs,
                                             HdBufferArrayUsageHintBitsStorage);
         //
-        // Index Buffer
+        // Index and Depth Buffer
         //
-        HdBufferSpecVector indexSpecs{
-            { HdxTokens->hdxOitIndexBuffer, HdTupleType{HdTypeInt32, 1} }
+
+        HdBufferSpecVector jointSpecs{
+                { HdxTokens->hdxOitIndexBuffer, HdTupleType{HdTypeInt32, 1} },
+                { HdxTokens->hdxOitDepthBuffer, HdTupleType{HdTypeFloat, 1} }
         };
-        _indexBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
-                                            /*role*/HdxTokens->oitIndices,
-                                            indexSpecs,
-                                            HdBufferArrayUsageHintBitsStorage);
+        _jointBar = hdStResourceRegistry->AllocateNonUniformBufferArrayRange(
+                /*role*/HdxTokens->oitJointBuffer,
+                        jointSpecs,
+                        HdBufferArrayUsageHintBitsStorage);
 
         //
         // Data Buffer
@@ -291,17 +293,6 @@ HdxOitResolveTask::_PrepareOitBuffers(
         _dataBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
                                             /*role*/HdxTokens->oitData,
                                             dataSpecs,
-                                            HdBufferArrayUsageHintBitsStorage);
-
-        //
-        // Depth Buffer
-        //
-        HdBufferSpecVector depthSpecs{
-            { HdxTokens->hdxOitDepthBuffer, HdTupleType{HdTypeFloat, 1} }
-        };
-        _depthBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
-                                            /*role*/HdxTokens->oitDepth,
-                                            depthSpecs,
                                             HdBufferArrayUsageHintBitsStorage);
 
         //
@@ -317,10 +308,9 @@ HdxOitResolveTask::_PrepareOitBuffers(
     }
 
     // Make sure task context has our buffer each frame (in case its cleared)
+    (*ctx)[HdxTokens->oitJointBufferBar] = _jointBar;
     (*ctx)[HdxTokens->oitCounterBufferBar] = _counterBar;
-    (*ctx)[HdxTokens->oitIndexBufferBar] = _indexBar;
     (*ctx)[HdxTokens->oitDataBufferBar] = _dataBar;
-    (*ctx)[HdxTokens->oitDepthBufferBar] = _depthBar;
     (*ctx)[HdxTokens->oitUniformBar] = _uniformBar;
 
     // The OIT buffer are sized based on the size of the screen and use 
@@ -336,9 +326,8 @@ HdxOitResolveTask::_PrepareOitBuffers(
         // +1 because element 0 of the counter buffer is used as an atomic
         // counter in the shader to give each fragment a unique index.
         _counterBar->Resize(newBufferSize + 1);
-        _indexBar->Resize(newBufferSize * numSamples);
+        _jointBar->Resize(newBufferSize * numSamples);
         _dataBar->Resize(newBufferSize * numSamples);
-        _depthBar->Resize(newBufferSize * numSamples);
 
         // Update the values in the uniform buffer
         hdStResourceRegistry->AddSource(

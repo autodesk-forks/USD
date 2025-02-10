@@ -921,6 +921,8 @@ HdSt_ResourceBinder::ResolveBindings(
                                             concatenateNames);
             }
             sblock.arraySize = it->GetArraySize();
+            sblock.isWritable = it->isWritable();
+            sblock.stageVisibility = it->GetStageVisibility();
             metaDataOut->customInterleavedBindings.insert(
                 std::make_pair(binding, sblock));
             _bindingMap[it->GetName()] = binding;
