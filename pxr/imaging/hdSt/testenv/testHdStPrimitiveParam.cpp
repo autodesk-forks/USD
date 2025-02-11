@@ -35,7 +35,6 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
-HdStResourceRegistrySharedPtr registry;
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
@@ -72,7 +71,8 @@ _CompareArrays(VtArray<Vec3Type> const & result,
 }
 
 bool
-_ComparePrimitiveIDMap(std::string const & name,
+_ComparePrimitiveIDMap(HdStResourceRegistrySharedPtr const &registry,
+                       std::string const & name,
                        std::string const & orientation,
                        VtIntArray numVerts, VtIntArray verts,
                        VtIntArray expectedMapping,
@@ -137,7 +137,8 @@ _ComparePrimitiveIDMap(std::string const & name,
 }
 
 bool
-_ComparePtexFaceIndex(std::string const & name,
+_ComparePtexFaceIndex(HdStResourceRegistrySharedPtr const &registry,
+                      std::string const & name,
                       std::string const & orientation,
                       VtIntArray numVerts, VtIntArray verts,
                       VtIntArray expectedMapping)
@@ -194,27 +195,27 @@ _ComparePtexFaceIndex(std::string const & name,
     return true;
 }
 
-#define COMPARE_PRIMITIVE_ID_MAP_TRI(name, orientation, numVerts, verts, expectedMapping) \
-    _ComparePrimitiveIDMap(name, orientation,                           \
+#define COMPARE_PRIMITIVE_ID_MAP_TRI(registry, name, orientation, numVerts, verts, expectedMapping) \
+    _ComparePrimitiveIDMap(registry, name, orientation,                           \
                            _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                            _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                            _BuildArray(expectedMapping, sizeof(expectedMapping)/sizeof(expectedMapping[0])), \
                            false)
 
-#define COMPARE_PRIMITIVE_ID_MAP_QUAD(name, orientation, numVerts, verts, expectedMapping) \
-    _ComparePrimitiveIDMap(name, orientation,                           \
+#define COMPARE_PRIMITIVE_ID_MAP_QUAD(registry, name, orientation, numVerts, verts, expectedMapping) \
+    _ComparePrimitiveIDMap(registry, name, orientation,                           \
                            _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                            _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                            _BuildArray(expectedMapping, sizeof(expectedMapping)/sizeof(expectedMapping[0])), \
                            true)
 
-#define COMPARE_PTEX_FACE_INDEX(name, orientation, numVerts, verts, expectedMapping) \
-    _ComparePtexFaceIndex(name, orientation,                           \
+#define COMPARE_PTEX_FACE_INDEX(registry, name, orientation, numVerts, verts, expectedMapping) \
+    _ComparePtexFaceIndex(registry, name, orientation,                           \
                           _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                           _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                           _BuildArray(expectedMapping, sizeof(expectedMapping)/sizeof(expectedMapping[0])))
 bool
-PrimitiveIDMapTest()
+PrimitiveIDMapTest(HdStResourceRegistrySharedPtr const &registry)
 {
     HdPerfLog& perfLog = HdPerfLog::GetInstance();
     perfLog.Enable();
@@ -240,12 +241,14 @@ PrimitiveIDMapTest()
         int expectedTri[] = { 0 };
         int expectedQuad[] = { 0, 0, 0 };
 
-        if (!COMPARE_PRIMITIVE_ID_MAP_TRI("triangle", _tokens->rightHanded,
-                                      numVerts, verts, expectedTri)) {
+        if (!COMPARE_PRIMITIVE_ID_MAP_TRI(
+                registry, "triangle", _tokens->rightHanded,
+                numVerts, verts, expectedTri)) {
             return false;
         }
-        if (!COMPARE_PRIMITIVE_ID_MAP_QUAD("triangle", _tokens->rightHanded,
-                                           numVerts, verts, expectedQuad)) {
+        if (!COMPARE_PRIMITIVE_ID_MAP_QUAD(
+                registry, "triangle", _tokens->rightHanded,
+                numVerts, verts, expectedQuad)) {
             return false;
         }
     }
@@ -266,12 +269,14 @@ PrimitiveIDMapTest()
         int expectedTri[] = { 0, 0 };
         int expectedQuad[] = { 0 };
 
-        if (!COMPARE_PRIMITIVE_ID_MAP_TRI("quad", _tokens->rightHanded,
-                                      numVerts, verts, expectedTri)) {
+        if (!COMPARE_PRIMITIVE_ID_MAP_TRI(
+            registry, "quad", _tokens->rightHanded,
+            numVerts, verts, expectedTri)) {
             return false;
         }
-        if (!COMPARE_PRIMITIVE_ID_MAP_QUAD("quad", _tokens->rightHanded,
-                                           numVerts, verts, expectedQuad)) {
+        if (!COMPARE_PRIMITIVE_ID_MAP_QUAD(
+            registry, "quad", _tokens->rightHanded,
+            numVerts, verts, expectedQuad)) {
             return false;
         }
     }
@@ -296,12 +301,14 @@ PrimitiveIDMapTest()
         int expectedTri[] = { 0, 1, 1, 2, 2, 2 };
         int expectedQuad[] = { 0, 0, 0, 1, 2, 2, 2, 2, 2 };
 
-        if (!COMPARE_PRIMITIVE_ID_MAP_TRI("polygons", _tokens->rightHanded,
-                                      numVerts, verts, expectedTri)) {
+        if (!COMPARE_PRIMITIVE_ID_MAP_TRI(
+            registry, "polygons", _tokens->rightHanded,
+            numVerts, verts, expectedTri)) {
             return false;
         }
-        if (!COMPARE_PRIMITIVE_ID_MAP_QUAD("polygons", _tokens->rightHanded,
-                                           numVerts, verts, expectedQuad)) {
+        if (!COMPARE_PRIMITIVE_ID_MAP_QUAD(
+            registry, "polygons", _tokens->rightHanded,
+            numVerts, verts, expectedQuad)) {
             return false;
         }
     }
@@ -309,7 +316,7 @@ PrimitiveIDMapTest()
 }
 
 bool
-PtexFaceIndexTest()
+PtexFaceIndexTest(HdStResourceRegistrySharedPtr const &registry)
 {
     HdPerfLog& perfLog = HdPerfLog::GetInstance();
     perfLog.Enable();
@@ -338,7 +345,7 @@ PtexFaceIndexTest()
                         4, 3, 5, 6, 7 };
         int expectedQuad[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
 
-        if (!COMPARE_PTEX_FACE_INDEX("polygons", _tokens->rightHanded,
+        if (!COMPARE_PTEX_FACE_INDEX(registry, "polygons", _tokens->rightHanded,
                                      numVerts, verts, expectedQuad)) {
             return false;
         }
@@ -353,21 +360,20 @@ int main()
 
     TfErrorMark mark;
 
-    HgiUniquePtr hgi = Hgi::CreatePlatformDefaultHgi();
+    HgiUniquePtr const hgi = Hgi::CreatePlatformDefaultHgi();
     HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
     HdStRenderDelegate renderDelegate;
-    std::unique_ptr<HdRenderIndex> index(
+    std::unique_ptr<HdRenderIndex> const index(
         HdRenderIndex::New(&renderDelegate, {&driver}));
-    registry = std::static_pointer_cast<HdStResourceRegistry>(
-        index->GetResourceRegistry());
+    HdStResourceRegistrySharedPtr const registry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            index->GetResourceRegistry());
 
     bool success = true;
-    success &= PrimitiveIDMapTest();
-    success &= PtexFaceIndexTest();
+    success &= PrimitiveIDMapTest(registry);
+    success &= PtexFaceIndexTest(registry);
 
     TF_VERIFY(mark.IsClean());
-
-    registry.reset();
 
     if (success && mark.IsClean()) {
         std::cout << "OK" << std::endl;

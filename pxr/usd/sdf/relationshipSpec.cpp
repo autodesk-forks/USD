@@ -281,4 +281,59 @@ SDF_DEFINE_GET_SET(NoLoadHint, SdfFieldKeys->NoLoadHint, bool);
 #undef SDF_ACCESSOR_READ_PREDICATE
 #undef SDF_ACCESSOR_WRITE_PREDICATE
 
+// Defined in primSpec.cpp.
+bool
+Sdf_UncheckedCreatePrimInLayer(SdfLayer *layer, SdfPath const &primPath);
+
+SdfRelationshipSpecHandle
+SdfCreateRelationshipInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &relPath,
+    SdfVariability variability,
+    bool isCustom)
+{
+    if (SdfJustCreateRelationshipInLayer(layer, relPath,
+                                         variability, isCustom)) {
+        return layer->GetRelationshipAtPath(relPath);
+    }
+    return TfNullPtr;
+}
+
+bool
+SdfJustCreateRelationshipInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &relPath,
+    SdfVariability variability,
+    bool isCustom)
+{
+    if (!relPath.IsPrimPropertyPath()) {
+        TF_CODING_ERROR("Cannot create prim relationship at path '%s' because "
+                        "it is not a prim property path",
+                        relPath.GetText());
+        return false;
+    }
+
+    SdfLayer *layerPtr = get_pointer(layer);
+
+    SdfChangeBlock block;
+
+    if (!Sdf_UncheckedCreatePrimInLayer(layerPtr, relPath.GetParentPath())) {
+        return false;
+    }
+
+    if (!Sdf_ChildrenUtils<Sdf_RelationshipChildPolicy>::CreateSpec(
+            layer, relPath, SdfSpecTypeRelationship,
+            /*hasOnlyRequiredFields=*/!isCustom)) {
+        TF_RUNTIME_ERROR("Failed to create relationship at path '%s' in "
+                         "layer @%s@", relPath.GetText(),
+                         layerPtr->GetIdentifier().c_str());
+        return false;
+    }
+    
+    layerPtr->SetField(relPath, SdfFieldKeys->Custom, isCustom);
+    layerPtr->SetField(relPath, SdfFieldKeys->Variability, variability);
+    
+    return true;
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

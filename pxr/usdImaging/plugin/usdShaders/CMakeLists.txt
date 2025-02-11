@@ -11,9 +11,6 @@ pxr_plugin(usdShaders
     PRIVATE_CLASSES
         discoveryPlugin
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_FILES
         __init__.py
 

@@ -1123,6 +1123,9 @@ class AppController(QtCore.QObject):
             if self._stageView:
                 self._stageView.setUpdatesEnabled(False)
 
+                # Update the BBox cache with the initial state's purposes.
+                self._stageView.updateBboxPurposes()
+
             self._mainWindow.update()
 
             QtWidgets.QApplication.processEvents()

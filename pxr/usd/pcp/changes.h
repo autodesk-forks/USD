@@ -156,9 +156,9 @@ private:
     // This set serves a similar purpose to _didChangeSpecsInternal above,
     // however, during processing descendants of the specs in this set will also
     // be marked as changed. A performance gain is accomplished by placing the
-    // ancestor specs in this set and marking children iteratively when applying
-    // changes to the cache.
-    SdfPathSet _didChangeSpecsAndChildrenInternal;
+    // ancestor specs in this set and processing children iteratively when
+    // applying changes to the cache.
+    SdfPathSet _didChangePrimSpecsAndChildrenInternal;
 };
 
 /// Structure used to temporarily retain layers and layerStacks within

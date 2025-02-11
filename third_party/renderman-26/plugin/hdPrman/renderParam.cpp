@@ -200,6 +200,7 @@ HdPrman_RenderParam::HdPrman_RenderParam(
     const int& xpuCpuConfig,
     const std::vector<int>& xpuGpuConfig,
     const std::vector<std::string>& extraArgs) :
+    sceneVersion(0),
     frame(0),
     _rix(nullptr),
     _ri(nullptr),
@@ -778,6 +779,19 @@ _Convert(HdSceneDelegate *sceneDelegate, SdfPath const& id,
                                      shutterInterval[1],
 #endif
                                      &samples);
+
+        // The HdSceneIndexAdapterSceneDelegate uses a zero sample count
+        // to indicate that the scene index provides a container data source
+        // for the primvar schema but no data source.
+        //
+        // In this case, we should skip the primvar. It is a unfortnate though
+        // to use samples.count == 0 because that could mask some other
+        // potential error.
+        //
+        if (samples.count == 0) {
+            continue;
+        }
+
         // XXX: The motion blur scene index plugin ensures that only a single
         // sample at offset 0 is returned for any primvar on which Prman does
         // not support motion samples. Currently, that's all primvars except P.
@@ -863,6 +877,10 @@ HdPrman_ConvertPrimvars(HdSceneDelegate *sceneDelegate, SdfPath const& id,
     }
 }
 
+// In 2302 and beyond, we can use
+// HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin.
+#if PXR_VERSION < 2302
+
 void
 HdPrman_TransferMaterialPrimvarOpinions(HdSceneDelegate *sceneDelegate,
                                         SdfPath const& materialId,
@@ -895,6 +913,8 @@ HdPrman_TransferMaterialPrimvarOpinions(HdSceneDelegate *sceneDelegate,
         }
     }
 }
+
+#endif // PXR_VERSION >= 2302
 
 RtParamList
 HdPrman_RenderParam::ConvertAttributes(HdSceneDelegate *sceneDelegate,
@@ -2723,15 +2743,15 @@ HdPrman_RenderParam::_CreateFallbackMaterials()
 {
     // Default material
     {
+        SdfPath id("/_FallbackMaterial");
         std::vector<riley::ShadingNode> materialNodes;
         HdPrman_ConvertHdMaterialNetwork2ToRmanNodes(
-            HdPrmanMaterial_GetFallbackSurfaceMaterialNetwork(),
+            id, HdPrmanMaterial_GetFallbackSurfaceMaterialNetwork(),
             SdfPath("/PxrSurface"), // We assume this terminal name here
             &materialNodes
         );
         _fallbackMaterialId = _riley->CreateMaterial(
-            riley::UserId(stats::AddDataLocation("/_FallbackMaterial").
-                          GetValue()),
+            riley::UserId(stats::AddDataLocation(id.GetText()).GetValue()),
             {static_cast<uint32_t>(materialNodes.size()), materialNodes.data()},
             RtParamList());
     }

@@ -36,6 +36,7 @@ pxr_library(usdImaging
         directMaterialBindingsSchema
         dataSourceAttribute
         dataSourceAttributeColorSpace
+        dataSourceAttributeTypeName
         dataSourceBasisCurves
         dataSourceCamera
         dataSourceGprim

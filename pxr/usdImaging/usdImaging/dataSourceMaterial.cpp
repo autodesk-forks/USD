@@ -8,6 +8,8 @@
 
 #include "pxr/usdImaging/usdImaging/dataSourceAttribute.h"
 #include "pxr/usdImaging/usdImaging/dataSourceAttributeColorSpace.h"
+#include "pxr/usdImaging/usdImaging/dataSourceAttributeTypeName.h"
+#include "pxr/usdImaging/usdImaging/tokens.h"
 
 #include "pxr/usd/usdLux/lightAPI.h"
 #include "pxr/usd/usdLux/lightFilter.h"
@@ -26,6 +28,7 @@
 #include "pxr/imaging/hd/materialNodeParameterSchema.h"
 #include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/materialInterfaceMappingSchema.h"
+#include "pxr/imaging/hd/utils.h"
 
 #include "pxr/base/work/utils.h"
 #include "pxr/base/tf/staticTokens.h"
@@ -173,6 +176,8 @@ public:
                             _locatorPrefix.Append(paramValueLocator)))
                     .SetColorSpace(
                         UsdImagingDataSourceAttributeColorSpace::New(attr))
+                    .SetTypeName(
+                        UsdImagingDataSourceAttributeTypeName::New(attr))
                     .Build();
             }
         }
@@ -796,6 +801,27 @@ _BuildMaterial(
         nodeValues.push_back(tokenDsPair.second);
     }
 
+    // Collect any 'config' on the Material prim
+    // Collect in to a VtDictionary to take advantage of SetValueAtPath for 
+    // nested namespaces in the attribute names.
+    VtDictionary configDict;
+    for (const auto& prop : usdMat.GetPrim().GetPropertiesInNamespace(
+            UsdImagingTokens->configPrefix)) {
+        const auto& attr = prop.As<UsdAttribute>();
+        if (!attr) {
+            continue;
+        }
+
+        std::string name = attr.GetName().GetString();
+        std::pair<std::string, bool> result =
+            SdfPath::StripPrefixNamespace(name, UsdImagingTokens->configPrefix);
+        name = result.first;
+
+        VtValue value;
+        attr.Get(&value);
+
+        configDict.SetValueAtPath(name, value);
+    }
 
     HdContainerDataSourceHandle nodesDs = 
         HdRetainedContainerDataSource::New(
@@ -803,10 +829,13 @@ _BuildMaterial(
             nodeNames.data(),
             nodeValues.data());
 
+    HdContainerDataSourceHandle configDefaultContext =
+        HdUtils::ConvertVtDictionaryToContainerDS(configDict);
 
     return HdMaterialNetworkSchema::Builder()
         .SetNodes(nodesDs)
         .SetTerminals(terminalsDs)
+        .SetConfig(configDefaultContext)
         .SetInterfaceMappings(_UsdImagingDataSourceInterfaceMappings::New(
             UsdShadeMaterial(usdMat.GetPrim())))
         .Build();

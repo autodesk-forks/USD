@@ -19,6 +19,11 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+    (typeName)
+);
+
 // We need to find the first layer that changes the value
 // of the parameter so that we anchor relative paths to that.
 static
@@ -320,6 +325,15 @@ void _WalkGraph(
                     node.parameters[colorSpaceInputName] =
                         VtValue(attr.GetColorSpace());
                 }
+
+                // Store the usdtype as an additional parameter of the form 
+                // 'typeName:inputName'
+                // We are using the GetAsToken() here since we do not expect an 
+                // alias other than the "official" type name.
+                const TfToken typeNameInputName(SdfPath::JoinIdentifier(
+                    _tokens->typeName, inputName));
+                node.parameters[typeNameInputName] = 
+                    VtValue(attr.GetTypeName().GetAsToken());
             }
         }
     }

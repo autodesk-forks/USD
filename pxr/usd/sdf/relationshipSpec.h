@@ -116,6 +116,47 @@ private:
     friend class Sdf_PyRelationshipAccess;
 };
 
+/// Convenience function to create a relationshipSpec on a primSpec at the
+/// given path, and any necessary parent primSpecs, in the given layer.
+///
+/// If a relationshipSpec already exists at the given path, author
+/// variability and custom according to passed arguments and return
+/// a relationship spec handle.
+///
+/// Any newly created prim specs have SdfSpecifierOver and an empty type (as if
+/// created by SdfJustCreatePrimInLayer()).  relPath must be a valid prim
+/// property path (see SdfPath::IsPrimPropertyPath()).  Return false and issue
+/// an error if we fail to author the required scene description.
+SDF_API
+SdfRelationshipSpecHandle
+SdfCreateRelationshipInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &relPath,
+    SdfVariability variability = SdfVariabilityVarying,
+    bool isCustom = false);
+
+/// Convenience function to create a relationshipSpec on a primSpec at the
+/// given path, and any necessary parent primSpecs, in the given layer.
+///
+/// If a relationshipSpec already exists at the given path, author
+/// variability and custom according to passed arguments and return
+/// a relationship spec handle.
+///
+/// Any newly created prim specs have SdfSpecifierOver and an empty type (as if
+/// created by SdfJustCreatePrimInLayer()).  relPath must be a valid prim
+/// property path (see SdfPath::IsPrimPropertyPath()).  Return false and issue
+/// an error if we fail to author the required scene description.
+///
+/// Differs only from SdfCreateRelationshipInLayer only in that a
+/// bool, not a handle, is returned.
+SDF_API
+bool
+SdfJustCreateRelationshipInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &relPath,
+    SdfVariability variability = SdfVariabilityVarying,
+    bool isCustom = false);
+
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // PXR_USD_SDF_RELATIONSHIP_SPEC_H

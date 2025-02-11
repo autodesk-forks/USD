@@ -29,6 +29,7 @@ struct HdSt_MeshShaderKey : public HdSt_ShaderKey
         NormalSourceFlatScreenSpace,
     };
 
+    HDST_API
     HdSt_MeshShaderKey(HdSt_GeometricShader::PrimitiveType primType,
                        TfToken shadingTerminal,
                        NormalSource normalsSource,
@@ -57,6 +58,7 @@ struct HdSt_MeshShaderKey : public HdSt_ShaderKey
     // when the default destructor is automatically generated at callers.
     // Having an empty destructor explicitly within this linkage apparently
     // avoids the issue.
+    HDST_API
     ~HdSt_MeshShaderKey();
 
     HdCullStyle GetCullStyle() const override { return cullStyle; }

@@ -12,6 +12,10 @@ page describes what metrics are collected, what hardware and software
 configurations are used, the actual metrics results, and how to generate the
 metrics locally. 
 
+.. contents:: Table of Contents
+    :local:
+    :depth: 2
+
 ***************
 What We Measure
 ***************
@@ -105,10 +109,8 @@ Windows platforms (as described in :ref:`perf_environments`).
 
 .. note::
 
-    For the 24.11 release, there are known issues with obtaining metrics for
-    the Moore Lane asset on Windows, and the create_first_image metric on 
-    macOS. We are actively investigating these issues and will update 
-    published metrics when these issues are resolved.
+    There are known issues with obtaining the create_first_image metric on 
+    macOS. We will update published metrics when this issue is resolved.
 
 .. image:: performance/linux.svg
     :width: 500
@@ -125,10 +127,14 @@ Standard Shader Ball
 This asset is designed to be a comprehensive test of a broad array of material 
 properties in a single render. Geometry is expressed using USD, materials are 
 defined using MaterialX, texture maps are provided in OpenEXR format and encoded 
-using the Academy Color Encoding System ACEScg color space. 
+using the Academy Color Encoding System ACEScg color space.
 
-.. image:: https://raw.githubusercontent.com/usd-wg/assets/main/full_assets/StandardShaderBall/media/figure02.png
-    :width: 500
+In our performance sweep we use the ``mtlx_bubblegum`` material. Note the
+image below may not exactly match the image generated during the performance
+run; the primary intention is not necessarily to exercise specific renderers.
+
+.. image:: https://raw.githubusercontent.com/usd-wg/assets/main/full_assets/StandardShaderBall/media/example_materials/mtlx_bubblegum.jpg
+    :width: 300
 
 The shader ball asset can be `downloaded here <https://github.com/usd-wg/assets/tree/main/full_assets/StandardShaderBall>`__.
 
@@ -215,6 +221,9 @@ are used (for each asset):
 .. code-block:: 
 
     python usdmeasureperformance.py <asset.usda> -i 10 -a min -o <metrics output filename.yaml>
+
+Optionally, `--tracedir <dir>` will output trace information to `dir` that may aid in
+performance debugging.
 
 Adding Custom Metrics
 =====================

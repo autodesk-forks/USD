@@ -53,6 +53,25 @@ using TfMetaDecay = TfMetaList<std::decay_t<Ts>...>;
 template <class... Xs>
 using TfMetaLength = std::integral_constant<size_t, sizeof...(Xs)>;
 
+// Lighter-weight compile-time conditional type selection implementation.
+template <bool Condition>
+struct Tf_ConditionalImpl {
+    template <class T, class>
+    using Type = T;
+};
+
+template <>
+struct Tf_ConditionalImpl<false> {
+    template <class, class F>
+    using Type = F;
+};
+
+// This is a bit lighter weight at compile time than std::conditional because it
+// instantiates a separate template for the condition from the selector.
+template <bool Cond, class T, class F>
+using TfConditionalType =
+    typename Tf_ConditionalImpl<Cond>::template Type<T, F>;
+
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // PXR_BASE_TF_META_H

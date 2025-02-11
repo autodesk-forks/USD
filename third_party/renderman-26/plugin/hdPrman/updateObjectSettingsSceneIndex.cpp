@@ -57,50 +57,48 @@ _UpdatePrimvars(HdPrimvarsSchema primvars)
 
     // boolean attributes that migrated from string to int
     // XXX array loop
-    if (HdPrimvarSchema primvar  =
-        primvars.GetPrimvar(_tokens->riAttributesDiceRasterOrient)) {
-        if (HdStringDataSourceHandle strDs =
-            HdStringDataSource::Cast(primvar.GetPrimvarValue())) {
-            std::string strVal = strDs->GetTypedValue(0.0f);
-            bool boolVal = (strVal == "Yes");
-            // Overlay boolean value
-            primvarsEditor.Overlay(
-                HdDataSourceLocator(
-                    _tokens->riAttributesDiceRasterOrient),
-                HdPrimvarSchema::Builder()
-                    .SetPrimvarValue(
-                        HdRetainedTypedSampledDataSource<bool>::New(boolVal))
-                    .Build());
-        }
+    HdPrimvarSchema primvar =
+        primvars.GetPrimvar(_tokens->riAttributesDiceRasterOrient);
+    if (HdStringDataSourceHandle strDs =
+        HdStringDataSource::Cast(primvar.GetPrimvarValue())) {
+        std::string strVal = strDs->GetTypedValue(0.0f);
+        bool boolVal = (strVal == "Yes");
+        // Overlay boolean value
+        primvarsEditor.Overlay(
+            HdDataSourceLocator(
+                _tokens->riAttributesDiceRasterOrient),
+            HdPrimvarSchema::Builder()
+            .SetPrimvarValue(
+                HdRetainedTypedSampledDataSource<bool>::New(boolVal))
+            .Build());
     }
 
     // shade:shadingrate -> dice:micropolygonlength
-    if (HdPrimvarSchema shadingRate =
-        primvars.GetPrimvar(_tokens->riAttributesShadeShadingRate)) {
-        if (primvars.GetPrimvar(_tokens->riAttributesDiceMicropolyonLength)) {
-            // If micropolygonlength is already set, leave as-is.
-        } else {
-            // Convert shadingrate to micropolygonlength
-            if (HdFloatArrayDataSourceHandle rateDs =
-                HdFloatArrayDataSource::Cast(shadingRate.GetPrimvarValue())) {
-                VtArray<float> rateVal = rateDs->GetTypedValue(0.0f);
-                if (rateVal.size() == 2) {
-                    // Use 1st component only
-                    float shadingRate_0 = rateVal[0];
-                    // micropolygonlength = sqrt(shadingRate[0])
-                    float micropolygonLength = sqrt(shadingRate_0);
-                    primvarsEditor.Overlay(
-                        HdDataSourceLocator(
-                            _tokens->riAttributesDiceMicropolyonLength),
-                        HdPrimvarSchema::Builder()
-                            .SetPrimvarValue(
-                              HdRetainedTypedSampledDataSource<float>::New(
-                                micropolygonLength))
-                            .SetInterpolation(
-                                HdPrimvarSchema::BuildInterpolationDataSource(
-                                    HdPrimvarSchemaTokens->constant))
-                            .Build());
-                }
+    HdPrimvarSchema shadingRate =
+        primvars.GetPrimvar(_tokens->riAttributesShadeShadingRate);
+    if (primvars.GetPrimvar(_tokens->riAttributesDiceMicropolyonLength)) {
+        // If micropolygonlength is already set, leave as-is.
+    } else {
+        // Convert shadingrate to micropolygonlength
+        if (HdFloatArrayDataSourceHandle rateDs =
+            HdFloatArrayDataSource::Cast(shadingRate.GetPrimvarValue())) {
+            VtArray<float> rateVal = rateDs->GetTypedValue(0.0f);
+            if (rateVal.size() == 2) {
+                // Use 1st component only
+                float shadingRate_0 = rateVal[0];
+                // micropolygonlength = sqrt(shadingRate[0])
+                float micropolygonLength = sqrt(shadingRate_0);
+                primvarsEditor.Overlay(
+                    HdDataSourceLocator(
+                        _tokens->riAttributesDiceMicropolyonLength),
+                    HdPrimvarSchema::Builder()
+                    .SetPrimvarValue(
+                        HdRetainedTypedSampledDataSource<float>::New(
+                            micropolygonLength))
+                    .SetInterpolation(
+                        HdPrimvarSchema::BuildInterpolationDataSource(
+                            HdPrimvarSchemaTokens->constant))
+                    .Build());
             }
         }
         // Erase shadingrate
@@ -108,23 +106,22 @@ _UpdatePrimvars(HdPrimvarsSchema primvars)
             HdDataSourceLocator(_tokens->riAttributesShadeShadingRate),
             HdBlockDataSource::New());
     }
-
+    
     // trace:displacements:
     // Values above 1 are deprecated, and are now equivalent to 1.
-    if (HdPrimvarSchema traceDisplacements =
-        primvars.GetPrimvar(_tokens->riAttributesTraceDisplacements)) {
-        if (HdIntDataSourceHandle intDs =
-            HdIntDataSource::Cast(traceDisplacements.GetPrimvarValue())) {
-            if (intDs->GetTypedValue(0) > 1) {
-                // Overlay a new value of 1
-                primvarsEditor.Overlay(
-                    HdDataSourceLocator(
-                        _tokens->riAttributesTraceDisplacements),
-                    HdPrimvarSchema::Builder()
-                        .SetPrimvarValue(
-                            HdRetainedTypedSampledDataSource<int>::New(1))
-                        .Build());
-            }
+    HdPrimvarSchema traceDisplacements =
+        primvars.GetPrimvar(_tokens->riAttributesTraceDisplacements);
+    if (HdIntDataSourceHandle intDs =
+        HdIntDataSource::Cast(traceDisplacements.GetPrimvarValue())) {
+        if (intDs->GetTypedValue(0) > 1) {
+            // Overlay a new value of 1
+            primvarsEditor.Overlay(
+                HdDataSourceLocator(
+                    _tokens->riAttributesTraceDisplacements),
+                HdPrimvarSchema::Builder()
+                .SetPrimvarValue(
+                    HdRetainedTypedSampledDataSource<int>::New(1))
+                .Build());
         }
     }
 
@@ -141,27 +138,19 @@ public:
     TfTokenVector
     GetNames() override
     {
-        TfTokenVector result;
-        if (_inputPrimDs) {
-            result = _inputPrimDs->GetNames();
-        }
-        return result;
+        return _inputPrimDs->GetNames();
     }
 
     HdDataSourceBaseHandle
     Get(const TfToken &name) override
     {
-        HdDataSourceBaseHandle result;
-        if (_inputPrimDs) {
-            result = _inputPrimDs->Get(name);
-        }
         if (name == HdPrimvarsSchemaTokens->primvars) {
             if (HdPrimvarsSchema primvars =
                 HdPrimvarsSchema::GetFromParent(_inputPrimDs)) {
-                result = _UpdatePrimvars(primvars);
+                return _UpdatePrimvars(primvars);
             }
         }
-        return result;
+        return _inputPrimDs->Get(name);
     }
 
 protected:
@@ -187,55 +176,59 @@ HdPrman_UpdateObjectSettingsSceneIndex::New(
 }
 
 HdPrman_UpdateObjectSettingsSceneIndex::HdPrman_UpdateObjectSettingsSceneIndex(
-                                                                             const HdSceneIndexBaseRefPtr &inputSceneIndex)
+    const HdSceneIndexBaseRefPtr &inputSceneIndex)
 : HdSingleInputFilteringSceneIndexBase(inputSceneIndex)
 { }
 
 HdSceneIndexPrim 
 HdPrman_UpdateObjectSettingsSceneIndex::GetPrim(
-                                               const SdfPath &primPath) const
+    const SdfPath &primPath) const
 {
     const HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
-    return {
-        prim.primType,
-        HdPrman_UpdateObjectSettings_DataSource::New(prim.dataSource)
-    };
+
+    if (prim.dataSource) {
+        return {
+            prim.primType,
+            HdPrman_UpdateObjectSettings_DataSource::New(prim.dataSource)
+        };
+    }
+    return prim;
 }
 
 SdfPathVector 
 HdPrman_UpdateObjectSettingsSceneIndex::GetChildPrimPaths(
-                                                         const SdfPath &primPath) const
+    const SdfPath &primPath) const
 {
     return _GetInputSceneIndex()->GetChildPrimPaths(primPath);
 }
 
 void
 HdPrman_UpdateObjectSettingsSceneIndex::_PrimsAdded(
-                                                   const HdSceneIndexBase &sender,
-                                                   const HdSceneIndexObserver::AddedPrimEntries &entries)
+    const HdSceneIndexBase &sender,
+    const HdSceneIndexObserver::AddedPrimEntries &entries)
 {    
     _SendPrimsAdded(entries);
 }
 
 void 
 HdPrman_UpdateObjectSettingsSceneIndex::_PrimsRemoved(
-                                                     const HdSceneIndexBase &sender,
-                                                     const HdSceneIndexObserver::RemovedPrimEntries &entries)
+    const HdSceneIndexBase &sender,
+    const HdSceneIndexObserver::RemovedPrimEntries &entries)
 {
     _SendPrimsRemoved(entries);
 }
 
 void
 HdPrman_UpdateObjectSettingsSceneIndex::_PrimsDirtied(
-                                                     const HdSceneIndexBase &sender,
-                                                     const HdSceneIndexObserver::DirtiedPrimEntries &entries)
+    const HdSceneIndexBase &sender,
+    const HdSceneIndexObserver::DirtiedPrimEntries &entries)
 {
     // XXX transfer primvar dirtiness
     _SendPrimsDirtied(entries);
 }
 
-HdPrman_UpdateObjectSettingsSceneIndex::~HdPrman_UpdateObjectSettingsSceneIndex()
-= default;
+HdPrman_UpdateObjectSettingsSceneIndex::
+~HdPrman_UpdateObjectSettingsSceneIndex() = default;
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

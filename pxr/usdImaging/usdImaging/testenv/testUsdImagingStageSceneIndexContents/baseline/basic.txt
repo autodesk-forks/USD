@@ -165,6 +165,7 @@
 			Material
 	[material]
 		[]
+			[config]
 			[interfaceMappings]
 			[nodes]
 				[MyPrimvar]
@@ -175,6 +176,8 @@
 						[varname]
 							[colorSpace]
 								
+							[typeName]
+								token
 							[value]
 								map1_uv
 				[MySurface]
@@ -209,6 +212,8 @@
 						[file]
 							[colorSpace]
 								
+							[typeName]
+								asset
 							[value]
 								@texture1.jpg@
 			[terminals]

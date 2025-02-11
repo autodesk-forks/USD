@@ -1607,5 +1607,441 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
             'Prim6' : prim6Contents
         })
 
+    def test_LayerDefaultPrim(self):
+        '''Test edits in layers with a default prim and dependent references 
+        and payloads that do not specify a prim path.'''
+
+        # Setup: Layer1 has a prim /Ref which and Ref is the default prim of 
+        # the layer.
+        layer1 = Sdf.Layer.CreateAnonymous("layer1.usda")
+        layer1.ImportFromString('''#usda 1.0
+        (
+            defaultPrim = "Ref"
+        )
+
+        def "Ref" {
+            int refAttr
+            def "Child" {
+                int childAttr
+            }
+        }
+
+        def "World" {
+        }
+
+        ''')
+
+        # Open just layer1 as a stage and create an editor for it. There are no
+        # dependent stages besides the stage itself.
+        stage1 = Usd.Stage.Open(layer1)
+        editor = Usd.NamespaceEditor(stage1)
+
+        # Verify "Ref" is the default prim of layer1.
+        self.assertEqual(layer1.defaultPrim, "Ref")
+
+        # Verify initial contents of stage1.
+        refContents = {
+            '.' : ['refAttr'],
+            'Child' : {
+                '.' : ['childAttr'],
+            }    
+        }
+
+        self._VerifyStageContents(stage1, {
+            'Ref' : refContents,
+            'World' : {}
+        })
+
+        # Edit: Rename /Ref to /RenamedRef
+        with self.ApplyEdits(editor, "Rename /Ref -> /RenamedRef",
+                expectWarnings = False):
+            self.assertTrue(editor.MovePrimAtPath("/Ref", "/RenamedRef"))
+
+        # Verify the default prim has been updated to "RenamedRef" because of 
+        # rename. The default prim is updated regardless of whether there is
+        # a dependent stage that requires it.
+        self.assertEqual(layer1.defaultPrim, "RenamedRef")
+
+        # Verify that /Ref was renamed in stage1.
+        self._VerifyStageContents(stage1, {
+            'RenamedRef' : refContents,
+            'World' : {}
+        })
+
+        # Edit: Reparent /RenamedRef to /World/RenamedRef.
+        with self.ApplyEdits(editor, "Reparent /RenamedRef -> /World/RenamedRef",
+                expectWarnings = False):
+            self.assertTrue(editor.MovePrimAtPath("/RenamedRef", "/World/RenamedRef"))
+
+        # Verify the default prim has been updated to "/World/RenamedRef" 
+        # because of the reparent. Note that the default prim is an absolute
+        # path since it is not a root prim path. A root relative path (i.e. 
+        # without the initial '/') would be valid but for clarity an absolute
+        # path is authored.
+        self.assertEqual(layer1.defaultPrim, "/World/RenamedRef")
+
+        # Verify that RenamedRef was reparented in stage1.
+        self._VerifyStageContents(stage1, {
+            'World' : {
+                'RenamedRef' : refContents,
+            }
+        })
+
+        # Edit: Rename /World to /NewWorld.
+        with self.ApplyEdits(editor, "Reparent /World -> /NewWorld",
+                expectWarnings = False):
+            self.assertTrue(editor.MovePrimAtPath("/World", "/NewWorld"))
+
+        # Verify the default prim has been updated to "/NewWorld/RenamedRef" 
+        # because of the rename of its parent.
+        self.assertEqual(layer1.defaultPrim, "/NewWorld/RenamedRef")
+
+        # Verify that RenamedRef was reparented in stage1.
+        self._VerifyStageContents(stage1, {
+            'NewWorld' : {
+                'RenamedRef' : refContents,
+            }
+        })
+
+        # Edit: Reparent and rename /NewWorld/RenamedRef back to /Ref
+        with self.ApplyEdits(editor, "Reparent /NewWorld/RenamedRef -> /Ref",
+                expectWarnings = False):
+            self.assertTrue(
+                editor.MovePrimAtPath("/NewWorld/RenamedRef", "/Ref"))
+
+        # Verify the default prim has been returned to "Ref" again. Note that 
+        # the default prim is a relative path (just the prim name) since it IS a
+        # root prim path. An absolute path would be valid but for consistency
+        # with most existing assets we just use the prim name for root prims 
+        # that are the default prim.
+        self.assertEqual(layer1.defaultPrim, "Ref")
+
+        # Verify that /NewWorld/RenamedRef has returned to /Ref on stage1.
+        self._VerifyStageContents(stage1, {
+            'Ref' : refContents,
+            'NewWorld' : {}
+        })
+
+        # XXX: Probably a case to rename Child to just prove that it doesn't 
+        # affect defaultPrim
+
+        # For the next part we create two new layers (2 and 3) that have the
+        # exact same contents. We have two prims that reference and payload 
+        # layer1 with no prim path (uses the defaultPrim) and two prims that 
+        # reference layer1's default prim explicit via a path to /Ref. We create
+        # a stage for each of these two layers.
+        layerString = '''#usda 1.0
+
+        def "RefToDefault" (
+            references = @''' + layer1.identifier + '''@
+        ) {
+        }
+
+        def "PayloadToDefault" (
+            payload =  @''' + layer1.identifier + '''@
+        ) {
+        }
+
+        def "RefToExplicit" (
+            references = @''' + layer1.identifier + '''@</Ref>
+        ) {
+        }
+
+        def "PayloadToExplicit" (
+            payload =  @''' + layer1.identifier + '''@</Ref>
+        ) {
+        }
+        '''
+        
+        layer2 = Sdf.Layer.CreateAnonymous("layer2.usda")
+        layer2.ImportFromString(layerString)
+        stage2 = Usd.Stage.Open(layer2)
+
+        layer3 = Sdf.Layer.CreateAnonymous("layer3.usda")
+        layer3.ImportFromString(layerString)
+        stage3 = Usd.Stage.Open(layer3)
+
+        # Add ONLY stage2 as a dependent stage of the namespace edit. Stage3 
+        # will not be a dependent stage but the use of default prim references
+        # and payloads allow some its prims to automatically remain updated
+        # with stage1 namespace edits.
+        editor.AddDependentStage(stage2)
+
+        # Verify the initial composition fields in layer2 (which will be 
+        # updated after namespace edits.)
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer2), {
+            '/RefToDefault' : {
+                'references' : (Sdf.Reference(layer1.identifier),)
+            },
+            '/PayloadToDefault' : {
+                'payload' : (Sdf.Payload(layer1.identifier),)
+            },
+            '/RefToExplicit' : {
+                'references' : (Sdf.Reference(layer1.identifier, '/Ref'),)
+            },
+            '/PayloadToExplicit' : {
+                'payload' : (Sdf.Payload(layer1.identifier, '/Ref'),)
+            },
+        })
+
+        # Verify the initial composition fields in layer3 which will NOT change
+        # after any of our edits since stage3 was not added as a dependent stage
+        # of the editor.
+        layer3CompositionFields = {
+            '/RefToDefault' : {
+                'references' : (Sdf.Reference(layer1.identifier),)
+            },
+            '/PayloadToDefault' : {
+                'payload' : (Sdf.Payload(layer1.identifier),)
+            },
+            '/RefToExplicit' : {
+                'references' : (Sdf.Reference(layer1.identifier, '/Ref'),)
+            },
+            '/PayloadToExplicit' : {
+                'payload' : (Sdf.Payload(layer1.identifier, '/Ref'),)
+            }
+        }
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer3), 
+                         layer3CompositionFields)
+
+        # Verify the initial contents of stage2 and stage3 (which start off the
+        # same). Each prim has the same contents since they each just reference/
+        # payload the same prim in layer1.
+        self._VerifyStageContents(stage2, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : refContents,
+            'RefToExplicit' : refContents,
+            'PayloadToExplicit' : refContents,
+        })
+
+        self._VerifyStageContents(stage3, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : refContents,
+            'RefToExplicit' : refContents,
+            'PayloadToExplicit' : refContents,
+        })
+
+        # Edit: Rename /Ref to /RenamedRef.
+        with self.ApplyEdits(editor, "Rename /Ref -> /RenamedRef",
+                expectWarnings = True):
+            self.assertTrue(editor.MovePrimAtPath("/Ref", "/RenamedRef"))
+
+        # Like before, the default prim is updated in layer1 and the rename
+        # is present in stage1.
+        self.assertEqual(layer1.defaultPrim, "RenamedRef")
+        self._VerifyStageContents(stage1, {
+            'RenamedRef' : refContents,
+            'NewWorld' : {}
+        })
+
+        # Verify in layer2 that the explicit reference and payload to /Ref
+        # has been updated with the new path. The default using reference and 
+        # payload are unchanged.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer2), {
+            '/RefToDefault' : {
+                'references' : (Sdf.Reference(layer1.identifier),)
+            },
+            '/PayloadToDefault' : {
+                'payload' : (Sdf.Payload(layer1.identifier),)
+            },
+            '/RefToExplicit' : {
+                'references' : (Sdf.Reference(layer1.identifier, '/RenamedRef'),)
+            },
+            '/PayloadToExplicit' : {
+                'payload' : (Sdf.Payload(layer1.identifier, '/RenamedRef'),)
+            },
+        })
+        # Verify layer3's composition fields are unchanged.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer3), 
+                         layer3CompositionFields)
+
+        # Verify stage2's contents are all unchanged. The default reference and
+        # payloads still refer to the same prim since the default prim was 
+        # updated. The explicit path reference and payload were updated to use
+        # the new path.
+        self._VerifyStageContents(stage2, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : refContents,
+            'RefToExplicit' : refContents,
+            'PayloadToExplicit' : refContents,
+        })
+
+        # Verify stage3's contents. The default reference and payload prims have
+        # their contents unchanged since the default prim is updated in layer1
+        # The explicit path prims however lose their contents since we couldn't 
+        # update the paths when not added as a dependent stage.
+        self._VerifyStageContents(stage3, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : refContents,
+            'RefToExplicit' : {},
+            'PayloadToExplicit' : {},
+        })
+
+        # Unload both payloads on both stages 2 and 3.
+        stage2.Unload('/PayloadToDefault')
+        stage2.Unload('/PayloadToExplicit')
+        stage3.Unload('/PayloadToDefault')
+        stage3.Unload('/PayloadToExplicit')
+
+        # Verify on both stages that the payload prims have no contents anymore
+        # (stage3's PayloadToExplicit already had no contents due to the prior
+        # edit).
+        self._VerifyStageContents(stage2, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : {},
+            'RefToExplicit' : refContents,
+            'PayloadToExplicit' : {},
+        })
+
+        self._VerifyStageContents(stage3, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : {},
+            'RefToExplicit' : {},
+            'PayloadToExplicit' : {},
+        })
+
+        # Edit: Reparent /RenamedRef to /NewWorld/RenamedRef with the payloads
+        # unloaded
+        with self.ApplyEdits(editor, "Reparent /RenamedRef -> /NewWorld/RenamedRef",
+                expectWarnings = True):
+            self.assertTrue(
+                editor.MovePrimAtPath("/RenamedRef", "/NewWorld/RenamedRef"))
+
+        # Like before, the default prim is updated in layer1 and the reparent
+        # is present in stage1.
+        self.assertEqual(layer1.defaultPrim, "/NewWorld/RenamedRef")
+        self._VerifyStageContents(stage1, {
+            'NewWorld' : {
+                'RenamedRef' : refContents,
+            }
+        })
+
+        # Verify in layer2 that ONLY the explicit reference /RenamedRef
+        # has been updated with the new path. Paths to unloaded payloads are not
+        # updated and the default using reference and payload are unchanged.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer2), {
+            '/RefToDefault' : {
+                'references' : (Sdf.Reference(layer1.identifier),)
+            },
+            '/PayloadToDefault' : {
+                'payload' : (Sdf.Payload(layer1.identifier),)
+            },
+            '/RefToExplicit' : {
+                'references' : (Sdf.Reference(layer1.identifier, 
+                                              '/NewWorld/RenamedRef'),)
+            },
+            '/PayloadToExplicit' : {
+                'payload' : (Sdf.Payload(layer1.identifier, '/RenamedRef'),)
+            },
+        })
+
+        # Verify layer3's composition fields are unchanged.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer3), 
+                         layer3CompositionFields)
+
+        # Verify stage2's reference contents are all unchanged. The payload
+        # load contents are still empty because the payloads are still unloaded.
+        self._VerifyStageContents(stage2, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : {},
+            'RefToExplicit' : refContents,
+            'PayloadToExplicit' : {},
+        })
+
+        # Verify stage3's contents. The default reference has its contents 
+        # unchanged since all the default prim is updated in layer1. The default
+        # payload is empty because it is still unloaded.
+        self._VerifyStageContents(stage3, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : {},
+            'RefToExplicit' : {},
+            'PayloadToExplicit' : {},
+        })
+
+        # Load all payloads on both stages.
+        stage2.Load('/PayloadToDefault')
+        stage3.Load('/PayloadToDefault')
+        print("\n=== EXPECT WARNINGS ===", file=sys.stderr)              
+        stage2.Load('/PayloadToExplicit')
+        stage3.Load('/PayloadToExplicit')
+        print("\n=== END EXPECTED WARNINGS ===", file=sys.stderr)              
+
+        # On stage2 the default prim payload has its contents again as we didn't
+        # need to update an payload paths while the payload was unloaded. The
+        # explicit path payload prim's contents are not restored since we didn't
+        # update its path while unloaded.       
+        self._VerifyStageContents(stage2, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : refContents,
+            'RefToExplicit' : refContents,
+            'PayloadToExplicit' : {},
+        })
+
+        # On stage3 the default prim payload's contents are also restored for
+        # for the same reason as we don't need to updated the payload path 
+        # itself to maintain the dependency.
+        self._VerifyStageContents(stage3, {
+            'RefToDefault' : refContents,
+            'PayloadToDefault' : refContents,
+            'RefToExplicit' : {},
+            'PayloadToExplicit' : {},
+        })
+
+        # Edit: Delete /NewWorld/RenamedRef
+        with self.ApplyEdits(editor, "Delete /NewWorld/RenamedRef",
+                expectWarnings = True):
+            self.assertTrue(editor.DeletePrimAtPath("/NewWorld/RenamedRef"))
+        
+        # This time the defaultPrim field is completely removed in layer1 as
+        # all specs for /NewWorld/RenamedRef are deleted.
+        self.assertEqual(layer1.defaultPrim, '')
+        self.assertFalse(layer1.HasDefaultPrim())
+        self._VerifyStageContents(stage1, {
+            'NewWorld' : {}
+        })
+
+        # Verify in layer2 that ONLY the explicit reference to 
+        # /NewWorld/RenamedRef in /RefToExplicit has been deleted. The 
+        # reference and payload to layer1's default prim are unchanged even 
+        # though there is no longer a default prim. /PayloadToExplicit is 
+        # unchanged since it hadn't been updated to use /NewWorld/RenamedRef 
+        # and doesn't have that dependency.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer2), {
+            '/RefToDefault' : {
+                'references' : (Sdf.Reference(layer1.identifier),)
+            },
+            '/PayloadToDefault' : {
+                'payload' : (Sdf.Payload(layer1.identifier),)
+            },
+            '/RefToExplicit' : {
+                'references' : ()
+            },
+            '/PayloadToExplicit' : {
+                'payload' : (Sdf.Payload(layer1.identifier, '/RenamedRef'),)
+            },
+        })
+
+        # Verify layer3's composition fields are still unchanged being it was 
+        # not added as a dependent stage.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer3), 
+                         layer3CompositionFields)
+
+        # On both stages 2 and 3, none of the prims have any contents as the
+        # reference/payload content has been deleted. Note that with the 
+        # exception of stage2's /RefToExplicit, all these prims have composition
+        # errors to nonexistent reference/payload targets.
+        self._VerifyStageContents(stage2, {
+            'RefToDefault' : {},
+            'PayloadToDefault' : {},
+            'RefToExplicit' : {},
+            'PayloadToExplicit' : {},
+        })
+        self._VerifyStageContents(stage3, {
+            'RefToDefault' : {},
+            'PayloadToDefault' : {},
+            'RefToExplicit' : {},
+            'PayloadToExplicit' : {},
+        })
+
 if __name__ == '__main__':
     unittest.main()

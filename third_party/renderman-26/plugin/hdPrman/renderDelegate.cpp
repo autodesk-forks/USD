@@ -47,6 +47,8 @@
 #include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hd/sprim.h"
 #include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hd/version.h"
+
 #if HD_API_VERSION >= 60
 #include "pxr/imaging/hd/renderCapabilitiesSchema.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
@@ -56,6 +58,14 @@
 #include "pxr/base/tf/getenv.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+#if HD_API_VERSION >= 71
+TF_DEFINE_ENV_SETTING(
+    HD_PRMAN_ENABLE_PARALLEL_PRIM_SYNC, true,
+    "Enables parallel prim Sync for supported prim types");
+static bool _enableParallelPrimSync =
+    TfGetEnvSetting(HD_PRMAN_ENABLE_PARALLEL_PRIM_SYNC);
+#endif
 
 // \class HdPrmanRenderDelegate::_RileySceneIndices.
 //
@@ -134,7 +144,7 @@ struct HdPrmanRenderDelegate::_RileySceneIndices
     HdContainerDataSourceHandle
     _Args(HdPrman_RenderParam * const renderParam)
     {
-        using DataSource = 
+        using DataSource =
             HdRetainedTypedSampledDataSource<
                 HdsiPrimManagingSceneIndexObserver::PrimFactoryBaseHandle>;
 
@@ -188,7 +198,7 @@ TF_DEFINE_PUBLIC_TOKENS(HdPrmanAovSettingsTokens,
     HDPRMAN_AOV_SETTINGS_TOKENS);
 
 #if PXR_VERSION <= 2308
-TF_DEFINE_PUBLIC_TOKENS(HdAspectRatioConformPolicyTokens, 
+TF_DEFINE_PUBLIC_TOKENS(HdAspectRatioConformPolicyTokens,
                         HD_ASPECT_RATIO_CONFORM_POLICY);
 #endif
 
@@ -295,7 +305,7 @@ HdPrmanRenderDelegate::_GetRenderVariant(const HdRenderSettingsMap &settingsMap)
         assert(it->second.IsHolding<TfToken>());
         renderVariant = it->second.UncheckedGet<TfToken>().GetText();
     } else {
-        renderVariant = 
+        renderVariant =
                 _ToLower(
                     GetRenderSetting<std::string>(
                         HdPrmanRenderSettingsTokens->rileyVariant,
@@ -369,9 +379,9 @@ void
 HdPrmanRenderDelegate::_Initialize()
 {
     // Prepare list of render settings descriptors
-    // TODO: With this approach some settings will need to be updated as the 
-    // defaults change in Renderman. Although these defaults are unlikely to 
-    // change we should either change how settings defaults are obtained or 
+    // TODO: With this approach some settings will need to be updated as the
+    // defaults change in Renderman. Although these defaults are unlikely to
+    // change we should either change how settings defaults are obtained or
     // automate using PRManOptions.args.
     _settingDescriptors.reserve(5);
 
@@ -380,11 +390,11 @@ HdPrmanRenderDelegate::_Initialize()
     _settingDescriptors.push_back({
         std::string("Integrator"),
         HdPrmanRenderSettingsTokens->integratorName,
-        VtValue(integrator) 
+        VtValue(integrator)
     });
 
     if (TfGetEnvSetting(HD_PRMAN_ENABLE_QUICKINTEGRATE)) {
-        const std::string interactiveIntegrator = 
+        const std::string interactiveIntegrator =
             HdPrmanIntegratorTokens->PxrDirectLighting;
         _settingDescriptors.push_back({
             std::string("Interactive Integrator"),
@@ -738,7 +748,7 @@ HdPrmanRenderDelegate::GetDefaultAovDescriptor(
     if (IsInteractive()) {
         if (name == HdAovTokens->color) {
             return HdAovDescriptor(
-                HdFormatFloat32Vec4, 
+                HdFormatFloat32Vec4,
                 false,
                 VtValue(GfVec4f(0.0f)));
         } else if (name == HdAovTokens->depth) {
@@ -749,7 +759,7 @@ HdPrmanRenderDelegate::GetDefaultAovDescriptor(
             return HdAovDescriptor(HdFormatInt32, false, VtValue(-1));
         }
         return HdAovDescriptor(
-            HdFormatFloat32Vec3, 
+            HdFormatFloat32Vec3,
             false,
             VtValue(GfVec3f(0.0f)));
     }
@@ -799,12 +809,12 @@ HdPrmanRenderDelegate::GetCapabilities() const
             .SetMotionBlur(
                 HdRetainedTypedSampledDataSource<bool>::New(true))
             .Build();
-    return result;                       
+    return result;
 }
 #endif
 
 void
-HdPrmanRenderDelegate::SetRenderSetting(TfToken const &key, 
+HdPrmanRenderDelegate::SetRenderSetting(TfToken const &key,
                                         VtValue const &value)
 {
     HdRenderDelegate::SetRenderSetting(key, value);
@@ -932,6 +942,26 @@ HdPrmanRenderDelegate::Update()
     }
 #endif
 }
+
+#if HD_API_VERSION >= 71
+bool
+HdPrmanRenderDelegate::IsParallelSyncEnabled(const TfToken &primType) const
+{
+    // The prim types below have been reviewed for Sync thread safety.
+    //
+    // Notable exceptions include integrator, renderSettings,
+    // volume, and lights.  These exceptions are generally due
+    // to interaction with HdChangeTracker state.
+    return
+        _enableParallelPrimSync && (
+        primType == HdPrimTypeTokens->camera ||
+        primType == HdPrimTypeTokens->coordSys ||
+        primType == HdPrimTypeTokens->displayFilter ||
+        primType == HdPrimTypeTokens->lightFilter ||
+        primType == HdPrimTypeTokens->material ||
+        primType == HdPrimTypeTokens->sampleFilter);
+}
+#endif
 
 #endif
 

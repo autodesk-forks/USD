@@ -5,17 +5,13 @@
 // https://openusd.org/license.
 //
 
-#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/retainedSceneIndex.h"
-#include "pxr/imaging/hd/tokens.h"
-
 #include "pxr/imaging/hdsi/switchingSceneIndex.h"
 
-#include <cassert>
+#include "pxr/base/tf/token.h"
+#include "pxr/base/tf/diagnosticLite.h"
+
 #include <iostream>
-#include <sstream>
-#include <utility>
-#include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -35,10 +31,10 @@ _TestBasic()
     });
 
     auto switchingSi = HdsiSwitchingSceneIndex::New({ siA, siB });
-    assert(switchingSi->GetPrim(SdfPath("/Prim")).primType == TfToken("A"));
+    TF_AXIOM(switchingSi->GetPrim(SdfPath("/Prim")).primType == TfToken("A"));
 
     switchingSi->SetIndex(1);
-    assert(switchingSi->GetPrim(SdfPath("/Prim")).primType == TfToken("B"));
+    TF_AXIOM(switchingSi->GetPrim(SdfPath("/Prim")).primType == TfToken("B"));
 
     return true;
 }

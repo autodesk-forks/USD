@@ -1452,7 +1452,6 @@ class StageView(QGLWidget):
                if self._dataModel.viewSettings.cullBackfaces
                else UsdImagingGL.CullStyle.CULL_STYLE_NOTHING)
         self._renderParams.gammaCorrectColors = False
-        self._renderParams.enableIdRender = False
         self._renderParams.enableSamlpeAlphaToCoverage = True
         self._renderParams.highlight = renderSelHighlights
         self._renderParams.enableSceneMaterials = self._dataModel.viewSettings.enableSceneMaterials
@@ -2199,7 +2198,6 @@ class StageView(QGLWidget):
                    if self._dataModel.viewSettings.cullBackfaces
                    else UsdImagingGL.CullStyle.CULL_STYLE_NOTHING)
         self._renderParams.gammaCorrectColors = False
-        self._renderParams.enableIdRender = True
         self._renderParams.enableSampleAlphaToCoverage = False
         self._renderParams.enableSceneMaterials = self._dataModel.viewSettings.enableSceneMaterials
         self._renderParams.enableSceneLights = self._dataModel.viewSettings.enableSceneLights

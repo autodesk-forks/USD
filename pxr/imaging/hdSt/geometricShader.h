@@ -246,6 +246,7 @@ public:
     HgiCullMode ResolveCullMode(HdCullStyle const renderStateCullStyle) const;
 
     // Factory for convenience.
+    HDST_API
     static HdSt_GeometricShaderSharedPtr Create(
             HdSt_ShaderKey const &shaderKey, 
             HdStResourceRegistrySharedPtr const &resourceRegistry);

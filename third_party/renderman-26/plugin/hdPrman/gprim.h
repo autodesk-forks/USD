@@ -257,9 +257,13 @@ HdPrman_Gprim<BASE>::Sync(HdSceneDelegate* sceneDelegate,
         primvars.SetString(RixStr.k_identifier_object,
                            RtUString(id.GetName().c_str()));
 
+// In 2302 and beyond, we can use
+// HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin.
+#if PXR_VERSION < 2302
         // Transfer material opinions of primvars.
         HdPrman_TransferMaterialPrimvarOpinions(sceneDelegate, hdMaterialId,
             primvars);
+#endif // PXR_VERSION < 2302
 
         // Adjust _prototypeIds array.
         const size_t oldCount = _prototypeIds.size();

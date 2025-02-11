@@ -142,32 +142,35 @@ HdDependencyForwardingSceneIndex::_PrimDirtied(
     _VisitedNodeSet *visited,
     HdSceneIndexObserver::DirtiedPrimEntries *moreDirtiedEntries)
 {
-    if (TF_VERIFY(visited)) {
-        _VisitedNode node = {primPath, sourceLocator};
-
-        if (visited->find(node) != visited->end()) {
-            return;
-        }
-
-        visited->insert(node);
+    if (!TF_VERIFY(visited)) {
+        return;
     }
 
-    moreDirtiedEntries->emplace_back(primPath, sourceLocator);
+    _VisitedNode node = {primPath, sourceLocator};
+    if (visited->find(node) != visited->end()) {
+        return;
+    }
 
-    // check to see if dependencies are dirty and should be recomputed
+    // don't add to visited set yet to simplify handling of dependencies below.
+
+
+    // check to see if dependencies are dirty and should be recomputed.
+    // we want to do this just once for a prim, so we insert an additional 
+    // node with the dependencies locator to the visited set to track this.
     const HdDataSourceLocator &depsLoc =
             HdDependenciesSchema::GetDefaultLocator();
     if (sourceLocator.Intersects(depsLoc)) {
-        if (TF_VERIFY(visited)) {
-            _VisitedNode dependenciesNode = {primPath, depsLoc};
-            if (visited->find(dependenciesNode) == visited->end()) {
-                visited->insert(dependenciesNode);
-                _ClearDependencies(primPath);
-                _UpdateDependencies(primPath);
-            }
+        const _VisitedNode dependenciesNode = {primPath, depsLoc};
+
+        if (visited->find(dependenciesNode) == visited->end()) {
+            visited->insert(dependenciesNode);
+            _ClearDependencies(primPath);
+            _UpdateDependencies(primPath);
         }
     }
 
+    visited->insert(node);
+    moreDirtiedEntries->emplace_back(primPath, sourceLocator);
 
     // check me in the reverse update table
     // now dirty any dependencies

@@ -232,12 +232,57 @@ UsdGeomXformable::GetXformOp(UsdGeomXformOp::Type const opType,
     return UsdGeomXformOp(xformOpAttr, isInverseOp);
 }
 
+UsdGeomXformOp
+UsdGeomXformable::AddTranslateXOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeTranslateX, precision, opSuffix,
+                      isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::AddTranslateYOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeTranslateY, precision, opSuffix,
+                      isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::AddTranslateZOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeTranslateZ, precision, opSuffix,
+                      isInverseOp);
+}
+
 UsdGeomXformOp 
 UsdGeomXformable::AddTranslateOp(UsdGeomXformOp::Precision const precision,
     TfToken const &opSuffix, bool isInverseOp) const
 {
     return AddXformOp(UsdGeomXformOp::TypeTranslate, precision, opSuffix,
                       isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::GetTranslateXOp(
+    TfToken const &opSuffix, bool isInverseOp) const 
+{
+    return GetXformOp(UsdGeomXformOp::TypeTranslateX, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::GetTranslateYOp(
+    TfToken const &opSuffix, bool isInverseOp) const 
+{
+    return GetXformOp(UsdGeomXformOp::TypeTranslateY, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::GetTranslateZOp(
+    TfToken const &opSuffix, bool isInverseOp) const 
+{
+    return GetXformOp(UsdGeomXformOp::TypeTranslateZ, opSuffix, isInverseOp);
 }
 
 UsdGeomXformOp 
@@ -247,11 +292,53 @@ UsdGeomXformable::GetTranslateOp(TfToken const &opSuffix, bool isInverseOp) cons
 }
 
 UsdGeomXformOp 
+UsdGeomXformable::AddScaleXOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeScaleX, precision, opSuffix, 
+                      isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::AddScaleYOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeScaleY, precision, opSuffix, 
+                      isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::AddScaleZOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeScaleZ, precision, opSuffix, 
+                      isInverseOp);
+}
+
+UsdGeomXformOp 
 UsdGeomXformable::AddScaleOp(UsdGeomXformOp::Precision const precision,
     TfToken const &opSuffix, bool isInverseOp) const
 {
     return AddXformOp(UsdGeomXformOp::TypeScale, precision, opSuffix, 
                       isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::GetScaleXOp(TfToken const &opSuffix, bool isInverseOp) const
+{
+    return GetXformOp(UsdGeomXformOp::TypeScaleX, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::GetScaleYOp(TfToken const &opSuffix, bool isInverseOp) const
+{
+    return GetXformOp(UsdGeomXformOp::TypeScaleY, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::GetScaleZOp(TfToken const &opSuffix, bool isInverseOp) const
+{
+    return GetXformOp(UsdGeomXformOp::TypeScaleZ, opSuffix, isInverseOp);
 }
 
 UsdGeomXformOp 

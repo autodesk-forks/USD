@@ -81,6 +81,7 @@ private:
 /// to perform this conversion.
 bool
 HdPrman_ConvertHdMaterialNetwork2ToRmanNodes(
+    SdfPath const& id,
     HdMaterialNetwork2 const& network,
     SdfPath const& nodePath,
     std::vector<riley::ShadingNode> *result);

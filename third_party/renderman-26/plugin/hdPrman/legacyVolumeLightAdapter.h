@@ -41,11 +41,6 @@ public:
         UsdPrim const& prim,
         SdfPath const& cachePath,
         UsdTimeCode time) const override;
-
-    HdVolumeFieldDescriptorVector GetVolumeFieldDescriptors(
-        UsdPrim const& usdPrim,
-        SdfPath const& id,
-        UsdTimeCode time) const override;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

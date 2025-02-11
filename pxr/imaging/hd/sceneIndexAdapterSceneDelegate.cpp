@@ -405,7 +405,7 @@ HdSceneIndexAdapterSceneDelegate::PrimsRemoved(
                     entry.primPath.GetParentPath(),
                     HdChangeTracker::DirtyTopology);
             } else if (primType == HdPrimTypeTokens->task) {
-                GetRenderIndex().RemoveTask(entry.primPath);
+                GetRenderIndex()._RemoveTask(entry.primPath);
             }
         } else {
             // Otherwise, there's a subtree and we need to call _RemoveSubtree.
@@ -488,7 +488,7 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
                 HdDirtyBitsTranslator::TaskLocatorSetToDirtyBits(
                     entry.dirtyLocators);
             if (dirtyBits != HdChangeTracker::Clean) {
-                GetRenderIndex().GetChangeTracker().MarkTaskDirty(
+                GetRenderIndex().GetChangeTracker()._MarkTaskDirty(
                     indexPath, dirtyBits);
             }
         }
@@ -1072,7 +1072,20 @@ _GetHdParamsFromDataSource(
             const TfToken cspName(
                 SdfPath::JoinIdentifier(
                     HdMaterialNodeParameterSchemaTokens->colorSpace, pName));
-            hdParams[cspName] = VtValue(colorSpaceDS->GetTypedValue(0));
+            const TfToken colorSpaceToken = colorSpaceDS->GetTypedValue(0);
+            if (!colorSpaceToken.IsEmpty()) {
+                hdParams[cspName] = VtValue(colorSpaceDS->GetTypedValue(0));
+            }
+        }
+        // TypeName Metadata
+        if (HdTokenDataSourceHandle typeNameDs = paramSchema.GetTypeName()) {
+            const TfToken typName(
+                SdfPath::JoinIdentifier(
+                    HdMaterialNodeParameterSchemaTokens->typeName, pName));
+            const TfToken typeNameToken = typeNameDs->GetTypedValue(0);
+            if (!typeNameToken.IsEmpty()) {
+                hdParams[typName] = VtValue(typeNameToken);
+            }
         }
     }
     return hdParams;
@@ -1171,6 +1184,25 @@ _Walk(
     netHd->nodes.push_back(n);
 }
 
+// Note: Utility methods below expect a valid data source handle.
+VtDictionary
+_ToDictionary(HdSampledDataSourceContainerSchema schema)
+{
+    VtDictionary dict;
+    for (const TfToken& name : schema.GetNames()) {
+        if (HdSampledDataSourceHandle valueDs = schema.Get(name)) {
+            dict[name.GetString()] = valueDs->GetValue(0);
+        }
+    }
+    return dict;
+}
+
+VtDictionary
+_ToDictionary(HdContainerDataSourceHandle const &cds)
+{
+    return _ToDictionary(HdSampledDataSourceContainerSchema(cds));
+}
+
 static
 HdMaterialNetworkMap
 _ToMaterialNetworkMap(
@@ -1206,6 +1238,11 @@ _ToMaterialNetworkMap(
     HdMaterialConnectionContainerSchema terminalsSchema =
         netSchema.GetTerminals();
     const TfTokenVector names = terminalsSchema.GetNames();
+
+    auto config = HdSampledDataSourceContainerSchema(netSchema.GetConfig());
+    if (config) {
+        matHd.config = _ToDictionary(config);
+    }
 
     for (const auto & name : names) {
         visitedNodes.clear();
@@ -1253,14 +1290,7 @@ HdSceneIndexAdapterSceneDelegate::GetMaterialResource(SdfPath const & id)
     // Query for a material network to match the requested render contexts
     const TfTokenVector renderContexts =
         GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();
-    HdMaterialNetworkSchema netSchema(nullptr);
-    for (TfToken const& networkSelector : renderContexts) {
-        netSchema = matSchema.GetMaterialNetwork(networkSelector);
-        if (netSchema) {
-            // Found a matching network
-            break;
-        }
-    }
+    HdMaterialNetworkSchema netSchema = matSchema.GetMaterialNetwork(renderContexts);
     if (!netSchema.IsDefined()) {
         return VtValue();
     }
@@ -1421,25 +1451,6 @@ HdSceneIndexAdapterSceneDelegate::GetLightParamValue(
 
 namespace {
 // Note: Utility methods below expect a valid data source handle.
-
-VtDictionary
-_ToDictionary(
-    HdSampledDataSourceContainerSchema schema)
-{
-    VtDictionary dict;
-    for (const TfToken& name : schema.GetNames()) {
-        if (HdSampledDataSourceHandle valueDs = schema.Get(name)) {
-            dict[name.GetString()] = valueDs->GetValue(0);
-        }
-    }
-    return dict;
-}
-
-VtDictionary
-_ToDictionary(HdContainerDataSourceHandle const &cds)
-{
-    return _ToDictionary(HdSampledDataSourceContainerSchema(cds));
-}
 
 using _RenderVar = HdRenderSettings::RenderProduct::RenderVar;
 
@@ -1779,6 +1790,9 @@ HdSceneIndexAdapterSceneDelegate::_ComputePrimvarDescriptors(
                 primvar.GetInterpolation();
 
             if (!interpolationDataSource) {
+                TF_WARN("HdSceneIndexAdapterSceneDelegate: Skipping primvar "
+                        "'%s' due to missing interpolation data source",
+                        name.GetText());
                 continue;
             }
 
@@ -1788,6 +1802,9 @@ HdSceneIndexAdapterSceneDelegate::_ComputePrimvarDescriptors(
                 Hd_InterpolationAsEnum(interpolationToken);
 
             if (interpolation >= HdInterpolationCount) {
+                TF_WARN("HdSceneIndexAdapterSceneDelegate: Skipping primvar "
+                        "'%s' due to invalid interpolation value %i",
+                        name.GetText(), interpolation);
                 continue;
             }
 

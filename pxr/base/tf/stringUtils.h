@@ -22,6 +22,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <list>
+#include <locale>
 #include <set>
 #include <sstream>
 #include <string>
@@ -559,6 +560,7 @@ TfStringify(const T& v)
     }
     else {
         std::ostringstream stream;
+        stream.imbue(std::locale::classic());
         stream << v;
         return stream.str();
     }

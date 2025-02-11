@@ -15,8 +15,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class UsdStageCache;
-
 /// \class UsdShadeShaderDefParserPlugin
 /// 
 /// Parses shader definitions represented using USD scene description using the 
@@ -40,9 +38,6 @@ public:
 
     USDSHADE_API
     const TfToken &GetSourceType() const override;    
-
-private:
-    static UsdStageCache _cache;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

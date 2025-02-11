@@ -26,9 +26,6 @@ pxr_library(usdLux
         discoveryPlugin
         lightDefParser
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_FILES 
         __init__.py
 

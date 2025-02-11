@@ -107,7 +107,7 @@ Pcp_ComposeExpressionVariables(
     const PcpLayerStackIdentifier& rootLayerStackId,
     CachePolicy* cache)
 {
-    PcpExpressionVariables localExpressionVars;
+    static const PcpExpressionVariables localExpressionVars;
     const PcpExpressionVariables* expressionVars = &localExpressionVars;
 
     // Traverse the variable override sources to collect the expression variable
@@ -150,7 +150,11 @@ Pcp_ComposeExpressionVariables(
                 sources[i], std::move(newExpressionVars));
         }
     }
-    
+
+    // expressionVars should be set to a cached entry at this point.
+    // If this fails for some reason, expressionVars will be set to a
+    // pointer to a static instance to avoid returning a pointer to a
+    // temporary.
     TF_VERIFY(expressionVars != &localExpressionVars);
     return expressionVars;
 }

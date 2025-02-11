@@ -420,6 +420,30 @@ function(pxr_library NAME)
         set(pch "OFF")
     endif()
 
+    if (PXR_ENABLE_PYTHON_SUPPORT AND args_PYMODULE_CPPFILES)
+        # If moduleDeps.cpp does not exist, create one
+        set(moduleDepsFileName "moduleDeps.cpp")
+        list(FIND args_PYTHON_CPPFILES ${moduleDepsFileName} foundModuleDeps)
+        if (${foundModuleDeps} EQUAL -1)
+            # Add moduleDeps.cpp as a built file
+            list(APPEND args_CPPFILES ${moduleDepsFileName})
+
+            # Keep only our libraries in the module dependencies
+            foreach(library ${args_LIBRARIES})
+                if (TARGET ${library}) 
+                    list(APPEND localLibs ${library})
+                endif()
+            endforeach()
+
+            # Generate moduleDeps.cpp
+            _get_python_module_name(${NAME} pyModuleName)
+            add_custom_command(
+                OUTPUT ${moduleDepsFileName}
+                COMMAND ${CMAKE_COMMAND} -DlibraryName=${NAME} -DmoduleName=${pyModuleName} -DsourceDir=${PROJECT_SOURCE_DIR} -Dlibraries="${localLibs}" -Doutfile=${moduleDepsFileName} -P "${PROJECT_SOURCE_DIR}/cmake/macros/genModuleDepsCpp.cmake"
+                DEPENDS "CMakeLists.txt")
+        endif()
+    endif()
+
     _pxr_library(${NAME}
         TYPE "${args_TYPE}"
         PREFIX "${prefix}"

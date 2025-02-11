@@ -488,10 +488,12 @@ class VtArray : public Vt_ArrayBase {
     /// this size is unachievable due to the amount of available memory or other
     /// system limitations.
     constexpr size_t max_size() const {
-        // The number of value_type elements that can be fit into maximum size_t
-        // bytes minus the size of _ControlBlock.
-        return (std::numeric_limits<size_t>::max() - sizeof(_ControlBlock))
-            / sizeof(value_type);
+        // Popular compilers limit object sizes to half the address space, so we
+        // follow suit, taking max bytes as one less than the maximum value of a
+        // difference between pointers.  This is unobtainable in practice: on a
+        // 64-bit machine this is more than 8 million terabytes.
+        return (std::numeric_limits<ptrdiff_t>::max() - 1 -
+                sizeof(_ControlBlock)) / sizeof(value_type);
     }
 
     /// Return true if this array contains no elements, false otherwise.

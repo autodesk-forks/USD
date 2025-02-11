@@ -11,6 +11,8 @@
 
 #include "pxr/usd/usd/stageCache.h"
 
+#include "pxr/base/tf/staticData.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PRIVATE_TOKENS(
@@ -22,7 +24,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (usd)
 );
 
-UsdStageCache UsdShadeShaderDefParserPlugin::_cache;
+static TfStaticData<UsdStageCache> _StageCache;
 
 static
 NdrTokenMap
@@ -52,11 +54,10 @@ UsdShadeShaderDefParserPlugin::Parse(
     const std::string &rootLayerPath = discoveryResult.resolvedUri;
 
     SdfLayerRefPtr rootLayer = SdfLayer::FindOrOpen(rootLayerPath);
-    UsdStageRefPtr stage = 
-        UsdShadeShaderDefParserPlugin::_cache.FindOneMatching(rootLayer);
+    UsdStageRefPtr stage = _StageCache->FindOneMatching(rootLayer);
     if (!stage) {
         stage = UsdStage::Open(rootLayer);
-        UsdShadeShaderDefParserPlugin::_cache.Insert(stage);
+        _StageCache->Insert(stage);
     }
 
     if (!stage) {

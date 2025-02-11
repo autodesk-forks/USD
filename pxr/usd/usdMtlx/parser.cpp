@@ -6,6 +6,7 @@
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usdMtlx/utils.h"
+#include "pxr/usd/usdMtlx/tokens.h"
 #include "pxr/usd/ndr/debugCodes.h"
 #include "pxr/usd/ndr/node.h"
 #include "pxr/usd/ndr/nodeDiscoveryResult.h"
@@ -460,7 +461,7 @@ ParseElement(ShaderBuilder* builder, const mx::ConstNodeDefPtr& nodeDef)
 
     // Metadata
     builder->metadata[SdrNodeMetadata->Label] = nodeDef->getNodeString();
-    ParseMetadata(builder, SdrNodeMetadata->Category, nodeDef, _tokens->nodecategory);
+    builder->metadata[SdrNodeMetadata->Category] = nodeDef->getType();
     ParseMetadata(builder, SdrNodeMetadata->Help, nodeDef, _tokens->doc);
     ParseMetadata(builder, SdrNodeMetadata->Target, nodeDef, _tokens->target);
     ParseMetadata(builder, SdrNodeMetadata->Role, nodeDef, _tokens->nodegroup);

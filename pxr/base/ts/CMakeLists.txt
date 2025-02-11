@@ -100,9 +100,6 @@ pxr_library(ts
     PUBLIC_HEADERS
         ${headers}
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         ${pycpp}
 

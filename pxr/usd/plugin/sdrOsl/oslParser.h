@@ -112,6 +112,10 @@ public:
     const TfToken& GetSourceType() const override;
 
 private:
+    // Determines the sdrContext for the shader from the schema base defined
+    // in the node's metadata
+    TfToken _getSdrContextFromSchemaBase(const NdrTokenMap& metadata) const;
+
     // Gets a vector of properties that are present on the specified OSL
     // query object
     NdrPropertyUniquePtrVec _getNodeProperties(const OSL::OSLQuery &query,

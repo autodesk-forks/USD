@@ -588,6 +588,46 @@ TestVulkanBuffer(HgiVulkan& hgiVulkan)
         return false;
     }
 
+    // Test another CPU to GPU copy, this time with different src and dst
+    // offsets.
+
+    // Write new data into CPU staging area
+    stagingBlob[8] = 789;
+    stagingBlob[9] = 789;
+    stagingBlob[10] = 789;
+    stagingBlob[11] = 789;
+    memcpy(cpuAddress, stagingBlob.data() + 4, 8 * sizeof(blob[0]));
+
+    // Schedule copy from staging area to GPU device-local buffer.
+    HgiBufferCpuToGpuOp transferOp2;
+    transferOp2.byteSize = 8 * sizeof(blob[0]);
+    transferOp2.cpuSourceBuffer = cpuAddress;
+    transferOp2.sourceByteOffset = 0;
+    transferOp2.destinationByteOffset = 4 * sizeof(blob[0]);
+    transferOp2.gpuDestinationBuffer = buffer;
+
+    HgiBlitCmdsUniquePtr blitCmds4 = hgiVulkan.CreateBlitCmds();
+    blitCmds4->CopyBufferCpuToGpu(transferOp2);
+    hgiVulkan.SubmitCmds(blitCmds4.get(), HgiSubmitWaitTypeWaitUntilCompleted);
+
+    // Read back the transfer to confirm it worked
+    HgiBufferGpuToCpuOp copyOp3;
+    copyOp3.byteSize = desc.byteSize;
+    copyOp3.cpuDestinationBuffer = &transferBackBlob[0];
+    copyOp3.destinationByteOffset = 0;
+    copyOp3.gpuSourceBuffer = buffer;
+    copyOp3.sourceByteOffset = 0;
+
+    HgiBlitCmdsUniquePtr blitCmds5 = hgiVulkan.CreateBlitCmds();
+    blitCmds5->CopyBufferGpuToCpu(copyOp3);
+    hgiVulkan.SubmitCmds(blitCmds5.get(), HgiSubmitWaitTypeWaitUntilCompleted);
+
+    std::cout << std::endl;
+    if (transferBackBlob != stagingBlob) {
+        TF_CODING_ERROR("Transfer readback failed");
+        return false;
+    }
+
     // Put buffer in garbage collector
     device->WaitForIdle();
     hgiVulkan.DestroyBuffer(&buffer);

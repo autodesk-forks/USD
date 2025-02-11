@@ -166,16 +166,6 @@ private:
     template <class U> friend class SdfHandle;
 };
 
-PXR_NAMESPACE_CLOSE_SCOPE
-
-namespace boost {
-
-using PXR_NS::get_pointer;
-
-}
-
-PXR_NAMESPACE_OPEN_SCOPE
-
 template <class T>
 struct SdfHandleTo {
     typedef SdfHandle<T> Handle;

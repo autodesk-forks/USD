@@ -62,13 +62,21 @@ public:
     /// Returns a garbage collection vector for a type of handle.
     /// Thread safety: The returned vector is a thread_local vector so this call
     /// is thread safe as long as the vector is only used by the calling thread.
+    HGIVULKAN_API
     HgiVulkanBufferVector* GetBufferList();
+    HGIVULKAN_API
     HgiVulkanTextureVector* GetTextureList();
+    HGIVULKAN_API
     HgiVulkanSamplerVector* GetSamplerList();
+    HGIVULKAN_API
     HgiVulkanShaderFunctionVector* GetShaderFunctionList();
+    HGIVULKAN_API
     HgiVulkanShaderProgramVector* GetShaderProgramList();
+    HGIVULKAN_API
     HgiVulkanResourceBindingsVector* GetResourceBindingsList();
+    HGIVULKAN_API
     HgiVulkanGraphicsPipelineVector* GetGraphicsPipelineList();
+    HGIVULKAN_API
     HgiVulkanComputePipelineVector* GetComputePipelineList();
 
 private:

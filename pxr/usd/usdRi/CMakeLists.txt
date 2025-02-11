@@ -18,9 +18,6 @@ pxr_library(usdRi
     PUBLIC_HEADERS
         api.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PRIVATE_CLASSES
         typeUtils
 

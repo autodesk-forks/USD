@@ -5,17 +5,13 @@
 // https://openusd.org/license.
 //
 
-#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/retainedSceneIndex.h"
-#include "pxr/imaging/hd/tokens.h"
-
 #include "pxr/imaging/hdsi/computeSceneIndexDiff.h"
 
-#include <cassert>
+#include "pxr/base/tf/diagnosticLite.h"
+#include "pxr/base/tf/token.h"
+
 #include <iostream>
-#include <sstream>
-#include <utility>
-#include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -45,11 +41,11 @@ _TestComputeSceneIndexDiffDelta()
         siA, siB, &removedEntries, &addedEntries, &renamedEntries,
         &dirtiedEntries);
 
-    assert(
+    TF_AXIOM(
         addedEntries.size() == 1
         && addedEntries[0].primPath == SdfPath("/Prim"));
 
-    assert(
+    TF_AXIOM(
         removedEntries.size() == 1
         && removedEntries[0].primPath == SdfPath("/Removed"));
 

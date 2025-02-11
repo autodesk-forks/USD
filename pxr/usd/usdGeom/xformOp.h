@@ -27,7 +27,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 /// \hideinitializer
 #define USDGEOM_XFORM_OP_TYPES \
+    (translateX) \
+    (translateY) \
+    (translateZ) \
     (translate) \
+    (scaleX) \
+    (scaleY) \
+    (scaleZ) \
     (scale) \
     (rotateX) \
     (rotateY) \
@@ -47,7 +53,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// XformOp() and UsdGeomXformOp::GetOpType(), to establish op type.
 ///
 /// The component operation names and their meanings are:
+/// \li <b>translateX</b> - translation along the X axis
+/// \li <b>translateY</b> - translation along the Y axis
+/// \li <b>translateZ</b> - translation along the Z axis
 /// \li <b>translate</b> - XYZ translation
+/// \li <b>scaleX</b> - scale along the X axis
+/// \li <b>scaleY</b> - scale along the Y axis
+/// \li <b>scaleZ</b> - scale along the Z axis
 /// \li <b>scale</b> - XYZ scale
 /// \li <b>rotateX</b> - rotation about the X axis, <b>in degrees</b>
 /// \li <b>rotateY</b> - rotation about the Y axis, <b>in degrees</b>
@@ -79,7 +91,7 @@ TF_DECLARE_PUBLIC_TOKENS(UsdGeomXformOpTypes, USDGEOM_API, USDGEOM_XFORM_OP_TYPE
 /// determines the type of transformation operation, and its secondary name 
 /// (or suffix) within the namespace (which is not required to exist), can be 
 /// any name that distinguishes it from other ops of the same type. Suffixes 
-/// are generally imposed by higer level xform API schemas.
+/// are generally imposed by higher level xform API schemas.
 ///
 /// \anchor usdGeom_rotationPackingOrder
 /// \note 
@@ -97,7 +109,13 @@ public:
     /// Enumerates the set of all transformation operation types.
     enum Type {
         TypeInvalid,   ///< Represents an invalid xformOp.
+        TypeTranslateX,///< Translation along the X-axis.
+        TypeTranslateY,///< Translation along the Y-axis.
+        TypeTranslateZ,///< Translation along the Z-axis.
         TypeTranslate, ///< XYZ translation.
+        TypeScaleX,    ///< Scale along the X-axis.
+        TypeScaleY,    ///< Scale along the Y-axis.
+        TypeScaleZ,    ///< Scale along the Z-axis.
         TypeScale,     ///< XYZ scale.
         TypeRotateX,   ///< Rotation about the X-axis, <b>in degrees</b>.
         TypeRotateY,   ///< Rotation about the Y-axis, <b>in degrees</b>.
@@ -118,7 +136,7 @@ public:
         TypeTransform  ///< A 4x4 matrix transformation.
     };
 
-    /// Precision with which the value of the tranformation operation is encoded.
+    /// Precision of the encoded transformation operation's value.
     enum Precision {
         PrecisionDouble, ///< Double precision
         PrecisionFloat,  ///< Floating-point precision 
@@ -162,7 +180,7 @@ public:
     USDGEOM_API
     static bool IsXformOp(const UsdAttribute &attr);
 
-    /// Test whether a given attrbute name represents a valid XformOp, which
+    /// Test whether a given attribute name represents a valid XformOp, which
     /// implies that creating a UsdGeomXformOp from the corresponding 
     /// UsdAttribute will succeed.
     ///
@@ -180,7 +198,8 @@ public:
 
     /// Returns the precision corresponding to the given value typeName.
     USDGEOM_API
-    static Precision GetPrecisionFromValueTypeName(const SdfValueTypeName& typeName);
+    static Precision GetPrecisionFromValueTypeName(
+        const SdfValueTypeName& typeName);
 
     /// Returns the value typeName token that corresponds to the given 
     /// combination of \p opType and \p precision.
@@ -217,7 +236,8 @@ public:
     /// Returns the opName as it appears in the xformOpOrder attribute.
     /// 
     /// This will begin with "!invert!:xformOp:" if it is an inverse xform 
-    /// operation. If it is not an inverse xformOp, it will begin with 'xformOp:'.
+    /// operation. If it is not an inverse xformOp, it will begin with 
+    /// 'xformOp:'.
     /// 
     /// This will be empty for an invalid xformOp.
     /// 
@@ -267,7 +287,7 @@ public:
     /// Return the 4x4 matrix that applies the transformation encoded
     /// by op \p opType and data value \p opVal. 
     /// 
-    /// If \p isInverseOp is true, then the inverse of the tranformation 
+    /// If \p isInverseOp is true, then the inverse of the transformation 
     /// represented by the op/value pair is returned.
     /// 
     /// An error will be issued if \p opType is not one of the values in the enum
@@ -436,7 +456,7 @@ private:
     static UsdAttribute _GetXformOpAttr(UsdPrim const& prim, 
         const TfToken &opName, bool *isInverseOp);
 
-    // Private method for creating and using an attribute query interally for 
+    // Private method for creating and using an attribute query internally for 
     // this xformOp.
     void _CreateAttributeQuery() const {
         _attr = UsdAttributeQuery(GetAttr());

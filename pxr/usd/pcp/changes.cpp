@@ -398,15 +398,24 @@ Pcp_LayerMightHaveRelocates(const PcpCache* cache,
         return false;
     }
 
+    // this checks if relocates have been specified on the layer using the 
+    // LayerRelocates key.
+    const bool hasLayerRelocates = !layer->GetRelocates().empty();
+
     if (cache->IsUsd()) {
         // In Usd mode, relocates may only be specified on on the absolute root
         // path, so this quick check is sufficient in all cases.
-        return !layer->GetRelocates().empty();
-    } else if (!layer->IsDirty()){
-        // If not in Usd mode, the layer hints may be used to quickly determine
-        // the presence of relocates.  This flag is reset whenever a layer is
-        // edited however.
-        return layer->GetHints().mightHaveRelocates;
+        return hasLayerRelocates;
+    }
+
+    // If not in Usd mode, relocates may be specified on either layers or
+    // individual prims.
+    if (hasLayerRelocates) {
+        return true;
+    } else if (!layer->GetHints().mightHaveRelocates){
+        // No relocates authored on individual prims, and we've already
+        // checked that there are no relocates on the layer itself.
+        return false;
     } else {
         // Unfortunately, an exhaustive search is necessary in the case where a 
         // non usd layer is dirty.
@@ -2040,6 +2049,8 @@ PcpChanges::_Optimize(PcpCacheChanges* changes)
         Pcp_SubsumeDescendants(&changes->didChangePrims, *i);
         Pcp_SubsumeDescendants(&changes->didChangeSpecs, *i);
         Pcp_SubsumeDescendants(&changes->_didChangeSpecsInternal, *i);
+        Pcp_SubsumeDescendants(
+            &changes->_didChangePrimSpecsAndChildrenInternal, *i);
     }
 
     // Subsume spec changes for prims whose indexes will be rebuilt.
@@ -2865,7 +2876,7 @@ void
 PcpChanges::_DidChangeSpecStackAndChildrenInternal(
     const PcpCache* cache, const SdfPath& path)
 {
-    _GetCacheChanges(cache)._didChangeSpecsAndChildrenInternal.insert(path);
+    _GetCacheChanges(cache)._didChangePrimSpecsAndChildrenInternal.insert(path);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -1539,8 +1539,6 @@ public:
     SDF_API
     std::set<double> ListAllTimeSamples() const;
     
-    /// \deprecated
-    /// Use SdfAttributeSpec::ListTimeSamples instead.
     SDF_API
     std::set<double> 
     ListTimeSamplesForPath(const SdfPath& path) const;
@@ -1548,32 +1546,22 @@ public:
     SDF_API
     bool GetBracketingTimeSamples(double time, double* tLower, double* tUpper);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::GetNumTimeSamples instead.
     SDF_API
     size_t GetNumTimeSamplesForPath(const SdfPath& path) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::GetBracketingTimeSamples instead.
     SDF_API
     bool GetBracketingTimeSamplesForPath(const SdfPath& path, 
                                          double time,
                                          double* tLower, double* tUpper);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::QueryTimeSample instead.
     SDF_API
     bool QueryTimeSample(const SdfPath& path, double time, 
                          VtValue *value=NULL) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::QueryTimeSample instead.
     SDF_API
     bool QueryTimeSample(const SdfPath& path, double time, 
                          SdfAbstractDataValue *value) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::QueryTimeSample instead.
     template <class T>
     bool QueryTimeSample(const SdfPath& path, double time, 
                          T* data) const
@@ -1593,20 +1581,14 @@ public:
         return hasValue && (!outValue.isValueBlock);
     }
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::SetTimeSample instead.
     SDF_API
     void SetTimeSample(const SdfPath& path, double time, 
                        const VtValue & value);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::SetTimeSample instead.
     SDF_API
     void SetTimeSample(const SdfPath& path, double time, 
                        const SdfAbstractDataConstValue& value);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::SetTimeSample instead.
     template <class T>
     void SetTimeSample(const SdfPath& path, double time, 
                        const T& value)
@@ -1616,8 +1598,6 @@ public:
         return SetTimeSample(path, time, untypedInValue);
     }
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::EraseTimeSample instead.
     SDF_API
     void EraseTimeSample(const SdfPath& path, double time);
 

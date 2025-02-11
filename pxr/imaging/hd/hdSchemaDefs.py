@@ -389,14 +389,14 @@
             ''',
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         MEMBERS = [
-            ('parameters', 'HdMaterialNodeParameterContainerSchema', 
+            ('parameters', 'HdMaterialNodeParameterContainerSchema',
              dict(DOC = '''
                 Maps parameter names to node parameters. Each node parameter
                 is a container that is defined by the MaterialNodeParameter
                 schema. Note that parameters are inputs that supply their value 
                 directly.
                 ''')),
-            ('inputConnections', 'HdMaterialConnectionVectorContainerSchema', 
+            ('inputConnections', 'HdMaterialConnectionVectorContainerSchema',
              dict(DOC = '''
                 Maps input names to vectors of connections. Each connection is
                 defined by the MaterialConnection schema. Note that 
@@ -441,6 +441,7 @@
             ('value', T_SAMPLED, {}),
             # Parameter Metadata
             ('colorSpace', T_TOKEN, {}),
+            ('typeName', T_TOKEN, {})
         ],
     ),
 
@@ -516,24 +517,25 @@
             ''',
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         MEMBERS = [
-            ('nodes', 'HdMaterialNodeContainerSchema', 
+            ('nodes', 'HdMaterialNodeContainerSchema',
              dict(DOC = '''
                 Maps node names to material nodes. Each material node is a
                 container that is defined by the MaterialNode schema. The
                 topology of the network is expressed by the connections found on
                 each material node.
                 ''')),
-            ('terminals', 'HdMaterialConnectionContainerSchema', 
+            ('terminals', 'HdMaterialConnectionContainerSchema',
              dict(DOC = '''
                 Maps terminal names to material connections. Each connection
                 is a container defined by the MaterialConnection schema.
                 ''')),
-            ('interfaceMappings', 'HdMaterialInterfaceMappingsContainerSchema', 
+            ('interfaceMappings', 'HdMaterialInterfaceMappingsContainerSchema',
              dict(DOC = '''
                 Maps interface names (public UI names) to vectors of material 
                 node parameters. Each mapped material node parameter is a 
                 container defined by the InterfaceMappings schema.
                 ''')),
+            ('config', "HdSampledDataSourceContainerSchema", {}),
         ],
     ),
 
@@ -622,9 +624,9 @@
         SCHEMA_TOKEN = 'materialOverride',
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         ADD_DEFAULT_LOCATOR = True,
-        
+
         MEMBERS = [
-            ('interfaceValues', 'HdMaterialNodeParameterContainerSchema', 
+            ('interfaceValues', 'HdMaterialNodeParameterContainerSchema',
              dict(DOC = '''
                 Maps interface names (ie. public UI names) to overriding
                 data sources that follow the MaterialNodeParameter schema.
@@ -819,6 +821,7 @@
         SCHEMA_TOKEN = 'displayStyle',
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
             ('refineLevel', T_INT, {}),
             ('flatShadingEnabled', T_BOOL, {}),
             ('displacementEnabled', T_BOOL, {}),
@@ -826,10 +829,8 @@
             ('pointsShadingEnabled', T_BOOL, {}),
             ('materialIsFinal', T_BOOL, {}),
             ('shadingStyle', T_TOKEN, {}),
-            ('reprSelector', T_TOKENARRAY,
-             dict(ADD_LOCATOR = True)),
-            ('cullStyle', T_TOKEN,
-             dict(ADD_LOCATOR = True)),
+            ('reprSelector', T_TOKENARRAY, {}),
+            ('cullStyle', T_TOKEN, {}),
         ],
     ),
 
@@ -1265,7 +1266,7 @@
         ],
 
     ),
-    
+
     #--------------------------------------------------------------------------
     # plane
     dict(

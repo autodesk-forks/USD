@@ -20,7 +20,14 @@ PXR_NAMESPACE_USING_DIRECTIVE
 using namespace pxr_boost::python;
 
 void wrapRelationshipSpec()
-{    
+{
+    def("CreateRelationshipInLayer", SdfCreateRelationshipInLayer,
+        (arg("layer"), arg("relPath"),
+         arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
+    def("JustCreateRelationshipInLayer", SdfJustCreateRelationshipInLayer,
+        (arg("layer"), arg("relPath"),
+         arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
+
     typedef SdfRelationshipSpec This;
 
     class_<This, SdfHandle<This>, 

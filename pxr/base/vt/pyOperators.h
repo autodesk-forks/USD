@@ -5,6 +5,9 @@
 // https://openusd.org/license.
 //
 
+#ifndef PXR_BASE_VT_PY_OPERATORS_H
+#define PXR_BASE_VT_PY_OPERATORS_H
+
 #include "pxr/pxr.h"
 #include "pxr/base/vt/api.h"
 
@@ -118,3 +121,5 @@ struct _ArrayPyOpHelp<bool> {
                       
 
 PXR_NAMESPACE_CLOSE_SCOPE
+
+#endif // PXR_BASE_VT_PY_OPERATORS_H

@@ -15,9 +15,6 @@ pxr_library(usdSemantics
     PUBLIC_HEADERS
         api.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         wrapLabelsQuery.cpp
 

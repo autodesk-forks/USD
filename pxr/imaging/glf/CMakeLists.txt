@@ -8,9 +8,6 @@ if (NOT ${PXR_ENABLE_GL_SUPPORT})
 endif()
 
 set(optionalPublicClasses "")
-if (X11_FOUND)
-    list(APPEND optionalPublicClasses testGLContext)
-endif()
 
 pxr_library(glf
     LIBRARIES
@@ -37,6 +34,7 @@ pxr_library(glf
         simpleLightingContext
         simpleMaterial
         simpleShadowArray
+        testGLContext
         texture
         uniformBlock
         utils
@@ -48,9 +46,6 @@ pxr_library(glf
 
     PUBLIC_HEADERS
         api.h
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
 
     PYMODULE_CPPFILES
         module.cpp

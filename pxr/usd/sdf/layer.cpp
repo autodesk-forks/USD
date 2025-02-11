@@ -4076,21 +4076,21 @@ SdfLayer::_ProcessIncomingData(const SdfAbstractDataPtr &newData,
         TF_REVERSE_FOR_ALL(i, specsToDelete.paths) {
             const SdfPath &path = *i;
 
-            const bool processFields = 
-                path.IsPropertyPath() ? processPropertyFields : true;
+            if (!processPropertyFields && path.IsPropertyPath()) {
+                deleteSpecFunc(path, /* inert */ false);
+                continue;
+            }
 
-            if (processFields) {
-                std::vector<TfToken> fields = ListFields(path);
+            std::vector<TfToken> fields = ListFields(path);
 
-                SdfSpecType specType = _data->GetSpecType(path);
-                const SdfSchema::SpecDefinition* specDefinition = 
-                    GetSchema().GetSpecDefinition(specType);
+            SdfSpecType specType = _data->GetSpecType(path);
+            const SdfSchema::SpecDefinition* specDefinition = 
+                GetSchema().GetSpecDefinition(specType);
 
-                TF_FOR_ALL(field, fields) {
-                    if (!specDefinition->IsRequiredField(*field)) {
-                        setFieldFunc(
-                            path, *field, VtValue(), /* oldValue */ nullptr);
-                    }
+            TF_FOR_ALL(field, fields) {
+                if (!specDefinition->IsRequiredField(*field)) {
+                    setFieldFunc(
+                        path, *field, VtValue(), /* oldValue */ nullptr);
                 }
             }
 
@@ -4154,9 +4154,17 @@ SdfLayer::_ProcessIncomingData(const SdfAbstractDataPtr &newData,
                                                 TfToken())
                         .IsEmpty());
             } else if (path.IsPropertyPath()) {
-                // Properties are considered inert if they are custom.
-                inert = !newData->GetAs<bool>(path, SdfFieldKeys->Custom,
-                                              false);
+                // If we are processing property fields, a path is
+                // considered inert if it is custom. If not processing fields
+                // we assume the worst case that property specs are never inert.
+                // This approach sacrifices some granularity but ensures
+                // downstream clients will process any changes in fields for
+                // this spec without us having to pay the potentially expensive
+                // cost of examining the actual field values at this time.
+                if (processPropertyFields) {
+                    inert = !newData->GetAs<bool>(
+                        path, SdfFieldKeys->Custom, false);
+                }
             }
 
             SdfSpecType specType = newData->GetSpecType(path);
@@ -4197,18 +4205,34 @@ SdfLayer::_ProcessIncomingData(const SdfAbstractDataPtr &newData,
     {
         struct _SpecUpdater : public SdfAbstractDataSpecVisitor {
             _SpecUpdater(const SdfLayer* layer_,
+                         const SdfAbstractDataPtr &newData_,
                          const SdfSchemaBase &newDataSchema_,
                          const bool processPropertyFields_,
+                         const DeleteSpecFunc &deleteSpecFunc_,
+                         const CreateSpecFunc &createSpecFunc_,
                          const SetFieldFunc &setFieldFunc_)
                 : layer(layer_)
+                , newData(newData_)
                 , newDataSchema(newDataSchema_)
                 , processPropertyFields(processPropertyFields_)
-                , setFieldFunc(setFieldFunc_){}
+                , deleteSpecFunc(deleteSpecFunc_)
+                , createSpecFunc(createSpecFunc_)
+                , setFieldFunc(setFieldFunc_) {}
 
             virtual bool VisitSpec(
                 const SdfAbstractData& newData, const SdfPath& path)
             {
+                // note processPropertyFields can only be false if we
+                // are creating diffs, so this will be a non-destructive
+                // operation.  Additionally, if we created or deleted the spec
+                // earlier in this operation we do not want to add these
+                // additional entries.
                 if (!processPropertyFields && path.IsPropertyPath()) {
+                    if (newData.HasSpec(path) && layer->HasSpec(path)) {
+                        deleteSpecFunc(path, /* inert */ false);
+                        createSpecFunc(path, layer->GetSpecType(path), 
+                                        /* inert */ false); 
+                    }
                     return true;
                 }
 
@@ -4257,7 +4281,7 @@ SdfLayer::_ProcessIncomingData(const SdfAbstractDataPtr &newData,
                             setFieldFunc(
                                 path, field, newValue, &oldValue);
                         }
-                    }
+                    } 
                 }
 
                 return true;
@@ -4269,17 +4293,20 @@ SdfLayer::_ProcessIncomingData(const SdfAbstractDataPtr &newData,
             }
 
             const SdfLayer* layer;
+            const SdfAbstractDataPtr &newData;
             const SdfSchemaBase &newDataSchema;
             const bool processPropertyFields;
+            const DeleteSpecFunc &deleteSpecFunc;
+            const CreateSpecFunc &createSpecFunc;
             const SetFieldFunc &setFieldFunc;
             std::map<TfToken, SdfPath> unrecognizedFields;
         };
 
         // If no newDataSchema is supplied, we assume the newData adheres to
         // this layer's schema.
-        _SpecUpdater updater( this, 
+        _SpecUpdater updater( this, newData,
             newDataSchema ? *newDataSchema : GetSchema(), 
-            processPropertyFields, setFieldFunc);
+            processPropertyFields, deleteSpecFunc, createSpecFunc,setFieldFunc);
         newData->VisitSpecs(&updater);
 
         // If there were unrecognized fields, report an error.

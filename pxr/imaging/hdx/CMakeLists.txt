@@ -45,6 +45,7 @@ pxr_library(hdx
         drawTargetTask
         effectsShader
         freeCameraSceneDelegate
+        freeCameraPrimDataSource
         fullscreenShader
         hgiConversions
         oitBufferAccessor

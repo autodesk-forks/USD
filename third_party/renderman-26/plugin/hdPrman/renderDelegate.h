@@ -71,7 +71,7 @@ TF_DECLARE_PUBLIC_TOKENS(HdPrmanExperimentalRenderSpecTokens, HDPRMAN_API,
 
 #define HDPRMAN_PROJECTION_TOKENS \
     (PxrPerspective)              \
-    (PxrOrthographic)             
+    (PxrOrthographic)
 
 TF_DECLARE_PUBLIC_TOKENS(HdPrmanIntegratorTokens, HDPRMAN_API,
     HDPRMAN_INTEGRATOR_TOKENS);
@@ -103,7 +103,7 @@ TF_DECLARE_PUBLIC_TOKENS(
     HDPRMAN_AOV_SETTINGS_TOKENS);
 
 #if PXR_VERSION <= 2308
-/* Aspect Ratio Conform Policy Tokens used on render settings prims 
+/* Aspect Ratio Conform Policy Tokens used on render settings prims
  * Note that these mirror the conform policy tokens in UsdRenderTokens */
 #define HD_ASPECT_RATIO_CONFORM_POLICY                       \
     (adjustApertureWidth)                                    \
@@ -112,16 +112,16 @@ TF_DECLARE_PUBLIC_TOKENS(
     (cropAperture)                                           \
     (adjustPixelAspectRatio)                                 \
 
-TF_DECLARE_PUBLIC_TOKENS(HdAspectRatioConformPolicyTokens, 
+TF_DECLARE_PUBLIC_TOKENS(HdAspectRatioConformPolicyTokens,
                         HD_ASPECT_RATIO_CONFORM_POLICY);
 #endif
 
-class HdPrmanRenderDelegate : public HdRenderDelegate 
+class HdPrmanRenderDelegate : public HdRenderDelegate
 {
 public:
-    HDPRMAN_API 
+    HDPRMAN_API
     HdPrmanRenderDelegate(HdRenderSettingsMap const& settingsMap);
-    HDPRMAN_API 
+    HDPRMAN_API
     ~HdPrmanRenderDelegate() override;
 
     // ------------------------------------------------------------------------
@@ -129,65 +129,65 @@ public:
     // ------------------------------------------------------------------------
     HDPRMAN_API
     HdRenderParam *GetRenderParam() const override;
-    HDPRMAN_API 
+    HDPRMAN_API
     const TfTokenVector & GetSupportedRprimTypes() const override;
-    HDPRMAN_API 
+    HDPRMAN_API
     const TfTokenVector & GetSupportedSprimTypes() const override;
-    HDPRMAN_API 
+    HDPRMAN_API
     const TfTokenVector & GetSupportedBprimTypes() const override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdResourceRegistrySharedPtr GetResourceRegistry() const override;
 
     /// Returns a list of user-configurable render settings.
-    HDPRMAN_API 
+    HDPRMAN_API
     HdRenderSettingDescriptorList GetRenderSettingDescriptors() const override;
 
     HDPRMAN_API
     VtDictionary GetRenderStats() const override;
 
-    HDPRMAN_API 
+    HDPRMAN_API
     HdRenderPassSharedPtr CreateRenderPass(
                 HdRenderIndex *index,
                 HdRprimCollection const& collection) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdInstancer *CreateInstancer(HdSceneDelegate *delegate,
                                  SdfPath const& id) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     void DestroyInstancer(HdInstancer *instancer) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdRprim *CreateRprim(TfToken const& typeId,
                          SdfPath const& rprimId) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     void DestroyRprim(HdRprim *rPrim) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdSprim *CreateSprim(TfToken const& typeId,
                          SdfPath const& sprimId) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdSprim *CreateFallbackSprim(TfToken const& typeId) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     void DestroySprim(HdSprim *sPrim) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdBprim *CreateBprim(TfToken const& typeId,
                          SdfPath const& bprimId) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     HdBprim *CreateFallbackBprim(TfToken const& typeId) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     void DestroyBprim(HdBprim *bPrim) override;
 
-    HDPRMAN_API 
+    HDPRMAN_API
     HdAovDescriptor GetDefaultAovDescriptor(TfToken const& name) const override;
 
-    HDPRMAN_API 
+    HDPRMAN_API
     void CommitResources(HdChangeTracker *tracker) override;
-    HDPRMAN_API 
+    HDPRMAN_API
     TfToken GetMaterialBindingPurpose() const override;
-    HDPRMAN_API 
+    HDPRMAN_API
     TfTokenVector GetMaterialRenderContexts() const override;
-    HDPRMAN_API 
+    HDPRMAN_API
     TfTokenVector GetShaderSourceTypes() const override;
 
 #if HD_API_VERSION > 46
-    HDPRMAN_API 
+    HDPRMAN_API
     TfTokenVector GetRenderSettingsNamespaces() const override;
 #endif
 
@@ -196,20 +196,20 @@ public:
     HdContainerDataSourceHandle GetCapabilities() const override;
 #endif
 
-    HDPRMAN_API 
+    HDPRMAN_API
     void SetRenderSetting(TfToken const &key, VtValue const &value) override;
 
-    HDPRMAN_API 
+    HDPRMAN_API
     bool IsPauseSupported() const override { return true; }
     bool Pause() override;
     bool Resume() override;
 
     /// Return true to indicate that stopping and restarting are supported.
-    HDPRMAN_API 
+    HDPRMAN_API
     bool IsStopSupported() const override;
 
     /// Return true to indicate whether or not the rendering threads are active.
-    HDPRMAN_API 
+    HDPRMAN_API
     bool IsStopped() const override;
 
     /// Stop background rendering threads.
@@ -217,7 +217,7 @@ public:
     bool Stop(bool blocking) override;
 
     /// Restart background rendering threads.
-    HDPRMAN_API 
+    HDPRMAN_API
     bool Restart() override;
 
 #if HD_API_VERSION >= 55
@@ -235,6 +235,11 @@ public:
     HDPRMAN_API
     void Update() override;
 
+#if HD_API_VERSION >= 71
+    HDPRMAN_API
+    bool IsParallelSyncEnabled(const TfToken &primType) const override;
+#endif
+
 #endif
 
     // ------------------------------------------------------------------------
@@ -242,7 +247,7 @@ public:
     // ------------------------------------------------------------------------
 
     HDPRMAN_API
-    HdRenderSettingsMap GetRenderSettingsMap() const;    
+    HdRenderSettingsMap GetRenderSettingsMap() const;
 
     HDPRMAN_API
     bool IsInteractive() const;

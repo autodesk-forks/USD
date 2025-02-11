@@ -158,9 +158,7 @@ SdfPredicateExpression::GetText() const
         return "<unknown>";
     };
 
-    std::vector<Op> opStack;
-
-    auto printLogic = [&opName, &opStack, &result](
+    auto printLogic = [&opName, &result](
         std::vector<std::pair<Op, int>> const &stack) {
 
         const Op op = stack.back().first;

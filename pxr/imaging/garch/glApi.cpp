@@ -7,14 +7,12 @@
 
 #include "pxr/imaging/garch/glApi.h"
 
-#include "pxr/base/tf/diagnostic.h"
-
 #include "pxr/base/arch/defines.h"
 #include "pxr/base/arch/library.h"
+#include "pxr/base/tf/diagnostic.h"
 
 #include <cstring>
 #include <cstdlib>
-#include <cassert>
 #include <vector>
 
 
@@ -3160,7 +3158,7 @@ static void unloadLibrary()
 static void* loadFunction(const char *name)
 {
     void* result = NULL;
-    assert(libHandle != NULL);
+    TF_AXIOM(libHandle != NULL);
 
 #if !defined(ARCH_OS_DARWIN)
     result = libGetProcAddress(name);

@@ -34,10 +34,14 @@ HdMapContainerDataSource::Get(const TfToken &name)
         return nullptr;
     }
 
-    if (!_f) {
-        return _src->Get(name);
+    HdDataSourceBaseHandle const ds = _src->Get(name);
+    if (!ds) {
+        return nullptr;
     }
-    return _f(_src->Get(name));
+    if (!_f) {
+        return ds;
+    }
+    return _f(ds);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

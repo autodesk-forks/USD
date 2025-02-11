@@ -25,9 +25,6 @@ pxr_library(usdAppUtils
         camera
         frameRecorder
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapCamera.cpp

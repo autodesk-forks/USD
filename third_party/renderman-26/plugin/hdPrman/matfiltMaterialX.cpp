@@ -51,11 +51,18 @@ TF_DEFINE_PRIVATE_TOKENS(
     // Hydra MaterialX Node Types
     (ND_standard_surface_surfaceshader)
     (ND_UsdPreviewSurface_surfaceshader)
+    (ND_UsdPreviewSurface)
     (ND_displacement_float)
     (ND_displacement_vector3)
     (ND_image_vector2)
     (ND_image_vector3)
     (ND_image_vector4)
+
+    (ND_surface)
+    (ND_oren_nayar_diffuse_bsdf)
+    (MaterialXOrenNayarDiffuse)
+    (ND_generalized_schlick_bsdf)
+    (MaterialXGeneralizedSchlick)
 
     // MaterialX - OSL Adapter Node names
     ((SS_Adapter, "StandardSurfaceParameters"))
@@ -245,8 +252,9 @@ _GetAdapterNodeType(TfToken const &hdNodeType)
 {
     if (hdNodeType == _tokens->ND_standard_surface_surfaceshader) {
         return _tokens->SS_Adapter;
-    } 
-    else if (hdNodeType == _tokens->ND_UsdPreviewSurface_surfaceshader) {
+    }
+    else if (hdNodeType == _tokens->ND_UsdPreviewSurface_surfaceshader ||
+        hdNodeType == _tokens->ND_UsdPreviewSurface) {
         return _tokens->USD_Adapter;
     }
     else if (hdNodeType == _tokens->ND_displacement_float ||
@@ -257,6 +265,19 @@ _GetAdapterNodeType(TfToken const &hdNodeType)
         TF_WARN("Unsupported Node Type '%s'", hdNodeType.GetText());
         return TfToken();
     }
+}
+
+// Some material nodes in RenderMan require a mapping from the ND node type
+// to the one used by RenderMan
+static TfToken
+_GetMaterialBsdfNodeType(TfToken const &hdNodeType)
+{
+    if (hdNodeType == _tokens->ND_oren_nayar_diffuse_bsdf) {
+        return _tokens->MaterialXOrenNayarDiffuse;
+    } else if (hdNodeType == _tokens->ND_generalized_schlick_bsdf) {
+        return _tokens->MaterialXGeneralizedSchlick;
+    }
+    return hdNodeType;
 }
 
 // Convert terminal MaterialX shader type to corresponding rman material type.
@@ -521,6 +542,25 @@ _UpdateNetwork(
             }
             
             visitedNodeNames.insert(upstreamNodeName);
+
+            // Recursively look upstream for the first mtlx pattern.
+            // In other words, skip over non-mtlx nodes and mtlx bsdf nodes.
+            SdrRegistry &sdrRegistry = SdrRegistry::GetInstance();
+            const TfToken nodeType = netInterface->GetNodeType(upstreamNodeName);
+            const SdrShaderNodeConstPtr sdrMtlxNode =
+                sdrRegistry.GetShaderNodeByIdentifierAndType(
+                    nodeType, _tokens->mtlx);
+            if(!sdrMtlxNode ||
+               TfStringEndsWith(nodeType.GetText(), "_bsdf")) {
+                _UpdateNetwork(netInterface, upstreamNodeName, mxDoc,
+                               searchPath, nodesToKeep, nodesToRemove);
+                netInterface->SetNodeType(
+                    upstreamNodeName,
+                    _GetMaterialBsdfNodeType(
+                        netInterface->GetNodeType(upstreamNodeName)));
+                continue;
+            }
+            
             // Collect nodes further removed from the terminal in nodesToRemove
             std::set<TfToken> tmpVisitedNodeNames;
             _GatherNodeGraphNodes(netInterface, upstreamNodeName, 
@@ -549,7 +589,6 @@ _UpdateNetwork(
             }
 
             // Create a new SdrShaderNode with the compiled oslSource
-            SdrRegistry &sdrRegistry = SdrRegistry::GetInstance();
             SdrShaderNodeConstPtr sdrNode = 
                 sdrRegistry.GetShaderNodeFromAsset(
                                 SdfAssetPath(compiledShaderPath),
@@ -611,6 +650,24 @@ _TransformTerminalNode(
                                               {_tokens->RmanCpp});
     if (!sdrAdapter) {
         TF_WARN("No sdrAdater node of type '%s'", adapterType.GetText());
+
+        // Prman does not have an adapter node for MtlxSurface terminal nodes.
+        // Instead use the the upstream BSDF node as the terminal.
+        if (nodeType == _tokens->ND_surface) {
+            for (const auto& inParamName:
+                     netInterface->GetNodeInputConnectionNames(terminalNodeName)) {
+                HdMaterialNetwork2Interface::InputConnectionVector inputs =
+                    netInterface->GetNodeInputConnection(terminalNodeName,
+                                                         inParamName);
+                for (const auto& input: inputs) {
+                    TfToken upstreamNode = input.upstreamNodeName;
+                    netInterface->SetTerminalConnection(
+                        terminalToken, { upstreamNode, TfToken() });
+                    break;
+                }
+                break;
+            }
+        }
         return;
     }
 
@@ -766,6 +823,25 @@ _NodeHasTextureCoordPrimvar(
             if (mxGeomPropNode->getType() == mx::Type::VECTOR2->getName()) {
                 return true;
             }
+        }
+    }
+    return false;
+}
+
+
+// Return true if the network contains any mtlx nodes
+static bool
+_NetworkHasMtlxNodes(HdMaterialNetworkInterface *netInterface)
+{
+    SdrRegistry &sdrRegistry = SdrRegistry::GetInstance();
+    const TfTokenVector nodeNames = netInterface->GetNodeNames();
+    for (TfToken const &nodeName : nodeNames) {
+        const TfToken nodeType = netInterface->GetNodeType(nodeName);
+        const SdrShaderNodeConstPtr sdrNode =
+            sdrRegistry.GetShaderNodeByIdentifierAndType(
+                nodeType, _tokens->mtlx);
+        if (sdrNode) {
+            return true;
         }
     }
     return false;
@@ -1179,12 +1255,10 @@ MatfiltMaterialX(
         const TfToken terminalNodeType =
             netInterface->GetNodeType(terminalNodeName);
 
-        // Check if the node connected to the terminal is a MaterialX node
-        SdrRegistry &sdrRegistry = SdrRegistry::GetInstance();
-        const SdrShaderNodeConstPtr mtlxSdrNode = 
-            sdrRegistry.GetShaderNodeByIdentifierAndType(terminalNodeType, 
-                                                         _tokens->mtlx);
-        if (!mtlxSdrNode) {
+        // Check if the network uses any Mtlx nodes, and return early if not.
+        // The terminal node may be Mtlx, but we also want to support
+        // using mtlx patterns with Usd, Pxr or Lama materials.
+        if(!_NetworkHasMtlxNodes(netInterface)) {
             return;
         }
 

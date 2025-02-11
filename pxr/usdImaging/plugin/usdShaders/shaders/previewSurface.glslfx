@@ -62,22 +62,26 @@ surfaceShader(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
     vec3 clearcoatColor      = vec3(1.0);
     float specularAmount     = 1.0;
 
-#ifdef HD_MATERIAL_TAG_MASKED   
+#ifdef HD_MATERIAL_TAG_MASKED
     if (opacity < opacityThreshold) {
         discard;
         return vec4(1.0);
     } 
     opacity = 1.0;
-#endif            
+#endif
 
     // Selection highlighting.
     vec4 colorAndOpacity = vec4(diffuseColor, opacity);
     diffuseColor = ApplyColorOverrides(colorAndOpacity).rgb;
 
-    // Pre-multiply diffuse color by opacity if not done so already
-#ifndef diffuseColor_IS_PREMULTIPLIED
-    diffuseColor *= opacity;
-#endif    
+    // We want to undo pre-multiplication of alpha of just the diffuse color so
+    // we can compute a color based on all the material parameters which we can
+    // then apply opacity to.
+#ifdef diffuseColor_IS_PREMULTIPLIED
+    if (opacity > 0) {
+        diffuseColor.rgb /= opacity;
+    }
+#endif
 
     // Evaluate all lights.
     vec3 c = evaluateLights(
@@ -96,7 +100,10 @@ surfaceShader(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
         Peye,
         perturbFragmentNormal(Peye.xyz, Neye));
 
-    return vec4(c, colorAndOpacity.a);
+    // Now we can multiply the final color by opacity.
+    c *= opacity;
+
+    return vec4(c, opacity);
 }
 
 
@@ -328,6 +335,7 @@ evaluateIndirectLighting(
             fresnel);
         lod = clearcoatRoughness * MAX_REFLECTION_LOD;
         prefilter = HdTextureLod_domeLightPrefilter(Rcoord, lod).rgb;
+        brdf = HdGet_domeLightBRDF(vec2(NdotE, clearcoatRoughness)).rg;
         clearcoat = prefilter * (clearcoatF * brdf.x + brdf.y);
     }
 

@@ -156,6 +156,7 @@ The resulting stage root layer for :file:`main.usda` will look like:
 
     **relocates** is a new composition arc for USD that is a separate feature
     from namespace editing, and can be used independently of namespace editing.
+    See :ref:`usdglossary-relocates` for more details.
 
 .. _nsedit_using_usdnamespaceeditor:
 

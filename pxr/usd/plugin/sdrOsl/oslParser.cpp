@@ -55,6 +55,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((usdSchemaDefPrefix, "usdSchemaDef_"))
     ((sdrGlobalConfigPrefix, "sdrGlobalConfig_"))
     (sdrDefinitionNameFallbackPrefix)
+    (schemaBase)
+
     
 );
 
@@ -169,9 +171,8 @@ SdrOslParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
             discoveryResult.version,
             discoveryResult.name,
             discoveryResult.family,
-            _tokens->sourceType,
-            _tokens->sourceType,    // OSL shaders don't declare different types
-                                    // so use the same type as the source type
+            _getSdrContextFromSchemaBase(metadata),
+            _tokens->sourceType,    
             discoveryResult.resolvedUri,
             discoveryResult.resolvedUri,    // Definitive assertion that the
                                             // implementation is the same asset
@@ -181,6 +182,41 @@ SdrOslParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
             discoveryResult.sourceCode
         )
     );
+}
+
+TfToken 
+SdrOslParserPlugin::_getSdrContextFromSchemaBase(
+    const NdrTokenMap& metadata) const
+{
+    auto metaIt = metadata.find(_tokens->schemaBase);
+    if (metaIt == metadata.end()) {
+        return _tokens->sourceType;
+    }
+    std::string schemaBase = metaIt->second;
+
+    static const std::unordered_map<TfToken, TfToken, TfHash> contextMapping({
+        { TfToken("displayfilter"), SdrNodeContext->DisplayFilter },
+        { TfToken("lightfilter"), SdrNodeContext->LightFilter },
+        { TfToken("samplefilter"), SdrNodeContext->SampleFilter },
+        { TfToken("integrator"), TfToken("integrator")},
+        // must check for "light" after "lightfilter" otherwise a light filter
+        // could be mistakenly classified as a light
+        { TfToken("light"), TfToken("light")} ,
+        { TfToken("projection"), TfToken("projection")}
+    });
+
+    // Use the context mapping to determine the sdrContext for this schema. 
+    // Test if the schema base name contains of the map keys
+    // for example, PxrDisplayFilterPluginBase contains "displayfilter"
+    std::unordered_map<TfToken, TfToken, TfHash>::const_iterator it;
+    for (it = contextMapping.begin(); it != contextMapping.end(); ++it) {
+        if (TfStringContains(TfStringToLower(schemaBase), it->first)) {
+            return it->second;
+        }
+    }
+    
+    // fallback to sourceType as default context
+    return _tokens->sourceType;
 }
 
 NdrPropertyUniquePtrVec

@@ -122,6 +122,12 @@
                         "loadWithRenderer": "Prman",
                         "priority": 0,
                         "displayName": "Scene index populating riley options."
+                    },
+                    "HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": "Prman",
+                        "priority": 0,
+                        "displayName": "Scene index that adds primvars needed for UsdPreviewSurface"
                     }
                 }
             },

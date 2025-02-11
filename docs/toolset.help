@@ -91,7 +91,7 @@ optional arguments:
 usage: usdview
        [-h] [--renderer {GL,Prman,Embree,Tiny}] [--select PRIMPATH]
        [--camera CAMERA] [--mask PRIMPATH[,PRIMPATH...]] [--clearsettings]
-       [--config {foo}] [--defaultsettings] [--norender] [--noplugins]
+       [--config {}] [--defaultsettings] [--norender] [--noplugins]
        [--unloaded] [--bboxStandin] [--timing] [--allow-async]
        [--traceToFile TRACETOFILE] [--traceFormat {chrome,trace}]
        [--tracePython] [--memstats {none,stage,stageAndImaging}]
@@ -127,7 +127,7 @@ optional arguments:
                         either use commas with no spaces or quote the argument
                         and separate paths by commas and/or spaces.
   --clearsettings       Restores usdview settings to default
-  --config {foo}        Load usdview with the state settings found in the
+  --config {}           Load usdview with the state settings found in the
                         specified config. If not provided will use the
                         previously saved application state and automatically
                         persist state on close
@@ -207,6 +207,8 @@ usage: usdrecord [-h] [--mask PRIMPATH[,PRIMPATH...]]
                  [--enableDomeLightVisibility]
                  [--renderPassPrimPath RPPRIMPATH]
                  [--renderSettingsPrimPath RSPRIMPATH]
+                 [--traceToFile TRACETOFILE] [--traceFormat {chrome,trace}]
+                 [--memstats]
                  usdFilePath outputImagePath
 
 Generates images from a USD file
@@ -298,6 +300,19 @@ optional arguments:
                         properties authored on the RenderSettings will
                         override other arguments (imageWidth, camera,
                         outputImagePath)
+  --traceToFile TRACETOFILE
+                        Start tracing at application startup and write
+                        --traceFormat specified format output to the specified
+                        trace file when the application quits
+  --traceFormat {chrome,trace}
+                        Output format for trace file specified by
+                        --traceToFile. 'chrome' files can be read in chrome,
+                        'trace' files are simple text reports.
+                        (default=chrome)
+  --memstats            Use the Pxr MallocTags memory accounting system to
+                        profile USD, saving results to a tmp file, with a
+                        summary to the console. Will have no effect if
+                        MallocTags are not supported in the USD installation.
 
 ==== usdrecord end ====
 
@@ -410,45 +425,71 @@ optional arguments:
 ==== usdzip end ====
 
 ==== usdchecker start ====
-usage: usdchecker [-h] [-s] [-p] [-o [OUTFILE]] [--noAssetChecks] [--arkit]
-                  [-d] [-v] [-t]
-                  [inputFile]
+Utility for checking the compliance of a given USD stage or a USDZ package.  
+Only the first sample of any relevant time-sampled attribute is checked, 
+currently.  General USD checks are always performed, and more restrictive checks 
+targeted at distributable consumer content are also applied when the "--arkit" 
+option is specified. In order to use the new validation framework provide the 
+'--useNewValidationFramework' option.
+Usage: usdchecker [OPTIONS] [inputFile]
 
-Utility for checking the compliance of a given USD stage or a USDZ package.
-Only the first sample of any relevant time-sampled attribute is checked,
-currently. General USD checks are always performed, and more restrictive
-checks targeted at distributable consumer content are also applied when the "
---arkit" option is specified.
+Positionals:
+  inputFile FILE              Name of the input file to inspect.
 
-positional arguments:
-  inputFile             Name of the input file to inspect.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -s, --skipVariants    If specified, only the prims that are present in the
-                        default (i.e. selected) variants are checked. When
-                        this option is not specified, prims in all possible
-                        combinations of variant selections are checked.
-  -p, --rootPackageOnly
-                        Check only the specifiedpackage. Nested packages,
-                        dependencies and their contents are not validated.
-  -o [OUTFILE], --out [OUTFILE]
-                        The file to which all the failed checks are output. If
-                        unspecified, the failed checks are output to stdout;
-                        if "stderr", terminal coloring will be surpressed.
-  --noAssetChecks       If specified, do NOT perform extra checks to help
-                        ensure the stage or package can be easily and safely
-                        referenced into aggregate stages.
-  --arkit               Check if the given USD stage is compatible with
-                        RealityKit's implementation of USDZ as of 2023. These
-                        assets operate under greater constraints that usdz
-                        files for more general in-house uses, and this option
-                        attempts to ensure that these constraints are met.
-  -d, --dumpRules       Dump the enumerated set of rules being checked for the
-                        given set of options.
-  -v, --verbose         Enable verbose output mode.
-  -t, --strict          Return failure code even if only warnings are issued,
-                        for stricter compliance.
+Options:
+  -h,--help                   Print this help message and exit
+  -s,--skipVariants           If specified, only the prims that are present in 
+                              the default (i.e. selected) variants are checked. 
+                              When this option is not specified, prims in all 
+                              possible combinations of variant selections are 
+                              checked.
+  -p,--rootPackageOnly        Check only the specified package. Nested packages, 
+                              dependencies and their contents are not validated.
+  -o,--out FILE               The file to which all the failed checks are 
+                              output. If unspecified, the failed checks are 
+                              output to stdout; if "stderr", terminal coloring 
+                              will be suppressed.
+  --noAssetChecks             If specified, do NOT perform extra checks to help 
+                              ensure the stage or package can be easily and 
+                              safely referenced into aggregate stages.
+  --arkit                     Check if the given USD stage is compatible with 
+                              RealityKit's implementation of USDZ as of 2023. 
+                              These assets operate under greater constraints 
+                              that usdz files for more general in-house uses, 
+                              and this option attempts to ensure that these 
+                              constraints are met.
+  -d,--dumpRules              Dump the enumerated set of rules being checked for 
+                              the given set of options.
+  -v,--verbose                Enable verbose output mode.
+  -t,--strict                 Return failure code even if only warnings are 
+                              issued, for stricter compliance.
+  --useNewValidationFramework Enable the new validation framework.
+  --variantSets TEXT ...      List of variantSets to validate. All variants for 
+                              the given variantSets are validated. This can also 
+                              be used with --variants to validate the given 
+                              variants in combination with variants from the 
+                              explicitly specified variantSets. This option is 
+                              only valid when using the new validation 
+                              framework.
+  --variants TEXT ...         List of ',' separated variantSet:variant pairs to 
+                              validate. Each set of variants in the list are 
+                              validated separately. Example: --variants 
+                              foo:bar,baz:qux will validate foo:bar and baz:qux 
+                              together but --variants foo:bar --variants 
+                              baz:qux will validate foo:bar and baz:qux 
+                              separately. This can also be used with 
+                              --variantSets to validate the given variants in 
+                              combination with variants from the explicitly 
+                              specified variantSets. This option is only valid 
+                              when using the new validation framework.
+  --disableVariantValidationLimit
+                              Disable the limit set to restrict the number of 
+                              variants validation calls. This is useful when the 
+                              number of variants is large and we want to 
+                              validate all possible combinations of variants. 
+                              Default is to limit the number of validation calls 
+                              to 1000. This option is only valid when using the 
+                              new validation framework.
 
 ==== usdchecker end ====
 
@@ -622,6 +663,7 @@ Options:
 usage: usdmeasureperformance [-h] [-c [CUSTOM_METRICS ...]] -o OUTPUT
                              [-i ITERATIONS]
                              [-a {min,mean,max} [{min,mean,max} ...]]
+                             [-t TRACEDIR]
                              asset
 
 Measure and export USD functional performance
@@ -653,9 +695,16 @@ optional arguments:
                         yaml format will be a key value dictionary with
                         <metric_name>_<aggregation> to aggregated time value.
                         If multiple aggregations are requested, the output
-                        yaml format will be<metric_name>: {<agg1>: <value1>,
+                        yaml format will be <metric_name>: {<agg1>: <value1>,
                         <agg2>:...}.When no aggregation is set, the output
                         format will be <metric_name>: [<val1>, <val2>, ...] or
                         one measured value for each iteration.
+  -t TRACEDIR, --tracedir TRACEDIR
+                        Outputs a trace file for each run of usdview in the
+                        given directory if provided and if 'aggregation'
+                        includes min or max. A trace file for the iteration of
+                        testusdview or usdview from which the aggregated value
+                        of each metric was observed will be output in the form
+                        <metric name>_<aggregation>.trace
 
 ==== usdmeasureperformance end ====

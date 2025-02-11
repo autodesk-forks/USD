@@ -31,10 +31,6 @@ pxr_library(usdSkel
         skinningQuery
         topology
         utils
-        validatorTokens
-
-    CPPFILES
-        validators.cpp
 
     PUBLIC_HEADERS
         api.h
@@ -44,9 +40,6 @@ pxr_library(usdSkel
         animQueryImpl
         cacheImpl
         skelDefinition
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp    
 
     PYMODULE_FILES
         __init__.py
@@ -80,15 +73,6 @@ pxr_library(usdSkel
         images/unboundedInterpolationExample.svg
 )
 
-pxr_build_test(testUsdSkelValidators
-    LIBRARIES
-    tf
-    usd
-    usdSkel
-    CPPFILES
-    testenv/testUsdSkelValidators.cpp
-)
-   
 pxr_test_scripts(
     testenv/testUsdSkelAnimMapper.py
     testenv/testUsdSkelAnimQuery.py 
@@ -182,11 +166,6 @@ pxr_register_test(testUsdSkelTopology
 pxr_register_test(testUsdSkelUtils
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSkelUtils"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdSkelValidators
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSkelValidators"
     EXPECTED_RETURN_CODE 0
 )
 

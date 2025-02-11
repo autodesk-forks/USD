@@ -66,9 +66,6 @@ pxr_library(pcp
     PRIVATE_HEADERS
         traversalCache.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapCache.cpp

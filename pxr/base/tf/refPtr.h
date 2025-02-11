@@ -1299,22 +1299,6 @@ swap(TfRefPtr<T>& lhs, TfRefPtr<T>& rhs)
     lhs.swap(rhs);
 }
 
-PXR_NAMESPACE_CLOSE_SCOPE
-
-namespace boost {
-
-template<typename T>
-T *
-get_pointer(PXR_NS::TfRefPtr<T> const& p)
-{
-    return get_pointer(p);
-}
-
-} // end namespace boost
-
-PXR_NAMESPACE_OPEN_SCOPE
-
-// Extend boost::hash to support TfRefPtr.
 template <class T>
 inline size_t
 hash_value(const TfRefPtr<T>& ptr)

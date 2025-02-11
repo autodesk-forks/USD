@@ -97,6 +97,9 @@ _EraseTimeSample(SdfAttributeSpec &self, double time)
 
 void wrapAttributeSpec()
 {
+    def("CreatePrimAttributeInLayer", SdfCreatePrimAttributeInLayer,
+        (arg("layer"), arg("attrPath"), arg("typeName"),
+         arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
     def("JustCreatePrimAttributeInLayer", SdfJustCreatePrimAttributeInLayer,
         (arg("layer"), arg("attrPath"), arg("typeName"),
          arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
