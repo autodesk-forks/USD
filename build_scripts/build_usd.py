@@ -995,7 +995,6 @@ def InstallBoost(context, force, buildArgs):
     # dependency to build the next time it's run.
     try:
         InstallBoost_Helper(context, force, buildArgs)
-
     except:
         for versionHeader in [
             os.path.join(context.instDir, f) for f in BOOST_VERSION_FILES
@@ -1256,7 +1255,6 @@ TIFF = Dependency("TIFF", InstallTIFF, "include/tiff.h")
 
 ############################################################
 # PNG
-
 PNG_URL = "https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.47.zip"
 
 def InstallPNG(context, force, buildArgs):
@@ -1890,12 +1888,6 @@ def InstallUSD(context, force, buildArgs):
         extraArgs += buildArgs
 
         if context.targetWasm:
-
-            if context.buildJsBindings:
-                extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=ON')
-            else:
-                extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
-
             extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
             # For some reason we have to manually specify path to boost
             extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
@@ -1915,10 +1907,6 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_WASM_NODE=ON')
             else:
                 extraArgs.append('-DPXR_WASM_NODE=OFF')
-
-        else:
-            # JS binding is only possibly enabled for webassembly build
-            extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
         RunCMake(context, force, extraArgs)
 
@@ -2077,12 +2065,6 @@ if MacOS():
                        default=codesignDefault, action="store_true",
                        help=("Enable code signing for macOS builds "
                              "(defaults to enabled on Apple Silicon)"))
-
-subgroup = group.add_mutually_exclusive_group()
-subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_true",
-                    default=True, help="Build with JavaScript bindings")
-subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
-                    help="Do not build with JavaScript bindings")
 
 if Linux():
     group.add_argument("--use-cxx11-abi", type=int, choices=[0, 1],
@@ -2405,7 +2387,6 @@ class InstallContext:
         if self.targetWasm and Windows():
             self.cmakeGenerator = 'MinGW Makefiles'
 
-        self.buildJsBindings = args.buildJsBindings
         self.useCXX11ABI = \
             (args.use_cxx11_abi if hasattr(args, "use_cxx11_abi") else None)
         self.safetyFirst = args.safety_first
@@ -2876,7 +2857,6 @@ summaryMsg = summaryMsg.format(
     buildAlembic=("On" if context.buildAlembic else "Off"),
     buildDraco=("On" if context.buildDraco else "Off"),
     buildMaterialX=("On" if context.buildMaterialX else "Off"),
-    buildJsBindings=("On" if context.buildJsBindings else "Off"),
     buildMayapyTests=("On" if context.buildMayapyTests else "Off"),
     buildAnimXTests=("On" if context.buildAnimXTests else "Off"),
     enableHDF5=("On" if context.enableHDF5 else "Off"))

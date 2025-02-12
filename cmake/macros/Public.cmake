@@ -242,11 +242,6 @@ function(pxr_library NAME)
         PYMODULE_CPPFILES
         PYMODULE_FILES
         PYSIDE_UI_FILES
-        JS_PUBLIC_CLASSES
-        JS_PRIVATE_CLASSES
-        JS_PUBLIC_HEADERS
-        JS_PRIVATE_HEADERS
-        JS_CPPFILES
     )
 
     cmake_parse_arguments(args
@@ -341,24 +336,6 @@ function(pxr_library NAME)
                 list(APPEND args_RESOURCE_FILES ${line})
             endif()
         endforeach()
-    endif()
-
-    if(PXR_ENABLE_JS_BINDINGS_SUPPORT)
-        if(args_JS_PUBLIC_CLASSES)
-            list(APPEND args_PUBLIC_CLASSES ${args_JS_PUBLIC_CLASSES})
-        endif()
-        if(args_JS_PUBLIC_HEADERS)
-            list(APPEND args_PUBLIC_HEADERS ${args_JS_PUBLIC_HEADERS})
-        endif()
-        if(args_JS_PRIVATE_CLASSES)
-            list(APPEND args_PRIVATE_CLASSES ${args_JS_PRIVATE_CLASSES})
-        endif()
-        if(args_JS_PRIVATE_HEADERS)
-            list(APPEND args_PRIVATE_HEADERS ${args_JS_PRIVATE_HEADERS})
-        endif()
-        if(args_JS_CPPFILES)
-            list(APPEND args_CPPFILES ${args_JS_CPPFILES})
-        endif()
     endif()
 
     # Collect libraries.

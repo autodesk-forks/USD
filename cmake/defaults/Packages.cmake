@@ -32,10 +32,6 @@ if(PXR_ENABLE_OPENVDB_SUPPORT)
     endif()
 endif()
 
-if (PXR_ENABLE_JS_BINDINGS_SUPPORT)
-    add_definitions(-DPXR_JS_BINDINGS_SUPPORT_ENABLED)
-endif()
-
 if(PXR_ENABLE_PYTHON_SUPPORT)
     # 1--Python.
     macro(setup_python_package package)

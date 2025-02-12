@@ -15,10 +15,6 @@
 #include "pxr/base/gf/ostreamHelpers.h"
 #include "pxr/base/tf/type.h"
 
-#ifdef ARCH_OS_WASM_VM
-#include "pxr/base/gf/emscriptenRegistrationHelper.h"
-#endif
-
 // Include headers for other vec types to support wrapping conversions and
 // operators.
 #include "pxr/base/gf/vec4d.h"
