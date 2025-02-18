@@ -38,9 +38,10 @@ from shutil import which
 
 # Helpers for printing output
 verbosity = 1
-EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB'
+EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-pthread'
 EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
 TARGET_WASM='wasm'
+TARGET_WASM64='wasm64'
 TARGET_WASM_NODE='node'
 
 def Print(msg):
@@ -89,11 +90,11 @@ def GetBuildTargetDefault():
 def GetBuildTargets():
     # The wasm build has been tested only in MacOS so far
     if MacOS():
-        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM_NODE]
+        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     elif Linux():
-        return [TARGET_WASM, TARGET_WASM_NODE]
+        return [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     elif Windows():
-        return [TARGET_WASM, TARGET_WASM_NODE]        
+        return [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     else:
         return []
 
@@ -1542,8 +1543,8 @@ def InstallOpenSubdiv(context, force, buildArgs):
         ]
         if context.targetWasm:
             extraArgs.append('-DBUILD_SHARED_LIB=OFF')
-            extraArgs.append('-DCMAKE_CXX_FLAGS="-pthread"')
-            extraArgs.append('-DCMAKE_C_FLAGS="-pthread"')
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
             extraArgs.append('-DNO_METAL=ON')
 
         # Use Metal for macOS and all Apple embedded systems.
@@ -1843,8 +1844,9 @@ def InstallGlslang(context, force, buildArgs):
             ]
             if context.targetWasm:
                 cmakeOptions += [
-                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
+                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
+                    '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
                     '-DBUILD_SHARED_LIBS=OFF',
                     '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
                     '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
@@ -1865,8 +1867,9 @@ def InstallTint(context, force, buildArgs):
         with CurrentWorkingDirectory(srcDir):
             cmakeOptions = [
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
-                + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
+                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' "',
                 '-DBUILD_SHARED_LIBS=OFF',
                 '-DCMAKE_INSTALL_DATADIR=' + os.path.join(context.instDir, 'lib')
             ]
@@ -2168,6 +2171,9 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
             extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_C_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
             # For some reason we have to manually specify path to boost
             extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
 
@@ -2186,6 +2192,11 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_WASM_NODE=ON')
             else:
                 extraArgs.append('-DPXR_WASM_NODE=OFF')
+
+            if context.targetWasm64:
+                extraArgs.append('-DPXR_WASM64=ON')
+            else:
+                extraArgs.append('-DPXR_WASM64=OFF')
 
         else:
             # JS binding is only possibly enabled for webassembly build
@@ -2670,7 +2681,9 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
-        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM_NODE)
+        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM_NODE or args.build_target == TARGET_WASM64)
+        self.targetWasm64 = (args.build_target == TARGET_WASM64)
+
         self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
         self.buildTarget = args.build_target
         if MacOS():
@@ -2782,6 +2795,10 @@ except Exception as e:
     sys.exit(1)
 
 verbosity = args.verbosity
+
+if args.build_target == TARGET_WASM64:
+    EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS+=' -sMEMORY64=1'
+    EMSCRIPTEN_CMAKE_CXX_FLAGS+=' -sMEMORY64=1'
 
 # Augment PATH on Windows so that 3rd-party dependencies can find libraries
 # they depend on. In particular, this is needed for building IlmBase/OpenEXR.

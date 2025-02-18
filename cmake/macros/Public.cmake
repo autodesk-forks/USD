@@ -710,7 +710,7 @@ function(pxr_build_test TEST_NAME)
 
     # XXX -- We shouldn't have to install to run tests.
     if(PXR_ENABLE_JS_SUPPORT)
-        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL: -lembind")
         install(
             FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm

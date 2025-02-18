@@ -59,7 +59,7 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, false);
 #if defined(EMSCRIPTEN)
     // TODO: Some of the emscripten headers are not aligned with the mapAsync
-    // latest signature as of emscripten 3.1.66. We need to wait for it to be updated
+    // latest signature as of emscripten 3.1.72. We need to wait for it to be updated
     _SetFlag(HgiDeviceCapabilitiesBitsTimestamps, false);
 #else
     _SetFlag(HgiDeviceCapabilitiesBitsTimestamps, device.HasFeature(wgpu::FeatureName::TimestampQuery));
