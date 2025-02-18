@@ -33,6 +33,7 @@
 #include "pxr/imaging/hgi/graphicsPipeline.h"
 #include "pxr/imaging/hgi/indirectCommandEncoder.h"
 #include "pxr/imaging/hgi/resourceBindings.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/gf/matrix4f.h"
 
@@ -687,6 +688,10 @@ HdSt_PipelineDrawBatch::_CompileBatch(
 
         uint32_t const baseInstance = (uint32_t)item;
 
+        Hgi *hgi = resourceRegistry->GetHgi();
+        HgiCapabilities const *capabilities = hgi->GetCapabilities();
+
+        const TfToken apiName = resourceRegistry->GetHgi()->GetAPIName();
         // draw command
         if (!_useDrawIndexed) {
             if (_useInstanceCulling) {
@@ -765,7 +770,13 @@ HdSt_PipelineDrawBatch::_CompileBatch(
                     *cmdIt++ = instanceCount;
                     *cmdIt++ = baseIndex;
                     *cmdIt++ = baseVertex;
-                    *cmdIt++ = baseInstance;
+                    
+                    if (apiName == HgiTokens->WebGPU && 
+                        capabilities->IsSet(HgiDeviceCapabilitiesBitsMultiDrawIndirect)) {                        // WebGPU requires baseInstance to be 0 for indirect indexed draw.
+                        *cmdIt++ = 0;
+                    } else {
+                        *cmdIt++ = baseInstance;
+                    }
                 }
             }
         }

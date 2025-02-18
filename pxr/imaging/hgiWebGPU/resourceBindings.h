@@ -60,6 +60,7 @@ public:
             passEncoder.SetBindGroup(HgiWebGPUBufferShaderSection::bindingSet, _bindGroup, 0, nullptr);
             passEncoder.SetBindGroup(HgiWebGPUTextureShaderSection::bindingSet, _textureBindGroup, 0, nullptr);
             passEncoder.SetBindGroup(HgiWebGPUSamplerShaderSection::bindingSet, _samplerBindGroup, 0, nullptr);
+            passEncoder.SetBindGroup(HgiWebGPUBufferShaderSection::constantsBindingSet, _constantBindGroup, 0, nullptr);
         } else if (_bindGroup || _textureBindGroup || _samplerBindGroup ) {
             TF_CODING_ERROR("All binding groups should have been initialized at the same time");
         }
@@ -90,6 +91,7 @@ private:
     wgpu::BindGroup _bindGroup;
     wgpu::BindGroup _textureBindGroup;
     wgpu::BindGroup _samplerBindGroup;
+    wgpu::BindGroup _constantBindGroup;
     bool _firstInstance;
 };
 

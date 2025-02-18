@@ -294,6 +294,7 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
 }
 
 const uint32_t HgiWebGPUBufferShaderSection::bindingSet = 0;
+const uint32_t HgiWebGPUBufferShaderSection::constantsBindingSet = 3;
 HgiWebGPUBufferShaderSection::HgiWebGPUBufferShaderSection(
     const std::string &identifier,
     const bool writable,

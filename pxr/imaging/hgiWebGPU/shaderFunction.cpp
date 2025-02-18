@@ -99,6 +99,7 @@ void HgiWebGPUShaderFunction::_CreateBuffersBindingGroupLayoutEntries(
         wgpu::ShaderStage const &stage)
 {
     BindGroupLayoutEntryMap bufferBindGroupEntries;
+    BindGroupLayoutEntryMap constantBindGroupEntries;
 
     if (constants.size() > 0) {
         wgpu::BindGroupLayoutEntry entry;
@@ -106,8 +107,9 @@ void HgiWebGPUShaderFunction::_CreateBuffersBindingGroupLayoutEntries(
         entry.binding = 0;
         entry.visibility = stage;
         entry.buffer.type = wgpu::BufferBindingType::Uniform;
-        bufferBindGroupEntries.insert(std::make_pair(0,entry));
+        constantBindGroupEntries.insert(std::make_pair(0,entry));
     }
+    _bindGroups.insert(std::make_pair(HgiWebGPUBufferShaderSection::constantsBindingSet, constantBindGroupEntries));
 
     for (HgiShaderFunctionBufferDesc const &b : buffers)
     {

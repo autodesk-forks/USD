@@ -110,7 +110,9 @@ public:
         HgiWebGPUBuffer* drawBuf =
                 static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
 
-        _passEncoder.DrawIndirect(drawBuf->GetBufferHandle(), drawBufferOffset);
+        for (uint32_t baseInstance = 0; baseInstance < drawCount; baseInstance++) {
+            _passEncoder.DrawIndirect(drawBuf->GetBufferHandle(), baseInstance * stride);
+        }
     }
 
     HGIWEBGPU_API
@@ -157,7 +159,10 @@ public:
                 static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
 
         _passEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0, ibo->GetByteSizeOfResource() - drawBufferByteOffset);
-        _passEncoder.DrawIndexedIndirect(drawBuf->GetBufferHandle(), drawBufferByteOffset);
+
+        for (uint32_t baseInstance = 0; baseInstance < drawCount; baseInstance++) {
+            _passEncoder.DrawIndexedIndirect(drawBuf->GetBufferHandle(), baseInstance * stride);
+        }
     }
 
     HGIWEBGPU_API

@@ -178,6 +178,7 @@ class HgiWebGPUBufferShaderSection final: public HgiWebGPUShaderSection
 {
 public:
     static const uint32_t bindingSet;
+    static const uint32_t constantsBindingSet;
 
     HGIWEBGPU_API
     explicit HgiWebGPUBufferShaderSection(

@@ -177,9 +177,36 @@ HgiWebGPUShaderGenerator::_WriteConstantParams(
     if (parameters.empty()) {
         return;
     }
-    CreateShaderSection<HgiGLBlockShaderSection>(
-        "ParamBuffer",
-        parameters);
+
+    const HgiShaderSectionAttributeVector attrs = {
+            HgiShaderSectionAttribute{"std140", ""},
+            HgiShaderSectionAttribute{"binding", std::to_string(0)},
+            HgiShaderSectionAttribute{"set", std::to_string(HgiWebGPUBufferShaderSection::constantsBindingSet)}};
+
+    HgiBaseGLShaderSectionPtrVector members;
+    for(const HgiShaderFunctionParamDesc &param : parameters) {
+        auto *memberSection =
+                CreateShaderSection<HgiGLMemberShaderSection>(
+                    /*nameInShader=*/param.nameInShader,
+                    /*type=*/param.type,
+                    /*interpolation=*/HgiInterpolationDefault,
+                    /*sampling=*/HgiSamplingDefault,
+                    /*storage=*/HgiStorageDefault,
+                    /*attributes=*/HgiShaderSectionAttributeVector(),
+                    /*storageQualifier=*/std::string(),
+                    /*defaultValue=*/std::string(),
+                    /*arraySize=*/std::string(),
+                    /*blockInstanceIdentifier=*/param.nameInShader);
+        members.push_back(memberSection);
+    }
+
+    CreateShaderSection<HgiWebGPUInterstageBlockShaderSection>(
+            "ParamBuffer",
+            "",
+            attrs,
+            "uniform",
+            std::string(),
+            members);
 }
 
 void

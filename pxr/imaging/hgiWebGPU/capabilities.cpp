@@ -28,6 +28,9 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_ENV_SETTING(HGIWEBGPU_ENABLE_MULTI_DRAW_INDIRECT, false,
+                      "Use WebGPU multi draw indirect");
+
 HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 {
     _maxUniformBlockSize          = 64 * 1024;
@@ -39,6 +42,8 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _pageSizeAlignment = sizeof(void *);
     #endif
 
+    bool multiDrawIndirectEnabled = TfGetEnvSetting(HGIWEBGPU_ENABLE_MULTI_DRAW_INDIRECT);
+
     // https://github.com/gfx-rs/wgpu/issues/158#issuecomment-490653129
     _uniformBufferOffsetAlignment = 256;
     _SetFlag(HgiDeviceCapabilitiesBitsPrimitiveIdEmulation, true);
@@ -49,6 +54,7 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, true);
     _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, false);
     _SetFlag(HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsMultiDrawIndirect, multiDrawIndirectEnabled);
     // This might be available in the future https://github.com/gpuweb/gpuweb/issues/4891
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, false);
 #if defined(EMSCRIPTEN)
