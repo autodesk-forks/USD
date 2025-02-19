@@ -111,6 +111,7 @@ public:
                 static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
 
         for (uint32_t baseInstance = 0; baseInstance < drawCount; baseInstance++) {
+            _stepFunctions.SetVertexBufferOffsets(_passEncoder, baseInstance);
             _passEncoder.DrawIndirect(drawBuf->GetBufferHandle(), baseInstance * stride);
         }
     }
@@ -161,6 +162,7 @@ public:
         _passEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0, ibo->GetByteSizeOfResource() - drawBufferByteOffset);
 
         for (uint32_t baseInstance = 0; baseInstance < drawCount; baseInstance++) {
+            _stepFunctions.SetVertexBufferOffsets(_passEncoder, baseInstance);
             _passEncoder.DrawIndexedIndirect(drawBuf->GetBufferHandle(), baseInstance * stride);
         }
     }
