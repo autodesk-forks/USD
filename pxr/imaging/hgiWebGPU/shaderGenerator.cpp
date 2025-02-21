@@ -183,13 +183,13 @@ HgiWebGPUShaderGenerator::_WriteConstantParams(
             HgiShaderSectionAttribute{"binding", std::to_string(0)},
             HgiShaderSectionAttribute{"set", std::to_string(HgiWebGPUBufferShaderSection::constantsBindingSet)}};
 
-    HgiBaseGLShaderSectionPtrVector members;
+    HgiGLMemberShaderSectionPtrVector members;
     for(const HgiShaderFunctionParamDesc &param : parameters) {
         auto *memberSection =
                 CreateShaderSection<HgiGLMemberShaderSection>(
                     /*nameInShader=*/param.nameInShader,
                     /*type=*/param.type,
-                    /*interpolation=*/HgiInterpolationDefault,
+                    /*interpolation=*/param.interpolation,
                     /*sampling=*/HgiSamplingDefault,
                     /*storage=*/HgiStorageDefault,
                     /*attributes=*/HgiShaderSectionAttributeVector(),
@@ -399,14 +399,14 @@ HgiWebGPUShaderGenerator::_WriteInOutBlocks(
         const uint32_t locationIndex = in_qualifier ?
             _inLocationIndex : _outLocationIndex;
 
-        HgiBaseGLShaderSectionPtrVector members;
+        HgiGLMemberShaderSectionPtrVector members;
         for(const HgiShaderFunctionParamBlockDesc::Member &member : p.members) {
 
             HgiGLMemberShaderSection *memberSection =
                 CreateShaderSection<HgiGLMemberShaderSection>(
                     member.name,
                     member.type,
-                    HgiInterpolationDefault,
+                    member.interpolation,
                     HgiSamplingDefault,
                     HgiStorageDefault,
                     HgiShaderSectionAttributeVector(),

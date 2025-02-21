@@ -372,7 +372,7 @@ HgiWebGPUInterstageBlockShaderSection::HgiWebGPUInterstageBlockShaderSection(
     const HgiShaderSectionAttributeVector &attributes,
     const std::string &qualifier,
     const std::string &arraySize,
-    const HgiBaseGLShaderSectionPtrVector &members)
+    const HgiGLMemberShaderSectionPtrVector &members)
     : HgiWebGPUShaderSection(blockIdentifier,
                          attributes,
                          qualifier,
@@ -410,8 +410,9 @@ HgiWebGPUInterstageBlockShaderSection::VisitGlobalMemberDeclarations(
     ss << _qualifier << " ";
     WriteIdentifier(ss);
     ss << " {\n";
-    for (const HgiBaseGLShaderSection* member : _members) {
+    for (const HgiGLMemberShaderSection* member : _members) {
         ss << "  ";
+        member->WriteInterpolation(ss);
         member->WriteType(ss);
         ss << " ";
         member->WriteIdentifier(ss);

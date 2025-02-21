@@ -27,6 +27,7 @@
 
 #include "pxr/imaging/hgi/shaderFunctionDesc.h"
 #include "pxr/imaging/hgi/shaderSection.h"
+#include "pxr/imaging/hgiGL/shaderSection.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
 
 #include <string>
@@ -55,6 +56,9 @@ public:
 
 using HgiWebGPUShaderSectionPtrVector = 
     std::vector<HgiWebGPUShaderSection*>;
+
+using HgiGLMemberShaderSectionPtrVector =
+    std::vector<HgiGLMemberShaderSection*>;
 
 /// \class HgiWebGPUMacroShaderSection
 ///
@@ -223,7 +227,7 @@ public:
         const HgiShaderSectionAttributeVector &attributes,
         const std::string &qualifier,
         const std::string &arraySize,
-        const HgiBaseGLShaderSectionPtrVector &members);
+        const HgiGLMemberShaderSectionPtrVector &members);
 
     HGIWEBGPU_API
     bool VisitGlobalMemberDeclarations(std::ostream &ss) override;
@@ -235,7 +239,7 @@ private:
     HgiWebGPUInterstageBlockShaderSection(const HgiWebGPUInterstageBlockShaderSection&) = delete;
 
     const std::string _qualifier;
-    const HgiBaseGLShaderSectionPtrVector _members;
+    const HgiGLMemberShaderSectionPtrVector _members;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
