@@ -14,6 +14,10 @@
 #include "pxr/imaging/hgiPresent/interopGL.h"
 #endif
 
+#if defined(PXR_METAL_SUPPORT_ENABLED)
+#include "pxr/imaging/hgiPresent/metal.h"
+#endif
+
 #if defined(PXR_VULKAN_SUPPORT_ENABLED)
 #include "pxr/imaging/hgiVulkan/hgi.h"
 #include "pxr/imaging/hgiPresent/vulkan.h"
@@ -88,6 +92,11 @@ HgiPresent::Create(Hgi* hgi,
 #if defined(PXR_VULKAN_SUPPORT_ENABLED)
                 if (const auto hgiVulkan = dynamic_cast<HgiVulkan*>(hgi)) {
                     return new HgiPresentVulkan{ hgiVulkan, params };
+                }
+#endif
+#if defined(PXR_METAL_SUPPORT_ENABLED)
+                if (const auto hgiMetal = DynamicCastHgiMetal(hgi)) {
+                    return new HgiPresentMetal{ hgiMetal, params };
                 }
 #endif
                 TF_WARN("Unsupported Hgi: presentation is disabled");
