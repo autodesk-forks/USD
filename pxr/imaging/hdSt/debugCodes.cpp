@@ -60,6 +60,9 @@ TF_REGISTRY_FUNCTION(TfDebug)
 
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MATERIAL_REMOVED,
         "Report when a material is removed");
+
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MATERIALX_TOPOLOGY_ADDED,
+        "Report when a new materialx topology is added");
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

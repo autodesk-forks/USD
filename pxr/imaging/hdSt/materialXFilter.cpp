@@ -4,6 +4,7 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
+#include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/materialParam.h"
 #include "pxr/imaging/hdSt/materialXFilter.h"
 #include "pxr/imaging/hdSt/materialXLobePruner.h"
@@ -18,7 +19,11 @@
 #include "pxr/imaging/hio/glslfx.h"
 #include "pxr/imaging/hgi/capabilities.h"
 
+#include "pxr/base/gf/color.h"
+#include "pxr/base/gf/colorSpace.h"
 #include "pxr/base/gf/vec2f.h"
+#include "pxr/base/gf/vec3f.h"
+#include "pxr/base/gf/vec4f.h"
 #include "pxr/base/gf/matrix3d.h"
 #include "pxr/base/gf/matrix4d.h"
 
@@ -28,6 +33,8 @@
 #include <MaterialXGenShader/DefaultColorManagementSystem.h>
 #include <MaterialXRender/Util.h>
 #include <MaterialXRender/LightHandler.h> 
+
+#include <iostream>
 
 namespace mx = MaterialX;
 
@@ -1059,6 +1066,63 @@ _ReplaceFilenameInput(
 
 }
 
+// Official list of color spaces supported by MaterialX
+TF_DEFINE_PRIVATE_TOKENS(
+    _mxCsTokens,
+    (lin_rec709)
+    (g18_rec709)
+    (gamma18)
+    (g22_rec709)
+    (gamma22)
+    (rec709_display)
+    (gamma24)
+    (acescg)
+    (lin_ap1)
+    (g22_ap1)
+    (srgb_texture)
+    (lin_adobergb)
+    (adobergb)
+    (srgb_displayp3)
+    (lin_displayp3)
+);
+
+// Mapping from MaterialX color space to GfColorSpace
+const GfColorSpace*
+_MaterialXColorSpace(TfToken matxColorSpace) {
+
+    static const auto rec709_display = GfColorSpace(TfToken(_mxCsTokens->rec709_display),
+                          { 0.640f, 0.330f }, // Rec 709 primaries
+                          { 0.300f, 0.600f },
+                          { 0.150f, 0.060f },
+                          { 0.3127, 0.3290 }, // D65 White Point
+                          2.4f, // Gamma 2.4
+                          0.0f); // No linear section
+
+    static const auto map = std::unordered_map<TfToken, GfColorSpace, TfToken::HashFunctor> {
+        {_mxCsTokens->lin_rec709, GfColorSpace(GfColorSpaceNames->LinearRec709) },
+        {_mxCsTokens->g18_rec709, GfColorSpace(GfColorSpaceNames->G18Rec709) },
+        {_mxCsTokens->gamma18, GfColorSpace(GfColorSpaceNames->G18Rec709) },
+        {_mxCsTokens->g22_rec709, GfColorSpace(GfColorSpaceNames->G22Rec709) },
+        {_mxCsTokens->gamma22, GfColorSpace(GfColorSpaceNames->G22Rec709) },
+        {_mxCsTokens->rec709_display, rec709_display },
+        {_mxCsTokens->gamma24, rec709_display },
+        {_mxCsTokens->acescg, GfColorSpace(GfColorSpaceNames->LinearAP1) },
+        {_mxCsTokens->lin_ap1, GfColorSpace(GfColorSpaceNames->LinearAP1) },
+        {_mxCsTokens->g22_ap1, GfColorSpace(GfColorSpaceNames->G22AP1) },
+        {_mxCsTokens->srgb_texture, GfColorSpace(GfColorSpaceNames->SRGBRec709) },
+        {_mxCsTokens->lin_adobergb, GfColorSpace(GfColorSpaceNames->LinearAdobeRGB) },
+        {_mxCsTokens->adobergb, GfColorSpace(GfColorSpaceNames->G22AdobeRGB) },
+        {_mxCsTokens->srgb_displayp3, GfColorSpace(GfColorSpaceNames->SRGBP3D65) },
+        {_mxCsTokens->lin_displayp3, GfColorSpace(GfColorSpaceNames->LinearDisplayP3) },
+    };
+
+    auto it = map.find(matxColorSpace);
+    if (it != map.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
 // Gather the Material Params from the glslfx ShaderPtr
 void
 _AddMaterialXParams(
@@ -1076,6 +1140,8 @@ _AddMaterialXParams(
     // Storm can only find primvar nodes when they are connected to the terminal
     _ConnectPrimvarNodesToTerminalNode(terminalNodePath, hdNetwork);
 
+    const auto sceneColorSpace = GfColorSpace(GfColorSpaceNames->LinearRec709);
+
     // Store all the parameter values, mapped by the anonymized names used 
     // for MaterialXShaderGen
     // <annonNodeName_paramName, hdParamVtValue>
@@ -1089,13 +1155,54 @@ _AddMaterialXParams(
                 annonNodeNamePrefix = annonNodePathIt->second.GetName() + "_";
             }
         }
+        // Convert all colors to the rendering color space:
         for (auto const& param: node.second.parameters) {
+            if (!param.second.IsHolding<TfToken>()) {
+                continue;
+            }
+
+            const auto colorManagedInput = 
+                SdfPath::StripPrefixNamespace(param.first.GetString(),
+                                                SdfFieldKeys->ColorSpace);
+            if (!colorManagedInput.second) {
+                continue;
+            }
+
+            const auto* sourceColorSpace = _MaterialXColorSpace(param.second.Get<TfToken>());
+            if (!sourceColorSpace) {
+                continue;
+            }
+
+            const TfToken colorInputParam(colorManagedInput.first);
+            auto colorInputIt = node.second.parameters.find(colorInputParam);
+            if (colorInputIt == node.second.parameters.end()) {
+                continue;
+            }
+
+            VtValue colorInputValue = colorInputIt->second;
+            if (colorInputValue.IsHolding<GfVec3f>()) {
+                GfColor col = sceneColorSpace.Convert(*sourceColorSpace, colorInputValue.Get<GfVec3f>());
+                mxParamNameToValue.emplace(
+                    annonNodeNamePrefix + colorManagedInput.first, VtValue(col.GetRGB()));
+            } else if (colorInputValue.IsHolding<GfVec4f>()) {
+                const auto& color4 = colorInputValue.Get<GfVec4f>();
+                GfColor col = sceneColorSpace.Convert(*sourceColorSpace, GfVec3f(color4.data()));
+                const auto& dstColor = col.GetRGB();
+                mxParamNameToValue.emplace(
+                    annonNodeNamePrefix + colorManagedInput.first, 
+                    VtValue(GfVec4f(dstColor[0], dstColor[1], dstColor[2], color4[3])));
+            }
+        }
+
+        for (auto const& param: node.second.parameters) {
+            const auto anonParamName = annonNodeNamePrefix + param.first.GetString();
             if (param.second.IsHolding<std::string>() ||
-                param.second.IsHolding<TfToken>()) {
+                param.second.IsHolding<TfToken>() ||
+                mxParamNameToValue.find(anonParamName) != mxParamNameToValue.end()) {
                 continue;
             }
             mxParamNameToValue.emplace(
-                annonNodeNamePrefix + param.first.GetString(), param.second);
+                anonParamName, param.second);
         }
     }
 
@@ -1229,6 +1336,42 @@ _AddMaterialXParams(
     }
 }
 
+static void _DumpNode(const HdMaterialNode2& pv)
+{
+    std::cout << "\t\ttypeId: " << pv.nodeTypeId << "\n";
+    std::cout << "\t\tParameters:\n";
+    for (auto const& p: pv.parameters) {
+        std::cout << "\t\t\t" << p.first << ": " << p.second << "\n";
+    }
+    std::cout << "\t\tInputConnections:\n";
+    for (auto const& c: pv.inputConnections) {
+        std::cout << "\t\t\t" << c.first << ": ";
+        for (auto const& c2: c.second) {
+            std::cout << c2.upstreamNode << "." << c2.upstreamOutputName << " ";
+        }
+        std::cout << "\n";
+    }
+}
+
+static void _DumpNetwork(const HdMaterialNetwork2& pv)
+{
+    std::cout << "-------------------- Material Network --------------------\n";
+    std::cout << "Nodes:\n";
+    for (auto const& node: pv.nodes) {
+        std::cout << "\t" << node.first << "\n";
+        _DumpNode(node.second);
+    }
+    std::cout << "Terminals:\n";
+    for (auto const& t: pv.terminals) {
+        std::cout << "\t" << t.first << ": " << t.second.upstreamNode << "." << t.second.upstreamOutputName << "\n";
+    }
+    std::cout << "Primvars:\n";
+    for (auto const& p: pv.primvars) {
+        std::cout << "\t" << p << ", \n";
+    }
+    std::cout << "----------------------------------------------------------\n";
+}
+
 static mx::ShaderPtr
 _GenerateMaterialXShader(
     HdMaterialNetwork2 const& hdNetwork,
@@ -1239,6 +1382,12 @@ _GenerateMaterialXShader(
     TfToken const& apiName,
     bool const bindlessTexturesEnabled)
 {
+    if (TfDebug::IsEnabled(HDST_MATERIALX_TOPOLOGY_ADDED)) {
+        std::cout << "----- MaterialX Topology Added: " << materialPath << "\n";
+        _DumpNetwork(hdNetwork);
+        std::cout << std::flush;
+    }
+
     // Get Standard Libraries and SearchPaths (for mxDoc and mxShaderGen)
     const mx::DocumentPtr& stdLibraries = HdMtlxStdLibraries();
     const mx::FileSearchPath& searchPaths = HdMtlxSearchPaths();
@@ -1386,8 +1535,6 @@ size_t _BuildEquivalentMaterialNetwork(
                     SdfPath::StripPrefixNamespace(param.first.GetString(),
                                                   SdfFieldKeys->ColorSpace);
                 if (colorManagedInput.second) {
-                    outNode.parameters.insert(param);
-
                     // Get the parameter value for the input
                     const TfToken colorInputParam(colorManagedInput.first);
                     const auto colorInputIt =
@@ -1395,14 +1542,26 @@ size_t _BuildEquivalentMaterialNetwork(
                     if (colorInputIt != inNode.parameters.end()) {
                         VtValue colorInputValue = colorInputIt->second;
 
-                        // Use an empty asset for color managed files
                         if (colorInputValue.IsHolding<SdfAssetPath>()) {
+                            // Use an empty asset for color managed files
                             colorInputValue = VtValue(SdfAssetPath());
+                        } else if (colorInputValue.IsHolding<GfVec3f>() ||
+                                   colorInputValue.IsHolding<GfVec4f>()) {
+                            // It is the responsibility of the scene delegate to
+                            // convert color values to the correct color space.
+                            // So they are not to be considered topological for
+                            // MaterialX shadergen.
+                            continue;
+                        } else {
+                            TF_CODING_ERROR("Found color space tag on non-color attribute %s",
+                                            param.first.GetString().c_str());
+                            continue;
                         }
                         outNode.parameters.emplace(
                             colorInputParam, 
                             colorInputValue); 
                     }
+                    outNode.parameters.insert(param);
                 }
             }
         }
