@@ -63,6 +63,9 @@ TF_REGISTRY_FUNCTION(TfDebug)
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MATERIAL_REMOVED,
         "Report when a material is removed");
 
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MATERIALX_TOPOLOGY_ADDED,
+        "Report when a new materialx topology is added");
+
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX,
         "Debug messages in the MaterialX Filter.");
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_DUMP_SHADER_SOURCEFILE,
