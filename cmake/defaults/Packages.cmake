@@ -315,6 +315,16 @@ if (PXR_BUILD_ANIMX_TESTS)
     find_package(AnimX REQUIRED)
 endif()
 
+# Trace and Hd Performance log switch
+# ----------------------------------------------
+if (PXR_BUILD_TRACE)
+    add_definitions(-DTRACE_ENABLE)
+endif()
+
+if (PXR_BUILD_HD_PERF)
+    add_definitions(-DHD_PERF_ENABLE)
+endif()
+
 # ----------------------------------------------
 
 # Try and find Imath or fallback to OpenEXR

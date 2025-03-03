@@ -15,6 +15,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 
+#if defined(HD_PERF_ENABLE)
 TF_INSTANTIATE_SINGLETON(HdPerfLog);
 
 static
@@ -241,7 +242,7 @@ HdPerfLog::GetResourceRegistryVector()
 {
     return _resourceRegistryVector;
 }
-
+#endif // HD_PERF_ENABLE
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

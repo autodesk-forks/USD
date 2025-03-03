@@ -32,6 +32,7 @@ class HdResourceRegistry;
 // XXX: it would be nice to move this into Trace or use the existing Trace
 // counter mechanism, however we are restricted to TraceLite in the rocks.
 
+#if defined(HD_PERF_ENABLE)
 //----------------------------------------------------------------------------//
 // PERFORMANCE INSTURMENTATION MACROS                                         //
 //----------------------------------------------------------------------------//
@@ -217,6 +218,24 @@ private:
 };
 
 HD_API_TEMPLATE_CLASS(TfSingleton<HdPerfLog>);
+#else  // HD_PERF_ENABLE
+
+#define HD_TRACE_FUNCTION()
+#define HD_TRACE_SCOPE(tag)
+
+#define HD_PERF_CACHE_HIT(name, id)
+#define HD_PERF_CACHE_HIT_TAG(name, id, tag)
+
+#define HD_PERF_CACHE_MISS(name, id)
+#define HD_PERF_CACHE_MISS_TAG(name, id, tag)
+
+#define HD_PERF_COUNTER_INCR(name)
+#define HD_PERF_COUNTER_DECR(name)
+#define HD_PERF_COUNTER_SET(name, value)
+#define HD_PERF_COUNTER_ADD(name, value)
+#define HD_PERF_COUNTER_SUBTRACT(name, value)
+
+#endif // HD_PERF_ENABLE
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
