@@ -286,7 +286,10 @@ if (PXR_BUILD_IMAGING)
                 lang_hlsl
                 lang_hlsl_intrinsic
                 lang_hlsl_ir
+                lang_hlsl_type
                 lang_hlsl_writer
+                lang_hlsl_writer_ast_raise
+                lang_hlsl_writer_common
                 lang_hlsl_writer_printer
                 lang_hlsl_writer_raise
             )

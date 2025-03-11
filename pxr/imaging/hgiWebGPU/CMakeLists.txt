@@ -33,6 +33,7 @@ pxr_library(hgiWebGPU
         arch
         hgi
         tf
+        ts
         trace
         hgiGL
         ${HGI_WEBGPU_NATIVE_LIBRARIES}

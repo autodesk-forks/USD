@@ -31,6 +31,7 @@
 
 #include <sstream>
 #include <fstream>
+#include <filesystem>
 
 // tint include depends on this defines to populate the appropriate namespace
 #define TINT_BUILD_SPV_READER 1
@@ -195,7 +196,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     std::string wgslCode;
 
     size_t wgslHash = 0;
-    std::string wgslCachePath;
+    std::filesystem::path wgslCachePath;
     std::filesystem::path cacheDir = TfGetEnvSetting(HGIWEBGPU_SHADER_CACHE_DIR);
     const char* debugLbl = _descriptor.debugName.empty() ?
                            "unknown" : _descriptor.debugName.c_str();

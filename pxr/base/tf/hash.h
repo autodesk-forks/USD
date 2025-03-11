@@ -493,17 +493,17 @@ private:
 
 /// A hash function object that hashes the address of a char pointer.
 struct TfHashCharPtr {
-    size_t operator()(const char* ptr) const;
+    TF_API size_t operator()(const char* ptr) const;
 };
 
 /// A hash function object that hashes null-terminated c-string content.
 struct TfHashCString {
-    size_t operator()(const char* ptr) const;
+    TF_API size_t operator()(const char* ptr) const;
 };
 
 /// A function object that compares two c-strings for equality.
 struct TfEqualCString {
-    bool operator()(const char* lhs, const char* rhs) const;
+    TF_API bool operator()(const char* lhs, const char* rhs) const;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
