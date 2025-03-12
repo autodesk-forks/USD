@@ -168,7 +168,6 @@ public:
     }
 
     HGIWEBGPU_API
-    HGIWEBGPU_API
     void SetConstantValues(
             HgiGraphicsPipelineHandle ,
             HgiShaderStage ,
