@@ -26,9 +26,10 @@ public:
     enum DirtyBits : HdDirtyBits {
         Clean                 = 0,
         // XXX: Got to skip varying and force sync bits for now
+        DirtyInit             = 1 << 1, // Sprim created, but never synced
         DirtyParams           = 1 << 2,
         DirtyResource         = 1 << 3,
-        AllDirty              = (DirtyParams | DirtyResource)
+        AllDirty              = (DirtyInit | DirtyParams | DirtyResource)
     };
 
     HD_API

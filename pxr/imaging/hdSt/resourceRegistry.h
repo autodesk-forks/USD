@@ -414,10 +414,15 @@ public:
     RegisterGLSLFXFile(HdInstance<HioGlslfxSharedPtr>::ID id);
 
 #ifdef PXR_MATERIALX_SUPPORT_ENABLED
-    /// Register MaterialX GLSLFX Shader.
+    /// Register MaterialX shader.
     HDST_API
     HdInstance<MaterialX::ShaderPtr>
     RegisterMaterialXShader(HdInstance<MaterialX::ShaderPtr>::ID id);
+
+    /// Determine if a MaterialX shader with the given ID has been registered
+    HDST_API
+    bool
+    ContainsMaterialXShader(HdInstance<MaterialX::ShaderPtr>::ID id);
 #endif
 
     /// Register a Hgi resource bindings into the registry.

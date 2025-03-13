@@ -343,6 +343,13 @@ public:
     virtual HdSprim *CreateSprim(TfToken const& typeId,
                                  SdfPath const& sprimId) = 0;
 
+    //
+    /// Concrete render delegates can override this method to implement early
+    /// initialization of Sprims that have just been created
+    ///
+    virtual void StartEarlySprimInit(HdSceneDelegate *sceneDelegate,
+                                     HdSprim *sprim) {}
+
     ///
     /// Request to Allocate and Construct an Sprim to use as a standin, if there
     /// if an error with another another Sprim of the same type.  For example,
@@ -534,6 +541,10 @@ public:
     /// specified prim type.
     HD_API
     virtual bool IsParallelSyncEnabled(const TfToken &primType) const;
+
+    /// Wait for early initialization tasks, if any.
+    HD_API
+    virtual void WaitForEarlyInitTasks(const TfToken& primType) {}
 
 protected:
     /// This class must be derived from.

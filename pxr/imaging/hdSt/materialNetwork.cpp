@@ -159,8 +159,8 @@ _GetGlslfxForTerminal(
     }
 }
 
-static HdMaterialNode2 const*
-_GetTerminalNode(
+HdMaterialNode2 const*
+HdSt_GetTerminalNode(
     HdMaterialNetwork2 const& network,
     TfToken const& terminalName,
     SdfPath * terminalNodePath)
@@ -1098,6 +1098,43 @@ HdStMaterialNetwork::ProcessMaterialNetwork(
     HdMaterialNetworkMap const& hdNetworkMap,
     HdStResourceRegistry *resourceRegistry)
 {
+    bool isVolume = false;
+
+    // For early parallel initialization, filter tasks are created on the heap
+    // and cached on the Sprims.
+    // For regular Sync(), we allocate one on the stack.
+    //
+    HdSt_MaterialFilterTask filterTask;
+    filterTask.hdNetwork =
+        HdConvertToHdMaterialNetwork2(hdNetworkMap, &isVolume);
+
+    // The fragment source comes from the 'surface' network or the
+    // 'volume' network.
+    const TfToken &terminalName = 
+        isVolume ? HdMaterialTerminalTokens->volume
+        : HdMaterialTerminalTokens->surface;
+
+    filterTask.terminalNode = 
+        HdSt_GetTerminalNode(
+            filterTask.hdNetwork,
+            terminalName,
+            &filterTask.terminalNodePath);
+
+    if (!filterTask.terminalNode) {
+        return;
+    }
+
+    ProcessFilterTask(
+        materialId, &filterTask, isVolume, resourceRegistry);
+}
+
+void
+HdStMaterialNetwork::ProcessFilterTask(
+    SdfPath const& materialId,
+    HdSt_MaterialFilterTask *filterTask,
+    bool isVolume,
+    HdStResourceRegistry *resourceRegistry)
+{
     HD_TRACE_FUNCTION();
 
     _fragmentSource.clear();
@@ -1105,52 +1142,45 @@ HdStMaterialNetwork::ProcessMaterialNetwork(
     _materialMetadata.clear();
     _materialParams.clear();
     _textureDescriptors.clear();
+
     _materialTag = HdStMaterialTagTokens->defaultMaterialTag;
 
-    // The fragment source comes from the 'surface' network or the
-    // 'volume' network.
-    bool isVolume = false;
-    HdMaterialNetwork2 surfaceNetwork =
-        HdConvertToHdMaterialNetwork2(hdNetworkMap, &isVolume);
-    const TfToken &terminalName = (isVolume) ? HdMaterialTerminalTokens->volume 
-                                            : HdMaterialTerminalTokens->surface;
-
-    SdfPath surfTerminalPath;
-    if (HdMaterialNode2 const* surfTerminal = 
-            _GetTerminalNode(surfaceNetwork, terminalName, &surfTerminalPath)) {
+    if (!filterTask || !filterTask->terminalNode) {
+        return;
+    }
 
 #ifdef PXR_MATERIALX_SUPPORT_ENABLED
-        if (!isVolume) {
-            _materialXGfx = HdSt_ApplyMaterialXFilter(&surfaceNetwork, materialId,
-                                      *surfTerminal, surfTerminalPath,
-                                      &_materialParams, resourceRegistry);
-        }
+    if (!isVolume) {
+        _materialXGfx = HdSt_ApplyMaterialXFilter(filterTask, materialId,
+                                    &_materialParams, resourceRegistry);
+    }
 #endif
-        // Extract the glslfx and metadata for surface/volume.
-        _GetGlslfxForTerminal(_surfaceGfx, &_surfaceGfxHash,
-                              surfTerminal->nodeTypeId, resourceRegistry);
-        if (_surfaceGfx) {
+    // Extract the glslfx and metadata for surface/volume.
+    _GetGlslfxForTerminal(_surfaceGfx, &_surfaceGfxHash,
+                    filterTask->terminalNode->nodeTypeId, resourceRegistry);
+    if (_surfaceGfx) {
 
-            // If the glslfx file is not valid we skip parsing the network.
-            // This produces no fragmentSource which means Storm's material
-            // will use the fallback shader.
-            if (_surfaceGfx->IsValid()) {
-                
-                _fragmentSource = _surfaceGfx->GetSurfaceSource();
-                _volumeSource = _surfaceGfx->GetVolumeSource();
+        // If the glslfx file is not valid we skip parsing the network.
+        // This produces no fragmentSource which means Storm's material
+        // will use the fallback shader.
+        if (_surfaceGfx->IsValid()) {
+            _fragmentSource = _surfaceGfx->GetSurfaceSource();
+            _volumeSource = _surfaceGfx->GetVolumeSource();
 
-                _materialMetadata = _surfaceGfx->GetMetadata();
-                _materialTag = _GetMaterialTag(_materialMetadata, *surfTerminal);
-                _GatherMaterialParams(surfaceNetwork, *surfTerminal,
-                                      &_materialParams, &_textureDescriptors, 
-                                      _materialTag);
+            _materialMetadata = _surfaceGfx->GetMetadata();
 
-                // OSL networks have a displacement network in hdNetworkMap
-                // under terminal: HdMaterialTerminalTokens->displacement.
-                // For Storm however we expect the displacement shader to be
-                // provided via the surface glslfx / terminal.
-                _displacementSource = _surfaceGfx->GetDisplacementSource();
-            }
+            _materialTag = _GetMaterialTag(
+                _surfaceGfx->GetMetadata(), *filterTask->terminalNode);
+            _GatherMaterialParams(
+                filterTask->hdNetwork, *filterTask->terminalNode,
+                &_materialParams, &_textureDescriptors, 
+                _materialTag);
+
+            // OSL networks have a displacement network in hdNetworkMap
+            // under terminal: HdMaterialTerminalTokens->displacement.
+            // For Storm however we expect the displacement shader to be
+            // provided via the surface glslfx / terminal.
+            _displacementSource = _surfaceGfx->GetDisplacementSource();
         }
     }
 }

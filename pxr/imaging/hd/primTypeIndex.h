@@ -193,7 +193,8 @@ private:
                                       const SdfPath &path,
                                       HdDirtyBits dirtyBits);
 
-    static PrimType *_RenderDelegateCreatePrim(HdRenderDelegate *renderDelegate,
+    static PrimType *_RenderDelegateCreatePrim(HdSceneDelegate *sceneDelegate,
+                                               HdRenderDelegate *renderDelegate,
                                                const TfToken &typeId,
                                                const SdfPath &primId);
     static PrimType *_RenderDelegateCreateFallbackPrim(

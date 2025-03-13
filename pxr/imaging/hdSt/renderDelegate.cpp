@@ -45,6 +45,10 @@
 #include "pxr/base/tf/getenv.h"
 #include "pxr/base/tf/staticTokens.h"
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+#include "pxr/imaging/hdSt/materialXSyncDispatcher.h"
+#endif
+
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -168,6 +172,10 @@ HdStRenderDelegate::HdStRenderDelegate(HdRenderSettingsMap const& settingsMap)
     , _hgi(nullptr)
     , _renderParam(std::make_unique<HdStRenderParam>())
     , _drawItemsCache(std::make_unique<HdSt_DrawItemsCache>())
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    , _materialXSyncDispatcher(
+        std::make_unique<HdSt_MaterialXSyncDispatcher>())
+#endif
 {
     // Initialize the settings and settings descriptors.
     _settingDescriptors = {
@@ -408,6 +416,28 @@ HdStRenderDelegate::CreateSprim(TfToken const& typeId,
     }
 
     return nullptr;
+}
+
+void
+HdStRenderDelegate::StartEarlySprimInit(HdSceneDelegate *sceneDelegate,
+                                        HdSprim *sprim)
+{
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    if (auto *const hdStMaterial = dynamic_cast<HdStMaterial*>(sprim)) {
+        hdStMaterial->StartEarlyInit(sceneDelegate,
+                                    _materialXSyncDispatcher.get());
+    }
+#endif
+}
+
+void
+HdStRenderDelegate::WaitForEarlyInitTasks(TfToken const& primType)
+{
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    if (primType == HdPrimTypeTokens->material) {
+        _materialXSyncDispatcher->Wait();
+    }
+#endif
 }
 
 HdSprim *

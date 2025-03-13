@@ -96,7 +96,8 @@ Hd_PrimTypeIndex<PrimType>::InsertPrim(const TfToken    &typeId,
     }
 
 
-    PrimType *prim = _RenderDelegateCreatePrim(renderDelegate, typeId, primId);
+    PrimType *prim = _RenderDelegateCreatePrim(
+        sceneDelegate, renderDelegate, typeId, primId);
 
     if (prim == nullptr) {
         // Render Delegate is responsible for reporting reason creation failed.
@@ -383,10 +384,15 @@ Hd_PrimTypeIndex<PrimType>::SyncPrims(HdChangeTracker  &tracker,
 
     _dirtyPrimDelegates.clear();
     HdSceneDelegate *prevDelegate = nullptr;
+
     for (size_t typeIdx = 0; typeIdx < numTypes; ++typeIdx) {
 
+        TfToken const& primType = _primTypeNames[typeIdx];
+
+        renderDelegate->WaitForEarlyInitTasks(primType);
         const bool parallelSyncEnabled =
-            renderDelegate->IsParallelSyncEnabled(_primTypeNames[typeIdx]);
+            renderDelegate->IsParallelSyncEnabled(primType);
+
         _PrimTypeEntry &typeEntry =  _entries[typeIdx];
         _ParallelSyncHelper<PrimType> psyncHelper{
             {}, renderParam, &tracker,
@@ -493,11 +499,14 @@ Hd_PrimTypeIndex<HdSprim>::_TrackerMarkPrimClean(
 template <>
 // static
 HdSprim *
-Hd_PrimTypeIndex<HdSprim>::_RenderDelegateCreatePrim(HdRenderDelegate *renderDelegate,
+Hd_PrimTypeIndex<HdSprim>::_RenderDelegateCreatePrim(HdSceneDelegate *sceneDelegate, 
+                                                     HdRenderDelegate *renderDelegate,
                                                      const TfToken &typeId,
                                                      const SdfPath &primId)
 {
-    return renderDelegate->CreateSprim(typeId, primId);
+    HdSprim *const sprim = renderDelegate->CreateSprim(typeId, primId);
+    renderDelegate->StartEarlySprimInit(sceneDelegate, sprim);
+    return sprim;
 }
 
 template <>
@@ -568,7 +577,8 @@ Hd_PrimTypeIndex<HdBprim>::_TrackerMarkPrimClean(
 template <>
 // static
 HdBprim *
-Hd_PrimTypeIndex<HdBprim>::_RenderDelegateCreatePrim(HdRenderDelegate *renderDelegate,
+Hd_PrimTypeIndex<HdBprim>::_RenderDelegateCreatePrim(HdSceneDelegate *sceneDelegate,
+                                                     HdRenderDelegate *renderDelegate,
                                                      const TfToken &typeId,
                                                      const SdfPath &primId)
 {

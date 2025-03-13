@@ -22,6 +22,7 @@ using HdSt_MaterialNetworkShaderSharedPtr =
         std::shared_ptr<class HdSt_MaterialNetworkShader>;
 
 class HioGlslfx;
+class HdSt_MaterialXSyncDispatcher;
 
 class HdStMaterial final: public HdMaterial
 {
@@ -43,6 +44,13 @@ public:
     HdStMaterial(SdfPath const& id);
     HDST_API
     ~HdStMaterial() override;
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    /// Start early parallel initialization.
+    HDST_API
+    void StartEarlyInit(HdSceneDelegate *sceneDelegate,
+                        HdSt_MaterialXSyncDispatcher *syncDispatcher);
+#endif
 
     /// Synchronizes state from the delegate to this object.
     HDST_API
@@ -123,7 +131,11 @@ private:
     TfToken _materialTag;
     size_t _textureHash;
 
-    HdStMaterialNetwork _networkProcessor;
+    HdStMaterialNetwork _hdStMaterialNetwork;
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    std::unique_ptr<HdSt_MaterialFilterTask> _filterTask;
+#endif
 };
 
 inline bool HdStMaterial::HasPtex() const

@@ -24,6 +24,8 @@ using HdStDrawItemsCachePtr = HdSt_DrawItemsCache *;
 using HdStResourceRegistrySharedPtr = 
     std::shared_ptr<class HdStResourceRegistry>;
 
+class HdSt_MaterialXSyncDispatcher;
+
 ///
 /// HdStRenderDelegate
 ///
@@ -84,6 +86,9 @@ public:
     HdSprim *CreateSprim(TfToken const& typeId,
                          SdfPath const& sprimId) override;
     HDST_API
+    void StartEarlySprimInit(HdSceneDelegate *sceneDelegate,
+                             HdSprim *sprim) override;
+    HDST_API
     HdSprim *CreateFallbackSprim(TfToken const& typeId) override;
     HDST_API
     void DestroySprim(HdSprim *sPrim) override;
@@ -95,6 +100,9 @@ public:
     HdBprim *CreateFallbackBprim(TfToken const& typeId) override;
     HDST_API
     void DestroyBprim(HdBprim *bPrim) override;
+
+    HDST_API
+    void WaitForEarlyInitTasks(TfToken const& primType) override;
 
     HDST_API
     void CommitResources(HdChangeTracker *tracker) override;
@@ -117,7 +125,7 @@ public:
 
     HDST_API
     HdAovDescriptor
-        GetDefaultAovDescriptor(TfToken const& name) const override;
+    GetDefaultAovDescriptor(TfToken const& name) const override;
     
     // ---------------------------------------------------------------------- //
     /// \name Misc public API
@@ -157,6 +165,10 @@ private:
     std::unique_ptr<HdStRenderParam> _renderParam;
 
     HdStDrawItemsCacheUniquePtr _drawItemsCache;
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    std::unique_ptr<HdSt_MaterialXSyncDispatcher>   _materialXSyncDispatcher;
+#endif
 };
 
 

@@ -19,6 +19,10 @@
 #include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hdSt/materialParam.h"
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+#include "pxr/imaging/hdSt/materialXFilter.h"
+#endif
+
 #include "pxr/imaging/hd/changeTracker.h"
 #include "pxr/imaging/hd/tokens.h"
 
@@ -35,6 +39,11 @@ TF_DEFINE_PRIVATE_TOKENS(
     (limitSurfaceEvaluation)
     (opacity)
 );
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+TF_DEFINE_ENV_SETTING(HDST_ENABLE_PARALLEL_MTLX_CODEGEN, true,
+    "Enable early parallelized MaterialX codegen");
+#endif
 
 HioGlslfx *HdStMaterial::_fallbackGlslfx = nullptr;
 
@@ -167,6 +176,72 @@ HdStMaterial::_ProcessTextureDescriptors(
                                        doublesSupported);
 }
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+void
+HdStMaterial::StartEarlyInit(
+    HdSceneDelegate *sceneDelegate,
+    HdSt_MaterialXSyncDispatcher *syncDispatcher)
+{
+    // The task should be created by this method just once
+    TF_VERIFY(!_filterTask);
+    _filterTask.reset();
+
+    if (!TfGetEnvSetting(HDST_ENABLE_PARALLEL_MTLX_CODEGEN)) {
+        return;
+    }
+
+    HD_TRACE_FUNCTION();
+
+    VtValue vtMat = sceneDelegate->GetMaterialResource(this->GetId());
+    if (!vtMat.IsHolding<HdMaterialNetworkMap>()) {
+        return;
+    }
+
+    HdMaterialNetworkMap const& hdNetworkMap =
+        vtMat.UncheckedGet<HdMaterialNetworkMap>();
+
+    if (hdNetworkMap.terminals.empty() || hdNetworkMap.map.empty()) {
+        return;
+    }
+
+    bool isVolume = false;
+    auto filterTask = std::make_unique<HdSt_MaterialFilterTask>();
+    filterTask->hdNetwork =
+        HdConvertToHdMaterialNetwork2(hdNetworkMap, &isVolume);
+
+    if (isVolume) {
+        // We only use the early init mechanism for MaterialX surface shaders
+        return;
+    }
+    
+    filterTask->terminalNode =
+        HdSt_GetTerminalNode(
+            filterTask->hdNetwork,
+            HdMaterialTerminalTokens->surface,
+            &filterTask->terminalNodePath);
+
+    if (!filterTask->terminalNode) {
+        return;
+    }
+
+    HdStResourceRegistrySharedPtr resourceRegistry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            sceneDelegate->GetRenderIndex().GetResourceRegistry());
+
+    // Cache the task on the Sprim for later use in the regular Sync() call
+    _filterTask = std::move(filterTask);
+
+    // Launch a parallel task if we encounter this MaterialX topology for the
+    // first time
+    //
+    HdSt_StartEarlyMaterialXFilter(
+        _filterTask.get(),
+        this->GetId(),
+        resourceRegistry,
+        syncDispatcher);
+}
+#endif // #ifdef PXR_MATERIALX_SUPPORT_ENABLED
+
 /* virtual */
 void
 HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
@@ -180,15 +255,20 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
         std::static_pointer_cast<HdStResourceRegistry>(
             sceneDelegate->GetRenderIndex().GetResourceRegistry());
 
-    HdDirtyBits bits = *dirtyBits;
+    const HdDirtyBits maskedBits = (*dirtyBits & AllDirty);
 
-    if (!(bits & DirtyResource) && !(bits & DirtyParams)) {
+    if (maskedBits == 0) {
         *dirtyBits = Clean;
         return;
     }
 
-    bool needsRprimMaterialStateUpdate = false;
-    bool markBatchesDirty = false;
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    if (maskedBits != DirtyInit) {
+        // This means that the material has been modified since creation,
+        // so the state of the filter task is stale
+        _filterTask.reset();
+    }
+#endif
 
     std::string fragmentSource;
     std::string displacementSource;
@@ -200,20 +280,44 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
 
     VtValue vtMat = sceneDelegate->GetMaterialResource(GetId());
     if (vtMat.IsHolding<HdMaterialNetworkMap>()) {
+
         HdMaterialNetworkMap const& hdNetworkMap =
             vtMat.UncheckedGet<HdMaterialNetworkMap>();
+
         if (!hdNetworkMap.terminals.empty() && !hdNetworkMap.map.empty()) {
-            _networkProcessor.ProcessMaterialNetwork(GetId(), hdNetworkMap,
-                                                    resourceRegistry.get());
-            fragmentSource = _networkProcessor.GetFragmentCode();
-            volumeSource = _networkProcessor.GetVolumeCode();
-            displacementSource = _networkProcessor.GetDisplacementCode();
-            materialMetadata = _networkProcessor.GetMetadata();
-            materialTag = _networkProcessor.GetMaterialTag();
-            params = _networkProcessor.GetMaterialParams();
-                textureDescriptors = _networkProcessor.GetTextureDescriptors();
+            // Initialize the material network
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+            if (_filterTask) {
+                // We have a filter task created by early parallel
+                // initialization
+                constexpr bool isVolume = false; // We only use filter tasks
+                                                 // for non-volume materials
+                _hdStMaterialNetwork.ProcessFilterTask(
+                    GetId(), _filterTask.get(),
+                    isVolume, resourceRegistry.get());
+            }
+            else
+#endif
+            {
+                _hdStMaterialNetwork.ProcessMaterialNetwork(GetId(),
+                    hdNetworkMap, resourceRegistry.get());
+            }
+
+            fragmentSource = _hdStMaterialNetwork.GetFragmentCode();
+            volumeSource = _hdStMaterialNetwork.GetVolumeCode();
+            displacementSource = _hdStMaterialNetwork.GetDisplacementCode();
+            materialMetadata = _hdStMaterialNetwork.GetMetadata();
+            materialTag = _hdStMaterialNetwork.GetMaterialTag();
+            params = _hdStMaterialNetwork.GetMaterialParams();
+            textureDescriptors = _hdStMaterialNetwork.GetTextureDescriptors();
         }
     }
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    // If this task was populated by an early sync, we have already used it
+    // above and won't need it again.
+    _filterTask.reset();
+#endif
 
     // Use fallback shader when there is no source for
     // fragment and displacement shader.
@@ -224,6 +328,8 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
         fragmentSource = _fallbackGlslfx->GetSurfaceSource();
         materialMetadata = _fallbackGlslfx->GetMetadata();
     }
+
+    bool markBatchesDirty = false;
 
     // Update volume material data.
     if (_volumeMaterialData.source != volumeSource) {
@@ -258,6 +364,8 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
     _materialNetworkShader->SetDisplacementSource(displacementSource);
 
     bool hasDisplacement = !(displacementSource.empty());
+
+    bool needsRprimMaterialStateUpdate = false;
 
     if (_hasDisplacement != hasDisplacement) {
         _hasDisplacement = hasDisplacement;
@@ -383,7 +491,7 @@ HdStMaterial::_GetHasLimitSurfaceEvaluation(VtDictionary const & metadata) const
 HdDirtyBits
 HdStMaterial::GetInitialDirtyBitsMask() const
 {
-    return AllDirty;
+    return DirtyInit;
 }
 
 HdSt_MaterialNetworkShaderSharedPtr
