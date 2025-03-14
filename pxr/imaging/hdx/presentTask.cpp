@@ -84,10 +84,11 @@ HdxPresentTask::Execute(HdTaskContext* ctx)
             _GetTaskContextData(ctx, HdAovTokens->depth, &depthTexture);
         }
 
-        // Use HgiInterop to composite the Hgi textures over the application's
-        // framebuffer contents.
-        // Eg. This allows us to render with HgiMetal and present the images
-        // into a opengl based application (such as usdview).
+        // Present might blit to a window and make the AOV immediately visible,
+        // or it might compose to an externally managed framebuffer for further
+        // processing. We may render with an Hgi backend that differs from the
+        // rendering system used by a particular application. for example,
+        // using Vulkan to render, and OpenGL to display in an application.
         _present->Present(colorTexture, depthTexture);
     }
 

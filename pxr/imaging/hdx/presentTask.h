@@ -57,7 +57,7 @@ public:
 
     /// Returns true if the format is supported for presentation. This is useful
     /// for upstream tasks to prepare the AOV data accordingly, and keeps the
-    /// interop step simple.
+    /// api-interoperable presentation simple.
     HDX_API
     bool IsFormatSupported(HgiFormat colorFormat) const;
 
