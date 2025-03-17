@@ -266,8 +266,8 @@ _AddImageMemoryBarrier(VkCommandBuffer commandBuffer,
 PXR_NAMESPACE_OPEN_SCOPE
 
 
-HgiPresentVulkan::HgiPresentVulkan(HgiVulkan *hgi,
-    HgiWindowPresentParams const &params)
+HgiPresentWindowVulkan::HgiPresentWindowVulkan(HgiVulkan *hgi,
+    HgiPresentWindowParams const &params)
     : HgiPresentImpl(hgi)
     , _hgiVulkan{hgi}
     , _params(params)
@@ -290,7 +290,7 @@ HgiPresentVulkan::HgiPresentVulkan(HgiVulkan *hgi,
         using Window = std::decay_t<decltype(window)>;
         VkSurfaceKHR surface{};
 #if defined(VK_USE_PLATFORM_METAL_EXT)
-        if constexpr (std::is_same_v<Window, HgiMetalWindowHandle>) {
+        if constexpr (std::is_same_v<Window, HgiPresentMetalWindowHandle>) {
             VkMetalSurfaceCreateInfoEXT surfaceCreateInfo{};
             surfaceCreateInfo.sType =
                 VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
@@ -301,7 +301,7 @@ HgiPresentVulkan::HgiPresentVulkan(HgiVulkan *hgi,
         } else
 #endif
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-        if constexpr (std::is_same_v<Window, HgiWin32WindowHandle>) {
+        if constexpr (std::is_same_v<Window, HgiPresentWin32WindowHandle>) {
             VkWin32SurfaceCreateInfoKHR surfaceCreateInfo{};
             surfaceCreateInfo.sType =
                 VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -312,7 +312,7 @@ HgiPresentVulkan::HgiPresentVulkan(HgiVulkan *hgi,
         } else
 #endif
 #if defined(VK_USE_PLATFORM_XLIB_KHR)
-        if constexpr (std::is_same_v<Window, HgiXlibWindowHandle>) {
+        if constexpr (std::is_same_v<Window, HgiPresentXlibWindowHandle>) {
             VkXlibSurfaceCreateInfoKHR createSurfaceInfo{};
             createSurfaceInfo.sType =
                 VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -323,7 +323,7 @@ HgiPresentVulkan::HgiPresentVulkan(HgiVulkan *hgi,
         } else
 #endif
         {
-            static_assert(std::is_same_v<Window, HgiNullWindowHandle>);
+            static_assert(std::is_same_v<Window, HgiPresentNullWindowHandle>);
         }
         return surface;
     }, _params.window);
@@ -362,7 +362,7 @@ HgiPresentVulkan::HgiPresentVulkan(HgiVulkan *hgi,
             &_blitCompleteSemaphore));
 }
 
-HgiPresentVulkan::~HgiPresentVulkan()
+HgiPresentWindowVulkan::~HgiPresentWindowVulkan()
 {
     const auto hgiDevice = _hgiVulkan->GetPrimaryDevice();
     const auto device = hgiDevice->GetVulkanDevice();
@@ -375,7 +375,7 @@ HgiPresentVulkan::~HgiPresentVulkan()
     vkDestroySemaphore(device, _blitCompleteSemaphore, HgiVulkanAllocator());
 }
 
-void HgiPresentVulkan::_DestroySurfaceResources(VkInstance instance,
+void HgiPresentWindowVulkan::_DestroySurfaceResources(VkInstance instance,
     VkDevice device)
 {
     _DestroySwapchainResources(device);
@@ -386,7 +386,7 @@ void HgiPresentVulkan::_DestroySurfaceResources(VkInstance instance,
 }
 
 void
-HgiPresentVulkan::_ResolveSurfaceProperties(VkPhysicalDevice physicalDevice)
+HgiPresentWindowVulkan::_ResolveSurfaceProperties(VkPhysicalDevice physicalDevice)
 {
     if (!_surface || _validSurfaceProperties) {
         return;
@@ -528,7 +528,7 @@ HgiPresentVulkan::_ResolveSurfaceProperties(VkPhysicalDevice physicalDevice)
 }
 
 void
-HgiPresentVulkan::_CreateSwapchainResources(VkDevice device)
+HgiPresentWindowVulkan::_CreateSwapchainResources(VkDevice device)
 {
     if (!_surface || _validSwapchainResources) {
         return;
@@ -572,7 +572,7 @@ HgiPresentVulkan::_CreateSwapchainResources(VkDevice device)
 }
 
 void
-HgiPresentVulkan::_DestroySwapchainResources(VkDevice device)
+HgiPresentWindowVulkan::_DestroySwapchainResources(VkDevice device)
 {
     // Destroying the swapchain destroys its images
     vkDestroySwapchainKHR(device, _swapchain, HgiVulkanAllocator());
@@ -583,19 +583,19 @@ HgiPresentVulkan::_DestroySwapchainResources(VkDevice device)
 }
 
 bool
-HgiPresentVulkan::IsFormatSupported(HgiFormat colorFormat) const
+HgiPresentWindowVulkan::IsFormatSupported(HgiFormat colorFormat) const
 {
     return HgiIsFloatFormat(colorFormat) && !HgiIsCompressed(colorFormat);
 }
 
 bool
-HgiPresentVulkan::IsValid() const
+HgiPresentWindowVulkan::IsValid() const
 {
     return _surface && _validSurfaceProperties && _validSwapchainResources;
 }
 
 void
-HgiPresentVulkan::Present(HgiTextureHandle const &hgiSrcTexture,
+HgiPresentWindowVulkan::Present(HgiTextureHandle const &hgiSrcTexture,
     HgiTextureHandle const &)
 {
     const auto hgiDevice = _hgiVulkan->GetPrimaryDevice();

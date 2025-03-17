@@ -86,7 +86,7 @@ void _SetOverrideWindowPolicy(UsdImagingGLEngine & self,
 void _SetInteropGLPresentation(UsdImagingGLEngine &self, bool enable)
 {
     if (enable) {
-        HgiCompositionParams compParams;
+        HgiPresentCompositionParams compParams;
         compParams.colorSrcBlendFactor = HgiBlendFactorOne;
         compParams.colorDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
         compParams.colorBlendOp = HgiBlendOpAdd;
@@ -94,7 +94,7 @@ void _SetInteropGLPresentation(UsdImagingGLEngine &self, bool enable)
         compParams.alphaDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
         compParams.alphaBlendOp = HgiBlendOpAdd;
         compParams.depthFunc = HgiCompareFunctionLEqual;
-        self.EnableInteropPresentation(HgiGLInteropHandle{}, compParams);
+        self.EnableInteropPresentation(HgiPresentGLInteropHandle{}, compParams);
     } else {
         self.DisablePresentation();
     }

@@ -44,14 +44,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// A "null" window handle so there is always one default
 /// value available, regardless of actual supported windowing
 /// systems. Using it will result in an invalid presentation.
-struct HgiNullWindowHandle
+struct HgiPresentNullWindowHandle
 {
-    bool operator==(const HgiNullWindowHandle&) const
+    bool operator==(const HgiPresentNullWindowHandle&) const
     {
         return true;
     }
 
-    bool operator!=(const HgiNullWindowHandle& other) const
+    bool operator!=(const HgiPresentNullWindowHandle& other) const
     {
         return !(*this == other);
     }
@@ -59,16 +59,16 @@ struct HgiNullWindowHandle
 
 #if defined(ARCH_OS_DARWIN)
 /// A Metal layer handle.
-struct HgiMetalWindowHandle
+struct HgiPresentMetalWindowHandle
 {
     const CAMetalLayer* layer = nullptr;
 
-    bool operator==(const HgiMetalWindowHandle& other) const
+    bool operator==(const HgiPresentMetalWindowHandle& other) const
     {
         return layer == other.layer;
     }
 
-    bool operator!=(const HgiMetalWindowHandle& other) const
+    bool operator!=(const HgiPresentMetalWindowHandle& other) const
     {
         return !(*this == other);
     }
@@ -77,17 +77,17 @@ struct HgiMetalWindowHandle
 
 #if defined(ARCH_OS_WINDOWS)
 /// A WIN32 window handle.
-struct HgiWin32WindowHandle
+struct HgiPresentWin32WindowHandle
 {
     HINSTANCE instance = nullptr;
     HWND window = nullptr;
 
-    bool operator==(const HgiWin32WindowHandle& other) const
+    bool operator==(const HgiPresentWin32WindowHandle& other) const
     {
         return instance == other.instance && window == other.window;
     }
 
-    bool operator!=(const HgiWin32WindowHandle& other) const
+    bool operator!=(const HgiPresentWin32WindowHandle& other) const
     {
         return !(*this == other);
     }
@@ -96,17 +96,17 @@ struct HgiWin32WindowHandle
 
 #if defined(PXR_X11_SUPPORT_ENABLED)
 /// And X11 window handle.
-struct HgiXlibWindowHandle
+struct HgiPresentXlibWindowHandle
 {
     Display* display = nullptr;
     Window window = 0;
 
-    bool operator==(const HgiXlibWindowHandle& other) const
+    bool operator==(const HgiPresentXlibWindowHandle& other) const
     {
         return display == other.display && window == other.window;
     }
 
-    bool operator!=(const HgiXlibWindowHandle& other) const
+    bool operator!=(const HgiPresentXlibWindowHandle& other) const
     {
         return !(*this == other);
     }
@@ -114,16 +114,16 @@ struct HgiXlibWindowHandle
 #endif
 
 /// Any window handle currently supported by the system.
-using HgiWindowHandle = std::variant<
-    HgiNullWindowHandle
+using HgiPresentWindowHandle = std::variant<
+    HgiPresentNullWindowHandle
 #if defined(ARCH_OS_DARWIN)
-    , HgiMetalWindowHandle
+    , HgiPresentMetalWindowHandle
 #endif
 #if defined(ARCH_OS_WINDOWS)
-    , HgiWin32WindowHandle
+    , HgiPresentWin32WindowHandle
 #endif
 #if defined(PXR_X11_SUPPORT_ENABLED)
-    , HgiXlibWindowHandle
+    , HgiPresentXlibWindowHandle
 #endif
 >;
 

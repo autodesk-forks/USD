@@ -681,16 +681,8 @@ HgiInteropMetal::_RestoreOpenGlState()
 }
 
 void
-HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer,
-    GfRect2i const &compRegion,
-    int shaderIndex,
-    HgiBlendFactor colorSrcBlendFactor,
-    HgiBlendFactor colorDstBlendFactor,
-    HgiBlendOp colorBlendOp,
-    HgiBlendFactor alphaSrcBlendFactor,
-    HgiBlendFactor alphaDstBlendFactor,
-    HgiBlendOp alphaBlendOp,
-    HgiCompareFunction depthFunc)
+HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer, int shaderIndex,
+    HgiInteropCompositionParams const &compParams)
 {
     // Clear GL error state
     _ProcessGLErrors(true);
@@ -706,7 +698,8 @@ HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer,
     if (shaderIndex == ShaderContextColorDepth) {
         glEnable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
-        glDepthFunc(HgiGLConversions::GetCompareFunction(depthFunc));
+        glDepthFunc(HgiGLConversions::GetCompareFunction(
+            compParams.depthFunc));
     } else {
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
@@ -717,12 +710,14 @@ HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer,
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     glEnable(GL_BLEND);
-    glBlendFuncSeparate(HgiGLConversions::GetBlendFactor(colorSrcBlendFactor),
-                        HgiGLConversions::GetBlendFactor(colorDstBlendFactor),
-                        HgiGLConversions::GetBlendFactor(alphaSrcBlendFactor),
-                        HgiGLConversions::GetBlendFactor(alphaDstBlendFactor));
-    glBlendEquationSeparate(HgiGLConversions::GetBlendEquation(colorBlendOp),
-        HgiGLConversions::GetBlendEquation(alphaBlendOp));
+    glBlendFuncSeparate(
+        HgiGLConversions::GetBlendFactor(compParams.colorSrcBlendFactor),
+        HgiGLConversions::GetBlendFactor(compParams.colorDstBlendFactor),
+        HgiGLConversions::GetBlendFactor(compParams.alphaSrcBlendFactor),
+        HgiGLConversions::GetBlendFactor(compParams.alphaDstBlendFactor));
+    glBlendEquationSeparate(
+        HgiGLConversions::GetBlendEquation(compParams.colorBlendOp),
+        HgiGLConversions::GetBlendEquation(compParams.alphaBlendOp));
     
     ShaderContext &shader = _shaderProgramContext[shaderIndex];
     glUseProgram(shader.program);
@@ -761,8 +756,8 @@ HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer,
                 _mtlAliasedColorTexture.height);
     
     // Region of the framebuffer over which to composite.
-    glViewport(compRegion.GetMinX(), compRegion.GetMinY(),
-        compRegion.GetWidth(), compRegion.GetHeight());
+    glViewport(compParams.dstRegion.GetMinX(), compParams.dstRegion.GetMinY(),
+        compParams.dstRegion.GetWidth(), compParams.dstRegion.GetHeight());
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -773,16 +768,9 @@ HgiInteropMetal::_BlitToOpenGL(uint32_t framebuffer,
 void
 HgiInteropMetal::CompositeToInterop(
     HgiTextureHandle const &color,
-    HgiBlendFactor colorSrcBlendFactor,
-    HgiBlendFactor colorDstBlendFactor,
-    HgiBlendOp colorBlendOp,
-    HgiBlendFactor alphaSrcBlendFactor,
-    HgiBlendFactor alphaDstBlendFactor,
-    HgiBlendOp alphaBlendOp,
     HgiTextureHandle const &depth,
-    HgiCompareFunction depthFunc,
-    uint32_t framebuffer,
-    GfRect2i const &compRegion)
+    HgiInteropCompositionParams const &compositionParams,
+    uint32_t framebuffer)
 {
     if (!ARCH_UNLIKELY(color)) {
         TF_CODING_ERROR("No valid color texture provided");
@@ -892,16 +880,7 @@ HgiInteropMetal::CompositeToInterop(
         HgiMetal::CommitCommandBuffer_WaitUntilScheduled);
 
     if (glShaderIndex != -1) {
-        _BlitToOpenGL(framebuffer,
-            compRegion,
-            glShaderIndex,
-            colorSrcBlendFactor,
-            colorDstBlendFactor,
-            colorBlendOp,
-            alphaSrcBlendFactor,
-            alphaDstBlendFactor,
-            alphaBlendOp,
-            depthFunc);
+        _BlitToOpenGL(framebuffer, glShaderIndex, compositionParams);
 
         _ProcessGLErrors();
     }

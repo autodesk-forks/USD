@@ -21,14 +21,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// A "null" interop handle so there is always one default
 /// value available, regardless of actual supported rendering
 /// APIs. Using it will result in an invalid presentation.
-struct HgiNullInteropHandle
+struct HgiPresentNullInteropHandle
 {
-    bool operator==(const HgiNullInteropHandle&) const
+    bool operator==(const HgiPresentNullInteropHandle&) const
     {
         return true;
     }
 
-    bool operator!=(const HgiNullInteropHandle& other) const
+    bool operator!=(const HgiPresentNullInteropHandle& other) const
     {
         return !(*this == other);
     }
@@ -36,27 +36,27 @@ struct HgiNullInteropHandle
 
 #if defined(PXR_GL_SUPPORT_ENABLED)
 /// Interop to OpenGL
-struct HgiGLInteropHandle
+struct HgiPresentGLInteropHandle
 {
     /// OpenGL framebuffer "name", or 0 for the currently bound framebuffer.
     uint32_t fboName{};
 
-    bool operator==(const HgiGLInteropHandle& other) const
+    bool operator==(const HgiPresentGLInteropHandle& other) const
     {
         return fboName == other.fboName;
     }
 
-    bool operator!=(const HgiGLInteropHandle& other) const
+    bool operator!=(const HgiPresentGLInteropHandle& other) const
     {
         return !(*this == other);
     }
 };
 #endif
 
-using HgiInteropHandle = std::variant<
-    HgiNullInteropHandle
+using HgiPresentInteropHandle = std::variant<
+    HgiPresentNullInteropHandle
 #if defined(PXR_GL_SUPPORT_ENABLED)
-    , HgiGLInteropHandle
+    , HgiPresentGLInteropHandle
 #endif
 >;
 

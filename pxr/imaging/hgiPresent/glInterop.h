@@ -15,18 +15,18 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-/// \class HgiPresentInteropGL
+/// \class HgiInteropPresentInteropGL
 ///
 /// Forward the textures to \class HgiInterop.
 ///
-class HgiPresentInteropGL final : public HgiPresentImpl
+class HgiPresentGLInterop final : public HgiPresentImpl
 {
 public:
-    explicit HgiPresentInteropGL(Hgi* hgi,
-        HgiGLInteropHandle const &handle,
-        HgiCompositionParams const &composition);
+    explicit HgiPresentGLInterop(Hgi* hgi,
+        HgiPresentGLInteropHandle const &handle,
+        HgiPresentCompositionParams const &composition);
 
-    ~HgiPresentInteropGL() override = default;
+    ~HgiPresentGLInterop() override = default;
 
     bool IsFormatSupported(HgiFormat colorFormat) const override;
 
@@ -39,7 +39,7 @@ public:
 private:
     HgiInterop _interop;
     uint32_t _fboName;
-    HgiCompositionParams _composition;
+    HgiPresentCompositionParams _composition;
 };
 
 

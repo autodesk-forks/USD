@@ -29,6 +29,8 @@
 #include "pxr/imaging/hdx/shadowTask.h"
 #include "pxr/imaging/hdx/visualizeAovTask.h"
 
+#include "pxr/imaging/hgi/tokens.h"
+
 #include "pxr/imaging/hdSt/hgiConversions.h"
 #include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/hdSt/tokens.h"
@@ -1366,8 +1368,8 @@ HdxTaskController::SetRenderOutputSettings(TfToken const& name,
     if (name == HdAovTokens->color && !_presentTaskId.IsEmpty()) {
         auto params = _delegate.GetParameter<HdxPresentTaskParams>(
                 _presentTaskId, HdTokens->params);
-        if (const auto windowDst = std::get_if<HgiWindowPresentParams>(
-            &params.destination)) {
+        if (const auto windowDst = std::get_if<HgiPresentWindowParams>(
+            &params.destinationParams)) {
             const auto hgiFormat = HdStHgiConversions::GetHgiFormat(desc.format);
             if (windowDst->preferredSurfaceFormat != hgiFormat) {
                 windowDst->preferredSurfaceFormat = hgiFormat;
@@ -1950,62 +1952,64 @@ void
 HdxTaskController::SetColorCorrectionParams(
     HdxColorCorrectionTaskParams const& params)
 {
-    if (!_colorCorrectionTaskId.IsEmpty()) {
-        HdxColorCorrectionTaskParams oldParams = _delegate.GetParameter<
-            HdxColorCorrectionTaskParams>(_colorCorrectionTaskId,
-            HdTokens->params);
+    if (_colorCorrectionTaskId.IsEmpty()) {
+        return;
+    }
 
-        // We assume the caller for SetColorCorrectionParams wants to set the
-        // OCIO settings, but does not want to override the AOV used to do color-
-        // correction on. (Currently this AOV is controlled via TaskController)
-        HdxColorCorrectionTaskParams newParams = params;
-        newParams.aovName = oldParams.aovName;
+    HdxColorCorrectionTaskParams oldParams = _delegate.GetParameter<
+        HdxColorCorrectionTaskParams>(_colorCorrectionTaskId,
+        HdTokens->params);
 
-        if (newParams != oldParams) {
-            _delegate.SetParameter(_colorCorrectionTaskId, HdTokens->params,
-                newParams);
+    // We assume the caller for SetColorCorrectionParams wants to set the
+    // OCIO settings, but does not want to override the AOV used to do color-
+    // correction on. (Currently this AOV is controlled via TaskController)
+    HdxColorCorrectionTaskParams newParams = params;
+    newParams.aovName = oldParams.aovName;
 
-            GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
-                _colorCorrectionTaskId, HdChangeTracker::DirtyParams);
-        }
+    if (newParams != oldParams) {
+        _delegate.SetParameter(_colorCorrectionTaskId, HdTokens->params,
+            newParams);
 
-        if (!_presentTaskId.IsEmpty()) {
-            auto presentParams = _delegate.GetParameter<HdxPresentTaskParams>(
-                    _presentTaskId, HdTokens->params);
-            if (const auto windowDst = std::get_if<HgiWindowPresentParams>(
-                &presentParams.destination)) {
+        GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
+            _colorCorrectionTaskId, HdChangeTracker::DirtyParams);
+    }
 
-                if (params.colorCorrectionMode.IsEmpty() ||
-                    params.colorCorrectionMode ==
-                    HdxColorCorrectionTokens->disabled) {
-                    // Linear sRGB present to sRGB texture
-                    windowDst->srcColorSpace =
-                        GfColorSpaceNames->LinearRec709;
-                    windowDst->surfaceColorSpace =
-                        GfColorSpaceNames->SRGBRec709;
-                } else if (params.colorCorrectionMode ==
-                    HdxColorCorrectionTokens->sRGB) {
-                    // sRGB present to sRGB texture
-                    windowDst->srcColorSpace =
-                        GfColorSpaceNames->SRGBRec709;
-                    windowDst->surfaceColorSpace =
-                        GfColorSpaceNames->SRGBRec709;
-                } else if (params.colorCorrectionMode ==
-                    HdxColorCorrectionTokens->openColorIO) {
-                    // Pass-through
-                    windowDst->srcColorSpace =
-                        GfColorSpaceNames->Raw;
-                    windowDst->surfaceColorSpace =
-                        GfColorSpaceNames->Raw;
-                } else {
-                    TF_CODING_ERROR("Unknown colorCorrectionMode token");
-                }
+    if (!_presentTaskId.IsEmpty()) {
+        auto presentParams = _delegate.GetParameter<HdxPresentTaskParams>(
+                _presentTaskId, HdTokens->params);
+        if (const auto windowDst = std::get_if<HgiPresentWindowParams>(
+            &presentParams.destinationParams)) {
 
-                _delegate.SetParameter(_presentTaskId, HdTokens->params,
-                    presentParams);
-                GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
-                    _presentTaskId, HdChangeTracker::DirtyParams);
+            if (params.colorCorrectionMode.IsEmpty() ||
+                params.colorCorrectionMode ==
+                HdxColorCorrectionTokens->disabled) {
+                // Linear sRGB present to sRGB texture
+                windowDst->srcColorSpace =
+                    GfColorSpaceNames->LinearRec709;
+                windowDst->surfaceColorSpace =
+                    GfColorSpaceNames->SRGBRec709;
+            } else if (params.colorCorrectionMode ==
+                HdxColorCorrectionTokens->sRGB) {
+                // sRGB present to sRGB texture
+                windowDst->srcColorSpace =
+                    GfColorSpaceNames->SRGBRec709;
+                windowDst->surfaceColorSpace =
+                    GfColorSpaceNames->SRGBRec709;
+            } else if (params.colorCorrectionMode ==
+                HdxColorCorrectionTokens->openColorIO) {
+                // Pass-through
+                windowDst->srcColorSpace =
+                    GfColorSpaceNames->Raw;
+                windowDst->surfaceColorSpace =
+                    GfColorSpaceNames->Raw;
+            } else {
+                TF_CODING_ERROR("Unknown colorCorrectionMode token");
             }
+
+            _delegate.SetParameter(_presentTaskId, HdTokens->params,
+                presentParams);
+            GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
+                _presentTaskId, HdChangeTracker::DirtyParams);
         }
     }
 }
@@ -2050,7 +2054,7 @@ HdxTaskController::DisablePresentation()
 
     if (params.enabled) {
         params.enabled = false;
-        params.destination = HgiNoOpPresentParams{};
+        params.destinationParams = HgiPresentNoOpParams{};
         _delegate.SetParameter(_presentTaskId, HdTokens->params, params);
         GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
             _presentTaskId, HdChangeTracker::DirtyParams);
@@ -2058,8 +2062,8 @@ HdxTaskController::DisablePresentation()
 }
 
 void
-HdxTaskController::EnableWindowPresentation(HgiWindowHandle const& window,
-    bool vsync)
+HdxTaskController::EnableWindowPresentation(
+    HgiPresentWindowHandle const &window, bool vsync)
 {
     if (_presentTaskId.IsEmpty()) {
         return;
@@ -2069,12 +2073,12 @@ HdxTaskController::EnableWindowPresentation(HgiWindowHandle const& window,
         _delegate.GetParameter<HdxPresentTaskParams>(
             _presentTaskId, HdTokens->params);
 
-    if (!std::holds_alternative<HgiWindowPresentParams>(params.destination)) {
+    if (!std::holds_alternative<HgiPresentWindowParams>(params.destinationParams)) {
         params.enabled = true;
-        HgiWindowPresentParams windowDst{};
+        HgiPresentWindowParams windowDst{};
         windowDst.window = window;
         windowDst.wantVsync = vsync;
-        params.destination = windowDst;
+        params.destinationParams = windowDst;
         _delegate.SetParameter(_presentTaskId, HdTokens->params, params);
         GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
             _presentTaskId, HdChangeTracker::DirtyParams);
@@ -2083,8 +2087,8 @@ HdxTaskController::EnableWindowPresentation(HgiWindowHandle const& window,
 
 void
 HdxTaskController::EnableInteropPresentation(
-    const HgiInteropHandle& destination,
-    HgiCompositionParams composition)
+    HgiPresentInteropHandle const &destination,
+    HgiPresentCompositionParams const &composition)
 {
     if (_presentTaskId.IsEmpty()) {
         return;
@@ -2094,16 +2098,69 @@ HdxTaskController::EnableInteropPresentation(
         _delegate.GetParameter<HdxPresentTaskParams>(
             _presentTaskId, HdTokens->params);
 
-    if (!std::holds_alternative<HgiInteropPresentParams>(params.destination)) {
+    if (!std::holds_alternative<HgiPresentInteropParams>(params.destinationParams)) {
         params.enabled = true;
-        HgiInteropPresentParams interopDestination{};
+        HgiPresentInteropParams interopDestination{};
         interopDestination.destination = destination;
         interopDestination.composition = composition;
-        params.destination = interopDestination;
+        params.destinationParams = interopDestination;
         _delegate.SetParameter(_presentTaskId, HdTokens->params, params);
         GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
             _presentTaskId, HdChangeTracker::DirtyParams);
     }
+}
+
+void
+HdxTaskController::SetEnablePresentation(bool enabled)
+{
+    if (_presentTaskId.IsEmpty()) {
+        return;
+    }
+
+    HdxPresentTaskParams params =
+        _delegate.GetParameter<HdxPresentTaskParams>(
+            _presentTaskId, HdTokens->params);
+
+    params.enabled = enabled;
+    _delegate.SetParameter(_presentTaskId, HdTokens->params, params);
+    GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
+        _presentTaskId, HdChangeTracker::DirtyParams);
+}
+
+void
+HdxTaskController::SetPresentationOutput(
+    TfToken const &api,
+    VtValue const &framebuffer)
+{
+    if (_presentTaskId.IsEmpty()) {
+        return;
+    }
+
+    if (api != HgiTokens->OpenGL) {
+        TF_CODING_ERROR("API must be OpenGL, not: %s",
+            api.GetText());
+        return;
+    }
+
+    uint32_t fboName = 0;
+    if (!framebuffer.IsEmpty()) {
+        if (framebuffer.IsHolding<uint32_t>()) {
+            fboName = framebuffer.UncheckedGet<uint32_t>();
+        } else {
+            TF_CODING_ERROR("framebuffer must hold uint32_t");
+        }
+    }
+
+    HgiInteropCompositionParams compositionParams;
+    compositionParams.colorSrcBlendFactor = HgiBlendFactorOne;
+    compositionParams.colorDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
+    compositionParams.colorBlendOp = HgiBlendOpAdd;
+    compositionParams.alphaSrcBlendFactor = HgiBlendFactorOne;
+    compositionParams.alphaDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
+    compositionParams.alphaBlendOp = HgiBlendOpAdd;
+    EnableInteropPresentation(
+        HgiPresentGLInteropHandle{fboName},
+        compositionParams);
 }
 
 void
@@ -2212,7 +2269,7 @@ HdxTaskController::_SetCameraFramingForTasks()
                 _presentTaskId, HdTokens->params);
 
         if (const auto interopDestination =
-            std::get_if<HgiInteropPresentParams>(&params.destination)) {
+            std::get_if<HgiPresentInteropParams>(&params.destinationParams)) {
             // The composition step uses the viewport passed in by the application,
             // which may have a non-zero offset for things like camera masking.
             const GfRect2i dstRegion =

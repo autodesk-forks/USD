@@ -23,7 +23,7 @@ class HgiPresentNoOp final: public HgiPresentImpl
 {
 public:
     explicit HgiPresentNoOp(Hgi* hgi,
-        HgiNoOpPresentParams const &params);
+        HgiPresentNoOpParams const &params);
 
     ~HgiPresentNoOp() override = default;
 

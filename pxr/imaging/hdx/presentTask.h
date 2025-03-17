@@ -22,7 +22,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 struct HdxPresentTaskParams
 {
     /// Parameters for the presentation destination. Forwarded to hgiPresent.
-    HgiPresentDestinationParams destination;
+    HgiPresentDestinationParams destinationParams;
 
     /// When not enabled, present task does not execute, but still calls
     /// Hgi::EndFrame.

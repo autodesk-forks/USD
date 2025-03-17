@@ -21,13 +21,17 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class HgiVulkan;
 
-class HgiPresentVulkan final: public HgiPresentImpl
+/// \class HgiPresentWindowVulkan
+///
+/// Present to a Vulkan Window using the Vulkan WSI extensions.
+///
+class HgiPresentWindowVulkan final: public HgiPresentImpl
 {
 public:
-    explicit HgiPresentVulkan(HgiVulkan* hgi,
-        HgiWindowPresentParams const &params);
+    explicit HgiPresentWindowVulkan(HgiVulkan* hgi,
+        HgiPresentWindowParams const &params);
 
-    ~HgiPresentVulkan() override;
+    ~HgiPresentWindowVulkan() override;
 
     bool IsFormatSupported(HgiFormat colorFormat) const override;
 
@@ -48,7 +52,7 @@ private:
     void _DestroySwapchainResources(VkDevice device);
 
     HgiVulkan* _hgiVulkan{};
-    HgiWindowPresentParams _params{};
+    HgiPresentWindowParams _params{};
 
     VkSurfaceKHR _surface{};
 

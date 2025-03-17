@@ -18,6 +18,8 @@
 #include "pxr/imaging/hgiPresent/interopHandle.h"
 #include "pxr/imaging/hgiPresent/windowHandle.h"
 
+#include "pxr/imaging/hgiInterop/hgiInterop.h"
+
 #include <variant>
 
 
@@ -30,19 +32,19 @@ class HgiTexture;
 /// Configure the presentation to simply do nothing.
 /// This is the default presentation since it doesn't
 /// require any external resources.
-struct HgiNoOpPresentParams
+struct HgiPresentNoOpParams
 {
     /// Should HgiPresent::IsValid return true or false?
     /// Set to false when an instance of HgiPresent can't
     /// be created and an error state is needed.
     bool isValid{true};
 
-    bool operator==(const HgiNoOpPresentParams& other) const
+    bool operator==(const HgiPresentNoOpParams& other) const
     {
         return isValid == other.isValid;
     }
 
-    bool operator!=(const HgiNoOpPresentParams& other) const
+    bool operator!=(const HgiPresentNoOpParams& other) const
     {
         return !(*this == other);
     }
@@ -53,65 +55,34 @@ struct HgiNoOpPresentParams
 /// the rendered content into existing framebuffer contents.
 /// The actual supported composition options dependent on the
 /// interop backend.
-struct HgiCompositionParams
-{
-    /// Alpha blending options if the destination supports alpha.
-    HgiBlendFactor colorSrcBlendFactor{HgiBlendFactorOne};
-    HgiBlendFactor colorDstBlendFactor{HgiBlendFactorZero};
-    HgiBlendOp colorBlendOp{HgiBlendOpAdd};
-    HgiBlendFactor alphaSrcBlendFactor{HgiBlendFactorOne};
-    HgiBlendFactor alphaDstBlendFactor{HgiBlendFactorZero};
-    HgiBlendOp alphaBlendOp{HgiBlendOpAdd};
-    /// If a depth buffer is available in the destination,
-    /// only copy pixels that pass the depth comparison.
-    HgiCompareFunction depthFunc{HgiCompareFunctionAlways};
-    /// Copy into a subregion of the destination framebuffer.
-    GfRect2i dstRegion{};
-
-    bool operator==(const HgiCompositionParams& other) const
-    {
-        return colorSrcBlendFactor == other.colorSrcBlendFactor &&
-            colorDstBlendFactor == other.colorDstBlendFactor &&
-            colorBlendOp == other.colorBlendOp &&
-            alphaSrcBlendFactor == other.alphaSrcBlendFactor &&
-            alphaDstBlendFactor == other.alphaDstBlendFactor &&
-            alphaBlendOp == other.alphaBlendOp &&
-            depthFunc == other.depthFunc &&
-            dstRegion == other.dstRegion;
-    }
-
-    bool operator!=(const HgiCompositionParams& other) const
-    {
-        return !(*this == other);
-    }
-};
+using HgiPresentCompositionParams = HgiInteropCompositionParams;
 
 /// "Present" to an externally managed framebuffer.
-struct HgiInteropPresentParams
+struct HgiPresentInteropParams
 {
     /// A handle to an externally managed framebuffer.
-    HgiInteropHandle destination{};
+    HgiPresentInteropHandle destination{};
     /// See \struct HgiCompositionParams.
     /// All composition options are supported by OpenGL interop.
-    HgiCompositionParams composition;
+    HgiPresentCompositionParams composition;
 
-    bool operator==(const HgiInteropPresentParams& other) const
+    bool operator==(const HgiPresentInteropParams& other) const
     {
         return destination == other.destination &&
             composition == other.composition;
     }
 
-    bool operator!=(const HgiInteropPresentParams& other) const
+    bool operator!=(const HgiPresentInteropParams& other) const
     {
         return !(*this == other);
     }
 };
 
 /// Present to a UI window.
-struct HgiWindowPresentParams
+struct HgiPresentWindowParams
 {
     /// A handle to an externally managed window.
-    HgiWindowHandle window{};
+    HgiPresentWindowHandle window{};
     /// Source texture color space. Not all values are supported,
     /// this is system dependent.
     TfToken srcColorSpace{GfColorSpaceNames->LinearRec709};
@@ -125,7 +96,7 @@ struct HgiWindowPresentParams
     /// Try to enable display refresh rate synchronization (aka v-sync).
     bool wantVsync{true};
 
-    bool operator==(const HgiWindowPresentParams& other) const
+    bool operator==(const HgiPresentWindowParams& other) const
     {
         return window == other.window &&
             srcColorSpace == other.srcColorSpace &&
@@ -134,16 +105,16 @@ struct HgiWindowPresentParams
             wantVsync == other.wantVsync;
     }
 
-    bool operator!=(const HgiWindowPresentParams& other) const
+    bool operator!=(const HgiPresentWindowParams& other) const
     {
         return !(*this == other);
     }
 };
 
 using HgiPresentDestinationParams = std::variant<
-    HgiNoOpPresentParams,
-    HgiWindowPresentParams,
-    HgiInteropPresentParams
+    HgiPresentNoOpParams,
+    HgiPresentWindowParams,
+    HgiPresentInteropParams
 >;
 
 class HgiPresentImpl;

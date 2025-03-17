@@ -47,16 +47,9 @@ HgiInterop::~HgiInterop() = default;
 void HgiInterop::TransferToApp(
     Hgi *srcHgi,
     HgiTextureHandle const &srcColor,
-    HgiBlendFactor colorSrcBlendFactor,
-    HgiBlendFactor colorDstBlendFactor,
-    HgiBlendOp colorBlendOp,
-    HgiBlendFactor alphaSrcBlendFactor,
-    HgiBlendFactor alphaDstBlendFactor,
-    HgiBlendOp alphaBlendOp,
     HgiTextureHandle const &srcDepth,
-    HgiCompareFunction depthFunc,
-    uint32_t dstFramebuffer,
-    GfRect2i const &dstRegion)
+    HgiInteropCompositionParams const &compositionParams,
+    uint32_t dstFramebuffer)
 {
     TfToken const& srcApi = srcHgi->GetAPIName();
 
@@ -68,9 +61,7 @@ void HgiInterop::TransferToApp(
                 std::make_unique<HgiInteropOpenGL>();
         }
         return _hgiInteropImpl->_openGLToOpenGL->CompositeToInterop(
-            srcColor, colorSrcBlendFactor, colorDstBlendFactor, colorBlendOp,
-            alphaSrcBlendFactor, alphaDstBlendFactor, alphaBlendOp,
-            srcDepth, depthFunc, dstFramebuffer, dstRegion);
+            srcColor, srcDepth, compositionParams, dstFramebuffer);
     }
 #endif
 
@@ -86,9 +77,7 @@ void HgiInterop::TransferToApp(
                 std::make_unique<HgiInteropVulkan>(srcHgi);
         }
         return _hgiInteropImpl->_vulkanToOpenGL->CompositeToInterop(
-            srcColor, colorSrcBlendFactor, colorDstBlendFactor, colorBlendOp,
-            alphaSrcBlendFactor, alphaDstBlendFactor, alphaBlendOp,
-            srcDepth, depthFunc, dstFramebuffer, dstRegion);
+            srcColor, srcDepth, compositionParams, dstFramebuffer);
     }
 #endif
 
@@ -104,9 +93,7 @@ void HgiInterop::TransferToApp(
                 std::make_unique<HgiInteropMetal>(srcHgi);
         }
         return _hgiInteropImpl->_metalToOpenGL->CompositeToInterop(
-            srcColor, colorSrcBlendFactor, colorDstBlendFactor, colorBlendOp,
-            alphaSrcBlendFactor, alphaDstBlendFactor, alphaBlendOp,
-            srcDepth, depthFunc, dstFramebuffer, dstRegion);
+            srcColor, srcDepth, compositionParams, dstFramebuffer);
     }
 #endif
 

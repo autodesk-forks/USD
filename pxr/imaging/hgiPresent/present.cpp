@@ -11,7 +11,7 @@
 #include "pxr/imaging/hgiPresent/noOp.h"
 
 #if defined(PXR_GL_SUPPORT_ENABLED)
-#include "pxr/imaging/hgiPresent/interopGL.h"
+#include "pxr/imaging/hgiPresent/glInterop.h"
 #endif
 
 #if defined(PXR_METAL_SUPPORT_ENABLED)
@@ -75,34 +75,34 @@ HgiPresent::Create(Hgi* hgi,
     return HgiPresent{
         std::visit([hgi](const auto& params) -> HgiPresentImpl* {
             using Params = std::decay_t<decltype(params)>;
-            if constexpr (std::is_same_v<Params, HgiInteropPresentParams>) {
+            if constexpr (std::is_same_v<Params, HgiPresentInteropParams>) {
                 return std::visit([hgi, &params](const auto& destination) -> HgiPresentImpl* {
                     using Destination = std::decay_t<decltype(destination)>;
 #if defined(PXR_GL_SUPPORT_ENABLED)
-                    if constexpr (std::is_same_v<Destination, HgiGLInteropHandle>) {
-                        return new HgiPresentInteropGL{ hgi, destination, params.composition };
+                    if constexpr (std::is_same_v<Destination, HgiPresentGLInteropHandle>) {
+                        return new HgiPresentGLInterop{ hgi, destination, params.composition };
                     } else
 #endif
                     {
-                        static_assert(std::is_same_v<Destination, HgiNullInteropHandle>);
+                        static_assert(std::is_same_v<Destination, HgiPresentNullInteropHandle>);
                         return new HgiPresentNoOp{ hgi, {false} };
                     }
                 }, params.destination);
-            } else if constexpr (std::is_same_v<Params, HgiWindowPresentParams>) {
+            } else if constexpr (std::is_same_v<Params, HgiPresentWindowParams>) {
 #if defined(PXR_VULKAN_SUPPORT_ENABLED)
                 if (const auto hgiVulkan = dynamic_cast<HgiVulkan*>(hgi)) {
-                    return new HgiPresentVulkan{ hgiVulkan, params };
+                    return new HgiPresentWindowVulkan{ hgiVulkan, params };
                 }
 #endif
 #if defined(PXR_METAL_SUPPORT_ENABLED)
                 if (const auto hgiMetal = DynamicCastHgiMetal(hgi)) {
-                    return new HgiPresentMetal{ hgiMetal, params };
+                    return new HgiPresentWindowMetal{ hgiMetal, params };
                 }
 #endif
                 TF_WARN("Unsupported Hgi: presentation is disabled");
                 return new HgiPresentNoOp{ hgi, {false} };
             } else {
-                static_assert(std::is_same_v<Params, HgiNoOpPresentParams>);
+                static_assert(std::is_same_v<Params, HgiPresentNoOpParams>);
                 return new HgiPresentNoOp{ hgi, params };
             }
         }, params)

@@ -1504,8 +1504,8 @@ UsdImagingGLEngine::DisablePresentation()
 }
 
 void
-UsdImagingGLEngine::EnableWindowPresentation(const HgiWindowHandle &window,
-    bool vsync)
+UsdImagingGLEngine::EnableWindowPresentation(
+    const HgiPresentWindowHandle &window, bool vsync)
 {
     if (ARCH_UNLIKELY(!_taskController)) {
         return;
@@ -1516,14 +1516,36 @@ UsdImagingGLEngine::EnableWindowPresentation(const HgiWindowHandle &window,
 
 void
 UsdImagingGLEngine::EnableInteropPresentation(
-    const HgiInteropHandle& destination,
-    HgiCompositionParams composition)
+    HgiPresentInteropHandle const &destination,
+    HgiPresentCompositionParams const &composition)
 {
     if (ARCH_UNLIKELY(!_taskController)) {
         return;
     }
 
     _taskController->EnableInteropPresentation(destination, composition);
+}
+
+void
+UsdImagingGLEngine::SetEnablePresentation(bool enabled)
+{
+    if (ARCH_UNLIKELY(!_taskController)) {
+        return;
+    }
+
+    _taskController->SetEnablePresentation(enabled);
+}
+
+void
+UsdImagingGLEngine::SetPresentationOutput(
+    TfToken const &api,
+    VtValue const &framebuffer)
+{
+    if (ARCH_UNLIKELY(!_taskController)) {
+        return;
+    }
+
+    _taskController->SetPresentationOutput(api, framebuffer);
 }
 
 // ---------------------------------------------------------------------

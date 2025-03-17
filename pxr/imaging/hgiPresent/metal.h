@@ -19,13 +19,17 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class HgiMetal;
 
-class HgiPresentMetal final: public HgiPresentImpl
+/// \class HgiPresentWindowMetal
+///
+/// Present to a Metal Window using CAMetalLayer.
+///
+class HgiPresentWindowMetal final: public HgiPresentImpl
 {
 public:
-    explicit HgiPresentMetal(HgiMetal* hgi,
-        HgiWindowPresentParams const &params);
+    explicit HgiPresentWindowMetal(HgiMetal* hgi,
+        HgiPresentWindowParams const &params);
 
-    ~HgiPresentMetal() override;
+    ~HgiPresentWindowMetal() override;
 
     bool IsFormatSupported(HgiFormat colorFormat) const override;
 
@@ -37,7 +41,7 @@ public:
 
 private:
     HgiMetal* _hgiMetal{};
-    HgiWindowPresentParams _params{};
+    HgiPresentWindowParams _params{};
 
     const CAMetalLayer* _metalLayer = nullptr;
     std::unique_ptr<struct MetalResources> _resources;

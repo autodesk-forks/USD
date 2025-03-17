@@ -156,8 +156,8 @@ struct MetalResources
     id<MTLComputePipelineState> computePipeline = nil;
 };
 
-HgiPresentMetal::HgiPresentMetal(HgiMetal *hgi,
-    HgiWindowPresentParams const &params)
+HgiPresentWindowMetal::HgiPresentWindowMetal(HgiMetal *hgi,
+    HgiPresentWindowParams const &params)
     : HgiPresentImpl(hgi)
     , _hgiMetal{hgi}
     , _params(params)
@@ -169,7 +169,7 @@ HgiPresentMetal::HgiPresentMetal(HgiMetal *hgi,
             return;
         }
 
-        if (!std::holds_alternative<HgiMetalWindowHandle>(_params.window)) {
+        if (!std::holds_alternative<HgiPresentMetalWindowHandle>(_params.window)) {
             TF_WARN(
                 "Window handle is unsupported by Metal: presentation is disabled");
             return;
@@ -207,7 +207,7 @@ HgiPresentMetal::HgiPresentMetal(HgiMetal *hgi,
                 ", " << colorSpaceNameCStr << std::endl;
         }
 
-        _metalLayer = std::get<HgiMetalWindowHandle>(_params.window).layer;
+        _metalLayer = std::get<HgiPresentMetalWindowHandle>(_params.window).layer;
 
         if (_metalLayer.device == nil) {
             _metalLayer.device = _hgiMetal->GetPrimaryDevice();
@@ -233,7 +233,7 @@ HgiPresentMetal::HgiPresentMetal(HgiMetal *hgi,
     }
 }
 
-HgiPresentMetal::~HgiPresentMetal()
+HgiPresentWindowMetal::~HgiPresentWindowMetal()
 {
     @autoreleasepool {
         [_resources->computePipeline release];
@@ -241,19 +241,19 @@ HgiPresentMetal::~HgiPresentMetal()
 }
 
 bool
-HgiPresentMetal::IsFormatSupported(HgiFormat colorFormat) const
+HgiPresentWindowMetal::IsFormatSupported(HgiFormat colorFormat) const
 {
     return HgiIsFloatFormat(colorFormat) && !HgiIsCompressed(colorFormat);
 }
 
 bool
-HgiPresentMetal::IsValid() const
+HgiPresentWindowMetal::IsValid() const
 {
     return _metalLayer && _resources->computePipeline;
 }
 
 void
-HgiPresentMetal::Present(HgiTextureHandle const &hgiSrcTexture,
+HgiPresentWindowMetal::Present(HgiTextureHandle const &hgiSrcTexture,
     HgiTextureHandle const &)
 {
     @autoreleasepool {

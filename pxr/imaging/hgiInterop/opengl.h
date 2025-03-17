@@ -11,6 +11,7 @@
 #include "pxr/base/gf/rect2i.h"
 #include "pxr/imaging/hgi/texture.h"
 #include "pxr/imaging/hgiInterop/api.h"
+#include "pxr/imaging/hgiInterop/hgiInterop.h"
 
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -34,17 +35,10 @@ public:
     /// framebuffer contents.
     HGIINTEROP_API
     void CompositeToInterop(
-        HgiTextureHandle const &color,
-        HgiBlendFactor colorSrcBlendFactor,
-        HgiBlendFactor colorDstBlendFactor,
-        HgiBlendOp colorBlendOp,
-        HgiBlendFactor alphaSrcBlendFactor,
-        HgiBlendFactor alphaDstBlendFactor,
-        HgiBlendOp alphaBlendOp,
-        HgiTextureHandle const &depth,
-        HgiCompareFunction depthFunc,
-        uint32_t framebuffer,
-        GfRect2i const& viewport);
+        HgiTextureHandle const &srcColor,
+        HgiTextureHandle const &srcDepth,
+        HgiInteropCompositionParams const &compositionParams,
+        uint32_t dstFramebuffer);
 
 private:
     uint32_t _vs;

@@ -16,6 +16,7 @@
 #include "pxr/base/gf/rect2i.h"
 #include "pxr/imaging/hgi/texture.h"
 #include "pxr/imaging/hgiInterop/api.h"
+#include "pxr/imaging/hgiInterop/hgiInterop.h"
 
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -41,17 +42,10 @@ public:
     /// Copy/Present provided color (and optional depth) textures to app.
     HGIINTEROP_API
     void CompositeToInterop(
-        HgiTextureHandle const &color,
-        HgiBlendFactor colorSrcBlendFactor,
-        HgiBlendFactor colorDstBlendFactor,
-        HgiBlendOp colorBlendOp,
-        HgiBlendFactor alphaSrcBlendFactor,
-        HgiBlendFactor alphaDstBlendFactor,
-        HgiBlendOp alphaBlendOp,
-        HgiTextureHandle const &depth,
-        HgiCompareFunction depthFunc,
-        uint32_t framebuffer,
-        GfRect2i const &compRegion);
+        HgiTextureHandle const &srcColor,
+        HgiTextureHandle const &srcDepth,
+        HgiInteropCompositionParams const &compositionParams,
+        uint32_t dstFramebuffer);
 
 private:
     HgiInteropMetal() = delete;
@@ -85,15 +79,8 @@ private:
     };
 
     void _BlitToOpenGL(uint32_t framebuffer,
-        GfRect2i const& compRegion,
         int shaderIndex,
-        HgiBlendFactor colorSrcBlendFactor,
-        HgiBlendFactor colorDstBlendFactor,
-        HgiBlendOp colorBlendOp,
-        HgiBlendFactor alphaSrcBlendFactor,
-        HgiBlendFactor alphaDstBlendFactor,
-        HgiBlendOp alphaBlendOp,
-        HgiCompareFunction depthFunc);
+        HgiInteropCompositionParams const &compositionParams);
     void _FreeTransientTextureCacheRefs();
     void _CaptureOpenGlState();
     void _RestoreOpenGlState();

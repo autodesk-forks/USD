@@ -13,7 +13,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 
 HgiPresentNoOp::HgiPresentNoOp(Hgi* hgi,
-    HgiNoOpPresentParams const &params)
+    HgiPresentNoOpParams const &params)
     : HgiPresentImpl(hgi)
     , _valid(params.isValid)
 {}

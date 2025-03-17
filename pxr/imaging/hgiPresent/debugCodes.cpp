@@ -15,7 +15,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_REGISTRY_FUNCTION(TfDebug)
 {
      TF_DEBUG_ENVIRONMENT_SYMBOL(HGIPRESENT_DUMP_CANDIDATE_SURFACE_FORMATS,
-        "Dump candidate VkSurfaceFormatKHR in order of match");
+        "Dump candidate formats in order of match. "
+        "Values are API specific.");
 }
 
 

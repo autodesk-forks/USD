@@ -515,14 +515,32 @@ public:
 
     /// Enable the presentation task, and configure it to present to a window.
     USDIMAGINGGL_API
-    void EnableWindowPresentation(HgiWindowHandle const &window,
+    void EnableWindowPresentation(HgiPresentWindowHandle const &window,
         bool vsync = true);
 
     /// Enable the presentation task, and configure it to "present" to an
     /// externally managed framebuffer. See \struct HgiInteropPresentParams.
     USDIMAGINGGL_API
-    void EnableInteropPresentation(const HgiInteropHandle& destination,
-        HgiCompositionParams composition = {});
+    void EnableInteropPresentation(HgiPresentInteropHandle const &destination,
+        HgiPresentCompositionParams const &composition = {});
+
+    /// Enable / disable presenting the render to bound framebuffer.
+    /// An application may choose to manage the AOVs that are rendered into
+    /// itself and skip the engine's presentation.
+    /// \deprecated Use DisablePresentation(), EnableWindowPresentation() or
+    // EnableInteropPresentation() instead.
+    USDIMAGINGGL_API
+    void SetEnablePresentation(bool enabled);
+
+    /// The destination API (e.g., OpenGL, see hgiInterop for details) and
+    /// framebuffer that the AOVs are presented into. The framebuffer
+    /// is a VtValue that encoding a framebuffer in a destination API
+    /// specific way.
+    /// E.g., a uint32_t (aka GLuint) for framebuffer object for OpenGL.
+    /// \deprecated Use EnableWindowPresentation() or
+    // EnableInteropPresentation() instead.
+    USDIMAGINGGL_API
+    void SetPresentationOutput(TfToken const &api, VtValue const &framebuffer);
 
     /// @}
     

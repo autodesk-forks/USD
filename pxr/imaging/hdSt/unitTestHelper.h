@@ -468,19 +468,20 @@ HdSt_TestDriverBase<SceneDelegate>::Present(
         }
     }
 
+    HgiInteropCompositionParams compositionParams;
+    compositionParams.colorSrcBlendFactor = HgiBlendFactorOne;
+    compositionParams.colorDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
+    compositionParams.colorBlendOp = HgiBlendOpAdd;
+    compositionParams.alphaSrcBlendFactor = HgiBlendFactorOne;
+    compositionParams.alphaDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
+    compositionParams.alphaBlendOp = HgiBlendOpAdd;
+    compositionParams.dstRegion = {{0, 0}, width, height};
     _interop.TransferToApp(
         _hgi.get(),
         colorTexture,
-        HgiBlendFactorOne,
-        HgiBlendFactorOneMinusSrcAlpha,
-        HgiBlendOpAdd,
-        HgiBlendFactorOne,
-        HgiBlendFactorOneMinusSrcAlpha,
-        HgiBlendOpAdd,
         /*srcDepth*/HgiTextureHandle(),
-        HgiCompareFunctionLEqual,
-        framebuffer,
-        GfRect2i({0, 0}, width, height));
+        compositionParams,
+        framebuffer);
 }
 
 // --------------------------------------------------------------------------

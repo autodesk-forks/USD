@@ -14,7 +14,7 @@ set(optionalCppFiles "")
 
 if (PXR_ENABLE_GL_SUPPORT AND NOT PXR_APPLE_EMBEDDED)
     list(APPEND optionalLibraries hgiInterop)
-    list(APPEND optionalPrivateClasses interopGL)
+    list(APPEND optionalPrivateClasses glInterop)
 endif()
 
 if (PXR_ENABLE_METAL_SUPPORT)

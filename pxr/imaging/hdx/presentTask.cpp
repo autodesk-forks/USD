@@ -34,7 +34,7 @@ HdxPresentTask::_Sync(
         HdxPresentTaskParams params;
 
         if (_GetTaskParams(delegate, &params)) {
-            if (_params.destination != params.destination) {
+            if (_params.destinationParams != params.destinationParams) {
                 _present = nullptr;
             }
 
@@ -49,7 +49,7 @@ HdxPresentTask::Prepare(HdTaskContext* ctx, HdRenderIndex *renderIndex)
 {
     if (!_present) {
         _present = std::make_unique<HgiPresent>(HgiPresent::Create(_GetHgi(),
-            _params.destination));
+            _params.destinationParams));
     }
 }
 
@@ -120,7 +120,7 @@ std::ostream& operator<<(std::ostream& out, const HdxPresentTaskParams& pv)
 bool operator==(const HdxPresentTaskParams& lhs,
                 const HdxPresentTaskParams& rhs)
 {
-    return lhs.destination == rhs.destination &&
+    return lhs.destinationParams == rhs.destinationParams &&
            lhs.enabled == rhs.enabled;
 }
 

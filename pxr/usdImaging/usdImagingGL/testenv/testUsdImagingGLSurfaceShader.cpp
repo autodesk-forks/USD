@@ -138,7 +138,7 @@ My_TestGLDrawing::InitTest()
     if (PresentDisabled()) {
         _engine->DisablePresentation();
     } else {
-        HgiCompositionParams compParams;
+        HgiPresentCompositionParams compParams;
         compParams.colorSrcBlendFactor = HgiBlendFactorOne;
         compParams.colorDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
         compParams.colorBlendOp = HgiBlendOpAdd;
@@ -146,7 +146,7 @@ My_TestGLDrawing::InitTest()
         compParams.alphaDstBlendFactor = HgiBlendFactorOneMinusSrcAlpha;
         compParams.alphaBlendOp = HgiBlendOpAdd;
         compParams.depthFunc = HgiCompareFunctionLEqual;
-        _engine->EnableInteropPresentation(HgiGLInteropHandle{}, compParams);
+        _engine->EnableInteropPresentation(HgiPresentGLInteropHandle{}, compParams);
     }
 }
 
