@@ -236,8 +236,8 @@ TF_API
 bool TfTouchFile(std::string const &fileName, bool create=true);
 
 #ifdef ARCH_OS_WASM_VM
-    #define ACCESSPERMS 0777
-    #define DEFFILEMODE 0777
+    #define ACCESSPERMS 0666
+    #define DEFFILEMODE 0666
 #endif
 
 PXR_NAMESPACE_CLOSE_SCOPE
