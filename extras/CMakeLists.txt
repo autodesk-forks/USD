@@ -1,4 +1,4 @@
-if (${PXR_BUILD_PERFORMANCE})
+if (NOT EMSCRIPTEN)
     add_subdirectory(performance)
 endif()
 add_subdirectory(usd)

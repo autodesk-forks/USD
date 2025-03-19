@@ -1046,7 +1046,7 @@ else:
 
 def InstallTBB(context, force, buildArgs):
     if context.targetWasm:
-        raise RuntimeError("TBB is no longed used for WebAssembly builds. Use oneTBB instead.")
+        raise RuntimeError("OneTBB is required for WebAssembly builds.")
     elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
     elif MacOS():
@@ -1901,7 +1901,6 @@ def InstallUSD(context, force, buildArgs):
 
             extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=ON')
             extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
-            extraArgs.append('-DPXR_BUILD_PERFORMANCE=OFF')
 
             if context.targetWasmNode:
                 extraArgs.append('-DPXR_WASM_NODE=ON')
@@ -2649,14 +2648,14 @@ for dep in requiredDependencies:
 # Verify toolchain needed to build required dependencies
 if context.targetWasm:
     if not which("emcc"):
-        PrintError(" Wasm compiler emcc not found -- please install a compiler")
+        PrintError("Wasm compiler emcc not found -- please install a compiler")
         sys.exit(1)
 else:
     if (not which("g++") and
         not which("clang") and
         not GetXcodeDeveloperDirectory() and
         not GetVisualStudioCompilerAndVersion()):
-        PrintError(" C++ compiler not found -- please install a compiler")
+        PrintError("C++ compiler not found -- please install a compiler")
         sys.exit(1)
 
 # Error out if a 64bit version of python interpreter is not being used
