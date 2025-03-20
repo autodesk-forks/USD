@@ -270,13 +270,9 @@ Arch_MeasureExecutionTime(uint64_t maxTicks, bool *reachedConsensus,
     // Since measured times are +/- 1 quantum, we multiply by 2000 to get the
     // desired runtime, and from there figure number of iterations for a sample.
     const uint64_t minTicksPerSample = 2000 * ArchGetTickQuantum();
-    #if defined(ARCH_OS_WASM_VM)
-    const int sampleIters = 1; // FIXME
-    #else
     const int sampleIters = (estTicksPer < minTicksPerSample)
         ? (minTicksPerSample + estTicksPer/2) / estTicksPer
         : 1;
-    #endif
 
     auto measureSample = [&measureN, sampleIters]() {
         return (measureN(sampleIters) + sampleIters/2) / sampleIters;
