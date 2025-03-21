@@ -157,7 +157,9 @@ HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
           "#define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, "
           "expected, desired)\n"
           "#define atomic_int int\n"
-          "#define atomic_uint uint\n";
+          "#define atomic_uint uint\n"
+          "float dummy_PointSize = 1.0f;\n" // Define a dummy variable
+          "#define gl_PointSize dummy_PointSize\n"; // Redirect gl_PointSize to dummy variable
 
     // Advertise to shader code that we support double precision math
     // and don't support IEEE float special values (NaN, +-Inf).
@@ -438,18 +440,6 @@ HgiWebGPUShaderGenerator::_WriteInOutBlocks(
     }
 }
 
-std::string removeLine(const std::string& input, const std::string& toRemove) {
-    std::istringstream iss(input);
-    std::ostringstream oss;
-    std::string line;
-    while (std::getline(iss, line)) {
-        if (line.find(toRemove) == std::string::npos) {
-            oss << line << std::endl;
-        }
-    }
-    return oss.str();
-}
-
 void
 HgiWebGPUShaderGenerator::_Execute(std::ostream &ss)
 {
@@ -508,9 +498,7 @@ HgiWebGPUShaderGenerator::_Execute(std::ostream &ss)
     ss << "\n";
 
     // write all the original shader
-    // TODO: we do a nasty hack of removing any line using or assigning gl_PointSize
-    std::string preprocessedShader = removeLine(_GetShaderCode(), "gl_PointSize");
-    ss << preprocessedShader;
+    ss << _GetShaderCode();
 }
 
 HgiBaseGLShaderSectionUniquePtrVector*
