@@ -26,23 +26,43 @@
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hgiWebGPU/api.h"
-#include "webgpu/webgpu.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 HGIWEBGPU_API
-bool HgiWebGPUIsDebugEnabled();
+bool
+HgiWebGPUIsDebugEnabled();
+
+template<typename Encoder>
+constexpr bool isCommandEncoder =
+    std::is_same_v<Encoder, wgpu::CommandEncoder> ||
+    std::is_same_v<Encoder, wgpu::RenderPassEncoder> ||
+    std::is_same_v<Encoder, wgpu::ComputePassEncoder> ||
+    std::is_same_v<Encoder, wgpu::RenderBundleEncoder>;
 
 /// Begin a label in a webgpu command encoder
+template<typename Encoder>
 HGIWEBGPU_API
-void HgiWebGPUBeginLabel(
-        wgpu::CommandEncoder const &ce,
-        const char* label);
+std::enable_if_t<isCommandEncoder<Encoder>>
+HgiWebGPUBeginLabel(Encoder const &encoder, const char* label)
+{
+    if (!HgiWebGPUIsDebugEnabled() || !label) {
+        return;
+    }
+    encoder.PushDebugGroup(label);
+}
 
 /// End the last pushed label in a webgpu command encoder
+template<typename Encoder>
 HGIWEBGPU_API
-void HgiWebGPUEndLabel(
-        wgpu::CommandEncoder const &ce);
+std::enable_if_t<isCommandEncoder<Encoder>>
+HgiWebGPUEndLabel(Encoder const &encoder)
+{
+    if (!HgiWebGPUIsDebugEnabled()) {
+        return;
+    }
+    encoder.PopDebugGroup();
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

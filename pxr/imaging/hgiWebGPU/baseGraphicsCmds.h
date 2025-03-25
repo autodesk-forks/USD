@@ -43,15 +43,21 @@ public:
 
     HGIWEBGPU_API
     void PushDebugGroup(const char* label) override {
-        _CreateCommandEncoder();
-        HgiWebGPUBeginLabel(_commandEncoder, label);
+        if (_passEncoder) {
+            HgiWebGPUBeginLabel(_passEncoder, label);
+        } else {
+            HgiWebGPUBeginLabel(_commandEncoder, label);
+        }
         _debugGroupLabels.push_back(label);
     }
 
     HGIWEBGPU_API
     void PopDebugGroup() override {
-        _CreateCommandEncoder();
-        HgiWebGPUEndLabel(_commandEncoder);
+        if (_passEncoder) {
+            HgiWebGPUEndLabel(_passEncoder);
+        } else {
+            HgiWebGPUEndLabel(_commandEncoder);
+        }
         _debugGroupLabels.pop_back();
     }
 

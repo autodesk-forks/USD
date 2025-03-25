@@ -56,22 +56,26 @@ HgiWebGPUComputeCmds::~HgiWebGPUComputeCmds()
 void
 HgiWebGPUComputeCmds::PushDebugGroup(const char* label)
 {
-    _CreateCommandEncoder();
-    HgiWebGPUBeginLabel(_commandEncoder, label);
+    if (_computePassEncoder) {
+        HgiWebGPUBeginLabel(_computePassEncoder, label);
+    } else {
+        HgiWebGPUBeginLabel(_commandEncoder, label);
+    }
 }
 
 void
 HgiWebGPUComputeCmds::PopDebugGroup()
 {
-    _CreateCommandEncoder();
-    HgiWebGPUEndLabel(_commandEncoder);
+    if (_computePassEncoder) {
+        HgiWebGPUEndLabel(_computePassEncoder);
+    } else {
+        HgiWebGPUEndLabel(_commandEncoder);
+    }
 }
 
 void
 HgiWebGPUComputeCmds::BindPipeline(HgiComputePipelineHandle pipeline)
 {
-    _CreateCommandEncoder();
-
     _pipeline = static_cast<HgiWebGPUComputePipeline *>(pipeline.Get());
 
     _computePassEncoder.SetPipeline(_pipeline->GetPipeline());

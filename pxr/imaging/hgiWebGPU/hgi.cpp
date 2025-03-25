@@ -46,21 +46,24 @@
 #include "pxr/base/tf/getenv.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
-#include <algorithm>
 
-#if defined EMSCRIPTEN
+#include <algorithm>
+#include <sstream>
+
+#if defined(ARCH_OS_WASM_VM)
+#include <emscripten.h>
+#include <emscripten/html5.h>
 #include <emscripten/html5_webgpu.h>
 #else
-#if defined _WIN32 && !defined WIN32_VULKAN
+#if defined(ARCH_OS_WINDOWS) && !defined(WIN32_VULKAN)
 #define DAWN_ENABLE_BACKEND_D3D12
 #elif defined(ARCH_OS_DARWIN)
 #define DAWN_ENABLE_BACKEND_METAL
 #else
 #define DAWN_ENABLE_BACKEND_VULKAN
 #endif
-
 #include <webgpu/webgpu_cpp.h>
-
+#include <dawn/native/DawnNative.h>
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -76,114 +79,169 @@ TF_DEFINE_ENV_SETTING(HGIWEBGPU_ENABLE_RENDER_BUNDLES, true,
 "Enable indirect command buffers");
 
 // GetDevice code based on https://github.com/kainino0x/webgpu-cross-platform-demo/blob/main/main.cpp
-#if defined EMSCRIPTEN
-#include <emscripten.h>
-#include <emscripten/html5.h>
-#include <emscripten/html5_webgpu.h>
-
-wgpu::Device GetDevice() {
+#if defined(ARCH_OS_WASM_VM)
+static wgpu::Device
+GetDevice() {
     WGPUDevice deviceImp = emscripten_webgpu_get_device();
     return wgpu::Device::Acquire(deviceImp);
 }
 #else
-#include <dawn/native/DawnNative.h>
-
-    void PrintDeviceError(const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView message) {
-        std::string errorTypeName;
-        switch (type) {
-            case wgpu::ErrorType::Validation:
-                errorTypeName = "Validation";
-                break;
-            case wgpu::ErrorType::OutOfMemory:
-                errorTypeName = "Out of memory";
-                break;
-            case wgpu::ErrorType::Unknown:
-                errorTypeName = "Unknown";
-                break;
-            case wgpu::ErrorType::DeviceLost:
-                errorTypeName = "Device lost";
-                break;
-            default:
-                errorTypeName = "Other";
-                break;
-        }
-        TF_CODING_ERROR(errorTypeName + " error: " + message.data);
+static void
+PrintUncapturedError(const wgpu::Device& device, wgpu::ErrorType type,
+    const char* message)
+{
+    std::stringstream fullMessage;
+    fullMessage << "WebGPU";
+    switch (type) {
+    case wgpu::ErrorType::Validation:
+        fullMessage << " validation";
+        break;
+    case wgpu::ErrorType::OutOfMemory:
+        fullMessage << " out-of-memory";
+        break;
+    case wgpu::ErrorType::Unknown:
+        fullMessage << " unknown";
+        break;
+    case wgpu::ErrorType::DeviceLost:
+        fullMessage << " device lost";
+        break;
+    default:
+        fullMessage << " unknown";
+        TF_CODING_ERROR("Unhandled WebGPU error type");
+        break;
     }
-    static wgpu::Instance instance;
+    fullMessage <<  " error: " << message;
+    TF_RUNTIME_ERROR(fullMessage.str());
+}
 
-    wgpu::Device GetDevice() {
-        if (!instance) {
-            wgpu::InstanceDescriptor instanceDescriptor{};
-            instanceDescriptor.features.timedWaitAnyEnable = true;
-            instance = wgpu::CreateInstance(&instanceDescriptor);
-        }
+// Note that this isn't actually an error callback, so we don't print an error.
+// A device can be lost due to no fault of the application.
+static void
+PrintDeviceReason(const wgpu::Device& device, wgpu::DeviceLostReason reason,
+    wgpu::StringView message)
+{
+    std::stringstream fullMessage;
+    fullMessage << "WebGPU device lost";
+    switch (reason) {
+    case wgpu::DeviceLostReason::Unknown:
+        fullMessage << " for an unknown reason";
+        break;
+    case wgpu::DeviceLostReason::Destroyed:
+        fullMessage << " because it was destroyed";
+        break;
+    case wgpu::DeviceLostReason::InstanceDropped:
+        fullMessage << " because the Instance was dropped";
+        break;
+    case wgpu::DeviceLostReason::FailedCreation:
+        fullMessage << " because creation failed";
+        break;
+    default:
+        fullMessage << " for an unknown reason";
+        TF_CODING_ERROR("Unhandled WebGPU device lost reason");
+        break;
+    }
+    fullMessage <<  ": " << (std::string_view)message;
+    TF_STATUS(fullMessage.str());
+}
 
-        // Simply pick the first adapter in the sorted list.
-        wgpu::RequestAdapterOptions options = {};
-        wgpu::Adapter adapter;;
+static wgpu::Instance instance;
 
-        wgpu::DeviceDescriptor descriptor;
-        std::vector<wgpu::FeatureName> requiredFeatures = {
-                wgpu::FeatureName::Depth32FloatStencil8,
-                wgpu::FeatureName::Float32Filterable
-        };
-        instance.WaitAny(instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly,
-            [&adapter](wgpu::RequestAdapterStatus status, wgpu::Adapter reqAdapter,
-            wgpu::StringView message) {
-             if (status != wgpu::RequestAdapterStatus::Success) {
-                 TF_CODING_ERROR("Failed to get an adapter: %s", message.data);
-                 return;
-             }
-             adapter = std::move(reqAdapter);
-            }), UINT64_MAX);
-        if (adapter == nullptr) {
-            TF_CODING_ERROR("RequestAdapter failed!");
-        }
+static wgpu::Device
+GetDevice() {
+    if (!instance) {
+        wgpu::InstanceDescriptor instanceDescriptor{};
+        instanceDescriptor.features.timedWaitAnyEnable = true;
+        instance = wgpu::CreateInstance(&instanceDescriptor);
+    }
 
-        if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS)) {
-            requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
-        }
+    wgpu::RequestAdapterOptions options = {};
+    wgpu::Adapter adapter;
 
-        #ifndef EMSCRIPTEN
-            // toggles are handled by chrome itself, so we only enable it for the desktop version where we have direct
-            // control
-            wgpu::DawnTogglesDescriptor deviceTogglesDesc;
-            // Toggle for debugging shader
-            std::vector<const char *> enabledToggles = {};
-            if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_SHADER_CODE)) {
-                enabledToggles.push_back("dump_shaders");
-                enabledToggles.push_back("disable_symbol_renaming");
+    wgpu::DeviceDescriptor descriptor;
+    std::vector<wgpu::FeatureName> requiredFeatures = {
+            wgpu::FeatureName::Depth32FloatStencil8,
+            wgpu::FeatureName::Float32Filterable
+    };
+    instance.WaitAny(instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly,
+        [&adapter](wgpu::RequestAdapterStatus status, wgpu::Adapter reqAdapter,
+        wgpu::StringView message) {
+            if (status != wgpu::RequestAdapterStatus::Success) {
+                TF_RUNTIME_ERROR("Failed to get an adapter: %s", message.data);
+                return;
             }
-            deviceTogglesDesc.enabledToggles = enabledToggles.data();
-            deviceTogglesDesc.enabledToggleCount = enabledToggles.size();
-            descriptor.nextInChain = &deviceTogglesDesc;
-
-        #endif
-
-        wgpu::SupportedLimits supportedLimits = {};
-        adapter.GetLimits(&supportedLimits);
-
-        // If the requirements are not met, dawn will throw a warning
-        wgpu::RequiredLimits limits = {};
-        limits.limits.maxStorageBuffersPerShaderStage = 10;
-        limits.limits.maxColorAttachmentBytesPerSample = 64;
-        limits.limits.maxBufferSize = 0x40000000;
-        descriptor.requiredLimits = &limits;
-
-        descriptor.requiredFeatures = requiredFeatures.data();
-        descriptor.requiredFeatureCount = requiredFeatures.size();
-        descriptor.SetDeviceLostCallback(
-                wgpu::CallbackMode::AllowSpontaneous,
-                [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message) {
-                    TF_CODING_ERROR("Device lost error: %s", message.data);
-                });
-        descriptor.SetUncapturedErrorCallback(PrintDeviceError);
-
-        wgpu::Device device = adapter.CreateDevice(&descriptor);
-
-        return device;
+            adapter = std::move(reqAdapter);
+        }), UINT64_MAX);
+    if (adapter == nullptr) {
+        TF_RUNTIME_ERROR("RequestAdapter failed!");
     }
-#endif  // ARCH_OS_WASM_VM
+
+    if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS)) {
+        requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
+    }
+
+#if !defined(ARCH_OS_WASM_VM)
+    // toggles are handled by chrome itself, so we only enable it for the desktop version where we have direct
+    // control
+    wgpu::DawnTogglesDescriptor deviceTogglesDesc;
+    // Toggle for debugging shader
+    std::vector<const char *> enabledToggles = {};
+    if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_SHADER_CODE)) {
+        enabledToggles.push_back("dump_shaders");
+        enabledToggles.push_back("disable_symbol_renaming");
+    }
+    deviceTogglesDesc.enabledToggles = enabledToggles.data();
+    deviceTogglesDesc.enabledToggleCount = enabledToggles.size();
+    descriptor.nextInChain = &deviceTogglesDesc;
+#endif
+
+    wgpu::SupportedLimits supportedLimits = {};
+    adapter.GetLimits(&supportedLimits);
+
+    static constexpr uint32_t minStorageBuffersPerShaderStage = 10;
+    static constexpr uint32_t minColorAttachmentBytesPerSample = 64;
+    static constexpr uint64_t minBufferSize = 0x40000000;
+
+    if (supportedLimits.limits.maxStorageBuffersPerShaderStage <
+        minStorageBuffersPerShaderStage) {
+        TF_WARN("WebGPU limits: expected at least %u storage buffers per"
+            " shader stage, but only %u buffers are supported."
+            " Stability might be affected.",
+            minStorageBuffersPerShaderStage,
+            supportedLimits.limits.maxStorageBuffersPerShaderStage);
+    }
+    if (supportedLimits.limits.maxColorAttachmentBytesPerSample <
+        minColorAttachmentBytesPerSample) {
+        TF_WARN("WebGPU limits: expected at least %u color attachment"
+            " bytes per sample, but only %u bytes is supported."
+            " Stability might be affected.",
+            minColorAttachmentBytesPerSample,
+            supportedLimits.limits.maxColorAttachmentBytesPerSample);
+    }
+    if (supportedLimits.limits.maxBufferSize < minBufferSize) {
+        TF_WARN("WebGPU limits: expected a max buffer size of at least"
+            " 0x%llx bytes, but only 0x%llx bytes is supported."
+            " Stability might be affected.",
+            minBufferSize, supportedLimits.limits.maxBufferSize);
+    }
+
+    // If the requirements are not met, dawn will throw a warning
+    wgpu::RequiredLimits limits = {};
+    limits.limits.maxStorageBuffersPerShaderStage =
+        supportedLimits.limits.maxStorageBuffersPerShaderStage;
+    limits.limits.maxColorAttachmentBytesPerSample =
+        supportedLimits.limits.maxColorAttachmentBytesPerSample;
+    limits.limits.maxBufferSize = supportedLimits.limits.maxBufferSize;
+    descriptor.requiredLimits = &limits;
+
+    descriptor.requiredFeatures = requiredFeatures.data();
+    descriptor.requiredFeatureCount = requiredFeatures.size();
+    descriptor.SetUncapturedErrorCallback(&PrintUncapturedError);
+    descriptor.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
+        &PrintDeviceReason);
+
+    return adapter.CreateDevice(&descriptor);
+}
+#endif  // defined(ARCH_OS_WASM_VM)
 
 HgiWebGPU::HgiWebGPU()
 : _device(GetDevice())
@@ -403,7 +461,7 @@ HgiWebGPU::StartFrame()
 void
 HgiWebGPU::EndFrame()
 {
-#ifndef EMSCRIPTEN
+#if !defined(ARCH_OS_WASM_VM)
     instance.ProcessEvents();
 #endif
 }
@@ -421,7 +479,7 @@ HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const &commandBuffer)
         _commandBuffers.push_back(commandBuffer);
     }
 }
-#if !defined(EMSCRIPTEN)
+#if !defined(ARCH_OS_WASM_VM)
 void
 HgiWebGPU::QueryValue()
 {

@@ -1710,7 +1710,6 @@ DAWN_CHROMIUM_VERSION = "6858"
 
 DAWN_CMAKE_OPTIONS = [
     '-DTINT_BUILD_SPV_READER=ON',
-    '-DTINT_BUILD_SPV_WRITER=OFF',
     '-DTINT_BUILD_WGSL_WRITER=ON',
     '-DTINT_BUILD_TESTS=OFF',
     '-DTINT_BUILD_CMD_TOOLS=OFF',
@@ -1747,19 +1746,24 @@ def PrepareDawn(context, force):
                 required_submodules += [
                     'third_party/dxheaders'
                 ]
+            elif Linux():
+                required_submodules += [
+                    'third_party/khronos/OpenGL-Registry',
+                    'third_party/khronos/EGL-Registry'
+                ]
 
             google_depot_tools.fetch_dependecies(required_submodules)
 
             PatchFile("third_party/CMakeLists.txt",
-                      [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
-                        '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
-                       ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
-                        '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
-                       ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
-                        '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
-                       ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
-                        '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
-                       ])
+                [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
+                '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
+                ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
+                '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
+                ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
+                '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
+                ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
+                '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
+                ])
 
             if context.targetWasm:
                 # We need to resolve spirv dependencies even when dawn is disabled, so we skip the return() statement
@@ -1773,7 +1777,11 @@ def PrepareDawn(context, force):
                 PatchFile("third_party/spirv-headers/src/CMakeLists.txt", [
                     ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
                 ])
-
+            elif Linux():
+                PatchFile("src/dawn/common/StringViewUtils.cpp",
+                    [('#include "dawn/common/StringViewUtils.h"\n',
+                      '#include "dawn/common/StringViewUtils.h"\n'
+                      '#include <cstring>\n')])
             elif Windows():
                 # Dawn native cmake needs revise for DX12
                 PatchFile("src/dawn/native/CMakeLists.txt",
@@ -1884,6 +1892,7 @@ def InstallTint(context, force, buildArgs):
                 '-DTINT_BUILD_GLSL_WRITER=OFF',
                 '-DTINT_BUILD_HLSL_WRITER=OFF',
                 '-DTINT_BUILD_MSL_WRITER=OFF',
+                '-DTINT_BUILD_SPV_WRITER=OFF',
             ]
 
             # There is a weird issue with the current tint build that, with some features off, it will not generate
@@ -2914,10 +2923,6 @@ if context.buildAnimXTests:
 # script to allow the dependency to find zlib in the build environment.
 if (Linux() or not context.buildZlib or context.targetWasm) and ZLIB in requiredDependencies:
     requiredDependencies.remove(ZLIB)
-
-# TODO: support to DAWN on Linux
-if Linux() and DAWN in requiredDependencies:
-    requiredDependencies.remove(DAWN)
 
 # Error out if user is building monolithic library on windows with draco plugin
 # enabled. This currently results in missing symbols.
