@@ -58,3 +58,55 @@ pxr_library(hgiPresent
     CPPFILES
         ${optionalCppFiles}
 )
+
+if (PXR_HEADLESS_TEST_MODE)
+    message(STATUS "Skipping ${PXR_PACKAGE} tests because PXR_HEADLESS_TEST_MODE is ON")
+    return()
+endif()
+
+set(optionalTestLibraries "")
+set(optionalTestClasses)
+if (X11_FOUND)
+    list(APPEND optionalTestLibraries X11::X11)
+    list(APPEND optionalTestClasses testenv/testWindowX11)
+endif()
+
+pxr_build_test(testHgiPresent
+    LIBRARIES
+        usdImagingGL
+        hgiPresent
+        ${optionalTestLibraries}
+
+    CLASSES
+        testenv/testWindow
+        ${optionalTestClasses}
+
+    CPPFILES
+        testenv/testHgiPresent.cpp
+)
+pxr_install_test_dir(
+    SRC testenv/testHgiPresent
+    DEST testHgiPresent
+)
+
+if (PXR_ENABLE_VULKAN_SUPPORT)
+    if (X11_FOUND)
+        pxr_register_test(testHgiPresentVulkanX11
+            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHgiPresent -window X11 -capture 0 60 15 -stage testHgiPresent.usda"
+            IMAGE_DIFF_COMPARE
+                testHgiPresent_frame0.png
+                testHgiPresent_frame15.png
+                testHgiPresent_frame30.png
+                testHgiPresent_frame45.png
+            FAIL 0.05
+            FAIL_PERCENT 0.5
+            WARN 0.01
+            WARN_PERCENT 0.5
+            EXPECTED_RETURN_CODE 0
+            TESTENV testHgiPresent
+            ENV
+                HGI_ENABLE_VULKAN=1
+                HGI_ENABLE_WEBGPU=0
+        )
+    endif()
+endif()

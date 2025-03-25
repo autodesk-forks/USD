@@ -257,6 +257,10 @@ HgiPresentWindowMetal::Present(HgiTextureHandle const &hgiSrcTexture,
     HgiTextureHandle const &)
 {
     @autoreleasepool {
+        if (!_metalLayer) {
+            return;
+        }
+
         const auto srcTexture = dynamic_cast<HgiMetalTexture *>(hgiSrcTexture.
             Get());
         if (!srcTexture) {
@@ -298,8 +302,14 @@ HgiPresentWindowMetal::Present(HgiTextureHandle const &hgiSrcTexture,
 
         [computeEncoder endEncoding];
 
-        [commandBuffer presentDrawable:drawable];
-        [commandBuffer commit];
+        if (_metalLayer.presentsWithTransaction) {
+            [commandBuffer commit];
+            [commandBuffer waitUntilScheduled];
+            [drawable present];
+        } else {
+            [commandBuffer presentDrawable:drawable];
+            [commandBuffer commit];
+        }
 
         // We need to force a sync here because we don't have the
         // synchronization mechanism to prevent the AOV from being reused
