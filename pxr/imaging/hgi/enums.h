@@ -374,7 +374,7 @@ enum HgiShaderStageBits : HgiBits
 };
 using HgiShaderStage = HgiBits;
 
-static HgiShaderStage InputShaderStageBits = HgiShaderStageVertex | HgiShaderStageCompute | HgiShaderStagePostTessellationControl | HgiShaderStagePostTessellationVertex;
+inline const HgiShaderStage InputShaderStageBits = HgiShaderStageVertex | HgiShaderStageCompute | HgiShaderStagePostTessellationControl | HgiShaderStagePostTessellationVertex;
 
 /// \enum HgiBindResourceType
 ///
