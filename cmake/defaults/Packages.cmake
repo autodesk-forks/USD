@@ -377,7 +377,7 @@ if (PXR_BUILD_DRACO_PLUGIN)
 endif()
 
 if (PXR_ENABLE_MATERIALX_SUPPORT)
-    find_package(MaterialX REQUIRED)
+    find_package(MaterialX REQUIRED NO_CMAKE_FIND_ROOT_PATH)
     add_definitions(-DPXR_MATERIALX_SUPPORT_ENABLED)
 endif()
 

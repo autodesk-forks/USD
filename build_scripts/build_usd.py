@@ -1670,7 +1670,34 @@ def InstallMaterialX(context, force, buildArgs):
                         '-DMATERIALX_BUILD_TESTS=OFF'
         ]
 
-        if MacOSTargetEmbedded(context):
+        if context.targetWasm:
+            cmakeOptions.extend([
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
+                '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                '-DMATERIALX_BUILD_JS=OFF', # We don't need the js bindings
+                '-DMATERIALX_BUILD_TESTS=OFF',
+                '-DMATERIALX_BUILD_GEN_OSL=OFF',
+                '-DMATERIALX_BUILD_GEN_MDL=OFF'])
+
+            # We need to skip some things for emscripten. This should be fixed in version v1.39.3
+            PatchFile("CMakeLists.txt",
+                [('    add_subdirectory(source/MaterialXRenderHw)',
+                  '    #add_subdirectory(source/MaterialXRenderHw)')])
+
+            PatchFile("source/MaterialXRenderGlsl/CMakeLists.txt",
+                [('\nif(APPLE)',
+                'if(NOT EMSCRIPTEN)\n   if(APPLE)'),
+                 ('    include_directories(${X11_INCLUDE_DIR})',
+                  '    include_directories(${X11_INCLUDE_DIR})\nendif()'),
+                 ('\nif(WIN32)',
+                  'if(NOT EMSCRIPTEN)\n   if(WIN32)'),
+                 ('        X11::Xt)',
+                  '        X11::Xt)\nendif()')
+                 ], multiLineMatches=True)
+
+
+        elif MacOSTargetEmbedded(context):
             # The materialXShaderGen in hdSt assumes the GLSL shadergen is
             # available but MaterialX intertwines GLSL shadergen support with
             # also requiring rendering support.
@@ -2847,10 +2874,6 @@ if context.targetWasm:
     if context.buildUsdview:
         context.buildUsdview = False
         disabled.append('usdview')
-
-    if context.buildMaterialX:
-        context.buildMaterialX = False
-        disabled.append('materialX')
 
     if context.buildAVIF:
         context.buildAVIF = False
