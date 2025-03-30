@@ -114,36 +114,6 @@ PrintUncapturedError(const wgpu::Device& device, wgpu::ErrorType type,
     TF_RUNTIME_ERROR(fullMessage.str());
 }
 
-// Note that this isn't actually an error callback, so we don't print an error.
-// A device can be lost due to no fault of the application.
-static void
-PrintDeviceReason(const wgpu::Device& device, wgpu::DeviceLostReason reason,
-    wgpu::StringView message)
-{
-    std::stringstream fullMessage;
-    fullMessage << "WebGPU device lost";
-    switch (reason) {
-    case wgpu::DeviceLostReason::Unknown:
-        fullMessage << " for an unknown reason";
-        break;
-    case wgpu::DeviceLostReason::Destroyed:
-        fullMessage << " because it was destroyed";
-        break;
-    case wgpu::DeviceLostReason::InstanceDropped:
-        fullMessage << " because the Instance was dropped";
-        break;
-    case wgpu::DeviceLostReason::FailedCreation:
-        fullMessage << " because creation failed";
-        break;
-    default:
-        fullMessage << " for an unknown reason";
-        TF_CODING_ERROR("Unhandled WebGPU device lost reason");
-        break;
-    }
-    fullMessage <<  ": " << (std::string_view)message;
-    TF_STATUS(fullMessage.str());
-}
-
 static wgpu::Instance instance;
 
 static wgpu::Device
@@ -236,8 +206,6 @@ GetDevice() {
     descriptor.requiredFeatures = requiredFeatures.data();
     descriptor.requiredFeatureCount = requiredFeatures.size();
     descriptor.SetUncapturedErrorCallback(&PrintUncapturedError);
-    descriptor.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
-        &PrintDeviceReason);
 
     return adapter.CreateDevice(&descriptor);
 }
