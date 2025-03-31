@@ -29,7 +29,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// \addtogroup group_arch_Math
 ///@{
 
-#if defined (ARCH_CPU_INTEL) || defined (ARCH_CPU_ARM) || defined (doxygen) || defined(ARCH_OS_WASM_VM)
+#if defined (ARCH_CPU_INTEL) || defined (ARCH_CPU_ARM) || defined(ARCH_OS_WASM_VM) || defined (doxygen)
 
 /// This is the smallest value e such that 1+e^2 == 1, using floats.
 /// True for all IEEE754 chipsets.

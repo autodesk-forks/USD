@@ -50,10 +50,8 @@
 #define ARCH_BITS_64
 #elif defined(__wasm64__)
 #define ARCH_BITS_64
-#define __emscripten__ 1
 #elif defined(__wasm32__)
 #define ARCH_BITS_32
-#define __emscripten__ 1
 #else
 #error "Unsupported architecture.  x86_64 or ARM64 required."
 #endif

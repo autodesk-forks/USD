@@ -77,14 +77,8 @@ Tf_AtomicRenameFileOver(std::string const &srcFileName,
     if (stat(dstFileName.c_str(), &st) != -1) {
         fileMode = st.st_mode & DEFFILEMODE;
     } else {
-        #if defined(ARCH_OS_WASM_VM)
-            // For some reason, EMSCRIPTEN has the mask set to 0777, which
-            // results in files we cannot read
-            const mode_t mask = 0;
-        #else
-            const mode_t mask = umask(0);
-            umask(mask);
-        #endif
+        const mode_t mask = umask(0);
+        umask(mask);
         fileMode = DEFFILEMODE & ~mask;
     }
 

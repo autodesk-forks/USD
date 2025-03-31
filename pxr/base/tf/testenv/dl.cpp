@@ -16,12 +16,6 @@
 #include "pxr/base/arch/library.h"
 #include "pxr/base/arch/symbols.h"
 
-#ifdef ARCH_OS_WASM_VM
-#include <emscripten.h>
-#include <dlfcn.h>
-#include <iostream>
-#endif // EMSCRIPTEN_SUPPORT
-
 using std::string;
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -40,33 +34,12 @@ Test_TfDl()
     TF_AXIOM(!TfDlopen("nonexisting" ARCH_LIBRARY_SUFFIX, ARCH_LIBRARY_NOW));
 
     // Check that TfDlopen fills in our error string with something
-    std::string dlErrorStr; // Renamed from dlerror
-    // Check that opening a non-existing shared library fails
-    #ifdef ARCH_OS_WASM_VM
-    // Try to load side module
-    void* handle = dlopen("nonexisting.wasm", RTLD_NOW);
-    if (!handle) {
-    char* error = dlerror();
-    if (error) 
-    {
-        dlErrorStr = std::string(error);
-    }
-    else{
-        dlErrorStr = "Unknown error"; 
-    }
-        printf("Emscripten Side Module Loading Error: %s\n", error);
-    }
-    dlclose(handle);
-    #else
-    TfDlopen("nonexisting" ARCH_LIBRARY_SUFFIX, ARCH_LIBRARY_NOW, &dlErrorStr);    
-    #endif 
-    TF_AXIOM(!dlErrorStr.empty());
+    string dlerror;
+    TfDlopen("nonexisting" ARCH_LIBRARY_SUFFIX, ARCH_LIBRARY_NOW, &dlerror);
+    TF_AXIOM(!dlerror.empty());
 
     // Compute path to test library.
     string dlname;
-    #ifdef ARCH_OS_WASM_VM
-    dlname = "TestTf.wasm"; 
-    #else
     TF_AXIOM(ArchGetAddressInfo((void*)Test_TfDl, &dlname, NULL, NULL, NULL));
     dlname = TfGetPathName(dlname) +
         "lib" ARCH_PATH_SEP
@@ -74,31 +47,17 @@ Test_TfDl()
         "lib"
 #endif
         "TestTfDl" ARCH_LIBRARY_SUFFIX;
-    #endif
 
     // Make sure that this .so does indeed exist first
     printf("Checking test shared lib: %s\n", dlname.c_str());
+    TF_AXIOM(!ArchFileAccess(dlname.c_str(), R_OK));
 
-    std::string errorStr;
-    #ifdef ARCH_OS_WASM_VM
-    // Check that we can open the existing .wasm library.
-    handle = dlopen(dlname.c_str(), RTLD_LAZY | RTLD_LOCAL);
-    if (!handle) {
-        char* errorCStr = dlerror();
-        if (errorCStr) {
-            errorStr = "Failed to open the dynamic library. Error: " + std::string(errorCStr);
-        }
-    }
-    #else
-    void* handle = TfDlopen(dlname, ARCH_LIBRARY_LAZY | ARCH_LIBRARY_LOCAL, &errorStr);
-    #endif
-    TF_AXIOM(handle != nullptr);
-    TF_AXIOM(errorStr.empty());
-#ifdef ARCH_OS_WASM_VM
-    TF_AXIOM(dlclose(handle) == 0);
-#else
+    // Check that we can open the existing library.
+    void *handle =
+        TfDlopen(dlname, ARCH_LIBRARY_LAZY|ARCH_LIBRARY_LOCAL, &dlerror);
+    TF_AXIOM(handle);
+    TF_AXIOM(dlerror.empty());
     TF_AXIOM(!TfDlclose(handle));
-#endif
 
     // we should not be in the process of opening/closing a DL now either
     TF_AXIOM(!Tf_DlOpenIsActive());

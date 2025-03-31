@@ -27,10 +27,7 @@ ArchGetAddressInfo(
     std::string* objectPath, void** baseAddress,
     std::string* symbolName, void** symbolAddress)
 {
-#if defined(ARCH_OS_WASM_VM)
-    // Currently not available for EMSCRIPTEN
-    return false;
-#elif defined(_GNU_SOURCE) || defined(ARCH_OS_DARWIN)
+#if defined(_GNU_SOURCE) || defined(ARCH_OS_DARWIN)
 
     Dl_info info;
     if (dladdr(address, &info)) {

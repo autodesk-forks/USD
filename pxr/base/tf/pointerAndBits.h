@@ -50,7 +50,7 @@ public:
     }
 
     constexpr uintptr_t GetNumBitsValues() const {
-        return 32;
+        return std::pow(2,32);
     }
 
     /// Assignment.  Leaves bits unmodified.
