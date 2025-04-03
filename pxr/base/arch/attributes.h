@@ -248,8 +248,7 @@ struct Arch_ConstructorEntry {
         _priority                                                              \
     };                                                                         \
     static void _name(__VA_ARGS__)
-
-#elif defined(ARCH_COMPILER_GCC) || defined(ARCH_COMPILER_CLANG)
+#elif defined(ARCH_OS_WASM_VM)
 // The used attribute is required to prevent these apparently unused functions
 // from being removed by the linker.
 #   define ARCH_CONSTRUCTOR(_name, _priority, ...) \
@@ -258,6 +257,16 @@ struct Arch_ConstructorEntry {
 #   define ARCH_DESTRUCTOR(_name, _priority, ...) \
         __attribute__((used, section(".pxrdtor"), destructor((_priority) + 100))) \
         static void _name()
+
+#elif defined(ARCH_COMPILER_GCC) || defined(ARCH_COMPILER_CLANG)
+// The used attribute is required to prevent these apparently unused functions
+// from being removed by the linker.
+#   define ARCH_CONSTRUCTOR(_name, _priority, ...) \
+        __attribute__((used, section(".pxrctor"), constructor((_priority) + 100))) \
+        static void _name(__VA_ARGS__)
+#   define ARCH_DESTRUCTOR(_name, _priority, ...) \
+        __attribute__((used, section(".pxrdtor"), destructor((_priority) + 100))) \
+        static void _name(__VA_ARGS__)
 
 #elif defined(ARCH_OS_WINDOWS)
     
