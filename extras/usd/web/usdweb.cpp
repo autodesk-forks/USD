@@ -573,10 +573,8 @@ void wrap_setStage(pxr::UsdStageRefPtr &s)
 }
 
 
-EMSCRIPTEN_BINDINGS(UsdWebView2) {
-    emscripten::function("UsdviewwebEms_Setup" , &wrap_ems_setup);
-    //emscripten::function("UsdviewwebInitialize3", &wrap_initialize);
-    emscripten::function("UsdviewwebGetStage", &wrap_getStage);
-    emscripten::function("UsdviewwebSetStage", &wrap_setStage);
-    //emscripten::function("UsdviewwebResetEngine", &wrap_resetEngine);
+EMSCRIPTEN_BINDINGS(Usdweb) {
+    emscripten::function("UsdwebInit" , &wrap_ems_setup);
+    emscripten::function("UsdwebGetStage", &wrap_getStage);
+    emscripten::function("UsdwebSetStage", &wrap_setStage);
 }
