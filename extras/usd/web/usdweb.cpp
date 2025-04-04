@@ -69,7 +69,7 @@ TF_REGISTRY_FUNCTION(TfDebug)
     TF_DEBUG_ENVIRONMENT_SYMBOL(INFO, "UsdViewWeb info");
 }
 
-namespace {
+namespace usdweb {
 
     std::function<void()> loop;
     pxr::UsdImagingGLRenderParams renderParams;
@@ -80,6 +80,8 @@ namespace {
     pxr::GlfSimpleLightVector defaultLighting;
     pxr::GfVec4f defaultAmbient = pxr::GfVec4f(0.01f, 0.01f, 0.01f, 1.0f);
     std::string filePath;
+    Camera camera;
+    int framebufferWidth = 1, framebufferHeight = 1;
 
     void main_loop() {
         loop();
@@ -208,7 +210,12 @@ struct VertexOutput {
     });
 
     void initGLEngine() {
-        stage = pxr::UsdStage::Open(filePath);
+        if (!stage) {
+            //stage = pxr::UsdStage::Open(filePath);
+            stage = pxr::UsdStage::CreateInMemory();
+            stage->DefinePrim(pxr::SdfPath("/world"), pxr::TfToken("Xform"));
+            stage->DefinePrim(pxr::SdfPath("/world/sphere"), pxr::TfToken("Sphere"));
+        }
 
         // Initialize usd imaging engine
         pxr::SdfPathVector excludedPaths;
@@ -264,9 +271,31 @@ struct VertexOutput {
         return world;
     }
 
+    void fit_camera()
+    {
+        // File globals within namespace:
+        //  camera: variable coming from file global within namespace
+        //  framebufferWidth
+        //  framebufferHeight
+        //
+        
+        pxr::GfRange3d bounds = getStageBounds();
+
+        // create the samer and set its state
+        const auto center = bounds.GetMidpoint();
+
+        const auto dimensions = bounds.GetSize();
+        const auto diameter = std::max(dimensions[0], std::max(dimensions[1], dimensions[2]));
+
+        camera.sphere(diameter);
+        camera.setPosition(bounds.GetMax() * 2.f);
+        camera.setTarget(center);
+        camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));  // Q: Should this use framebufferHeight?
+        camera.update();
+        setupDefaults(camera.getPosition());
+    }
+
     extern "C" int initialize(uint32_t width, uint32_t height) {
-        filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
-        TF_INFO(INFO).Msg("File: %s", filePath.c_str());
         TF_INFO(INFO).Msg("Starting GLEngine ");
         initGLEngine();
         glfwSetErrorCallback(error_callback);
@@ -385,21 +414,9 @@ struct VertexOutput {
         std::vector<uint8_t> colorData;
 
         // Setup camera
-        Camera camera = Camera();
-        pxr::GfRange3d bounds = getStageBounds();
+        //Camera camera = Camera();
+        fit_camera();
 
-        // create the samer and set its state
-        const auto center = bounds.GetMidpoint();
-
-        const auto dimensions = bounds.GetSize();
-        const auto diameter = std::max(dimensions[0], std::max(dimensions[1], dimensions[2]));
-
-        camera.sphere(diameter);
-        camera.setPosition(bounds.GetMax() * 2.f);
-        camera.setTarget(center);
-        camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));
-        camera.update();
-        setupDefaults(camera.getPosition());
         // attach the camera to the window state object
         WindowState wstate;
         wstate.camera = &camera;
@@ -418,7 +435,7 @@ struct VertexOutput {
             glfwSwapInterval(1);
             // update the uniforms
             // blit the texture data to the OpenGL framebuffer
-            camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));
+            camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth)); // Q: Should this use framebufferHeight?
 
             // glEngine update
             glEngine->SetRenderBufferSize(pxr::GfVec2i(framebufferWidth, framebufferHeight));
@@ -509,14 +526,57 @@ struct VertexOutput {
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-
+/*
 extern "C" int __main__(int argc, char **argv);
 
 int main(int argc, char **argv) {
-    pxr::ems_setup();
+    pxr::usdweb::ems_setup();
     return 0;
 }
-
+*/
 extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height) {
-    pxr::initialize(width, height);
+    pxr::usdweb::initialize(width, height);
+}
+
+void wrap_ems_setup()
+{
+    pxr::usdweb::ems_setup();   
+}
+
+
+/*
+void wrap_initialize(uint32_t width, uint32_t height)
+{
+    pxr::usdweb::initialize(width, height);
+}
+*/
+
+pxr::UsdStageRefPtr& wrap_getStage()
+{
+    return pxr::usdweb::stage;
+}
+
+void wrap_resetEngine()
+{
+    pxr::SdfPathVector excludedPaths;
+    pxr::usdweb::glEngine.reset(
+        new pxr::UsdImagingGLEngine(pxr::usdweb::stage->GetPseudoRoot().GetPath(), excludedPaths));   
+}
+
+void wrap_setStage(pxr::UsdStageRefPtr &s)
+{
+    pxr::usdweb::stage = s;
+    if (pxr::usdweb::glEngine != nullptr) {
+        wrap_resetEngine();
+    }
+    pxr::usdweb::fit_camera();
+}
+
+
+EMSCRIPTEN_BINDINGS(UsdWebView2) {
+    emscripten::function("UsdviewwebEms_Setup" , &wrap_ems_setup);
+    //emscripten::function("UsdviewwebInitialize3", &wrap_initialize);
+    emscripten::function("UsdviewwebGetStage", &wrap_getStage);
+    emscripten::function("UsdviewwebSetStage", &wrap_setStage);
+    //emscripten::function("UsdviewwebResetEngine", &wrap_resetEngine);
 }
