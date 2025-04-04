@@ -22,7 +22,7 @@ EMSCRIPTEN_REGISTER_VECTOR_TO_ARRAY_CONVERSION(pxr::UsdGeomXformOp)
 EMSCRIPTEN_REGISTER_TYPE(std::vector<pxr::UsdGeomXformOp>)
 
 EMSCRIPTEN_BINDINGS(UsdGeomXformable) {
-    class_<pxr::UsdGeomXformable>("UsdGeomXformable")
+    class_<pxr::UsdGeomXformable, base<pxr::UsdGeomImageable>>("UsdGeomXformable")
         .constructor<const pxr::UsdPrim &>()
         .function("AddScaleOp", AddScaleOp)
         .function("AddTranslateOp", AddTranslateOp)

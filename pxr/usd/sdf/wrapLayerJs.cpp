@@ -171,6 +171,8 @@ EMSCRIPTEN_BINDINGS(SdfLayer) {
     .function("GetPropertyAtPath", /*&pxr::SdfLayer::GetPropertyAtPath*/ &_GetPropertyAtPath, allow_raw_pointer<ret_val>())
     .function("SetTimeSample", &_SetTimeSample)
     .function("Traverse", &traverse)
+    .function("IsMuted", select_overload<bool()const>(&pxr::SdfLayer::IsMuted))
+    .function("SetMuted", &pxr::SdfLayer::SetMuted)
     .class_function("Find", emscripten::select_overload<SdfLayerHandle(const std::string&)>(&_Find))
     .class_function("Find", emscripten::select_overload<SdfLayerHandle(const std::string&, const emscripten::val&)>(&_Find))
     .class_function("CreateAnonymous", emscripten::select_overload<SdfLayerRefPtr(const std::string&)>(&_CreateAnonymous))

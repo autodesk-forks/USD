@@ -32,8 +32,13 @@ pxr_library(usdGeom
     JS_CPPFILES
         wrapXformJs.cpp
         wrapXformOpJs.cpp
+        wrapImageableJs.cpp
         wrapXformableJs.cpp
+        wrapBoundableJs.cpp
+        wrapGprimJs.cpp
+        wrapPointBasedJs.cpp
         wrapMeshJs.cpp
+        wrapSphereJs.cpp
 
     PUBLIC_HEADERS
         api.h
