@@ -1,5 +1,5 @@
-set(PXR_PREFIX pxr/usdImaging)
-set(PXR_PACKAGE usdviewweb)
+set(PXR_PREFIX pxr/usdweb)
+set(PXR_PACKAGE usdweb)
 
 pxr_cpp_bin(${PXR_PACKAGE}
     LIBRARIES
@@ -26,11 +26,9 @@ if (EMSCRIPTEN)
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm
             ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wasm-server.py
-            ${CMAKE_CURRENT_SOURCE_DIR}/usdviewweb.html
+            ${CMAKE_CURRENT_SOURCE_DIR}/${PXR_PACKAGE}.html
         )
 
-    set(MODEL "Knife")
-    set(MODEL_EXT "usda")
     set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB " --tracing ${DEBUG_OPTIONS} \
         -s ENVIRONMENT=web,worker \
         -pthread \
@@ -53,9 +51,7 @@ if (EMSCRIPTEN)
         -s ALLOW_MEMORY_GROWTH \
     ")
     target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0 -O0")
-    add_compile_definitions(MODEL_NAME="${MODEL}" MODEL_EXT_NAME="${MODEL_EXT}")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
-        --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/${MODEL}.${MODEL_EXT}@${MODEL}.${MODEL_EXT} \
         --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/webgpu-env-settings@/webgpu-env-settings \
         -mbulk-memory \
         -matomics \

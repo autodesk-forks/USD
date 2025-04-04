@@ -1,6 +1,7 @@
 # What is USDViewWeb?
 
-It is a simple application for testing USD Hydra Storm raster renderer with HGI WebGPU backend in web browser.
+It expands on the simple USDViewWeb application to initialize a USD Hydra Storm renderer in a web viewport while exposing USD javascript
+that can be controlled via the html or js files.  For reference, see pxr/usdImaging/bin/usdviewweb.
 
 # How to build and deploy?
 
@@ -60,7 +61,13 @@ python3 ./build_scripts/build_usd.py --build-target wasm --onetbb ../build_dir
 
 This also builds the UsdViewWeb application, which you can use to test Hydra Storm with the WebGPU backend.
 
-## Set up web service
+## Launch web server and open browser
+```
+emrun --browser chrome usdweb.html
+```
+
+
+## Set up web service and Launch Storm in browser
 Start a web server in the build dir with the appropriate flags.
 
 Go into the <build_dir>/bin folder first.
@@ -68,12 +75,8 @@ Go into the <build_dir>/bin folder first.
 ```
 python3 ./wasm-server.py
 ```
+Launch Chrome browser and navigate to http://localhost:8080/usdweb.html. 
 
 ## Browser Requirements
 
 - Chrome v114 and upper version
-
-## Launch Storm in browser
-Launch Chrome browser and navigate to the HdStorm web example: http://localhost:8080/usdviewweb.html. 
-
-
