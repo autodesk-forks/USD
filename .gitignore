@@ -4,4 +4,6 @@
 USD_emscripten/
 build
 .vscode/
+/build*/
+/tmp/
 
