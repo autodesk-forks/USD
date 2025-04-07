@@ -571,9 +571,17 @@ void wrap_setStage(pxr::UsdStageRefPtr &s)
     pxr::usdweb::fit_camera();
 }
 
+//void wrap_setRenderParamsTime(pxr::UsdTimeCode &new_timecode)
+void wrap_setRenderParamsTime(double d)
+{
+    pxr::UsdTimeCode new_timecode(d);
+    pxr::usdweb::renderParams.frame = new_timecode;
+}
+
 
 EMSCRIPTEN_BINDINGS(Usdweb) {
-    emscripten::function("UsdwebInit" , &wrap_ems_setup);
+    emscripten::function("UsdwebInit" , &wrap_ems_setup); // handled automatically in main()
     emscripten::function("UsdwebGetStage", &wrap_getStage);
     emscripten::function("UsdwebSetStage", &wrap_setStage);
+    emscripten::function("UsdwebSetRenderParamsTime", &wrap_setRenderParamsTime);    
 }
