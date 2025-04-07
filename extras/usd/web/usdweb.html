@@ -143,6 +143,28 @@
             if (text) console.error('[post-exception status] ' + text);
         };
     };
+
+    Usd = Module;
+    async function openStageFromUsdfile(filename)
+    {
+        Usd = Module;
+
+        // Workaround for CORS errors when using github.com. 
+        if (filename.includes("github.com")) {
+            filename = filename.replace("github.com", "raw.githubusercontent.com");
+            filename = filename.replace("/blob/", "/");
+        }
+        
+        var fs_filename = filename.split('/').reverse()[0];
+        if (!FS.analyzePath(fs_filename).exists) {
+            const blob = await fetch(filename);
+            const arrayBuffer = await blob.arrayBuffer();
+            Usd.FS_createDataFile("", fs_filename, new Uint8Array(arrayBuffer), true, true, true);
+        }
+        stage = Usd.UsdStage.Open(fs_filename);
+        Usd.UsdwebSetStage(stage);
+        return stage;        
+    }
 </script>
 <script async type="text/javascript" src="usdweb.js"></script>
 </body>
