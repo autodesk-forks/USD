@@ -526,14 +526,13 @@ struct VertexOutput {
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-/*
 extern "C" int __main__(int argc, char **argv);
 
 int main(int argc, char **argv) {
     pxr::usdweb::ems_setup();
     return 0;
 }
-*/
+
 extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height) {
     pxr::usdweb::initialize(width, height);
 }
