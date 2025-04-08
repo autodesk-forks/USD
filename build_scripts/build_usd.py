@@ -1586,7 +1586,9 @@ PYSIDE = PythonDependency("PySide", GetPySideInstructions,
 ############################################################
 # HDF5
 
-HDF5_URL = "https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.10/hdf5-1.10.0-patch1/src/hdf5-1.10.0-patch1.zip"
+#HDF5_URL = "https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.10/hdf5-1.10.0-patch1/src/hdf5-1.10.0-patch1.zip"
+# Autodesk: update to v1.14.5 (security fixes)
+HDF5_URL = "https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.5/hdf5-1.14.5.zip"
 
 def InstallHDF5(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(HDF5_URL, context, force)):
@@ -1601,7 +1603,8 @@ def InstallHDF5(context, force, buildArgs):
         RunCMake(context, force,
                  ['-DBUILD_TESTING=OFF',
                   '-DHDF5_BUILD_TOOLS=OFF',
-                  '-DHDF5_BUILD_EXAMPLES=OFF'] + buildArgs)
+                  '-DHDF5_BUILD_EXAMPLES=OFF',
+                  '-DHDF5_BUILD_CPP_LIB=ON'] + buildArgs)
                  
 HDF5 = Dependency("HDF5", InstallHDF5, "include/hdf5.h")
 
