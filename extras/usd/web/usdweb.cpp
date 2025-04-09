@@ -565,17 +565,26 @@ void wrap_resetEngine()
 void wrap_setStage(pxr::UsdStageRefPtr &s)
 {
     pxr::usdweb::stage = s;
+    // Reset Engine (with stage)
     if (pxr::usdweb::glEngine != nullptr) {
         wrap_resetEngine();
     }
+    // Set timecode
+    pxr::UsdTimeCode new_timecode( pxr::usdweb::stage->GetStartTimeCode() );
+    pxr::usdweb::renderParams.frame = new_timecode;
+    // Fit Camera
     pxr::usdweb::fit_camera();
 }
 
-//void wrap_setRenderParamsTime(pxr::UsdTimeCode &new_timecode)
 void wrap_setRenderParamsTime(double d)
 {
     pxr::UsdTimeCode new_timecode(d);
     pxr::usdweb::renderParams.frame = new_timecode;
+}
+
+double wrap_getRenderParamsTime()
+{
+    return pxr::usdweb::renderParams.frame.GetValue();
 }
 
 
@@ -584,4 +593,5 @@ EMSCRIPTEN_BINDINGS(Usdweb) {
     emscripten::function("UsdwebGetStage", &wrap_getStage);
     emscripten::function("UsdwebSetStage", &wrap_setStage);
     emscripten::function("UsdwebSetRenderParamsTime", &wrap_setRenderParamsTime);    
+    emscripten::function("UsdwebGetRenderParamsTime", &wrap_getRenderParamsTime);    
 }

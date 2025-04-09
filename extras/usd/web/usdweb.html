@@ -176,6 +176,20 @@
         Usd.UsdwebSetStage(stage);
         return stage;        
     }
+
+    document.body.onkeyup = function(e){
+        console.log("==Last key released: " + event.key);
+        if (e.keyCode == 37) {
+            let t = Usd.UsdwebGetRenderParamsTime();
+            t -= 1;
+            Usd.UsdwebSetRenderParamsTime(t);
+        }
+        else if (e.keyCode == 39) {
+            let t = Usd.UsdwebGetRenderParamsTime();
+            t += 1;
+            Usd.UsdwebSetRenderParamsTime(t);
+        }
+    }
 </script>
 <script async type="text/javascript" src="usdweb.js"></script>
 </body>
