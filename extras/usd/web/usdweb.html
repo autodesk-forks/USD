@@ -59,7 +59,7 @@
     #container {
         position: relative;
         width: 100%;
-        height: 100%;
+        height: 90%;
     }
 
     .hidden {
@@ -81,12 +81,23 @@
 <body>
 
 <div id="container">
-
     <div class="spinner" id="spinner"></div>
     <div id="canvasContainer" class="hidden">
         <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
     </div>
 </div>
+
+<div id="footer">
+    Sample files from usd-wg/assets<br>
+    <input type="button" value="FancyTeapot" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd")'><br>
+    <input type="button" value="CarbonFrameBike" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz")'>
+        (
+        <input type="button" value="Hide Rear Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>
+        |     
+        <input type="button" value="Hide Front Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>        
+        )
+</div>
+
 <script type='text/javascript'>
     var spinnerElement = document.getElementById('spinner');
     var canvasContainer = document.getElementById('canvasContainer');
