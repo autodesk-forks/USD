@@ -24,6 +24,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/usdUtils/dependencies.h"
+#include "pxr/base/tf/emscriptenTypeRegistration.h"
 
 #include <emscripten/bind.h>
 using namespace emscripten;
@@ -48,7 +49,9 @@ std::vector<std::string> wrap_UsdUtilsExtractExternalReferences(const std::strin
     return combinedList;
 }
 
+EMSCRIPTEN_REGISTER_VECTOR_TO_ARRAY_CONVERSION(std::string)
+EMSCRIPTEN_REGISTER_TYPE(std::vector< std::string >)
+
 EMSCRIPTEN_BINDINGS(UsdUtils) {
-	register_vector<std::string>("StringVector");
     emscripten::function("UsdUtilsExtractExternalReferences" , &wrap_UsdUtilsExtractExternalReferences);
 }
