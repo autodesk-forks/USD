@@ -6,6 +6,7 @@ pxr_cpp_bin(${PXR_PACKAGE}
         usdImagingGL
         hdStorm
         usdShaders
+        usdUtils
 
     INCLUDE_DIRS
         ${TBB_INCLUDE_DIRS}

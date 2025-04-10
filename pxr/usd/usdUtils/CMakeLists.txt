@@ -76,6 +76,9 @@ pxr_library(usdUtils
         updateSchemaWithSdrNode.py
         usdzUtils.py
 
+    JS_CPPFILES
+        wrapDependenciesJs.cpp
+
     RESOURCE_FILES
         plugInfo.json
 
