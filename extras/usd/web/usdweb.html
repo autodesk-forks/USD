@@ -95,6 +95,26 @@
         <input type="button" value="Hide Rear Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>
         |     
         <input type="button" value="Hide Front Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>        
+        )<br>
+    <input type="button" value="CarbonFrameBike_Variants" onclick='
+        fetchFileToFS("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", "CarbonFrameBike.usdz");
+        openStageFromUsdfile("CarbonFrameBike_Variants.usda");'>
+        (WheelVariants:
+        <input type="button" value="Small" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("wheels");
+            vset.SetVariantSelection("small");'> |
+        <input type="button" value="Normal" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("wheels");
+            vset.SetVariantSelection("normal");'> |
+        <input type="button" value="Big" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("wheels");
+            vset.SetVariantSelection("big");'> |
         )
 </div>
 
@@ -156,22 +176,32 @@
     };
 
     Usd = Module;
-    async function openStageFromUsdfile(filename)
-    {
-        Usd = Module;
 
+
+    async function fetchFileToFS(filename, fs_filename)
+    {
         // Workaround for CORS errors when using github.com. 
         if (filename.includes("github.com")) {
             filename = filename.replace("github.com", "raw.githubusercontent.com");
             filename = filename.replace("/blob/", "/");
         }
         
-        var fs_filename = filename.split('/').reverse()[0];
+        //let fs_filename = filename.split('/').reverse()[0];
         if (!FS.analyzePath(fs_filename).exists) {
+            console.log('Fetching '+filename+' to '+fs_filename);
             const blob = await fetch(filename);
             const arrayBuffer = await blob.arrayBuffer();
             Usd.FS_createDataFile("", fs_filename, new Uint8Array(arrayBuffer), true, true, true);
         }
+        return fs_filename;
+    }
+
+    async function openStageFromUsdfile(filename)
+    {
+
+        let fs_filename = filename.split('/').reverse()[0];
+        await fetchFileToFS(filename, fs_filename);
+        console.log('Setting USDStage: '+fs_filename);
         stage = Usd.UsdStage.Open(fs_filename);
         Usd.UsdwebSetStage(stage);
         return stage;        
