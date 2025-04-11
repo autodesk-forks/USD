@@ -44,6 +44,11 @@ TARGET_WASM='wasm'
 TARGET_WASM64='wasm64'
 TARGET_WASM_NODE='node'
 
+# Hide symbols
+HIDDEN_SYMBOLS = ['-DCMAKE_CXX_VISIBILITY_PRESET=hidden',
+                  '-DCMAKE_C_VISIBILITY_PRESET=hidden',
+                  '-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON']
+
 def Print(msg):
     if verbosity > 0:
         print(msg)
@@ -743,25 +748,16 @@ def AnyPythonDependencies(deps):
 ############################################################
 # zlib
 
-ZLIB_URL = "https://github.com/madler/zlib/archive/v1.2.13.zip"
+ZLIB_URL = "https://github.com/madler/zlib/archive/v1.3.1.zip"
 
 def InstallZlib(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ZLIB_URL, context, force)):
-        # The following test files aren't portable to embedded platforms.
-        # They're not required for use on any platforms, so we elide them
-        # for efficiency
+        # Install static zlib only to avoid conflict if the application already has zlib shared library but with different version.
         PatchFile("CMakeLists.txt",
-                [("add_executable(example test/example.c)",
-                    ""),
-                ("add_executable(minigzip test/minigzip.c)",
-                    ""),
-                ("target_link_libraries(example zlib)",
-                    ""),
-                ("target_link_libraries(minigzip zlib)",
-                    ""),
-                ("add_test(example example)",
-                    "")])
-        RunCMake(context, force, buildArgs)
+                  [("install(TARGETS zlib zlibstatic",
+                    "install(TARGETS zlibstatic")])
+        extraArgs = ['-DZLIB_BUILD_EXAMPLES=OFF'] + HIDDEN_SYMBOLS
+        RunCMake(context, force, buildArgs + extraArgs)
 
 ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
         
@@ -1301,20 +1297,17 @@ TIFF = Dependency("TIFF", InstallTIFF, "include/tiff.h")
 
 ############################################################
 # PNG
-PNG_URL = "https://github.com/glennrp/libpng/archive/refs/tags/v1.6.38.zip"
+PNG_URL = "https://github.com/glennrp/libpng/archive/refs/tags/v1.6.43.zip"
 
 def InstallPNG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(PNG_URL, context, force)):
-        macArgs = []
+        macArgs = ["-DPNG_SHARED=OFF"]
         if MacOS() and apple_utils.IsTargetArm(context):
             # Ensure libpng's build doesn't erroneously activate inappropriate
             # Neon extensions
-            macArgs = ["-DCMAKE_C_FLAGS=\"-DPNG_ARM_NEON_OPT=0\""]
-
-            if context.targetUniversal:
-                PatchFile("scripts/genout.cmake.in",
-                [("CMAKE_OSX_ARCHITECTURES",
-                  "CMAKE_OSX_INTERNAL_ARCHITECTURES")])
+            macArgs += ["-DCMAKE_C_FLAGS=\"-DPNG_ARM_NEON_OPT=0\"",
+                        "-DPNG_FRAMEWORK=OFF"]
+        macArgs += HIDDEN_SYMBOLS
 
         RunCMake(context, force, buildArgs + macArgs)
 
@@ -1930,6 +1923,13 @@ def InstallDawn(context, force, buildArgs):
                      '    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n')])
 
             google_depot_tools.fetch_dependecies(required_submodules)
+
+            # Issue when updating XCode to version 15
+            # https://github.com/abseil/abseil-cpp/issues/1241#issuecomment-2151166131
+            PatchFile("third_party/abseil-cpp/absl/copts/AbseilConfigureCopts.cmake", [
+                ('if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES [[Clang]])','if(FALSE)')
+            ])
+
             cmakeOptions = [
                 '-DDAWN_BUILD_SAMPLES=OFF',
                 '-DDAWN_ENABLE_INSTALL=ON',
