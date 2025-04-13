@@ -59,7 +59,7 @@
     #container {
         position: relative;
         width: 100%;
-        height: 90%;
+        height: 85%;
     }
 
     .hidden {
@@ -92,14 +92,24 @@
     <input type="button" value="FancyTeapot" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd")'><br>
     <input type="button" value="CarbonFrameBike" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz")'>
         (
+        <input type="button" value="Show Rear Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeVisible();'>
+        |     
         <input type="button" value="Hide Rear Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>
+        |
+        <input type="button" value="Show Front Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeVisible();'>
         |     
         <input type="button" value="Hide Front Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>        
         )<br>
-    <input type="button" value="CarbonFrameBike_Variants" onclick='
-        fetchFileToFS("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", "CarbonFrameBike.usdz");
-        openStageFromUsdfile("CarbonFrameBike_Variants.usda");'>
-        (WheelVariants:
+    <input type="button" id="CarbonFrameBike_Variants" value="CarbonFrameBike_Variants">
+    <script>
+        async function loadscene_CarbonFrameBike_Variants()
+        {
+            await fetchFileToFS("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", "CarbonFrameBike.usdz");
+            openStageFromUsdfile("CarbonFrameBike_Variants.usda");
+        }
+        document.getElementById("CarbonFrameBike_Variants").onclick = loadscene_CarbonFrameBike_Variants;
+    </script>
+        (wheels:
         <input type="button" value="Small" onclick='
             prim = stage.GetPrimAtPath("/CarbonFrameBike");
             vsets = prim.GetVariantSets();
@@ -114,8 +124,45 @@
             prim = stage.GetPrimAtPath("/CarbonFrameBike");
             vsets = prim.GetVariantSets();
             vset = vsets.GetVariantSet("wheels");
-            vset.SetVariantSelection("big");'> |
+            vset.SetVariantSelection("big");'>
         )
+        (frame_material:
+        <input type="button" value="Carbon" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("frame_material");
+            vset.SetVariantSelection("carbon");'> |
+       <input type="button" value="Yellow" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("frame_material");
+            vset.SetVariantSelection("yellow");'> |
+        <input type="button" value="Red" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("frame_material");
+            vset.SetVariantSelection("red");'> |
+        <input type="button" value="Blue" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("frame_material");
+            vset.SetVariantSelection("blue");'>
+         )
+         <br>
+         (camera:
+        <input type="button" value="All" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike");
+            Usd.UsdwebFitCamera(prim);'> |
+        <input type="button" value="SamplerDisk" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike/SamplerDisk");
+            Usd.UsdwebFitCamera(prim);'> |
+        <input type="button" value="Front Wheel" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn");
+            Usd.UsdwebFitCamera(prim);'> |
+        <input type="button" value="Rear Wheel" onclick='
+            prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten");
+            Usd.UsdwebFitCamera(prim);'> |
+         )
 </div>
 
 <script type='text/javascript'>
