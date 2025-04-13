@@ -259,19 +259,19 @@ struct VertexOutput {
         defaultLighting.push_back(light);
     }
 
-    pxr::GfRange3d getStageBounds() {
+    pxr::GfRange3d getStageBounds(const pxr::UsdPrim &prim) {
         pxr::TfTokenVector purposes;
         purposes.push_back(pxr::UsdGeomTokens->default_);
         purposes.push_back(pxr::UsdGeomTokens->proxy);
         bool useExtentHints = false;
 
         pxr::UsdGeomBBoxCache bboxCache(pxr::UsdTimeCode::Default(), purposes, useExtentHints);
-        pxr::GfBBox3d bbox = bboxCache.ComputeWorldBound(stage->GetPseudoRoot());
+        pxr::GfBBox3d bbox = bboxCache.ComputeWorldBound(prim);
         pxr::GfRange3d world = bbox.ComputeAlignedRange();
         return world;
     }
 
-    void fit_camera()
+    void fit_camera(const pxr::UsdPrim &prim)
     {
         // File globals within namespace:
         //  camera: variable coming from file global within namespace
@@ -279,7 +279,7 @@ struct VertexOutput {
         //  framebufferHeight
         //
         
-        pxr::GfRange3d bounds = getStageBounds();
+        pxr::GfRange3d bounds = prim.IsValid() ? getStageBounds(prim) : getStageBounds(stage->GetPseudoRoot());
 
         // create the samer and set its state
         const auto center = bounds.GetMidpoint();
@@ -288,7 +288,7 @@ struct VertexOutput {
         const auto diameter = std::max(dimensions[0], std::max(dimensions[1], dimensions[2]));
 
         camera.sphere(diameter);
-        camera.setPosition(bounds.GetMax() * 2.f);
+        camera.setPosition(bounds.GetMax() * 1.5f);
         camera.setTarget(center);
         camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));  // Q: Should this use framebufferHeight?
         camera.update();
@@ -415,7 +415,7 @@ struct VertexOutput {
 
         // Setup camera
         //Camera camera = Camera();
-        fit_camera();
+        fit_camera(pxr::UsdPrim());
 
         // attach the camera to the window state object
         WindowState wstate;
@@ -573,7 +573,7 @@ void wrap_setStage(pxr::UsdStageRefPtr &s)
     pxr::UsdTimeCode new_timecode( pxr::usdweb::stage->GetStartTimeCode() );
     pxr::usdweb::renderParams.frame = new_timecode;
     // Fit Camera
-    pxr::usdweb::fit_camera();
+    pxr::usdweb::fit_camera(pxr::usdweb::stage->GetPseudoRoot());
 }
 
 void wrap_setRenderParamsTime(double d)
@@ -592,6 +592,7 @@ EMSCRIPTEN_BINDINGS(Usdweb) {
     emscripten::function("UsdwebInit" , &wrap_ems_setup); // handled automatically in main()
     emscripten::function("UsdwebGetStage", &wrap_getStage);
     emscripten::function("UsdwebSetStage", &wrap_setStage);
+    emscripten::function("UsdwebFitCamera", &pxr::usdweb::fit_camera);
     emscripten::function("UsdwebSetRenderParamsTime", &wrap_setRenderParamsTime);    
     emscripten::function("UsdwebGetRenderParamsTime", &wrap_getRenderParamsTime);    
 }
