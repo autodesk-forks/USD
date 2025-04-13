@@ -76,6 +76,7 @@ pxr_library(usd
 
     JS_CPPFILES
         wrapAttributeJs.cpp
+        wrapObjectJs.cpp
         wrapPrimJs.cpp
         wrapReferencesJs.cpp
         wrapStageJs.cpp
