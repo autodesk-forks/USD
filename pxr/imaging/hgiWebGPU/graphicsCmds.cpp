@@ -147,20 +147,21 @@ HgiWebGPUGraphicsCmds::_EndRenderPass()
         _passEncoder = nullptr;
         _lastIndexBuffer = nullptr;
 
-        if (_hasWork)  {
 #if !defined(EMSCRIPTEN)
-            if (_IsTimestampsEnabled()) {
-                _hgi->ResolveQuery(_commandEncoder,
-                                   _lastDrawLabel.empty() ? _pipeline->GetDescriptor().debugName : _lastDrawLabel);
-            }
+        if (_hasWork && _IsTimestampsEnabled()) {
+            _hgi->ResolveQuery(_commandEncoder,
+                                _lastDrawLabel.empty() ? _pipeline->GetDescriptor().debugName : _lastDrawLabel);
+        }
 #endif
-            auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
-            if (depthTarget) {
-                HgiTextureDesc depthDesc = depthTarget->GetDescriptor();
-                if(depthDesc.sampleCount > 1 && _descriptor.depthResolveTexture) {
-                    auto depthResolveTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthResolveTexture.Get());
-                    _hgi->ResolveDepth(_commandEncoder, *depthTarget, *depthResolveTarget);
-                }
+
+        // Always resolve depth in order to catch the case where nothing opaque is drawn which would leave the depth resolve texture
+        // in an uncleared stage. We need to make sure that depth resolve and depth have been initialized with the same clear value.
+        auto depthTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthTexture.Get());
+        if (depthTarget) {
+            HgiTextureDesc depthDesc = depthTarget->GetDescriptor();
+            if(depthDesc.sampleCount > 1 && _descriptor.depthResolveTexture) {
+                auto depthResolveTarget = dynamic_cast<HgiWebGPUTexture *>(_descriptor.depthResolveTexture.Get());
+                _hgi->ResolveDepth(_commandEncoder, *depthTarget, *depthResolveTarget);
             }
         }
 

@@ -138,7 +138,11 @@ HgiWebGPUGraphicsPipeline::HgiWebGPUGraphicsPipeline(
     {
         depthStencilDesc.format = HgiWebGPUConversions::GetDepthOrStencilTextureFormat(desc.depthAttachmentDesc.usage, desc.depthAttachmentDesc.format);
         depthStencilDesc.depthWriteEnabled = desc.depthState.depthWriteEnabled;
-        depthStencilDesc.depthCompare = HgiWebGPUConversions::GetCompareFunction(desc.depthState.depthCompareFn);
+        if (desc.depthState.depthTestEnabled) {
+            depthStencilDesc.depthCompare = HgiWebGPUConversions::GetCompareFunction(desc.depthState.depthCompareFn);
+        } else {
+            depthStencilDesc.depthCompare = HgiWebGPUConversions::GetCompareFunction(HgiCompareFunctionAlways);
+        }
         depthStencilDesc.stencilBack = _GetStencilFaceState(desc.depthState.stencilBack);
         depthStencilDesc.stencilFront = _GetStencilFaceState(desc.depthState.stencilFront);
         // TODO: Should it be desc.depthState.stencilFront or desc.depthState.stencilBack?
