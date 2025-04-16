@@ -351,6 +351,7 @@ void FreeCameraGL::Zoom(float zoomDelta)
         AdjustDistance(1 + zoomDelta);
     }
     _cameraTransformDirty = true;
+    //self.signalFrustumChanged.emit()
 }
 
 
