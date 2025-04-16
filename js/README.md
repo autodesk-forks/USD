@@ -43,6 +43,29 @@ or in watch mode
 npm run test --  --watch
 ```
 
+Benchmarking
+------------
+
+You can launch the benchmark script by running:
+
+```sh
+npm run test:playwright:benchmarks
+```
+
+Ensure that USD has been built using the `build_usd.py` Python script or with CMake, including the install step. This process will create a folder under `js` called `usdviewweb/`, which contains the application used for benchmarking.
+
+To configure parameters, copy the `default_env` file to `.env` and modify it with the appropriate values.
+
+```sh
+cp default_env .env
+```
+
+To view the results, run:
+
+```sh
+npx playwright show-report tests-playwright/.reports/html
+```
+
 NPM package consumption
 ------------------------
 

@@ -4,4 +4,7 @@
 USD_emscripten/
 build
 .vscode/
-
+.idea/
+.vs/*
+out/*
+build_scripts/__pycache__

@@ -35,9 +35,6 @@
 #include <vector>
 #include <fstream>
 
-#define GL_GLEXT_PROTOTYPES
-#define EGL_EGLEXT_PROTOTYPES
-
 #include <GLFW/glfw3.h>
 #include <cmath>
 
@@ -156,30 +153,96 @@ struct VertexOutput {
 
     EM_JS(void, ems_setup, (), {
         if (_ems_main) {
+        var currentFileName = "";
+        function loadUsdFileFromArrayBuffer(filename, usdFile) {
+            let parts = filename.split('.');
+            let extension = parts[parts.length - 1];
+            extension = extension.split('?')[0];
+            // random filename allows to use multiple files at the same time.
+            // this implementation currently clears the old file.
+            let fileName = (Math.random() + 1).toString(36).substring(7);
+            let inputFile = fileName + "." + extension;
+
+            FS_createDataFile('/', inputFile, new Uint8Array(usdFile), true, true, true);
+
+            // clear existing objects
+            if (currentFileName) {
+                FS_unlink(currentFileName, true);
+            }
+            currentFileName = inputFile;
+            return inputFile;
+        }
+
+        async function loadFile(fileOrHandle) {
+            let file = undefined;
+            try {
+                if(fileOrHandle.getFile !== undefined) {
+                    file = await fileOrHandle.getFile();
+                }
+                else
+                    file = fileOrHandle;
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    loadUsdFileFromArrayBuffer(file.name, event.target.result);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            catch(ex) {
+                console.warn("Error loading file", fileOrHandle, ex);
+            }
+        }
+
+        async function loadBinaryFile(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                const urlObject = new URL(url, window.location.origin);
+                const fileName = urlObject.pathname.split('/').pop();
+                return loadUsdFileFromArrayBuffer(fileName, arrayBuffer);
+            } catch (error) {
+                console.error(`Error loading binary file: ${error.message}`);
+                throw error;
+            }
+        }
+
+        function testAndLoadFile(file) {
+            let ext = file.name.split('.').pop();
+            console.log(file.name + ", " + file.size + ", " + ext);
+            if(ext == 'usd' || ext == 'usdz'|| ext == 'usda') {
+                loadFile(file);
+            }
+        }
+
         if (navigator["gpu"]) {
-        navigator["gpu"]["requestAdapter"]().then(function (adapter) {
-            const requestedFeatures = [
-            'depth32float-stencil8',
+            window.loadBinaryFile = loadBinaryFile;
+            (async function() {
+                const adapter = await navigator["gpu"]["requestAdapter"]();
+                const requestedFeatures = [
+                    'depth32float-stencil8',
                     'float32-filterable'
-            ];
-            const requiredFeatures = [];
-            requestedFeatures.forEach((feat) => {
-                    if (adapter.features.has(feat))
-                    {
+                ];
+                const requiredFeatures = [];
+                requestedFeatures.forEach((feat) => {
+                    if (adapter.features.has(feat)){
                         requiredFeatures.push(feat);
                         console.log('WebGPU adapter supports ' + feat + '.');
-                    }
-                    else
-                    {
+                    } else {
                         console.log('WebGPU adapter does not support ' + feat + '.');
                     }
-            });
-            const requiredLimits = {
+                });
+                const requiredLimits = {
                     maxStorageBuffersPerShaderStage: 10,
                     maxColorAttachmentBytesPerSample: 64,
                     maxBufferSize: 0x40000000
-            };
-            adapter["requestDevice"]({requiredFeatures, requiredLimits}).then( function (device) {
+                };
+                const device = await adapter.requestDevice({
+                    requiredFeatures: requiredFeatures,
+                    requiredLimits: requiredLimits
+                });
+
                 Module["preinitializedWebGPUDevice"] = device;
                 const canvasContainer = document.getElementById("canvasContainer");
                 const height = document.getElementById('canvasContainer').offsetHeight;
@@ -194,11 +257,30 @@ struct VertexOutput {
                 const mainCanvas = document.getElementById("canvas");
                 mainCanvas.style.position = "absolute";
                 mainCanvas.style.opacity = 0;
-                _ems_main(width, height);
-            }).catch((res) => { console.log(res); });
-        }, function () {
-            console.log("WebGPU adapter not found.");
-        });
+                const urlParams = new URLSearchParams(window.location.search);
+                const perf = urlParams.has('perf');
+                let modelParam = urlParams.get('model');
+                let usdFilename = "";
+                if (modelParam) {
+                    usdFilename = await loadBinaryFile(modelParam);
+                }
+
+                var lengthBytes = lengthBytesUTF8(usdFilename) + 1;
+                var fileNameOnWasmHeap = _malloc(lengthBytes);
+                stringToUTF8(usdFilename, fileNameOnWasmHeap, lengthBytes);
+
+                if(!urlParams.has('perf')) {
+                    _ems_main(
+                        width,
+                        height,
+                        -1,
+                        fileNameOnWasmHeap,
+                        false
+                    );
+                }
+                _free(fileNameOnWasmHeap);
+
+            })();
     } else {
         console.log("WebGPU not found.");
     }
@@ -264,8 +346,15 @@ struct VertexOutput {
         return world;
     }
 
-    extern "C" int initialize(uint32_t width, uint32_t height) {
-        filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
+    extern "C" int initialize(uint32_t width, uint32_t height, int32_t numFrames, const char* fileName, bool rotate) {
+        if (fileName == nullptr || fileName[0] == '\0') {
+            std::cout << "Empty file name" << std::endl;
+            filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
+        } else {
+            std::cout << "File name: " << fileName << std::endl;
+            filePath = fileName;
+        }
+
         TF_INFO(INFO).Msg("File: %s", filePath.c_str());
         TF_INFO(INFO).Msg("Starting GLEngine ");
         initGLEngine();
@@ -275,6 +364,7 @@ struct VertexOutput {
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
 
         // just use multiples of 256 now until row alignment is handled in HgiWebGPU
         auto window = glfwCreateWindow(width, height, "HgiWebGPU Test", NULL, NULL);
@@ -413,6 +503,12 @@ struct VertexOutput {
         glfwSetScrollCallback(window, scroll_callback);
         glfwSwapBuffers(window);
 
+        int rotationSpeed = 40;
+        EM_ASM({
+            const event = new CustomEvent('onplay', {});
+            window.dispatchEvent(event);
+        });
+        int frameIndex = 0;
         loop = [&]() {
 
             glfwSwapInterval(1);
@@ -425,6 +521,12 @@ struct VertexOutput {
             glEngine->SetRendererAov(pxr::HdAovTokens->color);
             glEngine->SetRenderViewport(pxr::GfVec4d(0, 0, framebufferWidth, framebufferHeight));
             glEngine->SetWindowPolicy(pxr::CameraUtilConformWindowPolicy::CameraUtilFit);
+            if (rotate) {
+                camera.mouseDown(GLFW_MOUSE_BUTTON_LEFT, GLFW_PRESS, 0, framebufferWidth / 2, framebufferHeight / 2);
+                camera.mouseMove(framebufferWidth / 2 + rotationSpeed, framebufferHeight / 2);
+                camera.update();
+                camera.mouseUp();
+            }
             glEngine->SetCameraState(camera.getViewMatrix(), camera.getProjectionMatrix());
             const auto position = camera.getPosition();
             defaultLighting[0].SetPosition(
@@ -434,7 +536,24 @@ struct VertexOutput {
             // Render
             glEngine->SetEnablePresentation(false);
 
+            EM_ASM({
+                const event = new CustomEvent('onframechanged', {detail: {frameIndex: $0}});
+                window.dispatchEvent(event);
+            }, frameIndex);
             glEngine->Render(stage->GetPseudoRoot(), renderParams);
+            EM_ASM({
+                const frameIndex = $0;
+                const numFrames = $1;
+                const event = new CustomEvent('onframepresented', {
+                    detail: {
+                        frameIndex: frameIndex,
+                        lastFrame: frameIndex === numFrames-1,
+                        firstFrame: frameIndex === 0
+                    }
+                });
+                window.dispatchEvent(event);
+            }, frameIndex, numFrames);
+
 
             pxr::HgiTextureHandle colorTarget = glEngine->GetAovTexture(pxr::HdAovTokens->color);
 
@@ -497,8 +616,16 @@ struct VertexOutput {
             }
 
             device.GetQueue().Submit(1, &commands);
+            if (numFrames > 0) frameIndex++;
 
             glfwPollEvents();
+            if (numFrames > 0 && frameIndex == numFrames) {
+                emscripten_cancel_main_loop();
+                glfwDestroyWindow(window);
+                glfwTerminate();
+                printf("Shutting down\n");
+            }
+
         };
         emscripten_set_main_loop(main_loop, 0, true);
         glfwDestroyWindow(window);
@@ -517,6 +644,8 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height) {
-    pxr::initialize(width, height);
+extern "C" __attribute__((used, visibility("default"))) void ems_main(
+    uint32_t width, uint32_t height, int32_t numFrames, const char* fileName, bool rotate) {
+    pxr::initialize(width, height, numFrames, fileName, rotate);
 }
+

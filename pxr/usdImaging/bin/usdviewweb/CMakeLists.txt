@@ -87,6 +87,12 @@ if (EMSCRIPTEN)
         ${BUILD_FILES}
         DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
     )
+
+    install(
+            FILES
+            ${BUILD_FILES}
+            DESTINATION ${CMAKE_SOURCE_DIR}/js/usdviewweb
+    )
 endif()
 
 target_sources(${PXR_PACKAGE} PRIVATE
