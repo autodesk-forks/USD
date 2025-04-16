@@ -86,5 +86,5 @@ if (EMSCRIPTEN)
 endif()
 
 target_sources(${PXR_PACKAGE} PRIVATE
-        camera.cpp
+        freeCameraGL.cpp
 )

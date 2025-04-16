@@ -24,7 +24,7 @@
 
 #include <GLFW/glfw3.h>
 #include <iostream>
-#include "camera.h"
+#include "freeCameraGL.h"
 
 #ifndef PXR_USD_IMAGING_USD_WINDOW_STATE_H
 #define PXR_USD_IMAGING_USD_WINDOW_STATE_H
@@ -50,7 +50,7 @@ struct WindowState
     double mouseX, mouseY;
     int mouseButton;
     int mouseButtonState;
-    Camera *camera;
+    FreeCameraGL *camera;
 };
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)

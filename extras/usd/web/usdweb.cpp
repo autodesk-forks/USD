@@ -35,9 +35,6 @@
 #include <vector>
 #include <fstream>
 
-#define GL_GLEXT_PROTOTYPES
-#define EGL_EGLEXT_PROTOTYPES
-
 #include <GLFW/glfw3.h>
 #include <cmath>
 
@@ -52,10 +49,12 @@
 #include <pxr/imaging/hgi/blitCmdsOps.h>
 #include "pxr/imaging/hdx/tokens.h"
 #include "pxr/usd/usdGeom/bboxCache.h"
+#include <pxr/usd/usdGeom/metrics.h>
+#include <pxr/usd/usdGeom/tokens.h>
 #include "pxr/base/plug/registry.h"
 #include "pxr/base/plug/plugin.h"
 
-#include "camera.h"
+#include "freeCameraGL.h"
 #include "window_state.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -80,7 +79,7 @@ namespace usdweb {
     pxr::GlfSimpleLightVector defaultLighting;
     pxr::GfVec4f defaultAmbient = pxr::GfVec4f(0.01f, 0.01f, 0.01f, 1.0f);
     std::string filePath;
-    Camera camera;
+    FreeCameraGL camera;
     int framebufferWidth = 1, framebufferHeight = 1;
 
     void main_loop() {
@@ -213,6 +212,7 @@ struct VertexOutput {
         if (!stage) {
             //stage = pxr::UsdStage::Open(filePath);
             stage = pxr::UsdStage::CreateInMemory();
+            UsdGeomSetStageUpAxis(stage, UsdGeomTokens->y);
             stage->DefinePrim(pxr::SdfPath("/world"), pxr::TfToken("Xform"));
             stage->DefinePrim(pxr::SdfPath("/world/sphere"), pxr::TfToken("Sphere"));
         }
@@ -247,7 +247,8 @@ struct VertexOutput {
         renderParams.clearColor = pxr::GfVec4f(0.5f);
     }
 
-    void setupDefaults(pxr::GfVec3d const &lightPosition) {
+    void setupDefaults(pxr::GfVec3d const &lightPosition) 
+    {
         // Set default lights and materials
         defaultMaterial.SetAmbient(pxr::GfVec4f(0.0f, 0.0f, 0.0f, 1.0f));
         defaultMaterial.SetSpecular(pxr::GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
@@ -259,7 +260,7 @@ struct VertexOutput {
         defaultLighting.push_back(light);
     }
 
-    pxr::GfRange3d getStageBounds(const pxr::UsdPrim &prim) {
+    pxr::GfBBox3d getStageBBox(const pxr::UsdPrim &prim) {
         pxr::TfTokenVector purposes;
         purposes.push_back(pxr::UsdGeomTokens->default_);
         purposes.push_back(pxr::UsdGeomTokens->proxy);
@@ -267,30 +268,21 @@ struct VertexOutput {
 
         pxr::UsdGeomBBoxCache bboxCache(pxr::UsdTimeCode::Default(), purposes, useExtentHints);
         pxr::GfBBox3d bbox = bboxCache.ComputeWorldBound(prim);
+        return bbox;
+    }
+
+    pxr::GfRange3d getStageBounds(const pxr::UsdPrim &prim) 
+    {
+        pxr::GfBBox3d bbox = getStageBBox(prim);
         pxr::GfRange3d world = bbox.ComputeAlignedRange();
         return world;
     }
 
     void fit_camera(const pxr::UsdPrim &prim)
     {
-        // File globals within namespace:
-        //  camera: variable coming from file global within namespace
-        //  framebufferWidth
-        //  framebufferHeight
-        //
-        
-        pxr::GfRange3d bounds = prim.IsValid() ? getStageBounds(prim) : getStageBounds(stage->GetPseudoRoot());
-
-        // create the samer and set its state
-        const auto center = bounds.GetMidpoint();
-
-        const auto dimensions = bounds.GetSize();
-        const auto diameter = std::max(dimensions[0], std::max(dimensions[1], dimensions[2]));
-
-        camera.sphere(diameter);
-        camera.setPosition(bounds.GetMax() * 1.5f);
-        camera.setTarget(center);
-        camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));  // Q: Should this use framebufferHeight?
+        pxr::GfBBox3d bbox = prim.IsValid() ? getStageBBox(prim) : getStageBBox(stage->GetPseudoRoot());
+        float frameFit = 1.2f;
+        camera.FrameSelection(bbox, frameFit);
         camera.update();
         setupDefaults(camera.getPosition());
     }
@@ -435,7 +427,7 @@ struct VertexOutput {
             glfwSwapInterval(1);
             // update the uniforms
             // blit the texture data to the OpenGL framebuffer
-            camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth)); // Q: Should this use framebufferHeight?
+            camera.setViewportDimensions(pxr::GfVec2f(framebufferWidth, framebufferHeight));
 
             // glEngine update
             glEngine->SetRenderBufferSize(pxr::GfVec2i(framebufferWidth, framebufferHeight));
