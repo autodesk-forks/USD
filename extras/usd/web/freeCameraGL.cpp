@@ -428,11 +428,6 @@ void FreeCameraGL::mouseWheel(double dx ,double dy)
 
 void FreeCameraGL::mouseMove(int xpos,int ypos)
 {
-    //if( state == CAM_STATE::ROTATE )
-    //    rotEnd = getMouseProjectionOnBall(xpos,ypos);
-    //else if( state == CAM_STATE::PAN )
-    //    panEnd = getMouseOnScreen(xpos,ypos);
-
     if (_dragActive) {
         int dx = xpos - _lastX;
         int dy = ypos - _lastY;
@@ -456,28 +451,12 @@ void FreeCameraGL::mouseMove(int xpos,int ypos)
 
         _lastX = xpos;
         _lastY = ypos;
-        //self.updateGL()
     }
 }
 
-/*
-pxr::GfVec2d FreeCameraGL::getMouseOnScreen(int clientX, int clientY)
-{
-    return pxr::GfVec2d(
-            (double)(clientX - screenDimensions[0]) / screenDimensions[2],
-            (double)(clientY - screenDimensions[1]) / screenDimensions[3] );
-}
-*/
 
 void FreeCameraGL::mouseUp()
 {
     _cameraMode = Camera_Mode::NONE;
     _dragActive = false;
 }
-
-
-//const pxr::GfMatrix4d FreeCameraGL::GetProjectionMatrix() {
-//    pxr::GfFrustum frustum;
-//    frustum.SetPerspective(GetFOV() * (180/3.14), screenDimensions[2] / screenDimensions[3], diameter / 100, diameter * 10);
-//    return frustum.ComputeProjectionMatrix();
-//}

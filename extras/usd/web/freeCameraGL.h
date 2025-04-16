@@ -47,17 +47,6 @@ public:
         );
 	virtual ~FreeCameraGL(){}
 
-	// BEG: REVISIT =====
-	//void setPosition(pxr::GfVec3d cameraPosition) { position = cameraPosition; }
-
-	//void setTarget(pxr::GfVec3d cameraTarget) { target = cameraTarget; }
-	//const pxr::GfVec3d &getTarget() const { return target; }
-
-	//void setViewport(pxr::GfVec4d screenDims) { screenDimensions = screenDims; }
-
-    //pxr::GfMatrix4d pickingMatrix(double x, double y) const;
-    // END: REVISIT =======
-
     // Static Const
     static constexpr float defaultNear = 1.0f;
     static constexpr float defaultFar = 2000000.0f;
@@ -73,7 +62,7 @@ public:
     static const pxr::GfMatrix4d _ZUpRotInvMatrix;
 
     // =====
-    // from web camera.h 
+    // Functions incorporated from usdweb camera.h 
     //
 	void update();
 	void mouseUp();
@@ -81,7 +70,7 @@ public:
 	void mouseMove(int xpos, int ypos);
 	void mouseWheel(double xoffset ,double yoffset);
 
-	// REVISIT: Cache instead of computing each time
+	// @REVISIT: Cache instead of computing each time ComputeViewMatrix(), ComputeProjectionMatrix()
 	// Referenced from python code
     // 		renderer.SetCameraState(frustum.ComputeViewMatrix(),
     //                              frustum.ComputeProjectionMatrix())
