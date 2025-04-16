@@ -41,7 +41,7 @@ public:
 	FreeCameraGL(
 	    bool  isZUp=false,
 		float aspectRatio=1.0, 
-		float fov=60.0, 
+		float fov=30.0, 
 		float overrideNear = FreeCameraGL::defaultNear, 
 		float overrideFar = FreeCameraGL::defaultFar
         );

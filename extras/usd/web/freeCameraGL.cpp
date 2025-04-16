@@ -422,7 +422,7 @@ void FreeCameraGL::mouseDown(int button, int action, int mods, int xpos, int ypo
 void FreeCameraGL::mouseWheel(double dx ,double dy)
 {
     // An implicit ZOOM with mouse wheel
-    float zoomDelta = -.002 * (dx + dy);
+    float zoomDelta = -.1 * (dx + dy);
     Zoom(zoomDelta);
 }
 
