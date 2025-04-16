@@ -271,13 +271,6 @@ struct VertexOutput {
         return bbox;
     }
 
-    pxr::GfRange3d getStageBounds(const pxr::UsdPrim &prim) 
-    {
-        pxr::GfBBox3d bbox = getStageBBox(prim);
-        pxr::GfRange3d world = bbox.ComputeAlignedRange();
-        return world;
-    }
-
     void fit_camera(const pxr::UsdPrim &prim)
     {
         pxr::GfBBox3d bbox = prim.IsValid() ? getStageBBox(prim) : getStageBBox(stage->GetPseudoRoot());
