@@ -39,6 +39,7 @@ pxr_library(usdGeom
         wrapPointBasedJs.cpp
         wrapMeshJs.cpp
         wrapSphereJs.cpp
+        wrapCameraJs.cpp
 
     PUBLIC_HEADERS
         api.h
