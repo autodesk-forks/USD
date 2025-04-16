@@ -208,6 +208,53 @@ struct VertexOutput {
     }
     });
 
+
+    void setupDefaults(pxr::GfVec3d const &lightPosition) 
+    {
+        // Set default lights and materials
+        defaultMaterial.SetAmbient(pxr::GfVec4f(0.0f, 0.0f, 0.0f, 1.0f));
+        defaultMaterial.SetSpecular(pxr::GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
+        defaultMaterial.SetShininess(32.0f);
+
+        light.SetPosition(
+                pxr::GfVec4f((float) lightPosition[0], (float) lightPosition[1], (float) lightPosition[2], 1.f));
+        light.SetAmbient(pxr::GfVec4f(0.9));
+        defaultLighting.push_back(light);
+    }
+
+
+    pxr::GfBBox3d getStageBBox(const pxr::UsdPrim &prim) {
+        pxr::TfTokenVector purposes;
+        purposes.push_back(pxr::UsdGeomTokens->default_);
+        purposes.push_back(pxr::UsdGeomTokens->proxy);
+        bool useExtentHints = false;
+
+        pxr::UsdGeomBBoxCache bboxCache(pxr::UsdTimeCode::Default(), purposes, useExtentHints);
+        pxr::GfBBox3d bbox = bboxCache.ComputeWorldBound(prim);
+        return bbox;
+    }
+
+
+    void fit_camera(const pxr::UsdPrim &prim)
+    {
+        pxr::GfBBox3d bbox = prim.IsValid() ? getStageBBox(prim) : getStageBBox(stage->GetPseudoRoot());
+        float frameFit = 1.2f;
+        camera.FrameSelection(bbox, frameFit);
+        camera.update();
+        setupDefaults(camera.getPosition());
+    }
+
+    void initParamsForWebStage()
+    {
+        // Set timecode
+        pxr::UsdTimeCode new_timecode( pxr::usdweb::stage->GetStartTimeCode() );
+        pxr::usdweb::renderParams.frame = new_timecode;
+        // Set Camera Up
+        pxr::usdweb::camera.SetIsZUp( (UsdGeomGetStageUpAxis(pxr::usdweb::stage) == pxr::UsdGeomTokens->z) );
+        // Fit Camera
+        pxr::usdweb::fit_camera(pxr::usdweb::stage->GetPseudoRoot());
+    }
+
     void initGLEngine() {
         if (!stage) {
             //stage = pxr::UsdStage::Open(filePath);
@@ -215,6 +262,7 @@ struct VertexOutput {
             UsdGeomSetStageUpAxis(stage, UsdGeomTokens->y);
             stage->DefinePrim(pxr::SdfPath("/world"), pxr::TfToken("Xform"));
             stage->DefinePrim(pxr::SdfPath("/world/sphere"), pxr::TfToken("Sphere"));
+            initParamsForWebStage();
         }
 
         // Initialize usd imaging engine
@@ -247,38 +295,6 @@ struct VertexOutput {
         renderParams.clearColor = pxr::GfVec4f(0.5f);
     }
 
-    void setupDefaults(pxr::GfVec3d const &lightPosition) 
-    {
-        // Set default lights and materials
-        defaultMaterial.SetAmbient(pxr::GfVec4f(0.0f, 0.0f, 0.0f, 1.0f));
-        defaultMaterial.SetSpecular(pxr::GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
-        defaultMaterial.SetShininess(32.0f);
-
-        light.SetPosition(
-                pxr::GfVec4f((float) lightPosition[0], (float) lightPosition[1], (float) lightPosition[2], 1.f));
-        light.SetAmbient(pxr::GfVec4f(0.9));
-        defaultLighting.push_back(light);
-    }
-
-    pxr::GfBBox3d getStageBBox(const pxr::UsdPrim &prim) {
-        pxr::TfTokenVector purposes;
-        purposes.push_back(pxr::UsdGeomTokens->default_);
-        purposes.push_back(pxr::UsdGeomTokens->proxy);
-        bool useExtentHints = false;
-
-        pxr::UsdGeomBBoxCache bboxCache(pxr::UsdTimeCode::Default(), purposes, useExtentHints);
-        pxr::GfBBox3d bbox = bboxCache.ComputeWorldBound(prim);
-        return bbox;
-    }
-
-    void fit_camera(const pxr::UsdPrim &prim)
-    {
-        pxr::GfBBox3d bbox = prim.IsValid() ? getStageBBox(prim) : getStageBBox(stage->GetPseudoRoot());
-        float frameFit = 1.2f;
-        camera.FrameSelection(bbox, frameFit);
-        camera.update();
-        setupDefaults(camera.getPosition());
-    }
 
     extern "C" int initialize(uint32_t width, uint32_t height) {
         TF_INFO(INFO).Msg("Starting GLEngine ");
@@ -399,7 +415,6 @@ struct VertexOutput {
         std::vector<uint8_t> colorData;
 
         // Setup camera
-        //Camera camera = Camera();
         fit_camera(pxr::UsdPrim());
 
         // attach the camera to the window state object
@@ -554,11 +569,7 @@ void wrap_setStage(pxr::UsdStageRefPtr &s)
     if (pxr::usdweb::glEngine != nullptr) {
         wrap_resetEngine();
     }
-    // Set timecode
-    pxr::UsdTimeCode new_timecode( pxr::usdweb::stage->GetStartTimeCode() );
-    pxr::usdweb::renderParams.frame = new_timecode;
-    // Fit Camera
-    pxr::usdweb::fit_camera(pxr::usdweb::stage->GetPseudoRoot());
+    pxr::usdweb::initParamsForWebStage();
 }
 
 void wrap_setRenderParamsTime(double d)

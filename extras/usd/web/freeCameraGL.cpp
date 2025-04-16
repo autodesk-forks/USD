@@ -39,12 +39,19 @@
 
 #include <GLFW/glfw3.h>
 
+
+const pxr::GfMatrix4d FreeCameraGL::_ZUpRotMatrix = pxr::GfMatrix4d().SetRotate(pxr::GfRotation(pxr::GfVec3d::XAxis(), -90));
+const pxr::GfMatrix4d FreeCameraGL::_ZUpRotInvMatrix = FreeCameraGL::_ZUpRotMatrix.GetInverse();
+
+
 FreeCameraGL::FreeCameraGL(
+    bool  isZUp,
     float aspectRatio,
     float fov, 
     float overrideNear, 
     float overrideFar) 
 {
+    _isZUp = isZUp;
     _overrideNear = overrideNear;
     _overrideFar = overrideFar;
     _gfCamera.SetPerspectiveFromAspectRatioAndFieldOfView(aspectRatio, fov, pxr::GfCamera::FOVVertical);
@@ -67,17 +74,16 @@ void FreeCameraGL::PushToCameraTransform()
     if (!_cameraTransformDirty)
         return;
 
-    // @REVISIT
-    // # self._YZUpInvMatrix influences the behavior about how the
-    // # FreeCamera will tumble. It is the identity or a rotation about the
-    // # x-Axis.
-    _gfCamera.SetTransform(
-        pxr::GfMatrix4d().SetTranslate(pxr::GfVec3d::ZAxis() * _dist) *
+    pxr::GfMatrix4d cam_xform = pxr::GfMatrix4d().SetTranslate(pxr::GfVec3d::ZAxis() * _dist) *
         RotMatrix(pxr::GfVec3d::ZAxis(), -_rotPsi) *
         RotMatrix(pxr::GfVec3d::XAxis(), -_rotPhi) *
-        RotMatrix(pxr::GfVec3d::YAxis(), -_rotTheta) *
-        //self._YZUpInvMatrix *
-        pxr::GfMatrix4d().SetTranslate(_center));
+        RotMatrix(pxr::GfVec3d::YAxis(), -_rotTheta);
+    if (_isZUp) {
+        // _ZUpRotInvMatrix (90 degree rotation around the x-Axis) influences how the FreeCamera will tumble
+        cam_xform *= FreeCameraGL::_ZUpRotInvMatrix;
+    }
+    cam_xform *= pxr::GfMatrix4d().SetTranslate(_center);
+    _gfCamera.SetTransform(cam_xform);
     _gfCamera.SetFocusDistance(_dist);
     _cameraTransformDirty = false;
 }
@@ -103,7 +109,10 @@ void FreeCameraGL::PullFromCameraTransform()
     // # x-Axis.
 
     //# Compute rotational part
-    pxr::GfMatrix4d transform = cam_transform; // * self._YZUpMatrix
+    pxr::GfMatrix4d transform = cam_transform;
+    if (_isZUp) {
+        transform *= FreeCameraGL::_ZUpRotMatrix;
+    }
     transform.Orthonormalize();
     pxr::GfRotation rotation = transform.ExtractRotation();
 

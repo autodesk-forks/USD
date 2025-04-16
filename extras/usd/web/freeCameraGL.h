@@ -39,6 +39,7 @@ class FreeCameraGL
 {
 public:
 	FreeCameraGL(
+	    bool  isZUp=false,
 		float aspectRatio=1.0, 
 		float fov=60.0, 
 		float overrideNear = FreeCameraGL::defaultNear, 
@@ -67,6 +68,9 @@ public:
     // then we will often see Z-fighting artifacts even for geometry that
     // is close to camera, when rendering for picking
     static constexpr float maxGoodZResolution = 5e4f;
+
+    static const pxr::GfMatrix4d _ZUpRotMatrix;
+    static const pxr::GfMatrix4d _ZUpRotInvMatrix;
 
     // =====
     // from web camera.h 
@@ -119,6 +123,7 @@ public:
 	void Zoom(float zoomDelta); // added
 	float GetFOV();
 	void SetFOV(float fov);
+	void SetIsZUp(bool isZUp) { _isZUp = isZUp; }
 
 protected:
 
@@ -130,6 +135,7 @@ private:
     int _lastY = 0;
     bool _dragActive = false;
     Camera_Mode _cameraMode = Camera_Mode::NONE;
+    bool _isZUp = false;
 
     bool _cameraTransformDirty = false;
     float _rotTheta = 0;
