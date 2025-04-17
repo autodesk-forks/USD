@@ -26,12 +26,12 @@ class TestUsdCrateRelocates(unittest.TestCase):
         # Open a crate file and verify the layer has no relocates.
         def _OpenCrateLayerAndVerifyNoRelocates(crateFileName):
             # A newly created crate file that has never had relocates added will
-            # be verion 0.9.0 or newer.
+            # be verion 0.8.0 or newer.
             majver, minver, patchver = map(
                 int, Usd.CrateInfo.Open(
                     crateFileName).GetFileVersion().split('.'))
             self.assertEqual(majver, 0)
-            self.assertGreaterEqual(minver, 9)
+            self.assertGreaterEqual(minver, 8)
             
             # The layer will have no relocates in its metadata
             layer = Sdf.Layer.FindOrOpen(crateFileName)

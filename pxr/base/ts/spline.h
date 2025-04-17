@@ -320,6 +320,54 @@ public:
     bool DoSidesDiffer(
         TsTime time) const;
 
+    /// \brief Evaluates the value of the TsSpline over the given time interval,
+    /// typically for drawing.
+    ///
+    /// \c Sample creates a piecewise linear approximation of the spline curve.
+    /// When the returned samples are scaled by \e timeScale and \e valueScale
+    /// and linearly interpolated, the reconstructed curve will nowhere have an
+    /// error greater than \e tolerance.
+    ///
+    /// The values of \e timeScale and \e valueScale are typically chosen to
+    /// scale the spline's units to pixels and then \e tolerance represents
+    /// the allowed deviation in pixel space from a theoretical exact answer.
+    ///
+    /// \c timeInterval must not be empty and \c timeScale, \c valueScale, and
+    /// \c tolerance must all be greater than 0.0. If any of these conditions
+    /// are not met, \c Sample returns false and \c *splineSamples is unchanged.
+    /// Otherwise, true is returned and \c splineSamples is populated.
+    template <typename Vertex>
+    bool
+    Sample(
+        const GfInterval& timeInterval,
+        double timeScale,
+        double valueScale,
+        double tolerance,
+        TsSplineSamples<Vertex>* splineSamples) const
+    {
+        return _Sample(timeInterval, timeScale, valueScale, tolerance,
+                       splineSamples);
+    }
+
+    /// \overload
+    /// When passed a \c TsSplineSamplesWithSources<Vertex> class, the returned
+    /// information contains a \c TsSplineSampleSource value for each
+    /// polyline. The \c TsSplineSampleSource indicates the source region
+    /// (extrapolation, looping, normal interpolation, etc.) of the spline
+    /// generated that polyline.
+    template <typename Vertex>
+    bool
+    Sample(
+        const GfInterval& timeInterval,
+        double timeScale,
+        double valueScale,
+        double tolerance,
+        TsSplineSamplesWithSources<Vertex>* splineSamples) const
+    {
+        return _Sample(timeInterval, timeScale, valueScale, tolerance,
+                       splineSamples);
+    }
+
     /// @}
     /// \name Whole-spline queries
     /// @{
@@ -414,6 +462,14 @@ private:
     friend class TsRegressionPreventer;
     void _SetKnotUnchecked(const TsKnot & knot);
 
+    template <typename SampleHolder>
+    bool _Sample(
+        const GfInterval& timeInterval,
+        double timeScale,
+        double valueScale,
+        double tolerance,
+        SampleHolder* splineSamples) const;
+
     // External helpers provide direct data access for Ts implementation.
     friend Ts_SplineData* Ts_GetSplineData(TsSpline &spline);
     friend const Ts_SplineData* Ts_GetSplineData(const TsSpline &spline);
@@ -500,6 +556,17 @@ bool TsSpline::_Eval(
     *valueOut = T(*result);
     return true;
 }
+
+// Implement a special case that will ensure the contents of the VtValue output
+// variable contain a value of the same type (double, float, or GfHalf) as the
+// spline.
+template <>
+TS_API
+bool TsSpline::_Eval(
+    const TsTime time,
+    VtValue* const valueOut,
+    const Ts_EvalAspect aspect,
+    const Ts_EvalLocation location) const;
 
 template <typename T>
 bool TsSpline::Eval(const TsTime time, T* const valueOut) const

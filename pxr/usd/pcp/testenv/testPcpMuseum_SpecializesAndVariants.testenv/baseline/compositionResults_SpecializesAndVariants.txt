@@ -1,0 +1,34 @@
+Loading @SpecializesAndVariants/root.sdf@
+
+------------------------------------------------------------------------
+Layer Stack:
+     root.sdf
+
+------------------------------------------------------------------------
+Results for composing </A>
+
+Prim Stack:
+    root.sdf             /A
+    root.sdf             /A{nestedVariantSet=nestedVariant}
+
+Variant Selections:
+    {nestedVariantSet = nestedVariant}
+
+Property names:
+     ['test']
+
+Property stacks:
+/A.test:
+    root.sdf             /A{nestedVariantSet=nestedVariant}.test
+
+------------------------------------------------------------------------
+Results for composing </B>
+
+Prim Stack:
+    root.sdf             /B
+    root.sdf             /B{introducingVariantSet=introducingVariant}
+    root.sdf             /A
+
+Variant Selections:
+    {introducingVariantSet = introducingVariant}
+

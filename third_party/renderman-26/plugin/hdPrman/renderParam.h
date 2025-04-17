@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
 
 #include "pxr/pxr.h"
 #include "hdPrman/api.h"
@@ -22,6 +22,7 @@
 #if PXR_VERSION >= 2302
 #include "pxr/imaging/hd/retainedSceneIndex.h"
 #endif
+#include <tbb/concurrent_unordered_map.h>
 
 #include "Riley.h"
 #include "RixEventCallbacks.h"
@@ -362,11 +363,11 @@ public:
     };
 #endif
 
-    // Path to the connected Sample Filter from the Render Settings Prim
-    void SetConnectedSampleFilterPaths(HdSceneDelegate *sceneDelegate,
-        SdfPathVector const& connectedSampleFilterPaths);
-    SdfPathVector GetConnectedSampleFilterPaths() {
-        return _connectedSampleFilterPaths;
+    // Paths to the Sample Filters from the Render Settings Prim
+    void SetSampleFilterPaths(HdSceneDelegate *sceneDelegate,
+        SdfPathVector const& sampleFilterPaths);
+    SdfPathVector GetSampleFilterPaths() {
+        return _sampleFilterPaths;
     }
 
     // Riley Data from the Sample Filter Prim
@@ -377,11 +378,11 @@ public:
     void CreateSampleFilterNetwork(HdSceneDelegate *sceneDelegate);
     riley::SampleFilterList GetSampleFilterList();
 
-    // Path to the connected Display Filter from the Render Settings Prim
-    void SetConnectedDisplayFilterPaths(HdSceneDelegate *sceneDelegate,
-        SdfPathVector const& connectedDisplayFilterPaths);
-    SdfPathVector GetConnectedDisplayFilterPaths() {
-        return _connectedDisplayFilterPaths;
+    // Paths to the Display Filters from the Render Settings Prim
+    void SetDisplayFilterPaths(HdSceneDelegate *sceneDelegate,
+        SdfPathVector const& displayFilterPaths);
+    SdfPathVector GetDisplayFilterPaths() {
+        return _displayFilterPaths;
     }
 
     // Riley Data from the Display Filter Prim
@@ -416,6 +417,13 @@ public:
     // Returns true if the render delegate in interactive mode (as opposed to
     // batched/offline mode).
     bool IsInteractive() const;
+
+#if HD_API_VERSION >= 76
+    /// HdRenderParam overrides.
+    bool HasArbitraryValue(const TfToken& key) const override;
+    VtValue GetArbitraryValue(const TfToken& key) const override;
+    bool SetArbitraryValue(const TfToken& key, const VtValue& value) override;
+#endif
 
 private:
     void _CreateStatsSession();
@@ -497,6 +505,8 @@ private:
     stats::Session *_statsSession;
     int _progressPercent;
     int _progressMode;
+    uint64_t _startTime;
+    uint64_t _stopTime;
 
     // Riley instance.
     riley::Riley *_riley;
@@ -587,16 +597,21 @@ private:
     RtParamList _renderSettingsPrimOptions;
 
     // Render terminals
+    // Since parallel sync is enabled for sample and display filters, filter 
+    // nodes may be addeed in parallel via AddSampleFilter/AddDisplayFilter.
+    using _PathToRileyFilterMap = 
+        tbb::concurrent_unordered_map<SdfPath, riley::ShadingNode, SdfPath::Hash>;
+
     SdfPath _renderSettingsIntegratorPath;
     HdMaterialNode2 _renderSettingsIntegratorNode;
     riley::IntegratorId _integratorId;
 
-    SdfPathVector _connectedSampleFilterPaths;
-    std::map<SdfPath, riley::ShadingNode> _sampleFilterNodes;
+    SdfPathVector _sampleFilterPaths;
+    _PathToRileyFilterMap _sampleFilterNodes;
     riley::SampleFilterId _sampleFiltersId;
 
-    SdfPathVector _connectedDisplayFilterPaths;
-    std::map<SdfPath, riley::ShadingNode> _displayFilterNodes;
+    SdfPathVector _displayFilterPaths;
+    _PathToRileyFilterMap _displayFilterNodes;
     riley::DisplayFilterId _displayFiltersId;
     /// ------------------------------------------------------------------------
 
@@ -609,6 +624,7 @@ private:
 
     // Resolution for the render pass via render pass state.
     GfVec2i _resolution;
+    std::string _resolutionStr; // Used by UpdateRenderStats
 
     RtParamList _integratorParams;
     /// ------------------------------------------------------------------------
@@ -643,6 +659,9 @@ private:
     bool _qnCheapPass;
     int _qnMinSamples;
     int _qnInterval;
+
+    // Scene state Id.
+    std::atomic<int> _sceneStateId = 0;
 };
 
 /// Convert Hydra points to Riley point primvar.
@@ -678,9 +697,9 @@ HdPrman_ConvertPrimvars(
     const GfVec2d &shutterInterval,
     float time = 0.f);
 
-// In 2302 and beyond, we can use
+// In 2311 and beyond, we can use
 // HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin.
-#if PXR_VERSION < 2302
+#if PXR_VERSION < 2311
 
 /// Check for any primvar opinions on the material that should be Riley primvars.
 void
@@ -689,7 +708,7 @@ HdPrman_TransferMaterialPrimvarOpinions(
     SdfPath const& hdMaterialId,
     RtPrimVarList& primvars);
 
-#endif // PXR_VERSION >= 2302
+#endif // PXR_VERSION >= 2311
 
 
 /// Resolve Hd material ID to the corresponding Riley material & displacement
@@ -703,4 +722,4 @@ HdPrman_ResolveMaterial(
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
+#endif // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H

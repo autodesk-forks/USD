@@ -31,9 +31,7 @@ pxr_library(usdImaging
         adapterRegistry
         collectionCache
         collectionMaterialBindingSchema
-        collectionMaterialBindingsSchema
         directMaterialBindingSchema
-        directMaterialBindingsSchema
         dataSourceAttribute
         dataSourceAttributeColorSpace
         dataSourceAttributeTypeName
@@ -91,7 +89,7 @@ pxr_library(usdImaging
         fieldAdapter
         flattenedDataSourceProviders
         flattenedGeomModelDataSourceProvider
-        flattenedDirectMaterialBindingsDataSourceProvider
+        flattenedMaterialBindingsDataSourceProvider
         geometryLightAdapter
         geomModelAPIAdapter
         gprimAdapter
@@ -104,6 +102,8 @@ pxr_library(usdImaging
         lightFilterAdapter
         materialAdapter
         materialBindingAPIAdapter
+        materialBindingSchema
+        materialBindingsSchema
         materialBindingsResolvingSceneIndex
         meshAdapter
         niPrototypePropagatingSceneIndex
@@ -131,7 +131,10 @@ pxr_library(usdImaging
         renderSettingsFlatteningSceneIndex
         renderVarAdapter
         representedByAncestorPrimAdapter
+        rerootingContainerDataSource
         rerootingSceneIndex
+        sceneIndexPlugin
+        sceneIndexPrimAdapter
         sceneIndices
         sphereAdapter
         sphereLightAdapter
@@ -353,3 +356,59 @@ pxr_register_test(testUsdImagingStageSceneIndexContents
     DIFF_COMPARE 
         basic.txt
 )
+
+# This test requires MaterialX support and is not currently supported on static 
+# builds as it uses a plugin mechanism which is not supported for static build 
+# configurations. 
+if (BUILD_SHARED_LIBS AND $PXR_ENABLE_MATERIALX_SUPPORT)
+
+pxr_build_test(testUsdImagingHdMtlx
+    LIBRARIES
+        tf
+        hd
+        hdMtlx
+        usdImaging
+    CPPFILES
+        testenv/testUsdImagingHdMtlx.cpp
+)
+pxr_install_test_dir(
+    SRC testenv/testUsdImagingHdMtlx
+    DEST testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_withMtlxVersion
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename withMtlxVersion.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        withMtlxVersion.mtlx
+    TESTENV testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_withoutMtlxVersion
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename withoutMtlxVersion.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        withoutMtlxVersion.mtlx
+    TESTENV testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_atan2Node
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename atan2Node.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        atan2Node.mtlx
+    TESTENV testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_switchNode
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename switchNode.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        switchNode.mtlx
+    TESTENV testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_swizzleNode
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename swizzleNode.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        swizzleNode.mtlx
+    TESTENV testUsdImagingHdMtlx
+)
+
+endif() # BUILD_SHARED_LIBS AND PXR_ENABLE_MATERIALX_SUPPORT

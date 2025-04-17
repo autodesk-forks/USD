@@ -573,6 +573,40 @@ Usd_ClipSet::GetBracketingTimeSamplesForPath(
     return true;
 }
 
+bool
+Usd_ClipSet::GetPreviousTimeSampleForPath(
+    const SdfPath& path, double time, double* tPrevious) const
+{
+    const std::set<double> allTimeSamples = ListTimeSamplesForPath(path);
+    if (allTimeSamples.empty()) {
+        return false;
+    }
+
+    // Can't get a previous time sample if the given time is less than
+    // or equal to the first time sample.
+    if (time <= *allTimeSamples.begin()) {
+        return false;
+    }
+
+    // Last time is the previous time if the query time is greater than
+    // the last time sample.
+    if (time > *allTimeSamples.rbegin()) {
+        *tPrevious = *allTimeSamples.rbegin();
+        return true;
+    }
+
+    // The previous time sample is the one before the lower_bound with the 
+    // given time.
+    auto it = allTimeSamples.lower_bound(time);
+
+    // We can never be at the beginning of the set since we've already
+    // checked that the given time is greater than the first time sample.
+    TF_VERIFY(it != allTimeSamples.begin());
+
+    *tPrevious = *--it;
+    return true;
+}
+
 std::set<double>
 Usd_ClipSet::ListTimeSamplesForPath(const SdfPath& path) const
 {

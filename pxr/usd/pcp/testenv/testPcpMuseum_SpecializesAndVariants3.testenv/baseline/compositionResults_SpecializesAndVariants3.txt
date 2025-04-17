@@ -1,0 +1,86 @@
+Loading @SpecializesAndVariants3/root.sdf@
+
+------------------------------------------------------------------------
+Layer Stack:
+     root.sdf
+
+------------------------------------------------------------------------
+Results for composing </implementation>
+
+Prim Stack:
+    root.sdf             /implementation
+    root.sdf             /implementation{testVariantSet=testVariant}
+    root.sdf             /_class_defaultVariantSelections
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['classVariantAttr', 'variantAttr']
+
+Property stacks:
+/implementation.classVariantAttr:
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+/implementation.variantAttr:
+    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+
+------------------------------------------------------------------------
+Results for composing </middleman>
+
+Prim Stack:
+    root.sdf             /middleman
+    root.sdf             /implementation
+    root.sdf             /implementation{testVariantSet=testVariant}
+    root.sdf             /_class_defaultVariantSelections
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['classVariantAttr', 'variantAttr']
+
+Property stacks:
+/middleman.classVariantAttr:
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+/middleman.variantAttr:
+    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+
+------------------------------------------------------------------------
+Results for composing </_class_defaultVariantSelections>
+
+Prim Stack:
+    root.sdf             /_class_defaultVariantSelections
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['classVariantAttr']
+
+Property stacks:
+/_class_defaultVariantSelections.classVariantAttr:
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+
+------------------------------------------------------------------------
+Results for composing </element>
+
+Prim Stack:
+    root.sdf             /element
+    root.sdf             /middleman
+    root.sdf             /implementation
+    root.sdf             /_class_defaultVariantSelections
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['classVariantAttr']
+
+Property stacks:
+/element.classVariantAttr:
+    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+

@@ -102,6 +102,10 @@ public:
     /// Clears all overrides set with \ref SetLayerStackVectorOverride
     void ClearLayerStackVectorOverrides();
 
+    /// Returns the overrides set for the supplied layer.
+    const PcpLayerStackPtrVector&
+    GetLayerStackVectorOverride(const SdfLayerHandle& layer) const;
+
 private:
     /// Private constructor -- see New().
     Pcp_LayerStackRegistry(const PcpLayerStackIdentifier& rootLayerStackId,

@@ -91,29 +91,26 @@ namespace
     };
 }
 
-static double _RealCubeRoot(
-    const double x)
-{
-    static constexpr double oneThird = 1.0/3.0;
-    return (x >= 0 ? std::pow(x, oneThird) : -std::pow(-x, oneThird));
-}
-
 static double _FilterZeroes(
     const std::vector<double> &candidates)
 {
     double result = 0;
-    int numFound = 0;
+    bool found = false;
 
     for (double c : candidates)
     {
         if (c >= 0 && c <= 1)
         {
-            result = c;
-            numFound++;
+            if (TF_VERIFY(!found || result == c,
+                          "Multiple zeros found!"))
+            {
+                result = c;
+                found = true;
+            }
         }
     }
 
-    TF_VERIFY(numFound == 1);
+    TF_VERIFY(found, "No zeros found!");
     return result;
 }
 
@@ -156,7 +153,7 @@ static double _FindMonotonicZero(
         const double r = std::sqrt(-p33);
         const double t = -q / (2*r);
         const double phi = std::acos(GfClamp(t, -1, 1));
-        const double t1 = 2 * _RealCubeRoot(r);
+        const double t1 = 2 * std::cbrt(r);
         const double root1 = t1 * std::cos(phi/3) - b3;
         const double root2 = t1 * std::cos((phi + 2*M_PI) / 3) - b3;
         const double root3 = t1 * std::cos((phi + 4*M_PI) / 3) - b3;
@@ -165,7 +162,7 @@ static double _FindMonotonicZero(
     else if (discrim == 0)
     {
         // Two real roots.
-        const double u1 = -_RealCubeRoot(q2);
+        const double u1 = -std::cbrt(q2);
         const double root1 = 2*u1 - b3;
         const double root2 = -u1 - b3;
         return _FilterZeroes({root1, root2});
@@ -174,8 +171,8 @@ static double _FindMonotonicZero(
     {
         // One real root.
         const double sd = std::sqrt(discrim);
-        const double u1 = _RealCubeRoot(sd - q2);
-        const double v1 = _RealCubeRoot(sd + q2);
+        const double u1 = std::cbrt(sd - q2);
+        const double v1 = std::cbrt(sd + q2);
         return u1 - v1 - b3;
     }
 }
@@ -562,8 +559,8 @@ _LoopResolver::_LoopResolver(
 
     // Find first and last knot times.  These may be authored, or they may be
     // echoed.
-    const TsTime rawFirstTime = _firstTime = *(_data->times.begin());
-    const TsTime rawLastTime = _lastTime = *(_data->times.rbegin());
+    const TsTime rawFirstTime = _firstTime = _data->times.front();
+    const TsTime rawLastTime = _lastTime = _data->times.back();
     if (_haveInnerLoops)
     {
         const GfInterval loopedInterval = _data->loopParams.GetLoopedInterval();

@@ -9,6 +9,18 @@
                         "priority": 0,
                         "displayName": "Prman Motion Blur Scene Index"
                     },
+                    "HdPrman_VelocityMotionResolvingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": "Prman",
+                        "priority": 0,
+                        "displayName": "Prman Velocity Motion Resolving Scene Index"
+                    },
+                    "HdPrman_VblurInterpretingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": "Prman",
+                        "priority": 0,
+                        "displayName": "Prman ri:object:vblur-Interpreting Scene Index"
+                    },
                     "HdPrman_PreviewMaterialFilteringSceneIndexPlugin" : {
                         "bases": ["HdSceneIndexPlugin"],
                         "loadWithRenderer": "Prman",

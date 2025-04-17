@@ -71,6 +71,17 @@ class TestSdfLayer(unittest.TestCase):
         with self.assertRaises(Tf.ErrorException):
             layer.identifier = "anon:testing"
 
+    def test_SetIdentifierAnonymousLayer(self):
+        layer = Sdf.Layer.CreateAnonymous()
+        anonIdentifier = layer.identifier
+        nonAnonIdentifier = 'tmp_testSetIdentifierAnonymousLayer.sdf'
+        layer.identifier = nonAnonIdentifier
+
+        layer = Sdf.Layer.FindOrOpen(nonAnonIdentifier)
+        self.assertTrue(layer)
+        anonLayer = Sdf.Layer.FindOrOpen(anonIdentifier)
+        self.assertFalse(anonLayer)
+
     def test_SetIdentifierWithArgs(self):
         layer = Sdf.Layer.CreateAnonymous()
         layer.Export("testSetIdentifierWithArgs.sdf")
@@ -1034,6 +1045,59 @@ over "test"
         self.assertTrue(layer.HasDefaultPrim())
         layer.ClearDefaultPrim()
         self.assertFalse(layer.HasDefaultPrim())
+
+        # Test static defaultPrim token to path conversion functions
+        
+        # Absolute path string tokens 
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/foo'), 
+            Sdf.Path('/foo'))
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/foo/bar'), 
+            Sdf.Path('/foo/bar'))
+
+        # Relative path string tokens
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('foo'), 
+            Sdf.Path('/foo'))
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('foo/bar'), 
+            Sdf.Path('/foo/bar'))
+        
+        # Invalid non-prim path tokens
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/foo.prop'), 
+            Sdf.Path())
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/'), 
+            Sdf.Path())
+
+        # Test static defaultPrim path to token conversion functions
+
+        # Absolute paths. Roots paths convert to just name token. Non-root
+        # paths convert to absolute path token.
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('/foo')), 
+            'foo')
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('/foo/bar')), 
+            '/foo/bar')
+
+        # Relative paths. Produce the exact same tokens as absolute paths.
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('foo')), 
+            'foo')
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('foo/bar')), 
+            '/foo/bar')
+        
+        # Non-prim paths produce empty tokens.
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('/foo.prop')), 
+            '')
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path.absoluteRootPath), 
+            '')
 
 if __name__ == "__main__":
     unittest.main()

@@ -220,6 +220,19 @@ Pcp_LayerStackRegistry::SetLayerStackVectorOverride(
     _data->layerToLayerStackOverrides[layer] = layerStacks;
 }
 
+const PcpLayerStackPtrVector&
+Pcp_LayerStackRegistry::GetLayerStackVectorOverride(const SdfLayerHandle& layer) const
+{
+    tbb::queuing_rw_mutex::scoped_lock lock(_data->mutex, /*write=*/false);
+    if (_data->layerToLayerStackOverrides.empty()) {
+        return _data->empty;
+    }
+
+    auto layerStackOverrides = _data->layerToLayerStackOverrides.find(layer);
+    return layerStackOverrides != _data->layerToLayerStackOverrides.end() ?
+        layerStackOverrides->second : _data->empty;
+}
+
 void 
 Pcp_LayerStackRegistry::ClearLayerStackVectorOverrides()
 {

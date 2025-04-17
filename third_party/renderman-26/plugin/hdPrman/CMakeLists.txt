@@ -190,6 +190,7 @@ pxr_plugin(${PXR_PACKAGE}
         updateObjectSettingsSceneIndex
         updateObjectSettingsSceneIndexPlugin
         utils
+        velocityMotionResolvingSceneIndexPlugin
         virtualStructResolvingSceneIndex
 
     PUBLIC_HEADERS

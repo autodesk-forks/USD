@@ -274,6 +274,7 @@ UsdImagingGL_UnitTestGLDrawing::UsdImagingGL_UnitTestGLDrawing()
     , _showProxy(UsdImagingGLRenderParams().showProxy)
     , _presentComposite(false)
     , _presentDisabled(false)
+    , _numErrorsAllowed(0)
 {
 }
 
@@ -497,6 +498,7 @@ static void Usage(int argc, char *argv[])
 "  -windowPolicy [matchVertically|matchHorizontally|fit|crop|dontConform]\n"
 "                      Forces the window policy\n"
 "                      (defaults to matchVertically to match usdview)\n"
+"  -numErrorsAllowed n Number of errors allowed before test fails (default 0)"
 ;
 
     Die(usage, TfGetBaseName(argv[0]).c_str());
@@ -541,8 +543,8 @@ static double ParseDouble(int& i, int argc, char *argv[],
     return result;
 }
 
-static long ParseInt(int& i, int argc, char *argv[],
-                          bool* invalid = nullptr)
+
+static int ParseInt(int& i, int argc, char *argv[], bool* invalid = nullptr)
 {
     if (i + 1 == argc) {
         if (invalid) {
@@ -551,16 +553,7 @@ static long ParseInt(int& i, int argc, char *argv[],
         }
         ParseError(argv[0], "missing parameter for '%s'", argv[i]);
     }
-    char* end;
-    long result = strtol(argv[i + 1], &end, 10);
-    if (end == argv[i + 1] || *end != '\0') {
-        if (invalid) {
-            *invalid = true;
-            return 0.0;
-        }
-        ParseError(argv[0], "invalid parameter for '%s': %s",
-                   argv[i], argv[i + 1]);
-    }
+    int result = atoi(argv[i + 1]);
     ++i;
     if (invalid) {
         *invalid = false;
@@ -623,13 +616,37 @@ ParseDoubleVector(
     }
 }
 
+static bool ParseBool(int& i, int argc, char *argv[])
+{
+    if (i + 1 == argc) {
+        ParseError(argv[0], "missing parameter for '%s'", argv[i]);
+        return false;
+    }
+
+    bool result = false;
+    if (strcmp(argv[i + 1], "true") == 0) {
+        result = true;
+    } else if (strcmp(argv[i + 1], "false") == 0) {
+        result = false;
+    } else {
+        ParseError(argv[0], "invalid parameter for '%s': %s. Must be either "
+                            "'true' or 'false'",
+                   argv[i], argv[i + 1]);
+    }
+
+    ++i;
+    return result;
+}
+
 static VtValue ParseVtValue(int &i, int argc, char *argv[])
 {
     const char * const typeString = ParseString(i, argc, argv);
-
     if (strcmp(typeString, "float") == 0) {
         CheckForMissingArguments(i, 1, argc, argv);
         return VtValue(float(ParseDouble(i, argc, argv)));
+    } else if (strcmp(typeString, "bool") == 0) {
+        CheckForMissingArguments(i, 1, argc, argv);
+        return VtValue(ParseBool(i, argc, argv));
     } else {
         ParseError(argv[0], "unknown type '%s'", typeString);
         return VtValue();
@@ -798,6 +815,10 @@ UsdImagingGL_UnitTestGLDrawing::_Parse(int argc, char *argv[], _Args* args)
         }
         else if (strcmp(argv[i], "-presentDisabled") == 0) {
             _presentDisabled = true;
+        }
+        else if (strcmp(argv[i], "-numErrorsAllowed") == 0) {
+            // CheckForMissingArguments(i, 1, argc, argv);
+            _numErrorsAllowed = ParseInt(i, argc, argv);
         }
         else {
             ParseError(argv[0], "unknown argument %s", argv[i]);

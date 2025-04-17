@@ -46,144 +46,58 @@ static float _ToLinear(const NcColorSpace* cs, float t) {
     return powf((t + a) / (1.f + a), gamma);
 }
 
-static const char _g22_adobergb[] = "g22_adobergb_scene";
-static const char _g18_rec709[] = "g18_rec709_scene";
-static const char _g22_ap1[] = "g22_ap1_scene";
-static const char _g22_rec709[] = "g22_rec709_scene";
-static const char _identity[] = "identity";
-static const char _lin_adobergb[] = "lin_adobergb_scene";
-static const char _lin_ap0[] = "lin_ap0_scene";
-static const char _lin_ap1[] = "lin_ap1_scene";
-static const char _lin_p3d65[] = "lin_p3d65_scene";
-static const char _lin_rec709[] = "lin_rec709_scene";
-static const char _lin_rec2020[] = "lin_rec2020_scene";
-static const char _raw[] = "raw";
-static const char _srgb_p3d65[] = "srgb_p3d65_scene";
-static const char _srgb_rec709[] = "srgb_rec709_scene";
+
 
 NCAPI const char* NcGetDescription(const NcColorSpace* cs) {
     if (!cs)
         return NULL;
 
-    if (!strcmp(cs->desc.name, _lin_ap1))
-        return "Academy Color Encoding System (ACEScg), a color space designed for computer graphics.";
-    if (!strcmp(cs->desc.name, _g22_adobergb))
-        return "Adobe RGB (1998), a color space developed by Adobe Systems.";
-    if (!strcmp(cs->desc.name, _g18_rec709))
-        return "Gamma 1.8, primaries from Rec. 709, white point from D65.";
-    if (!strcmp(cs->desc.name, _g22_ap1))
-        return "Gamma 2.2, primaries from ACEScg, white point from ACEScg.";
-    if (!strcmp(cs->desc.name, _g22_rec709))
-        return "Gamma 2.2, primaries from Rec. 709, white point from D65.";
-    if (!strcmp(cs->desc.name, _identity))
-        return "Identity color space, no conversion.";
-    if (!strcmp(cs->desc.name, _lin_adobergb))
-        return "Linear Adobe RGB (1998), a color space developed by Adobe Systems.";
-    if (!strcmp(cs->desc.name, _lin_ap0))
-        return "Linear transfer, ACES 2065-1.";
-    if (!strcmp(cs->desc.name, _lin_ap1))
-        return "Linear transfer, ACESCg.";
-    if (!strcmp(cs->desc.name, _lin_p3d65))
-        return "Linear Display P3, a color space using the Display P3 primaries.";
-    if (!strcmp(cs->desc.name, _lin_rec709))
-        return "Linear Rec. 709, a color space using the Rec. 709 primaries.";
-    if (!strcmp(cs->desc.name, _lin_rec2020))
-        return "Linear Rec. 2020, a color space using the Rec. 2020 primaries.";
-    if (!strcmp(cs->desc.name, _lin_rec709))
-        return "Linear sRGB, a color space using the sRGB primaries.";
-    if (!strcmp(cs->desc.name, _raw))
-        return "Raw color space, no conversion.";
-    if (!strcmp(cs->desc.name, _srgb_p3d65))
-        return "sRGB Display P3, a color space using the Display P3 primaries.";
-    if (!strcmp(cs->desc.name, _srgb_rec709))
-        return "sRGB, a display color space developed by HP and Microsoft.";
-    return cs->desc.name;
+    return cs->desc.descriptiveName;
 }
 
 // White point chromaticities.
-#define _WpD65 { 0.3127, 0.3290 }
-#define _WpACES { 0.32168, 0.33767 }
+#define _WpD65 { 0.3127f, 0.3290f }
+#define _WpACES { 0.32168f, 0.33767f }
 
 static NcColorSpace _colorSpaces[] = {
     {
-        _g22_adobergb,
-        { 0.64, 0.33 },
-        { 0.21, 0.71 },
-        { 0.15, 0.06 },
+        // extractPrimaries(cmx %*% AP1Mx)
+        // These primaries are preadapted to D65 using a Bradford transform
+        "ACEScg", "lin_ap1_scene",
+        { 0.71319588766205f, 0.29268891446333f },
+        { 0.15950855654178f, 0.83878851615096f },
+        { 0.128672995285350f, 0.043895571160528f },
         _WpD65,
-        563.0/256.0, // 2.19921875
+        1.0,
         0.0,
         0, 0,
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _g22_ap1,
-        { 0.713, 0.293 },
-        { 0.165, 0.830 },
-        { 0.128, 0.044 },
-        _WpACES,
-        2.2,
+        // extractPrimaries(cmx %*% AP0Mx)
+        "ACES2065-1", "lin_ap0_scene",
+        { 0.73485524337371f, 0.26422532524554f },
+        { -0.0061709124786224f, 1.0113149590212864f },
+        { 0.015967559255041f, -0.064235503128551f },
+        _WpD65,
+        1.0,
         0.0,
         0, 0,
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _g18_rec709,
+        "Linear Rec.709 (sRGB)", "lin_rec709_scene",
         { 0.640, 0.330 },
         { 0.300, 0.600 },
         { 0.150, 0.060 },
         _WpD65,
-        1.8,
-        0.0,
-        0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
-    },
-    {
-        _g22_rec709,
-        { 0.640, 0.330 },
-        { 0.300, 0.600 },
-        { 0.150, 0.060 },
-        _WpD65,
-        2.2,
-        0.0,
-        0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
-    },
-    {
-        _lin_adobergb,
-        { 0.64, 0.33 },
-        { 0.21, 0.71 },
-        { 0.15, 0.06 },
-        _WpD65,
         1.0,
         0.0,
         0, 0,
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _lin_ap0,
-        { 0.7347, 0.2653  },
-        { 0.0000, 1.0000  },
-        { 0.0001, -0.0770 },
-        _WpACES,
-        1.0,
-        0.0,
-        0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
-    },
-    {
-        _lin_ap1,                      // same primaries and wp as acescg
-        { 0.713, 0.293 },
-        { 0.165, 0.830 },
-        { 0.128, 0.044 },
-        _WpACES,
-        1.0,
-        0.0,
-        0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
-    },
-    {
-        _lin_p3d65,
+        "Linear P3-D65", "lin_p3d65_scene",
         { 0.6800, 0.3200 },
         { 0.2650, 0.6900 },
         { 0.1500, 0.0600 },
@@ -194,18 +108,7 @@ static NcColorSpace _colorSpaces[] = {
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _lin_rec709,
-        { 0.640, 0.330 },
-        { 0.300, 0.600 },
-        { 0.150, 0.060 },
-        _WpD65,
-        1.0,
-        0.0,
-        0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
-    },
-    {
-        _lin_rec2020,
+        "Linear Rec.2020", "lin_rec2020_scene",
         { 0.708, 0.292 },
         { 0.170, 0.797 },
         { 0.131, 0.046 },
@@ -216,18 +119,29 @@ static NcColorSpace _colorSpaces[] = {
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _srgb_p3d65,
-        { 0.6800, 0.3200 },
-        { 0.2650, 0.6900 },
-        { 0.1500, 0.0600 },
+        "Linear AdobeRGB", "lin_adobergb_scene",
+        { 0.64, 0.33 },
+        { 0.21, 0.71 },
+        { 0.15, 0.06 },
         _WpD65,
-        2.4,
-        0.055,
+        1.0,
+        0.0,
         0, 0,
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _srgb_rec709,
+        "CIE XYZ-D65 - Scene-referred", "lin_ciexyzd65_scene",
+        { 1.0, 0.0 },
+        { 0.0, 1.0 },
+        { 0.0, 0.0 },
+        _WpD65,
+        1.0,
+        0.0,
+        0, 0,
+        { 0,0,0, 0,0,0, 0,0,0 }
+    },
+    {
+        "sRGB Encoded Rec.709 (sRGB)", "srgb_rec709_scene",
         { 0.640, 0.330 },
         { 0.300, 0.600 },
         { 0.150, 0.060 },
@@ -238,18 +152,73 @@ static NcColorSpace _colorSpaces[] = {
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _identity,
-        { 1.0, 0.0 }, // these chromaticities generate identity
-        { 0.0, 1.0 },
-        { 0.0, 0.0 },
-        { 1.0/3.0, 1.0/3.0 },
-        1.0,
+        "Gamma 2.2 Encoded Rec.709", "g22_rec709_scene",
+        { 0.640, 0.330 },
+        { 0.300, 0.600 },
+        { 0.150, 0.060 },
+        _WpD65,
+        2.2,
         0.0,
         0, 0,
         { 0,0,0, 0,0,0, 0,0,0 }
     },
     {
-        _raw,
+        "Gamma 1.8 Encoded Rec.709", "g18_rec709_scene",
+        { 0.640, 0.330 },
+        { 0.300, 0.600 },
+        { 0.150, 0.060 },
+        _WpD65,
+        1.8,
+        0.0,
+        0, 0,
+        { 0,0,0, 0,0,0, 0,0,0 }
+    },
+    {
+        "sRGB Encoded AP1", "srgb_ap1_scene",
+        { 0.71319588766205f, 0.29268891446333f },
+        { 0.15950855654178f, 0.83878851615096f },
+        { 0.128672995285350f, 0.043895571160528f },
+        _WpD65,
+        2.4,
+        0.055,
+        0, 0,
+        { 0,0,0, 0,0,0, 0,0,0 }
+    },
+    {
+        "Gamma 2.2 Encoded AP1", "g22_ap1_scene",
+        { 0.71319588766205f, 0.29268891446333f },
+        { 0.15950855654178f, 0.83878851615096f },
+        { 0.128672995285350f, 0.043895571160528f },
+        _WpD65,
+        2.2,
+        0.0,
+        0, 0,
+        { 0,0,0, 0,0,0, 0,0,0 }
+    },
+    {
+        "sRGB Encoded P3-D65", "srgb_p3d65_scene",
+        { 0.6800, 0.3200 },
+        { 0.2650, 0.6900 },
+        { 0.1500, 0.0600 },
+        _WpD65,
+        2.4,
+        0.055,
+        0, 0,
+        { 0,0,0, 0,0,0, 0,0,0 }
+    },
+    {
+        "Gamma 2.2 Encoded AdobeRGB", "g22_adobergb_scene",
+        { 0.64, 0.33 },
+        { 0.21, 0.71 },
+        { 0.15, 0.06 },
+        _WpD65,
+        2.2,
+        0.0,
+        0, 0,
+        { 0,0,0, 0,0,0, 0,0,0 }
+    },
+    {
+        "Data", "data",
         { 1.0, 0.0 }, // these chromaticities generate identity
         { 0.0, 1.0 },
         { 0.0, 0.0 },
@@ -257,7 +226,40 @@ static NcColorSpace _colorSpaces[] = {
         1.0,
         0.0,
         0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
+        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+    },
+    {
+        "Identity", "identity",
+        { 1.0, 0.0 }, // these chromaticities generate identity
+        { 0.0, 1.0 },
+        { 0.0, 0.0 },
+        { 1.0/3.0, 1.0/3.0 },
+        1.0,
+        0.0,
+        0, 0,
+        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+    },
+    {
+        "Raw", "raw",
+        { 1.0, 0.0 }, // these chromaticities generate identity
+        { 0.0, 1.0 },
+        { 0.0, 0.0 },
+        { 1.0/3.0, 1.0/3.0 },
+        1.0,
+        0.0,
+        0, 0,
+        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+    },
+    {
+        "Unknown", "unknown",
+        { 1.0, 0.0 }, // these chromaticities generate identity
+        { 0.0, 1.0 },
+        { 0.0, 0.0 },
+        { 1.0/3.0, 1.0/3.0 },
+        1.0,
+        0.0,
+        0, 0,
+        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
     }
 };
 
@@ -266,11 +268,11 @@ bool NcColorSpaceEqual(const NcColorSpace* cs1, const NcColorSpace* cs2) {
         return false;
     }
 
-    if (cs1->desc.name == NULL || cs2->desc.name == NULL) {
+    if (cs1->desc.shortName == NULL || cs2->desc.shortName == NULL) {
         return false;
     }
 
-    if (strcmp(cs1->desc.name, cs1->desc.name) != 0) {
+    if (strcmp(cs1->desc.shortName, cs1->desc.shortName) != 0) {
         return false;
     }
 
@@ -347,7 +349,7 @@ static void _InitColorSpace(NcColorSpace* cs) {
         }
     }
     
-    // if the primaries are zero, the cs was defined by the 3x3 matrix, don't overwrite it.
+    // if the primaries are zero, the color space was defined by the 3x3 matrix,
     if (cs->desc.whitePoint.x == 0.f)
         return;
     
@@ -419,7 +421,8 @@ const NcColorSpace* NcCreateColorSpace(const NcColorSpaceDescriptor* csd) {
     
     NcColorSpace* cs = (NcColorSpace*) calloc(1, sizeof(*cs));
     cs->desc = *csd;
-    cs->desc.name = strdup(csd->name);
+    cs->desc.descriptiveName = strdup(csd->descriptiveName);
+    cs->desc.shortName = strdup(csd->shortName);
     _InitColorSpace(cs);
     return cs;
 }
@@ -430,7 +433,8 @@ const NcColorSpace* NcCreateColorSpaceM33(const NcColorSpaceM33Descriptor* csd,
         return NULL;
     
     NcColorSpace* cs = (NcColorSpace*) calloc(1, sizeof(*cs));
-    cs->desc.name = strdup(csd->name);
+    cs->desc.descriptiveName = strdup(csd->descriptiveName);
+    cs->desc.shortName = strdup(csd->shortName);
     cs->desc.gamma = csd->gamma;
     cs->desc.linearBias = csd->linearBias;
     cs->rgbToXYZ = csd->rgbToXYZ;
@@ -439,12 +443,12 @@ const NcColorSpace* NcCreateColorSpaceM33(const NcColorSpaceM33Descriptor* csd,
     // fill in the assumed chromaticities
     NcXYZ whiteXYZ = NcRGBToXYZ(cs, (NcRGB){ 1, 1, 1 });
     NcYxy whiteYxy = NcXYZToYxy(whiteXYZ);
-    NcXYZ redXYZ = NcRGBToXYZ(cs, (NcRGB){ 1, 0, 0 });
+    NcXYZ redXYZ   = NcRGBToXYZ(cs, (NcRGB){ 1, 0, 0 });
     NcXYZ greenXYZ = NcRGBToXYZ(cs, (NcRGB){ 0, 1, 0 });
-    NcXYZ blueXYZ = NcRGBToXYZ(cs, (NcRGB){ 0, 0, 1 });
-    NcYxy redYxy = NcXYZToYxy(redXYZ);
+    NcXYZ blueXYZ  = NcRGBToXYZ(cs, (NcRGB){ 0, 0, 1 });
+    NcYxy redYxy   = NcXYZToYxy(redXYZ);
     NcYxy greenYxy = NcXYZToYxy(greenXYZ);
-    NcYxy blueYxy = NcXYZToYxy(blueXYZ);
+    NcYxy blueYxy  = NcXYZToYxy(blueXYZ);
 
     // if the Y components are not close to one, the matrix was not a normalized
     // primary matrix; report that if requested.
@@ -454,10 +458,10 @@ const NcColorSpace* NcCreateColorSpaceM33(const NcColorSpaceM33Descriptor* csd,
                                fabsf(blueYxy.Y - 1) < 1e-3f &&
                                fabsf(whiteYxy.Y - 1) < 1e-3f);
 
-    cs->desc.redPrimary = (NcChromaticity) { redYxy.x, redYxy.y };
+    cs->desc.redPrimary   = (NcChromaticity) { redYxy.x, redYxy.y };
     cs->desc.greenPrimary = (NcChromaticity) { greenYxy.x, greenYxy.y };
-    cs->desc.bluePrimary = (NcChromaticity) { blueYxy.x, blueYxy.y };
-    cs->desc.whitePoint = (NcChromaticity) { whiteYxy.x, whiteYxy.y };
+    cs->desc.bluePrimary  = (NcChromaticity) { blueYxy.x, blueYxy.y };
+    cs->desc.whitePoint   = (NcChromaticity) { whiteYxy.x, whiteYxy.y };
     return cs;
 }
 
@@ -472,7 +476,8 @@ void NcFreeColorSpace(const NcColorSpace* cs) {
         }
     }
     
-    free((void*)cs->desc.name);
+    free((void*)cs->desc.descriptiveName);
+    free((void*)cs->desc.shortName);
     free((void*)cs);
 }
 
@@ -497,7 +502,6 @@ NcM33f NcGetRGBToRGBMatrix(const NcColorSpace* src, const NcColorSpace* dst) {
     
     NcM33f toXYZ = NcGetRGBToXYZMatrix(src);
     NcM33f fromXYZ = NcGetXYZToRGBMatrix(dst);
-    
     NcM33f tx = _M33fMultiply(fromXYZ, toXYZ);
     return tx;
 }
@@ -753,7 +757,11 @@ const NcColorSpace* NcGetNamedColorSpace(const char* name)
 {
     if (name) {
         for (size_t i = 0; i < sizeof(_colorSpaces) / sizeof(_colorSpaces[0]); i++) {
-            if (strcmp(name, _colorSpaces[i].desc.name) == 0) {
+            if (strcmp(name, _colorSpaces[i].desc.shortName) == 0) {
+                _InitColorSpace((NcColorSpace*) &_colorSpaces[i]); // ensure initialization
+                return &_colorSpaces[i];
+            }
+            if (strcmp(name, _colorSpaces[i].desc.descriptiveName) == 0) {
                 _InitColorSpace((NcColorSpace*) &_colorSpaces[i]); // ensure initialization
                 return &_colorSpaces[i];
             }
@@ -785,7 +793,7 @@ NcMatchLinearColorSpace(NcChromaticity redPrimary, NcChromaticity greenPrimary, 
             _CompareChromaticity(&_colorSpaces[i].desc.greenPrimary, &greenPrimary, threshold) &&
             _CompareChromaticity(&_colorSpaces[i].desc.bluePrimary, &bluePrimary, threshold) &&
             _CompareChromaticity(&_colorSpaces[i].desc.whitePoint, &whitePoint, threshold))
-            return _colorSpaces[i].desc.name;
+            return _colorSpaces[i].desc.shortName;
     }
     return NULL;
 }
@@ -802,7 +810,8 @@ bool NcGetColorSpaceDescriptor(const NcColorSpace* cs, NcColorSpaceDescriptor* d
 bool NcGetColorSpaceM33Descriptor(const NcColorSpace* cs, NcColorSpaceM33Descriptor* desc) {
     if (!cs || !desc)
         return false;
-    desc->name = cs->desc.name;
+    desc->descriptiveName = cs->desc.descriptiveName;
+    desc->shortName = cs->desc.shortName;
     desc->gamma = cs->desc.gamma;
     desc->linearBias = cs->desc.linearBias;
     desc->rgbToXYZ = cs->rgbToXYZ;

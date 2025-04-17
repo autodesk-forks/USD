@@ -34,23 +34,12 @@ _GetRenderPassColorGlslfx()
     return glslfx;
 }
 
-static const HioGlslfxSharedPtr &
-_GetRenderPassIdGlslfx()
-{
-    static const HioGlslfxSharedPtr glslfx =
-        std::make_shared<HioGlslfx>(HdxPackageRenderPassIdShader());
-    return glslfx;
-}
-
 HdxRenderSetupTask::HdxRenderSetupTask(
     HdSceneDelegate* delegate, SdfPath const& id)
     : HdTask(id)
     , _colorRenderPassShader(
         std::make_shared<HdStRenderPassShader>(_GetRenderPassColorGlslfx()))
-    , _idRenderPassShader(
-        std::make_shared<HdStRenderPassShader>(_GetRenderPassIdGlslfx()))
     , _viewport(0)
-    , _enableIdRenderFromParams(false)
 {
 }
 
@@ -131,12 +120,8 @@ HdxRenderSetupTask::_SetRenderpassShadersForStorm(
     HdStRenderPassState *renderPassState,
     HdResourceRegistrySharedPtr const &resourceRegistry)
 {
-    // XXX: This id render codepath will be deprecated soon.
-    if (_enableIdRenderFromParams) {
-        renderPassState->SetRenderPassShader(_idRenderPassShader);
-        return;
     // If no aovs are bound, use pre-assembled color render pass shader.
-    } else if (_aovBindings.empty()) {
+    if (_aovBindings.empty()) {
         renderPassState->SetRenderPassShader(_colorRenderPassShader);
         return;
     }
@@ -162,11 +147,6 @@ HdxRenderSetupTask::SyncParams(HdSceneDelegate* delegate,
     _aovBindings = params.aovBindings;
     _aovInputBindings = params.aovInputBindings;
 
-    // XXX: For now, we track enabling an id render via params vs. AOV bindings
-    // as two slightly different states regarding MSAA. We will soon deprecate
-    // "enableIdRender" as an option, though.
-    _enableIdRenderFromParams = params.enableIdRender;
-
     HdRenderIndex &renderIndex = delegate->GetRenderIndex();
     HdRenderPassStateSharedPtr &renderPassState =
             _GetRenderPassState(&renderIndex);
@@ -185,9 +165,6 @@ HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPas
             break;
         }
     }
-
-    const bool enableIdRender = params.enableIdRender || usingIdAov;
-    const bool enableIdRenderNoIdAov = params.enableIdRender && !usingIdAov;
 
     renderPassState->SetOverrideColor(params.overrideColor);
     renderPassState->SetWireframeColor(params.wireframeColor);
@@ -232,14 +209,13 @@ HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPas
         // If this becomes an issue, we'll need to reconsider this approach.
         renderPassState->SetAlphaToCoverageEnabled(
             params.enableAlphaToCoverage &&
-            !enableIdRender &&
+            !usingIdAov &&
             !TfDebug::IsEnabled(HDX_DISABLE_ALPHA_TO_COVERAGE));
 
         // For id renders that use an id aov (which use an int format), it's ok
         // to have multi-sampling enabled. During the MSAA resolve for integer
         // types, a single sample will be selected.
-        renderPassState->SetMultiSampleEnabled(
-            params.useAovMultiSample && !enableIdRenderNoIdAov);
+        renderPassState->SetMultiSampleEnabled(params.useAovMultiSample);
 
         if (HdStRenderPassState * const hdStRenderPassState =
                     dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
@@ -248,7 +224,7 @@ HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPas
             
             // Don't enable multisample for id renders.
             hdStRenderPassState->SetUseAovMultiSample(
-                params.useAovMultiSample && !enableIdRenderNoIdAov);
+                params.useAovMultiSample);
             hdStRenderPassState->SetResolveAovMultiSample(
                 params.resolveAovMultiSample);
         }
@@ -328,7 +304,6 @@ std::ostream& operator<<(std::ostream& out, const HdxRenderTaskParams& pv)
         << pv.pointColor << " "
         << pv.pointSize << " "
         << pv.enableLighting << " "
-        << pv.enableIdRender << " "
         << pv.alphaThreshold << " "
         << pv.enableSceneMaterials << " "
         << pv.enableSceneLights << " "
@@ -385,7 +360,6 @@ bool operator==(const HdxRenderTaskParams& lhs, const HdxRenderTaskParams& rhs)
            lhs.pointColor               == rhs.pointColor               &&
            lhs.pointSize                == rhs.pointSize                &&
            lhs.enableLighting           == rhs.enableLighting           &&
-           lhs.enableIdRender           == rhs.enableIdRender           &&
            lhs.alphaThreshold           == rhs.alphaThreshold           &&
            lhs.enableSceneMaterials     == rhs.enableSceneMaterials     &&
            lhs.enableSceneLights        == rhs.enableSceneLights        &&

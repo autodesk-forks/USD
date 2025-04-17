@@ -1,0 +1,100 @@
+Loading @SpecializesAndVariants2/root.sdf@
+
+------------------------------------------------------------------------
+Layer Stack:
+     root.sdf
+
+------------------------------------------------------------------------
+Results for composing </element>
+
+Prim Stack:
+    root.sdf             /element
+    root.sdf             /_element_class
+    root.sdf             /middleman
+    root.sdf             /implementation
+    root.sdf             /implementation{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['variantAttr']
+
+Property stacks:
+/element.variantAttr:
+    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+
+------------------------------------------------------------------------
+Results for composing </_element_class>
+
+Prim Stack:
+    root.sdf             /_element_class
+    root.sdf             /middleman
+    root.sdf             /referencedMiddleman
+    root.sdf             /implementation
+    root.sdf             /implementation{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['variantAttr', 'referencedAttr']
+
+Property stacks:
+/_element_class.referencedAttr:
+    root.sdf             /referencedMiddleman.referencedAttr
+/_element_class.variantAttr:
+    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+
+------------------------------------------------------------------------
+Results for composing </middleman>
+
+Prim Stack:
+    root.sdf             /middleman
+    root.sdf             /referencedMiddleman
+    root.sdf             /implementation
+
+Property names:
+     ['referencedAttr']
+
+Property stacks:
+/middleman.referencedAttr:
+    root.sdf             /referencedMiddleman.referencedAttr
+
+------------------------------------------------------------------------
+Results for composing </referencedMiddleman>
+
+Prim Stack:
+    root.sdf             /referencedMiddleman
+    root.sdf             /implementation
+    root.sdf             /implementation{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['variantAttr', 'referencedAttr']
+
+Property stacks:
+/referencedMiddleman.referencedAttr:
+    root.sdf             /referencedMiddleman.referencedAttr
+/referencedMiddleman.variantAttr:
+    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+
+------------------------------------------------------------------------
+Results for composing </implementation>
+
+Prim Stack:
+    root.sdf             /implementation
+    root.sdf             /implementation{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
+
+Property names:
+     ['variantAttr']
+
+Property stacks:
+/implementation.variantAttr:
+    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+
