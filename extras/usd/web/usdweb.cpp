@@ -75,7 +75,7 @@ namespace usdweb {
     std::unique_ptr<pxr::UsdImagingGLEngine> glEngine;
     pxr::UsdStageRefPtr stage;
     pxr::GlfSimpleMaterial defaultMaterial;
-    pxr::GlfSimpleLight light;
+    pxr::GlfSimpleLight cameraLight;
     pxr::GlfSimpleLightVector defaultLighting;
     pxr::GfVec4f defaultAmbient = pxr::GfVec4f(0.01f, 0.01f, 0.01f, 1.0f);
     std::string filePath;
@@ -209,20 +209,6 @@ struct VertexOutput {
     });
 
 
-    void setupDefaults(pxr::GfVec3d const &lightPosition) 
-    {
-        // Set default lights and materials
-        defaultMaterial.SetAmbient(pxr::GfVec4f(0.0f, 0.0f, 0.0f, 1.0f));
-        defaultMaterial.SetSpecular(pxr::GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
-        defaultMaterial.SetShininess(32.0f);
-
-        light.SetPosition(
-                pxr::GfVec4f((float) lightPosition[0], (float) lightPosition[1], (float) lightPosition[2], 1.f));
-        light.SetAmbient(pxr::GfVec4f(0.9));
-        defaultLighting.push_back(light);
-    }
-
-
     pxr::GfBBox3d getStageBBox(const pxr::UsdPrim &prim) {
         pxr::TfTokenVector purposes;
         purposes.push_back(pxr::UsdGeomTokens->default_);
@@ -241,7 +227,6 @@ struct VertexOutput {
         float frameFit = 1.2f;
         camera.FrameSelection(bbox, frameFit);
         camera.update();
-        setupDefaults(camera.getPosition());
     }
 
     void initParamsForWebStage()
@@ -249,13 +234,38 @@ struct VertexOutput {
         // Set timecode
         pxr::UsdTimeCode new_timecode( pxr::usdweb::stage->GetStartTimeCode() );
         pxr::usdweb::renderParams.frame = new_timecode;
-        // Set Camera Up
+        // Set Camera
         pxr::usdweb::camera.SetIsZUp( (UsdGeomGetStageUpAxis(pxr::usdweb::stage) == pxr::UsdGeomTokens->z) );
-        // Fit Camera
         pxr::usdweb::fit_camera(pxr::usdweb::stage->GetPseudoRoot());
+
+
+
+    }
+
+    // Initialize params used in SetLightingState()
+    void initUsdRenderParams()
+    {
+        // Set defaultAmbient
+        //   initialized when variable instanciated
+
+        // Set default material
+        defaultMaterial.SetAmbient(pxr::GfVec4f(0.0f, 0.0f, 0.0f, 1.0f));
+        defaultMaterial.SetSpecular(pxr::GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
+        defaultMaterial.SetShininess(32.0f);   
+
+        // Set default lights
+        defaultLighting.clear();
+        cameraLight.SetIsCameraSpaceLight(true); // makes position camera relative
+        cameraLight.SetPosition(pxr::GfVec4f(0.f, 0.f, 0.f, 1.f));
+        cameraLight.SetAmbient(pxr::GfVec4f(0.0f)); //(pxr::GfVec4f(0.9));
+        defaultLighting.push_back(cameraLight);  
     }
 
     void initGLEngine() {
+        // Init USD render params
+        initUsdRenderParams();
+
+        // Make sure there is a default stage
         if (!stage) {
             //stage = pxr::UsdStage::Open(filePath);
             stage = pxr::UsdStage::CreateInMemory();
@@ -443,9 +453,7 @@ struct VertexOutput {
             glEngine->SetRenderViewport(pxr::GfVec4d(0, 0, framebufferWidth, framebufferHeight));
             glEngine->SetWindowPolicy(pxr::CameraUtilConformWindowPolicy::CameraUtilFit);
             glEngine->SetCameraState(camera.getViewMatrix(), camera.getProjectionMatrix());
-            const auto position = camera.getPosition();
-            defaultLighting[0].SetPosition(
-                    pxr::GfVec4f((float) position[0], (float) position[1], (float) position[2], 1.f));
+            defaultLighting[0].SetTransform( camera.getViewInverse() );
             glEngine->SetLightingState(defaultLighting, defaultMaterial, defaultAmbient);
 
             // Render

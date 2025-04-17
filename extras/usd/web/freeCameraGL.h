@@ -78,6 +78,7 @@ public:
     // 		viewProjectionMatrix = Gf.Matrix4f(frustum.ComputeViewMatrix()
     //                                         * frustum.ComputeProjectionMatrix())
 	const pxr::GfMatrix4d getViewMatrix()       { return _gfCamera.GetFrustum().ComputeViewMatrix(); }
+	const pxr::GfMatrix4d getViewInverse()      { return _gfCamera.GetFrustum().ComputeViewInverse(); }
     const pxr::GfMatrix4d getProjectionMatrix() { return _gfCamera.GetFrustum().ComputeProjectionMatrix();}
 	const pxr::GfVec3d    getPosition()         { return _gfCamera.GetFrustum().GetPosition();}
 
