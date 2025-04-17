@@ -132,7 +132,7 @@
             vsets = prim.GetVariantSets();
             vset = vsets.GetVariantSet("frame_material");
             vset.SetVariantSelection("carbon");'> |
-       <input type="button" value="Yellow" onclick='
+        <input type="button" value="Yellow" onclick='
             prim = stage.GetPrimAtPath("/CarbonFrameBike");
             vsets = prim.GetVariantSets();
             vset = vsets.GetVariantSet("frame_material");
@@ -162,9 +162,12 @@
         <input type="button" value="Rear Wheel" onclick='
             prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten");
             Usd.UsdwebFitCamera(prim);'> |
-         )
-         <br>
-         <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall" onclick='openStageFromUsdfile("standard_shader_ball_scene.usdz")'>
+        )
+        <br>
+        <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
+        <input type="button" id="Standard_ShaderBall_usdpreview_copper" value="Copper">
+        <input type="button" id="Standard_ShaderBall_usdpreview_glass" value="Glass">
+        <input type="button" id="Standard_ShaderBall_usdpreview_plastic" value="Plastic">
         <script>
             async function loadscene_standard_shader_ball_scene()
             {
@@ -176,13 +179,33 @@
                 vset = vsets.GetVariantSet("surface_geometry");
                 vset.SetVariantSelection("triangulated");
                 vset = vsets.GetVariantSet("example_material");
-                vset.SetVariantSelection("uvgrid");
+                vset.SetVariantSelection("none");
                 vset = vsets.GetVariantSet("scene_lights");
                 vset.SetVariantSelection("on");
                 vset = vsets.GetVariantSet("internal_emitter");
                 vset.SetVariantSelection("off");
             }
+
+            async function standard_shader_ball_set_material_variant(matVar)
+            {
+                console.log('MaterialVariant = '+matVar);
+                stage = Usd.UsdwebGetStage();
+                prim = stage.GetPrimAtPath('/standard_shader_ball_scene');
+                vsets = prim.GetVariantSets();
+                vset = vsets.GetVariantSet("example_material");
+                vset.SetVariantSelection(matVar);
+            }
+
             document.getElementById("Standard_ShaderBall").onclick = loadscene_standard_shader_ball_scene;
+            document.getElementById("Standard_ShaderBall_usdpreview_copper").onclick = function() {
+                standard_shader_ball_set_material_variant('usdpreview_copper');
+            };
+            document.getElementById("Standard_ShaderBall_usdpreview_glass").onclick = function() {
+                standard_shader_ball_set_material_variant('usdpreview_glass');
+            };
+            document.getElementById("Standard_ShaderBall_usdpreview_plastic").onclick = function() {
+                standard_shader_ball_set_material_variant('usdpreview_plastic');
+            };
         </script>
 </div>
 
