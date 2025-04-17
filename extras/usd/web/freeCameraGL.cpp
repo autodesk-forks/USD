@@ -104,13 +104,11 @@ void FreeCameraGL::PullFromCameraTransform()
     _selSize = dist / 10.0;
     _center = cam_pos + dist * cam_axis;
 
-    // # self._YZUpMatrix influences the behavior about how the
-    // # FreeCamera will tumble. It is the identity or a rotation about the
-    // # x-Axis.
-
     //# Compute rotational part
     pxr::GfMatrix4d transform = cam_transform;
     if (_isZUp) {
+        // _ZUpRotMatrix influences the behavior about how the
+        // FreeCamera will tumble. It is the identity or a rotation about the x-Axis.
         transform *= FreeCameraGL::_ZUpRotMatrix;
     }
     transform.Orthonormalize();
