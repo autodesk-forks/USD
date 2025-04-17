@@ -88,7 +88,7 @@
 </div>
 
 <div id="footer">
-    Sample files from usd-wg/assets<br>
+    Sample files from usd-wg/assets
     <input type="button" value="FancyTeapot" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd")'><br>
     <input type="button" value="CarbonFrameBike" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz")'>
         (
@@ -163,6 +163,27 @@
             prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten");
             Usd.UsdwebFitCamera(prim);'> |
          )
+         <br>
+         <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall" onclick='openStageFromUsdfile("standard_shader_ball_scene.usdz")'>
+        <script>
+            async function loadscene_standard_shader_ball_scene()
+            {
+                stage = await openStageFromUsdfile("standard_shader_ball_scene.usdz");
+                prim = stage.GetPrimAtPath('/standard_shader_ball_scene/shader_ball');
+                Usd.UsdwebFitCamera(prim);
+                prim = stage.GetPrimAtPath('/standard_shader_ball_scene');
+                vsets = prim.GetVariantSets();
+                vset = vsets.GetVariantSet("surface_geometry");
+                vset.SetVariantSelection("triangulated");
+                vset = vsets.GetVariantSet("example_material");
+                vset.SetVariantSelection("uvgrid");
+                vset = vsets.GetVariantSet("scene_lights");
+                vset.SetVariantSelection("on");
+                vset = vsets.GetVariantSet("internal_emitter");
+                vset.SetVariantSelection("off");
+            }
+            document.getElementById("Standard_ShaderBall").onclick = loadscene_standard_shader_ball_scene;
+        </script>
 </div>
 
 <script type='text/javascript'>
