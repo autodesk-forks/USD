@@ -29,13 +29,6 @@
 #ifndef PXR_USD_IMAGING_USD_WINDOW_STATE_H
 #define PXR_USD_IMAGING_USD_WINDOW_STATE_H
 
-#ifndef MODEL_NAME
-#define MODEL_NAME "Knife"
-#endif
-#ifndef MODEL_EXT_NAME
-#define MODEL_EXT_NAME "usdz"
-#endif
-
 static void error_callback(int error, const char *description)
 {
     std::cout << "Error: " << description << std::endl;
