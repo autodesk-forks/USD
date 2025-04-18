@@ -164,10 +164,12 @@
             Usd.UsdwebFitCamera(prim);'> |
         )
         <br>
+        <input type="button" id="basic_materialx" value="basic_materialx">
         <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
         <input type="button" id="Standard_ShaderBall_usdpreview_copper" value="Copper">
         <input type="button" id="Standard_ShaderBall_usdpreview_glass" value="Glass">
         <input type="button" id="Standard_ShaderBall_usdpreview_plastic" value="Plastic">
+        <input type="button" id="Standard_ShaderBall_uvgrid" value="UVGrid">
         <script>
             async function loadscene_standard_shader_ball_scene()
             {
@@ -196,6 +198,9 @@
                 vset.SetVariantSelection(matVar);
             }
 
+            document.getElementById("basic_materialx").onclick  = async function() {
+                stage = await openStageFromUsdfile("basic_materialx.usdz");
+            };
             document.getElementById("Standard_ShaderBall").onclick = loadscene_standard_shader_ball_scene;
             document.getElementById("Standard_ShaderBall_usdpreview_copper").onclick = function() {
                 standard_shader_ball_set_material_variant('usdpreview_copper');
@@ -205,6 +210,9 @@
             };
             document.getElementById("Standard_ShaderBall_usdpreview_plastic").onclick = function() {
                 standard_shader_ball_set_material_variant('usdpreview_plastic');
+            };
+            document.getElementById("Standard_ShaderBall_uvgrid").onclick = function() {
+                standard_shader_ball_set_material_variant('uvgrid');
             };
         </script>
 </div>
