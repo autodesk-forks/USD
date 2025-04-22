@@ -1275,6 +1275,13 @@ _ToMaterialNetworkMap(
         matHd.config = _ToDictionary(config);
     }
 
+    HdTokenVectorMap primvarsMap;
+    if (const HdTokenVectorMapDataSourceHandle primvarsMapDs =
+            netSchema.GetPrimvars())
+    {
+        primvarsMap = primvarsMapDs->GetTypedValue(0);
+    }
+
     for (const auto & name : names) {
         visitedNodes.clear();
 
@@ -1303,6 +1310,16 @@ _ToMaterialNetworkMap(
                 _Walk(SdfPath(nodeName.GetString()),
                     nodesSchema, renderContexts, &visitedNodes, &netHd);
             }
+        }
+
+        // Extra primvars.
+        if (const auto &primvarsIter = primvarsMap.find(name);
+            primvarsIter != primvarsMap.end())
+        {
+            netHd.primvars.insert(
+                netHd.primvars.end(),
+                primvarsIter->second.begin(),
+                primvarsIter->second.end());
         }
     }
 
