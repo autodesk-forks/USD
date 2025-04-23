@@ -13,6 +13,7 @@
 #include "pxr/imaging/hgi/cmds.h"
 #include "pxr/imaging/hgi/texture.h"
 #include <memory>
+#include <functional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 

@@ -50,6 +50,12 @@ HgiGLBlitCmds::CopyTextureGpuToCpu(
     HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
 {
     _ops.push_back( HgiGLOps::CopyTextureGpuToCpu(copyOp) );
+    if (callback) {
+        // Offset into the dst buffer
+        char* dst = ((char*) copyOp.cpuDestinationBuffer) +
+        copyOp.destinationByteOffset;
+        callback((void*)dst);
+    }
 }
 
 void
