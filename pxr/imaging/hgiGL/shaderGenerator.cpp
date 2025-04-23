@@ -253,7 +253,8 @@ HgiGLShaderGenerator::_WriteMacros(std::ostream &ss)
           "#define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, "
           "expected, desired)\n"
           "#define atomic_int int\n"
-          "#define atomic_uint uint\n";
+          "#define atomic_uint uint\n"
+          "#define hd_SampleMask gl_SampleMask[0]\n";
 
     // Advertise to shader code that we support double precision math
     // and IEEE float special values (NaN, +-Inf).
@@ -373,6 +374,7 @@ HgiGLShaderGenerator::_WriteInOuts(
         "gl_FragColor",
         "gl_FragDepth",
         "gl_PointSize",
+        "hd_SampleMask",
     };
 
     const static std::unordered_map<std::string, std::string> takenInParams {
@@ -393,6 +395,7 @@ HgiGLShaderGenerator::_WriteInOuts(
         { HgiShaderKeywordTokens->hdViewportIndex, "gl_ViewportIndex"},
         { HgiShaderKeywordTokens->hdGlobalInvocationID, "gl_GlobalInvocationID"},
         { HgiShaderKeywordTokens->hdBaryCoordNoPersp, "gl_BaryCoordNoPerspNV"},
+        { HgiShaderKeywordTokens->hdSampleMaskIn, "gl_SampleMaskIn[0]"}
     };
 
     const bool in_qualifier = qualifier == "in";
@@ -408,11 +411,7 @@ HgiGLShaderGenerator::_WriteInOuts(
             const std::string &role = param.role;
             auto const& keyword = takenInParams.find(role);
             if (keyword != takenInParams.end()) {
-                if (role == HgiShaderKeywordTokens->hdGlobalInvocationID ||
-                    role == HgiShaderKeywordTokens->hdVertexID ||
-                    role == HgiShaderKeywordTokens->hdInstanceID ||
-                    role == HgiShaderKeywordTokens->hdBaseInstance ||
-                    role == HgiShaderKeywordTokens->hdBaryCoordNoPersp) {
+                if (paramName != keyword->second) {
                     CreateShaderSection<HgiGLKeywordShaderSection>(
                         paramName,
                         param.type,

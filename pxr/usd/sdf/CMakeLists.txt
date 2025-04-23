@@ -136,6 +136,7 @@ pxr_library(sdf
         module.cpp
         wrapArrayAssetPath.cpp
         wrapArrayPath.cpp
+        wrapArrayPathExpression.cpp
         wrapArrayTimeCode.cpp
         wrapAssetPath.cpp
         wrapAttributeSpec.cpp
@@ -209,6 +210,7 @@ pxr_test_scripts(
     testenv/testSdfPath2.py
     testenv/testSdfPath2Construct.py
     testenv/testSdfPathExpression.py
+    testenv/testSdfPathExpressionArray.py
     testenv/testSdfPayload.py
     testenv/testSdfPrim.py
     testenv/testSdfReference.py
@@ -280,6 +282,15 @@ pxr_build_test_shared_lib(TestSdfResolver
     CPPFILES
         testenv/TestSdfResolver.cpp
 )
+
+pxr_build_test(testSdfAbstractData_Cpp
+    LIBRARIES
+        tf
+        vt
+        sdf
+    CPPFILES
+        testenv/testSdfAbstractData.cpp
+) 
 
 pxr_build_test(testSdfAttributeBlocking_Cpp
     LIBRARIES
@@ -384,6 +395,10 @@ pxr_install_test_dir(
     DEST testSdfParsing/testSdfParsing.testenv
 )
 
+pxr_register_test(testSdfAbstractData_Cpp
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAbstractData_Cpp"
+)
+
 pxr_register_test(testSdfAssetPath
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAssetPath"
@@ -483,6 +498,11 @@ pxr_register_test(testSdfPathExpression
 
 pxr_register_test(testSdfPathExpression_Cpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfPathExpression_Cpp"
+)
+
+pxr_register_test(testSdfPathExpressionArray
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfPathExpressionArray"
 )
 
 pxr_register_test(testSdfParsing

@@ -313,9 +313,11 @@ HdSceneIndexAdapterSceneDelegate::_PrimAdded(
             GetRenderIndex().GetChangeTracker().
                 _MarkRprimDirty(indexPath, allDirtyRprim);
         } else if (GetRenderIndex().IsSprimTypeSupported(primType)) {
+            const TfTokenVector renderContexts =
+                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();    
             HdDirtyBits allDirtySprim =
                 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
-                    primType, allDirty);
+                    primType, allDirty, renderContexts);
             GetRenderIndex().GetChangeTracker().
                 _MarkSprimDirty(indexPath, allDirtySprim);
         } else if (GetRenderIndex().IsBprimTypeSupported(primType)) {
@@ -457,9 +459,11 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
                     indexPath, dirtyBits);
             }
         } else if (GetRenderIndex().IsSprimTypeSupported(primType)) {
+            const TfTokenVector renderContexts =
+                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();    
             HdDirtyBits dirtyBits =
                 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
-                        primType, entry.dirtyLocators);
+                        primType, entry.dirtyLocators, renderContexts);
             if (dirtyBits != HdChangeTracker::Clean) {
                 GetRenderIndex().GetChangeTracker()._MarkSprimDirty(
                     indexPath, dirtyBits);
@@ -743,6 +747,28 @@ HdSceneIndexAdapterSceneDelegate::GetExtent(SdfPath const &id)
     return GfRange3d(min, max);
 }
 
+static
+bool
+_IsLegacyInstancer(const HdSceneIndexPrim &prim)
+{    
+    if (prim.primType != HdPrimTypeTokens->instancer) {
+        return false;
+    }
+
+    HdContainerDataSourceHandle const container =
+        HdInstancerTopologySchema::
+        GetFromParent(prim.dataSource).GetContainer();
+    if (!container) {
+        return false;
+    }
+    auto const ds = HdBoolDataSource::Cast(
+        container->Get(HdLegacyFlagTokens->isLegacyInstancer));
+    if(!ds) {
+        return false;
+    }
+    return ds->GetTypedValue(0.0f);
+}
+
 bool
 HdSceneIndexAdapterSceneDelegate::GetVisible(SdfPath const &id)
 {
@@ -750,6 +776,15 @@ HdSceneIndexAdapterSceneDelegate::GetVisible(SdfPath const &id)
     HF_MALLOC_TAG_FUNCTION();
     HdSceneIndexPrim prim = _GetInputPrim(id);
 
+    if (_IsLegacyInstancer(prim)) {
+        // For usdImaging delegate.
+        // When changing the visibility of a USD point instancer, the
+        // delegate does not properly update the visibility of the
+        // corresponding Hydra instancer. It actually invis's a point
+        // instancer by deleting all the prototype prims.
+        return true;
+    }
+    
     HdVisibilitySchema visibilitySchema =
         HdVisibilitySchema::GetFromParent(prim.dataSource);
     if (!visibilitySchema.IsDefined()) {
@@ -1239,8 +1274,8 @@ _ToMaterialNetworkMap(
         netSchema.GetTerminals();
     const TfTokenVector names = terminalsSchema.GetNames();
 
-    auto config = HdSampledDataSourceContainerSchema(netSchema.GetConfig());
-    if (config) {
+    if (const HdSampledDataSourceContainerSchema config =
+                                                netSchema.GetConfig()) {
         matHd.config = _ToDictionary(config);
     }
 
@@ -1255,6 +1290,10 @@ _ToMaterialNetworkMap(
 
         // Keep track of the terminals
         TfToken pathTk = connSchema.GetUpstreamNodePath()->GetTypedValue(0);
+        if (pathTk.IsEmpty()) {
+            // Allow setting terminals to an empty string to disable them.
+            continue;
+        }
         SdfPath path(pathTk.GetString());
         matHd.terminals.push_back(path);
 
@@ -2921,6 +2960,11 @@ HdSceneIndexAdapterSceneDelegate::GetDisplayStyle(SdfPath const &id)
         if (HdBoolDataSourceHandle ds =
                 styleSchema.GetDisplacementEnabled()) {
             result.displacementEnabled = ds->GetTypedValue(0.0f);
+        }
+
+        if (HdBoolDataSourceHandle ds =
+                styleSchema.GetDisplayInOverlay()) {
+            result.displayInOverlay = ds->GetTypedValue(0.0f);
         }
 
         if (HdBoolDataSourceHandle ds =

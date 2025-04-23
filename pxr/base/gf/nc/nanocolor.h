@@ -76,7 +76,8 @@ typedef struct {
 // The color space is defined by the red, green, and blue primaries,
 // the white point, the gamma of the log section, and the linear bias.
 typedef struct {
-    const char*       name;
+    const char*       descriptiveName;
+    const char*       shortName;
     NcChromaticity    redPrimary, greenPrimary, bluePrimary;
     NcChromaticity    whitePoint;
     float             gamma;      // gamma of log section
@@ -86,7 +87,8 @@ typedef struct {
 // NcColorSpaceM33Descriptor describes a color space defined in terms of a 
 // 3x3 matrix, the gamma of the log section, and the linear bias.
 typedef struct {
-    const char*       name;
+    const char*       descriptiveName;
+    const char*       shortName;
     NcM33f            rgbToXYZ;
     float             gamma;      // gamma of log section
     float             linearBias; // where the linear section ends
@@ -100,31 +102,46 @@ extern "C" {
 #endif
 
 /*
- The named color spaces provided by Nanocolor are as follows.
- Note that the names are shared with libraries such as MaterialX.
+ The named color spaces provided by Nanocolor are those published in the
+ Color Interop Forum Texture Asset Color Spaces document.
 
- - acescg:           The Academy Color Encoding System, a color space designed
-                     for cinematic content creation and exchange, using AP1 primaries
- - adobergb:         A color space developed by Adobe Systems. It has a wider gamut
-                     than sRGB and is suitable for photography and printing
- - g18_ap1:          A color space with a 1.8 gamma and an AP1 primaries color gamut
- - g18_rec709:       A color space with a 1.8 gamma, and primaries per the Rec. 709
-                     standard, commonly used in HDTV
- - g22_ap1:          A color space with a 2.2 gamma and an AP1 primaries color gamut
- - g22_rec709:       A color space with a 2.2 gamma, and primaries per the Rec. 709
-                     standard, commonly used in HDTV
- - identity:         Indicates that no transform is applied.
- - lin_adobergb:     The AdobeRGB gamut, and linear gamma
- - lin_ap0:          AP0 primaries, and linear gamma
- - lin_ap1:          AP1 primaries, and linear gamma; these are the ACESCg primaries
- - lin_displayp3:    DisplayP3 gamut, and linear gamma
- - lin_rec709:       A linearized version of the Rec. 709 color space.
- - lin_rec2020:      Rec2020 gamut, and linear gamma
- - lin_srgb:         sRGB gamut, linear gamma
- - raw:              Indicates that no transform is applied.
- - srgb_displayp3:   sRGB color space adapted to the Display P3 primaries
- - sRGB:             The sRGB color space.
- - srgb_texture:     The sRGB color space.
+The names correspond to the names found in the standard set of CIF color space
+configurations distributed as part of OpenColorIO. The short names take the form
+of three components joined by underscores. The first component is the encoding
+of the RGB tuple; either linear for no encoding, srgb for `IEC 61966-2-1:1999`
+encoding, or gNN where NN indicates a gamma value. The second component is the
+name of the color space. Finally, the third component names the image state, as
+named in `ISO 22028-1`, drawing a distinction between scene-referred and display-
+referred color spaces. Scene referenced color spaces are used to describe the
+color of objects in the real world, while display-referred color spaces are used
+to describe the color of images displayed on a screen.
+
+`CIE XYZ-D65 - Scene-referred` bears some additional explanation. The D65
+component in the name indicates that values transformed to this color space are
+subject to an adaptation to the D65 white point. This is necessary to match
+results from the ACES reference transformation implementations. Of the color
+spaces provided, only the ACES color spaces by definition have an adaptation
+to the D65 whitepoint, as required to match results provided by DCCs and OCIO.
+
+ACEScg: lin_ap1_scene
+ACES2065-1: lin_ap0_scene
+Linear Rec.709 (sRGB): lin_rec709_scene
+Linear P3-D65: lin_p3d65_scene
+Linear Rec.2020: lin_rec2020_scene
+Linear AdobeRGB: lin_adobergb_scene
+CIE XYZ-D65 - Scene-referred: lin_ciexyzd65_scene
+sRGB Encoded Rec.709 (sRGB): srgb_rec709_scene
+Gamma 2.2 Encoded Rec.709: g22_rec709_scene
+Gamma 1.8 Encoded Rec.709: g18_rec709_scene
+sRGB Encoded AP1: srgb_ap1_scene
+Gamma 2.2 Encoded AP1: g22_ap1_scene
+sRGB Encoded P3-D65: srgb_p3d65_scene
+Gamma 2.2 Encoded AdobeRGB: g22_adobergb_scene
+Data: data
+Unknown: unknown
+
+Additionally, raw and identity color spaces are provided as they are commonly
+found in documents naming color spaces.
 */
 
 // Declare the public interface using the namespacing macro.

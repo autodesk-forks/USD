@@ -71,6 +71,8 @@ using HgiBits = uint32_t;
 /// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
 ///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
 ///   regardless of the body of the shader</li>
+/// <li>HgiDeviceCapabilitiesBitsRoundPoints:
+///   Points can be natively rasterized as disks</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
@@ -99,6 +101,7 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsPushConstants           = 1 << 21,
     HgiDeviceCapabilitiesBitsTimestamps              = 1 << 22,
     HgiDeviceCapabilitiesForceEarlyFragmentTest      = 1 << 23,
+    HgiDeviceCapabilitiesBitsRoundPoints             = 1 << 24,
 };
 
 using HgiDeviceCapabilities = HgiBits;

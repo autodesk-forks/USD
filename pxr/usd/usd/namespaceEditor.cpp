@@ -427,6 +427,75 @@ UsdNamespaceEditor::ApplyEdits()
         TF_CODING_ERROR("Failed to process edits");
         return false;
     }
+
+    // We create a namespace edit change block for each stage that is edited
+    // by this editor. This is so the stage can appropriately parse the layer 
+    // and PcpCache changes that are processed by the UsdStage and classify 
+    // namespace edits in the ObjectsChanged notice.
+    //
+    // Note that this only includes the primary edit stage and any explicitly
+    // added dependent stage. We do NOT attempt to search for open stages that
+    // just happen to be affected by the edits that will be applied.
+    std::vector<UsdStage::_NamespaceEditsChangeBlock> namespaceEditChangeBlocks;
+    namespaceEditChangeBlocks.reserve(_dependentStages.size() + 1);
+
+    auto addPrimChangesForStage = [&](const UsdStageRefPtr &stage) {
+        // The expected namespace changes to prim index paths are stored per
+        // PcpCache in the dependent namespace edits so we look up the expected
+        // changes for this stage's cache.
+        const auto *pathChangesForStage = TfMapLookupPtr(
+            _processedEdit->dependentStageNamespaceEdits.dependentCachePathChanges, 
+            stage->_GetPcpCache());
+        if (!pathChangesForStage) {
+            return;
+        }
+
+        // Convert the expected namespace changes to what's needed for the
+        // change block by removing old paths that don't exist as prims on the
+        // stage and computing the current prim stack for the old prim before
+        // edits are applied (to be compared with the prim stack after the
+        // edits are applied.)
+        UsdStage::_NamespaceEditsChangeBlock::ExpectedNamespaceEditChangeVector
+            changeBlockExpectedChanges;
+        changeBlockExpectedChanges.reserve(pathChangesForStage->size());
+        for (const auto &change : *pathChangesForStage) {
+            UsdPrim oldPrim = stage->GetPrimAtPath(change.oldPath);
+            if (!oldPrim) {
+                continue;
+            }
+            changeBlockExpectedChanges.push_back({
+                change.oldPath, change.newPath, oldPrim.GetPrimStack()});
+        }
+
+        // Create the change block for this stage's expected namespace changes.
+        namespaceEditChangeBlocks.emplace_back(
+            stage, std::move(changeBlockExpectedChanges));
+    };
+
+    if (_processedEdit->editDescription.IsPropertyEdit()) {
+        // For property edits we only edit the primary stage's root layer stack
+        // so we only have to log the expected property path change in a change
+        // block for that stage. Note that we don't need to compute and add
+        // a prim stack for properties as the change handling in UsdStage 
+        // doesn't need it.
+        // 
+        // XXX: WE don't currently look for downstream dependencies in dependent
+        // stages for property edits. This is something that will likely be
+        // needed so and we'll accordingly need to change block property changes
+        // for the affected dependent stages as well.
+        UsdStage::_NamespaceEditsChangeBlock::ExpectedNamespaceEditChangeVector
+            changeBlockExpectedChanges({
+                {_processedEdit->editDescription.oldPath, 
+                 _processedEdit->editDescription.newPath}});
+        namespaceEditChangeBlocks.emplace_back(
+            _stage, std::move(changeBlockExpectedChanges));
+    } else {
+        addPrimChangesForStage(_stage);
+        for (const auto &stage : _dependentStages) {
+            addPrimChangesForStage(stage);
+        }
+    }
+
     const bool success = _processedEdit->Apply();
 
     // Always clear the processed edits after applying them.

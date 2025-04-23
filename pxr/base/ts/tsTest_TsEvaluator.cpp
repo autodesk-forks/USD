@@ -270,4 +270,42 @@ TsTest_TsEvaluator::Eval(
     return result;
 }
 
+template <typename SampleData>
+bool
+TsTest_TsEvaluator::Sample(
+    const SData &splineData,
+    const GfInterval& timeInterval,
+    const double timeScale,
+    const double valueScale,
+    const double tolerance,
+    SampleData* splineSamples) const
+{
+    const TsSpline spline = SplineDataToSpline(splineData);
+
+    return spline.Sample(timeInterval,
+                         timeScale,
+                         valueScale,
+                         tolerance,
+                         splineSamples);
+}
+
+// Explicit templated method instantiation.
+template TS_API bool
+TsTest_TsEvaluator::Sample(
+    const SData &splineData,
+    const GfInterval& timeInterval,
+    const double timeScale,
+    const double valueScale,
+    const double tolerance,
+    TsSplineSamples<GfVec2d>* splineSamples) const;
+
+template TS_API bool
+TsTest_TsEvaluator::Sample(
+    const SData &splineData,
+    const GfInterval& timeInterval,
+    const double timeScale,
+    const double valueScale,
+    const double tolerance,
+    TsSplineSamplesWithSources<GfVec2d>* splineSamples) const;
+
 PXR_NAMESPACE_CLOSE_SCOPE

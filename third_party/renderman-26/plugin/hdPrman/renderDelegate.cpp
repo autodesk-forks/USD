@@ -177,6 +177,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (renderCameraPath)
     (DefaultMayaLight)
     (__FnKat_bbox)
+    (viewerMouseClick)
 );
 
 TF_DEFINE_PUBLIC_TOKENS(HdPrmanRenderSettingsTokens,
@@ -745,25 +746,22 @@ HdAovDescriptor
 HdPrmanRenderDelegate::GetDefaultAovDescriptor(
     TfToken const& name) const
 {
-    if (IsInteractive()) {
-        if (name == HdAovTokens->color) {
-            return HdAovDescriptor(
-                HdFormatFloat32Vec4,
-                false,
-                VtValue(GfVec4f(0.0f)));
-        } else if (name == HdAovTokens->depth) {
-            return HdAovDescriptor(HdFormatFloat32, false, VtValue(1.0f));
-        } else if (name == HdAovTokens->primId ||
-                   name == HdAovTokens->instanceId ||
-                   name == HdAovTokens->elementId) {
-            return HdAovDescriptor(HdFormatInt32, false, VtValue(-1));
-        }
+    if (name == HdAovTokens->color) {
         return HdAovDescriptor(
-            HdFormatFloat32Vec3,
+            HdFormatFloat32Vec4,
             false,
-            VtValue(GfVec3f(0.0f)));
+            VtValue(GfVec4f(0.0f)));
+    } else if (name == HdAovTokens->depth) {
+        return HdAovDescriptor(HdFormatFloat32, false, VtValue(1.0f));
+    } else if (name == HdAovTokens->primId ||
+               name == HdAovTokens->instanceId ||
+               name == HdAovTokens->elementId) {
+        return HdAovDescriptor(HdFormatInt32, false, VtValue(-1));
     }
-    return HdAovDescriptor();
+    return HdAovDescriptor(
+        HdFormatFloat32Vec3,
+        false,
+        VtValue(GfVec3f(0.0f)));
 }
 
 TfToken
@@ -817,6 +815,12 @@ void
 HdPrmanRenderDelegate::SetRenderSetting(TfToken const &key,
                                         VtValue const &value)
 {
+    // Solaris will send mouse clicks to the render settings.
+    // We want to ignore these as they will cause the render to restart which
+    // can be frustrating for users.
+    if (key == _tokens->viewerMouseClick)
+        return;
+
     HdRenderDelegate::SetRenderSetting(key, value);
 
     if(key == _tokens->renderCameraPath)

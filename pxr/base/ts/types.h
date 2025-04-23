@@ -10,12 +10,63 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/ts/api.h"
+
 #include "pxr/base/gf/interval.h"
+#include "pxr/base/gf/vec2d.h"
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 
 #include <cstdint>
+#include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+/// \anchor TS_SPLINE_SUPPORTED_VALUE_TYPES
+/// Sequence of value types that are supported by the spline system.
+/// \li <b>double</b>
+/// \li <b>float</b>
+/// \li <b>GfHalf</b>
+/// \hideinitializer
+#define TS_SPLINE_SUPPORTED_VALUE_TYPES         \
+    ((Double,   double))                        \
+    ((Float,    float))                         \
+    ((Half,     GfHalf))
+
+#define TS_SPLINE_SAMPLE_VERTEX_TYPES \
+    ((Vec2d,    GfVec2d))                       \
+    ((Vec2f,    GfVec2f))                       \
+    ((Vec2h,    GfVec2h))
+
+#define TS_SPLINE_VALUE_TYPE_NAME(x) TF_PP_TUPLE_ELEM(0, x)
+#define TS_SPLINE_VALUE_CPP_TYPE(x) TF_PP_TUPLE_ELEM(1, x)
+
+/// \brief True if template parameter T is a supported spline data type.
+template <class T>
+inline constexpr bool
+TsSplineIsValidDataType = false;
+
+#define _TS_SUPPORT_DATA_TYPE(unused, tuple)                            \
+    template <>                                                         \
+    inline constexpr bool                                               \
+    TsSplineIsValidDataType< TS_SPLINE_VALUE_CPP_TYPE(tuple) > = true;
+TF_PP_SEQ_FOR_EACH(_TS_SUPPORT_DATA_TYPE,
+                   ~,
+                   TS_SPLINE_SUPPORTED_VALUE_TYPES)
+#undef _TS_SUPPORT_DATA_TYPE
+
+/// \brief True if template parameter T is a supported spline sampling vertex
+/// type.
+template <class T>
+inline constexpr bool
+TsSplineIsValidSampleType = false;
+
+#define _TS_SUPPORT_SAMPLE_TYPE(unused, tuple)                          \
+    template <>                                                         \
+    inline constexpr bool                                               \
+    TsSplineIsValidSampleType< TS_SPLINE_VALUE_CPP_TYPE(tuple) > = true;
+TF_PP_SEQ_FOR_EACH(_TS_SUPPORT_SAMPLE_TYPE,
+                   ~,
+                   TS_SPLINE_SAMPLE_VERTEX_TYPES)
+#undef _TS_SUPPORT_SAMPLE_TYPE
 
 // Times are encoded as double.
 using TsTime = double;
@@ -56,6 +107,24 @@ enum TsExtrapMode
     TsExtrapLoopRepeat    = 4, //< Knot curve repeated, offset so ends meet.
     TsExtrapLoopReset     = 5, //< Curve repeated exactly, discontinuous joins.
     TsExtrapLoopOscillate = 6  //< Like Reset, but every other copy reversed.
+};
+
+/// The source for a particular part of a sampled spline. A \c TsSpline can have
+/// a number of different regions. The source is not important to the values
+/// that vary over time, but if the spline is sampled and displayed in a user
+/// interface, the source can be used to highlight different regions of the
+/// displayed spline.
+///
+enum TsSplineSampleSource
+{
+    TsSourcePreExtrap,          //< Extrapolation before the first knot
+    TsSourcePreExtrapLoop,      //< Looped extrapolation before the first knot
+    TsSourceInnerLoopPreEcho,   //< Echoed copy of an inner loop prototype
+    TsSourceInnerLoopProto,     //< This is the inner loop prototype
+    TsSourceInnerLoopPostEcho,  //< Echoed copy of an inner loop prototype
+    TsSourceKnotInterp,         //< "Normal" knot interpolation
+    TsSourcePostExtrap,         //< Extrapolation after the last knot
+    TsSourcePostExtrapLoop,     //< Looped extrapolation after the last knot
 };
 
 /// Inner-loop parameters.
@@ -140,6 +209,60 @@ public:
     TS_API
     bool IsLooping() const;
 };
+
+/// \brief \c TsSplineSamples<Vertex> holds a collection of piecewise linear
+/// polylines that approximate a \c TsSpline.
+///
+/// The vertex must be one of \c GfVec2d, \c GfVec2f, or \c GfVec2h. Note that
+/// you may have precision or overflow issues if you use \c GfVec2h.
+///
+/// \sa \ref TsSplineSamplesWithSources and \ref TsSpline::Sample
+template <typename Vertex>
+class TsSplineSamples
+{
+public:
+    static_assert(TsSplineIsValidSampleType<Vertex>,
+                  "The Vertex template parameter to TsSplineSamples must be one"
+                  " of GfVec2d, GfVec2f, or GfVec2h.");
+
+    using Polyline = std::vector<Vertex>;
+
+    std::vector<Polyline> polylines;
+};
+
+/// \brief \c TsSplineSamplesWithSources<Vertex> is a \c TsSplineSamples<Vertex>
+/// that also includes source information for each polyline.
+///
+/// The vertex must be one of \c GfVec2d, \c GfVec2f, or \c GfVec2h. Note that
+/// you may have precision or overflow issues if you use \c GfVec2h.
+///
+/// The \c polylines and \c sources vectors are parallel arrays. In other words,
+/// the source for the \c Polyline in \c polylines[i] is in \c sources[i] and
+/// the two vectors have the same size.
+/// \sa \ref TsSplineSamples and \ref TsSpline::SampleWithSources
+template <typename Vertex>
+class TsSplineSamplesWithSources
+{
+public:
+    static_assert(TsSplineIsValidSampleType<Vertex>,
+                  "The Vertex template parameter to TsSplineSamplesWithSources"
+                  " must be one of GfVec2d, GfVec2f, or GfVec2h.");
+
+    using Polyline = std::vector<Vertex>;
+
+    std::vector<Polyline> polylines;
+    std::vector<TsSplineSampleSource> sources;
+};
+
+// Declare sampling classes as extern templates. They are explicitly
+// instantiated in types.cpp
+#define TS_SAMPLE_EXTERN_IMPL(unused, tuple)                            \
+    TS_API_TEMPLATE_CLASS(                                              \
+        TsSplineSamples< TS_SPLINE_VALUE_CPP_TYPE(tuple) >);            \
+    TS_API_TEMPLATE_CLASS(                                              \
+        TsSplineSamplesWithSources< TS_SPLINE_VALUE_CPP_TYPE(tuple) >);
+TF_PP_SEQ_FOR_EACH(TS_SAMPLE_EXTERN_IMPL, ~, TS_SPLINE_SAMPLE_VERTEX_TYPES)
+#undef TS_SAMPLE_EXTERN_IMPL
 
 /// Modes for enforcing non-regression in splines.
 ///

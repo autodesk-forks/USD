@@ -29,6 +29,7 @@
 #include "pxr/imaging/hdx/simpleLightTask.h"
 #include "pxr/imaging/hdx/skydomeTask.h"
 #include "pxr/imaging/hdx/shadowTask.h"
+#include "pxr/imaging/hdx/taskControllerSceneIndex.h"
 #include "pxr/imaging/hdx/visualizeAovTask.h"
 
 #include "pxr/imaging/hdSt/renderDelegate.h"
@@ -650,15 +651,7 @@ HdxTaskController::_ShadowsEnabled() const
 bool
 HdxTaskController::_SelectionEnabled() const
 {
-    if (_renderTaskIds.empty())
-        return false;
-
-    const HdxRenderTaskParams& renderTaskParams =
-        _delegate.GetParameter<HdxRenderTaskParams>(
-            _renderTaskIds.front(), HdTokens->params);
-
-    // Disable selection highlighting when we're rendering ID buffers.
-    return !renderTaskParams.enableIdRender;
+    return !_renderTaskIds.empty();
 }
 
 bool
@@ -709,11 +702,18 @@ HdxTaskController::_UsingAovs() const
     return !_aovBufferIds.empty();
 }
 
-HdTaskSharedPtrVector const
-HdxTaskController::GetRenderingTasks() const
+static
+void
+_AddIfNonEmpty(const SdfPath &path, SdfPathVector * const paths)
 {
-    HdTaskSharedPtrVector tasks;
+    if (!path.IsEmpty()) {
+        paths->push_back(path);
+    }
+}
 
+SdfPathVector
+HdxTaskController::GetRenderingTaskPaths() const
+{
     /* The superset of tasks we can run, in order, is:
      * - simpleLightTaskId
      * - shadowTaskId
@@ -733,86 +733,104 @@ HdxTaskController::GetRenderingTasks() const
      * See _CreateRenderGraph for more details.
      */
 
-    if (!_simpleLightTaskId.IsEmpty()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_simpleLightTaskId));
-    }
-
+    SdfPathVector paths;
+    
+    _AddIfNonEmpty(_simpleLightTaskId, &paths);
     if (!_shadowTaskId.IsEmpty() && _ShadowsEnabled()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_shadowTaskId));
+        paths.push_back(_shadowTaskId);
     }
 
     // Perform draw calls
     if (!_renderTaskIds.empty()) {
-        SdfPath volumeId = _GetRenderTaskPath(HdStMaterialTagTokens->volume);
+        const SdfPath volumeId =
+            _GetRenderTaskPath(HdStMaterialTagTokens->volume);
 
+        bool hasVolume = false;
+        
         // Render opaque prims, additive and translucent blended prims.
         // Skip volume prims, because volume rendering reads from the depth
         // buffer so we must resolve depth first first.
-        for (SdfPath const& id : _renderTaskIds) {
-            if (id != volumeId) {
-                tasks.push_back(GetRenderIndex()->GetTask(id));
+        for (const SdfPath &id : _renderTaskIds) {
+            if (id == volumeId) {
+                hasVolume = true;
+                continue;
             }
+            paths.push_back(id);
         }
 
         // Take the aov results from the render tasks, resolve the multisample
         // images and put the results into gpu textures onto shared context.
-        if (!_aovInputTaskId.IsEmpty()) {
-            tasks.push_back(GetRenderIndex()->GetTask(_aovInputTaskId));
-        }
+        _AddIfNonEmpty(_aovInputTaskId, &paths);
 
-        if (!_boundingBoxTaskId.IsEmpty()) {
-            tasks.push_back(GetRenderIndex()->GetTask(_boundingBoxTaskId));
-        }
+        _AddIfNonEmpty(_boundingBoxTaskId, &paths);
 
         // Render volume prims
         if (!HdxWbOitRenderTask::IsEnabled()) {
-            if (std::find(_renderTaskIds.begin(), _renderTaskIds.end(), volumeId) 
-                    != _renderTaskIds.end()) {
-                tasks.push_back(GetRenderIndex()->GetTask(volumeId));
+            if (hasVolume) {
+                paths.push_back(volumeId);
             }
         }
     }
 
     // Merge translucent and volume pixels into color target
-    if (!_oitResolveTaskId.IsEmpty()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_oitResolveTaskId));
-    }
+    _AddIfNonEmpty(_oitResolveTaskId, &paths);
 
     if (!_selectionTaskId.IsEmpty() && _SelectionEnabled()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_selectionTaskId));
+        paths.push_back(_selectionTaskId);
     }
 
     if (!_colorizeSelectionTaskId.IsEmpty() && _ColorizeSelectionEnabled()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_colorizeSelectionTaskId));
+        paths.push_back(_colorizeSelectionTaskId);
     }
 
     // Apply color correction / grading (convert to display colors)
     if (_ColorCorrectionEnabled()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_colorCorrectionTaskId));
+        paths.push_back(_colorCorrectionTaskId);
     }
 
     if (!_visualizeAovTaskId.IsEmpty() && _VisualizeAovEnabled()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_visualizeAovTaskId));
+        paths.push_back(_visualizeAovTaskId);
     }
 
     // Render pixels to screen
-    if (!_presentTaskId.IsEmpty()) {
-        tasks.push_back(GetRenderIndex()->GetTask(_presentTaskId));
-    }
+    _AddIfNonEmpty(_presentTaskId, &paths);
 
+    return paths;
+}
+
+SdfPathVector
+HdxTaskController::GetPickingTaskPaths() const
+{
+    SdfPathVector paths;
+    _AddIfNonEmpty(_pickTaskId, &paths);
+    _AddIfNonEmpty(_pickFromRenderBufferTaskId, &paths);
+    return paths;
+}
+
+static
+HdTaskSharedPtrVector
+_GetTasks(
+    const HdRenderIndex * const renderIndex,
+    const SdfPathVector &paths)
+{
+    HdTaskSharedPtrVector tasks;
+    tasks.reserve(paths.size());
+    for (const SdfPath &path : paths) {
+        tasks.push_back(renderIndex->GetTask(path));
+    }
     return tasks;
 }
 
-HdTaskSharedPtrVector const
+HdTaskSharedPtrVector
+HdxTaskController::GetRenderingTasks() const
+{
+    return _GetTasks(GetRenderIndex(), GetRenderingTaskPaths());
+}
+
+HdTaskSharedPtrVector
 HdxTaskController::GetPickingTasks() const
 {
-    HdTaskSharedPtrVector tasks;
-    if (!_pickTaskId.IsEmpty())
-        tasks.push_back(GetRenderIndex()->GetTask(_pickTaskId));
-    if (!_pickFromRenderBufferTaskId.IsEmpty())
-        tasks.push_back(GetRenderIndex()->GetTask(_pickFromRenderBufferTaskId));
-
-    return tasks;
+    return _GetTasks(GetRenderIndex(), GetPickingTaskPaths());
 }
 
 SdfPath
@@ -1450,11 +1468,8 @@ HdxTaskController::SetRenderParams(HdxRenderTaskParams const& params)
         mergedParams.resolveAovMultiSample = oldParams.resolveAovMultiSample && mergedParams.resolveAovMultiSample;
 
         // We also explicitly manage blend params, based on the material tag.
-        // XXX: Note: if params.enableIdRender is set, we want to use default
-        // blend params so that we don't try to additive blend ID buffers...
         _SetBlendStateForMaterialTag(
-            params.enableIdRender ? TfToken() : collection.GetMaterialTag(),
-            &mergedParams);
+            collection.GetMaterialTag(), &mergedParams);
 
         if (mergedParams != oldParams) {
             _delegate.SetParameter(renderTaskId,

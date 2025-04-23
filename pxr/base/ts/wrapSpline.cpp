@@ -9,8 +9,8 @@
 #include "pxr/base/ts/spline.h"
 #include "pxr/base/ts/types.h"
 #include "pxr/base/ts/typeHelpers.h"
-#include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/stringUtils.h"
 
 #include "pxr/external/boost/python/class.hpp"
 #include "pxr/external/boost/python/make_constructor.hpp"
@@ -88,6 +88,40 @@ WRAP_EVAL(EvalPreDerivative);
 WRAP_EVAL(EvalHeld);
 WRAP_EVAL(EvalPreValueHeld);
 
+static object _WrapSample(
+    const TsSpline &spline,
+    const GfInterval& timeInterval,
+    double timeScale,
+    double valueScale,
+    double tolerance,
+    bool withSources)
+{
+    if (withSources) {
+        TsSplineSamplesWithSources<GfVec2d> samplesWithSources;
+
+        if (spline.Sample(timeInterval,
+                          timeScale,
+                          valueScale,
+                          tolerance,
+                          &samplesWithSources))
+        {
+            return object(samplesWithSources);
+        }
+    } else {
+        TsSplineSamples<GfVec2d> samples;
+
+        if (spline.Sample(timeInterval,
+                          timeScale,
+                          valueScale,
+                          tolerance,
+                          &samples))
+        {
+            return object(samples);
+        }
+    }
+
+    return object();
+}
 
 void wrapSpline()
 {
@@ -141,6 +175,13 @@ void wrapSpline()
         .def("EvalPreDerivative", &_WrapEvalPreDerivative)
         .def("EvalHeld", &_WrapEvalHeld)
         .def("EvalPreValueHeld", &_WrapEvalPreValueHeld)
+
+        .def("Sample", &_WrapSample,
+             (arg("timeInterval"),
+              arg("timeScale"),
+              arg("valueScale"),
+              arg("tolerance"),
+              arg("withSources") = false))
 
         .def("DoSidesDiffer", &This::DoSidesDiffer)
 
