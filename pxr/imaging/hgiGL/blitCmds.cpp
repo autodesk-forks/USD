@@ -47,7 +47,7 @@ HgiGLBlitCmds::PopDebugGroup()
 
 void
 HgiGLBlitCmds::CopyTextureGpuToCpu(
-    HgiTextureGpuToCpuOp const& copyOp)
+    HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
 {
     _ops.push_back( HgiGLOps::CopyTextureGpuToCpu(copyOp) );
 }

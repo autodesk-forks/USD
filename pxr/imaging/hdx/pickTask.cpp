@@ -112,6 +112,7 @@ HdxPickTask::HdxPickTask(HdSceneDelegate* delegate, SdfPath const& id)
     , _renderTags()
     , _useOverlayPass(false)
     , _index(nullptr)
+    , _pickOp(nullptr)
     , _hgi(nullptr)
     , _pickableDepthIndex(0)
     , _depthToken(HdAovTokens->depthStencil)
@@ -200,8 +201,7 @@ HdxPickTask::_CreateAovBindings()
     _depthToken = stencilReadback ? HdAovTokens->depthStencil
                                   : HdAovTokens->depth;
 
-    // Generated renderbuffers
-    TfTokenVector const _aovOutputs {
+    _aovOutputs = {
         HdAovTokens->primId,
         HdAovTokens->instanceId,
         HdAovTokens->elementId,
@@ -436,6 +436,27 @@ HdxPickTask::_ReadAovBuffer(TfToken const & aovName) const
     }
 
     return HdStTextureUtils::AlignedBuffer<T>();
+}
+
+template<typename T>
+void HdxPickTask::_ReadAovBufferAsync(TfToken const &aovName,
+    std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<T>)> completed)
+{
+    HdRenderBuffer const * renderBuffer = _FindAovBuffer(aovName);
+
+    VtValue aov = renderBuffer->GetResource(false);
+    if (aov.IsHolding<HgiTextureHandle>()) {
+        HgiTextureHandle texture = aov.Get<HgiTextureHandle>();
+        if (texture) {
+            std::function<void(HdStTextureUtils::AlignedBuffer<T>)> readCb =
+                ([aovName, completed](HdStTextureUtils::AlignedBuffer<T> data) -> void {
+                completed(aovName, std::move(data));
+            });
+            HdStTextureUtils::HgiTextureReadback<T>(_hgi, texture, readCb);
+            return;
+        }
+    }
+    completed(aovName, HdStTextureUtils::AlignedBuffer<T>());
 }
 
 HdRenderBuffer const *
@@ -735,6 +756,49 @@ HdxPickTask::_ClearPickBuffer()
     hdStResourceRegistry->AddSource(_pickBuffer, bufferSource);
 }
 
+pxr::HdxPickHitVector
+HdxPickTask::_BuildResults(
+    int const* primIds,
+    int const* instanceIds,
+    int const* elementIds,
+    int const* edgeIds,
+    int const* pointIds,
+    int const* neyes,
+    float const* depths,
+    pxr::HdxPickHitVector &outHits)
+{
+    GfVec2i dimensions = _contextParams.resolution;
+    GfVec4i viewport(0, 0, dimensions[0], dimensions[1]);
+    // For un-projection, get the depth range at time of drawing.
+    GfVec2f depthRange(0, 1);
+    if (_hgi->GetCapabilities()->IsSet(
+        HgiDeviceCapabilitiesBitsCustomDepthRange)) {
+        // Assume each of the render passes used the same depth range.
+        depthRange = _pickableRenderPassState->GetDepthRange();
+    }
+
+    HdxPickResult result(primIds, instanceIds, elementIds, edgeIds, pointIds, neyes, depths,
+                         _index, _contextParams.pickTarget, _contextParams.viewMatrix,
+                         _contextParams.projectionMatrix, depthRange, dimensions, viewport);
+
+    if (_contextParams.resolveMode ==
+        HdxPickTokens->resolveNearestToCenter) {
+        result.ResolveNearestToCenter(&outHits);
+    } else if (_contextParams.resolveMode ==
+               HdxPickTokens->resolveNearestToCamera) {
+        result.ResolveNearestToCamera(&outHits);
+    } else if (_contextParams.resolveMode ==
+               HdxPickTokens->resolveUnique) {
+        result.ResolveUnique(&outHits);
+    } else if (_contextParams.resolveMode ==
+               HdxPickTokens->resolveAll) {
+        result.ResolveAll(&outHits);
+    } else {
+        TF_CODING_ERROR("Unrecognized interesection mode '%s'",
+                        _contextParams.resolveMode.GetText());
+    }
+    return outHits;
+}
 void
 HdxPickTask::Execute(HdTaskContext* ctx)
 {
@@ -746,9 +810,6 @@ HdxPickTask::Execute(HdTaskContext* ctx)
 
     // This is important for Hgi garbage collection to run.
     _hgi->StartFrame();
-
-    GfVec2i dimensions = _contextParams.resolution;
-    GfVec4i viewport(0, 0, dimensions[0], dimensions[1]);
 
     // Are we using stencil conditioning?
     bool needStencilConditioning =
@@ -803,52 +864,64 @@ HdxPickTask::Execute(HdTaskContext* ctx)
         return;
     }
 
-    // Capture the result buffers and cast to the appropriate types.
-    HdStTextureUtils::AlignedBuffer<int> primIds =
-        _ReadAovBuffer<int>(HdAovTokens->primId);
-    HdStTextureUtils::AlignedBuffer<int> instanceIds =
-        _ReadAovBuffer<int>(HdAovTokens->instanceId);
-    HdStTextureUtils::AlignedBuffer<int> elementIds =
-        _ReadAovBuffer<int>(HdAovTokens->elementId);
-    HdStTextureUtils::AlignedBuffer<int> edgeIds =
-        _ReadAovBuffer<int>(HdAovTokens->edgeId);
-    HdStTextureUtils::AlignedBuffer<int> pointIds =
-        _ReadAovBuffer<int>(HdAovTokens->pointId);
-    HdStTextureUtils::AlignedBuffer<int> neyes =
-        _ReadAovBuffer<int>(HdAovTokens->Neye);
-    HdStTextureUtils::AlignedBuffer<float> depths =
-        _ReadAovBuffer<float>(_depthToken);
+    if (_contextParams.returnHits)
+    {
+        if (!_pickOp) {
+            _pickOp = ([this](TfToken const &aovName, HdStTextureUtils::AlignedBuffer<int32_t> data) {
+                _gpuBuffers[aovName] = std::move(data);
 
-    // For un-projection, get the depth range at time of drawing.
-    GfVec2f depthRange(0, 1);
-    if (_hgi->GetCapabilities()->IsSet(
-        HgiDeviceCapabilitiesBitsCustomDepthRange)) {
-        // Assume each of the render passes used the same depth range.
-        depthRange = _pickableRenderPassState->GetDepthRange();
+                if (_gpuBuffers.size() == _aovOutputs.size()) {
+                    int *primIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
+                    int *instanceIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->instanceId].get());
+                    int *elementIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->elementId].get());
+                    int *edgeIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
+                    int *pointIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
+                    int *neyes = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
+                    float *depths = reinterpret_cast<float *>(_gpuBuffers[HdAovTokens->primId].get());
+
+                    pxr::HdxPickHitVector outHits;
+                    _BuildResults(primIds, instanceIds, elementIds,
+                                  edgeIds, pointIds, neyes, depths, outHits);
+
+                    // Call the deferred callback
+                    _contextParams.returnHits(outHits);
+
+                    _gpuBuffers.clear();
+                    _pickOp = nullptr;
+                }
+            });
+
+            _ReadAovBufferAsync(HdAovTokens->primId, _pickOp);
+            _ReadAovBufferAsync(HdAovTokens->instanceId, _pickOp);
+            _ReadAovBufferAsync(HdAovTokens->elementId, _pickOp);
+            _ReadAovBufferAsync(HdAovTokens->edgeId, _pickOp);
+            _ReadAovBufferAsync(HdAovTokens->pointId, _pickOp);
+            _ReadAovBufferAsync(HdAovTokens->Neye, _pickOp);
+            _ReadAovBufferAsync(_depthToken, _pickOp);
+        } else {
+            TF_CODING_ERROR("Pick task is already in progress");
+        }
     }
+    else
+    {
+        // Capture the result buffers and cast to the appropriate types.
+        HdStTextureUtils::AlignedBuffer<int> primIds =
+            _ReadAovBuffer<int>(HdAovTokens->primId);
+        HdStTextureUtils::AlignedBuffer<int> instanceIds =
+            _ReadAovBuffer<int>(HdAovTokens->instanceId);
+        HdStTextureUtils::AlignedBuffer<int> elementIds =
+            _ReadAovBuffer<int>(HdAovTokens->elementId);
+        HdStTextureUtils::AlignedBuffer<int> edgeIds =
+            _ReadAovBuffer<int>(HdAovTokens->edgeId);
+        HdStTextureUtils::AlignedBuffer<int> pointIds =
+            _ReadAovBuffer<int>(HdAovTokens->pointId);
+        HdStTextureUtils::AlignedBuffer<int> neyes =
+            _ReadAovBuffer<int>(HdAovTokens->Neye);
+        HdStTextureUtils::AlignedBuffer<float> depths =
+            _ReadAovBuffer<float>(_depthToken);
 
-    HdxPickResult result(
-        primIds.get(), instanceIds.get(), elementIds.get(),
-        edgeIds.get(), pointIds.get(), neyes.get(), depths.get(),
-        _index, _contextParams.pickTarget, _contextParams.viewMatrix,
-        _contextParams.projectionMatrix, depthRange, dimensions, viewport);
-
-    // Resolve!
-    if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveNearestToCenter) {
-        result.ResolveNearestToCenter(_contextParams.outHits);
-    } else if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveNearestToCamera) {
-        result.ResolveNearestToCamera(_contextParams.outHits);
-    } else if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveUnique) {
-        result.ResolveUnique(_contextParams.outHits);
-    } else if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveAll) {
-        result.ResolveAll(_contextParams.outHits);
-    } else {
-        TF_CODING_ERROR("Unrecognized interesection mode '%s'",
-            _contextParams.resolveMode.GetText());
+        _BuildResults(primIds.get(), instanceIds.get(), elementIds.get(),
+          edgeIds.get(), pointIds.get(), neyes.get(), depths.get(), *_contextParams.outHits);
     }
 
     // This is important for Hgi garbage collection to run.

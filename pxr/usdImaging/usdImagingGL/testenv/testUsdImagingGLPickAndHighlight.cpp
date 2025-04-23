@@ -111,6 +111,8 @@ public:
         _translate[0] = _translate[1] = _translate[2] = 0;
     }
 
+    bool useAsync = false;
+
     // UsdImagingGL_UnitTestGLDrawing overrides
     virtual void InitTest();
     virtual void DrawTest(bool offscreen);
@@ -123,6 +125,8 @@ public:
     void Draw(bool render=true);
     void Pick(GfVec2i const &startPos, GfVec2i const &endPos);
     void Pick(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out);
+    void PickAsync(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out);
+    void PickSync(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out);
     void DeepSelect(GfVec2i const& startPos, GfVec2i const& endPos, UsdImagingGLEngine::IntersectionResultVector& out);
 
 private:
@@ -142,6 +146,9 @@ void
 My_TestGLDrawing::InitTest()
 {
     std::cout << "My_TestGLDrawing::InitTest()\n";
+
+    static const bool enableAsync = TfGetenvBool("USD_IMAGING_GL_PICK_TEST_ASYNC", false);
+    useAsync = enableAsync;
     _stage = UsdStage::Open(GetStageFilePath());
     SdfPathVector excludedPaths;
 
@@ -430,7 +437,20 @@ My_TestGLDrawing::MouseMove(int x, int y, int modKeys)
 
 void
 My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos) {
-    Pick(startPos, endPos, nullptr);
+    if (useAsync) {
+        PickSync(startPos, endPos, nullptr);
+    } else  {
+        PickAsync(startPos, endPos, nullptr);
+    }
+}
+
+void
+My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out) {
+    if (useAsync) {
+        PickSync(startPos, endPos, out);
+    } else  {
+        PickSync(startPos, endPos, out);
+    }
 }
 
 void
@@ -483,9 +503,78 @@ My_TestGLDrawing::DeepSelect(GfVec2i const& startPos, GfVec2i const& endPos,
     _engine->SetSelected(selection);
 }
 
+
 void
-My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos, 
-        OutHit* out)
+My_TestGLDrawing::PickAsync(GfVec2i const &startPos, GfVec2i const &endPos,
+                       OutHit* out)
+{
+    GfFrustum frustum = _frustum;
+    float width = GetWidth(), height = GetHeight();
+
+    GfVec2d min(2*startPos[0]/width-1, 1-2*startPos[1]/height);
+    GfVec2d max(2*(endPos[0]+1)/width-1, 1-2*(endPos[1]+1)/height);
+    // scale window
+    GfVec2d origin = frustum.GetWindow().GetMin();
+    GfVec2d scale = frustum.GetWindow().GetMax() - frustum.GetWindow().GetMin();
+    min = origin + GfCompMult(scale, 0.5 * (GfVec2d(1.0, 1.0) + min));
+    max = origin + GfCompMult(scale, 0.5 * (GfVec2d(1.0, 1.0) + max));
+
+    frustum.SetWindow(GfRange2d(min, max));
+
+    // XXX: For a timevarying test need to set timecode for frame param
+    UsdImagingGLRenderParams params;
+
+    UsdImagingGLEngine::IntersectionResultVector outResults;
+
+    SdfPathVector selection;
+    bool completed = false;
+
+    auto returnHits = [&completed,&outResults](UsdImagingGLEngine::IntersectionResultVector results) -> void {
+        outResults = std::move(results);
+        completed = true;
+    };
+    UsdImagingGLEngine::PickParams pickParams = {
+        HdxPickTokens->resolveNearestToCenter
+    };
+
+    _engine->TestIntersection(
+        pickParams,
+        _viewMatrix,
+        frustum.ComputeProjectionMatrix(),
+        _stage->GetPseudoRoot(),
+        params,
+        returnHits);
+
+    while (!completed)
+    {
+        _engine->GetHgi()->EndFrame();
+    }
+
+    if (outResults.size() == 1)
+    {
+        std::cout << "Hit "
+                  << outResults[0].hitPoint << ", "
+                  << outResults[0].hitNormal << ", "
+                  << outResults[0].hitPrimPath << ", "
+                  << outResults[0].hitInstancerPath << ", "
+                  << outResults[0].hitInstanceIndex << "\n";
+
+        _engine->SetSelectionColor(GfVec4f(1, 1, 0, 1));
+        selection.push_back(outResults[0].hitPrimPath);
+
+        if (out) {
+            *out = outResults[0];
+        }
+    }
+
+    if (!out) {
+        _engine->SetSelected(selection);
+    }
+}
+
+void
+My_TestGLDrawing::PickSync(GfVec2i const &startPos, GfVec2i const &endPos,
+           OutHit* out)
 {
     GfFrustum frustum = _frustum;
     float width = GetWidth(), height = GetHeight();

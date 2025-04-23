@@ -207,6 +207,8 @@ struct HdxPrimOriginInfo
     HdContainerDataSourceHandle primOrigin;
 };
 
+using ReturnHitsFn = std::function<void(pxr::HdxPickHitVector&)>;
+
 /// Pick task context params.  This contains task params that can't come from
 /// the scene delegate (like resolution mode and pick location, that might
 /// be resolved late), as well as the picking collection and the output
@@ -270,6 +272,8 @@ struct HdxPickTaskContextParams
     HdRprimCollection collection;
     float alphaThreshold;
     HdxPickHitVector *outHits;
+    /// A callback for executing the pick task asynchronously.
+    ReturnHitsFn returnHits;
 };
 
 /// \class HdxPickTask
@@ -331,6 +335,9 @@ private:
     // map prim ID to paths.
     HdRenderIndex *_index;
 
+    // Generated renderbuffers
+    TfTokenVector _aovOutputs;
+
     void _InitIfNeeded();
     void _CreateAovBindings();
     void _CleanupAovBindings();
@@ -347,10 +354,26 @@ private:
 
     void _ClearPickBuffer();
     void _ResolveDeep();
+    pxr::HdxPickHitVector _BuildResults(
+        int const* primIds,
+        int const* instanceIds,
+        int const* elementIds,
+        int const* edgeIds,
+        int const* pointIds,
+        int const* neyes,
+        float const* depths,
+        pxr::HdxPickHitVector &outHits);
 
     template<typename T>
     HdStTextureUtils::AlignedBuffer<T>
     _ReadAovBuffer(TfToken const & aovName) const;
+
+    template<typename T>
+    void
+    _ReadAovBufferAsync(TfToken const &aovName,
+      std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<T>)> completed);
+
+    std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<int32_t>)> _pickOp;
 
     HdRenderBuffer const * _FindAovBuffer(TfToken const & aovName) const;
 
@@ -378,6 +401,7 @@ private:
 
     // pick buffer used for deep selection
     HdBufferArrayRangeSharedPtr _pickBuffer;
+    std::map<TfToken, HdStTextureUtils::AlignedBuffer<int32_t>> _gpuBuffers;
 
     HdxPickTask() = delete;
     HdxPickTask(const HdxPickTask &) = delete;

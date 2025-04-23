@@ -35,7 +35,7 @@ public:
     void PopDebugGroup() override;
 
     HGIMETAL_API
-    void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp) override;
+    void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback = nullptr) override;
 
     HGIMETAL_API
     void CopyTextureCpuToGpu(HgiTextureCpuToGpuOp const& copyOp) override;

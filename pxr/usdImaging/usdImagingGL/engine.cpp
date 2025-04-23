@@ -961,6 +961,77 @@ UsdImagingGLEngine::TestIntersection(
     return false;
 }
 
+void
+UsdImagingGLEngine::TestIntersection(
+        const PickParams& pickParams,
+        const GfMatrix4d& viewMatrix,
+        const GfMatrix4d& projectionMatrix,
+        const UsdPrim& root,
+        const UsdImagingGLRenderParams& params,
+        IntersectionResultsFn returnHits)
+{
+
+    if (ARCH_UNLIKELY(!_renderDelegate)) {
+        returnHits({});
+    }
+
+    PrepareBatch(root, params);
+
+    // XXX(UsdImagingPaths): This is incorrect...  "Root" points to a USD
+    // subtree, but the subtree in the hydra namespace might be very different
+    // (e.g. for native instancing).  We need a translation step.
+    const SdfPathVector paths = {
+            root.GetPath().ReplacePrefix(
+                    SdfPath::AbsoluteRootPath(), _sceneDelegateId)
+    };
+    _UpdateHydraCollection(&_intersectCollection, paths, params);
+
+    _PrepareRender(params);
+
+    HdxPickHitVector allHits;
+    HdxPickTaskContextParams pickCtxParams;
+    pickCtxParams.resolveMode = pickParams.resolveMode;
+    pickCtxParams.viewMatrix = viewMatrix;
+    pickCtxParams.projectionMatrix = projectionMatrix;
+    pickCtxParams.clipPlanes = params.clipPlanes;
+    pickCtxParams.collection = _intersectCollection;
+    pickCtxParams.outHits = &allHits;
+    pickCtxParams.returnHits = [&](pxr::HdxPickHitVector allHits){
+        IntersectionResultVector outResults;
+
+        for(HdxPickHit& hit : allHits)
+        {
+            IntersectionResult res;
+
+            if (_sceneDelegate) {
+                res.hitPrimPath = _sceneDelegate->GetScenePrimPath(
+                        hit.objectId, hit.instanceIndex, &(res.instancerContext));
+                res.hitInstancerPath = _sceneDelegate->ConvertIndexPathToCachePath(
+                        hit.instancerId).GetAbsoluteRootOrPrimPath();
+            } else {
+                const HdxPrimOriginInfo info = HdxPrimOriginInfo::FromPickHit(
+                        _renderIndex.get(), hit);
+                res.hitPrimPath = info.GetFullPath();
+                res.hitInstancerPath = hit.instancerId.ReplacePrefix(
+                        _sceneDelegateId, SdfPath::AbsoluteRootPath());
+                res.instancerContext = info.ComputeInstancerContext();
+            }
+
+            res.hitPoint = hit.worldSpaceHitPoint;
+            res.hitNormal = hit.worldSpaceHitNormal;
+            res.hitInstanceIndex = hit.instanceIndex;
+
+            outResults.push_back(res);
+        }
+        returnHits(outResults);
+
+    };
+    const VtValue vtPickCtxParams(pickCtxParams);
+
+    _engine->SetTaskContextData(HdxPickTokens->pickParams, vtPickCtxParams);
+    _Execute(params, _taskController->GetPickingTasks());
+}
+
 bool
 UsdImagingGLEngine::TestIntersection(
     const PickParams& pickParams,

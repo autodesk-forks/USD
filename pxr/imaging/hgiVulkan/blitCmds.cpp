@@ -66,7 +66,7 @@ _GetImageAspectMaskForCopy(HgiTextureUsage textureUsage)
 
 void
 HgiVulkanBlitCmds::CopyTextureGpuToCpu(
-    HgiTextureGpuToCpuOp const& copyOp)
+    HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
 {
     _CreateCommandBuffer();
 
@@ -166,6 +166,10 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     _commandBuffer->AddCompletedHandler(
         [dst, src, byteSize]{ memcpy(dst, src, byteSize);}
     );
+
+    if (callback) {
+        callback((void*)dst);
+    }
 }
 
 void

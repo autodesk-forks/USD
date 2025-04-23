@@ -35,6 +35,7 @@
 #include "pxr/base/arch/pragmas.h"
 
 #include "mipmapGenerator.h"
+#include <cstddef>
 
 #if defined(EMSCRIPTEN)
 #include <emscripten.h>
@@ -115,7 +116,7 @@ HgiWebGPUBlitCmds::_MapAsyncAndWait(const wgpu::Buffer &buffer,
 }
 
 void 
-HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp)
+HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
 {
     HgiTextureHandle texHandle = copyOp.gpuSourceTexture;
     HgiWebGPUTexture* srcTexture =static_cast<HgiWebGPUTexture*>(texHandle.Get());
@@ -176,13 +177,14 @@ HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp)
 
     auto bufferSize = copyOp.destinationBufferByteSize;
 
-    StagingData stagingData;
-    stagingData.src = stagingBuffer;
-    stagingData.dst = dst;
-    stagingData.size = bufferSize;
-    stagingData.bytesPerRowAligned = bytesPerRowAligned;
-    stagingData.bytesPerRow = bytesPerRow;
-    stagingData.isTmp = true;
+    StagingData* stagingData = new StagingData();
+    stagingData->src = stagingBuffer;
+    stagingData->dst = dst;
+    stagingData->size = bufferSize;
+    stagingData->bytesPerRowAligned = bytesPerRowAligned;
+    stagingData->bytesPerRow = bytesPerRow;
+    stagingData->isTmp = true;
+    stagingData->callback = callback;
     _stagingDatas.push_back(stagingData);
 }
 
@@ -280,8 +282,27 @@ HgiWebGPUBlitCmds::CopyBufferGpuToCpu(HgiBufferGpuToCpuOp const& copyOp)
     auto buffer = dynamic_cast<HgiWebGPUBuffer*>(copyOp.gpuSourceBuffer.Get());
 
     if (buffer) {
-        _MapAsyncAndWait(buffer->GetBufferHandle(), wgpu::MapMode::Read,0, copyOp.byteSize);
-        const void *memoryPtr = buffer->GetBufferHandle().GetConstMappedRange(0, copyOp.byteSize);
+        auto device = _hgi->GetPrimaryDevice();
+        // Create a new buffer with MapRead usage
+        wgpu::BufferDescriptor desc;
+        desc.label = "MapReadBuffer";
+        desc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
+        desc.size = copyOp.byteSize;
+        wgpu::Buffer dstBuffer = device.CreateBuffer(&desc);
+
+        // Create a command encoder
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+        // Copy the source buffer to the destination buffer
+        encoder.CopyBufferToBuffer(buffer->GetBufferHandle(), copyOp.sourceByteOffset, dstBuffer, 0, copyOp.byteSize);
+
+        // Finish encoding and submit the commands
+        wgpu::CommandBuffer commandBuffer = encoder.Finish();
+        wgpu::Queue queue = device.GetQueue();
+        queue.Submit(1, &commandBuffer);
+
+        _MapAsyncAndWait(dstBuffer, wgpu::MapMode::Read, 0, copyOp.byteSize);
+        const void *memoryPtr = dstBuffer.GetConstMappedRange(0, copyOp.byteSize);
         char* dst = ((char*) copyOp.cpuDestinationBuffer) + copyOp.destinationByteOffset;
         memcpy(dst, memoryPtr, copyOp.byteSize);
     }
@@ -361,29 +382,71 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
         // once we have submitted the copy commands we can do the mapping and copy
         // this could in theory be done in a completion handler but it seems emscripten
         // doesn't like an emscripten_sleep within another block containing and emscripten_sleep
-        for( auto &stagingData : _stagingDatas )
+        for(StagingData* stagingData : _stagingDatas )
         {
-            _MapAsyncAndWait(stagingData.src, wgpu::MapMode::Read,0, stagingData.size);
-            const void *memoryPtr = stagingData.src.GetConstMappedRange(0, stagingData.size);
-
-            if (stagingData.bytesPerRow != stagingData.bytesPerRowAligned) {
-                uint32_t height = stagingData.size / stagingData.bytesPerRow;
-                uint32_t offset = 0;
-                const char* srcPtr = static_cast<const char*>(memoryPtr);
-                char* dstPtr = static_cast<char*>(stagingData.dst);
-                for (uint32_t y = 0; y < height; ++y) {
-                    uint32_t offset2 = y * stagingData.bytesPerRowAligned;
-                    for (uint32_t x = 0; x < stagingData.bytesPerRow; ++x) {
-                        dstPtr[offset++] = srcPtr[offset2++];
-                    }
+            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->size, [](WGPUBufferMapAsyncStatus status, void *userdata)
+            {
+                if (status != WGPUBufferMapAsyncStatus_Success) 
+                {
+                    TF_WARN("Failed to call MapAsync");
                 }
-            } else{
-                memcpy(stagingData.dst, memoryPtr, stagingData.size);
-            }
-            if (stagingData.isTmp) {
-                // Call needed by emscripten due to bug https://github.com/emscripten-core/emscripten/pull/18790
-                stagingData.src.Unmap();
-                stagingData.src.Destroy();
+
+                StagingData* stagingData = static_cast<StagingData *>(userdata);
+
+                // copy to statging data
+                const void *memoryPtr = stagingData->src.GetConstMappedRange(0, stagingData->size);
+
+                if (stagingData->bytesPerRow != stagingData->bytesPerRowAligned) 
+                {
+                    uint32_t height = stagingData->size / stagingData->bytesPerRow;
+                    uint32_t offset = 0;
+                    const char* srcPtr = static_cast<const char*>(memoryPtr);
+                    char* dstPtr = static_cast<char*>(stagingData->dst);
+                    for (uint32_t y = 0; y < height; ++y) 
+                    {
+                        uint32_t offset2 = y * stagingData->bytesPerRowAligned;
+                        for (uint32_t x = 0; x < stagingData->bytesPerRow; ++x) 
+                        {
+                            dstPtr[offset++] = srcPtr[offset2++];
+                        }
+                    }
+                } 
+                else
+                {
+                    memcpy(stagingData->dst, memoryPtr, stagingData->size);
+                }
+
+                if (stagingData->isTmp) 
+                {
+                    // Call needed by emscripten due to bug https://github.com/emscripten-core/emscripten/pull/18790
+                    stagingData->src.Unmap();
+                    stagingData->src.Destroy();
+                }
+
+                if (stagingData->callback)
+                {
+                    // callback and we are done here
+                    stagingData->callback(stagingData->dst);
+                    delete stagingData;
+                }
+                else
+                {
+                    stagingData->asyncDone = true;
+                }
+            }, stagingData);            
+
+            if (!stagingData->callback)
+            {
+                // no callback so we need to wait for the async call to finish
+                while (!stagingData->asyncDone) 
+                {
+                    #if defined(EMSCRIPTEN)
+                        emscripten_sleep(1);
+                    #else
+                        _hgi->EndFrame();
+                    #endif
+                }            
+                delete stagingData;
             }
         }
         _stagingDatas.clear();

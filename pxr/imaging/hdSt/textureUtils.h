@@ -145,6 +145,28 @@ public:
     HgiTextureReadback(Hgi * const hgi,
                        HgiTextureHandle const & texture,
                        size_t * bufferSize);
+
+    /// Accepts a callback function \p completed that will be called when the
+    /// readback is complete. The callback will be passed a pointer to the
+    /// readback data
+    HDST_API
+    static
+    void
+    HgiTextureReadback(
+            Hgi* const hgi,
+            HgiTextureHandle const& texture,
+            std::function<void(AlignedBuffer<uint8_t>)> const completed);
+
+    /// Accepts a callback function \p completed that will be called when the
+    /// readback is complete. The callback will be passed a pointer to the
+    /// readback data
+    template <typename T>
+    static
+    void
+    HgiTextureReadback(
+            Hgi* const hgi,
+            HgiTextureHandle const& texture,
+            std::function<void(AlignedBuffer<T>)> const completed);
 };
 
 template <typename T>
@@ -158,6 +180,20 @@ HdStTextureUtils::HgiTextureReadback(Hgi * const hgi,
 
     T * typedData = reinterpret_cast<T *>(buffer.release());
     return HdStTextureUtils::AlignedBuffer<T>(typedData);
+}
+
+
+template<typename T>
+void HdStTextureUtils::HgiTextureReadback(
+    Hgi* const hgi,
+    HgiTextureHandle const& texture,
+    std::function<void(AlignedBuffer<T>)> const completed)
+{
+    std::function<void(AlignedBuffer<uint8_t>)> cb = [completed](AlignedBuffer<uint8_t> buffer){
+        T * typedData = reinterpret_cast<T *>(buffer.release());
+        completed(HdStTextureUtils::AlignedBuffer<T>(typedData));
+    };
+    HdStTextureUtils::HgiTextureReadback(hgi, texture, cb);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

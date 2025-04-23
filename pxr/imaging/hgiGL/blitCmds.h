@@ -32,7 +32,7 @@ public:
     void PopDebugGroup() override;
 
     HGIGL_API
-    void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp) override;
+    void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, const std::function<void(void*)> callback = nullptr) override;
 
     HGIGL_API
     void CopyTextureCpuToGpu(HgiTextureCpuToGpuOp const& copyOp) override;

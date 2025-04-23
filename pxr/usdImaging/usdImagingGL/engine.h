@@ -27,6 +27,7 @@
 
 #include "pxr/imaging/hdx/selectionTracker.h"
 #include "pxr/imaging/hdx/renderSetupTask.h"
+#include "pxr/imaging/hdx/pickTask.h"
 
 #include "pxr/imaging/hgi/hgi.h"
 
@@ -349,6 +350,7 @@ public:
     };
 
     typedef std::vector<struct IntersectionResult> IntersectionResultVector;
+    using IntersectionResultsFn = std::function<void(IntersectionResultVector)>;
 
     // Pick params
     struct PickParams
@@ -383,6 +385,15 @@ public:
         const UsdPrim& root,
         const UsdImagingGLRenderParams& params,
         IntersectionResultVector* outResults);
+
+    void
+    TestIntersection(
+            const PickParams& pickParams,
+            const GfMatrix4d& viewMatrix,
+            const GfMatrix4d& projectionMatrix,
+            const UsdPrim& root,
+            const UsdImagingGLRenderParams& params,
+            IntersectionResultsFn returnHits);
 
     /// Decodes a pick result given hydra prim ID/instance ID (like you'd get
     /// from an ID render), where ID is represented as a vec4 color.
