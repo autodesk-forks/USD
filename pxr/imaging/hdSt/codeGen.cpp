@@ -1805,19 +1805,20 @@ _GetOSDCommonShaderSource(TfToken const &apiName)
     std::stringstream ss;
 
 #if OPENSUBDIV_VERSION_NUMBER >= 30600
+    if (apiName == HgiTokens->Metal) {
 #if defined(PXR_METAL_SUPPORT_ENABLED)
-    ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchDrawingShaderSource();
-#else
-    ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
-          "FORWARD_DECL(float GetTessLevel());\n"
-          "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
-          "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
-          "float OsdTessLevel() { return GetTessLevel(); }\n"
-          "\n";
+        ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchDrawingShaderSource();
+#endif
+    } else {
+        ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
+              "FORWARD_DECL(float GetTessLevel());\n"
+              "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
+              "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
+              "float OsdTessLevel() { return GetTessLevel(); }\n"
+              "\n";
 
-    ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchDrawingShaderSource();
-#endif // PXR_METAL_SUPPORT_ENABLED
-
+        ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchDrawingShaderSource();
+    }
 #else // OPENSUBDIV_VERSION_NUMBER
     // Additional declarations are needed for older OpenSubdiv versions.
 
