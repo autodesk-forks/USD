@@ -386,8 +386,9 @@ public:
         const UsdImagingGLRenderParams& params,
         IntersectionResultVector* outResults);
 
-    void
-    TestIntersection(
+    
+    USDIMAGINGGL_API
+    void TestIntersection(
             const PickParams& pickParams,
             const GfMatrix4d& viewMatrix,
             const GfMatrix4d& projectionMatrix,
