@@ -32,6 +32,7 @@
 #include <pxr/base/gf/matrix4d.h>
 #include <pxr/base/gf/camera.h>
 #include <pxr/base/gf/frustum.h> // @REVISIT: can remove if GfFrustum removed from header
+#include <pxr/usd/usd/prim.h>
 
 #include <iostream>
 
@@ -82,6 +83,8 @@ public:
     const pxr::GfMatrix4d getProjectionMatrix() { return _gfCamera.GetFrustum().ComputeProjectionMatrix();}
 	const pxr::GfVec3d    getPosition()         { return _gfCamera.GetFrustum().GetPosition();}
 
+	void setGfCamera(pxr::GfCamera &gfCam) { _gfCamera = gfCam; }
+
 	pxr::GfVec2f _screenDimensions = pxr::GfVec2f(1.0, 1.0);
 	void setViewportDimensions(const pxr::GfVec2f &screenDims) { _screenDimensions = screenDims; }
 	// ======
@@ -99,6 +102,7 @@ public:
     static pxr::GfMatrix4d RotMatrix(const pxr::GfVec3d &vec, float angle);
     void PushToCameraTransform();
     void PullFromCameraTransform();
+	void LookThroughUsdCamera(const pxr::UsdPrim &cameraPrim, const pxr::UsdTimeCode &atTime);
     //def _rangeOfBoxAlongRay(self, camRay, bbox, debugClipping=False):
     void SetClippingPlanes(pxr::GfBBox3d &stageBBox);
     void ResetClippingPlanes();
@@ -114,6 +118,7 @@ public:
 	float GetFOV();
 	void SetFOV(float fov);
 	void SetIsZUp(bool isZUp) { _isZUp = isZUp; }
+	bool IsZUp() const { return _isZUp ; }
 
 protected:
 

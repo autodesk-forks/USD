@@ -36,6 +36,7 @@
 #include <pxr/base/gf/rotation.h>
 #include <pxr/base/gf/quaternion.h>
 #include <pxr/base/gf/frustum.h>
+#include <pxr/usd/usdGeom/camera.h>
 
 #include <GLFW/glfw3.h>
 
@@ -125,6 +126,16 @@ void FreeCameraGL::PullFromCameraTransform()
 
     _cameraTransformDirty = true;
 }
+
+
+void FreeCameraGL::LookThroughUsdCamera(const pxr::UsdPrim &cameraPrim, const pxr::UsdTimeCode &atTime)
+{
+    pxr::UsdGeomCamera usdCam(cameraPrim);
+    pxr::GfCamera gfCam = usdCam.GetCamera(atTime);
+    setGfCamera(gfCam);
+    PullFromCameraTransform();
+}
+
 
 //def _rangeOfBoxAlongRay(self, camRay, bbox, debugClipping=False):
 
