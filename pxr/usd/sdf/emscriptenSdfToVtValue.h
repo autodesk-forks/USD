@@ -11,6 +11,16 @@
 #include <functional>
 #include <iostream>
 
+
+// == Get ==
+template <typename T>
+emscripten::val GetAndReturnEmscriptenValFromVtValue(T& self) {
+    pxr::VtValue value;
+    self.Get(&value);
+    return value._GetJsVal();
+};
+
+// == Set ==
 typedef std::function<pxr::VtValue (const emscripten::val& jsVal)> SdfToVtValueFunc;
 
 SdfToVtValueFunc* UsdJsToSdfType(pxr::SdfValueTypeName const &targetType);

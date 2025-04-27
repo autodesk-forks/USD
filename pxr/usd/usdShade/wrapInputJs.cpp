@@ -21,6 +21,7 @@ EMSCRIPTEN_BINDINGS(UsdShadeInput) {
     .function("ConnectToSource", &connectToSource)
     .function("ConnectToSourceInput", select_overload<bool(const pxr::UsdShadeInput&)const>(&pxr::UsdShadeInput::ConnectToSource))
     .function("ConnectToSourcePath", select_overload<bool(const pxr::SdfPath&)const>(&pxr::UsdShadeInput::ConnectToSource))
+    .function("Get", &::GetAndReturnEmscriptenValFromVtValue<pxr::UsdShadeInput>)
     .function("Set", &::SetVtValueFromEmscriptenVal<pxr::UsdShadeInput>)
     ;
 }

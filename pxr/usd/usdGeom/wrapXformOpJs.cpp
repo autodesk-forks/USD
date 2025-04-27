@@ -6,6 +6,7 @@ using namespace emscripten;
 
 EMSCRIPTEN_BINDINGS(UsdGeomXformOp) {
     class_<pxr::UsdGeomXformOp>("UsdGeomXformOp")
-        .function("Set", ::SetVtValueFromEmscriptenVal<pxr::UsdGeomXformOp>)
+        .function("Get", &::GetAndReturnEmscriptenValFromVtValue<pxr::UsdGeomXformOp>)
+        .function("Set", &::SetVtValueFromEmscriptenVal<pxr::UsdGeomXformOp>)
     ;
 }
