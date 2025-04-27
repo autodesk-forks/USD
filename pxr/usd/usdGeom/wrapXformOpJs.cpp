@@ -8,5 +8,6 @@ EMSCRIPTEN_BINDINGS(UsdGeomXformOp) {
     class_<pxr::UsdGeomXformOp>("UsdGeomXformOp")
         .function("Get", &::GetAndReturnEmscriptenValFromVtValue<pxr::UsdGeomXformOp>)
         .function("Set", &::SetVtValueFromEmscriptenVal<pxr::UsdGeomXformOp>)
+        .function("GetOpName", select_overload<pxr::TfToken()const>(&pxr::UsdGeomXformOp::GetOpName))
     ;
 }
