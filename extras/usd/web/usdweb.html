@@ -165,6 +165,7 @@
         )
         <br>
         <input type="button" id="basic_materialx" value="basic_materialx">
+        <input type="button" id="blue_sphere" value="blue_sphere">
         <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
         <input type="button" id="Standard_ShaderBall_usdpreview_copper" value="Copper">
         <input type="button" id="Standard_ShaderBall_usdpreview_glass" value="Glass">
@@ -200,6 +201,9 @@
 
             document.getElementById("basic_materialx").onclick  = async function() {
                 stage = await openStageFromUsdfile("basic_materialx.usdz");
+            };
+            document.getElementById("blue_sphere").onclick  = async function() {
+                stage = await openStageFromUsdfile("blue_sphere.usda");
             };
             document.getElementById("Standard_ShaderBall").onclick = loadscene_standard_shader_ball_scene;
             document.getElementById("Standard_ShaderBall_usdpreview_copper").onclick = function() {
@@ -276,6 +280,23 @@
 
     Usd = Module;
 
+    async function downloadTextFileFromFS(fs_filename, filename="")
+    {        
+        const text = FS.readFile(fs_filename, {encoding:'utf8'});
+        if (filename == "") {
+            filename = fs_filename.split('/').pop(); // basename
+        }
+        console.log('Downloading ' + fs_filename + ' to ' + filename);
+
+        // From downloadJs
+       let element = document.createElement("a");
+       element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
+       element.setAttribute("download", filename);
+       element.style.display = "none";
+       document.body.appendChild(element);
+       element.click();
+       document.body.removeChild(element);        
+    }
 
     async function fetchFileToFS(filename, fs_filename)
     {
