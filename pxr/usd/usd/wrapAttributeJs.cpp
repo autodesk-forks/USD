@@ -16,7 +16,9 @@ EMSCRIPTEN_BINDINGS(UsdAttribute) {
 
     class_<pxr::UsdAttribute>("UsdAttribute")
         .function("Get", &::GetAndReturnEmscriptenValFromVtValue<pxr::UsdAttribute>)
+        .function("Get", &::GetAndReturnEmscriptenValFromVtValue_TimeCode<pxr::UsdAttribute>)
         .function("Set", &::SetVtValueFromEmscriptenVal<pxr::UsdAttribute>)
+        .function("Set", &::SetVtValueFromEmscriptenVal_TimeCode<pxr::UsdAttribute>)
         .function("GetTypeName", GetTypeName)
         ;
 }

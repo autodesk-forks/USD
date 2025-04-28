@@ -81,6 +81,7 @@ pxr_library(usd
         wrapReferencesJs.cpp
         wrapStageJs.cpp
         wrapVariantSetsJs.cpp
+        wrapTimeCodeJs.cpp
 
     PYTHON_PUBLIC_CLASSES
         pyEditContext

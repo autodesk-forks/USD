@@ -34,8 +34,11 @@ EMSCRIPTEN_BINDINGS(UsdGeomImageable) {
     class_<pxr::UsdGeomImageable>("UsdGeomImageable")
         .constructor<const pxr::UsdPrim &>()
         .function("GetVisibilityAttr", &pxr::UsdGeomImageable::GetVisibilityAttr)
-        .function("MakeVisible", &MakeVisible) //&pxr::UsdGeomImageable::MakeVisible)
-        .function("MakeInvisible", &MakeInvisible) //&pxr::UsdGeomImageable::MakeInvisible)
-        .function("ComputeVisibility", &ComputeVisibility) //&pxr::UsdGeomImageable::ComputeVisibility)
+        .function("MakeVisible", &MakeVisible)
+        .function("MakeVisible", &pxr::UsdGeomImageable::MakeVisible)
+        .function("MakeInvisible", &MakeInvisible)
+        .function("MakeInvisible", &pxr::UsdGeomImageable::MakeInvisible)
+        .function("ComputeVisibility", &ComputeVisibility)
+        .function("ComputeVisibility", &pxr::UsdGeomImageable::ComputeVisibility)
     ;
 }
