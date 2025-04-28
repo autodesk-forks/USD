@@ -1,3 +1,4 @@
+#include "pxr/usd/usd/wrapTimeCodeJs.h"
 #include "pxr/usd/usd/timeCode.h"
 #include <emscripten/bind.h>
 

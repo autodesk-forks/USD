@@ -2,8 +2,10 @@
 #include "pxr/usd/usd/attribute.h"
 
 #include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
+#include "pxr/usd/usd/wrapTimeCodeJs.h"
 
 #include <emscripten/bind.h>
+
 using namespace emscripten;
 
 

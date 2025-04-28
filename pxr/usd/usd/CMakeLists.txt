@@ -104,6 +104,7 @@ pxr_library(usd
 
     JS_PUBLIC_HEADERS
         emscriptenPtrRegistrationHelper.h
+        wrapTimeCodeJs.h
 
     PUBLIC_HEADERS
         api.h

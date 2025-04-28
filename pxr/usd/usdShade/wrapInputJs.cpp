@@ -1,5 +1,6 @@
 #include "pxr/base/tf/wrapTokenJs.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
+#include "pxr/usd/usd/wrapTimeCodeJs.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/usd/sdf/valueTypeName.h"
 #include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
