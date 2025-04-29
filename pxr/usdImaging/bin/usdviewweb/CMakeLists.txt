@@ -48,12 +48,10 @@ if (EMSCRIPTEN)
     endif()
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} \
         -s USE_GLFW=3 \
-        -s USE_WEBGL2=1 \
         -s USE_WEBGPU=1 \
-        -O0 \
         -s ALLOW_MEMORY_GROWTH \
     ")
-    target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0 -O0")
+    target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0")
     add_compile_definitions(MODEL_NAME="${MODEL}" MODEL_EXT_NAME="${MODEL_EXT}")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
         --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/${MODEL}.${MODEL_EXT}@${MODEL}.${MODEL_EXT} \

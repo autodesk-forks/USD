@@ -6,17 +6,17 @@ import { expect, test } from '@playwright/test';
 
 import {
     BenchmarkLog,
+    track,
     getResolutionsSubset,
     prettyPrintTestRun,
     getFilteredModels
 } from './helpers';
 
+import { NUM_RUNS, NUM_WARMUP_RUNS } from '../_playwright/constants.js';
 const NUM_SAMPLES = 100;
-const NUM_WARMUP_RUNS = 0;
-const NUM_RUNS = 4;
 /**
  * Speed benchmarks evaluate the viewer's ability to display models with highly interactive frame rates, while
- * considering different rendering modes, such as progressive and full frame rendering. The rendering speed depends on
+ * considering different rendering model. The rendering speed depends on
  * resolution, backend, optimizations and their configurations, post-processing setup, and complexity of the scene.
  */
 test.describe('WASM Rendering Speed', () => {
@@ -27,17 +27,16 @@ test.describe('WASM Rendering Speed', () => {
 
     const resolutions = getResolutionsSubset('720p'); // other: '720p,1440p', '1440p-ramp', or based on process.env.BENCHMARK_RESOLUTIONS_SUBSET
     test.beforeEach(async ({ page, browser }, testInfo) => {
-        benchmarkLog = new BenchmarkLog(testInfo, browser);
+        benchmarkLog = new BenchmarkLog(testInfo, browser, page);
     });
 
     test.afterEach(async ({ page }, testInfo) => {
         await benchmarkLog.finalize(true, true);
+        await track(benchmarkLog);
         benchmarkLog = undefined;
     });
 
-    const test_frameRendering = async (page, progressive, immediate, hooks) => {
-        const { preInitializationCallback, postInitializationCallback, postLoadCallback, preRunCallback, postRunCallback } = hooks;
-
+    const test_frameRendering = async (page) => {
         const [numWarmupRuns, numRuns] = [NUM_WARMUP_RUNS, NUM_RUNS];
         const runs = numWarmupRuns + numRuns;
 
@@ -49,19 +48,6 @@ test.describe('WASM Rendering Speed', () => {
         // Accumulate the total timeout for all models and runs.
         test.setTimeout(3_600 * 2 * 1e+3); // two hours
 
-        await test.step(`Initialize viewing`, async () => {
-            await preInitializationCallback?.(page);
-            await postInitializationCallback?.(page);
-        });
-
-        /** @todo: could also be done as pre-run callback configuration */
-        await test.step(`${progressive ? 'Enable' : 'Disable'} progressive rendering (pre-run)`, async () => {
-            await page.evaluate(({ progressive, immediate = true }) => {
-                window.progressive = progressive;
-                window.immediate = progressive && immediate;
-            }, { progressive, immediate });
-        });
-
         const models = getFilteredModels();
         for (const [identifier, filename] of models) {
 
@@ -71,8 +57,6 @@ test.describe('WASM Rendering Speed', () => {
             });
             expect(await page.evaluate(() => _ems_main !== undefined)).toBeTruthy();
 
-            await postLoadCallback?.(page);
-
             const numSamples = NUM_SAMPLES;
             await page.evaluate((numSamples) => {
                 window.measurements = new Array();
@@ -80,6 +64,7 @@ test.describe('WASM Rendering Speed', () => {
                 window.addEventListener('onplay', (event) => {
                     window.measurements_running = true;
                     window.measurements.length = numSamples;
+                    window.measurements_load_time = performance.now() - window.measurements_load_time;
                     window.measurements.fill(0);
                     window.measurements_average = NaN;
                 });
@@ -115,18 +100,18 @@ test.describe('WASM Rendering Speed', () => {
                 const finalFrameTimeAverages = new Array();
                 const firstFrameTime = new Array();
                 const finalFrameExcludeFirstTimeAverages = new Array();
+                const finalLoadTimeArr = new Array();
 
                 for (let run = 0; run < runs; ++run) {
                     const stepTitle = prettyPrintTestRun(
                         run, runs, numWarmupRuns, [identifier, resolution].join(', '));
                     await test.step(stepTitle, async () => {
-                        await preRunCallback?.(page);
-
                         await page.evaluate(async ({numSamples, filename}) => {
                             try {
                                 let usdFilename = await loadBinaryFile(filename);
                                 var lengthBytes = lengthBytesUTF8(filename) + 1;
                                 var fileNameOnWasmHeap = _malloc(lengthBytes);
+                                window.measurements_load_time = performance.now();
                                 stringToUTF8(usdFilename, fileNameOnWasmHeap, lengthBytes);
                                 _ems_main(
                                     document.getElementById("webgpuCanvas").width,
@@ -145,11 +130,11 @@ test.describe('WASM Rendering Speed', () => {
                         const finalFrameTimes_average = await page.evaluate(() => window.measurements_average);
                         const firstFrame = await page.evaluate(() => window.measurements_first_frame);
                         const finalFrameTimesExcludeFirst_average = await page.evaluate(() => window.measurements_frame_average_exclude_first_frame);
+                        const finalLoadTime = await page.evaluate(() => window.measurements_load_time);
                         finalFrameTimeAverages.push(finalFrameTimes_average);
                         firstFrameTime.push(firstFrame);
                         finalFrameExcludeFirstTimeAverages.push(finalFrameTimesExcludeFirst_average);
-
-                        await postRunCallback?.(page);
+                        finalLoadTimeArr.push(finalLoadTime);
                     });
                 }
 
@@ -171,6 +156,12 @@ test.describe('WASM Rendering Speed', () => {
                     data: finalFrameExcludeFirstTimeAverages, numRuns, numWarmupRuns, tags: [identifier, resolution]
                 });
 
+                benchmarkLog.pushMeasurement({
+                    name: 'model-load-time', type: 'time', unit: 'ms',
+                    description: 'time to load a model by the glEngine',
+                    data: finalLoadTimeArr, numRuns, numWarmupRuns, tags: [identifier]
+                });
+
             }
         }
     };
@@ -180,10 +171,6 @@ test.describe('WASM Rendering Speed', () => {
             `This benchmark measures the time it takes to render a full frame of a model. The measurements are averaged
             over multiple consecutive runs. It also displays how long the first frame took and the average excluding it.`);
 
-        await test_frameRendering(page, false, undefined, {
-            preInitializationCallback: undefined,
-            postLoadCallback: undefined
-        });
+        await test_frameRendering(page);
     });
-
 });

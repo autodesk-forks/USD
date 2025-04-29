@@ -7,4 +7,11 @@ USDVIEWWEB_LOCAL_PORT=8000
 # It should not include the extension, only the filename
 FILTERED_MODELS=model1,model2,model3
 # Resolutions to use for the benchmark
-#BENCHMARK_RESOLUTIONS_SUBSET = '1080p'
+#BENCHMARK_RESOLUTIONS_SUBSET='1080p'
+# This can be set to, e.g., 'user', 'nightly, or 'ci' to distinguish between manual and automated runs.
+#BENCHMARK_TRACKING_ORIGIN=user
+# Mixpanel token corresponding to the project where events are published. This token is not secret
+# as it  is used in the client code. It is used to identify the project where events are published.
+MIXPANEL_TOKEN=a653c59f032f2f7a8854156013f0b4f9
+# Indicate whether we should submit the benchmark results to Mixpanel
+BENCHMARK_TRACKING='true'

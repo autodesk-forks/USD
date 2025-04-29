@@ -22,9 +22,6 @@
 // language governing permissions and limitations under the Apache License.
 //
 
-#include <GLES/gl.h>
-#include <GLES/glext.h>
-#include <GLES3/gl3.h>
 #include <emscripten/em_js.h>
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu_cpp.h>
@@ -46,7 +43,6 @@
 #include <pxr/usd/sdf/path.h>
 #include <pxr/usd/usd/stage.h>
 #include <pxr/imaging/hgi/hgi.h>
-#include <pxr/imaging/hgi/blitCmdsOps.h>
 #include "pxr/imaging/hdx/tokens.h"
 #include "pxr/usd/usdGeom/bboxCache.h"
 #include "pxr/base/plug/registry.h"
@@ -402,77 +398,11 @@ struct VertexOutput {
             swapChain = device.CreateSwapChain(surface, &scDesc);
         }
 
-        wgpu::Texture testTexture;
-        {
-            wgpu::TextureDescriptor textureDescriptor;
-            textureDescriptor.dimension = wgpu::TextureDimension::e2D;
-            textureDescriptor.size.width = width;
-            textureDescriptor.size.height = height;
-            textureDescriptor.size.depthOrArrayLayers = 1;
-            textureDescriptor.sampleCount = 1;
-            textureDescriptor.format = wgpu::TextureFormat::RGBA8Unorm;
-            textureDescriptor.mipLevelCount = 1;
-            textureDescriptor.usage = wgpu::TextureUsage::CopyDst | wgpu::TextureUsage::TextureBinding;
-            testTexture = device.CreateTexture(&textureDescriptor);
-
-            // Initialize the texture with arbitrary data until we can load images
-            std::vector<uint8_t> data(2 * 4 * width * height, 0);
-            for (size_t i = 0; i < data.size(); ++i) {
-                data[i] = static_cast<uint8_t>(i % 253);
-            }
-
-            wgpu::BufferDescriptor stgDescriptor;
-            stgDescriptor.size = static_cast<uint32_t>(data.size());
-            stgDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
-            wgpu::Buffer stagingBuffer = device.CreateBuffer(&stgDescriptor);
-
-            device.GetQueue().WriteBuffer(stagingBuffer, 0, data.data(), static_cast<uint32_t>(data.size()));
-
-            wgpu::ImageCopyBuffer imageCopyBuffer = {};
-            imageCopyBuffer.buffer = stagingBuffer;
-             wgpu::TextureDataLayout textureDataLayout;
-            textureDataLayout.offset = 0;
-            textureDataLayout.bytesPerRow = 4 * width;
-
-            imageCopyBuffer.layout = textureDataLayout;
-
-            wgpu::ImageCopyTexture imageCopyTexture;
-            imageCopyTexture.texture = testTexture;
-            imageCopyTexture.mipLevel = 0;
-            imageCopyTexture.origin = {0, 0, 0};
-            wgpu::Extent3D copySize = {width, height, 1};
-
-            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.CopyBufferToTexture(&imageCopyBuffer, &imageCopyTexture, &copySize);
-
-            wgpu::CommandBuffer copy = encoder.Finish();
-            device.GetQueue().Submit(1, &copy);
-        }
         wgpu::RenderPipeline pipeline = createBlitPipeline(device, swapChainFormat);
         wgpu::SamplerDescriptor samplerDsc = {};
         samplerDsc.minFilter = wgpu::FilterMode::Linear;
         samplerDsc.magFilter = wgpu::FilterMode::Linear;
         wgpu::Sampler sampler = device.CreateSampler(&samplerDsc);
-
-        // gl framebuffer for blitting
-        // we render the frame into a webgpu texture then read it back, upload it as a GL texture and do a framebuffer blit
-        // suboptimal but this is to get things working
-        GLuint frameBufferTexture;
-        glGenTextures(1, &frameBufferTexture);
-        glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
-        char imageData[4 * 4 * 4];
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGBA, GL_HALF_FLOAT, imageData);
-
-        GLuint frameBufferObject;
-        glGenFramebuffers(1, &frameBufferObject);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBufferObject);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frameBufferTexture, 0);
-
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        // for holding the data read back from the WebGPU render target
-        std::vector<uint8_t> colorData;
 
         // Setup camera
         Camera camera = Camera();
@@ -503,7 +433,7 @@ struct VertexOutput {
         glfwSetScrollCallback(window, scroll_callback);
         glfwSwapBuffers(window);
 
-        int rotationSpeed = 40;
+        const int rotationSpeed = 40;
         EM_ASM({
             const event = new CustomEvent('onplay', {});
             window.dispatchEvent(event);
@@ -647,5 +577,14 @@ int main(int argc, char **argv) {
 extern "C" __attribute__((used, visibility("default"))) void ems_main(
     uint32_t width, uint32_t height, int32_t numFrames, const char* fileName, bool rotate) {
     pxr::initialize(width, height, numFrames, fileName, rotate);
+}
+
+
+extern "C" __attribute__((used, visibility("default"))) bool isWasm64() {
+#if defined(__wasm64__)
+    return true;
+#else
+    return false;
+#endif
 }
 

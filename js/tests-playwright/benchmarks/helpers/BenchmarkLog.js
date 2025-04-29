@@ -9,6 +9,7 @@ import {
 
 import { writeFileSync, rmSync } from 'fs';
 import * as os from 'os';
+import { execSync } from 'child_process';
 
 /** @import { Browser, Page, TestInfo } from '@playwright/test' */
 
@@ -86,11 +87,12 @@ export class BenchmarkLog {
      *
      * @param {TestInfo} testInfo - Used to access test information as provided by the test framework.
      * @param {Browser} browser - The browser instance being used for the test.
+     * @param {Page} page - The page instance being used for the test.
      * @returns {BenchmarkLog} The created benchmark log object.
      *
      * @throws {Error} - If the benchmark log is not initialized, i.e., not attached to testInfo.
      */
-    constructor(testInfo, browser) {
+    constructor(testInfo, browser, page) {
         this.#testInfo = testInfo;
 
         const date = new Date();
@@ -108,6 +110,7 @@ export class BenchmarkLog {
             version: browser.version(), // example: '94.0.4606.71'
         };
         this.device = getDeviceInfo();
+        this.evaluateViewerVersion(page);
     }
 
     /**
@@ -215,6 +218,34 @@ export class BenchmarkLog {
     }
 
     /**
+     * Evaluates and adds the viewer version information to the benchmark log. The viewer information
+     * includes the current git commit, the timestamp of the git commit and whether it is a wasm64 build
+     *
+     * @param {Page} page - The page instance being used for the test.
+     * @returns {Promise<void>} A promise that resolves when the viewer version information is added to the benchmark log.
+     *
+     * @throws {Error} - If the benchmark log is not initialized, i.e., not attached to testInfo.
+     */
+    async evaluateViewerVersion(page) {
+        if (this.viewer !== undefined) {
+            return;
+        }
+
+        await page.waitForFunction(() => {
+            return _isWasm64 !== undefined;
+        });
+        const commitInfo = execSync('git rev-parse --short HEAD', { cwd: process.cwd() }).toString().trim();
+        const commitTimestamp = execSync('git log -1 --format=%cd --date=iso-strict', { cwd: process.cwd() }).toString().trim();
+        const isWasm64 = await page.evaluate(() => window._isWasm64());
+
+        this.viewer = {
+            version: commitInfo,
+            build:'wasm',
+            commitTimestamp
+        };
+    }
+
+    /**
      * Finalizes the log by adding test start time, duration, and status. After finalization, the log is frozen to
      * prevent further modifications.
      *
@@ -248,6 +279,7 @@ export class BenchmarkLog {
                 description: this.description,
                 test: this.test,
                 browser: this.browser,
+                viewer: this.viewer,
                 device: this.device,
                 measurements: this.measurements,
             }, undefined, 2);
