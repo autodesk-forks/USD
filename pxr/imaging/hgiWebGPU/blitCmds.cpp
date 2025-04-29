@@ -211,7 +211,7 @@ HgiWebGPUBlitCmds::CopyTextureCpuToGpu(
         static_cast<uint32_t>(offsets[2]) };
 
     wgpu::TextureDataLayout dataLayout;
-    dataLayout.bytesPerRow = copyOp.bufferByteSize / height / width;
+    dataLayout.bytesPerRow = copyOp.bufferByteSize / height;
     dataLayout.rowsPerImage = height;
 
 	wgpu::Extent3D writeSize = { static_cast<uint32_t>(width), static_cast<uint32_t>(height), static_cast<uint32_t>(depth) };
