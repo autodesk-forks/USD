@@ -28,5 +28,6 @@ EMSCRIPTEN_BINDINGS(UsdShadeInput) {
     .function("Get", &::GetAndReturnEmscriptenValFromVtValue_TimeCode<pxr::UsdShadeInput>)
     .function("Set", &::SetVtValueFromEmscriptenVal<pxr::UsdShadeInput>)
     .function("Set", &::SetVtValueFromEmscriptenVal_TimeCode<pxr::UsdShadeInput>)
+    .function("GetAttr", &pxr::UsdShadeInput::GetAttr)
     ;
 }
