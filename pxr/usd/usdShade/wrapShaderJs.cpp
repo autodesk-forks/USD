@@ -13,6 +13,13 @@ using namespace emscripten;
 
 EMSCRIPTEN_ENABLE_WEAK_PTR_CAST(UsdStage)
 
+EMSCRIPTEN_REGISTER_VECTOR_TO_ARRAY_CONVERSION(pxr::UsdShadeInput)
+EMSCRIPTEN_REGISTER_TYPE(std::vector<pxr::UsdShadeInput>)
+
+EMSCRIPTEN_REGISTER_VECTOR_TO_ARRAY_CONVERSION(pxr::UsdShadeOutput)
+EMSCRIPTEN_REGISTER_TYPE(std::vector<pxr::UsdShadeOutput>)
+
+
 pxr::UsdAttribute createIdAttr(pxr::UsdShadeShader &self, const emscripten::val& value) {
     SdfToVtValueFunc* sdfToValue = UsdJsToSdfType(pxr::SdfValueTypeNames->Token);
     pxr::VtValue vtValue = (*sdfToValue)(value);
@@ -21,6 +28,7 @@ pxr::UsdAttribute createIdAttr(pxr::UsdShadeShader &self, const emscripten::val&
 
 EMSCRIPTEN_BINDINGS(UsdShadeShader) {
   class_<pxr::UsdShadeShader>("UsdShadeShader")
+    .constructor<const pxr::UsdPrim &>()
     .class_function("Define", &pxr::UsdShadeShader::Define)
     .function("CreateIdAttr", &createIdAttr)
     .function("CreateInput", &pxr::UsdShadeShader::CreateInput)
@@ -28,5 +36,7 @@ EMSCRIPTEN_BINDINGS(UsdShadeShader) {
     .function("GetIdAttr", &pxr::UsdShadeShader::GetIdAttr)
     .function("GetInput", &pxr::UsdShadeShader::GetInput)
     .function("GetOutput", &pxr::UsdShadeShader::GetOutput)
+    .function("GetInputs", &pxr::UsdShadeShader::GetInputs)
+    .function("GetOutputs", &pxr::UsdShadeShader::GetOutputs)
     ;
 }
