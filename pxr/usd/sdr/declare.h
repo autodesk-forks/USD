@@ -115,8 +115,8 @@ public:
     SDR_API
     std::size_t GetHash() const
     {
-        return (static_cast<std::size_t>(_major) << 32) +
-                static_cast<std::size_t>(_minor);
+        return (static_cast<std::size_t>(_major) << (sizeof(std::size_t) * 4)) +
+            static_cast<std::size_t>(_minor);
     }
 
     /// Return true iff the version is valid.
