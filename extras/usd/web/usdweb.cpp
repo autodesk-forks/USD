@@ -44,15 +44,31 @@
 #include <pxr/usdImaging/usdImagingGL/engine.h>
 #include <pxr/base/tf/diagnostic.h>
 #include <pxr/usd/sdf/path.h>
+#include <pxr/usd/sdf/assetPath.h>
 #include <pxr/usd/usd/stage.h>
 #include <pxr/imaging/hgi/hgi.h>
 #include <pxr/imaging/hgi/blitCmdsOps.h>
-#include "pxr/imaging/hdx/tokens.h"
-#include "pxr/usd/usdGeom/bboxCache.h"
+#include <pxr/imaging/hdx/tokens.h>
+#include <pxr/imaging/hd/tokens.h>
+
+#include <pxr/usd/usdGeom/bboxCache.h>
 #include <pxr/usd/usdGeom/metrics.h>
 #include <pxr/usd/usdGeom/tokens.h>
-#include "pxr/base/plug/registry.h"
-#include "pxr/base/plug/plugin.h"
+#include <pxr/base/plug/registry.h>
+#include <pxr/base/plug/plugin.h>
+
+#include <pxr/usd/usdShade/materialBindingAPI.h>
+#include <pxr/usd/usdShade/material.h>
+#include <pxr/usd/usdShade/shader.h>
+#include <pxr/usd/usdShade/output.h>
+#include <pxr/usd/usdShade/input.h>
+#include <pxr/base/gf/vec3f.h>
+#include <pxr/base/gf/color.h>
+
+#include <pxr/imaging/hdSt/debugCodes.h>
+#include <pxr/imaging/hgi/debugCodes.h>
+#include <cstdlib> // for setenv
+
 
 #include "freeCameraGL.h"
 #include "window_state.h"
@@ -76,7 +92,11 @@ namespace usdweb {
     pxr::UsdStageRefPtr stage;
     pxr::GlfSimpleMaterial defaultMaterial;
     pxr::GlfSimpleLight cameraLight;
+    pxr::GlfSimpleLight domeLight;
+    bool cameraLightEnabled;
+    bool domeLightEnabled;
     pxr::GlfSimpleLightVector defaultLighting;
+    bool _defaultLightingDirty = true;
     pxr::GfVec4f defaultAmbient = pxr::GfVec4f(0.01f, 0.01f, 0.01f, 1.0f);
     std::string filePath;
     FreeCameraGL camera;
@@ -229,6 +249,14 @@ struct VertexOutput {
         camera.update();
     }
 
+
+    void LookThroughUsdCamera(const pxr::UsdPrim &prim)
+    {
+        camera.LookThroughUsdCamera(prim, pxr::usdweb::renderParams.frame);
+        camera.update();
+    }
+
+
     void initParamsForWebStage()
     {
         // Set timecode
@@ -237,9 +265,32 @@ struct VertexOutput {
         // Set Camera
         pxr::usdweb::camera.SetIsZUp( (UsdGeomGetStageUpAxis(pxr::usdweb::stage) == pxr::UsdGeomTokens->z) );
         pxr::usdweb::fit_camera(pxr::usdweb::stage->GetPseudoRoot());
+        // Adjust Dome Light
+        if (pxr::usdweb::camera.IsZUp()) {
+            pxr::usdweb::domeLight.SetTransform(pxr::GfMatrix4d().SetRotate(pxr::GfRotation(pxr::GfVec3d::XAxis(), 90.0)));
+        }
+    }
 
+    // To be called right before Render() is called
+    //
+    void UpdateDefaultLightingBeforeRender()
+    {
+        // Make sure defaultLighting vector is current
+        if (_defaultLightingDirty) {
+            std::cout << "Updating lights since _defaultLightingDirty." << std::endl;
+            defaultLighting.clear();
+            if (cameraLightEnabled) {
+                defaultLighting.push_back(cameraLight); 
+            }
+            if (domeLightEnabled) {
+                defaultLighting.push_back(domeLight);
+            }
+            _defaultLightingDirty = false;
 
-
+            pxr::usdweb::glEngine->SetRendererSetting(
+                pxr::HdRenderSettingsTokens->domeLightCameraVisibility,
+                pxr::VtValue(domeLightEnabled));
+        }
     }
 
     // Initialize params used in SetLightingState()
@@ -254,11 +305,14 @@ struct VertexOutput {
         defaultMaterial.SetShininess(32.0f);   
 
         // Set default lights
-        defaultLighting.clear();
+        cameraLightEnabled = true;
+        domeLightEnabled   = false;
         cameraLight.SetIsCameraSpaceLight(true); // makes position camera relative
         cameraLight.SetPosition(pxr::GfVec4f(0.f, 0.f, 0.f, 1.f));
         cameraLight.SetAmbient(pxr::GfVec4f(0.0f)); //(pxr::GfVec4f(0.9));
-        defaultLighting.push_back(cameraLight);  
+        domeLight.SetIsDomeLight(true); // makes a dome light
+        domeLight.SetPosition(pxr::GfVec4f(0.f, 0.f, 0.f, 1.f));
+        domeLight.SetAmbient(pxr::GfVec4f(0.0f)); //(pxr::GfVec4f(0.9));
     }
 
     void initGLEngine() {
@@ -271,7 +325,14 @@ struct VertexOutput {
             stage = pxr::UsdStage::CreateInMemory();
             UsdGeomSetStageUpAxis(stage, UsdGeomTokens->y);
             stage->DefinePrim(pxr::SdfPath("/world"), pxr::TfToken("Xform"));
-            stage->DefinePrim(pxr::SdfPath("/world/sphere"), pxr::TfToken("Sphere"));
+            pxr::UsdPrim prim = stage->DefinePrim(pxr::SdfPath("/world/sphere"), pxr::TfToken("Sphere"));
+            // apply a material
+            pxr::UsdShadeMaterial material = pxr::UsdShadeMaterial::Define(stage, pxr::SdfPath("/world/MaterialBlue"));
+            pxr::UsdShadeShader shader = pxr::UsdShadeShader::Define(stage, pxr::SdfPath("/world/MaterialBlue/Shader"));
+            shader.CreateIdAttr().Set(pxr::TfToken("UsdPreviewSurface"));
+            shader.CreateInput(pxr::TfToken("diffuseColor"), pxr::SdfValueTypeNames->Color3f).Set(pxr::GfVec3f(0.1, 0.1, 0.8));
+            material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), pxr::TfToken("surface"));
+            pxr::UsdShadeMaterialBindingAPI(prim).Apply(prim).Bind(material);
             initParamsForWebStage();
         }
 
@@ -298,6 +359,7 @@ struct VertexOutput {
         renderParams.enableLighting = true;
         renderParams.drawMode = pxr::UsdImagingGLDrawMode::DRAW_SHADED_SMOOTH;
         renderParams.enableSceneMaterials = true;
+        renderParams.enableSceneLights = true;
         renderParams.enableUsdDrawModes = true;
         renderParams.cullStyle = pxr::UsdImagingGLCullStyle::CULL_STYLE_BACK_UNLESS_DOUBLE_SIDED;
         renderParams.colorCorrectionMode = pxr::HdxColorCorrectionTokens->sRGB;
@@ -447,13 +509,19 @@ struct VertexOutput {
             // blit the texture data to the OpenGL framebuffer
             camera.setViewportDimensions(pxr::GfVec2f(framebufferWidth, framebufferHeight));
 
+            UpdateDefaultLightingBeforeRender();
+
             // glEngine update
             glEngine->SetRenderBufferSize(pxr::GfVec2i(framebufferWidth, framebufferHeight));
             glEngine->SetRendererAov(pxr::HdAovTokens->color);
             glEngine->SetRenderViewport(pxr::GfVec4d(0, 0, framebufferWidth, framebufferHeight));
             glEngine->SetWindowPolicy(pxr::CameraUtilConformWindowPolicy::CameraUtilFit);
             glEngine->SetCameraState(camera.getViewMatrix(), camera.getProjectionMatrix());
-            defaultLighting[0].SetTransform( camera.getViewInverse() );
+            for (GlfSimpleLight& lt : defaultLighting) {
+                if (lt.IsCameraSpaceLight()) {
+                    lt.SetTransform( camera.getViewInverse() );
+                }
+            }
             glEngine->SetLightingState(defaultLighting, defaultMaterial, defaultAmbient);
 
             // Render
@@ -592,11 +660,50 @@ double wrap_getRenderParamsTime()
 }
 
 
+void wrap_setRenderParamsEnableSceneMaterials(bool enable)
+{
+    pxr::usdweb::renderParams.enableSceneMaterials = enable;
+}
+
+
+void wrap_setCameraLightEnabled(bool enable)
+{
+    pxr::usdweb::cameraLightEnabled = enable;
+    pxr::usdweb::_defaultLightingDirty = true;
+}
+
+void wrap_setDomeLightEnabled(bool enable)
+{
+    pxr::usdweb::domeLightEnabled = enable;
+    pxr::usdweb::_defaultLightingDirty = true;
+}
+
+void wrap_setDomeLightTextureFile(const std::string& path)
+{
+    pxr::SdfAssetPath asset_path(path, path);
+    bool orig_domeLightEnabled = pxr::usdweb::domeLightEnabled;
+    pxr::usdweb::domeLightEnabled = false;
+    pxr::usdweb::domeLight.SetDomeLightTextureFile(asset_path);
+    pxr::usdweb::domeLightEnabled = orig_domeLightEnabled;
+}
+
+void wrap_setSceneLightsEnabled(bool enable)
+{
+    pxr::usdweb::renderParams.enableSceneLights = enable;
+}
+
+
 EMSCRIPTEN_BINDINGS(Usdweb) {
     emscripten::function("UsdwebInit" , &wrap_ems_setup); // handled automatically in main()
     emscripten::function("UsdwebGetStage", &wrap_getStage);
     emscripten::function("UsdwebSetStage", &wrap_setStage);
     emscripten::function("UsdwebFitCamera", &pxr::usdweb::fit_camera);
+    emscripten::function("UsdwebLookThroughUsdCamera", &pxr::usdweb::LookThroughUsdCamera);
     emscripten::function("UsdwebSetRenderParamsTime", &wrap_setRenderParamsTime);    
     emscripten::function("UsdwebGetRenderParamsTime", &wrap_getRenderParamsTime);    
+    emscripten::function("UsdwebSetRenderParamsEnableSceneMaterials", &wrap_setRenderParamsEnableSceneMaterials);
+    emscripten::function("UsdwebSetCameraLightEnabled", &wrap_setCameraLightEnabled);
+    emscripten::function("UsdwebSetDomeLightEnabled",   &wrap_setDomeLightEnabled);    
+    emscripten::function("UsdwebSetDomeLightTextureFile", &wrap_setDomeLightTextureFile);
+    emscripten::function("UsdwebSetSceneLightsEnabled", &wrap_setSceneLightsEnabled);
 }
