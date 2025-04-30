@@ -438,16 +438,16 @@ My_TestGLDrawing::MouseMove(int x, int y, int modKeys)
 void
 My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos) {
     if (useAsync) {
-        PickSync(startPos, endPos, nullptr);
-    } else  {
         PickAsync(startPos, endPos, nullptr);
+    } else  {
+        PickSync(startPos, endPos, nullptr);
     }
 }
 
 void
 My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out) {
     if (useAsync) {
-        PickSync(startPos, endPos, out);
+        PickAsync(startPos, endPos, out);
     } else  {
         PickSync(startPos, endPos, out);
     }

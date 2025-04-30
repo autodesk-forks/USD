@@ -164,12 +164,13 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
 
     // Copy to cpu buffer when cmd buffer has been executed
     _commandBuffer->AddCompletedHandler(
-        [dst, src, byteSize]{ memcpy(dst, src, byteSize);}
+        [dst, src, byteSize, callback]{
+            memcpy(dst, src, byteSize);
+            if (callback) {
+                callback((void*)dst);
+            }
+        }
     );
-
-    if (callback) {
-        callback((void*)dst);
-    }
 }
 
 void

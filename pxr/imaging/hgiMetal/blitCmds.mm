@@ -169,11 +169,10 @@ HgiMetalBlitCmds::CopyTextureGpuToCpu(
             const char* src = (const char*) [cpuBuffer contents];
             memcpy(dst, src, byteSize);
             [cpuBuffer release];
+            if (callback) {
+                callback((void*)dst);
+            }
         }];
-
-    if (callback) {
-        callback((void*)dst);
-    }
 }
 
 void
