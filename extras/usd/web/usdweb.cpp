@@ -306,28 +306,7 @@ struct VertexOutput {
         }
         */
     }
-
-    // To be called right before Render() is called
-    //
-    void UpdateDefaultLightingBeforeRender()
-    {
-        // Make sure defaultLighting vector is current
-        if (_defaultLightingDirty) {
-            std::cout << "Updating lights since _defaultLightingDirty." << std::endl;
-            defaultLighting.clear();
-            if (cameraLightEnabled) {
-                defaultLighting.push_back(cameraLight); 
-            }
-            if (domeLightEnabled) {
-                defaultLighting.push_back(domeLight);
-            }
-            _defaultLightingDirty = false;
-
-            pxr::usdweb::glEngine->SetRendererSetting(
-                pxr::HdRenderSettingsTokens->domeLightCameraVisibility,
-                pxr::VtValue(domeLightEnabled));
-        }
-    }  
+ 
 
     // Initialize params used in SetLightingState()
     void initUsdRenderParams()
