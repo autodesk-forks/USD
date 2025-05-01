@@ -37,7 +37,7 @@ from shutil import which
 
 # Helpers for printing output
 verbosity = 1
-EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB'
+EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB -sSHARED_MEMORY=1'
 EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
 TARGET_WASM='wasm'
 TARGET_WASM_NODE='node'
@@ -1599,8 +1599,21 @@ MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.10.zip"
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
-                        '-DMATERIALX_BUILD_TESTS=OFF'
+                        '-DMATERIALX_BUILD_TESTS=OFF',
         ]
+        if context.targetWasm:
+            cmakeOptions.extend([
+                    '-DAPPLE=ON',
+                    '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+                    '-DMATERIALX_BUILD_GEN_GLSL=ON',
+                    '-DMATERIALX_BUILD_GEN_MSL=OFF',
+                    '-DPXR_ENABLE_METAL_SUPPORT=OFF',
+                    # For Wasm
+                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                    '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
+                    '-DBUILD_SHARED_LIBS=OFF',
+                ])
 
         if MacOSTargetEmbedded(context):
             # The materialXShaderGen in hdSt assumes the GLSL shadergen is
@@ -1622,6 +1635,7 @@ def InstallMaterialX(context, force, buildArgs):
                        ], multiLineMatches=True)
 
         cmakeOptions += buildArgs
+        print(f'CMAKE FOR MATERIALX: {context=}, {force=}, {cmakeOptions=}')
         RunCMake(context, force, cmakeOptions)
 
 MATERIALX = Dependency("MaterialX", InstallMaterialX, "include/MaterialXCore/Library.h")
@@ -2083,6 +2097,9 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildMaterialX:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=ON')
+            # HACK SBREW ======
+            extraArgs.append('-DMaterialX_DIR="/Users/sbrew/Github/USD-webgpu/build_debug/lib/cmake/MaterialX"')
+            # HACK SBREW  =====
         else:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=OFF')
 
@@ -2109,6 +2126,7 @@ def InstallUSD(context, force, buildArgs):
         extraArgs += buildArgs
 
         if context.targetWasm:
+            extraArgs.append('-DPXR_ENABLE_METAL_SUPPORT=OFF')
 
             if context.buildJsBindings:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=ON')
@@ -2141,6 +2159,9 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildWebGPU:
             extraArgs.append('-DPXR_ENABLE_WEBGPU_SUPPORT=ON')
+            # HACK [sbrew]
+            #extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')  # HACK [sbrew]
+            #extraArgs.append('-DPXR_BUILD_GPU_SUPPORT=ON')  # HACK [sbrew]
 
         RunCMake(context, force, extraArgs)
 
@@ -2745,9 +2766,9 @@ if context.targetWasm:
         context.buildUsdview = False
         disabled.append('usdview')
 
-    if context.buildMaterialX:
-        context.buildMaterialX = False
-        disabled.append('materialX')
+    #if context.buildMaterialX:
+    #    context.buildMaterialX = False
+    #    disabled.append('materialX')
 
     if context.buildAVIF:
         context.buildAVIF = False

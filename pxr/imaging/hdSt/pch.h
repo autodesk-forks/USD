@@ -97,9 +97,11 @@
 #include <MaterialXCore/Library.h>
 #include <MaterialXCore/Value.h>
 #include <MaterialXGenGlsl/Nodes/SurfaceNodeGlsl.h>
+#ifdef PXR_METAL_SUPPORT_ENABLED
 #include <MaterialXGenMsl/MslResourceBindingContext.h>
 #include <MaterialXGenMsl/MslShaderGenerator.h>
 #include <MaterialXGenMsl/Nodes/SurfaceNodeMsl.h>
+#endif
 #include <MaterialXGenShader/DefaultColorManagementSystem.h>
 #include <MaterialXGenShader/Shader.h>
 #include <MaterialXGenShader/ShaderGenerator.h>

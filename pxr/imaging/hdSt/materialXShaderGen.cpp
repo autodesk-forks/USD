@@ -13,9 +13,12 @@
 #include <MaterialXGenShader/ShaderGenerator.h>
 #include <MaterialXGenShader/Syntax.h>
 #include <MaterialXGenGlsl/Nodes/SurfaceNodeGlsl.h>
+
+#ifdef PXR_METAL_SUPPORT_ENABLED
 #include <MaterialXGenMsl/Nodes/SurfaceNodeMsl.h>
 #include <MaterialXGenMsl/MslResourceBindingContext.h>
 #include <MaterialXGenMsl/MslShaderGenerator.h>
+#endif
 
 namespace mx = MaterialX;
 
@@ -382,6 +385,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     mx::VariableBlock const& vertexData,
     mx::ShaderStage& mxStage) const
 {
+    std::cout << "In _EmitMxInitFunction" << std::endl;
     Base::setFunctionName("mxInit", mxStage);
     emitLine("void mxInit(vec4 Peye, vec3 Neye)", mxStage, false);
     Base::emitScopeBegin(mxStage);
@@ -429,7 +433,9 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     // Note: only need to initialize textures when bindlessTextures are enabled,
     // when bindlessTextures are not enabled, mappings are defined in 
     // HdStMaterialXShaderGen*::_EmitMxFunctions
+    std::cout << "_bindlessTexturesEnabled = " << _bindlessTexturesEnabled << std::endl;
     Base::emitComment("Initialize Indirect Light Textures and values", mxStage);
+    Base::emitComment("TEST [sbrew]", mxStage);
     if (_bindlessTexturesEnabled) {
         emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
         emitLine("u_envIrradiance = HdGetSampler_domeLightIrradiance()", mxStage);
@@ -439,6 +445,10 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
         emitLine("u_envRadiance = HdGetSampler_domeLightFallback()", mxStage);
         emitLine("#endif", mxStage, false);
     }
+    //Base::emitComment("HACK [sbrew]", mxStage);
+    //Base::emitComment("BEG =====", mxStage);
+    //emitLine("u_envRadianceMips = 1", mxStage);
+    //Base::emitComment("END =====", mxStage);
     emitLine("u_envRadianceMips = textureQueryLevels(u_envRadiance)", mxStage);
     Base::emitLineBreak(mxStage);
 
@@ -487,9 +497,11 @@ HdStMaterialXShaderGen<Base>::_EmitMxVertexDataDeclarations(
     if (targetShadingLanguage == mx::GlslShaderGenerator::TARGET) {
         line += "(";
     }
+#ifdef PXR_METAL_SUPPORT_ENABLED
     else if (targetShadingLanguage == mx::MslShaderGenerator::TARGET) {
         line += "{";
     }
+#endif
     else {
         TF_CODING_ERROR("MaterialX Shader Generator doesn't support %s",
                         targetShadingLanguage.c_str());
@@ -505,10 +517,11 @@ HdStMaterialXShaderGen<Base>::_EmitMxVertexDataDeclarations(
     if (targetShadingLanguage == mx::GlslShaderGenerator::TARGET) {
         line += ")";
     }
+#ifdef PXR_METAL_SUPPORT_ENABLED
     else if (targetShadingLanguage == mx::MslShaderGenerator::TARGET) {
         line += "}";
     }
-
+#endif
     emitLine(line, mxStage);
 }
 
@@ -950,8 +963,16 @@ HdStMaterialXShaderGenGlsl::_EmitMxFunctions(
     // If bindlessTextures are not enabled, the above for loop skips
     // initializing textures. Initialize them here by defining mappings
     // to the appropriate HdGetSampler function.
+    std::cout << "_bindlessTexturesEnabled = " << _bindlessTexturesEnabled << std::endl;
     if (!_bindlessTexturesEnabled) {
-
+        // @REVISIT: HACK [sbrew]
+        //std::cerr << "HACK: TAKE OUT sampler2d for testing." << std::endl;
+        //emitComment("BEG: ========", mxStage);
+        //emitComment("HACK: TAKE OUT sampler2d for testing.", mxStage);
+        //emitLine("#define u_envRadiance   vec3(0.5, 0.5, 0.5)", mxStage, false);
+        //emitLine("#define u_envIrradiance vec3(0.5, 0.5, 0.5)", mxStage, false);
+        //emitComment("END: ========", mxStage);
+        //emitLineBreak(mxStage);
         // Define mappings for the DomeLight Textures
         emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
         emitLine("#define u_envRadiance "
@@ -1142,7 +1163,7 @@ HdStMaterialXShaderGenVkGlsl::_EmitMxFunctions(
 // ----------------------------------------------------------------------------
 //                          HdSt MaterialX ShaderGen Metal
 // ----------------------------------------------------------------------------
-
+#ifdef PXR_METAL_SUPPORT_ENABLED
 namespace {
     // Create a customized version of the class mx::SurfaceNodeMsl
     // to be able to notify the shader generator when we start/end
@@ -1351,6 +1372,7 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
     _EmitDataStructsAndFunctionDefinitions(
         mxGraph, mxContext, mxStage, &_tokenSubstitutions);
 }
+#endif
 
 
 PXR_NAMESPACE_CLOSE_SCOPE

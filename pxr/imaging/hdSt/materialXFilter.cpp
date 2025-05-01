@@ -166,14 +166,32 @@ _CreateHdStMaterialXContext(
     HdSt_MxShaderGenInfo const& mxHdInfo,
     TfToken const& apiName)
 {
+#ifdef PXR_METAL_SUPPORT_ENABLED
     if (apiName == HgiTokens->Metal) {
         return HdStMaterialXShaderGenMsl::create(mxHdInfo);
     }
+#endif
     if (apiName == HgiTokens->Vulkan) {
         return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
     }
     if (apiName == HgiTokens->OpenGL) {
         return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
+    }
+    if (apiName == HgiTokens->WebGPU) {
+        // This causes a GLSL compile error with Sampler2D
+        //return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
+        //
+        //   Shader compiler code refers to Vulkan
+        //   WebGPU/shaderCompiler.cpp/HgiWebGPUCompileGLSL():68
+        //      shader.setEnvClient(glslang::EShClientVulkan,
+        //                          glslang::EShTargetVulkan_1_0);
+        //
+
+        // Ashwin Bhat indicates that should use HdStMaterialXShaderGenVkGlsl
+        //
+        // Issue in Dawn for compiling Sampler2D
+        //     See https://dawn.googlesource.com/dawn/+/refs/heads/chromium/6530/docs/tint/spirv-reader-overview.md#passing-textures-and-samplers-into-helper-functions
+        return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
     }
     else {
         TF_CODING_ERROR(
@@ -200,6 +218,7 @@ HdSt_GenMaterialXShader(
     mxContext.getOptions().hwTransparency
         = mxHdInfo.materialTag != HdStMaterialTagTokens->defaultMaterialTag;
 
+    // @REVISIT
     // Starting from MaterialX 1.38.4 at PR 877, we must remove the "libraries" part:
     mx::FileSearchPath libSearchPaths;
     for (const mx::FilePath &path : searchPaths) {
@@ -1435,6 +1454,7 @@ HdSt_ApplyMaterialXFilter(
         resourceRegistry->GetHgi()->GetCapabilities()->IsSet(
             HgiDeviceCapabilitiesBitsBindlessTextures);
     const TfToken apiName = resourceRegistry->GetHgi()->GetAPIName();
+    std::cout << "HdSt_ApplyMaterialXFilter: Hgi GetAPIName() = " << apiName << std::endl;
 
     // Use the Resource Registry to cache the generated MaterialX 
     // glslfx Shader

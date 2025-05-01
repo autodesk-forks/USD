@@ -26,10 +26,14 @@
 
 #include "pxr/base/arch/defines.h"
 
+#include <iostream>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 {
+    std::cout << "In HgiWebGPUCapabilities()" << std::endl;
+
     _maxUniformBlockSize          = 64 * 1024;
     _maxShaderStorageBlockSize    = 1 * 1024 * 1024 * 1024;
 
@@ -58,6 +62,14 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 #else
     _SetFlag(HgiDeviceCapabilitiesBitsTimestamps, device.HasFeature(wgpu::FeatureName::TimestampQuery));
 #endif
+    // BEG: HACK for testing [sbrew]  ====
+    std::cout << "Hack [sbrew]: HgiDeviceCapabilities" << std::endl;
+    _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsBindlessBuffers, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures, false);
+    // END: HACK for testing [sbrew]  ====
+
 }
 
 HgiWebGPUCapabilities::~HgiWebGPUCapabilities() = default;

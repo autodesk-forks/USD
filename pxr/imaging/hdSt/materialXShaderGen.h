@@ -10,7 +10,9 @@
 #include "pxr/pxr.h"
 
 #include <MaterialXGenGlsl/GlslShaderGenerator.h>
+#ifdef PXR_METAL_SUPPORT_ENABLED
 #include <MaterialXGenMsl/MslShaderGenerator.h>
+#endif
 #include <MaterialXGenGlsl/VkShaderGenerator.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -159,6 +161,7 @@ private:
                           MaterialX::ShaderStage& mxStage) const;
 };
 
+#ifdef PXR_METAL_SUPPORT_ENABLED
 /// \class HdStMaterialXShaderGenMsl
 ///
 /// Generates a glslfx shader with a surfaceShader function for a MaterialX 
@@ -191,7 +194,7 @@ private:
                           MaterialX::GenContext& mxContext,
                           MaterialX::ShaderStage& mxStage) const;
 };
-
+#endif
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
