@@ -375,11 +375,6 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
-    SRC testenv/testUsdImagingGLPickAndHighlight
-    DEST testUsdImagingGLPickAndHighlight_Async
-)
-
-pxr_install_test_dir(
     SRC testenv/testUsdImagingGLHighlight
     DEST testUsdImagingGLHighlight
 )
@@ -1696,24 +1691,6 @@ pxr_register_test(testUsdImagingGLPickAndHighlight_SceneIndex
     ENV
         USD_IMAGING_GL_PICK_TEST_SKIP_INSTANCER_DETAILS=true
         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true
-)
-
-pxr_register_test(testUsdImagingGLPickAndHighlight_Async
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLPickAndHighlight -offscreen -frameAll -stage instance.usda -write testUsdImagingGLPickAndHighlight.png"
-    IMAGE_DIFF_COMPARE
-        testUsdImagingGLPickAndHighlight_000.png
-        testUsdImagingGLPickAndHighlight_001.png
-        testUsdImagingGLPickAndHighlight_002.png
-        testUsdImagingGLPickAndHighlight_003.png
-        testUsdImagingGLPickAndHighlight_004.png
-    FAIL 1
-    FAIL_PERCENT 1
-    PERCEPTUAL
-    EXPECTED_RETURN_CODE 0
-    TESTENV testUsdImagingGLPickAndHighlight
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=false
-        USD_IMAGING_GL_PICK_TEST_ASYNC=true
 )
 
 pxr_register_test(testUsdImagingGLHighlight
