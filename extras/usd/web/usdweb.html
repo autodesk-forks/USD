@@ -88,9 +88,12 @@
 </div>
 
 <div id="footer">
-    Test Grid
+    Tests
     <input type="button" id="Quad_Usd"  value="Quad_Usd"/>
     <input type="button" id="Quad_Mtlx" value="Quad_Mtlx"/>
+    <input type="button" id="Quad_Usd_usdz"  value="Quad_Usd(USDZ)"/>
+    <input type="button" id="Quad_Mtlx_usdz"  value="Quad_Mtlx(USDZ)"/>
+    <input type="button" id="StdShrBallGrnd"  value="StdShrBallGrnd"/>
     <script>
         async function loadscene_with_deps(depfile, scenefile)
         {
@@ -99,6 +102,9 @@
         }
         document.getElementById("Quad_Usd").onclick  = () => {loadscene_with_deps("uvgrid.png", "textured_quad.usda");};
         document.getElementById("Quad_Mtlx").onclick = () => {loadscene_with_deps("uvgrid.png", "textured_quad_mtlx.usda");};
+        document.getElementById("Quad_Usd_usdz").onclick = () => {openStageFromUsdfile("textured_quad.usdz");};
+        document.getElementById("Quad_Mtlx_usdz").onclick = () => {openStageFromUsdfile("textured_quad_mtlx.usdz");};
+        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps("uvgrid.png", "standard_shader_ball_ground.usda");};
     </script>
     <br>   
     Sample files from usd-wg/assets
