@@ -88,6 +88,19 @@
 </div>
 
 <div id="footer">
+    Test Grid
+    <input type="button" id="Quad_Usd"  value="Quad_Usd"/>
+    <input type="button" id="Quad_Mtlx" value="Quad_Mtlx"/>
+    <script>
+        async function loadscene_with_deps(depfile, scenefile)
+        {
+            await fetchFileToFS(depfile, depfile);
+            openStageFromUsdfile(scenefile);
+        }
+        document.getElementById("Quad_Usd").onclick  = () => {loadscene_with_deps("uvgrid.png", "textured_quad.usda");};
+        document.getElementById("Quad_Mtlx").onclick = () => {loadscene_with_deps("uvgrid.png", "textured_quad_mtlx.usda");};
+    </script>
+    <br>   
     Sample files from usd-wg/assets
     <input type="button" value="FancyTeapot" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd")'><br>
     <input type="button" value="CarbonFrameBike" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz")'>
