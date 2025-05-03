@@ -67,7 +67,6 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures, false);
     _SetFlag(HgiDeviceCapabilitiesBitsBindlessBuffers, false);
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
-    _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures, false);
     // END: HACK for testing [sbrew]  ====
 
 }
