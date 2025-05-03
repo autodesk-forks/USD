@@ -59,7 +59,7 @@
     #container {
         position: relative;
         width: 100%;
-        height: 85%;
+        height: 80%;
     }
 
     .hidden {
@@ -186,10 +186,8 @@
         <input type="button" id="basic_materialx" value="basic_materialx">
         <input type="button" id="blue_sphere" value="blue_sphere">
         <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
-        <input type="button" id="Standard_ShaderBall_usdpreview_copper" value="Copper">
-        <input type="button" id="Standard_ShaderBall_usdpreview_glass" value="Glass">
-        <input type="button" id="Standard_ShaderBall_usdpreview_plastic" value="Plastic">
-        <input type="button" id="Standard_ShaderBall_uvgrid" value="UVGrid">
+        <span id="Standard_ShaderBall_Variants">
+        </span>
         <script>
             async function loadscene_standard_shader_ball_scene()
             {
@@ -202,6 +200,7 @@
                 vset.SetVariantSelection("triangulated");
                 vset = vsets.GetVariantSet("example_material");
                 vset.SetVariantSelection("none");
+                SSB_Add_Variants('Standard_ShaderBall_Variants', vset);
                 vset = vsets.GetVariantSet("scene_lights");
                 vset.SetVariantSelection("on");
                 vset = vsets.GetVariantSet("internal_emitter");
@@ -218,6 +217,33 @@
                 vset.SetVariantSelection(matVar);
             }
 
+            function SSB_Add_Variants(container_id, variant_set) 
+            {
+                //container_id = 'Standard_ShaderBall_Variants'; 
+                const container = document.getElementById(container_id)
+                if (!container) {
+                    console.error('Unable to find container id='+container_id+' to add new elements.  Exiting.')
+                    return;
+                }
+                // Clear all elements in the container
+                console.log('Removing elements from container:' + container_id);
+                while (container.firstChild) {
+                    container.removeChild(container.lastChild);
+                }
+                // Add new child elements
+                //const variant_names = ['v1', 'v2', 'v3', 'v4']
+                const variant_names = vset.GetVariantNames();
+                for (const variant_name of variant_names) {
+                    console.log('Adding '+variant_name);
+                    const newInput = document.createElement('input');
+                    newInput.type = 'button'
+                    newInput.id = 'SSB_'+variant_name;
+                    newInput.value = variant_name;
+                    newInput.onclick = () => { standard_shader_ball_set_material_variant(variant_name); }
+                    container.appendChild(newInput);
+                }
+            }
+
             document.getElementById("basic_materialx").onclick  = async function() {
                 stage = await openStageFromUsdfile("basic_materialx.usdz");
             };
@@ -225,18 +251,6 @@
                 stage = await openStageFromUsdfile("blue_sphere.usda");
             };
             document.getElementById("Standard_ShaderBall").onclick = loadscene_standard_shader_ball_scene;
-            document.getElementById("Standard_ShaderBall_usdpreview_copper").onclick = function() {
-                standard_shader_ball_set_material_variant('usdpreview_copper');
-            };
-            document.getElementById("Standard_ShaderBall_usdpreview_glass").onclick = function() {
-                standard_shader_ball_set_material_variant('usdpreview_glass');
-            };
-            document.getElementById("Standard_ShaderBall_usdpreview_plastic").onclick = function() {
-                standard_shader_ball_set_material_variant('usdpreview_plastic');
-            };
-            document.getElementById("Standard_ShaderBall_uvgrid").onclick = function() {
-                standard_shader_ball_set_material_variant('uvgrid');
-            };
         </script>
 </div>
 
