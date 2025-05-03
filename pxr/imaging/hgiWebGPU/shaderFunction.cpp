@@ -31,6 +31,8 @@
 #include "pxr/imaging/hgiWebGPU/shaderGenerator.h"
 
 #include <sstream>
+#include <iostream>  // HACK: for std::cout
+#include <regex>  // HACK [sbrew] for LightData.type -> LightData.lightType
 
 #if defined EMSCRIPTEN
 #include <emscripten.h>
@@ -127,7 +129,20 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     HgiWebGPUShaderGenerator shaderGenerator(hgi, desc);
 
     shaderGenerator.Execute();
-    const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
+    // ShaderCode HACK [sbrew]
+    //   1) Change member variable name of Replace LightData.type -> LightData.lightType , as "type" can be a reserved word
+    //   2) Modify the mx_latlong_map_lookup() shader code resulting from snippets in libraries/pbrlib/genglsl/lib/*.glsl
+    // Orig:
+    // const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
+    // BEG: ShaderCode Hack
+    std::string shaderCode_HACK_REPLACE = shaderGenerator.GetGeneratedShaderCode();
+    std::cout << "MaterialX shadergen HACK: 1) Replace LightData.type with LightData.lightType. 2) Change mx_latlong_map_lookup() calls to vec3(0.0)" << std::endl;
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("int type;"), "int lightType;");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("\\.type"), ".lightType");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("= mx_latlong_map_lookup\\((.+), (.+), (.+), (.+)\\);"), "= textureLod($4, mx_latlong_projection(normalize(($2 * vec4($1,0.0)).xyz)), $3).rgb;");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color3|mx_image_vector3)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).rgb; // $1()");
+    const char *shaderCode = shaderCode_HACK_REPLACE.c_str();
+    // END: ShaderCode Hack
 
     wgpu::ShaderStage stage = HgiWebGPUConversions::GetShaderStages(desc.shaderStage);
 
