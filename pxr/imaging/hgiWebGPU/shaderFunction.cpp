@@ -136,11 +136,14 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     // const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
     // BEG: ShaderCode Hack
     std::string shaderCode_HACK_REPLACE = shaderGenerator.GetGeneratedShaderCode();
-    std::cout << "MaterialX shadergen HACK: 1) Replace LightData.type with LightData.lightType. 2) Change mx_latlong_map_lookup() calls to vec3(0.0)" << std::endl;
+    std::cout << "MaterialX shadergen HACK: 1) Replace LightData.type with LightData.lightType. 2) Unroll functions that take sampler2D as a parameter: mx_latlong_map_lookup, mx_image_color[3,4], mx_image_vector[2,3,4], mx_image_float)" << std::endl;
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("int type;"), "int lightType;");
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("\\.type"), ".lightType");
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("= mx_latlong_map_lookup\\((.+), (.+), (.+), (.+)\\);"), "= textureLod($4, mx_latlong_projection(normalize(($2 * vec4($1,0.0)).xyz)), $3).rgb;");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_float)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).r; // $1()");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_vector2)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).rg; // $1()");
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color3|mx_image_vector3)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).rgb; // $1()");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color4|mx_image_vector4)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)); // $1()");
     const char *shaderCode = shaderCode_HACK_REPLACE.c_str();
     // END: ShaderCode Hack
 
