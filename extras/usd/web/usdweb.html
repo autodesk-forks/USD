@@ -199,6 +199,7 @@
         )
         <br>
         <input type="button" id="basic_materialx" value="basic_materialx">
+        <input type="button" id="sphere_mtlx" value="sphere_mtlx">
         <input type="button" id="blue_sphere" value="blue_sphere">
         <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
         <span id="Standard_ShaderBall_Variants">
@@ -261,6 +262,9 @@
 
             document.getElementById("basic_materialx").onclick  = async function() {
                 stage = await openStageFromUsdfile("basic_materialx.usdz");
+            };
+            document.getElementById("sphere_mtlx").onclick  = async function() {
+                stage = await openStageFromUsdfile("sphere_mtlx.usdz");
             };
             document.getElementById("blue_sphere").onclick  = async function() {
                 stage = await openStageFromUsdfile("blue_sphere.usda");
@@ -366,7 +370,7 @@
 
     async function openStageFromUsdfile(filename)
     {
-
+        console.log('openStageFromUsdfile: '+filename);
         let fs_filename = filename.split('/').reverse()[0];
         await fetchFileToFS(filename, fs_filename);
         console.log('Setting USDStage: '+fs_filename);
