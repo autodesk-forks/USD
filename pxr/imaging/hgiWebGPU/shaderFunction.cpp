@@ -33,6 +33,9 @@
 #include <sstream>
 #include <iostream>  // HACK: for std::cout
 #include <regex>  // HACK [sbrew] for LightData.type -> LightData.lightType
+#include <fstream> // HACK: Writing files
+#include <strstream> // HACK: Writing files
+
 
 #if defined EMSCRIPTEN
 #include <emscripten.h>
@@ -129,6 +132,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     HgiWebGPUShaderGenerator shaderGenerator(hgi, desc);
 
     shaderGenerator.Execute();
+
     // ShaderCode HACK [sbrew]
     //   1) Change member variable name of Replace LightData.type -> LightData.lightType , as "type" can be a reserved word
     //   2) Modify the mx_latlong_map_lookup() shader code resulting from snippets in libraries/pbrlib/genglsl/lib/*.glsl
@@ -139,12 +143,32 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     std::cout << "MaterialX shadergen HACK: 1) Replace LightData.type with LightData.lightType. 2) Unroll functions that take sampler2D as a parameter: mx_latlong_map_lookup, mx_image_color[3,4], mx_image_vector[2,3,4], mx_image_float)" << std::endl;
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("int type;"), "int lightType;");
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("\\.type"), ".lightType");
+    // Unroll
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("= mx_latlong_map_lookup\\((.+), (.+), (.+), (.+)\\);"), "= textureLod($4, mx_latlong_projection(normalize(($2 * vec4($1,0.0)).xyz)), $3).rgb;");
-    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_float)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).r; // $1()");
-    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_vector2)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).rg; // $1()");
-    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color3|mx_image_vector3)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)).rgb; // $1()");
-    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color4|mx_image_vector4)\\((.+), .+, .+, (.+), .+, .+, .+, .+, .+, .+, (.+), (.+), (.+)\\);") , "  $6 = texture($2, mx_transform_uv($3, $4, $5)); // $1()");
+     // sampler2D -> texture2D, sampler
+    //shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("(mx_image_float|mx_image_vector2|mx_image_color3|mx_image_vector3|mx_image_color4|mx_image_vector4|NG_tiledimage_float|NG_tiledimage_vector3)\\((.*)sampler2D (\\w+)([^\\)]*)\\)"), "$1($2texture2D textureBind_$3, sampler samplerBind_$3$4)");
+    //shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("(mx_image_float|mx_image_vector2|mx_image_color3|mx_image_vector3|mx_image_color4|mx_image_vector4|NG_tiledimage_float|NG_tiledimage_vector3)\\((\\w+)(\\s*,[^\\)]*)\\)"), "$1(textureBind_$2, samplerBind_$2$3)");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("(NG_tiledimage_float|NG_tiledimage_vector3)\\((.*)sampler2D (\\w+)([^\\)]*)\\)"), "$1($2texture2D textureBind_$3, sampler samplerBind_$3$4)");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("(NG_tiledimage_float|NG_tiledimage_vector3)\\((\\w+)(\\s*,[^\\)]*)\\)"), "$1(textureBind_$2, samplerBind_$2$3)");
+    // Remove funcs
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("void (mx_image_float|mx_image_vector2|mx_image_color3|mx_image_vector3|mx_image_color4|mx_image_vector4)\\([^\\}]*?\\}", std::regex_constants::multiline), "//void $1(...) { ... }");
+    // Unroll
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_float)\\((.+?), .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), .+?, .+?, .+?, .+?, .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\))\\);") , "  $6 = texture(sampler2D(textureBind_$2, samplerBind_$2), mx_transform_uv($3, $4, $5)).r; // $1()");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_vector2)\\((.+?), .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), .+?, .+?, .+?, .+?, .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\))\\);") , "  $6 = texture(sampler2D(textureBind_$2, samplerBind_$2), mx_transform_uv($3, $4, $5)).rg; // $1()");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color3|mx_image_vector3)\\((.+?), .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), .+?, .+?, .+?, .+?, .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\))\\);") , "  $6 = texture(sampler2D(textureBind_$2, samplerBind_$2), mx_transform_uv($3, $4, $5)).rgb; // $1()");
+    shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("  (mx_image_color4|mx_image_vector4)\\((.+?), .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), .+?, .+?, .+?, .+?, .+?, .+?, (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\)), (\\w+|\\w+?\\([^()]+?\\))\\);") , "  $6 = texture(sampler2D(textureBind_$2, samplerBind_$2), mx_transform_uv($3, $4, $5)); // $1()");
+    // Set shaderCode
     const char *shaderCode = shaderCode_HACK_REPLACE.c_str();
+
+    // Output ShaderCode to a file
+    // std::stringstream ofstreamName;
+    // static size_t debugShaderID = 0;
+    // ofstreamName << "program_modified_glsl_" << debugShaderID++ << ".frag";
+    // std::cout << "Writing out '" << ofstreamName.str() << "'" << std::endl;
+    // std::fstream outputFile(ofstreamName.str(), std::ios::out);
+    // outputFile << shaderCode_HACK_REPLACE << std::endl;
+    // outputFile.close();
+
     // END: ShaderCode Hack
 
     wgpu::ShaderStage stage = HgiWebGPUConversions::GetShaderStages(desc.shaderStage);
