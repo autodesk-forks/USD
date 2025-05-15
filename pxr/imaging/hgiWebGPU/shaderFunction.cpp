@@ -161,13 +161,14 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     const char *shaderCode = shaderCode_HACK_REPLACE.c_str();
 
     // Output ShaderCode to a file
-    // std::stringstream ofstreamName;
-    // static size_t debugShaderID = 0;
-    // ofstreamName << "program_modified_glsl_" << debugShaderID++ << ".frag";
-    // std::cout << "Writing out '" << ofstreamName.str() << "'" << std::endl;
-    // std::fstream outputFile(ofstreamName.str(), std::ios::out);
-    // outputFile << shaderCode_HACK_REPLACE << std::endl;
-    // outputFile.close();
+    std::stringstream ofstreamName;
+    static size_t debugShaderID = 0;
+    ofstreamName << "program_modified_glsl_" << debugShaderID++ << ".frag";
+    std::cout << "Writing out '" << ofstreamName.str() << "'" << std::endl;
+    std::fstream outputFile(ofstreamName.str(), std::ios::out);
+    outputFile << shaderCode_HACK_REPLACE << std::endl;
+    outputFile.close();
+
 
     // END: ShaderCode Hack
 
