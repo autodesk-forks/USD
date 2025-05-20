@@ -43,8 +43,9 @@ _ConvertDoubleToFloatArray(VtValue * value, HdTupleType * tupleType)
 {
     VtArray<DBL> const & dblArray = value->UncheckedGet<VtArray<DBL>>();
     VtArray<FLT> fltArray(dblArray.size());
+    auto iter = fltArray.begin();
     for (size_t i = 0; i < dblArray.size(); ++i) {
-        fltArray[i] = FLT(dblArray[i]);
+        *iter++ = FLT(dblArray[i]);
     }
     *value = VtValue(fltArray);
     *tupleType = HdGetValueTupleType(*value);
@@ -82,8 +83,9 @@ HdVtBufferSource::_SetValue(const VtValue &v, int arraySize, bool allowDoubles)
     } else if (_value.IsHolding<VtBoolArray>()) {
         VtBoolArray boolValues = _value.UncheckedGet<VtBoolArray>();
         VtIntArray intValues(_value.GetArraySize());
+        auto iter = intValues.begin();
         for (size_t i = 0; i < _value.GetArraySize(); i++) {
-            intValues[i] = boolValues[i] ? 1 : 0;
+            *iter++ = boolValues[i] ? 1 : 0;
         }
         _value = VtValue(intValues);
     } else if (!allowDoubles) {

@@ -1099,8 +1099,9 @@ public:
                 const std::vector<GfVec4d> &vec =
                     v.UncheckedGet<std::vector<GfVec4d>>();
                 array.resize(vec.size());
+                auto iter = array.begin();
                 for (size_t i = 0; i < vec.size(); i++) {
-                    array[i] = vec[i];
+                    *iter++ = vec[i];
                 }
             }
             return HdRetainedTypedSampledDataSource<VtArray<GfVec4d>>::New(
@@ -1653,8 +1654,9 @@ public:
             }
             if (!empty) {
                 VtArray<TfToken> array(HdReprSelector::MAX_TOPOLOGY_REPRS);
+                auto iter = array.begin();
                 for (size_t i = 0; i < HdReprSelector::MAX_TOPOLOGY_REPRS; ++i) {
-                    array[i] = repr[i];
+                    *iter++ = repr[i];
                 }
                 reprSelectorDs =
                     HdRetainedTypedSampledDataSource<VtArray<TfToken>>::New(

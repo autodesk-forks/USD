@@ -907,15 +907,17 @@ struct UsdImaging_PointInstancerIndicesStrategy
 
         std::vector<bool> mask = pi.ComputeMaskAtTime(time);
 
+        auto vBegin = v.begin();
         for (size_t instanceId = 0; instanceId < protoIndices.size(); ++instanceId) {
             size_t protoIndex = protoIndices[instanceId];
 
             if (protoIndex >= v.size()) {
                 v.resize(protoIndex + 1);
+                vBegin = v.begin();
             }
 
             if (mask.size() == 0 || mask[instanceId]) {
-                v[protoIndex].push_back(instanceId);
+                (vBegin + protoIndex)->push_back(instanceId);
             }
         }
 

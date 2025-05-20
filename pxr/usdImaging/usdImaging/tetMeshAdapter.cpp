@@ -146,13 +146,15 @@ UsdImagingTetMeshAdapter::GetTopology(UsdPrim const& prim,
 
     // Compute faceVertexIndices and faceVertexCounts for the HdMeshTopology
     const size_t numCounts = surfaceFaceIndices.size();
-    VtIntArray faceVertexIndices;
+    VtIntArray faceVertexIndices(numCounts * 3);
     VtIntArray faceVertexCounts(numCounts);
+    auto faceVertexIndicesIter = faceVertexIndices.begin();
+    auto faceVertexCountsIter = faceVertexCounts.begin();
     for (size_t i = 0; i < numCounts; ++i) {
-        faceVertexIndices.push_back(surfaceFaceIndices[i][0]);
-        faceVertexIndices.push_back(surfaceFaceIndices[i][1]);
-        faceVertexIndices.push_back(surfaceFaceIndices[i][2]);
-        faceVertexCounts[i] = 3;
+        *faceVertexIndicesIter++ = surfaceFaceIndices[i][0];
+        *faceVertexIndicesIter++ = surfaceFaceIndices[i][1];
+        *faceVertexIndicesIter++ = surfaceFaceIndices[i][2];
+        *faceVertexCountsIter++ = 3;
     }
 
     // Create and return the HdMeshTopology

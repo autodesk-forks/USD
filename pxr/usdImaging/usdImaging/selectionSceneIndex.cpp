@@ -263,8 +263,9 @@ VtIntArray
 _Range(const size_t n)
 {
     VtIntArray result(n);
+    auto iter = result.begin();
     for (size_t i = 0; i < n; i++) {
-        result[i] = i;
+        *iter++ = i;
     }
     return result;
 }

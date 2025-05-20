@@ -68,10 +68,11 @@ _ComputeFlatNormals(HdMeshTopology const *topology, SrcType const* points)
     VtArray<DstType> normals(numFaces);
 
     VtIntArray faceOffsets(numFaces);
+    auto faceOffsetIter = faceOffsets.begin();
     VtIntArray const &faceCounts = topology->GetFaceVertexCounts();
     int offset = 0;
     for (int i = 0; i < numFaces; ++i) {
-        faceOffsets[i] = offset;
+        *faceOffsetIter++ = offset;
         offset += faceCounts[i];
     }
     VtIntArray const &faceIndices = topology->GetFaceVertexIndices();

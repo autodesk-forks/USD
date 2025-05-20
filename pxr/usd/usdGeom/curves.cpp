@@ -202,8 +202,10 @@ UsdGeomCurves::ComputeExtent(const VtVec3fArray& points,
     }
 
     GfVec3f widthVec = GfVec3f(maxWidth * 0.5);
-    (*extent)[0] -= widthVec;
-    (*extent)[1] += widthVec;
+    
+    auto iter = extent->begin();
+    *iter -= widthVec;
+    *(iter + 1) += widthVec;
 
     return true;
 }
@@ -244,8 +246,10 @@ UsdGeomCurves::ComputeExtent(const VtVec3fArray& points,
                                       &sphereExtent)) {
         return false;
     }
-    (*extent)[0] += sphereExtent[0];
-    (*extent)[1] += sphereExtent[1];
+    
+    auto iter = extent->begin();
+    *iter += sphereExtent[0];
+    *(iter + 1) += sphereExtent[1];
 
     return true;
 }

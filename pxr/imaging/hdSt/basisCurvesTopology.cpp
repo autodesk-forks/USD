@@ -44,14 +44,15 @@ HdSt_BasisCurvesTopology::GetPointsIndexBuilderComputation()
     }
 
     VtIntArray finalIndices(numVerts);
+    auto finalIndicesIter = finalIndices.begin();
     const VtIntArray& curveIndices = GetCurveIndices();
     if (curveIndices.empty()) {
         for (int i=0; i<numVerts; ++i) {
-            finalIndices[i] = i;
+            *finalIndicesIter++ = i;
         }
     } else {
         for (int i=0; i<numVerts; ++i) {
-            finalIndices[i] = curveIndices[i];
+            *finalIndicesIter++ = curveIndices[i];
         }
     }
 

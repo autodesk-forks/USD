@@ -305,10 +305,11 @@ _ComputePoints(const GfBBox3d &bbox)
     const GfVec3d min = HdSt_VolumeShader::GetSafeMin(range);
     const GfVec3d max = HdSt_VolumeShader::GetSafeMax(range);
 
+    auto pointsBegin = points.begin();
     for (const double x : { min[0], max[0] }) {
         for (const double y : { min[1], max[1] }) {
             for (const double z : { min[2], max[2] }) {
-                points[i] = GfVec3f(transform.Transform(GfVec3d(x, y, z)));
+                *(pointsBegin + i) = GfVec3f(transform.Transform(GfVec3d(x, y, z)));
                 i++;
             }
         }

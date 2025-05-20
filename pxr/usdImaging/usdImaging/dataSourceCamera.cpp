@@ -86,8 +86,9 @@ public:
         const VtArray<GfVec4f> data =
             _dataSource->GetTypedValue(shutterOffset);
         result.resize(data.size());
+        auto iter = result.begin();
         for (size_t i = 0; i < data.size(); ++i) {
-            result[i] = GfVec4d(data[i]);
+            *iter++ = GfVec4d(data[i]);
         }
         return result;
     }

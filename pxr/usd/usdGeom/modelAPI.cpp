@@ -373,16 +373,18 @@ UsdGeomModelAPI::ComputeExtentsHint(UsdGeomBBoxCache& bboxCache) const
             // 'extent' for aggregate boundables should support per-purpose
             // extent, like extentsHint.
             extents.resize(2 * purposeTokens.size());
+            auto iter = extents.begin();
             for (size_t i = 1; i != purposeTokens.size(); ++i) {
-                extents[2*i] = extents[0];
-                extents[2*i+1] = extents[1];
+                *(iter + 2*i) = *iter;
+                *(iter + 2*i+1) = *(iter + 1);
             }
         }
         else {
             // Leave a single empty range.
             extents.resize(2);
-            extents[0] = GfRange3f().GetMin();
-            extents[1] = GfRange3f().GetMax();
+            auto iter = extents.begin();
+            *iter = GfRange3f().GetMin();
+            *(iter + 1) = GfRange3f().GetMax();
         }
         return extents;
     }
@@ -394,6 +396,7 @@ UsdGeomModelAPI::ComputeExtentsHint(UsdGeomBBoxCache& bboxCache) const
     // a bottleneck.
     std::vector<TfToken> purposeTokenVec(1);
     size_t lastNotEmpty = 0;
+    auto iter = extents.begin();
     for (size_t i = 0, end = purposeTokens.size(); i != end; ++i) {
 
         // Set the gprim purpose that we are interested in computing the bbox
@@ -404,9 +407,9 @@ UsdGeomModelAPI::ComputeExtentsHint(UsdGeomBBoxCache& bboxCache) const
         const GfRange3d range = bboxCache
             .ComputeUntransformedBound(GetPrim())
             .ComputeAlignedBox();
-
-        extents[2*i] = GfVec3f(range.GetMin());
-        extents[2*i+1] = GfVec3f(range.GetMax());
+        
+        *(iter + 2*i) = GfVec3f(range.GetMin());
+        *(iter + 2*i+1) = GfVec3f(range.GetMax());
 
         if (!range.IsEmpty()) {
             lastNotEmpty = i;

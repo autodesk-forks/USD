@@ -746,7 +746,7 @@ struct UsdImagingInstanceAdapter::_ComputeInstanceTransformFn
         // transform incorporated, so we need to negate that.
         xform = inverseRoot * xform;
 
-        result[instanceIdx] = xform;
+        *(result.begin() + instanceIdx) = xform;
         return true;
     }
 
@@ -972,16 +972,17 @@ struct UsdImagingInstanceAdapter::_ComputeInheritedPrimvarFn
                 inheritedPrimvarRecord =
                     adapter->_GetInheritedPrimvars(instanceProxyPrim);
             if (inheritedPrimvarRecord) {
+                auto resultBegin = result.begin();
                 for (auto const& pv : inheritedPrimvarRecord->primvars) {
                     if (pv.GetPrimvarName() == name) {
                         VtValue v;
                         pv.ComputeFlattened(&v, time);
                         if (v.IsHolding<T>()) {
-                            result[instanceIdx] = v.Get<T>();
+                            *(resultBegin + instanceIdx) = v.Get<T>();
                         } else if (v.IsHolding<VtArray<T>>()) {
                             VtArray<T> a = v.Get<VtArray<T>>();
                             if (a.size() > 0) {
-                                result[instanceIdx] = a[0];
+                                *(resultBegin + instanceIdx) = a[0];
                             }
                             if (a.size() != 1) {
                                 sampleSizeErrorPaths.push_back(

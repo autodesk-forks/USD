@@ -92,8 +92,9 @@ Hd_VertexAdjacency::BuildAdjacencyTable(HdMeshTopology const *topology)
     // know counts, don't fill them out now, so we know how many indices
     // we've written so far.
     int currentOffset = _numPoints * 2;
+    auto adjacencyIter = _adjacencyTable.begin();
     for (int pointNum = 0; pointNum < _numPoints; ++pointNum) {
-        _adjacencyTable[pointNum * 2] = currentOffset;
+        *(adjacencyIter + pointNum * 2) = currentOffset;
         currentOffset += 2*vertexValence[pointNum];
     }
 
@@ -106,14 +107,14 @@ Hd_VertexAdjacency::BuildAdjacencyTable(HdMeshTopology const *topology)
             int next = vertsPtr[vertIndex+(j+1)%nv];
             if (flip) std::swap(prev, next);
 
-            int entryOffset = _adjacencyTable[curr * 2 + 0];
-            int &entryCount = _adjacencyTable[curr * 2 + 1];
+            int entryOffset = *(adjacencyIter + curr * 2 + 0);
+            int &entryCount = *(adjacencyIter + curr * 2 + 1);
 
             int pairOffset = entryOffset + entryCount * 2;
             ++entryCount;
 
-            _adjacencyTable[pairOffset + 0] = prev;
-            _adjacencyTable[pairOffset + 1] = next;
+            *(adjacencyIter + pairOffset + 0) = prev;
+            *(adjacencyIter + pairOffset + 1) = next;
         }
         vertIndex += nv;
     }

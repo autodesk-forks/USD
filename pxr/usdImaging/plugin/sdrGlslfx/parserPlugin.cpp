@@ -101,11 +101,12 @@ ConvertToSdrCompatibleValueAndType(
         // support for vectors length 2
         } else if (anyVec.size() == 2) {
             VtFloatArray retVec(2);
+            auto iter = retVec.begin();
             for (int i = 0; i < 2; i++) {
                 if (anyVec[i].IsHolding<double>()) {
-                    retVec[i] = anyVec[i].UncheckedGet<double>();
+                    *(iter + i) = anyVec[i].UncheckedGet<double>();
                 } else if (anyVec[i].IsHolding<float>()) {
-                    retVec[i] = anyVec[i].UncheckedGet<float>();
+                    *(iter + i) = anyVec[i].UncheckedGet<float>();
                 } else {
                     return VtValue();
                 }
@@ -134,11 +135,12 @@ ConvertToSdrCompatibleValueAndType(
         // support for vectors length 4
         } else if (anyVec.size() == 4) {
             VtFloatArray retVec(4);
+            auto iter = retVec.begin();
             for (int i = 0; i < 4; i++) {
                 if (anyVec[i].IsHolding<double>()) {
-                    retVec[i] = anyVec[i].UncheckedGet<double>();
+                    *(iter + i) = anyVec[i].UncheckedGet<double>();
                 } else if (anyVec[i].IsHolding<float>()) {
-                    retVec[i] = anyVec[i].UncheckedGet<float>();
+                    *(iter + i) = anyVec[i].UncheckedGet<float>();
                 } else {
                     return VtValue();
                 }

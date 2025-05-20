@@ -54,14 +54,15 @@ _ComputeFlattened(VtArray<T> const &array, VtIntArray const &indices) {
     }
 
     VtArray<T> result = VtArray<T>(indices.size());
+    auto resultBegin = result.begin();
 
     bool invalidIndices = false;
     for (size_t i = 0; i < indices.size(); ++i) {
         int index = indices[i];
         if (index >= 0 && (size_t)index < array.size()) {
-            result[i] = array[index];
+            *(resultBegin + i) = array[index];
         } else {
-            result[i] = T();
+            *(resultBegin + i) = T();
             invalidIndices = true;
         }
     }

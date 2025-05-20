@@ -791,8 +791,9 @@ _ConvertValueForTime(const Usd_Clip::ExternalTime &extTime,
                      const Usd_Clip::InternalTime &intTime,
                      VtArray<SdfTimeCode> *value)
 {
+    auto iter = value->begin();
     for (size_t i = 0; i < value->size(); ++i) {
-        _ConvertValueForTime(extTime, intTime, &(*value)[i]);
+        _ConvertValueForTime(extTime, intTime, iter++);
     }
 }
 

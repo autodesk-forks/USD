@@ -251,8 +251,9 @@ UsdGeomCylinder_1::ComputeExtent(double height, double radiusTop,
         return false;
     }
 
-    (*extent)[0] = -max;
-    (*extent)[1] = max;
+    auto iter = extent->begin();
+    *iter = -max;
+    *(iter + 1) = max;
 
     return true;
 }
@@ -272,8 +273,10 @@ UsdGeomCylinder_1::ComputeExtent(double height, double radiusTop,
 
     GfBBox3d bbox = GfBBox3d(GfRange3d(-max, max), transform);
     GfRange3d range = bbox.ComputeAlignedRange();
-    (*extent)[0] = GfVec3f(range.GetMin());
-    (*extent)[1] = GfVec3f(range.GetMax());
+    
+    auto iter = extent->begin();
+    *iter = GfVec3f(range.GetMin());
+    *(iter + 1) = GfVec3f(range.GetMax());
 
     return true;
 }

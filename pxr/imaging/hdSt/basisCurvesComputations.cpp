@@ -80,6 +80,7 @@ HdSt_BasisCurvesIndexBuilderComputation::_BuildLinesIndexArray()
         size_t lineCount = indices.size();
         int maxIndex = curveIndices.size() - 1;
 
+        auto finalIndicesIter = finalIndices.begin();
         for (size_t lineNum = 0; lineNum < lineCount; ++lineNum)
         {
             const GfVec2i &line = indices[lineNum];
@@ -90,7 +91,7 @@ HdSt_BasisCurvesIndexBuilderComputation::_BuildLinesIndexArray()
             int v0 = curveIndices[i0];
             int v1 = curveIndices[i1];
 
-            finalIndices[lineNum].Set(v0, v1);
+            (finalIndicesIter++)->Set(v0, v1);
         }
     }
 
@@ -161,6 +162,7 @@ HdSt_BasisCurvesIndexBuilderComputation::_BuildLineSegmentIndexArray()
         size_t lineCount = indices.size();
         int maxIndex = curveIndices.size() - 1;
 
+        auto finalIndicesIter = finalIndices.begin();
         for (size_t lineNum = 0; lineNum < lineCount; ++lineNum)
         {
             const GfVec2i &line = indices[lineNum];
@@ -171,7 +173,7 @@ HdSt_BasisCurvesIndexBuilderComputation::_BuildLineSegmentIndexArray()
             int v0 = curveIndices[i0];
             int v1 = curveIndices[i1];
 
-            finalIndices[lineNum].Set(v0, v1);
+            (finalIndicesIter++)->Set(v0, v1);
         }
     }
 
@@ -366,6 +368,7 @@ HdSt_BasisCurvesIndexBuilderComputation::_BuildCubicIndexArray()
         size_t lineCount = indices.size();
         int maxIndex = curveIndices.size() - 1;
 
+        auto finalIndicesIter = finalIndices.begin();
         for (size_t lineNum = 0; lineNum < lineCount; ++lineNum)
         {
             const GfVec4i &line = indices[lineNum];
@@ -380,7 +383,7 @@ HdSt_BasisCurvesIndexBuilderComputation::_BuildCubicIndexArray()
             int v2 = curveIndices[i2];
             int v3 = curveIndices[i3];
 
-            finalIndices[lineNum].Set(v0, v1, v2, v3);
+            (finalIndicesIter++)->Set(v0, v1, v2, v3);
         }
     }
 

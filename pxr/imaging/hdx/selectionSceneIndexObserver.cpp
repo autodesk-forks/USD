@@ -197,9 +197,10 @@ _GetInstanceIndices(
         // Multiply number of nested instances by number of instances selected
         // at this nesting level.
         VtIntArray newResult(result.size() * l);
+        auto newResultBegin = newResult.begin();
         for (size_t j = 0; j < result.size(); j++) {
             for (size_t k = 0; k < l; k++) {
-                newResult[j * l + k] =
+                *(newResultBegin + j * l + k) =
                     numInstances * result.AsConst()[j] +
                     instanceIndices[k];
             }

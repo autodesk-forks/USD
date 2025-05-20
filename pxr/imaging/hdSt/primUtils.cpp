@@ -775,8 +775,9 @@ HdStPopulateConstantPrimvars(
             const VtMatrix4dArray rootTransforms = 
                 prim->GetInstancerTransforms(delegate);
             VtMatrix4dArray rootInverseTransforms(rootTransforms.size());
+            auto iter = rootInverseTransforms.begin();
             for (size_t i = 0; i < rootTransforms.size(); ++i) {
-                rootInverseTransforms[i] = rootTransforms[i].GetInverse();
+                *iter++ = rootTransforms[i].GetInverse();
                 // Flip the handedness if necessary
                 leftHanded ^= rootTransforms[i].IsLeftHanded();
             }
@@ -1037,10 +1038,11 @@ HdStUpdateInstancerData(
                 GetInstanceIndices(prim->GetId());
             VtIntArray instanceIndices =
                 VtIntArray(originalInstanceIndices.size() + 1);
-            instanceIndices[0] = 0;
+            auto instanceIndicesBegin = instanceIndices.begin();
+            *instanceIndicesBegin = 0;
             std::copy(originalInstanceIndices.cbegin(),
                       originalInstanceIndices.cend(),
-                      instanceIndices.begin() + 1);
+                      instanceIndicesBegin + 1);
 
             HdStResourceRegistry* const resourceRegistry =
                 static_cast<HdStResourceRegistry*>(
@@ -1163,6 +1165,7 @@ _GetBitmaskEncodedVisibilityBuffer(VtIntArray invisibleIndices,
     // Initialize all bits to 1 (visible)
     VtArray<uint32_t> visibility(numUIntsNeeded,
                                  std::numeric_limits<uint32_t>::max());
+    auto visibilityBegin = visibility.begin();
 
     for (VtIntArray::const_iterator i = invisibleIndices.begin(),
                                   end = invisibleIndices.end(); i != end; ++i) {
@@ -1172,7 +1175,7 @@ _GetBitmaskEncodedVisibilityBuffer(VtIntArray invisibleIndices,
         }
         const size_t arrayIndex = *i/numBitsPerUInt;
         const size_t bitIndex   = *i % numBitsPerUInt;
-        visibility[arrayIndex] &= ~(1 << bitIndex); // set bit to 0
+        *(visibilityBegin + arrayIndex) &= ~(1 << bitIndex); // set bit to 0
     }
 
     return std::make_shared<HdVtBufferSource>(

@@ -79,8 +79,9 @@ HdInstancerTopologySchema::ComputeInstanceIndicesForProto(SdfPath const &path)
             // Note: we call result.data() here to break buffer sharing.
             result.data();
             result.resize(oldSize + iiSize);
+            auto resultBegin = result.begin();
             for (size_t i = 0; i < iiSize; ++i) {
-                result[oldSize + i] = instanceIndices[i];
+                *(resultBegin + oldSize + i) = instanceIndices[i];
             }
         } else {
             for (int instanceIndex : instanceIndices) {

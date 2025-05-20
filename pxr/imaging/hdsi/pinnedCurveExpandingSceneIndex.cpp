@@ -52,10 +52,11 @@ _ComputeExpandedValue(
     // values per curve.
     const size_t numCurves = perCurveCounts.size();
     VtIntArray authoredStartIndices(numCurves);
+    auto indicesBegin = authoredStartIndices.begin();
     size_t idx = 0;
     size_t authoredSum = 0;
     for (int const &vc : perCurveCounts) {
-        authoredStartIndices[idx++] = authoredSum;
+        *(indicesBegin + idx++) = authoredSum;
         authoredSum += size_t(vc);
     }
 
@@ -131,15 +132,17 @@ _ComputeExpandedVaryingValue(
     VtIntArray expandedStartIndices(numCurves);
     size_t authoredSum = 0;
     size_t expandedSum = 0;
+    auto authoredStartIndicesBegin = authoredStartIndices.begin();
+    auto expandedStartIndicesBegin = expandedStartIndices.begin();
 
     for (size_t idx = 0; idx < numCurves; idx++) {
         const int numVarying = curveVaryingCounts[idx];
         const int numVertices = curveVertexCounts[idx];
 
-        authoredStartIndices[idx] = authoredSum;
+        *(authoredStartIndicesBegin + idx) = authoredSum;
         authoredSum += size_t(numVarying);
 
-        expandedStartIndices[idx] = expandedSum;
+        *(expandedStartIndicesBegin + idx) = expandedSum;
 
         if (numVertices >= 4) {
             expandedSum += size_t(numVarying) + 2 * numRepeat;
@@ -483,9 +486,10 @@ private:
     {
         const size_t numCurves = _curveVertexCounts.size();
         _curveVaryingCounts.resize(numCurves);
+        auto curveVaryingCountsBegin = _curveVaryingCounts.begin();
         for (size_t cId = 0; cId < numCurves; cId++) {
             const int &vertexCount = _curveVertexCounts[cId];
-            int &varyingCount = _curveVaryingCounts[cId];
+            int &varyingCount = *(curveVaryingCountsBegin + cId);
 
             if (vertexCount < 2) {
                 varyingCount = 0;

@@ -236,9 +236,10 @@ _ComputeExtentImpl(const VtVec3fArray& points, VtVec3fArray* extent,
         },
         /*grainSize=*/ 500
     );
-
-    (*extent)[0] = GfVec3f(bbox.GetMin());
-    (*extent)[1] = GfVec3f(bbox.GetMax());
+    
+    auto iter = extent->begin();
+    *iter = GfVec3f(bbox.GetMin());
+    *(iter + 1) = GfVec3f(bbox.GetMax());
 
     return true;
 }
@@ -421,10 +422,10 @@ UsdGeomPointBased::ComputePointsAtTime(
                                       timeCodesPerSecond);
 
     points->resize(numPoints);
-
-    const auto computePoints = [&velocityTimeDelta, 
+    auto pointsBegin = points->begin();
+    const auto computePoints = [&velocityTimeDelta,
         &positions, &velocities, &accelerations, 
-        &points] (size_t start, size_t end) {
+        &pointsBegin] (size_t start, size_t end) {
         for (size_t pointId = start ; pointId < end ; ++pointId) {
             GfVec3f translation = positions[pointId];
             if (velocities.size() != 0) {
@@ -434,7 +435,7 @@ UsdGeomPointBased::ComputePointsAtTime(
                 }
                 translation += velocityTimeDelta * velocity;
             }
-            (*points)[pointId] = translation;
+            *(pointsBegin + pointId) = translation;
 
         }
     };

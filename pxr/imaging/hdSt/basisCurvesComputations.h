@@ -75,6 +75,7 @@ HdSt_ExpandVarying(const SdfPath &id, const TfToken &name,
     VtArray<T> const &authoredValues, const T fallbackValue)
 {
     VtArray<T> outputValues(numVerts);
+    auto outputValuesBegin = outputValues.begin();
 
     size_t srcIndex = 0;
     size_t dstIndex = 0;
@@ -99,15 +100,15 @@ HdSt_ExpandVarying(const SdfPath &id, const TfToken &name,
             // between segments, so all we do here is duplicate the first and 
             // last outputValues. Since these are never acutally used during 
             // drawing, it would also work just to set the value to 0.
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex;
             for (int i = 1; i < nVerts - 2; ++i){
-                outputValues[dstIndex] = authoredValues[srcIndex];
+                *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
                 ++dstIndex; ++srcIndex;
             }
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex;
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex; ++srcIndex;
         }
         TF_VERIFY(srcIndex == authoredValues.size());
@@ -126,23 +127,23 @@ HdSt_ExpandVarying(const SdfPath &id, const TfToken &name,
             // interpolating a value, which happens to match up with the
             // indexing to use for catmullRom and bSpline basis.
             const int vStep = 3;
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex; // don't increment the srcIndex
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex; ++ srcIndex;
 
             // vstep - 1 control points will have an interpolated value
             for(int i = 2; i < nVerts - 2; i += vStep) {
-                outputValues[dstIndex] = authoredValues[srcIndex];
+                *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
                 ++ dstIndex; // don't increment the srcIndex
-                outputValues[dstIndex] = authoredValues[srcIndex];
+                *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
                 ++ dstIndex; // don't increment the srcIndex
-                outputValues[dstIndex] = authoredValues[srcIndex];
-                ++ dstIndex; ++ srcIndex; 
+                *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
+                ++ dstIndex; ++ srcIndex;
             }
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex; // don't increment the srcIndex
-            outputValues[dstIndex] = authoredValues[srcIndex];
+            *(outputValuesBegin + dstIndex) = authoredValues[srcIndex];
             ++dstIndex; ++ srcIndex;
         }
         TF_VERIFY(srcIndex == authoredValues.size());

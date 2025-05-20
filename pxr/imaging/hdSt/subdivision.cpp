@@ -1327,6 +1327,8 @@ HdSt_OsdIndexComputation::_PopulateUniformPrimitiveBuffer(
         : 0;
     VtVec3iArray primitiveParam(numPatches);
     VtVec2iArray edgeIndices(numPatches);
+    auto primitiveParamBegin = primitiveParam.begin();
+    auto edgeIndicesBegin = edgeIndices.begin();
 
     for (size_t i = 0; i < numPatches; ++i) {
         OpenSubdiv::Far::PatchParam const &patchParam =
@@ -1337,11 +1339,12 @@ HdSt_OsdIndexComputation::_PopulateUniformPrimitiveBuffer(
 
         unsigned int field0 = patchParam.field0;
         unsigned int field1 = patchParam.field1;
-        primitiveParam[i][0] = info.baseFaceParam;
-        primitiveParam[i][1] = *((int*)&field0);
-        primitiveParam[i][2] = *((int*)&field1);
+        auto& primitiveParamItem = *(primitiveParamBegin + i);
+        primitiveParamItem[0] = info.baseFaceParam;
+        primitiveParamItem[1] = *((int*)&field0);
+        primitiveParamItem[2] = *((int*)&field1);
 
-        edgeIndices[i] = info.baseFaceEdgeIndices;
+        *(edgeIndicesBegin + i) = info.baseFaceEdgeIndices;
     }
 
     _primitiveBuffer.reset(new HdVtBufferSource(
@@ -1369,6 +1372,8 @@ HdSt_OsdIndexComputation::_PopulatePatchPrimitiveBuffer(
         : 0;
     VtVec4iArray primitiveParam(numPatches);
     VtVec2iArray edgeIndices(numPatches);
+    auto primitiveParamBegin = primitiveParam.begin();
+    auto edgeIndicesBegin = edgeIndices.begin();
 
     for (size_t i = 0; i < numPatches; ++i) {
         OpenSubdiv::Far::PatchParam const &patchParam =
@@ -1387,14 +1392,15 @@ HdSt_OsdIndexComputation::_PopulatePatchPrimitiveBuffer(
 
         unsigned int field0 = patchParam.field0;
         unsigned int field1 = patchParam.field1;
-        primitiveParam[i][0] = info.baseFaceParam;
-        primitiveParam[i][1] = *((int*)&field0);
-        primitiveParam[i][2] = *((int*)&field1);
+        auto& primitiveParamItem = *(primitiveParamBegin + i);
+        primitiveParamItem[0] = info.baseFaceParam;
+        primitiveParamItem[1] = *((int*)&field0);
+        primitiveParamItem[2] = *((int*)&field1);
 
         int sharpnessAsInt = static_cast<int>(sharpness);
-        primitiveParam[i][3] = sharpnessAsInt;
+        primitiveParamItem[3] = sharpnessAsInt;
 
-        edgeIndices[i] = info.baseFaceEdgeIndices;
+        *(edgeIndicesBegin + i) = info.baseFaceEdgeIndices;
     }
     _primitiveBuffer.reset(new HdVtBufferSource(
                                HdTokens->primitiveParam,
@@ -1501,11 +1507,13 @@ HdSt_OsdFvarIndexComputation::_PopulateFvarPatchParamBuffer(
             patchTable->GetFVarPatchParams(_channel);
         size_t numPatches = patchParamArray.size();
         fvarPatchParam.resize(numPatches);
+        auto fvarPatchParamBegin = fvarPatchParam.begin();
 
         for (size_t i = 0; i < numPatches; ++i) {
             OpenSubdiv::Far::PatchParam const &patchParam = patchParamArray[i];
-            fvarPatchParam[i][0] = patchParam.field0;
-            fvarPatchParam[i][1] = patchParam.field1;
+            auto& fvarPatchParamItem = *(fvarPatchParamBegin + i);
+            fvarPatchParamItem[0] = patchParam.field0;
+            fvarPatchParamItem[1] = patchParam.field1;
         }
     }
 
@@ -1603,6 +1611,7 @@ HdSt_OsdBaseFaceToRefinedFacesMapComputation::Resolve()
 
     VtIntArray baseFaceToRefinedFacesArr;
     VtIntArray refinedFaceCounts(numBaseFaces);
+    auto refinedFaceIter = refinedFaceCounts.begin();
     size_t currRefinedFaceCount = 0;
 
     for (size_t i = 0; i < numBaseFaces; ++i) {
@@ -1612,7 +1621,7 @@ HdSt_OsdBaseFaceToRefinedFacesMapComputation::Resolve()
         for (size_t j = 0; j < refinedFaces.size(); ++j) {
             baseFaceToRefinedFacesArr.push_back(refinedFaces[j]);
         }
-        refinedFaceCounts[i] = currRefinedFaceCount;
+        *refinedFaceIter++ = currRefinedFaceCount;
     }
 
     HdBufferSourceSharedPtr source = std::make_shared<HdVtBufferSource>(

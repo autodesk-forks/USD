@@ -201,7 +201,8 @@ HdxSelectionTracker::GetSelectionOffsetBuffer(
         offsets->resize(headerSize);
     }
 
-    (*offsets)[0] = numHighlightModes;
+    auto offsetsBegin = offsets->begin();
+    *offsetsBegin = numHighlightModes;
 
     HdSelectionSharedPtr const highlights =
         enableSelectionHighlight || enableLocateHighlight
@@ -216,7 +217,7 @@ HdxSelectionTracker::GetSelectionOffsetBuffer(
         for (size_t mode = HdSelection::HighlightModeSelect;
                     mode < HdSelection::HighlightModeCount;
                  mode++) {
-            (*offsets)[mode + 1] = SELECT_NONE;
+            *(offsetsBegin + mode + 1) = SELECT_NONE;
         }
         _DebugPrintArray("nothing selected", *offsets);
         return false;
@@ -248,14 +249,14 @@ HdxSelectionTracker::GetSelectionOffsetBuffer(
 
         hasSelection = hasSelection || modeHasSelection;
 
-        (*offsets)[mode + 1] = modeHasSelection? copyOffset : SELECT_NONE;
+        *(offsetsBegin + mode + 1) = modeHasSelection? copyOffset : SELECT_NONE;
 
         if (modeHasSelection) {
             // append the offset buffer for the highlight mode
             offsets->resize(output.size() + copyOffset);
 
             for (size_t i = 0; i < output.size(); i++) {
-                (*offsets)[i + copyOffset] = output[i];
+                *(offsetsBegin + i + copyOffset) = output[i];
             }
 
             copyOffset += output.size();

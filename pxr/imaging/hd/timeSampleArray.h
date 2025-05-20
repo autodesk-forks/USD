@@ -42,8 +42,9 @@ inline VtArray<T> HdResampleNeighbors(float alpha,
                                       const VtArray<T>& v1)
 {
     VtArray<T> r(v0.size());
+    auto iter = r.begin();
     for (size_t i=0; i < r.size(); ++i) {
-        r[i] = HdResampleNeighbors(alpha, v0[i], v1[i]);
+        *iter++ = HdResampleNeighbors(alpha, v0[i], v1[i]);
     }
     return r;
 }

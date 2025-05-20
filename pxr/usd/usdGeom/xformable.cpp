@@ -522,9 +522,10 @@ UsdGeomXformable::SetResetXformStack(bool resetXformStack) const
 
         VtTokenArray newOpOrderVec(opOrderVec.size() + 1);
 
-        newOpOrderVec[0] = UsdGeomXformOpTypes->resetXformStack;
+        auto iter = newOpOrderVec.begin();
+        *iter = UsdGeomXformOpTypes->resetXformStack;
         for (size_t i = 0; i < opOrderVec.size(); i++)
-            newOpOrderVec[i+1] = opOrderVec[i];
+            *(iter+i+1) = *(iter+i);
 
         result = CreateXformOpOrderAttr().Set(newOpOrderVec);
     } else {

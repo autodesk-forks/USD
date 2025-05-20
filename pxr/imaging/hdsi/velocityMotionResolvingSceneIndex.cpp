@@ -80,11 +80,12 @@ _ApplyAngularVelocities(
     const HdSampledDataSource::Time scaledTime)
 {
     VtArray<T> result(rotations.size());
+    auto resultIter = result.begin();
     for (size_t i = 0; i < rotations.size(); ++i) {
         GfRotation rotation = GfRotation(rotations[i]);
         rotation *= GfRotation(velocities[i],
             scaledTime * velocities[i].GetLength());
-        result[i] = T(rotation.GetQuat());
+        *resultIter++ = T(rotation.GetQuat());
     }
     return VtValue(result);
 }
@@ -252,16 +253,17 @@ protected:
 
         // perform velocity motion on positions
         VtVec3fArray result(positions.size());
+        auto resultIter = result.begin();
         if (useAccelerations) {
             const float timeSqrHalf = 0.5f * scaledTime * scaledTime;
             for (size_t i = 0; i < positions.size(); ++i) {
-                result[i] = positions[i]
+                *resultIter++ = positions[i]
                   + scaledTime * velocities[i]
                   + timeSqrHalf * accelerations[i];
             }
         } else {
             for (size_t i = 0; i < positions.size(); ++i) {
-                result[i] = positions[i]
+                *resultIter++ = positions[i]
                   + scaledTime * velocities[i];
             }
         }

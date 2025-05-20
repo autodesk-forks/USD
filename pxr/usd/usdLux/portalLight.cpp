@@ -174,8 +174,9 @@ _ComputeLocalExtent(const float width, const float height, VtVec3fArray *extent)
     }
 
     extent->resize(2);
-    (*extent)[1] = GfVec3f(width * 0.5f, height * 0.5f, 0.0f);
-    (*extent)[0] = -(*extent)[1];
+    auto extentBegin = extent->begin();
+    *(extentBegin + 1) = GfVec3f(width * 0.5f, height * 0.5f, 0.0f);
+    *extentBegin = -(*(extentBegin + 1));
     return true;
 }
 
@@ -208,8 +209,9 @@ _ComputeExtent(
     if (transform) {
         GfBBox3d bbox(GfRange3d((*extent)[0], (*extent)[1]), *transform);
         GfRange3d range = bbox.ComputeAlignedRange();
-        (*extent)[0] = GfVec3f(range.GetMin());
-        (*extent)[1] = GfVec3f(range.GetMax());
+        auto extentBegin = extent->begin();
+        *extentBegin = GfVec3f(range.GetMin());
+        *(extentBegin + 1) = GfVec3f(range.GetMax());
     }
 
     return true;

@@ -547,41 +547,58 @@ HdxSimpleLightTask::Prepare(HdTaskContext* ctx,
         VtIntArray shadowIndexEnd(numLights);
         VtBoolArray hasShadow(numLights);
         VtBoolArray isIndirectLight(numLights);
+        auto positionIter = position.begin();
+        auto ambientIter = ambient.begin();
+        auto diffuseIter = diffuse.begin();
+        auto specularIter = specular.begin();
+        auto spotDirectionIter = spotDirection.begin();
+        auto spotCutoffIter = spotCutoff.begin();
+        auto spotFalloffIter = spotFalloff.begin();
+        auto attenuationIter = attenuation.begin();
+        auto worldToLightTransformIter = worldToLightTransform.begin();
+        auto shadowIndexStartIter = shadowIndexStart.begin();
+        auto shadowIndexEndIter = shadowIndexEnd.begin();
+        auto hasShadowIter = hasShadow.begin();
+        auto isIndirectLightIter = isIndirectLight.begin();
 
         // Shadows
         VtMatrix4fArray worldToShadowMatrix(numShadows);
         VtMatrix4fArray shadowToWorldMatrix(numShadows);
         VtFloatArray blur(numShadows);
         VtFloatArray bias(numShadows);
+        auto worldToShadowMatrixBegin = worldToShadowMatrix.begin();
+        auto shadowToWorldMatrixBegin = shadowToWorldMatrix.begin();
+        auto blurBegin = blur.begin();
+        auto biasBegin = bias.begin();
         
         GlfSimpleLightVector const & lights = lightingContext->GetLights();
         GlfSimpleShadowArrayRefPtr const & shadows = 
             lightingContext->GetShadows();
 
         for (size_t i = 0; i < numLights; ++i) {
-            position[i] = lights[i].GetPosition();
-            ambient[i] = lights[i].GetAmbient();
-            diffuse[i] = lights[i].GetDiffuse();
-            specular[i] = lights[i].GetSpecular();
-            spotDirection[i] = lights[i].GetSpotDirection();
-            spotCutoff[i] = lights[i].GetSpotCutoff();
-            spotFalloff[i] = lights[i].GetSpotFalloff();
-            attenuation[i] = lights[i].GetAttenuation();
-            worldToLightTransform[i] = 
+            *positionIter++ = lights[i].GetPosition();
+            *ambientIter++ = lights[i].GetAmbient();
+            *diffuseIter++ = lights[i].GetDiffuse();
+            *specularIter++ = lights[i].GetSpecular();
+            *spotDirectionIter++ = lights[i].GetSpotDirection();
+            *spotCutoffIter++ = lights[i].GetSpotCutoff();
+            *spotFalloffIter++ = lights[i].GetSpotFalloff();
+            *attenuationIter++ = lights[i].GetAttenuation();
+            *worldToLightTransformIter++ = 
                 GfMatrix4f(lights[i].GetTransform().GetInverse());
-            shadowIndexStart[i] = lights[i].GetShadowIndexStart();
-            shadowIndexEnd[i] = lights[i].GetShadowIndexEnd();
-            hasShadow[i] = lights[i].HasShadow();
-            isIndirectLight[i] = lights[i].IsDomeLight();
+            *shadowIndexStartIter++ = lights[i].GetShadowIndexStart();
+            *shadowIndexEndIter++ = lights[i].GetShadowIndexEnd();
+            *hasShadowIter++ = lights[i].HasShadow();
+            *isIndirectLightIter++ = lights[i].IsDomeLight();
             // Shadows
             if (hasShadow[i]) {
                 for (int j = shadowIndexStart[i]; j <= shadowIndexEnd[i]; ++j) {
-                    worldToShadowMatrix[j] = GfMatrix4f(
+                    *(worldToShadowMatrixBegin + j) = GfMatrix4f(
                         shadows->GetWorldToShadowMatrix(j));
-                    shadowToWorldMatrix[j] = GfMatrix4f(
+                    *(shadowToWorldMatrixBegin + j) = GfMatrix4f(
                         worldToShadowMatrix[j].GetInverse());
-                    blur[j] = lights[i].GetShadowBlur();
-                    bias[j] = lights[i].GetShadowBias();
+                    *(blurBegin + j) = lights[i].GetShadowBlur();
+                    *(biasBegin + j) = lights[i].GetShadowBias();
                 }
             }
         }

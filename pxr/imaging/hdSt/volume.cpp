@@ -451,10 +451,11 @@ _ComputeBBoxVertices(GfRange3d const &range)
 
     int i = 0;
 
+    auto resultBegin = result.begin();
     for (const double x : { min[0], max[0] }) {
         for (const double y : { min[1], max[1] }) {
             for (const double z : { min[2], max[2] }) {
-                result[i] = GfVec3f(x,y,z);
+                *(resultBegin + i) = GfVec3f(x,y,z);
                 i++;
             }
         }

@@ -252,11 +252,12 @@ HdStInstancer::GetInstanceIndices(SdfPath const &prototypeId)
     int instanceIndexWidth = 1 + instancerNumLevels;
 
     VtIntArray instanceIndices(nTotal * instanceIndexWidth);
+    auto instanceIndicesBegin = instanceIndices.begin();
     std::vector<int> currents(instancerNumLevels);
     for (size_t j = 0; j < nTotal; ++j) {
-        instanceIndices[j*instanceIndexWidth] = j; // global idx
+        *(instanceIndicesBegin + j*instanceIndexWidth) = j; // global idx
         for (int i = 0; i < instancerNumLevels; ++i) {
-            instanceIndices[j*instanceIndexWidth + i + 1] =
+            *(instanceIndicesBegin + j*instanceIndexWidth + i + 1) =
                 instanceIndicesArray[i].cdata()[currents[i]];
         }
         ++currents[0];

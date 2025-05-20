@@ -621,26 +621,22 @@ UsdImagingDrawModeAdapter::Get(UsdPrim const& prim,
     UsdGeomModelAPI model(prim);
 
     if (key == HdTokens->displayColor) {
-        VtVec3fArray color = VtVec3fArray(1);
         GfVec3f drawModeColor;
         if (model) {
             model.GetModelDrawModeColorAttr().Get(&drawModeColor);
         } else {
             drawModeColor = _schemaColor;
         }
-
-        color[0] = drawModeColor;
+        
+        VtVec3fArray color = VtVec3fArray{drawModeColor};
         value = color;
     } else if (key == HdTokens->displayOpacity) {
-        VtFloatArray opacity = VtFloatArray(1);
-
         // Full opacity.
-        opacity[0] = 1.0f;
+        VtFloatArray opacity = VtFloatArray{1.0f};
         value = opacity;
 
     } else if (key == HdTokens->widths) {
-        VtFloatArray widths = VtFloatArray(1);
-        widths[0] = 1.0f;
+        VtFloatArray widths = VtFloatArray{1.0f};
         value = widths;
 
     } else if (key == HdTokens->points) {
@@ -1010,19 +1006,15 @@ UsdImagingDrawModeAdapter::_GenerateOriginGeometry(
     VtValue *topo, VtValue *points, GfRange3d const& extents) const
 {
     // Origin: vertices are (0,0,0); (1,0,0); (0,1,0); (0,0,1)
-    VtVec3fArray pt = VtVec3fArray(4);
-    pt[0] = GfVec3f(0,0,0);
-    pt[1] = GfVec3f(1,0,0);
-    pt[2] = GfVec3f(0,1,0);
-    pt[3] = GfVec3f(0,0,1);
+    VtVec3fArray pt{GfVec3f(0,0,0),
+        GfVec3f(1,0,0),
+        GfVec3f(0,1,0),
+        GfVec3f(0,0,1)};
     *points = VtValue(pt);
 
     // segments are +X, +Y, +Z.
-    VtIntArray curveVertexCounts = VtIntArray(1);
-    curveVertexCounts[0] = 6;
-    VtIntArray curveIndices = VtIntArray(6);
-    const int indices[] = { 0, 1, 0, 2, 0, 3 };
-    for (int i = 0; i < 6; ++i) { curveIndices[i] = indices[i]; }
+    VtIntArray curveVertexCounts {6};
+    VtIntArray curveIndices { 0, 1, 0, 2, 0, 3 };
 
     HdBasisCurvesTopology topology(
         HdTokens->linear, HdTokens->bezier, HdTokens->segmented,
@@ -1042,8 +1034,9 @@ UsdImagingDrawModeAdapter::_GenerateBoundsGeometry(
     GfVec3f min = GfVec3f(extents.GetMin()),
             max = GfVec3f(extents.GetMax());
     VtVec3fArray pt = VtVec3fArray(8);
+    auto ptIter = pt.begin();
     for(int i = 0; i < 8; ++i) {
-        pt[i] = GfVec3f((i & 4) ? max[0] : min[0],
+        *ptIter++ = GfVec3f((i & 4) ? max[0] : min[0],
                         (i & 2) ? max[1] : min[1],
                         (i & 1) ? max[2] : min[2]);
     }
@@ -1052,13 +1045,10 @@ UsdImagingDrawModeAdapter::_GenerateBoundsGeometry(
     // Segments: CCW bottom face starting at (-x, -y, -z)
     //           CCW top face starting at (-x, -y, z)
     //           CCW vertical edges, starting at (-x, -y)
-    VtIntArray curveVertexCounts = VtIntArray(1);
-    curveVertexCounts[0] = 24;
-    VtIntArray curveIndices = VtIntArray(24);
-    const int indices[] = { /* bottom face */ 0, 4, 4, 6, 6, 2, 2, 0,
+    VtIntArray curveVertexCounts {24};
+    VtIntArray curveIndices{ /* bottom face */ 0, 4, 4, 6, 6, 2, 2, 0,
                             /* top face */    1, 5, 5, 7, 7, 3, 3, 1,
                             /* edge pairs */  0, 1, 4, 5, 6, 7, 2, 3 };
-    for (int i = 0; i < 24; ++i) { curveIndices[i] = indices[i]; }
 
     HdBasisCurvesTopology topology(
         HdTokens->linear, HdTokens->bezier, HdTokens->segmented,
@@ -1089,7 +1079,7 @@ UsdImagingDrawModeAdapter::_GenerateCardsGeometry(
     static const float eps(0x1.0p-23); // 1.0 * 2^-23, approx 1.19e-7
 
     VtVec3fArray pt = VtVec3fArray(numFaces * 4);
-    int ptIdx = 0;
+    auto ptIter = pt.begin();
     int faceIndex = 0;
 
     HdGeomSubsets geomSubsets;
@@ -1116,20 +1106,20 @@ UsdImagingDrawModeAdapter::_GenerateCardsGeometry(
     if (axes_mask & xAxis) {
         // +X
         float x = cross ? mid[0] + eps : max[0];
-        pt[ptIdx++] = GfVec3f(x, max[1], max[2]);
-        pt[ptIdx++] = GfVec3f(x, min[1], max[2]);
-        pt[ptIdx++] = GfVec3f(x, min[1], min[2]);
-        pt[ptIdx++] = GfVec3f(x, max[1], min[2]);
+        *ptIter++ = GfVec3f(x, max[1], max[2]);
+        *ptIter++ = GfVec3f(x, min[1], max[2]);
+        *ptIter++ = GfVec3f(x, min[1], min[2]);
+        *ptIter++ = GfVec3f(x, max[1], min[2]);
         if (generateSubsets) {
             generateSubset(xPos);
         }
 
         // -X
         x = cross ? mid[0] - eps : min[0];
-        pt[ptIdx++] = GfVec3f(x, min[1], max[2]);
-        pt[ptIdx++] = GfVec3f(x, max[1], max[2]);
-        pt[ptIdx++] = GfVec3f(x, max[1], min[2]);
-        pt[ptIdx++] = GfVec3f(x, min[1], min[2]);
+        *ptIter++ = GfVec3f(x, min[1], max[2]);
+        *ptIter++ = GfVec3f(x, max[1], max[2]);
+        *ptIter++ = GfVec3f(x, max[1], min[2]);
+        *ptIter++ = GfVec3f(x, min[1], min[2]);
         if (generateSubsets) {
             generateSubset(xNeg);
         }
@@ -1138,20 +1128,20 @@ UsdImagingDrawModeAdapter::_GenerateCardsGeometry(
     if (axes_mask & yAxis) {
         // +Y
         float y = cross ? mid[1] + eps : max[1];
-        pt[ptIdx++] = GfVec3f(min[0], y, max[2]);
-        pt[ptIdx++] = GfVec3f(max[0], y, max[2]);
-        pt[ptIdx++] = GfVec3f(max[0], y, min[2]);
-        pt[ptIdx++] = GfVec3f(min[0], y, min[2]);
+        *ptIter++ = GfVec3f(min[0], y, max[2]);
+        *ptIter++ = GfVec3f(max[0], y, max[2]);
+        *ptIter++ = GfVec3f(max[0], y, min[2]);
+        *ptIter++ = GfVec3f(min[0], y, min[2]);
         if (generateSubsets) {
             generateSubset(yPos);
         }
 
         // -Y
         y = cross ? mid[1] - eps : min[1];
-        pt[ptIdx++] = GfVec3f(max[0], y, max[2]);
-        pt[ptIdx++] = GfVec3f(min[0], y, max[2]);
-        pt[ptIdx++] = GfVec3f(min[0], y, min[2]);
-        pt[ptIdx++] = GfVec3f(max[0], y, min[2]);
+        *ptIter++ = GfVec3f(max[0], y, max[2]);
+        *ptIter++ = GfVec3f(min[0], y, max[2]);
+        *ptIter++ = GfVec3f(min[0], y, min[2]);
+        *ptIter++ = GfVec3f(max[0], y, min[2]);
         if (generateSubsets) {
             generateSubset(yNeg);
         }
@@ -1160,20 +1150,20 @@ UsdImagingDrawModeAdapter::_GenerateCardsGeometry(
     if (axes_mask & zAxis) {
         // +Z
         float z = cross ? mid[2] + eps: max[2];
-        pt[ptIdx++] = GfVec3f(max[0], max[1], z);
-        pt[ptIdx++] = GfVec3f(min[0], max[1], z);
-        pt[ptIdx++] = GfVec3f(min[0], min[1], z);
-        pt[ptIdx++] = GfVec3f(max[0], min[1], z);
+        *ptIter++ = GfVec3f(max[0], max[1], z);
+        *ptIter++ = GfVec3f(min[0], max[1], z);
+        *ptIter++ = GfVec3f(min[0], min[1], z);
+        *ptIter++ = GfVec3f(max[0], min[1], z);
         if (generateSubsets) {
             generateSubset(zPos);
         }
 
         // -Z
         z = cross ? mid[2] - eps : min[2];
-        pt[ptIdx++] = GfVec3f(min[0], max[1], z);
-        pt[ptIdx++] = GfVec3f(max[0], max[1], z);
-        pt[ptIdx++] = GfVec3f(max[0], min[1], z);
-        pt[ptIdx++] = GfVec3f(min[0], min[1], z);
+        *ptIter++ = GfVec3f(min[0], max[1], z);
+        *ptIter++ = GfVec3f(max[0], max[1], z);
+        *ptIter++ = GfVec3f(max[0], min[1], z);
+        *ptIter++ = GfVec3f(min[0], min[1], z);
         if (generateSubsets) {
             generateSubset(zNeg);
         }
@@ -1181,12 +1171,14 @@ UsdImagingDrawModeAdapter::_GenerateCardsGeometry(
 
     VtIntArray faceCounts = VtIntArray(numFaces);
     VtIntArray faceIndices = VtIntArray(numFaces * 4);
+    auto faceCountsIter = faceCounts.begin();
+    auto faceIndicesBegin = faceIndices.begin();
     for (int i = 0; i < numFaces; ++i) {
-        faceCounts[i] = 4;
-        faceIndices[i*4+0] = i*4+0;
-        faceIndices[i*4+1] = i*4+1;
-        faceIndices[i*4+2] = i*4+2;
-        faceIndices[i*4+3] = i*4+3;
+        *faceCountsIter++ = 4;
+        *(faceIndicesBegin + i*4+0) = i*4+0;
+        *(faceIndicesBegin + i*4+1) = i*4+1;
+        *(faceIndicesBegin + i*4+2) = i*4+2;
+        *(faceIndicesBegin + i*4+3) = i*4+3;
     }
 
     VtIntArray holeIndices(0);
@@ -1273,6 +1265,11 @@ UsdImagingDrawModeAdapter::_GenerateCardsFromTextureGeometry(
     VtIntArray arr_assign = VtIntArray(faces.size());
     VtIntArray faceCounts = VtIntArray(faces.size());
     VtIntArray faceIndices = VtIntArray(faces.size() * 4);
+    auto ptBegin = arr_pt.begin();
+    auto uvBegin = arr_uv.begin();
+    auto assignBegin = arr_assign.begin();
+    auto faceCountsBegin = faceCounts.begin();
+    auto faceIndicesBegin = faceIndices.begin();
 
     static const std::array<GfVec3f, 4> corners = {
         GfVec3f(-1, -1,  0), GfVec3f(-1,  1,  0),
@@ -1284,12 +1281,12 @@ UsdImagingDrawModeAdapter::_GenerateCardsFromTextureGeometry(
     HdGeomSubsets geomSubsets;
     for(size_t i = 0; i < faces.size(); ++i) {
         GfMatrix4d screenToWorld = faces[i].first.GetInverse();
-        faceCounts[i] = 4;
-        arr_assign[i] = faces[i].second;
+        *(faceCountsBegin + i) = 4;
+        *(assignBegin + i) = faces[i].second;
         for (size_t j = 0; j < 4; ++j) {
-            faceIndices[i*4+j] = i*4+j;
-            arr_pt[i*4+j] = GfVec3f(screenToWorld.Transform(corners[j]));
-            arr_uv[i*4+j] = std_uvs[j];
+            *(faceIndicesBegin + i*4+j) = i*4+j;
+            *(ptBegin + i*4+j) = GfVec3f(screenToWorld.Transform(corners[j]));
+            *(uvBegin + i*4+j) = std_uvs[j];
         }
 
         // generate the subset
@@ -1488,8 +1485,9 @@ UsdImagingDrawModeAdapter::_GenerateTextureCoordinates(
     }
 
     VtVec2fArray faceUV = VtVec2fArray(uv_faces.size() * 4);
+    auto faceUVBegin = faceUV.begin();
     for (size_t i = 0; i < uv_faces.size(); ++i) {
-        memcpy(&faceUV[i*4], uv_faces[i], 4 * sizeof(GfVec2f));
+        memcpy(faceUVBegin + i*4, uv_faces[i], 4 * sizeof(GfVec2f));
     }
     *uv = VtValue(faceUV);
 }

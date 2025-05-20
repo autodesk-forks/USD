@@ -123,8 +123,9 @@ public:
 
         // Starting with the first element where the path matched the
         // prefix, process it and all following elements.
+        auto iter = result.begin();
         for (; i < n; i++) {
-            SdfPath &path = result[i];
+            SdfPath &path = *iter++;
             path = path.ReplacePrefix(_srcPrefix, _dstPrefix);
         }
 

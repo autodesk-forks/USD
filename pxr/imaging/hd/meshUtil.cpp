@@ -118,6 +118,9 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
     // tv -> triangulated face index [0, numTris)
     // v  -> index to the first vertex (index) for face i
     // ev -> edges visited
+    auto indicesBegin = indices->begin();
+    auto primitiveParamsBegin = primitiveParams->begin();
+    auto edgeIndicesBegin = edgeIndices->begin();
     for (int i=0,tv=0,v=0,ev=0; i<numFaces; ++i) {
         int nv = numVertsPtr[i];
         if (nv < 3) {
@@ -143,9 +146,10 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
             //
             int edgeFlag = 0;
             int edgeIndex = ev;
+            
             for (int j=0; j < nv-2; ++j) {
                 if (!_FanTriangulate(
-                        &(*indices)[tv],
+                        indicesBegin + tv,
                         vertsPtr, v, j, numVertIndices, flip)) {
                     invalidTopology = true;
                 }
@@ -157,7 +161,7 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
                             // 021 instead of 012, and we'd hide edge 0-1
                             // instead of 0-2; so we rotate the indices to
                             // produce triangle 210.
-                            GfVec3i &index = (*indices)[tv];
+                            GfVec3i &index = *(indicesBegin + tv);
                             index.Set(index[1], index[2], index[0]);
                         }
                         edgeFlag = 1;
@@ -168,7 +172,7 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
                             // 043 instead of 034, and we'd hide edge 0-4
                             // instead of 0-3; so we rotate the indices to
                             // produce triangle 304.
-                            GfVec3i &index = (*indices)[tv];
+                            GfVec3i &index = *(indicesBegin + tv);
                             index.Set(index[2], index[0], index[1]);
                         }
                         edgeFlag = 2;
@@ -179,9 +183,9 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
                     ++edgeIndex;
                 }
 
-                (*primitiveParams)[tv] = EncodeCoarseFaceParam(i, edgeFlag);
+                *(primitiveParamsBegin + tv) = EncodeCoarseFaceParam(i, edgeFlag);
                 if (edgeIndices) {
-                    (*edgeIndices)[tv] = edgeIndex;
+                    *(edgeIndicesBegin + tv) = edgeIndex;
                 }
 
                 ++tv;
@@ -239,6 +243,7 @@ void _TriangulateFaceVarying(
     holeIndex = 0;
 
     int dstIndex = 0;
+    auto resultsBegin = results.begin();
     for (int i = 0, v = 0; i < (int)faceVertexCounts.size(); ++i) {
         int nVerts = faceVertexCounts[i];
 
@@ -251,7 +256,7 @@ void _TriangulateFaceVarying(
             // triangulate.
             // apply same triangulation as index does
             for (int j=0; j < nVerts-2; ++j) {
-                if (!_FanTriangulate(&results[dstIndex],
+                if (!_FanTriangulate(resultsBegin + dstIndex,
                         source, v, j, numElements, flip)) {
                     invalidTopology = true;
                 }
@@ -260,11 +265,11 @@ void _TriangulateFaceVarying(
                 // triangle indices. See ComputeTriangleIndices.
                 if (nVerts > 3 && flip) {
                     if (j == 0) {
-                        std::swap(results[dstIndex], results[dstIndex+1]);
-                        std::swap(results[dstIndex+1], results[dstIndex+2]);
+                        std::swap(*(resultsBegin + dstIndex), *(resultsBegin + dstIndex+1));
+                        std::swap(*(resultsBegin + dstIndex+1), *(resultsBegin + dstIndex+2));
                     } else if (j == nVerts-3) {
-                        std::swap(results[dstIndex+1], results[dstIndex+2]);
-                        std::swap(results[dstIndex], results[dstIndex+1]);
+                        std::swap(*(resultsBegin + dstIndex+1), *(resultsBegin + dstIndex+2));
+                        std::swap(*(resultsBegin + dstIndex), *(resultsBegin + dstIndex+1));
                     }
                 }
                 dstIndex += 3;
@@ -509,6 +514,8 @@ HdMeshUtil::_ComputeQuadIndices(VtIntArray *indices,
     if (edgeIndices) {
         edgeIndices->resize(numQuads);
     }
+    auto primitiveParamsBegin = primitiveParams->begin();
+    auto edgeIndicesBegin = edgeIndices->begin();
 
     // quadrangulated verts is added to the end.
     bool flip = (_topology->GetOrientation() != HdTokens->rightHanded);
@@ -574,11 +581,11 @@ HdMeshUtil::_ComputeQuadIndices(VtIntArray *indices,
             //  The first quad of a non-quad face is marked 1; the last as 2; and
             //  intermediate quads as 3.
 
-            (*primitiveParams)[qv] = EncodeCoarseFaceParam(i, /*edgeFlag=*/0);
+            *(primitiveParamsBegin + qv) = EncodeCoarseFaceParam(i, /*edgeFlag=*/0);
 
             if (edgeIndices) {
-                (*edgeIndices)[qv][0] = edgeIndex;
-                (*edgeIndices)[qv][1] = edgeIndex+3;
+                (*(edgeIndicesBegin + qv))[0] = edgeIndex;
+                (*(edgeIndicesBegin + qv))[1] = edgeIndex+3;
             }
 
             ++qv;
@@ -628,15 +635,15 @@ HdMeshUtil::_ComputeQuadIndices(VtIntArray *indices,
                 } else {
                     edgeFlag = 3;
                 }
-                (*primitiveParams)[qv] = EncodeCoarseFaceParam(i, edgeFlag);
+                *(primitiveParamsBegin + qv) = EncodeCoarseFaceParam(i, edgeFlag);
 
                 if (edgeIndices) {
                     if (flip) {
-                        (*edgeIndices)[qv][0] = edgeIndex+(j+nv-1)%nv;
-                        (*edgeIndices)[qv][1] = edgeIndex+j;
+                        (*(edgeIndicesBegin + qv))[0] = edgeIndex+(j+nv-1)%nv;
+                        (*(edgeIndicesBegin + qv))[1] = edgeIndex+j;
                     } else {
-                        (*edgeIndices)[qv][0] = edgeIndex+j;
-                        (*edgeIndices)[qv][1] = edgeIndex+(j+nv-1)%nv;
+                        (*(edgeIndicesBegin + qv))[0] = edgeIndex+j;
+                        (*(edgeIndicesBegin + qv))[1] = edgeIndex+(j+nv-1)%nv;
                     }
                 }
 
@@ -682,6 +689,7 @@ _Quadrangulate(SdfPath const& id,
 
     // original points + quadrangulated points
     VtArray<T> results(qi->pointsOffset + qi->numAdditionalPoints);
+    auto resultsBegin = results.begin();
 
     // copy original primvars
     T const *source = reinterpret_cast<T const*>(sourceUntyped);
@@ -692,7 +700,7 @@ _Quadrangulate(SdfPath const& id,
                 id.GetText());
         memcpy(results.data(), source, sizeof(T)*numElements);
         for (int i = numElements; i < qi->pointsOffset; ++i) {
-            results[i] = T(0);
+            *(resultsBegin + i) = T(0);
         }
     }
 
@@ -709,14 +717,14 @@ _Quadrangulate(SdfPath const& id,
 
             // midpoint
             T edge = (results[i0] + results[i1]) * 0.5;
-            results[dstIndex++] = edge;
+            *(resultsBegin + dstIndex++) = edge;
 
             // accumulate center
             center += results[i0];
         }
         // average center value
         center /= nv;
-        results[dstIndex++] = center;
+        *(resultsBegin + dstIndex++) = center;
 
         index += nv;
     }
@@ -813,6 +821,7 @@ _QuadrangulateFaceVarying(SdfPath const& id,
     }
 
     VtArray<T> results(numFVarValues);
+    auto resultsBegin = results.begin();
     // reset holeIndex
     holeIndex = 0;
 
@@ -828,20 +837,20 @@ _QuadrangulateFaceVarying(SdfPath const& id,
             // copy
             if (v+nVerts > numElements) {
                 invalidTopology = true;
-                results[dstIndex++] = T(0);
-                results[dstIndex++] = T(0);
-                results[dstIndex++] = T(0);
-                results[dstIndex++] = T(0);
+                *(resultsBegin + dstIndex++) = T(0);
+                *(resultsBegin + dstIndex++) = T(0);
+                *(resultsBegin + dstIndex++) = T(0);
+                *(resultsBegin + dstIndex++) = T(0);
             } else {
-                results[dstIndex++] = source[v];
+                *(resultsBegin + dstIndex++) = source[v];
                 if (flip) {
-                    results[dstIndex++] = source[v+3]; 
-                    results[dstIndex++] = source[v+2]; 
-                    results[dstIndex++] = source[v+1]; 
+                    *(resultsBegin + dstIndex++) = source[v+3];
+                    *(resultsBegin + dstIndex++) = source[v+2];
+                    *(resultsBegin + dstIndex++) = source[v+1];
                 } else {
-                    results[dstIndex++] = source[v+1]; 
-                    results[dstIndex++] = source[v+2]; 
-                    results[dstIndex++] = source[v+3]; 
+                    *(resultsBegin + dstIndex++) = source[v+1];
+                    *(resultsBegin + dstIndex++) = source[v+2];
+                    *(resultsBegin + dstIndex++) = source[v+3];
                 }
             }
         } else {
@@ -852,10 +861,10 @@ _QuadrangulateFaceVarying(SdfPath const& id,
             if (v+nVerts > numElements) {
                 invalidTopology = true;
                 for (int j = 0; j < nVerts; ++j) {
-                    results[dstIndex++] = T(0);
-                    results[dstIndex++] = T(0);
-                    results[dstIndex++] = T(0);
-                    results[dstIndex++] = T(0);
+                    *(resultsBegin + dstIndex++) = T(0);
+                    *(resultsBegin + dstIndex++) = T(0);
+                    *(resultsBegin + dstIndex++) = T(0);
+                    *(resultsBegin + dstIndex++) = T(0);
                 }
                 continue;
             } 
@@ -870,34 +879,34 @@ _QuadrangulateFaceVarying(SdfPath const& id,
             T e0 = (source[v] + source[v+1]) * 0.5;
             T e1 = (source[v] + source[v+(nVerts-1)%nVerts]) * 0.5;
 
-            results[dstIndex++] = source[v];
+            *(resultsBegin + dstIndex++) = source[v];
             if (flip) {
-                results[dstIndex++] = e1; 
-                results[dstIndex++] = center; 
-                results[dstIndex++] = e0; 
+                *(resultsBegin + dstIndex++) = e1;
+                *(resultsBegin + dstIndex++) = center;
+                *(resultsBegin + dstIndex++) = e0;
 
                 for (int j = nVerts - 1; j > 0; --j) {
                     e0 = (source[v+j] + source[v+(j+1)%nVerts]) * 0.5;
                     e1 = (source[v+j] + source[v+(j+nVerts-1)%nVerts]) * 0.5;
 
-                    results[dstIndex++] = source[v+j];
-                    results[dstIndex++] = e1; 
-                    results[dstIndex++] = center; 
-                    results[dstIndex++] = e0; 
+                    *(resultsBegin + dstIndex++) = source[v+j];
+                    *(resultsBegin + dstIndex++) = e1;
+                    *(resultsBegin + dstIndex++) = center;
+                    *(resultsBegin + dstIndex++) = e0;
                 }
             } else {
-                results[dstIndex++] = e0; 
-                results[dstIndex++] = center;
-                results[dstIndex++] = e1; 
+                *(resultsBegin + dstIndex++) = e0;
+                *(resultsBegin + dstIndex++) = center;
+                *(resultsBegin + dstIndex++) = e1;
 
                 for (int j = 1; j < nVerts; ++j) {
                     e0 = (source[v+j] + source[v+(j+1)%nVerts]) * 0.5;
                     e1 = (source[v+j] + source[v+(j+nVerts-1)%nVerts]) * 0.5;
 
-                    results[dstIndex++] = source[v+j];
-                    results[dstIndex++] = e0; 
-                    results[dstIndex++] = center;
-                    results[dstIndex++] = e1; 
+                    *(resultsBegin + dstIndex++) = source[v+j];
+                    *(resultsBegin + dstIndex++) = e0;
+                    *(resultsBegin + dstIndex++) = center;
+                    *(resultsBegin + dstIndex++) = e1; 
                 }
             }
         }

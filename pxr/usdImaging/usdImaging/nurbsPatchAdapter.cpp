@@ -150,24 +150,22 @@ UsdImagingNurbsPatchAdapter::GetMeshTopology(UsdPrim const& prim,
     int nIndices = nFaces * 4;
 
     // Prepare the array of vertices per face required for rendering
-    VtArray<int> vertsPerFace(nFaces);
-    for(int i = 0 ; i < nFaces; i++) {
-        vertsPerFace[i] = 4;
-    }
+    VtArray<int> vertsPerFace(nFaces, 4);
 
     // Prepare the array of indices required for rendering
     // Basically, we create one quad per vertex, except for the ones in the
     // last column and last row.
     int uid = 0;
     VtArray<int> indices(nIndices);
+    auto indicesBegin = indices.begin();
     for(int row = 0 ; row < nVVertexCount - 1 ; row ++) {
         for(int col = 0 ; col < nUVertexCount - 1 ; col ++) {
             int idx = row * nUVertexCount + col;
 
-            indices[uid++] = idx;
-            indices[uid++] = idx + 1;
-            indices[uid++] = idx + nUVertexCount + 1;
-            indices[uid++] = idx + nUVertexCount;
+            *(indicesBegin + uid++) = idx;
+            *(indicesBegin + uid++) = idx + 1;
+            *(indicesBegin + uid++) = idx + nUVertexCount + 1;
+            *(indicesBegin + uid++) = idx + nUVertexCount;
         }
     } 
 

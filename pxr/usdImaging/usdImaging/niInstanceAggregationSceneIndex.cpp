@@ -174,11 +174,10 @@ public:
     {
         VtArray<T> result(_instances->size());
 
-        int i = 0;
+        auto iter = result.begin();
         for (const SdfPath &instance : *_instances) {
-            result[i] = _GetTypedPrimvarValue<T>(
+            *iter++ = _GetTypedPrimvarValue<T>(
                 _inputSceneIndex, instance, _primvarName);
-            i++;
         }
         return result;
     }
@@ -509,8 +508,9 @@ VtArray<int>
 _Range(const int n)
 {
     VtArray<int> result(n);
+    auto iter = result.begin();
     for (int i = 0; i < n; i++) {
-        result[i] = i;
+        *iter++ = i;
     }
     return result;
 }
@@ -596,10 +596,9 @@ _ComputeMask(HdSceneIndexBaseRefPtr const &sceneIndex,
 {
     VtBoolArray result(instances->size());
 
-    int i = 0;
+    auto iter = result.begin();
     for (const SdfPath &instance : *instances) {
-        result[i] = _GetVisibility(sceneIndex, instance);
-        i++;
+        *iter++ = _GetVisibility(sceneIndex, instance);
     }
     return result;
 }

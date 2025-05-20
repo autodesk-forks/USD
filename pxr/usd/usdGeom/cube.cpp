@@ -173,8 +173,9 @@ UsdGeomCube::ComputeExtent(double size, VtVec3fArray* extent)
     // Create Sized Extent
     extent->resize(2);
 
-    (*extent)[0] = GfVec3f(size * -0.5);
-    (*extent)[1] = GfVec3f(size * 0.5);
+    auto iter = extent->begin();
+    *iter = GfVec3f(size * -0.5);
+    *(iter + 1) = GfVec3f(size * 0.5);
 
     return true;
 }
@@ -189,8 +190,10 @@ UsdGeomCube::ComputeExtent(double size, const GfMatrix4d& transform,
     GfBBox3d bbox = GfBBox3d(
         GfRange3d(GfVec3d(size * -0.5), GfVec3d(size * 0.5)), transform);
     GfRange3d range = bbox.ComputeAlignedRange();
-    (*extent)[0] = GfVec3f(range.GetMin());
-    (*extent)[1] = GfVec3f(range.GetMax());
+    
+    auto iter = extent->begin();
+    *iter = GfVec3f(range.GetMin());
+    *(iter + 1) = GfVec3f(range.GetMax());
 
     return true;
 }

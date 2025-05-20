@@ -172,9 +172,10 @@ UsdGeomSphere::ComputeExtent(double radius, VtVec3fArray* extent)
 {
     // Create Sized Extent
     extent->resize(2);
-
-    (*extent)[0] = GfVec3f(-radius);
-    (*extent)[1] = GfVec3f(radius);
+    
+    auto iter = extent->begin();
+    *iter = GfVec3f(-radius);
+    *(iter + 1) = GfVec3f(radius);
 
     return true;
 }
@@ -189,8 +190,10 @@ UsdGeomSphere::ComputeExtent(double radius, const GfMatrix4d& transform,
     GfBBox3d bbox = GfBBox3d(
         GfRange3d(GfVec3d(-radius), GfVec3d(radius)), transform);
     GfRange3d range = bbox.ComputeAlignedRange();
-    (*extent)[0] = GfVec3f(range.GetMin());
-    (*extent)[1] = GfVec3f(range.GetMax());
+    
+    auto iter = extent->begin();
+    *iter = GfVec3f(range.GetMin());
+    *(iter + 1) = GfVec3f(range.GetMax());
 
     return true;
 }

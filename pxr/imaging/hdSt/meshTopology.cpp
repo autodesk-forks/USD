@@ -156,7 +156,8 @@ HdSt_MeshTopology::GetPointsIndexBuilderComputation()
     // this is simple enough to return the result right away.
     int numPoints = GetNumPoints();
     VtIntArray indices(numPoints);
-    for (int i = 0; i < numPoints; ++i) indices[i] = i;
+    auto iter = indices.begin();
+    for (int i = 0; i < numPoints; ++i) *iter++ = i;
 
     return std::make_shared<HdVtBufferSource>(
         HdTokens->indices, VtValue(indices));
@@ -619,9 +620,10 @@ HdSt_IndexSubsetComputation::_ResolveIndices(VtIntArray const &faceIndices)
         case HdTypeInt32Vec3: 
         {
             VtVec3iArray typedSubsetIndices(numFaces);
+            auto iter = typedSubsetIndices.begin();
             for (size_t i = 0; i < numFaces; ++i) {
                 size_t index = 3 * faceIndices[i];
-                typedSubsetIndices[i] = GfVec3i(
+                *iter++ = GfVec3i(
                     indices[index], indices[index+1], indices[index+2]);
             }
             subsetIndices = VtValue(typedSubsetIndices);
@@ -630,10 +632,11 @@ HdSt_IndexSubsetComputation::_ResolveIndices(VtIntArray const &faceIndices)
         case HdTypeInt32Vec4:
         {
             VtVec4iArray typedSubsetIndices(numFaces);
+            auto iter = typedSubsetIndices.begin();
             for (size_t i = 0; i < numFaces; ++i) {
                 size_t index = 4 * faceIndices[i];
-                typedSubsetIndices[i] = GfVec4i(
-                    indices[index], indices[index+1], indices[index+2], 
+                *iter++ = GfVec4i(
+                    indices[index], indices[index+1], indices[index+2],
                         indices[index+3]);
             }
             subsetIndices = VtValue(typedSubsetIndices);
@@ -670,9 +673,10 @@ HdSt_IndexSubsetComputation::_PopulateChainedBuffers(
                 case HdTypeInt32: 
                 {
                     VtIntArray typedSubsetChainedBuffer(numFaces);
+                    auto iter = typedSubsetChainedBuffer.begin();
                     for (size_t i = 0; i < numFaces; ++i) {
                         size_t index = faceIndices[i];
-                        typedSubsetChainedBuffer[i] = chainedBufferData[index];
+                        *iter++ = chainedBufferData[index];
                     }
                     subsetChainedBuffer = VtValue(typedSubsetChainedBuffer);
                     break;
@@ -680,10 +684,11 @@ HdSt_IndexSubsetComputation::_PopulateChainedBuffers(
                 case HdTypeInt32Vec2:
                 {
                     VtVec2iArray typedSubsetChainedBuffer(numFaces);
+                    auto iter = typedSubsetChainedBuffer.begin();
                     for (size_t i = 0; i < numFaces; ++i) {
                         size_t index = 2 * faceIndices[i];
-                        typedSubsetChainedBuffer[i] = GfVec2i(
-                            chainedBufferData[index], 
+                        *iter++ = GfVec2i(
+                            chainedBufferData[index],
                             chainedBufferData[index + 1]);
                     }
                     subsetChainedBuffer = VtValue(typedSubsetChainedBuffer);
@@ -692,10 +697,11 @@ HdSt_IndexSubsetComputation::_PopulateChainedBuffers(
                 case HdTypeInt32Vec3:
                 {
                     VtVec3iArray typedSubsetChainedBuffer(numFaces);
+                    auto iter = typedSubsetChainedBuffer.begin();
                     for (size_t i = 0; i < numFaces; ++i) {
                         size_t index = 3 * faceIndices[i];
-                        typedSubsetChainedBuffer[i] = GfVec3i(
-                            chainedBufferData[index], 
+                        *iter++ = GfVec3i(
+                            chainedBufferData[index],
                             chainedBufferData[index + 1], 
                             chainedBufferData[index + 2]);
                     }
@@ -705,9 +711,10 @@ HdSt_IndexSubsetComputation::_PopulateChainedBuffers(
                 case HdTypeInt32Vec4:
                 {
                     VtVec4iArray typedSubsetChainedBuffer(numFaces);
+                    auto iter = typedSubsetChainedBuffer.begin();
                     for (size_t i = 0; i < numFaces; ++i) {
                         size_t index = 4 * faceIndices[i];
-                        typedSubsetChainedBuffer[i] = GfVec4i(
+                        *iter++ = GfVec4i(
                             chainedBufferData[index], 
                             chainedBufferData[index + 1], 
                             chainedBufferData[index + 2], 
@@ -825,6 +832,7 @@ HdSt_GeomSubsetFaceIndexHelperComputation::Resolve()
 
     const VtIntArray &faceVertexCounts = _topology->GetFaceVertexCounts();
     VtIntArray processedFaceCounts = VtIntArray(_topology->GetNumFaces());
+    auto processedFaceCountsBegin = processedFaceCounts.begin();
 
     // Based on whether the mesh underwent a triangulation or quadrangulation
     // step, determine how many faces each base face becomes.
@@ -833,13 +841,13 @@ HdSt_GeomSubsetFaceIndexHelperComputation::Resolve()
         size_t holeIndex = 0;
         for (int i = 0; i < _topology->GetNumFaces(); ++i) {
             if (holeIndex < holeIndices.size() && holeIndices[holeIndex] == i) {
-                processedFaceCounts[i] = 0;
+                *(processedFaceCountsBegin + i) = 0;
                 holeIndex++;
             } else if (faceVertexCounts[i] == 4) {
                 // Quad faces do not get quadrangulated
-                processedFaceCounts[i] = 1;
+                *(processedFaceCountsBegin + i) = 1;
             } else {
-                processedFaceCounts[i] = faceVertexCounts[i];
+                *(processedFaceCountsBegin + i) = faceVertexCounts[i];
             }
         }
     } else {
@@ -847,10 +855,10 @@ HdSt_GeomSubsetFaceIndexHelperComputation::Resolve()
         size_t holeIndex = 0;
         for (int i = 0; i < _topology->GetNumFaces(); ++i) {
             if (holeIndex < holeIndices.size() && holeIndices[holeIndex] == i) {
-                processedFaceCounts[i] = 0;
+                *(processedFaceCountsBegin + i) = 0;
                 holeIndex++;
             } else {
-                processedFaceCounts[i] = faceVertexCounts[i] - 2;
+                *(processedFaceCountsBegin + i) = faceVertexCounts[i] - 2;
             }
         }
     }
@@ -863,9 +871,10 @@ HdSt_GeomSubsetFaceIndexHelperComputation::Resolve()
     // Each base face can potentially map to multiple processed faces, but this
     // value gives us the new starting index for those processed faces.
     VtIntArray processedFaceIndices = VtIntArray(_topology->GetNumFaces());
+    auto processedFaceIndicesIter = processedFaceIndices.begin();
     int processedFaceIndex = 0;
     for (int i = 0; i < _topology->GetNumFaces(); ++i) {
-        processedFaceIndices[i] = processedFaceIndex;
+        *processedFaceIndicesIter++ = processedFaceIndex;
 
         // If current face is hole 
         if (_refined && processedFaceCounts[i] == 0) {

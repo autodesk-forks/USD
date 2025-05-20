@@ -466,12 +466,11 @@ public:
 
         /// Compute 8 points on box.
         VtVec3fArray pts(8);
-        size_t i = 0;
+        auto iter = pts.begin();
         for (size_t j0 = 0; j0 < 2; j0++) {
             for (size_t j1 = 0; j1 < 2; j1++) {
                 for (size_t j2 = 0; j2 < 2; j2++) {
-                    pts[i] = { exts[j0][0], exts[j1][1], exts[j2][2] };
-                    ++i;
+                    *iter++ = { exts[j0][0], exts[j1][1], exts[j2][2] };
                 }
             }
         }
@@ -1293,8 +1292,9 @@ VtIntArray
 _Range(const size_t n)
 {
     VtIntArray result(n);
+    auto iter = result.begin();
     for (size_t i = 0; i < n; i++) {
-        result[i] = i;
+        *iter++ = i;
     }
     return result;
 }
@@ -1874,8 +1874,9 @@ public:
             max = GfVec3f(src->GetTypedValue(shutterOffset));
         }
 
+        auto iter = pts.begin();
         for (size_t i = 0; i < pts.size(); i++) {
-            GfVec3f &pt = pts[i];
+            GfVec3f &pt = *iter++;
             pt = { min[0] * (1.0f - pt[0]) + max[0] * pt[0],
                    min[1] * (1.0f - pt[1]) + max[1] * pt[1],
                    min[2] * (1.0f - pt[2]) + max[2] * pt[2] };

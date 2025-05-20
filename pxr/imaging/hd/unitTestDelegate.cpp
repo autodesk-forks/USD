@@ -555,8 +555,9 @@ HdUnitTestDelegate::SetVisibility(SdfPath const &id, bool vis)
 static VtVec3fArray _AnimatePositions(VtVec3fArray const &positions, float time)
 {
     VtVec3fArray result = positions;
+    auto iter = result.begin();
     for (size_t i = 0; i < result.size(); ++i) {
-        result[i] += GfVec3f((float)(0.5*sin(0.5*i + time)), 0, 0);
+        *iter++ += GfVec3f((float)(0.5*sin(0.5*i + time)), 0, 0);
     }
     return result;
 }
@@ -607,13 +608,14 @@ HdUnitTestDelegate::UpdateInstancerPrimvars(float time)
 {
     // update instancers
     TF_FOR_ALL (it, _instancers) {
+        auto iter = it->second.rotate.begin();
         for (size_t i = 0; i < it->second.rotate.size(); ++i) {
             GfQuaternion q = GfRotation(GfVec3d(1, 0, 0), i*time).GetQuaternion();
             GfVec4f quat(q.GetReal(),
                          q.GetImaginary()[0],
                          q.GetImaginary()[1],
                          q.GetImaginary()[2]);
-            it->second.rotate[i] = quat;
+            *(iter + i) = quat;
         }
 
         GetRenderIndex().GetChangeTracker().MarkInstancerDirty(
@@ -629,11 +631,11 @@ HdUnitTestDelegate::UpdateInstancerPrototypes(float time)
         // rotate prototype indices
         int numInstances = it->second.prototypeIndices.size();
         if (numInstances > 0) {
-            int firstPrototype = it->second.prototypeIndices[0];
+            auto firstPrototype = it->second.prototypeIndices.begin();
             for (int i = 1; i < numInstances; ++i) {
-                it->second.prototypeIndices[i-1] = it->second.prototypeIndices[i];
+                *(firstPrototype + i-1) = *(firstPrototype + i);
             }
-            it->second.prototypeIndices[numInstances-1] = firstPrototype;
+            *(firstPrototype + numInstances-1) = *firstPrototype;
         }
 
         // invalidate instance index
@@ -972,11 +974,12 @@ VtValue
 _ComputeFlattened(VtValue const &value, VtIntArray const &indices) {
     VtArray<T> array = value.Get<VtArray<T>>();
     VtArray<T> result = VtArray<T>(indices.size());
+    auto resultBegin = result.begin();
 
     for (size_t i = 0; i < indices.size(); ++i) {
         int index = indices[i];
         if (index >= 0 && (size_t)index < array.size()) {
-            result[i] = array[index];
+            *(resultBegin + i) = array[index];
         } else {
             TF_CODING_ERROR("Invalid indices");
         }
@@ -1273,16 +1276,18 @@ HdUnitTestDelegate::AddPolygons(
         color = VtValue(_BuildArray(&colors[0], sizeof(colors)/sizeof(colors[0])));
     } else if (colorInterp == HdInterpolationVertex) {
         VtVec3fArray colorArray(sizeof(points)/sizeof(points[0]));
+        auto colorIter = colorArray.begin();
         for (size_t i = 0; i < colorArray.size(); ++i) {
-            colorArray[i] = GfVec3f(fabs(sin(0.5*i)),
+            *colorIter++ = GfVec3f(fabs(sin(0.5*i)),
                                     fabs(cos(0.7*i)),
                                     fabs(sin(0.9*i)*cos(0.25*i)));
         }
         color = VtValue(colorArray);
     } else if (colorInterp == HdInterpolationFaceVarying) {
         VtVec3fArray colorArray(sizeof(verts)/sizeof(verts[0]));
+        auto colorIter = colorArray.begin();
         for (size_t i = 0; i < colorArray.size(); ++i) {
-            colorArray[i] = GfVec3f(fabs(sin(0.5*i)),
+            *colorIter++ = GfVec3f(fabs(sin(0.5*i)),
                                     fabs(cos(0.7*i)),
                                     fabs(sin(0.9*i)*cos(0.25*i)));
         }
@@ -1466,8 +1471,9 @@ HdUnitTestDelegate::AddGridWithFaceColor(SdfPath const &id, int nx, int ny,
     _CreateGrid(nx, ny, &points, &numVerts, &verts, transform);
 
     VtVec3fArray colorArray(numVerts.size());
+    auto colorIter = colorArray.begin();
     for (size_t i = 0; i < numVerts.size(); ++i) {
-        colorArray[i] = GfVec3f(fabs(sin(0.1*i)),
+        *colorIter++ = GfVec3f(fabs(sin(0.1*i)),
                                 fabs(cos(0.3*i)),
                                 fabs(sin(0.7*i)*cos(0.25*i)));
     }
@@ -1504,8 +1510,9 @@ HdUnitTestDelegate::AddGridWithVertexColor(SdfPath const &id, int nx, int ny,
     _CreateGrid(nx, ny, &points, &numVerts, &verts, transform);
 
     VtVec3fArray colorArray(points.size());
+    auto colorIter = colorArray.begin();
     for (size_t i = 0; i < points.size(); ++i) {
-        colorArray[i] = GfVec3f(fabs(sin(0.1*i)),
+        *colorIter++ = GfVec3f(fabs(sin(0.1*i)),
                                 fabs(cos(0.3*i)),
                                 fabs(sin(0.7*i)*cos(0.25*i)));
     }
@@ -1542,8 +1549,9 @@ HdUnitTestDelegate::AddGridWithFaceVaryingColor(SdfPath const &id, int nx, int n
     _CreateGrid(nx, ny, &points, &numVerts, &verts, transform);
 
     VtVec3fArray colorArray(verts.size());
+    auto colorIter = colorArray.begin();
     for (size_t i = 0; i < verts.size(); ++i) {
-        colorArray[i] = GfVec3f(fabs(sin(0.1*i)),
+        *colorIter++ = GfVec3f(fabs(sin(0.1*i)),
                                 fabs(cos(0.3*i)),
                                 fabs(sin(0.7*i)*cos(0.25*i)));
     }
@@ -1686,11 +1694,12 @@ HdUnitTestDelegate::AddPoints(
     int numPoints = 500;
 
     VtVec3fArray points(numPoints);
+    auto pointIter = points.begin();
     float s = 0, t = 0;
     for (int i = 0; i < numPoints; ++i) {
         GfVec4f p (sin(s)*cos(t), sin(s)*sin(t), cos(s), 1);
         p = p * transform;
-        points[i] = GfVec3f(p[0], p[1], p[2]);;
+        *pointIter++ = GfVec3f(p[0], p[1], p[2]);;
         s += 0.10;
         t += 0.34;
     }
@@ -1701,8 +1710,9 @@ HdUnitTestDelegate::AddPoints(
         color = VtValue(GfVec3f(1, 1, 1));
     } else if (colorInterp == HdInterpolationVertex) {
         VtVec3fArray colors(numPoints);
+        auto colorIter = colors.begin();
         for (int i = 0; i < numPoints; ++i) {
-            colors[i] = GfVec3f(fabs(sin(0.1*i)),
+            *colorIter++ = GfVec3f(fabs(sin(0.1*i)),
                                 fabs(cos(0.3*i)),
                                 fabs(sin(0.7*i)*cos(0.25*i)));
         }
@@ -1715,8 +1725,9 @@ HdUnitTestDelegate::AddPoints(
         width = VtValue(0.1f);
     } else { // VERTEX
         VtFloatArray widths(numPoints);
+        auto iter = widths.begin();
         for (int i = 0; i < numPoints; ++i) {
-            widths[i] = 0.1*fabs(sin(0.1*i));
+            *iter++ = 0.1*fabs(sin(0.1*i));
         }
         width = VtValue(widths);
     }

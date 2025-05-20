@@ -1035,11 +1035,12 @@ UsdGeomPointInstancer::_DoComputeInstanceTransformsAtTime(
 
             const int protoIndex = protoIndices[instanceId];
 
+            auto xformsBegin = xforms->begin();
             if (protoPaths.size() != 0) {
-                (*xforms)[instanceId] =
+                *(xformsBegin + instanceId) =
                     protoXforms[protoIndex] * instanceTransform;
             } else {
-                (*xforms)[instanceId] = instanceTransform;
+                *(xformsBegin + instanceId) = instanceTransform;
             }
         }
     };
@@ -1255,8 +1256,9 @@ UsdGeomPointInstancer::_ComputeExtentFromTransforms(
     const GfVec3d &extentMax = extentRange.GetMax();
 
     *extent = VtVec3fArray(2);
-    (*extent)[0] = GfVec3f(extentMin[0], extentMin[1], extentMin[2]);
-    (*extent)[1] = GfVec3f(extentMax[0], extentMax[1], extentMax[2]);
+    auto extentBegin = extent->begin();
+    *extentBegin = GfVec3f(extentMin[0], extentMin[1], extentMin[2]);
+    *(extentBegin + 1) = GfVec3f(extentMax[0], extentMax[1], extentMax[2]);
 
     return true;
 }

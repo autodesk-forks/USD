@@ -60,8 +60,9 @@ UsdObjTranslateObjToUsd(const UsdObjStream &objStream)
         extent.UnionWith(pt);
     }
     VtVec3fArray extentArray(2);
-    extentArray[0] = extent.GetMin();
-    extentArray[1] = extent.GetMax();
+    auto iter = extentArray.begin();
+    *iter++ = extent.GetMin();
+    *iter = extent.GetMax();
 
     // Make a poly mesh for each group in the obj.
     for (const auto& group : objStream.GetGroups()) {

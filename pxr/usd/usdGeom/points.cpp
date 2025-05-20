@@ -243,9 +243,10 @@ _ComputeExtent(const VtVec3fArray& points, const VtFloatArray& widths,
 
         widthsItr++;
     }
-
-    (*extent)[0] = GfVec3f(bbox.GetMin());
-    (*extent)[1] = GfVec3f(bbox.GetMax());
+    
+    auto iter = extent->begin();
+    *iter = GfVec3f(bbox.GetMin());
+    *(iter + 1) = GfVec3f(bbox.GetMax());
 
     return true;
 }

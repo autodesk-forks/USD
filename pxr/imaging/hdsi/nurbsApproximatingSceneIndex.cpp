@@ -281,14 +281,15 @@ public:
             return result;
         }
 
+        auto resultBegin = result.begin();
         for (int row = 0; row < vVertexCount - 1; ++row) {
             for (int col = 0; col < uVertexCount - 1; ++col) {
                 const size_t faceIdx = row * (uVertexCount - 1) + col;
                 const int vertexIdx = row * uVertexCount + col;
-                result[4 * faceIdx   ] = vertexIdx;
-                result[4 * faceIdx + 1] = vertexIdx + 1;
-                result[4 * faceIdx + 2] = vertexIdx + uVertexCount + 1;
-                result[4 * faceIdx + 3] = vertexIdx + uVertexCount;
+                *(resultBegin + 4 * faceIdx    ) = vertexIdx;
+                *(resultBegin + 4 * faceIdx + 1) = vertexIdx + 1;
+                *(resultBegin + 4 * faceIdx + 2) = vertexIdx + uVertexCount + 1;
+                *(resultBegin + 4 * faceIdx + 3) = vertexIdx + uVertexCount;
             }
         }
 

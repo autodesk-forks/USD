@@ -859,9 +859,10 @@ UsdGeomPrimvar::_ComputeFlattenedHelper(const VtArray<ScalarType> &authored,
 
         const size_t indicesIdx = indices[i] * elementSize;
         const size_t valuesIdx = i * elementSize;
+        auto valueBegin = value->begin();
         for (size_t j=0; j < static_cast<size_t>(elementSize); j++) {
             size_t index = indicesIdx + j;
-            (*value)[valuesIdx + j] = authored[index];
+            *(valueBegin + valuesIdx + j) = authored[index];
         }
     }
 

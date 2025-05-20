@@ -251,6 +251,7 @@ HdSt_QuadrangulateTableComputation::Resolve()
 
         // create a buffer source for gpu quadinfo table
         VtIntArray array(quadInfoStride * numNonQuads);
+        auto arrayBegin = array.begin();
 
         int index = 0, vertIndex = 0, dstOffset = quadInfo->pointsOffset;
         for (int i = 0; i < numNonQuads; ++i) {
@@ -263,10 +264,10 @@ HdSt_QuadrangulateTableComputation::Resolve()
             // } [numNonQuads]
             //
             int numVert = quadInfo->numVerts[i];
-            array[index]   = numVert;
-            array[index+1] = dstOffset;
+            *(arrayBegin + index    ) = numVert;
+            *(arrayBegin + index + 1) = dstOffset;
             for (int j = 0; j < numVert; ++j) {
-                array[index+j+2] = quadInfo->verts[vertIndex++];
+                *(arrayBegin + index + j + 2) = quadInfo->verts[vertIndex++];
             }
             index += quadInfoStride;
             dstOffset += numVert + 1;  // edge + center

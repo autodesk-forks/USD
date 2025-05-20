@@ -846,8 +846,10 @@ UsdSkelComputeJointsExtent(const VtMatrix4dArray& joints,
             joints, &range, pad, rootXform)) {
 
         extent->resize(2);
-        (*extent)[0] = range.GetMin();
-        (*extent)[1] = range.GetMax();
+
+        auto extentBegin = extent->begin();
+        *extentBegin = range.GetMin();
+        *(extentBegin + 1) = range.GetMax();
         return true;
     }
     return false;
@@ -867,8 +869,9 @@ UsdSkelComputeJointsExtent(const GfMatrix4d* xforms,
             TfSpan<const GfMatrix4d>(xforms, count),
             &range, pad, rootXform)) {
         extent->resize(2);
-        (*extent)[0] = range.GetMin();
-        (*extent)[1] = range.GetMax();
+        auto extentBegin = extent->begin();
+        *extentBegin = range.GetMin();
+        *(extentBegin + 1) = range.GetMax();
         return true;
     }
     return false;

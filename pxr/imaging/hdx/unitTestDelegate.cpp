@@ -1081,4 +1081,3 @@ Hdx_UnitTestDelegate::WriteRenderBufferToFile(SdfPath const &id,
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

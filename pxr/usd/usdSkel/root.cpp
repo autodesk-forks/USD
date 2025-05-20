@@ -240,8 +240,9 @@ _ComputeExtent(const UsdGeomBoundable& boundable,
     }
 
     extent->resize(2);
-    (*extent)[0] = GfVec3f(bbox.GetMin());
-    (*extent)[1] = GfVec3f(bbox.GetMax());
+    auto extentBegin = extent->begin();
+    *extentBegin = GfVec3f(bbox.GetMin());
+    *(extentBegin + 1) = GfVec3f(bbox.GetMax());
 
     return true;
 }        
