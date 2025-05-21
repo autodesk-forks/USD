@@ -557,7 +557,8 @@ static VtVec3fArray _AnimatePositions(VtVec3fArray const &positions, float time)
     VtVec3fArray result = positions;
     auto iter = result.begin();
     for (size_t i = 0; i < result.size(); ++i) {
-        *iter++ += GfVec3f((float)(0.5*sin(0.5*i + time)), 0, 0);
+        *iter += GfVec3f((float)(0.5*sin(0.5*i + time)), 0, 0);
+        ++iter;
     }
     return result;
 }
