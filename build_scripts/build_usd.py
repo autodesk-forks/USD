@@ -31,6 +31,7 @@ import sys
 import sysconfig
 import zipfile
 import google_depot_tools
+import pprint
 
 from urllib.request import urlopen
 from shutil import which
@@ -1595,13 +1596,16 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 # MaterialX
 
 MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.10.zip"
+#MATERIALX_URL = "https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl.zip"
 
 def InstallMaterialX(context, force, buildArgs):
+    print("BEG:InstallMaterialX() =====")
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
                         '-DMATERIALX_BUILD_TESTS=OFF',
         ]
         if context.targetWasm:
+            print("Tcontext.targetWasm ======")
             cmakeOptions.extend([
                     '-DAPPLE=ON',
                     '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
@@ -1613,6 +1617,7 @@ def InstallMaterialX(context, force, buildArgs):
                     '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                     '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                     '-DBUILD_SHARED_LIBS=OFF',
+                    f'-DMaterialX_DIR="{context.instDir}/lib/cmake/MaterialX"',
                 ])
 
         if MacOSTargetEmbedded(context):
@@ -1637,6 +1642,7 @@ def InstallMaterialX(context, force, buildArgs):
         cmakeOptions += buildArgs
         print(f'CMAKE FOR MATERIALX: {context=}, {force=}, {cmakeOptions=}')
         RunCMake(context, force, cmakeOptions)
+        print("END:InstallMaterialX() =====")
 
 MATERIALX = Dependency("MaterialX", InstallMaterialX, "include/MaterialXCore/Library.h")
 
@@ -2097,8 +2103,8 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildMaterialX:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=ON')
-            # HACK SBREW ======
-            extraArgs.append('-DMaterialX_DIR="/Users/sbrew/Github/USD-webgpu/build_debug/lib/cmake/MaterialX"')
+            # HACK SBREW  ===== (For Local Build Only -- Do Not Check In)
+            extraArgs.append(f'-DMaterialX_DIR="{context.instDir}/lib/cmake/MaterialX"')
             # HACK SBREW  =====
         else:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=OFF')
@@ -2163,6 +2169,7 @@ def InstallUSD(context, force, buildArgs):
             #extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')  # HACK [sbrew]
             #extraArgs.append('-DPXR_BUILD_GPU_SUPPORT=ON')  # HACK [sbrew]
 
+        print(f"=== CMAKE EXTRAARGS= {pprint.pformat(extraArgs)}")
         RunCMake(context, force, extraArgs)
 
 USD = Dependency("USD", InstallUSD, "include/pxr/pxr.h")
