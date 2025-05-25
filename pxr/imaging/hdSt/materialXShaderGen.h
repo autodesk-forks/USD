@@ -101,22 +101,18 @@ protected:
 };
 
 
-/// \class HdStMaterialXShaderGenGlsl
+/// \class HdStMaterialXShaderGenBaseGlsl
 ///
-/// Generates a glslfx shader with a surfaceShader function for a MaterialX 
+/// Base class for generating a glslfx shader with a surfaceShader function for a MaterialX 
 /// network, targeting OpenGL GLSL.
 
-class HdStMaterialXShaderGenGlsl
-    : public HdStMaterialXShaderGen<MaterialX::GlslShaderGenerator>
+template<typename Base>
+class HdStMaterialXShaderGenBaseGlsl
+    : public HdStMaterialXShaderGen<Base>
 {
 public:
-    HdStMaterialXShaderGenGlsl(HdSt_MxShaderGenInfo const& mxHdInfo);
-    
-    static MaterialX::ShaderGeneratorPtr create(
-            HdSt_MxShaderGenInfo const& mxHdInfo) {
-        return std::make_shared<HdStMaterialXShaderGenGlsl>(mxHdInfo);
-    }
-    
+    HdStMaterialXShaderGenBaseGlsl(HdSt_MxShaderGenInfo const& mxHdInfo);
+        
     MaterialX::ShaderPtr generate(const std::string& shaderName,
                            MaterialX::ElementPtr mxElement,
                            MaterialX::GenContext& mxContext) const override;
@@ -131,13 +127,30 @@ private:
                           MaterialX::ShaderStage& mxStage) const;
 };
 
+/// \class HdStMaterialXShaderGenGlsl
+///
+/// Generates a glslfx shader with a surfaceShader function for a MaterialX 
+/// network, targeting OpenGL GLSL.
+
+class HdStMaterialXShaderGenGlsl 
+    : public HdStMaterialXShaderGenBaseGlsl<MaterialX::GlslShaderGenerator>
+{
+public:
+    HdStMaterialXShaderGenGlsl(HdSt_MxShaderGenInfo const& mxHdInfo); 
+
+    static MaterialX::ShaderGeneratorPtr create(
+            HdSt_MxShaderGenInfo const& mxHdInfo) {
+        return std::make_shared<HdStMaterialXShaderGenGlsl>(mxHdInfo);
+    }
+};
+
 /// \class HdStMaterialXShaderGenVkGlsl
 ///
 /// Generates a glslfx shader with a surfaceShader function for a MaterialX 
 /// network, targeting Vulkan GLSL.
 
 class HdStMaterialXShaderGenVkGlsl
-    : public HdStMaterialXShaderGen<MaterialX::VkShaderGenerator>
+    : public HdStMaterialXShaderGenBaseGlsl<MaterialX::VkShaderGenerator>
 {
 public:
     HdStMaterialXShaderGenVkGlsl(HdSt_MxShaderGenInfo const& mxHdInfo);
@@ -146,19 +159,6 @@ public:
             HdSt_MxShaderGenInfo const& mxHdInfo) {
         return std::make_shared<HdStMaterialXShaderGenVkGlsl>(mxHdInfo);
     }
-    
-    MaterialX::ShaderPtr generate(const std::string& shaderName,
-                           MaterialX::ElementPtr mxElement,
-                           MaterialX::GenContext& mxContext) const override;
-
-private:
-    void _EmitGlslfxShader(const MaterialX::ShaderGraph& mxGraph,
-                           MaterialX::GenContext& mxContext,
-                           MaterialX::ShaderStage& mxStage) const;
-
-    void _EmitMxFunctions(const MaterialX::ShaderGraph& mxGraph,
-                          MaterialX::GenContext& mxContext,
-                          MaterialX::ShaderStage& mxStage) const;
 };
 
 #ifdef PXR_METAL_SUPPORT_ENABLED

@@ -131,6 +131,26 @@ _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
     return false;
 }
 
+template<typename Base>
+HdStMaterialXShaderGen<Base>::HdStMaterialXShaderGen(
+    HdSt_MxShaderGenInfo const& mxHdInfo)
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+    : Base(),
+#else
+    : Base( mx::TypeSystem::create() ),
+#endif
+      _mxHdTextureMap(mxHdInfo.textureMap),
+      _mxHdPrimvarMap(mxHdInfo.primvarMap),
+      _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
+      _materialTag(mxHdInfo.materialTag),
+      _bindlessTexturesEnabled(mxHdInfo.bindlessTexturesEnabled),
+      _emittingSurfaceNode(false)
+{
+    _defaultTexcoordName =
+        (mxHdInfo.defaultTexcoordName == mx::EMPTY_STRING)
+            ? "st" : mxHdInfo.defaultTexcoordName;
+
+}
 
 template<typename Base>
 void
@@ -710,7 +730,7 @@ HdStMaterialXShaderGen<Base>::emitLine(
     // Note: Metal uses float3, Glsl uses vec3, in the line we're looking for.
     if (_emittingSurfaceNode && (str == "vec3 L = lightShader.direction" ||
                                  str == "float3 L = lightShader.direction" )) {
-        emitLine(
+        Base::emitLine(
             "occlusion = u_lightData[activeLightIndex].shadowOcclusion", stage);
     }
 }
@@ -880,6 +900,116 @@ HdStMaterialXShaderGen<Base>::_EmitDataStructsAndFunctionDefinitions(
 }
 
 // ----------------------------------------------------------------------------
+//                          HdSt MaterialX ShaderGen OpenGL GLSL Base Class
+// ----------------------------------------------------------------------------
+
+template<typename Base>
+HdStMaterialXShaderGenBaseGlsl<Base>::HdStMaterialXShaderGenBaseGlsl(
+    HdSt_MxShaderGenInfo const& mxHdInfo)
+    : HdStMaterialXShaderGen<Base>(mxHdInfo)
+{
+}
+
+// Based on GlslShaderGenerator::generate()
+// Generates a glslfx shader and stores that in the pixel shader stage where it
+// can be retrieved with getSourceCode()
+template<typename Base>
+mx::ShaderPtr
+HdStMaterialXShaderGenBaseGlsl<Base>::generate(
+    const std::string& shaderName,
+    mx::ElementPtr mxElement,
+    mx::GenContext & mxContext) const
+{
+    mx::ShaderPtr shader = this->createShader(shaderName, mxElement, mxContext);
+
+    // Turn on fixed float formatting to make sure float values are
+    // emitted with a decimal point and not as integers, and to avoid
+    // any scientific notation which isn't supported by all OpenGL targets.
+    mx::ScopedFloatFormatting fmt(mx::Value::FloatFormatFixed);
+
+    // Create the glslfx (Pixel) Shader
+    mx::ShaderStage& shaderStage = shader->getStage(mx::Stage::PIXEL);
+    _EmitGlslfxShader(shader->getGraph(), mxContext, shaderStage);
+    this->replaceTokens(this->_tokenSubstitutions, shaderStage);
+    return shader;
+}
+
+template<typename Base>
+void
+HdStMaterialXShaderGenBaseGlsl<Base>::_EmitGlslfxShader(
+    const mx::ShaderGraph& mxGraph,
+    mx::GenContext& mxContext,
+    mx::ShaderStage& mxStage) const
+{
+    // Add a per-light shadowOcclusion value to the lightData uniform block
+    addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
+        "shadowOcclusion", mxStage);
+
+    this->_EmitGlslfxHeader(mxStage);
+    this->_EmitMxFunctions(mxGraph, mxContext, mxStage);
+    this->_EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
+}
+
+// Similar to GlslShaderGenerator::emitPixelStage() with alterations and
+// additions to match Pxr's codeGen
+template<typename Base>
+void
+HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions(
+    const mx::ShaderGraph& mxGraph,
+    mx::GenContext& mxContext,
+    mx::ShaderStage& mxStage) const
+{
+    this->emitLibraryInclude(
+        "stdlib/" + this->getTarget()
+        + "/lib/mx_math.glsl", mxContext, mxStage);
+
+    // Add type definitions
+    this->emitTypeDefinitions(mxContext, mxStage);
+
+    this->_EmitConstantsUniformsAndTypeDefs(
+        mxContext, mxStage, this->_syntax->getConstantQualifier());
+
+    // If bindlessTextures are not enabled, the above for loop skips
+    // initializing textures. Initialize them here by defining mappings
+    // to the appropriate HdGetSampler function.
+    std::cout << "_bindlessTexturesEnabled = " << this->_bindlessTexturesEnabled << std::endl;
+    if (!this->_bindlessTexturesEnabled) {
+        // Define mappings for the DomeLight Textures
+        this->emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
+        this->emitLine("#define u_envRadiance "
+                 "HdGetSampler_domeLightPrefilter() ", mxStage, false);
+        this->emitLine("#define u_envIrradiance "
+                "HdGetSampler_domeLightIrradiance() ", mxStage, false);
+        this->emitLine("#else", mxStage, false);
+        this->emitLine("#define u_envRadiance "
+                "HdGetSampler_domeLightFallback()", mxStage, false);
+        this->emitLine("#define u_envIrradiance "
+                "HdGetSampler_domeLightFallback()", mxStage, false);
+        this->emitLine("#endif", mxStage, false);
+        this->emitLineBreak(mxStage);
+
+        // Define mappings for the MaterialX Textures
+        if (!this->_mxHdTextureMap.empty()) {
+            this->emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
+            for (mx::StringMap::const_reference texturePair : this->_mxHdTextureMap) {
+                if (texturePair.first == "domeLightFallback") {
+                    continue;
+                }
+                this->emitLine(TfStringPrintf(
+                    "#define %s HdGetSampler_%s()",
+                        texturePair.first.c_str(),
+                        texturePair.second.c_str()),
+                    mxStage, false);
+            }
+            this->emitLineBreak(mxStage);
+        }
+    }
+
+    this->_EmitDataStructsAndFunctionDefinitions(
+        mxGraph, mxContext, mxStage, &(this->_tokenSubstitutions));
+}
+
+// ----------------------------------------------------------------------------
 //                          HdSt MaterialX ShaderGen OpenGL GLSL
 // ----------------------------------------------------------------------------
 
@@ -910,139 +1040,14 @@ namespace {
     };
 }
 
+template class HdStMaterialXShaderGenBaseGlsl<MaterialX::GlslShaderGenerator>;
 
-template<>
-HdStMaterialXShaderGen<mx::GlslShaderGenerator>::HdStMaterialXShaderGen(
-    HdSt_MxShaderGenInfo const& mxHdInfo)
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
-    : mx::GlslShaderGenerator(),
-#else
-    : mx::GlslShaderGenerator( mx::TypeSystem::create() ),
-#endif
-      _mxHdTextureMap(mxHdInfo.textureMap),
-      _mxHdPrimvarMap(mxHdInfo.primvarMap),
-      _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
-      _materialTag(mxHdInfo.materialTag),
-      _bindlessTexturesEnabled(mxHdInfo.bindlessTexturesEnabled),
-      _emittingSurfaceNode(false)
-{
-    _defaultTexcoordName =
-        (mxHdInfo.defaultTexcoordName == mx::EMPTY_STRING)
-            ? "st" : mxHdInfo.defaultTexcoordName;
-
-}
-
-HdStMaterialXShaderGenGlsl::HdStMaterialXShaderGenGlsl(
-    HdSt_MxShaderGenInfo const& mxHdInfo)
-    : HdStMaterialXShaderGen<mx::GlslShaderGenerator>(mxHdInfo)
+HdStMaterialXShaderGenGlsl::HdStMaterialXShaderGenGlsl(HdSt_MxShaderGenInfo const& mxHdInfo) : 
+    HdStMaterialXShaderGenBaseGlsl<mx::GlslShaderGenerator>(mxHdInfo)
 {
     // Register the customized version of the Surface node generator
-    registerImplementation("IM_surface_" + mx::GlslShaderGenerator::TARGET,
+    registerImplementation("IM_surface_" + this->getTarget(),
         HdStMaterialXSurfaceNodeGenGlsl::create);
-}
-
-// Based on GlslShaderGenerator::generate()
-// Generates a glslfx shader and stores that in the pixel shader stage where it
-// can be retrieved with getSourceCode()
-mx::ShaderPtr
-HdStMaterialXShaderGenGlsl::generate(
-    const std::string& shaderName,
-    mx::ElementPtr mxElement,
-    mx::GenContext & mxContext) const
-{
-    mx::ShaderPtr shader = createShader(shaderName, mxElement, mxContext);
-
-    // Turn on fixed float formatting to make sure float values are
-    // emitted with a decimal point and not as integers, and to avoid
-    // any scientific notation which isn't supported by all OpenGL targets.
-    mx::ScopedFloatFormatting fmt(mx::Value::FloatFormatFixed);
-
-    // Create the glslfx (Pixel) Shader
-    mx::ShaderStage& shaderStage = shader->getStage(mx::Stage::PIXEL);
-    _EmitGlslfxShader(shader->getGraph(), mxContext, shaderStage);
-    replaceTokens(_tokenSubstitutions, shaderStage);
-    return shader;
-}
-
-void
-HdStMaterialXShaderGenGlsl::_EmitGlslfxShader(
-    const mx::ShaderGraph& mxGraph,
-    mx::GenContext& mxContext,
-    mx::ShaderStage& mxStage) const
-{
-    // Add a per-light shadowOcclusion value to the lightData uniform block
-    addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
-        "shadowOcclusion", mxStage);
-
-    _EmitGlslfxHeader(mxStage);
-    _EmitMxFunctions(mxGraph, mxContext, mxStage);
-    _EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
-}
-
-// Similar to GlslShaderGenerator::emitPixelStage() with alterations and
-// additions to match Pxr's codeGen
-void
-HdStMaterialXShaderGenGlsl::_EmitMxFunctions(
-    const mx::ShaderGraph& mxGraph,
-    mx::GenContext& mxContext,
-    mx::ShaderStage& mxStage) const
-{
-    mx::ShaderGenerator::emitLibraryInclude(
-        "stdlib/" + mx::GlslShaderGenerator::TARGET
-        + "/lib/mx_math.glsl", mxContext, mxStage);
-
-    // Add type definitions
-    emitTypeDefinitions(mxContext, mxStage);
-
-    _EmitConstantsUniformsAndTypeDefs(
-        mxContext, mxStage, _syntax->getConstantQualifier());
-
-    // If bindlessTextures are not enabled, the above for loop skips
-    // initializing textures. Initialize them here by defining mappings
-    // to the appropriate HdGetSampler function.
-    std::cout << "_bindlessTexturesEnabled = " << _bindlessTexturesEnabled << std::endl;
-    if (!_bindlessTexturesEnabled) {
-        // @REVISIT: HACK [sbrew]
-        //std::cerr << "HACK: TAKE OUT sampler2d for testing." << std::endl;
-        //emitComment("BEG: ========", mxStage);
-        //emitComment("HACK: TAKE OUT sampler2d for testing.", mxStage);
-        //emitLine("#define u_envRadiance   vec3(0.5, 0.5, 0.5)", mxStage, false);
-        //emitLine("#define u_envIrradiance vec3(0.5, 0.5, 0.5)", mxStage, false);
-        //emitComment("END: ========", mxStage);
-        //emitLineBreak(mxStage);
-        // Define mappings for the DomeLight Textures
-        emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
-        emitLine("#define u_envRadiance "
-                 "HdGetSampler_domeLightPrefilter() ", mxStage, false);
-        emitLine("#define u_envIrradiance "
-                "HdGetSampler_domeLightIrradiance() ", mxStage, false);
-        emitLine("#else", mxStage, false);
-        emitLine("#define u_envRadiance "
-                "HdGetSampler_domeLightFallback()", mxStage, false);
-        emitLine("#define u_envIrradiance "
-                "HdGetSampler_domeLightFallback()", mxStage, false);
-        emitLine("#endif", mxStage, false);
-        emitLineBreak(mxStage);
-
-        // Define mappings for the MaterialX Textures
-        if (!_mxHdTextureMap.empty()) {
-            emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
-                    continue;
-                }
-                emitLine(TfStringPrintf(
-                    "#define %s HdGetSampler_%s()",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str()),
-                    mxStage, false);
-            }
-            emitLineBreak(mxStage);
-        }
-    }
-
-    _EmitDataStructsAndFunctionDefinitions(
-        mxGraph, mxContext, mxStage, &_tokenSubstitutions);
 }
 
 // ----------------------------------------------------------------------------
@@ -1076,129 +1081,14 @@ namespace {
     };
 }
 
-template<>
-HdStMaterialXShaderGen<mx::VkShaderGenerator>::HdStMaterialXShaderGen(
-    HdSt_MxShaderGenInfo const& mxHdInfo)
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
-    : mx::VkShaderGenerator(),
-#else
-    : mx::VkShaderGenerator( mx::TypeSystem::create() ),
-#endif    
-      _mxHdTextureMap(mxHdInfo.textureMap),
-      _mxHdPrimvarMap(mxHdInfo.primvarMap),
-      _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
-      _materialTag(mxHdInfo.materialTag),
-      _bindlessTexturesEnabled(mxHdInfo.bindlessTexturesEnabled),
-      _emittingSurfaceNode(false)
-{
-    _defaultTexcoordName =
-        (mxHdInfo.defaultTexcoordName == mx::EMPTY_STRING)
-            ? "st" : mxHdInfo.defaultTexcoordName;
+template class HdStMaterialXShaderGenBaseGlsl<mx::VkShaderGenerator>;
 
-}
-
-HdStMaterialXShaderGenVkGlsl::HdStMaterialXShaderGenVkGlsl(
-    HdSt_MxShaderGenInfo const& mxHdInfo)
-    : HdStMaterialXShaderGen<mx::VkShaderGenerator>(mxHdInfo)
+HdStMaterialXShaderGenVkGlsl::HdStMaterialXShaderGenVkGlsl(HdSt_MxShaderGenInfo const& mxHdInfo) : 
+    HdStMaterialXShaderGenBaseGlsl<mx::VkShaderGenerator>(mxHdInfo)
 {
     // Register the customized version of the Surface node generator
-    registerImplementation("IM_surface_" + mx::VkShaderGenerator::TARGET,
+    registerImplementation("IM_surface_" + this->getTarget(),
         HdStMaterialXSurfaceNodeGenVkGlsl::create);
-}
-
-// Based on GlslShaderGenerator::generate()
-// Generates a glslfx shader and stores that in the pixel shader stage where it
-// can be retrieved with getSourceCode()
-mx::ShaderPtr
-HdStMaterialXShaderGenVkGlsl::generate(
-    const std::string& shaderName,
-    mx::ElementPtr mxElement,
-    mx::GenContext & mxContext) const
-{
-    mx::ShaderPtr shader = createShader(shaderName, mxElement, mxContext);
-
-    // Turn on fixed float formatting to make sure float values are
-    // emitted with a decimal point and not as integers, and to avoid
-    // any scientific notation which isn't supported by all OpenGL targets.
-    mx::ScopedFloatFormatting fmt(mx::Value::FloatFormatFixed);
-
-    // Create the glslfx (Pixel) Shader
-    mx::ShaderStage& shaderStage = shader->getStage(mx::Stage::PIXEL);
-    _EmitGlslfxShader(shader->getGraph(), mxContext, shaderStage);
-    replaceTokens(_tokenSubstitutions, shaderStage);
-    return shader;
-}
-
-void
-HdStMaterialXShaderGenVkGlsl::_EmitGlslfxShader(
-    const mx::ShaderGraph& mxGraph,
-    mx::GenContext& mxContext,
-    mx::ShaderStage& mxStage) const
-{
-    // Add a per-light shadowOcclusion value to the lightData uniform block
-    addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
-        "shadowOcclusion", mxStage);
-
-    _EmitGlslfxHeader(mxStage);
-    _EmitMxFunctions(mxGraph, mxContext, mxStage);
-    _EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
-}
-
-// Similar to GlslShaderGenerator::emitPixelStage() with alterations and
-// additions to match Pxr's codeGen
-void
-HdStMaterialXShaderGenVkGlsl::_EmitMxFunctions(
-    const mx::ShaderGraph& mxGraph,
-    mx::GenContext& mxContext,
-    mx::ShaderStage& mxStage) const
-{
-    emitLibraryInclude("stdlib/" + mx::VkShaderGenerator::TARGET
-                       + "/lib/mx_math.glsl", mxContext, mxStage);
-
-    // Add type definitions
-    emitTypeDefinitions(mxContext, mxStage);
-
-    _EmitConstantsUniformsAndTypeDefs(
-        mxContext, mxStage, _syntax->getConstantQualifier());
-
-    // If bindlessTextures are not enabled, the above for loop skips
-    // initializing textures. Initialize them here by defining mappings
-    // to the appropriate HdGetSampler function.
-    if (!_bindlessTexturesEnabled) {
-
-        // Define mappings for the DomeLight Textures
-        emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
-        emitLine("#define u_envRadiance "
-                 "HdGetSampler_domeLightPrefilter() ", mxStage, false);
-        emitLine("#define u_envIrradiance "
-                "HdGetSampler_domeLightIrradiance() ", mxStage, false);
-        emitLine("#else", mxStage, false);
-        emitLine("#define u_envRadiance "
-                "HdGetSampler_domeLightFallback()", mxStage, false);
-        emitLine("#define u_envIrradiance "
-                "HdGetSampler_domeLightFallback()", mxStage, false);
-        emitLine("#endif", mxStage, false);
-        emitLineBreak(mxStage);
-
-        // Define mappings for the MaterialX Textures
-        if (!_mxHdTextureMap.empty()) {
-            emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
-                    continue;
-                }
-                emitLine(TfStringPrintf(
-                    "#define %s HdGetSampler_%s()",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str()),
-                    mxStage, false);
-            }
-            emitLineBreak(mxStage);
-        }
-    }
-
-    _EmitDataStructsAndFunctionDefinitions(
-        mxGraph, mxContext, mxStage, &_tokenSubstitutions);
 }
 
 // ----------------------------------------------------------------------------
@@ -1232,32 +1122,12 @@ namespace {
     };
 }
 
-template<>
-HdStMaterialXShaderGen<mx::MslShaderGenerator>::HdStMaterialXShaderGen(
-    HdSt_MxShaderGenInfo const& mxHdInfo)
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
-    : mx::MslShaderGenerator(),
-#else
-    : mx::MslShaderGenerator( mx::TypeSystem::create() ),
-#endif 
-      _mxHdTextureMap(mxHdInfo.textureMap),
-      _mxHdPrimvarMap(mxHdInfo.primvarMap),
-      _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
-      _materialTag(mxHdInfo.materialTag),
-      _bindlessTexturesEnabled(mxHdInfo.bindlessTexturesEnabled),
-      _emittingSurfaceNode(false)
-{
-    _defaultTexcoordName =
-        (mxHdInfo.defaultTexcoordName == mx::EMPTY_STRING)
-            ? "st" : mxHdInfo.defaultTexcoordName;
-}
-
 HdStMaterialXShaderGenMsl::HdStMaterialXShaderGenMsl(
     HdSt_MxShaderGenInfo const& mxHdInfo)
     : HdStMaterialXShaderGen<mx::MslShaderGenerator>(mxHdInfo)
 {
     // Register the customized version of the Surface node generator
-    registerImplementation("IM_surface_" + mx::MslShaderGenerator::TARGET,
+    registerImplementation("IM_surface_" + this->getTarget(),
         HdStMaterialXSurfaceNodeGenMsl::create);
 }
 
