@@ -132,8 +132,11 @@ void _BakeMtlxDocument(
     MATERIALX_BUILD_VERSION <= 6
     mx::TextureBakerPtr baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
+#elif ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+    mx::TextureBakerPtr baker = mx::TextureBaker::create(
+        textureWidth, textureHeight, baseType);
 #else
-    mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
+    mx::TextureBakerGlslPtr baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #endif
     baker->setupUnitSystem(stdLibraries);

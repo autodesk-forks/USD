@@ -528,8 +528,11 @@ _UpdatePrimvarNodes(
                 auto metadata = sdrTexCoordNode->GetMetadata();
                 texCoordName = metadata[SdrNodeMetadata->Primvars];
             }
-
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
             (*mxHdPrimvarMap)[texCoordName] = mx::Type::VECTOR2->getName();
+#else
+            (*mxHdPrimvarMap)[texCoordName] = mx::Type::VECTOR2.getName();
+#endif
         }
     }
 }
@@ -652,7 +655,11 @@ _GetMxTypeDescription(std::string const& typeName)
 {
     // Add whatever is necessary for current codebase:
     static const auto _typeLibrary = 
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         std::map<std::string, const mx::TypeDesc*>{
+#else
+        std::map<std::string, const mx::TypeDesc>{
+#endif
             {"float", mx::Type::FLOAT},
             {"color3", mx::Type::COLOR3},
             {"color4", mx::Type::COLOR4},
@@ -664,7 +671,11 @@ _GetMxTypeDescription(std::string const& typeName)
 
     const auto typeDescIt = _typeLibrary.find(typeName);
     if (typeDescIt != _typeLibrary.end()) {
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         return typeDescIt->second;
+#else
+        return &(typeDescIt->second);
+#endif
     }
     return nullptr;
 }
@@ -698,7 +709,11 @@ _AddStrippedSurfaceNode(
         // If hdNode is connected to the surfaceshader node, recursively call 
         // this function to make sure that surfaceshader node is added to 
         // the mxDocument
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         if (mxTypeDesc == mx::Type::SURFACESHADER) {
+#else
+        if (*mxTypeDesc == mx::Type::SURFACESHADER) {
+#endif
             auto const& hdConnectedPath = connIt.second.front().upstreamNode;
             auto const& hdConnectedNode = hdNetwork.nodes.at(hdConnectedPath);
             mx::NodePtr mxConnectedNode =
@@ -802,7 +817,11 @@ _GetMaterialTag(
         // XXX This is not fully per USD specs, but is supported by MaterialX.
         auto const* typeDesc = 
             _GetMxTypeDescription(activeOutputs.back()->getType());
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         if (typeDesc == mx::Type::COLOR4 || typeDesc == mx::Type::VECTOR4) {
+#else
+        if (*typeDesc == mx::Type::COLOR4 || *typeDesc == mx::Type::VECTOR4) {
+#endif
             return HdStMaterialTagTokens->translucent.GetString();
         }
         return HdStMaterialTagTokens->defaultMaterialTag.GetString();
@@ -1113,7 +1132,12 @@ _AddMaterialXParams(
 
         // MaterialX parameter Information
         const auto* variable = paramsBlock[i];
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         const auto varType = variable->getType();
+#else
+        const auto varTypeRef = variable->getType();
+        const auto* varType = &varTypeRef;
+#endif
 
         // Create a corresponding HdSt_MaterialParam
         HdSt_MaterialParam param;
