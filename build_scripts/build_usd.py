@@ -1608,17 +1608,22 @@ def InstallMaterialX(context, force, buildArgs):
         ]
         if context.targetWasm:
             cmakeOptions.extend([
-                    '-DAPPLE=ON',
-                    '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                     '-DMATERIALX_BUILD_GEN_GLSL=ON',
                     '-DMATERIALX_BUILD_GEN_MSL=OFF',
-                    '-DPXR_ENABLE_METAL_SUPPORT=OFF',
                     # For Wasm
                     '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                     '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
                     '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                     '-DBUILD_SHARED_LIBS=OFF',
                 ])
+            # MaterialX/source/MaterialXRenderGlsl/CMakeLists.txt will error if compiling 
+            # on MacOS and APPLE=ON is not set.
+            # Consider change to MaterialX to move find_package(OpenGL REQUIRED) outside of the platform
+            # if(APPLE/UNIX) block
+            # Note: USD requires -DMATERIALX_BUILD_RENDER=ON tools for materialXFilter.cpp
+            #       so we cannot just disable that compiler flag.
+            if MacOS():
+                cmakeOptions.append('-DAPPLE=ON')
 
         if MacOSTargetEmbedded(context):
             # The materialXShaderGen in hdSt assumes the GLSL shadergen is

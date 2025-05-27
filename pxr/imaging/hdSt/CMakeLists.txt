@@ -20,7 +20,6 @@ if (${PXR_ENABLE_MATERIALX_SUPPORT})
         MaterialXCore
         MaterialXFormat
         MaterialXGenGlsl
-       #MaterialXGenMsl
         hdMtlx
     )
     if (${PXR_ENABLE_METAL_SUPPORT})
