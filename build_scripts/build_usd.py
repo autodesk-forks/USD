@@ -1600,6 +1600,7 @@ def InstallMaterialX(context, force, buildArgs):
     if context.targetWasm:
         # For Wasm WebGPU/WGSL shader generation for MaterialX, an experimental build
         # must currently be used until it is integrated into MaterialX dev and release branches 
+        global MATERIALX_URL
         MATERIALX_URL = "https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl.zip"
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
@@ -2100,9 +2101,9 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildMaterialX:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=ON')
-            # HACK SBREW  ===== (For Local Build Only -- Do Not Check In)
-            extraArgs.append(f'-DMaterialX_DIR="{context.instDir}/lib/cmake/MaterialX"')
-            # HACK SBREW  =====
+            if context.targetWasm:
+                # build is failing without this being set
+                extraArgs.append(f'-DMaterialX_DIR="{context.instDir}/lib/cmake/MaterialX"')
         else:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=OFF')
 
@@ -2162,9 +2163,6 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildWebGPU:
             extraArgs.append('-DPXR_ENABLE_WEBGPU_SUPPORT=ON')
-            # HACK [sbrew]
-            #extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')  # HACK [sbrew]
-            #extraArgs.append('-DPXR_BUILD_GPU_SUPPORT=ON')  # HACK [sbrew]
 
         RunCMake(context, force, extraArgs)
 
@@ -2768,10 +2766,6 @@ if context.targetWasm:
     if context.buildUsdview:
         context.buildUsdview = False
         disabled.append('usdview')
-
-    #if context.buildMaterialX:
-    #    context.buildMaterialX = False
-    #    disabled.append('materialX')
 
     if context.buildAVIF:
         context.buildAVIF = False
