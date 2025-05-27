@@ -1595,8 +1595,8 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.10.zip"
-#MATERIALX_URL = "https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl.zip"
+#MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.10.zip"
+MATERIALX_URL = "https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     print("BEG:InstallMaterialX() =====")

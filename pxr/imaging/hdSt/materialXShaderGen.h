@@ -15,6 +15,11 @@
 #endif
 #include <MaterialXGenGlsl/VkShaderGenerator.h>
 
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#else
+#include <MaterialXGenGlsl/WgslShaderGenerator.h>
+#endif
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 struct HdSt_MxShaderGenInfo;
@@ -86,6 +91,8 @@ protected:
         MaterialX::ShaderStage& mxStage,
         MaterialX::StringMap* tokenSubstitutions) const;
 
+    virtual void _EmitAdditionalDefines(MaterialX::GenContext& mxContext, MaterialX::ShaderStage& mxStage) const {};
+
     // Store MaterialX and Hydra counterparts and other Hydra specific info
     // to generate an appropriate glslfx header and properly initialize 
     // MaterialX values.
@@ -154,12 +161,34 @@ class HdStMaterialXShaderGenVkGlsl
 {
 public:
     HdStMaterialXShaderGenVkGlsl(HdSt_MxShaderGenInfo const& mxHdInfo);
-    
+
     static MaterialX::ShaderGeneratorPtr create(
             HdSt_MxShaderGenInfo const& mxHdInfo) {
         return std::make_shared<HdStMaterialXShaderGenVkGlsl>(mxHdInfo);
     }
 };
+
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#else
+/// \class HdStMaterialXShaderGenWgslGlsl
+///
+/// Generates a glslfx shader with a surfaceShader function for a MaterialX 
+/// network, targeting Wgsl GLSL.
+
+class HdStMaterialXShaderGenWgslGlsl
+    : public HdStMaterialXShaderGenBaseGlsl<MaterialX::WgslShaderGenerator>
+{
+public:
+    HdStMaterialXShaderGenWgslGlsl(HdSt_MxShaderGenInfo const& mxHdInfo);
+    
+    static MaterialX::ShaderGeneratorPtr create(
+            HdSt_MxShaderGenInfo const& mxHdInfo) {
+        return std::make_shared<HdStMaterialXShaderGenWgslGlsl>(mxHdInfo);
+    }
+
+    void _EmitAdditionalDefines(MaterialX::GenContext& mxContext, MaterialX::ShaderStage& mxStage) const override;
+};
+#endif
 
 #ifdef PXR_METAL_SUPPORT_ENABLED
 /// \class HdStMaterialXShaderGenMsl

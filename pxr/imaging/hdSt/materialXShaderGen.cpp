@@ -61,7 +61,7 @@ R"(#if NUM_LIGHTS > 0
             // Distant lights have Hydra attenuation = vec3(0.0, 0.0, 0.0)
             if (light.attenuation.x == 0.0 && light.attenuation.y == 0.0 && 
                 light.attenuation.z == 0.0) {
-                $lightData[u_numActiveLightSources].type = 2; // directional
+                $lightData[u_numActiveLightSources].$lightDataType = 2; // directional
 
                 // Direction (Hydra position in ViewSpace)
                 $lightData[u_numActiveLightSources].direction = 
@@ -69,7 +69,7 @@ R"(#if NUM_LIGHTS > 0
             }
             // Treat all other lights as Point lights
             else {
-                $lightData[u_numActiveLightSources].type = 1; // point
+                $lightData[u_numActiveLightSources].$lightDataType = 1; // point
 
                 // Position (Hydra position in ViewSpace)
                 $lightData[u_numActiveLightSources].position = 
@@ -149,7 +149,11 @@ HdStMaterialXShaderGen<Base>::HdStMaterialXShaderGen(
     _defaultTexcoordName =
         (mxHdInfo.defaultTexcoordName == mx::EMPTY_STRING)
             ? "st" : mxHdInfo.defaultTexcoordName;
-
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+    this->_tokenSubstitutions[mx::string("$lightDataType")] = mx::string("type");
+#else
+    this->_tokenSubstitutions[mx::string("$lightDataType")] = this->getLightDataTypevarString();
+#endif
 }
 
 template<typename Base>
@@ -428,6 +432,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     mx::VariableBlock const& vertexData,
     mx::ShaderStage& mxStage) const
 {
+    this->emitComment("BEGIN: _EmitMxInitFunction()", mxStage);
     std::cout << "In _EmitMxInitFunction" << std::endl;
     Base::setFunctionName("mxInit", mxStage);
     emitLine("void mxInit(vec4 Peye, vec3 Neye)", mxStage, false);
@@ -459,7 +464,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     }
 
     // Initialize MaterialX parameters with HdGet_ equivalents
-    Base::emitComment("Initialize Material Parameters", mxStage);
+    Base::emitComment("BEGIN: Initialize MaterialX parameters with HdGet_ equivalents", mxStage);
     const mx::VariableBlock& paramsBlock =
         mxStage.getUniformBlock(mx::HW::PUBLIC_UNIFORMS);
     for (size_t i = 0; i < paramsBlock.size(); ++i) {
@@ -483,7 +488,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     // HdStMaterialXShaderGen*::_EmitMxFunctions
     std::cout << "_bindlessTexturesEnabled = " << _bindlessTexturesEnabled << std::endl;
     Base::emitComment("Initialize Indirect Light Textures and values", mxStage);
-    Base::emitComment("TEST [sbrew]", mxStage);
     if (_bindlessTexturesEnabled) {
         emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
         emitLine("u_envIrradiance = HdGetSampler_domeLightIrradiance()", mxStage);
@@ -493,10 +497,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
         emitLine("u_envRadiance = HdGetSampler_domeLightFallback()", mxStage);
         emitLine("#endif", mxStage, false);
     }
-    //Base::emitComment("HACK [sbrew]", mxStage);
-    //Base::emitComment("BEG =====", mxStage);
-    //emitLine("u_envRadianceMips = 1", mxStage);
-    //Base::emitComment("END =====", mxStage);
     emitLine("u_envRadianceMips = textureQueryLevels(u_envRadiance)", mxStage);
     Base::emitLineBreak(mxStage);
 
@@ -687,16 +687,22 @@ HdStMaterialXShaderGen<Base>::emitVariableDeclarations(
         const mx::ShaderPort* variable = block[i];
 #if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         const mx::TypeDesc* varType = variable->getType();
+
+        // If bindlessTextures are not enabled the Mx Smpler names are mapped 
+        // to the Hydra equivalents in HdStMaterialXShaderGen*::_EmitMxFunctions
+        if (!_bindlessTexturesEnabled && varType == mx::Type::FILENAME) {
+            continue;
+        }
 #else
         const mx::TypeDesc varTypeRef = variable->getType();
         const mx::TypeDesc* varType = &varTypeRef; 
-#endif
 
         // If bindlessTextures are not enabled the Mx Smpler names are mapped 
         // to the Hydra equivalents in HdStMaterialXShaderGen*::_EmitMxFunctions
         if (!_bindlessTexturesEnabled && *varType == mx::Type::FILENAME) {
             continue;
         }
+#endif
 
         // Only declare the variables that we need to initialize with Hd Data
         if ( (isPublicUniform && !_IsHardcodedPublicUniform(*varType))
@@ -787,6 +793,7 @@ HdStMaterialXShaderGen<Base>::_EmitDataStructsAndFunctionDefinitions(
     mx::ShaderStage& mxStage,
     MaterialX::StringMap* tokenSubstitutions) const
 {
+    this->emitComment("BEGIN: _EmitDataStructsAndFunctionDefinitions()", mxStage);
     const bool lighting =
         mxGraph.hasClassification(mx::ShaderNode::Classification::SHADER |
                                   mx::ShaderNode::Classification::SURFACE)
@@ -959,6 +966,8 @@ HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions(
     mx::GenContext& mxContext,
     mx::ShaderStage& mxStage) const
 {
+    this->emitComment("BEGIN: _EmitMxFunctions()", mxStage);
+    this->_EmitAdditionalDefines(mxContext, mxStage);
     this->emitLibraryInclude(
         "stdlib/" + this->getTarget()
         + "/lib/mx_math.glsl", mxContext, mxStage);
@@ -1090,6 +1099,91 @@ HdStMaterialXShaderGenVkGlsl::HdStMaterialXShaderGenVkGlsl(HdSt_MxShaderGenInfo 
     registerImplementation("IM_surface_" + this->getTarget(),
         HdStMaterialXSurfaceNodeGenVkGlsl::create);
 }
+
+// ----------------------------------------------------------------------------
+//                    HdSt MaterialX ShaderGen Wgsl GLSL
+// ----------------------------------------------------------------------------
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#else
+namespace {
+    // Create a customized version of the class mx::SurfaceNodeGlsl
+    // to be able to notify the shader generator when we start/end
+    // emitting the code for the SurfaceNode
+    class HdStMaterialXSurfaceNodeGenWgslGlsl : public mx::SurfaceNodeGlsl
+    {
+    public:
+        static mx::ShaderNodeImplPtr create() {
+            return std::make_shared<HdStMaterialXSurfaceNodeGenWgslGlsl>();
+        }
+
+        void emitFunctionCall(
+            const mx::ShaderNode& node, 
+            mx::GenContext& context,
+            mx::ShaderStage& stage) const override
+        {
+            HdStMaterialXShaderGenWgslGlsl& shadergen =
+                static_cast<HdStMaterialXShaderGenWgslGlsl&>(
+                    context.getShaderGenerator());
+            
+            shadergen.SetEmittingSurfaceNode(true);
+            mx::SurfaceNodeGlsl::emitFunctionCall(node, context, stage);
+            shadergen.SetEmittingSurfaceNode(false);
+        }
+    };
+}
+
+template class HdStMaterialXShaderGenBaseGlsl<mx::WgslShaderGenerator>;
+
+HdStMaterialXShaderGenWgslGlsl::HdStMaterialXShaderGenWgslGlsl(HdSt_MxShaderGenInfo const& mxHdInfo) : 
+    HdStMaterialXShaderGenBaseGlsl<mx::WgslShaderGenerator>(mxHdInfo)
+{
+    // Register the customized version of the Surface node generator
+    registerImplementation("IM_surface_" + this->getTarget(),
+        HdStMaterialXSurfaceNodeGenWgslGlsl::create);
+}
+
+void HdStMaterialXShaderGenWgslGlsl::_EmitAdditionalDefines(MaterialX::GenContext& mxContext, MaterialX::ShaderStage& mxStage) const
+{
+    this->emitComment("WGSL Specific Items", mxStage);
+    this->emitLine("#define HW_SEPARATE_SAMPLERS", mxStage, false);
+    // Define mappings for the DomeLight Textures
+    //   See HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions()
+    this->emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
+    this->emitLine("#define $envRadiance_texture textureBind_domeLightPrefilter", mxStage, false);
+    this->emitLine("#define $envRadiance_sampler samplerBind_domeLightPrefilter", mxStage, false);
+    this->emitLine("#define $envIrradiance_texture textureBind_domeLightIrradiance", mxStage, false);
+    this->emitLine("#define $envIrradiance_sampler samplerBind_domeLightIrradiance", mxStage, false);
+    this->emitLine("#else", mxStage, false);
+    this->emitLine("#define $envRadiance_texture textureBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define $envRadiance_sampler samplerBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define $envIrradiance_texture textureBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define $envIrradiance_sampler samplerBind_domeLightFallback", mxStage, false);
+    this->emitLine("#endif", mxStage, false);
+    this->emitLineBreak(mxStage);
+
+    // Define mappings for the MaterialX Textures
+    if (!this->_mxHdTextureMap.empty()) {
+        this->emitComment("Define MaterialX to Hydra Sampler mappings (WGSL)", mxStage);
+        for (mx::StringMap::const_reference texturePair : this->_mxHdTextureMap) {
+            if (texturePair.first == "domeLightFallback") {
+                continue;
+            }
+            this->emitLine(TfStringPrintf(
+                "#define %s_texture textureBind_%s",
+                    texturePair.first.c_str(),
+                    texturePair.second.c_str()),
+                mxStage, false);
+            this->emitLine(TfStringPrintf(
+                "#define %s_sampler samplerBind_%s",
+                    texturePair.first.c_str(),
+                    texturePair.second.c_str()),
+                mxStage, false);
+        }
+        this->emitLineBreak(mxStage);
+    }
+
+}
+#endif
 
 // ----------------------------------------------------------------------------
 //                          HdSt MaterialX ShaderGen Metal

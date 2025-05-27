@@ -133,6 +133,8 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
 
     shaderGenerator.Execute();
 
+//#define HACK_WGSL_CODE_MODIFICATIONS
+#ifdef HACK_WGSL_CODE_MODIFICATIONS
     // ShaderCode HACK [sbrew]
     //   1) Change member variable name of Replace LightData.type -> LightData.lightType , as "type" can be a reserved word
     //   2) Modify the mx_latlong_map_lookup() shader code resulting from snippets in libraries/pbrlib/genglsl/lib/*.glsl
@@ -168,9 +170,10 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     std::fstream outputFile(ofstreamName.str(), std::ios::out);
     outputFile << shaderCode_HACK_REPLACE << std::endl;
     outputFile.close();
-
-
     // END: ShaderCode Hack
+#else
+    const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
+#endif
 
     wgpu::ShaderStage stage = HgiWebGPUConversions::GetShaderStages(desc.shaderStage);
 

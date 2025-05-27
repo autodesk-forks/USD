@@ -191,7 +191,11 @@ _CreateHdStMaterialXContext(
         //
         // Issue in Dawn for compiling Sampler2D
         //     See https://dawn.googlesource.com/dawn/+/refs/heads/chromium/6530/docs/tint/spirv-reader-overview.md#passing-textures-and-samplers-into-helper-functions
+#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
+#else
+        return HdStMaterialXShaderGenWgslGlsl::create(mxHdInfo);
+#endif
     }
     else {
         TF_CODING_ERROR(
