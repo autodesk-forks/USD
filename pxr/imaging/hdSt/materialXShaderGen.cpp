@@ -433,7 +433,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     mx::ShaderStage& mxStage) const
 {
     this->emitComment("BEGIN: _EmitMxInitFunction()", mxStage);
-    std::cout << "In _EmitMxInitFunction" << std::endl;
     Base::setFunctionName("mxInit", mxStage);
     emitLine("void mxInit(vec4 Peye, vec3 Neye)", mxStage, false);
     Base::emitScopeBegin(mxStage);
@@ -486,7 +485,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     // Note: only need to initialize textures when bindlessTextures are enabled,
     // when bindlessTextures are not enabled, mappings are defined in 
     // HdStMaterialXShaderGen*::_EmitMxFunctions
-    std::cout << "_bindlessTexturesEnabled = " << _bindlessTexturesEnabled << std::endl;
     Base::emitComment("Initialize Indirect Light Textures and values", mxStage);
     if (_bindlessTexturesEnabled) {
         emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
@@ -981,7 +979,6 @@ HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions(
     // If bindlessTextures are not enabled, the above for loop skips
     // initializing textures. Initialize them here by defining mappings
     // to the appropriate HdGetSampler function.
-    std::cout << "_bindlessTexturesEnabled = " << this->_bindlessTexturesEnabled << std::endl;
     if (!this->_bindlessTexturesEnabled) {
         // Define mappings for the DomeLight Textures
         this->emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);

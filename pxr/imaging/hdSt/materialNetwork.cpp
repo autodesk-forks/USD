@@ -117,7 +117,6 @@ _GetGlslfxForTerminal(
     HdStResourceRegistry *resourceRegistry)
 {
     HD_TRACE_FUNCTION();
-    //std::cerr << "_GetGlslfxForTerminal ---> nodeTypeId = " << nodeTypeId << std::endl;
 
     // If there is a URI, we will use that, otherwise we will try to use
     // the source code.
@@ -1133,12 +1132,6 @@ HdStMaterialNetwork::ProcessMaterialNetwork(
                 // provided via the surface glslfx / terminal.
                 _displacementSource = _surfaceGfx->GetDisplacementSource();
             }
-            else {
-                std::cerr << "_surfaceGfx is not valid, so cannot get glslfx. Using default shader: " << materialId << std::endl;
-            }
-        }
-        else {
-            std::cerr << "_surfaceGfx=NULL, so cannot get glslfx. Using default shader: " << materialId << std::endl;
         }
     }
 }

@@ -1482,7 +1482,6 @@ HdSt_ApplyMaterialXFilter(
         resourceRegistry->GetHgi()->GetCapabilities()->IsSet(
             HgiDeviceCapabilitiesBitsBindlessTextures);
     const TfToken apiName = resourceRegistry->GetHgi()->GetAPIName();
-    std::cout << "HdSt_ApplyMaterialXFilter: Hgi GetAPIName() = " << apiName << std::endl;
 
     // Use the Resource Registry to cache the generated MaterialX 
     // glslfx Shader
