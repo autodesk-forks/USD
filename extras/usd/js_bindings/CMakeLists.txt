@@ -27,7 +27,7 @@ pxr_cpp_bin(${BINDINGS_NAME}
 )
 
 target_compile_options(${BINDINGS_NAME} PRIVATE "SHELL:-lembind")
-target_link_options(${BINDINGS_NAME} PRIVATE "SHELL:-sUSE_WEBGPU=1 -sEXPORT_NAME=getUsdModule -sMODULARIZE=1  -lembind --pre-js ${CMAKE_SOURCE_DIR}/js/prejs.js")
+target_link_options(${BINDINGS_NAME} PRIVATE "SHELL:-sEXPORT_NAME=getUsdModule -sMODULARIZE=1  -lembind --pre-js ${CMAKE_SOURCE_DIR}/js/prejs.js")
 set_target_properties(${BINDINGS_NAME}
     PROPERTIES
         SUFFIX ".js"

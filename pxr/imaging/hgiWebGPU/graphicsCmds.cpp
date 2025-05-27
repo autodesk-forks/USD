@@ -70,7 +70,7 @@ HgiWebGPUGraphicsCmds::HgiWebGPUGraphicsCmds(
     }
 #if !defined(EMSCRIPTEN)
     if (_IsTimestampsEnabled()) {
-        wgpu::RenderPassTimestampWrites timestampWrites = _hgi->GetRenderTimestampWrites();
+        wgpu::PassTimestampWrites timestampWrites = _hgi->GetRenderTimestampWrites();
         renderPassDesc.timestampWrites = &timestampWrites;
     }
 #endif

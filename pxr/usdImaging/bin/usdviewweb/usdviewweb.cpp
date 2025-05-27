@@ -353,6 +353,8 @@ struct VertexOutput {
 
         TF_INFO(INFO).Msg("File: %s", filePath.c_str());
         TF_INFO(INFO).Msg("Starting GLEngine ");
+        wgpu::Instance instance = wgpu::CreateInstance();
+        wgpu::Surface surface;
         initGLEngine();
         glfwSetErrorCallback(error_callback);
         if (!glfwInit())
@@ -374,28 +376,25 @@ struct VertexOutput {
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
 
         glfwMakeContextCurrent(window);
-        wgpu::SwapChain swapChain;
         pxr::Hgi *hgi = glEngine->GetHgi();
         pxr::HgiWebGPU* hgiWebGPU = static_cast<pxr::HgiWebGPU*>(hgi);
         wgpu::Device device = hgiWebGPU->GetPrimaryDevice();
         wgpu::TextureFormat swapChainFormat =  wgpu::TextureFormat::BGRA8Unorm;
 
         {
-            wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+            wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
             canvasDesc.selector = "#webgpuCanvas";
 
             wgpu::SurfaceDescriptor surfDesc{};
             surfDesc.nextInChain = &canvasDesc;
-            wgpu::Instance instance = wgpu::CreateInstance();
-            wgpu::Surface surface = instance.CreateSurface(&surfDesc);
+            surface = instance.CreateSurface(&surfDesc);
 
-            wgpu::SwapChainDescriptor scDesc{};
-            scDesc.usage = wgpu::TextureUsage::RenderAttachment;
-            scDesc.format = wgpu::TextureFormat::BGRA8Unorm;
-            scDesc.width = framebufferWidth;
-            scDesc.height = framebufferHeight;
-            scDesc.presentMode = wgpu::PresentMode::Fifo;
-            swapChain = device.CreateSwapChain(surface, &scDesc);
+            wgpu::SurfaceConfiguration surfaceDesc{};
+            surfaceDesc.device = device;
+            surfaceDesc.format = swapChainFormat;
+            surfaceDesc.width = framebufferWidth;
+            surfaceDesc.height = framebufferHeight;
+            surface.Configure(&surfaceDesc);
         }
 
         wgpu::RenderPipeline pipeline = createBlitPipeline(device, swapChainFormat);
@@ -487,8 +486,10 @@ struct VertexOutput {
 
             pxr::HgiTextureHandle colorTarget = glEngine->GetAovTexture(pxr::HdAovTokens->color);
 
-            wgpu::TextureView backbuffer = swapChain.GetCurrentTextureView();
-            pxr::HgiWebGPUTexture* srcTexture =static_cast<pxr::HgiWebGPUTexture*>(colorTarget.Get());
+            wgpu::SurfaceTexture surfaceTexture;
+            surface.GetCurrentTexture(&surfaceTexture);
+            wgpu::TextureView backbuffer = surfaceTexture.texture.CreateView();
+            auto srcTexture =static_cast<pxr::HgiWebGPUTexture*>(colorTarget.Get());
             wgpu::Texture colorTexture = srcTexture->GetTextureHandle();
             wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
 
@@ -555,6 +556,10 @@ struct VertexOutput {
                 glfwTerminate();
                 printf("Shutting down\n");
             }
+            #if !defined(ARCH_OS_WASM_VM)
+                surface.Present();
+                instance.ProcessEvents();
+            #endif
 
         };
         emscripten_set_main_loop(main_loop, 0, true);
@@ -579,7 +584,6 @@ extern "C" __attribute__((used, visibility("default"))) void ems_main(
     pxr::initialize(width, height, numFrames, fileName, rotate);
 }
 
-
 extern "C" __attribute__((used, visibility("default"))) bool isWasm64() {
 #if defined(__wasm64__)
     return true;
@@ -587,4 +591,3 @@ extern "C" __attribute__((used, visibility("default"))) bool isWasm64() {
     return false;
 #endif
 }
-

@@ -88,7 +88,7 @@ std::string GlslToWgsl(
         if (tintResult == tint::Success) {
             wgslCode = tintResult->wgsl;
         } else {
-            *errors = tintResult.Failure().reason.Str();
+            *errors = tintResult.Failure().reason;
         }
     }
     return wgslCode;
@@ -186,11 +186,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
 
     wgpu::ShaderModuleWGSLDescriptor wgslDesc;
     wgpu::ShaderModuleDescriptor shaderModuleDesc;
-#if defined(ARCH_OS_WASM_VM)
-    wgslDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
-#else
     wgslDesc.sType = wgpu::SType::ShaderSourceWGSL;
-#endif
     shaderModuleDesc.label = _descriptor.debugName.c_str();
     shaderModuleDesc.nextInChain = &wgslDesc;
     std::string wgslCode;
@@ -237,7 +233,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     if (_errors.empty()) {
         _shaderModule = hgi->GetPrimaryDevice().CreateShaderModule(&shaderModuleDesc);
         // Get the compilation details
-#if defined EMSCRIPTEN
+#if defined ARCH_OS_WASM_VM
         // Getting unimplemented in Chrome
         if( !_shaderModule )
         {

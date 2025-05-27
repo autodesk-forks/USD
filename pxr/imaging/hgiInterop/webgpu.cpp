@@ -604,16 +604,6 @@ HgiInteropWebGPU::CompositeToInterop(
         return;
     }
 
-    const int width =
-            color ? color->GetDescriptor().dimensions[0] :
-            depth ? depth->GetDescriptor().dimensions[0] :
-            256;
-
-    const int height =
-            color ? color->GetDescriptor().dimensions[1] :
-            depth ? depth->GetDescriptor().dimensions[1] :
-            256;
-
     _FreeTransientTextureCacheRefs();
     int glShaderIndex = -1;
     // Convert textures from HgiTexture to GL

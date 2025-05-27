@@ -99,12 +99,12 @@ HgiWebGPUTexture::HgiWebGPUTexture(HgiWebGPU *hgi, HgiTextureDesc const & desc)
             _stagingDatas.resize(_stagingDatas.size() + 1);
             auto &stagingData = *_stagingDatas.rbegin();
 
-            wgpu::ImageCopyTexture &destination = stagingData.destination;
+            wgpu::TexelCopyTextureInfo &destination = stagingData.destination;
             destination.texture = _textureHandle;
             destination.mipLevel = mip;
             destination.origin = { 0, 0, 0 };
 
-            wgpu::TextureDataLayout &dataLayout = stagingData.dataLayout;
+            wgpu::TexelCopyBufferLayout &dataLayout = stagingData.dataLayout;
             dataLayout.bytesPerRow = bytesPerRow;
             dataLayout.rowsPerImage = height;
 

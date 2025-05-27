@@ -115,7 +115,7 @@ private:
         bool asyncDone = false; // to be removed when async is the only option
         std::function<void(void*)> callback;
     };
-    std::vector<StagingData*> _stagingDatas;
+    std::vector<std::unique_ptr<StagingData>> _stagingDataItems;
 
 };
 

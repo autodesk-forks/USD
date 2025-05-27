@@ -52,8 +52,6 @@
 
 #if defined(ARCH_OS_WASM_VM)
 #include <emscripten.h>
-#include <emscripten/html5.h>
-#include <emscripten/html5_webgpu.h>
 #else
 #if defined(ARCH_OS_WINDOWS) && !defined(WIN32_VULKAN)
 #define DAWN_ENABLE_BACKEND_D3D12
@@ -88,7 +86,7 @@ GetDevice() {
 #else
 static void
 PrintUncapturedError(const wgpu::Device& device, wgpu::ErrorType type,
-    const char* message)
+    wgpu::StringView message)
 {
     std::stringstream fullMessage;
     fullMessage << "WebGPU";
@@ -102,15 +100,15 @@ PrintUncapturedError(const wgpu::Device& device, wgpu::ErrorType type,
     case wgpu::ErrorType::Unknown:
         fullMessage << " unknown";
         break;
-    case wgpu::ErrorType::DeviceLost:
-        fullMessage << " device lost";
+    case wgpu::ErrorType::Internal:
+        fullMessage << " internal";
         break;
     default:
         fullMessage << " unknown";
         TF_CODING_ERROR("Unhandled WebGPU error type");
         break;
     }
-    fullMessage <<  " error: " << message;
+    fullMessage <<  " error: " << (std::string_view)message;
     TF_RUNTIME_ERROR(fullMessage.str());
 }
 
@@ -120,7 +118,7 @@ static wgpu::Device
 GetDevice() {
     if (!instance) {
         wgpu::InstanceDescriptor instanceDescriptor{};
-        instanceDescriptor.features.timedWaitAnyEnable = true;
+        instanceDescriptor.capabilities.timedWaitAnyEnable = true;
         instance = wgpu::CreateInstance(&instanceDescriptor);
     }
 
@@ -149,7 +147,6 @@ GetDevice() {
         requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
     }
 
-#if !defined(ARCH_OS_WASM_VM)
     // toggles are handled by chrome itself, so we only enable it for the desktop version where we have direct
     // control
     wgpu::DawnTogglesDescriptor deviceTogglesDesc;
@@ -162,45 +159,44 @@ GetDevice() {
     deviceTogglesDesc.enabledToggles = enabledToggles.data();
     deviceTogglesDesc.enabledToggleCount = enabledToggles.size();
     descriptor.nextInChain = &deviceTogglesDesc;
-#endif
 
-    wgpu::SupportedLimits supportedLimits = {};
+    wgpu::Limits supportedLimits = {};
     adapter.GetLimits(&supportedLimits);
 
     static constexpr uint32_t minStorageBuffersPerShaderStage = 10;
     static constexpr uint32_t minColorAttachmentBytesPerSample = 64;
     static constexpr uint64_t minBufferSize = 0x40000000;
 
-    if (supportedLimits.limits.maxStorageBuffersPerShaderStage <
+    if (supportedLimits.maxStorageBuffersPerShaderStage <
         minStorageBuffersPerShaderStage) {
         TF_WARN("WebGPU limits: expected at least %u storage buffers per"
             " shader stage, but only %u buffers are supported."
             " Stability might be affected.",
             minStorageBuffersPerShaderStage,
-            supportedLimits.limits.maxStorageBuffersPerShaderStage);
+            supportedLimits.maxStorageBuffersPerShaderStage);
     }
-    if (supportedLimits.limits.maxColorAttachmentBytesPerSample <
+    if (supportedLimits.maxColorAttachmentBytesPerSample <
         minColorAttachmentBytesPerSample) {
         TF_WARN("WebGPU limits: expected at least %u color attachment"
             " bytes per sample, but only %u bytes is supported."
             " Stability might be affected.",
             minColorAttachmentBytesPerSample,
-            supportedLimits.limits.maxColorAttachmentBytesPerSample);
+            supportedLimits.maxColorAttachmentBytesPerSample);
     }
-    if (supportedLimits.limits.maxBufferSize < minBufferSize) {
+    if (supportedLimits.maxBufferSize < minBufferSize) {
         TF_WARN("WebGPU limits: expected a max buffer size of at least"
             " 0x%llx bytes, but only 0x%llx bytes is supported."
             " Stability might be affected.",
-            minBufferSize, supportedLimits.limits.maxBufferSize);
+            minBufferSize, supportedLimits.maxBufferSize);
     }
 
     // If the requirements are not met, dawn will throw a warning
-    wgpu::RequiredLimits limits = {};
-    limits.limits.maxStorageBuffersPerShaderStage =
-        supportedLimits.limits.maxStorageBuffersPerShaderStage;
-    limits.limits.maxColorAttachmentBytesPerSample =
-        supportedLimits.limits.maxColorAttachmentBytesPerSample;
-    limits.limits.maxBufferSize = supportedLimits.limits.maxBufferSize;
+    wgpu::Limits limits = {};
+    limits.maxStorageBuffersPerShaderStage =
+        supportedLimits.maxStorageBuffersPerShaderStage;
+    limits.maxColorAttachmentBytesPerSample =
+        supportedLimits.maxColorAttachmentBytesPerSample;
+    limits.maxBufferSize = supportedLimits.maxBufferSize;
     descriptor.requiredLimits = &limits;
 
     descriptor.requiredFeatures = requiredFeatures.data();
@@ -553,10 +549,10 @@ HgiWebGPU::QueryValue()
         }
     }
 
-    wgpu::RenderPassTimestampWrites HgiWebGPU::GetRenderTimestampWrites() {
+    wgpu::PassTimestampWrites HgiWebGPU::GetRenderTimestampWrites() {
         _ProcessNextInflightQuery();
 
-        wgpu::RenderPassTimestampWrites timestampWrites;
+        wgpu::PassTimestampWrites timestampWrites;
         timestampWrites.querySet = _inflightQuery->querySet;
         timestampWrites.beginningOfPassWriteIndex = 0;
         timestampWrites.endOfPassWriteIndex = 1;

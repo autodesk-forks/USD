@@ -48,7 +48,6 @@ if (EMSCRIPTEN)
     endif()
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} \
         -s USE_GLFW=3 \
-        -s USE_WEBGPU=1 \
         -s ALLOW_MEMORY_GROWTH \
     ")
     target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0")

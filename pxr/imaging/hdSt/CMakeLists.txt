@@ -217,6 +217,10 @@ pxr_library(hdSt
 )
 
 if (EMSCRIPTEN)
+    set_source_files_properties(resourceRegistry.cpp
+        PROPERTIES
+            COMPILE_FLAGS "-std=c++20"
+    )
     message(STATUS "Skipping rest of ${PXR_PACKAGE} tests because they are currently unsupported for wasm")
     return()
 endif()

@@ -2,7 +2,7 @@ Additional Requirements
 -----------------------
 
 Node version 18.0.0^
-Emscripten version 3.1.72
+Emscripten version 4.0.8
 
 Setup
 -----

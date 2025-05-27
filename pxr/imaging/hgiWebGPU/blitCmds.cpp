@@ -37,10 +37,8 @@
 #include "mipmapGenerator.h"
 #include <cstddef>
 
-#if defined(EMSCRIPTEN)
+#if defined(ARCH_OS_WASM_VM)
 #include <emscripten.h>
-#include <emscripten/html5.h>
-#include <emscripten/html5_webgpu.h>
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -82,31 +80,18 @@ HgiWebGPUBlitCmds::_MapAsyncAndWait(const wgpu::Buffer &buffer,
                                     size_t offset,
                                     size_t size) {
     bool done = false;
-#if defined(EMSCRIPTEN)
-    buffer.MapAsync(
-        mode, offset, size,
-        [](WGPUBufferMapAsyncStatus status, void *userdata) {
-            if (status != WGPUBufferMapAsyncStatus_Success) {
+    buffer.MapAsync(mode, offset, size,
+        wgpu::CallbackMode::AllowProcessEvents,
+        [&done](wgpu::MapAsyncStatus status, const char*) {
+            if (status != wgpu::MapAsyncStatus::Success) {
                 TF_WARN("Failed to call MapAsync");
             }
             // Make sure we dont need to wait for it anymore.
-            *static_cast<bool *>(userdata) = true;
-        },
-        &done);
-#else
-    buffer.MapAsync(mode, offset, size,
-                    wgpu::CallbackMode::AllowProcessEvents,
-                    [&done](wgpu::MapAsyncStatus status, const char*) {
-                        if (status != wgpu::MapAsyncStatus::Success) {
-                            TF_WARN("Failed to call MapAsync");
-                        }
-                        // Make sure we dont need to wait for it anymore.
-                        done = true;
+            done = true;
     });
-#endif
 
     while (!done) {
-#if defined(EMSCRIPTEN)
+#if defined(ARCH_OS_WASM_VM)
         emscripten_sleep(1);
 #else
         _hgi->EndFrame();
@@ -139,14 +124,14 @@ HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::
 
     int depthOffset = texDesc.layerCount>1 ? 0 : copyOp.sourceTexelOffset[2];
 
-	wgpu::ImageCopyTexture textureCopyView ;
+	wgpu::TexelCopyTextureInfo textureCopyView ;
 	textureCopyView.texture = srcTexture->GetTextureHandle();
 	textureCopyView.origin = {
         static_cast<uint32_t>(copyOp.sourceTexelOffset[0]),
         static_cast<uint32_t>(copyOp.sourceTexelOffset[1]),
         static_cast<uint32_t>(depthOffset)};
  
-	wgpu::TextureDataLayout textureDataLayout;
+	wgpu::TexelCopyBufferLayout textureDataLayout;
     uint32_t bytesPerRow = texDesc.dimensions[0] * bytesPerPixel;
     uint32_t bytesPerRowAligned = std::ceil(bytesPerRow / 256.0) * 256;
     // bytesPerRow has to be multiple of 256 https://www.w3.org/TR/webgpu/#gpuimagecopybuffer
@@ -160,7 +145,7 @@ HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::
 
     auto stagingBuffer = device.CreateBuffer(&desc);
 
-	wgpu::ImageCopyBuffer bufferCopyView;
+	wgpu::TexelCopyBufferInfo bufferCopyView;
 	bufferCopyView.buffer = stagingBuffer;
 	bufferCopyView.layout = textureDataLayout;
 	wgpu::Extent3D copySize = {
@@ -177,7 +162,7 @@ HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::
 
     auto bufferSize = copyOp.destinationBufferByteSize;
 
-    StagingData* stagingData = new StagingData();
+    auto stagingData = std::make_unique<StagingData>();
     stagingData->src = stagingBuffer;
     stagingData->dst = dst;
     stagingData->size = bufferSize;
@@ -185,7 +170,7 @@ HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::
     stagingData->bytesPerRow = bytesPerRow;
     stagingData->isTmp = true;
     stagingData->callback = callback;
-    _stagingDatas.push_back(stagingData);
+    _stagingDataItems.push_back(std::move(stagingData));
 }
 
 void
@@ -202,7 +187,7 @@ HgiWebGPUBlitCmds::CopyTextureCpuToGpu(
 
     GfVec3i const& offsets = copyOp.destinationTexelOffset;
 
-    wgpu::ImageCopyTexture destination;
+    wgpu::TexelCopyTextureInfo destination;
     destination.texture = dstTexture->GetTextureHandle();
     destination.mipLevel = copyOp.mipLevel;
     destination.origin = { 
@@ -210,7 +195,7 @@ HgiWebGPUBlitCmds::CopyTextureCpuToGpu(
         static_cast<uint32_t>(offsets[1]),
         static_cast<uint32_t>(offsets[2]) };
 
-    wgpu::TextureDataLayout dataLayout;
+    wgpu::TexelCopyBufferLayout dataLayout;
     dataLayout.bytesPerRow = copyOp.bufferByteSize / height;
     dataLayout.rowsPerImage = height;
 
@@ -373,7 +358,7 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
                 _hgi->QueueSubmit();
                 break;
             default:
-                TF_CODING_ERROR("Waiting %s type not supported\n", wait);
+                TF_CODING_ERROR("Waiting %u type not supported\n", wait);
                 break;
         }
 
@@ -382,18 +367,21 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
         // once we have submitted the copy commands we can do the mapping and copy
         // this could in theory be done in a completion handler but it seems emscripten
         // doesn't like an emscripten_sleep within another block containing and emscripten_sleep
-        for(StagingData* stagingData : _stagingDatas )
+        for(std::unique_ptr<StagingData>& stagingData : _stagingDataItems)
         {
-            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->size, [](WGPUBufferMapAsyncStatus status, void *userdata)
+            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->size, wgpu::CallbackMode::AllowProcessEvents,
+                [](wgpu::MapAsyncStatus status, wgpu::StringView message, StagingData* rawStagingData)
             {
-                if (status != WGPUBufferMapAsyncStatus_Success) 
+                std::unique_ptr<StagingData> stagingData{rawStagingData};
+
+                if (status != wgpu::MapAsyncStatus::Success)
                 {
-                    TF_WARN("Failed to call MapAsync");
+                    TF_WARN("Failed to call MapAsync: %s",
+                        ((std::string)message).c_str());
+                    return;
                 }
 
-                StagingData* stagingData = static_cast<StagingData *>(userdata);
-
-                // copy to statging data
+                // copy to staging data
                 const void *memoryPtr = stagingData->src.GetConstMappedRange(0, stagingData->size);
 
                 if (stagingData->bytesPerRow != stagingData->bytesPerRowAligned) 
@@ -418,8 +406,6 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
 
                 if (stagingData->isTmp) 
                 {
-                    // Call needed by emscripten due to bug https://github.com/emscripten-core/emscripten/pull/18790
-                    stagingData->src.Unmap();
                     stagingData->src.Destroy();
                 }
 
@@ -427,29 +413,33 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
                 {
                     // callback and we are done here
                     stagingData->callback(stagingData->dst);
-                    delete stagingData;
                 }
                 else
                 {
                     stagingData->asyncDone = true;
+                    (void)stagingData.release();
                 }
-            }, stagingData);            
+            }, stagingData.get());
 
-            if (!stagingData->callback)
+            if (stagingData->callback)
+            {
+                (void)stagingData.release();
+            }
+            else
             {
                 // no callback so we need to wait for the async call to finish
                 while (!stagingData->asyncDone) 
                 {
-                    #if defined(EMSCRIPTEN)
+                    #if defined(ARCH_OS_WASM_VM)
                         emscripten_sleep(1);
                     #else
                         _hgi->EndFrame();
                     #endif
-                }            
-                delete stagingData;
+                }
             }
         }
-        _stagingDatas.clear();
+
+        _stagingDataItems.clear();
     }
 
     return submittedWork;

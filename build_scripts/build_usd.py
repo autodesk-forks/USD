@@ -392,7 +392,7 @@ def FormatMultiProcs(numJobs, generator):
 
     return "{tag}{procs}".format(tag=tag, procs=numJobs)
 
-def RunCMake(context, force, extraArgs = None, target="install"):
+def RunCMake(context, force, extraArgs=None, *, buildDirName=None, target="install"):
     """Invoke CMake to configure, build, and install a library whose 
     source code is located in the current working directory."""
     # Create a directory for out-of-source builds in the build directory
@@ -408,7 +408,8 @@ def RunCMake(context, force, extraArgs = None, target="install"):
     srcDir = os.getcwd()
     instDir = (context.usdInstDir if srcDir == context.usdSrcDir
                else context.instDir)
-    buildDir = os.path.join(context.buildDir, os.path.split(srcDir)[1])
+    buildDir = os.path.join(context.buildDir, buildDirName if buildDirName
+                            else os.path.split(srcDir)[1])
     if force and os.path.isdir(buildDir):
         shutil.rmtree(buildDir)
 
@@ -1705,10 +1706,9 @@ THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6858"
+DAWN_CHROMIUM_VERSION = "7187"
 
 DAWN_CMAKE_OPTIONS = [
-    '-DTINT_BUILD_SPV_READER=ON',
     '-DTINT_BUILD_WGSL_WRITER=ON',
     '-DTINT_BUILD_TESTS=OFF',
     '-DTINT_BUILD_CMD_TOOLS=OFF',
@@ -1769,24 +1769,7 @@ def PrepareDawn(context, force):
                 '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
                 ])
 
-            if context.targetWasm:
-                # We need to resolve spirv dependencies even when dawn is disabled, so we skip the return() statement
-                PatchFile("third_party/CMakeLists.txt",[('    return()','    #return()')])
-                # If we are building for wasm, we only want to build tint. Currently, there is no way to build tint
-                # as a standalone library, so we disable it by skipping the dawn folder through a patch
-                PatchFile("CMakeLists.txt",
-                          [('if (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12 OR DAWN_ENABLE_METAL OR DAWN_ENABLE_NULL OR DAWN_ENABLE_DESKTOP_GL OR DAWN_ENABLE_OPENGLES OR DAWN_ENABLE_VULKAN OR DAWN_ENABLE_EMSCRIPTEN)',
-                            'if (False)')])
-                # This will allow us to install the already built spirv-tools library
-                PatchFile("third_party/spirv-headers/src/CMakeLists.txt", [
-                    ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
-                ])
-            elif Linux():
-                PatchFile("src/dawn/common/StringViewUtils.cpp",
-                    [('#include "dawn/common/StringViewUtils.h"\n',
-                      '#include "dawn/common/StringViewUtils.h"\n'
-                      '#include <cstring>\n')])
-            elif Windows():
+            if Windows():
                 # Dawn native cmake needs revise for DX12
                 PatchFile("src/dawn/native/CMakeLists.txt",
                           [('    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n',
@@ -1805,6 +1788,7 @@ def InstallDawn(context, force, buildArgs):
             ]
 
             cmakeOptions += DAWN_CMAKE_OPTIONS
+            cmakeOptions += ['-DTINT_BUILD_SPV_READER=ON']
             cmakeOptions += buildArgs
             buildDir = RunCMake(context, force, cmakeOptions)
         
@@ -1831,6 +1815,39 @@ def InstallDawn(context, force, buildArgs):
 
 DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
 
+def InstallDawnHeaders(context, force, buildArgs):
+    PrepareDawn(context, force)
+    
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn")
+        with CurrentWorkingDirectory(srcDir):
+            # Add pthread support to webgpu port build since it's required for USD.
+            # This is a temporary workaround until the fix lands in Dawn.
+            # See https://issues.chromium.org/issues/420406098
+            PatchFile("src/emdawnwebgpu/pkg/emdawnwebgpu.port.py",[
+            ("    flags = [opt_level_flag]",
+             '''    flags = [opt_level_flag, '-pthread']''')
+             ])
+            cmakeOptions = DAWN_CMAKE_OPTIONS
+            cmakeOptions += [
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' "',
+            ]
+            cmakeOptions += buildArgs
+            buildDir = RunCMake(context, force, cmakeOptions, target="emdawnwebgpu_pkg")
+
+        with CurrentWorkingDirectory(buildDir):
+            CopyDirectory(context, "emdawnwebgpu_pkg", "ports/emdawnwebgpu_pkg")
+            Run('{} --force {} build {}'.format(
+                'embuilder.bat' if Windows() else 'embuilder',
+                '--wasm64' if context.targetWasm64 else '',
+                os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py")
+            ))
+            
+
+DAWN_HEADERS = Dependency("DawnHeaders", InstallDawnHeaders, "ports/emdawnwebgpu_pkg/README.md")
+
 
 ############################################################
 # glslang
@@ -1844,7 +1861,6 @@ def InstallGlslang(context, force, buildArgs):
                                "tint installation was not executed firts")
 
         with CurrentWorkingDirectory(srcDir):
-
             if context.buildDebug:
                 PatchFile("CMakeLists.txt", [('set(CMAKE_DEBUG_POSTFIX "d")','set(CMAKE_DEBUG_POSTFIX "")')])
 
@@ -1864,7 +1880,7 @@ def InstallGlslang(context, force, buildArgs):
                     '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
                 ]
             cmakeOptions += buildArgs
-            RunCMake(context, force, cmakeOptions)
+            RunCMake(context, force, cmakeOptions, buildDirName='glslang')
 
 GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangToSpv.h")
 
@@ -1877,6 +1893,17 @@ def InstallTint(context, force, buildArgs):
         srcDir = os.path.join(os.getcwd(), "dawn")
 
         with CurrentWorkingDirectory(srcDir):
+            # We need to resolve spirv dependencies even when dawn is disabled, so we skip the return() statement
+            PatchFile("third_party/CMakeLists.txt",[('    return()','    #return()')])
+            # If we are building for wasm, we only want to build tint. Currently, there is no way to build tint
+            # as a standalone library, so we disable it by skipping the dawn folder through a patch
+            PatchFile("CMakeLists.txt",
+                      [('if (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12 OR DAWN_ENABLE_METAL OR DAWN_ENABLE_NULL OR DAWN_ENABLE_DESKTOP_GL OR DAWN_ENABLE_OPENGLES OR DAWN_ENABLE_VULKAN OR EMSCRIPTEN)',
+                        'if (False)')])
+            # This will allow us to install the already built spirv-tools library
+            PatchFile("third_party/spirv-headers/src/CMakeLists.txt", [
+                ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
+            ])
             cmakeOptions = [
                 '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
                     + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
@@ -1887,6 +1914,7 @@ def InstallTint(context, force, buildArgs):
             ]
             cmakeOptions += buildArgs
             cmakeOptions += DAWN_CMAKE_OPTIONS
+            cmakeOptions += ['-DTINT_BUILD_SPV_READER=ON']
             # In the case of the desktop build, we need to let tint specify the value of the readers and writers for
             # the current platform, so that it also matches the corresponding Dawn backend (e.g. Metal).
             # In contrast, the emscripten build just needs to process the glsl to wgsl and the browser implementation
@@ -2184,9 +2212,10 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
             extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
-            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            webGPUPortArg = "--use-port={}".format(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py"))
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' ' + webGPUPortArg + '"')
             extraArgs.append('-DCMAKE_C_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
-            extraArgs.append('-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"')
             # For some reason we have to manually specify path to boost
             extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
 
@@ -2887,7 +2916,7 @@ if context.buildImaging:
     if context.buildWebGPU:
         if context.targetWasm:
             # Same as above, please keep the dependencies order.
-            requiredDependencies += [TINT, GLSLANG]
+            requiredDependencies += [DAWN_HEADERS, TINT, GLSLANG]
         else:
             # Please keep the dependencies order as glslang is a
             # dependency of Dawn and, it is downloaded when building it.
