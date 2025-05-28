@@ -151,18 +151,22 @@
         }
     </script>
     <br>
-    Tests
-    <input type="button" id="TexQuad_Usd"  value="TexQuad_Usd"/>
-    <input type="button" id="TexQuad_Mtlx" value="TexQuad_Mtlx"/>
-    <input type="button" id="StdShrBallGrnd"  value="StdShrBallGrnd"/>
+    USD Tests
     <input type="button" id="blue_sphere" value="blue_sphere">
+    <input type="button" id="TexQuad_Usd"  value="TexQuad_Usd"/>
+    <input type="button" id="StdShrBallGrnd"  value="StdShrBallGrnd"/>
+    <br>
+    MaterialX Tests
     <input type="button" id="sphere_mtlx" value="sphere_mtlx">
+    <input type="button" id="TexQuad_Mtlx" value="TexQuad_Mtlx"/>
+    <input type="button" id="sample_mtlx_brick" value="sample_mtlx_brick">
     <script>
-        document.getElementById("TexQuad_Usd").onclick  = () => {loadscene_with_deps_and_actions("textured_quad.usda", ["uvgrid.png"]);};
-        document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("textured_quad_mtlx.usda", ["uvgrid.png"]);};
-        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("standard_shader_ball_ground.usda", ["uvgrid.png"]);};
         document.getElementById("blue_sphere").onclick = () => loadscene_with_deps_and_actions("blue_sphere.usda");
+        document.getElementById("TexQuad_Usd").onclick  = () => {loadscene_with_deps_and_actions("textured_quad.usda", ["uvgrid.png"]);};
+        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("standard_shader_ball_ground.usda", ["uvgrid.png"]);};
         document.getElementById("sphere_mtlx").onclick = () => loadscene_with_deps_and_actions("sphere_mtlx.usdz");
+        document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("textured_quad_mtlx.usda", ["uvgrid.png"]);};
+        document.getElementById("sample_mtlx_brick").onclick = () => loadscene_with_deps_and_actions("sample_mtlx_brick.usdz");
     </script>
     <br>   
     Samples:
