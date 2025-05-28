@@ -348,7 +348,6 @@ HdStGLSLProgram::CompileShader(HgiShaderFunctionDesc const &desc)
 
     // Create a shader, compile it
     Hgi *const hgi = _registry->GetHgi();
-    const TfToken apiName = hgi->GetAPIName();
 
     // Optionally, capture generated shader code for diagnostic output.
     std::string *generatedCode = desc.generatedShaderCodeOut;
