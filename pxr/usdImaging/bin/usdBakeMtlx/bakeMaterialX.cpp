@@ -132,7 +132,8 @@ void _BakeMtlxDocument(
     MATERIALX_BUILD_VERSION <= 6
     mx::TextureBakerPtr baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
-#elif ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#elif ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION <= 39) && \
+    (MATERIALX_BUILD_VERSION < 4))
     mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #else
