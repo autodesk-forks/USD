@@ -22,8 +22,8 @@
 // language governing permissions and limitations under the Apache License.
 //
 
-#ifndef PXR_USD_WEB_FREECAMERAGL_H
-#define PXR_USD_WEB_FREECAMERAGL_H
+#ifndef PXR_USDWEB_FREECAMERAGL_H
+#define PXR_USDWEB_FREECAMERAGL_H
 
 #include <pxr/base/gf/vec2d.h>
 #include <pxr/base/gf/vec3d.h>
@@ -33,8 +33,6 @@
 #include <pxr/base/gf/camera.h>
 #include <pxr/base/gf/frustum.h> // @REVISIT: can remove if GfFrustum removed from header
 #include <pxr/usd/usd/prim.h>
-
-#include <iostream>
 
 class FreeCameraGL
 {

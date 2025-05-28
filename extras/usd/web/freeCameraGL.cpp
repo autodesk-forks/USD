@@ -27,7 +27,6 @@
 //      stageView.py
 //      freeCamera.py
 //
-
 #include "freeCameraGL.h"
 
 #include <pxr/base/gf/vec2d.h>

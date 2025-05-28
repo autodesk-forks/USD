@@ -69,23 +69,13 @@
 #include <pxr/imaging/hgi/debugCodes.h>
 #include <cstdlib> // for setenv
 
-
 #include "freeCameraGL.h"
 #include "window_state.h"
+#include "debugCodes.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEBUG_CODES(
-        INFO
-);
-
-TF_REGISTRY_FUNCTION(TfDebug)
-{
-    TF_DEBUG_ENVIRONMENT_SYMBOL(INFO, "UsdViewWeb info");
-}
-
 namespace usdweb {
-
     std::function<void()> loop;
     pxr::UsdImagingGLRenderParams renderParams;
     std::unique_ptr<pxr::UsdImagingGLEngine> glEngine;
@@ -277,7 +267,7 @@ struct VertexOutput {
     {
         // Make sure defaultLighting vector is current
         if (_defaultLightingDirty) {
-            std::cout << "Updating lights since _defaultLightingDirty." << std::endl;
+            TF_DEBUG_MSG(USDWEB, "Updating lights since _defaultLightingDirty.");
             defaultLighting.clear();
             if (cameraLightEnabled) {
                 defaultLighting.push_back(cameraLight); 
@@ -357,13 +347,13 @@ struct VertexOutput {
             TF_RUNTIME_ERROR("Couldn't set renderer plugin: %s", renderer.GetText());
             exit(-1);
         } else {
-            TF_INFO(INFO).Msg("Renderer plugin: %s", renderer.GetText());
+            TF_INFO(USDWEB).Msg("Renderer plugin: %s", renderer.GetText());
         }
         if (!glEngine) {
             TF_RUNTIME_ERROR("Couldn't initialize UsdImagingGLEngine");
             exit(-1);
         } else {
-            TF_INFO(INFO).Msg("UsdImagingGLEngine initialized successfully");
+            TF_INFO(USDWEB).Msg("UsdImagingGLEngine initialized successfully");
         }
 
         renderParams.showRender = true;
@@ -380,7 +370,7 @@ struct VertexOutput {
 
 
     extern "C" int initialize(uint32_t width, uint32_t height) {
-        TF_INFO(INFO).Msg("Starting GLEngine ");
+        TF_INFO(USDWEB).Msg("Starting GLEngine ");
         initGLEngine();
         glfwSetErrorCallback(error_callback);
         if (!glfwInit())

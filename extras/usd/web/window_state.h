@@ -22,16 +22,19 @@
 // language governing permissions and limitations under the Apache License.
 //
 
-#include <GLFW/glfw3.h>
-#include <iostream>
-#include "freeCameraGL.h"
+#ifndef PXR_USDWEB_WINDOW_STATE_H
+#define PXR_USDWEB_WINDOW_STATE_H
 
-#ifndef PXR_USD_IMAGING_USD_WINDOW_STATE_H
-#define PXR_USD_IMAGING_USD_WINDOW_STATE_H
+#include <GLFW/glfw3.h>
+#include "freeCameraGL.h"
+#include "debugCodes.h"
+#include "pxr/base/tf/diagnostic.h"
+
+PXR_NAMESPACE_OPEN_SCOPE
 
 static void error_callback(int error, const char *description)
 {
-    std::cout << "Error: " << description << std::endl;
+    TF_RUNTIME_ERROR(description);
 }
 
 // GLFW window state data
@@ -76,4 +79,6 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     windowState->camera->update();
 }
 
-#endif //PXR_USD_IMAGING_USD_WINDOW_STATE_H
+PXR_NAMESPACE_CLOSE_SCOPE
+
+#endif

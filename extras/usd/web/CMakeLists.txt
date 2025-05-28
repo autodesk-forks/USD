@@ -7,25 +7,16 @@ pxr_cpp_bin(${PXR_PACKAGE}
         hdStorm
         usdShaders
         usdUtils
-        # Trial libs that may be needed for MaterialX
-        hdSt         # not sure if this is needed here for MaterialX
-        usdMtlx      # not sure if needed
-        usdImaging
+        hdSt
+        usdMtlx
         sdrGlslfx
-        usdShaders
-
 
     INCLUDE_DIRS
         ${TBB_INCLUDE_DIRS}
+
+    PRIVATE_CLASSES
+        debugCodes
 )
-
-#set(MATERIALX_RESOURCES "item1;item2;item3")
-#file(GLOB MATERIALX_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/*")
-#file(GLOB_RECURSE MATERIALX_RESOURCES "${CMAKE_INSTALL_PREFIX}/libraries/*")
-#list(TRANSFORM MATERIALX_RESOURCES REPLACE "${CMAKE_INSTALL_PREFIX}/" "")
-#message(AUTHOR_WARNING "MATERIALX_RESOURCES: \"${MATERIALX_RESOURCES}\"")
-#message(FATAL_ERROR "EXITING FOR TESTING...")
-
 
 if (EMSCRIPTEN)
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
@@ -56,7 +47,6 @@ if (EMSCRIPTEN)
         -s NO_EXIT_RUNTIME=1 \
         -s SHARED_MEMORY=1 \
     ")
-    #-s STACK_SIZE=786432
     if(PXR_WASM_NODE)
         target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:-s NODERAWFS=0")
     endif ()
@@ -71,7 +61,6 @@ if (EMSCRIPTEN)
         -s ALLOW_MEMORY_GROWTH \
         -s FULL_ES3 \
     ")
-    # See if this is useful: -sFULL_ES3
 
     target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0 -O0")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
