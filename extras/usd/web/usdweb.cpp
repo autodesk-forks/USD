@@ -291,20 +291,6 @@ struct VertexOutput {
                 pxr::HdRenderSettingsTokens->domeLightCameraVisibility,
                 pxr::VtValue(domeLightEnabled));
         }
-        // HACK
-        /*
-        std::cerr << "IN initParamsForWebStage  === " << std::endl;
-        pxr::PlugRegistry& pluginRegistry = pxr::PlugRegistry::GetInstance();
-        //auto pluginRegistry = PlugRegistry::GetInstance();
-        auto allPlugins = pluginRegistry.GetAllPlugins();
-        for (const auto& element : allPlugins) {
-            auto e_name = element->GetName();
-            auto e_path = element->GetPath();
-            auto e_isLoaded = element->IsLoaded();
-            auto e_metadata = element->GetMetadata();
-            std::cerr << "PLUGIN NAME " << e_name << " PATH = " << e_path << " LOADED=" << e_isLoaded << std::endl;
-        }
-        */
     }
  
 
@@ -332,29 +318,14 @@ struct VertexOutput {
 
     void initGLEngine() {
         TfDebug::Enable(HDST_DUMP_FAILING_SHADER_SOURCEFILE);
-        TfDebug::Enable(HGI_DEBUG_DEVICE_CAPABILITIES);
+        //TfDebug::Enable(HGI_DEBUG_DEVICE_CAPABILITIES);
         //TfDebug::Enable(HDST_DUMP_SHADER_SOURCE);
-        TfDebug::Enable(HDST_DUMP_SHADER_SOURCEFILE);
+        //TfDebug::Enable(HDST_DUMP_SHADER_SOURCEFILE);
         setenv("HGIGL_ENABLE_BINDLESS_TEXTURE", "0", 1);
         setenv("HGIGL_ENABLE_BINDLESS_BUFFER", "0", 1);
         setenv("HGIGL_ENABLE_BUILTIN_BARYCENTRICS", "0", 1);
         setenv("HGIGL_ENABLE_MULTI_DRAW_INDIRECT", "0", 1);
         setenv("HGIGL_ENABLE_SHADER_DRAW_PARAMETERS", "0", 1);
-
-        // HACK
-        /*
-        std::cerr << "IN initGLEngine  === " << std::endl;
-        pxr::PlugRegistry& pluginRegistry = pxr::PlugRegistry::GetInstance();
-        //auto pluginRegistry = PlugRegistry::GetInstance();
-        auto allPlugins = pluginRegistry.GetAllPlugins();
-        for (const auto& element : allPlugins) {
-            auto e_name = element->GetName();
-            auto e_path = element->GetPath();
-            auto e_isLoaded = element->IsLoaded();
-            auto e_metadata = element->GetMetadata();
-            std::cerr << "PLUGIN NAME " << e_name << " PATH = " << e_path << " LOADED=" << e_isLoaded << std::endl;
-        }
-        */
 
         // Init USD render params
         initUsdRenderParams();
@@ -373,9 +344,6 @@ struct VertexOutput {
             shader.CreateInput(pxr::TfToken("diffuseColor"), pxr::SdfValueTypeNames->Color3f).Set(pxr::GfVec3f(0.1, 0.1, 0.8));
             material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), pxr::TfToken("surface"));
             pxr::UsdShadeMaterialBindingAPI(prim).Apply(prim).Bind(material);
-            //std::string tmp_str;
-            //stage->ExportToString(&tmp_str);
-            //std::cerr << tmp_str << std::endl;
             initParamsForWebStage();
         }
 
@@ -660,14 +628,6 @@ void wrap_ems_setup()
 {
     pxr::usdweb::ems_setup();   
 }
-
-
-/*
-void wrap_initialize(uint32_t width, uint32_t height)
-{
-    pxr::usdweb::initialize(width, height);
-}
-*/
 
 pxr::UsdStageRefPtr& wrap_getStage()
 {

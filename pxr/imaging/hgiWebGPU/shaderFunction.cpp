@@ -31,11 +31,12 @@
 #include "pxr/imaging/hgiWebGPU/shaderGenerator.h"
 
 #include <sstream>
-#include <iostream>  // HACK: for std::cout
+
+//#define WGSL_MATERIALX_138_SHADERCODE_HACK
+#ifdef WGSL_MATERIALX_138_SHADERCODE_HACK
 #include <regex>  // HACK [sbrew] for LightData.type -> LightData.lightType
 #include <fstream> // HACK: Writing files
-#include <strstream> // HACK: Writing files
-
+#endif
 
 #if defined EMSCRIPTEN
 #include <emscripten.h>
@@ -133,8 +134,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
 
     shaderGenerator.Execute();
 
-//#define HACK_WGSL_CODE_MODIFICATIONS
-#ifdef HACK_WGSL_CODE_MODIFICATIONS
+#ifdef WGSL_MATERIALX_138_SHADERCODE_HACK
     // ShaderCode HACK [sbrew]
     //   1) Change member variable name of Replace LightData.type -> LightData.lightType , as "type" can be a reserved word
     //   2) Modify the mx_latlong_map_lookup() shader code resulting from snippets in libraries/pbrlib/genglsl/lib/*.glsl
@@ -142,7 +142,10 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     // const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
     // BEG: ShaderCode Hack
     std::string shaderCode_HACK_REPLACE = shaderGenerator.GetGeneratedShaderCode();
-    std::cout << "MaterialX shadergen HACK: 1) Replace LightData.type with LightData.lightType. 2) Unroll functions that take sampler2D as a parameter: mx_latlong_map_lookup, mx_image_color[3,4], mx_image_vector[2,3,4], mx_image_float)" << std::endl;
+    TF_WARN("MaterialX 1.38 HACK: "
+        "1) Replace LightData.type with LightData.lightType. "
+        "2) Unroll functions that take sampler2D as a parameter: mx_latlong_map_lookup, "
+        "mx_image_color[3,4], mx_image_vector[2,3,4], mx_image_float)");
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("int type;"), "int lightType;");
     shaderCode_HACK_REPLACE = std::regex_replace(shaderCode_HACK_REPLACE, std::regex("\\.type"), ".lightType");
     // Unroll
@@ -166,11 +169,10 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     std::stringstream ofstreamName;
     static size_t debugShaderID = 0;
     ofstreamName << "program_modified_glsl_" << debugShaderID++ << ".frag";
-    std::cout << "Writing out '" << ofstreamName.str() << "'" << std::endl;
+    TF_STATUS("Writing out '" + ofstreamName.str() + "'");
     std::fstream outputFile(ofstreamName.str(), std::ios::out);
     outputFile << shaderCode_HACK_REPLACE << std::endl;
     outputFile.close();
-    // END: ShaderCode Hack
 #else
     const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
 #endif

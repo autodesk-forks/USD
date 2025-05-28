@@ -178,19 +178,6 @@ _CreateHdStMaterialXContext(
         return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
     }
     if (apiName == HgiTokens->WebGPU) {
-        // This causes a GLSL compile error with Sampler2D
-        //return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
-        //
-        //   Shader compiler code refers to Vulkan
-        //   WebGPU/shaderCompiler.cpp/HgiWebGPUCompileGLSL():68
-        //      shader.setEnvClient(glslang::EShClientVulkan,
-        //                          glslang::EShTargetVulkan_1_0);
-        //
-
-        // Ashwin Bhat indicates that should use HdStMaterialXShaderGenVkGlsl
-        //
-        // Issue in Dawn for compiling Sampler2D
-        //     See https://dawn.googlesource.com/dawn/+/refs/heads/chromium/6530/docs/tint/spirv-reader-overview.md#passing-textures-and-samplers-into-helper-functions
 #if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
         return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
 #else

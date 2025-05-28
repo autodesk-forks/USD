@@ -185,8 +185,8 @@ _ValidateCompilation(
         output << shaderSource;
         output.close();
 
-        std::cout << "Write " << fname
-                  << " (size=" << shaderSource.size() << ")\n";
+        TF_DEBUG_MSG(HDST_DUMP_SHADER_SOURCEFILE, "Dumping Shader Sourcefile: "+fname);
+        TF_DEBUG_MSG(HDST_DUMP_FAILING_SHADER_SOURCEFILE, "Dumping Failing Shader Sourcefile: "+fname);
     }
 
     if (!shaderFn->IsValid()) {
@@ -342,7 +342,6 @@ HdStGLSLProgram::CompileShader(HgiShaderFunctionDesc const &desc)
 
     TF_DESCRIBE_SCOPE(
         "Compiling GLSL shader" + _GetScopeDescriptionLabel(_programDesc));
-    std::cout << "Compiling GLSL shader" << _GetScopeDescriptionLabel(_programDesc) << std::endl;
 
     if (TfDebug::IsEnabled(HDST_DUMP_SHADER_SOURCE)) {
         _DumpShaderSource(desc);
@@ -351,7 +350,6 @@ HdStGLSLProgram::CompileShader(HgiShaderFunctionDesc const &desc)
     // Create a shader, compile it
     Hgi *const hgi = _registry->GetHgi();
     const TfToken apiName = hgi->GetAPIName();
-    std::cout << "HdStGLSLProgram::CompileShader: _registry->GetHgi()->GetAPIName() = " << apiName << std::endl;
 
     // Optionally, capture generated shader code for diagnostic output.
     std::string *generatedCode = desc.generatedShaderCodeOut;

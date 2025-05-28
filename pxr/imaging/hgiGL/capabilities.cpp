@@ -48,7 +48,6 @@ void
 HgiGLCapabilities::_LoadCapabilities()
 {
     GarchGLApiLoad();
-    std::cout << "In HgiGLCapabilities::_LoadCapabilities()" << std::endl;
 
     // Reset values to reasonable defaults based of OpenGL minimums.
     // So that if we early out, systems can still depend on the

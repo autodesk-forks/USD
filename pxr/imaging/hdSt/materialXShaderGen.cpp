@@ -432,7 +432,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     mx::VariableBlock const& vertexData,
     mx::ShaderStage& mxStage) const
 {
-    this->emitComment("BEGIN: _EmitMxInitFunction()", mxStage);
     Base::setFunctionName("mxInit", mxStage);
     emitLine("void mxInit(vec4 Peye, vec3 Neye)", mxStage, false);
     Base::emitScopeBegin(mxStage);
@@ -463,7 +462,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     }
 
     // Initialize MaterialX parameters with HdGet_ equivalents
-    Base::emitComment("BEGIN: Initialize MaterialX parameters with HdGet_ equivalents", mxStage);
+    Base::emitComment("Initialize MaterialX parameters with HdGet_ equivalents", mxStage);
     const mx::VariableBlock& paramsBlock =
         mxStage.getUniformBlock(mx::HW::PUBLIC_UNIFORMS);
     for (size_t i = 0; i < paramsBlock.size(); ++i) {
@@ -791,7 +790,6 @@ HdStMaterialXShaderGen<Base>::_EmitDataStructsAndFunctionDefinitions(
     mx::ShaderStage& mxStage,
     MaterialX::StringMap* tokenSubstitutions) const
 {
-    this->emitComment("BEGIN: _EmitDataStructsAndFunctionDefinitions()", mxStage);
     const bool lighting =
         mxGraph.hasClassification(mx::ShaderNode::Classification::SHADER |
                                   mx::ShaderNode::Classification::SURFACE)
@@ -964,7 +962,6 @@ HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions(
     mx::GenContext& mxContext,
     mx::ShaderStage& mxStage) const
 {
-    this->emitComment("BEGIN: _EmitMxFunctions()", mxStage);
     this->_EmitAdditionalDefines(mxContext, mxStage);
     this->emitLibraryInclude(
         "stdlib/" + this->getTarget()
