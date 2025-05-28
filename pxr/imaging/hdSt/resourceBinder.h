@@ -13,6 +13,7 @@
 #include "pxr/imaging/hd/version.h"
 #include "pxr/imaging/hgi/capabilities.h"
 #include "pxr/imaging/hgi/handle.h"
+#include "pxr/imaging/hgi/enums.h"
 #include "pxr/base/tf/token.h"
 #include "pxr/base/tf/stl.h"
 #include "pxr/base/tf/staticTokens.h"
@@ -174,6 +175,8 @@ public:
             TfToken blockName;
             std::vector<StructEntry> entries;
             int arraySize;
+            bool isWritable;
+            HgiShaderStage stageVisibility;
         };
         using StructBlockBinding = std::map<HdStBinding, StructBlock>;
 
@@ -257,16 +260,19 @@ public:
             BindingDeclaration(TfToken const &name,
                                TfToken const &dataType,
                                HdStBinding binding,
-                               bool isWritable = false)
+                               bool isWritable = false,
+                               HgiShaderStage stageVisibility = HgiShaderStageAll)
                 : name(name)
                 , dataType(dataType)
                 , binding(binding)
-                , isWritable(isWritable) { }
+                , isWritable(isWritable)
+                , stageVisibility(stageVisibility) {}
 
             TfToken name;
             TfToken dataType;
             HdStBinding binding;
             bool isWritable;
+            HgiShaderStage stageVisibility;
         };
 
         // -------------------------------------------------------------------
@@ -336,7 +342,8 @@ public:
                          MetaData::DrawingCoordBufferBinding const &dcBinding,
                          bool instanceDraw,
                          HdStBindingRequestVector const &customBindings,
-                         HgiCapabilities const *capabilities);
+                         HgiCapabilities const *capabilities,
+                         TfToken const &apiName);
 
     /// Assign all binding points used in computation.
     /// Returns metadata to be used for codegen.

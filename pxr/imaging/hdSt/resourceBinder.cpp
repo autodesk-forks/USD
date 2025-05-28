@@ -27,6 +27,7 @@
 #include "pxr/imaging/hgiGL/shaderProgram.h"
 
 #include "pxr/imaging/hgi/resourceBindings.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/tf/staticTokens.h"
 
@@ -178,7 +179,8 @@ HdSt_ResourceBinder::ResolveBindings(
     HdSt_ResourceBinder::MetaData::DrawingCoordBufferBinding const &dcBinding,
     bool instanceDraw,
     HdStBindingRequestVector const &customBindings,
-    HgiCapabilities const *capabilities)
+    HgiCapabilities const *capabilities,
+    TfToken const &apiName)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -190,7 +192,7 @@ HdSt_ResourceBinder::ResolveBindings(
     const bool bindlessTexturesEnabled = 
         capabilities->IsSet(HgiDeviceCapabilitiesBitsBindlessTextures);
     const bool isMetal =
-        capabilities->IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
+            apiName == HgiTokens->Metal;
 
     HdStBinding::Type arrayBufferBindingType = HdStBinding::SSBO;
     if (bindlessBuffersEnabled) {
@@ -611,7 +613,9 @@ HdSt_ResourceBinder::ResolveBindings(
                 MetaData::BindingDeclaration(
                     /*name=*/HdInstancerTokens->instanceIndices,
                     /*type=*/glType,
-                    /*binding=*/instanceIndexArrayBinding);
+                    /*binding=*/instanceIndexArrayBinding,
+                    /*isWritable=*/false,
+                    /*stageVisibility=*/InputShaderStageBits);
         }
         if (culledInstanceIndices) {
             HdStBinding culledInstanceIndexArrayBinding =
@@ -627,7 +631,8 @@ HdSt_ResourceBinder::ResolveBindings(
                     /*name=*/HdInstancerTokens->culledInstanceIndices,
                     /*type=*/glType,
                     /*binding=*/culledInstanceIndexArrayBinding,
-                    /*isWritable=*/true);
+                    /*isWritable=*/true,
+                    /*stageVisibility=*/InputShaderStageBits);
         }
     }
 
@@ -931,6 +936,8 @@ HdSt_ResourceBinder::ResolveBindings(
                                             concatenateNames);
             }
             sblock.arraySize = it->GetArraySize();
+            sblock.isWritable = it->isWritable();
+            sblock.stageVisibility = it->GetStageVisibility();
             metaDataOut->customInterleavedBindings.insert(
                 std::make_pair(binding, sblock));
             _bindingMap[it->GetName()] = binding;
@@ -952,7 +959,8 @@ HdSt_ResourceBinder::ResolveBindings(
                         HdStGLConversions::GetGLSLTypename(
                             nameRes.second->GetTupleType().type),
                         binding,
-                        it->isWritable());
+                        it->isWritable(),
+                        it->GetStageVisibility());
                     metaDataOut->customBindings.push_back(b);
                     _bindingMap[nameRes.first] = binding;
                 }

@@ -360,8 +360,12 @@ enum HgiShaderStageBits : HgiBits
     HgiShaderStagePostTessellationControl = 1 << 6,
     HgiShaderStagePostTessellationVertex = 1 << 7,
     HgiShaderStageCustomBitsBegin        = 1 << 8,
+    HgiShaderStageAll                    = 0xFFFFFFFF
+
 };
 using HgiShaderStage = HgiBits;
+
+inline const HgiShaderStage InputShaderStageBits = HgiShaderStageVertex | HgiShaderStageCompute | HgiShaderStagePostTessellationControl | HgiShaderStagePostTessellationVertex;
 
 /// \enum HgiBindResourceType
 ///
@@ -807,10 +811,6 @@ enum HgiShaderTextureType
     HgiShaderTextureTypeArrayTexture,
     HgiShaderTextureTypeCubemapTexture
 };
-
-/// \enum HgiComputeDispatch
-///
-/// Specifies the dispatch method for compute encoders.
 ///
 /// <ul>
 /// <li>HgiComputeDispatchSerial:

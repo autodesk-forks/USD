@@ -166,7 +166,8 @@ public:
     HdStBindingRequest(HdStBinding::Type type, TfToken const& name,
                        HdBufferArrayRangeSharedPtr bar,
                        bool interleave, bool writable = false,
-                       size_t arraySize = 0, bool concatenateNames = false)
+                       size_t arraySize = 0, bool concatenateNames = false,
+                       HgiShaderStage stageVisibility = HgiShaderStageAll)
         : _bindingType(type)
         , _dataType(HdTypeInvalid)
         , _name(name)
@@ -176,6 +177,7 @@ public:
         , _isWritable(writable)
         , _arraySize(arraySize)
         , _concatenateNames(concatenateNames)
+        , _stageVisibility(stageVisibility)
     {}
 
     // ---------------------------------------------------------------------- //
@@ -265,6 +267,11 @@ public:
         return _concatenateNames;
     }
 
+    /// Returns the stage visibility of the binding
+    HgiShaderStage GetStageVisibility() const {
+        return _stageVisibility;
+    }
+
     // ---------------------------------------------------------------------- //
     /// \name Comparison
     // ---------------------------------------------------------------------- //
@@ -318,6 +325,8 @@ private:
     size_t _arraySize;
 
     bool _concatenateNames;
+
+    HgiShaderStage _stageVisibility;
 };
 
 
