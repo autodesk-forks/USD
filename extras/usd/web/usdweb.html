@@ -88,6 +88,53 @@
 </div>
 
 <div id="footer">
+    <script>
+        async function loadscene_with_deps_and_actions(scenefile, depfiles=[], callback_func=null)
+        {
+            const container = container_clear( get_actionbar_container() );
+            if (depfiles.length > 0) {
+                depPromises = depfiles.map( depfile => fetchFileToFS(depfile) );
+                await Promise.all(depPromises);
+            }
+            stage = await openStageFromUsdfile(scenefile);
+            if (callback_func != null) {
+                callback_func(stage);
+            }
+            return stage;
+        }
+
+        function get_actionbar_container()
+        {
+            const container_id = 'SceneActionsBar'; 
+            const container = document.getElementById(container_id)
+            if (!container) {
+                console.error('Unable to find container id='+container_id+' to add new elements.  Exiting.')
+                return;
+            }   
+            return container;             
+        }
+
+        function container_clear(container)
+        {
+            // Clear all elements in the container
+            console.log('Removing elements from container:' + container.id);
+            while (container.firstChild) {
+                container.removeChild(container.lastChild);
+            }
+            return container;
+        }
+
+        function create_element_button(name, onclick_func) 
+        {
+            console.log('Adding Button '+name);
+            const newInput = document.createElement('input');
+            newInput.type = 'button'
+            newInput.id = 'ActionsBar_'+name;
+            newInput.value = name;
+            newInput.onclick = onclick_func;
+            return newInput;
+        }        
+    </script>
     Lighting: 
     <input type="checkbox" id="Lighting_Camera" checked />Camera
     <input type="checkbox" id="Lighting_Scene"  checked />Scene
@@ -105,172 +152,78 @@
     </script>
     <br>
     Tests
-    <input type="button" id="Quad_Usd"  value="Quad_Usd"/>
-    <input type="button" id="Quad_Mtlx" value="Quad_Mtlx"/>
-    <input type="button" id="Quad_Usd_usdz"  value="Quad_Usd(USDZ)"/>
-    <input type="button" id="Quad_Mtlx_usdz"  value="Quad_Mtlx(USDZ)"/>
+    <input type="button" id="TexQuad_Usd"  value="TexQuad_Usd"/>
+    <input type="button" id="TexQuad_Mtlx" value="TexQuad_Mtlx"/>
     <input type="button" id="StdShrBallGrnd"  value="StdShrBallGrnd"/>
+    <input type="button" id="blue_sphere" value="blue_sphere">
+    <input type="button" id="sphere_mtlx" value="sphere_mtlx">
     <script>
-        async function loadscene_with_deps(depfile, scenefile)
-        {
-            await fetchFileToFS(depfile, depfile);
-            openStageFromUsdfile(scenefile);
-        }
-        document.getElementById("Quad_Usd").onclick  = () => {loadscene_with_deps("uvgrid.png", "textured_quad.usda");};
-        document.getElementById("Quad_Mtlx").onclick = () => {loadscene_with_deps("uvgrid.png", "textured_quad_mtlx.usda");};
-        document.getElementById("Quad_Usd_usdz").onclick = () => {openStageFromUsdfile("textured_quad.usdz");};
-        document.getElementById("Quad_Mtlx_usdz").onclick = () => {openStageFromUsdfile("textured_quad_mtlx.usdz");};
-        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps("uvgrid.png", "standard_shader_ball_ground.usda");};
+        document.getElementById("TexQuad_Usd").onclick  = () => {loadscene_with_deps_and_actions("textured_quad.usda", ["uvgrid.png"]);};
+        document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("textured_quad_mtlx.usda", ["uvgrid.png"]);};
+        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("standard_shader_ball_ground.usda", ["uvgrid.png"]);};
+        document.getElementById("blue_sphere").onclick = () => loadscene_with_deps_and_actions("blue_sphere.usda");
+        document.getElementById("sphere_mtlx").onclick = () => loadscene_with_deps_and_actions("sphere_mtlx.usdz");
     </script>
     <br>   
-    Samples
-    <input type="button" value="FancyTeapot" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd")'>
-    <input type="button" value="CarbonFrameBike" onclick='openStageFromUsdfile("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz")'>
-        (
-        <input type="button" value="Show Rear Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeVisible();'>
-        |     
-        <input type="button" value="Hide Rear Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>
-        |
-        <input type="button" value="Show Front Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeVisible();'>
-        |     
-        <input type="button" value="Hide Front Wheel" onclick='Usd=Module; prim = Usd.UsdwebGetStage().GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible();'>        
-        )
-    <input type="button" id="CarbonFrameBike_Variants" value="CarbonFrameBike_Variants">
+    Samples:
+    <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
+    <br>
+    Download Samples:
+    <input type="button" id="FancyTeapot" value="FancyTeapot">
+    <input type="button" id="CarbonFrameBike" value="CarbonFrameBike">
+    <br>
     <script>
-        async function loadscene_CarbonFrameBike_Variants()
+        async function shaderball_scene_callback(stage)
         {
-            await fetchFileToFS("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", "CarbonFrameBike.usdz");
-            openStageFromUsdfile("CarbonFrameBike_Variants.usda");
+            // Configure stage
+            prim = stage.GetPrimAtPath('/standard_shader_ball_scene/shader_ball');
+            Usd.UsdwebFitCamera(prim);
+            prim = stage.GetPrimAtPath('/standard_shader_ball_scene');
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("surface_geometry");
+            vset.SetVariantSelection("triangulated");
+            vset = vsets.GetVariantSet("scene_lights");
+            vset.SetVariantSelection("on");
+            vset = vsets.GetVariantSet("internal_emitter");
+            vset.SetVariantSelection("off");
+            vset = vsets.GetVariantSet("example_material");
+            vset.SetVariantSelection("none");
+            // Add Variant button actions
+            const container = get_actionbar_container();
+            const variant_names = vset.GetVariantNames();
+            for (const variant_name of variant_names) {
+                newInput = create_element_button(variant_name, 
+                    () => { vset.SetVariantSelection(variant_name); } );
+                container.appendChild(newInput);
+            }
         }
-        document.getElementById("CarbonFrameBike_Variants").onclick = loadscene_CarbonFrameBike_Variants;
+
+        async function CarbonFrameBike_callback(stage) 
+        {
+            const container = get_actionbar_container();
+            newInput = create_element_button("ShowFrontWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); 
+                imageable = new Usd.UsdGeomImageable(prim); 
+                imageable.MakeVisible(); 
+            });
+            container.appendChild(newInput);
+            newInput = create_element_button("HideFrontWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); 
+                imageable = new Usd.UsdGeomImageable(prim); 
+                imageable.MakeInvisible(); 
+            });
+            container.appendChild(newInput);        
+        }
+
+        document.getElementById("Standard_ShaderBall").onclick = () => loadscene_with_deps_and_actions("standard_shader_ball_scene.usdz", [], shaderball_scene_callback);
+        document.getElementById("FancyTeapot").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd");
+        document.getElementById("CarbonFrameBike").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", [], CarbonFrameBike_callback);
+
     </script>
-        (wheels:
-        <input type="button" value="Small" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("wheels");
-            vset.SetVariantSelection("small");'> |
-        <input type="button" value="Normal" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("wheels");
-            vset.SetVariantSelection("normal");'> |
-        <input type="button" value="Big" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("wheels");
-            vset.SetVariantSelection("big");'>
-        )
-        (frame_material:
-        <input type="button" value="Carbon" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("frame_material");
-            vset.SetVariantSelection("carbon");'> |
-        <input type="button" value="Yellow" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("frame_material");
-            vset.SetVariantSelection("yellow");'> |
-        <input type="button" value="Red" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("frame_material");
-            vset.SetVariantSelection("red");'> |
-        <input type="button" value="Blue" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            vsets = prim.GetVariantSets();
-            vset = vsets.GetVariantSet("frame_material");
-            vset.SetVariantSelection("blue");'>
-         )
-         (camera:
-        <input type="button" value="All" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike");
-            Usd.UsdwebFitCamera(prim);'> |
-        <input type="button" value="SamplerDisk" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike/SamplerDisk");
-            Usd.UsdwebFitCamera(prim);'> |
-        <input type="button" value="Front Wheel" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn");
-            Usd.UsdwebFitCamera(prim);'> |
-        <input type="button" value="Rear Wheel" onclick='
-            prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten");
-            Usd.UsdwebFitCamera(prim);'> |
-        )
-        <br>
-        <input type="button" id="basic_materialx" value="basic_materialx">
-        <input type="button" id="sphere_mtlx" value="sphere_mtlx">
-        <input type="button" id="blue_sphere" value="blue_sphere">
-        <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
-        <span id="Standard_ShaderBall_Variants">
-        </span>
-        <script>
-            async function loadscene_standard_shader_ball_scene()
-            {
-                stage = await openStageFromUsdfile("standard_shader_ball_scene.usdz");
-                prim = stage.GetPrimAtPath('/standard_shader_ball_scene/shader_ball');
-                Usd.UsdwebFitCamera(prim);
-                prim = stage.GetPrimAtPath('/standard_shader_ball_scene');
-                vsets = prim.GetVariantSets();
-                vset = vsets.GetVariantSet("surface_geometry");
-                vset.SetVariantSelection("triangulated");
-                vset = vsets.GetVariantSet("example_material");
-                vset.SetVariantSelection("none");
-                SSB_Add_Variants('Standard_ShaderBall_Variants', vset);
-                vset = vsets.GetVariantSet("scene_lights");
-                vset.SetVariantSelection("on");
-                vset = vsets.GetVariantSet("internal_emitter");
-                vset.SetVariantSelection("off");
-            }
+    SceneActions:
+    <span id="SceneActionsBar">
+    </span>
 
-            async function standard_shader_ball_set_material_variant(matVar)
-            {
-                console.log('MaterialVariant = '+matVar);
-                stage = Usd.UsdwebGetStage();
-                prim = stage.GetPrimAtPath('/standard_shader_ball_scene');
-                vsets = prim.GetVariantSets();
-                vset = vsets.GetVariantSet("example_material");
-                vset.SetVariantSelection(matVar);
-            }
-
-            function SSB_Add_Variants(container_id, variant_set) 
-            {
-                //container_id = 'Standard_ShaderBall_Variants'; 
-                const container = document.getElementById(container_id)
-                if (!container) {
-                    console.error('Unable to find container id='+container_id+' to add new elements.  Exiting.')
-                    return;
-                }
-                // Clear all elements in the container
-                console.log('Removing elements from container:' + container_id);
-                while (container.firstChild) {
-                    container.removeChild(container.lastChild);
-                }
-                // Add new child elements
-                //const variant_names = ['v1', 'v2', 'v3', 'v4']
-                const variant_names = vset.GetVariantNames();
-                for (const variant_name of variant_names) {
-                    console.log('Adding '+variant_name);
-                    const newInput = document.createElement('input');
-                    newInput.type = 'button'
-                    newInput.id = 'SSB_'+variant_name;
-                    newInput.value = variant_name;
-                    newInput.onclick = () => { standard_shader_ball_set_material_variant(variant_name); }
-                    container.appendChild(newInput);
-                }
-            }
-
-            document.getElementById("basic_materialx").onclick  = async function() {
-                stage = await openStageFromUsdfile("basic_materialx.usdz");
-            };
-            document.getElementById("sphere_mtlx").onclick  = async function() {
-                stage = await openStageFromUsdfile("sphere_mtlx.usdz");
-            };
-            document.getElementById("blue_sphere").onclick  = async function() {
-                stage = await openStageFromUsdfile("blue_sphere.usda");
-            };
-            document.getElementById("Standard_ShaderBall").onclick = loadscene_standard_shader_ball_scene;
-        </script>
 </div>
 
 <script type='text/javascript'>
@@ -350,7 +303,9 @@
        document.body.removeChild(element);        
     }
 
-    async function fetchFileToFS(filename, fs_filename)
+    // Handle file load into browser FS.
+    // Works with local files as well as http and github.com.
+    async function fetchFileToFS(filename, fs_filename = null)
     {
         // Workaround for CORS errors when using github.com. 
         if (filename.includes("github.com")) {
@@ -358,7 +313,9 @@
             filename = filename.replace("/blob/", "/");
         }
         
-        //let fs_filename = filename.split('/').reverse()[0];
+        if (fs_filename == null) {
+            fs_filename = filename.split('/').reverse()[0];
+        }
         if (!FS.analyzePath(fs_filename).exists) {
             console.log('Fetching '+filename+' to '+fs_filename);
             const blob = await fetch(filename);
@@ -372,7 +329,7 @@
     {
         console.log('openStageFromUsdfile: '+filename);
         let fs_filename = filename.split('/').reverse()[0];
-        await fetchFileToFS(filename, fs_filename);
+        await fetchFileToFS(filename);
         console.log('Setting USDStage: '+fs_filename);
         stage = Usd.UsdStage.Open(fs_filename);
         Usd.UsdwebSetStage(stage);
