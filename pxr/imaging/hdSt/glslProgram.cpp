@@ -185,8 +185,7 @@ _ValidateCompilation(
         output << shaderSource;
         output.close();
 
-        TF_DEBUG_MSG(HDST_DUMP_SHADER_SOURCEFILE, "Dumping Shader Sourcefile: "+fname);
-        TF_DEBUG_MSG(HDST_DUMP_FAILING_SHADER_SOURCEFILE, "Dumping Failing Shader Sourcefile: "+fname);
+        TF_STATUS("Dumping Shader Sourcefile: "+fname);
     }
 
     if (!shaderFn->IsValid()) {
