@@ -26,8 +26,6 @@
 
 #include "pxr/base/arch/defines.h"
 
-#include <iostream>
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
