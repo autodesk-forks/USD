@@ -217,6 +217,16 @@
                 imageable.MakeInvisible(); 
             });
             container.appendChild(newInput);        
+            newInput = create_element_button("ViewFrontWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); 
+                Usd.UsdwebFitCamera( prim );
+            });
+            container.appendChild(newInput); 
+            newInput = create_element_button("ViewRearWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); 
+                Usd.UsdwebFitCamera( prim );
+            });
+            container.appendChild(newInput); 
         }
 
         document.getElementById("Standard_ShaderBall").onclick = () => loadscene_with_deps_and_actions("standard_shader_ball_scene.usdz", [], shaderball_scene_callback);
