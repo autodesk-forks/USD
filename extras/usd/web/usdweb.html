@@ -166,15 +166,17 @@
         document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("standard_shader_ball_ground.usda", ["uvgrid.png"]);};
         document.getElementById("sphere_mtlx").onclick = () => loadscene_with_deps_and_actions("sphere_mtlx.usdz");
         document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("textured_quad_mtlx.usda", ["uvgrid.png"]);};
-        document.getElementById("sample_mtlx_brick").onclick = () => loadscene_with_deps_and_actions("sample_mtlx_brick.usdz");
+        document.getElementById("sample_mtlx_brick").onclick = () => loadscene_with_deps_and_actions("sample_mtlx_brick.usdz", [], (stage)=>{prim = stage.GetPrimAtPath('/World/Sphere'); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible(); });
     </script>
     <br>   
     Samples:
     <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
+    <input type="button" id="Vehicles" value="Vehicles">
     <br>
     Download Samples:
     <input type="button" id="FancyTeapot" value="FancyTeapot">
     <input type="button" id="CarbonFrameBike" value="CarbonFrameBike">
+    <input type="button" id="DamagedHelmet" value="DamagedHelmet">
     <br>
     <script>
         async function shaderball_scene_callback(stage)
@@ -192,6 +194,22 @@
             vset.SetVariantSelection("off");
             vset = vsets.GetVariantSet("example_material");
             vset.SetVariantSelection("none");
+            // Add Variant button actions
+            const container = get_actionbar_container();
+            const variant_names = vset.GetVariantNames();
+            for (const variant_name of variant_names) {
+                newInput = create_element_button(variant_name, 
+                    () => { vset.SetVariantSelection(variant_name); } );
+                container.appendChild(newInput);
+            }
+        }
+
+        async function vehicles_callback(stage)
+        {
+            // Configure stage
+            prim = stage.GetPrimAtPath('/vehicleVariant');
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("wheels");
             // Add Variant button actions
             const container = get_actionbar_container();
             const variant_names = vset.GetVariantNames();
@@ -230,8 +248,10 @@
         }
 
         document.getElementById("Standard_ShaderBall").onclick = () => loadscene_with_deps_and_actions("standard_shader_ball_scene.usdz", [], shaderball_scene_callback);
+        document.getElementById("Vehicles").onclick = () => loadscene_with_deps_and_actions("vehicles.usdz", [], vehicles_callback);
         document.getElementById("FancyTeapot").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd");
         document.getElementById("CarbonFrameBike").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", [], CarbonFrameBike_callback);
+        document.getElementById("DamagedHelmet").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/test_assets/USDZ/DamagedHelmet/DamagedHelmet.usdz");
 
     </script>
     SceneActions:
