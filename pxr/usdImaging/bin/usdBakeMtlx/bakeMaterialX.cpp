@@ -20,7 +20,7 @@
 #include "pxr/usd/usdShade/shader.h"
 
 #include <MaterialXCore/Document.h>
-#include <MaterialXCore/Generated.h>
+#include <MaterialXCore/Library.h>
 #include <MaterialXCore/Node.h>
 #include <MaterialXFormat/Util.h>
 #include <MaterialXFormat/XmlIo.h>
@@ -39,6 +39,13 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((mtlxSurface, "mtlx:surface"))
     (surface)
 );
+
+// In MaterialX 1.39.2, MATERIALX_GENERATE_INDEX and MATERIALX_VERSION_INDEX defined in MaterialXCore/Library.h
+#ifndef MATERIALX_VERSION_INDEX
+#define MATERIALX_GENERATE_INDEX(major, minor, build) (((major) << 22U) | ((minor) << 12U) | (build))
+#define MATERIALX_VERSION_INDEX \
+    MATERIALX_GENERATE_INDEX(MATERIALX_MAJOR_VERSION, MATERIALX_MINOR_VERSION, MATERIALX_BUILD_VERSION)
+#endif
 
 
 namespace {
@@ -128,11 +135,10 @@ void _BakeMtlxDocument(
         : mx::Image::BaseType::UINT8;
 
     // Construct a Texture Baker.
-#if MATERIALX_MAJOR_VERSION <= 1 && MATERIALX_MINOR_VERSION <= 38 && \
-    MATERIALX_BUILD_VERSION <= 6
+#if MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 38, 6)
     mx::TextureBakerPtr baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
-#elif MATERIALX_MAJOR_VERSION <= 1 && MATERIALX_MINOR_VERSION <= 39 && MATERIALX_BUILD_VERSION <= 3
+#elif MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 39, 3)
     mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #else
