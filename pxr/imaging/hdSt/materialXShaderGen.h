@@ -9,14 +9,21 @@
 
 #include "pxr/pxr.h"
 
+// Added in MaterialX 1.39.2, MATERIALX_GENERATE_INDEX and MATERIALX_VERSION_INDEX
+// defined in MaterialXCore/Library.h.  Define here for earlier versions.
+#ifndef MATERIALX_VERSION_INDEX
+#define MATERIALX_GENERATE_INDEX(major, minor, build) (((major) << 22U) | ((minor) << 12U) | (build))
+#define MATERIALX_VERSION_INDEX \
+    MATERIALX_GENERATE_INDEX(MATERIALX_MAJOR_VERSION, MATERIALX_MINOR_VERSION, MATERIALX_BUILD_VERSION)
+#endif
+
 #include <MaterialXGenGlsl/GlslShaderGenerator.h>
 #ifdef PXR_METAL_SUPPORT_ENABLED
 #include <MaterialXGenMsl/MslShaderGenerator.h>
 #endif
 #include <MaterialXGenGlsl/VkShaderGenerator.h>
 
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
-#else
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 4)
 #include <MaterialXGenGlsl/WgslShaderGenerator.h>
 #endif
 
@@ -168,8 +175,7 @@ public:
     }
 };
 
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
-#else
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 4)
 /// \class HdStMaterialXShaderGenWgslGlsl
 ///
 /// Generates a glslfx shader with a surfaceShader function for a MaterialX 

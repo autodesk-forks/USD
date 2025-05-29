@@ -178,7 +178,7 @@ _CreateHdStMaterialXContext(
         return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
     }
     if (apiName == HgiTokens->WebGPU) {
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 4)
         return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
 #else
         return HdStMaterialXShaderGenWgslGlsl::create(mxHdInfo);
@@ -519,7 +519,7 @@ _UpdatePrimvarNodes(
                 auto metadata = sdrTexCoordNode->GetMetadata();
                 texCoordName = metadata[SdrNodeMetadata->Primvars];
             }
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
             (*mxHdPrimvarMap)[texCoordName] = mx::Type::VECTOR2->getName();
 #else
             (*mxHdPrimvarMap)[texCoordName] = mx::Type::VECTOR2.getName();
@@ -646,7 +646,7 @@ _GetMxTypeDescription(std::string const& typeName)
 {
     // Add whatever is necessary for current codebase:
     static const auto _typeLibrary = 
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         std::map<std::string, const mx::TypeDesc*>{
 #else
         std::map<std::string, const mx::TypeDesc>{
@@ -662,7 +662,7 @@ _GetMxTypeDescription(std::string const& typeName)
 
     const auto typeDescIt = _typeLibrary.find(typeName);
     if (typeDescIt != _typeLibrary.end()) {
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         return typeDescIt->second;
 #else
         return &(typeDescIt->second);
@@ -700,7 +700,7 @@ _AddStrippedSurfaceNode(
         // If hdNode is connected to the surfaceshader node, recursively call 
         // this function to make sure that surfaceshader node is added to 
         // the mxDocument
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         if (mxTypeDesc == mx::Type::SURFACESHADER) {
 #else
         if (*mxTypeDesc == mx::Type::SURFACESHADER) {
@@ -808,7 +808,7 @@ _GetMaterialTag(
         // XXX This is not fully per USD specs, but is supported by MaterialX.
         auto const* typeDesc = 
             _GetMxTypeDescription(activeOutputs.back()->getType());
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         if (typeDesc == mx::Type::COLOR4 || typeDesc == mx::Type::VECTOR4) {
 #else
         if (*typeDesc == mx::Type::COLOR4 || *typeDesc == mx::Type::VECTOR4) {
@@ -1123,7 +1123,7 @@ _AddMaterialXParams(
 
         // MaterialX parameter Information
         const auto* variable = paramsBlock[i];
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         const auto varType = variable->getType();
 #else
         const auto varTypeRef = variable->getType();

@@ -134,7 +134,7 @@ _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
 template<typename Base>
 HdStMaterialXShaderGen<Base>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
     : Base(),
 #else
     : Base( mx::TypeSystem::create() ),
@@ -149,7 +149,7 @@ HdStMaterialXShaderGen<Base>::HdStMaterialXShaderGen(
     _defaultTexcoordName =
         (mxHdInfo.defaultTexcoordName == mx::EMPTY_STRING)
             ? "st" : mxHdInfo.defaultTexcoordName;
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 4)
     this->_tokenSubstitutions[mx::string("$lightDataType")] = mx::string("type");
 #else
     this->_tokenSubstitutions[mx::string("$lightDataType")] = this->getLightDataTypevarString();
@@ -185,7 +185,7 @@ HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
         Base::emitString(R"(    "attributes": {)" "\n", mxStage);
         std::string line = ""; unsigned int i = 0;
         for (mx::StringMap::const_reference primvarPair : _mxHdPrimvarMap) {
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
             const mx::TypeDesc *mxType = mx::TypeDesc::get(primvarPair.second);
             if (mxType == nullptr) {
 #else
@@ -195,7 +195,7 @@ HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
                 TF_WARN("MaterialX geomprop '%s' has unknown type '%s'",
                         primvarPair.first.c_str(), primvarPair.second.c_str());
             }
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
             const std::string type = mxType 
                 ? Base::_syntax->getTypeName(mxType) : "vec2";
 #else
@@ -285,8 +285,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
             Base::emitFunctionCalls(mxGraph, mxContext, mxStage,
                 mx::ShaderNode::Classification::TEXTURE);
 
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION == 38 && \
-    MATERIALX_BUILD_VERSION <= 4
+#if MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 38, 4)
             // Emit function calls for all surface shader nodes.
             // These will internally emit their closure function calls.
             Base::emitFunctionCalls(mxGraph, mxContext, mxStage, 
@@ -324,7 +323,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
         if (outputConnection) {
 
             std::string finalOutput = outputConnection->getVariable();
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
             const std::string& channels = outputSocket->getChannels();
             if (!channels.empty()) {
                 finalOutput = Base::_syntax->getSwizzledVariable(
@@ -355,7 +354,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
                 }
             }
             else {
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
                 if (!outputSocket->getType()->isFloat4()) {
 #else
                 if (!outputSocket->getType().isFloat4()) {
@@ -371,7 +370,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
                 ? Base::_syntax->getValue(
                     outputSocket->getType(), *outputSocket->getValue()) 
                 : Base::_syntax->getDefaultValue(outputSocket->getType());
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
             if (!outputSocket->getType()->isFloat4()) {
 #else
             if (!outputSocket->getType().isFloat4()) {
@@ -467,7 +466,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
         mxStage.getUniformBlock(mx::HW::PUBLIC_UNIFORMS);
     for (size_t i = 0; i < paramsBlock.size(); ++i) {
         const mx::ShaderPort* variable = paramsBlock[i];
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         const mx::TypeDesc* variableType = variable->getType();
         if (!_IsHardcodedPublicUniform(*variableType)) {
 #else
@@ -682,7 +681,7 @@ HdStMaterialXShaderGen<Base>::emitVariableDeclarations(
     {
         Base::emitLineBegin(stage);
         const mx::ShaderPort* variable = block[i];
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
         const mx::TypeDesc* varType = variable->getType();
 
         // If bindlessTextures are not enabled the Mx Smpler names are mapped 
@@ -885,14 +884,12 @@ HdStMaterialXShaderGen<Base>::_EmitDataStructsAndFunctionDefinitions(
     // Prior to MaterialX 1.38.5 the token substitutions need to
     // include the full path to the .glsl files, so we prepend that
     // here.
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION == 38
-    #if MATERIALX_BUILD_VERSION < 4
-        (*tokenSubstitutions)[mx::ShaderGenerator::T_FILE_TRANSFORM_UV].insert(
-            0, "stdlib/" + Base::TARGET + "/lib/");
-    #elif MATERIALX_BUILD_VERSION == 4
-        (*tokenSubstitutions)[mx::ShaderGenerator::T_FILE_TRANSFORM_UV].insert(
-            0, "libraries/stdlib/" + Base::TARGET + "/lib/");
-    #endif
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 38, 4)
+    (*tokenSubstitutions)[mx::ShaderGenerator::T_FILE_TRANSFORM_UV].insert(
+        0, "stdlib/" + Base::TARGET + "/lib/");
+#elif MATERIALX_VERSION_INDEX == MATERIALX_GENERATE_INDEX(1, 38, 4)
+    (*tokenSubstitutions)[mx::ShaderGenerator::T_FILE_TRANSFORM_UV].insert(
+        0, "libraries/stdlib/" + Base::TARGET + "/lib/");
 #endif
 
     // Add light sampling functions
@@ -1097,8 +1094,7 @@ HdStMaterialXShaderGenVkGlsl::HdStMaterialXShaderGenVkGlsl(HdSt_MxShaderGenInfo 
 // ----------------------------------------------------------------------------
 //                    HdSt MaterialX ShaderGen Wgsl GLSL
 // ----------------------------------------------------------------------------
-#if ((MATERIALX_MAJOR_VERSION <= 1) && (MATERIALX_MINOR_VERSION < 39))
-#else
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 4)
 namespace {
     // Create a customized version of the class mx::SurfaceNodeGlsl
     // to be able to notify the shader generator when we start/end
