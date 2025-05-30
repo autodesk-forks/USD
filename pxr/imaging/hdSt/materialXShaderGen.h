@@ -7,7 +7,6 @@
 #ifndef PXR_IMAGING_HD_ST_MATERIALX_SHADER_GEN_H
 #define PXR_IMAGING_HD_ST_MATERIALX_SHADER_GEN_H
 
-
 #include "pxr/pxr.h"
 #include <MaterialXCore/Library.h>
 
@@ -62,7 +61,8 @@ public:
 
 protected:
     // Helper functions to generate the Glslfx Shader
-    void _EmitGlslfxHeader(MaterialX::ShaderStage& mxStage) const;
+    void _EmitGlslfxHeader(MaterialX::GenContext& mxContext,
+                           MaterialX::ShaderStage& mxStage) const;
 
     void _EmitMxSurfaceShader(const MaterialX::ShaderGraph& mxGraph,
                               MaterialX::GenContext& mxContext,
@@ -232,7 +232,23 @@ private:
                           MaterialX::GenContext& mxContext,
                           MaterialX::ShaderStage& mxStage) const;
 };
-#endif
+#endif // PXR_METAL_SUPPORT_ENABLED
+
+// Helper functions to aid building both MaterialX 1.38.X and 1.39.X
+// once MaterialX 1.38.X is no longer required these should likely be removed.
+namespace HdStMaterialXHelpers {
+
+bool MxTypeIsNone(MaterialX::TypeDesc typeDesc);
+bool MxTypeIsSurfaceShader(MaterialX::TypeDesc typeDesc);
+bool MxTypeDescIsFilename(const MaterialX::TypeDesc typeDesc);
+const MaterialX::TypeDesc GetMxTypeDesc(const MaterialX::ShaderPort* port);
+const std::string MxGetTypeString(
+    MaterialX::SyntaxPtr syntax, 
+    const MaterialX::GenContext& mxContext,
+    const std::string& typeName);
+const std::string& GetVector2Name();
+
+} // namespace HdStMaterialXHelpers
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
