@@ -4,5 +4,3 @@
 USD_emscripten/
 build
 .vscode/
-/build-*/
-NOTES.txt
