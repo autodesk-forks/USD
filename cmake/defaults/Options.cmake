@@ -26,8 +26,11 @@ option(PXR_BUILD_DOCUMENTATION "Generate doxygen documentation" OFF)
 option(PXR_BUILD_PYTHON_DOCUMENTATION "Generate Python documentation" OFF)
 option(PXR_BUILD_HTML_DOCUMENTATION "Generate HTML documentation if PXR_BUILD_DOCUMENTATION is ON" ON)
 option(PXR_ENABLE_PYTHON_SUPPORT "Enable Python based components for USD" ON)
-option(PXR_ENABLE_JS_SUPPORT "Enable Javascript based components for USD" OFF)
-option(PXR_ENABLE_JS_BINDINGS_SUPPORT "Enable Javascript bindings for USD" ON)
+option(PXR_ENABLE_JS_SUPPORT "[Experimental] Enable Javascript based components for USD" OFF)
+option(PXR_ENABLE_JS_BINDINGS_SUPPORT "[Experimental] Enable Javascript bindings for USD" ON)
+option(PXR_BUILD_JS_USDWEB "[Experimental] Build extras/usd/web " ON)
+option(PXR_BUILD_JS_STANDALONE "[Experimental] Build extras/usd/js_bindings" ON)
+option(PXR_BUILD_JS_USDVIEWWEB "[Experimental] Build pxr/usdImaging/bin/usdviewweb" ON)
 if (NOT EMSCRIPTEN)
     set(PXR_ENABLE_JS_BINDINGS_SUPPORT OFF)
 endif()
@@ -185,6 +188,31 @@ if (${PXR_ENABLE_JS_SUPPORT})
 message(STATUS
         "Setting PXR_ENABLE_WEBGPU_SUPPORT=ON")
     set(PXR_ENABLE_WEBGPU_SUPPORT "ON" CACHE BOOL "" FORCE)
+endif()
+
+if (${PXR_BUILD_JS_STANDALONE})
+    if (NOT ${PXR_ENABLE_JS_BINDINGS_SUPPORT})
+        message(STATUS
+            "Setting PXR_BUILD_JS_STANDALONE=OFF because "
+            "PXR_ENABLE_JS_BINDINGS_SUPPORT=OFF")
+        set(PXR_BUILD_JS_STANDALONE "OFF" CACHE BOOL "" FORCE)
+    endif()
+endif()
+if (${PXR_BUILD_JS_USDWEB})
+    if (NOT ${PXR_ENABLE_WEBGPU_SUPPORT})
+        message(STATUS
+            "Setting PXR_BUILD_JS_USDWEB=OFF because "
+            "PXR_ENABLE_WEBGPU_SUPPORT=OFF")
+        set(PXR_BUILD_JS_USDWEB "OFF" CACHE BOOL "" FORCE)
+    endif()
+endif()
+if (${PXR_BUILD_JS_USDVIEWWEB})
+    if (NOT ${PXR_ENABLE_WEBGPU_SUPPORT})
+        message(STATUS
+            "Setting PXR_BUILD_JS_USDVIEWWEB=OFF because "
+            "PXR_ENABLE_WEBGPU_SUPPORT=OFF")
+        set(PXR_BUILD_JS_USDVIEWWEB "OFF" CACHE BOOL "" FORCE)
+    endif()
 endif()
 
 if (${PXR_ENABLE_GL_SUPPORT} OR ${PXR_ENABLE_METAL_SUPPORT} OR ${PXR_ENABLE_VULKAN_SUPPORT} OR ${PXR_ENABLE_WEBGPU_SUPPORT})
