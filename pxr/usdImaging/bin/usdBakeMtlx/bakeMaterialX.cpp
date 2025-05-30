@@ -40,15 +40,6 @@ TF_DEFINE_PRIVATE_TOKENS(
     (surface)
 );
 
-// Added in MaterialX 1.39.2, MATERIALX_GENERATE_INDEX and MATERIALX_VERSION_INDEX
-// defined in MaterialXCore/Library.h.  Define here for earlier versions.
-#ifndef MATERIALX_VERSION_INDEX
-#define MATERIALX_GENERATE_INDEX(major, minor, build) (((major) << 22U) | ((minor) << 12U) | (build))
-#define MATERIALX_VERSION_INDEX \
-    MATERIALX_GENERATE_INDEX(MATERIALX_MAJOR_VERSION, MATERIALX_MINOR_VERSION, MATERIALX_BUILD_VERSION)
-#endif
-
-
 namespace {
 
 /// Read a MaterialX document then convert it using UsdMtlxRead().
