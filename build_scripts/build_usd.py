@@ -2321,15 +2321,6 @@ if MacOS():
                        help=("Enable code signing for macOS builds "
                              "(defaults to enabled on Apple Silicon)"))
 
-group.add_argument("--webgpu", dest="buildWebGPU", action="store_true",
-                    help="Build WebGPU Hgi")
-
-subgroup = group.add_mutually_exclusive_group()
-subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_true",
-                    default=True, help="Build with JavaScript bindings")
-subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
-                    help="Do not build with JavaScript bindings")
-
 if Linux():
     group.add_argument("--use-cxx11-abi", type=int, choices=[0, 1],
                        help=("Use C++11 ABI for libstdc++. (see docs above)"))
@@ -2544,6 +2535,15 @@ subgroup.add_argument("--no-animx-tests",
                       dest="build_animx_tests", action="store_false",
                       help="Do not build AnimX spline tests (default)")
 
+group = parser.add_argument_group(title="Web")
+group.add_argument("--webgpu", dest="buildWebGPU", action="store_true",
+                    help="Build WebGPU Hgi")
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_true",
+                    default=True, help="Build with JavaScript bindings")
+subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
+                    help="Do not build with JavaScript bindings")
+
 args = parser.parse_args()
 
 class InstallContext:
@@ -2624,7 +2624,7 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
-        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM_NODE)
+        self.targetWasm = ( args.build_target in (TARGET_WASM, TARGET_WASM_NODE) ) # bool
         self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
         self.buildTarget = args.build_target
         if MacOS():
@@ -3071,11 +3071,13 @@ summaryMsg += """\
       AnimX Tests:              {buildAnimXTests}
     Examples                    {buildExamples}
     Tutorials                   {buildTutorials}
-    WebGPU                      {buildWebGPU}
     Tools                       {buildTools}
     Alembic Plugin              {buildAlembic}
       HDF5 support:             {enableHDF5}
     Draco Plugin                {buildDraco}
+    Web
+      Javascript Bindings       {buildJsBindings}
+      WebGPU                    {buildWebGPU}
 
   Dependencies                  {dependencies}"""
 
