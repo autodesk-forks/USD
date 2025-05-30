@@ -50,6 +50,11 @@ install(
 )
 # Install files for npm package
 
+# ================
+# REVISIT: This install DESTINATION appears to be cluttering the source folders
+#     Resulting and intermediate files should go into the target build folders
+#     under ${CMAKE_INSTALL_PREFIX}
+# ================
 install(
     FILES
       ${BUILD_FILES}
