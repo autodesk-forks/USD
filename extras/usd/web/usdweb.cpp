@@ -193,8 +193,8 @@ struct VertexOutput {
             adapter["requestDevice"]({requiredFeatures, requiredLimits}).then( function (device) {
                 Module["preinitializedWebGPUDevice"] = device;
                 const canvasContainer = document.getElementById("canvasContainer");
-                const height = document.getElementById('canvasContainer').offsetHeight;
-                const width = document.getElementById('canvasContainer').offsetWidth;
+                const height = canvasContainer.offsetHeight;
+                const width  = canvasContainer.offsetWidth;
                 const webgpuCanvas = document.createElement("canvas");
                 webgpuCanvas.id = "webgpuCanvas";
                 webgpuCanvas.height = height;
