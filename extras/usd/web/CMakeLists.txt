@@ -73,6 +73,10 @@ if (EMSCRIPTEN)
         -s FULL_ES3 \
     ")
 
+    # Add the following to the local web filesystem
+    #   * /webgpu-env-settings
+    #   * /libraries/           Required for MaterialX
+    #
     target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0 -O0")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
         --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/webgpu-env-settings@/webgpu-env-settings \
