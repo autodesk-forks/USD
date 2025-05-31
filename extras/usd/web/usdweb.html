@@ -272,16 +272,18 @@
     //      * Module["canvas"]                     (specified in usdweb.html)
     //      * Module["preinitializedWebGPUDevice"] (specified in usdweb.cpp: ems_setup() )
     //      Optional:
-    //      * Module["setStatus"]
-    //      * Module["monitorRunDependencies"] (referenced by addRunDependency() removeRunDependency() )
-    //      * Callback: Module["onFullScreen"](bool)
+    //      * Module["setStatus"](text)        function: called by internal emscripten functions
+    //      * Module["monitorRunDependencies"](int) function: (referenced by addRunDependency() removeRunDependency() )
+    //      * Module["onFullScreen"](bool)     function: callback if the window goes full screen
     //      * Module["forcedAspectRatio"] 
-    //      * Module["noInitialRun"]    skips calling main()
-    //      Internals:
-    //      * Module["ctx"] (set internally by createContext() )
-    //      * Module["setImmediates"] (set by MainLoop.setImmediate(func) )
-    //      * Module["preMainLoop"] 
-    //      * Module["postMainLoop"]
+    //      * Module["noInitialRun"]           bool: skips calling main()
+    //      * Module["onRuntimeInitialized"]() function: called directly before calling main()
+    //      * Module["preMainLoop"]()          function: called once before the main loop
+    //      * Module["postMainLoop"]()         function: called once before the main loop
+    //      Internal Data:
+    //      * Module["ctx"]                    (set internally by createContext() )
+    //      * Module["setImmediates"]          (populate by MainLoop.setImmediate(func) )
+    //      * Module["dataFileDownloads"][packageName] record on what files were donwnloaded
     //      EmscriptenTrace (memory, etc)
     //      * See usdweb.js for details on using
     //
