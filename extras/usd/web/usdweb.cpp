@@ -165,10 +165,18 @@ struct VertexOutput {
         return device.CreateRenderPipeline(&pipelineDsc);
     }
 
+    // 
+    // JavaScript Function Generator from C++: 
+    //   This gets embedded in the generated usdweb.js and 
+    //   can be called as a JavaScript function.
+    // void ems_setup()
     EM_JS(void, ems_setup, (), {
+        console.log('In ems_setup()');
         if (_ems_main) {
         if (navigator["gpu"]) {
+        console.log('Requesting adapter');
         navigator["gpu"]["requestAdapter"]().then(function (adapter) {
+            console.log('Requesting adapter. Completed.');
             const requestedFeatures = [
             'depth32float-stencil8',
                     'float32-filterable'
@@ -190,8 +198,11 @@ struct VertexOutput {
                     maxColorAttachmentBytesPerSample: 64,
                     maxBufferSize: 0x40000000
             };
+            console.log('Requesting device');
             adapter["requestDevice"]({requiredFeatures, requiredLimits}).then( function (device) {
+                console.log('Requesting device. Completed.');
                 Module["preinitializedWebGPUDevice"] = device;
+                console.log('Get orig canvas:'+ document.getElementById("canvas").id);
                 const canvasContainer = document.getElementById("canvasContainer");
                 const height = canvasContainer.offsetHeight;
                 const width  = canvasContainer.offsetWidth;
@@ -200,11 +211,15 @@ struct VertexOutput {
                 webgpuCanvas.height = height;
                 webgpuCanvas.width = width;
                 canvasContainer.appendChild(webgpuCanvas);
+                console.log('Get webgpu canvas:'+ webgpuCanvas.id);
                 canvasContainer.style.display = "flex";
                 canvasContainer.style.justifyContent = "center";
+                // Make sure canvas (created in usdweb.html) has opacity=0;
                 const mainCanvas = document.getElementById("canvas");
+                console.log('Get new canvas:'+ mainCanvas.id);
                 mainCanvas.style.position = "absolute";
                 mainCanvas.style.opacity = 0;
+                console.log('Calling _ems_main().');
                 _ems_main(width, height);
             }).catch((res) => { console.log(res); });
         }, function () {
@@ -605,15 +620,20 @@ struct VertexOutput {
 PXR_NAMESPACE_CLOSE_SCOPE
 extern "C" int __main__(int argc, char **argv);
 
+// Automatically called from usdweb.js: run(args) -> callMain(args)
+// This can be suppressed by setting Module["noInitialRun"] = false
 int main(int argc, char **argv) {
     pxr::usdweb::ems_setup();
     return 0;
 }
 
+// Called from the embedded Javascript, referred to as _ems_main()
 extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height) {
     pxr::usdweb::initialize(width, height);
 }
 
+// NOTE: May not be needed if it is called from 
+// main(int argc, char **argv) 
 void wrap_ems_setup()
 {
     pxr::usdweb::ems_setup();   
