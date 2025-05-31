@@ -161,12 +161,12 @@
     <input type="button" id="TexQuad_Mtlx" value="TexQuad_Mtlx"/>
     <input type="button" id="sample_mtlx_brick" value="sample_mtlx_brick">
     <script>
-        document.getElementById("blue_sphere").onclick = () => loadscene_with_deps_and_actions("blue_sphere.usda");
-        document.getElementById("TexQuad_Usd").onclick  = () => {loadscene_with_deps_and_actions("textured_quad.usda", ["uvgrid.png"]);};
-        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("standard_shader_ball_ground.usda", ["uvgrid.png"]);};
-        document.getElementById("sphere_mtlx").onclick = () => loadscene_with_deps_and_actions("sphere_mtlx.usdz");
-        document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("textured_quad_mtlx.usda", ["uvgrid.png"]);};
-        document.getElementById("sample_mtlx_brick").onclick = () => loadscene_with_deps_and_actions("sample_mtlx_brick.usdz", [], (stage)=>{prim = stage.GetPrimAtPath('/World/Sphere'); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible(); });
+        document.getElementById("blue_sphere").onclick = () => loadscene_with_deps_and_actions("assets/blue_sphere.usda");
+        document.getElementById("TexQuad_Usd").onclick  = () => {loadscene_with_deps_and_actions("assets/textured_quad.usda", ["assets/uvgrid.png"]);};
+        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("assets/standard_shader_ball_ground.usda", ["assets/uvgrid.png"]);};
+        document.getElementById("sphere_mtlx").onclick = () => loadscene_with_deps_and_actions("assets/sphere_mtlx.usdz");
+        document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("assets/textured_quad_mtlx.usda", ["assets/uvgrid.png"]);};
+        document.getElementById("sample_mtlx_brick").onclick = () => loadscene_with_deps_and_actions("assets/sample_mtlx_brick.usdz", [], (stage)=>{prim = stage.GetPrimAtPath('/World/Sphere'); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible(); });
     </script>
     <br>   
     Samples:
@@ -247,8 +247,8 @@
             container.appendChild(newInput); 
         }
 
-        document.getElementById("Standard_ShaderBall").onclick = () => loadscene_with_deps_and_actions("standard_shader_ball_scene.usdz", [], shaderball_scene_callback);
-        document.getElementById("Vehicles").onclick = () => loadscene_with_deps_and_actions("vehicles.usdz", [], vehicles_callback);
+        document.getElementById("Standard_ShaderBall").onclick = () => loadscene_with_deps_and_actions("assets/standard_shader_ball_scene.usdz", [], shaderball_scene_callback);
+        document.getElementById("Vehicles").onclick = () => loadscene_with_deps_and_actions("assets/vehicles.usdz", [], vehicles_callback);
         document.getElementById("FancyTeapot").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd");
         document.getElementById("CarbonFrameBike").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", [], CarbonFrameBike_callback);
         document.getElementById("DamagedHelmet").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/test_assets/USDZ/DamagedHelmet/DamagedHelmet.usdz");

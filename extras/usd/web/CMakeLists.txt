@@ -18,6 +18,17 @@ pxr_cpp_bin(${PXR_PACKAGE}
         debugCodes
 )
 
+set(APP_CPPFILES
+    usdweb.cpp
+    freeCameraGL.cpp
+)
+
+set(ICON_FILES
+    USDLogoUnsized.svg
+)
+
+file(GLOB ASSET_FILES "assets/*.usd*" "assets/*.png" "assets/*.exr")
+
 if (EMSCRIPTEN)
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/plugin/usd/plugInfo.json")
@@ -97,6 +108,20 @@ if (EMSCRIPTEN)
     )
 endif()
 
+# Install icon files to the bin directory
+install(
+    FILES
+    ${ICON_FILES}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+)
+
+# Install asset files to the bin/assets directory
+install(
+    FILES
+    ${ASSET_FILES}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/assets
+)
+
 target_sources(${PXR_PACKAGE} PRIVATE
-        freeCameraGL.cpp
+    ${APP_CPPFILES}
 )

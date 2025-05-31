@@ -1,0 +1,535 @@
+#usda 1.0
+(
+    customLayerData = {
+        string License = "CC BY 4.0"
+        string Version = "1.1"
+    }
+    defaultPrim = "standard_shader_ball_scene"
+    doc = """Generated from Composed Stage of root layer /Users/sbrew/Github/USD-webgpu/build/bin/standard_shader_ball_scene.usdz
+"""
+    endTimeCode = 3
+    framesPerSecond = 24
+    metersPerUnit = 0.01
+    startTimeCode = 3
+    timeCodesPerSecond = 24
+    upAxis = "Y"
+)
+
+def Xform "standard_shader_ball_scene" (
+    kind = "group"
+)
+{
+    def Scope "materials"
+    {
+        def Material "ground"
+        {
+            token outputs:mtlx:surface.connect = </standard_shader_ball_scene/materials/ground/mtlxstandard_surface1.outputs:out>
+            token outputs:surface.connect = </standard_shader_ball_scene/materials/ground/usdpreviewsurface1.outputs:surface>
+
+            def Shader "mtlxstandard_surface1"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                float inputs:base (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1
+                            string ogl_diff_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:base_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (0.8, 0.8, 0.8)
+                            string ogl_diff = "1"
+                        }
+                    }
+                )
+                color3f inputs:base_color.connect = </standard_shader_ball_scene/materials/ground/mtlximage1.outputs:out>
+                float inputs:coat (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_coat_intensity = "1"
+                        }
+                    }
+                )
+                float inputs:coat_roughness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0.1
+                            string ogl_coat_rough = "1"
+                        }
+                    }
+                )
+                float inputs:emission (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_emit_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:emission_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (1, 1, 1)
+                            string ogl_emit = "1"
+                        }
+                    }
+                )
+                float inputs:metalness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_metallic = "1"
+                        }
+                    }
+                )
+                float inputs:specular = 0 (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1
+                            string ogl_spec_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:specular_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (1, 1, 1)
+                            string ogl_spec = "1"
+                        }
+                    }
+                )
+                float inputs:specular_IOR (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1.5
+                            string ogl_ior = "1"
+                        }
+                    }
+                )
+                float inputs:specular_roughness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0.2
+                            string ogl_rough = "1"
+                        }
+                    }
+                )
+                float inputs:transmission (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_transparency = "1"
+                        }
+                    }
+                )
+                token outputs:out
+            }
+
+            def Shader "mtlximage1"
+            {
+                uniform token info:id = "ND_image_color3"
+                asset inputs:file = @uvgrid.png@
+                float2 inputs:texcoord.connect = </standard_shader_ball_scene/materials/ground/mtlxtexcoord1.outputs:out>
+                color3f outputs:out
+            }
+
+            def Shader "mtlxtexcoord1"
+            {
+                uniform token info:id = "ND_texcoord_vector2"
+                float2 outputs:out
+            }
+
+            def Shader "usdpreviewsurface1"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </standard_shader_ball_scene/materials/ground/usduvtexture1.outputs:rgb>
+                float inputs:roughness = 1
+                token outputs:surface
+            }
+
+            def Shader "usduvtexture1"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @uvgrid.png@
+                float2 inputs:st.connect = </standard_shader_ball_scene/materials/ground/usdprimvarreader1.outputs:result>
+                vector3f outputs:rgb
+            }
+
+            def Shader "usdprimvarreader1"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+
+        def Material "uvgrid"
+        {
+            token outputs:mtlx:surface.connect = </standard_shader_ball_scene/materials/uvgrid/mtlxstandard_surface1.outputs:out>
+            token outputs:surface.connect = </standard_shader_ball_scene/materials/uvgrid/usdpreviewsurface1.outputs:surface>
+
+            def Shader "usdpreviewsurface1"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </standard_shader_ball_scene/materials/uvgrid/usduvtexture1.outputs:rgb>
+                float inputs:roughness = 1
+                token outputs:surface
+            }
+
+            def Shader "usduvtexture1"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @./uvgrid.png@
+                float2 inputs:st.connect = </standard_shader_ball_scene/materials/uvgrid/usdprimvarreader1.outputs:result>
+                vector3f outputs:rgb
+            }
+
+            def Shader "usdprimvarreader1"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "mtlxstandard_surface1"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                float inputs:base (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1
+                            string ogl_diff_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:base_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (0.8, 0.8, 0.8)
+                            string ogl_diff = "1"
+                        }
+                    }
+                )
+                color3f inputs:base_color.connect = </standard_shader_ball_scene/materials/uvgrid/mtlximage1.outputs:out>
+                float inputs:coat (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_coat_intensity = "1"
+                        }
+                    }
+                )
+                float inputs:coat_roughness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0.1
+                            string ogl_coat_rough = "1"
+                        }
+                    }
+                )
+                float inputs:emission (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_emit_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:emission_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (1, 1, 1)
+                            string ogl_emit = "1"
+                        }
+                    }
+                )
+                float inputs:metalness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_metallic = "1"
+                        }
+                    }
+                )
+                float inputs:specular = 0 (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1
+                            string ogl_spec_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:specular_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (1, 1, 1)
+                            string ogl_spec = "1"
+                        }
+                    }
+                )
+                float inputs:specular_IOR (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1.5
+                            string ogl_ior = "1"
+                        }
+                    }
+                )
+                float inputs:specular_roughness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0.2
+                            string ogl_rough = "1"
+                        }
+                    }
+                )
+                float inputs:transmission (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_transparency = "1"
+                        }
+                    }
+                )
+                token outputs:out
+            }
+
+            def Shader "mtlximage1"
+            {
+                uniform token info:id = "ND_image_color3"
+                asset inputs:file = @./uvgrid.png@
+                float2 inputs:texcoord.connect = </standard_shader_ball_scene/materials/uvgrid/mtlxtexcoord1.outputs:out>
+                color3f outputs:out
+            }
+
+            def Shader "mtlxtexcoord1"
+            {
+                uniform token info:id = "ND_texcoord_vector2"
+                float2 outputs:out
+            }
+        }
+
+    }
+
+    def "textured_quad_materials"
+    {
+        def Material "uvgrid"
+        {
+            token outputs:mtlx:surface.connect = </standard_shader_ball_scene/textured_quad_materials/uvgrid/mtlxstandard_surface1.outputs:out>
+            token outputs:surface.connect = </standard_shader_ball_scene/textured_quad_materials/uvgrid/usdpreviewsurface1.outputs:surface>
+
+            def Shader "usdpreviewsurface1"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </standard_shader_ball_scene/textured_quad_materials/uvgrid/usduvtexture1.outputs:rgb>
+                float inputs:roughness = 1
+                token outputs:surface
+            }
+
+            def Shader "usduvtexture1"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @uvgrid.png@
+                float2 inputs:st.connect = </standard_shader_ball_scene/textured_quad_materials/uvgrid/usdprimvarreader1.outputs:result>
+                vector3f outputs:rgb
+            }
+
+            def Shader "usdprimvarreader1"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "mtlxstandard_surface1"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                float inputs:base (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1
+                            string ogl_diff_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:base_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (0.8, 0.8, 0.8)
+                            string ogl_diff = "1"
+                        }
+                    }
+                )
+                color3f inputs:base_color.connect = </standard_shader_ball_scene/textured_quad_materials/uvgrid/mtlximage1.outputs:out>
+                float inputs:coat (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_coat_intensity = "1"
+                        }
+                    }
+                )
+                float inputs:coat_roughness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0.1
+                            string ogl_coat_rough = "1"
+                        }
+                    }
+                )
+                float inputs:emission (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_emit_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:emission_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (1, 1, 1)
+                            string ogl_emit = "1"
+                        }
+                    }
+                )
+                float inputs:metalness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_metallic = "1"
+                        }
+                    }
+                )
+                float inputs:specular = 0 (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1
+                            string ogl_spec_intensity = "1"
+                        }
+                    }
+                )
+                color3f inputs:specular_color (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double3 default_value = (1, 1, 1)
+                            string ogl_spec = "1"
+                        }
+                    }
+                )
+                float inputs:specular_IOR (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 1.5
+                            string ogl_ior = "1"
+                        }
+                    }
+                )
+                float inputs:specular_roughness (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0.2
+                            string ogl_rough = "1"
+                        }
+                    }
+                )
+                float inputs:transmission (
+                    customData = {
+                        dictionary HoudiniPreviewTags = {
+                            double default_value = 0
+                            string ogl_transparency = "1"
+                        }
+                    }
+                )
+                token outputs:out
+            }
+
+            def Shader "mtlximage1"
+            {
+                uniform token info:id = "ND_image_color3"
+                asset inputs:file = @uvgrid.png@
+                float2 inputs:texcoord.connect = </standard_shader_ball_scene/textured_quad_materials/uvgrid/mtlxtexcoord1.outputs:out>
+                color3f outputs:out
+            }
+
+            def Shader "mtlxtexcoord1"
+            {
+                uniform token info:id = "ND_texcoord_vector2"
+                float2 outputs:out
+            }
+        }
+    }
+
+    def Mesh "card_WORKS" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        float3[] extent = [(-100, -100, 0), (100, 100, 0)]
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        rel material:binding = </standard_shader_ball_scene/textured_quad_materials/uvgrid>
+        point3f[] points = [(-100, -100, 0), (100, -100, 0), (100, 100, 0), (-100, 100, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "varying"
+        )
+    }
+
+    def Xform "ground"
+    {
+        #rel material:binding = </standard_shader_ball_scene/materials/ground>
+        #rel material:binding = </standard_shader_ball_scene/textured_quad_materials/uvgrid>
+        #matrix4d xformOp:transform:tweak_box_position = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (3.25, 0, 0.3, 1) )
+        #uniform token[] xformOpOrder = ["xformOp:transform:tweak_box_position"]
+
+        def Mesh "grid" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.0, 50.0, 0.0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            rel material:binding = </standard_shader_ball_scene/textured_quad_materials/uvgrid>
+            uniform bool doubleSided = 1
+            float3[] extent = [(-50, 0, -50), (50, 0, 50)]
+            int[] faceVertexCounts = [3, 3]
+            int[] faceVertexIndices = [0, 3, 1, 3, 0, 2]
+            uniform token orientation = "rightHanded"
+            point3f[] points = [(-50, 0, -50), (50, 0, -50), (-50, 0, 50), (50, 0, 50)] (
+                interpolation = "vertex"
+            )
+            texCoord2f[] primvars:st = [(0, 0), (1, -1), (1, 0), (1, -1), (0, 0), (0, -1)] (
+                interpolation = "uniform"
+            )
+            #int[] primvars:st:indices = None
+            #uniform token subdivisionScheme = "none"
+        }
+
+        def Mesh "grid_WORKS" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.0, -50.0, 0.0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            rel material:binding = </standard_shader_ball_scene/textured_quad_materials/uvgrid>
+            uniform bool doubleSided = 1
+            float3[] extent = [(-50, 0, -50), (50, 0, 50)]
+            int[] faceVertexCounts = [3, 3]
+            int[] faceVertexIndices = [0, 3, 1, 3, 0, 2]
+            uniform token orientation = "rightHanded"
+            point3f[] points = [(-50, 0, -50), (50, 0, -50), (-50, 0, 50), (50, 0, 50)] (
+                interpolation = "vertex"
+            )
+            texCoord2f[] primvars:st = [(0, 0), (1, -1), (1, 0), (1, -1), (0, 0), (0, -1)] (
+                interpolation = "varying"
+            )
+            #int[] primvars:st:indices = None
+            #uniform token subdivisionScheme = "none"
+        }
+    }
+
+}
+
