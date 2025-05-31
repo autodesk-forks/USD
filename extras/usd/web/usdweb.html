@@ -342,13 +342,13 @@
                 }
             }
         },
-        totalDependencies: 0,
         monitorRunDependencies: (left) => {
+            if (this.totalDependencies === undefined) {
+                this.totalDependencies = 0;
+            }
             this.totalDependencies = Math.max(this.totalDependencies, left);
-            //console.log('Downloading: '+left);
-            //console.log('Downloading queue:'+ this.totalDependencies);
-            Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
-        }
+            Module.setStatus(`Downloading Queue: ${this.totalDependencies - left}/${this.totalDependencies} Remaining=${left}`);
+        },
     };
     console.log('Module structure declared.');
     //console.log('Downloading...');
