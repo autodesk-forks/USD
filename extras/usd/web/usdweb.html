@@ -347,7 +347,7 @@
                 this.totalDependencies = 0;
             }
             this.totalDependencies = Math.max(this.totalDependencies, left);
-            Module.setStatus(`Downloading Queue: ${this.totalDependencies - left}/${this.totalDependencies} Remaining=${left}`);
+            Module.setStatus(`Downloaded: ${this.totalDependencies - left}/${this.totalDependencies} Remaining=${left}`);
         },
     };
     console.log('Module structure declared.');
