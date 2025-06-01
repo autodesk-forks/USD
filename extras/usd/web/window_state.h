@@ -34,7 +34,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 static void error_callback(int error, const char *description)
 {
-    //TF_RUNTIME_ERROR(description); // issues a warning at compile time
+    TF_RUNTIME_ERROR("window_state error_callback: %s",description);
 }
 
 // GLFW window state data
