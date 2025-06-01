@@ -35,7 +35,7 @@
 #include <vector>
 #include <fstream>
 
-//#include <GLFW/glfw3.h>
+#include <GLFW/glfw3.h>
 #include <cmath>
 
 #include <pxr/pxr.h>
@@ -174,7 +174,6 @@ struct VertexOutput {
     // void ems_setup()
     EM_JS(void, ems_setup, (), {
         console.log('In ems_setup()');
-        if (1) { // (_ems_main) {
         if (navigator["gpu"]) {
         console.log('Requesting adapter');
         navigator["gpu"]["requestAdapter"]().then(function (adapter) {
@@ -204,80 +203,31 @@ struct VertexOutput {
             adapter["requestDevice"]({requiredFeatures, requiredLimits}).then( function (device) {
                 console.log('Requesting device. Completed.');
                 Module["preinitializedWebGPUDevice"] = device;
-
-                console.log('Module["preinitializedWebGPUDevice"] = '+device);
-                console.log('WebGPU.preinitializedDeviceId = '+ WebGPU.preinitializedDeviceId );
-                const myDeviceId = _emscripten_webgpu_get_device();
-                console.log('WebGPU.preinitializedDeviceId2 = '+ myDeviceId );
-                console.log('WebGPU.preinitializedDeviceId3 = '+ WebGPU.preinitializedDeviceId );
-
-                // const canvas = Module["canvas"];
-                // // Perform checks
-                // if (canvas.tagName != "CANVAS") {
-                //     throw new Error(`For Module["canvas"] value, expected DOM element with id='${canvas.id}' to be type CANVAS`);
-                // }
-                // // Get Params
-                // const width  = canvas.offsetWidth;  
-                // const height = canvas.offsetHeight;
-                // console.log(`Canvas size: (${width}, ${height})`);              
-                // // Modify Params
-                // console.log(`Modifying parameters for canvas element with id=${canvas.id}`);
-                // canvas.style.position = "absolute";
-                // canvas.style.opacity = 0;
-                // let canvasSelectorStr = '#'+canvas.id;
-
-
-                // ==========
-                // HACK
-                // console.log(`HACKS for canvasContainer (HARDCODED)`);
-                // const canvasContainer = document.getElementById("canvasContainer");
-                // console.log(`Canvas size: (${canvasContainer.offsetWidth}, ${canvasContainer.offsetHeight})`);              
-                // canvasContainer.style.display = "flex";
-                // canvasContainer.style.justifyContent = "center";
-
-                // // HACK
-                // console.log(`HACKS for adding canvas and its selector (HARDCODED)`);
-                // webgpuCanvas.id = "webgpuCanvas";
-                // webgpuCanvas.height = height;
-                // webgpuCanvas.width = width;
-                // canvasContainer.appendChild(webgpuCanvas);
-                // console.log('Get webgpu canvas:'+ webgpuCanvas.id);
-                // canvasSelectorStr = '#'+webgpuCanvas.id;
-
-                // HARDCODE
-                //console.log('Get orig canvas:'+ document.getElementById("canvas").id);
+                console.log('Get orig canvas:'+ document.getElementById("canvas").id);
                 const canvasContainer = document.getElementById("canvasContainer");
                 const height = canvasContainer.offsetHeight;
                 const width  = canvasContainer.offsetWidth;
-                // const webgpuCanvas = document.createElement("canvas");
-                // webgpuCanvas.id = "webgpuCanvas";
-                // webgpuCanvas.height = height;
-                // webgpuCanvas.width = width;
-                // canvasContainer.appendChild(webgpuCanvas);
-                // console.log('Get webgpu canvas:'+ webgpuCanvas.id);
-                // canvasContainer.style.display = "flex";
-                // canvasContainer.style.justifyContent = "center";
-                // // Make sure canvas (created in usdweb.html) has opacity=0;
-                // const mainCanvas = document.getElementById("canvas");
-                // console.log('Get new canvas:'+ mainCanvas.id);
-                // mainCanvas.style.position = "absolute";
-                // mainCanvas.style.opacity = 0;
-                // const canvasSelectorStr = '#'+webgpuCanvas.id;
-
-                
-                console.log(`Calling Module.myInitialize()`);
-                //console.log(`Calling Module.myInitialize(${width}, ${height}, ${canvasSelectorStr})`);
-                //_ems_main(width, height, canvasSelectorStr);
-                Module.myInitialize(width, height); //, canvasSelectorStr);
+                const webgpuCanvas = document.createElement("canvas");
+                webgpuCanvas.id = "webgpuCanvas";
+                webgpuCanvas.height = height;
+                webgpuCanvas.width = width;
+                canvasContainer.appendChild(webgpuCanvas);
+                console.log('Get webgpu canvas:'+ webgpuCanvas.id);
+                canvasContainer.style.display = "flex";
+                canvasContainer.style.justifyContent = "center";
+                // Make sure canvas (created in usdweb.html) has opacity=0;
+                const mainCanvas = document.getElementById("canvas");
+                console.log('Get new canvas:'+ mainCanvas.id);
+                mainCanvas.style.position = "absolute";
+                mainCanvas.style.opacity = 0;
+                console.log("Module.myInitialize(width, height);.");
+                Module.myInitialize(width, height);
             }).catch((res) => { console.log(res); });
         }, function () {
             console.log("WebGPU adapter not found.");
         });
     } else {
         console.log("WebGPU not found.");
-    }
-    } else {
-    console.log("Module entry point not found.");
     }
     });
 
@@ -444,9 +394,9 @@ struct VertexOutput {
     //    function _wgpuDeviceCreateCommandEncoder(deviceId, descriptor) will have a garbage deviceId
     //    passed into it and fail.
     // 
-    int initialize(uint32_t width, uint32_t height) //, const std::string& canvasSelectorStr)  
+    int initialize(uint32_t width, uint32_t height)
     {
-        //std::cout << "In initialize(" << width << ", " << height << ", " << canvasSelectorStr << ")" << std::endl;
+        std::cout << "In initialize(" << width << ", " << height << ")" << std::endl;
         TF_INFO(USDWEB).Msg("Starting GLEngine ");
         initGLEngine();
         glfwSetErrorCallback(error_callback);
@@ -481,14 +431,7 @@ struct VertexOutput {
 
         {
             wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
-            // REVISIT: Change this hardcode
-            // 
-            //std::cout << "+++++canvasDesc.selector = " << canvasSelectorStr << std::endl;
-
-            // QUESTION: Is the CreateSurface the first time that the 
-            //      Module["canvas"] object is referred to?
-            //      Therefore Module["canvas"] does not need to be set directly?
-            canvasDesc.selector = "#webgpuCanvas"; // canvasSelectorStr; //"#webgpuCanvas";
+            canvasDesc.selector = "#webgpuCanvas";
 
             wgpu::SurfaceDescriptor surfDesc{};
             surfDesc.nextInChain = &canvasDesc;
@@ -703,10 +646,6 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-// Called from the embedded Javascript, referred to as _ems_main()
-// extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height, const char* canvasSelectorStr) {
-//     pxr::usdweb::initialize(width, height, canvasSelectorStr);
-// }
 
 // NOTE: May not be needed if it is called from 
 // main(int argc, char **argv) 

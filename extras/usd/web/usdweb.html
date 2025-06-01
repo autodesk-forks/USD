@@ -84,7 +84,7 @@
 <div id="container">
     <div class="spinner" id="spinner"></div>
     <div id="canvasContainer" class="hidden">
-        <canvas id="webgpuCanvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
     </div>
 </div>
 
@@ -289,10 +289,6 @@
     //      EmscriptenTrace (memory, etc)
     //      * See usdweb.js for details on using
     //
-    // For contrib.glfw3 (C++ implementation)
-    // Use:
-    //      
-    //
     // TODO:
     //    1) Revise the code in usdewb.cpp so that it does not have any hardcodes
     //       past Module["canvas"].
@@ -315,26 +311,20 @@
                 console.log(text);
             };
         })(),
-        // canvas: (() => {
-        //     var canvas = document.getElementById('canvas');
-        //     // verify DOM element is a CANVAS element
-        //     console.log(`Canvas Element tagName: ${canvas.tagName}`)
-        //     console.log(`Canvas Element style: ${canvas.style}`)
-        //     if (canvas.tagName != "CANVAS") {
-        //         throw new Error(`For Module["canvas"] value, expected DOM element with id='${canvas.id}' to be type CANVAS`);
-        //     }
+        canvas: (() => {
+            var canvas = document.getElementById('canvas');
 
-        //     // Assign a listener to the element specified here by Module["canvas"] 
-        //     // As a default initial behavior, pop up an alert when webgl context is lost. To make your
-        //     // application robust, you may want to override this behavior before shipping!
-        //     // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
-        //     canvas.addEventListener("webglcontextlost", (e) => {
-        //         alert('WebGL context lost. You will need to reload the page.');
-        //         e.preventDefault();
-        //     }, false);
+            // Assign a listener to the element specified here by Module["canvas"] 
+            // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+            // application robust, you may want to override this behavior before shipping!
+            // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+            canvas.addEventListener("webglcontextlost", (e) => {
+                alert('WebGL context lost. You will need to reload the page.');
+                e.preventDefault();
+            }, false);
 
-        //     return canvas;
-        // })(),
+            return canvas;
+        })(),
         setStatus: (text) => {
             console.log('Status: '+text); // print any status messages also to the console for debugging
             if (!Module.setStatus.last) Module.setStatus.last = {time: Date.now(), text: ''};
