@@ -64,6 +64,18 @@ if (EMSCRIPTEN)
     if (PXR_ENABLE_JS_BINDINGS_SUPPORT)
         set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB "${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} --bind")
     endif()
+
+    # GLFW OPTIONS
+    #   -s USE_GLFW=3             This is the older Javascript version of GLFW, hardcoded to Module["canvas"]
+    #   --use-port=contrib.glfw3  This is more modern, supports multiple windows, and is faster
+    #                             It is an Emscripten port of GLFW written in C++ for the web/wasm
+    #                             platform.  It currently supports GLFW API 3.4.
+    #                             See  https://github.com/pongasoft/emscripten-glfw
+    #                             It is referred to in https://emscripten.org/docs/compiling/Contrib-Ports.html
+    # If using --use-port=contrib.glfw3, consider:
+    #       disableWebGL2
+    #
+    # Taking out: -s FULL_ES3 \
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} \
         -s USE_GLFW=3 \
         -s MAX_WEBGL_VERSION=2 \
