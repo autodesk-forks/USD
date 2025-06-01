@@ -35,7 +35,7 @@
 #include <vector>
 #include <fstream>
 
-#include <GLFW/glfw3.h>
+//#include <GLFW/glfw3.h>
 #include <cmath>
 
 #include <pxr/pxr.h>
