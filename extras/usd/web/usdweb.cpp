@@ -73,7 +73,8 @@
 #include "window_state.h"
 #include "debugCodes.h"
 
-#include <iostream> // for printf
+#include <iostream>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 namespace usdweb {
@@ -482,7 +483,6 @@ struct VertexOutput {
             wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
             // REVISIT: Change this hardcode
             // 
-            //printf("=====canvasDesc.selector = %s", canvasSelectorStr.c_str());
             //std::cout << "+++++canvasDesc.selector = " << canvasSelectorStr << std::endl;
 
             // QUESTION: Is the CreateSurface the first time that the 
