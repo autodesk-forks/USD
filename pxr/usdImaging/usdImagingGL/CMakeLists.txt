@@ -181,6 +181,11 @@ if (WIN32)
     return()
 endif()
 
+if (EMSCRIPTEN)
+    message(STATUS "Skipping ${PXR_PACKAGE} tests because they are currently unsupported on Wasm")
+    return()
+endif()
+
 # usdImagingGL tests require plugin mechanism to find different renderer
 # plugins, which we do not support for static build configurations due to
 # potential conflict in client applications linking against static build USD

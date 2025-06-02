@@ -1650,7 +1650,8 @@ def InstallMaterialX(context, force, buildArgs):
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
                 '-DMATERIALX_BUILD_JS=OFF', # We don't need the js bindings
                 '-DMATERIALX_BUILD_TESTS=OFF',
-                '-DMATERIALX_BUILD_RENDER=OFF',
+                '-DMATERIALX_BUILD_RENDER=ON',
+                '-DMATERIALX_BUILD_RENDER_PLATFORMS=OFF',
                 '-DMATERIALX_BUILD_GEN_OSL=OFF',
                 '-DMATERIALX_BUILD_GEN_MDL=OFF'])
 
