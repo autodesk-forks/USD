@@ -874,10 +874,10 @@ HdxPickTask::Execute(HdTaskContext* ctx)
                     int *primIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
                     int *instanceIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->instanceId].get());
                     int *elementIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->elementId].get());
-                    int *edgeIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
-                    int *pointIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
-                    int *neyes = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
-                    float *depths = reinterpret_cast<float *>(_gpuBuffers[HdAovTokens->primId].get());
+                    int *edgeIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->edgeId].get());
+                    int *pointIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->pointId].get());
+                    int *neyes = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->Neye].get());
+                    float *depths = reinterpret_cast<float *>(_gpuBuffers[_depthToken].get());
 
                     pxr::HdxPickHitVector outHits;
                     _BuildResults(primIds, instanceIds, elementIds,
