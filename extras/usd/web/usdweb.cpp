@@ -25,18 +25,21 @@
 #include <GLES/gl.h>
 #include <GLES/glext.h>
 #include <GLES3/gl3.h>
+
 #include <emscripten/em_js.h>
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu_cpp.h>
-#include <pxr/imaging/hgiWebGPU/texture.h>
-#include <pxr/imaging/hgiWebGPU/hgi.h>
+#include <GLFW/glfw3.h>
+#ifdef EMSCRIPTEN_USE_CONTRIB_GLFW3
+#include <GLFW/emscripten_glfw3.h>
+#endif
 
 #include <functional>
 #include <vector>
 #include <fstream>
-
-#include <GLFW/glfw3.h>
 #include <cmath>
+#include <cstdlib> // for setenv
+#include <iostream>
 
 #include <pxr/pxr.h>
 #include <pxr/base/tf/token.h>
@@ -50,6 +53,8 @@
 #include <pxr/imaging/hgi/blitCmdsOps.h>
 #include <pxr/imaging/hdx/tokens.h>
 #include <pxr/imaging/hd/tokens.h>
+#include <pxr/imaging/hgiWebGPU/texture.h>
+#include <pxr/imaging/hgiWebGPU/hgi.h>
 
 #include <pxr/usd/usdGeom/bboxCache.h>
 #include <pxr/usd/usdGeom/metrics.h>
@@ -67,13 +72,11 @@
 
 #include <pxr/imaging/hdSt/debugCodes.h>
 #include <pxr/imaging/hgi/debugCodes.h>
-#include <cstdlib> // for setenv
 
 #include "freeCameraGL.h"
 #include "window_state.h"
 #include "debugCodes.h"
 
-#include <iostream>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -403,20 +406,33 @@ struct VertexOutput {
         if (!glfwInit())
             exit(EXIT_FAILURE);
 
+#ifdef EMSCRIPTEN_USE_CONTRIB_GLFW3
+        // Need to call this before glfwCreateWindow()
+        emscripten::glfw3::SetNextWindowCanvasSelector("#webgpuCanvas");
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // without this set, it fails in CreateSurface
+#else
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);        
+#endif        
 
         // just use multiples of 256 now until row alignment is handled in HgiWebGPU
+        std::cout << "glfwCreateWindow" << std::endl;
         auto window = glfwCreateWindow(width, height, "USD Web", NULL, NULL);
         if (!window) {
             glfwTerminate();
             exit(EXIT_FAILURE);
         }
 
+#ifdef EMSCRIPTEN_USE_CONTRIB_GLFW3
+        //emscripten::glfw3::MakeCanvasResizable(window, "window"); // fill entire window
+        //emscripten::glfw3::MakeCanvasResizable(window, "canvas1-container"); // inside a <div/> 
+#endif
+
         // get the size of the framebuffer
         int framebufferWidth = 1, framebufferHeight = 1;
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
 
+        std::cout << "glfwMakeContextCurrent" << std::endl;
         glfwMakeContextCurrent(window);
         wgpu::SwapChain swapChain;
         pxr::Hgi *hgi = glEngine->GetHgi();
@@ -435,8 +451,9 @@ struct VertexOutput {
 
             wgpu::SurfaceDescriptor surfDesc{};
             surfDesc.nextInChain = &canvasDesc;
+            std::cout << "wgpu::CreateInstance()" << std::endl;
             wgpu::Instance instance = wgpu::CreateInstance();
-            std::cout << "About to instance.CreateSurface(&surfDesc)" << std::endl;
+            std::cout << "instance.CreateSurface(&surfDesc)" << std::endl;
             wgpu::Surface surface = instance.CreateSurface(&surfDesc);
 
             wgpu::SwapChainDescriptor scDesc{};
@@ -459,6 +476,7 @@ struct VertexOutput {
             textureDescriptor.format = wgpu::TextureFormat::RGBA8Unorm;
             textureDescriptor.mipLevelCount = 1;
             textureDescriptor.usage = wgpu::TextureUsage::CopyDst | wgpu::TextureUsage::TextureBinding;
+            std::cout << "device.CreateTexture(&textureDescriptor)" << std::endl;
             testTexture = device.CreateTexture(&textureDescriptor);
 
             // Initialize the texture with arbitrary data until we can load images
@@ -470,8 +488,10 @@ struct VertexOutput {
             wgpu::BufferDescriptor stgDescriptor;
             stgDescriptor.size = static_cast<uint32_t>(data.size());
             stgDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
+            std::cout << "device.CreateBuffer(&stgDescriptor);" << std::endl;
             wgpu::Buffer stagingBuffer = device.CreateBuffer(&stgDescriptor);
 
+            std::cout << "device.GetQueue().WriteBuffer" << std::endl;
             device.GetQueue().WriteBuffer(stagingBuffer, 0, data.data(), static_cast<uint32_t>(data.size()));
 
             wgpu::ImageCopyBuffer imageCopyBuffer = {};
@@ -490,27 +510,34 @@ struct VertexOutput {
 
             std::cout << "About to device.CreateCommandEncoder()" << std::endl;
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            std::cout << "encoder.CopyBufferToTexture()" << std::endl;
             encoder.CopyBufferToTexture(&imageCopyBuffer, &imageCopyTexture, &copySize);
 
             wgpu::CommandBuffer copy = encoder.Finish();
             device.GetQueue().Submit(1, &copy);
         }
+
+        std::cout << "createBlitPipeline" << std::endl;
         wgpu::RenderPipeline pipeline = createBlitPipeline(device, swapChainFormat);
         wgpu::SamplerDescriptor samplerDsc = {};
         samplerDsc.minFilter = wgpu::FilterMode::Linear;
         samplerDsc.magFilter = wgpu::FilterMode::Linear;
+        std::cout << "CreateSampler" << std::endl;
         wgpu::Sampler sampler = device.CreateSampler(&samplerDsc);
 
         // gl framebuffer for blitting
         // we render the frame into a webgpu texture then read it back, upload it as a GL texture and do a framebuffer blit
         // suboptimal but this is to get things working
         GLuint frameBufferTexture;
+        std::cout << "glGenTextures" << std::endl;
         glGenTextures(1, &frameBufferTexture);
+        std::cout << "glBindTexture" << std::endl;
         glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
         char imageData[4 * 4 * 4];
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGBA, GL_HALF_FLOAT, imageData);
 
         GLuint frameBufferObject;
+        std::cout << "glGenFramebuffers" << std::endl;
         glGenFramebuffers(1, &frameBufferObject);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBufferObject);
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frameBufferTexture, 0);
@@ -529,6 +556,7 @@ struct VertexOutput {
         wstate.camera = &camera;
 
         // set the window state data so we can use it in glfw callbacks
+        std::cout << "glfwSetWindowUserPointer" << std::endl;
         glfwSetWindowUserPointer(window, (void *) &wstate);
 
         // set glfw input callbacks

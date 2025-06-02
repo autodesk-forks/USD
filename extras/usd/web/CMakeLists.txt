@@ -30,6 +30,14 @@ set(ICON_FILES
 file(GLOB ASSET_FILES "assets/*.usd*" "assets/*.png" "assets/*.exr")
 
 if (EMSCRIPTEN)
+
+    # Determine which GLFW3 to use through Emscripten
+    if (EMSCRIPTEN_USE_CONTRIB_GLFW3)
+        set(EMSCRIPTEN_GLFW_BUILD_FLAGS "--use-port=contrib.glfw3 -DEMSCRIPTEN_USE_CONTRIB_GLFW3")
+    else()
+        set(EMSCRIPTEN_GLFW_BUILD_FLAGS "-s USE_GLFW=3")
+    endif()
+
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
     list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/plugin/usd/plugInfo.json")
 
@@ -50,8 +58,8 @@ if (EMSCRIPTEN)
         )
 
     set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB " --tracing ${DEBUG_OPTIONS} \
+        ${EMSCRIPTEN_GLFW_BUILD_FLAGS} -pthread   \
         -s ENVIRONMENT=web,worker \
-        -pthread \
         -s MAXIMUM_MEMORY=4GB \
         -s PTHREAD_POOL_SIZE=8 \
         -s WASM_BIGINT \
@@ -77,24 +85,24 @@ if (EMSCRIPTEN)
     #
     # Taking out: -s FULL_ES3 \
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} \
-        -s USE_GLFW=3 \
+        ${EMSCRIPTEN_GLFW_BUILD_FLAGS} -pthread   \
         -s MAX_WEBGL_VERSION=2 \
         -s USE_WEBGPU=1 \
         -O0 \
         -s ALLOW_MEMORY_GROWTH \
-        -s FULL_ES3 \
     ")
 
     # Add the following to the local web filesystem
     #   * /webgpu-env-settings
     #   * /libraries/           Required for MaterialX
     #
-    target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0 -O0")
+    # Note that -pthread automatically sets -mbulk-memory -matomics and SHARED_ARRAY_BUFFER
+    #
+    target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} ${EMSCRIPTEN_GLFW_BUILD_FLAGS} -pthread  -sMODULARIZE=0 -O0")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
+        ${EMSCRIPTEN_GLFW_BUILD_FLAGS} -pthread   \
         --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/webgpu-env-settings@/webgpu-env-settings \
         --embed-file ${CMAKE_INSTALL_PREFIX}/libraries@/libraries/ \
-        -mbulk-memory \
-        -matomics \
         --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/resources/preload.js \ 
         --profiling-funcs \
         ")
@@ -116,7 +124,7 @@ if (EMSCRIPTEN)
                 ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm.debug.wasm
         )
     endif()
-
+ 
     install(
         FILES
         ${BUILD_FILES}
