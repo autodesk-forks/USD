@@ -240,7 +240,7 @@ export class BenchmarkLog {
 
         this.viewer = {
             version: commitInfo,
-            build:'wasm',
+            build: isWasm64 ? 'wasm64' : 'wasm',
             commitTimestamp
         };
     }
