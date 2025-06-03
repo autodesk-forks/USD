@@ -496,7 +496,7 @@ struct VertexOutput {
 
             wgpu::ImageCopyBuffer imageCopyBuffer = {};
             imageCopyBuffer.buffer = stagingBuffer;
-             wgpu::TextureDataLayout textureDataLayout;
+            wgpu::TextureDataLayout textureDataLayout;
             textureDataLayout.offset = 0;
             textureDataLayout.bytesPerRow = 4 * width;
 
