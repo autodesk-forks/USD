@@ -29,6 +29,16 @@ set(ICON_FILES
 
 file(GLOB ASSET_FILES "assets/*.usd*" "assets/*.png" "assets/*.exr")
 
+# ==============================
+# EMSCRIPTEN_USE_CONTRIB_GLFW
+# This feature is a WIP (work in progress)
+# It can be enabled by adding -DEMSCRIPTEN_USE_CONTRIB_GLFW3=ON
+#
+# Sample build setup:
+#     build_scripts/build_usd.py --cmake-build-args "-DEMSCRIPTEN_USE_CONTRIB_GLFW3=ON"
+#
+# ==============================
+
 if (EMSCRIPTEN)
 
     # Determine which GLFW3 to use through Emscripten

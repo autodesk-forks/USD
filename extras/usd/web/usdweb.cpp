@@ -426,8 +426,11 @@ struct VertexOutput {
 #ifdef EMSCRIPTEN_USE_CONTRIB_GLFW3
         //emscripten::glfw3::MakeCanvasResizable(window, "window"); // fill entire window
         //emscripten::glfw3::MakeCanvasResizable(window, "canvas1-container"); // inside a <div/> 
-#endif
 
+        // ======
+        // WIP: Put the logic for rendering directly to a webgpu viewport here
+        // ======
+#else
         // get the size of the framebuffer
         int framebufferWidth = 1, framebufferHeight = 1;
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
@@ -548,9 +551,6 @@ struct VertexOutput {
         // for holding the data read back from the WebGPU render target
         std::vector<uint8_t> colorData;
 
-        // Setup camera
-        fit_camera(pxr::UsdPrim());
-
         // attach the camera to the window state object
         WindowState wstate;
         wstate.camera = &camera;
@@ -564,7 +564,9 @@ struct VertexOutput {
         glfwSetMouseButtonCallback(window, mouse_button_callback);
         glfwSetScrollCallback(window, scroll_callback);
         glfwSwapBuffers(window);
+#endif // EMSCRIPTEN_USE_CONTRIB_GLFW3
 
+        // === Main Loop ===
         loop = [&]() {
 
             glfwSwapInterval(1);
@@ -655,7 +657,8 @@ struct VertexOutput {
             device.GetQueue().Submit(1, &commands);
 
             glfwPollEvents();
-        };
+        }; // === END: Main Loop ===
+
         emscripten_set_main_loop(main_loop, 0, true);
         glfwDestroyWindow(window);
         glfwTerminate();
