@@ -57,3 +57,7 @@ it recreates buffers every time a push constant is updated.
 - WebGPU only has optional support for `ClipDistance`s. We introduced the
 `HgiDeviceCapabilitiesClipDistance` capability to make it optional.
 Clip distances are simply ignored when unsupported.
+
+- The lack of gl_primitiveID and tessellation shaders limits some HdSt features. For example:
+  - Meshes with subdivision schemes but no normals will fail to render since they require post-tessellation vertex shaders
+  - Meshes with faceVarying normal interpolation will fail since they require tessellation shaders and gl_primitiveID
