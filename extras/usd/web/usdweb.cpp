@@ -182,8 +182,8 @@ struct VertexOutput {
         navigator["gpu"]["requestAdapter"]().then(function (adapter) {
             console.log('Requesting adapter. Completed.');
             const requestedFeatures = [
-            'depth32float-stencil8',
-                    'float32-filterable'
+                'depth32float-stencil8',
+                'float32-filterable'
             ];
             const requiredFeatures = [];
             requestedFeatures.forEach((feat) => {
