@@ -1828,7 +1828,7 @@ def InstallDawnHeaders(context, force, buildArgs):
             Run('{} --force {} build {}'.format(
                 'embuilder.bat' if Windows() else 'embuilder',
                 '--wasm64' if context.targetWasm64 else '',
-                os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py")
+                os.path.normpath(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py")).replace(os.sep, '/')
             ))
             
 
