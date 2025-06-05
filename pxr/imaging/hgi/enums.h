@@ -60,8 +60,6 @@ using HgiBits = uint32_t;
 ///   Indirect command buffers are supported</li>
 /// <li>HgiDeviceCapabilitiesBitsGeometricStage:
 ///   Support for geometric shader stage</li>
-/// <li>HgiDeviceCapabilitiesBitsClipDistanceSupport:
-///   Support for clips distance planes</li>
 /// <li>HgiDeviceCapabilitiesBitsTriangulatedQuads:
 ///   Rendering support for triangulated quads</li>
 /// <li>HgiDeviceCapabilitiesBitsPushConstants:
@@ -96,12 +94,11 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsPrimitiveIdEmulation    = 1 << 16,
     HgiDeviceCapabilitiesBitsIndirectCommandBuffers  = 1 << 17,
     HgiDeviceCapabilitiesBitsGeometricStage          = 1 << 18,
-    HgiDeviceCapabilitiesBitsClipDistanceSupport     = 1 << 19,
-    HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 20,
-    HgiDeviceCapabilitiesBitsPushConstants           = 1 << 21,
-    HgiDeviceCapabilitiesBitsTimestamps              = 1 << 22,
-    HgiDeviceCapabilitiesForceEarlyFragmentTest      = 1 << 23,
-    HgiDeviceCapabilitiesBitsRoundPoints             = 1 << 24,
+    HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 19,
+    HgiDeviceCapabilitiesBitsPushConstants           = 1 << 20,
+    HgiDeviceCapabilitiesBitsTimestamps              = 1 << 21,
+    HgiDeviceCapabilitiesForceEarlyFragmentTest      = 1 << 22,
+    HgiDeviceCapabilitiesBitsRoundPoints             = 1 << 23,
 };
 
 using HgiDeviceCapabilities = HgiBits;

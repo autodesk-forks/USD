@@ -35,6 +35,8 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 {
     _maxUniformBlockSize          = 64 * 1024;
     _maxShaderStorageBlockSize    = 1 * 1024 * 1024 * 1024;
+    // WebGPU does not support clip distances by default
+    _maxClipDistances             = 0;
 
     #ifdef ARCH_OS_WASM_VM
     // Without this, the default value of 1 causes aligned_malloc to always return 0 (null)
@@ -49,7 +51,6 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _SetFlag(HgiDeviceCapabilitiesBitsPrimitiveIdEmulation, true);
     _SetFlag(HgiDeviceCapabilitiesBitsCppShaderPadding, false);
     _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, false);
-    _SetFlag(HgiDeviceCapabilitiesBitsClipDistanceSupport, false);
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, true);
     _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, false);
