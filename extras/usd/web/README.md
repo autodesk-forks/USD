@@ -7,7 +7,7 @@ to initialize a USD Hydra Storm renderer in a web viewport while exposing USD ja
 # How to build and deploy?
 See basic instructions under [pxr/usdImaging/bin/usdviewweb/README.md](/pxr/usdImaging/bin/usdviewweb/README.md).
 
-**Build: (using ./build-wasm-release as the <build_dir>)**
+**Build:** (using ./build-wasm-release as the <build_dir>)
 cd <root_dir_of_repo>
 ```
 python3 ./build_scripts/build_usd.py --build-target wasm --build-variant release ./build-wasm-release
