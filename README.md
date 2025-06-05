@@ -16,6 +16,9 @@ It reuses the existing shaders that are converted to SPIR-V by [Shaderc](https:/
 and then WGSL by [Tint](https://dawn.googlesource.com/tint), finally consumed by a browser with WebGPU feature 
 enabled.
 
+Features:
+ - **MaterialX** supported with the WebGPU HdStorm renderer as of 1.39.4 (?).
+
 #### Getting Started with HgiWebGPU
 
 As we worked on a WebGPU based backend, we developed 2 solutions for different scenarios according 
@@ -31,9 +34,14 @@ export HDX_ENABLE_OIT=0
 export HGI_ENABLE_WEBGPU=1
 ```
 
-- **Wasm-based**: It is used for rendering and viewing on a web browser.
+**WebAssembly (Wasm) Examples:**
+- **usdviewweb** : Used for rendering and viewing on a web browser.
 The WebAssembly content can be tested using [usdviewweb](./pxr/usdImaging/bin/usdviewweb/README.md). For running an example on the browser, please follow the instructions [under usdviewweb folder](./pxr/usdImaging/bin/usdviewweb/README.md).
 Please build USD with `--build-target wasm` option. 
+
+- **usdweb** : Example using HdStorm rendering controlled by JavaScript USD commands 
+in a web browser.  See [extras/usd/web/README.md](./extras/usd/web/README.md) for more information.
+
 
 **Limitations**
 
