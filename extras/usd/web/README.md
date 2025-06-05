@@ -3,9 +3,6 @@
 This example expands on the simple [USDViewWeb](./pxr/usdImaging/bin/usdviewweb) application
 to initialize a USD Hydra Storm renderer in a web viewport while exposing USD javascript that can be controlled via the html or js files.
 
-## Features
- - Controllable with JavaScript via html and the Developer Console.  Type `Module` to see the commands exposed.
-
 # How to build and deploy?
 See basic instructions under [pxr/usdImaging/bin/usdviewweb/README.md](./pxr/usdImaging/bin/usdviewweb/README.md).
 
