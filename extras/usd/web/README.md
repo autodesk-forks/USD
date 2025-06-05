@@ -1,10 +1,10 @@
 # What is UsdWeb?
 
-This example expands on the simple [USDViewWeb](./pxr/usdImaging/bin/usdviewweb) application
+This example expands on the simple [USDViewWeb](/pxr/usdImaging/bin/usdviewweb) application
 to initialize a USD Hydra Storm renderer in a web viewport while exposing USD javascript that can be controlled via the html or js files.
 
 # How to build and deploy?
-See basic instructions under [pxr/usdImaging/bin/usdviewweb/README.md](./pxr/usdImaging/bin/usdviewweb/README.md).
+See basic instructions under [pxr/usdImaging/bin/usdviewweb/README.md](/pxr/usdImaging/bin/usdviewweb/README.md).
 
 **Build: (using ./build-wasm-release as the <build_dir>)**
 cd <root_dir_of_repo>
