@@ -25,4 +25,6 @@ python3 ./wasm-server.py
 ```
 
 # How to use?
-See the usdweb.html or from the Chrome Developer Console, type `Module` to see the commands exposed.
+See [usdweb.html](usdweb.html)
+<br>or<br> 
+from the Chrome Developer Console, type `Module` to see the commands exposed.
