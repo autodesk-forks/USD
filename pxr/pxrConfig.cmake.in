@@ -120,7 +120,7 @@ if(@PXR_ENABLE_WEBGPU_SUPPORT@)
 endif()
 
 include("${PXR_CMAKE_DIR}/cmake/pxrTargets.cmake")
-if(@PXR_ENABLE_JS_SUPPORT@)
+if(@EMSCRIPTEN@)
     include("${PXR_CMAKE_DIR}/pxrStaticConfig.cmake")
 endif()
 if (TARGET usd_ms)

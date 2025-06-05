@@ -2196,7 +2196,6 @@ def InstallUSD(context, force, buildArgs):
             else:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
-            extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
             if context.buildImaging:
                 webGPUPortArg = "--use-port={}".format(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py"))
             else:

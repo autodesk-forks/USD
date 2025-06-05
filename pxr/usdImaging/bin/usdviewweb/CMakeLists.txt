@@ -70,7 +70,7 @@ if (EMSCRIPTEN)
         --profiling-funcs \
         ")
 
-    if(CMAKE_BUILD_TYPE MATCHES "(Debug|DEBUG|debug|RelWithDebInfo|RELWITHDEBINFO|relwithdebinfo)")
+    if(CMAKE_BUILD_TYPE MATCHES "(Debug|DEBUG|debug)")
         message("Building with debug information")
         # See https://developer.chrome.com/blog/faster-wasm-debugging#debug_fission
         # Note: -g is set automatically so we're just adding some additional flags

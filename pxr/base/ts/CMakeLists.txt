@@ -133,7 +133,7 @@ pxr_library(ts
 )
 
 if (${PXR_BUILD_TESTS})
-    if (PXR_ENABLE_JS_SUPPORT)
+    if (EMSCRIPTEN)
         target_compile_definitions(ts INTERFACE TS_BUILD_TEST_FRAMEWORK)
     else()
         target_compile_definitions(ts PRIVATE TS_BUILD_TEST_FRAMEWORK)

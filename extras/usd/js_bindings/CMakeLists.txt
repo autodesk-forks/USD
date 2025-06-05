@@ -1,7 +1,7 @@
 set(PXR_PREFIX jsBindings)
 set(PXR_PACKAGE jsBindings)
 
-if (NOT PXR_ENABLE_JS_SUPPORT)
+if (NOT EMSCRIPTEN)
   return()
 endif()
 

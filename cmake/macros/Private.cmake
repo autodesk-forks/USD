@@ -346,7 +346,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
             set(EMSCRIPTEN_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
         endif()
 
-        if (PXR_ENABLE_JS_SUPPORT)
+        if (EMSCRIPTEN)
             string(REGEX REPLACE "^lib\\/" "/" LOCAL_PATH "${resourcesPath}")
 
             list(APPEND EMSCRIPTEN_RESOURCE_FILES "--preload-file ${EMSCRIPTEN_RESOURCE_FILE}@${LOCAL_PATH}/${dirPath}/${destFileName}")
@@ -358,7 +358,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
         )
     endforeach()
 
-    if (PXR_ENABLE_JS_SUPPORT)
+    if (EMSCRIPTEN)
         set_property(TARGET ${NAME} PROPERTY EMSCRIPTEN_RESOURCES ${EMSCRIPTEN_RESOURCE_FILES})
     endif()
 endfunction() # _install_resource_files
@@ -998,7 +998,7 @@ function(_pxr_target_link_libraries NAME)
                     list(APPEND final ${lib})
                 elseif(CMAKE_COMPILER_IS_GNUCXX)
                     list(APPEND final "$<LINK_LIBARAY:WHOLE_ARCHIVE,${lib}")
-                elseif(PXR_ENABLE_JS_SUPPORT)
+                elseif(EMSCRIPTEN)
                     list(APPEND final ${lib})
                 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
                     list(APPEND final -Wl,-force_load ${lib})
@@ -1311,7 +1311,7 @@ function(_pxr_library NAME)
             ${args_PRIVATE_HEADERS}
         )
 
-    elseif(args_TYPE STREQUAL "STATIC" AND PXR_ENABLE_JS_SUPPORT)
+    elseif(args_TYPE STREQUAL "STATIC" AND EMSCRIPTEN)
         # Building an explicitly static library.
         add_library(${NAME_INTERNAL}
             STATIC
@@ -1503,7 +1503,7 @@ function(_pxr_library NAME)
 
     # XXX -- May want some plugins to be baked into monolithic.
     set(ADDITIONAL_ARGS )
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         list(APPEND ADDITIONAL_ARGS IS_STATIC_PLUGIN)
     endif()
     _pxr_target_link_libraries(${NAME} ${ADDITIONAL_ARGS} ${args_LIBRARIES})
@@ -1558,7 +1558,7 @@ function(_pxr_library NAME)
                 ARCHIVE DESTINATION ${libInstallPrefix}
                 RUNTIME DESTINATION ${libInstallPrefix}
             )
-            if (PXR_ENABLE_JS_SUPPORT)
+            if (EMSCRIPTEN)
                 install(
                     TARGETS ${NAME_INTERNAL}
                     LIBRARY DESTINATION ${libInstallPrefix}
@@ -1597,7 +1597,7 @@ function(_pxr_library NAME)
                 ARCHIVE DESTINATION ${libInstallPrefix}
                 RUNTIME DESTINATION ${libInstallPrefix}
             )
-            if (PXR_ENABLE_JS_SUPPORT)
+            if (EMSCRIPTEN)
                 install(
                     TARGETS ${NAME_INTERNAL}
                     EXPORT pxrTargets
@@ -1632,7 +1632,7 @@ endfunction() # _pxr_library
 
 function(_get_final_package_name PXR_PACKAGE FINAL_PXR_PACKAGE)
     set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}" PARENT_SCOPE)
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}_internal" PARENT_SCOPE)
     endif ()
 endfunction()

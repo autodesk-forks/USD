@@ -54,7 +54,7 @@ pxr_library(hio
 )
 
 set(TARGET_NAME "hio")
-if(PXR_ENABLE_JS_SUPPORT)
+if(EMSCRIPTEN)
     set(TARGET_NAME "hio_internal")
 endif()
 

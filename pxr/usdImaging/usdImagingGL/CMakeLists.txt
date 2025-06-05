@@ -77,7 +77,7 @@ set(TEST_LIBS
         "usdImaging"
         "usdImagingGL")
 
-if(PXR_ENABLE_JS_SUPPORT)
+if(EMSCRIPTEN)
     list(APPEND TEST_LIBS
     "-s MAX_WEBGL_VERSION=3"
     "-s LEGACY_GL_EMULATION=1"

@@ -26,8 +26,6 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/declarePtrs.h"
-//#include <X11/Xlib.h>
-//#include <GL/glx.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 

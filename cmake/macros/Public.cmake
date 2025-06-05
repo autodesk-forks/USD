@@ -198,7 +198,7 @@ function(pxr_cpp_bin BIN_NAME)
         ${PXR_MALLOC_LIBRARY}
     )
 
-    if (PXR_ENABLE_JS_SUPPORT)
+    if (EMSCRIPTEN)
         _get_all_dependencies(${BIN_NAME} all_dependencies)
         set(RESOURCES_LIST "")
         foreach(dep ${all_dependencies})
@@ -486,7 +486,7 @@ macro(pxr_static_library NAME)
 endmacro(pxr_static_library)
 
 macro(pxr_plugin NAME)
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         # Not ideal but dynamic linking is not supported yet in the usd build toolchain
         message(STATUS "Building ${NAME} plugin as static library for emscripten support")
         pxr_library(${NAME} TYPE "STATIC" ${ARGN})
@@ -709,7 +709,7 @@ function(pxr_build_test TEST_NAME)
     _pxr_install_rpath(rpath ${TEST_NAME})
 
     # XXX -- We shouldn't have to install to run tests.
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         target_compile_options(${TEST_NAME} PRIVATE "SHELL: -lembind")
         install(
             FILES

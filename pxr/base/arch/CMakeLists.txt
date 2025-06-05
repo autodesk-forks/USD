@@ -4,7 +4,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR OFF)
 set(PXR_PREFIX pxr/base)
 set(PXR_PACKAGE arch)
 
-if(NOT PXR_ENABLE_JS_SUPPORT)
+if(NOT EMSCRIPTEN)
     set(PLATFORM_LIBS ${M_LIB})
 endif()
 if(WIN32)
