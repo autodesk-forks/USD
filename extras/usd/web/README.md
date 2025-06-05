@@ -9,6 +9,7 @@ to initialize a USD Hydra Storm renderer in a web viewport while exposing USD ja
  - MaterialX changed in 1.39.0, and some of the more complex shaders (like procedural brick) is currently not rendering as expected.  We are waiting on the parent branch to be updated to the latest USD dev/ branch to see if that fixes it.  It was working with MaterialX 1.38.10.
 
 ## Plans
+ - [x] Enable HdStorm C++ rendering with access to USD JavaScript commands.
  - [x] Port FreeCamera from usdview python into C++ for better manipulation.
  - [x] Expand USD API commands exposed to JavaScript (variants, layers, visibility, fit camera, etc.)
  - [x] Prototype MaterialX enhancements needed to generate WGSL-compliant GLSL.
