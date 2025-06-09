@@ -1598,10 +1598,13 @@ MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.10.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     if context.targetWasm:
-        # For Wasm WebGPU/WGSL shader generation for MaterialX, an experimental build
-        # must currently be used until it is integrated into MaterialX dev and release branches 
+        # For Wasm WebGPU/WGSL shader generation for MaterialX, 
+        # MaterialX as of 6/9/2025 needs to be used with the 
+        # "WGSL/WebGPU GLSL ShaderGenerator" pull request integrated.
+        # The full MaterialX release with this enhancement should be 
+        # the pending version 1.39.4.
         global MATERIALX_URL
-        MATERIALX_URL = "https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl.zip"
+        MATERIALX_URL = 'https://github.com/AcademySoftwareFoundation/MaterialX/archive/8eaf80cf7b6a27c1a7b3eeb8c9bc8872fddb4d60.zip'
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
                         '-DMATERIALX_BUILD_TESTS=OFF',

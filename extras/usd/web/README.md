@@ -5,14 +5,14 @@ The **UsdWeb** example expands on the simple
 to initialize a USD Hydra Storm renderer in a web viewport while exposing USD javascript that can be controlled via the html or js files.
 
 ## Limitations
- - MaterialX enhancement for webgpu is under review and targeted for 1.39.4.  The build_usd.py script has been updated to use a fork in the meantime.
+TBD
 
 ## Plans
  - [x] Enable HdStorm C++ rendering with access to USD JavaScript commands.
  - [x] Port FreeCamera from usdview python into C++ for better manipulation.
  - [x] Expand USD API commands exposed to JavaScript (variants, layers, visibility, fit camera, etc.)
  - [x] Prototype MaterialX enhancements needed to generate WGSL-compliant GLSL.
- - [ ] Integrate webgpu enhancements into MaterialX 1.39.4.
+ - [x] Integrate webgpu enhancements into MaterialX 1.39.4 main branch.
  - [ ] Simplify usdweb.cpp and usdweb.html to remove the dependency on GL and blitting textures as a post process.
  - [ ] Integrate into USD dev/ branch.
 
