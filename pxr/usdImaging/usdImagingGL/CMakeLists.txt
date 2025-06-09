@@ -490,6 +490,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLIndexedPrimvars
+    DEST testUsdImagingGLIndexedPrimvars
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdImagingGLShadingPrimvars
     DEST testUsdImagingGLShadingPrimvars
 )
@@ -3754,6 +3759,17 @@ pxr_register_test(testUsdImagingGLFaceVaryingLeftHanded_Adaptive_Low
     TESTENV testUsdImagingGLFaceVarying
     ENV
         HD_ENABLE_OPENSUBDIV3_ADAPTIVE=1
+)
+
+pxr_register_test(testUsdImagingGLIndexedPrimvars
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -complexity 1.0 -offscreen -lighting -camlight -shading wireOnSurface -frameAll -stage testUsdImagingGLIndexedPrimvars.usda -write testUsdImagingGLIndexedPrimvars.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLIndexedPrimvars.png
+    FAIL 1
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLIndexedPrimvars
 )
 
 pxr_register_test(testUsdImagingGLShadingPrimvars

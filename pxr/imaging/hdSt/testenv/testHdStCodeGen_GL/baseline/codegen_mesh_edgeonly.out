@@ -115,6 +115,7 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_widths 1
 #define HD_INSTANCER_NUM_LEVELS 0
 #define HD_INSTANCE_INDEX_WIDTH 1
+#define HD_INDEXED_PRIMVAR_COUNT 0
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
@@ -790,6 +791,7 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_widths 1
 #define HD_INSTANCER_NUM_LEVELS 0
 #define HD_INSTANCE_INDEX_WIDTH 1
+#define HD_INDEXED_PRIMVAR_COUNT 0
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
@@ -1619,6 +1621,7 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_widths 1
 #define HD_INSTANCER_NUM_LEVELS 0
 #define HD_INSTANCE_INDEX_WIDTH 1
+#define HD_INDEXED_PRIMVAR_COUNT 0
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
@@ -2877,6 +2880,7 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_widths 1
 #define HD_INSTANCER_NUM_LEVELS 0
 #define HD_INSTANCE_INDEX_WIDTH 1
+#define HD_INDEXED_PRIMVAR_COUNT 0
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
@@ -3552,6 +3556,7 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_widths 1
 #define HD_INSTANCER_NUM_LEVELS 0
 #define HD_INSTANCE_INDEX_WIDTH 1
+#define HD_INDEXED_PRIMVAR_COUNT 0
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1
@@ -4410,6 +4415,7 @@ uvec2 hd_half4_set(vec4 v) {
 #define HD_HAS_widths 1
 #define HD_INSTANCER_NUM_LEVELS 0
 #define HD_INSTANCE_INDEX_WIDTH 1
+#define HD_INDEXED_PRIMVAR_COUNT 0
 #define HD_HAS_faceVisibility 1
 #define HD_HAS_dispTextureCoord 1
 #define HD_HAS_points 1

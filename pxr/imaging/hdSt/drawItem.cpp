@@ -62,6 +62,12 @@ HdStDrawItem::GetBufferArraysHash() const
                 _GetVersion(GetInstancePrimvarRange(i)));
     }
 
+    int const indexedPrimvarCount = GetIndexedPrimvarCount();
+    for (int i = 0; i < indexedPrimvarCount; ++i) {
+        hash = TfHash::Combine(hash,
+                _GetVersion(GetIndexedPrimvarRange(i)));
+    }
+
     return hash;
 }
 
@@ -85,6 +91,12 @@ HdStDrawItem::GetElementOffsetsHash() const
                 _GetElementOffset(GetInstancePrimvarRange(i)));
     }
 
+    int const indexedPrimvarCount = GetIndexedPrimvarCount();
+    for (int i = 0; i < indexedPrimvarCount; ++i) {
+        hash = TfHash::Combine(hash,
+                _GetElementOffset(GetIndexedPrimvarRange(i)));
+    }
+
     return hash;
 }
 
@@ -101,4 +113,3 @@ HdStDrawItem::IntersectsViewVolume(GfMatrix4d const &viewProjMatrix) const
 
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

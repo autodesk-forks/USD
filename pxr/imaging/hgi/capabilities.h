@@ -36,6 +36,11 @@ public:
     virtual int GetShaderVersion() const = 0;
 
     HGI_API
+    size_t GetMaxShaderStorageBufferCount() const {
+        return _maxShaderStorageBufferCount;
+    }
+
+    HGI_API
     size_t GetMaxUniformBlockSize() const {
         return _maxUniformBlockSize;
     }
@@ -62,7 +67,8 @@ public:
 
 protected:
     HgiCapabilities()
-        : _maxUniformBlockSize(0)
+        : _maxShaderStorageBufferCount(0)
+        , _maxUniformBlockSize(0)
         , _maxShaderStorageBlockSize(0)
         , _uniformBufferOffsetAlignment(0)
         , _maxClipDistances(0)
@@ -78,6 +84,7 @@ protected:
         }
     }
 
+    size_t _maxShaderStorageBufferCount;
     size_t _maxUniformBlockSize;
     size_t _maxShaderStorageBlockSize;
     size_t _uniformBufferOffsetAlignment;

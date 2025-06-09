@@ -61,12 +61,18 @@ TF_DEFINE_ENV_SETTING(HD_ENABLE_FORCE_QUADRANGULATE, 0,
 TF_DEFINE_ENV_SETTING(HD_ENABLE_PACKED_NORMALS, 1,
                       "Use packed normals");
 
+TF_DEFINE_ENV_SETTING(HDST_ENABLE_NATIVE_INDEXED_PRIMVARS, true,
+                      "Enable native indexed primvars");
+
 // Use more recognizable names for each compute queue the mesh computations use.
 namespace {
     constexpr HdStComputeQueue _CopyExtCompQueue = HdStComputeQueueZero;
     constexpr HdStComputeQueue _RefinePrimvarCompQueue = HdStComputeQueueOne;
     constexpr HdStComputeQueue _NormalsCompQueue = HdStComputeQueueTwo;
     constexpr HdStComputeQueue _RefineNormalsCompQueue = HdStComputeQueueThree;
+
+    // Empirically determined based on OpenGL test results.
+    constexpr double _MaxIndexedPrimvarToMaxStorageBufferRatio = 3. / 16;
 }
 
 HdStMesh::HdStMesh(SdfPath const& id)
@@ -241,6 +247,13 @@ HdStMesh::IsEnabledPackedNormals()
     return enabled;
 }
 
+static bool
+_IsNativeIndexedPrimvarsEnabled()
+{
+    static bool enabled = TfGetEnvSetting(HDST_ENABLE_NATIVE_INDEXED_PRIMVARS);
+    return enabled;
+}
+
 int
 HdStMesh::_GetRefineLevelForDesc(const HdMeshReprDesc &desc) const
 {
@@ -309,26 +322,14 @@ HdStMesh::_GatherFaceVaryingTopologies(HdSceneDelegate *sceneDelegate,
                     indices.push_back(i);
                 }
             }
-                        
+
             _fvarTopologyTracker->AddOrUpdateTopology(primvar.name, indices);
         }
     }
 
     // Also check for removed primvars
-    HdBufferSpecVector removedSpecs;
-    if (*dirtyBits & HdChangeTracker::DirtyPrimvar) {
-        HdBufferArrayRangeSharedPtr const &bar =
-            drawItem->GetFaceVaryingPrimvarRange();
-        TfTokenVector internallyGeneratedPrimvars; // empty
-        removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
-            internallyGeneratedPrimvars, id);
-    }
+    _fvarTopologyTracker->RemoveExtinctPrimvars(primvars);
 
-    for (size_t i = 0; i < removedSpecs.size(); ++i) {
-        TfToken const& removedName = removedSpecs[i].name;
-        _fvarTopologyTracker->RemovePrimvar(removedName);
-    }
-    
     _fvarTopologyTracker->RemoveUnusedTopologies();
 }
 
@@ -1760,6 +1761,58 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
 }
 
 void
+HdStMesh::_UpdateIndexedPrimvarDrawCoord(HdDrawingCoord* drawingCoord,
+    const HdReprSharedPtr &repr,
+    const HdMeshReprDesc &desc,
+    int geomSubsetDescIndex)
+{
+    const int indexedPrimvarTotalCount = _indexedFaceVaryingPrimvarSourceCount +
+        _indexedElementPrimvarSourceCount;
+    if (indexedPrimvarTotalCount == drawingCoord->GetIndexedPrimvarCount()) {
+        return;
+    }
+
+    drawingCoord->SetIndexedPrimvarSlotRange(
+        drawingCoord->GetInstancePrimvarIndex(_sharedData.instancerLevels),
+        indexedPrimvarTotalCount);
+    _sharedData.barContainer.Resize(drawingCoord->GetTotalDrawCoordCount());
+
+    const size_t numGeomSubsets = _topology->GetGeomSubsets().size();
+    if (numGeomSubsets > 0 && desc.geomStyle != HdMeshGeomStylePoints) {
+        for (size_t i = 0; i < numGeomSubsets; i++) {
+            HdDrawItem* geomSubsetDrawItem = repr->GetDrawItemForGeomSubset(
+                geomSubsetDescIndex, numGeomSubsets, i);
+            auto drawingCoord = geomSubsetDrawItem->GetDrawingCoord();
+            drawingCoord->SetIndexedPrimvarSlotRange(
+                drawingCoord->GetInstancePrimvarIndex(_sharedData.instancerLevels),
+                indexedPrimvarTotalCount);
+            _sharedData.barContainer.Resize(drawingCoord->GetTotalDrawCoordCount());
+        }
+    }
+}
+
+namespace {
+    struct _IndexedSourceInfo
+    {
+        HdPrimvarDescriptor indicesPrimvar;
+        HdPrimvarDescriptor indexedPrimvar;
+        HdBufferSourceSharedPtr indicesSource;
+        HdBufferSourceSharedPtr indexedSource;
+        int channel{-1};
+    };
+
+    size_t
+    _GetMaxIndexedPrimvar(
+        const HdStResourceRegistrySharedPtr& resourceRegistry)
+    {
+        const HgiCapabilities* capabilities =
+            resourceRegistry->GetHgi()->GetCapabilities();
+        return std::llround(capabilities->GetMaxShaderStorageBufferCount() *
+            _MaxIndexedPrimvarToMaxStorageBufferRatio);
+    }
+}
+
+void
 HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
                                        HdRenderParam *renderParam,
                                        const HdReprSharedPtr &repr,
@@ -1785,9 +1838,6 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
     HdStResourceRegistrySharedPtr const& resourceRegistry = 
         std::static_pointer_cast<HdStResourceRegistry>(
         sceneDelegate->GetRenderIndex().GetResourceRegistry());
-
-    HdBufferSourceSharedPtrVector sources;
-    sources.reserve(primvars.size());
     HdStComputationComputeQueuePairVector computations;
 
     int refineLevel = _GetRefineLevelForDesc(desc);
@@ -1813,31 +1863,64 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
     // these, or if they need to be converted to floats.
     const bool doublesSupported = _GetDoubleSupport(resourceRegistry);
 
+    // Indexed primvars double the number of storage buffers, so we need to
+    // limit them for backends with low limits (OpenGL, WebGPU)
+    const size_t maxIndexedPrimvars = _GetMaxIndexedPrimvar(resourceRegistry);
+
+    HdBufferSourceSharedPtrVector sources;
+    sources.reserve(primvars.size());
+
+    std::vector<_IndexedSourceInfo> indexedSourceInfos;
+    indexedSourceInfos.reserve(primvars.size());
+
     for (HdPrimvarDescriptor const& primvar: primvars) {
+        // We can't quadrangulate indices because the center value needs to be
+        // computed from the other values. Refinment does want indexed values,
+        // but it doesn't operate on indices for the same reason.
+        const bool useIndexedPrimvar = primvar.indexed && (doRefine || (
+            !doQuadrangulate && _IsNativeIndexedPrimvarsEnabled() &&
+                indexedSourceInfos.size() < maxIndexedPrimvars
+        ));
+        const bool useIndexedSource = useIndexedPrimvar && !doRefine;
+
+        if (useIndexedSource) {
+            auto& info = indexedSourceInfos.emplace_back();
+            info.indicesPrimvar = info.indexedPrimvar = primvar;
+            info.indicesPrimvar.name = TfToken{info.indexedPrimvar.name.GetString() + "_indices"};
+            // Fvar indexed primvars go before element indexed primvars
+            info.channel = static_cast<int>(indexedSourceInfos.size()) - 1;
+        }
+
         if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name)) {
             continue;
         }
 
-        VtValue value;
-        // If refining and primvar is indexed, get unflattened primvar
-        const bool useUnflattendPrimvar = doRefine && primvar.indexed;
-        if (useUnflattendPrimvar) {
-            VtIntArray indices(0);
-            value = GetIndexedPrimvar(sceneDelegate, primvar.name, &indices);
+        VtValue values;
+        VtIntArray indices;
+        if (useIndexedPrimvar) {
+            values = GetIndexedPrimvar(sceneDelegate, primvar.name, &indices);
         } else {
-            value = GetPrimvar(sceneDelegate, primvar.name);
+            values = GetPrimvar(sceneDelegate, primvar.name);
         }
 
-        if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
+        if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, values)) {
             zeroElementPrimvars.push_back(primvar);
             continue;
         }
-        
-        HdBufferSourceSharedPtr source =
-            std::make_shared<HdVtBufferSource>(primvar.name, value, 1,
-                                                doublesSupported);
 
-        if (!useUnflattendPrimvar && source->GetNumElements() == 0) {
+        HdBufferSourceSharedPtr valueBuffer = std::make_shared<HdVtBufferSource>(primvar.name, values, 1, doublesSupported);
+        HdBufferSourceSharedPtr source;
+        if (useIndexedSource) {
+            auto& info = indexedSourceInfos.back();
+            source = std::make_shared<HdVtBufferSource>(info.indicesPrimvar.name, VtValue{indices}, 1, false);
+            info.indicesSource = source;
+            info.indexedSource = std::move(valueBuffer);
+        } else {
+            source = std::move(valueBuffer);
+        }
+
+        if ((!useIndexedPrimvar || useIndexedSource) &&
+            source->GetNumElements() == 0) {
             // zero elements for primvars will be treated as if the primvar
             // doesn't exist, so no warning is necessary
             zeroElementPrimvars.push_back(primvar);
@@ -1845,20 +1928,20 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
         }
 
         // verify primvar length
-        if ((int)source->GetNumElements() != numFaceVaryings && 
-            !useUnflattendPrimvar) {
+        if ((!useIndexedPrimvar || useIndexedSource) &&
+            static_cast<int>(source->GetNumElements()) != numFaceVaryings) {
             HF_VALIDATION_WARN(id, 
                 "# of facevaryings mismatch (%d != %d)"
                 " for primvar %s",
-                (int)source->GetNumElements(), numFaceVaryings,
+                static_cast<int>(source->GetNumElements()), numFaceVaryings,
                 primvar.name.GetText());
             continue;
         }
 
-        if (source->GetName() == HdTokens->normals) {
+        if (primvar.name == HdTokens->normals) {
             _sceneNormalsInterpolation = HdInterpolationFaceVarying;
             _sceneNormals = true;
-        } else if (source->GetName() == HdTokens->displayOpacity) {
+        } else if (primvar.name == HdTokens->displayOpacity) {
             _displayOpacity = true;
         }
 
@@ -1879,70 +1962,134 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
         source = _RefineOrQuadrangulateOrTriangulateFaceVaryingPrimvar(
             source, _topology, id,  doRefine, doQuadrangulate, 
             resourceRegistry, &computations, channel);
-        
+
         sources.push_back(source);
     }
 
     // remove the primvars with zero elements from further processing
-    for (HdPrimvarDescriptor const& primvar: zeroElementPrimvars) {
-        auto pos = std::find(primvars.begin(), primvars.end(), primvar);
-        if (pos != primvars.end()) {
-            primvars.erase(pos);
+    for (auto const& primvar : zeroElementPrimvars) {
+        if (const auto it = std::find(primvars.begin(), primvars.end(),
+        primvar); it != primvars.end()) {
+            primvars.erase(it);
         }
     }
-
-    HdBufferArrayRangeSharedPtr const &bar =
-        drawItem->GetFaceVaryingPrimvarRange();
-
-    if (HdStCanSkipBARAllocationOrUpdate(sources, computations, bar, *dirtyBits)) {
-        return;
+    // removed indexed primvars from the main list since they need to be put in
+    // a different BAR, and replace them by their associated indices primvar.
+    for (auto const& info : indexedSourceInfos) {
+        if (const auto it = std::find(primvars.begin(), primvars.end(),
+        info.indexedPrimvar); it != primvars.end()) {
+            primvars.erase(it);
+        }
+        primvars.push_back(info.indicesPrimvar);
     }
 
-    // XXX: This should be based off the DirtyPrimvarDesc bit.
-    bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
-    HdBufferSpecVector removedSpecs;
-    if (hasDirtyPrimvarDesc) {
-        // no internally generated facevarying primvars
-        TfTokenVector internallyGeneratedPrimvars; // empty
-        removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
-            internallyGeneratedPrimvars, id);
-    }
+    HdDrawingCoord* drawingCoord = drawItem->GetDrawingCoord();
+    {
+        HdBufferArrayRangeSharedPtr const &bar =
+            drawItem->GetFaceVaryingPrimvarRange();
 
-    HdBufferSpecVector bufferSpecs;
-    HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
-    HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
-
-    HdBufferArrayRangeSharedPtr range =
-        resourceRegistry->UpdateNonUniformBufferArrayRange(
-            HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHintBitsStorage);
-    
-    HdStUpdateDrawItemBAR(
-        range,
-        drawItem->GetDrawingCoord()->GetFaceVaryingPrimvarIndex(),
-        &_sharedData,
-        renderParam,
-        &(sceneDelegate->GetRenderIndex().GetChangeTracker()));
-
-    if (!sources.empty() || !computations.empty()) {
-        // If sources or computations are to be queued against the resulting
-        // BAR, we expect it to be valid.
-        if (!TF_VERIFY(drawItem->GetFaceVaryingPrimvarRange()->IsValid())) {
+        if (HdStCanSkipBARAllocationOrUpdate(sources, computations, bar, *dirtyBits)) {
             return;
         }
+
+        // XXX: This should be based off the DirtyPrimvarDesc bit.
+        bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
+        HdBufferSpecVector removedSpecs;
+        if (hasDirtyPrimvarDesc) {
+            // no internally generated facevarying primvars
+            TfTokenVector internallyGeneratedPrimvars; // empty
+            removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
+                internallyGeneratedPrimvars, id);
+        }
+
+        HdBufferSpecVector bufferSpecs;
+        HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
+        HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
+
+        HdBufferArrayRangeSharedPtr range =
+            resourceRegistry->UpdateNonUniformBufferArrayRange(
+                HdTokens->primvar, bar, bufferSpecs, removedSpecs,
+                HdBufferArrayUsageHintBitsStorage);
+        
+        HdStUpdateDrawItemBAR(
+            range,
+            drawingCoord->GetFaceVaryingPrimvarIndex(),
+            &_sharedData,
+            renderParam,
+            &sceneDelegate->GetRenderIndex().GetChangeTracker());
+
+        if (!sources.empty() || !computations.empty()) {
+            // If sources or computations are to be queued against the resulting
+            // BAR, we expect it to be valid.
+            if (!TF_VERIFY(drawItem->GetFaceVaryingPrimvarRange()->IsValid())) {
+                return;
+            }
+        }
+
+        if (!sources.empty()) {
+            resourceRegistry->AddSources(
+                drawItem->GetFaceVaryingPrimvarRange(), std::move(sources));
+        }
+
+        // add gpu computations to queue.
+        for (auto const& compQueuePair : computations) {
+            HdStComputationSharedPtr const& comp = compQueuePair.first;
+            HdStComputeQueue queue = compQueuePair.second;
+            resourceRegistry->AddComputation(
+                drawItem->GetFaceVaryingPrimvarRange(), comp, queue);
+        }
     }
 
-    if (!sources.empty()) {
+    _indexedFaceVaryingPrimvarSourceCount = static_cast<int>(indexedSourceInfos.size());
+    _UpdateIndexedPrimvarDrawCoord(drawingCoord, repr, desc, geomSubsetDescIndex);
+
+    for (auto& info : indexedSourceInfos) {
+        if (!info.indicesSource) {
+            continue;
+        }
+
+        std::vector indexedPrimvars{std::move(info.indexedPrimvar)};
+        std::vector indexedSources{std::move(info.indexedSource)};
+
+        HdBufferArrayRangeSharedPtr const &bar =
+            drawItem->GetIndexedPrimvarRange(info.channel);
+
+        if (HdStCanSkipBARAllocationOrUpdate(indexedSources, bar, *dirtyBits)) {
+            continue;
+        }
+
+        // XXX: This should be based off the DirtyPrimvarDesc bit.
+        bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
+        HdBufferSpecVector removedSpecs;
+        if (hasDirtyPrimvarDesc) {
+            // no internally generated facevarying primvars
+            TfTokenVector internallyGeneratedPrimvars; // empty
+            removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, indexedPrimvars,
+                internallyGeneratedPrimvars, id);
+        }
+
+        HdBufferSpecVector bufferSpecs;
+        HdBufferSpec::GetBufferSpecs(indexedSources, &bufferSpecs);
+
+        HdBufferArrayRangeSharedPtr range =
+            resourceRegistry->UpdateNonUniformBufferArrayRange(
+                HdTokens->primvar, bar, bufferSpecs, removedSpecs,
+                HdBufferArrayUsageHintBitsStorage);
+        
+        HdStUpdateDrawItemBAR(
+            range,
+            drawingCoord->GetIndexedPrimvarIndex(info.channel),
+            &_sharedData,
+            renderParam,
+            &sceneDelegate->GetRenderIndex().GetChangeTracker());
+
+        // If sources are to be queued against the resulting BAR, we expect it to be valid.
+        if (!TF_VERIFY(drawItem->GetIndexedPrimvarRange(info.channel)->IsValid())) {
+            continue;
+        }
+
         resourceRegistry->AddSources(
-            drawItem->GetFaceVaryingPrimvarRange(), std::move(sources));
-    }
-
-    // add gpu computations to queue.
-    for (auto const& compQueuePair : computations) {
-        HdStComputationSharedPtr const& comp = compQueuePair.first;
-        HdStComputeQueue queue = compQueuePair.second;
-        resourceRegistry->AddComputation(
-            drawItem->GetFaceVaryingPrimvarRange(), comp, queue);
+            drawItem->GetIndexedPrimvarRange(info.channel), std::move(indexedSources));
     }
 }
 
@@ -1969,9 +2116,6 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
             HdInterpolationUniform, repr, desc.geomStyle, geomSubsetDescIndex,
                 _topology->GetGeomSubsets().size());
 
-    HdBufferSourceSharedPtrVector sources;
-    sources.reserve(primvars.size());
-
     int numFaces = _topology ? _topology->GetNumFaces() : 0;
 
     // Track primvars that are skipped because they have zero elements
@@ -1981,21 +2125,76 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
     // these, or if they need to be converted to floats.
     const bool doublesSupported = _GetDoubleSupport(resourceRegistry);
 
-    for (HdPrimvarDescriptor const& primvar: primvars) {
-        if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name))
-            continue;
+    // Indexed primvars double the number of storage buffers, so we need to
+    // limit them for backends with low limits (OpenGL, WebGPU).
+    // fvar primvars will have already be populated by now, so we subtract them.
+    const size_t maxIndexedPrimvars = _GetMaxIndexedPrimvar(resourceRegistry) -
+        _indexedFaceVaryingPrimvarSourceCount;
 
-        VtValue value = GetPrimvar(sceneDelegate, primvar.name);
-        if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
+    HdBufferSourceSharedPtrVector sources;
+    sources.reserve(primvars.size());
+
+    std::vector<_IndexedSourceInfo> indexedSourceInfos;
+    indexedSourceInfos.reserve(primvars.size());
+
+    for (HdPrimvarDescriptor const& primvar : primvars) {
+        const bool useIndexedPrimvar = primvar.indexed &&
+            _IsNativeIndexedPrimvarsEnabled() &&
+            indexedSourceInfos.size() < maxIndexedPrimvars;
+        const bool useIndexedSource = useIndexedPrimvar;
+
+        if (useIndexedSource) {
+            auto& info = indexedSourceInfos.emplace_back();
+            info.indicesPrimvar = info.indexedPrimvar = primvar;
+            info.indicesPrimvar.name = TfToken{info.indexedPrimvar.name.GetString() + "_indices"};
+            // Element indexed primvars go after fvar indexed primvars
+            info.channel = _indexedFaceVaryingPrimvarSourceCount +
+                static_cast<int>(indexedSourceInfos.size()) - 1;
+        }
+
+        if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name)) {
+            continue;
+        }
+
+        if (useIndexedSource) {
+            auto& info = indexedSourceInfos.emplace_back();
+            info.indicesPrimvar = info.indexedPrimvar = primvar;
+            info.indicesPrimvar.name = TfToken{info.indexedPrimvar.name.GetString() + "_indices"};
+            // Element indexed primvars go after fvar indexed primvars
+            info.channel = _indexedFaceVaryingPrimvarSourceCount +
+                static_cast<int>(indexedSourceInfos.size()) - 1;
+        }
+
+        if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name)) {
+            continue;
+        }
+
+        VtValue values;
+        VtIntArray indices;
+        if (useIndexedPrimvar) {
+            values = GetIndexedPrimvar(sceneDelegate, primvar.name, &indices);
+        } else {
+            values = GetPrimvar(sceneDelegate, primvar.name);
+        }
+
+        if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, values)) {
             zeroElementPrimvars.push_back(primvar);
             continue;
         }
 
-        HdBufferSourceSharedPtr source =
-            std::make_shared<HdVtBufferSource>(primvar.name, value, 1,
-                                                doublesSupported);
+        HdBufferSourceSharedPtr valueBuffer = std::make_shared<HdVtBufferSource>(primvar.name, values, 1, doublesSupported);
+        HdBufferSourceSharedPtr source;
+        if (useIndexedSource) {
+            auto& info = indexedSourceInfos.back();
+            source = std::make_shared<HdVtBufferSource>(info.indicesPrimvar.name, VtValue{indices}, 1, false);
+            info.indicesSource = source;
+            info.indexedSource = std::move(valueBuffer);
+        } else {
+            source = std::move(valueBuffer);
+        }
 
-        if (source->GetNumElements() == 0) {
+        if ((!useIndexedPrimvar || useIndexedSource) &&
+            source->GetNumElements() == 0) {
             // zero elements for primvars other will be treated as if the
             // primvar doesn't exist, so no warning is necessary
             zeroElementPrimvars.push_back(primvar);
@@ -2003,29 +2202,39 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
         }
 
         // verify primvar length
-        if ((int)source->GetNumElements() != numFaces) {
+        if ((!useIndexedPrimvar || useIndexedSource) &&
+            static_cast<int>(source->GetNumElements()) != numFaces) {
             HF_VALIDATION_WARN(id,
                 "# of faces mismatch (%d != %d) for uniform primvar %s",
-                (int)source->GetNumElements(), numFaces, 
+                static_cast<int>(source->GetNumElements()), numFaces,
                 primvar.name.GetText());
             continue;
         }
 
-        if (source->GetName() == HdTokens->normals) {
+        if (primvar.name == HdTokens->normals) {
             _sceneNormalsInterpolation = HdInterpolationUniform;
             _sceneNormals = true;
-        } else if (source->GetName() == HdTokens->displayOpacity) {
+        } else if (primvar.name == HdTokens->displayOpacity) {
             _displayOpacity = true;
         }
         sources.push_back(source);
     }
 
     // remove the primvars with zero elements from further processing
-    for (HdPrimvarDescriptor const& primvar: zeroElementPrimvars) {
-        auto pos = std::find(primvars.begin(), primvars.end(), primvar);
-        if (pos != primvars.end()) {
-            primvars.erase(pos);
+    for (auto const& primvar : zeroElementPrimvars) {
+        if (const auto it = std::find(primvars.begin(), primvars.end(),
+        primvar); it != primvars.end()) {
+            primvars.erase(it);
         }
+    }
+    // removed indexed primvars from the main list since they need to be put in
+    // a different BAR, and replace them by their associated indices primvar.
+    for (auto const& info : indexedSourceInfos) {
+        if (const auto it = std::find(primvars.begin(), primvars.end(),
+        info.indexedPrimvar); it != primvars.end()) {
+            primvars.erase(it);
+        }
+        primvars.push_back(info.indicesPrimvar);
     }
 
     HdStComputationComputeQueuePairVector computations;
@@ -2058,66 +2267,121 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
         }
     }
 
-    HdBufferArrayRangeSharedPtr const &bar = drawItem->GetElementPrimvarRange();
-    
-    if (HdStCanSkipBARAllocationOrUpdate(sources, computations, bar,
-            *dirtyBits)) {
-        return;
-    }
+    HdDrawingCoord* drawingCoord = drawItem->GetDrawingCoord();
+    {
+        HdBufferArrayRangeSharedPtr const &bar = drawItem->GetElementPrimvarRange();
 
-    // XXX: This should be based off the DirtyPrimvarDesc bit.
-    bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
-    HdBufferSpecVector removedSpecs;
-    if (hasDirtyPrimvarDesc) {
-        // If we've just generated normals then make sure those
-        // are preserved, otherwise allow either previously existing
-        // packed or non-packed normals to remain.
-        TfTokenVector internallyGeneratedPrimvars;
-        if (! generatedNormalsName.IsEmpty()) {
-            internallyGeneratedPrimvars = { generatedNormalsName };
-        } else {
-            internallyGeneratedPrimvars =
-                { HdStTokens->packedFlatNormals, HdStTokens->flatNormals };
-        }
-
-        removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
-            internallyGeneratedPrimvars, id);
-    }
-
-    HdBufferSpecVector bufferSpecs;
-    HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
-    HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
-
-    HdBufferArrayRangeSharedPtr range =
-        resourceRegistry->UpdateNonUniformBufferArrayRange(
-            HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHintBitsStorage);
-
-    HdStUpdateDrawItemBAR(
-        range,
-        drawItem->GetDrawingCoord()->GetElementPrimvarIndex(),
-        &_sharedData,
-        renderParam,
-        &(sceneDelegate->GetRenderIndex().GetChangeTracker()));
-
-    if (!sources.empty() || !computations.empty()) {
-        // If sources or computations are to be queued against the resulting
-        // BAR, we expect it to be valid.
-        if (!TF_VERIFY(drawItem->GetElementPrimvarRange()->IsValid())) {
+        if (HdStCanSkipBARAllocationOrUpdate(sources, computations, bar,
+                *dirtyBits)) {
             return;
         }
+
+        // XXX: This should be based off the DirtyPrimvarDesc bit.
+        bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
+        HdBufferSpecVector removedSpecs;
+        if (hasDirtyPrimvarDesc) {
+            // If we've just generated normals then make sure those
+            // are preserved, otherwise allow either previously existing
+            // packed or non-packed normals to remain.
+            TfTokenVector internallyGeneratedPrimvars;
+            if (! generatedNormalsName.IsEmpty()) {
+                internallyGeneratedPrimvars = { generatedNormalsName };
+            } else {
+                internallyGeneratedPrimvars =
+                    { HdStTokens->packedFlatNormals, HdStTokens->flatNormals };
+            }
+
+            removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
+                internallyGeneratedPrimvars, id);
+        }
+
+        HdBufferSpecVector bufferSpecs;
+        HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
+        HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
+
+        HdBufferArrayRangeSharedPtr range =
+            resourceRegistry->UpdateNonUniformBufferArrayRange(
+                HdTokens->primvar, bar, bufferSpecs, removedSpecs,
+                HdBufferArrayUsageHintBitsStorage);
+
+        HdStUpdateDrawItemBAR(
+            range,
+            drawingCoord->GetElementPrimvarIndex(),
+            &_sharedData,
+            renderParam,
+            &sceneDelegate->GetRenderIndex().GetChangeTracker());
+
+        if (!sources.empty() || !computations.empty()) {
+            // If sources or computations are to be queued against the resulting
+            // BAR, we expect it to be valid.
+            if (!TF_VERIFY(drawItem->GetElementPrimvarRange()->IsValid())) {
+                return;
+            }
+        }
+
+        if (!sources.empty()) {
+            resourceRegistry->AddSources(
+                drawItem->GetElementPrimvarRange(), std::move(sources));
+        }
+        // add gpu computations to queue.
+        for (auto const& compQueuePair : computations) {
+            HdStComputationSharedPtr const& comp = compQueuePair.first;
+            HdStComputeQueue queue = compQueuePair.second;
+            resourceRegistry->AddComputation(
+                drawItem->GetElementPrimvarRange(), comp, queue);
+        }
     }
 
-    if (!sources.empty()) {
+    _indexedElementPrimvarSourceCount = static_cast<int>(indexedSourceInfos.size());
+    _UpdateIndexedPrimvarDrawCoord(drawingCoord, repr, desc, geomSubsetDescIndex);
+
+    for (auto& info : indexedSourceInfos) {
+        if (!info.indicesSource) {
+            continue;
+        }
+
+        std::vector indexedPrimvars{std::move(info.indexedPrimvar)};
+        std::vector indexedSources{std::move(info.indexedSource)};
+
+        HdBufferArrayRangeSharedPtr const &bar =
+            drawItem->GetIndexedPrimvarRange(info.channel);
+
+        if (HdStCanSkipBARAllocationOrUpdate(indexedSources, bar, *dirtyBits)) {
+            continue;
+        }
+
+        // XXX: This should be based off the DirtyPrimvarDesc bit.
+        bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
+        HdBufferSpecVector removedSpecs;
+        if (hasDirtyPrimvarDesc) {
+            // no internally generated indexed uniform primvars
+            TfTokenVector internallyGeneratedPrimvars; // empty
+            removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, indexedPrimvars,
+                internallyGeneratedPrimvars, id);
+        }
+
+        HdBufferSpecVector bufferSpecs;
+        HdBufferSpec::GetBufferSpecs(indexedSources, &bufferSpecs);
+
+        HdBufferArrayRangeSharedPtr range =
+            resourceRegistry->UpdateNonUniformBufferArrayRange(
+                HdTokens->primvar, bar, bufferSpecs, removedSpecs,
+                HdBufferArrayUsageHintBitsStorage);
+
+        HdStUpdateDrawItemBAR(
+            range,
+            drawingCoord->GetIndexedPrimvarIndex(info.channel),
+            &_sharedData,
+            renderParam,
+            &sceneDelegate->GetRenderIndex().GetChangeTracker());
+
+        // If sources are to be queued against the resulting BAR, we expect it to be valid.
+        if (!TF_VERIFY(drawItem->GetIndexedPrimvarRange(info.channel)->IsValid())) {
+            continue;
+        }
+
         resourceRegistry->AddSources(
-            drawItem->GetElementPrimvarRange(), std::move(sources));
-    }
-    // add gpu computations to queue.
-    for (auto const& compQueuePair : computations) {
-        HdStComputationSharedPtr const& comp = compQueuePair.first;
-        HdStComputeQueue queue = compQueuePair.second;
-        resourceRegistry->AddComputation(
-            drawItem->GetElementPrimvarRange(), comp, queue);
+            drawItem->GetIndexedPrimvarRange(info.channel), std::move(indexedSources));
     }
 }
 
@@ -2450,6 +2714,11 @@ HdStMesh::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
                                  dirtyBits,
                                  requireFlatNormals);
     }
+
+    // Make sure we initialize the indexed primvar drawcoord range even if
+    // neither faceVarying or element primvars are dirty.
+    _UpdateIndexedPrimvarDrawCoord(drawItem->GetDrawingCoord(), repr, desc,
+        geomSubsetDescIndex);
 
     // When we have multiple drawitems for the same mesh we need to clean the
     // bits for all the data fields touched in this function, otherwise it
@@ -3076,4 +3345,3 @@ HdStMesh::GetInitialDirtyBitsMask() const
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

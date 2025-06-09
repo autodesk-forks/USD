@@ -523,6 +523,16 @@ pxr_build_test(testHdStPrimvars
     CPPFILES
         testenv/testHdStPrimvars.cpp
 )
+pxr_build_test(testHdStIndexedPrimvars
+    LIBRARIES
+        hdSt
+        hd
+        vt
+        tf
+        gf
+    CPPFILES
+        testenv/testHdStIndexedPrimvars.cpp
+)
 pxr_build_test(testHdStQuadrangulation
     LIBRARIES
         hdSt
@@ -743,6 +753,10 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testHdStPrimvars
     DEST testHdStPrimvars
+)
+pxr_install_test_dir(
+    SRC testenv/testHdStIndexedPrimvars
+    DEST testHdStIndexedPrimvars
 )
 pxr_install_test_dir(
     SRC testenv/testHdStSamplerObjectRegistry
@@ -3006,6 +3020,21 @@ pxr_register_test(testHdStPrimvars
     TESTENV testHdStPrimvars
     ENV
         HDST_ENABLE_MATERIAL_PRIMVAR_FILTERING=0
+        TF_DEBUG=HD_SAFE_MODE
+)
+pxr_register_test(testHdStIndexedPrimvars
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStIndexedPrimvars --offscreen"
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        testHdStIndexedPrimvars_before.png
+        testHdStIndexedPrimvars_replaceColor.png
+        testHdStIndexedPrimvars_replaceOpacity.png
+        testHdStIndexedPrimvars_partialDirty.png
+    FAIL 1
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    TESTENV testHdStIndexedPrimvars
+    ENV
         TF_DEBUG=HD_SAFE_MODE
 )
 pxr_register_test(testHdStQuadrangulation

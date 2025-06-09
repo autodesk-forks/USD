@@ -111,6 +111,9 @@ HgiMetalCapabilities::HgiMetalCapabilities(id<MTLDevice> device)
     }
 #endif
 
+    // This is a shared limit with other kinds of buffers, if allocating it
+    // entirely to storage buffers becomes a problem we might want to lower it.
+    _maxShaderStorageBufferCount  = 31;
     _maxUniformBlockSize          = 64 * 1024;
     _maxShaderStorageBlockSize    = 1 * 1024 * 1024 * 1024;
     _uniformBufferOffsetAlignment = 16;

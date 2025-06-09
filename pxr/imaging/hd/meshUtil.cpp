@@ -341,6 +341,10 @@ HdMeshUtil::ComputeTriangulatedFaceVaryingPrimvar(void const* source,
     bool flip = (_topology->GetOrientation() != HdTokens->rightHanded);
 
     switch (dataType) {
+    case HdTypeInt32:
+        _TriangulateFaceVarying<int32_t>(_id, faceVertexCounts, holeFaces, flip,
+                source, numElements, triangulated);
+        break;
     case HdTypeFloat:
         return _TriangulateFaceVarying<float>(_id, faceVertexCounts, holeFaces, flip,
                 source, numElements, triangulated);

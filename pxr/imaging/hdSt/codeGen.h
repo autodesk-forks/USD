@@ -144,6 +144,7 @@ private:
         std::stringstream &ss,
         std::vector<std::string> const &drawingCoordParams,
         int instanceIndexWidth,
+        int indexedPrimvarCount,
         char const *inputPrefix,
         char const *inArraySize);
 
@@ -151,6 +152,7 @@ private:
         std::stringstream &ss,
         std::vector<std::string> const &drawingCoordParams,
         int instanceIndexWidth,
+        int indexedPrimvarCount,
         char const *outputPrefix,
         char const *outArraySize);
 

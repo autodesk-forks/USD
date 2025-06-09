@@ -202,6 +202,8 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         TF_STATUS("Selected GPU %s", vkDeviceProperties2.properties.deviceName);
     }
 
+    _maxShaderStorageBufferCount = vkDeviceProperties2.properties.limits.
+        maxPerStageDescriptorStorageBuffers;
     _maxClipDistances = vkDeviceProperties2.properties.limits.maxClipDistances;
     _maxUniformBlockSize =
         vkDeviceProperties2.properties.limits.maxUniformBufferRange;

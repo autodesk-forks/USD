@@ -2149,13 +2149,21 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
     _genDefines << "#define HD_INSTANCER_NUM_LEVELS "
                 << _metaData->instancerNumLevels << "\n"
                 << "#define HD_INSTANCE_INDEX_WIDTH "
-                << (_metaData->instancerNumLevels+1) << "\n";
+                << (_metaData->instancerNumLevels+1) << "\n"
+                << "#define HD_INDEXED_PRIMVAR_COUNT "
+                << _metaData->indexedPrimvarCount << "\n";
     if (!_geometricShader->IsPrimTypePoints()) {
         TF_FOR_ALL (it, _metaData->elementData) {
             _genDefines << "#define HD_HAS_" << it->second.name << " 1\n";
+            if (it->second.indexed) {
+                _genDefines << "#define HD_HAS_" << it->second.indexedName << " 1\n";
+            }
         }
         TF_FOR_ALL (it, _metaData->fvarData) {
             _genDefines << "#define HD_HAS_" << it->second.name << " 1\n";
+            if (it->second.indexed) {
+                _genDefines << "#define HD_HAS_" << it->second.indexedName << " 1\n";
+            }
         }
     }
     TF_FOR_ALL (it, _metaData->vertexData) {
@@ -3737,6 +3745,30 @@ static void _EmitAccessor(std::stringstream &str,
     _EmitScalarAccessor(str, name, type);
 }
 
+static void _EmitIndexedAccessor(std::stringstream &str,
+                          TfToken const &name,
+                          TfToken const &type,
+                          HdStBinding const &binding,
+                          const char *index,
+                          int indexedChannel)
+{
+    str << _GetUnpackedType(type, false)
+        << " HdGet_" << name << "(int localIndex) {\n"
+        << "  int index = " << index << ";\n"
+        << "  index = " << name << "_indices[index] +\n"
+        << "    GetDrawingCoord().indexedCoords[" << indexedChannel << "];\n"
+        << "  return " << _GetPackedTypeAccessor(type, true) << "("
+                       << name << "[index]);\n"
+        << "}\n";
+
+    // GLSL spec doesn't allow default parameter. use function overload instead.
+    // default to localIndex=0
+    str << _GetUnpackedType(type, false) << " HdGet_" << name << "()"
+        << " { return HdGet_" << name << "(0); }\n";
+
+    _EmitScalarAccessor(str, name, type);
+}
+
 static void _EmitTextureScaleAndBiasDeclarations(
     std::stringstream &accessors,
     HdSt_ResourceBinder::MetaData::ShaderParameterAccessor const &acc)
@@ -4267,9 +4299,11 @@ static void _EmitFVarAccessor(
                 TfToken const &name,
                 TfToken const &type,
                 HdStBinding const &binding,
-                HdSt_GeometricShader::PrimitiveType const& primType,
-                HdSt_GeometricShader::FvarPatchType const& fvarPatchType,
-                int fvarChannel)
+                HdSt_GeometricShader::PrimitiveType primType,
+                HdSt_GeometricShader::FvarPatchType fvarPatchType,
+                int fvarChannel,
+                bool indexed,
+                int indexedChannel)
 {
     // emit an internal getter for accessing the coarse fvar data (corresponding
     // to the refined face, in the case of refinement)
@@ -4283,8 +4317,14 @@ static void _EmitFVarAccessor(
     } else {
         str << "  int fvarIndex = GetDrawingCoord().fvarCoord + localIndex;\n";
     }
+
+    if (indexed) {
+        str << "  fvarIndex = " << name << "_indices[fvarIndex] +\n" <<
+            "    GetDrawingCoord().indexedCoords[" << indexedChannel << "];\n";
+    }
+
     str << "  return " << _GetPackedTypeAccessor(type, true) << "("
-        <<       name << "[fvarIndex]);\n}\n";
+        << name << "[fvarIndex]);\n}\n";
 
     // emit the (public) accessor for the fvar data, accounting for refinement
     // interpolation
@@ -4478,6 +4518,7 @@ HdSt_CodeGen::_GetDrawingCoord(
     std::stringstream &ss,
     std::vector<std::string> const &drawingCoordParams,
     int instanceIndexWidth,
+    int indexedPrimvarCount,
     char const *inputPrefix,
     char const *inArraySize)
 {
@@ -4505,6 +4546,13 @@ HdSt_CodeGen::_GetDrawingCoord(
            << " = " << inputPrefix << groupName << inArraySize << component
            << ";\n";
     }
+    for(int i = 0; i < indexedPrimvarCount; ++i) {
+        const auto [groupName, component] = _GetDrawingCoordMapping(
+            "indexedCoordsX" + std::to_string(i));
+        ss << "  dc.indexedCoords[" << i << "]"
+           << " = " << inputPrefix << groupName << inArraySize << component
+           << ";\n";
+    }
 
     ss << "  return dc; \n"
        << "}\n";
@@ -4515,6 +4563,7 @@ HdSt_CodeGen::_ProcessDrawingCoord(
     std::stringstream &ss,
     std::vector<std::string> const &drawingCoordParams,
     int instanceIndexWidth,
+    int indexedPrimvarCount,
     char const *outputPrefix,
     char const *outArraySize)
 {
@@ -4535,6 +4584,12 @@ HdSt_CodeGen::_ProcessDrawingCoord(
             "instanceCoordsI" + std::to_string(i));
         ss << "  " << outputPrefix << groupName << outArraySize << component
            << " = " << "dc.instanceCoords[" << i << "]" << ";\n";
+    }
+    for(int i = 0; i < indexedPrimvarCount; ++i) {
+        const auto [groupName, component] = _GetDrawingCoordMapping(
+            "indexedCoordsX" + std::to_string(i));
+        ss << "  " << outputPrefix << groupName << outArraySize << component
+           << " = " << "dc.indexedCoords[" << i << "]" << ";\n";
     }
 }
 
@@ -4564,6 +4619,7 @@ HdSt_CodeGen::_GenerateDrawingCoord(
            int varyingCoord;           // varying primvars  (per vertex)
            int instanceIndex[];        // (see below)
            int instanceCoords[];       // (see below)
+           int indexedCoords[];        // (see below)
        };
 
           instanceIndex[0]  : global instance ID (used for ID rendering)
@@ -4572,6 +4628,9 @@ HdSt_CodeGen::_GenerateDrawingCoord(
                        ...
           instanceCoords[0] : instanceDC for level = 0
           instanceCoords[1] : instanceDC for level = 1
+                       ...
+          indexedCoords[0]  : first indexed primvar index offset
+          indexedCoords[1]  : second indexed primvar index offset
                        ...
 
        We also have a drawingcoord for vertex primvars. Currently it's not
@@ -4656,6 +4715,7 @@ HdSt_CodeGen::_GenerateDrawingCoord(
     };
 
     const int instanceIndexWidth = _metaData->instancerNumLevels + 1;
+    const int indexedPrimvarCount = _metaData->indexedPrimvarCount;
 
     if (!_hasCS) {
         for (std::string const & param : drawingCoordParams) {
@@ -4679,6 +4739,13 @@ HdSt_CodeGen::_GenerateDrawingCoord(
                                   /*name=*/name,
                                   /*dataType=*/_tokens->_int);
         }
+        for (int i = 0; i < indexedPrimvarCount; ++i) {
+            TfToken const name(TfStringPrintf("dc_indexedCoordsX%d", i));
+            _AddInterstageElement(&_resInterstage,
+                                  HioGlslfxResourceLayout::InOut::NONE,
+                                  /*name=*/name,
+                                  /*dataType=*/_tokens->_int);
+        }
 
         _PlumbInterstageElements();
     }
@@ -4692,8 +4759,11 @@ HdSt_CodeGen::_GenerateDrawingCoord(
     for (std::string const & param : drawingCoordParams) {
         _genDecl << "  int " << param << ";\n";
     }
-    _genDecl <<"  int instanceIndex[HD_INSTANCE_INDEX_WIDTH];\n";
-    _genDecl <<"  int instanceCoords[HD_INSTANCE_INDEX_WIDTH];\n";
+    _genDecl << "  int instanceIndex[HD_INSTANCE_INDEX_WIDTH];\n";
+    _genDecl << "  int instanceCoords[HD_INSTANCE_INDEX_WIDTH];\n";
+    if (indexedPrimvarCount > 0) {
+        _genDecl << "  int indexedCoords[HD_INDEXED_PRIMVAR_COUNT];\n";
+    }
     _genDecl << "};\n";
 
     // forward declaration
@@ -4706,11 +4776,13 @@ HdSt_CodeGen::_GenerateDrawingCoord(
     //   layout (location=x) uniform ivec4 drawingCoord0;
     //   layout (location=y) uniform ivec4 drawingCoord1;
     //   layout (location=z) uniform int   drawingCoordI[N];
+    //   layout (location=w) uniform int   drawingCoordX[N];
     // [indirect]
     //   layout (location=x) in ivec4 drawingCoord0
     //   layout (location=y) in ivec4 drawingCoord1
     //   layout (location=z) in ivec2 drawingCoord2
     //   layout (location=w) in int   drawingCoordI[N]
+    //   layout (location=v) in int   drawingCoordX[N]
     if (!_hasCS) {
         _EmitDeclaration(&_resAttrib, _metaData->drawingCoord0Binding);
         _EmitDeclaration(&_resAttrib, _metaData->drawingCoord1Binding);
@@ -4719,6 +4791,10 @@ HdSt_CodeGen::_GenerateDrawingCoord(
         if (_metaData->drawingCoordIBinding.binding.IsValid()) {
             _EmitDeclaration(&_resAttrib, _metaData->drawingCoordIBinding,
                 /*arraySize=*/std::max(1, _metaData->instancerNumLevels));
+        }
+        if (_metaData->drawingCoordXBinding.binding.IsValid()) {
+            _EmitDeclaration(&_resAttrib, _metaData->drawingCoordXBinding,
+                /*arraySize=*/std::max(1, _metaData->indexedPrimvarCount));
         }
     }
 
@@ -5078,6 +5154,19 @@ HdSt_CodeGen::_GenerateDrawingCoord(
                  << " + dc.instanceIndex[" << std::to_string(i+1) << "];\n";
     }
 
+    for(int i = 0; i < indexedPrimvarCount; ++i) {
+        std::string const index = std::to_string(i);
+        _genVS   << "  dc.indexedCoords[" << index << "]"
+                 << " = drawingCoordX" << index << ";\n";
+        _genPTCS << "  dc.indexedCoords[" << index << "]"
+                 << " = drawingCoordX" << index << "[0];\n";
+        _genPTVS << "  dc.indexedCoords[" << index << "]"
+                 << " = drawingCoordX" << index << "[0];\n";
+        _genCS   << "  dc.indexedCoords[" << index << "]"
+                 << " = GetDrawingCoordField(10 + " <<
+                 std::to_string(_metaData->instancerNumLevels + i) << ");\n";
+    }
+
     _genVS   << "  return dc;\n"
              << "}\n";
 
@@ -5099,52 +5188,52 @@ HdSt_CodeGen::_GenerateDrawingCoord(
 
     // VS/PTVS from attributes
     _ProcessDrawingCoord(_procVS, drawingCoordParams, instanceIndexWidth,
-                         "vs_", "");
+                         indexedPrimvarCount, "vs_", "");
     _ProcessDrawingCoord(_procPTVSOut, drawingCoordParams, instanceIndexWidth,
-                         "vs_", "");
+                         indexedPrimvarCount, "vs_", "");
 
     // TCS from VS
     if (_hasTCS) {
         _GetDrawingCoord(_genTCS, drawingCoordParams, instanceIndexWidth,
-                "vs_", "[0]");
+                indexedPrimvarCount, "vs_", "[0]");
         _ProcessDrawingCoord(_procTCS, drawingCoordParams, instanceIndexWidth,
-                "tcs_", "[gl_InvocationID]");
+                indexedPrimvarCount, "tcs_", "[gl_InvocationID]");
     }
 
     // TES from TCS
     if (_hasTES) {
         _GetDrawingCoord(_genTES, drawingCoordParams, instanceIndexWidth,
-                "tcs_", "[0]");
+                indexedPrimvarCount, "tcs_", "[0]");
         _ProcessDrawingCoord(_procTES, drawingCoordParams, instanceIndexWidth,
-                "tes_", "");
+                indexedPrimvarCount, "tes_", "");
     }
 
     // GS
     if (_hasGS && _hasTES) {
         // from TES
         _GetDrawingCoord(_genGS, drawingCoordParams, instanceIndexWidth,
-                "tes_", "[0]");
+                indexedPrimvarCount, "tes_", "[0]");
     } else if (_hasGS) {
         // from VS
         _GetDrawingCoord(_genGS, drawingCoordParams, instanceIndexWidth,
-                "vs_", "[0]");
+                indexedPrimvarCount, "vs_", "[0]");
     }
     _ProcessDrawingCoord(_procGS, drawingCoordParams, instanceIndexWidth,
-                "gs_", "");
+                indexedPrimvarCount, "gs_", "");
 
     // FS
     if (_hasGS) {
         // from GS
         _GetDrawingCoord(_genFS, drawingCoordParams, instanceIndexWidth,
-                "gs_", "");
+                indexedPrimvarCount, "gs_", "");
     } else if (_hasTES) {
         // from TES
         _GetDrawingCoord(_genFS, drawingCoordParams, instanceIndexWidth,
-                "tes_", "");
+                indexedPrimvarCount, "tes_", "");
     } else {
         // from VS/PTVS
         _GetDrawingCoord(_genFS, drawingCoordParams, instanceIndexWidth,
-                "vs_", "");
+                indexedPrimvarCount, "vs_", "");
     }
 }
 
@@ -5715,14 +5804,27 @@ HdSt_CodeGen::_GenerateElementPrimvar()
     // Uniform primvar data declarations & accessors
     if (!_geometricShader->IsPrimTypePoints()) {
         TF_FOR_ALL (it, _metaData->elementData) {
-            HdStBinding binding = it->first;
-            TfToken const &name = it->second.name;
-            TfToken const &dataType = it->second.dataType;
+            const auto& primvar = it->second;
+            const bool indexed = primvar.indexed;
+            HdStBinding binding = indexed ? primvar.indexedBinding : it->first;
+            TfToken const &name = indexed ? primvar.indexedName : primvar.name;
+            TfToken const &dataType = indexed ? primvar.indexedDataType : primvar.dataType;
 
             _EmitDeclaration(&_resCommon, name, dataType, binding);
             // AggregatedElementID gives us the buffer index post batching, which
             // is what we need for accessing element (uniform) primvar data.
-            _EmitAccessor(accessors, name, dataType, binding,"GetAggregatedElementID()");
+            if (indexed) {
+                HdStBinding indicesBinding = it->first;
+                TfToken const &indicesName = primvar.name;
+                TfToken const &indicesDataType = primvar.dataType;
+                const int indexedChannel = primvar.indexedChannel;
+                _EmitDeclaration(&_resCommon, indicesName, indicesDataType, indicesBinding);
+                _EmitIndexedAccessor(accessors, name, dataType, binding,
+                    "GetAggregatedElementID()", indexedChannel);
+            } else {
+                _EmitAccessor(accessors, name, dataType, binding,
+                    "GetAggregatedElementID()");
+            }
         }
     }
 
@@ -6026,12 +6128,16 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
 
       // --------- facevarying data accessors ----------
       // in geometry shader
+
       // unrefined internal accessor
       vec2 HdGet_map1_Coarse(int localIndex) {
           int fvarIndex = GetFVarIndex(localIndex);
+          // if indexed:
+          //  fvarIndex = map1_indices[fvarIndex] +
+          //      GetDrawingCoord().indexedCoords[0];
           return vec2(map1[fvarIndex]);
       }
-      // unrefined public accessors
+      // refined public accessors
       vec2 HdGet_map1(int localIndex, vec2 st) {
           int fvarIndex = GetFVarIndex(localIndex);
           return (HdGet_map1_Coarse(0) * ...);
@@ -6041,9 +6147,12 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
           return HdGet_map1(localIndex, localST);
       }
 
-      // refined internal accessor
+      // unrefined internal accessor
       vec2 HdGet_map1_Coarse(int localIndex) {
           int fvarIndex = GetDrawingCoord().fvarCoord + localIndex;
+          // if indexed:
+          //  fvarIndex = map1_indices[fvarIndex] +
+          //      GetDrawingCoord().indexedCoords[0];
           return vec2(map1[fvarIndex]);
       }
       // refined public accessors
@@ -6094,13 +6203,22 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
 
     // FVar primvars are emitted by GS or FS
     TF_FOR_ALL (it, _metaData->fvarData) {
-        HdStBinding binding = it->first;
-        TfToken const &name = it->second.name;
-        TfToken const &dataType = it->second.dataType;
-        const int channel = it->second.channel;
+        const auto& primvar = it->second;
+        const bool indexed = primvar.indexed;
+        HdStBinding binding = indexed ? primvar.indexedBinding : it->first;
+        TfToken const &name = indexed ? primvar.indexedName : primvar.name;
+        TfToken const &dataType = indexed ? primvar.indexedDataType : primvar.dataType;
+        HdStBinding indicesBinding = it->first;
+        TfToken const &indicesName = primvar.name;
+        TfToken const &indicesDataType = primvar.dataType;
+        const int indexedChannel = primvar.indexedChannel;
+        const int fvarChannel = primvar.channel;
 
         if (_hasGS) {
             _EmitDeclaration(&_resMaterial, name, dataType, binding);
+            if (indexed) {
+                _EmitDeclaration(&_resMaterial, indicesName, indicesDataType, indicesBinding);
+            }
 
             interstagePrimvarFVar.emplace_back(
                 _GetPackedType(dataType, false), name);
@@ -6109,7 +6227,7 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
             _EmitFVarAccessor(_hasGS, accessorsGS, name, dataType, binding,
                               _geometricShader->GetPrimitiveType(),
                               _geometricShader->GetFvarPatchType(),
-                              channel);
+                              fvarChannel, indexed, indexedChannel);
 
             _EmitStructAccessor(accessorsFS, _tokens->inPrimvars,
                                 name, dataType,
@@ -6127,24 +6245,27 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
             }
         } else if (!_geometricShader->IsPrimTypePoints()) {
             _EmitDeclaration(&_resMaterial, name, dataType, binding);
+            if (indexed) {
+                _EmitDeclaration(&_resMaterial, indicesName, indicesDataType, indicesBinding);
+            }
 
             _EmitFVarAccessor(_hasGS,
                               accessorsFS, name, dataType, binding,
                               _geometricShader->GetPrimitiveType(),
                               _geometricShader->GetFvarPatchType(),
-                              channel);
+                              fvarChannel, indexed, indexedChannel);
 
             _EmitFVarAccessor(false,
                               accessorsPTCS, name, dataType, binding,
                               _geometricShader->GetPrimitiveType(),
                               _geometricShader->GetFvarPatchType(),
-                              channel);
+                              fvarChannel, indexed, indexedChannel);
 
             _EmitFVarAccessor(false,
                               accessorsPTVS, name, dataType, binding,
                               _geometricShader->GetPrimitiveType(),
                               _geometricShader->GetFvarPatchType(),
-                              channel);
+                              fvarChannel, indexed, indexedChannel);
         }
     }
 

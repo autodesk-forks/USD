@@ -43,7 +43,6 @@
 #include "pxr/base/tf/staticTokens.h"
 
 #include <iostream>
-#include <limits>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -210,7 +209,7 @@ namespace {
 // Note: GL specifies baseVertex as 'int' and other as 'uint', but
 // we never set negative baseVertex in our use cases.
 
-// DrawingCoord 10 integers (+ numInstanceLevels)
+// DrawingCoord 10 integers (+ numInstanceLevels + indexedPrimvarCount)
 struct _DrawingCoord
 {
     // drawingCoord0 (ivec4 for drawing and culling)
@@ -231,9 +230,12 @@ struct _DrawingCoord
 
     // drawingCoordI (int32[] for drawing and culling)
     // uint32_t instanceDC[numInstanceLevels];
+
+    // drawingCoordX (int32[] for drawing)
+    // uint32_t indexedDC[indexedPrimvarCount];
 };
 
-// DrawNonIndexed + non-instance culling : 14 integers (+ numInstanceLevels)
+// DrawNonIndexed + non-instance culling : 14 integers (+ numInstanceLevels + indexedPrimvarCount)
 struct _DrawNonIndexedCommand
 {
     union {
@@ -254,7 +256,7 @@ struct _DrawNonIndexedCommand
     _DrawingCoord drawingCoord;
 };
 
-// DrawNonIndexed + Instance culling : 18 integers (+ numInstanceLevels)
+// DrawNonIndexed + Instance culling : 18 integers (+ numInstanceLevels + indexedPrimvarCount)
 struct _DrawNonIndexedInstanceCullCommand
 {
     union {
@@ -280,7 +282,7 @@ struct _DrawNonIndexedInstanceCullCommand
     _DrawingCoord drawingCoord;
 };
 
-// DrawIndexed + non-instance culling : 15 integers (+ numInstanceLevels)
+// DrawIndexed + non-instance culling : 15 integers (+ numInstanceLevels + indexedPrimvarCount)
 struct _DrawIndexedCommand
 {
     union {
@@ -303,7 +305,7 @@ struct _DrawIndexedCommand
     _DrawingCoord drawingCoord;
 };
 
-// DrawIndexed + Instance culling : 19 integers (+ numInstanceLevels)
+// DrawIndexed + Instance culling : 19 integers (+ numInstanceLevels + indexedPrimvarCount)
 struct _DrawIndexedInstanceCullCommand
 {
     union {
@@ -344,6 +346,8 @@ struct _DrawCommandTraits
     size_t instancerNumLevels;
     size_t instanceIndexWidth;
 
+    size_t indexedPrimvarCount;
+
     size_t count_offset;
     size_t instanceCount_offset;
     size_t baseInstance_offset;
@@ -354,6 +358,7 @@ struct _DrawCommandTraits
     size_t drawingCoord1_offset;
     size_t drawingCoord2_offset;
     size_t drawingCoordI_offset;
+    size_t drawingCoordX_offset;
 
     size_t patchBaseVertex_offset;
 };
@@ -361,12 +366,13 @@ struct _DrawCommandTraits
 template <typename CmdType>
 void _SetDrawCommandTraits(_DrawCommandTraits * traits,
                            int const instancerNumLevels,
+                           int const indexedPrimvarCount,
                            size_t const uint32Alignment)
 {
     // Number of uint32_t in the command struct
     // followed by instanceDC[instancerNumLevals]
     traits->numUInt32 = sizeof(CmdType) / sizeof(uint32_t)
-                      + instancerNumLevels;
+                      + instancerNumLevels + indexedPrimvarCount;
 
     if (uint32Alignment > 0) {
         size_t const alignMask = uint32Alignment - 1;
@@ -380,6 +386,8 @@ void _SetDrawCommandTraits(_DrawCommandTraits * traits,
 
     traits->instancerNumLevels = instancerNumLevels;
     traits->instanceIndexWidth = instancerNumLevels + 1;
+
+    traits->indexedPrimvarCount = indexedPrimvarCount;
 
     traits->count_offset = offsetof(CmdType, common.count);
     traits->instanceCount_offset = offsetof(CmdType, common.instanceCount);
@@ -411,6 +419,9 @@ void _SetDrawingCoordTraits(_DrawCommandTraits * traits)
     // drawingCoord instancer bindings follow the base drawing coord struct
     traits->drawingCoordI_offset = sizeof(CmdType);
 
+    traits->drawingCoordX_offset = traits->drawingCoordI_offset +
+        traits->instancerNumLevels * sizeof(uint32_t);
+
     // needed to step vertex buffer binding offsets for Metal tessellation
     traits->patchBaseVertex_offset =
         offsetof(CmdType, drawingCoord) + offsetof(_DrawingCoord, vertexDC);
@@ -418,6 +429,7 @@ void _SetDrawingCoordTraits(_DrawCommandTraits * traits)
 
 _DrawCommandTraits
 _GetDrawCommandTraits(int const instancerNumLevels,
+                      int const indexedPrimvarCount,
                       bool const useDrawIndexed,
                       bool const useInstanceCulling,
                       size_t const uint32Alignment)
@@ -427,12 +439,14 @@ _GetDrawCommandTraits(int const instancerNumLevels,
         if (useInstanceCulling) {
             using CmdType = _DrawNonIndexedInstanceCullCommand;
             _SetDrawCommandTraits<CmdType>(&traits, instancerNumLevels,
+                                           indexedPrimvarCount,
                                            uint32Alignment);
             _SetInstanceCullTraits<CmdType>(&traits);
             _SetDrawingCoordTraits<CmdType>(&traits);
         } else {
             using CmdType = _DrawNonIndexedCommand;
             _SetDrawCommandTraits<CmdType>(&traits, instancerNumLevels,
+                                           indexedPrimvarCount,
                                            uint32Alignment);
             _SetDrawingCoordTraits<CmdType>(&traits);
         }
@@ -440,12 +454,14 @@ _GetDrawCommandTraits(int const instancerNumLevels,
         if (useInstanceCulling) {
             using CmdType = _DrawIndexedInstanceCullCommand;
             _SetDrawCommandTraits<CmdType>(&traits, instancerNumLevels,
+                                           indexedPrimvarCount,
                                            uint32Alignment);
             _SetInstanceCullTraits<CmdType>(&traits);
             _SetDrawingCoordTraits<CmdType>(&traits);
         } else {
             using CmdType = _DrawIndexedCommand;
             _SetDrawCommandTraits<CmdType>(&traits, instancerNumLevels,
+                                           indexedPrimvarCount,
                                            uint32Alignment);
             _SetDrawingCoordTraits<CmdType>(&traits);
         }
@@ -478,6 +494,12 @@ _AddDrawResourceViews(HdStDispatchBufferSharedPtr const & dispatchBuffer,
         dispatchBuffer->AddBufferResourceView(
             HdTokens->drawingCoordI, {HdTypeInt32, traits.instancerNumLevels},
             traits.drawingCoordI_offset);
+    }
+    // indexed primvars
+    if (traits.indexedPrimvarCount > 0) {
+        dispatchBuffer->AddBufferResourceView(
+            HdTokens->drawingCoordX, {HdTypeInt32, traits.indexedPrimvarCount},
+            traits.drawingCoordX_offset);
     }
 }
 
@@ -516,6 +538,13 @@ struct _DrawItemState
                 std::static_pointer_cast<HdStBufferArrayRange>(
                     drawItem->GetInstancePrimvarRange(i));
         }
+
+        indexedPrimvarBars.resize(drawItem->GetIndexedPrimvarCount());
+        for (size_t i = 0; i < indexedPrimvarBars.size(); ++i) {
+            indexedPrimvarBars[i] =
+                std::static_pointer_cast<HdStBufferArrayRange>(
+                    drawItem->GetIndexedPrimvarRange(i));
+        }
     }
 
     HdStBufferArrayRangeSharedPtr constantBar;
@@ -528,6 +557,7 @@ struct _DrawItemState
     HdStBufferArrayRangeSharedPtr shaderBar;
     HdStBufferArrayRangeSharedPtr instanceIndexBar;
     std::vector<HdStBufferArrayRangeSharedPtr> instancePrimvarBars;
+    std::vector<HdStBufferArrayRangeSharedPtr> indexedPrimvarBars;
 };
 
 uint32_t
@@ -607,6 +637,8 @@ HdSt_PipelineDrawBatch::_CompileBatch(
 
     size_t const instancerNumLevels =
         _drawItemInstances[0]->GetDrawItem()->GetInstancePrimvarNumLevels();
+    size_t const indexedPrimvarCount =
+        _drawItemInstances[0]->GetDrawItem()->GetIndexedPrimvarCount();
 
     bool const useMetalTessellation =
         _drawItemInstances[0]->GetDrawItem()->
@@ -618,6 +650,7 @@ HdSt_PipelineDrawBatch::_CompileBatch(
     // Get the layout of the command buffer we are building.
     _DrawCommandTraits const traits =
         _GetDrawCommandTraits(instancerNumLevels,
+                              indexedPrimvarCount,
                               _useDrawIndexed,
                               _useInstanceCulling,
                               uint32Alignment);
@@ -790,6 +823,11 @@ HdSt_PipelineDrawBatch::_CompileBatch(
         for (size_t i = 0; i < dc.instancePrimvarBars.size(); ++i) {
             uint32_t instanceDC = _GetElementOffset(dc.instancePrimvarBars[i]);
             *cmdIt++ = instanceDC;
+        }
+        // drawingCoordX
+        for (size_t i = 0; i < dc.indexedPrimvarBars.size(); ++i) {
+            uint32_t indexedDC = _GetElementOffset(dc.indexedPrimvarBars[i]);
+            *cmdIt++ = indexedDC;
         }
 
         // add padding and clear to 0
@@ -1084,6 +1122,10 @@ _BindingState::GetBindingsForDrawing(
     if (!geometricShader->IsPrimTypePoints()) {
         binder.GetBufferArrayBindingDesc(bindingsDesc, elementBar);
         binder.GetBufferArrayBindingDesc(bindingsDesc, fvarBar);
+        for (size_t channel = 0; channel < indexedPrimvarBars.size(); ++channel) {
+            binder.GetBufferArrayBindingDesc(bindingsDesc,
+                indexedPrimvarBars[channel]);
+        }
     }
     binder.GetBufferArrayBindingDesc(bindingsDesc, varyingBar);
 

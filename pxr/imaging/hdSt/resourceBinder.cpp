@@ -225,6 +225,9 @@ HdSt_ResourceBinder::ResolveBindings(
     // clear all
     _bindingMap.clear();
 
+    std::unordered_map<TfToken, MetaData::IndexablePrimvar&, TfToken::HashFunctor>
+        indexablePrimvars;
+
     // constant primvar (per-object)
     HdStBinding constantPrimvarBinding =
                 locator.GetBinding(structBufferBindingType,
@@ -495,9 +498,10 @@ HdSt_ResourceBinder::ResolveBindings(
             HdTupleType valueType = it->second->GetTupleType();
                 TfToken glType =
                     HdStGLConversions::GetGLSLTypename(valueType.type);
-            metaDataOut->elementData[elementPrimvarBinding] =
-                MetaData::Primvar(/*name=*/glName,
-                                  /*type=*/glType);
+            auto& primvar = metaDataOut->elementData[elementPrimvarBinding] =
+                MetaData::IndexablePrimvar(/*name=*/glName,
+                                           /*type=*/glType);
+            indexablePrimvars.try_emplace(name, primvar);
         }
     }
 
@@ -530,11 +534,46 @@ HdSt_ResourceBinder::ResolveBindings(
                     fvarChannel = i;
                 }
             }
-            
-            metaDataOut->fvarData[fvarPrimvarBinding] =
+
+            auto& primvar = metaDataOut->fvarData[fvarPrimvarBinding] =
                 MetaData::FvarPrimvar(/*name=*/glName,
                                       /*type=*/glType,
                                       /*channel=*/fvarChannel);
+            indexablePrimvars.try_emplace(name, primvar);
+        }
+    }
+
+    const int indexedPrimvarCount = drawItem->GetIndexedPrimvarCount();
+    metaDataOut->indexedPrimvarCount = indexedPrimvarCount;
+    for (int i = 0; i < indexedPrimvarCount; ++i) {
+        if (HdBufferArrayRangeSharedPtr primvarBar_ =
+            drawItem->GetIndexedPrimvarRange(i)) {
+
+            HdStBufferArrayRangeSharedPtr primvarBar =
+                std::static_pointer_cast<HdStBufferArrayRange>(primvarBar_);
+
+            TF_FOR_ALL (it, primvarBar->GetResources()) {
+                TfToken const& name = it->first;
+                TfToken glName = HdStGLConversions::GetGLSLIdentifier(name);
+
+                HdStBinding indexedPrimvarBinding =
+                    locator.GetBinding(arrayBufferBindingType, name);
+                _bindingMap[name] = indexedPrimvarBinding;
+
+                HdTupleType valueType = it->second->GetTupleType();
+                TfToken glType = HdStGLConversions::GetGLSLTypename(valueType.type);
+
+                const TfToken indicesName{name.GetString() + "_indices"};
+                if (const auto iter = indexablePrimvars.find(indicesName);
+                    iter != indexablePrimvars.end()) {
+                    MetaData::IndexablePrimvar& indexable = iter->second;
+                    indexable.indexed = true;
+                    indexable.indexedChannel = i;
+                    indexable.indexedBinding = indexedPrimvarBinding;
+                    indexable.indexedName = name;
+                    indexable.indexedDataType = glType;
+                }
+            }
         }
     }
 
@@ -581,6 +620,21 @@ HdSt_ResourceBinder::ResolveBindings(
             MetaData::BindingDeclaration(/*name=*/HdTokens->drawingCoordI,
                                          /*type=*/_tokens->_int,
                                          /*binding=*/drawingCoordIBinding);
+    }
+
+    if (indexedPrimvarCount > 0) {
+        HdStBinding drawingCoordXBinding =
+            HdStBinding(HdStBinding::DRAW_INDEX_INSTANCE_ARRAY,
+                      locator.attribLocation);
+
+        // each vertex attribute takes 1 location
+        locator.attribLocation += indexedPrimvarCount;
+
+        _bindingMap[HdTokens->drawingCoordX] = drawingCoordXBinding;
+        metaDataOut->drawingCoordXBinding =
+            MetaData::BindingDeclaration(/*name=*/HdTokens->drawingCoordX,
+                                         /*type=*/_tokens->_int,
+                                         /*binding=*/drawingCoordXBinding);
     }
 
     // instance index indirection buffer
@@ -1792,6 +1846,22 @@ HdSt_ResourceBinder::MetaData::ComputeHash() const
         }
     }
 
+    static constexpr auto combinePrimvarHash =
+        [](ID hash, const Primvar& primvar) {
+            return TfHash::Combine(hash, primvar.name.Hash(), primvar.dataType);
+        };
+    static constexpr auto combineIndexablePrimvarHash =
+        [](ID hash, const IndexablePrimvar& primvar) {
+            hash = combinePrimvarHash(hash, primvar);
+            if (primvar.indexed) {
+                hash = TfHash::Combine(hash,
+                    primvar.indexedName,
+                    primvar.indexedDataType,
+                    primvar.indexedChannel);
+            }
+            return hash;
+        };
+
     hash = TfHash::Combine(hash, 0); // separator
     TF_FOR_ALL (it, instanceData) {
         hash = TfHash::Combine(hash, (int)it->first.GetType()); // binding
@@ -1807,40 +1877,26 @@ HdSt_ResourceBinder::MetaData::ComputeHash() const
     TF_FOR_ALL (it, vertexData) {
         hash = TfHash::Combine(hash, (int)it->first.GetType()); // binding
         Primvar const &primvar = it->second;
-        hash = TfHash::Combine(
-            hash,
-            primvar.name.Hash(),
-            primvar.dataType
-        );
+        hash = combinePrimvarHash(hash, primvar);
     }
     hash = TfHash::Combine(hash, 0); // separator
     TF_FOR_ALL (it, varyingData) {
         hash = TfHash::Combine(hash, (int)it->first.GetType()); // binding
         Primvar const &primvar = it->second;
-        hash = TfHash::Combine(
-            hash,
-            primvar.name.Hash(),
-            primvar.dataType
-        );
+        hash = combinePrimvarHash(hash, primvar);
     }
     hash = TfHash::Combine(hash, 0); // separator
     TF_FOR_ALL (it, elementData) {
         hash = TfHash::Combine(hash, (int)it->first.GetType()); // binding
-        Primvar const &primvar = it->second;
-        hash = TfHash::Combine(
-            hash,
-            primvar.name.Hash(),
-            primvar.dataType
-        );
+        IndexablePrimvar const &primvar = it->second;
+        hash = combineIndexablePrimvarHash(hash, primvar);
     }
     hash = TfHash::Combine(hash, 0); // separator
     TF_FOR_ALL (it, fvarData) {
         hash = TfHash::Combine(hash, (int)it->first.GetType()); // binding
         FvarPrimvar const &primvar = it->second;
         hash = TfHash::Combine(
-            hash,
-            primvar.name.Hash(),
-            primvar.dataType,
+            combineIndexablePrimvarHash(hash, primvar),
             primvar.channel
         );
     }

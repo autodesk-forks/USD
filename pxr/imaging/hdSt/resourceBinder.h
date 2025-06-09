@@ -189,12 +189,26 @@ public:
         using PrimvarBinding = std::map<HdStBinding, Primvar>;
 
         // -------------------------------------------------------------------
+        // for a primvar in non-interleaved buffer array (Vertex, Element, ...)
+        struct ARCH_EXPORT_TYPE IndexablePrimvar : Primvar {
+            using Primvar::Primvar;
+
+            TfToken indexedName;
+            TfToken indexedDataType;
+            HdStBinding indexedBinding{};
+            int indexedChannel{}; // Index into dc.indexedCoords
+            bool indexed = false;
+        };
+        using IndexablePrimvarBinding = std::map<HdStBinding, IndexablePrimvar>;
+
+        // -------------------------------------------------------------------
         // for a face-varying primvar in non-interleaved buffer array
-        struct FvarPrimvar : Primvar {
+        struct FvarPrimvar : IndexablePrimvar {
             FvarPrimvar() : channel(0) {}
             FvarPrimvar(TfToken const &name, TfToken const &dataType, 
                         int channel)
-                : Primvar(name, dataType), channel(channel) {}
+                : IndexablePrimvar(name, dataType), channel(channel)
+                {}
             int channel;
         };
         using FvarPrimvarBinding = std::map<HdStBinding, FvarPrimvar>;
@@ -293,7 +307,7 @@ public:
         StructBlockBinding constantData;
         StructBlockBinding shaderData;
         StructBlockBinding topologyVisibilityData;
-        PrimvarBinding elementData;
+        IndexablePrimvarBinding elementData;
         PrimvarBinding vertexData;
         PrimvarBinding varyingData;
         FvarPrimvarBinding fvarData;
@@ -301,6 +315,7 @@ public:
         PrimvarBinding computeReadOnlyData;
         NestedPrimvarBinding instanceData;
         int instancerNumLevels;
+        int indexedPrimvarCount;
 
         ShaderParameterBinding shaderParameterBinding;
 
@@ -308,6 +323,7 @@ public:
         BindingDeclaration drawingCoord1Binding;
         BindingDeclaration drawingCoord2Binding;
         BindingDeclaration drawingCoordIBinding;
+        BindingDeclaration drawingCoordXBinding;
         BindingDeclaration instanceIndexArrayBinding;
         BindingDeclaration culledInstanceIndexArrayBinding;
         BindingDeclaration instanceIndexBaseBinding;
@@ -559,6 +575,7 @@ private:
                   (name == other.name && level < other.level);
         }
     };
+
     using _BindingMap = std::map<NameAndLevel, HdStBinding>;
     _BindingMap _bindingMap;
 };

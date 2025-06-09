@@ -34,6 +34,7 @@ TF_DEFINE_ENV_SETTING(HGIGL_GLSL_VERSION, 0,
                       "GLSL version");
 
 // Set defaults based on GL spec minimums
+static const int _DefaultMaxShaderStorageBufferCount  = 4;
 static const int _DefaultMaxUniformBlockSize          = 16*1024;
 static const int _DefaultMaxShaderStorageBlockSize    = 16*1024*1024;
 static const int _DefaultGLSLVersion                  = 400;
@@ -54,6 +55,7 @@ HgiGLCapabilities::_LoadCapabilities()
     // Reset values to reasonable defaults based of OpenGL minimums.
     // So that if we early out, systems can still depend on the
     // capabilities values being valid.
+    _maxShaderStorageBufferCount      = _DefaultMaxShaderStorageBufferCount;
     _maxUniformBlockSize              = _DefaultMaxUniformBlockSize;
     _maxShaderStorageBlockSize        = _DefaultMaxShaderStorageBlockSize;
     _uniformBufferOffsetAlignment     = 0;
@@ -118,6 +120,33 @@ HgiGLCapabilities::_LoadCapabilities()
         _uniformBufferOffsetAlignment = uniformBufferOffsetAlignment;
     }
     if (_glVersion >= 430) {
+        GLint maxCompShaderStorageBufferCount = 0;
+        glGetIntegerv(GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS,
+                      &maxCompShaderStorageBufferCount);
+        GLint maxVertShaderStorageBufferCount = 0;
+        glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS,
+                      &maxVertShaderStorageBufferCount);
+        GLint maxTessCtlShaderStorageBufferCount = 0;
+        glGetIntegerv(GL_MAX_TESS_CONTROL_SHADER_STORAGE_BLOCKS,
+                      &maxTessCtlShaderStorageBufferCount);
+        GLint maxTessEvalShaderStorageBufferCount = 0;
+        glGetIntegerv(GL_MAX_TESS_EVALUATION_SHADER_STORAGE_BLOCKS,
+                      &maxTessEvalShaderStorageBufferCount);
+        GLint maxGeomShaderStorageBufferCount = 0;
+        glGetIntegerv(GL_MAX_GEOMETRY_SHADER_STORAGE_BLOCKS,
+                      &maxGeomShaderStorageBufferCount);
+        GLint maxFragShaderStorageBufferCount = 0;
+        glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS,
+                      &maxFragShaderStorageBufferCount);
+        _maxShaderStorageBufferCount = std::min({
+            maxCompShaderStorageBufferCount,
+            maxVertShaderStorageBufferCount,
+            maxTessCtlShaderStorageBufferCount,
+            maxTessEvalShaderStorageBufferCount,
+            maxGeomShaderStorageBufferCount,
+            maxFragShaderStorageBufferCount
+        });
+
         GLint maxShaderStorageBlockSize = 0;
         glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,
                       &maxShaderStorageBlockSize);

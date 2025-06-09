@@ -103,7 +103,9 @@ private:
         HdStBufferArrayRangeSharedPtr const& vertexBar,
         int instancerNumLevels,
         HdStBufferArrayRangeSharedPtr const& instanceIndexBar,
-        std::vector<HdStBufferArrayRangeSharedPtr> const& instanceBars) const;
+        std::vector<HdStBufferArrayRangeSharedPtr> const& instanceBars,
+        int indexedPrimvarCount,
+        std::vector<HdStBufferArrayRangeSharedPtr> const& indexedBars) const;
 
     // Culling requires custom resource binding.
     class _CullingProgram : public _DrawingProgram

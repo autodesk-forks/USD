@@ -199,6 +199,11 @@ protected:
                                   HdDirtyBits *dirtyBits,
                                   bool requireFlatNormals);
 
+    void _UpdateIndexedPrimvarDrawCoord(HdDrawingCoord* drawingCoord,
+                                        const HdReprSharedPtr &repr,
+                                        const HdMeshReprDesc &desc,
+                                        int geomSubsetDescIndex);
+
     int _GetRefineLevelForDesc(const HdMeshReprDesc &desc) const;
 
     // Helper class for meshes to keep track of the topologies of their
@@ -247,6 +252,23 @@ protected:
                     primvar), _topologies[i].second.end());
 
                 }
+        }
+
+        void RemoveExtinctPrimvars(const HdPrimvarDescriptorVector& extantPrimvars)
+        {
+            for (auto& topology : _topologies) {
+                for (auto it = topology.second.begin(); it != topology.second.end();) {
+                    if (std::find_if(extantPrimvars.begin(),
+                        extantPrimvars.end(),
+                        [it](const HdPrimvarDescriptor& primvar) {
+                            return primvar.name == *it;
+                        }) != extantPrimvars.end()) {
+                        ++it;
+                    } else {
+                        it = topology.second.erase(it);
+                    }
+                }
+            }
         }
 
         // Remove unused topologies (topologies with no associated primvars), as
@@ -337,6 +359,9 @@ private:
     bool _pointsShadingEnabled : 1;
 
     std::unique_ptr<_FvarTopologyTracker> _fvarTopologyTracker;
+
+    int _indexedElementPrimvarSourceCount{};
+    int _indexedFaceVaryingPrimvarSourceCount{};
 };
 
 

@@ -63,6 +63,10 @@ using HdStDispatchBufferSharedPtr = std::shared_ptr<class HdStDispatchBuffer>;
 /// | (instanceDC[1])   |   |----> DrawingCoordI -------> DrawingCoordI
 /// | (instanceDC[2])   |   |
 /// | ...               | --+
+/// | (indexedDC[0])    | --+
+/// | (indexedDC[1])    |   |----> DrawingCoordX -------> DrawingCoordX
+/// | (indexedDC[2])    |   |
+/// | ...               | --+
 /// +----draw item 1----+
 /// | count             |
 /// | instanceCount     |

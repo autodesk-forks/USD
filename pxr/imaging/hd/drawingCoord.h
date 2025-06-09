@@ -62,6 +62,10 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// instance level=0 ---> [ k ]
 /// instance level=1 ---> [k+1]
 /// instance level=2 ---> [k+2]
+///                        ...
+/// indexed primvar=0 --> [ x ]
+/// indexed primvar=1 --> [x+1]
+/// indexed primvar=2 --> [x+2]
 ///
 class HdDrawingCoord {
 public:
@@ -73,13 +77,16 @@ public:
         // default slots:
         _topology(2),
         _instancePrimvar(Unassigned),
+        _indexedPrimvar(Unassigned),
+        _indexedPrimvarCount(0),
         _constantPrimvar(0),
         _vertexPrimvar(1),
         _elementPrimvar(3),
         _instanceIndex(4),
         _faceVaryingPrimvar(5),
         _topologyVisibility(6),
-        _varyingPrimvar(7) {
+        _varyingPrimvar(7)
+    {
     }
 
     int GetConstantPrimvarIndex() const    { return _constantPrimvar; }
@@ -106,9 +113,31 @@ public:
         return _instancePrimvar + level;
     }
 
+    // indexed primvars take up a range of slots.
+    void SetIndexedPrimvarSlotRange(int base, int count) {
+        _indexedPrimvar = base;
+        _indexedPrimvarCount = count;
+    }
+
+    int GetIndexedPrimvarCount() const {
+        return _indexedPrimvarCount;
+    }
+
+    int GetIndexedPrimvarIndex(int channel) const {
+        TF_VERIFY(_indexedPrimvar != Unassigned);
+        TF_VERIFY(channel < _indexedPrimvarCount);
+        return _indexedPrimvar + channel;
+    }
+
+    int GetTotalDrawCoordCount() const {
+        return _indexedPrimvar + _indexedPrimvarCount;
+    }
+
 private:
     int16_t _topology;
     int16_t _instancePrimvar;
+    int16_t _indexedPrimvar;
+    int8_t _indexedPrimvarCount;
     int8_t _constantPrimvar;
     int8_t _vertexPrimvar;
     int8_t _elementPrimvar;

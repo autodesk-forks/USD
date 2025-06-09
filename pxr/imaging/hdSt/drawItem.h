@@ -43,6 +43,11 @@ public:
         return _GetSharedData()->instancerLevels;
     }
 
+    /// Returns the number of indexed primvars
+    int GetIndexedPrimvarCount() const {
+        return _GetDrawingCoord().GetIndexedPrimvarCount();
+    }
+
     /// Returns a BufferArrayRange of instance primvars at \p level
     /// the level is assigned to nested instancers in a bottom-up manner.
     ///
@@ -60,55 +65,61 @@ public:
             _GetDrawingCoord().GetInstancePrimvarIndex(level));
     }
 
-    /// Returns instance-index indirection BAR.
+    /// Returns the instance-index indirection BAR.
     HdBufferArrayRangeSharedPtr const &GetInstanceIndexRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetInstanceIndexIndex());
     }
 
-    /// Returns constant primvar BAR.
+    /// Returns the constant primvar BAR.
     HdBufferArrayRangeSharedPtr const &GetConstantPrimvarRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetConstantPrimvarIndex());
     }
 
-    /// Returns element primvar BAR.
+    /// Returns the element primvar BAR.
     HdBufferArrayRangeSharedPtr const &GetElementPrimvarRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetElementPrimvarIndex());
     }
 
-    /// Returns vertex primvar BAR.
+    /// Returns the vertex primvar BAR.
     HdBufferArrayRangeSharedPtr const &GetVertexPrimvarRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetVertexPrimvarIndex());
     }
 
-    /// Returns varying primvar BAR.
+    /// Returns the varying primvar BAR.
     HdBufferArrayRangeSharedPtr const &GetVaryingPrimvarRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetVaryingPrimvarIndex());
     }
 
-    /// Returns face varying primvar BAR.
+    /// Returns the face varying primvar BAR.
     HdBufferArrayRangeSharedPtr const &GetFaceVaryingPrimvarRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetFaceVaryingPrimvarIndex());
     }
 
-    /// Returns topology BAR.
+    /// Returns the topology BAR.
     HdBufferArrayRangeSharedPtr const &GetTopologyRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetTopologyIndex());
     }
 
-    /// Returns topological visibility BAR (e.g. per-face, per-point, etc.)
+    /// Returns the topological visibility BAR (e.g. per-face, per-point, etc.)
     HdBufferArrayRangeSharedPtr const &GetTopologyVisibilityRange() const {
         return _GetSharedData()->barContainer.Get(
             _GetDrawingCoord().GetTopologyVisibilityIndex());
     }
 
-    /// Returns mapping from refined fvar channels to named primvar.
+    /// Returns the indexed primvar BAR for a given indexed channel.
+    HdBufferArrayRangeSharedPtr const &GetIndexedPrimvarRange(int channel) const {
+        return _GetSharedData()->barContainer.Get(
+            _GetDrawingCoord().GetIndexedPrimvarIndex(channel));
+    }
+
+    /// Returns the mapping from refined fvar channels to named primvar.
     TopologyToPrimvarVector const &GetFvarTopologyToPrimvarVector() const {
         return _GetSharedData()->fvarTopologyToPrimvarVector;
     }
