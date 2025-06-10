@@ -129,18 +129,17 @@ public:
     TfTokenVector GetNames() override;
     HdDataSourceBaseHandle Get(const TfToken & name) override;
 
-private:
+protected:
     UsdImagingDataSourcePrimvar(
-            const SdfPath &sceneIndexPath,
-            const TfToken &name,
-            const UsdImagingDataSourceStageGlobals &stageGlobals,
-            UsdAttributeQuery valueQuery,
-            UsdAttributeQuery indicesQuery,
-            HdTokenDataSourceHandle interpolation,
-            HdTokenDataSourceHandle role,
-            HdIntDataSourceHandle elementSize = nullptr);
+        const SdfPath &sceneIndexPath,
+        const TfToken &name,
+        const UsdImagingDataSourceStageGlobals &stageGlobals,
+        UsdAttributeQuery valueQuery,
+        UsdAttributeQuery indicesQuery,
+        HdTokenDataSourceHandle interpolation,
+        HdTokenDataSourceHandle role,
+        HdIntDataSourceHandle elementSize = nullptr);
 
-private:
     const UsdImagingDataSourceStageGlobals &_stageGlobals;
     UsdAttributeQuery _valueQuery;
     UsdAttributeQuery _indicesQuery;

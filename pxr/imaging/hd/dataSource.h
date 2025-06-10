@@ -68,6 +68,52 @@ PXR_NAMESPACE_OPEN_SCOPE
     using type##Handle = type::Handle; \
     using type##AtomicHandle = type::AtomicHandle;
 
+/// HD_DECLARE_DATASOURCE_ABSTRACT_TEMPLATE
+/// Used for templated non-instantiable classes, this defines a set of functions
+/// for manipulating handles to this type of datasource.
+#define HD_DECLARE_DATASOURCE_ABSTRACT_TEMPLATE(type, ...) \
+    using Handle =  std::shared_ptr<type< __VA_ARGS__ > >; \
+    using AtomicHandle = Handle; \
+    static Handle AtomicLoad(AtomicHandle &ptr) { \
+        return std::atomic_load(&ptr); \
+    } \
+    static void AtomicStore(AtomicHandle &ptr, const Handle &v) { \
+        std::atomic_store(&ptr, v); \
+    } \
+    static bool AtomicCompareExchange(AtomicHandle &ptr, \
+                                      AtomicHandle &expected, \
+                                      const Handle &desired) { \
+        return std::atomic_compare_exchange_strong(&ptr, &expected, desired); \
+    } \
+    static Handle Cast(const HdDataSourceBase::Handle &v) { \
+        return std::dynamic_pointer_cast<type< __VA_ARGS__ > >(v); \
+    }
+
+/// HD_DECLARE_DATASOURCE
+/// Used for templated instantiable classes, this defines functions for manipulating
+/// and allocating handles to this type of datasource.
+/// 
+/// Use of this macro in derived classes is important to make sure that
+/// core and client code share the same handle type and allocator.
+#define HD_DECLARE_DATASOURCE_TEMPLATE(type, ...) \
+    HD_DECLARE_DATASOURCE_ABSTRACT_TEMPLATE(type, __VA_ARGS__ ) \
+    template <typename ... Args> \
+    static Handle New(Args&& ... args) { \
+        return Handle(new type< __VA_ARGS__ >(std::forward<Args>(args) ... )); \
+    }
+
+/// HD_DECLARE_DATASOURCE_INITIALIZER_LIST_NEW_TEMPLATE
+/// Used for declaring a `New` function for datasource types that have a
+/// constructor that takes an initializer_list<T>.
+#define HD_DECLARE_DATASOURCE_INITIALIZER_LIST_NEW_TEMPLATE(type, T, ...) \
+    static Handle New(std::initializer_list<T> initList) { \
+        return Handle(new type< __VA_ARGS__ >(initList)); \
+    }
+
+#define HD_DECLARE_DATASOURCE_HANDLES_TEMPLATE(type, ...) \
+    using type< __VA_ARGS__ >##Handle = type< __VA_ARGS__ >::Handle; \
+    using type< __VA_ARGS__ >##AtomicHandle = type< __VA_ARGS__ >::AtomicHandle;
+
 /// \class HdDataSourceBase
 ///
 /// Represents an object which can produce scene data.

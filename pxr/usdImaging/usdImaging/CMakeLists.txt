@@ -153,6 +153,7 @@ pxr_library(usdImaging
 
     PUBLIC_HEADERS
         api.h
+        dataSourceConvertedPrimvar.h
         types.h
         unitTestHelper.h
         version.h
