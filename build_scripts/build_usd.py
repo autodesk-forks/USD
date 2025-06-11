@@ -1838,16 +1838,6 @@ def InstallUSD(context, force, buildArgs):
         else:
             extraArgs.append('-DPXR_BUILD_ANIMX_TESTS=OFF')
 
-        if context.buildTrace:
-            extraArgs.append('-DPXR_BUILD_TRACE=ON')
-        else:
-            extraArgs.append('-DPXR_BUILD_TRACE=OFF')
-
-        if context.buildPerfLog:
-            extraArgs.append('-DPXR_BUILD_HD_PERF=ON')
-        else:
-            extraArgs.append('-DPXR_BUILD_HD_PERF=OFF')
-
         if Windows():
             # Increase the precompiled header buffer limit.
             extraArgs.append('-DCMAKE_CXX_FLAGS="/Zm150"')
@@ -2237,18 +2227,6 @@ subgroup.add_argument("--no-animx-tests",
                       dest="build_animx_tests", action="store_false",
                       help="Do not build AnimX spline tests (default)")
 
-subgroup = group.add_mutually_exclusive_group()
-subgroup.add_argument("--trace", dest="build_trace", action="store_true",
-                      default=True, help="Enable trace (default)")
-subgroup.add_argument("--no-trace", dest="build_trace", action="store_false",
-                      help="Do not enable trace")
-
-subgroup = group.add_mutually_exclusive_group()
-subgroup.add_argument("--perflog", dest="build_perflog", action="store_true",
-                      default=True, help="Enable performance log (default)")
-subgroup.add_argument("--no-perflog", dest="build_perflog", action="store_false",
-                      help="Do not enable performance log")
-
 args = parser.parse_args()
 
 class InstallContext:
@@ -2416,10 +2394,6 @@ class InstallContext:
         self.buildMayapyTests = args.build_mayapy_tests
         self.mayapyLocation = args.mayapy_location
         self.buildAnimXTests = args.build_animx_tests
-        
-        # Trace and Profiling
-        self.buildTrace = args.build_trace
-        self.buildPerfLog = args.build_perflog
 
     def GetBuildArguments(self, dep):
         return self.buildArgs.get(dep.name.lower(), [])
@@ -2661,14 +2635,6 @@ if PYSIDE in requiredDependencies:
                    .format(" or ".join(set(pyside2Uic+pyside6Uic))))
         sys.exit(1)
 
-if context.buildTests:
-    if not context.buildTrace:
-        PrintError("--tests requires --trace")
-        sys.exit(1)
-    if not context.buildPerfLog:
-        PrintError("--tests requires --perflog")
-        sys.exit(1)
-
 if context.buildMayapyTests:
     if not context.buildPython:
         PrintError("--mayapy-tests requires --python")
@@ -2732,8 +2698,6 @@ summaryMsg += """\
     Alembic Plugin              {buildAlembic}
       HDF5 support:             {enableHDF5}
     Draco Plugin                {buildDraco}
-    Trace                       {buildTrace}
-    Performance log in hd       {buildPerfLog}
 
   Dependencies                  {dependencies}"""
 
@@ -2798,9 +2762,7 @@ summaryMsg = summaryMsg.format(
     buildMaterialX=("On" if context.buildMaterialX else "Off"),
     buildMayapyTests=("On" if context.buildMayapyTests else "Off"),
     buildAnimXTests=("On" if context.buildAnimXTests else "Off"),
-    enableHDF5=("On" if context.enableHDF5 else "Off"),
-    buildTrace=("On" if context.buildTrace else "Off"),
-    buildPerfLog=("On" if context.buildPerfLog else "Off"))
+    enableHDF5=("On" if context.enableHDF5 else "Off"))
 
 Print(summaryMsg)
 

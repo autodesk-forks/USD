@@ -25,6 +25,9 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#if !defined(HD_PERF_ENABLE)
+    #define HD_PERF_ENABLE 1
+#endif
 
 class SdfPath;
 class HdResourceRegistry;
@@ -32,7 +35,7 @@ class HdResourceRegistry;
 // XXX: it would be nice to move this into Trace or use the existing Trace
 // counter mechanism, however we are restricted to TraceLite in the rocks.
 
-#if defined(HD_PERF_ENABLE)
+#if HD_PERF_ENABLE
 //----------------------------------------------------------------------------//
 // PERFORMANCE INSTURMENTATION MACROS                                         //
 //----------------------------------------------------------------------------//

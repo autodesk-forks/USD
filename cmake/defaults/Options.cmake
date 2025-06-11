@@ -35,8 +35,6 @@ option(PXR_ENABLE_OPENVDB_SUPPORT "Enable OpenVDB support" OFF)
 option(PXR_BUILD_MAYAPY_TESTS "Build mayapy spline tests" OFF)
 option(PXR_BUILD_ANIMX_TESTS "Build AnimX spline tests" OFF)
 option(PXR_ENABLE_NAMESPACES "Enable C++ namespaces." ON)
-option(PXR_BUILD_TRACE "Build trace" ON)
-option(PXR_BUILD_HD_PERF "Build performance log in hd" ON)
 option(PXR_PREFER_SAFETY_OVER_SPEED
        "Enable certain checks designed to avoid crashes or out-of-bounds memory reads with malformed input files.  These checks may negatively impact performance."
         ON)

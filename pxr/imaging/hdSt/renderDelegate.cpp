@@ -142,7 +142,7 @@ public:
         // Insert into map.
         registry = result;
 
-#if defined(HD_PERF_ENABLE)
+#if HD_PERF_ENABLE
         // Also register with HdPerfLog.
         HdPerfLog::GetInstance().AddResourceRegistry(result.get());
 #endif
@@ -156,7 +156,7 @@ private:
 
         std::lock_guard<std::mutex> guard(_mutex);
 
-#if defined(HD_PERF_ENABLE)
+#if HD_PERF_ENABLE
         HdPerfLog::GetInstance().RemoveResourceRegistry(registry);
 #endif
         _map.erase(registry->GetHgi());

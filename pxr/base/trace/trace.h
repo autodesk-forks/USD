@@ -19,7 +19,11 @@
 
 #include <atomic>
 
-#if defined(TRACE_ENABLE)
+#if !defined(TRACE_ENABLE)
+    #define TRACE_ENABLE 1
+#endif
+
+#if TRACE_ENABLE
 
 /// Records a timestamp when constructed and a timespan event when destructed,
 /// using the name of the function or method as the key.
