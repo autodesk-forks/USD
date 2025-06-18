@@ -34,6 +34,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define HD_SPHERE_SCHEMA_TOKENS \
     (sphere) \
+    (doubleSided) \
     (radius) \
 
 TF_DECLARE_PUBLIC_TOKENS(HdSphereSchemaTokens, HD_API,
@@ -69,6 +70,9 @@ public:
     /// @{
 
     HD_API
+    HdBoolDataSourceHandle GetDoubleSided() const;
+
+    HD_API
     HdDoubleDataSourceHandle GetRadius() const; 
 
     /// @}
@@ -101,6 +105,7 @@ public:
     HD_API
     static HdContainerDataSourceHandle
     BuildRetained(
+        const HdBoolDataSourceHandle &doubleSided,
         const HdDoubleDataSourceHandle &radius
     );
 
@@ -114,6 +119,9 @@ public:
     {
     public:
         HD_API
+        Builder &SetDoubleSided(
+            const HdBoolDataSourceHandle &doubleSided);
+        HD_API
         Builder &SetRadius(
             const HdDoubleDataSourceHandle &radius);
 
@@ -122,6 +130,7 @@ public:
         HdContainerDataSourceHandle Build();
 
     private:
+        HdBoolDataSourceHandle _doubleSided;
         HdDoubleDataSourceHandle _radius;
 
     };

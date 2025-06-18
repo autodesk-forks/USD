@@ -34,6 +34,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define HD_CONE_SCHEMA_TOKENS \
     (cone) \
+    (doubleSided) \
     (height) \
     (radius) \
     (axis) \
@@ -74,6 +75,9 @@ public:
     /// @{
 
     HD_API
+    HdBoolDataSourceHandle GetDoubleSided() const;
+
+    HD_API
     HdDoubleDataSourceHandle GetHeight() const;
 
     HD_API
@@ -112,6 +116,7 @@ public:
     HD_API
     static HdContainerDataSourceHandle
     BuildRetained(
+        const HdBoolDataSourceHandle &doubleSided,
         const HdDoubleDataSourceHandle &height,
         const HdDoubleDataSourceHandle &radius,
         const HdTokenDataSourceHandle &axis
@@ -127,6 +132,9 @@ public:
     {
     public:
         HD_API
+        Builder &SetDoubleSided(
+            const HdBoolDataSourceHandle &doubleSided);
+        HD_API
         Builder &SetHeight(
             const HdDoubleDataSourceHandle &height);
         HD_API
@@ -141,6 +149,7 @@ public:
         HdContainerDataSourceHandle Build();
 
     private:
+        HdBoolDataSourceHandle _doubleSided;
         HdDoubleDataSourceHandle _height;
         HdDoubleDataSourceHandle _radius;
         HdTokenDataSourceHandle _axis;

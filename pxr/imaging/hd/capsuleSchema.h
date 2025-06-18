@@ -34,6 +34,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define HD_CAPSULE_SCHEMA_TOKENS \
     (capsule) \
+    (doubleSided) \
     (height) \
     (radius) \
     (radiusTop) \
@@ -74,6 +75,9 @@ public:
 
     /// \name Member accessor
     /// @{
+
+    HD_API
+    HdBoolDataSourceHandle GetDoubleSided() const;
 
     HD_API
     HdDoubleDataSourceHandle GetHeight() const;
@@ -123,6 +127,7 @@ public:
     HD_API
     static HdContainerDataSourceHandle
     BuildRetained(
+        const HdBoolDataSourceHandle &doubleSided,
         const HdDoubleDataSourceHandle &height,
         const HdDoubleDataSourceHandle &radius,
         const HdDoubleDataSourceHandle &radiusTop,
@@ -139,6 +144,9 @@ public:
     class Builder
     {
     public:
+        HD_API
+        Builder &SetDoubleSided(
+            const HdBoolDataSourceHandle &doubleSided);
         HD_API
         Builder &SetHeight(
             const HdDoubleDataSourceHandle &height);
@@ -160,6 +168,7 @@ public:
         HdContainerDataSourceHandle Build();
 
     private:
+        HdBoolDataSourceHandle _doubleSided;
         HdDoubleDataSourceHandle _height;
         HdDoubleDataSourceHandle _radius;
         HdDoubleDataSourceHandle _radiusTop;
