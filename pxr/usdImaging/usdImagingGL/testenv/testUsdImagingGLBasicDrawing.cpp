@@ -81,6 +81,7 @@ My_TestGLDrawing::InitTest()
         IsEnabledUnloadedAsBounds() ? UsdStage::LoadNone : UsdStage::LoadAll);
 
     UsdImagingGLEngine::Parameters parameters;
+    parameters.rendererPluginId = _GetRenderer();
     parameters.rootPath = _stage->GetPseudoRoot().GetPath();
     parameters.displayUnloadedPrimsWithBounds = IsEnabledUnloadedAsBounds();
 

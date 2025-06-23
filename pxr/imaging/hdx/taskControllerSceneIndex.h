@@ -33,6 +33,8 @@ extern TfEnvSetting<int> HDX_MSAA_SAMPLE_COUNT;
 TF_DECLARE_REF_PTRS(HdRetainedSceneIndex);
 TF_DECLARE_REF_PTRS(HdxTaskControllerSceneIndex);
 
+class HdRenderDelegate;
+
 /// \class HdxTaskControllerSceneIndex
 ///
 /// Manages tasks necessary to render an image (or perform picking)
@@ -66,7 +68,7 @@ public:
     static
     HdxTaskControllerSceneIndexRefPtr
     New(const SdfPath &prefix,
-        const TfToken &rendererPluginName,
+        const HdRenderDelegate& renderDelegate,
         const AovDescriptorCallback &aovDescriptorCallback,
         bool gpuEnabled = true);
 
@@ -268,7 +270,7 @@ public:
 private:
     HdxTaskControllerSceneIndex(
         const SdfPath &prefix,
-        const TfToken &rendererPluginName,
+        const HdRenderDelegate &renderDelegate,
         const AovDescriptorCallback &aovDescriptorCallback,
         bool gpuEnabled);
 

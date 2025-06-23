@@ -1551,9 +1551,10 @@ UsdImagingGLEngine::_SetRenderDelegate(
             _ComputeControllerPath(_renderDelegate);
         _taskControllerSceneIndex = HdxTaskControllerSceneIndex::New(
             taskControllerPath,
-            renderDelegate.GetPluginId(),
+            *_renderIndex.get()->GetRenderDelegate(),
             [renderDelegate = _renderDelegate.Get()](const TfToken &name) {
-                return renderDelegate->GetDefaultAovDescriptor(name); },
+                return renderDelegate->GetDefaultAovDescriptor(name);
+            },
             _gpuEnabled);
         _renderIndex->InsertSceneIndex(
             _taskControllerSceneIndex,

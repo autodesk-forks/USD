@@ -26,6 +26,7 @@
 #include "pxr/imaging/hdx/visualizeAovTask.h"
 
 #include "pxr/imaging/hdSt/tokens.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 
 #include "pxr/imaging/hd/light.h"
 #include "pxr/imaging/hd/legacyTaskSchema.h"
@@ -1056,23 +1057,23 @@ HD_DECLARE_DATASOURCE_HANDLES(_LightPrimDataSource);
 HdxTaskControllerSceneIndexRefPtr
 HdxTaskControllerSceneIndex::New(
     const SdfPath &prefix,
-    const TfToken &rendererPluginName,
+    const HdRenderDelegate &renderDelegate,
     const AovDescriptorCallback &aovDescriptorCallback,
     const bool gpuEnabled)
 {
     return TfCreateRefPtr(
         new HdxTaskControllerSceneIndex(
-            prefix, rendererPluginName, aovDescriptorCallback, gpuEnabled));
+            prefix, renderDelegate, aovDescriptorCallback, gpuEnabled));
 }
 
 
 HdxTaskControllerSceneIndex::HdxTaskControllerSceneIndex(
     const SdfPath &prefix,
-    const TfToken &rendererPluginName,
+    const HdRenderDelegate &renderDelegate,
     const AovDescriptorCallback &aovDescriptorCallback,
     const bool gpuEnabled)
  : _prefix(prefix)
- , _isForStorm(rendererPluginName == _rendererPluginNameTokens->storm)
+ , _isForStorm(dynamic_cast<const HdStRenderDelegate*>(&renderDelegate) != nullptr)
  , _aovDescriptorCallback(aovDescriptorCallback)
  , _runGpuAovTasks(gpuEnabled || _isForStorm)
  , _retainedSceneIndex(HdRetainedSceneIndex::New())
