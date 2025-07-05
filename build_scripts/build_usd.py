@@ -1604,7 +1604,8 @@ def InstallMaterialX(context, force, buildArgs):
         # The full MaterialX release with this enhancement should be 
         # the pending version 1.39.4.
         global MATERIALX_URL
-        MATERIALX_URL = 'https://github.com/AcademySoftwareFoundation/MaterialX/archive/8eaf80cf7b6a27c1a7b3eeb8c9bc8872fddb4d60.zip'
+        #MATERIALX_URL = 'https://github.com/AcademySoftwareFoundation/MaterialX/archive/8eaf80cf7b6a27c1a7b3eeb8c9bc8872fddb4d60.zip'
+        MATERIALX_URL = 'https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl_texsampler_code_replace.zip'
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
                         '-DMATERIALX_BUILD_TESTS=OFF',
