@@ -1112,15 +1112,15 @@ void HdStMaterialXShaderGenWgslGlsl::_EmitAdditionalDefines(MaterialX::GenContex
     // Define mappings for the DomeLight Textures
     //   See HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions()
     this->emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
-    this->emitLine("#define $envRadiance_texture textureBind_domeLightPrefilter", mxStage, false);
-    this->emitLine("#define $envRadiance_sampler samplerBind_domeLightPrefilter", mxStage, false);
-    this->emitLine("#define $envIrradiance_texture textureBind_domeLightIrradiance", mxStage, false);
-    this->emitLine("#define $envIrradiance_sampler samplerBind_domeLightIrradiance", mxStage, false);
+    this->emitLine("#define u_envRadiance_texture textureBind_domeLightPrefilter", mxStage, false);
+    this->emitLine("#define u_envRadiance_sampler samplerBind_domeLightPrefilter", mxStage, false);
+    this->emitLine("#define u_envIrradiance_texture textureBind_domeLightIrradiance", mxStage, false);
+    this->emitLine("#define u_envIrradiance_sampler samplerBind_domeLightIrradiance", mxStage, false);
     this->emitLine("#else", mxStage, false);
-    this->emitLine("#define $envRadiance_texture textureBind_domeLightFallback", mxStage, false);
-    this->emitLine("#define $envRadiance_sampler samplerBind_domeLightFallback", mxStage, false);
-    this->emitLine("#define $envIrradiance_texture textureBind_domeLightFallback", mxStage, false);
-    this->emitLine("#define $envIrradiance_sampler samplerBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define u_envRadiance_texture textureBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define u_envRadiance_sampler samplerBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define u_envIrradiance_texture textureBind_domeLightFallback", mxStage, false);
+    this->emitLine("#define u_envIrradiance_sampler samplerBind_domeLightFallback", mxStage, false);
     this->emitLine("#endif", mxStage, false);
     this->emitLineBreak(mxStage);
 
