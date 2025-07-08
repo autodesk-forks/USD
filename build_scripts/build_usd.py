@@ -1665,7 +1665,7 @@ def InstallMaterialX(context, force, buildArgs):
                 '-DMATERIALX_BUILD_RENDER=ON',
                 '-DMATERIALX_BUILD_RENDER_PLATFORMS=OFF',
                 '-DMATERIALX_BUILD_GEN_OSL=OFF',
-                '-DMATERIALX_BUILD_GEN_MDL=OFF'])
+                '-DMATERIALX_BUILD_GEN_MDL=OFF',
                 '-DMATERIALX_BUILD_GEN_GLSL=ON',
                 '-DMATERIALX_BUILD_GEN_MSL=OFF',
                 ])
