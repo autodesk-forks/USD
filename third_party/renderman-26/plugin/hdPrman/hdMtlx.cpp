@@ -39,18 +39,23 @@ namespace mx = MaterialX;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#if PXR_VERSION < 2505
+using SdrStringVec = NdrStringVec;
+#endif
+
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (texcoord)
     (geompropvalue)
     (filename)
+    (ND_surface)
 );
 
 static mx::FileSearchPath
 _ComputeSearchPaths()
 {
     mx::FileSearchPath searchPaths;
-    static const NdrStringVec searchPathStrings = UsdMtlxSearchPaths();
+    static const SdrStringVec searchPathStrings = UsdMtlxSearchPaths();
     for (auto path : searchPathStrings) {
         searchPaths.append(mx::FilePath(path));
     }
@@ -248,7 +253,12 @@ _AddMaterialXNode(
     mx::NodeDefPtr mxNodeDef = mxDoc->getNodeDef(hdNodeType.GetString());
     if (!mxNodeDef) {
         TF_WARN("NodeDef not found for Node '%s'", hdNodeType.GetText());
-        return mx::NodePtr();
+        // Instead of returning here, use a ND_surface definition so that the
+        // rest of the network can be processed without errors.
+        // This allows networks that might have non mtlx nodes next to
+        // the terminal node to come through, and those nodes will be kept
+        // out of the shader compile in hdPrman.
+        mxNodeDef = mxDoc->getNodeDef(_tokens->ND_surface);
     }
     const SdfPath hdNodePath(hdNodeName.GetString());
     const std::string mxNodeCategory = _GetMxNodeString(mxNodeDef);

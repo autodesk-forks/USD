@@ -303,26 +303,10 @@ static void streamValue(std::ostringstream &stream, T const &value) {
     }
 }
 
-static unsigned int
+VT_API
+unsigned int
 Vt_ComputeEffectiveRankAndLastDimSize(
-    Vt_ShapeData const *sd, size_t *lastDimSize)
-{
-    unsigned int rank = sd->GetRank();
-    if (rank == 1)
-        return rank;
-
-    size_t divisor = std::accumulate(
-        sd->otherDims, sd->otherDims + rank-1,
-        1, [](size_t x, size_t y) { return x * y; });
-
-    size_t remainder = divisor ? sd->totalSize % divisor : 0;
-    *lastDimSize = divisor ? sd->totalSize / divisor : 0;
-    
-    if (remainder)
-        rank = 1;
-
-    return rank;
-}
+    Vt_ShapeData const *sd, size_t *lastDimSize);
 
 template <typename T>
 string __repr__(VtArray<T> const &self)

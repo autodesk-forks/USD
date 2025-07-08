@@ -18,12 +18,16 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_ENV_SETTING(HGIVULKAN_PREFERRED_DEVICE_TYPE,
+    VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+    "Preferred device type. Use VkPhysicalDeviceType enum values.");
 
 static uint32_t
 _GetGraphicsQueueFamilyIndex(VkPhysicalDevice physicalDevice)
 {
     uint32_t queueCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, 0);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount,
+        nullptr);
 
     std::vector<VkQueueFamilyProperties> queues(queueCount);
     vkGetPhysicalDeviceQueueFamilyProperties(
@@ -69,6 +73,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     , _vmaAllocator(nullptr)
     , _commandQueue(nullptr)
     , _capabilities(nullptr)
+    , _pipelineCache(nullptr)
 {
     //
     // Determine physical device
@@ -77,13 +82,15 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     const uint32_t maxDevices = 64;
     VkPhysicalDevice physicalDevices[maxDevices];
     uint32_t physicalDeviceCount = maxDevices;
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkEnumeratePhysicalDevices(
             instance->GetVulkanInstance(),
             &physicalDeviceCount,
-            physicalDevices) == VK_SUCCESS
+            physicalDevices)
     );
 
+    const auto preferredDeviceType = static_cast<VkPhysicalDeviceType>(
+        TfGetEnvSetting(HGIVULKAN_PREFERRED_DEVICE_TYPE));
     for (uint32_t i = 0; i < physicalDeviceCount; i++) {
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physicalDevices[i], &props);
@@ -94,20 +101,22 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         if (familyIndex == VK_QUEUE_FAMILY_IGNORED) continue;
 
         // Assume we always want a presentation capable device for now.
-        if (!_SupportsPresentation(physicalDevices[i], familyIndex)) {
+        if (instance->HasPresentation() &&
+            !_SupportsPresentation(physicalDevices[i], familyIndex)) {
             continue;
         }
 
         if (props.apiVersion < VK_API_VERSION_1_0) continue;
 
-        // Try to find a discrete device. Until we find a discrete device,
-        // store the first non-discrete device as fallback in case we never
-        // find a discrete device at all.
-        if (props.deviceType==VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+        // Try to find a preferred device type. Until we find one, store the
+        // first non-preferred device as fallback in case we never find a
+        // preferred device at all.
+        if (props.deviceType == preferredDeviceType) {
             _vkPhysicalDevice = physicalDevices[i];
             _vkGfxsQueueFamilyIndex = familyIndex;
             break;
-        } else if (!_vkPhysicalDevice) {
+        }
+        if (!_vkPhysicalDevice) {
             _vkPhysicalDevice = physicalDevices[i];
             _vkGfxsQueueFamilyIndex = familyIndex;
         }
@@ -123,22 +132,22 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     //
 
     uint32_t extensionCount = 0;
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkEnumerateDeviceExtensionProperties(
             _vkPhysicalDevice,
             nullptr,
             &extensionCount,
-            nullptr) == VK_SUCCESS
+            nullptr)
     );
 
     _vkExtensions.resize(extensionCount);
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkEnumerateDeviceExtensionProperties(
             _vkPhysicalDevice,
             nullptr,
             &extensionCount,
-            _vkExtensions.data()) == VK_SUCCESS
+            _vkExtensions.data())
     );
 
     //
@@ -225,65 +234,84 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
 
     // Enabling certain features may incure a performance hit
     // (e.g. robustBufferAccess), so only enable the features we will use.
+
+    VkPhysicalDeviceFeatures2 features2 =
+        {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+
+    features2.features.multiDrawIndirect =
+        _capabilities->vkDeviceFeatures2.features.multiDrawIndirect;
+    features2.features.samplerAnisotropy =
+        _capabilities->vkDeviceFeatures2.features.samplerAnisotropy;
+    features2.features.shaderSampledImageArrayDynamicIndexing =
+        _capabilities->vkDeviceFeatures2.features.shaderSampledImageArrayDynamicIndexing;
+    features2.features.shaderStorageImageArrayDynamicIndexing =
+        _capabilities->vkDeviceFeatures2.features.shaderStorageImageArrayDynamicIndexing;
+    features2.features.sampleRateShading =
+        _capabilities->vkDeviceFeatures2.features.sampleRateShading;
+    features2.features.shaderClipDistance =
+        _capabilities->vkDeviceFeatures2.features.shaderClipDistance;
+    features2.features.tessellationShader =
+        _capabilities->vkDeviceFeatures2.features.tessellationShader;
+    features2.features.depthClamp =
+        _capabilities->vkDeviceFeatures2.features.depthClamp;
+    features2.features.shaderFloat64 =
+        _capabilities->vkDeviceFeatures2.features.shaderFloat64;
+    features2.features.fillModeNonSolid =
+        _capabilities->vkDeviceFeatures2.features.fillModeNonSolid;
+    features2.features.alphaToOne =
+        _capabilities->vkDeviceFeatures2.features.alphaToOne;
+    // Needed to write to storage buffers from vertex shader (eg. GPU culling).
+    features2.features.vertexPipelineStoresAndAtomics =
+        _capabilities->vkDeviceFeatures2.features.vertexPipelineStoresAndAtomics;
+    // Needed to write to storage buffers from fragment shader (eg. OIT).
+    features2.features.fragmentStoresAndAtomics =
+        _capabilities->vkDeviceFeatures2.features.fragmentStoresAndAtomics;
+    // Needed for buffer address feature
+    features2.features.shaderInt64 =
+        _capabilities->vkDeviceFeatures2.features.shaderInt64;
+    // Needed for gl_primtiveID
+    features2.features.geometryShader =
+        _capabilities->vkDeviceFeatures2.features.geometryShader;
+
     VkPhysicalDeviceVulkan11Features vulkan11Features =
         {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
-    vulkan11Features.pNext = _capabilities->vkVulkan11Features.pNext;
     vulkan11Features.shaderDrawParameters =
         _capabilities->vkVulkan11Features.shaderDrawParameters;
+    vulkan11Features.pNext = features2.pNext;
+    features2.pNext = &vulkan11Features;
 
-    VkPhysicalDeviceFeatures2 features =
-        {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    features.pNext = &vulkan11Features;
+    // Vertex attribute divisor features ext
+    VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT vertexAttributeDivisorFeatures
+    { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT };
+    vertexAttributeDivisorFeatures.vertexAttributeInstanceRateDivisor =
+        _capabilities->vkVertexAttributeDivisorFeatures.vertexAttributeInstanceRateDivisor;
+    vertexAttributeDivisorFeatures.pNext = features2.pNext;
+    features2.pNext = &vertexAttributeDivisorFeatures;
 
-    features.features.multiDrawIndirect =
-        _capabilities->vkDeviceFeatures.multiDrawIndirect;
-    features.features.samplerAnisotropy =
-        _capabilities->vkDeviceFeatures.samplerAnisotropy;
-    features.features.shaderSampledImageArrayDynamicIndexing =
-        _capabilities->vkDeviceFeatures.shaderSampledImageArrayDynamicIndexing;
-    features.features.shaderStorageImageArrayDynamicIndexing =
-        _capabilities->vkDeviceFeatures.shaderStorageImageArrayDynamicIndexing;
-    features.features.sampleRateShading =
-        _capabilities->vkDeviceFeatures.sampleRateShading;
-    features.features.shaderClipDistance =
-        _capabilities->vkDeviceFeatures.shaderClipDistance;
-    features.features.tessellationShader =
-        _capabilities->vkDeviceFeatures.tessellationShader;
-    features.features.depthClamp =
-        _capabilities->vkDeviceFeatures.depthClamp;
-    features.features.shaderFloat64 =
-        _capabilities->vkDeviceFeatures.shaderFloat64;
-    features.features.fillModeNonSolid =
-        _capabilities->vkDeviceFeatures.fillModeNonSolid;
-    features.features.alphaToOne =
-        _capabilities->vkDeviceFeatures.alphaToOne;
-
-    // Needed to write to storage buffers from vertex shader (eg. GPU culling).
-    features.features.vertexPipelineStoresAndAtomics =
-        _capabilities->vkDeviceFeatures.vertexPipelineStoresAndAtomics;
-    // Needed to write to storage buffers from fragment shader (eg. OIT).
-    features.features.fragmentStoresAndAtomics =
-        _capabilities->vkDeviceFeatures.fragmentStoresAndAtomics;
-    // Needed for buffer address feature
-    features.features.shaderInt64 =
-        _capabilities->vkDeviceFeatures.shaderInt64;
-    // Needed for gl_primtiveID
-    features.features.geometryShader =
-        _capabilities->vkDeviceFeatures.geometryShader;
+    // Barycentric features
+    VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR barycentricFeatures {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR
+    };
+    if (IsSupportedExtension(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME)) {
+        barycentricFeatures.fragmentShaderBarycentric =
+            _capabilities->vkBarycentricFeatures.fragmentShaderBarycentric;
+        barycentricFeatures.pNext = features2.pNext;
+        features2.pNext = &barycentricFeatures;
+    }
 
     VkDeviceCreateInfo createInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueInfo;
     createInfo.ppEnabledExtensionNames = extensions.data();
     createInfo.enabledExtensionCount = (uint32_t) extensions.size();
-    createInfo.pNext = &features;
+    createInfo.pNext = &features2;
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateDevice(
             _vkPhysicalDevice,
             &createInfo,
             HgiVulkanAllocator(),
-            &_vkDevice) == VK_SUCCESS
+            &_vkDevice)
     );
 
     HgiVulkanSetupDeviceDebug(instance, this);
@@ -311,8 +339,8 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     }
 
-    TF_VERIFY(
-        vmaCreateAllocator(&allocatorInfo, &_vmaAllocator) == VK_SUCCESS
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vmaCreateAllocator(&allocatorInfo, &_vmaAllocator)
     );
 
     //
@@ -330,8 +358,12 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
 
 HgiVulkanDevice::~HgiVulkanDevice()
 {
-    // Make sure device is idle before destroying objects.
-    TF_VERIFY(vkDeviceWaitIdle(_vkDevice) == VK_SUCCESS);
+    if (_vkDevice) {
+        // Make sure device is idle before destroying objects.
+        HGIVULKAN_VERIFY_VK_RESULT(
+            vkDeviceWaitIdle(_vkDevice)
+        );
+    }
 
     delete _pipelineCache;
     delete _commandQueue;
@@ -385,8 +417,8 @@ HgiVulkanDevice::GetPipelineCache() const
 void
 HgiVulkanDevice::WaitForIdle()
 {
-    TF_VERIFY(
-        vkDeviceWaitIdle(_vkDevice) == VK_SUCCESS
+    HGIVULKAN_VERIFY_VK_RESULT(
+        vkDeviceWaitIdle(_vkDevice)
     );
 }
 

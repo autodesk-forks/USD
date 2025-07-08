@@ -35,7 +35,9 @@ class HdStTextureIdentifier;
 class HdSt_TextureObjectRegistry final
 {
 public:
+    HDST_API
     explicit HdSt_TextureObjectRegistry(HdStResourceRegistry * registry);
+    HDST_API
     ~HdSt_TextureObjectRegistry();
 
     /// Allocate texture.

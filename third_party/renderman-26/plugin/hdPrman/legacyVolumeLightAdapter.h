@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_LEGACY_VOLUMELIGHT_ADAPTER_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_LEGACY_VOLUMELIGHT_ADAPTER_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_LEGACY_VOLUMELIGHT_ADAPTER_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_LEGACY_VOLUMELIGHT_ADAPTER_H
 
 #include "pxr/base/arch/defines.h"
 #if !defined(ARCH_OS_WINDOWS)
@@ -41,15 +41,10 @@ public:
         UsdPrim const& prim,
         SdfPath const& cachePath,
         UsdTimeCode time) const override;
-
-    HdVolumeFieldDescriptorVector GetVolumeFieldDescriptors(
-        UsdPrim const& usdPrim,
-        SdfPath const& id,
-        UsdTimeCode time) const override;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // !defined(ARCH_OS_WINDOWS)
 
-#endif  // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_LEGACY_VOLUMELIGHT_ADAPTER_H
+#endif  // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_LEGACY_VOLUMELIGHT_ADAPTER_H

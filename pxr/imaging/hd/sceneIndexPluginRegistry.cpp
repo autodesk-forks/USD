@@ -50,11 +50,12 @@ HdSceneIndexBaseRefPtr
 HdSceneIndexPluginRegistry::AppendSceneIndex(
     const TfToken &sceneIndexPluginId,
     const HdSceneIndexBaseRefPtr &inputScene,
-    const HdContainerDataSourceHandle &inputArgs)
+    const HdContainerDataSourceHandle &inputArgs,
+    const std::string &renderInstanceId)
 {
     if (HdSceneIndexPlugin *plugin = _GetSceneIndexPlugin(sceneIndexPluginId)) {
         HdSceneIndexBaseRefPtr result =
-            plugin->AppendSceneIndex(inputScene, inputArgs);
+            plugin->AppendSceneIndex(renderInstanceId, inputScene, inputArgs);
 
         // NOTE: While HfPluginRegistry has a ref count mechanism for
         //       life time of plug-in instances, we don't need them to be
@@ -99,7 +100,7 @@ HdSceneIndexPluginRegistry::_AppendForPhases(
                 result = entry.callback(renderInstanceId, result, args);
             } else {
                 result = AppendSceneIndex(
-                    entry.sceneIndexPluginId, result, args);
+                    entry.sceneIndexPluginId, result, args, renderInstanceId);
             }
 
         }
@@ -115,26 +116,38 @@ HdSceneIndexPluginRegistry::_CollectAdditionalMetadata(
         plugRegistry.GetDataFromPluginMetaData(pluginType,
             "loadWithRenderer");
 
+    const TfToken pluginTypeToken(pluginType.GetTypeName());
+
     if (loadWithRendererValue.GetType() == JsValue::StringType) {
         _preloadsForRenderer[loadWithRendererValue.GetString()].push_back(
-            TfToken(pluginType.GetTypeName().c_str()));
+            pluginTypeToken);
 
     } else if (loadWithRendererValue.GetType() == JsValue::ArrayType) {
         for (const std::string &s  : 
                 loadWithRendererValue.GetArrayOf<std::string>()) {
-            _preloadsForRenderer[s].push_back(
-                TfToken(pluginType.GetTypeName().c_str()));
+            _preloadsForRenderer[s].push_back(pluginTypeToken);
         }
+    }
+
+    const JsValue &loadWithAppsValue =
+        plugRegistry.GetDataFromPluginMetaData(
+            pluginType, "loadWithApps");
+    if (loadWithAppsValue.GetType() == JsValue::StringType) {
+        _preloadAppsForPlugins[pluginTypeToken]
+            .insert(loadWithAppsValue.GetString());
+    } else if (loadWithAppsValue.GetType() == JsValue::ArrayType) {
+        const std::vector<std::string> loadWithApps =
+            loadWithAppsValue.GetArrayOf<std::string>();
+        _preloadAppsForPlugins[pluginTypeToken] = std::set<std::string>(
+            loadWithApps.begin(), loadWithApps.end());
     }
 }
 
-HdSceneIndexBaseRefPtr
-HdSceneIndexPluginRegistry::AppendSceneIndicesForRenderer(
+void
+HdSceneIndexPluginRegistry::_LoadPluginsForRenderer(
     const std::string &rendererDisplayName,
-    const HdSceneIndexBaseRefPtr &inputScene,
-    const std::string &renderInstanceId)
+    const std::string &appName)
 {
-
     // Preload any renderer plug-ins which have been tagged (via plugInfo) to
     // be loaded along with the specified renderer (or any renderer)
     const std::string preloadKeys[] = {
@@ -145,17 +158,51 @@ HdSceneIndexPluginRegistry::AppendSceneIndicesForRenderer(
     for (size_t i = 0; i < TfArraySize(preloadKeys); ++i) {
         _PreloadMap::iterator plit = _preloadsForRenderer.find(preloadKeys[i]);
         if (plit != _preloadsForRenderer.end()) {
-            for (const TfToken &id : plit->second) {
+
+            TfTokenVector &rendererPlugins = plit->second;
+
+            for (auto iter = rendererPlugins.begin();
+                    iter != rendererPlugins.end();) {
+                const TfToken &id = *iter;
+
+                const auto appsIter = _preloadAppsForPlugins.find(id);
+                if (appsIter != _preloadAppsForPlugins.end()) {
+                    const std::set<std::string> &apps = appsIter->second;
+                    if (!apps.empty() && !apps.count(appName)) {
+                        // This plugin has a non-empty array entry for
+                        // loadWithApps and the app we're making scene indexes
+                        // for isn't in the array: don't load it.
+                        ++iter;
+                        continue;
+                    }
+                }
+
                 // this only ensures that the plug-in is loaded as the plug-in
                 // itself might do further registration relevant to below.
                 _GetSceneIndexPlugin(id);
+
+                // Preload only needs to happen once per process. Remove this
+                // plugin so we don't try to load it again later.
+                iter = rendererPlugins.erase(iter);
             }
 
-            // Preload only needs to happen once per process. Remove the
-            // just-processed key.
-            _preloadsForRenderer.erase(plit);
+            if (rendererPlugins.empty()) {
+                // Common case: we loaded all the plugins. We can entirely
+                // erase the entry for this renderer from the overall map.
+                _preloadsForRenderer.erase(plit);
+            }
         }
     }
+}
+
+HdSceneIndexBaseRefPtr
+HdSceneIndexPluginRegistry::AppendSceneIndicesForRenderer(
+    const std::string &rendererDisplayName,
+    const HdSceneIndexBaseRefPtr &inputScene,
+    const std::string &renderInstanceId,
+    const std::string &appName)
+{
+    _LoadPluginsForRenderer(rendererDisplayName, appName);
 
     HdContainerDataSourceHandle underlayArgs =
         HdRetainedContainerDataSource::New(

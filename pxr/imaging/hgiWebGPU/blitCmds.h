@@ -50,7 +50,7 @@ public:
     void PopDebugGroup() override;
 
     HGIWEBGPU_API
-    void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp) override;
+    void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback = nullptr) override;
 
     HGIWEBGPU_API
     void CopyTextureCpuToGpu(HgiTextureCpuToGpuOp const& copyOp) override;
@@ -102,6 +102,7 @@ private:
     HgiWebGPU* _hgi;
     wgpu::CommandEncoder _blitEncoder;
     wgpu::CommandBuffer _commandBuffer;
+    std::function<void()> _completedHandler;
 
     struct StagingData
     {
@@ -110,9 +111,12 @@ private:
         uint32_t size;
         uint32_t bytesPerRow;
         uint32_t bytesPerRowAligned;
-        bool isTmp = false;
+        bool isTmp = false; // to be removed when webgpu bug is fixed
+        bool asyncDone = false; // to be removed when async is the only option
+        std::function<void(void*)> callback;
     };
-    std::vector<StagingData> _stagingDatas;
+    std::vector<std::unique_ptr<StagingData>> _stagingDataItems;
+
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

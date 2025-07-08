@@ -64,6 +64,11 @@ if (WIN32)
     return()
 endif()
 
+if (EMSCRIPTEN)
+    message(STATUS "Skipping ${PXR_PACKAGE} tests because they are currently unsupported on Wasm")
+    return()
+endif()
+
 pxr_build_test(testHgiGL
     LIBRARIES
         hgiGL

@@ -45,7 +45,6 @@ struct HdxShadowTaskParams
         : overrideColor(0.0)
         , wireframeColor(0.0)
         , enableLighting(false)
-        , enableIdRender(false)
         , enableSceneMaterials(true)
         , alphaThreshold(0.0)
         , depthBiasEnable(false)
@@ -59,7 +58,6 @@ struct HdxShadowTaskParams
     GfVec4f overrideColor;
     GfVec4f wireframeColor;
     bool enableLighting;
-    bool enableIdRender;
     bool enableSceneMaterials;
     float alphaThreshold;
     bool  depthBiasEnable;
@@ -76,6 +74,8 @@ struct HdxShadowTaskParams
 class HdxShadowTask : public HdTask
 {
 public:
+    using TaskParams = HdxShadowTaskParams;
+
     HDX_API
     HdxShadowTask(HdSceneDelegate* delegate, SdfPath const& id);
 

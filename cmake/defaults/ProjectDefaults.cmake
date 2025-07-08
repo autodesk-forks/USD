@@ -27,6 +27,19 @@ if(APPLE)
     endif()
 endif()
 
+if(EMSCRIPTEN)
+    set(EMSCRIPTEN_COMPILE_FLAGS "-fPIC -fexceptions")
+    if (PXR_WASM64)
+        message("Building for 64-bit WebAssembly")
+        set(EMSCRIPTEN_COMPILE_FLAGS "${EMSCRIPTEN_COMPILE_FLAGS} -sMEMORY64=1 -sMAXIMUM_MEMORY=8GB")
+    else ()
+        set(EMSCRIPTEN_COMPILE_FLAGS "${EMSCRIPTEN_COMPILE_FLAGS} -sMAXIMUM_MEMORY=4GB")
+    endif ()
+    add_compile_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS}")
+    add_link_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS} -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB \
+        -sALLOW_MEMORY_GROWTH=1")
+endif()
+
 # Allow local includes from source directory.
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 

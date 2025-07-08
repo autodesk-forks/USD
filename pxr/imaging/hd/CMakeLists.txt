@@ -52,6 +52,7 @@ pxr_library(hd
         dataSource
         dataSourceHash
         dataSourceLegacyPrim
+        dataSourceLegacyTaskPrim
         dataSourceLocator
         dataSourceMaterialNetworkInterface
         debugCodes
@@ -103,6 +104,8 @@ pxr_library(hd
         legacyDisplayStyleSchema
         legacyGeomSubsetSceneIndex
         legacyPrimSceneIndex
+        legacyTaskFactory
+        legacyTaskSchema
         lensDistortionSchema
         light
         lightSchema
@@ -240,7 +243,7 @@ else()
     )
 endif()
 
-if (NOT PXR_ENABLE_JS_SUPPORT)
+if (NOT EMSCRIPTEN)
 pxr_build_test(testHdBufferSourceEmptyVal
    LIBRARIES
        hd

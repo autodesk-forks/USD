@@ -7,6 +7,8 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/plug/testPlugBase.h"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/args.hpp"
 #include "pxr/base/tf/makePyConstructor.h"
 #include "pxr/base/tf/pyPtrHelpers.h"
 #include "pxr/base/tf/pyContainerConversions.h"
@@ -32,6 +34,9 @@ void wrap_TestPlugBase(const std::string & name)
         .def(TfMakePyConstructor(&This::Manufacture))
 
         .def("GetTypeName", &This::GetTypeName)
+
+        .def("TestAcceptPluginSequence", &This::TestAcceptPluginSequence,
+             (arg("plugins")));
 
         ;
 }

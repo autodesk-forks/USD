@@ -249,13 +249,6 @@ public:
     /// \name Property value API
     /// @{
 
-    /// Returns the entire set of time samples.
-    ///
-    /// \deprecated
-    /// Use SdfAttributeSpec::GetTimeSampleMap instead.
-    SDF_API
-    SdfTimeSampleMap GetTimeSampleMap() const;
-
     /// Returns the TfType representing the value type this property holds.
     SDF_API
     TfType GetValueType() const;

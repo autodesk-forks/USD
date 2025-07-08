@@ -19,9 +19,6 @@ pxr_library(geomUtil
         planeMeshGenerator
         sphereMeshGenerator
         tokens
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
         
     PUBLIC_HEADERS
         api.h

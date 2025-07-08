@@ -858,6 +858,27 @@ public:
     SDF_API
     bool HasDefaultPrim();
 
+    /// Converts the given \p defaultPrim token into a prim path.
+    ///
+    /// If the input token is the string representation of an absolute prim,
+    /// that path is returned. If the token represents a relative prim path, the
+    /// returned path is coverted into a absolute path anchored to the absolute
+    /// root path. If the token does not represent a valid relative or absolute
+    /// prim path, an empty path is returned.
+    SDF_API
+    static SdfPath ConvertDefaultPrimTokenToPath(const TfToken &defaultPrim);
+
+    /// Converts the path \p primPath into a token value that can be used to 
+    /// set the default prim metadata for the layer to refer to the prim at that
+    /// path.
+    ///
+    /// If the given path is a root prim path, the returned token will just be
+    /// the name of the prim. For all other prim paths, this will return the 
+    /// absolute path as a string token. If the path is not a prim path, this
+    /// will return an empty token.
+    SDF_API
+    static TfToken ConvertDefaultPrimPathToToken(const SdfPath &primPath);
+
     /// Returns the documentation string for this layer.
     ///
     /// The default value for documentation is "".
@@ -1539,8 +1560,6 @@ public:
     SDF_API
     std::set<double> ListAllTimeSamples() const;
     
-    /// \deprecated
-    /// Use SdfAttributeSpec::ListTimeSamples instead.
     SDF_API
     std::set<double> 
     ListTimeSamplesForPath(const SdfPath& path) const;
@@ -1548,32 +1567,32 @@ public:
     SDF_API
     bool GetBracketingTimeSamples(double time, double* tLower, double* tUpper);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::GetNumTimeSamples instead.
     SDF_API
     size_t GetNumTimeSamplesForPath(const SdfPath& path) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::GetBracketingTimeSamples instead.
     SDF_API
     bool GetBracketingTimeSamplesForPath(const SdfPath& path, 
                                          double time,
-                                         double* tLower, double* tUpper);
+                                         double* tLower, double* tUpper) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::QueryTimeSample instead.
+    /// Returns the previous time sample authored just before the querying \p 
+    /// time.
+    ///
+    /// If there is no time sample authored just before \p time, this function
+    /// returns false. Otherwise, it returns true and sets \p tPrevious to the
+    /// time of the previous sample.
+    SDF_API
+    bool GetPreviousTimeSampleForPath(const SdfPath& path, double time,
+                                      double* tPrevious) const;
+
     SDF_API
     bool QueryTimeSample(const SdfPath& path, double time, 
                          VtValue *value=NULL) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::QueryTimeSample instead.
     SDF_API
     bool QueryTimeSample(const SdfPath& path, double time, 
                          SdfAbstractDataValue *value) const;
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::QueryTimeSample instead.
     template <class T>
     bool QueryTimeSample(const SdfPath& path, double time, 
                          T* data) const
@@ -1593,20 +1612,14 @@ public:
         return hasValue && (!outValue.isValueBlock);
     }
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::SetTimeSample instead.
     SDF_API
     void SetTimeSample(const SdfPath& path, double time, 
                        const VtValue & value);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::SetTimeSample instead.
     SDF_API
     void SetTimeSample(const SdfPath& path, double time, 
                        const SdfAbstractDataConstValue& value);
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::SetTimeSample instead.
     template <class T>
     void SetTimeSample(const SdfPath& path, double time, 
                        const T& value)
@@ -1616,8 +1629,6 @@ public:
         return SetTimeSample(path, time, untypedInValue);
     }
 
-    /// \deprecated
-    /// Use SdfAttributeSpec::EraseTimeSample instead.
     SDF_API
     void EraseTimeSample(const SdfPath& path, double time);
 
@@ -1899,12 +1910,13 @@ private:
     // consider property spec fields. In some cases, this can avoid expensive
     // operations which would pull large amounts of data.
     template<typename DeleteSpecFunc, typename CreateSpecFunc, 
-            typename SetFieldFunc, typename ErrorFunc>
+            typename GetFieldValuesFunc, typename SetFieldFunc, typename ErrorFunc>
     void _ProcessIncomingData(const SdfAbstractDataPtr &newData,
                               const SdfSchemaBase *newDataSchema,
                               bool processPropertyFields,
                               const DeleteSpecFunc &deleteSpecFunc,
                               const CreateSpecFunc &createSpecFunc,
+                              const GetFieldValuesFunc &getFieldValuesFunc,
                               const SetFieldFunc &setFieldFunc,
                               const ErrorFunc &errorFunc) const;
 

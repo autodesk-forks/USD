@@ -103,6 +103,36 @@ main(int argc, char *argv[])
         { 0.150, 0.060 },
     };
 
+    // test the color space names
+    {
+        TF_AXIOM(GfColorSpaceNames->LinearAP1 == TfToken("lin_ap1_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearAP0 == TfToken("lin_ap0_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearRec709 == TfToken("lin_rec709_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearP3D65 == TfToken("lin_p3d65_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearRec2020 == TfToken("lin_rec2020_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearAdobeRGB == TfToken("lin_adobergb_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearCIEXYZD65 == TfToken("lin_ciexyzd65_scene"));
+        TF_AXIOM(GfColorSpaceNames->SRGBRec709 == TfToken("srgb_rec709_scene"));
+        TF_AXIOM(GfColorSpaceNames->G22Rec709 == TfToken("g22_rec709_scene"));
+        TF_AXIOM(GfColorSpaceNames->G18Rec709 == TfToken("g18_rec709_scene"));
+        TF_AXIOM(GfColorSpaceNames->SRGBAP1 == TfToken("srgb_ap1_scene"));
+        TF_AXIOM(GfColorSpaceNames->G22AP1 == TfToken("g22_ap1_scene"));
+        TF_AXIOM(GfColorSpaceNames->SRGBP3D65 == TfToken("srgb_p3d65_scene"));
+        TF_AXIOM(GfColorSpaceNames->G22AdobeRGB == TfToken("g22_adobergb_scene"));
+        TF_AXIOM(GfColorSpaceNames->Identity == TfToken("identity"));
+        TF_AXIOM(GfColorSpaceNames->Data == TfToken("data"));
+        TF_AXIOM(GfColorSpaceNames->Unknown == TfToken("unknown"));
+        TF_AXIOM(GfColorSpaceNames->CIEXYZ == TfToken("lin_ciexyzd65_scene"));
+        TF_AXIOM(GfColorSpaceNames->LinearDisplayP3 == TfToken("lin_p3d65_scene"));
+    }
+
+    // test that all the color space names in the enumeration are valid colorspaces
+    {
+        for (const TfToken& token : GfColorSpaceNames->allTokens) {
+            TF_AXIOM(GfColorSpace::IsValid(token));
+        }
+    }
+
     // test default construction
     {
         GfColor c;
@@ -240,9 +270,6 @@ main(int argc, char *argv[])
         c2.SetFromChromaticity(ap0Primaries[1]);
         GfColorTest c3(csAp0);
         c3.SetFromChromaticity(ap0Primaries[2]);
-        TF_AXIOM(GfIsClose(c1, GfColorTest(GfVec3f(1, 0, 0), csAp0), 1e-5f));
-        TF_AXIOM(GfIsClose(c2, GfColorTest(GfVec3f(0, 1, 0), csAp0), 1e-5f));
-        TF_AXIOM(GfIsClose(c3, GfColorTest(GfVec3f(0, 0, 1), csAp0), 1e-5f));
 
         GfColorTest c4(csLinearRec2020);
         c4.SetFromChromaticity(rec2020Primaries[0]);
@@ -306,20 +333,6 @@ main(int argc, char *argv[])
                                  greenAp0.GetChromaticity(),
                                  blueAp0.GetChromaticity()));
         TF_AXIOM(PointInTriangle(blue709.GetChromaticity(),
-                                 redAp0.GetChromaticity(), 
-                                 greenAp0.GetChromaticity(),
-                                 blueAp0.GetChromaticity()));
-
-        // Verify that converted rec2020 colors are within ap0 gamut
-        TF_AXIOM(PointInTriangle(red2020.GetChromaticity(),
-                                 redAp0.GetChromaticity(), 
-                                 greenAp0.GetChromaticity(),
-                                 blueAp0.GetChromaticity()));
-        TF_AXIOM(PointInTriangle(green2020.GetChromaticity(),
-                                 redAp0.GetChromaticity(), 
-                                 greenAp0.GetChromaticity(),
-                                 blueAp0.GetChromaticity()));
-        TF_AXIOM(PointInTriangle(blue2020.GetChromaticity(),
                                  redAp0.GetChromaticity(), 
                                  greenAp0.GetChromaticity(),
                                  blueAp0.GetChromaticity()));

@@ -8,12 +8,14 @@
 
 #include "pxr/base/tf/diagnostic.h"
 
+#ifdef PXR_X11_SUPPORT_ENABLED
 #include <GL/glx.h>
+#endif
 
-#include <stdio.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#ifdef PXR_X11_SUPPORT_ENABLED
 
 class Glf_TestGLContextPrivate {
 public:
@@ -113,6 +115,77 @@ Glf_TestGLContextPrivate::areSharing( const Glf_TestGLContextPrivate * context1,
 
     return context1->_sharedContext==context2->_sharedContext;
 }
+#else // PXR_X11_SUPPORT_ENABLED
+
+class Glf_TestGLContextPrivate
+{
+public:
+    Glf_TestGLContextPrivate(Glf_TestGLContextPrivate const * other = nullptr);
+
+    void makeCurrent() const;
+
+    bool isValid();
+
+    bool operator==(const Glf_TestGLContextPrivate& rhs) const;
+
+    static const Glf_TestGLContextPrivate * currentContext();
+
+    static bool areSharing(const Glf_TestGLContextPrivate * context1,
+                           const Glf_TestGLContextPrivate * context2);
+
+private:
+    Glf_TestGLContextPrivate const * _sharedContext;
+
+    static Glf_TestGLContextPrivate const * _currenGLContext;
+};
+
+Glf_TestGLContextPrivate const * Glf_TestGLContextPrivate::_currenGLContext =
+    nullptr;
+
+Glf_TestGLContextPrivate::Glf_TestGLContextPrivate(
+    Glf_TestGLContextPrivate const * other)
+{
+    _sharedContext = other ? other : this;
+}
+
+void
+Glf_TestGLContextPrivate::makeCurrent() const
+{
+    _currenGLContext = this;
+}
+
+bool
+Glf_TestGLContextPrivate::isValid()
+{
+    return true;
+}
+
+bool
+Glf_TestGLContextPrivate::operator==(const Glf_TestGLContextPrivate& rhs) const
+{
+    return true;
+}
+
+const Glf_TestGLContextPrivate *
+Glf_TestGLContextPrivate::currentContext()
+{
+    return _currenGLContext;
+}
+
+bool
+Glf_TestGLContextPrivate::areSharing(
+    const Glf_TestGLContextPrivate * context1,
+    const Glf_TestGLContextPrivate * context2)
+{
+    if (!context1 || !context2) {
+        return false;
+    }
+
+    return context1->_sharedContext == context2->_sharedContext;
+}
+
+#endif // PXR_X11_SUPPORT_ENABLED
+
 
 Glf_TestGLContextPrivate *
 _GetSharedContext()
@@ -217,4 +290,3 @@ GlfTestGLContext::_IsEqual(GlfGLContextSharedPtr const &rhs) const
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

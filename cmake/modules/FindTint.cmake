@@ -81,8 +81,8 @@ unset(Tint_FOUND CACHE)
 set(Tint_FOUND ON)
 
 set(TINT_WRITER_COMPONENTS
-        ast_printer
-        ast_raise
+        printer
+        raise
         common
 )
 
@@ -93,19 +93,19 @@ set(TINT_READER_COMPONENTS
 )
 
 set(TINT_COMMON_COMPONENTS
+        api_common
         lang_core
         lang_core_constant
         lang_core_intrinsic
         lang_core_ir
+        lang_core_ir_analysis
         lang_core_ir_transform
+        lang_core_ir_type
         lang_core_type
         # TODO: Are all these libraries required in all cases?
         lang_wgsl
         lang_wgsl_ast
         lang_wgsl_ast_transform
-        lang_wgsl_common
-        lang_wgsl_features
-        lang_wgsl_helpers
         lang_wgsl_inspector
         lang_wgsl_intrinsic
         lang_wgsl_ir
@@ -121,16 +121,22 @@ set(TINT_COMMON_COMPONENTS
         lang_wgsl_writer_ir_to_program
         lang_wgsl_writer_raise
         lang_wgsl_writer_syntax_tree_printer
-        utils_debug
+        lang_spirv_reader_ast_lower
+        lang_spirv_reader_ast_parser
+        lang_spirv_reader_common
+        utils
+        utils_containers
         utils_diagnostic
-        utils_generator
         utils_ice
-        utils_id
+        utils_macros
+        utils_math
+        utils_memory
         utils_rtti
         utils_strconv
-        utils_result
         utils_symbol
+        utils_system
         utils_text
+        utils_text_generator
 )
 
 set(TINT_REQUESTED_COMPONENTS

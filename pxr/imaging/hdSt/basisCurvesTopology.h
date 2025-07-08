@@ -8,6 +8,7 @@
 #define PXR_IMAGING_HD_ST_BASIS_CURVES_TOPOLOGY_H
 
 #include "pxr/pxr.h"
+#include "pxr/imaging/hdSt/api.h"
 #include "pxr/imaging/hd/basisCurvesTopology.h"
 
 #include <memory>
@@ -26,8 +27,10 @@ using HdBufferSourceSharedPtr = std::shared_ptr<class HdBufferSource>;
 //
 class HdSt_BasisCurvesTopology final : public HdBasisCurvesTopology {
 public:
+    HDST_API
     static HdSt_BasisCurvesTopologySharedPtr New(const HdBasisCurvesTopology &src);
 
+    HDST_API
     virtual ~HdSt_BasisCurvesTopology();
 
     HdBufferSourceSharedPtr GetPointsIndexBuilderComputation();

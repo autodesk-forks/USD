@@ -11,6 +11,10 @@ set(include
     ""
 )
 
+set(privateClasses
+    sample
+)
+
 set(classes
     binary
     debugCodes
@@ -94,14 +98,14 @@ pxr_library(ts
     INCLUDE_DIRS
         ${include}
 
+    PRIVATE_CLASSES
+        ${privateClasses}
+
     PUBLIC_CLASSES
         ${classes}
 
     PUBLIC_HEADERS
         ${headers}
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
 
     PYMODULE_CPPFILES
         ${pycpp}
@@ -129,7 +133,7 @@ pxr_library(ts
 )
 
 if (${PXR_BUILD_TESTS})
-    if (PXR_ENABLE_JS_SUPPORT)
+    if (EMSCRIPTEN)
         target_compile_definitions(ts INTERFACE TS_BUILD_TEST_FRAMEWORK)
     else()
         target_compile_definitions(ts PRIVATE TS_BUILD_TEST_FRAMEWORK)
@@ -172,6 +176,16 @@ pxr_build_test(
 )
 
 pxr_build_test(
+    testTsSplineSampling
+    CPPFILES
+        testenv/testTsSplineSampling.cpp
+    LIBRARIES
+        ts
+        vt
+        tf
+)
+
+pxr_build_test(
     testTsTangentConversion
     CPPFILES
         testenv/testTsTangentConversion.cpp
@@ -198,6 +212,11 @@ pxr_install_test_dir(
     DEST testTsRegressionPreventer
 )
 
+pxr_install_test_dir(
+    SRC testenv/testTsSplineSampling.testenv
+    DEST testTsSplineSampling
+)
+
 pxr_register_test(
     testTsDerivatives
     PYTHON
@@ -218,6 +237,12 @@ pxr_register_test(
 pxr_register_test(
     testTsSplineAPI
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineAPI"
+)
+
+pxr_register_test(
+    testTsSplineSampling
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineSampling"
+    DIFF_COMPARE testTsSplineSampling.txt
 )
 
 pxr_register_test(

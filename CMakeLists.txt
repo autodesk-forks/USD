@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.26)
 
 project(usd)
 
@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH
     ${PROJECT_SOURCE_DIR}/cmake/macros)
 
 include(Options)
+
 include(ProjectDefaults)
 include(Packages)
 
@@ -36,15 +37,6 @@ set(PXR_PYTHON_SHEBANG "${PYTHON_EXECUTABLE}"
 include(CXXDefaults)
 add_definitions(${_PXR_CXX_DEFINITIONS})
 set(CMAKE_CXX_FLAGS "${_PXR_CXX_FLAGS} ${CMAKE_CXX_FLAGS}")
-
-if(PXR_ENABLE_JS_SUPPORT)
-    # Add EMSCRIPTEN specific compiler flags (is this the right place)?
-    set(EMSCRIPTEN_COMPILE_FLAGS "-fPIC -pthread -fexceptions")
-    add_compile_options("SHELL:${EMSCRIPTEN_COMPILE_FLAGS}")
-    add_link_options("SHELL:-sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB -sSHARED_MEMORY=1 \
-        -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -pthread -fexceptions")
-    message("EMSCRIPTEN Flags enabled")
-endif()
 
 include(Public)
 

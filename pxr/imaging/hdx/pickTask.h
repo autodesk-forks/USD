@@ -94,7 +94,7 @@ struct HdxPickHit
     GfVec3d worldSpaceHitPoint;
     GfVec3f worldSpaceHitNormal;
     /// normalizedDepth is in the range [0,1].  Nb: the pick depth buffer won't
-    /// contain items drawn with renderTag "widget" for simplicity.
+    /// contain items drawn with materialTag "displayInOverlay" for simplicity.
     float normalizedDepth;
 
     inline bool IsValid() const {
@@ -168,6 +168,15 @@ struct HdxPrimOriginInfo
     FromPickHit(HdRenderIndex * renderIndex,
                 const HdxPickHit &hit);
 
+    /// Vectorized implementation of function to query terminal scene index
+    /// of render index for information about picked prim. Amortizes the cost
+    /// of computing the array of all instace indices and locations for
+    /// instancers.
+    HDX_API
+    static std::vector<HdxPrimOriginInfo>
+    FromPickHits(HdRenderIndex * renderIndex,
+                const std::vector<HdxPickHit> &hits);
+
     /// Combines instance scene paths and prim scene path to obtain the full
     /// scene path.
     ///
@@ -197,6 +206,8 @@ struct HdxPrimOriginInfo
     /// by the scene index.
     HdContainerDataSourceHandle primOrigin;
 };
+
+using ReturnHitsFn = std::function<void(pxr::HdxPickHitVector&)>;
 
 /// Pick task context params.  This contains task params that can't come from
 /// the scene delegate (like resolution mode and pick location, that might
@@ -261,6 +272,8 @@ struct HdxPickTaskContextParams
     HdRprimCollection collection;
     float alphaThreshold;
     HdxPickHitVector *outHits;
+    /// A callback for executing the pick task asynchronously.
+    ReturnHitsFn returnHits;
 };
 
 /// \class HdxPickTask
@@ -278,6 +291,8 @@ struct HdxPickTaskContextParams
 class HdxPickTask : public HdTask
 {
 public:
+    using TaskParams = HdxPickTaskParams;
+
     HDX_API
     HdxPickTask(HdSceneDelegate* delegate, SdfPath const& id);
 
@@ -313,12 +328,15 @@ public:
 private:
     HdxPickTaskParams _params;
     HdxPickTaskContextParams _contextParams;
-    TfTokenVector _allRenderTags;
-    TfTokenVector _nonWidgetRenderTags;
+    TfTokenVector _renderTags;
+    bool _useOverlayPass;
 
     // We need to cache a pointer to the render index so Execute() can
     // map prim ID to paths.
     HdRenderIndex *_index;
+
+    // Generated renderbuffers
+    TfTokenVector _aovOutputs;
 
     void _InitIfNeeded();
     void _CreateAovBindings();
@@ -331,28 +349,45 @@ private:
             HdRenderBuffer const * depthStencilBuffer);
 
     bool _UseOcclusionPass() const;
-    bool _UseWidgetPass() const;
+    bool _UseOverlayPass() const;
+    void _UpdateUseOverlayPass();
 
     void _ClearPickBuffer();
     void _ResolveDeep();
+    pxr::HdxPickHitVector _BuildResults(
+        int const* primIds,
+        int const* instanceIds,
+        int const* elementIds,
+        int const* edgeIds,
+        int const* pointIds,
+        int const* neyes,
+        float const* depths,
+        pxr::HdxPickHitVector &outHits);
 
     template<typename T>
     HdStTextureUtils::AlignedBuffer<T>
     _ReadAovBuffer(TfToken const & aovName) const;
 
+    template<typename T>
+    void
+    _ReadAovBufferAsync(TfToken const &aovName,
+      std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<T>)> completed);
+
+    std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<int32_t>)> _pickOp;
+
     HdRenderBuffer const * _FindAovBuffer(TfToken const & aovName) const;
 
     // Create a shared render pass each for pickables, unpickables, and 
-    // widgets (which may draw on top even when occluded).
+    // items in overlay (which may draw on top even when occluded).
     HdRenderPassSharedPtr _pickableRenderPass;
     HdRenderPassSharedPtr _occluderRenderPass;
-    HdRenderPassSharedPtr _widgetRenderPass;
+    HdRenderPassSharedPtr _overlayRenderPass;
 
     // Having separate render pass states allows us to use different
     // shader mixins if we choose to (we don't currently).
     HdRenderPassStateSharedPtr _pickableRenderPassState;
     HdRenderPassStateSharedPtr _occluderRenderPassState;
-    HdRenderPassStateSharedPtr _widgetRenderPassState;
+    HdRenderPassStateSharedPtr _overlayRenderPassState;
 
     Hgi* _hgi;
 
@@ -361,11 +396,12 @@ private:
     HdRenderPassAovBinding _occluderAovBinding;
     size_t _pickableDepthIndex;
     TfToken _depthToken;
-    std::unique_ptr<HdStRenderBuffer> _widgetDepthStencilBuffer;
-    HdRenderPassAovBindingVector _widgetAovBindings;
+    std::unique_ptr<HdStRenderBuffer> _overlayDepthStencilBuffer;
+    HdRenderPassAovBindingVector _overlayAovBindings;
 
     // pick buffer used for deep selection
     HdBufferArrayRangeSharedPtr _pickBuffer;
+    std::map<TfToken, HdStTextureUtils::AlignedBuffer<int32_t>> _gpuBuffers;
 
     HdxPickTask() = delete;
     HdxPickTask(const HdxPickTask &) = delete;

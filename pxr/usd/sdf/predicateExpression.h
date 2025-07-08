@@ -246,8 +246,8 @@ public:
 
     /// Return parsing errors as a string if this function was constructed from
     /// a string and parse errors were encountered.
-    std::string GetParseError() const && {
-        return _parseError;
+    std::string GetParseError() && {
+        return std::move(_parseError);
     }
 
 private:

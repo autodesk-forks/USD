@@ -36,18 +36,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 ////////////////////////////////////////////////////////////////////////
 // Computing layer stacks
 
-// XXX Parallel layer prefetch is only available in usd-mode, until Sd
-// thread-safety issues can be fixed, specifically plugin loading:
-// - FileFormat plugins
-// - value type plugins for parsing AnimSplines
 TF_DEFINE_ENV_SETTING(
     PCP_ENABLE_PARALLEL_LAYER_PREFETCH, true,
-    "Enables parallel, threaded pre-fetch of sublayers.");
+    "Enables parallel, threaded pre-fetch of sublayers in USD mode.");
 
 TF_DEFINE_ENV_SETTING(
-    PCP_DISABLE_TIME_SCALING_BY_LAYER_TCPS, false,
-    "Disables automatic layer offset scaling from time codes per second "
-    "metadata in layers.");
+    PCP_ENABLE_PARALLEL_NON_USD_LAYER_PREFETCH, true,
+    "Enables parallel, threaded pre-fetch of sublayers in non-USD mode.");
 
 TF_DEFINE_ENV_SETTING(
     PCP_ENABLE_LEGACY_RELOCATES_BEHAVIOR, true,
@@ -57,11 +52,14 @@ TF_DEFINE_ENV_SETTING(
     "non-USD caches/layer stacks; the legacy behavior cannot be enabled in USD "
     "mode");
 
-bool
-PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled()
-{
-    return TfGetEnvSetting(PCP_DISABLE_TIME_SCALING_BY_LAYER_TCPS);
-}
+TF_DEFINE_ENV_SETTING(
+    PCP_ALLOW_NEGATIVE_LAYER_OFFSET_SCALE, true,
+    "Enables the use of negative layer offset scale. This behavior is "
+    "deprecated and a warning will be issued if this setting is enabled, "
+    "otherwise a coding error will be issued. Negative layer offset scale on a "
+    "composed property doesn't make sense, as it reverses the direction of "
+    "time, and can lead to incorrect and non intuitive results.");
+
 
 struct Pcp_SublayerInfo {
     Pcp_SublayerInfo() = default;
@@ -1557,10 +1555,6 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
     // Build the layer stack.
     std::set<SdfLayerHandle> seenLayers;
 
-    // Env setting for disabling TCPS scaling.
-    const bool scaleLayerOffsetByTcps = 
-        !PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled();
-
     const double rootTcps = _identifier.rootLayer->GetTimeCodesPerSecond();
     SdfLayerOffset rootLayerOffset;
 
@@ -1599,13 +1593,9 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
             if (_ShouldUseSessionTcps(_identifier.sessionLayer, 
                                       _identifier.rootLayer)) {
                 _timeCodesPerSecond = sessionTcps;
-                if (scaleLayerOffsetByTcps) {
-                    rootLayerOffset.SetScale(_timeCodesPerSecond / rootTcps);
-                }
+                rootLayerOffset.SetScale(_timeCodesPerSecond / rootTcps);
             } else {
-                if (scaleLayerOffsetByTcps) {
-                    sessionLayerOffset.SetScale(_timeCodesPerSecond / sessionTcps);
-                }
+                sessionLayerOffset.SetScale(_timeCodesPerSecond / sessionTcps);
             }
 
             _sessionLayerTree = 
@@ -1666,6 +1656,14 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
         _localErrors.reset(new PcpErrorVector);
         _localErrors->swap(errors);
     }
+}
+
+bool
+PcpNegativeLayerOffsetScaleAllowed()
+{
+    static bool allowed = 
+        TfGetEnvSetting(PCP_ALLOW_NEGATIVE_LAYER_OFFSET_SCALE);
+    return allowed;
 }
 
 SdfLayerTreeHandle
@@ -1752,10 +1750,10 @@ PcpLayerStack::_BuildLayerStack(
     
     // Open all the layers in parallel.
     WorkWithScopedDispatcher([&](WorkDispatcher &wd) {
-        // Cannot use parallelism for non-USD clients due to thread-safety
-        // issues in file format plugins & value readers.
-        const bool goParallel = _isUsd && numSublayers > 1 &&
-            TfGetEnvSetting(PCP_ENABLE_PARALLEL_LAYER_PREFETCH);
+        const bool goParallel = numSublayers > 1 && (
+            (_isUsd && TfGetEnvSetting(PCP_ENABLE_PARALLEL_LAYER_PREFETCH)) ||
+            (!_isUsd && TfGetEnvSetting(
+                PCP_ENABLE_PARALLEL_NON_USD_LAYER_PREFETCH)));
 
         for (size_t i=0; i != numSublayers; ++i) {
             if (sublayers[i].empty()) {
@@ -1805,8 +1803,20 @@ PcpLayerStack::_BuildLayerStack(
 
         // Check sublayer offset.
         SdfLayerOffset sublayerOffset = sublayerOffsets[i];
-        if (!sublayerOffset.IsValid()
-            || !sublayerOffset.GetInverse().IsValid()) {
+
+        const bool isNegativeScale = sublayerOffset.GetScale() < 0.0;
+        const bool negativeScaleAllowed = PcpNegativeLayerOffsetScaleAllowed();
+
+        if (isNegativeScale && negativeScaleAllowed) {
+            // Report warning.
+            TF_WARN("Layer @%s@ has a negative offset scale. Negative scale "
+                    "offsets are deprecated.",
+                    layer->GetIdentifier().c_str());
+        }
+
+        if ((isNegativeScale && !negativeScaleAllowed) ||
+            !sublayerOffset.IsValid() || 
+            !sublayerOffset.GetInverse().IsValid()) {
             // Report error, but continue with an identity layer offset.
             PcpErrorInvalidSublayerOffsetPtr err =
                 PcpErrorInvalidSublayerOffset::New();
@@ -1821,8 +1831,7 @@ PcpLayerStack::_BuildLayerStack(
         // Apply the scale from computed layer TCPS to sublayer TCPS to sublayer
         // layer offset.
         const double sublayerTcps = sublayerRefPtrs[i]->GetTimeCodesPerSecond();
-        if (!PcpIsTimeScalingForLayerTimeCodesPerSecondDisabled() &&
-            layerTcps != sublayerTcps) {
+        if (layerTcps != sublayerTcps) {
             sublayerOffset.SetScale(sublayerOffset.GetScale() * 
                                     layerTcps / sublayerTcps);
         }

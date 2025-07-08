@@ -25,6 +25,28 @@ VT_API string GetVtArrayName< VT_TYPE(elem) >() { \
 TF_PP_SEQ_FOR_EACH(MAKE_NAME_FUNC, ~, VT_ARRAY_VALUE_TYPES)
 #undef MAKE_NAME_FUNC
 
+
+unsigned int
+Vt_ComputeEffectiveRankAndLastDimSize(
+    Vt_ShapeData const *sd, size_t *lastDimSize)
+{
+    unsigned int rank = sd->GetRank();
+    if (rank == 1)
+        return rank;
+
+    size_t divisor = std::accumulate(
+        sd->otherDims, sd->otherDims + rank-1,
+        1, [](size_t x, size_t y) { return x * y; });
+
+    size_t remainder = divisor ? sd->totalSize % divisor : 0;
+    *lastDimSize = divisor ? sd->totalSize / divisor : 0;
+    
+    if (remainder)
+        rank = 1;
+
+    return rank;
 }
+
+} // namespace Vt_WrapArray
 
 PXR_NAMESPACE_CLOSE_SCOPE

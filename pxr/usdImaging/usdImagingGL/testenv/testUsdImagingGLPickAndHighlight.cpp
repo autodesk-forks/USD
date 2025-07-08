@@ -111,6 +111,8 @@ public:
         _translate[0] = _translate[1] = _translate[2] = 0;
     }
 
+    bool useAsync = false;
+
     // UsdImagingGL_UnitTestGLDrawing overrides
     virtual void InitTest();
     virtual void DrawTest(bool offscreen);
@@ -123,6 +125,8 @@ public:
     void Draw(bool render=true);
     void Pick(GfVec2i const &startPos, GfVec2i const &endPos);
     void Pick(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out);
+    void PickAsync(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out);
+    void PickSync(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out);
     void DeepSelect(GfVec2i const& startPos, GfVec2i const& endPos, UsdImagingGLEngine::IntersectionResultVector& out);
 
 private:
@@ -142,6 +146,9 @@ void
 My_TestGLDrawing::InitTest()
 {
     std::cout << "My_TestGLDrawing::InitTest()\n";
+
+    static const bool enableAsync = TfGetenvBool("USD_IMAGING_GL_PICK_TEST_ASYNC", false);
+    useAsync = enableAsync;
     _stage = UsdStage::Open(GetStageFilePath());
     SdfPathVector excludedPaths;
 
@@ -202,86 +209,26 @@ My_TestGLDrawing::DrawTest(bool offscreen)
     std::cout << "My_TestGLDrawing::DrawTest()\n";
 
     std::cout << "Testing just picking/TestIntersection without rendering\n";
-    const std::map<TfToken, OutHit>& expectedOutputs = {
-        { 
-            TfToken(""), 
-                { GfVec3d(3.386115312576294, -2.0000052452087402, -0.5881438851356506),
+
+    static const TfToken _stormRendererPluginName("HdStormRendererPlugin");
+    const OutHit expectedOut =
+        (_engine->GetCurrentRendererId() == _stormRendererPluginName) ?
+        OutHit{ GfVec3d(3.386115312576294, -2.0000052452087402, -0.5881438851356506),
                 GfVec3d(0, -0.9980430603027344, 2.2161007702308985e-16),
                 SdfPath("/Group/GI1/I1/Mesh1/Plane1"), 
                 _stage->GetPrimAtPath(SdfPath("/Group/GI1/I1")).GetPrototype().
-                    GetPath().AppendPath(SdfPath("Mesh1")),
+                GetPath().AppendPath(SdfPath("Mesh1")),
                 2,
-                {} }
-        },
-        {
-            TfToken("HdEmbreeRendererPlugin"), 
-                { GfVec3d(5.819578170776367, -15.916473388671875, -4.240192413330078),
+                {}
+        } :
+        OutHit{ GfVec3d(5.819578170776367, -15.916473388671875, -4.240192413330078),
                 GfVec3d(0, 0, 0),
                 SdfPath("/Instance/I1/Mesh1/Plane1"), 
                 SdfPath::EmptyPath(),
                 0,
-                {} }
-        }
-    };
+                {}
+        };
 
-    const UsdImagingGLEngine::IntersectionResultVector expectedOutputVector = {
-        {
-        GfVec3d(0.0, 0.0, 0.0),
-        GfVec3d(0.0, 0.0, 0.0),
-        SdfPath("/Group/GI1/I1/Mesh1/Plane1"),
-        _stage->GetPrimAtPath(SdfPath("/Group/GI1/I1")).GetPrototype().
-            GetPath().AppendPath(SdfPath("Mesh1")),
-        2,
-        {}
-        },
-        {
-        GfVec3d(0.0, 0.0, 0.0),
-        GfVec3d(0.0, 0.0, 0.0),
-        SdfPath("/Group/GI2/I1/Mesh1/Plane2"),
-        _stage->GetPrimAtPath(SdfPath("/Group/GI2/I1")).GetPrototype().
-            GetPath().AppendPath(SdfPath("Mesh1")),
-        3,
-        {}
-        },
-        {
-        GfVec3d(0.0, 0.0, 0.0),
-        GfVec3d(0.0, 0.0, 0.0),
-        SdfPath("/Instance/I1/Mesh1/Plane1"),
-        _stage->GetPrimAtPath(SdfPath("/Instance/I1")).GetPrototype().
-            GetPath().AppendPath(SdfPath("Mesh1")),
-        0,
-        {}
-        },
-        {
-        GfVec3d(0.0, 0.0, 0.0),
-        GfVec3d(0.0, 0.0, 0.0),
-        SdfPath("/Group/GI2/I1/Mesh1/Plane1"),
-        _stage->GetPrimAtPath(SdfPath("/Group/GI2/I1")).GetPrototype().
-            GetPath().AppendPath(SdfPath("Mesh1")),
-        3,
-        {}
-        },
-        {
-        GfVec3d(0.0, 0.0, 0.0),
-        GfVec3d(0.0, 0.0, 0.0),
-        SdfPath("/Group/GI1/I1/Mesh1/Plane2"),
-        _stage->GetPrimAtPath(SdfPath("/Group/GI1/I1")).GetPrototype().
-            GetPath().AppendPath(SdfPath("Mesh1")),
-        2,
-        {}
-        },
-        {
-        GfVec3d(0.0, 0.0, 0.0),
-        GfVec3d(0.0, 0.0, 0.0),
-        SdfPath("/Instance/I1/Mesh1/Plane2"),
-        _stage->GetPrimAtPath(SdfPath("/Instance/I1")).GetPrototype().
-            GetPath().AppendPath(SdfPath("Mesh1")),
-        0,
-        {}
-        }
-    };
-
-    const OutHit& expectedOut = expectedOutputs.at(_GetRenderer());
     Draw(false);
     OutHit testOut;
     Pick(GfVec2i(320, 130), GfVec2i(171, 131), &testOut);
@@ -302,9 +249,67 @@ My_TestGLDrawing::DrawTest(bool offscreen)
     }
 
     // currently only HdStorm supports deep selection
-    static const TfToken _stormRendererPluginName("HdStormRendererPlugin");
     if (_engine->GetCurrentRendererId() == _stormRendererPluginName)
     {
+        const UsdImagingGLEngine::IntersectionResultVector
+            expectedOutputVector =
+        {
+            {
+            GfVec3d(0.0, 0.0, 0.0),
+            GfVec3d(0.0, 0.0, 0.0),
+            SdfPath("/Group/GI1/I1/Mesh1/Plane1"),
+            _stage->GetPrimAtPath(SdfPath("/Group/GI1/I1")).GetPrototype().
+                GetPath().AppendPath(SdfPath("Mesh1")),
+            2,
+            {}
+            },
+            {
+            GfVec3d(0.0, 0.0, 0.0),
+            GfVec3d(0.0, 0.0, 0.0),
+            SdfPath("/Group/GI2/I1/Mesh1/Plane2"),
+            _stage->GetPrimAtPath(SdfPath("/Group/GI2/I1")).GetPrototype().
+                GetPath().AppendPath(SdfPath("Mesh1")),
+            3,
+            {}
+            },
+            {
+            GfVec3d(0.0, 0.0, 0.0),
+            GfVec3d(0.0, 0.0, 0.0),
+            SdfPath("/Instance/I1/Mesh1/Plane1"),
+            _stage->GetPrimAtPath(SdfPath("/Instance/I1")).GetPrototype().
+                GetPath().AppendPath(SdfPath("Mesh1")),
+            0,
+            {}
+            },
+            {
+            GfVec3d(0.0, 0.0, 0.0),
+            GfVec3d(0.0, 0.0, 0.0),
+            SdfPath("/Group/GI2/I1/Mesh1/Plane1"),
+            _stage->GetPrimAtPath(SdfPath("/Group/GI2/I1")).GetPrototype().
+                GetPath().AppendPath(SdfPath("Mesh1")),
+            3,
+            {}
+            },
+            {
+            GfVec3d(0.0, 0.0, 0.0),
+            GfVec3d(0.0, 0.0, 0.0),
+            SdfPath("/Group/GI1/I1/Mesh1/Plane2"),
+            _stage->GetPrimAtPath(SdfPath("/Group/GI1/I1")).GetPrototype().
+                GetPath().AppendPath(SdfPath("Mesh1")),
+            2,
+            {}
+            },
+            {
+            GfVec3d(0.0, 0.0, 0.0),
+            GfVec3d(0.0, 0.0, 0.0),
+            SdfPath("/Instance/I1/Mesh1/Plane2"),
+            _stage->GetPrimAtPath(SdfPath("/Instance/I1")).GetPrototype().
+                GetPath().AppendPath(SdfPath("Mesh1")),
+            0,
+            {}
+            }
+        };
+
         // Test windowed deep selection
         UsdImagingGLEngine::IntersectionResultVector testOutVector;
         DeepSelect(GfVec2i(320, 130), GfVec2i(171, 131), testOutVector);
@@ -432,7 +437,20 @@ My_TestGLDrawing::MouseMove(int x, int y, int modKeys)
 
 void
 My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos) {
-    Pick(startPos, endPos, nullptr);
+    if (useAsync) {
+        PickAsync(startPos, endPos, nullptr);
+    } else  {
+        PickSync(startPos, endPos, nullptr);
+    }
+}
+
+void
+My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos, OutHit* out) {
+    if (useAsync) {
+        PickAsync(startPos, endPos, out);
+    } else  {
+        PickSync(startPos, endPos, out);
+    }
 }
 
 void
@@ -454,7 +472,6 @@ My_TestGLDrawing::DeepSelect(GfVec2i const& startPos, GfVec2i const& endPos,
 
     // XXX: For a timevarying test need to set timecode for frame param
     UsdImagingGLRenderParams params;
-    params.enableIdRender = true;
 
     SdfPathVector selection;
 
@@ -486,9 +503,10 @@ My_TestGLDrawing::DeepSelect(GfVec2i const& startPos, GfVec2i const& endPos,
     _engine->SetSelected(selection);
 }
 
+
 void
-My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos, 
-        OutHit* out)
+My_TestGLDrawing::PickAsync(GfVec2i const &startPos, GfVec2i const &endPos,
+                       OutHit* out)
 {
     GfFrustum frustum = _frustum;
     float width = GetWidth(), height = GetHeight();
@@ -505,7 +523,74 @@ My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos,
 
     // XXX: For a timevarying test need to set timecode for frame param
     UsdImagingGLRenderParams params;
-    params.enableIdRender = true;
+
+    UsdImagingGLEngine::IntersectionResultVector outResults;
+
+    SdfPathVector selection;
+    bool completed = false;
+
+    auto returnHits = [&completed,&outResults](UsdImagingGLEngine::IntersectionResultVector results) -> void {
+        outResults = std::move(results);
+        completed = true;
+    };
+    UsdImagingGLEngine::PickParams pickParams = {
+        HdxPickTokens->resolveNearestToCenter
+    };
+
+    _engine->TestIntersection(
+        pickParams,
+        _viewMatrix,
+        frustum.ComputeProjectionMatrix(),
+        _stage->GetPseudoRoot(),
+        params,
+        returnHits);
+
+    while (!completed)
+    {
+        _engine->GetHgi()->EndFrame();
+    }
+
+    if (outResults.size() == 1)
+    {
+        std::cout << "Hit "
+                  << outResults[0].hitPoint << ", "
+                  << outResults[0].hitNormal << ", "
+                  << outResults[0].hitPrimPath << ", "
+                  << outResults[0].hitInstancerPath << ", "
+                  << outResults[0].hitInstanceIndex << "\n";
+
+        _engine->SetSelectionColor(GfVec4f(1, 1, 0, 1));
+        selection.push_back(outResults[0].hitPrimPath);
+
+        if (out) {
+            *out = outResults[0];
+        }
+    }
+
+    if (!out) {
+        _engine->SetSelected(selection);
+    }
+}
+
+void
+My_TestGLDrawing::PickSync(GfVec2i const &startPos, GfVec2i const &endPos,
+           OutHit* out)
+{
+    GfFrustum frustum = _frustum;
+    float width = GetWidth(), height = GetHeight();
+
+    GfVec2d min(2*startPos[0]/width-1, 1-2*startPos[1]/height);
+    GfVec2d max(2*(endPos[0]+1)/width-1, 1-2*(endPos[1]+1)/height);
+    // scale window
+    GfVec2d origin = frustum.GetWindow().GetMin();
+    GfVec2d scale = frustum.GetWindow().GetMax() - frustum.GetWindow().GetMin();
+    min = origin + GfCompMult(scale, 0.5 * (GfVec2d(1.0, 1.0) + min));
+    max = origin + GfCompMult(scale, 0.5 * (GfVec2d(1.0, 1.0) + max));
+
+    frustum.SetWindow(GfRange2d(min, max));
+
+    // XXX: For a timevarying test need to set timecode for frame param
+    UsdImagingGLRenderParams params;
 
     UsdImagingGLEngine::IntersectionResultVector outResults;
 
@@ -555,6 +640,15 @@ BasicTest(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+    TfErrorMark mark;
+
     BasicTest(argc, argv);
-    std::cout << "OK" << std::endl;
+
+    if (mark.IsClean()) {
+        std::cout << "OK" << std::endl;
+        return EXIT_SUCCESS;
+    } else {
+        std::cout << "FAILED" << std::endl;
+        return EXIT_FAILURE;
+    }
 }

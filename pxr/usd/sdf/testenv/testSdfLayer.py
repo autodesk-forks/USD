@@ -71,6 +71,17 @@ class TestSdfLayer(unittest.TestCase):
         with self.assertRaises(Tf.ErrorException):
             layer.identifier = "anon:testing"
 
+    def test_SetIdentifierAnonymousLayer(self):
+        layer = Sdf.Layer.CreateAnonymous()
+        anonIdentifier = layer.identifier
+        nonAnonIdentifier = 'tmp_testSetIdentifierAnonymousLayer.sdf'
+        layer.identifier = nonAnonIdentifier
+
+        layer = Sdf.Layer.FindOrOpen(nonAnonIdentifier)
+        self.assertTrue(layer)
+        anonLayer = Sdf.Layer.FindOrOpen(anonIdentifier)
+        self.assertFalse(anonLayer)
+
     def test_SetIdentifierWithArgs(self):
         layer = Sdf.Layer.CreateAnonymous()
         layer.Export("testSetIdentifierWithArgs.sdf")
@@ -535,6 +546,11 @@ def "Root"
         _TestWithRelativePath('FindOrOpenRelativeLayer.sdf')
         _TestWithRelativePath('subdir/FindOrOpenRelativeLayer.sdf')
 
+        srcLayer = Sdf.Layer.CreateAnonymous()
+        assetPath = "test.usd:SDF_FORMAT_ARGS:order=100"
+        self.assertEqual(Sdf.ComputeAssetPathRelativeToLayer(
+            srcLayer, assetPath), assetPath)
+
     @unittest.skipIf(preferredResolver != sdfTestResolver,
                      "Test uses search-path functionality specific to "
                      "the default test resolver")
@@ -773,6 +789,76 @@ def "Root"
         self.assertTrue('x' in rootSpec.variantSetNameList.prependedItems)
         self.assertTrue(len(rootSpec.variantSetNameList.addedItems) == 0)
 
+    def test_CreatePropertyInLayer(self):
+        layer = Sdf.Layer.CreateAnonymous()
+
+        # Test creating attribute in layer
+        attr = Sdf.CreatePrimAttributeInLayer(layer=layer,
+            attrPath='/prim.attr', typeName=Sdf.ValueTypeNames.Float)
+        self.assertEqual(attr.name, "attr")
+        prim = layer.GetPrimAtPath('/prim')
+        self.assertEqual(attr.owner, prim)
+        self.assertTrue(attr in prim.properties)
+        self.assertEqual(attr.variability, Sdf.VariabilityVarying)
+        self.assertEqual(attr.custom, False)
+
+        # Test creating attribute (no handle) in layer
+        self.assertTrue(Sdf.JustCreatePrimAttributeInLayer(
+            layer=layer, attrPath='/just/an.attributeSpec',
+            typeName=Sdf.ValueTypeNames.Float))
+        attr2 = layer.GetAttributeAtPath('/just/an.attributeSpec')
+        self.assertEqual(attr2.name, 'attributeSpec')
+        self.assertEqual(attr2.typeName, Sdf.ValueTypeNames.Float)
+        prim = layer.GetPrimAtPath('/just/an')
+        self.assertEqual(attr2.owner, prim)
+        self.assertTrue(attr2 in prim.properties)
+        self.assertTrue(attr2.name in prim.properties)
+        self.assertEqual(prim.properties[0], attr2)
+        self.assertEqual(prim.properties[attr2.name], attr2)
+        self.assertEqual(attr2.variability, Sdf.VariabilityVarying)
+        self.assertEqual(prim.properties[0].custom, False)
+
+        self.assertTrue(Sdf.JustCreatePrimAttributeInLayer(
+            layer=layer, attrPath='/just/another.attributeSpec',
+            typeName=Sdf.ValueTypeNames.Int,
+            variability=Sdf.VariabilityUniform,
+            isCustom=True))
+        attr3 = layer.GetAttributeAtPath('/just/another.attributeSpec')
+        self.assertEqual(attr3.name, 'attributeSpec')
+        self.assertEqual(attr3.typeName, Sdf.ValueTypeNames.Int)
+        prim = layer.GetPrimAtPath('/just/another')
+        self.assertEqual(attr3.owner, prim)
+        self.assertTrue(attr3 in prim.properties)
+        self.assertTrue(attr3.name in prim.properties)
+        self.assertEqual(prim.properties[0], attr3)
+        self.assertEqual(prim.properties[attr2.name], attr3)
+        self.assertEqual(attr3.variability, Sdf.VariabilityUniform)
+        self.assertEqual(prim.properties[0].custom, True)
+
+        # Test creating relationship in layer
+        rel = Sdf.CreateRelationshipInLayer(layer=layer,
+            relPath='/prim.rel')
+        self.assertEqual(rel.name, "rel")
+        prim = layer.GetPrimAtPath('/prim')
+        self.assertEqual(rel.owner, prim)
+        self.assertTrue(rel in prim.properties)
+        self.assertEqual(rel.variability, Sdf.VariabilityVarying)
+        self.assertEqual(rel.custom, False)
+
+        # Test creating relationship (no handle) in layer
+        self.assertTrue(Sdf.JustCreateRelationshipInLayer(layer=layer,
+            relPath="/just/prim.rel"))
+        rel2 = layer.GetRelationshipAtPath('/just/prim.rel')
+        self.assertEqual(rel2.name, 'rel')
+        prim = layer.GetPrimAtPath('/just/prim')
+        self.assertEqual(rel2.owner, prim)
+        self.assertTrue(rel2 in prim.properties)
+        self.assertTrue(rel2.name in prim.properties)
+        self.assertEqual(prim.properties[0], rel2)
+        self.assertEqual(prim.properties[rel2.name], rel2)
+        self.assertEqual(rel2.variability, Sdf.VariabilityVarying)
+        self.assertEqual(prim.properties[0].custom, False)
+
     def test_ReloadAfterSetIdentifier(self):
         layer = Sdf.Layer.CreateNew('TestReloadAfterSetIdentifier.sdf')
         
@@ -959,6 +1045,59 @@ over "test"
         self.assertTrue(layer.HasDefaultPrim())
         layer.ClearDefaultPrim()
         self.assertFalse(layer.HasDefaultPrim())
+
+        # Test static defaultPrim token to path conversion functions
+        
+        # Absolute path string tokens 
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/foo'), 
+            Sdf.Path('/foo'))
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/foo/bar'), 
+            Sdf.Path('/foo/bar'))
+
+        # Relative path string tokens
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('foo'), 
+            Sdf.Path('/foo'))
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('foo/bar'), 
+            Sdf.Path('/foo/bar'))
+        
+        # Invalid non-prim path tokens
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/foo.prop'), 
+            Sdf.Path())
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimTokenToPath('/'), 
+            Sdf.Path())
+
+        # Test static defaultPrim path to token conversion functions
+
+        # Absolute paths. Roots paths convert to just name token. Non-root
+        # paths convert to absolute path token.
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('/foo')), 
+            'foo')
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('/foo/bar')), 
+            '/foo/bar')
+
+        # Relative paths. Produce the exact same tokens as absolute paths.
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('foo')), 
+            'foo')
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('foo/bar')), 
+            '/foo/bar')
+        
+        # Non-prim paths produce empty tokens.
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path('/foo.prop')), 
+            '')
+        self.assertEqual(
+            Sdf.Layer.ConvertDefaultPrimPathToToken(Sdf.Path.absoluteRootPath), 
+            '')
 
 if __name__ == "__main__":
     unittest.main()

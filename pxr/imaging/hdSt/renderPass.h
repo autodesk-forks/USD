@@ -45,7 +45,8 @@ protected:
 
 private:
     void _UpdateDrawItems(TfTokenVector const& renderTags);
-    void _UpdateCommandBuffer(TfTokenVector const& renderTags);
+    void _UpdateCommandBuffer(HdStRenderPassStateSharedPtr const& renderPassState,
+                              TfTokenVector const& renderTags);
 
     // -----------------------------------------------------------------------
     // Drawing state
@@ -66,6 +67,9 @@ private:
 
     // The version number of the render tags opinion of tasks.
     int _taskRenderTagsVersion;
+
+    // Version of the Buffer Array Range used for the render pass state.
+    size_t _renderPassStateBarVersion;
     
     // The renderTags passed to _Execute(), for comparison next _Execute().
     TfTokenVector _prevRenderTags;

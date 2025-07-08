@@ -39,8 +39,6 @@ public:
 
 private:
     std::unique_ptr<HdSt_TextureTestDriver> _driver;
-
-    std::unique_ptr<HdStResourceRegistry> _hdStRegistry;
     std::unique_ptr<HdSt_TextureHandleRegistry> _textureHandleRegistry;
 };
 
@@ -48,10 +46,9 @@ void
 My_TestGLDrawing::InitTest()
 {
     _driver = std::make_unique<HdSt_TextureTestDriver>();
-    _hdStRegistry = std::make_unique<HdStResourceRegistry>(_driver->GetHgi());
     _textureHandleRegistry =
-        std::make_unique<HdSt_TextureHandleRegistry>(_hdStRegistry.get());
-    
+        std::make_unique<HdSt_TextureHandleRegistry>(
+            _driver->GetResourceRegistry().get());
 }
 
 template<typename T>
@@ -352,8 +349,9 @@ My_TestGLDrawing::OffscreenTest()
                 
         {
             TfDeleteFile("reloadingTexture.png");
-            std::ifstream src("reloadingTexture2.png");
-            std::ofstream dst("reloadingTexture.png");
+            constexpr auto mode = std::ios_base::binary;
+            std::ifstream src{"reloadingTexture2.png", mode};
+            std::ofstream dst{"reloadingTexture.png", mode};
             
             dst << src.rdbuf();
         }

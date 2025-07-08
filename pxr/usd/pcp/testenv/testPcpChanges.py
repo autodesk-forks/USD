@@ -378,9 +378,6 @@ class TestPcpChanges(unittest.TestCase):
         _ChangeAndVerify({'tcps' : 24.0, 'fps' : 24.0}, True, 24.0)
         _ChangeAndVerify({'tcps' : None, 'fps' : None}, False, 24.0)
 
-    @unittest.skipIf(
-        Tf.GetEnvSetting('PCP_DISABLE_TIME_SCALING_BY_LAYER_TCPS'),
-        "Test requires layer TCPS time scaling enabled")
     def test_TcpsChanges(self):
         """
         Tests change processing for changes that affect the time codes per
@@ -1326,6 +1323,26 @@ class TestPcpChanges(unittest.TestCase):
         pi, err = cache.ComputePrimIndex('/Root/A/B')
         self.assertFalse(len(err))
         self.assertEqual(pi.ComputePrimChildNames(), (['C'], []))
+
+    def test_SublayerOperationOnNonUsdLayerWithRelocates(self):
+        """Tests that when a cache is not in USD mode, a full resync is
+        performed for sublayer operations with layers that contain
+        relocates specified with the 'relocates' property """
+
+        rootLayer = Sdf.Layer.CreateAnonymous('root.sdf')
+        Sdf.PrimSpec(rootLayer, 'Root', Sdf.SpecifierDef)
+
+        subLayer = Sdf.Layer.CreateAnonymous('subLayer.sdf')
+        Sdf.PrimSpec(subLayer, 'Sub', Sdf.SpecifierDef)
+        subLayer.relocates = [("/foo/bar", "/foo/baz")]
+
+        pcpCache = Pcp.Cache(Pcp.LayerStackIdentifier(rootLayer, None))
+        pcpCache.ComputePrimIndex('/Root')
+
+        with Pcp._TestChangeProcessor(pcpCache) as changes:
+            rootLayer.subLayerPaths = [subLayer.identifier]
+            self.assertEqual(changes.GetSignificantChanges(), ['/'])
+
 
     def test_RelocatesMapFunctionChanges(self):
         """Tests that adding/removing relocates correctly updates map functions

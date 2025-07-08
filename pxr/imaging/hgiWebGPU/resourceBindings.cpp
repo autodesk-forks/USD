@@ -135,12 +135,16 @@ HgiWebGPUResourceBindings::_CreateBindGroups(
     if (_firstInstance) {
         _firstInstance = false;
         if (constantBindGroupEntry.size > 0 && isConstantDirty) {
-            _bindings.push_back(constantBindGroupEntry);
+            _constantBindGroup = _CreateBindGroup(device, bindGroupLayoutList[HgiWebGPUBufferShaderSection::constantsBindingSet],
+                                                  {constantBindGroupEntry});
+        }else {
+            _constantBindGroup = _CreateBindGroup(device, bindGroupLayoutList[HgiWebGPUBufferShaderSection::constantsBindingSet],{});
         }
+
         _bindGroup = _CreateBindGroup(device, bindGroupLayoutList[HgiWebGPUBufferShaderSection::bindingSet], _bindings);
-    } else if (isConstantDirty){
-        _bindings.back() = constantBindGroupEntry;
-        _bindGroup = _CreateBindGroup(device, bindGroupLayoutList[HgiWebGPUBufferShaderSection::bindingSet], _bindings);
+    } else if (isConstantDirty && constantBindGroupEntry.size){
+        _constantBindGroup = _CreateBindGroup(device, bindGroupLayoutList[HgiWebGPUBufferShaderSection::constantsBindingSet],
+               {constantBindGroupEntry});
     }
     // if we haven't yet created a bind group then create one with the provided layout
     // and the bind group entries we created earlier

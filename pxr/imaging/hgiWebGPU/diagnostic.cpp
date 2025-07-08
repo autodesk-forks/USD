@@ -23,7 +23,6 @@
 //
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/imaging/hgiWebGPU/diagnostic.h"
-#include "webgpu/webgpu.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -34,23 +33,6 @@ HgiWebGPUIsDebugEnabled()
 {
     static bool _v = TfGetEnvSetting(HGIWEBGPU_DEBUG) == 1;
     return _v;
-}
-
-void HgiWebGPUBeginLabel(
-        wgpu::CommandEncoder const &ce,
-        const char* label){
-    if (!HgiWebGPUIsDebugEnabled() || !label) {
-        return;
-    }
-    ce.PushDebugGroup(label);
-}
-
-void HgiWebGPUEndLabel(
-        wgpu::CommandEncoder const &ce) {
-    if (!HgiWebGPUIsDebugEnabled()) {
-        return;
-    }
-    ce.PopDebugGroup();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

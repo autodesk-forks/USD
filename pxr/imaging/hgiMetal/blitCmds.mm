@@ -86,7 +86,7 @@ HgiMetalBlitCmds::PopDebugGroup()
 
 void 
 HgiMetalBlitCmds::CopyTextureGpuToCpu(
-    HgiTextureGpuToCpuOp const& copyOp)
+    HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
 {
     HgiTextureHandle texHandle = copyOp.gpuSourceTexture;
     HgiMetalTexture* srcTexture =static_cast<HgiMetalTexture*>(texHandle.Get());
@@ -169,6 +169,9 @@ HgiMetalBlitCmds::CopyTextureGpuToCpu(
             const char* src = (const char*) [cpuBuffer contents];
             memcpy(dst, src, byteSize);
             [cpuBuffer release];
+            if (callback) {
+                callback((void*)dst);
+            }
         }];
 }
 

@@ -10,6 +10,7 @@
 #include "pxr/imaging/hgiVulkan/conversions.h"
 #include "pxr/imaging/hgiVulkan/device.h"
 #include "pxr/imaging/hgiVulkan/sampler.h"
+#include "pxr/imaging/hgiVulkan/diagnostic.h"
 
 #include <float.h>
 
@@ -44,26 +45,30 @@ HgiVulkanSampler::HgiVulkanSampler(
     sampler.mipLodBias = 0.0f;
     sampler.mipmapMode = HgiVulkanConversions::GetMipFilter(desc.mipFilter);
     sampler.minLod = 0.0f;
-    sampler.maxLod = FLT_MAX;
+    sampler.maxLod = desc.mipFilter == HgiMipFilterNotMipmapped
+        ? 0.25 : VK_LOD_CLAMP_NONE;
+    // 0.25 if not mipmapped, to emulate OpenGL
+    // See https://registry.khronos.org/vulkan/specs/latest/man/html/VkSamplerCreateInfo.html#_description
 
     if ((desc.minFilter != HgiSamplerFilterNearest ||
          desc.mipFilter == HgiMipFilterLinear) &&
          desc.magFilter != HgiSamplerFilterNearest) {
         HgiVulkanCapabilities const& caps = device->GetDeviceCapabilities();
-        sampler.anisotropyEnable = caps.vkDeviceFeatures.samplerAnisotropy;
+        sampler.anisotropyEnable =
+            caps.vkDeviceFeatures2.features.samplerAnisotropy;
         sampler.maxAnisotropy = sampler.anisotropyEnable ?
             std::min<float>({
-                caps.vkDeviceProperties.limits.maxSamplerAnisotropy,
+                caps.vkDeviceProperties2.properties.limits.maxSamplerAnisotropy,
                 static_cast<float>(desc.maxAnisotropy),
                 static_cast<float>(TfGetEnvSetting(HGI_MAX_ANISOTROPY))}) : 1.0f;
     }
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateSampler(
             device->GetVulkanDevice(),
             &sampler,
             HgiVulkanAllocator(),
-            &_vkSampler) == VK_SUCCESS
+            &_vkSampler)
     );
 }
 

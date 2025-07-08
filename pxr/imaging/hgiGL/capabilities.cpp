@@ -192,10 +192,11 @@ HgiGLCapabilities::_LoadCapabilities()
     _SetFlag(HgiDeviceCapabilitiesBitsCustomDepthRange,
         true);
     _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, true);
-    _SetFlag(HgiDeviceCapabilitiesBitsClipDistanceSupport, true);
     _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, false);
     _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, true);
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, true);
+    _SetFlag(HgiDeviceCapabilitiesBitsRoundPoints,
+        true);
 
     if (TfDebug::IsEnabled(HGI_DEBUG_DEVICE_CAPABILITIES)) {
         std::cout

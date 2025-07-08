@@ -661,6 +661,10 @@ struct UsdContrivedTokensType {
     /// 
     /// Schema identifer for UsdContrivedTestHairman_1
     const TfToken TestPxHairman_1;
+    /// \brief "UsdContrivedNoAlias"
+    /// 
+    /// Schema identifer and family for UsdContrivedNoAlias
+    const TfToken UsdContrivedNoAlias;
     /// A vector of all of the tokens listed above.
     const std::vector<TfToken> allTokens;
 };

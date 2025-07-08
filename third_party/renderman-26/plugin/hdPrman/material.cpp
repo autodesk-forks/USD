@@ -35,6 +35,11 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#if PXR_VERSION < 2505
+using SdrTokenVec = NdrTokenVec;
+using SdrOptionVec = NdrOptionVec;
+#endif
+
 TF_DEFINE_ENV_SETTING(HD_PRMAN_MATERIALID, true,
                       "Enable __materialid as hash of material network");
 static bool _enableMaterialID =
@@ -61,7 +66,7 @@ TF_DEFINE_ENV_SETTING(HD_PRMAN_TEX_EXTS, "tex:dds",
                       "that do not require txmake processing."
                       "eg. tex:dds:tx");
 
-TF_MAKE_STATIC_DATA(NdrTokenVec, _sourceTypesOslFirst) {
+TF_MAKE_STATIC_DATA(SdrTokenVec, _sourceTypesOslFirst) {
     *_sourceTypesOslFirst = {
         TfToken("OSL"),
         TfToken("RmanCpp"),
@@ -70,7 +75,7 @@ TF_MAKE_STATIC_DATA(NdrTokenVec, _sourceTypesOslFirst) {
 #endif
     };}
 
-TF_MAKE_STATIC_DATA(NdrTokenVec, _sourceTypesCppFirst) {
+TF_MAKE_STATIC_DATA(SdrTokenVec, _sourceTypesCppFirst) {
     *_sourceTypesCppFirst = {
         TfToken("RmanCpp"),
         TfToken("OSL"),
@@ -131,7 +136,7 @@ struct _HashMaterial {
     }
 };
 
-TF_MAKE_STATIC_DATA(NdrTokenVec, _texExts) {
+TF_MAKE_STATIC_DATA(SdrTokenVec, _texExts) {
     *_texExts = TfToTokenVector(TfStringSplit(
         TfGetEnvSetting(HD_PRMAN_TEX_EXTS), ":"));
     }
@@ -184,7 +189,9 @@ HdPrmanMaterial::GetMaterialNetwork() const
 
 HdPrmanMaterial::HdPrmanMaterial(SdfPath const& id)
     : HdMaterial(id)
+    , _dirtyMaterial(true)
     , _materialId(riley::MaterialId::InvalidId())
+    , _dirtyDisplacement(true)
     , _displacementId(riley::DisplacementId::InvalidId())
     , _rileyIsInSync(false)
 {
@@ -237,7 +244,7 @@ _ConvertToVec3fArray(const VtArray<GfVec3d>& v)
 
 static int
 _ConvertOptionTokenToInt(
-    const TfToken &option, const NdrOptionVec &options, bool *ok)
+    const TfToken &option, const SdrOptionVec &options, bool *ok)
 {
     for (const auto &tokenPair : options) {
         if (tokenPair.first == option) {
@@ -283,6 +290,7 @@ _IsWriteAsset(const TfToken& nodeName, const RtUString& paramName)
 // of multi-path dependencies.
 static bool
 _ConvertNodes(
+    SdfPath const& id,
     HdMaterialNetwork2 const& network,
     SdfPath const& nodePath,
     std::vector<riley::ShadingNode> *result,
@@ -301,7 +309,8 @@ _ConvertNodes(
     auto iter = network.nodes.find(nodePath);
     if (iter == network.nodes.end()) {
         // This could be caused by a bad connection to a non-existent node.
-        TF_WARN("Unknown material node '%s'", nodePath.GetText());
+        TF_WARN("Unknown material node '%s' in <%s>", nodePath.GetText(),
+            id.GetText());
         return false;
     }
     HdMaterialNode2 const& node = iter->second;
@@ -311,7 +320,7 @@ _ConvertNodes(
         for (auto const& e: connEntry.second) {
             // This method will just return if we've visited this upstream node
             // before
-            _ConvertNodes(network, e.upstreamNode, result, visitedNodes,
+            _ConvertNodes(id, network, e.upstreamNode, result, visitedNodes,
                           elideDefaults);
         }
     }
@@ -337,8 +346,8 @@ _ConvertNodes(
             sdrRegistry.GetShaderNodeByIdentifier(node.nodeTypeId,
                                                   _GetShaderSourceTypes());
     if (!sdrEntry) {
-        TF_WARN("Unknown shader ID %s for node <%s>\n",
-                node.nodeTypeId.GetText(), nodePath.GetText());
+        TF_WARN("Unknown shader ID %s for node <%s> in <%s>\n",
+                node.nodeTypeId.GetText(), nodePath.GetText(), id.GetText());
         return false;
     }
     // Create equivalent Riley shading node.
@@ -373,15 +382,16 @@ _ConvertNodes(
     } else if (sdrEntry->GetContext() == SdrNodeContext->LightFilter) {
         sn.type = riley::ShadingNode::Type::k_LightFilter;
     } else {
-        TF_WARN("Unknown shader entry type '%s' for shader '%s'",
-                sdrEntry->GetContext().GetText(), sdrEntry->GetName().c_str());
+        TF_WARN("Unknown shader entry type '%s' for shader '%s' in <%s>",
+                sdrEntry->GetContext().GetText(), sdrEntry->GetName().c_str(),
+                id.GetText());
         return false;
     }
     sn.handle = RtUString(nodePath.GetText());
     std::string shaderPath = sdrEntry->GetResolvedImplementationURI();
     if (shaderPath.empty()){
-        TF_WARN("Shader '%s' did not provide a valid implementation path.",
-                sdrEntry->GetName().c_str());
+        TF_WARN("Shader '%s' did not provide a valid implementation "
+                "path in <%s>.", sdrEntry->GetName().c_str(), id.GetText());
         return false;
     }
     if (sn.type == riley::ShadingNode::Type::k_Displacement ||
@@ -402,10 +412,11 @@ _ConvertNodes(
         if (!prop) {
             TF_DEBUG(HDPRMAN_MATERIALS)
                 .Msg("Unknown shader property '%s' for "
-                     "shader '%s' at '%s'; ignoring.\n",
+                     "shader '%s' at '%s' in <%s>; ignoring.\n",
                      param.first.GetText(),
                      sdrEntry->GetName().c_str(),
-                     nodePath.GetText());
+                     nodePath.GetText(),
+                     id.GetText());
             continue;
         }
         // Skip parameter values that match schema-defined defaults
@@ -431,10 +442,11 @@ _ConvertNodes(
             }
             TF_DEBUG(HDPRMAN_MATERIALS)
                 .Msg("Unknown shader entry field type for "
-                     "field '%s' on shader '%s' at '%s'; ignoring.\n",
+                     "field '%s' on shader '%s' at '%s' in <%s>; ignoring.\n",
                      param.first.GetText(),
                      sdrEntry->GetName().c_str(),
-                     nodePath.GetText());
+                     nodePath.GetText(),
+                     id.GetText());
             continue;
         }
 
@@ -597,9 +609,7 @@ _ConvertNodes(
                 }
             } else if(name == us_filename) {
                 SdfAssetPath path(v);
-                bool isLight = (sn.type == riley::ShadingNode::Type::k_Light &&
-                                param.first == HdLightTokens->textureFile);
-
+                bool isLight = (sn.type == riley::ShadingNode::Type::k_Light);
                 RtUString ustr = HdPrman_Utils::ResolveAssetToRtUString(
                     path,
                     !isLight, // only flip if NOT a light
@@ -621,9 +631,7 @@ _ConvertNodes(
             // This code processes nodes for both surface materials
             // and lights.  RenderMan does not flip light textures
             // as it does surface textures.
-            bool isLight = (sn.type == riley::ShadingNode::Type::k_Light &&
-                            param.first == HdLightTokens->textureFile);
-
+            bool isLight = (sn.type == riley::ShadingNode::Type::k_Light);
             RtUString v = HdPrman_Utils::ResolveAssetToRtUString(
                 param.second.UncheckedGet<SdfAssetPath>(),
                 !isLight, // only flip if NOT a light
@@ -650,11 +658,12 @@ _ConvertNodes(
         if (!ok) {
             TF_DEBUG(HDPRMAN_MATERIALS)
                 .Msg("Unknown shading parameter type '%s'; skipping "
-                     "parameter '%s' on node '%s'; "
+                     "parameter '%s' on node '%s' in <%s>; "
                      "expected type '%s'\n",
                      param.second.GetTypeName().c_str(),
                      param.first.GetText(),
                      nodePath.GetText(),
+                     id.GetText(),
                      propType.GetText());
         }
     }
@@ -665,7 +674,8 @@ _ConvertNodes(
         SdrShaderPropertyConstPtr downstreamProp =
             sdrEntry->GetShaderInput(connEntry.first);
         if (!downstreamProp) {
-            TF_WARN("Unknown downstream property %s", connEntry.first.data());
+            TF_WARN("Unknown downstream property %s in <%s>",
+                    connEntry.first.data(), id.GetText());
             continue;
         }
         RtUString name(downstreamProp->GetImplementationName().c_str());
@@ -680,7 +690,8 @@ _ConvertNodes(
             HdMaterialNode2 const* upstreamNode =
                 TfMapLookupPtr(network.nodes, e.upstreamNode);
             if (!upstreamNode) {
-                TF_WARN("Unknown upstream node %s", e.upstreamNode.GetText());
+                TF_WARN("Unknown upstream node %s in <%s>",
+                    e.upstreamNode.GetText(), id.GetText());
                 continue;
             }
             // Ignore nodes of id "PrimvarPass". This node is a workaround for 
@@ -693,8 +704,8 @@ _ConvertNodes(
                 sdrRegistry.GetShaderNodeByIdentifier(
                     upstreamNode->nodeTypeId, _GetShaderSourceTypes());
             if (!upstreamSdrEntry) {
-                TF_WARN("Unknown shader for upstream node %s",
-                        e.upstreamNode.GetText());
+                TF_WARN("Unknown shader for upstream node %s in <%s>",
+                        e.upstreamNode.GetText(), id.GetText());
                 continue;
             }
             SdrShaderPropertyConstPtr upstreamProp =
@@ -702,8 +713,8 @@ _ConvertNodes(
             // In the case of terminals there is no upstream output name
             // since the whole node is referenced as a whole
             if (!upstreamProp && propType != SdrPropertyTypes->Terminal) {
-                TF_WARN("Unknown upstream property %s",
-                        e.upstreamOutputName.data());
+                TF_WARN("Unknown upstream property %s in <%s>",
+                        e.upstreamOutputName.data(), id.GetText());
                 continue;
             }
             // Prman syntax for parameter references is "handle:param".
@@ -776,10 +787,11 @@ _ConvertNodes(
                     sn.params.SetStructReference(name, inputRefs[0]);
                 } else {
                      TF_WARN("Unsupported type struct array for property '%s' "
-                        "on shader '%s' at '%s'; ignoring.",
+                        "on shader '%s' at '%s' in <%s>; ignoring.",
                         connEntry.first.data(),
                         sdrEntry->GetName().c_str(),
-                        nodePath.GetText());
+                        nodePath.GetText(),
+                        id.GetText());
                 }
             } else if (propType == SdrPropertyTypes->Terminal) {
                 if (numInputRefs == 1) {
@@ -797,11 +809,12 @@ _ConvertNodes(
                 }
             } else {
                 TF_WARN("Unknown type '%s' for property '%s' "
-                        "on shader '%s' at %s; ignoring.",
+                        "on shader '%s' at %s in <%s>; ignoring.",
                         propType.GetText(),
                         connEntry.first.data(),
                         sdrEntry->GetName().c_str(),
-                        nodePath.GetText());
+                        nodePath.GetText(),
+                        id.GetText());
             }
         }
     }
@@ -813,6 +826,7 @@ _ConvertNodes(
     
 bool
 HdPrman_ConvertHdMaterialNetwork2ToRmanNodes(
+    SdfPath const& id,
     HdMaterialNetwork2 const& network,
     SdfPath const& nodePath,
     std::vector<riley::ShadingNode> *result)
@@ -824,7 +838,7 @@ HdPrman_ConvertHdMaterialNetwork2ToRmanNodes(
 
     _PathSet visitedNodes;
     return _ConvertNodes(
-        network, nodePath, result, &visitedNodes, elideDefaults);
+        id, network, nodePath, result, &visitedNodes, elideDefaults);
 }
     
 // Debug helper
@@ -858,102 +872,6 @@ HdPrman_DumpNetwork(HdMaterialNetwork2 const& network, SdfPath const& id)
                terminalEntry.second.upstreamNode.GetText());
     }
 }
-    
-// Convert given HdMaterialNetwork2 to Riley material and displacement
-// shader networks. If the Riley network exists, it will be modified;
-// otherwise it will be created as needed.
-static void
-_ConvertHdMaterialNetwork2ToRman(
-    HdSceneDelegate *sceneDelegate,
-    riley::Riley *riley,
-    SdfPath const& id,
-    const HdMaterialNetwork2 &network,
-    riley::MaterialId *materialId,
-    riley::DisplacementId *displacementId)
-{
-    HD_TRACE_FUNCTION();
-    std::vector<riley::ShadingNode> nodes;
-    nodes.reserve(network.nodes.size());
-    bool materialFound = false, displacementFound = false;
-
-    for (auto const& terminal: network.terminals) {
-        if (HdPrman_ConvertHdMaterialNetwork2ToRmanNodes(
-                network, terminal.second.upstreamNode, &nodes)) {
-            if (nodes.empty()) {
-                // Already emitted a specific warning.
-                continue;
-            }
-            // Compute a hash of the material network, and pass it as
-            // __materialid on the terminal shader node.  RenderMan uses
-            // this detect and re-use material netowrks, which is valuable
-            // in production scenes where upstream scene instancing did
-            // not already catch the reuse.
-            if (_enableMaterialID) {
-                static RtUString const materialid = RtUString("__materialid");
-                const size_t networkHash = _HashMaterial()(network);
-                nodes.back().params.SetString(
-                    materialid,
-                    RtUString(TfStringify(networkHash).c_str()));
-            }
-            if (terminal.first == HdMaterialTerminalTokens->surface ||
-                terminal.first == HdMaterialTerminalTokens->volume) {
-                // Create or modify Riley material.
-                materialFound = true;
-                TRACE_SCOPE("_ConvertHdMaterialNetwork2ToRman - Update Riley Material");
-                if (*materialId == riley::MaterialId::InvalidId()) {
-                    TRACE_SCOPE("riley::CreateMaterial");
-                    *materialId = riley->CreateMaterial(
-                        riley::UserId(stats::AddDataLocation(id.GetText()).GetValue()),
-                        {static_cast<uint32_t>(nodes.size()), &nodes[0]},
-                        RtParamList());
-                } else {
-                    TRACE_SCOPE("riley::ModifyMaterial");
-                    riley::ShadingNetwork const material = {
-                        static_cast<uint32_t>(nodes.size()), &nodes[0]};
-                    riley->ModifyMaterial(*materialId, &material, nullptr);
-                }
-                if (*materialId == riley::MaterialId::InvalidId()) {
-                    TF_WARN("Failed to create material %s\n",
-                                     id.GetText());
-                }
-            } else if (terminal.first ==
-                       HdMaterialTerminalTokens->displacement) {
-                // Create or modify Riley displacement.
-                TRACE_SCOPE("_ConvertHdMaterialNetwork2ToRman - Update Riley Displacement");
-                displacementFound = true;
-                if (*displacementId == riley::DisplacementId::InvalidId()) {
-                    TRACE_SCOPE("riley::CreateDisplacement");
-                    *displacementId = riley->CreateDisplacement(
-                        riley::UserId(stats::AddDataLocation(id.GetText()).GetValue()),
-                        {static_cast<uint32_t>(nodes.size()), &nodes[0]},
-                        RtParamList());
-                } else {
-                    TRACE_SCOPE("riley::ModifyDisplacement");
-                    riley::ShadingNetwork const displacement = {
-                        static_cast<uint32_t>(nodes.size()), &nodes[0]};
-                    riley->ModifyDisplacement(
-                        *displacementId, &displacement, nullptr);
-                }
-                if (*displacementId == riley::DisplacementId::InvalidId()) {
-                    TF_WARN("Failed to create displacement %s\n",
-                                     id.GetText());
-                }
-            }
-        } else {
-            TF_WARN("Failed to convert nodes for %s\n", id.GetText());
-        }
-        nodes.clear();
-    }
-    // Free dis-used networks.
-    if (!materialFound) {
-        riley->DeleteMaterial(*materialId);
-        *materialId = riley::MaterialId::InvalidId();
-    }
-    if (!displacementFound) {
-        riley->DeleteDisplacement(*displacementId);
-        *displacementId = riley::DisplacementId::InvalidId();
-    }
-}
 
 /* virtual */
 void
@@ -965,6 +883,14 @@ HdPrmanMaterial::Sync(HdSceneDelegate *sceneDelegate,
 
     HdPrman_RenderParam *param =
         static_cast<HdPrman_RenderParam*>(renderParam);
+
+#if PXR_VERSION >= 2505
+    _dirtyMaterial = _dirtyMaterial || (*dirtyBits & (HdMaterial::DirtySurface | HdMaterial::DirtyVolume));
+    _dirtyDisplacement = _dirtyDisplacement || (*dirtyBits & HdMaterial::DirtyDisplacement);
+#else
+    _dirtyMaterial = true;
+    _dirtyDisplacement = true;
+#endif
 
     if ((*dirtyBits & HdMaterial::DirtyResource) ||
         (*dirtyBits & HdMaterial::DirtyParams)) {
@@ -1024,9 +950,96 @@ HdPrmanMaterial::_SyncToRileyWithLock(
         if (TfDebug::IsEnabled(HDPRMAN_MATERIALS)) {
             HdPrman_DumpNetwork(_materialNetwork, id);
         }
-        _ConvertHdMaterialNetwork2ToRman(sceneDelegate,
-                                         riley, id, _materialNetwork,
-                                         &_materialId, &_displacementId);
+
+        // Convert given HdMaterialNetwork2 to Riley material and displacement
+        // shader networks. If the Riley network exists, it will be modified;
+        // otherwise it will be created as needed.
+        std::vector<riley::ShadingNode> nodes;
+        nodes.reserve(_materialNetwork.nodes.size());
+        bool materialFound = false, displacementFound = false;
+        
+        for (auto const& terminal: _materialNetwork.terminals) {
+            if (HdPrman_ConvertHdMaterialNetwork2ToRmanNodes(
+                    id, _materialNetwork, terminal.second.upstreamNode, &nodes)) {
+                if (nodes.empty()) {
+                    // Already emitted a specific warning.
+                    continue;
+                }
+                // Compute a hash of the material network, and pass it as
+                // __materialid on the terminal shader node.  RenderMan uses
+                // this detect and re-use material netowrks, which is valuable
+                // in production scenes where upstream scene instancing did
+                // not already catch the reuse.
+                if (_enableMaterialID) {
+                    static RtUString const materialId = RtUString("__materialid");
+                    const size_t networkHash = _HashMaterial()(_materialNetwork);
+                    nodes.back().params.SetString(
+                        materialId,
+                        RtUString(TfStringify(networkHash).c_str()));
+                }
+                if (terminal.first == HdMaterialTerminalTokens->surface ||
+                    terminal.first == HdMaterialTerminalTokens->volume) {
+                    // Create or modify Riley material.
+                    materialFound = true;
+                    if (_dirtyMaterial) {
+                        TRACE_SCOPE("_ConvertHdMaterialNetwork2ToRman - Update Riley Material");
+                        if (_materialId == riley::MaterialId::InvalidId()) {
+                            TRACE_SCOPE("riley::CreateMaterial");
+                            _materialId = riley->CreateMaterial(
+                                riley::UserId(stats::AddDataLocation(id.GetText()).GetValue()),
+                                {static_cast<uint32_t>(nodes.size()), &nodes[0]},
+                                RtParamList());
+                        } else {
+                            TRACE_SCOPE("riley::ModifyMaterial");
+                            riley::ShadingNetwork const material = {
+                                static_cast<uint32_t>(nodes.size()), &nodes[0]};
+                            riley->ModifyMaterial(_materialId, &material, nullptr);
+                        }
+                        if (_materialId == riley::MaterialId::InvalidId()) {
+                            TF_WARN("Failed to create material %s\n",
+                                            id.GetText());
+                        }
+                        _dirtyMaterial = false;
+                    }
+                } else if (terminal.first == HdMaterialTerminalTokens->displacement) {
+                    // Create or modify Riley displacement.
+                    TRACE_SCOPE("_ConvertHdMaterialNetwork2ToRman - Update Riley Displacement");
+                    displacementFound = true;
+                    if (_dirtyDisplacement) {
+                        if (_displacementId == riley::DisplacementId::InvalidId()) {
+                            TRACE_SCOPE("riley::CreateDisplacement");
+                            _displacementId = riley->CreateDisplacement(
+                                riley::UserId(stats::AddDataLocation(id.GetText()).GetValue()),
+                                {static_cast<uint32_t>(nodes.size()), &nodes[0]},
+                                RtParamList());
+                        } else {
+                            TRACE_SCOPE("riley::ModifyDisplacement");
+                            riley::ShadingNetwork const displacement = {
+                                static_cast<uint32_t>(nodes.size()), &nodes[0]};
+                            riley->ModifyDisplacement(
+                                _displacementId, &displacement, nullptr);
+                        }
+                        if (_displacementId == riley::DisplacementId::InvalidId()) {
+                            TF_WARN("Failed to create displacement %s\n",
+                                            id.GetText());
+                        }
+                        _dirtyDisplacement = false;
+                    }
+                }
+            } else {
+                TF_WARN("Failed to convert nodes for %s\n", id.GetText());
+            }
+            nodes.clear();
+        }
+        // Free dis-used networks.
+        if (!materialFound) {
+            riley->DeleteMaterial(_materialId);
+            _materialId = riley::MaterialId::InvalidId();
+        }
+        if (!displacementFound) {
+            riley->DeleteDisplacement(_displacementId);
+            _displacementId = riley::DisplacementId::InvalidId();
+        }
     } else {
         TF_CODING_ERROR("HdPrmanMaterial: Expected material resource "
             "for <%s> to contain material, but found %s instead.",

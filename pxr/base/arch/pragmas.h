@@ -48,6 +48,9 @@
     #define ARCH_PRAGMA_UNUSED_FUNCTION \
         _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
 
+    #define ARCH_PRAGMA_STRINGOP_OVERFLOW \
+        _Pragma("GCC diagnostic ignored \"-Wstringop-overflow=\"")
+
 #elif defined(ARCH_COMPILER_CLANG)
 
     #define ARCH_PRAGMA_PUSH \
@@ -143,6 +146,9 @@
     #define ARCH_PRAGMA_UNARY_MINUS_ON_UNSIGNED \
         __pragma(warning(disable:4146)) 
 
+    #define ARCH_PRAGMA_NON_EXPORTED_BASE_CLASS \
+        __pragma(warning(disable:4275))
+
 #endif
 
 #if !defined ARCH_PRAGMA_PUSH
@@ -179,6 +185,10 @@
 
 #if !defined ARCH_PRAGMA_UNUSED_FUNCTION
     #define ARCH_PRAGMA_UNUSED_FUNCTION
+#endif
+
+#if !defined ARCH_PRAGMA_STRINGOP_OVERFLOW
+    #define ARCH_PRAGMA_STRINGOP_OVERFLOW
 #endif
 
 #if !defined ARCH_PRAGMA_UNUSED_PRIVATE_FIELD
@@ -243,6 +253,10 @@
 
 #if !defined ARCH_PRAGMA_INSTANCE_METHOD_NOT_FOUND
     #define ARCH_PRAGMA_INSTANCE_METHOD_NOT_FOUND
+#endif
+
+#if !defined ARCH_PRAGMA_NON_EXPORTED_BASE_CLASS
+    #define ARCH_PRAGMA_NON_EXPORTED_BASE_CLASS
 #endif
 
 #endif // PXR_BASE_ARCH_PRAGMAS_H

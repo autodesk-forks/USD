@@ -26,9 +26,6 @@ pxr_library(ndr
         api.h
         nodeDiscoveryResult.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapDeclare.cpp
@@ -49,26 +46,4 @@ pxr_library(ndr
 
     DOXYGEN_FILES
         overview.dox
-)
-
-pxr_test_scripts(
-    testenv/testNdrFilesystemDiscovery.py
-    testenv/testNdrVersion.py
-)
-
-pxr_install_test_dir(
-    SRC testenv/testNdrFilesystemDiscovery.testenv
-    DEST testNdrFilesystemDiscovery
-)
-
-pxr_register_test(testNdrFilesystemDiscovery
-    PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testNdrFilesystemDiscovery"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testNdrVersion
-    PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testNdrVersion"
-    EXPECTED_RETURN_CODE 0
 )

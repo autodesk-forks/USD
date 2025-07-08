@@ -73,16 +73,16 @@ HgiWebGPUComputePipeline::HgiWebGPUComputePipeline(
     // TODO: desc.shaderConstantsDesc doesnt correspond with the webgpu spec
     std::vector<wgpu::ConstantEntry> constants;
 
-    wgpu::ProgrammableStageDescriptor computeStageDesc;
-    computeStageDesc.module = computeProgram->GetShaderModule();
-    computeStageDesc.entryPoint = computeProgram->GetShaderEntryPoint();
-    computeStageDesc.constantCount = constants.size();
-    computeStageDesc.constants = constants.data();
+    wgpu::ComputeState computeState;
+    computeState.module = computeProgram->GetShaderModule();
+    computeState.entryPoint = computeProgram->GetShaderEntryPoint();
+    computeState.constantCount = constants.size();
+    computeState.constants = constants.data();
 
     wgpu::ComputePipelineDescriptor pipelineDesc;
     pipelineDesc.label = desc.debugName.c_str();
     pipelineDesc.layout = pipelineLayout;
-    pipelineDesc.compute = computeStageDesc;
+    pipelineDesc.compute = computeState;
 
     _pipeline = device.CreateComputePipeline(&pipelineDesc);
 }

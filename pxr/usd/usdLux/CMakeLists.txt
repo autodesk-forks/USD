@@ -7,8 +7,8 @@ pxr_library(usdLux
     LIBRARIES
         tf
         vt
-        ndr
         sdf
+        sdr
         usd
         usdGeom
         usdShade
@@ -25,9 +25,6 @@ pxr_library(usdLux
     PRIVATE_CLASSES
         discoveryPlugin
         lightDefParser
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
 
     PYMODULE_FILES 
         __init__.py

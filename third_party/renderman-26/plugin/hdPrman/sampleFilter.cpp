@@ -19,12 +19,16 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#if PXR_VERSION < 2505
+using SdrTokenVec = NdrTokenVec;
+#endif
+
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (resource)
 );
 
-TF_MAKE_STATIC_DATA(NdrTokenVec, _sourceTypes) {
+TF_MAKE_STATIC_DATA(SdrTokenVec, _sourceTypes) {
     *_sourceTypes = { TfToken("OSL"), 
                       TfToken("RmanCpp"), }; }
 
@@ -97,13 +101,11 @@ HdPrman_SampleFilter::Sync(
     HdPrman_RenderParam *param = static_cast<HdPrman_RenderParam*>(renderParam);
 
     if (*dirtyBits & HdChangeTracker::DirtyParams) {
-        // Only Create the SampleFilter if connected to the RenderSettings
+        // Only Create the SampleFilter if on the RenderSettings
         // Note that this works because the RenderSettings, being a Bprim,
         // always gets synced before the SampleFilter Sprim.
-        const SdfPathVector& connectedFilters =
-            param->GetConnectedSampleFilterPaths();
-        if (std::find(connectedFilters.begin(), connectedFilters.end(), id)
-            != connectedFilters.end()) {
+        const SdfPathVector& filters = param->GetSampleFilterPaths();
+        if (std::find(filters.begin(), filters.end(), id) != filters.end()) {
             const VtValue sampleFilterResourceValue =
                 sceneDelegate->Get(id, _tokens->resource);
 

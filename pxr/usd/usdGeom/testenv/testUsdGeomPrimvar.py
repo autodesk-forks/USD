@@ -200,6 +200,14 @@ class TestUsdGeomPrimvarsAPI(unittest.TestCase):
         self.assertEqual(u1.GetTimeSamplesInInterval(Gf.Interval(0.5, 1.5)), [1.0])
         self.assertTrue(u1.ValueMightBeTimeVarying())
 
+        self.assertFalse(v1.IsIndexed())
+        self.assertTrue(v1.CreateIndicesAttr())
+        self.assertTrue(v1.GetIndicesAttr())
+        self.assertFalse(v1.IsIndexed())
+        self.assertTrue(v1.GetIndicesAttr().Set(Vt.IntArray([0, 1, 2, 2, 1, 0])))
+        self.assertTrue(v1.IsIndexed())
+        self.assertTrue(v1.GetIndicesAttr())
+
         # Add more time-samples to u1
         indicesAt0 = Vt.IntArray([])
         uValAt3 = Vt.FloatArray([4.1,5.1,6.1])

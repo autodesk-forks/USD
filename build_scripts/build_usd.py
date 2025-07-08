@@ -19,6 +19,7 @@ import ctypes
 import datetime
 import fnmatch
 import glob
+import hashlib
 import locale
 import multiprocessing
 import os
@@ -37,10 +38,16 @@ from shutil import which
 
 # Helpers for printing output
 verbosity = 1
-EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB -sSHARED_MEMORY=1'
+EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-pthread'
 EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
 TARGET_WASM='wasm'
+TARGET_WASM64='wasm64'
 TARGET_WASM_NODE='node'
+
+# Hide symbols
+HIDDEN_SYMBOLS = ['-DCMAKE_CXX_VISIBILITY_PRESET=hidden',
+                  '-DCMAKE_C_VISIBILITY_PRESET=hidden',
+                  '-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON']
 
 def Print(msg):
     if verbosity > 0:
@@ -88,11 +95,11 @@ def GetBuildTargetDefault():
 def GetBuildTargets():
     # The wasm build has been tested only in MacOS so far
     if MacOS():
-        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM_NODE]
+        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     elif Linux():
-        return [TARGET_WASM, TARGET_WASM_NODE]
+        return [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     elif Windows():
-        return [TARGET_WASM, TARGET_WASM_NODE]        
+        return [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     else:
         return []
 
@@ -174,14 +181,25 @@ def IsVisualStudio2017OrGreater():
     VISUAL_STUDIO_2017_VERSION = (14, 1)
     return IsVisualStudioVersionOrGreater(VISUAL_STUDIO_2017_VERSION)
 
+# Helper to get the current host arch on Windows
+def GetWindowsHostArch():
+    identifier = os.environ.get('PROCESSOR_IDENTIFIER')
+    # ARM64 identifiers currently start with "ARMv8 ...."
+    # Note: This could be modified in the future to distinguish between ARMv8 and ARMv9
+    if "ARMv" in identifier:
+        return "ARM64"
+    elif any(x64Arch in identifier for x64Arch in ["AMD64", "Intel64", "EM64T"]):
+        return "x64"
+    else:
+        raise RuntimeError("Unknown Windows host arch")
+
 def GetPythonInfo(context):
     """Returns a tuple containing the path to the Python executable, shared
     library, and include directory corresponding to the version of Python
     currently running. Returns None if any path could not be determined.
 
     This function is used to extract build information from the Python 
-    interpreter used to launch this script. This information is used
-    in the Boost and USD builds. By taking this approach we can support
+    interpreter used to launch this script. This allows us to support
     having USD builds for different Python versions built on the same
     machine. This is very useful, especially when developers have multiple
     versions installed on their machine.
@@ -374,7 +392,7 @@ def FormatMultiProcs(numJobs, generator):
 
     return "{tag}{procs}".format(tag=tag, procs=numJobs)
 
-def RunCMake(context, force, extraArgs = None, target="install"):
+def RunCMake(context, force, extraArgs=None, *, buildDirName=None, target="install"):
     """Invoke CMake to configure, build, and install a library whose 
     source code is located in the current working directory."""
     # Create a directory for out-of-source builds in the build directory
@@ -390,7 +408,8 @@ def RunCMake(context, force, extraArgs = None, target="install"):
     srcDir = os.getcwd()
     instDir = (context.usdInstDir if srcDir == context.usdSrcDir
                else context.instDir)
-    buildDir = os.path.join(context.buildDir, os.path.split(srcDir)[1])
+    buildDir = os.path.join(context.buildDir, buildDirName if buildDirName
+                            else os.path.split(srcDir)[1])
     if force and os.path.isdir(buildDir):
         shutil.rmtree(buildDir)
 
@@ -416,7 +435,7 @@ def RunCMake(context, force, extraArgs = None, target="install"):
     # EMSCRIPTEN doesn't use VS On Windows
     # Note - don't want to add -A (architecture flag) if generator is, ie, Ninja
     if not context.targetWasm and IsVisualStudio2019OrGreater() and "Visual Studio" in generator:
-        generator = generator + " -A x64"
+        generator = generator + " -A " + GetWindowsHostArch()
 
     toolset = context.cmakeToolset
     if toolset is not None:
@@ -510,6 +529,16 @@ def GetCMakeVersion():
     else:
         return (int(major), int(minor), int(patch))
 
+def ComputeSHA256Hash(filename):
+    """Returns the SHA256 hash of the specified file."""
+    hasher = hashlib.sha256()
+    with open(filename, "rb") as f:
+        buf = None
+        while buf != b'':
+            buf = f.read(4096)
+            hasher.update(buf)
+    return hasher.hexdigest()
+
 def PatchFile(filename, patches, multiLineMatches=False):
     """Applies patches to the specified file. patches is a list of tuples
     (old string, new string)."""
@@ -550,18 +579,31 @@ def DownloadFileWithUrllib(url, outputFilename):
         outfile.write(r.read())
 
 def DownloadURL(url, context, force, extractDir = None, 
-        dontExtract = None):
+                dontExtract = None, destFileName = None,
+                expectedSHA256 = None):
     """Download and extract the archive file at given URL to the
     source directory specified in the context. 
 
     dontExtract may be a sequence of path prefixes that will
     be excluded when extracting the archive.
 
+    destFileName may be a string containing the filename where
+    the file will be downloaded. If unspecified, this filename
+    will be derived from the URL.
+
+    expectedSHA256 may be a string containing the expected SHA256
+    checksum for the downloaded file. If provided, this function
+    will raise a RuntimeError if the SHA256 checksum computed from
+    the file does not match.
+
     Returns the absolute path to the directory where files have 
     been extracted."""
     with CurrentWorkingDirectory(context.srcDir):
-        # Extract filename from URL and see if file already exists. 
-        filename = url.split("/")[-1]       
+        if destFileName:
+            filename = destFileName
+        else:
+            filename = url.split("/")[-1]       
+
         if force and os.path.exists(filename):
             os.remove(filename)
 
@@ -607,6 +649,15 @@ def DownloadURL(url, context, force, extractDir = None,
                                  "this script.")
                 raise RuntimeError("Failed to download {url}: {err}"
                                    .format(url=url, err=errorMsg))
+
+            if expectedSHA256:
+                computedSHA256 = ComputeSHA256Hash(tmpFilename)
+                if computedSHA256 != expectedSHA256:
+                    raise RuntimeError(
+                        "Unexpected SHA256 for {url}: got {computed}, "
+                        "expected {expected}".format(
+                            url=url, computed=computedSHA256,
+                            expected=expectedSHA256))
 
             shutil.move(tmpFilename, filename)
 
@@ -709,25 +760,16 @@ def AnyPythonDependencies(deps):
 ############################################################
 # zlib
 
-ZLIB_URL = "https://github.com/madler/zlib/archive/v1.2.13.zip"
+ZLIB_URL = "https://github.com/madler/zlib/archive/v1.3.1.zip"
 
 def InstallZlib(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ZLIB_URL, context, force)):
-        # The following test files aren't portable to embedded platforms.
-        # They're not required for use on any platforms, so we elide them
-        # for efficiency
+        # Install static zlib only to avoid conflict if the application already has zlib shared library but with different version.
         PatchFile("CMakeLists.txt",
-                  [("add_executable(example test/example.c)",
-                    ""),
-                   ("add_executable(minigzip test/minigzip.c)",
-                    ""),
-                   ("target_link_libraries(example zlib)",
-                    ""),
-                   ("target_link_libraries(minigzip zlib)",
-                    ""),
-                   ("add_test(example example)",
-                    "")])
-        RunCMake(context, force, buildArgs)
+                  [("install(TARGETS zlib zlibstatic",
+                    "install(TARGETS zlibstatic")])
+        extraArgs = ['-DZLIB_BUILD_EXAMPLES=OFF'] + HIDDEN_SYMBOLS
+        RunCMake(context, force, buildArgs + extraArgs)
 
 ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
         
@@ -752,38 +794,30 @@ ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
 BOOST_VERSION_FILES = [
     "include/boost/version.hpp",
     "include/boost-1_76/boost/version.hpp",
-    "include/boost-1_78/boost/version.hpp",
-    "include/boost-1_82/boost/version.hpp"
+    "include/boost-1_82/boost/version.hpp",
+    "include/boost-1_86/boost/version.hpp"
 ]
 
 def InstallBoost_Helper(context, force, buildArgs):
     # In general we use boost 1.76.0 to adhere to VFX Reference Platform CY2022.
     # However, there are some cases where a newer version is required.
-    # - Building with Python 3.11 requires boost 1.82.0 or newer
-    #   (https://github.com/boostorg/python/commit/a218ba)
-    # - Building on MacOS requires v1.82.0 or later for C++17 support starting 
-    #   with Xcode 15. We choose to use this version for all MacOS builds for 
-    #   simplicity."
-    # - Building with Python 3.10 requires boost 1.76.0 or newer
-    #   (https://github.com/boostorg/python/commit/cbd2d9)
-    #   XXX: Due to a typo we've been using 1.78.0 in this case for a while.
-    #        We're leaving it that way to minimize potential disruption.
-    # - Building with Visual Studio 2022 requires boost 1.78.0 or newer.
-    #   (https://github.com/boostorg/build/issues/735)
-    # - Building on MacOS requires boost 1.78.0 or newer to resolve Python 3
-    #   compatibility issues on Big Sur and Monterey.
-    pyInfo = GetPythonInfo(context)
-    pyVer = (int(pyInfo[3].split('.')[0]), int(pyInfo[3].split('.')[1]))
+    # - Building with Visual Studio 2022 with the 14.4x toolchain requires boost
+    #   1.86.0 or newer, we choose it for all Visual Studio 2022 versions for
+    #   simplicity.
+    # - Building on MacOS requires v1.82.0 or later for C++17 support starting
+    #   with Xcode 15.
     if context.targetWasm:
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.zip"
-    elif MacOS() or (context.buildBoostPython and pyVer >= (3,11)):
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.zip"
-    elif context.buildBoostPython and pyVer >= (3, 10):
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
+        BOOST_VERSION = (1, 82, 0)
+        BOOST_SHA256 = "f7c9e28d242abcd7a2c1b962039fcdd463ca149d1883c3a950bbcc0ce6f7c6d9"
     elif IsVisualStudio2022OrGreater():
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
+        BOOST_VERSION = (1, 86, 0)
+        BOOST_SHA256 = "cd20a5694e753683e1dc2ee10e2d1bb11704e65893ebcc6ced234ba68e5d8646"
+    elif MacOS():
+        BOOST_VERSION = (1, 82, 0)
+        BOOST_SHA256 = "f7c9e28d242abcd7a2c1b962039fcdd463ca149d1883c3a950bbcc0ce6f7c6d9"
     else:
-        BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.zip"
+        BOOST_VERSION = (1, 76, 0)
+        BOOST_SHA256 = "0fd43bb53580ca54afc7221683dfe8c6e3855b351cd6dce53b1a24a7d7fbeedd"
 
     # Documentation files in the boost archive can have exceptionally
     # long paths. This can lead to errors when extracting boost on Windows,
@@ -797,8 +831,34 @@ def InstallBoost_Helper(context, force, buildArgs):
         "*/libs/wave/test/testwave/testfiles/utf8-test-*"
     ]
 
-    with CurrentWorkingDirectory(DownloadURL(BOOST_URL, context, force, 
-                                             dontExtract=dontExtract)):
+    # Provide backup sources for downloading boost to avoid issues when
+    # one mirror goes down.
+    major, minor, patch = BOOST_VERSION
+    version = f"{major}.{minor}.{patch}"
+    filename = f"boost_{major}_{minor}_{patch}.zip"
+    urls = [
+        # The sourceforge mirror is typically faster than archives.boost.io
+        # so we use that first.
+        f"https://sourceforge.net/projects/boost/files/boost/{version}/{filename}/download",
+        f"https://archives.boost.io/release/{version}/source/{filename}"
+    ]
+
+    sourceDir = None
+    for url in urls:
+        try:
+            sourceDir = DownloadURL(url, context, force,
+                                    dontExtract=dontExtract,
+                                    destFileName=filename,
+                                    expectedSHA256=BOOST_SHA256)
+            break
+        except Exception as e:
+            PrintWarning(str(e))
+            if url != urls[-1]:
+                PrintWarning("Trying alternative sources")
+    else:
+        raise RuntimeError("Failed to download boost")
+
+    with CurrentWorkingDirectory(sourceDir):
         if Windows():
             bootstrap = "bootstrap.bat"
         else:
@@ -862,36 +922,11 @@ def InstallBoost_Helper(context, force, buildArgs):
             '--with-regex'
         ]
 
-        if context.buildBoostPython:
-            b2_settings.append("--with-python")
-            pythonInfo = GetPythonInfo(context)
-            # This is the only platform-independent way to configure these
-            # settings correctly and robustly for the Boost jam build system.
-            # There are Python config arguments that can be passed to bootstrap 
-            # but those are not available in boostrap.bat (Windows) so we must 
-            # take the following approach:
-            projectPath = 'python-config.jam'
-            with open(projectPath, 'w') as projectFile:
-                # Note that we must escape any special characters, like 
-                # backslashes for jam, hence the mods below for the path 
-                # arguments. Also, if the path contains spaces jam will not
-                # handle them well. Surround the path parameters in quotes.
-                projectFile.write('using python : %s\n' % pythonInfo[3])
-                projectFile.write('  : "%s"\n' % pythonInfo[0].replace("\\","/"))
-                projectFile.write('  : "%s"\n' % pythonInfo[2].replace("\\","/"))
-                projectFile.write('  : "%s"\n' % os.path.dirname(pythonInfo[1]).replace("\\","/"))
-                if context.buildDebug and context.debugPython:
-                    projectFile.write('  : <python-debugging>on\n')
-                projectFile.write('  ;\n')
-            b2_settings.append("--user-config=python-config.jam")
-
-            if context.buildDebug and context.debugPython:
-                b2_settings.append("python-debugging=on")
-
         if context.buildOIIO:
             b2_settings.append("--with-date_time")
 
         if context.buildOIIO or context.enableOpenVDB:
+            b2_settings.append("--with-chrono")
             b2_settings.append("--with-system")
             b2_settings.append("--with-thread")
 
@@ -1233,20 +1268,21 @@ TIFF = Dependency("TIFF", InstallTIFF, "include/tiff.h")
 
 ############################################################
 # PNG
-PNG_URL = "https://github.com/glennrp/libpng/archive/refs/tags/v1.6.38.zip"
+
+PNG_URL = "https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.47.zip"
 
 def InstallPNG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(PNG_URL, context, force)):
-        macArgs = []
+        # Framework builds were enabled by default in v1.6.41 in commit
+        # 8fc13a8. We explicitly disable this to maintain legacy behavior
+        # from v1.6.38, which is what this script used previously.
+        # OpenImageIO v2.5.16.0 runs into linker issues otherwise.
+        macArgs = ["-DPNG_FRAMEWORK=OFF"]
+
         if MacOS() and apple_utils.IsTargetArm(context):
             # Ensure libpng's build doesn't erroneously activate inappropriate
             # Neon extensions
-            macArgs = ["-DCMAKE_C_FLAGS=\"-DPNG_ARM_NEON_OPT=0\""]
-
-            if context.targetUniversal:
-                PatchFile("scripts/genout.cmake.in",
-                [("CMAKE_OSX_ARCHITECTURES",
-                  "CMAKE_OSX_INTERNAL_ARCHITECTURES")])
+            macArgs += ["-DCMAKE_C_FLAGS=\"-DPNG_ARM_NEON_OPT=0\""]
 
         RunCMake(context, force, buildArgs + macArgs)
 
@@ -1255,7 +1291,7 @@ PNG = Dependency("PNG", InstallPNG, "include/png.h")
 ############################################################
 # IlmBase/OpenEXR
 
-OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v3.1.11.zip"
+OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v3.1.13.zip"
 
 def InstallOpenEXR(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OPENEXR_URL, context, force)):
@@ -1328,6 +1364,13 @@ def InstallOpenVDB(context, force, buildArgs):
         openvdb_url = OPENVDB_INTEL_URL
 
     with CurrentWorkingDirectory(DownloadURL(openvdb_url, context, force)):
+        # Back-port patch from OpenVDB PR #1977 to avoid errors when building
+        # with Xcode 16.3+. This fix is anticipated to be part of an OpenVDB
+        # 12.x release, which is in the VFX Reference Platform CY2025 and is
+        # several major versions ahead of what we currently use.
+        PatchFile("openvdb/openvdb/tree/NodeManager.h",
+                  [("OpT::template eval", "OpT::eval")])
+
         extraArgs = [
             '-DOPENVDB_BUILD_PYTHON_MODULE=OFF',
             '-DOPENVDB_BUILD_BINARIES=OFF',
@@ -1336,8 +1379,7 @@ def InstallOpenVDB(context, force, buildArgs):
 
         # Make sure to use boost installed by the build script and not any
         # system installed boost
-        extraArgs.append('-DBoost_NO_BOOST_CMAKE=On')
-        extraArgs.append('-DBoost_NO_SYSTEM_PATHS=True')
+        extraArgs.append('-DBoost_NO_SYSTEM_PATHS=ON')
 
         extraArgs.append('-DBLOSC_ROOT="{instDir}"'
                          .format(instDir=context.instDir))
@@ -1373,7 +1415,7 @@ OPENVDB = Dependency("OpenVDB", InstallOpenVDB, "include/openvdb/openvdb.h")
 ############################################################
 # OpenImageIO
 
-OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.3.21.0.zip"
+OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.5.16.0.zip"
 
 
 def InstallOpenImageIO(context, force, buildArgs):
@@ -1408,8 +1450,7 @@ def InstallOpenImageIO(context, force, buildArgs):
 
         # Make sure to use boost installed by the build script and not any
         # system installed boost
-        extraArgs.append('-DBoost_NO_BOOST_CMAKE=On')
-        extraArgs.append('-DBoost_NO_SYSTEM_PATHS=True')
+        extraArgs.append('-DBoost_NO_SYSTEM_PATHS=ON')
 
         # OpenImageIO 2.3.5 changed the default postfix for debug library
         # names from "" to "_d". USD's build system currently does not support
@@ -1475,8 +1516,8 @@ def InstallOpenSubdiv(context, force, buildArgs):
         ]
         if context.targetWasm:
             extraArgs.append('-DBUILD_SHARED_LIB=OFF')
-            extraArgs.append('-DCMAKE_CXX_FLAGS="-pthread"')
-            extraArgs.append('-DCMAKE_C_FLAGS="-pthread"')
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
             extraArgs.append('-DNO_METAL=ON')
 
         # Use Metal for macOS and all Apple embedded systems.
@@ -1594,7 +1635,7 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.10.zip"
+MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.39.3.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     if context.targetWasm:
@@ -1610,15 +1651,23 @@ def InstallMaterialX(context, force, buildArgs):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
                         '-DMATERIALX_BUILD_TESTS=OFF',
         ]
+
         if context.targetWasm:
             cmakeOptions.extend([
-                    '-DMATERIALX_BUILD_GEN_GLSL=ON',
-                    '-DMATERIALX_BUILD_GEN_MSL=OFF',
-                    # For Wasm
-                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                    '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
-                    '-DBUILD_SHARED_LIBS=OFF',
+                 # For Wasm
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
+                '-DBUILD_SHARED_LIBS=OFF',
+                # MaterialX config
+                '-DMATERIALX_BUILD_JS=OFF', # We don't need the js bindings
+                '-DMATERIALX_BUILD_TESTS=OFF',
+                '-DMATERIALX_BUILD_RENDER=ON',
+                '-DMATERIALX_BUILD_RENDER_PLATFORMS=OFF',
+                '-DMATERIALX_BUILD_GEN_OSL=OFF',
+                '-DMATERIALX_BUILD_GEN_MDL=OFF'])
+                '-DMATERIALX_BUILD_GEN_GLSL=ON',
+                '-DMATERIALX_BUILD_GEN_MSL=OFF',
                 ])
             # MaterialX/source/MaterialXRenderGlsl/CMakeLists.txt will error if compiling 
             # on MacOS and APPLE=ON is not set.
@@ -1629,7 +1678,8 @@ def InstallMaterialX(context, force, buildArgs):
             if MacOS():
                 cmakeOptions.append('-DAPPLE=ON')
 
-        if MacOSTargetEmbedded(context):
+
+        elif MacOSTargetEmbedded(context):
             # The materialXShaderGen in hdSt assumes the GLSL shadergen is
             # available but MaterialX intertwines GLSL shadergen support with
             # also requiring rendering support.
@@ -1663,146 +1713,21 @@ def InstallThreeJs(context, force, buildArgs):
 THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 
 ############################################################
-# glslang
+# DAWN and 3rd parties
+DAWN_REPO = "https://dawn.googlesource.com/dawn"
+DAWN_CHROMIUM_VERSION = "7187"
 
-def InstallGlslang(context, force, buildArgs):
-    with CurrentWorkingDirectory(context.srcDir):
-        if context.targetWasm:
-            srcDir = os.path.join(os.getcwd(), "tint", "third_party", "vulkan-deps", "glslang", "src")
-        else:
-            srcDir = os.path.join(os.getcwd(), "dawn", "third_party", "glslang", "src")
-
-        if not os.path.isdir(srcDir):
-            raise RuntimeError("glslang not found at " + srcDir + ". This is probably because dawn or " +
-               "tint installation was not executed firts")
-
-        with CurrentWorkingDirectory(srcDir):
-
-            if context.buildDebug:
-                PatchFile("CMakeLists.txt", [('set(CMAKE_DEBUG_POSTFIX "d")','set(CMAKE_DEBUG_POSTFIX "")')])
-
-            cmakeOptions = [
-                '-DALLOW_EXTERNAL_SPIRV_TOOLS=ON',
-                '-DENABLE_GLSLANG_BINARIES=OFF',
-                '-DENABLE_HLSL=OFF',
-                '-DENABLE_CTEST=OFF',
-            ]
-            if context.targetWasm:
-                cmakeOptions += [
-                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
-                    '-DBUILD_SHARED_LIBS=OFF',
-                    '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
-                    '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
-                ]
-            cmakeOptions += buildArgs
-            RunCMake(context, force, cmakeOptions)
-
-GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangToSpv.h")
-
-############################################################
-# Tint
-
-TINT_REPO = "https://dawn.googlesource.com/tint"
-TINT_COMMIT = "3cb3f4a22006b39e08dfda6b1dc4d01fafb2f7a5"
-
-TINT_CMAKE_OPTIONS = [
-    '-DTINT_BUILD_SPV_READER=ON',
-    '-DTINT_BUILD_SPV_WRITER=OFF',
+DAWN_CMAKE_OPTIONS = [
     '-DTINT_BUILD_WGSL_WRITER=ON',
     '-DTINT_BUILD_TESTS=OFF',
     '-DTINT_BUILD_CMD_TOOLS=OFF',
-    '-DTINT_BUILD_BENCHMARKS=OFF'
+    '-DTINT_BUILD_BENCHMARKS=OFF',
+    '-DDAWN_BUILD_TESTS=OFF',
+    '-DDAWN_BUILD_SAMPLES=OFF',
+    '-DDAWN_USE_GLFW=OFF',
 ]
 
-def InstallTint(context, force, buildArgs):
-    with CurrentWorkingDirectory(context.srcDir):
-        srcDir = os.path.join(os.getcwd(), "tint")
-        if force and os.path.isdir(srcDir):
-            shutil.rmtree(srcDir)
-
-        if not os.path.exists(srcDir):
-            os.makedirs(srcDir)
-            with CurrentWorkingDirectory(srcDir):
-                Run('git init')
-                Run('git remote add origin '+ TINT_REPO)
-                Run('git fetch origin ' + TINT_COMMIT + ' --depth 1')
-                Run("git checkout " + TINT_COMMIT)
-
-        with CurrentWorkingDirectory(srcDir):
-            required_submodules = [
-                'third_party/vulkan-deps',
-                'third_party/vulkan-deps/spirv-headers/src',
-                'third_party/vulkan-deps/spirv-tools/src',
-                'third_party/vulkan-deps/glslang/src',
-                'third_party/abseil-cpp',
-            ]
-            google_depot_tools.fetch_dependecies(required_submodules)
-
-            # This will allow us to install the already built spirv-tools library
-
-            PatchFile("third_party/vulkan-deps/spirv-headers/src/CMakeLists.txt", [
-                ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
-            ])
-
-            PatchFile("third_party/CMakeLists.txt", [
-            ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
-            '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
-            ('    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
-            '    add_subdirectory(${TINT_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
-            ])
-
-            PatchFile("src/tint/utils/system/terminal_posix.cc", [
-                ('#include "src/tint/utils/system/terminal.h"\n',
-                 """#include "src/tint/utils/system/terminal.h"
-                 #ifdef EMSCRIPTEN
-                 #include <sys/select.h>
-                 #endif\n""")
-            ])
-
-            cmakeOptions = [
-                '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
-                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
-                '-DBUILD_SHARED_LIBS=OFF',
-                '-DCMAKE_INSTALL_DATADIR=' + os.path.join(context.instDir, 'lib')
-            ]
-            cmakeOptions += buildArgs
-            cmakeOptions += TINT_CMAKE_OPTIONS
-            # In the case of the desktop build, we need to let tint specify the value of the readers and writers for
-            # the current platform, so that it also matches the corresponding Dawn backend (e.g. Metal).
-            # In contrast, the emscripten build just needs to process the glsl to wgsl and the browser implementation
-            # of WebGPU is the one responsible to interpret the wgsl shader code.
-            cmakeOptions += [
-                '-DTINT_BUILD_WGSL_READER=OFF',
-                '-DTINT_BUILD_GLSL_WRITER=OFF',
-                '-DTINT_BUILD_HLSL_WRITER=OFF',
-                '-DTINT_BUILD_MSL_WRITER=OFF',
-            ]
-
-            # There is a weird issue with the current tint build that, with some features off, it will not generate
-            # the tint libraries when using the "install" target. As we still want to install some of the SPIRV
-            # libraries, we first build with the "install" target
-            RunCMake(context, force, cmakeOptions)
-            buildDir = RunCMake(context, force, cmakeOptions, target="tint_api")
-
-        # installation scripts are missing in tint. Doing it manually until addressed
-        with CurrentWorkingDirectory(srcDir):
-            CopyDirectory(context, "include/tint", "include/tint")
-            CopyDirectory(context, "src/tint", "include/src/tint")
-
-        with CurrentWorkingDirectory(buildDir):
-            CopyFiles(context, "src/tint/libtint*.a", "lib")
-
-
-TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
-
-############################################################
-# DAWN and 3rd parties
-DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "6778"
-
-def InstallDawn(context, force, buildArgs):
+def PrepareDawn(context, force):
     with CurrentWorkingDirectory(context.srcDir):
         srcDir = os.path.join(os.getcwd(), "dawn")
         if force and os.path.isdir(srcDir):
@@ -1825,39 +1750,54 @@ def InstallDawn(context, force, buildArgs):
                 'third_party/markupsafe',
             ]
 
-            PatchFile("third_party/CMakeLists.txt",
-              [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
-              '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
-              ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
-              '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
-              ]) 
-            PatchFile("third_party/CMakeLists.txt",
-              [('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
-                '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
-               ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
-                '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n'),
-               ])
-
-            if Windows():
+            if Windows() and not context.targetWasm:
                 required_submodules += [
                     'third_party/dxheaders'
                 ]
-
-                # Dawn native cmake needs revise for DX12
-                PatchFile("src/dawn/native/CMakeLists.txt",
-                    [('    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n',
-                     '    target_include_directories(dawn_native PRIVATE ${DAWN_THIRD_PARTY_DIR}/dxheaders/include/directx)\n' +
-                     '    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n')])
+            elif Linux():
+                required_submodules += [
+                    'third_party/khronos/OpenGL-Registry',
+                    'third_party/khronos/EGL-Registry'
+                ]
 
             google_depot_tools.fetch_dependecies(required_submodules)
+            # Issue when updating XCode to version 15
+            # https://github.com/abseil/abseil-cpp/issues/1241#issuecomment-2151166131
+            PatchFile("third_party/abseil-cpp/absl/copts/AbseilConfigureCopts.cmake", [
+                ('if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES [[Clang]])','if(FALSE)')
+            ])
+
+            PatchFile("third_party/CMakeLists.txt",
+                [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
+                '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
+                ('    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers" EXCLUDE_FROM_ALL)\n',
+                '    add_subdirectory(${DAWN_SPIRV_HEADERS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers")\n'),
+                ('    set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)\n',
+                '    set(SKIP_SPIRV_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)\n'),
+                ('    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)\n',
+                '    add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools")\n')
+                ])
+
+            if Windows():
+                # Dawn native cmake needs revise for DX12
+                PatchFile("src/dawn/native/CMakeLists.txt",
+                          [('    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n',
+                            '    target_include_directories(dawn_native PRIVATE ${DAWN_THIRD_PARTY_DIR}/dxheaders/include/directx)\n' +
+                            '    target_link_libraries(dawn_native PRIVATE dxguid.lib)\n')])
+
+
+def InstallDawn(context, force, buildArgs):
+    PrepareDawn(context, force)
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn")
+        with CurrentWorkingDirectory(srcDir):
             cmakeOptions = [
-                '-DDAWN_BUILD_SAMPLES=OFF',
                 '-DDAWN_ENABLE_INSTALL=ON',
-                '-DDAWN_USE_GLFW=OFF',
                 '-DABSL_ENABLE_INSTALL=ON'
             ]
 
-            cmakeOptions += TINT_CMAKE_OPTIONS
+            cmakeOptions += DAWN_CMAKE_OPTIONS
+            cmakeOptions += ['-DTINT_BUILD_SPV_READER=ON']
             cmakeOptions += buildArgs
             buildDir = RunCMake(context, force, cmakeOptions)
         
@@ -1883,6 +1823,138 @@ def InstallDawn(context, force, buildArgs):
 
 
 DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
+
+def InstallDawnHeaders(context, force, buildArgs):
+    PrepareDawn(context, force)
+    
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn")
+        with CurrentWorkingDirectory(srcDir):
+            # Add pthread support to webgpu port build since it's required for USD.
+            # This is a temporary workaround until the fix lands in Dawn.
+            # See https://issues.chromium.org/issues/420406098
+            PatchFile("src/emdawnwebgpu/pkg/emdawnwebgpu.port.py",[
+            ("    flags = [opt_level_flag]",
+             '''    flags = [opt_level_flag, '-pthread']''')
+             ])
+            cmakeOptions = DAWN_CMAKE_OPTIONS
+            cmakeOptions += [
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' "',
+            ]
+            cmakeOptions += buildArgs
+            buildDir = RunCMake(context, force, cmakeOptions, target="emdawnwebgpu_pkg")
+
+        with CurrentWorkingDirectory(buildDir):
+            CopyDirectory(context, "emdawnwebgpu_pkg", "ports/emdawnwebgpu_pkg")
+            Run('{} --force {} build {}'.format(
+                'embuilder.bat' if Windows() else 'embuilder',
+                '--wasm64' if context.targetWasm64 else '',
+                os.path.normpath(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py")).replace(os.sep, '/')
+            ))
+            
+
+DAWN_HEADERS = Dependency("DawnHeaders", InstallDawnHeaders, "ports/emdawnwebgpu_pkg/README.md")
+
+
+############################################################
+# glslang
+
+def InstallGlslang(context, force, buildArgs):
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn", "third_party", "glslang", "src")
+
+        if not os.path.isdir(srcDir):
+            raise RuntimeError("glslang not found at " + srcDir + ". This is probably because dawn or " +
+                               "tint installation was not executed firts")
+
+        with CurrentWorkingDirectory(srcDir):
+            if context.buildDebug:
+                PatchFile("CMakeLists.txt", [('set(CMAKE_DEBUG_POSTFIX "d")','set(CMAKE_DEBUG_POSTFIX "")')])
+
+            cmakeOptions = [
+                '-DALLOW_EXTERNAL_SPIRV_TOOLS=ON',
+                '-DENABLE_GLSLANG_BINARIES=OFF',
+                '-DENABLE_HLSL=OFF',
+                '-DENABLE_CTEST=OFF',
+            ]
+            if context.targetWasm:
+                cmakeOptions += [
+                    '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
+                    '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                    '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                    '-DBUILD_SHARED_LIBS=OFF',
+                    '-DSPIRV-Tools-opt_DIR="{instDir}/lib/cmake/SPIRV-Tools-opt"'.format(instDir=context.instDir),
+                    '-DSPIRV-Tools_DIR="{instDir}/lib/cmake/SPIRV-Tools"'.format(instDir=context.instDir)
+                ]
+            cmakeOptions += buildArgs
+            RunCMake(context, force, cmakeOptions, buildDirName='glslang')
+
+GLSLANG = Dependency("glslang", InstallGlslang, "include/glslang/SPIRV/GlslangToSpv.h")
+
+############################################################
+# Tint
+
+def InstallTint(context, force, buildArgs):
+    PrepareDawn(context, force)
+    with CurrentWorkingDirectory(context.srcDir):
+        srcDir = os.path.join(os.getcwd(), "dawn")
+
+        with CurrentWorkingDirectory(srcDir):
+            # We need to resolve spirv dependencies even when dawn is disabled, so we skip the return() statement
+            PatchFile("third_party/CMakeLists.txt",[('    return()','    #return()')])
+            # If we are building for wasm, we only want to build tint. Currently, there is no way to build tint
+            # as a standalone library, so we disable it by skipping the dawn folder through a patch
+            PatchFile("CMakeLists.txt",
+                      [('if (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12 OR DAWN_ENABLE_METAL OR DAWN_ENABLE_NULL OR DAWN_ENABLE_DESKTOP_GL OR DAWN_ENABLE_OPENGLES OR DAWN_ENABLE_VULKAN OR EMSCRIPTEN)',
+                        'if (False)')])
+            # This will allow us to install the already built spirv-tools library
+            PatchFile("third_party/spirv-headers/src/CMakeLists.txt", [
+                ('if (PROJECT_IS_TOP_LEVEL)\n','if (TRUE)\n')
+            ])
+            cmakeOptions = [
+                '-DCMAKE_CXX_FLAGS="-Wno-unsafe-buffer-usage -Wno-disabled-macro-expansion -Wno-#warnings -Wno-error -Wno-switch-default '
+                    + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' "',
+                '-DBUILD_SHARED_LIBS=OFF'
+            ]
+            cmakeOptions += buildArgs
+            cmakeOptions += DAWN_CMAKE_OPTIONS
+            cmakeOptions += ['-DTINT_BUILD_SPV_READER=ON']
+            # In the case of the desktop build, we need to let tint specify the value of the readers and writers for
+            # the current platform, so that it also matches the corresponding Dawn backend (e.g. Metal).
+            # In contrast, the emscripten build just needs to process the glsl to wgsl and the browser implementation
+            # of WebGPU is the one responsible to interpret the wgsl shader code.
+            cmakeOptions += [
+                '-DTINT_BUILD_WGSL_READER=OFF',
+                '-DTINT_BUILD_GLSL_WRITER=OFF',
+                '-DTINT_BUILD_HLSL_WRITER=OFF',
+                '-DTINT_BUILD_MSL_WRITER=OFF',
+                '-DTINT_BUILD_SPV_WRITER=OFF',
+            ]
+
+            # There is a weird issue with the current tint build that, with some features off, it will not generate
+            # the tint libraries when using the "install" target. As we still want to install some of the SPIRV
+            # libraries, we first build with the "install" target
+            RunCMake(context, force, cmakeOptions)
+            buildDir = RunCMake(context, force, cmakeOptions, target="tint_api")
+
+        # installation scripts are missing in tint. Doing it manually until addressed
+        with CurrentWorkingDirectory(srcDir):
+            CopyDirectory(context, "include/tint", "include/tint")
+            CopyDirectory(context, "src/tint", "include/src/tint")
+            CopyFiles(context, "src/utils/compiler.h", "include/src/utils/")
+
+        with CurrentWorkingDirectory(buildDir):
+            # Lib files
+            CopyFiles(context, "third_party/spirv-tools/source/*SPIRV-Tools.*", "lib")
+            CopyFiles(context, "third_party/spirv-tools/source/opt/*SPIRV-Tools-opt.*", "lib")
+            CopyFiles(context, "src/tint/*.*", "lib")
+
+
+TINT = Dependency("Tint", InstallTint, "include/tint/tint.h")
 
 ############################################################
 # Embree
@@ -1962,11 +2034,6 @@ def InstallUSD(context, force, buildArgs):
             else:
                 extraArgs.append('-DPXR_USE_DEBUG_PYTHON=OFF')
 
-            if context.buildBoostPython:
-                extraArgs.append('-DPXR_USE_BOOST_PYTHON=ON')
-            else:
-                extraArgs.append('-DPXR_USE_BOOST_PYTHON=OFF')
-
             # CMake has trouble finding the executable, library, and include
             # directories when there are multiple versions of Python installed.
             # This can lead to crashes due to USD being linked against one
@@ -2032,6 +2099,11 @@ def InstallUSD(context, force, buildArgs):
             extraArgs.append('-DPXR_BUILD_USD_TOOLS=ON')
         else:
             extraArgs.append('-DPXR_BUILD_USD_TOOLS=OFF')
+
+        if context.buildUsdValidation:
+            extraArgs.append('-DPXR_BUILD_USD_VALIDATION=ON')
+        else:
+            extraArgs.append('-DPXR_BUILD_USD_VALIDATION=OFF')
             
         if context.buildImaging:
             extraArgs.append('-DPXR_BUILD_IMAGING=ON')
@@ -2072,6 +2144,11 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_BUILD_AVIF_PLUGIN=ON')
             else:
                 extraArgs.append('-DPXR_BUILD_AVIF_PLUGIN=OFF')
+
+            if context.enableVulkan:
+                extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')
+            else:
+                extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=OFF')
 
         else:
             extraArgs.append('-DPXR_BUILD_IMAGING=OFF')
@@ -2134,8 +2211,8 @@ def InstallUSD(context, force, buildArgs):
 
         # Make sure to use boost installed by the build script and not any
         # system installed boost
-        extraArgs.append('-DBoost_NO_BOOST_CMAKE=On')
-        extraArgs.append('-DBoost_NO_SYSTEM_PATHS=True')
+        extraArgs.append('-DBoost_NO_SYSTEM_PATHS=ON')
+
         extraArgs += buildArgs
 
         if context.targetWasm:
@@ -2146,7 +2223,14 @@ def InstallUSD(context, force, buildArgs):
             else:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
-            extraArgs.append('-DPXR_ENABLE_JS_SUPPORT=ON')
+            if context.buildImaging:
+                webGPUPortArg = "--use-port={}".format(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py"))
+            else:
+                webGPUPortArg = ""
+
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' ' + webGPUPortArg + '"')
+            extraArgs.append('-DCMAKE_C_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"')
             # For some reason we have to manually specify path to boost
             extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
 
@@ -2166,6 +2250,11 @@ def InstallUSD(context, force, buildArgs):
             else:
                 extraArgs.append('-DPXR_WASM_NODE=OFF')
 
+            if context.targetWasm64:
+                extraArgs.append('-DPXR_WASM64=ON')
+            else:
+                extraArgs.append('-DPXR_WASM64=OFF')
+
         else:
             # JS binding is only possibly enabled for webassembly build
             extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
@@ -2184,6 +2273,13 @@ programDescription = """\
 Installation Script for USD
 
 Builds and installs USD and 3rd-party dependencies to specified location.
+
+The `build_usd.py` script by default downloads and installs the zlib library
+when necessary on platforms other than Linux. For those platforms, this behavior
+may be overridden by supplying the `--no-zlib` command line option. If this
+option is used, then the dependencies of OpenUSD which use zlib must be able to
+discover the user supplied zlib in the build environment via the means of cmake's
+`find_package` utility.
 
 - Libraries:
 The following is a list of libraries that this script will download and build
@@ -2214,7 +2310,7 @@ errors may occur.
 - Embedded Build Targets
 When cross compiling for an embedded target operating system, e.g. iOS, the
 following components are disabled: python, tools, tests, examples, tutorials,
-opencolorio, openimageio, openvdb.
+opencolorio, openimageio, openvdb, vulkan.
 
 - Python Versions and DCC Plugins:
 Some DCCs may ship with and run using their own version of Python. In that case,
@@ -2395,10 +2491,13 @@ subgroup.add_argument("--prefer-speed-over-safety", dest="safety_first",
                       action="store_false", help=
                       "Disable performance-impacting safety checks against "
                       "malformed input files")
-
-group.add_argument("--boost-python", dest="build_boost_python",
-                   action="store_true", default=False,
-                   help="Build Python bindings with boost::python (deprecated)")
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--usdValidation", dest="build_usd_validation",
+                      action="store_true", default=True, help="Build USD " \
+                      "Validation library and validators (default)")
+subgroup.add_argument("--no-usdValidation", dest="build_usd_validation",
+                      action="store_false", help="Do not build USD " \
+                      "Validation library and validators")
 
 subgroup = group.add_mutually_exclusive_group()
 subgroup.add_argument("--debug-python", dest="debug_python", 
@@ -2444,6 +2543,18 @@ subgroup.add_argument("--usdview", dest="build_usdview",
 subgroup.add_argument("--no-usdview", dest="build_usdview",
                       action="store_false", 
                       help="Do not build usdview")
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--zlib", dest="build_zlib",
+                      action="store_true", default=True,
+                      help="Install zlib on behalf of dependencies (default)")
+subgroup.add_argument("--no-zlib", dest="build_zlib",
+                      action="store_false",
+                      help="Do not install zlib for dependencies")
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--vulkan", dest="enable_vulkan", action="store_true",
+                      default=False, help="Enable Vulkan support")
+subgroup.add_argument("--no-vulkan", dest="enable_vulkan", action="store_false",
+                      help="Disable Vulkan support (default)")
 
 group = parser.add_argument_group(title="Imaging Plugin Options")
 subgroup = group.add_mutually_exclusive_group()
@@ -2628,7 +2739,9 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
-        self.targetWasm = ( args.build_target in (TARGET_WASM, TARGET_WASM_NODE) ) # bool
+        self.targetWasm = ( args.build_target in (TARGET_WASM, TARGET_WASM_NODE, TARGET_WASM64) ) # bool
+        self.targetWasm64 = (args.build_target == TARGET_WASM64)
+
         self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
         self.buildTarget = args.build_target
         if MacOS():
@@ -2663,10 +2776,10 @@ class InstallContext:
         # Optional components
         self.buildTests = args.build_tests and not embedded
         self.buildPython = args.build_python and not embedded
-        self.buildBoostPython = self.buildPython and args.build_boost_python
         self.buildExamples = args.build_examples and not embedded
         self.buildTutorials = args.build_tutorials and not embedded
         self.buildTools = args.build_tools and not embedded
+        self.buildUsdValidation = args.build_usd_validation and not embedded
 
         # - Documentation
         self.buildDocs = args.build_docs or args.build_python_docs
@@ -2680,6 +2793,9 @@ class InstallContext:
         self.enableOpenVDB = (self.buildImaging
                               and args.enable_openvdb
                               and not embedded)
+        self.enableVulkan = (self.buildImaging
+                              and args.enable_vulkan
+                              and not embedded)
 
         # - USD Imaging
         self.buildUsdImaging = (args.build_imaging == USD_IMAGING)
@@ -2688,6 +2804,9 @@ class InstallContext:
         self.buildUsdview = (self.buildUsdImaging and 
                              self.buildPython and 
                              args.build_usdview)
+        
+        # - zlib
+        self.buildZlib = args.build_zlib
 
         # - Imaging plugins
         self.buildEmbree = self.buildImaging and args.build_embree
@@ -2736,6 +2855,10 @@ except Exception as e:
     sys.exit(1)
 
 verbosity = args.verbosity
+
+if args.build_target == TARGET_WASM64:
+    EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS+=' -sMEMORY64=1'
+    EMSCRIPTEN_CMAKE_CXX_FLAGS+=' -sMEMORY64=1'
 
 # Augment PATH on Windows so that 3rd-party dependencies can find libraries
 # they depend on. In particular, this is needed for building IlmBase/OpenEXR.
@@ -2789,18 +2912,13 @@ if context.buildOneTBB or context.targetWasm:
     TBB = ONETBB
 
 requiredDependencies = [TBB]
-if not context.targetWasm:
-    requiredDependencies += [ZLIB]
 
 if context.targetWasm and context.buildTests:
     requiredDependencies += [THREE]
 
-if context.buildBoostPython:
-    requiredDependencies += [BOOST]
-
 if context.buildAlembic:
     if context.enableHDF5:
-        requiredDependencies += [HDF5]
+        requiredDependencies += [ZLIB, HDF5]
     requiredDependencies += [OPENEXR, ALEMBIC]
 
 if context.buildDraco:
@@ -2813,25 +2931,25 @@ if context.buildImaging:
     if context.buildWebGPU:
         if context.targetWasm:
             # Same as above, please keep the dependencies order.
-            requiredDependencies += [TINT, GLSLANG]
+            requiredDependencies += [DAWN_HEADERS, TINT, GLSLANG]
         else:
             # Please keep the dependencies order as glslang is a
             # dependency of Dawn and, it is downloaded when building it.
             requiredDependencies += [DAWN, GLSLANG]
 
     if context.enablePtex:
-        requiredDependencies += [PTEX]
+        requiredDependencies += [ZLIB, PTEX]
 
     requiredDependencies += [OPENSUBDIV]
 
     if context.enableOpenVDB:
-        requiredDependencies += [BLOSC, BOOST, OPENEXR, OPENVDB, TBB]
+        requiredDependencies += [ZLIB, TBB, BLOSC, BOOST, OPENEXR, OPENVDB]
     
     if context.buildOIIO:
-        requiredDependencies += [BOOST, JPEG, TIFF, PNG, OPENEXR, OPENIMAGEIO]
+        requiredDependencies += [ZLIB, BOOST, JPEG, TIFF, PNG, OPENEXR, OPENIMAGEIO]
 
     if context.buildOCIO:
-        requiredDependencies += [OPENCOLORIO]
+        requiredDependencies += [ZLIB, OPENCOLORIO]
 
     if context.buildEmbree:
         requiredDependencies += [TBB, EMBREE]
@@ -2842,16 +2960,13 @@ if context.buildUsdview:
 if context.buildAnimXTests:
     requiredDependencies += [ANIMX]
 
-# Assume zlib already exists on Linux platforms and don't build
-# our own. This avoids potential issues where a host application
-# loads an older version of zlib than the one we'd build and link
-# our libraries against.
-if Linux() and ZLIB in requiredDependencies:
+# Linux provides zlib. Skipping it here avoids issues where a host 
+# application loads a different version of zlib than the one we build against.
+# Building zlib is the default when a dependency requires it, although OpenUSD
+# itself does not require it. The --no-zlib flag can be passed to the build
+# script to allow the dependency to find zlib in the build environment.
+if (Linux() or not context.buildZlib or context.targetWasm) and ZLIB in requiredDependencies:
     requiredDependencies.remove(ZLIB)
-
-# TODO: support to DAWN on Linux
-if Linux() and DAWN in requiredDependencies:
-    requiredDependencies.remove(DAWN)
 
 # Error out if user is building monolithic library on windows with draco plugin
 # enabled. This currently results in missing symbols.
@@ -2862,6 +2977,20 @@ if context.buildDraco and context.buildMonolithic and Windows():
 # The versions of Embree we currently support do not support oneTBB.
 if context.buildOneTBB and context.buildEmbree:
     PrintError("Embree support cannot be enabled when building against oneTBB")
+    sys.exit(1)
+
+# Windows ARM64 requires oneTBB. Since oneTBB is a non-standard option for the
+# currently aligned version of the VFX Reference Platform, we error out and 
+# require the user to explicitly specify --onetbb instead of silently switching
+# to oneTBB for them.
+if Windows() and GetWindowsHostArch() == "ARM64" and not context.buildOneTBB:
+    PrintError("Windows ARM64 builds require oneTBB. Enable via the --onetbb argument")
+    sys.exit(1)
+
+# Error out if user enables Vulkan support but env var VULKAN_SDK is not set.
+if context.enableVulkan and not 'VULKAN_SDK' in os.environ:
+    PrintError("Vulkan support cannot be enabled when VULKAN_SDK environment "
+               "variable is not set")
     sys.exit(1)
 
 # Error out if user explicitly enabled components which aren't
@@ -2890,6 +3019,9 @@ if MacOSTargetEmbedded(context):
         sys.exit(1)
     if "--openvdb" in sys.argv:
         PrintError("Cannot build openvdb for embedded build targets")
+        sys.exit(1)
+    if "--vulkan" in sys.argv:
+        PrintError("Cannot build vulkan for embedded build targets")
         sys.exit(1)
 
 # Error out if user explicitly specified building usdview without required
@@ -2932,31 +3064,12 @@ if not isPython64Bit:
 
 if which("cmake"):
     # Check cmake minimum version requirements
-    pyInfo = GetPythonInfo(context)
-    pyVer = (int(pyInfo[3].split('.')[0]), int(pyInfo[3].split('.')[1]))
-    if context.buildPython and pyVer >= (3, 11):
-        # Python 3.11 requires boost 1.82.0, which is not supported prior
-        # to 3.27
-        cmake_required_version = (3, 27)
-    elif context.buildPython and pyVer >= (3, 10):
-        # Python 3.10 is not supported prior to 3.24
-        cmake_required_version = (3, 24)
-    elif IsVisualStudio2022OrGreater():
-        # Visual Studio 2022 is not supported prior to 3.24
-        cmake_required_version = (3, 24)
-    elif Windows():
-        # Visual Studio 2017 and 2019 are verified to work correctly with 3.14
-        cmake_required_version = (3, 14)
-    elif MacOS():
-        # Apple Silicon is not supported prior to 3.19
-        cmake_required_version = (3, 19)
-
+    if MacOS() and context.buildTarget == apple_utils.TARGET_VISIONOS:
         # visionOS support was added in CMake 3.28
-        if context.buildTarget == apple_utils.TARGET_VISIONOS:
-            cmake_required_version = (3, 28)
+        cmake_required_version = (3, 28)
     else:
-        # Linux, and vfx platform CY2020, are verified to work correctly with 3.14
-        cmake_required_version = (3, 14)
+        # OpenUSD requires CMake 3.26+
+        cmake_required_version = (3, 26)
 
     cmake_version = GetCMakeVersion()
     if not cmake_version:
@@ -3055,6 +3168,7 @@ if context.useCXX11ABI is not None:
 summaryMsg += """\
     Variant                     {buildVariant}
     Target                      {buildTarget}
+    UsdValidation               {buildUsdValidation}
     Imaging                     {buildImaging}
       Ptex support:             {enablePtex}
       OpenVDB support:          {enableOpenVDB}
@@ -3063,6 +3177,7 @@ summaryMsg += """\
       PRMan support:            {buildPrman}
       Embree support:           {buildEmbree}
       AVIF support:             {buildAVIF}
+      Vulkan support:           {enableVulkan}
     UsdImaging                  {buildUsdImaging}
       usdview:                  {buildUsdview}
     MaterialX support           {buildMaterialX}
@@ -3139,7 +3254,9 @@ summaryMsg = summaryMsg.format(
     buildTests=("On" if context.buildTests else "Off"),
     buildExamples=("On" if context.buildExamples else "Off"),
     buildTutorials=("On" if context.buildTutorials else "Off"),
+    enableVulkan=("On" if context.enableVulkan else "Off"),
     buildTools=("On" if context.buildTools else "Off"),
+    buildUsdValidation=("On" if context.buildUsdValidation else "Off"),
     buildAlembic=("On" if context.buildAlembic else "Off"),
     buildDraco=("On" if context.buildDraco else "Off"),
     buildMaterialX=("On" if context.buildMaterialX else "Off"),

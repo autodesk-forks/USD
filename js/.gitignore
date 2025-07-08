@@ -10,3 +10,12 @@
 # ================
 node_modules/
 bindings/
+usdviewweb/
+**/.reports/
+**/.results/
+**/.cache/
+tests-playwright/.data/
+
+# Secrets
+
+.env

@@ -194,6 +194,18 @@ Pcp_TranslatePathFromNodeToRootOrClosestNode(
     const PcpNodeRef& node,
     const SdfPath& path);
 
+// Returns true if the given node is a specializes node that
+// has been propagated to the root of the graph for strength
+// ordering purposes.
+inline bool
+Pcp_IsPropagatedSpecializesNode(
+    const PcpNodeRef& node)
+{
+    return (PcpIsSpecializeArc(node.GetArcType()) &&
+            node.GetParentNode() == node.GetRootNode() &&
+            node.GetSite() == node.GetOriginNode().GetSite());
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // PXR_USD_PCP_UTILS_H

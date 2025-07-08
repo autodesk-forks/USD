@@ -56,17 +56,17 @@ shader UsdPreviewSurfaceParameters
     output normal bumpNormalOut = normal(0.0,0.0,0.0)
         [[ string widget = "null" ]],
 
-    // Opacity
-    output float refractionGainOut = 0.0
-        [[ string widget = "null" ]],
+    // Opacity & Presence outputs
     output float glassIorOut= 0.0
         [[ string widget = "null" ]],
-
-    // Presence output    
+    output float glassRoughnessOut = 0.0
+        [[ string widget = "null" ]],
+    output float refractionGainOut = 0.0
+        [[ string widget = "null" ]],
     output float presenceOut = 1.0
         [[ string widget = "null" ]],
     
-    // Displacement output
+    // Displacement outputs
     output float dispAmountOut = 0.0
         [[ string widget = "null" ]],
     output float dispScalarOut = 0.0
@@ -145,8 +145,9 @@ shader UsdPreviewSurfaceParameters
             // Opacity
             if (opacityAdjusted < 1.0) {
                 glassIorOut = ior;
-                refractionGainOut = 1.0 - opacityAdjusted;
+                glassRoughnessOut = 0.0;
                 diffuseGainOut *= opacityAdjusted;
+                refractionGainOut = (1.0 - opacityAdjusted);
                 presenceOut = opacityAdjusted;
             }
 

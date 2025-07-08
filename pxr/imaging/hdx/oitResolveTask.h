@@ -51,6 +51,8 @@ struct HdxOitResolveTaskParams
 class HdxOitResolveTask : public HdTask 
 {
 public:
+    using TaskParams = HdxOitResolveTaskParams;
+
     HDX_API
     static bool IsOitEnabled();
 
@@ -109,8 +111,7 @@ private:
     GfVec2i _screenSize;
     HdBufferArrayRangeSharedPtr _counterBar;
     HdBufferArrayRangeSharedPtr _dataBar;
-    HdBufferArrayRangeSharedPtr _depthBar;
-    HdBufferArrayRangeSharedPtr _indexBar;
+    HdBufferArrayRangeSharedPtr _jointBar;
     HdBufferArrayRangeSharedPtr _uniformBar;
 };
 

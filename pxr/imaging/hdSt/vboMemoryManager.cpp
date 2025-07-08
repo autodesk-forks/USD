@@ -20,6 +20,7 @@
 #include "pxr/imaging/hgi/blitCmds.h"
 #include "pxr/imaging/hgi/blitCmdsOps.h"
 #include "pxr/imaging/hgi/buffer.h"
+#include "pxr/imaging/hgi/capabilities.h"
 
 #include "pxr/base/arch/hash.h"
 #include "pxr/base/tf/diagnostic.h"
@@ -440,7 +441,10 @@ size_t
 HdStVBOMemoryManager::_StripedBufferArray::GetMaxNumElements() const
 {
     static size_t vboMaxSize = TfGetEnvSetting(HD_MAX_VBO_SIZE);
-    return vboMaxSize / _maxBytesPerElement;
+    Hgi* hgi = _resourceRegistry->GetHgi();
+    const size_t storageMaxSize = hgi->GetCapabilities()->
+        GetMaxShaderStorageBlockSize();
+    return std::min(storageMaxSize, vboMaxSize) / _maxBytesPerElement;
 }
 
 void
@@ -486,6 +490,7 @@ HdStBufferResourceSharedPtr
 HdStVBOMemoryManager::_StripedBufferArray::GetResource(TfToken const& name)
 {
     HD_TRACE_FUNCTION();
+    if (name.IsEmpty()) return GetResource();
 
     // linear search.
     // The number of buffer resources should be small (<10 or so).

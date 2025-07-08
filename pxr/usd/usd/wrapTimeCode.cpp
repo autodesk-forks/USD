@@ -7,11 +7,14 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/timeCode.h"
 
+#include "pxr/base/tf/pyContainerConversions.h"
+#include "pxr/base/tf/pyResultConversions.h"
 #include "pxr/base/tf/pyStaticTokens.h"
 #include "pxr/base/tf/pyUtils.h"
 #include "pxr/base/tf/stringUtils.h"
 
 #include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/def.hpp"
 #include "pxr/external/boost/python/implicit.hpp"
 #include "pxr/external/boost/python/operators.hpp"
 
@@ -36,11 +39,18 @@ static string __repr__(const UsdTimeCode &self)
 {
     string tail = ".Default()";
     if (self.IsNumeric()) {
-        if (self.IsEarliestTime()) {
-            tail = ".EarliestTime()";
+        if (self.IsPreTime()) {
+            tail = self.IsEarliestTime() ?
+                TfStringPrintf(".PreTime(%sTimeCode.EarliestTime().GetValue())",
+                               TF_PY_REPR_PREFIX.c_str()) :
+                TfStringPrintf(".PreTime(%s)", TfPyRepr(self.GetValue()).c_str());
         } else {
-            tail = self.GetValue() == 0.0 ? string("()") :
-                TfStringPrintf("(%s)", TfPyRepr(self.GetValue()).c_str());
+            if (self.IsEarliestTime()) {
+                tail = ".EarliestTime()";
+            } else {
+                tail = self.GetValue() == 0.0 ? "()" :
+                    TfStringPrintf("(%s)", TfPyRepr(self.GetValue()).c_str());
+            }
         }
     }
     return TF_PY_REPR_PREFIX + "TimeCode" + tail;
@@ -55,6 +65,12 @@ void wrapUsdTimeCode()
         .def(init<SdfTimeCode>())
         .def(init<UsdTimeCode>())
 
+        .def("PreTime", static_cast<UsdTimeCode(*)(double)>(
+            &UsdTimeCode::PreTime), (arg("value")))
+        .def("PreTime", static_cast<UsdTimeCode(*)(const SdfTimeCode&)>(
+            &UsdTimeCode::PreTime), (arg("sdfTimeCode")))
+        .staticmethod("PreTime")
+
         .def("EarliestTime", &UsdTimeCode::EarliestTime)
         .staticmethod("EarliestTime")
         
@@ -65,6 +81,7 @@ void wrapUsdTimeCode()
              (arg("maxValue")=1e6, arg("maxCompression")=10.0))
         .staticmethod("SafeStep")
 
+        .def("IsPreTime", &UsdTimeCode::IsPreTime)
         .def("IsEarliestTime", &UsdTimeCode::IsEarliestTime)
         .def("IsDefault", &UsdTimeCode::IsDefault)
         .def("IsNumeric", &UsdTimeCode::IsNumeric)
@@ -82,6 +99,18 @@ void wrapUsdTimeCode()
 //        .def(str(self))
         .def("__str__", _Str)
         ;
+        TfPyRegisterStlSequencesFromPython<UsdTimeCode>();
+        to_python_converter<std::vector<UsdTimeCode>, 
+            TfPySequenceToPython<std::vector<UsdTimeCode>>>();
+
+        // Following is only to test that we can pass a vector of UsdTimeCode
+        // objects to and from Python.
+        def("Test_TimeCodeSequenceRoundTrip", 
+            +[](const std::vector<UsdTimeCode> &times) {
+                return times;  
+            },
+            return_value_policy<TfPySequenceToList>());
+            (args("times"));
 
     TF_PY_WRAP_PUBLIC_TOKENS("Tokens", UsdTimeCodeTokens, USD_TIME_CODE_TOKENS);
 

@@ -40,7 +40,6 @@ public:
     bool IsEnabledTestLighting() const { return _testLighting; }
     bool IsEnabledSceneLights() const { return _sceneLights; }
     bool IsEnabledCameraLight() const { return _cameraLight; }
-    bool IsEnabledIdRender() const { return _testIdRender; }
     bool IsEnabledSceneMaterials() const { return _enableSceneMaterials; }
     bool IsEnabledUnloadedAsBounds() const { return _unloadedAsBounds; }
     
@@ -75,6 +74,7 @@ public:
     CameraUtilConformWindowPolicy const &
     GetWindowPolicy() const { return _windowPolicy; }
     UsdImagingGLCullStyle GetCullStyle() const { return _cullStyle; }
+    int GetNumErrorsAllowed() const { return _numErrorsAllowed; }
 
     void RunTest(int argc, char *argv[]);
 
@@ -124,7 +124,6 @@ private:
     bool _sceneLights;
     bool _cameraLight;
     std::string _cameraPath;
-    bool _testIdRender;
     bool _enableSceneMaterials;
     bool _unloadedAsBounds;
 
@@ -159,6 +158,8 @@ private:
     bool _showProxy;
     bool _presentComposite;
     bool _presentDisabled;
+
+    int _numErrorsAllowed;
 };
 
 

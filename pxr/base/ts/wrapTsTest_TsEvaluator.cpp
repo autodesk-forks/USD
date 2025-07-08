@@ -10,6 +10,7 @@
 #include "pxr/base/ts/spline.h"
 #include "pxr/base/ts/tsTest_SplineData.h"
 #include "pxr/base/ts/tsTest_SampleTimes.h"
+
 #include "pxr/base/tf/pyResultConversions.h"
 
 #include "pxr/external/boost/python/class.hpp"
@@ -18,6 +19,33 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 using namespace pxr_boost::python;
 
+static object
+_wrapSample(const TsTest_TsEvaluator& evaluator,
+            const TsTest_SplineData &splineData,
+            const GfInterval& timeInterval,
+            const double timeScale,
+            const double valueScale,
+            const double tolerance,
+            bool withSamples = false)
+{
+    if (withSamples) {
+        TsSplineSamplesWithSources<GfVec2d> samples;
+        if (evaluator.Sample(splineData, timeInterval,
+                             timeScale, valueScale, tolerance,
+                             &samples)) {
+            return object(samples);
+        }
+    } else {
+        TsSplineSamples<GfVec2d> samples;
+        if (evaluator.Sample(splineData, timeInterval,
+                             timeScale, valueScale, tolerance,
+                             &samples)) {
+            return object(samples);
+        }
+    }
+
+    return object();
+}
 
 void wrapTsTest_TsEvaluator()
 {
@@ -31,13 +59,13 @@ void wrapTsTest_TsEvaluator()
              arg("sampleTimes")),
             return_value_policy<TfPySequenceToList>())
 
-        /*
-        .def("Sample", &This::Sample,
+        .def("Sample", &_wrapSample,
             (arg("splineData"),
-             arg("interval"),
-             arg("tolerance")),
-            return_value_policy<TfPySequenceToList>())
-        */
+             arg("timeInterval"),
+             arg("timeScale"),
+             arg("valueScale"),
+             arg("tolerance"),
+             arg("withSources") = false))
 
         .def("SplineToSplineData", &This::SplineToSplineData,
             (arg("spline")))

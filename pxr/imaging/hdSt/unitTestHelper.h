@@ -210,7 +210,7 @@ HdSt_TestDriverBase<SceneDelegate>::_Init(HdReprSelector const &reprSelector)
     tracker.AddCollection(_collection.GetName());
 }
 
-static
+static inline
 HdCamera::Projection
 _ToHd(const GfCamera::Projection projection)
 {
@@ -550,6 +550,11 @@ public:
 
     HDST_API
     const HdRenderPassSharedPtr &GetRenderPass();
+    
+    HDST_API
+    Hgi* GetHgi() {
+        return _GetHgi();
+    }
 
 private:
     void _CreateRenderPassState();
@@ -584,16 +589,21 @@ public:
     HDST_API
     void UnbindResources(int program,
                          HdSt_ResourceBinder const &binder) override;
+    HDST_API
     void AddBindings(HdStBindingRequestVector *customBindings) override;
 
     /// HdStLightingShader overrides
+    HDST_API
     void SetCamera(GfMatrix4d const &worldToViewMatrix,
                    GfMatrix4d const &projectionMatrix) override;
 
+    HDST_API
     void SetSceneAmbient(GfVec3f const &color);
+    HDST_API
     void SetLight(int light, GfVec3f const &dir, GfVec3f const &color);
 
     /// Prepare lighting resource buffers
+    HDST_API
     void Prepare();
 
 private:
@@ -631,6 +641,9 @@ public:
 
     HDST_API
     Hgi * GetHgi() { return _hgi.get(); }
+    
+    HDST_API
+    HdStResourceRegistrySharedPtr const & GetResourceRegistry();
 
 private:
     void _CreateShaderProgram();
@@ -643,6 +656,11 @@ private:
     void _PrintCompileErrors();
 
     HgiUniquePtr _hgi;
+    HdDriver _hgiDriver;
+    HdStRenderDelegate _renderDelegate;
+    std::unique_ptr<HdRenderIndex> _renderIndex;
+    HdStResourceRegistrySharedPtr _resourceRegistry;
+
     HgiBufferHandle _indexBuffer;
     HgiBufferHandle _vertexBuffer;
     HgiShaderProgramHandle _shaderProgram;

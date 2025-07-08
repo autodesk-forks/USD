@@ -129,54 +129,10 @@
                     }, 
                     "UsdShadeShaderDefParserPlugin": {
                         "bases": [
-                            "NdrParserPlugin"
+                            "SdrParserPlugin"
                         ], 
                         "displayName": "USD-based shader definition parser plugin"
                     }
-                }, 
-                "Validators": {
-                    "EncapsulationRulesValidator": {
-                        "doc": "Connectable prims (e.g. Shader, Material, etc) can only be nested inside other Container-like Connectable prims. Container-like prims include Material, NodeGraph, Light, LightFilter. Shader is not a Container-like prim."
-                    }, 
-                    "MaterialBindingApiAppliedValidator": {
-                        "doc": "Verify a prim has the MaterialBindingAPI applied if it has a material binding relationship."
-                    }, 
-                    "MaterialBindingCollectionValidator": {
-                        "doc": "Verify that a collection defining a material binding is well-formed", 
-                        "schemaTypes": [
-                            "MaterialBindingAPI"
-                        ]
-                    }, 
-                    "MaterialBindingRelationships": {
-                        "doc": "All properties named 'material:binding' or in that namespace should be relationships."
-                    }, 
-                    "ShaderSdrCompliance": {
-                        "doc": "Shader prim's input types must be conforming to their appropriate sdf types in the respective sdr shader.", 
-                        "schemaTypes": [
-                            "UsdShadeShader"
-                        ]
-                    }, 
-                    "SubsetMaterialBindFamilyName": {
-                        "doc": "Geom subsets with authored material bindings should have the 'materialBind' family name.", 
-                        "keywords": [
-                            "UsdGeomSubset"
-                        ], 
-                        "schemaTypes": [
-                            "UsdGeomSubset"
-                        ]
-                    }, 
-                    "SubsetsMaterialBindFamily": {
-                        "doc": "Geom subsets of the 'materialBind' family should have a restricted family type.", 
-                        "keywords": [
-                            "UsdGeomSubset"
-                        ], 
-                        "schemaTypes": [
-                            "UsdGeomImageable"
-                        ]
-                    }, 
-                    "keywords": [
-                        "UsdShadeValidators"
-                    ]
                 }
             }, 
             "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@", 

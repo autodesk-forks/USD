@@ -4,8 +4,12 @@ add_subdirectory(external)
 add_subdirectory(base)
 add_subdirectory(usd)
 
-if (EXISTS "${PROJECT_SOURCE_DIR}/pxr/exec")
+if (${PXR_BUILD_EXEC})
     add_subdirectory(exec)
+endif()
+
+if (${PXR_BUILD_USD_VALIDATION})
+    add_subdirectory(usdValidation)
 endif()
 
 if (${PXR_BUILD_IMAGING})

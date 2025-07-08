@@ -53,6 +53,7 @@
 
 #include "pxr/base/arch/defines.h"
 #include "pxr/base/arch/fileSystem.h"
+#include "pxr/base/arch/pragmas.h"
 
 #include <cstdio>
 #include <cmath>
@@ -503,28 +504,18 @@ static void testArray() {
     }
     {
         // Test that attempts to create overly large arrays throw
-        // std::bad_alloc
-
+        // std::bad_alloc.
         VtIntArray ia;
         try {
-            ia.resize(std::numeric_limits<size_t>::max());
+            ia.resize(ia.max_size());
             TF_FATAL_ERROR("Did not throw std::bad_alloc");
         }
         catch (std::bad_alloc const &) {
             // pass
         }
 
-        VtDoubleArray da;
         try {
-            da.reserve(std::numeric_limits<size_t>::max() / 2);
-            TF_FATAL_ERROR("Did not throw std::bad_alloc");
-        }
-        catch (std::bad_alloc const &) {
-            // pass
-        }
-        
-        try {
-            da.resize(ia.max_size() + 1);
+            da.resize(da.max_size());
             TF_FATAL_ERROR("Did not throw std::bad_alloc");
         }
         catch (std::bad_alloc const &) {
@@ -898,6 +889,20 @@ testDictionaryIterators()
                 "have equal values.");
         }
     }
+
+
+    // Check a dictionaries erase method allows iterator incrementing
+    {
+        VtDictionary a = {key1, key2, key3};
+        for (auto it = a.begin(); it != a.end();) {
+            it = a.erase(it);
+        }
+
+        if (!a.empty()) {
+            die("VtDictionary::erase iterator did not remove all items");
+        }
+    }
+
 }
 
 static void

@@ -1,6 +1,12 @@
 set(PXR_PREFIX pxr/imaging)
 set(PXR_PACKAGE hio)
 
+set(stbImage "stbImage.cpp")
+if (EMSCRIPTEN AND PXR_WASM64)
+    message(STATUS "Skipping stbImage.cpp because it is not supported on Emscripten 64")
+    set(stbImage "")
+endif ()
+
 pxr_library(hio
     LIBRARIES
         arch
@@ -38,7 +44,7 @@ pxr_library(hio
     CPPFILES
         OpenEXRImage.cpp
         OpenEXR/openexr-c.c
-        stbImage.cpp
+        ${stbImage}
 
     RESOURCE_FILES
         plugInfo.json
@@ -48,7 +54,7 @@ pxr_library(hio
 )
 
 set(TARGET_NAME "hio")
-if(PXR_ENABLE_JS_SUPPORT)
+if(EMSCRIPTEN)
     set(TARGET_NAME "hio_internal")
 endif()
 

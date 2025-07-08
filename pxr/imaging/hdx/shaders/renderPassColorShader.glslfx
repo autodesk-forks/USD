@@ -11,7 +11,6 @@
 --- #import $TOOLS/hdx/shaders/renderPassColorShader.glslfx
 
 #import $TOOLS/hdSt/shaders/renderPass.glslfx
-#import $TOOLS/hdx/shaders/renderPass.glslfx
 #import $TOOLS/hdx/shaders/selection.glslfx
 
 -- configuration
@@ -46,7 +45,10 @@
                             "Selection.DecodeUtils",
                             "Selection.ComputeColor",
                             "RenderPass.ApplyColorOverrides",
-                            "RenderPass.RenderColor" ]
+                            "RenderPass.RenderColor",
+                            "RenderPass.RenderIdNoOp",
+                            "RenderPass.RenderNeyeNoOp",
+                            "RenderPass.RenderOutput" ]
             }
         }
     }

@@ -15,7 +15,6 @@
 #include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/perfLog.h"
-#include "pxr/imaging/hd/primvarsSchema.h"
 
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneIndexPluginRegistry.h"
@@ -28,9 +27,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     ((sceneIndexPluginName, "HdSt_DependencySceneIndexPlugin"))
-    (primvarsToMaterial)
-    (primvarsToMaterialDependencyToMaterialBindings)
-    (primvarsToMaterialBindings)
+
+    (storm_volumeFieldBindingToDependency)
+
+    (storm_materialToMaterialBindings)
+    (storm_materialBindingsToDependency)
 );
 
 static const char * const _pluginDisplayName = "GL";
@@ -58,158 +59,203 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
 namespace
 {
 
+void _AddIfNecessary(const TfToken &name, TfTokenVector * const names)
+{
+    if (std::find(names->begin(), names->end(), name) == names->end()) {
+        names->push_back(name);
+    }
+}
+
+HdContainerDataSourceHandle
+_ComputeMaterialBindingsDependency(
+    HdContainerDataSourceHandle const &inputDs)
+{
+    const HdMaterialBindingsSchema materialBindings =
+        HdMaterialBindingsSchema::GetFromParent(inputDs);
+    
+    TfToken names[2];
+    HdDataSourceBaseHandle dataSources[2];
+    size_t count = 0;
+
+    static HdLocatorDataSourceHandle const materialLocDs =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdMaterialSchema::GetDefaultLocator());
+    static HdLocatorDataSourceHandle const materialBindingsLocDs =
+        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+            HdMaterialBindingsSchema::GetDefaultLocator());
+
+    // HdsiMaterialBindingResolvingSceneIndex already ran, so we can just
+    // call GetMaterialBinding here (which uses the allPurpose binding).
+    if (HdPathDataSourceHandle const pathDs =
+            materialBindings.GetMaterialBinding().GetPath()) {
+        if (!pathDs->GetTypedValue(0.0f).IsEmpty()) {
+            HdDataSourceBaseHandle const dependencyDs =
+                HdDependencySchema::Builder()
+                     .SetDependedOnPrimPath(pathDs)
+                     .SetDependedOnDataSourceLocator(materialLocDs)
+                     .SetAffectedDataSourceLocator(materialBindingsLocDs)
+                     .Build();
+            names[count] = _tokens->storm_materialToMaterialBindings;
+            dataSources[count] = dependencyDs;
+            count++;
+        }
+    }
+
+    {
+        static const HdLocatorDataSourceHandle dependencyLocDs =
+            HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+                HdDependenciesSchema::GetDefaultLocator().Append(
+                    _tokens->storm_materialToMaterialBindings));
+        static HdDataSourceBaseHandle const dependencyDs =
+            HdDependencySchema::Builder()
+                // Prim depends on itself.
+                .SetDependedOnDataSourceLocator(materialBindingsLocDs)
+                .SetAffectedDataSourceLocator(dependencyLocDs)
+                .Build();
+        names[count] = _tokens->storm_materialBindingsToDependency;
+        dataSources[count] = dependencyDs;
+        count++;
+    }
+    
+    return HdRetainedContainerDataSource::New(
+        count, names, dataSources);
+}
+    
 /// Given a prim path data source, returns a dependency of volumeFieldBinding
 /// on volumeField of that given prim.
 HdDataSourceBaseHandle
-_ComputeVolumeFieldDependency(const HdDataSourceBaseHandle &src)
+_ComputeVolumeFieldDependency(const HdDataSourceBaseHandle &pathDs)
 {
-    HdDependencySchema::Builder builder;
-
-    builder.SetDependedOnPrimPath(HdPathDataSource::Cast(src));
-
     static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdVolumeFieldSchema::GetDefaultLocator());
-    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
-
     static HdLocatorDataSourceHandle affectedLocatorDataSource =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdVolumeFieldBindingSchema::GetDefaultLocator());
-    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
-    return builder.Build();
+
+    return 
+        HdDependencySchema::Builder()
+            .SetDependedOnPrimPath(HdPathDataSource::Cast(pathDs))
+            .SetDependedOnDataSourceLocator(dependedOnLocatorDataSource)
+            .SetAffectedDataSourceLocator(affectedLocatorDataSource)
+            .Build();
+}
+
+HdContainerDataSourceHandle
+_ComputeVolumeFieldBindingDependencies(
+    const HdContainerDataSourceHandle &primSource)
+{
+    return
+        HdMapContainerDataSource::New(
+            _ComputeVolumeFieldDependency,
+            HdVolumeFieldBindingSchema::GetFromParent(primSource)
+                .GetContainer());
 }
 
 /// Given a prim path, returns a dependency of __dependencies
 /// on volumeFieldBinding of the given prim.
 
 HdContainerDataSourceHandle
-_ComputeVolumeFieldBindingDependency(const SdfPath &primPath)
+_ComputeVolumeFieldBindingDependencyDependencies()
 {
-    HdDependencySchema::Builder builder;
-
-    builder.SetDependedOnPrimPath(
-        HdRetainedTypedSampledDataSource<SdfPath>::New(
-            primPath));
-
     static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdVolumeFieldBindingSchema::GetDefaultLocator());
-    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
-
     static HdLocatorDataSourceHandle affectedLocatorDataSource =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdDependenciesSchema::GetDefaultLocator());
-    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
 
     return
         HdRetainedContainerDataSource::New(
-            HdVolumeFieldBindingSchemaTokens->volumeFieldBinding,
-            builder.Build());
+            _tokens->storm_volumeFieldBindingToDependency,
+            HdDependencySchema::Builder()
+                .SetDependedOnDataSourceLocator(dependedOnLocatorDataSource)
+                .SetAffectedDataSourceLocator(affectedLocatorDataSource)
+                .Build());
 }
-
-HdContainerDataSourceHandle
-_ComputeVolumeFieldBindingDependencies(
-    const SdfPath &primPath,
-    const HdContainerDataSourceHandle &primSource)
+    
+class _PrimDataSource : public HdContainerDataSource
 {
-    return HdOverlayContainerDataSource::New(
-        HdMapContainerDataSource::New(
-            _ComputeVolumeFieldDependency,
-            HdContainerDataSource::Cast(
-                HdContainerDataSource::Get(
-                    primSource,
-                    HdVolumeFieldBindingSchema::GetDefaultLocator()))),
-        _ComputeVolumeFieldBindingDependency(primPath));
-}
+public:
+    HD_DECLARE_DATASOURCE(_PrimDataSource)
 
-/// Given a material prim path data source, returns a dependency of primvars
-/// on material of that given prim.
-HdContainerDataSourceHandle
-_ComputePrimvarsToMaterialDependency(const SdfPath &materialPrimPath)
-{
-    HdDependencySchema::Builder builder;
+    TfTokenVector GetNames() override
+    {
+        TfTokenVector result = _inputPrim.dataSource->GetNames();
+        if ( _inputPrim.primType == HdPrimTypeTokens->volume
+             || HdMaterialBindingsSchema::GetFromParent(
+                 _inputPrim.dataSource)) {
+            _AddIfNecessary(HdDependenciesSchema::GetSchemaToken(), &result);
+        }
+        return result;
+    }
 
-    builder.SetDependedOnPrimPath(
-        HdRetainedTypedSampledDataSource<SdfPath>::New(
-            materialPrimPath));
+    HdDataSourceBaseHandle Get(const TfToken &name) override
+    {
+        if (name == HdDependenciesSchema::GetSchemaToken()) {
+            return _GetDependencies();
+        }
+        return _inputPrim.dataSource->Get(name);
+    }
 
-    static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
-        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-            HdMaterialSchema::GetDefaultLocator());
-    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
+private:
+    _PrimDataSource(
+        const HdSceneIndexPrim &inputPrim)
+    : _inputPrim(inputPrim)
+    {
+    }
 
-    static HdLocatorDataSourceHandle affectedLocatorDataSource =
-        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-            HdPrimvarsSchema::GetDefaultLocator());
-    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
+    HdContainerDataSourceHandle _GetDependencies() const {
+        HdContainerDataSourceHandle dataSources[10];
+        size_t count = 0;
 
-    return
-        HdRetainedContainerDataSource::New(
-            _tokens->primvarsToMaterial,
-            builder.Build());
-}
+        if (HdContainerDataSourceHandle const ds =
+                HdDependenciesSchema::GetFromParent(_inputPrim.dataSource)
+                    .GetContainer()) {
+            dataSources[count] =
+                ds;
+            count++;
+        }
 
-/// Returns a dependency of the above (primvars -> material) dependency 
-/// on material bindings.
-HdContainerDataSourceHandle
-_ComputeDependencyToMaterialBindingsDependency()
-{
-    HdDependencySchema::Builder builder;
+        if (_inputPrim.primType == HdPrimTypeTokens->mesh) {
+            // TODO: We need to add dependencies on the material's
+            // bound by geomSubset's since geomSubset's could bind a
+            // material with a ptex.
+            // Note that, along similar lines, adding or removing a geomSubset
+            // can also mean we need to trigger the prim.
+            // Unfortunately, the dependencies schema does not allow us to
+            // say that we want to dirty a locator in response to child prims
+            // being added or removed.
+            dataSources[count] =
+                _ComputeMaterialBindingsDependency(
+                    _inputPrim.dataSource);
+            count++;
+        }
+        
+        if (_inputPrim.primType == HdPrimTypeTokens->volume) {
+            dataSources[count] =
+                _ComputeVolumeFieldBindingDependencies(
+                    _inputPrim.dataSource);
+            count++;
+            dataSources[count] =
+                _ComputeVolumeFieldBindingDependencyDependencies();
+            count++;
+        }
 
-    static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
-        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-            HdMaterialBindingsSchema::GetDefaultLocator());
-    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
+        switch(count) {
+        case 0:  return nullptr;
+        case 1:  return dataSources[0];
+        default: return HdOverlayContainerDataSource::New(count, dataSources);
+        }
+    }
+    
+    const HdSceneIndexPrim _inputPrim;
+};
 
-    static HdLocatorDataSourceHandle affectedLocatorDataSource =
-        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-            HdDependenciesSchema::GetDefaultLocator().Append(
-                _tokens->primvarsToMaterial));
-    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
-
-    return
-        HdRetainedContainerDataSource::New(
-            _tokens->primvarsToMaterialDependencyToMaterialBindings,
-            builder.Build());
-}
-
-/// Returns a dependency of primvars on material bindings.
-HdContainerDataSourceHandle
-_ComputePrimvarsToMaterialBindingsDependency()
-{
-    HdDependencySchema::Builder builder;
-
-    static HdLocatorDataSourceHandle dependedOnLocatorDataSource =
-        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-            HdMaterialBindingsSchema::GetDefaultLocator());
-    builder.SetDependedOnDataSourceLocator(dependedOnLocatorDataSource);
-
-    static HdLocatorDataSourceHandle affectedLocatorDataSource =
-        HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-            HdPrimvarsSchema::GetDefaultLocator());
-    builder.SetAffectedDataSourceLocator(affectedLocatorDataSource);
-
-    return
-        HdRetainedContainerDataSource::New(
-            _tokens->primvarsToMaterialBindings,
-            builder.Build());
-}
-
-HdContainerDataSourceHandle
-_ComputePrimvarsToMaterialDependencies(
-    const SdfPath &materialPrimPath,
-    const HdContainerDataSourceHandle &primSource)
-{
-    return HdOverlayContainerDataSource::New(
-        _ComputePrimvarsToMaterialDependency(materialPrimPath),
-        _ComputeDependencyToMaterialBindingsDependency(),
-        _ComputePrimvarsToMaterialBindingsDependency());
-}
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 TF_DECLARE_REF_PTRS(_SceneIndex);
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
 
 /// \class _SceneIndex
 ///
@@ -226,34 +272,11 @@ public:
 
     HdSceneIndexPrim GetPrim(const SdfPath &primPath) const override
     {
-        const HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
-
-        HdContainerDataSourceEditor editedDs =
-            HdContainerDataSourceEditor(prim.dataSource);
-
-        if (prim.primType == HdPrimTypeTokens->volume) {
-            editedDs.Overlay(
-                HdDependenciesSchema::GetDefaultLocator(),
-                HdLazyContainerDataSource::New(
-                    std::bind(_ComputeVolumeFieldBindingDependencies,
-                              primPath, prim.dataSource)));
+        HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
+        if (prim.dataSource) {
+            prim.dataSource = _PrimDataSource::New(prim);
         }
-    
-        // If prim has material binding, overlay dependencies from material to 
-        // prim's primvars.
-        if (HdPathDataSourceHandle materialPrimPathDs = _GetMaterialBindingPath(
-                prim.dataSource)) {
-            const SdfPath materialPrimPath =
-                materialPrimPathDs->GetTypedValue(0.f);
-            
-            editedDs.Overlay(
-                HdDependenciesSchema::GetDefaultLocator(),
-                HdLazyContainerDataSource::New(
-                    std::bind(_ComputePrimvarsToMaterialDependencies,
-                              materialPrimPath, prim.dataSource)));
-        }
-
-        return  { prim.primType, editedDs.Finish() };
+        return prim;
     }
 
     SdfPathVector GetChildPrimPaths(const SdfPath &primPath) const override
@@ -273,10 +296,6 @@ protected:
         const HdSceneIndexBase &sender,
         const HdSceneIndexObserver::AddedPrimEntries &entries) override
     {
-        if (!_IsObserved()) {
-            return;
-        }
-
         _SendPrimsAdded(entries);
     }
 
@@ -284,10 +303,6 @@ protected:
         const HdSceneIndexBase &sender,
         const HdSceneIndexObserver::RemovedPrimEntries &entries) override
     {
-        if (!_IsObserved()) {
-            return;
-        }
-
         _SendPrimsRemoved(entries);
     }
 
@@ -295,23 +310,7 @@ protected:
         const HdSceneIndexBase &sender,
         const HdSceneIndexObserver::DirtiedPrimEntries &entries) override
     {
-        HD_TRACE_FUNCTION();
-
-        if (!_IsObserved()) {
-            return;
-        }
-
         _SendPrimsDirtied(entries);
-    }
-
-    HdPathDataSourceHandle
-    _GetMaterialBindingPath(const HdContainerDataSourceHandle &ds) const
-    {
-        HdMaterialBindingsSchema materialBindings =
-            HdMaterialBindingsSchema::GetFromParent(ds);
-        HdMaterialBindingSchema materialBinding =
-            materialBindings.GetMaterialBinding();
-        return materialBinding.GetPath();
     }
 };
 

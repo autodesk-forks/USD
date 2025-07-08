@@ -97,5 +97,9 @@ void testTfMeta()
 
     ASSERT_SAME((TfMetaApply<std::tuple, TestList>),
                 (std::tuple<int, float, std::string>));
+
+    ASSERT_SAME((TfConditionalType<true, int, float>), int);
+    ASSERT_SAME((TfConditionalType<false, int, float>), float);
+                
 }
 

@@ -12,6 +12,7 @@
 #include "pxr/imaging/hd/sprim.h"
 #include "pxr/imaging/hd/types.h"
 #include "pxr/usd/sdr/declare.h"
+#include "pxr/base/vt/dictionary.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -27,7 +28,10 @@ public:
         // XXX: Got to skip varying and force sync bits for now
         DirtyParams           = 1 << 2,
         DirtyResource         = 1 << 3,
-        AllDirty              = (DirtyParams | DirtyResource)
+        DirtySurface          = 1 << 4,
+        DirtyDisplacement     = 1 << 5,
+        DirtyVolume           = 1 << 6,
+        AllDirty              = (DirtyParams | DirtyResource | DirtySurface | DirtyDisplacement | DirtyVolume)
     };
 
     HD_API
@@ -112,6 +116,7 @@ struct HdMaterialNetworkMap
 {
     std::map<TfToken, HdMaterialNetwork> map;
     std::vector<SdfPath> terminals;
+    VtDictionary config;
 };
 
 
@@ -162,11 +167,13 @@ struct HdMaterialNetwork2
     std::map<SdfPath, HdMaterialNode2> nodes;
     std::map<TfToken, HdMaterialConnection2> terminals;
     TfTokenVector primvars;
+    VtDictionary config;
 
     bool operator==(const HdMaterialNetwork2 & rhs) const {
         return nodes == rhs.nodes 
             && terminals == rhs.terminals
-            && primvars == rhs.primvars;
+            && primvars == rhs.primvars
+            && config == rhs.config;
     }
 };
 

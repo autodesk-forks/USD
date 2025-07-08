@@ -1,6 +1,11 @@
+CMakePresets.json
 .p4*
 .DS_Store
 .AppleDouble
 USD_emscripten/
 build
 .vscode/
+.idea/
+.vs/*
+out/*
+build_scripts/__pycache__

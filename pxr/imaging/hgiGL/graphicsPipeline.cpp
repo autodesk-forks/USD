@@ -224,6 +224,13 @@ HgiGLGraphicsPipeline::BindPipeline()
         glEnable(GL_CLIP_DISTANCE0 + i);
     }
 
+    // Provoking vertex
+    //
+    // GL defaults to last vertex, but because Vulkan and Metal use first 
+    // vertex (and are less easily configurable, if at all, compared to GL),
+    // we use first for GL, too.
+    glProvokingVertex(GL_FIRST_VERTEX_CONVENTION);
+
     //
     // Shader program
     //

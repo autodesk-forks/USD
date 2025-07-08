@@ -17,9 +17,6 @@ pxr_library(usdRender
     PUBLIC_HEADERS
         api.h
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_FILES
         __init__.py
 

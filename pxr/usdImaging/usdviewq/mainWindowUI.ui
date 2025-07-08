@@ -2414,14 +2414,6 @@
     <string>Render</string>
    </property>
   </action>
-  <action name="actionDisplay_PrimId">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Display Prim Id</string>
-   </property>
-  </action>
   <action name="actionEnable_Scene_Materials">
    <property name="checkable">
     <bool>true</bool>

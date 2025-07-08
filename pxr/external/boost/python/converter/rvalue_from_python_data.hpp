@@ -13,10 +13,6 @@
 #include "pxr/pxr.h"
 #include "pxr/external/boost/python/common.hpp"
 
-#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
-#include <boost/python/converter/rvalue_from_python_data.hpp>
-#else
-
 # include "pxr/external/boost/python/converter/constructor_function.hpp"
 # include "pxr/external/boost/python/detail/referent_storage.hpp"
 # include "pxr/external/boost/python/detail/destroy.hpp"
@@ -118,6 +114,10 @@ struct rvalue_from_python_data : rvalue_from_python_storage<T>
     // conversion, where the construct() function is already known.
     rvalue_from_python_data(void* convertible);
 
+    // Disallow copies to avoid double-destruction of object in storage.
+    rvalue_from_python_data(rvalue_from_python_data const&) = delete;
+    rvalue_from_python_data& operator=(rvalue_from_python_data const&) = delete;
+
     // Destroys any object constructed in the storage.
     ~rvalue_from_python_data();
  private:
@@ -155,5 +155,4 @@ inline rvalue_from_python_data<T>::~rvalue_from_python_data()
 
 }}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
-#endif // PXR_USE_INTERNAL_BOOST_PYTHON
 #endif // PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_RVALUE_FROM_PYTHON_DATA_HPP

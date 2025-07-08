@@ -41,6 +41,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     (file)
     (normal)
     (opacityThreshold)
+    (opacityMode)
+    (transparent)
 
     // UsdPreviewSurface conversion to Pxr nodes
     (PxrDisplace)
@@ -66,6 +68,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     (dispScalarOut)
     (glassIor)
     (glassIorOut)
+    (glassRoughness)
+    (glassRoughnessOut)
     (glowGain)
     (glowGainOut)
     (glowColor)
@@ -225,6 +229,7 @@ _ProcessPreviewSurfaceNode(
             {_tokens->diffuseColor, _tokens->diffuseColorOut},
             {_tokens->diffuseGain, _tokens->diffuseGainOut},
             {_tokens->glassIor, _tokens->glassIorOut},
+            {_tokens->glassRoughness, _tokens->glassRoughnessOut},
             {_tokens->glowColor, _tokens->glowColorOut},
             {_tokens->glowGain, _tokens->glowGainOut},
             {_tokens->specularFaceColor, _tokens->specularFaceColorOut},
@@ -243,13 +248,12 @@ _ProcessPreviewSurfaceNode(
                 {{nodeName, inOutPair.second}});
         }
 
-        // If opacityThreshold is > 0, do *not* use refraction.
-        VtValue vtOpThres;
+        // if opacityMode is 'transparent' use refraction
+        VtValue vtOpMode;
         if (_GetParameter(
-                netInterface, nodeName, _tokens->opacityThreshold,
-                &vtOpThres)) {
+                netInterface, nodeName, _tokens->opacityMode, &vtOpMode)) {
 
-            if (vtOpThres.Get<float>() <= 0.0f) {
+            if (vtOpMode.Get<TfToken>() == _tokens->transparent) {
                 netInterface->SetNodeInputConnection(
                     pxrSurfaceNodeName, _tokens->refractionGain,
                     {{nodeName, _tokens->refractionGainOut}});
@@ -289,6 +293,10 @@ _ProcessPreviewSurfaceNode(
             {{nodeName, _tokens->dispScalarOut}});
     }
 
+// In 2311 and beyond, we can use
+// HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin.
+#if PXR_VERSION < 2311
+
     // One additional "dummy" node to author primvar opinions on the
     // material to be passed to the gprim.
     TfToken primvarPassNodeName =
@@ -308,6 +316,8 @@ _ProcessPreviewSurfaceNode(
     netInterface->SetNodeInputConnection(
         pxrSurfaceNodeName, _tokens->displacementBoundSphere,
         {{primvarPassNodeName, _tokens->displacementBoundSphere}});
+
+#endif // PXR_VERSION < 2311
     
     // Update network terminals to point to the PxrSurface and PxrDisplacement
     // nodes that were added.

@@ -198,7 +198,7 @@ function(pxr_cpp_bin BIN_NAME)
         ${PXR_MALLOC_LIBRARY}
     )
 
-    if (PXR_ENABLE_JS_SUPPORT)
+    if (EMSCRIPTEN)
         _get_all_dependencies(${BIN_NAME} all_dependencies)
         set(RESOURCES_LIST "")
         foreach(dep ${all_dependencies})
@@ -420,6 +420,30 @@ function(pxr_library NAME)
         set(pch "OFF")
     endif()
 
+    if (PXR_ENABLE_PYTHON_SUPPORT AND args_PYMODULE_CPPFILES)
+        # If moduleDeps.cpp does not exist, create one
+        set(moduleDepsFileName "moduleDeps.cpp")
+        list(FIND args_PYTHON_CPPFILES ${moduleDepsFileName} foundModuleDeps)
+        if (${foundModuleDeps} EQUAL -1)
+            # Add moduleDeps.cpp as a built file
+            list(APPEND args_CPPFILES ${moduleDepsFileName})
+
+            # Keep only our libraries in the module dependencies
+            foreach(library ${args_LIBRARIES})
+                if (TARGET ${library}) 
+                    list(APPEND localLibs ${library})
+                endif()
+            endforeach()
+
+            # Generate moduleDeps.cpp
+            _get_python_module_name(${NAME} pyModuleName)
+            add_custom_command(
+                OUTPUT ${moduleDepsFileName}
+                COMMAND ${CMAKE_COMMAND} -DlibraryName=${NAME} -DmoduleName=${pyModuleName} -DsourceDir=${PROJECT_SOURCE_DIR} -Dlibraries="${localLibs}" -Doutfile=${moduleDepsFileName} -P "${PROJECT_SOURCE_DIR}/cmake/macros/genModuleDepsCpp.cmake"
+                DEPENDS "CMakeLists.txt")
+        endif()
+    endif()
+
     _pxr_library(${NAME}
         TYPE "${args_TYPE}"
         PREFIX "${prefix}"
@@ -462,7 +486,7 @@ macro(pxr_static_library NAME)
 endmacro(pxr_static_library)
 
 macro(pxr_plugin NAME)
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         # Not ideal but dynamic linking is not supported yet in the usd build toolchain
         message(STATUS "Building ${NAME} plugin as static library for emscripten support")
         pxr_library(${NAME} TYPE "STATIC" ${ARGN})
@@ -685,8 +709,8 @@ function(pxr_build_test TEST_NAME)
     _pxr_install_rpath(rpath ${TEST_NAME})
 
     # XXX -- We shouldn't have to install to run tests.
-    if(PXR_ENABLE_JS_SUPPORT)
-        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1 -lembind")
+    if(EMSCRIPTEN)
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL: -lembind")
         install(
             FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm
@@ -728,7 +752,24 @@ function(pxr_test_scripts)
     endif()
 
     foreach(file ${ARGN})
-        get_filename_component(destFile ${file} NAME_WE)
+        # Perform regex match to extract both source resource path and
+        # destination resource path.
+        # Regex match appropriately takes care of windows drive letter followed
+        # by a ":", which is also the token we use to separate the source and
+        # destination resource paths.
+        string(REGEX MATCHALL "([A-Za-z]:)?([^:]+)" file "${file}")
+
+        list(LENGTH file n)
+        if (n EQUAL 1)
+            get_filename_component(destFile ${file} NAME_WE)
+        elseif (n EQUAL 2)
+           list(GET file 1 destFile)
+           list(GET file 0 file)
+        else()
+           message(FATAL_ERROR
+               "Failed to parse test file path ${file}")
+        endif()        
+
         # XXX -- We shouldn't have to install to run tests.
         install(
             PROGRAMS ${file}

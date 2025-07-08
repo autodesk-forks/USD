@@ -117,9 +117,17 @@ UsdUtilsCreateNewARKitUsdzPackage(
     // the composition of the stage.
     std::vector<std::string> sublayers, references, payloads;
 
+    // We are explicitly setting the UDIM path resolution option to false
+    // here because the following logic only cares if the root layer contains
+    // any external references and does reason about the contents of the
+    // results.  UDIM path resolution has the potential to be expensive, for
+    // example in the case of network filesystem paths.
+    UsdUtilsExtractExternalReferencesParams params;
+    params.SetResolveUdimPaths(false);
+
     UsdUtils_ExtractExternalReferences(resolvedPath, 
         UsdUtils_LocalizationContext::ReferenceType::CompositionOnly,
-        &sublayers, &references, &payloads);
+        &sublayers, &references, &payloads, params);
 
     // Ensure that the root layer has the ".usdc" extension.
     std::string targetBaseName = firstLayerName.empty() ? 

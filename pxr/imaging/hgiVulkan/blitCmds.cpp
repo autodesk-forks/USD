@@ -66,7 +66,7 @@ _GetImageAspectMaskForCopy(HgiTextureUsage textureUsage)
 
 void
 HgiVulkanBlitCmds::CopyTextureGpuToCpu(
-    HgiTextureGpuToCpuOp const& copyOp)
+    HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
 {
     _CreateCommandBuffer();
 
@@ -164,7 +164,12 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
 
     // Copy to cpu buffer when cmd buffer has been executed
     _commandBuffer->AddCompletedHandler(
-        [dst, src, byteSize]{ memcpy(dst, src, byteSize);}
+        [dst, src, byteSize, callback]{
+            memcpy(dst, src, byteSize);
+            if (callback) {
+                callback((void*)dst);
+            }
+        }
     );
 }
 
@@ -283,15 +288,17 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
     if (!buffer->IsCPUStagingAddress(copyOp.cpuSourceBuffer) ||
         copyOp.sourceByteOffset != copyOp.destinationByteOffset) {
 
-        uint8_t* dst = static_cast<uint8_t*>(buffer->GetCPUStagingAddress());
-        size_t dstOffset = copyOp.destinationByteOffset;
+        // Offset into the src buffer.
+        const uint8_t* const src =
+            static_cast<const uint8_t*>(copyOp.cpuSourceBuffer) +
+                copyOp.sourceByteOffset;
 
-        // Offset into the src buffer
-        uint8_t* src = ((uint8_t*) copyOp.cpuSourceBuffer) +
-            copyOp.sourceByteOffset;
+        // Offset into the dst buffer.
+        uint8_t* const dst =
+            static_cast<uint8_t*>(buffer->GetCPUStagingAddress()) +
+                copyOp.destinationByteOffset;
 
-        // Offset into the dst buffer
-        memcpy(dst + dstOffset, src, copyOp.byteSize);
+        memcpy(dst, src, copyOp.byteSize);
     }
 
     // Schedule copy data from staging buffer to device-local buffer.
@@ -299,7 +306,9 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
 
     if (TF_VERIFY(stagingBuffer)) {
         VkBufferCopy copyRegion = {};
-        copyRegion.srcOffset = copyOp.sourceByteOffset;
+        // Note we use the destinationByteOffset as the srcOffset here. The staging buffer
+        // should be prepared with the same data layout of the destination buffer.
+        copyRegion.srcOffset = copyOp.destinationByteOffset;
         copyRegion.dstOffset = copyOp.destinationByteOffset;
         copyRegion.size = copyOp.byteSize;
 

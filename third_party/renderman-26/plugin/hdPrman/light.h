@@ -55,6 +55,7 @@ private:
     const TfToken _hdLightType;
     riley::LightShaderId _shaderId;
     riley::LightInstanceId _instanceId;
+    bool _visibleToCamera;
     
     RtUString _lightShaderType;
     TfToken _lightLink;

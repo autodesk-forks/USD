@@ -19,4 +19,5 @@ TF_WRAP(UsdContrivedTestHairman_1);
 TF_WRAP(UsdContrivedTestNoVersion0_2);
 TF_WRAP(UsdContrivedSingleApplyAPI_1);
 TF_WRAP(UsdContrivedMultipleApplyAPI_1);
+TF_WRAP(UsdContrivedNoAlias);
 TF_WRAP(UsdContrivedTokens);

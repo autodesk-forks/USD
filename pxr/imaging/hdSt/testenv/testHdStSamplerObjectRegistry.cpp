@@ -45,11 +45,12 @@ void
 My_TestGLDrawing::InitTest()
 {
     _driver = std::make_unique<HdSt_TextureTestDriver>();
-    _hdStRegistry = std::make_unique<HdStResourceRegistry>(_driver->GetHgi());
     _textureRegistry =
-        std::make_unique<HdSt_TextureObjectRegistry>(_hdStRegistry.get());
+        std::make_unique<HdSt_TextureObjectRegistry>(
+            _driver->GetResourceRegistry().get());
     _samplerRegistry =
-        std::make_unique<HdSt_SamplerObjectRegistry>(_hdStRegistry.get());
+        std::make_unique<HdSt_SamplerObjectRegistry>(
+            _driver->GetResourceRegistry().get());
     
 }
 template<typename T>

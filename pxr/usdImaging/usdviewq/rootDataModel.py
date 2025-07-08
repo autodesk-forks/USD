@@ -5,7 +5,7 @@
 # https://openusd.org/license.
 #
 
-from pxr import Usd, UsdGeom, UsdShade
+from pxr import Usd, UsdGeom, UsdShade, UsdSemantics
 from .qt import QtCore
 from .common import IncludedPurposes, Timer
 from pxr.UsdUtils.constantsGroup import ConstantsGroup
@@ -209,3 +209,14 @@ class RootDataModel(QtCore.QObject):
         # We don't use the binding cache yet since it isn't exposed to python.
         return UsdShade.MaterialBindingAPI(
                 prim).ComputeBoundMaterial(purpose)
+
+    def getResolvedLabels(self, prim, frame):
+        """Compute the resolved labels for a prim."""
+        inheritedTaxonomies = \
+                UsdSemantics.LabelsAPI.ComputeInheritedTaxonomies(prim)
+        resolvedLabels: dict[str, list[str]] = {}
+        for taxonomy in inheritedTaxonomies:
+            query = UsdSemantics.LabelsQuery(taxonomy, frame)
+            labels = query.ComputeUniqueInheritedLabels(prim)
+            resolvedLabels[taxonomy] = list(labels)
+        return resolvedLabels

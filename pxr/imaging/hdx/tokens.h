@@ -22,20 +22,19 @@ PXR_NAMESPACE_OPEN_SCOPE
     (hdxOitDataBuffer)          \
     (hdxOitDepthBuffer)         \
     (hdxOitIndexBuffer)         \
+    (hdxOitJointBuffer)         \
     (hdxSelectionBuffer)        \
     (imagerVersion)             \
     (lightingContext)           \
     (lightingShader)            \
     (occludedSelectionOpacity)  \
     (oitCounter)                \
+    (oitJointBuffer)            \
     (oitData)                   \
-    (oitDepth)                  \
-    (oitIndices)                \
     (oitUniforms)               \
     (oitCounterBufferBar)       \
     (oitDataBufferBar)          \
-    (oitDepthBufferBar)         \
-    (oitIndexBufferBar)         \
+    (oitJointBufferBar)         \
     (oitUniformBar)             \
     (oitRenderPassState)        \
     (oitScreenSize)             \
@@ -88,8 +87,7 @@ TF_DECLARE_PUBLIC_TOKENS(HdxPrimitiveTokens, HDX_API, HDX_PRIMITIVE_TOKENS);
     (inCameraGuide)             \
     (streamline)                \
     (interactiveOnlyGeom)       \
-    (path)                      \
-    (widget)
+    (path)
 
 TF_DECLARE_PUBLIC_TOKENS(HdxRenderTagTokens, HDX_API, HDX_RENDERTAG_TOKENS);
 

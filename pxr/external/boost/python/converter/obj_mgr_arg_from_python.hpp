@@ -13,10 +13,6 @@
 #include "pxr/pxr.h"
 #include "pxr/external/boost/python/common.hpp"
 
-#ifndef PXR_USE_INTERNAL_BOOST_PYTHON
-#include <boost/python/converter/obj_mgr_arg_from_python.hpp>
-#else
-
 # include "pxr/external/boost/python/detail/prefix.hpp"
 # include "pxr/external/boost/python/detail/referent_storage.hpp"
 # include "pxr/external/boost/python/detail/destroy.hpp"
@@ -58,6 +54,13 @@ struct object_manager_ref_arg_from_python
     typedef Ref result_type;
     
     object_manager_ref_arg_from_python(PyObject*);
+
+    // Disallow copies to avoid double-destruction of object in m_result.
+    object_manager_ref_arg_from_python(
+        object_manager_ref_arg_from_python const&) = delete;
+    object_manager_ref_arg_from_python& operator=(
+        object_manager_ref_arg_from_python const&) = delete;
+
     bool convertible() const;
     Ref operator()() const;
     ~object_manager_ref_arg_from_python();
@@ -130,5 +133,4 @@ inline Ref object_manager_ref_arg_from_python<Ref>::operator()() const
 
 }}} // namespace PXR_BOOST_NAMESPACE::python::converter
 
-#endif // PXR_USE_INTERNAL_BOOST_PYTHON
 #endif // PXR_EXTERNAL_BOOST_PYTHON_CONVERTER_OBJ_MGR_ARG_FROM_PYTHON_HPP

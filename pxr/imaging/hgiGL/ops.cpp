@@ -98,6 +98,8 @@ HgiGLOps::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp)
             return;
         }
 
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
         glGetTextureSubImage(
             srcTexture->GetTextureId(),
             copyOp.mipLevel,
@@ -136,6 +138,8 @@ HgiGLOps::CopyTextureCpuToGpu(HgiTextureCpuToGpuOp const& copyOp)
 
         HgiGLTexture* dstTexture = static_cast<HgiGLTexture*>(
             copyOp.gpuDestinationTexture.Get());
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         switch(desc.type) {
         case HgiTextureType2D:
@@ -740,6 +744,16 @@ HgiGLOps::Dispatch(int dimX, int dimY)
     };
 }
 
+static
+bool
+_IsInt32Format(HgiFormat format)
+{
+    return (format == HgiFormatInt32) ||
+           (format == HgiFormatInt32Vec2) ||
+           (format == HgiFormatInt32Vec3) ||
+           (format == HgiFormatInt32Vec4);
+}
+
 HgiGLOpsFn
 HgiGLOps::BindFramebufferOp(
     HgiGLDevice* device,
@@ -769,7 +783,19 @@ HgiGLOps::BindFramebufferOp(
             }
 
             if (colorAttachment.loadOp == HgiAttachmentLoadOpClear) {
-                glClearBufferfv(GL_COLOR, i, colorAttachment.clearValue.data());
+                // Special handling for int format used by id renders.
+                if (_IsInt32Format(colorAttachment.format)) {
+                    GLint clearValue[4] = {
+                        static_cast<GLint>(colorAttachment.clearValue[0]),
+                        static_cast<GLint>(colorAttachment.clearValue[1]),
+                        static_cast<GLint>(colorAttachment.clearValue[2]),
+                        static_cast<GLint>(colorAttachment.clearValue[3])
+                    };
+                    glClearBufferiv(GL_COLOR, i, clearValue);
+                } else {
+                    glClearBufferfv(
+                        GL_COLOR, i, colorAttachment.clearValue.data());
+                }
             }
 
             blendEnabled |= colorAttachment.blendEnabled;

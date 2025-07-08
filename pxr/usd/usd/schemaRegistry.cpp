@@ -163,14 +163,22 @@ struct _TypeMapCache {
             }
 
             // The schema's identifier is the "schemaIdentifier" field.
-            // If not present, we use the type's alias under UsdSchemaBase. 
+            // If not present, we use the type's alias under UsdSchemaBase
+            // to maintain backwards compatibility. 
             string identifier = _GetSchemaIdentifierFromMetadata(metadata);
             if(identifier.empty()) {
                 const vector<string> aliases = schemaBaseType.GetAliases(type);
-                if (aliases.size() != 1) {
-                    continue;
+                if (aliases.size() == 1) {
+                    identifier = aliases.front();
                 }
-                identifier = aliases.front();
+            }
+
+            // Check if a valid identifier was found
+            if (identifier.empty()) {
+                TF_CODING_ERROR("Registration failed for schema type %s. "
+                "Schema types must have a single valid identifier.", 
+                type.GetTypeName().c_str());
+                continue;
             }
 
             // Generate all the components of the schema info.
@@ -1166,9 +1174,6 @@ _InitializePrimDefsAndSchematicsForPluginSchemas()
         });
 
     for (const SdfLayerRefPtr& generatedSchema : generatedSchemas) {
-        VtDictionary customDataDict = generatedSchema->GetCustomLayerData();
-
-        bool hasErrors = false;
 
         // Schema generation will have added any defined fallback prim 
         // types as a dictionary in layer metadata which will be composed
@@ -1188,13 +1193,6 @@ _InitializePrimDefsAndSchematicsForPluginSchemas()
                         generatedSchema->GetRealPath().c_str());
                 }
             }
-        }
-
-        if (hasErrors) {
-            TF_CODING_ERROR(
-                "Encountered errors in layer metadata from generated "
-                "schema file '%s'. This schema must be regenerated.",
-                generatedSchema->GetRealPath().c_str());
         }
     }
 }

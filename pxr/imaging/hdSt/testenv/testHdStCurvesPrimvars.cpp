@@ -8,10 +8,13 @@
 #include "pxr/imaging/hdSt/basisCurvesComputations.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/glf/testGLContext.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/usd/sdf/path.h"
 
@@ -26,8 +29,6 @@
 #include <iostream>
 
 PXR_NAMESPACE_USING_DIRECTIVE
-
-HdStResourceRegistrySharedPtr registry;
 
 template <typename T>
 static VtArray<T>
@@ -58,6 +59,7 @@ _CompareArrays(VtArray<Vec3Type> const & result,
 
 static bool
 _ComparePoints(std::string const & name,
+        HdStResourceRegistrySharedPtr const & registry,
                 VtIntArray numVerts, VtIntArray indices, VtVec3fArray points, 
                 VtVec3fArray expected)
 {
@@ -100,6 +102,7 @@ _ComparePoints(std::string const & name,
 
 static bool
 _CompareVertexPrimvar(std::string const & name,
+        HdStResourceRegistrySharedPtr const & registry,
                 VtIntArray numVerts, VtIntArray indices, VtFloatArray primvar, 
                 VtFloatArray expected)
 {
@@ -140,7 +143,7 @@ _CompareVertexPrimvar(std::string const & name,
 }
 
 bool
-TopologyWithIndicesTest()
+TopologyWithIndicesTest(HdStResourceRegistrySharedPtr const & registry)
 {
     {
         int numVerts[] = { 11 };
@@ -163,6 +166,7 @@ TopologyWithIndicesTest()
                                 GfVec3f(0, 0, 6) };
 
         if (!_ComparePoints("topology_w_indices_points_small",
+                            registry,
                          _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                          _BuildArray(indices, sizeof(indices)/sizeof(int)),
                          _BuildArray(points, sizeof(points)/sizeof(GfVec3f)),
@@ -187,6 +191,7 @@ TopologyWithIndicesTest()
                              GfVec3f(0, 0, 10) };
 
         if (!_ComparePoints("topology_w_indices_points_equal",
+                        registry,
                          _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                          _BuildArray(indices, sizeof(indices)/sizeof(int)),
                          _BuildArray(points, sizeof(points)/sizeof(GfVec3f)),
@@ -224,6 +229,7 @@ TopologyWithIndicesTest()
                              GfVec3f(0, 0, 9) };
 
         if (!_ComparePoints("topology_w_indices_points_big",
+                        registry,
                          _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                          _BuildArray(indices, sizeof(indices)/sizeof(int)),
                          _BuildArray(points, sizeof(points)/sizeof(GfVec3f)),
@@ -248,6 +254,7 @@ TopologyWithIndicesTest()
         std::fill_n(expected, 10, GfVec3f(1, 0, 0));
 
         if (!_ComparePoints("topology_w_indices_points_insufficient",
+                        registry,
                          _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                          _BuildArray(indices, sizeof(indices)/sizeof(int)),
                          _BuildArray(points, sizeof(points)/sizeof(GfVec3f)),
@@ -262,6 +269,7 @@ TopologyWithIndicesTest()
         float primvar[] = { 0, 1, 2, 3, 4, 5, 6};
         float expected[] = { 0, 1, 2, 3, 4, 5, 6};
         if (!_CompareVertexPrimvar("topology_w_indices_primvar_small",
+                            registry,
                             _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                             _BuildArray(indices, sizeof(indices)/sizeof(int)),
                             _BuildArray(primvar, sizeof(primvar)/sizeof(float)),
@@ -275,6 +283,7 @@ TopologyWithIndicesTest()
         int indices[] = { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
         float primvar[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         if (!_CompareVertexPrimvar("topology_w_indices_primvar_equal",
+                            registry,
                             _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                             _BuildArray(indices, sizeof(indices)/sizeof(int)),
                             _BuildArray(primvar, sizeof(primvar)/sizeof(float)),
@@ -289,6 +298,7 @@ TopologyWithIndicesTest()
         float primvar[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         float expected[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         if (!_CompareVertexPrimvar("topology_w_indices_primvar_big",
+                            registry,
                             _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                             _BuildArray(indices, sizeof(indices)/sizeof(int)),
                             _BuildArray(primvar, sizeof(primvar)/sizeof(float)),
@@ -307,6 +317,7 @@ TopologyWithIndicesTest()
         float expected[9];
         std::fill_n(expected, 9, 0);
         if (!_CompareVertexPrimvar("topology_w_indices_primvar_insufficient",
+                            registry,
                             _BuildArray(numVerts, sizeof(numVerts)/sizeof(int)),
                             _BuildArray(indices, sizeof(indices)/sizeof(int)),
                             _BuildArray(primvar, sizeof(primvar)/sizeof(float)),
@@ -325,15 +336,18 @@ int main()
 
     TfErrorMark mark;
 
-    static HgiUniquePtr _hgi = Hgi::CreatePlatformDefaultHgi();
-    registry = std::make_shared<HdStResourceRegistry>(_hgi.get());
+    HgiUniquePtr const hgi = Hgi::CreatePlatformDefaultHgi();
+    HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
+    HdStRenderDelegate renderDelegate;
+    std::unique_ptr<HdRenderIndex> const index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    HdStResourceRegistrySharedPtr const registry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            index->GetResourceRegistry());
 
     bool success = true;
-    success &= TopologyWithIndicesTest();
+    success &= TopologyWithIndicesTest(registry);
 
-    registry->GarbageCollect();
-    registry.reset();
-    
     TF_VERIFY(mark.IsClean());
 
     if (success && mark.IsClean()) {

@@ -298,9 +298,6 @@ pxr_library(tf
         pxrDoubleConversion/strtod.cc
         pxrLZ4/lz4.cpp
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         pyWeakObject.cpp

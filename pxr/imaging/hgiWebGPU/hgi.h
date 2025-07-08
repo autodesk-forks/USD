@@ -181,7 +181,7 @@ public:
     void QueryValue();
 
     HGIWEBGPU_API
-    wgpu::RenderPassTimestampWrites GetRenderTimestampWrites();
+    wgpu::PassTimestampWrites GetRenderTimestampWrites();
 
     HGIWEBGPU_API
     void ResolveQuery(wgpu::CommandEncoder &commandEncoder, const std::string &label);

@@ -34,11 +34,12 @@ UsdUtilsExtractExternalReferences(
     const std::string& filePath,
     std::vector<std::string>* subLayers,
     std::vector<std::string>* references,
-    std::vector<std::string>* payloads)
+    std::vector<std::string>* payloads,
+    const UsdUtilsExtractExternalReferencesParams& params)
 {
     UsdUtils_ExtractExternalReferences(filePath, 
         UsdUtils_LocalizationContext::ReferenceType::All,
-        subLayers, references, payloads);
+        subLayers, references, payloads, params);
 }
 
 struct UsdUtils_ComputeAllDependenciesClient

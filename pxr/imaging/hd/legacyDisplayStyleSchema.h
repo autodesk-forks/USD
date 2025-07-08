@@ -37,6 +37,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (refineLevel) \
     (flatShadingEnabled) \
     (displacementEnabled) \
+    (displayInOverlay) \
     (occludedSelectionShowsThrough) \
     (pointsShadingEnabled) \
     (materialIsFinal) \
@@ -86,6 +87,9 @@ public:
     HdBoolDataSourceHandle GetDisplacementEnabled() const;
 
     HD_API
+    HdBoolDataSourceHandle GetDisplayInOverlay() const;
+
+    HD_API
     HdBoolDataSourceHandle GetOccludedSelectionShowsThrough() const;
 
     HD_API
@@ -129,6 +133,38 @@ public:
     /// HdDataSourceLocatorSet sent with HdDataSourceObserver::PrimsDirtied.
     /// @{
 
+    /// Prim-level relative data source locator to locate refineLevel.
+    HD_API
+    static const HdDataSourceLocator &GetRefineLevelLocator();
+
+    /// Prim-level relative data source locator to locate flatShadingEnabled.
+    HD_API
+    static const HdDataSourceLocator &GetFlatShadingEnabledLocator();
+
+    /// Prim-level relative data source locator to locate displacementEnabled.
+    HD_API
+    static const HdDataSourceLocator &GetDisplacementEnabledLocator();
+
+    /// Prim-level relative data source locator to locate displayInOverlay.
+    HD_API
+    static const HdDataSourceLocator &GetDisplayInOverlayLocator();
+
+    /// Prim-level relative data source locator to locate occludedSelectionShowsThrough.
+    HD_API
+    static const HdDataSourceLocator &GetOccludedSelectionShowsThroughLocator();
+
+    /// Prim-level relative data source locator to locate pointsShadingEnabled.
+    HD_API
+    static const HdDataSourceLocator &GetPointsShadingEnabledLocator();
+
+    /// Prim-level relative data source locator to locate materialIsFinal.
+    HD_API
+    static const HdDataSourceLocator &GetMaterialIsFinalLocator();
+
+    /// Prim-level relative data source locator to locate shadingStyle.
+    HD_API
+    static const HdDataSourceLocator &GetShadingStyleLocator();
+
     /// Prim-level relative data source locator to locate reprSelector.
     HD_API
     static const HdDataSourceLocator &GetReprSelectorLocator();
@@ -154,6 +190,7 @@ public:
         const HdIntDataSourceHandle &refineLevel,
         const HdBoolDataSourceHandle &flatShadingEnabled,
         const HdBoolDataSourceHandle &displacementEnabled,
+        const HdBoolDataSourceHandle &displayInOverlay,
         const HdBoolDataSourceHandle &occludedSelectionShowsThrough,
         const HdBoolDataSourceHandle &pointsShadingEnabled,
         const HdBoolDataSourceHandle &materialIsFinal,
@@ -181,6 +218,9 @@ public:
         Builder &SetDisplacementEnabled(
             const HdBoolDataSourceHandle &displacementEnabled);
         HD_API
+        Builder &SetDisplayInOverlay(
+            const HdBoolDataSourceHandle &displayInOverlay);
+        HD_API
         Builder &SetOccludedSelectionShowsThrough(
             const HdBoolDataSourceHandle &occludedSelectionShowsThrough);
         HD_API
@@ -207,6 +247,7 @@ public:
         HdIntDataSourceHandle _refineLevel;
         HdBoolDataSourceHandle _flatShadingEnabled;
         HdBoolDataSourceHandle _displacementEnabled;
+        HdBoolDataSourceHandle _displayInOverlay;
         HdBoolDataSourceHandle _occludedSelectionShowsThrough;
         HdBoolDataSourceHandle _pointsShadingEnabled;
         HdBoolDataSourceHandle _materialIsFinal;

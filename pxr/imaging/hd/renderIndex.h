@@ -21,6 +21,7 @@
 #include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hd/mergingSceneIndex.h"
 #include "pxr/imaging/hd/legacyPrimSceneIndex.h"
+#include "pxr/imaging/hd/legacyTaskFactory.h"
 #include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
 
 #include "pxr/imaging/hf/perfLog.h"
@@ -117,11 +118,17 @@ public:
     /// "instanceName" is an optional identifier useful for applications to
     /// associate this render index with related resources (such as the scene
     /// index instances).
+    ///
+    /// "appName" is an application name that is used to load scene index
+    /// plugins that are enabled on a per-app basis, when scene index emulation
+    /// is enabled. See HdSceneIndexPluginRegistry for more information.
+    ///
     HD_API
     static HdRenderIndex* New(
         HdRenderDelegate *renderDelegate,
         HdDriverVector const& drivers,
-        const std::string &instanceName=std::string());
+        const std::string &instanceName=std::string(),
+        const std::string &appName=std::string());
 
     HD_API
     ~HdRenderIndex();
@@ -427,7 +434,8 @@ private:
     HdRenderIndex(
         HdRenderDelegate *renderDelegate, 
         HdDriverVector const& drivers,
-        const std::string &instanceName=std::string());
+        const std::string &instanceName,
+        const std::string &appName);
 
     // ---------------------------------------------------------------------- //
     // Private Helper methods 
@@ -443,13 +451,13 @@ private:
     using HdTaskCreateFnc =
             std::function<HdTaskSharedPtr(HdSceneDelegate*, SdfPath const&)>;
 
-    // Inserts the task into the index and updates tracking state.
-    // _TrackDelegateTask is called by the inlined InsertTask<T>, so it needs
-    // to be marked HD_API.
+    // Implements InsertTask<T>.
+    // Inserts task going through emulation if enabled.
     HD_API
-    void _TrackDelegateTask(HdSceneDelegate* delegate, 
-                            SdfPath const& taskId,
-                            HdTaskCreateFnc taskCreateFnc);
+    void _InsertSceneDelegateTask(
+        HdSceneDelegate* delegate, 
+        SdfPath const& taskId,
+        HdLegacyTaskFactorySharedPtr factory);
 
     template <typename T>
     static inline const TfToken & _GetTypeId();
@@ -485,6 +493,9 @@ private:
                       SdfPath const& bprimId);
     void _InsertInstancer(HdSceneDelegate* delegate,
                           SdfPath const &id);
+    void _InsertTask(HdSceneDelegate* delegate,
+                     SdfPath const &id,
+                     HdTaskSharedPtr const &task);
 
     void _RemoveRprim(SdfPath const& id);
     void _RemoveSprim(TfToken const& typeId, SdfPath const& id);
@@ -499,6 +510,7 @@ private:
                                       HdSceneDelegate* sceneDelegate);
     void _RemoveTaskSubtree(const SdfPath &root,
                             HdSceneDelegate* sceneDelegate);
+    void _RemoveTask(SdfPath const &id);
     void _Clear();
 
     // ---------------------------------------------------------------------- //
@@ -598,12 +610,8 @@ template <typename T>
 void
 HdRenderIndex::InsertTask(HdSceneDelegate* delegate, SdfPath const& id)
 {
-    auto createTask = [](HdSceneDelegate* _delegate, SdfPath const& _id) -> HdTaskSharedPtr
-    {
-        return std::make_shared<T>(_delegate, _id);
-    };
-
-    _TrackDelegateTask(delegate, id, createTask);
+    _InsertSceneDelegateTask(
+        delegate, id, HdMakeLegacyTaskFactory<T>());
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

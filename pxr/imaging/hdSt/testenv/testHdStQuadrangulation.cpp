@@ -9,12 +9,16 @@
 #include "pxr/imaging/hdSt/meshTopology.h"
 
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/types.h"
+#include "pxr/imaging/hd/renderIndex.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/glf/testGLContext.h"
+#include "pxr/imaging/hgi/tokens.h"
 
 #include "pxr/base/gf/math.h"
 #include "pxr/base/gf/vec3d.h"
@@ -63,7 +67,8 @@ _CompareArrays(VtArray<Vec3Type> const & result,
 
 template <typename Vec3Type>
 bool
-_CompareQuadPoints(std::string const & name,
+_CompareQuadPoints(HdStResourceRegistrySharedPtr const &registry,
+                   std::string const & name,
                    std::string const & orientation,
                    VtIntArray numVerts, VtIntArray verts,
                    VtArray<Vec3Type> points,
@@ -74,17 +79,12 @@ _CompareQuadPoints(std::string const & name,
 {
     std::cout << "GPU quadrangulate = " << gpu << "\n";
 
-    static HgiUniquePtr _hgi = Hgi::CreatePlatformDefaultHgi();
-    static HdStResourceRegistrySharedPtr registry(
-        new HdStResourceRegistry(_hgi.get()));
-
     HdMeshTopology m(_tokens->bilinear, TfToken(orientation), numVerts, verts);
 
     m.SetHoleIndices(holes);
 
     // Convert topology to render delegate version
     HdSt_MeshTopologySharedPtr rdTopology = HdSt_MeshTopology::New(m, 0);
-
 
     HdBufferArrayRangeSharedPtr indexRange;
 
@@ -195,8 +195,8 @@ _CompareQuadPoints(std::string const & name,
     return true;
 }
 
-#define COMPARE_QUAD_POINTS(name, orientation, numVerts, verts, points, expectedIndices, expectedPoints) \
-    _CompareQuadPoints(name, orientation, \
+#define COMPARE_QUAD_POINTS(registry, name, orientation, numVerts, verts, points, expectedIndices, expectedPoints) \
+    _CompareQuadPoints(registry, name, orientation, \
                _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                _BuildArray(points, sizeof(points)/sizeof(points[0])), \
@@ -205,8 +205,8 @@ _CompareQuadPoints(std::string const & name,
                _BuildArray(expectedPoints, sizeof(expectedPoints)/sizeof(expectedPoints[0])), \
                false)
 
-#define COMPARE_GPU_QUAD_POINTS(name, orientation, numVerts, verts, points, expectedIndices, expectedPoints) \
-    _CompareQuadPoints(name, orientation, \
+#define COMPARE_GPU_QUAD_POINTS(registry, name, orientation, numVerts, verts, points, expectedIndices, expectedPoints) \
+    _CompareQuadPoints(registry, name, orientation, \
                _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                _BuildArray(points, sizeof(points)/sizeof(points[0])), \
@@ -215,8 +215,8 @@ _CompareQuadPoints(std::string const & name,
                _BuildArray(expectedPoints, sizeof(expectedPoints)/sizeof(expectedPoints[0])), \
                true)
 
-#define COMPARE_QUAD_POINTS_HOLE(name, orientation, numVerts, verts, points, holes, expectedIndices, expectedPoints) \
-    _CompareQuadPoints(name, orientation, \
+#define COMPARE_QUAD_POINTS_HOLE(registry, name, orientation, numVerts, verts, points, holes, expectedIndices, expectedPoints) \
+    _CompareQuadPoints(registry, name, orientation, \
                _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                _BuildArray(points, sizeof(points)/sizeof(points[0])), \
@@ -225,8 +225,8 @@ _CompareQuadPoints(std::string const & name,
                _BuildArray(expectedPoints, sizeof(expectedPoints)/sizeof(expectedPoints[0])), \
                false)
 
-#define COMPARE_GPU_QUAD_POINTS_HOLE(name, orientation, numVerts, verts, points, holes, expectedIndices, expectedPoints) \
-    _CompareQuadPoints(name, orientation, \
+#define COMPARE_GPU_QUAD_POINTS_HOLE(registry, name, orientation, numVerts, verts, points, holes, expectedIndices, expectedPoints) \
+    _CompareQuadPoints(registry, name, orientation, \
                _BuildArray(numVerts, sizeof(numVerts)/sizeof(numVerts[0])), \
                _BuildArray(verts, sizeof(verts)/sizeof(verts[0])), \
                _BuildArray(points, sizeof(points)/sizeof(points[0])), \
@@ -236,7 +236,8 @@ _CompareQuadPoints(std::string const & name,
                true)
 
 bool
-QuadrangulationTest()
+QuadrangulationTest(
+    HdStResourceRegistrySharedPtr const &registry)
 {
     HdPerfLog& perfLog = HdPerfLog::GetInstance();
     perfLog.Enable();
@@ -281,7 +282,7 @@ QuadrangulationTest()
             2, 5, 6, 4
         };
 
-        if (!COMPARE_QUAD_POINTS("triangle", _tokens->rightHanded,
+        if (!COMPARE_QUAD_POINTS(registry, "triangle", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -294,7 +295,7 @@ QuadrangulationTest()
         TF_VERIFY(perfLog.GetCounter(HdPerfTokens->computationsCommited) == 0);
         perfLog.ResetCounters();
 
-        if (!COMPARE_GPU_QUAD_POINTS("triangle", _tokens->rightHanded,
+        if (!COMPARE_GPU_QUAD_POINTS(registry, "triangle", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -341,7 +342,7 @@ QuadrangulationTest()
             2, 4, 6, 5
         };
 
-        if (!COMPARE_QUAD_POINTS("triangle", _tokens->leftHanded,
+        if (!COMPARE_QUAD_POINTS(registry, "triangle", _tokens->leftHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -354,7 +355,7 @@ QuadrangulationTest()
         TF_VERIFY(perfLog.GetCounter(HdPerfTokens->computationsCommited) == 0);
         perfLog.ResetCounters();
 
-        if (!COMPARE_GPU_QUAD_POINTS("triangle", _tokens->leftHanded,
+        if (!COMPARE_GPU_QUAD_POINTS(registry, "triangle", _tokens->leftHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -387,7 +388,7 @@ QuadrangulationTest()
             0, 1, 2, 3
         };
 
-        if (!COMPARE_QUAD_POINTS("quad", _tokens->rightHanded,
+        if (!COMPARE_QUAD_POINTS(registry, "quad", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -399,7 +400,7 @@ QuadrangulationTest()
         TF_VERIFY(perfLog.GetCounter(HdPerfTokens->computationsCommited) == 0);
         perfLog.ResetCounters();
 
-        if (!COMPARE_GPU_QUAD_POINTS("quad", _tokens->rightHanded,
+        if (!COMPARE_GPU_QUAD_POINTS(registry, "quad", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -470,7 +471,7 @@ QuadrangulationTest()
             6, 15, 17, 14,
             7, 16, 17, 15
         };
-        if (!COMPARE_QUAD_POINTS("quad", _tokens->rightHanded,
+        if (!COMPARE_QUAD_POINTS(registry, "quad", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -482,7 +483,7 @@ QuadrangulationTest()
         TF_VERIFY(perfLog.GetCounter(HdPerfTokens->computationsCommited) == 0);
         perfLog.ResetCounters();
 
-        if (!COMPARE_GPU_QUAD_POINTS("quad", _tokens->rightHanded,
+        if (!COMPARE_GPU_QUAD_POINTS(registry, "quad", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -554,7 +555,7 @@ QuadrangulationTest()
             7, 16, 17, 15
         };
 
-        if (!COMPARE_QUAD_POINTS_HOLE("quad", _tokens->rightHanded,
+        if (!COMPARE_QUAD_POINTS_HOLE(registry, "quad", _tokens->rightHanded,
             numVerts, verts, points, holes, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -566,7 +567,7 @@ QuadrangulationTest()
         TF_VERIFY(perfLog.GetCounter(HdPerfTokens->computationsCommited) == 0);
         perfLog.ResetCounters();
 
-        if (!COMPARE_GPU_QUAD_POINTS_HOLE("quad", _tokens->rightHanded,
+        if (!COMPARE_GPU_QUAD_POINTS_HOLE(registry, "quad", _tokens->rightHanded,
             numVerts, verts, points, holes, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -583,7 +584,8 @@ QuadrangulationTest()
 }
 
 bool
-QuadrangulationInvalidTopologyTest()
+QuadrangulationInvalidTopologyTest(
+    HdStResourceRegistrySharedPtr const &registry)
 {
     HdPerfLog& perfLog = HdPerfLog::GetInstance();
     perfLog.Enable();
@@ -653,7 +655,7 @@ QuadrangulationInvalidTopologyTest()
             0, 0, 0, 0, // missing
             0, 0, 0, 0  // missing
         };
-        if (!COMPARE_QUAD_POINTS("quad", _tokens->rightHanded,
+        if (!COMPARE_QUAD_POINTS(registry, "quad", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -665,7 +667,7 @@ QuadrangulationInvalidTopologyTest()
         TF_VERIFY(perfLog.GetCounter(HdPerfTokens->computationsCommited) == 0);
         perfLog.ResetCounters();
 
-        if (!COMPARE_GPU_QUAD_POINTS("quad", _tokens->rightHanded,
+        if (!COMPARE_GPU_QUAD_POINTS(registry, "quad", _tokens->rightHanded,
                 numVerts, verts, points, expectedIndices, expectedPoints)) {
             return false;
         }
@@ -688,9 +690,18 @@ int main()
 
     TfErrorMark mark;
 
+    HgiUniquePtr const hgi = Hgi::CreatePlatformDefaultHgi();
+    HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
+    HdStRenderDelegate renderDelegate;
+    std::unique_ptr<HdRenderIndex> const index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    HdStResourceRegistrySharedPtr const registry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            index->GetResourceRegistry());
+
     bool success = true;
-    success &= QuadrangulationTest();
-    success &= QuadrangulationInvalidTopologyTest();
+    success &= QuadrangulationTest(registry);
+    success &= QuadrangulationInvalidTopologyTest(registry);
 
     TF_VERIFY(mark.IsClean());
 

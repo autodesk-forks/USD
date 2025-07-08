@@ -16,7 +16,7 @@ if (OPENSUBDIV_HAS_GLSL_COMPUTE)
     add_definitions(-DOPENSUBDIV_HAS_GLSL_COMPUTE)
 endif()
 
-if(PXR_ENABLE_JS_SUPPORT)
+if(EMSCRIPTEN)
     set(PXR_CMD "pxr_library")
 else()
     # At the moment, the emscripten setup ins configured to build only static libraries

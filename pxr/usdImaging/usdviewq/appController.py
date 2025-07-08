@@ -897,9 +897,6 @@ class AppController(QtCore.QObject):
             self._ui.actionDisplay_Camera_Oracles.triggered.connect(
                 self._toggleDisplayCameraOracles)
 
-            self._ui.actionDisplay_PrimId.triggered.connect(
-                self._toggleDisplayPrimId)
-
             self._ui.actionEnable_Scene_Materials.triggered.connect(
                 self._toggleEnableSceneMaterials)
 
@@ -1125,6 +1122,9 @@ class AppController(QtCore.QObject):
             # the viewer, which might take a long time.
             if self._stageView:
                 self._stageView.setUpdatesEnabled(False)
+
+                # Update the BBox cache with the initial state's purposes.
+                self._stageView.updateBboxPurposes()
 
             self._mainWindow.update()
 
@@ -2648,10 +2648,6 @@ class AppController(QtCore.QObject):
         self._dataModel.viewSettings.displayCameraOracles = (
             self._ui.actionDisplay_Camera_Oracles.isChecked())
 
-    def _toggleDisplayPrimId(self):
-        self._dataModel.viewSettings.displayPrimId = (
-            self._ui.actionDisplay_PrimId.isChecked())
-
     def _toggleEnableSceneMaterials(self):
         self._dataModel.viewSettings.enableSceneMaterials = (
             self._ui.actionEnable_Scene_Materials.isChecked())
@@ -2721,8 +2717,18 @@ class AppController(QtCore.QObject):
     def GrabViewportShot(self, cropToAspectRatio=False):
         '''Returns a QImage of the current stage view in usdview.'''
         if self._stageView:
-            return self._stageView.grabFrameBuffer(
+            shot = self._stageView.grabFrameBuffer(
                 cropToAspectRatio=cropToAspectRatio)
+            # The framebuffer might be a pixel larger in either dimension
+            # because its size was rounded up when applying the device
+            # pixel ratio, so crop the extra down to the original physical size.
+            width, height = self._stageView.GetPhysicalWindowSize()
+            width = min(width, shot.width())
+            height = min(height, shot.height())
+            if shot.width() == width and shot.height() == height:
+                return shot
+            else:
+                return shot.copy(0, 0, width, height)
         else:
             return None
 
@@ -5370,8 +5376,6 @@ class AppController(QtCore.QObject):
             self._dataModel.viewSettings.enableSceneMaterials)
         self._ui.actionEnable_Scene_Lights.setChecked(
             self._dataModel.viewSettings.enableSceneLights)
-        self._ui.actionDisplay_PrimId.setChecked(
-            self._dataModel.viewSettings.displayPrimId)
         self._ui.actionCull_Backfaces.setChecked(
             self._dataModel.viewSettings.cullBackfaces)
         self._ui.actionDomeLightTexturesVisible.setChecked(

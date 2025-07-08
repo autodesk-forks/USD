@@ -97,6 +97,9 @@ _EraseTimeSample(SdfAttributeSpec &self, double time)
 
 void wrapAttributeSpec()
 {
+    def("CreatePrimAttributeInLayer", SdfCreatePrimAttributeInLayer,
+        (arg("layer"), arg("attrPath"), arg("typeName"),
+         arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
     def("JustCreatePrimAttributeInLayer", SdfJustCreatePrimAttributeInLayer,
         (arg("layer"), arg("attrPath"), arg("typeName"),
          arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
@@ -123,7 +126,7 @@ void wrapAttributeSpec()
         .def("__unused__",
             SdfMakePySpecConstructor(wrapNewPrimAttr,
                 "__init__(ownerPrimSpec, name, typeName, "
-                "variability = Sd.VariabilityVarying, "
+                "variability = Sdf.VariabilityVarying, "
                 "declaresCustom = False)\n"
                 "ownerPrimSpec : PrimSpec\n"
                 "name : string\n"

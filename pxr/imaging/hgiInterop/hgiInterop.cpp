@@ -34,8 +34,11 @@ struct HgiInteropImpl
 #if defined(PXR_GL_SUPPORT_ENABLED)
     std::unique_ptr<HgiInteropOpenGL> _openGLToOpenGL;
 #endif
-#if defined(PXR_VULKAN_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED)
-    std::unique_ptr<HgiInteropCpu> _backendToOpenGL;
+#if defined(PXR_VULKAN_SUPPORT_ENABLED)
+    std::unique_ptr<HgiInteropVulkan> _vulkanToOpenGL;
+#endif
+#if defined(PXR_WEBGPU_SUPPORT_ENABLED)
+    std::unique_ptr<HgiInteropWebGPU> _webgpuToOpenGL;
 #endif
 #if defined(PXR_METAL_SUPPORT_ENABLED) && !defined(ARCH_OS_IPHONE)
     std::unique_ptr<HgiInteropMetal> _metalToOpenGL;
@@ -76,17 +79,28 @@ void HgiInterop::TransferToApp(
     }
 #endif
 
-#if defined(PXR_VULKAN_SUPPORT_ENABLED) ||  defined(PXR_WEBGPU_SUPPORT_ENABLED)
-    if (srcApi == HgiTokens->Vulkan || srcApi==HgiTokens->WebGPU) {
+#if defined(PXR_VULKAN_SUPPORT_ENABLED)
+    if (srcApi == HgiTokens->Vulkan) {
         // XXX: It's possible that if we use the same HgiInterop with a 
         // different Hgi instance passed to this function, HgiInteropVulkan 
         // will have the wrong Hgi instance since we wouldn't recreate it here.
         // We should fix this.
-        if (!_hgiInteropImpl->_backendToOpenGL) {
-            _hgiInteropImpl->_backendToOpenGL =
-                std::make_unique<HgiInteropCpu>(srcHgi);
+        if (!_hgiInteropImpl->_vulkanToOpenGL) {
+            _hgiInteropImpl->_vulkanToOpenGL =
+                std::make_unique<HgiInteropVulkan>(srcHgi);
         }
-        return _hgiInteropImpl->_backendToOpenGL->CompositeToInterop(
+        return _hgiInteropImpl->_vulkanToOpenGL->CompositeToInterop(
+            srcColor, srcDepth, dstFramebuffer, dstRegion);
+    }
+#endif
+
+#if defined(PXR_WEBGPU_SUPPORT_ENABLED)
+    if (srcApi==HgiTokens->WebGPU) {
+        if (!_hgiInteropImpl->_webgpuToOpenGL) {
+            _hgiInteropImpl->_webgpuToOpenGL =
+                std::make_unique<HgiInteropWebGPU>(srcHgi);
+        }
+        return _hgiInteropImpl->_webgpuToOpenGL->CompositeToInterop(
             srcColor, srcDepth, dstFramebuffer, dstRegion);
     }
 #endif

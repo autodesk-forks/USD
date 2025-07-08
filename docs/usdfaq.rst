@@ -320,7 +320,7 @@ Sublayering has the following advantages:
       your results together rather than sublayer them - or add another layer
       into the mix so that you can reference in the root layer of your sublayer
       stack. This is because the data in the layers that you SubLayer form the
-      **L** in :ref:`LIVRPS Strength Ordering <glossary:LIVRPS Strength Ordering>`, 
+      **L** in :ref:`LIVERPS Strength Ordering <usdglossary-livrpsstrengthordering>`, 
       whereas opinions from VariantSets form the **V**, so anything defined in
       VariantSets will be *weaker* than the data in your sublayers. By
       extension, if you want to compose several layers into the existing file
@@ -438,14 +438,14 @@ List-edited composition arcs
 
 Meaningfully deleting composition arcs imposes some restrictions, because of the
 central aspect of *encapsulation* in USD composition. Encapsulation means that
-whenever you use a references, payload, inherits, variantSet, or specializes arc
-on a prim, **the result that gets woven into the composition is immutable by
-stronger layers** - values can be overridden, and objects can be added, but the
-"internal referencing structure" of the arc's target cannot be changed. This is
-important for several reasons:
+whenever you use a references, relocates, payload, inherits, variantSet, or 
+specializes arc on a prim, **the result that gets woven into the composition is 
+immutable by stronger layers** - values can be overridden, and objects can be 
+added, but the "internal referencing structure" of the arc's target cannot be 
+changed. This is important for several reasons:
 
-    * It makes the :ref:`LIVRPS composition algorithm <glossary:LIVRPS Strength
-      Ordering>` explainable and (more easily) understandable, because it is
+    * It makes the :ref:`LIVERPS composition algorithm <usdglossary-livrpsstrengthordering>` 
+      explainable and (more easily) understandable, because it is
       properly recursive.
 
     * It enables more efficient composition engine implementations, because it

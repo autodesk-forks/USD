@@ -59,8 +59,11 @@ TfTokenVector
 UsdImagingDataSourceUsdPrimInfo::GetNames()
 {
     TfTokenVector result = { 
+        UsdImagingUsdPrimInfoSchemaTokens->specifier,
+        UsdImagingUsdPrimInfoSchemaTokens->typeName,
         UsdImagingUsdPrimInfoSchemaTokens->isLoaded,
-        UsdImagingUsdPrimInfoSchemaTokens->specifier
+        UsdImagingUsdPrimInfoSchemaTokens->apiSchemas,
+        UsdImagingUsdPrimInfoSchemaTokens->kind,
     };
 
     if (_usdPrim.IsInstance()) {
@@ -77,12 +80,34 @@ UsdImagingDataSourceUsdPrimInfo::GetNames()
 HdDataSourceBaseHandle
 UsdImagingDataSourceUsdPrimInfo::Get(const TfToken &name)
 {
-    if (name == UsdImagingUsdPrimInfoSchemaTokens->isLoaded) {
-        return HdRetainedTypedSampledDataSource<bool>::New(
-            _usdPrim.IsLoaded());
-    }
+    using BoolDataSource = HdRetainedTypedSampledDataSource<bool>;
+    using TokenDataSource = HdRetainedTypedSampledDataSource<TfToken>;
+    using TokenArrayDataSource =
+        HdRetainedTypedSampledDataSource<VtArray<TfToken>>;
+
     if (name == UsdImagingUsdPrimInfoSchemaTokens->specifier) {
         return _SpecifierToDataSource(_usdPrim.GetSpecifier());
+    }
+    if (name == UsdImagingUsdPrimInfoSchemaTokens->typeName) {
+        return TokenDataSource::New(_usdPrim.GetTypeName());
+    }
+    if (name == UsdImagingUsdPrimInfoSchemaTokens->isLoaded) {
+        return BoolDataSource::New(_usdPrim.IsLoaded());
+    }
+    if (name == UsdImagingUsdPrimInfoSchemaTokens->apiSchemas) {
+        const TfTokenVector appliedSchemas = _usdPrim.GetAppliedSchemas();
+        if (!appliedSchemas.empty()) {
+            return TokenArrayDataSource::New(
+                VtArray<TfToken>(appliedSchemas.begin(), appliedSchemas.end()));
+        }
+        return nullptr;
+    }
+    if (name == UsdImagingUsdPrimInfoSchemaTokens->kind) {
+        TfToken kind;
+        if (_usdPrim.GetKind(&kind)) {
+            return TokenDataSource::New(kind);
+        }
+        return nullptr;
     }
     if (name == UsdImagingUsdPrimInfoSchemaTokens->niPrototypePath) {
         if (!_usdPrim.IsInstance()) {
@@ -99,7 +124,7 @@ UsdImagingDataSourceUsdPrimInfo::Get(const TfToken &name)
         if (!_usdPrim.IsPrototype()) {
             return nullptr;
         }
-        return HdRetainedTypedSampledDataSource<bool>::New(true);
+        return BoolDataSource::New(true);
     }
     return nullptr;
 }

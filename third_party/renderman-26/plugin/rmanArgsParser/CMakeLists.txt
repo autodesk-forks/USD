@@ -8,7 +8,6 @@ pxr_plugin(rmanArgsParser
         tf
         vt
         ar
-        ndr
         sdr
 
     PRIVATE_CLASSES
@@ -21,13 +20,6 @@ pxr_plugin(rmanArgsParser
         api.h
         pugixml/pugiconfig.hpp
         pugixml/pugixml.hpp
-
-    PYMODULE_CPPFILES
-        module.cpp
-        wrapRmanArgsParser.cpp
-
-    PYMODULE_FILES
-        __init__.py
 
     RESOURCE_FILES
         plugInfo.json

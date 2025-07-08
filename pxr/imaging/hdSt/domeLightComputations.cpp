@@ -190,7 +190,7 @@ HdSt_DomeLightComputationGPU::Execute(
         return;
     }
 
-    if (_level == 0) {
+    if (_level == 0 && !dstUvTextureObject->GetTexture()) {
         // Level zero is in charge of actually creating the
         // GPU resource.
         HgiTextureDesc desc;

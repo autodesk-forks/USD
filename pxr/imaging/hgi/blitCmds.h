@@ -13,6 +13,7 @@
 #include "pxr/imaging/hgi/cmds.h"
 #include "pxr/imaging/hgi/texture.h"
 #include <memory>
+#include <functional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -52,7 +53,7 @@ public:
     /// Synchronization between GPU writes and CPU reads must be managed by
     /// the client by supplying the correct 'wait' flags in SubmitCmds.
     HGI_API
-    virtual void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp) = 0;
+    virtual void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback = nullptr) = 0;
 
     /// Copy new data from the CPU into a GPU texture.
     HGI_API

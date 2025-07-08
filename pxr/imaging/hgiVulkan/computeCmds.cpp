@@ -118,7 +118,7 @@ HgiVulkanComputeCmds::Dispatch(int dimX, int dimY)
 
     // Determine device's num compute work group limits
     const VkPhysicalDeviceLimits limits = 
-        _hgi->GetCapabilities()->vkDeviceProperties.limits;
+        _hgi->GetCapabilities()->vkDeviceProperties2.properties.limits;
     const GfVec3i maxNumWorkGroups = GfVec3i(
         limits.maxComputeWorkGroupCount[0],
         limits.maxComputeWorkGroupCount[1],

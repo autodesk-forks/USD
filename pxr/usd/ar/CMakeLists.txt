@@ -50,9 +50,6 @@ pxr_library(ar
     PYTHON_PUBLIC_CLASSES
         pyResolverContext
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapAsset.cpp

@@ -175,6 +175,8 @@ public:
             TfToken blockName;
             std::vector<StructEntry> entries;
             int arraySize;
+            bool isWritable;
+            HgiShaderStage stageVisibility;
         };
         using StructBlockBinding = std::map<HdStBinding, StructBlock>;
 

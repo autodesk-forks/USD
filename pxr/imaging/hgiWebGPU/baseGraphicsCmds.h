@@ -43,15 +43,21 @@ public:
 
     HGIWEBGPU_API
     void PushDebugGroup(const char* label) override {
-        _CreateCommandEncoder();
-        HgiWebGPUBeginLabel(_commandEncoder, label);
+        if (_passEncoder) {
+            HgiWebGPUBeginLabel(_passEncoder, label);
+        } else {
+            HgiWebGPUBeginLabel(_commandEncoder, label);
+        }
         _debugGroupLabels.push_back(label);
     }
 
     HGIWEBGPU_API
     void PopDebugGroup() override {
-        _CreateCommandEncoder();
-        HgiWebGPUEndLabel(_commandEncoder);
+        if (_passEncoder) {
+            HgiWebGPUEndLabel(_passEncoder);
+        } else {
+            HgiWebGPUEndLabel(_commandEncoder);
+        }
         _debugGroupLabels.pop_back();
     }
 
@@ -110,7 +116,10 @@ public:
         HgiWebGPUBuffer* drawBuf =
                 static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
 
-        _passEncoder.DrawIndirect(drawBuf->GetBufferHandle(), drawBufferOffset);
+        for (uint32_t baseInstance = 0; baseInstance < drawCount; baseInstance++) {
+            _stepFunctions.SetVertexBufferOffsets(_passEncoder, baseInstance);
+            _passEncoder.DrawIndirect(drawBuf->GetBufferHandle(), baseInstance * stride);
+        }
     }
 
     HGIWEBGPU_API
@@ -157,10 +166,13 @@ public:
                 static_cast<HgiWebGPUBuffer*>(drawParameterBuffer.Get());
 
         _passEncoder.SetIndexBuffer(ibo->GetBufferHandle(), wgpu::IndexFormat::Uint32, 0, ibo->GetByteSizeOfResource() - drawBufferByteOffset);
-        _passEncoder.DrawIndexedIndirect(drawBuf->GetBufferHandle(), drawBufferByteOffset);
+
+        for (uint32_t baseInstance = 0; baseInstance < drawCount; baseInstance++) {
+            _stepFunctions.SetVertexBufferOffsets(_passEncoder, baseInstance);
+            _passEncoder.DrawIndexedIndirect(drawBuf->GetBufferHandle(), baseInstance * stride);
+        }
     }
 
-    HGIWEBGPU_API
     HGIWEBGPU_API
     void SetConstantValues(
             HgiGraphicsPipelineHandle ,

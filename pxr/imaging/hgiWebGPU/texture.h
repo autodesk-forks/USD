@@ -86,8 +86,8 @@ private:
 
     struct StagingData
     {
-        wgpu::ImageCopyTexture destination;
-        wgpu::TextureDataLayout dataLayout;
+        wgpu::TexelCopyTextureInfo destination;
+        wgpu::TexelCopyBufferLayout dataLayout;
         std::vector<uint8_t> initData;
     };
     std::vector<StagingData> _stagingDatas;

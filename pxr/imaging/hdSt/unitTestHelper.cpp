@@ -325,6 +325,11 @@ HdSt_TestLightingShader::SetLight(int light,
 
 HdSt_TextureTestDriver::HdSt_TextureTestDriver() :
     _hgi(Hgi::CreatePlatformDefaultHgi())
+  , _hgiDriver{HgiTokens->renderDriver, VtValue(_hgi.get())}
+  , _renderDelegate()
+  , _renderIndex(HdRenderIndex::New(&_renderDelegate, {&_hgiDriver}))
+  , _resourceRegistry(std::static_pointer_cast<HdStResourceRegistry>(
+        _renderIndex->GetResourceRegistry()))
   , _indexBuffer()
   , _vertexBuffer()
   , _shaderProgram()
@@ -351,6 +356,12 @@ HdSt_TextureTestDriver::~HdSt_TextureTestDriver()
     if (_pipeline) {
         _hgi->DestroyGraphicsPipeline(&_pipeline);
     }
+}
+
+HdStResourceRegistrySharedPtr const &
+HdSt_TextureTestDriver::GetResourceRegistry()
+{
+    return _resourceRegistry;
 }
 
 void
@@ -565,13 +576,13 @@ HdSt_TextureTestDriver::_CreateBufferResources()
     vboDesc.vertexStride = elementsPerVertex * sizeof(vertData[0]);
     _vertexBuffer = _hgi->CreateBuffer(vboDesc);
 
-    static const int32_t indices[3] = { 0, 1, 2 };
+    constexpr int32_t indices[3] = { 0, 1, 2 };
 
     HgiBufferDesc iboDesc;
     iboDesc.debugName = "HdSt_TextureTestDriver IndexBuffer";
     iboDesc.usage = HgiBufferUsageIndex32;
     iboDesc.initialData = indices;
-    iboDesc.byteSize = sizeof(indices) * sizeof(indices[0]);
+    iboDesc.byteSize = sizeof(indices);
     _indexBuffer = _hgi->CreateBuffer(iboDesc);
 }
 

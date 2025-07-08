@@ -615,7 +615,9 @@ HdSt_ResourceBinder::ResolveBindings(
                 MetaData::BindingDeclaration(
                     /*name=*/HdInstancerTokens->instanceIndices,
                     /*type=*/glType,
-                    /*binding=*/instanceIndexArrayBinding);
+                    /*binding=*/instanceIndexArrayBinding,
+                    /*isWritable=*/false,
+                    /*stageVisibility=*/InputShaderStageBits);
         }
         if (culledInstanceIndices) {
             HdStBinding culledInstanceIndexArrayBinding =
@@ -633,7 +635,8 @@ HdSt_ResourceBinder::ResolveBindings(
                     /*name=*/HdInstancerTokens->culledInstanceIndices,
                     /*type=*/glType,
                     /*binding=*/culledInstanceIndexArrayBinding,
-                    /*isWritable=*/!isWebGPU);
+                    /*isWritable=*/!isWebGPU,
+                    /*stageVisibility=*/InputShaderStageBits);
         }
     }
 
@@ -918,6 +921,8 @@ HdSt_ResourceBinder::ResolveBindings(
                                             concatenateNames);
             }
             sblock.arraySize = it->GetArraySize();
+            sblock.isWritable = it->isWritable();
+            sblock.stageVisibility = it->GetStageVisibility();
             metaDataOut->customInterleavedBindings.insert(
                 std::make_pair(binding, sblock));
             _bindingMap[it->GetName()] = binding;

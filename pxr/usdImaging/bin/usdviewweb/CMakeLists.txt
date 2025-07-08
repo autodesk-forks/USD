@@ -31,29 +31,35 @@ if (EMSCRIPTEN)
 
     set(MODEL "Knife")
     set(MODEL_EXT "usda")
-    set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB " --tracing ${DEBUG_OPTIONS} \
+    set(USDVIEWWEB_EXE_LINKER_FLAGS " --tracing ${DEBUG_OPTIONS} \
         -s ENVIRONMENT=web,worker \
         -pthread \
-        -s MAXIMUM_MEMORY=4GB \
         -s PTHREAD_POOL_SIZE=8 \
         -s WASM_BIGINT \
         -s NO_EXIT_RUNTIME=1 \
-        -s SHARED_MEMORY=1 \
+        -lidbfs.js \
     ")
+
+    if (PXR_WASM64)
+        # WASM treats all values as numbers by default and cannot distinguish pointers.
+        # Specify that ems_main's fourth argument is a pointer while keeping default behavior for other args.
+        set(USDVIEWWEB_EXE_LINKER_FLAGS "${USDVIEWWEB_EXE_LINKER_FLAGS} -s SIGNATURE_CONVERSIONS=ems_main:____p_")
+    else()
+        set(USDVIEWWEB_EXE_LINKER_FLAGS "${USDVIEWWEB_EXE_LINKER_FLAGS} -s MAXIMUM_MEMORY=4GB")
+    endif ()
+
     if(PXR_WASM_NODE)
         target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:-s NODERAWFS=0")
     endif ()
+
     if (PXR_ENABLE_JS_BINDINGS_SUPPORT)
-        set(CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB "${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} --bind")
+        set(USDVIEWWEB_EXE_LINKER_FLAGS "${USDVIEWWEB_EXE_LINKER_FLAGS} --bind")
     endif()
-    target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} \
+    target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${USDVIEWWEB_EXE_LINKER_FLAGS} \
         -s USE_GLFW=3 \
-        -s USE_WEBGL2=1 \
-        -s USE_WEBGPU=1 \
-        -O0 \
         -s ALLOW_MEMORY_GROWTH \
     ")
-    target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} -sMODULARIZE=0 -O0")
+    target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${USDVIEWWEB_EXE_LINKER_FLAGS} -sMODULARIZE=0")
     add_compile_definitions(MODEL_NAME="${MODEL}" MODEL_EXT_NAME="${MODEL_EXT}")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
         --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/${MODEL}.${MODEL_EXT}@${MODEL}.${MODEL_EXT} \
@@ -64,7 +70,7 @@ if (EMSCRIPTEN)
         --profiling-funcs \
         ")
 
-    if(CMAKE_BUILD_TYPE MATCHES "(Debug|DEBUG|debug|RelWithDebInfo|RELWITHDEBINFO|relwithdebinfo)")
+    if(CMAKE_BUILD_TYPE MATCHES "(Debug|DEBUG|debug)")
         message("Building with debug information")
         # See https://developer.chrome.com/blog/faster-wasm-debugging#debug_fission
         # Note: -g is set automatically so we're just adding some additional flags
@@ -86,6 +92,12 @@ if (EMSCRIPTEN)
         FILES
         ${BUILD_FILES}
         DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+    )
+
+    install(
+            FILES
+            ${BUILD_FILES}
+            DESTINATION ${CMAKE_SOURCE_DIR}/js/usdviewweb
     )
 endif()
 

@@ -412,6 +412,7 @@ HdStTextureUtils::GetHioToHgiConversion(
             hioFormat,
             premultiplyAlpha).second;
 }
+
 std::vector<HioImageSharedPtr>
 HdStTextureUtils::GetAllMipImages(
     const std::string &filePath,
@@ -435,8 +436,8 @@ HdStTextureUtils::GetAllMipImages(
             break;
         }
 
-        const unsigned int currHeight = image->GetWidth();
-        const unsigned int currWidth = image->GetHeight();
+        const unsigned int currWidth = image->GetWidth();
+        const unsigned int currHeight = image->GetHeight();
         if (!(currWidth < prevWidth || currHeight < prevHeight)) {
             break;
         }
@@ -448,7 +449,7 @@ HdStTextureUtils::GetAllMipImages(
     }
 
     return result;
-};
+}
 
 static
 GfVec3i
@@ -565,11 +566,41 @@ HdStTextureUtils::ReadAndConvertImage(
     return true;
 }
 
-HdStTextureUtils::AlignedBuffer<uint8_t>
-HdStTextureUtils::HgiTextureReadback(
+static
+HgiTextureGpuToCpuOp _HgiTextureReadback(
     Hgi * const hgi,
     HgiTextureHandle const & texture,
     size_t * bufferSize)
+{
+    const HgiTextureDesc& textureDesc = texture.Get()->GetDescriptor();
+    const size_t formatByteSize = HgiGetDataSizeOfFormat(textureDesc.format);
+    const size_t width = textureDesc.dimensions[0];
+    const size_t height = textureDesc.dimensions[1];
+    const size_t dataByteSize = width * height * formatByteSize;
+
+    // For Metal the CPU buffer has to be rounded up to a multiple of the page
+    // size.
+    const size_t alignment = hgi->GetCapabilities()->GetPageSizeAlignment();
+    const size_t bitMask = alignment - 1;
+    *bufferSize = (dataByteSize + bitMask) & (~bitMask);
+
+    auto rawBuffer = (uint8_t*)ArchAlignedAlloc(alignment, *bufferSize);
+
+    HgiTextureGpuToCpuOp copyOp;
+    copyOp.gpuSourceTexture = texture;
+    copyOp.sourceTexelOffset = GfVec3i(0);
+    copyOp.mipLevel = 0;
+    copyOp.cpuDestinationBuffer = rawBuffer;
+    copyOp.destinationByteOffset = 0;
+    copyOp.destinationBufferByteSize = *bufferSize;
+    return copyOp;
+}
+
+HdStTextureUtils::AlignedBuffer<uint8_t>
+HdStTextureUtils::HgiTextureReadback(
+    Hgi *const hgi,
+    HgiTextureHandle const &texture,
+    size_t *bufferSize)
 {
     if (!bufferSize) {
         return AlignedBuffer<uint8_t>();
@@ -581,37 +612,36 @@ HdStTextureUtils::HgiTextureReadback(
         return AlignedBuffer<uint8_t>();
     }
 
-    const HgiTextureDesc& textureDesc = texture.Get()->GetDescriptor();
-    const size_t formatByteSize = HgiGetDataSizeOfFormat(textureDesc.format);
-    const size_t width = textureDesc.dimensions[0];
-    const size_t height = textureDesc.dimensions[1];
-    const size_t dataByteSize = width * height * formatByteSize;
-
-    if (dataByteSize == 0) {
+    HgiTextureGpuToCpuOp copyOp = _HgiTextureReadback(hgi, texture, bufferSize);
+    if (copyOp.destinationBufferByteSize == 0) {
         return AlignedBuffer<uint8_t>();
     }
-
-    // For Metal the CPU buffer has to be rounded up to a multiple of the page
-    // size.
-    const size_t alignment = hgi->GetCapabilities()->GetPageSizeAlignment();
-    const size_t bitMask = alignment - 1;
-    *bufferSize = (dataByteSize + bitMask) & (~bitMask);
-
-    uint8_t* rawBuffer = (uint8_t*)ArchAlignedAlloc(alignment, *bufferSize);
-    AlignedBuffer<uint8_t> buffer(rawBuffer);
-
+    AlignedBuffer<uint8_t> buffer((uint8_t*)copyOp.cpuDestinationBuffer);
     HgiBlitCmdsUniquePtr const blitCmds = hgi->CreateBlitCmds();
-    HgiTextureGpuToCpuOp copyOp;
-    copyOp.gpuSourceTexture = texture;
-    copyOp.sourceTexelOffset = GfVec3i(0);
-    copyOp.mipLevel = 0;
-    copyOp.cpuDestinationBuffer = rawBuffer;
-    copyOp.destinationByteOffset = 0;
-    copyOp.destinationBufferByteSize = *bufferSize;
     blitCmds->CopyTextureGpuToCpu(copyOp);
     hgi->SubmitCmds(blitCmds.get(), HgiSubmitWaitTypeWaitUntilCompleted);
 
     return buffer;
+}
+
+void
+HdStTextureUtils::HgiTextureReadback(
+	Hgi* const hgi,
+	HgiTextureHandle const& texture,
+    std::function<void(AlignedBuffer<uint8_t>)> const completed)
+{
+    if (!texture) {
+        completed(AlignedBuffer<uint8_t>());
+    }
+
+    size_t bufferSize = 0;
+    HgiBlitCmdsUniquePtr const blitCmds = hgi->CreateBlitCmds();
+    HgiTextureGpuToCpuOp copyOp = _HgiTextureReadback(hgi, texture, &bufferSize);
+    std::function<void(void* rawdata)> cb = [completed](void* rawdata){
+        completed(AlignedBuffer<uint8_t>((uint8_t*)rawdata));
+    };
+    blitCmds->CopyTextureGpuToCpu(copyOp, cb);
+    hgi->SubmitCmds(blitCmds.get(), HgiSubmitWaitTypeWaitUntilCompleted);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

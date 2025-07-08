@@ -29,6 +29,7 @@ struct HdSt_MeshShaderKey : public HdSt_ShaderKey
         NormalSourceFlatScreenSpace,
     };
 
+    HDST_API
     HdSt_MeshShaderKey(HdSt_GeometricShader::PrimitiveType primType,
                        TfToken shadingTerminal,
                        NormalSource normalsSource,
@@ -50,13 +51,15 @@ struct HdSt_MeshShaderKey : public HdSt_ShaderKey
                        bool enableScalarOverride,
                        bool pointsShadingEnabled,
                        bool forceOpaqueEdges,
-                       bool surfaceEdgeIds);
+                       bool surfaceEdgeIds,
+                       bool nativeRoundPoints);
 
     // Note: it looks like gcc 4.8 has a problem issuing
     // a wrong warning as "array subscript is above array bounds"
     // when the default destructor is automatically generated at callers.
     // Having an empty destructor explicitly within this linkage apparently
     // avoids the issue.
+    HDST_API
     ~HdSt_MeshShaderKey();
 
     HdCullStyle GetCullStyle() const override { return cullStyle; }
@@ -102,13 +105,13 @@ struct HdSt_MeshShaderKey : public HdSt_ShaderKey
     TfToken const *GetFS()  const override { return FS; }
 
     TfToken glslfx;
-    TfToken VS[7];
+    TfToken VS[8];
     TfToken TCS[4];
     TfToken TES[4];
     TfToken PTCS[4];
-    TfToken PTVS[12];
+    TfToken PTVS[13];
     TfToken GS[10];
-    TfToken FS[22];
+    TfToken FS[23];
 };
 
 

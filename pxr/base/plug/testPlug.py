@@ -275,10 +275,18 @@ class TestPlug(unittest.TestCase):
         self.assertEqual(listener.numReceived, 0)
 
         # try to load an unloadable plugin
-        badPlugin = Plug.Registry().GetPluginForType('TestPlugUnloadable')
-        self.assertIsNotNone(badPlugin)
-        with self.assertRaises(RuntimeError):
-            badPlugin.Load()
+        # XXX:
+        # On Windows ARM64 loading TestPlugUnloadable (which intentionally uses
+        # an undefined external symbol) unexpectedly crashes in the underlying
+        # LoadLibrary system call with an EXCEPTION_ACCESS_VIOLATION, instead of
+        # returning NULL as it does on x64, which should be the intended behaviour.
+        # For now we just skip this test on Windows ARM64. More discussion at:
+        # https://github.com/PixarAnimationStudios/OpenUSD/pull/3430.
+        if "ARMv" not in os.environ.get('PROCESSOR_IDENTIFIER', ''):
+            badPlugin = Plug.Registry().GetPluginForType('TestPlugUnloadable')
+            self.assertIsNotNone(badPlugin)
+            with self.assertRaises(RuntimeError):
+                badPlugin.Load()
 
         # try to load an unloadable plugin python module
         badPlugin = Plug.Registry().GetPluginForType('TestPlugPythonUnloadable')
@@ -326,6 +334,11 @@ class TestPlug(unittest.TestCase):
         debugCodes = Tf.Debug.GetDebugSymbolNames()
         self.assertTrue('PLUG_INFO_SEARCH' in debugCodes)
         self.assertTrue('PLUG_REGISTRATION' in debugCodes)
+
+    def test_StlSequencesForPlugPluginPtr(self):
+        pd1 = Plug.Registry().GetPluginForType('TestPlugDerived1')
+        td1 = Plug._TestPlugBase1('TestPlugDerived1')
+        self.assertTrue(td1.TestAcceptPluginSequence([pd1]))
 
 if __name__ == '__main__':
     unittest.main()

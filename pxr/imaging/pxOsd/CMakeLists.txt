@@ -21,9 +21,6 @@ pxr_library(pxOsd
         subdivTags
         tokens
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapMeshTopology.cpp

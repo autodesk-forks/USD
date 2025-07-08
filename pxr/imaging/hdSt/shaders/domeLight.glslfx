@@ -43,13 +43,30 @@ vec2 GetTexCoords(ivec2 outCoords)
     return texCoords;
 }
 
+float SanitizeValue(float value)
+{
+#if HGI_HAS_IEEE_FLOAT_SPECIAL_VALUES
+    if (isnan(value) || isinf(value)) {
+        return 0;
+    }
+#endif
+    return value;
+}
+
+vec3 SanitizeChannels(vec3 value)
+{
+    return vec3(SanitizeValue(value.r),
+                SanitizeValue(value.g),
+                SanitizeValue(value.b));
+}
+
 // sample lat/long env map input texture
 vec3 SampleEnvMapLod(vec3 sampleVec, float sampleLod) {
     vec2 coord = vec2((atan(sampleVec.z, sampleVec.x) + PI) / (2.0 * PI),
                       acos(sampleVec.y) / PI);
     vec3 value = HgiTextureLod_inTexture(coord, sampleLod).rgb;
 
-    return max(value, vec3(0.0, 0.0, 0.0));
+    return SanitizeChannels(value);
 }
 
 // compute world position from texture coords

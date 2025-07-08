@@ -231,10 +231,10 @@ wgpu::Texture HgiWebGPUMipmapGenerator::generateMipmap(const wgpu::Texture& text
         mipLevelSize.depthOrArrayLayers = arrayLayerCount;
 
         for (uint32_t i = 1; i < mipLevelCount; ++i) {
-            wgpu::ImageCopyTexture imageCopyTextureSrc = {};
+            wgpu::TexelCopyTextureInfo imageCopyTextureSrc = {};
             imageCopyTextureSrc.texture = mipTexture;
             imageCopyTextureSrc.mipLevel = i - 1;
-            wgpu::ImageCopyTexture imageCopyTextureDst = {};
+            wgpu::TexelCopyTextureInfo imageCopyTextureDst = {};
             imageCopyTextureDst.texture = texture;
             imageCopyTextureDst.mipLevel = i;
             commandEncoder.CopyTextureToTexture(&imageCopyTextureSrc, &imageCopyTextureDst, &mipLevelSize);

@@ -26,9 +26,8 @@ pxr_library(usdGeom
         boundableComputeExtent
         metrics
         primvar
-        validatorTokens
         xformOp
-        
+
     JS_CPPFILES
         wrapXformJs.cpp
         wrapXformOpJs.cpp
@@ -44,11 +43,6 @@ pxr_library(usdGeom
     PUBLIC_HEADERS
         api.h
 
-    CPPFILES
-        validators.cpp
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
 
     PRIVATE_CLASSES
         samplingUtils
@@ -132,14 +126,6 @@ pxr_build_test(testUsdGeomHasAPI
         usdGeom
     CPPFILES
         testenv/testUsdGeomHasAPI.cpp
-)
-
-pxr_build_test(testUsdGeomValidators
-    LIBRARIES
-        usd
-        usdGeom
-    CPPFILES
-        testenv/testUsdGeomValidators.cpp
 )
 
 pxr_install_test_dir(
@@ -358,10 +344,5 @@ pxr_register_test(testUsdGeomImageable
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomImageable"
     EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdGeomValidators
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomValidators"
-        EXPECTED_RETURN_CODE 0
 )
 

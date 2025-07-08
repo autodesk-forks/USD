@@ -62,3 +62,12 @@ def TestDoesNotRecurseDeps():
     refLayer.Export("ref_unmodified.usda")
 
 TestDoesNotRecurseDeps()
+
+def TestDoesNotStripMetadata():
+    # Ensure that metadata is retained.
+    def fn(s):
+        return s
+
+    Test('metadata.usda', 'preserve_metadata.usda', fn)
+
+TestDoesNotStripMetadata()

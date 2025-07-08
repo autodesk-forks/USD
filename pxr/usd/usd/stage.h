@@ -1464,10 +1464,10 @@ public:
     /// \anchor Usd_ColorConfigurationAPI
     /// \name Color Configuration API
     ///
-    /// Methods for authoring and querying the color configuration to 
-    /// be used to interpret the per-attribute color-spaces. An external 
-    /// system (like OpenColorIO) is typically used for interpreting the
-    /// configuration.
+    /// Methods for authoring and querying the display color configuration 
+    /// encoded in layer metadata. This color configuration information is
+    /// stored as a convenience for use in pipeline tools and is unrelated
+    /// to color space information associated with Usd attributes or textures.
     /// 
     /// Site-wide fallback values for the colorConfiguration and
     /// colorManagementSystem metadata can be set in the plugInfo.json file of 
@@ -1475,49 +1475,23 @@ public:
     /// 
     /// \code{.json}
     ///         "UsdColorConfigFallbacks": {
-    ///             "colorConfiguration" = "https://github.com/imageworks/OpenColorIO-Configs/blob/master/aces_1.0.1/config.ocio",
+    ///             "colorConfiguration" = "https://path/to/color/config.ocio",
     ///             "colorManagementSystem" : "OpenColorIO"
     ///         }
     /// \endcode
     /// 
-    /// The color space in which a given color or texture attribute is authored 
-    /// is set as token-valued metadata 'colorSpace' on the attribute. For 
-    /// color or texture attributes that don't have an authored 'colorSpace'
-    /// value, the fallback color-space is gleaned from the color configuration 
-    /// oracle. This is usually the config's <b>scene_linear</b> role
-    /// color-space.
-    /// 
-    /// Here's the pseudo-code for determining an attribute's color-space.
-    /// 
-    /// \code{.cpp}
-    /// UsdStageRefPtr stage = UsdStage::Open(filePath);
-    /// UsdPrim prim = stage->GetPrimAtPath("/path/to/prim")
-    /// UsdAttribute attr = prim.GetAttribute("someColorAttr");
-    /// TfToken colorSpace = attr.GetColorSpace();
-    /// if (colorSpace.IsEmpty()) {
-    ///     // If colorSpace is empty, get the default from the stage's 
-    ///     // colorConfiguration, using external API (not provided by USD).
-    ///     colorSpace = ExternalAPI::GetDefaultColorSpace(
-    ///                         stage->GetColorConfiguration());
-    /// }
-    /// \endcode
-    ///
-    /// \sa \ref Usd_AttributeColorSpaceAPI "UsdAttribute ColorSpace API"
-    /// 
-    /// 
     /// @{
     // --------------------------------------------------------------------- //
 
-    /// Sets the default color configuration to be used to interpret the 
-    /// per-attribute color-spaces in the composed USD stage. This is specified
-    /// as asset path which can be resolved to the color spec file.
+    /// Sets the default color configuration to be used for querying color
+    /// configuration metadata stored in a layer. This data is informational
+    /// for use in pipeline tools.
     /// 
     /// \ref Usd_ColorConfigurationAPI "Color Configuration API"
     USD_API
     void SetColorConfiguration(const SdfAssetPath &colorConfig) const;
 
-    /// Returns the default color configuration used to interpret the per-
-    /// attribute color-spaces in the composed USD stage.
+    /// Returns the default color configuration stored in layer metadata.
     /// 
     /// \ref Usd_ColorConfigurationAPI "Color Configuration API"
     USD_API
@@ -1544,7 +1518,6 @@ public:
     /// 
     /// The python wrapping of this method returns a tuple containing 
     /// (colorConfiguration, colorManagementSystem).
-    /// 
     /// 
     /// \sa SetColorConfigFallbacks,
     /// \ref Usd_ColorConfigurationAPI "Color Configuration API"
@@ -1907,14 +1880,17 @@ private:
 
     // Pushes changes through PCP to determine invalidation based on 
     // composition metadata.
-    void _ProcessChangeLists(const SdfLayerChangeListVec &);
+    // Returns a value indicating if notices were sent during execution.
+    bool _ProcessChangeLists(const SdfLayerChangeListVec &);
 
     // Update stage contents in response to changes to the asset resolver.
     void _HandleResolverDidChange(const ArNotice::ResolverChanged &);
 
     // Process stage change information stored in _pendingChanges.
     // _pendingChanges will be set to nullptr by the end of the function.
-    void _ProcessPendingChanges();
+    // This function will return true if UsdNotice::ObjectsChanged and 
+    // UsdNotice::StageContentsChanged notices were sent during execution.
+    bool _ProcessPendingChanges();
 
     // Remove scene description for the prim at \p fullPath in the current edit
     // target.
@@ -2289,6 +2265,37 @@ private:
     inline char const *_GetMallocTagId() const;
 
 private:
+    class _PendingChanges;
+
+    // Change block for use by the UsdNamespaceEditor to allow it to indicate
+    // to its dependent stages what the expected namespace edits are when the
+    // stages handles notices from the changes the namespace editor performs.
+    // The stage uses this provide additional information about prim resyncs
+    // related to namespace edits in the ObjectsChanged notice it sends.
+    class _NamespaceEditsChangeBlock {
+    public:
+        // Info about an expected namespace edit change from UsdNamespaceEditor.
+        // This includes the original pre-edit prim stack of the prim at the old
+        // path which is used to determine if the prim at the new path has the
+        // same composed contents after the edits as the prim had originally at
+        // the old path before the edits.
+        struct ExpectedNamespaceEditChange {
+            SdfPath oldPath;
+            SdfPath newPath;
+            SdfPrimSpecHandleVector oldPrimStack;
+        };
+        using ExpectedNamespaceEditChangeVector = 
+            std::vector<ExpectedNamespaceEditChange>;
+
+        _NamespaceEditsChangeBlock(const UsdStagePtr &stage,
+            ExpectedNamespaceEditChangeVector &&expectedChanges);
+        _NamespaceEditsChangeBlock(_NamespaceEditsChangeBlock &&);
+        ~_NamespaceEditsChangeBlock();
+
+    private:
+        UsdStagePtr _stage;
+        std::unique_ptr<_PendingChanges> _localPendingChanges;
+    };
 
     // The 'pseudo root' prim.
     Usd_PrimDataPtr _pseudoRoot;
@@ -2336,7 +2343,6 @@ private:
     TfNotice::Key _resolverChangeKey;
 
     // Data for pending change processing.
-    class _PendingChanges;
     _PendingChanges* _pendingChanges;
 
     std::optional<WorkDispatcher> _dispatcher;

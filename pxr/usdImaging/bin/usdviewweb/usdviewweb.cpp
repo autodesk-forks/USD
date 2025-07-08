@@ -22,9 +22,6 @@
 // language governing permissions and limitations under the Apache License.
 //
 
-#include <GLES/gl.h>
-#include <GLES/glext.h>
-#include <GLES3/gl3.h>
 #include <emscripten/em_js.h>
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu_cpp.h>
@@ -34,9 +31,6 @@
 #include <functional>
 #include <vector>
 #include <fstream>
-
-#define GL_GLEXT_PROTOTYPES
-#define EGL_EGLEXT_PROTOTYPES
 
 #include <GLFW/glfw3.h>
 #include <cmath>
@@ -49,7 +43,6 @@
 #include <pxr/usd/sdf/path.h>
 #include <pxr/usd/usd/stage.h>
 #include <pxr/imaging/hgi/hgi.h>
-#include <pxr/imaging/hgi/blitCmdsOps.h>
 #include "pxr/imaging/hdx/tokens.h"
 #include "pxr/usd/usdGeom/bboxCache.h"
 #include "pxr/base/plug/registry.h"
@@ -156,30 +149,96 @@ struct VertexOutput {
 
     EM_JS(void, ems_setup, (), {
         if (_ems_main) {
+        var currentFileName = "";
+        function loadUsdFileFromArrayBuffer(filename, usdFile) {
+            let parts = filename.split('.');
+            let extension = parts[parts.length - 1];
+            extension = extension.split('?')[0];
+            // random filename allows to use multiple files at the same time.
+            // this implementation currently clears the old file.
+            let fileName = (Math.random() + 1).toString(36).substring(7);
+            let inputFile = fileName + "." + extension;
+
+            FS_createDataFile('/', inputFile, new Uint8Array(usdFile), true, true, true);
+
+            // clear existing objects
+            if (currentFileName) {
+                FS_unlink(currentFileName, true);
+            }
+            currentFileName = inputFile;
+            return inputFile;
+        }
+
+        async function loadFile(fileOrHandle) {
+            let file = undefined;
+            try {
+                if(fileOrHandle.getFile !== undefined) {
+                    file = await fileOrHandle.getFile();
+                }
+                else
+                    file = fileOrHandle;
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    loadUsdFileFromArrayBuffer(file.name, event.target.result);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            catch(ex) {
+                console.warn("Error loading file", fileOrHandle, ex);
+            }
+        }
+
+        async function loadBinaryFile(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                const urlObject = new URL(url, window.location.origin);
+                const fileName = urlObject.pathname.split('/').pop();
+                return loadUsdFileFromArrayBuffer(fileName, arrayBuffer);
+            } catch (error) {
+                console.error(`Error loading binary file: ${error.message}`);
+                throw error;
+            }
+        }
+
+        function testAndLoadFile(file) {
+            let ext = file.name.split('.').pop();
+            console.log(file.name + ", " + file.size + ", " + ext);
+            if(ext == 'usd' || ext == 'usdz'|| ext == 'usda') {
+                loadFile(file);
+            }
+        }
+
         if (navigator["gpu"]) {
-        navigator["gpu"]["requestAdapter"]().then(function (adapter) {
-            const requestedFeatures = [
-            'depth32float-stencil8',
+            window.loadBinaryFile = loadBinaryFile;
+            (async function() {
+                const adapter = await navigator["gpu"]["requestAdapter"]();
+                const requestedFeatures = [
+                    'depth32float-stencil8',
                     'float32-filterable'
-            ];
-            const requiredFeatures = [];
-            requestedFeatures.forEach((feat) => {
-                    if (adapter.features.has(feat))
-                    {
+                ];
+                const requiredFeatures = [];
+                requestedFeatures.forEach((feat) => {
+                    if (adapter.features.has(feat)){
                         requiredFeatures.push(feat);
                         console.log('WebGPU adapter supports ' + feat + '.');
-                    }
-                    else
-                    {
+                    } else {
                         console.log('WebGPU adapter does not support ' + feat + '.');
                     }
-            });
-            const requiredLimits = {
+                });
+                const requiredLimits = {
                     maxStorageBuffersPerShaderStage: 10,
                     maxColorAttachmentBytesPerSample: 64,
                     maxBufferSize: 0x40000000
-            };
-            adapter["requestDevice"]({requiredFeatures, requiredLimits}).then( function (device) {
+                };
+                const device = await adapter.requestDevice({
+                    requiredFeatures: requiredFeatures,
+                    requiredLimits: requiredLimits
+                });
+
                 Module["preinitializedWebGPUDevice"] = device;
                 const canvasContainer = document.getElementById("canvasContainer");
                 const height = document.getElementById('canvasContainer').offsetHeight;
@@ -194,11 +253,30 @@ struct VertexOutput {
                 const mainCanvas = document.getElementById("canvas");
                 mainCanvas.style.position = "absolute";
                 mainCanvas.style.opacity = 0;
-                _ems_main(width, height);
-            }).catch((res) => { console.log(res); });
-        }, function () {
-            console.log("WebGPU adapter not found.");
-        });
+                const urlParams = new URLSearchParams(window.location.search);
+                const perf = urlParams.has('perf');
+                let modelParam = urlParams.get('model');
+                let usdFilename = "";
+                if (modelParam) {
+                    usdFilename = await loadBinaryFile(modelParam);
+                }
+
+                var lengthBytes = lengthBytesUTF8(usdFilename) + 1;
+                var fileNameOnWasmHeap = _malloc(lengthBytes);
+                stringToUTF8(usdFilename, fileNameOnWasmHeap, lengthBytes);
+
+                if(!urlParams.has('perf')) {
+                    _ems_main(
+                        width,
+                        height,
+                        -1,
+                        fileNameOnWasmHeap,
+                        false
+                    );
+                }
+                _free(fileNameOnWasmHeap);
+
+            })();
     } else {
         console.log("WebGPU not found.");
     }
@@ -264,10 +342,19 @@ struct VertexOutput {
         return world;
     }
 
-    extern "C" int initialize(uint32_t width, uint32_t height) {
-        filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
+    extern "C" int initialize(uint32_t width, uint32_t height, int32_t numFrames, const char* fileName, bool rotate) {
+        if (fileName == nullptr || fileName[0] == '\0') {
+            std::cout << "Empty file name" << std::endl;
+            filePath = "/" MODEL_NAME "." MODEL_EXT_NAME;
+        } else {
+            std::cout << "File name: " << fileName << std::endl;
+            filePath = fileName;
+        }
+
         TF_INFO(INFO).Msg("File: %s", filePath.c_str());
         TF_INFO(INFO).Msg("Starting GLEngine ");
+        wgpu::Instance instance = wgpu::CreateInstance();
+        wgpu::Surface surface;
         initGLEngine();
         glfwSetErrorCallback(error_callback);
         if (!glfwInit())
@@ -275,6 +362,7 @@ struct VertexOutput {
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
 
         // just use multiples of 256 now until row alignment is handled in HgiWebGPU
         auto window = glfwCreateWindow(width, height, "HgiWebGPU Test", NULL, NULL);
@@ -288,101 +376,32 @@ struct VertexOutput {
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
 
         glfwMakeContextCurrent(window);
-        wgpu::SwapChain swapChain;
         pxr::Hgi *hgi = glEngine->GetHgi();
         pxr::HgiWebGPU* hgiWebGPU = static_cast<pxr::HgiWebGPU*>(hgi);
         wgpu::Device device = hgiWebGPU->GetPrimaryDevice();
         wgpu::TextureFormat swapChainFormat =  wgpu::TextureFormat::BGRA8Unorm;
 
         {
-            wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+            wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
             canvasDesc.selector = "#webgpuCanvas";
 
             wgpu::SurfaceDescriptor surfDesc{};
             surfDesc.nextInChain = &canvasDesc;
-            wgpu::Instance instance = wgpu::CreateInstance();
-            wgpu::Surface surface = instance.CreateSurface(&surfDesc);
+            surface = instance.CreateSurface(&surfDesc);
 
-            wgpu::SwapChainDescriptor scDesc{};
-            scDesc.usage = wgpu::TextureUsage::RenderAttachment;
-            scDesc.format = wgpu::TextureFormat::BGRA8Unorm;
-            scDesc.width = framebufferWidth;
-            scDesc.height = framebufferHeight;
-            scDesc.presentMode = wgpu::PresentMode::Fifo;
-            swapChain = device.CreateSwapChain(surface, &scDesc);
+            wgpu::SurfaceConfiguration surfaceDesc{};
+            surfaceDesc.device = device;
+            surfaceDesc.format = swapChainFormat;
+            surfaceDesc.width = framebufferWidth;
+            surfaceDesc.height = framebufferHeight;
+            surface.Configure(&surfaceDesc);
         }
 
-        wgpu::Texture testTexture;
-        {
-            wgpu::TextureDescriptor textureDescriptor;
-            textureDescriptor.dimension = wgpu::TextureDimension::e2D;
-            textureDescriptor.size.width = width;
-            textureDescriptor.size.height = height;
-            textureDescriptor.size.depthOrArrayLayers = 1;
-            textureDescriptor.sampleCount = 1;
-            textureDescriptor.format = wgpu::TextureFormat::RGBA8Unorm;
-            textureDescriptor.mipLevelCount = 1;
-            textureDescriptor.usage = wgpu::TextureUsage::CopyDst | wgpu::TextureUsage::TextureBinding;
-            testTexture = device.CreateTexture(&textureDescriptor);
-
-            // Initialize the texture with arbitrary data until we can load images
-            std::vector<uint8_t> data(2 * 4 * width * height, 0);
-            for (size_t i = 0; i < data.size(); ++i) {
-                data[i] = static_cast<uint8_t>(i % 253);
-            }
-
-            wgpu::BufferDescriptor stgDescriptor;
-            stgDescriptor.size = static_cast<uint32_t>(data.size());
-            stgDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
-            wgpu::Buffer stagingBuffer = device.CreateBuffer(&stgDescriptor);
-
-            device.GetQueue().WriteBuffer(stagingBuffer, 0, data.data(), static_cast<uint32_t>(data.size()));
-
-            wgpu::ImageCopyBuffer imageCopyBuffer = {};
-            imageCopyBuffer.buffer = stagingBuffer;
-             wgpu::TextureDataLayout textureDataLayout;
-            textureDataLayout.offset = 0;
-            textureDataLayout.bytesPerRow = 4 * width;
-
-            imageCopyBuffer.layout = textureDataLayout;
-
-            wgpu::ImageCopyTexture imageCopyTexture;
-            imageCopyTexture.texture = testTexture;
-            imageCopyTexture.mipLevel = 0;
-            imageCopyTexture.origin = {0, 0, 0};
-            wgpu::Extent3D copySize = {width, height, 1};
-
-            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.CopyBufferToTexture(&imageCopyBuffer, &imageCopyTexture, &copySize);
-
-            wgpu::CommandBuffer copy = encoder.Finish();
-            device.GetQueue().Submit(1, &copy);
-        }
         wgpu::RenderPipeline pipeline = createBlitPipeline(device, swapChainFormat);
         wgpu::SamplerDescriptor samplerDsc = {};
         samplerDsc.minFilter = wgpu::FilterMode::Linear;
         samplerDsc.magFilter = wgpu::FilterMode::Linear;
         wgpu::Sampler sampler = device.CreateSampler(&samplerDsc);
-
-        // gl framebuffer for blitting
-        // we render the frame into a webgpu texture then read it back, upload it as a GL texture and do a framebuffer blit
-        // suboptimal but this is to get things working
-        GLuint frameBufferTexture;
-        glGenTextures(1, &frameBufferTexture);
-        glBindTexture(GL_TEXTURE_2D, frameBufferTexture);
-        char imageData[4 * 4 * 4];
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGBA, GL_HALF_FLOAT, imageData);
-
-        GLuint frameBufferObject;
-        glGenFramebuffers(1, &frameBufferObject);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBufferObject);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frameBufferTexture, 0);
-
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        // for holding the data read back from the WebGPU render target
-        std::vector<uint8_t> colorData;
 
         // Setup camera
         Camera camera = Camera();
@@ -413,6 +432,12 @@ struct VertexOutput {
         glfwSetScrollCallback(window, scroll_callback);
         glfwSwapBuffers(window);
 
+        const int rotationSpeed = 40;
+        EM_ASM({
+            const event = new CustomEvent('onplay', {});
+            window.dispatchEvent(event);
+        });
+        int frameIndex = 0;
         loop = [&]() {
 
             glfwSwapInterval(1);
@@ -425,6 +450,12 @@ struct VertexOutput {
             glEngine->SetRendererAov(pxr::HdAovTokens->color);
             glEngine->SetRenderViewport(pxr::GfVec4d(0, 0, framebufferWidth, framebufferHeight));
             glEngine->SetWindowPolicy(pxr::CameraUtilConformWindowPolicy::CameraUtilFit);
+            if (rotate) {
+                camera.mouseDown(GLFW_MOUSE_BUTTON_LEFT, GLFW_PRESS, 0, framebufferWidth / 2, framebufferHeight / 2);
+                camera.mouseMove(framebufferWidth / 2 + rotationSpeed, framebufferHeight / 2);
+                camera.update();
+                camera.mouseUp();
+            }
             glEngine->SetCameraState(camera.getViewMatrix(), camera.getProjectionMatrix());
             const auto position = camera.getPosition();
             defaultLighting[0].SetPosition(
@@ -434,12 +465,31 @@ struct VertexOutput {
             // Render
             glEngine->SetEnablePresentation(false);
 
+            EM_ASM({
+                const event = new CustomEvent('onframechanged', {detail: {frameIndex: $0}});
+                window.dispatchEvent(event);
+            }, frameIndex);
             glEngine->Render(stage->GetPseudoRoot(), renderParams);
+            EM_ASM({
+                const frameIndex = $0;
+                const numFrames = $1;
+                const event = new CustomEvent('onframepresented', {
+                    detail: {
+                        frameIndex: frameIndex,
+                        lastFrame: frameIndex === numFrames-1,
+                        firstFrame: frameIndex === 0
+                    }
+                });
+                window.dispatchEvent(event);
+            }, frameIndex, numFrames);
+
 
             pxr::HgiTextureHandle colorTarget = glEngine->GetAovTexture(pxr::HdAovTokens->color);
 
-            wgpu::TextureView backbuffer = swapChain.GetCurrentTextureView();
-            pxr::HgiWebGPUTexture* srcTexture =static_cast<pxr::HgiWebGPUTexture*>(colorTarget.Get());
+            wgpu::SurfaceTexture surfaceTexture;
+            surface.GetCurrentTexture(&surfaceTexture);
+            wgpu::TextureView backbuffer = surfaceTexture.texture.CreateView();
+            auto srcTexture =static_cast<pxr::HgiWebGPUTexture*>(colorTarget.Get());
             wgpu::Texture colorTexture = srcTexture->GetTextureHandle();
             wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
 
@@ -497,8 +547,20 @@ struct VertexOutput {
             }
 
             device.GetQueue().Submit(1, &commands);
+            if (numFrames > 0) frameIndex++;
 
             glfwPollEvents();
+            if (numFrames > 0 && frameIndex == numFrames) {
+                emscripten_cancel_main_loop();
+                glfwDestroyWindow(window);
+                glfwTerminate();
+                printf("Shutting down\n");
+            }
+            #if !defined(ARCH_OS_WASM_VM)
+                surface.Present();
+                instance.ProcessEvents();
+            #endif
+
         };
         emscripten_set_main_loop(main_loop, 0, true);
         glfwDestroyWindow(window);
@@ -517,6 +579,15 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-extern "C" __attribute__((used, visibility("default"))) void ems_main(uint32_t width, uint32_t height) {
-    pxr::initialize(width, height);
+extern "C" __attribute__((used, visibility("default"))) void ems_main(
+    uint32_t width, uint32_t height, int32_t numFrames, const char* fileName, bool rotate) {
+    pxr::initialize(width, height, numFrames, fileName, rotate);
+}
+
+extern "C" __attribute__((used, visibility("default"))) bool isWasm64() {
+#if defined(__wasm64__)
+    return true;
+#else
+    return false;
+#endif
 }

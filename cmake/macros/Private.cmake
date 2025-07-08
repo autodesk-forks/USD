@@ -346,7 +346,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
             set(EMSCRIPTEN_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
         endif()
 
-        if (PXR_ENABLE_JS_SUPPORT)
+        if (EMSCRIPTEN)
             string(REGEX REPLACE "^lib\\/" "/" LOCAL_PATH "${resourcesPath}")
 
             list(APPEND EMSCRIPTEN_RESOURCE_FILES "--preload-file ${EMSCRIPTEN_RESOURCE_FILE}@${LOCAL_PATH}/${dirPath}/${destFileName}")
@@ -358,7 +358,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
         )
     endforeach()
 
-    if (PXR_ENABLE_JS_SUPPORT)
+    if (EMSCRIPTEN)
         set_property(TARGET ${NAME} PROPERTY EMSCRIPTEN_RESOURCES ${EMSCRIPTEN_RESOURCE_FILES})
     endif()
 endfunction() # _install_resource_files
@@ -584,7 +584,8 @@ function(_pxr_enable_precompiled_header TARGET_NAME)
     # Headers live in subdirectories.
     set(rel_output_header_path "${PXR_PREFIX}/${TARGET_NAME}/${output_header_name}")
     set(abs_output_header_path "${PROJECT_BINARY_DIR}/include/${rel_output_header_path}")
-    set(abs_precompiled_path ${PROJECT_BINARY_DIR}/include/${PXR_PREFIX}/${TARGET_NAME}/${CMAKE_BUILD_TYPE}/${precompiled_name})
+    set(abs_precompiled_container_path "${PROJECT_BINARY_DIR}/include/${PXR_PREFIX}/${TARGET_NAME}/${CMAKE_BUILD_TYPE}")
+    set(abs_precompiled_path "${abs_precompiled_container_path}/${precompiled_name}")
 
     # Additional compile flags to use precompiled header.  This will be
     set(compile_flags "")
@@ -616,14 +617,8 @@ function(_pxr_enable_precompiled_header TARGET_NAME)
             set(abs_output_source_path ${CMAKE_CURRENT_BINARY_DIR}/${output_header_name_we}.cpp)
             add_custom_command(
                 OUTPUT "${abs_output_source_path}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${abs_precompiled_container_path}"
                 COMMAND ${CMAKE_COMMAND} -E touch ${abs_output_source_path}
-            )
-
-            # The trigger file gets a special compile flag (/Yc).
-            set_source_files_properties(${abs_output_source_path} PROPERTIES
-                COMPILE_FLAGS "/Yc\"${rel_output_header_path}\" /FI\"${rel_output_header_path}\" /Fp\"${abs_precompiled_path}\""
-                OBJECT_OUTPUTS "${abs_precompiled_path}"
-                OBJECT_DEPENDS "${abs_output_header_path}"
             )
 
             # Add the header file to the target.
@@ -631,6 +626,13 @@ function(_pxr_enable_precompiled_header TARGET_NAME)
 
             # Add the trigger file to the target.
             target_sources(${TARGET_NAME} PRIVATE "${abs_output_source_path}")
+
+            # The trigger file gets a special compile flag (/Yc).
+            set_source_files_properties(${abs_output_source_path} PROPERTIES
+                    COMPILE_FLAGS "/Yc\"${rel_output_header_path}\" /FI\"${rel_output_header_path}\" /Fp\"${abs_precompiled_path}\""
+                    OBJECT_OUTPUTS "${abs_precompiled_path}"
+                    OBJECT_DEPENDS "${abs_output_header_path}"
+            )
 
             # Exclude the trigger.
             list(APPEND pch_EXCLUDE ${abs_output_source_path})
@@ -996,7 +998,7 @@ function(_pxr_target_link_libraries NAME)
                     list(APPEND final ${lib})
                 elseif(CMAKE_COMPILER_IS_GNUCXX)
                     list(APPEND final "$<LINK_LIBARAY:WHOLE_ARCHIVE,${lib}")
-                elseif(PXR_ENABLE_JS_SUPPORT)
+                elseif(EMSCRIPTEN)
                     list(APPEND final ${lib})
                 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
                     list(APPEND final -Wl,-force_load ${lib})
@@ -1309,7 +1311,7 @@ function(_pxr_library NAME)
             ${args_PRIVATE_HEADERS}
         )
 
-    elseif(args_TYPE STREQUAL "STATIC" AND PXR_ENABLE_JS_SUPPORT)
+    elseif(args_TYPE STREQUAL "STATIC" AND EMSCRIPTEN)
         # Building an explicitly static library.
         add_library(${NAME_INTERNAL}
             STATIC
@@ -1501,7 +1503,7 @@ function(_pxr_library NAME)
 
     # XXX -- May want some plugins to be baked into monolithic.
     set(ADDITIONAL_ARGS )
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         list(APPEND ADDITIONAL_ARGS IS_STATIC_PLUGIN)
     endif()
     _pxr_target_link_libraries(${NAME} ${ADDITIONAL_ARGS} ${args_LIBRARIES})
@@ -1556,7 +1558,7 @@ function(_pxr_library NAME)
                 ARCHIVE DESTINATION ${libInstallPrefix}
                 RUNTIME DESTINATION ${libInstallPrefix}
             )
-            if (PXR_ENABLE_JS_SUPPORT)
+            if (EMSCRIPTEN)
                 install(
                     TARGETS ${NAME_INTERNAL}
                     LIBRARY DESTINATION ${libInstallPrefix}
@@ -1595,7 +1597,7 @@ function(_pxr_library NAME)
                 ARCHIVE DESTINATION ${libInstallPrefix}
                 RUNTIME DESTINATION ${libInstallPrefix}
             )
-            if (PXR_ENABLE_JS_SUPPORT)
+            if (EMSCRIPTEN)
                 install(
                     TARGETS ${NAME_INTERNAL}
                     EXPORT pxrTargets
@@ -1630,7 +1632,7 @@ endfunction() # _pxr_library
 
 function(_get_final_package_name PXR_PACKAGE FINAL_PXR_PACKAGE)
     set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}" PARENT_SCOPE)
-    if(PXR_ENABLE_JS_SUPPORT)
+    if(EMSCRIPTEN)
         set(${FINAL_PXR_PACKAGE} "${PXR_PACKAGE}_internal" PARENT_SCOPE)
     endif ()
 endfunction()

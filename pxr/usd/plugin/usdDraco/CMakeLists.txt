@@ -26,9 +26,6 @@ pxr_plugin(${PXR_PACKAGE}
         importTranslator.cpp
         writer.cpp
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     PYMODULE_CPPFILES
         module.cpp
         wrapDraco.cpp

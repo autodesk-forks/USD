@@ -52,10 +52,12 @@ public:
         HdBufferArrayUsageHint usageHint) const;
 
     /// Returns the buffer specs from a given buffer array
+    HDST_API
     virtual HdBufferSpecVector GetBufferSpecs(
         HdBufferArraySharedPtr const &bufferArray) const;
 
     /// Returns the size of the GPU memory used by the passed buffer array
+    HDST_API
     virtual size_t GetResourceAllocation(
         HdBufferArraySharedPtr const &bufferArray, 
         VtDictionary &result) const;

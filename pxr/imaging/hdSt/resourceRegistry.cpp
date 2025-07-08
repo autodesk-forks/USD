@@ -11,6 +11,7 @@
 #include "pxr/imaging/hdSt/dispatchBuffer.h"
 #include "pxr/imaging/hdSt/glslProgram.h"
 #include "pxr/imaging/hdSt/interleavedMemoryManager.h"
+#include "pxr/imaging/hdSt/renderPassShader.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/stagingBuffer.h"
 #include "pxr/imaging/hdSt/vboMemoryManager.h"
@@ -137,6 +138,7 @@ HdStResourceRegistry::~HdStResourceRegistry()
 void HdStResourceRegistry::InvalidateShaderRegistry()
 {
     _geometricShaderRegistry.Invalidate();
+    _renderPassShaderRegistry.Invalidate();
     _glslfxFileRegistry.Invalidate();
 #ifdef PXR_MATERIALX_SUPPORT_ENABLED
     _materialXShaderRegistry.Invalidate();
@@ -549,8 +551,9 @@ HdStResourceRegistry::GarbageCollectDispatchBuffers()
     _dispatchBufferRegistry.erase(
         std::remove_if(
             _dispatchBufferRegistry.begin(), _dispatchBufferRegistry.end(),
-            std::bind(&HdStDispatchBufferSharedPtr::unique,
-                      std::placeholders::_1)),
+            [](const HdStDispatchBufferSharedPtr& ptr) {
+                return ptr.use_count() == 1;
+            }),
         _dispatchBufferRegistry.end());
 }
 
@@ -562,8 +565,9 @@ HdStResourceRegistry::GarbageCollectBufferResources()
     _bufferResourceRegistry.erase(
         std::remove_if(
             _bufferResourceRegistry.begin(), _bufferResourceRegistry.end(),
-            std::bind(&HdStBufferResourceSharedPtr::unique,
-                      std::placeholders::_1)),
+            [](const HdStBufferResourceSharedPtr& ptr) {
+                return ptr.use_count() == 1;
+            }),
         _bufferResourceRegistry.end());
 }
 
@@ -631,6 +635,13 @@ HdStResourceRegistry::RegisterGeometricShader(
         HdInstance<HdSt_GeometricShaderSharedPtr>::ID id)
 {
     return _geometricShaderRegistry.GetInstance(id);
+}
+
+HdInstance<HdStRenderPassShaderSharedPtr>
+HdStResourceRegistry::RegisterRenderPassShader(
+    HdInstance<HdStRenderPassShaderSharedPtr>::ID id)
+{
+    return _renderPassShaderRegistry.GetInstance(id);
 }
 
 HdInstance<HdStGLSLProgramSharedPtr>
@@ -1097,6 +1108,7 @@ HdStResourceRegistry::_GarbageCollect()
 
     // Cleanup Shader registries
     _geometricShaderRegistry.GarbageCollect();
+    _renderPassShaderRegistry.GarbageCollect();
     _glslProgramRegistry.GarbageCollect();
     _glslfxFileRegistry.GarbageCollect();
 #ifdef PXR_MATERIALX_SUPPORT_ENABLED

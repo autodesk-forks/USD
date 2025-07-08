@@ -120,7 +120,7 @@ HdSt_RenderPass::_Execute(HdRenderPassStateSharedPtr const &renderPassState,
     TF_VERIFY(stRenderPassState);
 
     // Validate and update draw batches.
-    _UpdateCommandBuffer(renderTags);
+    _UpdateCommandBuffer(stRenderPassState, renderTags);
 
     // Downcast the resource registry
     HdStResourceRegistrySharedPtr const& resourceRegistry = 
@@ -332,7 +332,9 @@ HdSt_RenderPass::_UpdateDrawItems(TfTokenVector const& renderTags)
 }
 
 void
-HdSt_RenderPass::_UpdateCommandBuffer(TfTokenVector const& renderTags)
+HdSt_RenderPass::_UpdateCommandBuffer(
+        HdStRenderPassStateSharedPtr const& renderPassState,
+        TfTokenVector const& renderTags)
 {
     HD_TRACE_FUNCTION();
 
@@ -359,6 +361,12 @@ HdSt_RenderPass::_UpdateCommandBuffer(TfTokenVector const& renderTags)
         // validate command buffer to not include expired drawItems,
         // which could be produced by migrating BARs at the new repr creation.
         _cmdBuffer.RebuildDrawBatchesIfNeeded(batchVersion, _hgi);
+    }
+
+    size_t renderPassStateBarVersion = renderPassState->GetRenderPassStateBarVersion();
+    if (_renderPassStateBarVersion != renderPassStateBarVersion) {
+        renderPassStateBarVersion = _renderPassStateBarVersion;
+        _recordedCmds.reset();
     }
 
     // -------------------------------------------------------------------

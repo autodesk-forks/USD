@@ -136,7 +136,7 @@ class HdSt_MyTestDriver : public HdSt_TestDriverBase<HdUnitTestDelegate>
 public:
     HdSt_MyTestDriver();
 
-    void Draw(std::vector<size_t> viewerIds);
+    void Draw(const std::vector<size_t> &viewerIds);
 
     const HdStRenderPassStateSharedPtr &GetRenderPassState() const {
         return _renderPassStates[0];
@@ -211,7 +211,7 @@ HdSt_MyTestDriver::HdSt_MyTestDriver()
 }
 
 void
-HdSt_MyTestDriver::Draw(std::vector<size_t> viewerIds)
+HdSt_MyTestDriver::Draw(const std::vector<size_t> &viewerIds)
 {
     for (size_t const &vidx : viewerIds) {
         if (vidx < _viewers.size()) {
@@ -461,7 +461,7 @@ HdSt_MyTestDriver::_Viewer::_CreateRenderTasks(
     HdUnitTestDelegate &sd,
     HdStRenderPassStateSharedPtr const &state)
 {
-    std::string prefix(_viewerName + "/Tasks/");
+    std::string prefix("/" + _viewerName + "/Tasks/");
     
     {
         _drawTaskId = SdfPath(prefix + "DrawTask");

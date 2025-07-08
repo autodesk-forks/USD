@@ -47,6 +47,7 @@ HgiVulkanTexture::HgiVulkanTexture(
 {
     GfVec3i const& dimensions = desc.dimensions;
     bool const isDepthBuffer = desc.usage & HgiTextureUsageBitsDepthTarget;
+    bool const isStencilBuffer = desc.usage & HgiTextureUsageBitsStencilTarget;
 
     //
     // Gather image create info
@@ -107,14 +108,14 @@ HgiVulkanTexture::HgiVulkanTexture(
     // Equivalent to: vkCreateImage, vkAllocateMemory, vkBindImageMemory
     VmaAllocationCreateInfo allocInfo = {};
     allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vmaCreateImage(
             device->GetVulkanMemoryAllocator(),
             &imageCreateInfo,
             &allocInfo,
             &_vkImage,
             &_vmaImageAllocation,
-            nullptr) == VK_SUCCESS
+            nullptr)
     );
 
     TF_VERIFY(_vkImage, "Failed to create image");
@@ -152,11 +153,14 @@ HgiVulkanTexture::HgiVulkanTexture(
     // that can be accessed through this image view.
     // It's possible to create multiple image views for a single image
     // referring to different (and/or overlapping) ranges of the image.
-    // A 'view' must be either depth or stencil, not both, especially when used
-    // in a descriptor set. For now we assume we always want the 'depth' aspect.
-    view.subresourceRange.aspectMask = isDepthBuffer ?
-        VK_IMAGE_ASPECT_DEPTH_BIT /*| VK_IMAGE_ASPECT_STENCIL_BIT*/ :
-        VK_IMAGE_ASPECT_COLOR_BIT;
+    if (isDepthBuffer) {
+        view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (isStencilBuffer) {
+            view.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+    } else {
+        view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
 
     view.subresourceRange.baseMipLevel = 0;
     view.subresourceRange.baseArrayLayer = 0;
@@ -164,12 +168,12 @@ HgiVulkanTexture::HgiVulkanTexture(
     view.subresourceRange.levelCount = desc.mipLevels;
     view.image = _vkImage;
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateImageView(
             device->GetVulkanDevice(),
             &view,
             HgiVulkanAllocator(),
-            &_vkImageView) == VK_SUCCESS
+            &_vkImageView)
     );
 
     // Debug label
@@ -286,12 +290,12 @@ HgiVulkanTexture::HgiVulkanTexture(
     view.subresourceRange.levelCount = desc.mipLevels;
     view.image = srcTexture->GetImage();
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateImageView(
             device->GetVulkanDevice(),
             &view,
             HgiVulkanAllocator(),
-            &_vkImageView) == VK_SUCCESS
+            &_vkImageView)
     );
 
     // Debug label
@@ -358,11 +362,11 @@ HgiVulkanTexture::GetCPUStagingAddress()
     }
 
     if (!_cpuStagingAddress) {
-        TF_VERIFY(
+        HGIVULKAN_VERIFY_VK_RESULT(
             vmaMapMemory(
                 _device->GetVulkanMemoryAllocator(), 
                 _stagingBuffer->GetVulkanMemoryAllocation(), 
-                &_cpuStagingAddress) == VK_SUCCESS
+                &_cpuStagingAddress)
         );
     }
 

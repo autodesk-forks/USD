@@ -96,8 +96,36 @@ def _testAddRemovePrimvarNotUsedByMaterial(appController):
     _RemovePrimvar(prim, 'bar')
     appController._takeShot("remove_unused_primvars.png")
 
+def _testPrimvarReaderVarnameEdit(appController):
+    # Test editing the inputs:varname of a primvar reader.
+    #
+    # In particular, there was a bug in Storm where the other primvar was
+    # pruned and thus changing the primvar reader to that other primvar
+    # resulted in the primvar not being picked up.
+    #
+    # https://github.com/PixarAnimationStudios/OpenUSD/issues/2382
+
+    # Setup the stage with two primvars and making the primvar reader
+    # consume one of the primvars.
+    stage = appController._dataModel.stage
+    prim = stage.GetPrimAtPath("/Scene/Geom/Plane")
+    mesh = UsdGeom.Imageable(prim)
+    _CreatePrimvar(mesh, 'myColorGreen', Sdf.ValueTypeNames.Float3, 'constant',
+        Gf.Vec3f(0.0, 1.0, 0.0))
+    _CreatePrimvar(mesh, 'myColorBlue', Sdf.ValueTypeNames.Float3, 'constant',
+        Gf.Vec3f(0.0, 0.0, 1.0))
+    varnameAttr = stage.GetAttributeAtPath("/Scene/Looks/MainMaterial/Primvar.inputs:varname")
+    varnameAttr.Set('myColorGreen')
+    # Take a snap shot to see whether the setup is correct.
+    appController._takeShot('add_primvars_for_varname_edit.png')
+
+    # Now switch to the other primvar.
+    varnameAttr.Set('myColorBlue')
+    appController._takeShot('primvar_reader_varname_edit.png')
+
 # This test adds and removes primvars that are used/unused by the material.
 def testUsdviewInputFunction(appController):
     _modifySettings(appController)
     _testAddRemovePrimvarUsedByMaterial(appController)
     _testAddRemovePrimvarNotUsedByMaterial(appController)
+    _testPrimvarReaderVarnameEdit(appController)

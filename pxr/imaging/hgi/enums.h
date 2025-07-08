@@ -60,8 +60,6 @@ using HgiBits = uint32_t;
 ///   Indirect command buffers are supported</li>
 /// <li>HgiDeviceCapabilitiesBitsGeometricStage:
 ///   Support for geometric shader stage</li>
-/// <li>HgiDeviceCapabilitiesBitsClipDistanceSupport:
-///   Support for clips distance planes</li>
 /// <li>HgiDeviceCapabilitiesBitsTriangulatedQuads:
 ///   Rendering support for triangulated quads</li>
 /// <li>HgiDeviceCapabilitiesBitsPushConstants:
@@ -71,6 +69,8 @@ using HgiBits = uint32_t;
 /// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
 ///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
 ///   regardless of the body of the shader</li>
+/// <li>HgiDeviceCapabilitiesBitsRoundPoints:
+///   Points can be natively rasterized as disks</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
@@ -94,11 +94,11 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsPrimitiveIdEmulation    = 1 << 16,
     HgiDeviceCapabilitiesBitsIndirectCommandBuffers  = 1 << 17,
     HgiDeviceCapabilitiesBitsGeometricStage          = 1 << 18,
-    HgiDeviceCapabilitiesBitsClipDistanceSupport     = 1 << 19,
-    HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 20,
-    HgiDeviceCapabilitiesBitsPushConstants           = 1 << 21,
-    HgiDeviceCapabilitiesBitsTimestamps              = 1 << 22,
-    HgiDeviceCapabilitiesForceEarlyFragmentTest      = 1 << 23,
+    HgiDeviceCapabilitiesBitsTriangulatedQuads       = 1 << 19,
+    HgiDeviceCapabilitiesBitsPushConstants           = 1 << 20,
+    HgiDeviceCapabilitiesBitsTimestamps              = 1 << 21,
+    HgiDeviceCapabilitiesForceEarlyFragmentTest      = 1 << 22,
+    HgiDeviceCapabilitiesBitsRoundPoints             = 1 << 23,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -373,6 +373,8 @@ enum HgiShaderStageBits : HgiBits
 
 };
 using HgiShaderStage = HgiBits;
+
+inline const HgiShaderStage InputShaderStageBits = HgiShaderStageVertex | HgiShaderStageCompute | HgiShaderStagePostTessellationControl | HgiShaderStagePostTessellationVertex;
 
 /// \enum HgiBindResourceType
 ///

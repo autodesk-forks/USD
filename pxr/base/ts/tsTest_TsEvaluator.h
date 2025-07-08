@@ -10,6 +10,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/ts/api.h"
+#include "pxr/base/ts/types.h"
 #include "pxr/base/ts/tsTest_Types.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -35,13 +36,14 @@ public:
 
     // Produce bulk samples for drawing.  Sample times are determined adaptively
     // and cannot be controlled.
-    /*
-    TS_API
-    TsTest_SampleVec Sample(
+    template <typename SampleData>
+    bool Sample(
         const TsTest_SplineData &splineData,
-        const GfInterval &interval,
-        double tolerance) const;
-    */
+        const GfInterval& timeInterval,
+        double timeScale,
+        double valueScale,
+        double tolerance,
+        SampleData* splineSamples) const;
 
     ////////////////////////////////////////////////////////////////////////////
     // CONVERSION

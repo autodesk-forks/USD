@@ -54,6 +54,7 @@ public:
     /// After submission the command buffer must not be re-used by client.
     /// Thread safety: Submission must be externally synchronized. Clients
     /// should call HgiVulkan::SubmitToQueue.
+    HGIVULKAN_API
     void SubmitToQueue(
         HgiVulkanCommandBuffer* cmdBuffer,
         HgiSubmitWaitType wait = HgiSubmitWaitTypeNoWait);

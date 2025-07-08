@@ -33,6 +33,7 @@ pxr_library(hgiWebGPU
         arch
         hgi
         tf
+        ts
         trace
         hgiGL
         ${HGI_WEBGPU_NATIVE_LIBRARIES}
@@ -42,7 +43,7 @@ pxr_library(hgiWebGPU
         glslang::MachineIndependent
         glslang::SPIRV
         glslang::GenericCodeGen
-        ${SPIRV-Tools-opt_LIBRARIES}
+        SPIRV-Tools-opt
         SPIRV-Headers::SPIRV-Headers
         ${Tint_LIBRARIES}
 
@@ -82,6 +83,12 @@ pxr_library(hgiWebGPU
 
     RESOURCE_FILES
         plugInfo.json
+)
+
+# Set C++20 standard for this specific library due to requirements with the latest update of Dawn and Tint
+set_source_files_properties(shaderFunction.cpp
+    PROPERTIES
+        COMPILE_FLAGS "-std=c++20"
 )
 
 if (NOT EMSCRIPTEN)

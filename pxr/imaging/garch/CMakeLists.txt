@@ -28,7 +28,7 @@ elseif(WIN32)
     set(GARCH_GLPLATFORMDEBUGWINDOW   glPlatformDebugWindowWindows)
     set(GARCH_SOURCE_EXTENSION        cpp)
     set(GARCH_PLATFORM_LIBRARIES      OpenGL::GL)
-elseif(PXR_ENABLE_JS_SUPPORT)
+elseif(EMSCRIPTEN)
     set(GARCH_GLPLATFORMCONTEXT       glPlatformContextEmscripten)
     set(GARCH_GLPLATFORMDEBUGWINDOW   glPlatformDebugWindowEmscripten)
     set(GARCH_SOURCE_EXTENSION        cpp)
@@ -56,9 +56,6 @@ pxr_library(garch
 
     PRIVATE_HEADERS
         ${GARCH_GLPLATFORMDEBUGWINDOW}.h
-
-    PYTHON_CPPFILES
-        moduleDeps.cpp
 
     CPPFILES
         ${GARCH_GLPLATFORMCONTEXT}.${GARCH_SOURCE_EXTENSION}

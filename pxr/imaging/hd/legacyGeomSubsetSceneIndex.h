@@ -18,7 +18,7 @@
 
 #include "pxr/pxr.h"
 
-#include <unordered_map>
+#include <map>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -45,42 +45,42 @@ public:
     HD_API
     static HdLegacyGeomSubsetSceneIndexRefPtr New(
         const HdSceneIndexBaseRefPtr& inputSceneIndex);
-    
+
     HD_API
     ~HdLegacyGeomSubsetSceneIndex() override;
-    
+
     HD_API
     HdSceneIndexPrim GetPrim(const SdfPath& primPath) const override;
-    
+
     HD_API
     SdfPathVector GetChildPrimPaths(const SdfPath& primPath) const override;
 
 protected:
     HdLegacyGeomSubsetSceneIndex(
         const HdSceneIndexBaseRefPtr& inputSceneIndex);
-    
+
     void _PrimsAdded(
         const HdSceneIndexBase& sender,
         const HdSceneIndexObserver::AddedPrimEntries& entries) override;
-    
+
     void _PrimsRemoved(
         const HdSceneIndexBase& sender,
         const HdSceneIndexObserver::RemovedPrimEntries& entries) override;
-    
+
     void _PrimsDirtied(
         const HdSceneIndexBase& sender,
         const HdSceneIndexObserver::DirtiedPrimEntries& entries) override;
 
-private:    
+private:
     static SdfPathVector
     _ListDelegateSubsets(
         const SdfPath& parentPath,
         const HdSceneIndexPrim& parentPrim);
-    
+
     // Unordered map of parent path -> [subset paths...]
     // XXX: Do not use SdfPathTable because we do not want it
     // to implicitly include the extra ancestor paths.
-    std::unordered_map<SdfPath, SdfPathVector, SdfPath::Hash> _parentPrims;
+    std::map<SdfPath, SdfPathVector> _parentPrims;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -69,7 +69,6 @@ public:
     bool forceRefresh;
     bool flipFrontFacing;
     UsdImagingGLCullStyle cullStyle;
-    bool enableIdRender;
     bool enableLighting;
     bool enableSampleAlphaToCoverage;
     bool applyRenderState;
@@ -116,7 +115,6 @@ UsdImagingGLRenderParams::UsdImagingGLRenderParams() :
     forceRefresh(false),
     flipFrontFacing(false),
     cullStyle(UsdImagingGLCullStyle::CULL_STYLE_NOTHING),
-    enableIdRender(false),
     enableLighting(true),
     enableSampleAlphaToCoverage(false),
     applyRenderState(true),
@@ -149,7 +147,6 @@ UsdImagingGLRenderParams::operator==(const UsdImagingGLRenderParams &other)
         && forceRefresh                == other.forceRefresh
         && flipFrontFacing             == other.flipFrontFacing
         && cullStyle                   == other.cullStyle
-        && enableIdRender              == other.enableIdRender
         && enableLighting              == other.enableLighting
         && enableSampleAlphaToCoverage == other.enableSampleAlphaToCoverage
         && applyRenderState            == other.applyRenderState

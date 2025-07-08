@@ -157,11 +157,15 @@ HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
           "#define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, "
           "expected, desired)\n"
           "#define atomic_int int\n"
-          "#define atomic_uint uint\n";
+          "#define atomic_uint uint\n"
+          "float dummy_PointSize = 1.0f;\n" // Define a dummy variable
+          "#define gl_PointSize dummy_PointSize\n"; // Redirect gl_PointSize to dummy variable
 
     // Advertise to shader code that we support double precision math
+    // and don't support IEEE float special values (NaN, +-Inf).
     ss << "\n"
         << "#define HGI_HAS_DOUBLE_TYPE 1\n"
+        << "#define HGI_HAS_IEEE_FLOAT_SPECIAL_VALUES 0\n"
         << "\n";
 
     // Define platform independent baseInstance as 0
@@ -175,9 +179,36 @@ HgiWebGPUShaderGenerator::_WriteConstantParams(
     if (parameters.empty()) {
         return;
     }
-    CreateShaderSection<HgiGLBlockShaderSection>(
-        "ParamBuffer",
-        parameters);
+
+    const HgiShaderSectionAttributeVector attrs = {
+            HgiShaderSectionAttribute{"std140", ""},
+            HgiShaderSectionAttribute{"binding", std::to_string(0)},
+            HgiShaderSectionAttribute{"set", std::to_string(HgiWebGPUBufferShaderSection::constantsBindingSet)}};
+
+    HgiGLMemberShaderSectionPtrVector members;
+    for(const HgiShaderFunctionParamDesc &param : parameters) {
+        auto *memberSection =
+                CreateShaderSection<HgiGLMemberShaderSection>(
+                    /*nameInShader=*/param.nameInShader,
+                    /*type=*/param.type,
+                    /*interpolation=*/param.interpolation,
+                    /*sampling=*/HgiSamplingDefault,
+                    /*storage=*/HgiStorageDefault,
+                    /*attributes=*/HgiShaderSectionAttributeVector(),
+                    /*storageQualifier=*/std::string(),
+                    /*defaultValue=*/std::string(),
+                    /*arraySize=*/std::string(),
+                    /*blockInstanceIdentifier=*/param.nameInShader);
+        members.push_back(memberSection);
+    }
+
+    CreateShaderSection<HgiWebGPUInterstageBlockShaderSection>(
+            "ParamBuffer",
+            "",
+            attrs,
+            "uniform",
+            std::string(),
+            members);
 }
 
 void
@@ -370,14 +401,14 @@ HgiWebGPUShaderGenerator::_WriteInOutBlocks(
         const uint32_t locationIndex = in_qualifier ?
             _inLocationIndex : _outLocationIndex;
 
-        HgiBaseGLShaderSectionPtrVector members;
+        HgiGLMemberShaderSectionPtrVector members;
         for(const HgiShaderFunctionParamBlockDesc::Member &member : p.members) {
 
             HgiGLMemberShaderSection *memberSection =
                 CreateShaderSection<HgiGLMemberShaderSection>(
                     member.name,
                     member.type,
-                    HgiInterpolationDefault,
+                    member.interpolation,
                     HgiSamplingDefault,
                     HgiStorageDefault,
                     HgiShaderSectionAttributeVector(),
@@ -407,18 +438,6 @@ HgiWebGPUShaderGenerator::_WriteInOutBlocks(
             p.arraySize,
             members);
     }
-}
-
-std::string removeLine(const std::string& input, const std::string& toRemove) {
-    std::istringstream iss(input);
-    std::ostringstream oss;
-    std::string line;
-    while (std::getline(iss, line)) {
-        if (line.find(toRemove) == std::string::npos) {
-            oss << line << std::endl;
-        }
-    }
-    return oss.str();
 }
 
 void
@@ -479,9 +498,7 @@ HgiWebGPUShaderGenerator::_Execute(std::ostream &ss)
     ss << "\n";
 
     // write all the original shader
-    // TODO: we do a nasty hack of removing any line using or assigning gl_PointSize
-    std::string preprocessedShader = removeLine(_GetShaderCode(), "gl_PointSize");
-    ss << preprocessedShader;
+    ss << _GetShaderCode();
 }
 
 HgiBaseGLShaderSectionUniquePtrVector*

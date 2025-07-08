@@ -66,7 +66,9 @@ struct UsdUtils_LocalizationDelegate
         const SdfLayerRefPtr &layer,
         const std::string &keyPath,
         const std::string &authoredPath,
-        const std::vector<std::string> &dependencies) { return {}; }
+        const std::vector<std::string> &dependencies,
+        const bool processingMetadata = false,
+        const bool processingDictionary = false) { return {}; }
 
     virtual std::vector<std::string> ProcessValuePathArrayElement(
         const SdfLayerRefPtr &layer,
@@ -157,7 +159,9 @@ public:
         const SdfLayerRefPtr &layer,
         const std::string &keyPath,
         const std::string &authoredPath,
-        const std::vector<std::string> &dependencies) override;
+        const std::vector<std::string> &dependencies,
+        const bool processingMetadata = false,
+        const bool processingDictionary = false) override;
 
     virtual std::vector<std::string> ProcessValuePathArrayElement(
         const SdfLayerRefPtr &layer,
@@ -273,7 +277,7 @@ public:
 
     virtual std::vector<std::string> ProcessPayloads(
         const SdfLayerRefPtr &layer,
-        const SdfPrimSpecHandle &primSpec);
+        const SdfPrimSpecHandle &primSpec) override;
 
     virtual std::vector<std::string> ProcessReferences(
         const SdfLayerRefPtr &layer,
@@ -283,7 +287,9 @@ public:
         const SdfLayerRefPtr &layer,
         const std::string &keyPath,
         const std::string &authoredPath,
-        const std::vector<std::string> &dependencies) override;
+        const std::vector<std::string> &dependencies,
+        const bool processingMetadata = false,
+        const bool processingDictionary = false) override;
 
     virtual std::vector<std::string> ProcessValuePathArrayElement(
         const SdfLayerRefPtr &layer,
