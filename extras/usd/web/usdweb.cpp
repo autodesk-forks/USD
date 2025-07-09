@@ -400,6 +400,8 @@ struct VertexOutput {
     int initialize(uint32_t width, uint32_t height)
     {
         std::cout << "In initialize(" << width << ", " << height << ")" << std::endl;
+        wgpu::Instance instance = wgpu::CreateInstance();
+        wgpu::Surface surface;
         TF_INFO(USDWEB).Msg("Starting GLEngine ");
         initGLEngine();
         glfwSetErrorCallback(error_callback);
@@ -437,7 +439,6 @@ struct VertexOutput {
 
         std::cout << "glfwMakeContextCurrent" << std::endl;
         glfwMakeContextCurrent(window);
-        wgpu::SwapChain swapChain;
         pxr::Hgi *hgi = glEngine->GetHgi();
         pxr::HgiWebGPU* hgiWebGPU = static_cast<pxr::HgiWebGPU*>(hgi);
         wgpu::Device device = hgiWebGPU->GetPrimaryDevice();
@@ -449,23 +450,20 @@ struct VertexOutput {
         wgpu::TextureFormat swapChainFormat =  wgpu::TextureFormat::BGRA8Unorm;
 
         {
-            wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+            wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
             canvasDesc.selector = "#webgpuCanvas";
 
             wgpu::SurfaceDescriptor surfDesc{};
             surfDesc.nextInChain = &canvasDesc;
-            std::cout << "wgpu::CreateInstance()" << std::endl;
-            wgpu::Instance instance = wgpu::CreateInstance();
-            std::cout << "instance.CreateSurface(&surfDesc)" << std::endl;
-            wgpu::Surface surface = instance.CreateSurface(&surfDesc);
 
-            wgpu::SwapChainDescriptor scDesc{};
-            scDesc.usage = wgpu::TextureUsage::RenderAttachment;
-            scDesc.format = wgpu::TextureFormat::BGRA8Unorm;
-            scDesc.width = framebufferWidth;
-            scDesc.height = framebufferHeight;
-            scDesc.presentMode = wgpu::PresentMode::Fifo;
-            swapChain = device.CreateSwapChain(surface, &scDesc);
+            std::cout << "CreateSurface()" << std::endl;
+            surface = instance.CreateSurface(&surfDesc);
+            wgpu::SurfaceConfiguration surfaceDesc{};
+            surfaceDesc.device = device;
+            surfaceDesc.format = swapChainFormat;
+            surfaceDesc.width = framebufferWidth;
+            surfaceDesc.height = framebufferHeight;
+            surface.Configure(&surfaceDesc);
         }
 
         wgpu::Texture testTexture;
@@ -497,15 +495,15 @@ struct VertexOutput {
             std::cout << "device.GetQueue().WriteBuffer" << std::endl;
             device.GetQueue().WriteBuffer(stagingBuffer, 0, data.data(), static_cast<uint32_t>(data.size()));
 
-            wgpu::ImageCopyBuffer imageCopyBuffer = {};
+            wgpu::TexelCopyBufferInfo imageCopyBuffer = {};
             imageCopyBuffer.buffer = stagingBuffer;
-            wgpu::TextureDataLayout textureDataLayout;
+            wgpu::TexelCopyBufferLayout textureDataLayout;
             textureDataLayout.offset = 0;
             textureDataLayout.bytesPerRow = 4 * width;
 
             imageCopyBuffer.layout = textureDataLayout;
 
-            wgpu::ImageCopyTexture imageCopyTexture;
+            wgpu::TexelCopyTextureInfo imageCopyTexture;
             imageCopyTexture.texture = testTexture;
             imageCopyTexture.mipLevel = 0;
             imageCopyTexture.origin = {0, 0, 0};
@@ -596,8 +594,11 @@ struct VertexOutput {
 
             pxr::HgiTextureHandle colorTarget = glEngine->GetAovTexture(pxr::HdAovTokens->color);
 
-            wgpu::TextureView backbuffer = swapChain.GetCurrentTextureView();
-            pxr::HgiWebGPUTexture* srcTexture =static_cast<pxr::HgiWebGPUTexture*>(colorTarget.Get());
+            wgpu::SurfaceTexture surfaceTexture;
+            surface.GetCurrentTexture(&surfaceTexture);
+            wgpu::TextureView backbuffer = surfaceTexture.texture.CreateView();
+            auto srcTexture =static_cast<pxr::HgiWebGPUTexture*>(colorTarget.Get());
+
             wgpu::Texture colorTexture = srcTexture->GetTextureHandle();
             wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
 
@@ -657,6 +658,11 @@ struct VertexOutput {
             device.GetQueue().Submit(1, &commands);
 
             glfwPollEvents();
+
+            #if !defined(ARCH_OS_WASM_VM)
+                surface.Present();
+                instance.ProcessEvents();
+            #endif
         }; // === END: Main Loop ===
 
         emscripten_set_main_loop(main_loop, 0, true);

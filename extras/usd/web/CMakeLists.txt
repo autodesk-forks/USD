@@ -94,10 +94,10 @@ if (EMSCRIPTEN)
     #       disableWebGL2
     #
     # Taking out: -s FULL_ES3 \
+    #             -s USE_WEBGPU=1 \   (since now using Dawn)
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${CMAKE_EXE_LINKER_FLAGS_USDVIEWWEB} \
         ${EMSCRIPTEN_GLFW_BUILD_FLAGS} -pthread   \
         -s MAX_WEBGL_VERSION=2 \
-        -s USE_WEBGPU=1 \
         -O0 \
         -s ALLOW_MEMORY_GROWTH \
     ")

@@ -1655,8 +1655,8 @@ def InstallMaterialX(context, force, buildArgs):
         if context.targetWasm:
             cmakeOptions.extend([
                  # For Wasm
-                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
-                '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"', # removed:  + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"', # removed:  + ' -s SIDE_MODULE=1"',
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
                 '-DBUILD_SHARED_LIBS=OFF',
                 # MaterialX config
