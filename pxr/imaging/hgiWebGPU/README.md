@@ -57,6 +57,17 @@ it recreates buffers every time a push constant is updated.
 - WebGPU only has optional support for `ClipDistance`s. We introduced the
 `HgiDeviceCapabilitiesClipDistance` capability to make it optional.
 Clip distances are simply ignored when unsupported.
+- Some rendering representations are not completely supported
+
+| Representation | Note |
+|----------------|------|
+| Smooth | Supported |
+| Points | Only basic point rendering supported, no custom point sizes |
+| Wireframe | Not supported due to the dependency to barycentric builtin to calculate the distance to the edge |
+| Wireframe on Surface | Not supported due to the dependency to barycentric builtin to calculate the distance to the edge  |
+| Flat | Not supported due to missing primitive_id, used to access the normals in a storage buffer |
+
+
 
 - The lack of gl_primitiveID and tessellation shaders limits some HdSt features. For example:
   - Meshes with subdivision schemes but no normals will fail to render since they require post-tessellation vertex shaders

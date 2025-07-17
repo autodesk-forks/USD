@@ -1627,8 +1627,8 @@ void
 HdSt_CodeGen::_PlumbInterstageElements()
 {
     // Graphics devices impose limits on the number of input/output locations
-    // available. We can quickly exceeed such limits on low spec devices if we 
-    // naively use one location per drawing coord. This is because arrays take 
+    // available. We can quickly exceed such limits on low spec devices if we
+    // naively use one location per drawing coord. This is because arrays take
     // one location per item, regardless of the item size. This means that:
     //   layout(location = 0) in int someCoord[gl_MaxPatchVertices]
     // consumes as many locations (gl_MaxPatchVertices) as:
@@ -3308,8 +3308,12 @@ HdSt_CodeGen::_CompileWithGeneratedHgiResources(
 
         if (_geometricShader->GetPrimitiveType() ==
             HdSt_GeometricShader::PrimitiveType::PRIM_POINTS) {
-            HgiShaderFunctionAddStageInput(&fsDesc, "hd_SampleMaskIn", "uint",
-                HgiShaderKeywordTokens->hdSampleMaskIn);
+                HgiShaderFunctionParamDesc param;
+                param.nameInShader = "hd_SampleMaskIn";
+                param.type = "uint";
+                param.role = HgiShaderKeywordTokens->hdSampleMaskIn;
+                param.interpolation = HgiInterpolationFlat;
+                HgiShaderFunctionAddStageInput(&fsDesc, param);
             if (!registry->GetHgi()->GetCapabilities()->IsSet(
                     HgiDeviceCapabilitiesBitsRoundPoints)) {
                 HgiShaderFunctionAddStageInput(&fsDesc, "gl_PointCoord", "vec2",

@@ -225,7 +225,9 @@ private:
     void _InitAttachmentState(HgiGraphicsPipelineDesc * pipeDesc,
                               bool firstDrawBatch) const;
     void _InitDepthStencilState(HgiDepthStencilState * depthState) const;
-    void _InitMultiSampleState(HgiMultiSampleState * multisampleState) const;
+    void _InitMultiSampleState(
+                HgiMultiSampleState * multisampleState,
+                HdSt_GeometricShaderSharedPtr const & geometricShader) const;
     void _InitRasterizationState(
                 HgiRasterizationState * rasterizationState,
                 HdSt_GeometricShaderSharedPtr const & geometricShader) const;

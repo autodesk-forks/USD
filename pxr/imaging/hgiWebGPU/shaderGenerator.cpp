@@ -146,6 +146,7 @@ void
 HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
 {
     ss << "#define gl_PrimitiveID 1\n" // TODO: gl_PrimitiveID not implemented in webgpu, faking it for the moment
+          "#define gl_PointCoord vec2(0.5)\n" // TODO: gl_PointCoord not implemented in webgpu, faking it for the moment
           "#define centroid\n" // TODO: avoid interpolation qualifier due to limited support
           "#define REF(space,type) inout type\n"
           "#define FORWARD_DECL(func_decl) func_decl\n"
@@ -158,6 +159,7 @@ HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
           "expected, desired)\n"
           "#define atomic_int int\n"
           "#define atomic_uint uint\n"
+          "#define hd_SampleMask gl_SampleMask[0]\n"
           "float dummy_PointSize = 1.0f;\n" // Define a dummy variable
           "#define gl_PointSize dummy_PointSize\n"; // Redirect gl_PointSize to dummy variable
 
@@ -306,16 +308,21 @@ HgiWebGPUShaderGenerator::_WriteInOuts(
     const HgiShaderFunctionParamDescVector &parameters,
     const std::string &qualifier)
 {
-    //To unify glslfx across different apis, other apis
-    //may want these to be defined, but since they are
-    //taken in opengl we ignore them
+    // To unify glslfx across different apis, other apis may want these to be 
+    // defined, but since they are taken in opengl we ignore them.
     const static std::set<std::string> takenOutParams {
         "gl_Position",
         "gl_FragColor",
         "gl_FragDepth",
         "gl_PointSize",
-        "gl_ClipDistance",
         "gl_CullDistance",
+        "hd_SampleMask",
+    };
+
+    // Some params are built-in, but we may want to declare them in the shader 
+    // anyway, such as to declare their array size.
+    const static std::set<std::string> takenOutParamsToDeclare {
+        "gl_ClipDistance"
     };
 
     const static std::unordered_map<std::string, std::string> takenInParams {
@@ -335,27 +342,38 @@ HgiWebGPUShaderGenerator::_WriteInOuts(
         { HgiShaderKeywordTokens->hdLayer, "gl_Layer"},
         { HgiShaderKeywordTokens->hdViewportIndex, "gl_ViewportIndex"},
         { HgiShaderKeywordTokens->hdGlobalInvocationID, "gl_GlobalInvocationID"},
-        { HgiShaderKeywordTokens->hdBaryCoordNoPersp, "gl_BaryCoordNoPerspNV"},
+        { HgiShaderKeywordTokens->hdBaryCoordNoPersp, "gl_BaryCoordNoPerspEXT"},
+        { HgiShaderKeywordTokens->hdSampleMaskIn, "gl_SampleMaskIn[0]"}
     };
 
     const bool in_qualifier = qualifier == "in";
     const bool out_qualifier = qualifier == "out";
-    for(const HgiShaderFunctionParamDesc &param : parameters) {
-        //Skip writing out taken parameter names
+    for (const HgiShaderFunctionParamDesc &param : parameters) {
+        // Skip writing out taken parameter names
         const std::string &paramName = param.nameInShader;
         if (out_qualifier &&
                 takenOutParams.find(paramName) != takenOutParams.end()) {
+            continue;
+        }
+        if (out_qualifier && takenOutParamsToDeclare.find(paramName) !=
+                             takenOutParamsToDeclare.end()) {
+            CreateShaderSection<HgiGLMemberShaderSection>(
+                paramName,
+                param.type,
+                param.interpolation,
+                param.sampling,
+                param.storage,
+                HgiShaderSectionAttributeVector(),
+                qualifier,
+                std::string(),
+                param.arraySize);
             continue;
         }
         if (in_qualifier) {
             const std::string &role = param.role;
             auto const& keyword = takenInParams.find(role);
             if (keyword != takenInParams.end()) {
-                if (role == HgiShaderKeywordTokens->hdGlobalInvocationID ||
-                    role == HgiShaderKeywordTokens->hdVertexID ||
-                    role == HgiShaderKeywordTokens->hdInstanceID ||
-                    role == HgiShaderKeywordTokens->hdBaseInstance ||
-                    role == HgiShaderKeywordTokens->hdBaryCoordNoPersp) {
+                if (paramName != keyword->second) {
                     CreateShaderSection<HgiGLKeywordShaderSection>(
                         paramName,
                         param.type,
@@ -365,16 +383,21 @@ HgiWebGPUShaderGenerator::_WriteInOuts(
             }
         }
 
-        // If a location has been specified then add it to the attributes.
-        const int32_t locationIndex =
-                param.location >= 0
-                ? param.location
-                : (in_qualifier ? _inLocationIndex++ : _outLocationIndex++);
-
-        const HgiShaderSectionAttributeVector attrs {
-                HgiShaderSectionAttribute{
-                        "location", std::to_string(locationIndex) }
-        };
+        // If a location or interstage slot has been specified then add it to 
+        // the attributes.
+        HgiShaderSectionAttributeVector attrs;
+        if (param.location != -1) {
+            // If a location has been specified then add it to the attributes.
+            attrs.push_back({"location", std::to_string(param.location)});
+        } else if (param.interstageSlot != -1) {
+            // For interstage parameters use the interstageSlot for location.
+            attrs.push_back({"location", std::to_string(param.interstageSlot)});
+        } else {
+            // Otherwise use shader generator's counter sytem.
+            const int32_t locationIndex =
+                in_qualifier ? _inLocationIndex++ : _outLocationIndex++;
+            attrs.push_back({"location", std::to_string(locationIndex)});
+        }
 
         CreateShaderSection<HgiGLMemberShaderSection>(
                 paramName,
@@ -425,10 +448,15 @@ HgiWebGPUShaderGenerator::_WriteInOutBlocks(
             }
         }
 
-        const HgiShaderSectionAttributeVector attrs {
-                HgiShaderSectionAttribute{
-                        "location", std::to_string(locationIndex) }
-        };
+        // If interstage slot has been specified then add it to the attributes.
+        HgiShaderSectionAttributeVector attrs;
+        if (p.interstageSlot != -1) {
+            // For interstage parameters use the interstageSlot for location.
+            attrs.push_back({"location", std::to_string(p.interstageSlot)});
+        } else {
+            // Otherwise use shader generator's counter sytem.
+            attrs.push_back({"location", std::to_string(locationIndex)});
+        }
 
         CreateShaderSection<HgiWebGPUInterstageBlockShaderSection>(
             p.blockName,

@@ -1207,11 +1207,13 @@ HdStRenderPassState::_InitDepthStencilState(
 
 void
 HdStRenderPassState::_InitMultiSampleState(
-    HgiMultiSampleState * multiSampleState) const
+    HgiMultiSampleState * multiSampleState,
+    HdSt_GeometricShaderSharedPtr const & geometricShader) const
 {
     multiSampleState->multiSampleEnable = _multiSampleEnabled;
 
-    if (_alphaToCoverageEnabled) {
+    // Point rendering uses sampleMasks, which is a competing rendering feature to alphaToCoverage
+    if (_alphaToCoverageEnabled && !geometricShader->IsPrimTypePoints()) {
         multiSampleState->alphaToCoverageEnable = true;
         multiSampleState->alphaToOneEnable = true;
     }
@@ -1253,7 +1255,7 @@ HdStRenderPassState::InitGraphicsPipelineDesc(
 {
     _InitPrimitiveState(pipeDesc, geometricShader);
     _InitDepthStencilState(&pipeDesc->depthState);
-    _InitMultiSampleState(&pipeDesc->multiSampleState);
+    _InitMultiSampleState(&pipeDesc->multiSampleState, geometricShader);
     _InitRasterizationState(&pipeDesc->rasterizationState, geometricShader);
     _InitAttachmentState(pipeDesc, firstDrawBatch);
 }
