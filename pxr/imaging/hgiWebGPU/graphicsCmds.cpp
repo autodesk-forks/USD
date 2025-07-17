@@ -15,7 +15,6 @@
 #include "pxr/imaging/hgiWebGPU/graphicsPipeline.h"
 #include "pxr/imaging/hgiWebGPU/resourceBindings.h"
 #include "pxr/imaging/hgiWebGPU/texture.h"
-#include "pxr/imaging/hgiWebGPU/buffer.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 

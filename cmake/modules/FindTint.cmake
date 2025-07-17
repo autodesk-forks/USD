@@ -121,9 +121,13 @@ set(TINT_COMMON_COMPONENTS
         lang_wgsl_writer_ir_to_program
         lang_wgsl_writer_raise
         lang_wgsl_writer_syntax_tree_printer
+        lang_spirv
+        lang_spirv_ir
+        lang_spirv_intrinsic
         lang_spirv_reader_ast_lower
         lang_spirv_reader_ast_parser
         lang_spirv_reader_common
+        lang_spirv_type
         utils
         utils_containers
         utils_diagnostic

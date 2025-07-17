@@ -85,11 +85,15 @@ pxr_library(hgiWebGPU
         plugInfo.json
 )
 
-# Set C++20 standard for this specific library due to requirements with the latest update of Dawn and Tint
-set_source_files_properties(shaderFunction.cpp
-    PROPERTIES
-        COMPILE_FLAGS "-std=c++20"
-)
+if (WIN32 AND NOT EMSCRIPTEN)
+    set_source_files_properties(shaderFunction.cpp PROPERTIES COMPILE_FLAGS "/std:c++20")
+else()
+    # Set C++20 standard for this specific library due to requirements with the latest update of Dawn and Tint
+    set_source_files_properties(shaderFunction.cpp
+        PROPERTIES
+            COMPILE_FLAGS "-std=c++20"
+    )
+endif()
 
 if (NOT EMSCRIPTEN)
     message("Restoring PXR_ENABLE_PRECOMPILED_HEADERS:${PXR_ENABLE_PRECOMPILED_HEADERS_PREV}")

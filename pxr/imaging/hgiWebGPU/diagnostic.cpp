@@ -35,4 +35,68 @@ HgiWebGPUIsDebugEnabled()
     return _v;
 }
 
+void HgiWebGPUBeginLabel(wgpu::CommandEncoder const &encoder, const char* label)
+{
+    if (!HgiWebGPUIsDebugEnabled() || !label) {
+        return;
+    }
+    encoder.PushDebugGroup(label);
+}
+
+void HgiWebGPUBeginLabel(wgpu::RenderPassEncoder const &encoder, const char* label)
+{
+    if (!HgiWebGPUIsDebugEnabled() || !label) {
+        return;
+    }
+    encoder.PushDebugGroup(label);
+}
+
+void HgiWebGPUBeginLabel(wgpu::ComputePassEncoder const &encoder, const char* label)
+{
+    if (!HgiWebGPUIsDebugEnabled() || !label) {
+        return;
+    }
+    encoder.PushDebugGroup(label);
+}
+
+void HgiWebGPUBeginLabel(wgpu::RenderBundleEncoder const &encoder, const char* label)
+{
+    if (!HgiWebGPUIsDebugEnabled() || !label) {
+        return;
+    }
+    encoder.PushDebugGroup(label);
+}
+
+void HgiWebGPUEndLabel(wgpu::CommandEncoder const &encoder)
+{
+    if (!HgiWebGPUIsDebugEnabled()) {
+        return;
+    }
+    encoder.PopDebugGroup();
+}
+
+void HgiWebGPUEndLabel(wgpu::RenderPassEncoder const &encoder)
+{
+    if (!HgiWebGPUIsDebugEnabled()) {
+        return;
+    }
+    encoder.PopDebugGroup();
+}
+
+void HgiWebGPUEndLabel(wgpu::ComputePassEncoder const &encoder)
+{
+    if (!HgiWebGPUIsDebugEnabled()) {
+        return;
+    }
+    encoder.PopDebugGroup();
+}
+
+void HgiWebGPUEndLabel(wgpu::RenderBundleEncoder const &encoder)
+{
+    if (!HgiWebGPUIsDebugEnabled()) {
+        return;
+    }
+    encoder.PopDebugGroup();
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -33,36 +33,17 @@ HGIWEBGPU_API
 bool
 HgiWebGPUIsDebugEnabled();
 
-template<typename Encoder>
-constexpr bool isCommandEncoder =
-    std::is_same_v<Encoder, wgpu::CommandEncoder> ||
-    std::is_same_v<Encoder, wgpu::RenderPassEncoder> ||
-    std::is_same_v<Encoder, wgpu::ComputePassEncoder> ||
-    std::is_same_v<Encoder, wgpu::RenderBundleEncoder>;
+// Begin a label in a webgpu command encoder
+HGIWEBGPU_API void HgiWebGPUBeginLabel(wgpu::CommandEncoder const &encoder, const char* label);
+HGIWEBGPU_API void HgiWebGPUBeginLabel(wgpu::RenderPassEncoder const &encoder, const char* label);
+HGIWEBGPU_API void HgiWebGPUBeginLabel(wgpu::ComputePassEncoder const &encoder, const char* label);
+HGIWEBGPU_API void HgiWebGPUBeginLabel(wgpu::RenderBundleEncoder const &encoder, const char* label);
 
-/// Begin a label in a webgpu command encoder
-template<typename Encoder>
-HGIWEBGPU_API
-std::enable_if_t<isCommandEncoder<Encoder>>
-HgiWebGPUBeginLabel(Encoder const &encoder, const char* label)
-{
-    if (!HgiWebGPUIsDebugEnabled() || !label) {
-        return;
-    }
-    encoder.PushDebugGroup(label);
-}
-
-/// End the last pushed label in a webgpu command encoder
-template<typename Encoder>
-HGIWEBGPU_API
-std::enable_if_t<isCommandEncoder<Encoder>>
-HgiWebGPUEndLabel(Encoder const &encoder)
-{
-    if (!HgiWebGPUIsDebugEnabled()) {
-        return;
-    }
-    encoder.PopDebugGroup();
-}
+// End the last pushed label in a webgpu command encoder
+HGIWEBGPU_API void HgiWebGPUEndLabel(wgpu::CommandEncoder const &encoder);
+HGIWEBGPU_API void HgiWebGPUEndLabel(wgpu::RenderPassEncoder const &encoder);
+HGIWEBGPU_API void HgiWebGPUEndLabel(wgpu::ComputePassEncoder const &encoder);
+HGIWEBGPU_API void HgiWebGPUEndLabel(wgpu::RenderBundleEncoder const &encoder);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
