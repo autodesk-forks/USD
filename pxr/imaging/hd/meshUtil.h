@@ -104,7 +104,8 @@ public:
     /// a buffer of size numElements and type corresponding to dataType
     /// (e.g. HdTypeFloatVec3); the result is a VtArray<T> of the
     /// correct type written to the variable "triangulated".
-    /// This function returns false if it can't resolve dataType.
+    /// Returns false if triangulation isn't necessary or possible
+    // (such as if it can't resolve dataType).
     HD_API
     bool ComputeTriangulatedFaceVaryingPrimvar(void const* source,
                                                int numElements,
