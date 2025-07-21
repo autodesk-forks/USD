@@ -17,7 +17,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-
 HgiVulkanBuffer::HgiVulkanBuffer(
     HgiVulkan* hgi,
     HgiVulkanDevice* device,
@@ -27,8 +26,8 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     , _vkBuffer(nullptr)
     , _vmaAllocation(nullptr)
     , _inflightBits(0)
-    , _stagingBuffer(nullptr)
     , _cpuStagingAddress(nullptr)
+    , _isUma(false)
 {
     if (_descriptor.byteSize == 0) {
         TF_CODING_ERROR("The size of buffer [%p] is zero.", this);
@@ -52,9 +51,16 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     VmaAllocationCreateInfo ai = {};
     ai.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT; // GPU efficient
 
+    if (hgi->GetCapabilities()->
+        IsSet(HgiDeviceCapabilitiesBitsUnifiedMemory)) {
+        _isUma = true;
+        ai.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    }
+
     HGIVULKAN_VERIFY_VK_RESULT(
-        vmaCreateBuffer(vma,&bi,&ai,&_vkBuffer,&_vmaAllocation,0)
-    );
+        vmaCreateBuffer(vma, &bi, &ai, &_vkBuffer, &_vmaAllocation, 0));
 
     // Debug label
     if (!_descriptor.debugName.empty()) {
@@ -67,52 +73,57 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     }
 
     if (_descriptor.initialData) {
-        // Use a 'staging buffer' to schedule uploading the 'initialData' to
-        // the device-local GPU buffer.
-        HgiBufferDesc stagingDesc = _descriptor;
-        if (!stagingDesc.debugName.empty()) {
-            stagingDesc.debugName =
-                "Staging Buffer for " + stagingDesc.debugName;
+        if (const auto umaPointer = GetUmaPointer()) {
+            memcpy(umaPointer.get(), _descriptor.initialData,
+                _descriptor.byteSize);
+        } else {
+            // Use a 'staging buffer' to schedule uploading the 'initialData' to
+            // the device-local GPU buffer.
+            HgiBufferDesc stagingDesc = _descriptor;
+            if (!stagingDesc.debugName.empty()) {
+                stagingDesc.debugName =
+                    "Staging Buffer for " + stagingDesc.debugName;
+            }
+
+            std::unique_ptr<HgiVulkanBuffer> stagingBuffer = CreateStagingBuffer(
+                _device, stagingDesc);
+            VkBuffer vkStagingBuf = stagingBuffer->GetVulkanBuffer();
+
+            HgiVulkanCommandQueue* queue = device->GetCommandQueue();
+            HgiVulkanCommandBuffer* cb = queue->AcquireResourceCommandBuffer();
+            VkCommandBuffer vkCmdBuf = cb->GetVulkanCommandBuffer();
+
+            // Copy data from staging buffer to device-local buffer.
+            VkBufferCopy copyRegion = {};
+            copyRegion.srcOffset = 0;
+            copyRegion.dstOffset = 0;
+            copyRegion.size = stagingDesc.byteSize;
+            vkCmdCopyBuffer(vkCmdBuf, vkStagingBuf, _vkBuffer, 1, &copyRegion);
+
+            VkBufferMemoryBarrier memoryBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+            memoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+            memoryBarrier.dstAccessMask =
+                VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            memoryBarrier.buffer = _vkBuffer;
+            memoryBarrier.offset = 0;
+            memoryBarrier.size = stagingDesc.byteSize;
+            vkCmdPipelineBarrier(
+                vkCmdBuf,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0, nullptr,
+                1, &memoryBarrier,
+                0, nullptr);
+
+            // We don't know if this buffer is a static (immutable) or
+            // dynamic (animated) buffer. We assume that most buffers are
+            // static and schedule garbage collection of staging resource.
+            HgiBufferHandle stagingHandle(stagingBuffer.release(), 0);
+            hgi->TrashObject(
+                &stagingHandle,
+                hgi->GetGarbageCollector()->GetBufferList());
         }
-
-        HgiVulkanBuffer* stagingBuffer = CreateStagingBuffer(
-            _device, stagingDesc);
-        VkBuffer vkStagingBuf = stagingBuffer->GetVulkanBuffer();
-
-        HgiVulkanCommandQueue* queue = device->GetCommandQueue();
-        HgiVulkanCommandBuffer* cb = queue->AcquireResourceCommandBuffer();
-        VkCommandBuffer vkCmdBuf = cb->GetVulkanCommandBuffer();
-
-        // Copy data from staging buffer to device-local buffer.
-        VkBufferCopy copyRegion = {};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = stagingDesc.byteSize;
-        vkCmdCopyBuffer(vkCmdBuf, vkStagingBuf, _vkBuffer, 1, &copyRegion);
-
-        VkBufferMemoryBarrier memoryBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-        memoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-        memoryBarrier.dstAccessMask =
-            VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-        memoryBarrier.buffer = _vkBuffer;
-        memoryBarrier.offset = 0;
-        memoryBarrier.size = stagingDesc.byteSize;
-        vkCmdPipelineBarrier(
-            vkCmdBuf,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0, nullptr,
-            1, &memoryBarrier,
-            0, nullptr);
-
-        // We don't know if this buffer is a static (immutable) or
-        // dynamic (animated) buffer. We assume that most buffers are
-        // static and schedule garbage collection of staging resource.
-        HgiBufferHandle stagingHandle(stagingBuffer, 0);
-        hgi->TrashObject(
-            &stagingHandle,
-            hgi->GetGarbageCollector()->GetBufferList());
     }
 
     _descriptor.initialData = nullptr;
@@ -130,6 +141,7 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     , _inflightBits(0)
     , _stagingBuffer(nullptr)
     , _cpuStagingAddress(nullptr)
+    , _isUma(false)
 {
 }
 
@@ -142,7 +154,6 @@ HgiVulkanBuffer::~HgiVulkanBuffer()
         _cpuStagingAddress = nullptr;
     }
 
-    delete _stagingBuffer;
     _stagingBuffer = nullptr;
 
     vmaDestroyBuffer(
@@ -213,7 +224,7 @@ HgiVulkanBuffer::GetVulkanMemoryAllocation() const
 HgiVulkanBuffer*
 HgiVulkanBuffer::GetStagingBuffer() const
 {
-    return _stagingBuffer;
+    return _stagingBuffer.get();
 }
 
 HgiVulkanDevice*
@@ -228,7 +239,20 @@ HgiVulkanBuffer::GetInflightBits()
     return _inflightBits;
 }
 
-HgiVulkanBuffer*
+HgiVulkanUmaUniquePointer
+HgiVulkanBuffer::GetUmaPointer() const
+{
+    if (!_isUma) {
+        return {};
+    }
+
+    VmaAllocator vma = _device->GetVulkanMemoryAllocator();
+    void* memory = nullptr;
+    HGIVULKAN_VERIFY_VK_RESULT(vmaMapMemory(vma, _vmaAllocation, &memory));
+    return HgiVulkanUmaUniquePointer(memory, {vma, _vmaAllocation});
+}
+
+std::unique_ptr<HgiVulkanBuffer>
 HgiVulkanBuffer::CreateStagingBuffer(
     HgiVulkanDevice* device,
     HgiBufferDesc const& desc)
@@ -263,8 +287,8 @@ HgiVulkanBuffer::CreateStagingBuffer(
         vmaUnmapMemory(vma, alloc);
     }
 
-    // Return new staging buffer (caller manages lifetime)
-    return new HgiVulkanBuffer(device, buffer, alloc, desc);
+    return std::unique_ptr<HgiVulkanBuffer>(
+        new HgiVulkanBuffer{device, buffer, alloc, desc});
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

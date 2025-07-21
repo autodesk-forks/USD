@@ -11,6 +11,8 @@
 #include "pxr/imaging/hgiVulkan/api.h"
 #include "pxr/imaging/hgi/blitCmds.h"
 
+#include <deque>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 class HgiVulkan;
@@ -87,6 +89,10 @@ private:
 
     HgiVulkan* _hgi;
     HgiVulkanCommandBuffer* _commandBuffer;
+
+    // Store labels here until we create the command buffer, because we
+    // shouldn't be creating a command buffer just to insert labels!
+    std::deque<std::string> _labelCache;
 
     // BlitCmds is used only one frame so storing multi-frame state on BlitCmds
     // will not survive.

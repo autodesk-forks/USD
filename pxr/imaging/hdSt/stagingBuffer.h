@@ -55,20 +55,19 @@ public:
     HDST_API
     void StageCopy(HgiBufferCpuToGpuOp const &copyOp);
 
-    /// Flush the queued GPU to GPU blits from the calls to StageCopy.  Resets
-    /// the state for the next ResoureRegistry commit.
+    /// Flush the queued GPU to GPU blits from the calls to StageCopy.
+    /// Resets the state for the next ResoureRegistry commit.
+    /// Returns false if there were no staged copies to flush. This is the
+    /// case when UMA or ReBAR is available.
     HDST_API
-    void Flush();
+    bool Flush();
 
 private:
-    static constexpr int32_t MULTIBUFFERING = 3;
-
     HdStResourceRegistry *_resourceRegistry;
-    HgiBufferHandle _handles[MULTIBUFFERING];
+    HgiBufferHandle _buffer;
     size_t _head;
     size_t _capacity;
-    size_t _activeSlot;
-    bool _tripleBuffered;
+    bool _uniformMemoryAccess;
     std::vector<HgiBufferGpuToGpuOp> _gpuCopyOps;
 };
 

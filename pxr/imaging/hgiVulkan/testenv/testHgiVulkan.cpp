@@ -188,12 +188,14 @@ TestVulkanCommandQueue(HgiVulkan& hgiVulkan)
             // Perform first job on thread and wait (spin) until next job
             if (job==Job::FirstJob) {
                 cmds0->PushDebugGroup("First Job");
+                cmds0->InsertMemoryBarrier(HgiMemoryBarrierAll);
                 cmds0->PopDebugGroup();
                 status->store(Job::Wait);
             }
             // Perform second job and quit thread.
             if (job==Job::SecondJob) {
                 cmds1->PushDebugGroup("Second Job");
+                cmds1->InsertMemoryBarrier(HgiMemoryBarrierAll);
                 cmds1->PopDebugGroup();
                 status->store(Job::Quit);
             }
@@ -380,6 +382,7 @@ TestVulkanGarbageCollection(HgiVulkan& hgiVulkan)
     // Start recording commands in BlitCmds0.
     // This means the command buffer inside the Cmds is now 'in-flight'.
     blitCmds0->PushDebugGroup("BlitCmds0");
+    blitCmds0->InsertMemoryBarrier(HgiMemoryBarrierAll);
     blitCmds0->PopDebugGroup();
 
     // Schedule destruction of the first shader.
@@ -390,6 +393,7 @@ TestVulkanGarbageCollection(HgiVulkan& hgiVulkan)
     // Start recording commands in BlitCmds1.
     // This means the command buffer inside the Cmds is now 'in-flight'.
     blitCmds1->PushDebugGroup("BlitCmds1");
+    blitCmds1->InsertMemoryBarrier(HgiMemoryBarrierAll);
     blitCmds1->PopDebugGroup();
 
     // Schedule destruction of the second shader.
@@ -416,6 +420,7 @@ TestVulkanGarbageCollection(HgiVulkan& hgiVulkan)
     // it was waiting on BlitCmds0 to no longer be  in-flight.
     HgiBlitCmdsUniquePtr blitCmdsX = hgiVulkan2.CreateBlitCmds();
     blitCmdsX->PushDebugGroup("BlitCmdsX");
+    blitCmdsX->InsertMemoryBarrier(HgiMemoryBarrierAll);
     blitCmdsX->PopDebugGroup();
     hgiVulkan2.SubmitCmds(blitCmdsX.get());
 
@@ -534,7 +539,7 @@ TestVulkanBuffer(HgiVulkan& hgiVulkan)
 
     HgiBufferGpuToCpuOp copyOp;
     copyOp.byteSize = desc.byteSize;
-    copyOp.cpuDestinationBuffer = &readbackBlob[0];
+    copyOp.cpuDestinationBuffer = readbackBlob.data();
     copyOp.destinationByteOffset = 0;
     copyOp.gpuSourceBuffer = buffer;
     copyOp.sourceByteOffset = 0;

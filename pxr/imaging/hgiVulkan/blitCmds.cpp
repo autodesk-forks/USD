@@ -34,15 +34,21 @@ HgiVulkanBlitCmds::~HgiVulkanBlitCmds() = default;
 void
 HgiVulkanBlitCmds::PushDebugGroup(const char* label)
 {
-    _CreateCommandBuffer();
-    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label);
+    if (_commandBuffer) {
+        HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label);
+    } else {
+        _labelCache.push_back(label);
+    }
 }
 
 void
 HgiVulkanBlitCmds::PopDebugGroup()
 {
-    _CreateCommandBuffer();
-    HgiVulkanEndLabel(_hgi->GetPrimaryDevice(), _commandBuffer);
+    if (_commandBuffer) {
+        HgiVulkanEndLabel(_hgi->GetPrimaryDevice(), _commandBuffer);
+    } else {
+        _labelCache.pop_back();
+    }
 }
 
 static
@@ -96,7 +102,7 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     _CreateCommandBuffer();
 
     HgiVulkanTexture* srcTexture =
-        static_cast<HgiVulkanTexture*>(copyOp.gpuSourceTexture.Get());
+        dynamic_cast<HgiVulkanTexture*>(copyOp.gpuSourceTexture.Get());
 
     if (!TF_VERIFY(srcTexture && srcTexture->GetImage(),
         "Invalid texture handle")) {
@@ -198,10 +204,15 @@ void
 HgiVulkanBlitCmds::CopyTextureCpuToGpu(
     HgiTextureCpuToGpuOp const& copyOp)
 {
+    HgiVulkanTexture* dstTexture = dynamic_cast<HgiVulkanTexture*>(
+        copyOp.gpuDestinationTexture.Get());
+    if (!TF_VERIFY(dstTexture && dstTexture->GetImage(),
+        "Invalid texture handle")) {
+        return;
+    }
+
     _CreateCommandBuffer();
 
-    HgiVulkanTexture* dstTexture = static_cast<HgiVulkanTexture*>(
-        copyOp.gpuDestinationTexture.Get());
     HgiTextureDesc const& texDesc = dstTexture->GetDescriptor();
 
     // If we used GetCPUStagingAddress as the cpuSourceBuffer when the copyOp
@@ -252,8 +263,7 @@ void HgiVulkanBlitCmds::CopyBufferGpuToGpu(
 
     HgiBufferHandle const& srcBufHandle = copyOp.gpuSourceBuffer;
     HgiVulkanBuffer* srcBuffer =
-        static_cast<HgiVulkanBuffer*>(srcBufHandle.Get());
-
+        dynamic_cast<HgiVulkanBuffer*>(srcBufHandle.Get());
     if (!TF_VERIFY(srcBuffer && srcBuffer->GetVulkanBuffer(),
         "Invalid source buffer handle")) {
         return;
@@ -261,8 +271,7 @@ void HgiVulkanBlitCmds::CopyBufferGpuToGpu(
 
     HgiBufferHandle const& dstBufHandle = copyOp.gpuDestinationBuffer;
     HgiVulkanBuffer* dstBuffer =
-        static_cast<HgiVulkanBuffer*>(dstBufHandle.Get());
-
+        dynamic_cast<HgiVulkanBuffer*>(dstBufHandle.Get());
     if (!TF_VERIFY(dstBuffer && dstBuffer->GetVulkanBuffer(),
         "Invalid destination buffer handle")) {
         return;
@@ -292,17 +301,15 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
     _CreateCommandBuffer();
 
     HgiVulkanTexture* srcTexture =
-        static_cast<HgiVulkanTexture*>(src.Get());
-
+        dynamic_cast<HgiVulkanTexture*>(src.Get());
     if (!TF_VERIFY(srcTexture && srcTexture->GetImage(),
         "Invalid texture handle")) {
         return;
     }
 
     HgiVulkanTexture* dstTexture =
-        static_cast<HgiVulkanTexture*>(dst.Get());
-
-    if (!TF_VERIFY(srcTexture && srcTexture->GetImage(),
+        dynamic_cast<HgiVulkanTexture*>(dst.Get());
+    if (!TF_VERIFY(dstTexture && dstTexture->GetImage(),
         "Invalid texture handle")) {
         return;
     }
@@ -400,8 +407,6 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
 void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
     HgiBufferCpuToGpuOp const& copyOp)
 {
-    _CreateCommandBuffer();
-
     if (copyOp.byteSize == 0 ||
         !copyOp.cpuSourceBuffer ||
         !copyOp.gpuDestinationBuffer)
@@ -411,6 +416,21 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
 
     HgiVulkanBuffer* buffer = static_cast<HgiVulkanBuffer*>(
         copyOp.gpuDestinationBuffer.Get());
+    if (!TF_VERIFY(buffer && buffer->GetVulkanBuffer(),
+        "Invalid destination buffer handle")) {
+        return;
+    }
+
+    if (const auto umaPointer = buffer->GetUmaPointer()) {
+        memcpy(static_cast<std::byte*>(umaPointer.get()) +
+                copyOp.destinationByteOffset,
+            static_cast<const std::byte*>(copyOp.cpuSourceBuffer) +
+                copyOp.sourceByteOffset,
+            copyOp.byteSize);
+        return;
+    }
+
+    _CreateCommandBuffer();
 
     // If we used GetCPUStagingAddress as the cpuSourceBuffer when the copyOp
     // was created, we can skip the memcpy since the src and dst buffer are
@@ -419,15 +439,14 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
     if (!buffer->IsCPUStagingAddress(copyOp.cpuSourceBuffer) ||
         copyOp.sourceByteOffset != copyOp.destinationByteOffset) {
 
-        // Offset into the src buffer.
+        // Offset into the src buffer
         const uint8_t* const src =
             static_cast<const uint8_t*>(copyOp.cpuSourceBuffer) +
-                copyOp.sourceByteOffset;
+            copyOp.sourceByteOffset;
 
         // Offset into the dst buffer.
-        uint8_t* const dst =
-            static_cast<uint8_t*>(buffer->GetCPUStagingAddress()) +
-                copyOp.destinationByteOffset;
+        uint8_t* const dst = static_cast<uint8_t*>(buffer->GetCPUStagingAddress()) +
+        copyOp.destinationByteOffset;
 
         memcpy(dst, src, copyOp.byteSize);
     }
@@ -436,7 +455,7 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
     HgiVulkanBuffer* stagingBuffer = buffer->GetStagingBuffer();
 
     if (TF_VERIFY(stagingBuffer)) {
-        VkBufferCopy copyRegion = {};
+        VkBufferCopy copyRegion{};
         // Note we use the destinationByteOffset as the srcOffset here. The staging buffer
         // should be prepared with the same data layout of the destination buffer.
         copyRegion.srcOffset = copyOp.destinationByteOffset;
@@ -444,10 +463,10 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
         copyRegion.size = copyOp.byteSize;
 
         vkCmdCopyBuffer(
-            _commandBuffer->GetVulkanCommandBuffer(), 
+            _commandBuffer->GetVulkanCommandBuffer(),
             stagingBuffer->GetVulkanBuffer(),
             buffer->GetVulkanBuffer(),
-            1, 
+            1,
             &copyRegion);
     }
 }
@@ -455,8 +474,6 @@ void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
 void
 HgiVulkanBlitCmds::CopyBufferGpuToCpu(HgiBufferGpuToCpuOp const& copyOp)
 {
-    _CreateCommandBuffer();
-
     if (copyOp.byteSize == 0 ||
         !copyOp.cpuDestinationBuffer ||
         !copyOp.gpuSourceBuffer)
@@ -464,8 +481,23 @@ HgiVulkanBlitCmds::CopyBufferGpuToCpu(HgiBufferGpuToCpuOp const& copyOp)
         return;
     }
 
-    HgiVulkanBuffer* buffer = static_cast<HgiVulkanBuffer*>(
+    HgiVulkanBuffer* buffer = dynamic_cast<HgiVulkanBuffer*>(
         copyOp.gpuSourceBuffer.Get());
+    if (!TF_VERIFY(buffer && buffer->GetVulkanBuffer(),
+        "Invalid source buffer handle")) {
+        return;
+    }
+
+    if (const auto umaPointer = buffer->GetUmaPointer()) {
+        memcpy(static_cast<std::byte*>(copyOp.cpuDestinationBuffer) +
+                copyOp.destinationByteOffset,
+            static_cast<const std::byte*>(umaPointer.get()) +
+                copyOp.sourceByteOffset,
+            copyOp.byteSize);
+        return;
+    }
+
+    _CreateCommandBuffer();
 
     // Make sure there is a staging buffer in the buffer by asking for cpuAddr.
     void* cpuAddress = buffer->GetCPUStagingAddress();
@@ -475,7 +507,7 @@ HgiVulkanBlitCmds::CopyBufferGpuToCpu(HgiBufferGpuToCpuOp const& copyOp)
     }
 
     // Copy from device-local GPU buffer into GPU staging buffer
-    VkBufferCopy copyRegion = {};
+    VkBufferCopy copyRegion{};
     copyRegion.srcOffset = copyOp.sourceByteOffset;
     // No need to use dst offset during intermediate step of copying into 
     // staging buffer.
@@ -491,20 +523,20 @@ HgiVulkanBlitCmds::CopyBufferGpuToCpu(HgiBufferGpuToCpuOp const& copyOp)
     // Next schedule a callback when the above GPU-GPU copy completes.
 
     // Offset into the dst buffer
-    char* dst = ((char*) copyOp.cpuDestinationBuffer) +
+    char* const dst = static_cast<char*>(copyOp.cpuDestinationBuffer) +
         copyOp.destinationByteOffset;
 
     // No need to offset into src buffer since we copied into staging buffer
     // without dst offset.
-    const char* src = ((const char*) cpuAddress);
+    const char* const src = static_cast<const char*>(cpuAddress);
 
     // bytes to copy
-    size_t size = copyOp.byteSize;
+    const size_t size = copyOp.byteSize;
 
     // Copy to cpu buffer when cmd buffer has been executed
-    _commandBuffer->AddCompletedHandler(
-        [dst, src, size]{ memcpy(dst, src, size);}
-    );
+    _commandBuffer->AddCompletedHandler([dst, src, size]{
+        memcpy(dst, src, size);
+    });
 }
 
 void
@@ -518,14 +550,15 @@ HgiVulkanBlitCmds::CopyTextureToBuffer(HgiTextureToBufferOp const& copyOp)
     _CreateCommandBuffer();
 
     HgiVulkanTexture* srcTexture =
-        static_cast<HgiVulkanTexture*>(copyOp.gpuSourceTexture.Get());
-    if (!TF_VERIFY(srcTexture && srcTexture->GetImage(), "Invalid texture")) {
+        dynamic_cast<HgiVulkanTexture*>(copyOp.gpuSourceTexture.Get());
+    if (!TF_VERIFY(srcTexture && srcTexture->GetImage(),
+        "Invalid texture")) {
         return;
     }
     HgiTextureDesc const& texDesc = srcTexture->GetDescriptor();
 
     HgiVulkanBuffer* dstBuffer =
-        static_cast<HgiVulkanBuffer*>(copyOp.gpuDestinationBuffer.Get());
+        dynamic_cast<HgiVulkanBuffer*>(copyOp.gpuDestinationBuffer.Get());
     if (!TF_VERIFY(dstBuffer && dstBuffer->GetVulkanBuffer(),
         "Invalid buffer")) {
         return;
@@ -606,14 +639,14 @@ HgiVulkanBlitCmds::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
 
     HgiBufferHandle const& srcBufHandle = copyOp.gpuSourceBuffer;
     HgiVulkanBuffer* srcBuffer =
-        static_cast<HgiVulkanBuffer*>(srcBufHandle.Get());
+        dynamic_cast<HgiVulkanBuffer*>(srcBufHandle.Get());
     if (!TF_VERIFY(srcBuffer && srcBuffer->GetVulkanBuffer(),
         "Invalid buffer")) {
         return;
     }
 
     HgiVulkanTexture* dstTexture =
-        static_cast<HgiVulkanTexture*>(copyOp.gpuDestinationTexture.Get());
+        dynamic_cast<HgiVulkanTexture*>(copyOp.gpuDestinationTexture.Get());
     if (!TF_VERIFY(dstTexture && dstTexture->GetImage(),
         "Invalid texture handle")) {
         return;
@@ -688,6 +721,11 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
     _CreateCommandBuffer();
 
     HgiVulkanTexture* vkTex = static_cast<HgiVulkanTexture*>(texture.Get());
+    if (!TF_VERIFY(vkTex && vkTex->GetImage(),
+        "Invalid texture handle")) {
+        return;
+    }
+
     HgiVulkanDevice* device = vkTex->GetDevice();
 
     HgiTextureDesc const& desc = texture->GetDescriptor();
@@ -855,11 +893,19 @@ HgiVulkanBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
 void
 HgiVulkanBlitCmds::_CreateCommandBuffer()
 {
-    if (!_commandBuffer) {
-        HgiVulkanDevice* device = _hgi->GetPrimaryDevice();
-        HgiVulkanCommandQueue* queue = device->GetCommandQueue();
-        _commandBuffer = queue->AcquireCommandBuffer();
-        TF_VERIFY(_commandBuffer);
+    if (_commandBuffer) {
+        return;
+    }
+
+    HgiVulkanDevice* device = _hgi->GetPrimaryDevice();
+    HgiVulkanCommandQueue* queue = device->GetCommandQueue();
+    _commandBuffer = queue->AcquireCommandBuffer();
+    TF_VERIFY(_commandBuffer);
+
+    while (!_labelCache.empty()) {
+        HgiVulkanBeginLabel(device, _commandBuffer,
+            _labelCache.front().c_str());
+        _labelCache.pop_front();
     }
 }
 

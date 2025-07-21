@@ -18,6 +18,36 @@ class HgiVulkanCommandBuffer;
 class HgiVulkanDevice;
 
 ///
+/// \struct HgiVulkanUmaUniquePointerDeleter
+///
+/// For use with std::unique_ptr. Unmaps a pointer to UMA/ReBAR memory when
+/// the owning pointer is destroyed.
+///
+struct HgiVulkanUmaUniquePointerDeleter
+{
+    void operator()([[maybe_unused]] void* memory) const
+    {
+        vmaUnmapMemory(_vma, _allocation);
+    }
+
+    HgiVulkanUmaUniquePointerDeleter() = default;
+
+    HgiVulkanUmaUniquePointerDeleter(VmaAllocator vma,
+        VmaAllocation allocation)
+        : _vma(vma)
+        , _allocation(allocation)
+    {
+    }
+
+private:
+    VmaAllocator _vma{};
+    VmaAllocation _allocation{};
+};
+
+using HgiVulkanUmaUniquePointer =
+    std::unique_ptr<void, HgiVulkanUmaUniquePointerDeleter>;
+
+///
 /// \class HgiVulkanBuffer
 ///
 /// Vulkan implementation of HgiBuffer
@@ -61,10 +91,17 @@ public:
     HGIVULKAN_API
     uint64_t & GetInflightBits();
 
+    /// Returns a device local, host writeable pointer to the buffer allocaiton,
+    /// if UMA or equivalent like ReBAR is available. Returns null otherwise.
+    /// Writing sequentially to this pointer should be the fastest way to write
+    /// to device memory.
+    HGIVULKAN_API
+    HgiVulkanUmaUniquePointer GetUmaPointer() const;
+
     /// Creates a staging buffer.
     /// The caller is responsible for the lifetime (destruction) of the buffer.
     HGIVULKAN_API
-    static HgiVulkanBuffer* CreateStagingBuffer(
+    static std::unique_ptr<HgiVulkanBuffer> CreateStagingBuffer(
         HgiVulkanDevice* device,
         HgiBufferDesc const& desc);
 
@@ -95,8 +132,9 @@ private:
     VkBuffer _vkBuffer;
     VmaAllocation _vmaAllocation;
     uint64_t _inflightBits;
-    HgiVulkanBuffer* _stagingBuffer;
+    std::unique_ptr<HgiVulkanBuffer> _stagingBuffer;
     void* _cpuStagingAddress;
+    bool _isUma;
 };
 
 

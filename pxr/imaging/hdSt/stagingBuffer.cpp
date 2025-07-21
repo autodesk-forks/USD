@@ -17,9 +17,8 @@ HdStStagingBuffer::HdStStagingBuffer(HdStResourceRegistry *resourceRegistry)
     : _resourceRegistry(resourceRegistry)
     , _head(0)
     , _capacity(0)
-    , _activeSlot(0)
 {
-    _tripleBuffered = resourceRegistry->GetHgi()->GetCapabilities()->
+    _uniformMemoryAccess = resourceRegistry->GetHgi()->GetCapabilities()->
                           IsSet(HgiDeviceCapabilitiesBitsUnifiedMemory);
 }
 
@@ -31,16 +30,12 @@ HdStStagingBuffer::~HdStStagingBuffer()
 void
 HdStStagingBuffer::Deallocate()
 {
-    Hgi* hgi = _resourceRegistry->GetHgi();
-
-    for (size_t i = 0; i < MULTIBUFFERING; ++i) {
-        if (_handles[i]) {
-            hgi->DestroyBuffer(&_handles[i]);
-        }
+    if (_buffer) {
+        _resourceRegistry->GetHgi()->DestroyBuffer(&_buffer);
+        _buffer = {};
     }
 
     _capacity = 0;
-    _activeSlot = 0;
 }
 
 void
@@ -65,42 +60,41 @@ HdStStagingBuffer::StageCopy(HgiBufferCpuToGpuOp const &copyOp)
         return;
     }
 
-    // When the to-be-copied data is 'large' doing the extra memcpy into the
+    // Skip staging buffer if device supports unified memory or when
+    // the to-be-copied data is 'large'. Doing the extra memcpy into the
     // stating buffer to avoid many small GPU buffer upload can be more
     // expensive than just submitting the CPU to GPU copy operation directly.
     // The value of 'queueThreshold' is estimated (when is the extra memcpy
     // into the staging buffer slower than immediately issuing a gpu upload)
-    static const int queueThreshold = 512*1024;
-    if (!_tripleBuffered && copyOp.byteSize > queueThreshold) {
+    static constexpr size_t queueThreshold = 512 * 1024;
+    if (_uniformMemoryAccess || copyOp.byteSize > queueThreshold) {
         HgiBlitCmds* blitCmds = _resourceRegistry->GetGlobalBlitCmds();
         blitCmds->CopyBufferCpuToGpu(copyOp);
         return;
     }
 
-    HgiBufferHandle buffer = _handles[_activeSlot];
-    constexpr size_t recoveryRatio = 4;
+    static constexpr size_t recoveryRatio = 4;
 
-    // If there is no buffer in the active slot or it is either too small or
+    // If there is no buffer or it is either too small or
     // substantially larger than the required size, recreate it.
-    if (!buffer ||
-        buffer->GetDescriptor().byteSize < _capacity ||
-        buffer->GetDescriptor().byteSize > _capacity * recoveryRatio) {
+    if (!_buffer ||
+        _buffer->GetDescriptor().byteSize < _capacity ||
+        _buffer->GetDescriptor().byteSize > _capacity * recoveryRatio) {
         HgiBufferDesc bufferDesc;
         bufferDesc.debugName = "HdStStagingBuffer";
         bufferDesc.byteSize = _capacity;
 
         Hgi* hgi = _resourceRegistry->GetHgi();
 
-        if (buffer) {
-            hgi->DestroyBuffer(&buffer);
+        if (_buffer) {
+            hgi->DestroyBuffer(&_buffer);
         }
 
-        _handles[_activeSlot] = hgi->CreateBuffer(bufferDesc);
-        buffer = _handles[_activeSlot];
+        _buffer = hgi->CreateBuffer(bufferDesc);
     }
 
-    size_t capacity = buffer->GetDescriptor().byteSize;
-    uint8_t *cpuStaging = static_cast<uint8_t*>(buffer->GetCPUStagingAddress());
+    size_t capacity = _buffer->GetDescriptor().byteSize;
+    uint8_t *cpuStaging = static_cast<uint8_t*>(_buffer->GetCPUStagingAddress());
 
     if (TF_VERIFY(_head + copyOp.byteSize <= capacity)) {
         // Copy source into the staging buffer.
@@ -129,7 +123,7 @@ HdStStagingBuffer::StageCopy(HgiBufferCpuToGpuOp const &copyOp)
             // Create a GPU to GPU blit operation to do the final copy.
             HgiBufferGpuToGpuOp gpuCopy;
 
-            gpuCopy.gpuSourceBuffer = buffer;
+            gpuCopy.gpuSourceBuffer = _buffer;
             gpuCopy.sourceByteOffset = _head;
             gpuCopy.byteSize = copyOp.byteSize;
             gpuCopy.gpuDestinationBuffer = copyOp.gpuDestinationBuffer;
@@ -142,33 +136,29 @@ HdStStagingBuffer::StageCopy(HgiBufferCpuToGpuOp const &copyOp)
     }
 }
 
-void
+bool
 HdStStagingBuffer::Flush()
 {
     if (_head == 0) {
-        _gpuCopyOps.clear();
-        return;
+        // UMA case
+        return false;
     }
 
     HgiBlitCmds* blitCmds = _resourceRegistry->GetGlobalBlitCmds();
 
     blitCmds->PushDebugGroup(__ARCH_PRETTY_FUNCTION__);
 
-    if (!_tripleBuffered) {
-        // If this isn't UMA then blit the staging buffer to GPU.
-        HgiBufferCpuToGpuOp op;
-        HgiBufferHandle buffer = _handles[_activeSlot];
-        uint8_t* const cpuStaging = static_cast<uint8_t* const>(
-            buffer->GetCPUStagingAddress());
+    HgiBufferCpuToGpuOp op;
+    uint8_t* const cpuStaging = static_cast<uint8_t* const>(
+        _buffer->GetCPUStagingAddress());
 
-        op.cpuSourceBuffer = cpuStaging;
-        op.sourceByteOffset = 0;
-        op.gpuDestinationBuffer = buffer;
-        op.destinationByteOffset = 0;
-        op.byteSize = _head;
-        blitCmds->CopyBufferCpuToGpu(op);
-        blitCmds->InsertMemoryBarrier(HgiMemoryBarrierAll);
-    }
+    op.cpuSourceBuffer = cpuStaging;
+    op.sourceByteOffset = 0;
+    op.gpuDestinationBuffer = _buffer;
+    op.destinationByteOffset = 0;
+    op.byteSize = _head;
+    blitCmds->CopyBufferCpuToGpu(op);
+    blitCmds->InsertMemoryBarrier(HgiMemoryBarrierAll);
 
     for (auto const &copyOp : _gpuCopyOps) {
         blitCmds->CopyBufferGpuToGpu(copyOp);
@@ -179,10 +169,7 @@ HdStStagingBuffer::Flush()
     _gpuCopyOps.clear();
     _head = 0;
 
-    if (_tripleBuffered) {
-        _activeSlot++;
-        _activeSlot = (_activeSlot < MULTIBUFFERING) ? _activeSlot : 0;
-    }
+    return true;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
