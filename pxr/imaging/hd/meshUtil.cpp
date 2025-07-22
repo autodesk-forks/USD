@@ -220,7 +220,7 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
 
 // Face-varying triangulation helper function, to deal with type polymorphism.
 template <typename T>
-static bool
+static HdMeshComputationResult
 _TriangulateFaceVarying(
         SdfPath const& id,
         VtIntArray const &faceVertexCounts,
@@ -260,7 +260,7 @@ _TriangulateFaceVarying(
 
     // Already triangulated
     if (allTriangles && !flip) {
-        return false;
+        return HdMeshComputationResult::Unchanged;
     }
 
     VtArray<T> results(numTris * 3);
@@ -302,10 +302,10 @@ _TriangulateFaceVarying(
     }
 
     *triangulated = results;
-    return true;
+    return HdMeshComputationResult::Success;
 }
 
-bool
+HdMeshComputationResult
 HdMeshUtil::ComputeTriangulatedFaceVaryingPrimvar(void const* source,
                                                   int numElements,
                                                   HdType dataType,
@@ -315,11 +315,11 @@ HdMeshUtil::ComputeTriangulatedFaceVaryingPrimvar(void const* source,
 
     if (_topology == nullptr) {
         TF_CODING_ERROR("No topology provided for triangulation");
-        return false;
+        return HdMeshComputationResult::Error;
     }
     if (triangulated == nullptr) {
         TF_CODING_ERROR("No output buffer provided for triangulation");
-        return false;
+        return HdMeshComputationResult::Error;
     }
 
     VtIntArray const &faceVertexCounts = _topology->GetFaceVertexCounts();
@@ -360,7 +360,7 @@ HdMeshUtil::ComputeTriangulatedFaceVaryingPrimvar(void const* source,
     default:
         TF_CODING_ERROR("Unsupported primvar type for triangulation [%s]",
                         _id.GetText());
-        return false;
+        return HdMeshComputationResult::Error;
     }
 }
 

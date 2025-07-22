@@ -22,6 +22,8 @@
 #include "pxr/base/vt/array.h"
 #include "pxr/base/vt/value.h"
 
+#include "pxr/base/tf/pxrCLI11/CLI11.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 /// \class HdQuadInfo
@@ -56,6 +58,18 @@ struct HdQuadInfo {
     int maxNumVert;
     std::vector<int> numVerts;  // num vertices of non-quads
     std::vector<int> verts;     // vertex indices of non-quads
+};
+
+/// Return status for a computation
+enum class CLI11_NODISCARD HdMeshComputationResult
+{
+    /// Computation failed
+    Error,
+    /// Computation succeeded and a result was produced
+    Success,
+    /// Computation succeeded but no result was produced,
+    /// because it is the same as the input.
+    Unchanged
 };
 
 /// \class HdMeshUtil
@@ -100,17 +114,17 @@ public:
                                 VtIntArray *primitiveParams,
                                 VtIntArray *edgeIndices = nullptr) const;
 
-    /// Return a triangulation of a face-varying primvar. source is
+    /// Perform a triangulation of a face-varying primvar. source is
     /// a buffer of size numElements and type corresponding to dataType
     /// (e.g. HdTypeFloatVec3); the result is a VtArray<T> of the
-    /// correct type written to the variable "triangulated".
-    /// Returns false if triangulation isn't necessary or possible
-    // (such as if it can't resolve dataType).
+    /// correct type written to the variable "triangulated", unless the
+    /// result is not "Success", in which case the argument is unmodified.
     HD_API
-    bool ComputeTriangulatedFaceVaryingPrimvar(void const* source,
-                                               int numElements,
-                                               HdType dataType,
-                                               VtValue *triangulated) const;
+    HdMeshComputationResult ComputeTriangulatedFaceVaryingPrimvar(
+        void const* source,
+        int numElements,
+        HdType dataType,
+        VtValue *triangulated) const;
 
     /// @}
 

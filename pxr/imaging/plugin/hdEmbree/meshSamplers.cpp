@@ -126,16 +126,21 @@ HdEmbreeTriangleFaceVaryingSampler::_Triangulate(TfToken const& name,
 {
     HdVtBufferSource buffer(name, value);
     VtValue triangulated;
-    if (!meshUtil.ComputeTriangulatedFaceVaryingPrimvar(
-            buffer.GetData(),
-            buffer.GetNumElements(),
-            buffer.GetTupleType().type,
-            &triangulated)) {
+    const auto status = meshUtil.ComputeTriangulatedFaceVaryingPrimvar(
+        buffer.GetData(),
+        buffer.GetNumElements(),
+        buffer.GetTupleType().type,
+        &triangulated);
+    switch (status) {
+    case HdMeshComputationResult::Error:
         TF_CODING_ERROR("[%s] Could not triangulate face-varying data.",
             name.GetText());
-        return VtValue();
+        return triangulated;
+    case HdMeshComputationResult::Success:
+        return triangulated;
+    case HdMeshComputationResult::Unchanged:
+        return value;
     }
-    return triangulated;
 }
 
 // HdEmbreeSubdivVertexSampler
