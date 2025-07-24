@@ -58,6 +58,42 @@ bool _FanTriangulate(GfVec3i *dst, int const *src,
     return _FanTriangulate(dst->data(), src, offset, index, size, flip);
 }
 
+/// The first value is the number of triangles for the triangulated mesh.
+/// The second value is true only if the mesh is already all triangles.
+static std::pair<int, bool>
+_CountTriangles(SdfPath const& id,
+    VtIntArray const& faceVertexCounts,
+    VtIntArray const& holeIndices)
+{
+    const int numFaces = static_cast<int>(faceVertexCounts.size());
+    const int numHoleFaces = static_cast<int>(holeIndices.size());
+    const auto numVertsPtr = faceVertexCounts.cdata();
+    const auto holeFacesPtr = holeIndices.cdata();
+    int numTris = 0;
+    bool invalidTopology = false;
+    bool allTriangles = true;
+    for (int i = 0, holeIndex = 0; i < numFaces; ++i) {
+        const int nv = numVertsPtr[i];
+        if (nv < 3) {
+            // skip degenerated face
+            invalidTopology = true;
+            allTriangles = false;
+        } else if (holeIndex < numHoleFaces && holeFacesPtr[holeIndex] == i) {
+            // skip hole face
+            ++holeIndex;
+            allTriangles = false;
+        } else {
+            numTris += nv - 2;
+            allTriangles &= (nv == 3);
+        }
+    }
+    if (invalidTopology) {
+        TF_WARN("degenerated face found [%s]", id.GetText());
+    }
+
+    return {numTris, allTriangles};
+}
+
 void
 HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
                                    VtIntArray *primitiveParams,
@@ -77,34 +113,10 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
 
     // generate triangle index buffer
 
-    int const * numVertsPtr = _topology->GetFaceVertexCounts().cdata();
-    int const * vertsPtr = _topology->GetFaceVertexIndices().cdata();
-    int const * holeFacesPtr = _topology->GetHoleIndices().cdata();
-    const int numFaces = _topology->GetFaceVertexCounts().size();
-    const int numVertIndices = _topology->GetFaceVertexIndices().size();
-    int numTris = 0;
-    const int numHoleFaces = _topology->GetHoleIndices().size();
-    bool invalidTopology = false;
-    bool allTriangles = true;
-    for (int i = 0, holeIndex = 0; i < numFaces; ++i) {
-        const int nv = numVertsPtr[i];
-        if (nv < 3) {
-            // skip degenerated face
-            invalidTopology = true;
-            allTriangles = false;
-        } else if (holeIndex < numHoleFaces && holeFacesPtr[holeIndex] == i) {
-            // skip hole face
-            ++holeIndex;
-            allTriangles = false;
-        } else {
-            numTris += nv - 2;
-            allTriangles &= (nv == 3);
-        }
-    }
-    if (invalidTopology) {
-        TF_WARN("degenerated face found [%s]", _id.GetText());
-        invalidTopology = false;
-    }
+    const VtIntArray& faceVertexCounts = _topology->GetFaceVertexCounts();
+    const VtIntArray& holeIndices = _topology->GetHoleIndices();
+    const auto [numTris, allTriangles] =
+        _CountTriangles(_id, faceVertexCounts, holeIndices);
 
     indices->resize(numTris); // vec3 per face
     primitiveParams->resize(numTris); // int per face
@@ -113,6 +125,9 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
     }
 
     const bool flip = (_topology->GetOrientation() != HdTokens->rightHanded);
+
+    const VtIntArray& faceVertexIndices = _topology->GetFaceVertexIndices();
+    const auto vertsPtr = faceVertexIndices.cdata();
 
     // Fast path for already triangulated
     if (allTriangles && !flip) {
@@ -134,10 +149,17 @@ HdMeshUtil::ComputeTriangleIndices(VtVec3iArray *indices,
         return;
     }
 
+    const auto numVertsPtr = faceVertexCounts.cdata();
+    const auto holeFacesPtr = holeIndices.cdata();
+    const int numFaces = static_cast<int>(faceVertexCounts.size());
+    const int numVertIndices = static_cast<int>(faceVertexIndices.size());
+    const int numHoleFaces = static_cast<int>(holeIndices.size());
+
     // i  -> authored face index [0, numFaces)
     // tv -> triangulated face index [0, numTris)
     // v  -> index to the first vertex (index) for face i
     // ev -> edges visited
+    bool invalidTopology = false;
     for (int i = 0, tv = 0, v = 0, ev = 0, holeIndex = 0; i < numFaces; ++i) {
         int nv = numVertsPtr[i];
         if (nv < 3) {
@@ -224,7 +246,7 @@ static HdMeshComputationResult
 _TriangulateFaceVarying(
         SdfPath const& id,
         VtIntArray const &faceVertexCounts,
-        VtIntArray const &holeFaces,
+        VtIntArray const &holeIndices,
         bool flip,
         void const* sourceUntyped,
         int numElements,
@@ -232,44 +254,26 @@ _TriangulateFaceVarying(
 {
     T const* source = static_cast<T const*>(sourceUntyped);
 
-    // CPU face-varying triangulation
-    const int numFaces = static_cast<int>(faceVertexCounts.size());
-    const int numHoleFaces = static_cast<int>(holeFaces.size());
-    int numTris = 0;
-    bool invalidTopology = false;
-    bool allTriangles = true;
-    for (int i = 0, holeIndex = 0; i < numFaces; ++i) {
-        const int nv = faceVertexCounts[i];
-        if (nv < 3) {
-            // skip degenerated face
-            invalidTopology = true;
-            allTriangles = false;
-        } else if (holeIndex < numHoleFaces && holeFaces[holeIndex] == i) {
-            // skip hole face
-            ++holeIndex;
-            allTriangles = false;
-        } else {
-            numTris += nv - 2;
-            allTriangles &= (nv == 3);
-        }
-    }
-    if (invalidTopology) {
-        TF_WARN("degenerated face found [%s]", id.GetText());
-        invalidTopology = false;
-    }
+    const auto [numTris, allTriangles] =
+        _CountTriangles(id, faceVertexCounts, holeIndices);
 
     // Already triangulated
     if (allTriangles && !flip) {
         return HdMeshComputationResult::Unchanged;
     }
 
+    // CPU face-varying triangulation
+    const int numFaces = static_cast<int>(faceVertexCounts.size());
+    const int numHoleFaces = static_cast<int>(holeIndices.size());
+
     VtArray<T> results(numTris * 3);
+    bool invalidTopology = false;
     for (int i = 0, v = 0, holeIndex = 0, dstIndex = 0; i < numFaces; ++i) {
         const int nVerts = faceVertexCounts[i];
 
         if (nVerts < 3) {
             // Skip degenerate faces.
-        } else if (holeIndex < numHoleFaces && holeFaces[holeIndex] == i) {
+        } else if (holeIndex < numHoleFaces && holeIndices[holeIndex] == i) {
             // Skip hole faces.
             ++holeIndex;
         } else {
