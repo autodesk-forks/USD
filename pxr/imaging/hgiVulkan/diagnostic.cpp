@@ -47,14 +47,24 @@ _VulkanDebugCallback(
     const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* userData)
 {
-    const char* type =
-        (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ?
-            "VULKAN_ERROR" : "VULKAN_MESSAGE";
+    using namespace std::literals::string_view_literals;
+    static constexpr auto ignoredMessages = {
+        "Validation Warning: [ Undefined-Value-ShaderOutputNotConsumed ]"sv,
+        "Validation Warning: [ Undefined-Value-ShaderInputNotProduced ]"sv,
+    };
+    if (HgiVulkanIsVerboseDebugEnabled() ||
+        std::find_if(ignoredMessages.begin(), ignoredMessages.end(),
+            [callbackData](std::string_view message) {
+        return std::string_view{callbackData->pMessage}.
+            rfind(message, 0) == 0;
+    }) != ignoredMessages.end()) {
+        return VK_FALSE;
+    }
 
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        TF_CODING_ERROR("%s: %s\n", type, callbackData->pMessage);
+        TF_CODING_ERROR("VULKAN_ERROR: %s\n", callbackData->pMessage);
     } else {
-        TF_WARN("%s: %s\n", type, callbackData->pMessage);
+        TF_WARN("VULKAN_MESSAGE: %s\n", callbackData->pMessage);
     }
 
     return VK_FALSE;

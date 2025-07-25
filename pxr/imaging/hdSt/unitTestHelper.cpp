@@ -712,4 +712,3 @@ HdSt_TextureTestDriver::_PrintCompileErrors()
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-
