@@ -96,6 +96,7 @@ pxr_library(hdSt
         nurbsApproximatingSceneIndexPlugin
         instancer
         interleavedMemoryManager
+        lineIndexComputation
         light      
         lightingShader
         material

@@ -581,7 +581,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
                 FS[fsIndex++] = _tokens->edgeIdTriangleSurfFS;
             }
             FS[fsIndex++] = _tokens->edgeIdTriangleParamFS;
-        } else {
+        } else if (isPrimTypeQuads) {
             if (polygonMode == HdPolygonModeLine) {
                 FS[fsIndex++] = _tokens->edgeIdQuadLineFS;
             } else {

@@ -63,7 +63,7 @@ Clip distances are simply ignored when unsupported.
 |----------------|------|
 | Smooth | Supported |
 | Points | Only basic point rendering supported, no custom point sizes |
-| Wireframe | Not supported due to the dependency to barycentric builtin to calculate the distance to the edge |
+| Wireframe | Only line rendering supported. This limits the rendering to 1px line width. Only support for non-refined mesh. The standard normal line rendering in HdSt has a dependency to barycentric builtin to calculate the distance to the edge, which is not supported in WebGPU |
 | Wireframe on Surface | Not supported due to the dependency to barycentric builtin to calculate the distance to the edge  |
 | Flat | Not supported due to missing primitive_id, used to access the normals in a storage buffer |
 

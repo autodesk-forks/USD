@@ -203,11 +203,11 @@ HgiWebGPUGraphicsPipeline::HgiWebGPUGraphicsPipeline(
         vertexBufferDescriptors.push_back(std::move(vib));
     }
 
-	shaderState.vertexState.bufferCount = vertexBufferDescriptors.size();
-	shaderState.vertexState.buffers = vertexBufferDescriptors.data();
+    shaderState.vertexState.bufferCount = vertexBufferDescriptors.size();
+    shaderState.vertexState.buffers = vertexBufferDescriptors.data();
 
-	pipelineDesc.primitive.topology = HgiWebGPUConversions::GetPrimitiveTopology(desc.primitiveType);
-    pipelineDesc.primitive.frontFace =HgiWebGPUConversions::GetWinding(desc.rasterizationState.winding);
+    pipelineDesc.primitive.topology = HgiWebGPUConversions::GetPrimitiveTopology(desc.primitiveType);
+    pipelineDesc.primitive.frontFace = HgiWebGPUConversions::GetWinding(desc.rasterizationState.winding);
     pipelineDesc.primitive.cullMode = HgiWebGPUConversions::GetCullMode(desc.rasterizationState.cullMode);
 
     wgpu::MultisampleState multisampleState;
