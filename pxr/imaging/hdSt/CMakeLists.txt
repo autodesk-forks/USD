@@ -588,6 +588,19 @@ pxr_build_test(testHdStSubResourceRegistry
     CPPFILES
         testenv/testHdStSubResourceRegistry.cpp
 )
+
+pxr_build_test(testHdStGeometricShader
+    LIBRARIES
+        gf
+        hdSt
+        hd
+        hgi
+        tf
+        vt
+    CPPFILES
+        testenv/testHdStGeometricShader.cpp
+)
+
 endif()
 
 if (X11_FOUND)
@@ -3119,6 +3132,14 @@ pxr_register_test(testHdStSubResourceRegistry
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStSubResourceRegistry"
     EXPECTED_RETURN_CODE 0
     TESTENV testHdStSubResourceRegistry
+    ENV
+        TF_DEBUG=HD_SAFE_MODE
+)
+
+pxr_register_test(testHdStGeometricShader
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStGeometricShader --offscreen"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testHdStGeometricShader
     ENV
         TF_DEBUG=HD_SAFE_MODE
 )
