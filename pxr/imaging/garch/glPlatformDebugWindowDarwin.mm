@@ -109,39 +109,78 @@ Garch_GetModifierKeys(NSUInteger flags)
     _callback->OnResize(r.size.width, r.size.height);
 }
 
--(void)mouseDown:(NSEvent*)event
+-(void)_handleMouseEvent:(NSEvent*)event
+                 handler:(void (^)(NSInteger button, CGFloat x, CGFloat y, int modifiers))callback
 {
     NSPoint p = [event locationInWindow];
+    NSInteger b = [event buttonNumber];
     NSRect r = [self frame];
     NSUInteger modflags = [event modifierFlags];
-    _callback->OnMousePress(GarchGLDebugWindow::MyButton1,
-                            p.x, r.size.height - 1 - p.y,
-                            Garch_GetModifierKeys(modflags));
-
+    callback(b, p.x, r.size.height - 1 - p.y, Garch_GetModifierKeys(modflags));
     [self setNeedsDisplay:YES];
+}
+
+-(void)mouseDown:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMousePress(button, x, y, modifiers);
+    }];
 }
 
 -(void)mouseUp:(NSEvent*)event
 {
-    NSPoint p = [event locationInWindow];
-    NSRect r = [self frame];
-    NSUInteger modflags = [event modifierFlags];
-    _callback->OnMouseRelease(GarchGLDebugWindow::MyButton1,
-                              p.x, r.size.height - 1 - p.y,
-                              Garch_GetModifierKeys(modflags));
-
-    [self setNeedsDisplay:YES];
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMouseRelease(button, x, y, modifiers);
+    }];
 }
 
 -(void)mouseDragged:(NSEvent*)event
 {
-    NSPoint p = [event locationInWindow];
-    NSRect r = [self frame];
-    NSUInteger modflags = [event modifierFlags];
-    _callback->OnMouseMove(p.x, r.size.height - 1 - p.y,
-                           Garch_GetModifierKeys(modflags));
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMouseMove(x, y, modifiers);
+    }];
+}
 
-    [self setNeedsDisplay:YES];
+-(void)rightMouseDown:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMousePress(button, x, y, modifiers);
+    }];
+}
+
+-(void)rightMouseUp:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMouseRelease(button, x, y, modifiers);
+    }];
+}
+
+-(void)rightMouseDragged:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMouseMove(x, y, modifiers);
+    }];
+}
+
+-(void)otherMouseDown:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMousePress(button, x, y, modifiers);
+    }];
+}
+
+-(void)otherMouseUp:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMouseRelease(button, x, y, modifiers);
+    }];
+}
+
+-(void)otherMouseDragged:(NSEvent*)event
+{
+    [self _handleMouseEvent:event handler:^(NSInteger button, CGFloat x, CGFloat y, int modifiers) {
+        _callback->OnMouseMove(x, y, modifiers);
+    }];
 }
 
 - (void)keyDown:(NSEvent *)event
