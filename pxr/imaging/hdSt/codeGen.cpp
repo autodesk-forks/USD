@@ -54,12 +54,7 @@
 #endif
 #endif
 
-#if defined(PXR_DIRECTX_SUPPORT_ENABLED)
-#include <opensubdiv/osd/hlslPatchShaderSource.h>
-#endif
-
 PXR_NAMESPACE_OPEN_SCOPE
-
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
@@ -1816,8 +1811,9 @@ _GetOSDCommonShaderSource(TfToken const &apiName)
               "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
               "float OsdTessLevel() { return GetTessLevel(); }\n"
               "\n";
-
+#if defined(PXR_OSD_WITH_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED)
         ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchDrawingShaderSource();
+#endif
     }
 #else // OPENSUBDIV_VERSION_NUMBER
     // Additional declarations are needed for older OpenSubdiv versions.
@@ -1882,14 +1878,7 @@ _GetOSDPatchBasisShaderSource(const TfToken &apiName)
                HgiTokens->WebGPU == apiName ) {
 #if !defined(PXR_DISABLE_OSD)
 
-#if defined(PXR_DIRECTX_SUPPORT_ENABLED)
-
-        if (dxHgiEnabled)
-            ss << OpenSubdiv::Osd::HLSLPatchShaderSource::GetPatchBasisShaderSource();
-        else
-            ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchBasisShaderSource();
-
-#elif (defined(PXR_OSD_WITH_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED))
+#if (defined(PXR_OSD_WITH_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED))
         ss << "#define OSD_PATCH_BASIS_GLSL\n";
         ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchBasisShaderSource();
 #endif

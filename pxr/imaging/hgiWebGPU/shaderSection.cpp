@@ -125,7 +125,7 @@ HgiWebGPUTextureShaderSection::_WriteTextureType(std::ostream &ss) const
         } else if (_textureType == HgiShaderTextureTypeArrayTexture) {
             TF_CODING_ERROR("Missing Implementation of HgiShaderTextureTypeArrayTexture");
         } else {
-            ss << "texture"
+            ss << _GetTextureTypePrefix(_format) << "texture"
                << _dimensions << "D";
         }
     }
@@ -180,12 +180,13 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         "float" :
         "vec" + std::to_string(coordDim);
 
+    const std::string formatPrefix = _GetTextureTypePrefix(_format);
     if (_arraySize > 0) {
         WriteType(ss);
         ss << " HgiGetSampler_" << _samplerSharedIdentifier;
         ss << "(uint index) {\n";
         ss << "    return ";
-        ss << "sampler" << _dimensions << "D(";
+        ss << formatPrefix << "sampler" << _dimensions << "D(";
         WriteIdentifier(ss);
         ss << ", ";
         _samplerShaderSectionDependency->WriteIdentifier(ss);
@@ -194,7 +195,7 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
     } else {
         ss << "#define HgiGetSampler_" << _samplerSharedIdentifier;
         ss << "() ";
-        ss << "sampler" << _dimensions << "D(";
+        ss << formatPrefix << "sampler" << _dimensions << "D(";
         WriteIdentifier(ss);
         ss << ", ";
         _samplerShaderSectionDependency->WriteIdentifier(ss);
@@ -235,7 +236,7 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         ss << "(" << arrayInput << floatCoordType << " uv) {\n";
         ss << "    ";
         _WriteSampledDataType(ss);
-        ss << " result = texture(sampler" << _dimensions << "D(";
+        ss << " result = texture(" << formatPrefix << "sampler" << _dimensions << "D(";
         WriteIdentifier(ss);
         ss << ", ";
         _samplerShaderSectionDependency->WriteIdentifier(ss);
@@ -249,7 +250,7 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         ss << _samplerSharedIdentifier;
         ss << "(" << ((_arraySize > 0) ? "uint index" : "")  << ") {\n";
         ss << "    ";
-        ss << "return textureSize(sampler" << _dimensions << "D(";
+        ss << "return textureSize(" << formatPrefix << "sampler" << _dimensions << "D(";
         WriteIdentifier(ss);
         ss << ", ";
         _samplerShaderSectionDependency->WriteIdentifier(ss);
@@ -263,7 +264,7 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         ss << _samplerSharedIdentifier;
         ss << "(" << arrayInput << floatCoordType << " coord, float lod) {\n";
         ss << "    ";
-        ss << "return textureLod(sampler" << _dimensions << "D(";
+        ss << "return textureLod(" << formatPrefix << "sampler" << _dimensions << "D(";
         WriteIdentifier(ss);
         ss << ", ";
         _samplerShaderSectionDependency->WriteIdentifier(ss);
@@ -279,7 +280,7 @@ HgiWebGPUTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
             ss << "(" << arrayInput << intCoordType << " coord) {\n";
             ss << "    ";
             _WriteSampledDataType(ss);
-            ss << " result = texelFetch(sampler" << _dimensions << "D(";
+            ss << " result = texelFetch(" << formatPrefix << "sampler" << _dimensions << "D(";
             WriteIdentifier(ss);
             ss << ", ";
             _samplerShaderSectionDependency->WriteIdentifier(ss);
