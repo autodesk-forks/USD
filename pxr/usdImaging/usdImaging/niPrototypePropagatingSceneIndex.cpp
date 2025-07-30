@@ -127,6 +127,8 @@ public:
     GarbageCollect(const TfToken &prototypeName,
                    const size_t prototypeRootOverlayDsHash)
     {
+        TRACE_FUNCTION();
+        
         auto it = _prototypeToBindingHashToSceneIndices.find(prototypeName);
         if (it == _prototypeToBindingHashToSceneIndices.end()) {
             return;
@@ -342,11 +344,20 @@ UsdImagingNiPrototypePropagatingSceneIndex(
         HdSceneIndexObserverPtr(&_mergingSceneIndexObserver));
 
     _Populate(sceneIndices.instanceAggregationSceneIndex);
+
+    if (!prototypeName.IsEmpty()) {
+        SetDisplayName(
+            TfStringPrintf(
+                "Propagating native prototype %s",
+                prototypeName.GetText()));
+    }
 }
 
 UsdImagingNiPrototypePropagatingSceneIndex::
 ~UsdImagingNiPrototypePropagatingSceneIndex()
 {
+    TRACE_FUNCTION()
+
     // We need to release all references we have to the scene indices...
     _instancersToMergingSceneIndexEntry.clear();
     _instanceAggregationSceneIndex = nullptr;

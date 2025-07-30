@@ -14,8 +14,6 @@
 #include "pxr/exec/ef/api.h"
 #include "pxr/exec/ef/inputValueBlock.h"
 
-#include "pxr/exec/vdf/request.h"
-
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -23,6 +21,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 class Ef_OutputValueCache;
 class EfPageCacheStorage;
 class VdfExecutorInterface;
+class VdfRequest;
 
 ///////////////////////////////////////////////////////////////////////////////
 ///

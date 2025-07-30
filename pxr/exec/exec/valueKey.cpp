@@ -11,9 +11,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 std::string
 ExecValueKey::GetDebugName() const
 {
-    std::string debugName = _provider.GetAsString();
+    // Diagnostics should not be entangled with uncompilation dependencies.
+    EsfJournal *journal = nullptr;
+    std::string debugName = _provider->GetPath(journal).GetAsString();
     debugName += " [";
-    debugName += _computation.GetString();
+    debugName += _computationName.GetString();
     debugName += ']';
     return debugName;
 }

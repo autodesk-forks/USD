@@ -79,6 +79,7 @@ struct Utf8NoEolf : PEGTL_NS::minus<Utf8, Eol> {};
 
 // keyword
 struct KeywordAdd : PXR_PEGTL_KEYWORD("add") {};
+struct KeywordAnimationBlock : PXR_PEGTL_KEYWORD("AnimationBlock") {};
 struct KeywordAppend : PXR_PEGTL_KEYWORD("append") {};
 struct KeywordBezier: PXR_PEGTL_KEYWORD("bezier") {};
 struct KeywordClass : PXR_PEGTL_KEYWORD("class") {};
@@ -136,6 +137,7 @@ struct KeywordVarying : PXR_PEGTL_KEYWORD("varying") {};
 
 struct Keywords : PEGTL_NS::sor<
 KeywordAdd,
+KeywordAnimationBlock,
 KeywordAppend,
 KeywordBezier,
 KeywordClass,
@@ -906,12 +908,13 @@ struct AttributeDeclaration : PEGTL_NS::seq<
     TokenSeparator,
     NamespacedName> {};
 
-// AttributeValue = None / TypedValue
+// AttributeValue = None / AnimationBlock / TypedValue
 // AttributeAssignment = Assignment AttributeValue
 struct AttributeAssignment : PEGTL_NS::seq<
     Assignment,
     PEGTL_NS::sor<
         KeywordNone,
+        KeywordAnimationBlock,
         TypedValue>> {};
 struct AttributeAssignmentOptional : PEGTL_NS::opt<
     AttributeAssignment> {};

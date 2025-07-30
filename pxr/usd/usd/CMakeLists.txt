@@ -16,10 +16,7 @@ pxr_library(usd
         ts
         vt
         work
-        ${TBB_tbb_LIBRARY}
-
-    INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
+        TBB::tbb
 
     PUBLIC_CLASSES
         attribute
@@ -27,7 +24,6 @@ pxr_library(usd
         collectionMembershipQuery
         collectionPredicateLibrary
         common
-        crateInfo
         debugCodes
         editContext
         editTarget
@@ -67,7 +63,6 @@ pxr_library(usd
         usdcFileFormat
         usdzFileFormat
         variantSets
-        zipFile
 
     JS_CPPFILES
         wrapAttributeJs.cpp
@@ -84,14 +79,10 @@ pxr_library(usd
         clipCache
         clipSet
         clipSetDefinition
-        crateData
-        crateFile
         instanceCache
         instanceKey
-        integerCoding
         interpolators
         primTypeInfoCache
-        usdzResolver
         valueUtils
 
     JS_PUBLIC_HEADERS
@@ -99,10 +90,10 @@ pxr_library(usd
 
     PUBLIC_HEADERS
         api.h
+        crateInfo.h
+        zipFile.h
 
     PRIVATE_HEADERS
-        crateDataTypes.h
-        crateValueInliners.h
         listEditImpl.h
         wrapUtils.h
         testenv/TestUsdResolverChangedResolver.h
@@ -292,7 +283,6 @@ pxr_test_scripts(
     testenv/testUsdVariantEditing.py
     testenv/testUsdVariantFallbacks.py
     testenv/testUsdVariants.py
-    testenv/testUsdZipFile.py
 )
 
 pxr_build_test_shared_lib(TestUsdProceduralExternalAssetsFileFormatPlugin
@@ -351,13 +341,6 @@ pxr_build_test(testUsdHardToReach
         usd
     CPPFILES
         testenv/testUsdHardToReach.cpp
-)
-
-pxr_build_test(testUsdIntegerCoding
-    LIBRARIES
-        usd
-    CPPFILES
-        testenv/testUsdIntegerCoding.cpp
 )
 
 pxr_build_test(testUsdMetadataCpp
@@ -434,6 +417,7 @@ pxr_build_test(testUsdThreadedAuthoring
         work
         sdf
         usd
+        TBB::tbb
     CPPFILES
         testenv/testUsdThreadedAuthoring.cpp
 )
@@ -482,26 +466,6 @@ pxr_build_test(testUsdTimeValueAuthoringCpp
         testenv/testUsdTimeValueAuthoring.cpp
 )
 
-pxr_build_test(testUsdUsdzResolver
-    LIBRARIES
-        ar
-        arch
-        tf
-        usd
-    CPPFILES
-        testenv/testUsdUsdzResolver.cpp
-)
-
-pxr_build_test(testUsdZipFile_CPP
-    LIBRARIES
-        ar
-        arch
-        tf
-        usd
-    CPPFILES
-        testenv/testUsdZipFile.cpp
-)
-
 pxr_build_test(testUsdUsdzBugGHSA01
     LIBRARIES
         ar
@@ -511,6 +475,17 @@ pxr_build_test(testUsdUsdzBugGHSA01
         usd
     CPPFILES
         testenv/testUsdUsdzBugGHSA01.cpp
+)
+
+pxr_build_test(testUsdUsdcBugGHSA02
+    LIBRARIES
+        ar
+        arch
+        tf
+        sdf
+        usd
+    CPPFILES
+    testenv/testUsdUsdcBugGHSA02.cpp
 )
 
 pxr_build_test(testUsdSplinesCpp
@@ -785,23 +760,13 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
-    SRC testenv/testUsdUsdzResolver
-    DEST testUsdUsdzResolver
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdZipFile.testenv
-    DEST testUsdZipFile
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdZipFile.testenv
-    DEST testUsdZipFile_CPP
-)
-
-pxr_install_test_dir(
     SRC testenv/testUsdUsdzBugGHSA01.testenv
     DEST testUsdUsdzBugGHSA01
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdUsdcBugGHSA02.testenv
+    DEST testUsdUsdcBugGHSA02
 )
 
 pxr_register_test(testUsdAppliedAPISchemas
@@ -957,11 +922,6 @@ pxr_register_test(testUsdInstancing
 pxr_register_test(testUsdInstanceProxy
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdInstanceProxy"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdIntegerCoding
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdIntegerCoding"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1400,22 +1360,6 @@ pxr_register_test(testUsdUsdzFileFormat_pread
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testUsdZipFile
-    PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdZipFile"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdZipFile_CPP
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdZipFile_CPP"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdUsdzResolver
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzResolver"
-    EXPECTED_RETURN_CODE 0
-)
-
 pxr_register_test(testUsdOpaqueAttributes
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdOpaqueAttributes"
@@ -1426,3 +1370,9 @@ pxr_register_test(testUsdUsdzBugGHSA01
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzBugGHSA01"
     EXPECTED_RETURN_CODE 0
 )
+
+pxr_register_test(testUsdUsdcBugGHSA02
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdcBugGHSA02"
+    EXPECTED_RETURN_CODE 0
+)
+  

@@ -748,18 +748,15 @@ _NodeGraphBuilder::Build(ShaderNamesByOutputName* outputs)
         return UsdPrim();
     }
 
-    const bool isInsideNodeGraph = _mtlxContainer->isA<mx::NodeGraph>();
+    // Create a USD nodegraph.
+    auto usdNodeGraph = UsdShadeNodeGraph::Define(_usdStage, _usdPath);
+    if (!usdNodeGraph) {
+        return UsdPrim();
+    }
+    UsdPrim usdPrim = usdNodeGraph.GetPrim();
 
-    // Create the USD nodegraph.
-    UsdPrim usdPrim;
-    if (isInsideNodeGraph) {
-        // Create the nodegraph.
-        auto usdNodeGraph = UsdShadeNodeGraph::Define(_usdStage, _usdPath);
-        if (!usdNodeGraph) {
-            return UsdPrim();
-        }
-        usdPrim = usdNodeGraph.GetPrim();
-
+    const bool isExplicitNodeGraph = _mtlxContainer->isA<mx::NodeGraph>();
+    if (isExplicitNodeGraph) {
         _SetCoreUIAttributes(usdPrim, _mtlxContainer);
 
         // Create the interface inputs for the NodeDef.
@@ -776,9 +773,6 @@ _NodeGraphBuilder::Build(ShaderNamesByOutputName* outputs)
             _AddInput(in, usdNodeGraph.ConnectableAPI(), /* isInterface */ true);
         }
     }
-    else {
-        usdPrim = _usdStage->DefinePrim(_usdPath);
-    }
 
     // Build the graph of nodes.
     for (mx::NodePtr& mtlxNode : _mtlxContainer->getChildrenOfType<mx::Node>()) {
@@ -791,19 +785,7 @@ _NodeGraphBuilder::Build(ShaderNamesByOutputName* outputs)
         _AddNode(mtlxNode, usdPrim);
     }
     _ConnectNodes();
-
-    if (isInsideNodeGraph) {
-        _ConnectTerminals(_mtlxContainer, UsdShadeConnectableAPI(usdPrim));
-    }
-    else if (outputs) {
-        // Collect the outputs on the existing shader nodes.
-        for (mx::OutputPtr& mtlxOutput :
-                _mtlxContainer->getChildrenOfType<mx::Output>()) {
-            if (auto nodeName = _Attr(mtlxOutput, names.nodename)) {
-                (*outputs)[_Name(mtlxOutput)] = TfToken(nodeName);
-            }
-        }
-    }
+    _ConnectTerminals(_mtlxContainer, UsdShadeConnectableAPI(usdPrim));
 
     return usdPrim;
 }

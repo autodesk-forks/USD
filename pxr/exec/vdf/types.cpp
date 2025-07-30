@@ -10,13 +10,15 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_ENV_SETTING(PRESTO_MULTITHREADED_MUNGING, true,
-    "Enables single-frame parallel evaluation.");
+TF_DEFINE_ENV_SETTING(VDF_ENABLE_PARALLEL_EVALUATION_ENGINE, true,
+    "Enables parallel evaluation at the level of a single round of exec "
+    "evaluation. This is distinct from other forms of evaluation parallelism "
+    "where results for different times may be computed in parallel.")
 
 bool
 VdfIsParallelEvaluationEnabled() 
 {
-    return TfGetEnvSetting(PRESTO_MULTITHREADED_MUNGING);
+    return TfGetEnvSetting(VDF_ENABLE_PARALLEL_EVALUATION_ENGINE);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

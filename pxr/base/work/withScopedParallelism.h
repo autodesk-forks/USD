@@ -12,9 +12,9 @@
 #include "pxr/pxr.h"
 #include "pxr/base/work/api.h"
 #include "pxr/base/work/dispatcher.h"
+#include "pxr/base/work/workTBB/impl.h"
 #include "pxr/base/tf/pyLock.h"
 
-#include <tbb/task_arena.h>
 
 #include <utility>
 
@@ -101,11 +101,9 @@ WorkWithScopedParallelism(Fn &&fn, bool dropPythonGIL=true)
 {
     if (dropPythonGIL) {
         TF_PY_ALLOW_THREADS_IN_SCOPE();
-        return tbb::this_task_arena::isolate(std::forward<Fn>(fn));
+        return WorkImpl_WithScopedParallelism(std::forward<Fn>(fn));
     }
-    else {
-        return tbb::this_task_arena::isolate(std::forward<Fn>(fn));
-    }
+    return WorkImpl_WithScopedParallelism(std::forward<Fn>(fn));
 }
 
 /// Similar to WorkWithScopedParallelism(), but pass a WorkDispatcher instance

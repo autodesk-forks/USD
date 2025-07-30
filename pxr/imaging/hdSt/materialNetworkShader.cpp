@@ -196,7 +196,7 @@ HdSt_MaterialNetworkShader::_ComputeTextureSourceHash() const
     // easier for ourselves by having this function check and return 0 if
     // using bindless textures.
     const bool useBindlessHandles = _namedTextureHandles.empty() ? false :
-        _namedTextureHandles[0].handle->UseBindlessHandles();
+        _namedTextureHandles[0].handles[0]->UseBindlessHandles();
 
     if (useBindlessHandles) {
         return 0;

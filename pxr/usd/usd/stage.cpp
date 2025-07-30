@@ -29,7 +29,6 @@
 #include "pxr/usd/usd/stageCache.h"
 #include "pxr/usd/usd/stageCacheContext.h"
 #include "pxr/usd/usd/tokens.h"
-#include "pxr/usd/usd/usdFileFormat.h"
 #include "pxr/usd/usd/valueUtils.h"
 
 #include "pxr/usd/pcp/changes.h"
@@ -47,6 +46,7 @@
 #include "pxr/usd/sdf/fileFormat.h"
 #include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdf/types.h" 
+#include "pxr/usd/sdf/usdFileFormat.h"
 #include "pxr/usd/sdf/variableExpression.h"
 
 #include "pxr/base/trace/trace.h"
@@ -696,7 +696,7 @@ UsdStage::UsdStage(const SdfLayerRefPtr& rootLayer,
     , _editTargetIsLocalLayer(true)
     , _cache(new PcpCache(PcpLayerStackIdentifier(
                               _rootLayer, _sessionLayer, pathResolverContext),
-                          UsdUsdFileFormatTokens->Target,
+                          SdfUsdFileFormatTokens->Target,
                           /*usdMode=*/true))
     , _clipCache(new Usd_ClipCache)
     , _instanceCache(new Usd_InstanceCache)
@@ -1077,7 +1077,7 @@ _OpenLayer(
 
     SdfLayer::FileFormatArguments args;
     args[SdfFileFormatTokens->TargetArg] =
-        UsdUsdFileFormatTokens->Target.GetString();
+        SdfUsdFileFormatTokens->Target.GetString();
 
     return SdfLayer::FindOrOpen(filePath, args);
 }
@@ -2305,17 +2305,12 @@ UsdStage::GetObjectAtPath(const SdfPath &path) const
         return UsdObject();
     }
 
-    const bool isPrimPath = path.IsPrimPath();
-    const bool isPropPath = !isPrimPath && path.IsPropertyPath();
-    if (!isPrimPath && !isPropPath) {
-        return UsdObject();
+    if (path.IsAbsoluteRootOrPrimPath()) {
+        return GetPrimAtPath(path);
     }
 
-    // A valid prim must be found to return either a prim or prop
-    if (isPrimPath) {
-        return GetPrimAtPath(path);
-    } else if (isPropPath) {
-        if (auto prim = GetPrimAtPath(path.GetPrimPath())) {
+    if (path.IsPrimPropertyPath()) {
+        if (const auto prim = GetPrimAtPath(path.GetPrimPath())) {
             return prim.GetProperty(path.GetNameToken());
         }
     }
@@ -3671,7 +3666,7 @@ UsdStage::IsSupportedFile(const std::string& filePath)
 
     // if the extension is valid we'll get a non null FileFormatPtr
     return SdfFileFormat::FindByExtension(fileExtension, 
-                                          UsdUsdFileFormatTokens->Target);
+                                          SdfUsdFileFormatTokens->Target);
 }
 
 namespace {
@@ -4689,6 +4684,8 @@ bool UsdStage::_ProcessChangeLists(
 bool
 UsdStage::_ProcessPendingChanges()
 {
+    TRACE_FUNCTION();
+
     if (!TF_VERIFY(_pendingChanges)) {
         return false;
     }
@@ -4840,6 +4837,8 @@ UsdStage::_ProcessPendingChanges()
     // determine the nature of the resyncs they receive.
     for (const auto &namespaceChange : 
             _pendingChanges->expectedNamespaceEditChanges) {
+        TRACE_SCOPE("Process expected namespace edit changes");
+
         const SdfPath &oldPath = namespaceChange.oldPath;
         const SdfPath &newPath = namespaceChange.newPath;
 
@@ -6471,9 +6470,10 @@ protected:
 
         // Try to read value from scene description.
         if (std::forward<GetValueFn>(getValue)()) {
-            // If this is a value block, set _done to stop composing, and
-            // swap back the composed value so far.
-            if (Usd_ValueContainsBlock(_value)) {
+            // If this is a value block or an animation block, set _done to 
+            // stop composing, and swap back the composed value so far.
+            if (Usd_ValueContainsBlock<SdfValueBlock>(_value) || 
+                    Usd_ValueContainsBlock<SdfAnimationBlock>(_value)) {
                 if (array) {
                     _UncheckedSwap(_value, tmpExprs);
                 }
@@ -7055,8 +7055,10 @@ UsdStage::_SetValueImpl(
                         attr.GetPath().GetText(), time.GetValue());
         return false;
     }
-    // if we are setting a value block, we don't want type checking
-    if (!Usd_ValueContainsBlock(&newValue)) {
+    // if we are setting a value block or an animation block, we don't want 
+    // type checking
+    if (! (Usd_ValueContainsBlock<SdfValueBlock>(&newValue) ||
+           Usd_ValueContainsBlock<SdfAnimationBlock>(&newValue))) {
         // Find the attribute's value type.
         const TfType valType = _GetAttributeValueType(attr);
         if (!valType) {
@@ -8160,8 +8162,19 @@ public:
                 attr, SdfFieldKeys->Default, TfToken(), 
                 /*useFallbacks=*/true, &composer);
 
-            return valueFound && 
-                (!Usd_ClearValueIfBlocked<SdfAbstractDataValue>(&out));
+            if (!out.isAnimationBlock) {
+                // We can only stop here if the value is not an animation block,
+                // as if the strongest value is an animation block, we must walk
+                // the node graph to get the next stronger non-animation block
+                // value.
+                return valueFound && 
+                    (!Usd_ClearValueIfBlocked<
+                        SdfValueBlock, SdfAbstractDataValue>(&out));
+            }
+            // Clear the animation block and continue walking to find next
+            // stronger non-animation block default.
+            Usd_ClearValueIfBlocked<
+                SdfAnimationBlock, SdfAbstractDataValue>(&out);
         }
 
         // Otherwise we have numeric time and need to get the value with
@@ -8326,7 +8339,17 @@ struct Usd_AttrGetUntypedValueHelper {
             bool valueFound = stage._GetMetadata(
                 attr, SdfFieldKeys->Default, TfToken(), 
                 /*useFallbacks=*/true, result);
-            return valueFound && (!Usd_ClearValueIfBlocked(result));
+            if (!result->IsHolding<SdfAnimationBlock>()) {
+                // We can only stop here if the value is not an animation block,
+                // as if the strongest value is an animation block, we must walk
+                // the node graph to get the next stronger non-animation block
+                // value.
+                return valueFound && 
+                    (!Usd_ClearValueIfBlocked<SdfValueBlock>(result));
+            }
+            // Clear the animation block and continue walking to find next
+            // stronger non-animation block default.
+            Usd_ClearValueIfBlocked<SdfAnimationBlock>(result);
         }
 
         Usd_UntypedInterpolator interpolator(attr, result);
@@ -8555,6 +8578,16 @@ public:
             lower);
 
         if (time.IsPreTime() && lower == upper) {
+
+            if (clipSet->QueryPreTimeSampleWithJumpDiscontinuity(
+                    specPath, UsdTimeCode::PreTime(lower), interpolator, 
+                    result)) {
+                // If we have a jump discontinuity at this time, we query the 
+                // appropriate time sample from the jump discontinuity and we
+                // return the result.
+                return true;
+            }
+            
             // We should update our lower and upper to represent the previous
             // time sample segment, upper is already set to lower.
             if (!clipSet->GetPreviousTimeSampleForPath(
@@ -8590,6 +8623,14 @@ struct UsdStage::_ExtraResolveInfo
     // If the resolve info source is UsdResolveInfoSourceValueClips this will 
     // be the Usd_ClipSet containing values for the attribute.
     Usd_ClipSetRefPtr clipSet;
+
+    // If we found a default value of animation block as the strongest value
+    // source, we need to keep walking the pcp node graph, until we have found a 
+    // non-animation block default value and ignoring any animation via spline 
+    // or time samples in weaker layer. processingAnimationBlock helps us keep
+    // track of this strongest animation block value source, to ignore any
+    // spline / time sample value sources in the weaker layers.
+    bool processingAnimationBlock = false;
 };
 
 Usd_AssetPathContext
@@ -8611,8 +8652,22 @@ UsdStage::_GetAssetPathContext(UsdTimeCode time, const UsdAttribute &attr) const
     }
     else if (resolveInfo._source == UsdResolveInfoSourceValueClips) {
         const Usd_ClipSetRefPtr& clipSet = extraResolveInfo.clipSet;
-        const Usd_ClipRefPtr& activeClip = 
-            clipSet->GetActiveClip(time.GetValue());
+
+        // Get the active clip assuming no jump discontinuity or time not at any
+        // clip boundary.
+        Usd_ClipRefPtr activeClip = clipSet->GetActiveClip(time, false);
+
+        // If we are querying for a pre-time, and land on a time sample, and the
+        // active clip we retrieved has it start time same as the time, that
+        // means we are on a clip boundary, and we should use the previous
+        // clip as the active clip. This will automatically also cover jump 
+        // discontinuity scenarios.
+        if (time.IsPreTime() && 
+                extraResolveInfo.lowerSample == extraResolveInfo.upperSample &&
+                activeClip->startTime == time.GetValue()) {
+            activeClip = clipSet->GetPreviousClip(activeClip);
+        }
+
         resultSpecPath =
             resolveInfo._primPathInLayerStack.AppendProperty(attr.GetName());
 
@@ -8688,7 +8743,7 @@ struct UsdStage::_PropertyStackResolver {
     ProcessLayerAtTime(const SdfLayerRefPtr &layer,
                        const SdfPath& specPath,
                        const PcpNodeRef& node,
-                       const double *) 
+                       const UsdTimeCode *) 
     {
         // Processing layers for the property stack does not depend on time.
         return ProcessLayerAtDefault(layer, specPath, node);
@@ -8716,17 +8771,34 @@ struct UsdStage::_PropertyStackResolver {
     ProcessClips(const Usd_ClipSetRefPtr& clipSet,
                  const SdfPath& specPath,
                  const PcpNodeRef& node,
-                 const double* time) 
+                 const UsdTimeCode* time) 
     {
         // Look through clips to see if they have a time sample for
         // this attribute. If a time is given, examine just the clips
         // that are active at that time.
         double lowerSample = 0.0, upperSample = 0.0;
-
+        std::optional<double> localTime;
+        if (time) {
+            localTime = time->GetValue();
+        }
         if (_HasTimeSamples(
-                clipSet, specPath, time, &lowerSample, &upperSample)) {
+                clipSet, specPath, 
+                localTime ? std::addressof(*localTime) : nullptr, 
+                &lowerSample, &upperSample)) {
 
-            const Usd_ClipRefPtr& activeClip = clipSet->GetActiveClip(*time);
+            // Get the active clip assuming no jump discontinuity or time not at
+            // any clip boundary.
+            Usd_ClipRefPtr activeClip = clipSet->GetActiveClip(*time, false);
+
+            // If we are querying for a pre-time, and land on a time sample, and
+            // the active clip we retrieved has it start time same as the time,
+            // that means we are on a clip boundary, and we should use the
+            // previous clip as the active clip. This will automatically also
+            // cover jump discontinuity scenarios.
+            if (time->IsPreTime() && lowerSample == upperSample &&
+                    activeClip->startTime == time->GetValue()) {
+                activeClip = clipSet->GetPreviousClip(activeClip);
+            }
 
             // If the active clip has authored time samples, the value will
             // come from it (or at least be interpolated from it) so use the
@@ -8773,9 +8845,8 @@ UsdStage::_GetPropertyStack(const UsdProperty &prop,
     if (time.IsDefault()) {
         _GetResolvedValueAtDefaultImpl(prop, &resolver, makeUsdResolverFn);
     } else {
-        double localTime = time.GetValue();
         _GetResolvedValueAtTimeImpl(
-            prop, &resolver, &localTime, makeUsdResolverFn);
+            prop, &resolver, &time, makeUsdResolverFn);
     }
     return resolver.propertyStack; 
 }
@@ -8792,9 +8863,8 @@ UsdStage::_GetPropertyStackWithLayerOffsets(
     if (time.IsDefault()) {
         _GetResolvedValueAtDefaultImpl(prop, &resolver, makeUsdResolverFn);
     } else {
-        double localTime = time.GetValue();
         _GetResolvedValueAtTimeImpl(
-            prop, &resolver, &localTime, makeUsdResolverFn);
+            prop, &resolver, &time, makeUsdResolverFn);
     }
     return resolver.propertyStackWithLayerOffsets; 
 }
@@ -8870,21 +8940,23 @@ struct UsdStage::_ResolveInfoResolver
     ProcessLayerAtTime(const SdfLayerRefPtr& layer,
                        const SdfPath& specPath,
                        const PcpNodeRef& node,
-                       const double *time) 
+                       const UsdTimeCode *time) 
     {
         const SdfLayerOffset layerToStageOffset =
             _GetLayerToStageOffset(node, layer);
         std::optional<double> localTime;
         if (time) {
-            localTime = layerToStageOffset.GetInverse() * (*time);
+            localTime = layerToStageOffset.GetInverse() * time->GetValue();
         }
 
-        if (_HasTimeSamples(layer, specPath,
+        if (!_extraInfo->processingAnimationBlock &&
+            _HasTimeSamples(layer, specPath,
                             localTime ? std::addressof(*localTime) : nullptr,
                             &_extraInfo->lowerSample, 
                             &_extraInfo->upperSample)) {
             _resolveInfo->_source = UsdResolveInfoSourceTimeSamples;
-        } else if (layer->HasField(specPath, SdfFieldKeys->Spline)) {
+        } else if (!_extraInfo->processingAnimationBlock &&
+                layer->HasField(specPath, SdfFieldKeys->Spline)) {
             _resolveInfo->_source = UsdResolveInfoSourceSpline;
             // In order to optimize read only / playback workflow, we save the
             // spline in the resolve info. Do note that with every resync /
@@ -8903,6 +8975,17 @@ struct UsdStage::_ResolveInfoResolver
             else if (defValue == Usd_DefaultValueResult::Blocked) {
                 _resolveInfo->_valueIsBlocked = true;
                 return ProcessFallback();
+            }
+            else if (defValue == Usd_DefaultValueResult::BlockedAnimation) {
+                // We need to keep on walking back and only consider default
+                // values, since we found an AnimationBlock, which blocks any
+                // spline or time samples value and will only allow default
+                // values on the attribute to shine through.
+                // Note that since AnimationBlock is itself a default, we keep
+                // on walking up the node graph until a non-animation block
+                // default is found.
+                _extraInfo->processingAnimationBlock = true;
+                return false;
             }
         }
 
@@ -8939,6 +9022,11 @@ struct UsdStage::_ResolveInfoResolver
             _resolveInfo->_valueIsBlocked = true;
             return ProcessFallback();
         }
+        else if (defValue == Usd_DefaultValueResult::BlockedAnimation) {
+            // We need to keep on walking back and only consider non animation
+            // block default values.
+            return false;
+        }
 
         return false;
     }
@@ -8947,10 +9035,15 @@ struct UsdStage::_ResolveInfoResolver
     ProcessClips(const Usd_ClipSetRefPtr& clipSet,
                  const SdfPath& specPath,
                  const PcpNodeRef& node,
-                 const double* time)
+                 const UsdTimeCode* time)
     {
+        std::optional<double> localTime;
+        if (time) {
+            localTime = time->GetValue();
+        }
         if (!_HasTimeSamples(
-                clipSet, specPath, time,
+                clipSet, specPath, 
+                localTime ? std::addressof(*localTime) : nullptr,
                 &_extraInfo->lowerSample, &_extraInfo->upperSample)) {
             return false;
         }
@@ -9021,9 +9114,8 @@ UsdStage::_GetResolveInfoImpl(
     } else if (time->IsDefault()) {
         _GetResolvedValueAtDefaultImpl(attr, &resolver, makeUsdResolverFn);
     } else {
-        double localTime = time->GetValue();
         _GetResolvedValueAtTimeImpl(
-            attr, &resolver, &localTime, makeUsdResolverFn);
+            attr, &resolver, time, makeUsdResolverFn);
     }
     
     if (TfDebug::IsEnabled(USD_VALIDATE_VARIABILITY) &&
@@ -9077,7 +9169,7 @@ _GetResolvedValueAtTimeNoClipsImpl(
     Usd_Resolver *res,
     const TfToken &propName,
     Resolver *resolver,
-    const double *localTime)
+    const UsdTimeCode *localTime)
 {
     SdfPath specPath;
     for (bool isNewNode = true; res->IsValid(); isNewNode = res->NextLayer()) {
@@ -9099,7 +9191,7 @@ _GetResolvedValueAtTimeWithClipsImpl(
     Usd_Resolver *res,
     const TfToken &propName,
     Resolver *resolver,
-    const double *localTime,
+    const UsdTimeCode *localTime,
     const std::vector<Usd_ClipSetRefPtr> &clipsAffectingPrim)
 {
     bool nodeHasSpecs;
@@ -9160,7 +9252,7 @@ void
 UsdStage::_GetResolvedValueAtTimeImpl(
     const UsdProperty &prop,
     Resolver *resolver,
-    const double *localTime,
+    const UsdTimeCode *localTime,
     const MakeUsdResolverFn &makeUsdResolverFn) const
 {
     auto primHandle = prop._Prim();

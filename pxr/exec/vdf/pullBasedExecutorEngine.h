@@ -17,8 +17,9 @@
 #include "pxr/exec/vdf/evaluationState.h"
 #include "pxr/exec/vdf/executorBufferData.h"
 #include "pxr/exec/vdf/executionStats.h"
-#include "pxr/exec/vdf/fallbackValueRegistry.h"
+#include "pxr/exec/vdf/executionTypeRegistry.h"
 #include "pxr/exec/vdf/mask.h"
+#include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/networkUtil.h"
 #include "pxr/exec/vdf/node.h"
 #include "pxr/exec/vdf/output.h"
@@ -1045,11 +1046,11 @@ VdfPullBasedExecutorEngine<DataManagerType>::_ComputeNode(
             //     to package into the output.  This can happen anywhere
             //     in the network, but for now, I only added a workaround
             //     in the EfCopyToPoolNode.
-            Vdf_FallbackValueRegistry::GetInstance().FillVector(
+            VdfExecutionTypeRegistry::FillVector(
                 output.GetSpec().GetType(),
+                requestMask.GetSize(),
                 _dataManager->GetOrCreateOutputValueForWriting(
-                    output, dataHandle),
-                requestMask.GetSize());
+                    output, dataHandle));
         }
 
         // If the node has been interrupted, make sure to reset the computed

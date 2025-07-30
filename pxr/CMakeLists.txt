@@ -5,7 +5,12 @@ add_subdirectory(base)
 add_subdirectory(usd)
 
 if (${PXR_BUILD_EXEC})
-    add_subdirectory(exec)
+    # XXX: OpenExec currently does not support oneTBB.
+    if (PXR_FIND_TBB_IN_CONFIG)
+        message(STATUS "Skipping OpenExec because it currently does not support oneTBB")
+    else()
+        add_subdirectory(exec)
+    endif()
 endif()
 
 if (${PXR_BUILD_USD_VALIDATION})

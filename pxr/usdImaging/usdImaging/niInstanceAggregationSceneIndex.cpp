@@ -922,6 +922,9 @@ public:
     PrimsRenamed(const HdSceneIndexBase &sender,
                  const RenamedPrimEntries &entries) override;
 
+    const HdSceneIndexBaseRefPtr &GetInputScene() const {
+        return _inputScene;
+    }
 
 private:
     using _Map0 = std::map<TfToken, std::shared_ptr<SdfPathSet>>;
@@ -1277,6 +1280,9 @@ _InstanceObserver::_AddInstance(const SdfPath &primPath,
     const SdfPath instancerPath =
         info.GetInstancerPath();
 
+    // Update this map prior to sending notification below.
+    _instanceToInfo[primPath] = info;
+
     std::shared_ptr<SdfPathSet> &instances =
         prototypeNameToInstances[info.prototypeName];
     if (instances) {
@@ -1285,10 +1291,16 @@ _InstanceObserver::_AddInstance(const SdfPath &primPath,
                 HdInstancerTopologySchemaTokens->instanceIndices),
             HdPrimvarsSchema::GetDefaultLocator()};
 
+        // Update instances list prior to sending notification.
+        instances->insert(primPath);
+
         _retainedSceneIndex->DirtyPrims(
             { { instancerPath, locators } });
     } else {
         instances = std::make_shared<SdfPathSet>();
+
+        // Update instances list prior to sending notification.
+        instances->insert(primPath);
 
         _retainedSceneIndex->AddPrims(
             { // Add propagated prototype base prim
@@ -1305,10 +1317,6 @@ _InstanceObserver::_AddInstance(const SdfPath &primPath,
                     instances,
                     _forNativePrototype) } });
     }
-
-    instances->insert(primPath);
-
-    _instanceToInfo[primPath] = info;
 
     // Add (lazy) instance data source to instance.
     _retainedSceneIndex->AddPrims(
@@ -1651,6 +1659,12 @@ UsdImaging_NiInstanceAggregationSceneIndex::
 
 std::vector<HdSceneIndexBaseRefPtr>
 UsdImaging_NiInstanceAggregationSceneIndex::GetInputScenes() const
+{
+    return { _instanceObserver->GetInputScene() };
+}
+
+std::vector<HdSceneIndexBaseRefPtr>
+UsdImaging_NiInstanceAggregationSceneIndex::GetEncapsulatedScenes() const
 {
     return { _instanceObserver->GetRetainedSceneIndex() };
 }

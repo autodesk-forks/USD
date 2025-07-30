@@ -27,9 +27,9 @@
 #include "pxr/usd/sdf/relationshipSpec.h"
 #include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdf/specType.h"
-#include "pxr/usd/sdf/textFileFormat.h"
-#include "pxr/usd/sdf/types.h"
 #include "pxr/usd/sdf/subLayerListEditor.h"
+#include "pxr/usd/sdf/types.h"
+#include "pxr/usd/sdf/usdaFileFormat.h"
 #include "pxr/usd/sdf/variantSetSpec.h"
 #include "pxr/usd/sdf/variantSpec.h"
 
@@ -335,7 +335,7 @@ SdfLayer::CreateAnonymous(
     }
 
     if (!fileFormat) {
-        fileFormat = SdfFileFormat::FindById(SdfTextFileFormatTokens->Id);
+        fileFormat = SdfFileFormat::FindById(SdfUsdaFileFormatTokens->Id);
     }
 
     if (!fileFormat) {
@@ -1289,6 +1289,14 @@ SdfLayer::SetTimeSample(const SdfPath& path, double time,
         return;
     }
 
+    if (value.IsHolding<SdfAnimationBlock>()) {
+        TF_CODING_ERROR(
+            "Animation block cannot be authored on a time sample."
+            "SdfAnimationBlock can only be authored as the default value to "
+            "block animation from weaker layer.");
+        return;
+    }
+
     // circumvent type checking if setting a block.
     if (value.IsHolding<SdfValueBlock>()) {
         _PrimSetTimeSample(path, time, value);
@@ -1323,10 +1331,18 @@ SdfLayer::SetTimeSample(const SdfPath& path, double time,
 // cache the value of typeid(SdfValueBlock)
 namespace 
 {
-    const TfType& _GetSdfValueBlockType() 
+    const std::type_info& _GetSdfValueBlockTypeid() 
     {
-        static const TfType blockType = TfType::Find<SdfValueBlock>();
-        return blockType;
+        static const std::type_info& typeidSdfValueBlock = 
+            typeid(SdfValueBlock);
+        return typeidSdfValueBlock;
+    }
+
+    const std::type_info& _GetSdfAnimationBlockTypeid()
+    {
+        static const std::type_info& typeidSdfAnimationBlock = 
+            typeid(SdfAnimationBlock);
+        return typeidSdfAnimationBlock;
     }
 }
 
@@ -1343,7 +1359,15 @@ SdfLayer::SetTimeSample(const SdfPath& path, double time,
         return;
     }
 
-    if (value.valueType == _GetSdfValueBlockType().GetTypeid()) {
+    if (TfSafeTypeCompare(value.valueType, _GetSdfAnimationBlockTypeid())) {
+        TF_CODING_ERROR(
+            "Animation block cannot be authored on a time sample."
+            "SdfAnimationBlock can only be authored as the default value to "
+            "block animation from weaker layer.");
+        return;
+    }
+
+    if (TfSafeTypeCompare(value.valueType, _GetSdfValueBlockTypeid())) {
         _PrimSetTimeSample(path, time, value);
         return;
     }
@@ -2635,6 +2659,7 @@ void
 SdfLayer::UpdateAssetInfo()
 {
     TRACE_FUNCTION();
+    TF_DESCRIBE_SCOPE("Updating asset info for layer: " + GetIdentifier());
     TF_DEBUG(SDF_LAYER).Msg("SdfLayer::UpdateAssetInfo('%s')\n",
                             GetIdentifier().c_str());
 

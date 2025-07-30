@@ -28,7 +28,7 @@ class Vdf_VectorAccessor
 {
 public:
     static_assert(
-        !Vdf_IsBoxedContainer<T>::value,
+        !Vdf_IsBoxedContainer<T>,
         "Vdf_VectorAccessor does not provide access to boxed containers");
 
     /// Default constructor.

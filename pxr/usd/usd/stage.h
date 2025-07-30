@@ -2170,7 +2170,7 @@ private:
     void _GetResolvedValueAtTimeImpl(
         const UsdProperty &prop,
         Resolver *resolver,
-        const double *time,
+        const UsdTimeCode *time,
         const MakeUsdResolverFn &makeUsdResolverFn) const;
 
     bool _GetValue(UsdTimeCode time, const UsdAttribute &attr, 

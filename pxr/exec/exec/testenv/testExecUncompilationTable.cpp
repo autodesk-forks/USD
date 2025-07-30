@@ -4,6 +4,7 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
+#include "pxr/exec/exec/uncompilationTarget.h"
 #include "pxr/pxr.h"
 
 #include "pxr/exec/exec/uncompilationRuleSet.h"
@@ -49,19 +50,49 @@ PXR_NAMESPACE_OPEN_SCOPE
 // operators must be defined in the pxr namespace.
 
 static bool operator==(
+    const Exec_NodeUncompilationTarget &a,
+    const Exec_NodeUncompilationTarget &b)
+{
+    return a.GetNodeId() == b.GetNodeId();
+}
+
+static bool operator==(
+    const Exec_InputUncompilationTarget &a,
+    const Exec_InputUncompilationTarget &b)
+{
+    return a.IsValid() && b.IsValid() &&
+        *a.GetNodeId() == *b.GetNodeId() &&
+        *a.GetInputName() == *b.GetInputName();
+}
+
+static bool operator==(
     const Exec_UncompilationRule &a,
     const Exec_UncompilationRule &b)
 {
-    return (std::tie(a.nodeId, a.inputName, a.reasons) ==
-        std::tie(b.nodeId, b.inputName, b.reasons));
+    return std::tie(a.target, a.reasons) == std::tie(b.target, b.reasons);
+}
+
+static bool operator<(
+    const Exec_NodeUncompilationTarget &a,
+    const Exec_NodeUncompilationTarget &b)
+{
+    return a.GetNodeId() < b.GetNodeId();
+}
+
+static bool operator<(
+    const Exec_InputUncompilationTarget &a,
+    const Exec_InputUncompilationTarget &b)
+{
+    return a.IsValid() && b.IsValid() &&
+        std::tie(*a.GetNodeId(), *a.GetInputName()) <
+        std::tie(*b.GetNodeId(), *b.GetInputName());
 }
 
 static bool operator<(
     const Exec_UncompilationRule &a,
     const Exec_UncompilationRule &b)
 {
-    return (std::tie(a.nodeId, a.inputName, a.reasons) <
-        std::tie(b.nodeId, b.inputName, b.reasons));
+    return std::tie(a.target, a.reasons) < std::tie(b.target, b.reasons);
 }
 
 static bool operator==(
@@ -88,27 +119,53 @@ std::ostream &operator<<(std::ostream &out, const Exec_UncompilationRuleSet& r)
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-static void TestUncompilationRuleSetErase()
+// Test that Exec_UncompilationRuleSet::erase is correct.
+static void
+TestUncompilationRuleSetErase()
 {
-    // Test that Exec_UncompilationRuleSet::erase is correct.
-
-    using Rule = Exec_UncompilationRule;
-
     // Initialize a rule set.
-    Exec_UncompilationRuleSet ruleSet{
-        Rule(0, EsfEditReason::ResyncedObject),
-        Rule(1, EsfEditReason::ResyncedObject),
-        Rule(2, EsfEditReason::ResyncedObject),
-        Rule(0, _tokens->input1, EsfEditReason::ChangedPropertyList),
-        Rule(1, _tokens->input1, EsfEditReason::ChangedPropertyList),
-        Rule(2, _tokens->input1, EsfEditReason::ChangedPropertyList)
+    Exec_UncompilationRuleSet ruleSet {
+        {
+            Exec_NodeUncompilationTarget(0),
+            EsfEditReason::ResyncedObject
+        },
+        {
+            Exec_NodeUncompilationTarget(1),
+            EsfEditReason::ResyncedObject
+        },
+        {
+            Exec_NodeUncompilationTarget(2),
+            EsfEditReason::ResyncedObject
+        },
+        {
+            Exec_InputUncompilationTarget(0, _tokens->input1),
+            EsfEditReason::ChangedPropertyList
+        },
+        {
+            Exec_InputUncompilationTarget(1, _tokens->input1),
+            EsfEditReason::ChangedPropertyList
+        },
+        {
+            Exec_InputUncompilationTarget(2, _tokens->input1),
+            EsfEditReason::ChangedPropertyList
+        },
     };
 
     // Erase elements that have nodeId == 2. (This also ensures we test the
     // corner case of erasing the last element.)
+    struct _Visitor {
+        bool operator()(const Exec_NodeUncompilationTarget &target) const {
+            return target.GetNodeId() == 2;
+        }
+
+        bool operator()(const Exec_InputUncompilationTarget &target) const {
+            return target.IsValid() && *target.GetNodeId() == 2;
+        }
+    };
+
     Exec_UncompilationRuleSet::iterator it = ruleSet.begin();
     while (it != ruleSet.end()) {
-        if (it->nodeId == 2) {
+        if (std::visit(_Visitor(), it->target)) {
             it = ruleSet.erase(it);
             continue;
         }
@@ -117,19 +174,33 @@ static void TestUncompilationRuleSetErase()
 
     // Verify resulting rule set
     Exec_UncompilationRuleSet expected{
-        Rule(0, EsfEditReason::ResyncedObject),
-        Rule(1, EsfEditReason::ResyncedObject),
-        Rule(0, _tokens->input1, EsfEditReason::ChangedPropertyList),
-        Rule(1, _tokens->input1, EsfEditReason::ChangedPropertyList)
+        {
+            Exec_NodeUncompilationTarget(0),
+            EsfEditReason::ResyncedObject
+        },
+        {
+            Exec_NodeUncompilationTarget(1),
+            EsfEditReason::ResyncedObject
+        },
+        {
+            Exec_InputUncompilationTarget(0, _tokens->input1),
+            EsfEditReason::ChangedPropertyList
+        },
+        {
+            Exec_InputUncompilationTarget(1, _tokens->input1),
+            EsfEditReason::ChangedPropertyList
+        },
     };
     ASSERT_EQ(ruleSet, expected);
 }
 
-static void TestUncompilationTableInsertAndFind()
+// Test that we add uncompilation rules for each journal entry. If separate
+// journals add rules for the same path, those rules get inserted into the
+// same rule set.
+//
+static void
+TestUncompilationTableInsertAndFind()
 {
-    // Test that we add uncompilation rules for each journal entry. If separate
-    // journals add rules for the same path, those rules get inserted into the
-    // same rule set.
 
     Exec_UncompilationTable table;
     {
@@ -160,9 +231,14 @@ static void TestUncompilationTableInsertAndFind()
         TF_AXIOM(entryA.path == SdfPath("/A"));
         TF_AXIOM(entryA.ruleSet);
         Exec_UncompilationRuleSet expected{
-            Exec_UncompilationRule(0, EsfEditReason::ResyncedObject),
-            Exec_UncompilationRule(
-                0, _tokens->input1, EsfEditReason::ChangedPropertyList)
+            {
+                Exec_NodeUncompilationTarget(0),
+                EsfEditReason::ResyncedObject
+            },
+            {
+                Exec_InputUncompilationTarget(0, _tokens->input1),
+                EsfEditReason::ChangedPropertyList
+            },
         };
         ASSERT_EQ(*entryA.ruleSet, expected);
     }
@@ -172,8 +248,14 @@ static void TestUncompilationTableInsertAndFind()
         TF_AXIOM(entryB.path == SdfPath("/B"));
         TF_AXIOM(entryB.ruleSet);
         Exec_UncompilationRuleSet expected{
-            Exec_UncompilationRule(0, EsfEditReason::ResyncedObject),
-            Exec_UncompilationRule(1, EsfEditReason::ResyncedObject)
+            {
+                Exec_NodeUncompilationTarget(0),
+                EsfEditReason::ResyncedObject
+            },
+            {
+                Exec_NodeUncompilationTarget(1),
+                EsfEditReason::ResyncedObject
+            },
         };
         ASSERT_EQ(*entryB.ruleSet, expected);
     }
@@ -183,7 +265,10 @@ static void TestUncompilationTableInsertAndFind()
         TF_AXIOM(entryC.path == SdfPath("/C"));
         TF_AXIOM(entryC.ruleSet);
         Exec_UncompilationRuleSet expected{
-            Exec_UncompilationRule(1, EsfEditReason::ResyncedObject)
+            {
+                Exec_NodeUncompilationTarget(1),
+                EsfEditReason::ResyncedObject
+            },
         };
         ASSERT_EQ(*entryC.ruleSet, expected);
     }
@@ -195,10 +280,12 @@ static void TestUncompilationTableInsertAndFind()
     }
 }
 
-static void TestUncompilationTableUpdateForRecursiveResync()
+// Test that UpdateForRecursiveResync removes the correct rule sets from
+// the uncompilation table, and that unrelated rule sets are not removed.
+//
+static void
+TestUncompilationTableUpdateForRecursiveResync()
 {
-    // Test that UpdateForRecursiveResync removes the correct rule sets from
-    // the uncompilation table, and that unrelated rule sets are not removed.
 
     const SdfPath parent("/Parent");
     const SdfPath child1("/Parent/Child1");
@@ -235,7 +322,10 @@ static void TestUncompilationTableUpdateForRecursiveResync()
     {
         ASSERT_EQ(removedEntries[entryIndex].path, path);
         Exec_UncompilationRuleSet expected{
-            Exec_UncompilationRule(nodeId, EsfEditReason::ResyncedObject)
+            {
+                Exec_NodeUncompilationTarget(nodeId),
+                EsfEditReason::ResyncedObject
+            },
         };
         TF_AXIOM(removedEntries[entryIndex].ruleSet != nullptr);
         ASSERT_EQ(*removedEntries[entryIndex].ruleSet, expected);
@@ -256,7 +346,10 @@ static void TestUncompilationTableUpdateForRecursiveResync()
     // Rule sets remain in the table for /Other and /Other/Child.
     Exec_UncompilationTable::Entry entry = table.Find(other);
     Exec_UncompilationRuleSet expectedRuleSetOther{
-        Exec_UncompilationRule(4, EsfEditReason::ResyncedObject)
+        {
+            Exec_NodeUncompilationTarget(4),
+            EsfEditReason::ResyncedObject
+        },
     };
     TF_AXIOM(entry);
     ASSERT_EQ(entry.path, other);
@@ -264,17 +357,22 @@ static void TestUncompilationTableUpdateForRecursiveResync()
 
     entry = table.Find(otherChild);
     Exec_UncompilationRuleSet expectedRuleSetOtherChild{
-        Exec_UncompilationRule(5, EsfEditReason::ResyncedObject)
+        {
+            Exec_NodeUncompilationTarget(5),
+            EsfEditReason::ResyncedObject
+        },
     };
     TF_AXIOM(entry);
     ASSERT_EQ(entry.path, otherChild);
     ASSERT_EQ(*entry.ruleSet, expectedRuleSetOtherChild);
 }
 
-static void TestConcurrency()
+// Tests that we can add rules to the uncompilation table concurrently
+// from many threads.
+//
+static void
+TestConcurrency()
 {
-    // Tests that we can add rules to the uncompilation table concurrently
-    // from many threads.
 
     TRACE_FUNCTION();
 
@@ -315,7 +413,8 @@ static void TestConcurrency()
     Exec_UncompilationRuleSet expectedRuleSet;
     for (size_t i = 0; i < NUM_NODES; ++i) {
         expectedRuleSet.emplace_back(
-            VdfId(i), EsfEditReason::ResyncedObject);
+            Exec_NodeUncompilationTarget(i),
+            EsfEditReason::ResyncedObject);
     }
     {
         TRACE_SCOPE("Verifying table");

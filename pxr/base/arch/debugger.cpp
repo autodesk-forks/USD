@@ -653,7 +653,11 @@ ArchAbort(bool logging)
 #endif
         }
 
+#if defined(ARCH_OS_WASM_VM)
+        emscripten_force_exit(134);
+#else
         abort();
+#endif
     }
 
     // The exit code for abort() (128 + SIGABRT).

@@ -180,29 +180,27 @@ VdfOutput::GetDebugName() const
 int 
 VdfOutput::GetNumDataEntries() const
 {
+    // If we have an affects mask, that will give us the right size.
+    if (const VdfMask *const affectsMask = GetAffectsMask()) {
+        return affectsMask->GetSize();
+    }
+
     // If we have any outgoing connections, the size on one of their masks
     // will give us the right answer.
-    if (!GetConnections().empty()) {
-        return GetConnections().front()->GetMask().GetSize();
+    if (!_connections.empty()) {
+        return _connections.front()->GetMask().GetSize();
     }
 
     // If we have an associated input and it is connected, that mask gives us
     // the right answer.
-    if (GetAssociatedInput() && 
-        GetAssociatedInput()->GetNumConnections() > 0) {
+    if (_associatedInput &&
+        _associatedInput->GetNumConnections() > 0) {
+        return (*_associatedInput)[0].GetMask().GetSize();
 
-        return (*GetAssociatedInput())[0].GetMask().GetSize();
-
-    }
-
-    // If we have an affects mask, that will give us the right size.
-    if (GetAffectsMask()) {
-        return GetAffectsMask()->GetSize();
     }
 
     // Finally we have no option, we don't know what size of data we'll end up
     // with if we compute. We simply return 1 here.
-
     return 1;
 }
 

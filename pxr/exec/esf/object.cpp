@@ -14,15 +14,24 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 EsfObjectInterface::~EsfObjectInterface() = default;
 
-bool EsfObjectInterface::IsValid(EsfJournal *journal) const
+bool
+EsfObjectInterface::IsValid(EsfJournal *journal) const
 {
+    // If the path is empty, the object is invalid, but we don't want to
+    // journal for the empty path;
+    const SdfPath path = _GetPath();
+    if (path.IsEmpty()) {
+        return false;
+    }
+
     if (journal) {
-        journal->Add(_GetPath(), EsfEditReason::ResyncedObject);
+        journal->Add(path, EsfEditReason::ResyncedObject);
     }
     return _IsValid();
 }
 
-SdfPath EsfObjectInterface::GetPath(EsfJournal *journal) const
+SdfPath
+EsfObjectInterface::GetPath(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);
@@ -30,7 +39,8 @@ SdfPath EsfObjectInterface::GetPath(EsfJournal *journal) const
     return _path;
 }
 
-TfToken EsfObjectInterface::GetName(EsfJournal *journal) const
+TfToken
+EsfObjectInterface::GetName(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);
@@ -38,12 +48,28 @@ TfToken EsfObjectInterface::GetName(EsfJournal *journal) const
     return _GetName();
 }
 
-EsfPrim EsfObjectInterface::GetPrim(EsfJournal *journal) const
+EsfPrim
+EsfObjectInterface::GetPrim(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath().GetPrimPath(), EsfEditReason::ResyncedObject);
     }
     return _GetPrim();
+}
+
+EsfSchemaConfigKey
+EsfObjectInterface::GetSchemaConfigKey(EsfJournal *journal) const
+{
+    // We need to handle the pseudo-root specially, to avoid journaling for
+    // the empty path.
+    if (_GetPath().IsAbsoluteRootPath()) {
+        return EsfSchemaConfigKey();
+    }
+
+    if (journal) {
+        journal->Add(_GetPath().GetPrimPath(), EsfEditReason::ResyncedObject);
+    }
+    return _GetSchemaConfigKey();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

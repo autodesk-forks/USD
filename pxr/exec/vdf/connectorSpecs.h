@@ -17,7 +17,6 @@
 
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/smallVector.h"
-#include "pxr/base/tf/staticData.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 

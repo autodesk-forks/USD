@@ -125,23 +125,20 @@ UsdImagingDelegate::~UsdImagingDelegate()
 {
     TfNotice::Revoke(_objectsChangedNoticeKey);
 
-    // Remove all prims from the render index.
-
-    // Even though this delegate is going out of scope
-    // the render index may not be.  So, need to make
-    // sure we properly remove all prims from the
-    // render index.
-    //
-    // Note: This is not going through the adapters
-    // as we are destroying the whole delegate.  It is
-    // assumed that adapters are not shared between delegates.
-    HdRenderIndex& index = GetRenderIndex();
-    index.RemoveSubtree(GetDelegateID(), this);
-
-    _refineLevelMap.clear();
-    _hdPrimInfoMap.clear();
-    _dependencyInfo.clear();
-    _adapterMap.clear();
+    if (_stage) {
+        // Remove all prims conteributed by this delegate
+        // from the render index.
+        //
+        // Even though this delegate is going out of scope
+        // the render index may not be.  So, need to make
+        // sure we properly remove all prims from the
+        // render index.
+        //
+        // Note: This is not going through the adapters
+        // as we are destroying the whole delegate.  It is
+        // assumed that adapters are not shared between delegates.
+        GetRenderIndex().RemoveSubtree(GetDelegateID(), this);
+    }
 }
 
 

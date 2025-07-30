@@ -77,6 +77,7 @@ pxr_plugin(${PXR_PACKAGE}
         hd
         hdsi
         hio
+        TBB::tbb
         usdRi
         usdVol
         usdVolImaging

@@ -13,6 +13,8 @@
 #include "pxr/base/ts/types.h"
 #include "pxr/base/ts/tsTest_Types.h"
 
+#include "pxr/base/tf/type.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 class TsTest_SplineData;
@@ -53,10 +55,16 @@ public:
     TsTest_SplineData SplineToSplineData(
         const TsSpline &spline) const;
 
-    // Convert SplineData to a TsSpline.
+    // Convert SplineData to a TsSpline with double values
     TS_API
     TsSpline SplineDataToSpline(
         const TsTest_SplineData &splineData) const;
+ 
+    // Convert SplineData to a TsSpline with valueType values
+   TS_API
+    TsSpline SplineDataToSpline(
+        const TsTest_SplineData &splineData,
+        const TfType& valueType) const;
 
     ////////////////////////////////////////////////////////////////////////////
     // TEST DATA TRANSFORMATION

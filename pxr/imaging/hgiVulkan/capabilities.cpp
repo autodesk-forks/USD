@@ -5,12 +5,15 @@
 // https://openusd.org/license.
 //
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/envSetting.h"
 
 #include "pxr/imaging/hgiVulkan/capabilities.h"
+
 #include "pxr/imaging/hgiVulkan/device.h"
 #include "pxr/imaging/hgiVulkan/diagnostic.h"
+#include "pxr/imaging/hgiVulkan/debugCodes.h"
 
-#include "pxr/base/tf/envSetting.h"
+#include <iostream>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -19,8 +22,66 @@ TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_MULTI_DRAW_INDIRECT, true,
 TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_BUILTIN_BARYCENTRICS, false,
                       "Use Vulkan built in barycentric coordinates");
 
+static void _DumpDeviceDeviceMemoryProperties(
+    const VkPhysicalDeviceMemoryProperties& vkMemoryProperties)
+{
+    std::cout << "Vulkan memory info:\n";
+    for (uint32_t heapIndex = 0;
+            heapIndex < vkMemoryProperties.memoryHeapCount; heapIndex++) {
+        std::cout << "Heap " << heapIndex << ":\n";
+        const auto& heap = vkMemoryProperties.memoryHeaps[heapIndex];
+        std::cout << "    Size: " << heap.size << "\n";
+        std::cout << "    Flags:";
+        if (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+            std::cout << " DEVICE_LOCAL";
+        }
+        if (heap.flags & VK_MEMORY_HEAP_MULTI_INSTANCE_BIT) {
+            std::cout << " MULTI_INSTANCE";
+        }
+        std::cout << "\n";
+
+        for (uint32_t typeIndex = 0;
+                typeIndex < vkMemoryProperties.memoryTypeCount; typeIndex++) {
+            const auto& memoryType = vkMemoryProperties.memoryTypes[typeIndex];
+            if (memoryType.heapIndex != heapIndex) {
+                continue;
+            }
+
+            std::cout << "    Memory type " << typeIndex << ":\n";
+            std::cout << "        Flags:";
+            if (memoryType.propertyFlags &
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                std::cout << " DEVICE_LOCAL";
+            }
+            if (memoryType.propertyFlags &
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                std::cout << " HOST_VISIBLE";
+            }
+            if (memoryType.propertyFlags &
+                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+                std::cout << " HOST_COHERENT";
+            }
+            if (memoryType.propertyFlags &
+                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
+                std::cout << " HOST_CACHED";
+            }
+            if (memoryType.propertyFlags &
+                    VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                std::cout << " LAZILY_ALLOCATED";
+            }
+            if (memoryType.propertyFlags &
+                    VK_MEMORY_PROPERTY_PROTECTED_BIT) {
+                std::cout << " PROTECTED";
+            }
+            std::cout << "\n";
+        }
+    }
+    std::cout << std::flush;
+}
+
 HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
-    : supportsTimeStamps(false)
+    : supportsTimeStamps(false),
+    supportsNativeInterop(false)
 {
     VkPhysicalDevice physicalDevice = device->GetVulkanPhysicalDevice();
 
@@ -47,6 +108,10 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
     //
     vkDeviceProperties2.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+
+    if (TfDebug::IsEnabled(HGIVULKAN_DUMP_DEVICE_MEMORY_PROPERTIES)) {
+        _DumpDeviceDeviceMemoryProperties(vkMemoryProperties);
+    }
 
     // Vertex attribute divisor properties ext
     vkVertexAttributeDivisorProperties.sType =
@@ -83,6 +148,16 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         vkDeviceFeatures2.pNext =  &vkBarycentricFeatures;
     }
     
+    // Line rasterization features
+    const bool lineRasterizationExtSupported = device->IsSupportedExtension(
+        VK_KHR_LINE_RASTERIZATION_EXTENSION_NAME);
+    if (lineRasterizationExtSupported) {
+        vkLineRasterizationFeatures.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_KHR;
+        vkLineRasterizationFeatures.pNext = vkDeviceFeatures2.pNext;
+        vkDeviceFeatures2.pNext =  &vkLineRasterizationFeatures;
+    }
+
     // Query device features
     vkGetPhysicalDeviceFeatures2(physicalDevice, &vkDeviceFeatures2);
 
@@ -127,6 +202,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
     _SetFlag(HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne, false);
     _SetFlag(HgiDeviceCapabilitiesBitsStencilReadback, true);
     _SetFlag(HgiDeviceCapabilitiesBitsShaderDoublePrecision, true);
+    _SetFlag(HgiDeviceCapabilitiesBitsSingleSlotResourceArrays, true);
     _SetFlag(HgiDeviceCapabilitiesBitsConservativeRaster, 
         conservativeRasterEnabled);
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, 
@@ -146,7 +222,7 @@ HgiVulkanCapabilities::~HgiVulkanCapabilities() = default;
 int
 HgiVulkanCapabilities::GetAPIVersion() const
 {
-    return vkDeviceProperties2.properties.apiVersion;
+    return static_cast<int>(vkDeviceProperties2.properties.apiVersion);
 }
 
 int

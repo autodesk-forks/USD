@@ -11,8 +11,9 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-bool Exec_CompiledOutputCache::Insert(
-    const Exec_OutputKey &key,
+bool
+Exec_CompiledOutputCache::Insert(
+    const Exec_OutputKey::Identity &key,
     const VdfMaskedOutput &maskedOutput)
 {
     const auto [it, inserted] = _outputMap.emplace(key, maskedOutput);
@@ -32,7 +33,7 @@ bool Exec_CompiledOutputCache::Insert(
 }
 
 std::tuple<const VdfMaskedOutput &, bool>
-Exec_CompiledOutputCache::Find(const Exec_OutputKey &key) const
+Exec_CompiledOutputCache::Find(const Exec_OutputKey::Identity &key) const
 {
     const _OutputMap::const_iterator it = _outputMap.find(key);
     if (it == _outputMap.end()) {
@@ -42,7 +43,8 @@ Exec_CompiledOutputCache::Find(const Exec_OutputKey &key) const
     return {it->second, true};
 }
 
-void Exec_CompiledOutputCache::EraseByNodeId(VdfId nodeId)
+void
+Exec_CompiledOutputCache::EraseByNodeId(VdfId nodeId)
 {
     const _ReverseMap::iterator it = _reverseMap.find(nodeId);
     
@@ -53,7 +55,7 @@ void Exec_CompiledOutputCache::EraseByNodeId(VdfId nodeId)
         return;
     }
 
-    for (const Exec_OutputKey &key : it->second) {
+    for (const Exec_OutputKey::Identity &key : it->second) {
         _outputMap.unsafe_erase(key);
     }
     _reverseMap.unsafe_erase(it);

@@ -363,6 +363,59 @@ static void testArray() {
         }
     }
     {
+        // Test VtArray insert.
+        VtIntArray ia;
+        TF_AXIOM(*ia.insert(ia.cbegin(), 9) == 9);
+        TF_AXIOM(ia.size() == 1);
+
+        TF_AXIOM(*ia.insert(ia.cend(), -9) == -9);
+        TF_AXIOM(ia.size() == 2);
+        TF_AXIOM(ia == VtIntArray({ 9, -9 }));
+
+        TF_AXIOM(*ia.insert(ia.cbegin()+1, 3) == 3);
+        TF_AXIOM(ia.size() == 3);
+        TF_AXIOM(ia == VtIntArray({ 9, 3, -9 }));
+
+        {
+            VtIntArray ia2 { ia };
+            // Elements from the array.
+            TF_AXIOM(*ia2.insert(ia2.cbegin(), ia2.AsConst()[1]) == 3);
+            TF_AXIOM(ia2.size() == 4);
+            TF_AXIOM(ia2 == VtIntArray({ 3, 9, 3, -9 }));
+        
+            TF_AXIOM(*ia2.insert(ia2.cend(), ia2.AsConst()[1]) == 9);
+            TF_AXIOM(ia2.size() == 5);
+            TF_AXIOM(ia2 == VtIntArray({ 3, 9, 3, -9, 9 }));
+        }
+
+        // 4 7s at index 2.
+        TF_AXIOM(*ia.insert(ia.cbegin()+2, 4, 7) == 7);
+        TF_AXIOM(ia.size() == 7);
+        TF_AXIOM(ia == VtIntArray({ 9, 3, 7, 7, 7, 7, -9 }));
+
+        // Initializer list.
+        TF_AXIOM(*ia.insert(ia.cbegin()+3, {1, 2, 3, 4}) == 1);
+        TF_AXIOM(ia.size() == 11);
+        TF_AXIOM(ia == VtIntArray({ 9, 3, 7, 1, 2, 3, 4, 7, 7, 7, -9 }));
+
+        // Range.
+        VtIntArray ia2 = ia;
+        TF_AXIOM(*ia2.insert(ia2.cbegin()+4, ia.cbegin()+1, ia.cend()-1) == 3);
+        TF_AXIOM(ia2 == VtIntArray({ 9, 3, 7, 1, 3, 7, 1, 2, 3, 4, 7, 7,
+                                     7, 2, 3, 4, 7, 7, 7, -9 }));
+
+        // Fill function
+        ia = VtIntArray { 9, 9, 9, 9 };
+        ia.insert(ia.cbegin() + 2, 3, [](int *b, int *e) {
+            int x = 4;
+            while (b != e) {
+                new (b++) int { x++ };
+            }
+        });
+        TF_AXIOM(ia.size() == 7);
+        TF_AXIOM(ia == VtIntArray({ 9, 9, 4, 5, 6, 9, 9 }));
+    }
+    {
         // Test VtArray erasing from the middle
         VtIntArray array({1, 2, 3, 4, 5, 6});
         VtIntArray::iterator it = array.erase(

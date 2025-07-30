@@ -1,17 +1,17 @@
-Loading @SpecializesAndVariants3/root.sdf@
+Loading @SpecializesAndVariants3/root.usda@
 
 ------------------------------------------------------------------------
 Layer Stack:
-     root.sdf
+     root.usda
 
 ------------------------------------------------------------------------
 Results for composing </implementation>
 
 Prim Stack:
-    root.sdf             /implementation
-    root.sdf             /implementation{testVariantSet=testVariant}
-    root.sdf             /_class_defaultVariantSelections
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
+    root.usda            /_class_defaultVariantSelections
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
@@ -21,19 +21,19 @@ Property names:
 
 Property stacks:
 /implementation.classVariantAttr:
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
 /implementation.variantAttr:
-    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 
 ------------------------------------------------------------------------
 Results for composing </middleman>
 
 Prim Stack:
-    root.sdf             /middleman
-    root.sdf             /implementation
-    root.sdf             /implementation{testVariantSet=testVariant}
-    root.sdf             /_class_defaultVariantSelections
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+    root.usda            /middleman
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
+    root.usda            /_class_defaultVariantSelections
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
@@ -43,16 +43,16 @@ Property names:
 
 Property stacks:
 /middleman.classVariantAttr:
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
 /middleman.variantAttr:
-    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 
 ------------------------------------------------------------------------
 Results for composing </_class_defaultVariantSelections>
 
 Prim Stack:
-    root.sdf             /_class_defaultVariantSelections
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+    root.usda            /_class_defaultVariantSelections
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
@@ -62,25 +62,28 @@ Property names:
 
 Property stacks:
 /_class_defaultVariantSelections.classVariantAttr:
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
 
 ------------------------------------------------------------------------
 Results for composing </element>
 
 Prim Stack:
-    root.sdf             /element
-    root.sdf             /middleman
-    root.sdf             /implementation
-    root.sdf             /_class_defaultVariantSelections
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}
+    root.usda            /element
+    root.usda            /middleman
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
+    root.usda            /_class_defaultVariantSelections
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
 
 Property names:
-     ['classVariantAttr']
+     ['classVariantAttr', 'variantAttr']
 
 Property stacks:
 /element.classVariantAttr:
-    root.sdf             /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+    root.usda            /_class_defaultVariantSelections{testVariantSet=testVariant}.classVariantAttr
+/element.variantAttr:
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 

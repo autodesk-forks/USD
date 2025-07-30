@@ -13,6 +13,11 @@
 
 #include "pxr/exec/esf/fixedSizePolymorphicHolder.h"
 
+#include "pxr/base/tf/token.h"
+#include "pxr/base/tf/type.h"
+
+#include <utility>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 class EsfAttribute;
@@ -20,6 +25,7 @@ class EsfJournal;
 class EsfObject;
 class EsfPrim;
 class EsfProperty;
+class EsfRelationship;
 class SdfPath;
 
 /// Stage abstraction for scene adapter implementations.
@@ -57,13 +63,39 @@ public:
         const SdfPath &path,
         EsfJournal *journal) const;
 
+    /// \see UsdStage::GetRelationshipAtPath
+    ESF_API EsfRelationship GetRelationshipAtPath(
+        const SdfPath &path,
+        EsfJournal *journal) const;
+
+    /// \see UsdSchemaRegistry::GetTypeNameAndInstance
+    std::pair<TfToken, TfToken> GetTypeNameAndInstance(
+        const TfToken &apiSchemaName) const {
+        return _GetTypeNameAndInstance(apiSchemaName);
+    }
+
+    /// \see UsdSchemaRegistry::GetAPITypeFromSchemaTypeName
+    TfType GetAPITypeFromSchemaTypeName(
+        const TfToken &schemaTypeName) const {
+        return _GetAPITypeFromSchemaTypeName(schemaTypeName);
+    }
+
 private:
     // These methods must be implemented by the scene adapter implementation.
     virtual EsfAttribute _GetAttributeAtPath(
         const SdfPath &path) const = 0;
-    virtual EsfObject _GetObjectAtPath(const SdfPath &path) const = 0;
-    virtual EsfPrim _GetPrimAtPath(const SdfPath &path) const = 0;
-    virtual EsfProperty _GetPropertyAtPath(const SdfPath &path) const = 0;
+    virtual EsfObject _GetObjectAtPath(
+        const SdfPath &path) const = 0;
+    virtual EsfPrim _GetPrimAtPath(
+        const SdfPath &path) const = 0;
+    virtual EsfProperty _GetPropertyAtPath(
+        const SdfPath &path) const = 0;
+    virtual EsfRelationship _GetRelationshipAtPath(
+        const SdfPath &path) const = 0;
+    virtual std::pair<TfToken, TfToken> _GetTypeNameAndInstance(
+        const TfToken &apiSchemaName) const = 0;
+    virtual TfType _GetAPITypeFromSchemaTypeName(
+        const TfToken &schemaTypeName) const = 0;
 };
 
 /// Holds an implementation of EsfStageInterface in a fixed-size buffer.
@@ -72,8 +104,7 @@ private:
 /// UsdStageConstRefPtr. The size is specified as an integer literal to prevent
 /// introducing Usd as a dependency.
 ///
-class EsfStage
-    : public EsfFixedSizePolymorphicHolder<EsfStageInterface, 16>
+class EsfStage : public EsfFixedSizePolymorphicHolder<EsfStageInterface, 16>
 {
 public:
     using EsfFixedSizePolymorphicHolder::EsfFixedSizePolymorphicHolder;

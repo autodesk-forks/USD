@@ -27,7 +27,7 @@ def Xform "lights"
     def SphereLight "Light"
     {
         float inputs:radius = 20
-        float inputs:intensity = 5
+        float inputs:intensity = 2
         Vec3f xformOp:translate = (0, -50, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
     }

@@ -222,19 +222,6 @@ bool TsSpline::CanSetKnot(
         return false;
     }
 
-    if (knot.GetCurveType() != GetCurveType())
-    {
-        if (reasonOut)
-        {
-            *reasonOut = TfStringPrintf(
-                "Cannot set knot of curve type '%s' "
-                "into spline of curve type '%s'",
-                TfEnum::GetName(knot.GetCurveType()).c_str(),
-                TfEnum::GetName(GetCurveType()).c_str());
-        }
-        return false;
-    }
-
     return true;
 }
 

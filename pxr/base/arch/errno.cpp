@@ -12,7 +12,7 @@
 #if defined(ARCH_OS_WINDOWS)
 #include <Windows.h>
 #endif
-#if defined(EMSCRIPTEN)
+#if defined(ARCH_OS_WASM_VM)
 #include <locale.h>
 #endif
 
@@ -29,7 +29,7 @@ ArchStrerror(int errorCode)
 {
     char msg_buf[256];
 
-#if defined(EMSCRIPTEN)
+#if defined(ARCH_OS_WASM_VM)
     locale_t locale = newlocale(LC_ALL_MASK, "C", NULL);
     if (locale == (locale_t)0) {
         return "Failed to create locale";
@@ -51,7 +51,8 @@ ArchStrerror(int errorCode)
     //   (the string may be truncated if buflen is too small and errnum is
     //   unknown). The string always includes a terminating null byte.
     //
-    return (char*) strerror_r(errorCode, msg_buf, 256);  
+    char* result = strerror_r(errorCode, msg_buf, sizeof(msg_buf));
+    return std::string(result);
 #elif !defined(ARCH_COMPILER_MSVC)
     strerror_r(errorCode, msg_buf, 256);
 #else

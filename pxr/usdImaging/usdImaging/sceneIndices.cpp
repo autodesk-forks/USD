@@ -26,13 +26,34 @@
 #include "pxr/imaging/hd/purposeSchema.h"
 #include "pxr/imaging/hd/sceneIndexUtil.h"
 
+#include "pxr/base/tf/envSetting.h"
+#include "pxr/base/tf/getenv.h"
 #include "pxr/base/trace/trace.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_ENV_SETTING(
+    USDIMAGING_SET_STAGE_AFTER_CHAINING_SCENE_INDICES, true,
+    "If true (default), set the stage on the scene index *after* creating the "
+    "usdImaging scene indices graph. This results in added notices flowing "
+    "through the graph."
+    "If false, scene indices downstream of the stage scene index won't receive "
+    "added notices, and may need to query the input scene index for prim "
+    "discovery and bookkeeping."
+    "Each of these options have different performance characteristics.");
+
 TF_REGISTRY_FUNCTION(TfType)
 {
     TfRegistryManager::GetInstance().SubscribeTo<UsdImagingSceneIndexPlugin>();
+}
+
+static
+bool
+_ShouldSetStageAfterChainingSceneIndices()
+{
+    static const bool result =
+        TfGetEnvSetting(USDIMAGING_SET_STAGE_AFTER_CHAINING_SCENE_INDICES);
+    return result;
 }
 
 static
@@ -136,7 +157,11 @@ UsdImagingCreateSceneIndices(
                     createInfo.displayUnloadedPrimsWithBounds),
                 createInfo.stageSceneIndexInputArgs));
 
-    result.stageSceneIndex->SetStage(createInfo.stage);
+    if (!_ShouldSetStageAfterChainingSceneIndices()) {
+        // Downstream scene indices will not receive added notices since they
+        // haven't been chained yet.
+        result.stageSceneIndex->SetStage(createInfo.stage);
+    }
     
     if (createInfo.overridesSceneIndexCallback) {
         sceneIndex =
@@ -221,6 +246,12 @@ UsdImagingCreateSceneIndices(
     }
 
     result.finalSceneIndex = sceneIndex;
+
+    if (_ShouldSetStageAfterChainingSceneIndices()) {
+        // Setting the stage populates the scene index and results in added
+        // notices flowing downstream.
+        result.stageSceneIndex->SetStage(createInfo.stage);
+    }
 
     return result;
 }

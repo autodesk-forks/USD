@@ -5880,7 +5880,7 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
         _EmitAccessor(accessorsVS, name, dataType, binding);
 
         _EmitStructAccessor(accessorsTCS, _tokens->inPrimvars,
-                            name, dataType, /*arraySize=*/1, "gl_InvocationID");
+                            name, dataType, /*arraySize=*/1, "gl_InvocationID + localIndex");
         _EmitStructAccessor(accessorsTES, _tokens->inPrimvars,
                             name, dataType, /*arraySize=*/1, "localIndex");
         _EmitStructAccessor(accessorsGS,  _tokens->inPrimvars,
@@ -5980,7 +5980,7 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
             "GetDrawingCoord().varyingCoord + int(hd_VertexID) - GetBaseVertexOffset()");
         
         _EmitStructAccessor(accessorsTCS, _tokens->inPrimvars,
-                            name, dataType, /*arraySize=*/1, "gl_InvocationID");
+                            name, dataType, /*arraySize=*/1, "gl_InvocationID + localIndex");
         _EmitStructAccessor(accessorsTES, _tokens->inPrimvars,
                             name, dataType, /*arraySize=*/1, "localIndex");
         _EmitStructAccessor(accessorsGS,  _tokens->inPrimvars,

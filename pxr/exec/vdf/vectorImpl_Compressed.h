@@ -34,7 +34,7 @@ class VDF_API_TYPE Vdf_VectorImplCompressed final
     : public Vdf_VectorDataTyped<TYPE>
 {
     static_assert(
-        !Vdf_IsBoxedContainer<TYPE>::value,
+        !Vdf_IsBoxedContainer<TYPE>,
         "Only Vdf_VectorImplBoxed may hold boxed values");
 
 public :

@@ -41,8 +41,8 @@ TF_DECLARE_REF_PTRS(HdxTaskControllerSceneIndex);
 /// Note that the set of necessary tasks is different for Storm and other
 /// renderers. Thus, the c'tor needs to be given the renderer plugin name.
 ///
-/// It is a Hydra 2.0 implementation replacing of HdxTaskController.
-/// For now, the API and the behavior is the same than that of the
+/// It is a Hydra 2.0 implementation replacing the HdxTaskController.
+/// For now, the API and behavior is the same as that of the
 /// HdxTaskController.
 ///
 // XXX: This API is transitional. At the least, render/picking/selection

@@ -6,12 +6,19 @@
 //
 #include "pxr/exec/exec/outputKey.h"
 
+#include "pxr/base/tf/token.h"
+#include "pxr/usd/sdf/path.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 std::string
-Exec_OutputKey::GetDebugName() const
+Exec_OutputKey::Identity::GetDebugName() const 
 {
-    return _valueKey.GetDebugName();
+    std::string debugName = _providerPath.GetAsString();
+    debugName += " [";
+    debugName += _computationDefinition->GetComputationName().GetString();
+    debugName += ']';
+    return debugName;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

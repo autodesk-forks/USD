@@ -13,8 +13,6 @@
 
 #include "pxr/exec/vdf/api.h"
 #include "pxr/exec/vdf/countingIterator.h"
-#include "pxr/exec/vdf/error.h"
-#include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/node.h"
 #include "pxr/exec/vdf/request.h"
 #include "pxr/exec/vdf/scheduleNode.h"
@@ -22,7 +20,6 @@
 #include "pxr/exec/vdf/types.h"
 
 #include "pxr/base/tf/bits.h"
-#include "pxr/base/tf/hash.h"
 
 #include <vector>
 

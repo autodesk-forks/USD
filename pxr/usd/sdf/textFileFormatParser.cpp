@@ -20,6 +20,7 @@
 #include "pxr/base/ts/valueTypeDispatch.h"
 
 #include <cmath>
+#include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -173,6 +174,22 @@ struct TextParserAction<KeywordNone>
         {
             context.timeSamples[context.timeSampleTime] 
                 = VtValue(SdfValueBlock());
+        }
+    }
+};
+
+template <>
+struct TextParserAction<KeywordAnimationBlock>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context)
+    {
+        Sdf_TextParserCurrentParsingContext parsingContext =
+            context.parsingContext.back();
+        if (parsingContext ==
+            Sdf_TextParserCurrentParsingContext::AttributeSpec)
+        {
+            _SetDefault(context.path, VtValue(SdfAnimationBlock()), context);
         }
     }
 };
@@ -2439,8 +2456,7 @@ struct TextParserAction<SplineKnotTime>
         const std::pair<bool, Sdf_ParserHelpers::Value> result =
             _HelperGetNumericValueFromString(in, context);
         context.splineKnot = TsKnot(
-                context.spline.GetValueType(), 
-                context.spline.GetCurveType());
+                context.spline.GetValueType());
         context.splineKnot.SetTime(result.second.Get<double>());
         // We should get SplineKnotValue next;
         context.splineKnotValue = Sdf_ParserHelpers::Value();
@@ -4249,12 +4265,32 @@ Sdf_ParseLayer(
     context.magicIdentifierToken = magicId;
     context.versionString = versionString;
 
-    // Use the ArAsset buffer facility.
-    auto bufferPtr = asset->GetBuffer();
-    if (!bufferPtr) {
-        TF_RUNTIME_ERROR("Failed to read asset contents @%s@: "
-            "an error occurred while reading",
-            fileContext.c_str());
+    const size_t size = asset->GetSize();
+
+    // If the entire asset size is small, just read the asset content fully into
+    // memory via ArAsset::Read().  We've observed that this can be faster than
+    // demand-paging for very small assets on some systems.
+    const size_t smallSize = 1024;
+    std::unique_ptr<char []> smallBuffer;
+    std::shared_ptr<const char> largeBuffer;
+    char const *contentPtr = nullptr;
+    if (size <= smallSize) {
+        // Use ArAsset::Read().
+        smallBuffer.reset(new char[size]);
+        if (asset->Read(smallBuffer.get(), size, /*offset=*/0) == size) {
+            contentPtr = smallBuffer.get();
+        }
+    }
+    else {
+        // Use the ArAsset buffer facility.
+        largeBuffer = asset->GetBuffer();
+        contentPtr = largeBuffer.get();
+    }
+
+    // Now we should have content, either via smallBuffer or largeBuffer.
+    if (!contentPtr) {
+        TF_RUNTIME_ERROR("Failed to read asset content: @%s@",
+                         fileContext.c_str());
         return false;
     }
 
@@ -4267,13 +4303,14 @@ Sdf_ParseLayer(
         std::string_view
         >;
 
-    PegtlInput content { bufferPtr.get(), asset->GetSize(), fileContext };
+    PegtlInput content { contentPtr, size, fileContext };
     context.values.errorReporter =
         [&context, capture0 = std::cref(content)](auto && PH1) { 
             return Sdf_TextFileFormatParser
                 ::_ReportParseError<PegtlInput>(
                     context, capture0, std::forward<decltype(PH1)>(PH1));
         };
+    
     bool status = false;
     try
     {

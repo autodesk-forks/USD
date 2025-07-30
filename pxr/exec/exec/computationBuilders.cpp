@@ -78,6 +78,7 @@ struct Exec_PrimComputationBuilder::_Data
         const TfToken &computationName_)
     : schemaType(schemaType_)
     , computationName(computationName_)
+    , inputKeys(Exec_InputKeyVector::MakeShared())
     {
     }
 
@@ -85,7 +86,7 @@ struct Exec_PrimComputationBuilder::_Data
     const TfToken computationName;
     TfType resultType;
     ExecCallbackFn callback;
-    Exec_InputKeyVector inputKeys;
+    Exec_InputKeyVectorRefPtr inputKeys;
 };
 
 Exec_PrimComputationBuilder::Exec_PrimComputationBuilder(
@@ -97,8 +98,7 @@ Exec_PrimComputationBuilder::Exec_PrimComputationBuilder(
 
 Exec_PrimComputationBuilder::~Exec_PrimComputationBuilder()
 {
-    Exec_DefinitionRegistry::RegisterComputationAccess::_RegisterPrimComputation(
-        Exec_DefinitionRegistry::GetInstance(),
+    Exec_DefinitionRegistry::ComputationBuilderAccess::_RegisterPrimComputation(
         _data->schemaType,
         _data->computationName,
         _data->resultType,
@@ -118,8 +118,8 @@ void
 Exec_PrimComputationBuilder::_AddInputKey(
     const Exec_ComputationBuilderValueSpecifierBase *const valueSpecifier)
 {
-    _data->inputKeys.push_back({});
-    valueSpecifier->_GetInputKey(&_data->inputKeys.back());
+    _data->inputKeys->Get().push_back({});
+    valueSpecifier->_GetInputKey(&_data->inputKeys->Get().back());
 }
 
 //
@@ -130,6 +130,12 @@ Exec_ComputationBuilder::Exec_ComputationBuilder(
     const TfType schemaType)
     : _schemaType(schemaType)
 {
+}
+
+Exec_ComputationBuilder::~Exec_ComputationBuilder()
+{
+    Exec_DefinitionRegistry::ComputationBuilderAccess::
+        _SetComputationRegistrationComplete(_schemaType);
 }
 
 Exec_PrimComputationBuilder 

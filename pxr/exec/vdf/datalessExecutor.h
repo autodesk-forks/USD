@@ -13,10 +13,11 @@
 
 #include "pxr/exec/vdf/api.h"
 #include "pxr/exec/vdf/executorInterface.h"
-#include "pxr/exec/vdf/output.h"
-#include "pxr/exec/vdf/vector.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+class VdfOutput;
+class VdfVector;
 
 ///////////////////////////////////////////////////////////////////////////////
 ///

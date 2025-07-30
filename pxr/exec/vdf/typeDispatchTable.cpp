@@ -20,7 +20,7 @@ Vdf_TypeDispatchTableBase::Vdf_TypeDispatchTableBase() = default;
 Vdf_TypeDispatchTableBase::~Vdf_TypeDispatchTableBase() = default;
 
 bool
-Vdf_TypeDispatchTableBase::IsTypeRegistered(const TfType &t) const
+Vdf_TypeDispatchTableBase::IsTypeRegistered(const TfType t) const
 {
     tbb::spin_rw_mutex::scoped_lock lock(_mutex, /* write = */ false);
     return _map.count(t);
@@ -48,7 +48,7 @@ Vdf_TypeDispatchTableBase::_RegisterType(
 
 void *
 Vdf_TypeDispatchTableBase::_FindOrFatalError(
-    const TfType &t) const
+    const TfType t) const
 {
     tbb::spin_rw_mutex::scoped_lock lock(_mutex, /* write = */ false);
     _MapType::const_iterator i = _map.find(t);

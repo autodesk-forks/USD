@@ -22,10 +22,7 @@ pxr_library(usdImaging
         usdShade
         usdVol
         ar
-        ${TBB_tbb_LIBRARY}
-
-    INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
+        TBB::tbb
 
     PUBLIC_CLASSES
         adapterRegistry
@@ -66,6 +63,7 @@ pxr_library(usdImaging
         materialParamUtils
         modelSchema
         primvarUtils
+        prototypeSceneIndexUtils
         resolvedAttributeCache
         instancerContext
         stageSceneIndex
@@ -322,12 +320,15 @@ pxr_register_test(testUsdImagingExcluded
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingExcluded"
     EXPECTED_RETURN_CODE 0
 )
-pxr_register_test(testUsdImagingMaterialBinding
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingMaterialBinding"
-    EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
-)
+# Tests that rely on plugins aren't currently supported in static builds.
+if (BUILD_SHARED_LIBS)
+    pxr_register_test(testUsdImagingMaterialBinding
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingMaterialBinding"
+        EXPECTED_RETURN_CODE 0
+        ENV
+            USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
+    )
+endif()
 pxr_register_test(testUsdImagingNestedInstancingCategories
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingNestedInstancingCategories"
     EXPECTED_RETURN_CODE 0
@@ -360,7 +361,7 @@ pxr_register_test(testUsdImagingStageSceneIndexContents
 # This test requires MaterialX support and is not currently supported on static 
 # builds as it uses a plugin mechanism which is not supported for static build 
 # configurations. 
-if (BUILD_SHARED_LIBS AND $PXR_ENABLE_MATERIALX_SUPPORT)
+if (BUILD_SHARED_LIBS AND ${PXR_ENABLE_MATERIALX_SUPPORT})
 
 pxr_build_test(testUsdImagingHdMtlx
     LIBRARIES

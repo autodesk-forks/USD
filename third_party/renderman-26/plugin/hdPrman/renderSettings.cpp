@@ -442,6 +442,9 @@ HdPrman_RenderSettings::UpdateAndRender(
         //     per-product.
         _UpdateCameraContextFromProduct(product, &cameraContext);
 
+        // Some camera params may override values on the integrator. 
+        param->UpdateIntegrator(renderIndex);
+
         // This _cannot_ be moved to Sync since the camera Sprim wouldn't have
         // been updated.
         _UpdateRileyCamera(
@@ -578,11 +581,19 @@ void HdPrman_RenderSettings::_Sync(
         _UpdateFrame(terminalSi, &_settingsOptions);
     }
 #else
-        // Ignore the frame here for older usd versions.
-        // It doesn't get updated properly, but if we leave it here,
-        // it will win in composition in HdPrman_RenderParam::SetRileyOptions().
-        _settingsOptions.Remove(RixStr.k_Ri_Frame);
+    // Ignore the frame here for older usd versions.
+    // It doesn't get updated properly, but if we leave it here,
+    // it will win in composition in HdPrman_RenderParam::SetRileyOptions().
+    _settingsOptions.Remove(RixStr.k_Ri_Frame);
 #endif
+
+    // If threads has default value, remove it so fallback value,
+    // which has a reasonable value for interactive, will be used.
+    int nthreads = 0;
+    _settingsOptions.GetInteger(RixStr.k_limits_threads, nthreads);
+    if(nthreads == 0) {
+        _settingsOptions.Remove(RixStr.k_limits_threads);
+    }
 
     // XXX Preserve existing data flow for clients that don't populate the
     //     sceneGlobals.activeRenderSettingsPrim locator at the root prim of the

@@ -54,7 +54,7 @@ struct Sdf_AssetInfo;
 ///
 /// The SdfLayer class provides a consistent API for accesing and serializing
 /// scene description, using any data store provided by Ar plugins.  Sdf
-/// itself provides a UTF-8 text format for layers identified by the ".sdf"
+/// itself provides a UTF-8 text format for layers identified by the ".usda"
 /// identifier extension, but via the SdfFileFormat abstraction, allows
 /// downstream modules and plugins to adapt arbitrary data formats to the
 /// SdfData/SdfLayer model.
@@ -453,8 +453,8 @@ public:
     /// to those functions, those arguments will be encoded in the identifier.
     /// 
     /// For example: 
-    ///     FindOrOpen('foo.sdf', args={'a':'b', 'c':'d'}).identifier
-    ///         => "foo.sdf:SDF_FORMAT_ARGS:a=b&c=d"
+    ///     FindOrOpen('foo.usda', args={'a':'b', 'c':'d'}).identifier
+    ///         => "foo.usda:SDF_FORMAT_ARGS:a=b&c=d"
     ///
     /// Note that this means the identifier may in general not be a path.
     ///

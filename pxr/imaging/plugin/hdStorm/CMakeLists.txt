@@ -33,10 +33,8 @@ cmake_language(CALL ${PXR_CMD} hdStorm
         hd
         hdSt
         ${OPENSUBDIV_LIBRARIES}
-        ${TBB_tbb_LIBRARY}
 
     INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
         ${OPENSUBDIV_INCLUDE_DIR}
 
     PUBLIC_CLASSES

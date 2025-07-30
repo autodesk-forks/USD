@@ -9,6 +9,7 @@
 #include "pxr/base/arch/fileSystem.h"
 #include "pxr/base/arch/symbols.h"
 #include "pxr/base/arch/defines.h"
+
 #if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 #include <dlfcn.h>
 #elif defined(ARCH_OS_DARWIN)

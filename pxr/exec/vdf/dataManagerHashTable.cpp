@@ -6,8 +6,6 @@
 //
 #include "pxr/exec/vdf/dataManagerHashTable.h"
 
-#include "pxr/exec/vdf/network.h"
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 void

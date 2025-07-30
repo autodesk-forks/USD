@@ -552,10 +552,12 @@ TestEdits()
                 res = runner.Snapshot("edit_step_" + TfStringify(editStep++), false);
             }
 
+            const auto neverFilter = [](const VdfNode *) { return true; };
+
             prevVersion = net.GetVersion();
             error = TF_HAS_ERRORS(m,
                 VdfIsolatedSubnetwork::IsolateBranch(
-                    testNetwork["Translate4_0"], NULL /* filter */));
+                    testNetwork["Translate4_0"], neverFilter));
             TF_AXIOM(net.GetVersion() != prevVersion);
 
             net.UnregisterEditMonitor(&monitor);
@@ -678,13 +680,13 @@ TestEdits()
     // Test DeleteBranch and EditFilters
     //
 
-    struct Filter : public VdfNetwork::EditFilter
+    struct Filter
     {
         Filter(Runner &runner)
         :   _runner(runner),
             _nodesAsked(0) {}
 
-        virtual bool CanDelete(const VdfNode *node)
+        bool operator()(const VdfNode *node) const
         {
             printf("> asking: %s\n", node->GetDebugName().c_str());
             _nodesAsked++;
@@ -692,7 +694,7 @@ TestEdits()
         }
 
         Runner &_runner;
-        size_t  _nodesAsked;
+        mutable size_t _nodesAsked;
     };
 
     Filter filter(runner);
@@ -704,8 +706,8 @@ TestEdits()
 
     printf("Deleting branch: %s\n", connection->GetDebugName().c_str());
 
-    VdfIsolatedSubnetworkRefPtr subgraph =
-        VdfIsolatedSubnetwork::IsolateBranch(connection, &filter);
+    std::unique_ptr<VdfIsolatedSubnetwork> subgraph =
+        VdfIsolatedSubnetwork::IsolateBranch(connection, filter);
 
     size_t num = subgraph->GetIsolatedNodes().size();
     printf("> num = %zu\n", num);

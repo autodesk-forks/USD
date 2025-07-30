@@ -84,7 +84,7 @@ template<typename T>
 class Vdf_BoxedContainer
 {
     static_assert(
-        !Vdf_IsBoxedContainer<T>::value, "Recursive boxing is not allowed");
+        !Vdf_IsBoxedContainer<T>, "Recursive boxing is not allowed");
 
     // Adjust the local capacity of our data so that we use as much local
     // capacity as we can without growing sizeof(_DataVec).  We do this so

@@ -301,7 +301,7 @@ public:
 
     // Checks whether render param was successfully initialized.
     // ie. riley was created
-    bool IsValid() const;
+    bool IsValid() const override;
 
     // Creates displays in riley based on aovBindings vector together
     // with HdPrmanFramebuffer to transfer the result between the
@@ -635,10 +635,6 @@ private:
     HdRenderPassAovBindingVector _lastBindings;
 
     // Solaris Legacy Sample & Display Filter Support
-    std::unordered_map<RtUString, riley::ShadingNode> _displayFilters;
-    std::unordered_map<RtUString, riley::ShadingNode> _sampleFilters;
-    bool _displayFiltersDirty;
-    bool _sampleFiltersDirty;
     riley::SampleFilterId _sampleFilterId;
     riley::DisplayFilterId _displayFilterId;    
 

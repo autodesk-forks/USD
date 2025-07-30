@@ -7,7 +7,6 @@
 #include "pxr/exec/vdf/parallelDataManagerVector.h"
 
 #include "pxr/exec/vdf/dataManagerAllocator.h"
-#include "pxr/exec/vdf/network.h"
 
 #include "pxr/base/tf/staticData.h"
 #include "pxr/base/trace/trace.h"

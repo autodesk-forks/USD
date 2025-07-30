@@ -11,6 +11,7 @@
 #include "pxr/base/ts/typeHelpers.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/stringUtils.h"
+#include "pxr/base/vt/valueFromPython.h"
 
 #include "pxr/external/boost/python/class.hpp"
 #include "pxr/external/boost/python/make_constructor.hpp"
@@ -193,5 +194,10 @@ void wrapSpline()
 
         .def("HasValueBlockAtTime", &This::HasValueBlockAtTime)
 
+        .def("IsSupportedValueType",
+            &This::IsSupportedValueType)
+        .staticmethod("IsSupportedValueType")
         ;
+
+    VtValueFromPython<TsSpline>();
 }

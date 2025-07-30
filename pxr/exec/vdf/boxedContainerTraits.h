@@ -17,14 +17,10 @@ template <typename T>
 class Vdf_BoxedContainer;
 
 template <typename T>
-struct Vdf_IsBoxedContainer : std::false_type
-{
-};
+constexpr inline bool Vdf_IsBoxedContainer = false;
 
 template <typename T>
-struct Vdf_IsBoxedContainer<Vdf_BoxedContainer<T>> : std::true_type
-{
-};
+constexpr inline bool Vdf_IsBoxedContainer<Vdf_BoxedContainer<T>> = true;
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

@@ -8,6 +8,8 @@
 #define PXR_USD_SDF_TEXT_FILE_FORMAT_H
 
 /// \file sdf/textFileFormat.h
+///
+/// \deprecated in favor of usdaFileFormat.h
 
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/api.h"
@@ -37,6 +39,9 @@ class ArAsset;
 /// \class SdfTextFileFormat
 ///
 /// Sdf text file format
+///
+/// \deprecated in favor of SdfUsdaFileFormat. .sdf will be
+/// replaced by .usda.
 ///
 class SdfTextFileFormat : public SdfFileFormat
 {

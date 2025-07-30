@@ -672,7 +672,7 @@ Options:
   --outputType validity|summary|outline|pseudoLayer|layer
                               Specify output format; 'summary' reports overall statistics,
                               'outline' is a flat text report of paths and fields,
-                              'pseudoLayer' is similar to the sdf file format but with truncated
+                              'pseudoLayer' is similar to the usda file format but with truncated
                               array values and timeSamples for human readability, and 'layer' is
                               true layer output, with the format controlled by the 'outputFile'
                               and 'outputFormat' arguments. Default: outline

@@ -13,10 +13,12 @@
 #include "pxr/exec/vdf/types.h"
 
 #include "pxr/base/arch/demangle.h"
+#include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/token.h"
 
 #include <string>
 #include <typeinfo>
+#include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -28,14 +30,14 @@ public:
 
     Vdf_ExecNodeDebugName(
         const VdfNode &node,
-        const VdfNodeDebugNameCallback &callback) 
+        VdfNodeDebugNameCallback &&callback) 
     : _node(&node)
-    , _callback(callback) 
+    , _callback(std::move(callback))
     {
-        if (!callback) {
-            TF_CODING_ERROR("Null callback for node: %s",
-                ArchGetDemangled(typeid(node)).c_str());
-        }
+        TF_VERIFY(
+            _callback,
+            "Null callback for node: %s",
+            ArchGetDemangled(typeid(node)).c_str());
     }
 
 private:

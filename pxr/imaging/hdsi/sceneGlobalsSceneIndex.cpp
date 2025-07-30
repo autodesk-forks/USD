@@ -112,7 +112,10 @@ _SceneGlobalsDataSource::Get(const TfToken &name)
 HdsiSceneGlobalsSceneIndexRefPtr
 HdsiSceneGlobalsSceneIndex::New(const HdSceneIndexBaseRefPtr &inputSceneIndex)
 {
-    return TfCreateRefPtr(new HdsiSceneGlobalsSceneIndex(inputSceneIndex));
+    HdsiSceneGlobalsSceneIndexRefPtr const result =
+        TfCreateRefPtr(new HdsiSceneGlobalsSceneIndex(inputSceneIndex));
+    result->SetDisplayName("Scene Globals Scene Index");
+    return result;
 }
 
 void

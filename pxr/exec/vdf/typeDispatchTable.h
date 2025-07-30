@@ -17,7 +17,7 @@
 #include "pxr/exec/vdf/api.h"
 
 #include "pxr/base/tf/hash.h"
-#include "pxr/base/tf/hashmap.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
 #include "pxr/base/tf/type.h"
 
 #include <tbb/spin_rw_mutex.h>
@@ -33,7 +33,7 @@ class Vdf_TypeDispatchTableBase
 public:
     /// Returns \c true if a function has been registered for type \p t.
     VDF_API
-    bool IsTypeRegistered(const TfType &t) const;
+    bool IsTypeRegistered(TfType t) const;
 
 protected:
     /// Register function pointer \p f as the implementation to dispatch to
@@ -44,7 +44,7 @@ protected:
     /// Find a registered function pointer for type \p t.  Issues a fatal
     /// error if no function has been registered for type \p t.
     VDF_API
-    void * _FindOrFatalError(const TfType &t) const;
+    void *_FindOrFatalError(TfType t) const;
 
     VDF_API
     Vdf_TypeDispatchTableBase();
@@ -54,7 +54,7 @@ protected:
 
 private:
     // Type for the dispatch map, a map from keys to functions.
-    typedef TfHashMap<TfType, void *, TfHash> _MapType;
+    using _MapType = pxr_tsl::robin_map<TfType, void *, TfHash>;
 
     // The type dispatch map.
     _MapType _map;
@@ -64,10 +64,8 @@ private:
 };
 
 
-/// \brief A class template that conatins a table that is used to dispatch
-///        calls to function templates based on a TfType that is determined at
-///        runtime.
-///
+/// Dispatches calls to template instantiations based on a TfType that is
+/// determined at runtime.
 ///
 /// Parameters:
 ///
@@ -84,14 +82,15 @@ private:
 ///
 /// Example:
 ///
-/// Given this class template to be instantiated for each of the menva
-/// attribute types:
+/// Given this class template to be instantiated for each attribute type that
+/// may be computed:
 /// \code
 ///     template <typename T>
 ///     struct _ExtractExecValue {
 ///         static VtValue Call(const VdfVector &v, int offset)
 ///         {
-///             return VtValue( *v.Get<T>(offset) );
+///             const auto accessor = v.GetReadAccessor<T>();
+///             return VtValue(accessor[offset]);
 ///         }
 ///     };
 /// \endcode
@@ -113,7 +112,7 @@ private:
 /// type of \c attribute:
 /// \code
 ///     VtValue value = _extractTable->Call<VtValue>()(
-///         attribute->GetValueType(), v, offset );
+///         attribute.GetTypeName().GetType(), v, offset);
 /// \endcode
 ///
 template <template <typename> class Fn>
@@ -126,11 +125,13 @@ public:
     /// \c Fn<int> is special only because it was the default instantiation
     /// used by the previous VdfTypeDispatchTable implementation to determine
     /// the function type for all \c Fn<T>.
-    typedef decltype(Fn<int>::Call) FnSignature;
+    ///
+    using FnSignature = decltype(Fn<int>::Call);
 
     /// Register an additional type with the type dispatch table.  This will
     /// return \c true, if \p Type has been successfully added to the dispatch 
     /// table and \c false if it was registered already.
+    ///
     template <typename Type>
     bool RegisterType()
     {
@@ -144,8 +145,9 @@ public:
     /// Invoke the function registered for \p key type.
     ///
     /// Calling this with an unregistered type is a fatal error.
+    ///
     template <typename RetType, typename... Args>
-    RetType Call(const TfType &key, Args&&... args) const
+    RetType Call(TfType key, Args&&... args) const
     {
         return reinterpret_cast<FnSignature *>(this->_FindOrFatalError(key))
             (std::forward<Args>(args)...);

@@ -38,6 +38,8 @@ public:
 
     bool supportsTimeStamps;
 
+    bool supportsNativeInterop;
+
     VkPhysicalDeviceProperties2 vkDeviceProperties2 {};
     VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT
         vkVertexAttributeDivisorProperties {};
@@ -50,6 +52,7 @@ public:
         vkVertexAttributeDivisorFeatures {};
     VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR
         vkBarycentricFeatures {};
+    VkPhysicalDeviceLineRasterizationFeaturesKHR vkLineRasterizationFeatures {};
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -31,14 +31,12 @@ EfTimeInterval::GetAsString() const
 //
 // Special care is required when the frame is on one of the interval
 // boundaries, since we need to correctly handle time evaluation locations:
-// E.g., 1-EvaluateAtTime is *at* frame 1, but 1-EvaluatePre is at a frame that
+// E.g., 1 is *at* frame 1, but PreTime(1) is at a frame that
 // is infinitesimally smaller than 1. Therefore:
-// * 0-EvaluatePre **is not** contained in (0, 1] **or** [0, 1].
-// * 0-EvaluateAtTime **is not** contained in (0, 1], but **is** contained in 
-//      [0, 1].
-// * 1-EvaluatePre **is** contained in [0, 1) **and** [0, 1].
-// * 1-EvaluateAtTime **is not** contained in [0, 1), but **is** contained in
-//      [0, 1].
+// * PreTime(0) **is not** contained in (0, 1] **or** [0, 1].
+// * 0 **is not** contained in (0, 1], but **is** contained in [0, 1].
+// * PreTime(1) **is** contained in [0, 1) **and** [0, 1].
+// * 1 **is not** contained in [0, 1), but **is** contained in [0, 1].
 //
 static bool _TimeIsContainedIn(const EfTime &time, const GfInterval &interval)
 {
@@ -47,11 +45,9 @@ static bool _TimeIsContainedIn(const EfTime &time, const GfInterval &interval)
     if (timeCode.IsDefault() || interval.IsEmpty()) {
         return false;
     } else if (timeCode.GetValue() == interval.GetMin()) {
-        return time.GetEvaluationLocation() == EfTime::EvaluateAtTime &&
-            interval.IsMinClosed();
+        return !timeCode.IsPreTime() && interval.IsMinClosed();
     } else if (timeCode.GetValue() == interval.GetMax()) {
-        return time.GetEvaluationLocation() == EfTime::EvaluatePre ||
-            interval.IsMaxClosed();
+        return timeCode.IsPreTime() || interval.IsMaxClosed();
     }
 
     return interval.Contains(timeCode.GetValue());

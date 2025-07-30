@@ -140,6 +140,9 @@ public:
     HGIMETAL_API
     void EndFrame() override;
 
+    HGIMETAL_API
+    void GarbageCollect() override;
+
     //
     // HgiMetal specific
     //

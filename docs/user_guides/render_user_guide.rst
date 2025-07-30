@@ -1502,3 +1502,25 @@ see:
 Note that renderers are expected to add renderer-specific properties to the 
 USD render schemas via auto applied API schemas, and document those settings in 
 the renderer documentation. 
+
+.. _understanding_render_settings_colorspaces:
+
+Understanding Renderer Settings Colorspaces
+===========================================
+
+RenderSettings provides a way to set the renderer *working* color space via the
+:usda:`renderingColorSpace` attribute. This is the (linear) color space a 
+renderer should use to do internal calculations for the given render
+invocation. If this is not set, a renderer is expected to use whatever default
+color space it normally uses.
+
+Note that this color space should not be confused with specific color spaces for 
+scene objects. If you need to specify particular color spaces for objects
+(say, a texture asset that was created with a particular color space), or 
+transform between color spaces, you should use the :usda:`ColorSpaceAPI` and
+:usda:`ColorSpaceDefinitionAPI` schemas on prims that need to specify color
+space information. USD has specific rules on how color spaces specified on 
+objects are propagated and resolved.
+
+See :ref:`color_users_guide` for more details on working with color spaces with
+USD objects.

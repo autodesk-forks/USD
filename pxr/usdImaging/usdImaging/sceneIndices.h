@@ -34,7 +34,7 @@ struct UsdImagingCreateSceneIndicesInfo
     UsdStageRefPtr stage;
     /// Inputs to UsdImagingStageSceneIndex (note that
     /// includeUnloadedPrims is set automatically when
-    ///displayUnloadedPrimsWithBounds is enabled).
+    /// displayUnloadedPrimsWithBounds is enabled).
     HdContainerDataSourceHandle stageSceneIndexInputArgs;
     /// Add scene index resolving usd draw mode.
     bool addDrawModeSceneIndex = true;
@@ -46,7 +46,7 @@ struct UsdImagingCreateSceneIndicesInfo
 };
 
 /// Some scene indices in the chain of filtering scene indices created
-/// by UsdImagingInstantiateSceneIndices.
+/// by UsdImagingCreateSceneIndices.
 struct UsdImagingSceneIndices
 {
     UsdImagingStageSceneIndexRefPtr stageSceneIndex;

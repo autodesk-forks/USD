@@ -156,6 +156,9 @@ public:
     void EndFrame() override;
 
     HGIWEBGPU_API
+    void GarbageCollect() override;
+
+    HGIWEBGPU_API
     wgpu::Device GetPrimaryDevice() const;
 
     HGIWEBGPU_API

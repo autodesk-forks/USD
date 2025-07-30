@@ -61,7 +61,7 @@ public:
     /// layout transition in non-explicit APIs like OpenGL. Hence this function
     /// simply returns void.
     HGIWEBGPU_API
-    void SubmitLayoutChange(HgiTextureUsage newLayout) override;
+    HgiTextureUsage SubmitLayoutChange(HgiTextureUsage newLayout) override;
 
 protected:
     friend class HgiWebGPU;

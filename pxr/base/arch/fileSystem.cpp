@@ -143,7 +143,8 @@ int ArchRmDir(const char* path)
 bool
 ArchStatIsWritable(const ArchStatType *st)
 {
-#if defined(ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || defined(ARCH_OS_WASM_VM)
+#if defined(ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     if (st) {
         return (st->st_mode & S_IWOTH) || 
             ((getegid() == st->st_gid) && (st->st_mode & S_IWGRP)) ||
@@ -477,7 +478,8 @@ ArchGetFileLength(FILE *file)
 {
     if (!file)
         return -1;
-#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || defined(ARCH_OS_WASM_VM)
+#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     struct stat buf;
     return fstat(fileno(file), &buf) < 0 ? -1 :
         static_cast<int64_t>(buf.st_size);
@@ -491,7 +493,8 @@ ArchGetFileLength(FILE *file)
 int64_t
 ArchGetFileLength(const char* fileName)
 {
-#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || defined(ARCH_OS_WASM_VM)
+#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     struct stat buf;
     return stat(fileName, &buf) < 0 ? -1 : static_cast<int64_t>(buf.st_size);
 #elif defined (ARCH_OS_WINDOWS)
@@ -546,21 +549,13 @@ ArchGetFileName(FILE *file)
     }
 
     if (dwSize != 0) {
-        size_t outSize = WideCharToMultiByte(
-            CP_UTF8, 0, filePath.data(),
-            dwSize,
-            NULL, 0, NULL, NULL);
-        result.resize(outSize);
-        WideCharToMultiByte(
-            CP_UTF8, 0, filePath.data(),
-            -1,
-            &result.front(), outSize, NULL, NULL);
-
         // Strip path prefix if necessary.
         // See https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
         // for format of DOS device paths.
-        auto canonicalPath = std::filesystem::canonical(result);
-        result = canonicalPath.string();
+        
+        auto canonicalPath = std::filesystem::canonical(
+            std::filesystem::path(filePath.begin(), filePath.begin() + dwSize));
+        result = ArchWindowsUtf16ToUtf8(canonicalPath.wstring());
     }
     return result;                                        
 #else

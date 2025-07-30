@@ -24,11 +24,18 @@ TsKnot::TsKnot()
 }
 
 TsKnot::TsKnot(
-    TfType valueType,
-    TsCurveType curveType)
+    TfType valueType)
     : _data(Ts_KnotData::Create(valueType)),
       _proxy(Ts_KnotDataProxy::Create(_data, valueType))
 {
+}
+
+TsKnot::TsKnot(
+    TfType valueType,
+    TsCurveType curveType)
+    : TsKnot(valueType)
+{
+    // SetCurveType has been deprecated and will be removed in a future release.
     SetCurveType(curveType);
 }
 
@@ -230,12 +237,14 @@ bool TsKnot::ClearPreValue()
 
 bool TsKnot::SetCurveType(const TsCurveType curveType)
 {
+    TF_WARN("TsKnot::SetCurveType has been deprecated.");
     _data->curveType = curveType;
     return true;
 }
 
 TsCurveType TsKnot::GetCurveType() const
 {
+    TF_WARN("TsKnot::GetCurveType has been deprecated.");
     return _data->curveType;
 }
 
@@ -255,11 +264,6 @@ bool TsKnot::SetPreTanWidth(const TsTime width)
 
 TsTime TsKnot::GetPreTanWidth() const
 {
-    if (!_CheckGetWidth())
-    {
-        return false;
-    }
-
     return _data->GetPreTanWidth();
 }
 
@@ -301,11 +305,6 @@ bool TsKnot::SetPostTanWidth(const TsTime width)
 
 TsTime TsKnot::GetPostTanWidth() const
 {
-    if (!_CheckGetWidth())
-    {
-        return false;
-    }
-
     return _data->GetPostTanWidth();
 }
 
@@ -362,25 +361,8 @@ VtValue TsKnot::GetCustomDataByKey(
 ////////////////////////////////////////////////////////////////////////////////
 // Helpers
 
-bool TsKnot::_CheckGetWidth() const
-{
-    if (_data->curveType == TsCurveTypeHermite)
-    {
-        TF_CODING_ERROR("Cannot read widths for Hermite knots");
-        return false;
-    }
-
-    return true;
-}
-
 bool TsKnot::_CheckSetWidth(const TsTime width) const
 {
-    if (_data->curveType == TsCurveTypeHermite)
-    {
-        TF_CODING_ERROR("Cannot set widths for Hermite knots");
-        return false;
-    }
-
     if (width < 0)
     {
         TF_CODING_ERROR("Cannot set negative tangent width");
@@ -453,8 +435,6 @@ std::ostream& operator<<(std::ostream& out, const TsKnot &knot)
 {
     out << "Knot:" << std::endl
         << "  value type " << knot.GetValueType().GetTypeName() << std::endl
-        << "  curve type "
-        << TfEnum::GetName(knot.GetCurveType()).substr(11) << std::endl
         << "  time " << TfStringify(knot.GetTime()) << std::endl
         << "  value " << GET_VT_VALUE(GetValue) << std::endl
         << "  next interp "
@@ -465,21 +445,13 @@ std::ostream& operator<<(std::ostream& out, const TsKnot &knot)
         out << "  preValue " << GET_VT_VALUE(GetPreValue) << std::endl;
     }
 
-    if (knot.GetCurveType() == TsCurveTypeBezier)
-    {
-        out << "  pre-tan width "
-            << TfStringify(knot.GetPreTanWidth()) << std::endl;
-    }
-
-    out << "  pre-tan slope "
-        << GET_VT_VALUE(GetPreTanSlope) << std::endl;
-    if (knot.GetCurveType() == TsCurveTypeBezier)
-    {
-        out << "  post-tan width "
-            << TfStringify(knot.GetPostTanWidth()) << std::endl;
-    }
-
-    out << "  post-tan slope "
+    out << "  pre-tan width "
+        << TfStringify(knot.GetPreTanWidth()) << std::endl
+        << "  pre-tan slope "
+        << GET_VT_VALUE(GetPreTanSlope) << std::endl
+        << "  post-tan width "
+        << TfStringify(knot.GetPostTanWidth()) << std::endl
+        << "  post-tan slope "
         << GET_VT_VALUE(GetPostTanSlope) << std::endl;
 
     const VtDictionary customData = knot.GetCustomData();

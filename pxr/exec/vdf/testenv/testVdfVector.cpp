@@ -2181,6 +2181,30 @@ static bool TestDebugPrint()
     return true;
 }
 
+static bool
+TestConstructWithSize()
+{
+    {
+        const auto empty = VdfTypedVector<int>::CreateWithSize(0);
+        TF_AXIOM(empty.Holds<int>());
+        TF_AXIOM(empty.IsEmpty());
+    }
+
+    {
+        const auto single = VdfTypedVector<int>::CreateWithSize(1);
+        TF_AXIOM(single.Holds<int>());
+        ASSERT_EQ(single.GetSize(), 1);
+    }
+
+    {
+        const auto many = VdfTypedVector<int>::CreateWithSize(3);
+        TF_AXIOM(many.Holds<int>());
+        ASSERT_EQ(many.GetSize(), 3);
+    }
+
+    return true;
+}
+
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -2213,6 +2237,7 @@ static Tests tests[] =
     { TestVectorResize,          "TestVectorResize"          },
     { TestVectorMerge,           "TestVectorMerge"           },
     { TestDebugPrint,            "TestDebugPrint"            },
+    { TestConstructWithSize,     "TestConstructWithSize"     },
 
     NULL
 };

@@ -10,6 +10,7 @@
 #include "pxr/exec/ef/pageCacheStorage.h"
 
 #include "pxr/exec/vdf/executorInterface.h"
+#include "pxr/exec/vdf/request.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 

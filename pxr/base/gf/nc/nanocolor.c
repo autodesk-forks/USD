@@ -511,8 +511,8 @@ NcRGB NcTransformColor(const NcColorSpace* dst, const NcColorSpace* src, NcRGB r
         return rgb;
     }
     
-    NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(src),
-                               NcGetXYZToRGBMatrix(dst));
+    NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(dst),
+                              NcGetXYZToRGBMatrix(src));
     
     // if the source color space indicates a curve remove it.
     rgb.r = _ToLinear(src, rgb.r);
@@ -536,8 +536,8 @@ void NcTransformColors(const NcColorSpace* dst, const NcColorSpace* src, NcRGB* 
     if (!dst || !src || !rgb)
         return;
     
-    NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(src),
-                               NcGetXYZToRGBMatrix(dst));
+    NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(dst),
+                              NcGetXYZToRGBMatrix(src));
     
     // if the source color space indicates a curve remove it.
     for (size_t i = 0; i < count; i++) {
@@ -629,8 +629,8 @@ void NcTransformColorsWithAlpha(const NcColorSpace* dst, const NcColorSpace* src
     if (!dst || !src || !rgba)
         return;
     
-    NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(src),
-                               NcGetXYZToRGBMatrix(dst));
+    NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(dst),
+                              NcGetXYZToRGBMatrix(src));
     
     // if the source color space indicates a curve remove it.
     for (size_t i = 0; i < count; i++) {
