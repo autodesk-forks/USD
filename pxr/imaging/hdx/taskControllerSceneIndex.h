@@ -182,6 +182,10 @@ public:
     void SetOverrideWindowPolicy(
         const std::optional<CameraUtilConformWindowPolicy> &policy);
 
+    /// Set the multisample state for the AOVs.
+    HDX_API
+    void SetMultisampleState(const size_t &msaaSampleCount, bool enableMultisampling);
+
     /// -- Scene camera --
     /// Set the camera param on tasks to a USD camera path.
     HDX_API
@@ -287,6 +291,8 @@ private:
     void _SetRenderBufferSize();
     void _SetSimpleLightTaskParams(GlfSimpleLightingContextPtr const& src);
     void _SetLights(const GlfSimpleLightVector &lights);
+    void _UpdateAovMSAADescriptor();
+    void _UpdateAovMSAASampleCount();
 
     const SdfPath _prefix;
     const bool _isForStorm;
@@ -308,6 +314,12 @@ private:
     std::optional<CameraUtilConformWindowPolicy> _overrideWindowPolicy;
 
     GfVec4d _viewport;
+
+    // Multisampling enabled or not.
+    bool _enableMultisampling = true;
+
+    // Number of samples for multisampling.
+    size_t _msaaSampleCount = 4;
 
     friend class _Observer;
     class _Observer : public HdSceneIndexObserver

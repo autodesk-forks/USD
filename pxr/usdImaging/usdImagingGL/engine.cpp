@@ -789,7 +789,13 @@ UsdImagingGLEngine::SetMultisampleState(const size_t &msaaSampleCount, bool enab
         return;
     }
 
-    _taskController->SetMultisampleState(msaaSampleCount, enableMultisampling);
+    if (_taskControllerSceneIndex) {
+        _taskControllerSceneIndex->SetMultisampleState(msaaSampleCount, enableMultisampling);
+    } else if (_taskController) {
+        _taskController->SetMultisampleState(msaaSampleCount, enableMultisampling);
+    } else {
+        TF_CODING_ERROR("No task controller or task controller scene index.");
+    }
 }
 
 void
