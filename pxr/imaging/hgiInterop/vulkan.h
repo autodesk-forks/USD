@@ -151,6 +151,7 @@ private:
 
     std::unique_ptr<InteropSemaphore> _vkComplete;
     std::unique_ptr<InteropSemaphore> _glComplete;
+    VkFence _interopFinished = VK_NULL_HANDLE;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

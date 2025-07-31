@@ -549,6 +549,11 @@ HgiInteropVulkan::HgiInteropVulkan(Hgi* hgiVulkan)
         _depthTex = std::make_unique<InteropTexEmulated>();
     }
 
+    VkFenceCreateInfo fenceCreateInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    HGIVULKAN_VERIFY_VK_RESULT(vkCreateFence(
+        _hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(), &fenceCreateInfo,
+        HgiVulkanAllocator(), &_interopFinished));
+
     const GLenum error = glGetError();
     TF_VERIFY(error == GL_NO_ERROR, "OpenGL error: 0x%04x", error);
 }
@@ -564,6 +569,9 @@ HgiInteropVulkan::~HgiInteropVulkan()
     if (_vertexArray) {
         glDeleteVertexArrays(1, &_vertexArray);
     }
+
+    vkDestroyFence(_hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(),
+        _interopFinished, HgiVulkanAllocator());
 
     const GLenum error = glGetError();
     TF_VERIFY(error == GL_NO_ERROR, "OpenGL error: 0x%04x", error);
@@ -806,7 +814,18 @@ HgiInteropVulkan::CompositeToInterop(
 
         HGIVULKAN_VERIFY_VK_RESULT(
             vkQueueSubmit(commandQueue->GetVulkanGraphicsQueue(),
-                1, &submitInfoAfter, VK_NULL_HANDLE));
+                1, &submitInfoAfter, _interopFinished));
+
+        // We need to force a sync here because we don't have the
+        // synchronization mechanism to prevent the AOV from being reused
+        // before its copy is finished.
+        const VkDevice device =
+            _hgiVulkan->GetPrimaryDevice()->GetVulkanDevice();
+        static constexpr uint64_t timeOut = 100000000000;
+        HGIVULKAN_VERIFY_VK_RESULT(vkWaitForFences(device, 1,
+            &_interopFinished, VK_TRUE, timeOut));
+        HGIVULKAN_VERIFY_VK_RESULT(vkResetFences(device, 1,
+            &_interopFinished));
     }
 
     {
