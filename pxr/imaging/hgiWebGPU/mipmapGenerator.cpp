@@ -139,6 +139,10 @@ wgpu::Texture HgiWebGPUMipmapGenerator::generateMipmap(const wgpu::Texture& text
     const uint32_t  mipLevelCount =  textureDescriptor.mipLevels;
     const int32_t width = textureDescriptor.dimensions[0];
     const int32_t height = textureDescriptor.dimensions[1];
+    if (width == 1 || height == 1) {
+        TF_WARN("Skipping mipmap generation for texture with dimensions 1x1!");
+        return texture;
+    }
     const uint32_t arrayLayerCount = textureDescriptor.layerCount;
     const wgpu::RenderPipeline pipeline = _getMipmapPipeline(format);
     const bool renderToSource = textureDescriptor.usage & HgiTextureUsageBitsColorTarget || textureDescriptor.usage & HgiTextureUsageBitsDepthTarget;

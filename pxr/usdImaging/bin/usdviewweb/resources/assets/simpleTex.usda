@@ -1,0 +1,41 @@
+#usda 1.0
+(
+    defaultPrim = "Geom"
+)
+
+def Xform "Geom"
+{
+    def Mesh "Plane" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        float3[] extent = [(-2, -2, 0), (2, 2, 0)]
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        rel material:binding = </Materials/MaterialX/Materials/Tiled_Brass>
+        point3f[] points = [(-2, -2, 0), (2, -2, 0), (2, 2, 0), (-2, 2, 0)]
+        color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
+        float2[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "vertex"
+        )
+    }
+}
+
+def Scope "Materials" {
+
+    def Scope "MaterialX" (
+        references = [
+            @./simpleTex.mtlx@</MaterialX>,
+        ]
+    )
+    {
+    }
+}
+
+def Xform "lights" 
+{
+    def DomeLight "DomeLight"
+    {
+        asset inputs:texture:file = @./StinsonBeach.hdr@
+    }
+}

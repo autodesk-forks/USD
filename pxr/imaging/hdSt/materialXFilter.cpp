@@ -171,14 +171,19 @@ _CreateHdStMaterialXContext(
     HdSt_MxShaderGenInfo const& mxHdInfo,
     TfToken const& apiName)
 {
+#ifdef PXR_METAL_SUPPORT_ENABLED
     if (apiName == HgiTokens->Metal) {
         return HdStMaterialXShaderGenMsl::create(mxHdInfo);
     }
+#endif  // PXR_METAL_SUPPORT_ENABLED
     if (apiName == HgiTokens->Vulkan) {
         return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
     }
     if (apiName == HgiTokens->OpenGL) {
         return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
+    }
+    if (apiName == HgiTokens->WebGPU) {
+        return HdStMaterialXShaderGenWgslGlsl::create(mxHdInfo);
     }
     else {
         TF_CODING_ERROR(

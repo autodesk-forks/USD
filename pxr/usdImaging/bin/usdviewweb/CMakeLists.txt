@@ -1,11 +1,26 @@
 set(PXR_PREFIX pxr/usdImaging)
 set(PXR_PACKAGE usdviewweb)
 
+
+set (usdMtlxLibs "")
+set (optionalLinkOptions "")
+
+if (PXR_ENABLE_MATERIALX_SUPPORT)
+    list(APPEND usdMtlxLibs
+        usdMtlx
+        sdrGlslfx
+    )
+    list(APPEND optionalLinkOptions
+        "--preload-file ${CMAKE_INSTALL_PREFIX}/libraries@/libraries/ "
+    )
+endif()
+
 pxr_cpp_bin(${PXR_PACKAGE}
     LIBRARIES
         usdImagingGL
         hdStorm
         usdShaders
+        ${usdMtlxLibs}
 
     INCLUDE_DIRS
         ${TBB_INCLUDE_DIRS}
@@ -62,8 +77,9 @@ if (EMSCRIPTEN)
     target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${USDVIEWWEB_EXE_LINKER_FLAGS} -sMODULARIZE=0")
     add_compile_definitions(MODEL_NAME="${MODEL}" MODEL_EXT_NAME="${MODEL_EXT}")
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL: \
-        --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/${MODEL}.${MODEL_EXT}@${MODEL}.${MODEL_EXT} \
+        --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/assets/@/ \
         --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/resources/webgpu-env-settings@/webgpu-env-settings \
+        ${optionalLinkOptions} \
         -mbulk-memory \
         -matomics \
         --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/resources/preload.js \

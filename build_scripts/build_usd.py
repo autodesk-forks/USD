@@ -1619,7 +1619,7 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.39.3.zip"
+MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/refs/tags/v1.39.4-rc1.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
@@ -1636,6 +1636,8 @@ def InstallMaterialX(context, force, buildArgs):
                 '-DMATERIALX_BUILD_TESTS=OFF',
                 '-DMATERIALX_BUILD_RENDER=ON',
                 '-DMATERIALX_BUILD_RENDER_PLATFORMS=OFF',
+                '-DMATERIALX_BUILD_GEN_GLSL=ON',
+                '-DMATERIALX_BUILD_GEN_MSL=OFF',
                 '-DMATERIALX_BUILD_GEN_OSL=OFF',
                 '-DMATERIALX_BUILD_GEN_MDL=OFF'])
 

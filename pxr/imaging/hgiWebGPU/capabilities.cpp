@@ -59,6 +59,8 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     // This might be available in the future https://github.com/gpuweb/gpuweb/issues/4891
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, false);
     _SetFlag(HgiDeviceCapabilitiesBitsTimestamps, device.HasFeature(wgpu::FeatureName::TimestampQuery));
+    _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures, false); // WGSL not support bindless textures as of 06/2025
+    _SetFlag(HgiDeviceCapabilitiesBitsBindlessBuffers, false);  // WGSL can use similar "storage" buffers
 }
 
 HgiWebGPUCapabilities::~HgiWebGPUCapabilities() = default;

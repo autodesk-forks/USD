@@ -133,7 +133,7 @@ void _BakeMtlxDocument(
     mx::TextureBakerPtr baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
 #else
-    mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
+    auto baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #endif
     baker->setupUnitSystem(stdLibraries);
