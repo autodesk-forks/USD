@@ -313,11 +313,15 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
     HdBufferSpec::GetBufferSpecs(reserveOnlySources, &bufferSpecs);
     HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
-
+    
+    HdBufferArrayUsageHint usageHint =
+        HdBufferArrayUsageHintBitsVertex;
+    if (!computations.empty()) {
+        usageHint |= HdBufferArrayUsageHintBitsStorage;
+    }
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
-            HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHintBitsVertex);
+            HdTokens->primvar, bar, bufferSpecs, removedSpecs, usageHint);
 
     HdStUpdateDrawItemBAR(
         range,

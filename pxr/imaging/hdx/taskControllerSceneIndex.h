@@ -41,8 +41,8 @@ TF_DECLARE_REF_PTRS(HdxTaskControllerSceneIndex);
 /// Note that the set of necessary tasks is different for Storm and other
 /// renderers. Thus, the c'tor needs to be given the renderer plugin name.
 ///
-/// It is a Hydra 2.0 implementation replacing of HdxTaskController.
-/// For now, the API and the behavior is the same than that of the
+/// It is a Hydra 2.0 implementation replacing the HdxTaskController.
+/// For now, the API and behavior is the same as that of the
 /// HdxTaskController.
 ///
 // XXX: This API is transitional. At the least, render/picking/selection
@@ -182,6 +182,10 @@ public:
     void SetOverrideWindowPolicy(
         const std::optional<CameraUtilConformWindowPolicy> &policy);
 
+    /// Set the multisample state for the AOVs.
+    HDX_API
+    void SetMultisampleState(const size_t &msaaSampleCount, bool enableMultisampling);
+
     /// -- Scene camera --
     /// Set the camera param on tasks to a USD camera path.
     HDX_API
@@ -287,6 +291,8 @@ private:
     void _SetRenderBufferSize();
     void _SetSimpleLightTaskParams(GlfSimpleLightingContextPtr const& src);
     void _SetLights(const GlfSimpleLightVector &lights);
+    void _UpdateAovMSAADescriptor();
+    void _UpdateAovMSAASampleCount();
 
     const SdfPath _prefix;
     const bool _isForStorm;
@@ -308,6 +314,12 @@ private:
     std::optional<CameraUtilConformWindowPolicy> _overrideWindowPolicy;
 
     GfVec4d _viewport;
+
+    // Multisampling enabled or not.
+    bool _enableMultisampling = true;
+
+    // Number of samples for multisampling.
+    size_t _msaaSampleCount = 4;
 
     friend class _Observer;
     class _Observer : public HdSceneIndexObserver

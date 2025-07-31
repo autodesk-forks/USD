@@ -2369,9 +2369,9 @@ vec4 GetEdgeDistanceQuad()
 
 
 
-vec4 ApplyFinalEdgeOpacity(vec4 Cfill)
+vec4 ApplyFinalEdgeOpacity(vec4 Cfill, float p)
 {
-    Cfill.a = 1.0;
+    Cfill.a = mix(Cfill.a, 1, p);
     return Cfill;
 }
 
@@ -2388,7 +2388,7 @@ vec4 ApplyEdgeColor(vec4 Cfill, vec4 patchCoord)
 
     Cfill.rgb = mix(Cfill.rgb, wireColor.rgb, wireColor.a);
 
-    return ApplyFinalEdgeOpacity(Cfill);
+    return ApplyFinalEdgeOpacity(Cfill, p);
 }
 
 
@@ -5142,9 +5142,9 @@ vec4 GetEdgeDistanceQuad()
 
 
 
-vec4 ApplyFinalEdgeOpacity(vec4 Cfill)
+vec4 ApplyFinalEdgeOpacity(vec4 Cfill, float p)
 {
-    Cfill.a = 1.0;
+    Cfill.a = mix(Cfill.a, 1, p);
     return Cfill;
 }
 
@@ -5161,7 +5161,7 @@ vec4 ApplyEdgeColor(vec4 Cfill, vec4 patchCoord)
 
     Cfill.rgb = mix(Cfill.rgb, wireColor.rgb, wireColor.a);
 
-    return ApplyFinalEdgeOpacity(Cfill);
+    return ApplyFinalEdgeOpacity(Cfill, p);
 }
 
 

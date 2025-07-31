@@ -16,10 +16,7 @@
 #include "pxr/exec/ef/leafNodeIndexer.h"
 
 #include "pxr/base/tf/hashmap.h"
-#include "pxr/exec/vdf/maskedOutput.h"
 #include "pxr/exec/vdf/maskedOutputVector.h"
-#include "pxr/exec/vdf/nodeSet.h"
-#include "pxr/exec/vdf/request.h"
 #include "pxr/exec/vdf/sparseVectorizedOutputTraverser.h"
 #include "pxr/exec/vdf/types.h"
 
@@ -27,9 +24,6 @@
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
-class VdfMask;
-class VdfOutput;
 
 ///////////////////////////////////////////////////////////////////////////////
 ///

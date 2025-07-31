@@ -47,6 +47,20 @@ _wrapSample(const TsTest_TsEvaluator& evaluator,
     return object();
 }
 
+static TsSpline
+_wrapSplineDataToSpline(const TsTest_TsEvaluator& evaluator,
+                        const TsTest_SplineData &splineData,
+                        const std::string& valueTypeName = "double")
+{
+    const TfType valueType = Ts_GetTypeFromTypeName(valueTypeName);
+    if (!valueType) {
+        TfPyThrowTypeError("Invalid spline type name '" + valueTypeName + "'");
+        return TsSpline();
+    }
+
+    return evaluator.SplineDataToSpline(splineData, valueType);
+}
+
 void wrapTsTest_TsEvaluator()
 {
     using This = TsTest_TsEvaluator;
@@ -70,9 +84,9 @@ void wrapTsTest_TsEvaluator()
         .def("SplineToSplineData", &This::SplineToSplineData,
             (arg("spline")))
 
-        .def("SplineDataToSpline", &This::SplineDataToSpline,
-            (arg("splineData"),
-             arg("mayaTangentForm") = false))
+        .def("SplineDataToSpline", &_wrapSplineDataToSpline,
+             (arg("splineData"),
+              arg("valueType") = "double"))
 
         /*
         .def("BakeInnerLoops", &This::BakeInnerLoops,

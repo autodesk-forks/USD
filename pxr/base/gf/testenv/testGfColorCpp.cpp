@@ -204,19 +204,19 @@ main(int argc, char *argv[])
         TF_AXIOM(colG22Rec709.GetColorSpace() == csG22Rec709);
 
         TF_AXIOM(colLinRec709.GetColorSpace() == csLinearRec709);
-        GfColorTest colSRGB_2(colLinRec709, csSRGB);
-        GfVec2f xy1 = colG22Rec709.GetChromaticity();
-        GfVec2f xy2 = colSRGB_2.GetChromaticity();
-        TF_AXIOM(GfIsClose(xy1, xy2, 1e-5f));
+        const GfColorTest colSRGB_2(colLinRec709, csSRGB);
+        const GfVec2f chromaRec709 = colG22Rec709.GetChromaticity();
+        const GfVec2f chromaRec709_2 = colSRGB_2.GetChromaticity();
+        TF_AXIOM(GfIsClose(chromaRec709, chromaRec709_2, 1e-5f));
+
         GfColorTest colAp0(colSRGB_2, csAp0);
-        GfVec2f xy3 = colAp0.GetChromaticity();
-        TF_AXIOM(GfIsClose(xy1, xy3, 3e-2f));
+        const GfVec2f chroma_AP0 = colAp0.GetChromaticity();
         GfColorTest colSRGB_3(colAp0, csSRGB);
-        GfVec2f xy4 = colAp0.GetChromaticity();
-        TF_AXIOM(GfIsClose(xy1, xy4, 3e-2f));
         GfColorTest col_SRGBP3(colSRGB_3, csSRGBP3);
-        GfVec2f xy5 = col_SRGBP3.GetChromaticity();
-        TF_AXIOM(GfIsClose(xy1, xy5, 3e-2f));
+
+        GfColorTest colToAp0(col_SRGBP3, csAp0);
+        const GfVec2f xy6 = colToAp0.GetChromaticity();
+        TF_AXIOM(GfIsClose(chroma_AP0, xy6, 3e-2f));
 
         // all the way back to rec709
         GfColorTest colLinRec709_2(col_SRGBP3, csLinearRec709);

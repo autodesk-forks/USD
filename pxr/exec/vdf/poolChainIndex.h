@@ -14,22 +14,7 @@
 #include "pxr/exec/vdf/api.h"
 #include "pxr/exec/vdf/output.h"
 
-#include "pxr/base/tf/staticTokens.h"
-
 PXR_NAMESPACE_OPEN_SCOPE
-
-/// XXX: DO NOT TOUCH OR USE!
-///      This duplicates the .pool token defined in EfTokens. Thus, it is
-///      crucial that the tokens be kept in sync. Although, these tokens are
-///      declared as "public", they are really only to be used internally by
-///      the VdfPoolChainIndexer.
-///      Note, that the fact that we have this token in Vdf, at all, is very
-///      unfortunate. In the future, we would like to clean this up!
-#define VDF_POOLCHAININDEX_TOKENS \
-    ((pool, ".pool"))
-
-TF_DECLARE_PUBLIC_TOKENS(
-    _VdfPoolChainIndexTokens, VDF_API, VDF_POOLCHAININDEX_TOKENS);
 
 
 /// Opaque pool chain index type.
@@ -86,14 +71,13 @@ private:
 };
 
 
-/// Returns \c true if \p output is a pool output.
+/// Returns \c true if \p output is a pool output, i.e., an output that has an
+/// associated input, that outputs vectorized data.
 ///
 inline bool
 Vdf_IsPoolOutput(const VdfOutput &output)
 {
-    return 
-        output.GetAssociatedInput() && 
-        output.GetName() == _VdfPoolChainIndexTokens->pool;
+    return output.GetAssociatedInput() && output.GetNumDataEntries() > 1;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

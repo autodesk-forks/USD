@@ -1046,11 +1046,7 @@ if Windows():
     TBB_URL = "https://github.com/oneapi-src/oneTBB/releases/download/v2020.3/tbb-2020.3-win.zip"
     TBB_ROOT_DIR_NAME = "tbb"
 elif MacOS():
-    # On MacOS Intel systems we experience various crashes in tests during
-    # teardown starting with 2018 Update 2. Until we figure that out, we use
-    # 2018 Update 1 on this platform.
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2020.3.zip"
-    TBB_INTEL_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/2018_U1.zip"
 else:
     # Use point release with fix https://github.com/oneapi-src/oneTBB/pull/833
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2020.3.1.zip"
@@ -1082,8 +1078,7 @@ def InstallTBB_Windows(context, force, buildArgs):
         CopyDirectory(context, "include\\tbb", "include\\tbb")
 
 def InstallTBB_MacOS(context, force, buildArgs):
-    tbb_url = TBB_URL if apple_utils.IsTargetArm(context) else TBB_INTEL_URL
-    with CurrentWorkingDirectory(DownloadURL(tbb_url, context, force)):
+    with CurrentWorkingDirectory(DownloadURL(TBB_URL, context, force)):
         # Ensure that the tbb build system picks the proper architecture.
         PatchFile("build/macos.clang.inc",
                 [("-m64",
@@ -1145,7 +1140,7 @@ def InstallTBB_MacOS(context, force, buildArgs):
         # See comments in InstallTBB_Linux about why we patch the Makefile
         # and rerun builds. This is only required for TBB 2020; 2019 and
         # earlier build both release and debug, and 2021 has moved to CMake.
-        if "2020" in tbb_url:
+        if "2020" in TBB_URL:
             PatchFile("Makefile", [("release", "debug")])
             _RunBuild(primaryArch)
             _RunBuild(secondaryArch)
@@ -1332,17 +1327,20 @@ PTEX = Dependency("Ptex", InstallPtex, "include/PtexVersion.h")
 ############################################################
 # BLOSC (Compression used by OpenVDB)
 
-# Using blosc v1.20.1 to avoid build errors on macOS Catalina (10.15)
-# related to implicit declaration of functions in zlib. See:
-# https://github.com/Blosc/python-blosc/issues/229
 BLOSC_URL = "https://github.com/Blosc/c-blosc/archive/v1.20.1.zip"
+if MacOS():
+    # Using blosc v1.21.6 to avoid build errors with Xcode 16.3+ toolchain, 
+    # caused by incompatibility with internally used zlib v1.2.8 with blosc 
+    # v1.20.1
+    BLOSC_URL = "https://github.com/Blosc/c-blosc/archive/v1.21.6.zip"
 
 def InstallBLOSC(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(BLOSC_URL, context, force)):
-        macArgs = []
+        # MacOS we can use the built in Zlib instead of the external one.
+        macArgs = ["-DPREFER_EXTERNAL_ZLIB=ON"]
         if MacOS() and apple_utils.IsTargetArm(context):
             # Need to disable SSE for macOS ARM targets.
-            macArgs = ["-DDEACTIVATE_SSE2=ON"]
+            macArgs += ["-DDEACTIVATE_SSE2=ON"]
         RunCMake(context, force, buildArgs + macArgs)
 
 BLOSC = Dependency("Blosc", InstallBLOSC, "include/blosc.h")
@@ -1451,6 +1449,9 @@ def InstallOpenImageIO(context, force, buildArgs):
         # Make sure to use boost installed by the build script and not any
         # system installed boost
         extraArgs.append('-DBoost_NO_SYSTEM_PATHS=ON')
+        # OIIO 2.5.16 requires Boost_NO_BOOST_CMAKE to be explicitly defined,
+        # else it sets it to ON.
+        extraArgs.append('-DBoost_NO_BOOST_CMAKE=OFF')
 
         # OpenImageIO 2.3.5 changed the default postfix for debug library
         # names from "" to "_d". USD's build system currently does not support
@@ -1533,6 +1534,20 @@ OPENSUBDIV = Dependency("OpenSubdiv", InstallOpenSubdiv,
                         "include/opensubdiv/version.h")
 
 ############################################################
+# Jinja2
+
+def GetJinja2Instructions():
+    return ('Jinja2 is not installed. If you have pip '
+            'installed, run "pip install Jinja2" to '
+            'install it, then re-run this script.\n'
+            'If Jinja2 is already installed, you may need to '
+            'update your PYTHONPATH to indicate where it is '
+            'located.')
+
+JINJA2 = PythonDependency("Jinja2", GetJinja2Instructions, 
+                          moduleNames=["jinja2"])
+
+############################################################
 # PyOpenGL
 
 def GetPyOpenGLInstructions():
@@ -1571,27 +1586,6 @@ def GetPySideInstructions():
 PYSIDE = PythonDependency("PySide", GetPySideInstructions,
                           moduleNames=["PySide2", "PySide6"])
 
-############################################################
-# HDF5
-
-HDF5_URL = "https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.10/hdf5-1.10.0-patch1/src/hdf5-1.10.0-patch1.zip"
-
-def InstallHDF5(context, force, buildArgs):
-    with CurrentWorkingDirectory(DownloadURL(HDF5_URL, context, force)):
-        if MacOS():
-            PatchFile("config/cmake_ext_mod/ConfigureChecks.cmake",
-                    [("if (ARCH_LENGTH GREATER 1)", "if (FALSE)")])
-            if context.targetUniversal:
-                PatchFile("config/cmake/H5pubconf.h.in",
-                        [(" #define H5_SIZEOF_LONG_LONG 8",
-                        " #define H5_SIZEOF_LONG_LONG 8\n" +
-                        " #define H5_SIZEOF_LONG_DOUBLE 16")])
-        RunCMake(context, force,
-                 ['-DBUILD_TESTING=OFF',
-                  '-DHDF5_BUILD_TOOLS=OFF',
-                  '-DHDF5_BUILD_EXAMPLES=OFF'] + buildArgs)
-                 
-HDF5 = Dependency("HDF5", InstallHDF5, "include/hdf5.h")
 
 ############################################################
 # Alembic
@@ -1600,17 +1594,7 @@ ALEMBIC_URL = "https://github.com/alembic/alembic/archive/refs/tags/1.8.5.zip"
 
 def InstallAlembic(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ALEMBIC_URL, context, force)):
-        cmakeOptions = ['-DUSE_BINARIES=OFF', '-DUSE_TESTS=OFF']
-        if context.enableHDF5:
-            # HDF5 requires the H5_BUILT_AS_DYNAMIC_LIB macro be defined if
-            # it was built with CMake as a dynamic library.
-            cmakeOptions += [
-                '-DUSE_HDF5=ON',
-                '-DHDF5_ROOT="{instDir}"'.format(instDir=context.instDir),
-                '-DCMAKE_CXX_FLAGS="-D H5_BUILT_AS_DYNAMIC_LIB"']
-        else:
-           cmakeOptions += ['-DUSE_HDF5=OFF']
-                 
+        cmakeOptions = ['-DUSE_BINARIES=OFF', '-DUSE_TESTS=OFF', '-DUSE_HDF5=OFF']
         cmakeOptions += buildArgs
 
         RunCMake(context, force, cmakeOptions)
@@ -2106,6 +2090,12 @@ def InstallUSD(context, force, buildArgs):
                 extraArgs.append('-DPXR_BUILD_PRMAN_PLUGIN=ON')
             else:
                 extraArgs.append('-DPXR_BUILD_PRMAN_PLUGIN=OFF')                
+
+            if MacOS():
+                if context.buildImageIO:
+                    extraArgs.append('-DPXR_BUILD_IMAGEIO_PLUGIN=ON')
+                else:
+                    extraArgs.append('-DPXR_BUILD_IMAGEIO_PLUGIN=OFF')
             
             if context.buildOIIO:
                 extraArgs.append('-DPXR_BUILD_OPENIMAGEIO_PLUGIN=ON')
@@ -2142,15 +2132,6 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildAlembic:
             extraArgs.append('-DPXR_BUILD_ALEMBIC_PLUGIN=ON')
-            if context.enableHDF5:
-                extraArgs.append('-DPXR_ENABLE_HDF5_SUPPORT=ON')
-
-                # CMAKE_PREFIX_PATH isn't sufficient for the FindHDF5 module 
-                # to find the HDF5 we've built, so provide an extra hint.
-                extraArgs.append('-DHDF5_ROOT="{instDir}"'
-                                 .format(instDir=context.instDir))
-            else:
-                extraArgs.append('-DPXR_ENABLE_HDF5_SUPPORT=OFF')
         else:
             extraArgs.append('-DPXR_BUILD_ALEMBIC_PLUGIN=OFF')
 
@@ -2559,6 +2540,12 @@ subgroup.add_argument("--openimageio", dest="build_oiio", action="store_true",
                       help="Build OpenImageIO plugin for USD")
 subgroup.add_argument("--no-openimageio", dest="build_oiio", action="store_false",
                       help="Do not build OpenImageIO plugin for USD (default)")
+if MacOS():
+    group.add_argument("--imageio", dest="build_imageio", action="store_true", 
+                      default=True,
+                      help="Build the ImageIO.framework plugin for USD (default).")
+    group.add_argument("--no-imageio", dest="build_imageio", action="store_false",
+                       help="Do not build build the ImageIO.framework plugin for USD.")
 subgroup = group.add_mutually_exclusive_group()
 subgroup.add_argument("--opencolorio", dest="build_ocio", action="store_true", 
                       default=False,
@@ -2579,12 +2566,6 @@ subgroup.add_argument("--alembic", dest="build_alembic", action="store_true",
                       help="Build Alembic plugin for USD")
 subgroup.add_argument("--no-alembic", dest="build_alembic", action="store_false",
                       help="Do not build Alembic plugin for USD (default)")
-subgroup = group.add_mutually_exclusive_group()
-subgroup.add_argument("--hdf5", dest="enable_hdf5", action="store_true", 
-                      default=False,
-                      help="Enable HDF5 support in the Alembic plugin")
-subgroup.add_argument("--no-hdf5", dest="enable_hdf5", action="store_false",
-                      help="Disable HDF5 support in the Alembic plugin (default)")
 
 group = parser.add_argument_group(title="Draco Plugin Options")
 subgroup = group.add_mutually_exclusive_group()
@@ -2786,14 +2767,16 @@ class InstallContext:
         self.buildPrman = self.buildImaging and args.build_prman
         self.prmanLocation = (os.path.abspath(args.prman_location)
                                if args.prman_location else None)                               
-        self.buildOIIO = args.build_oiio or (self.buildUsdImaging
-                                             and self.buildTests and not self.targetWasm)
+        self.buildOIIO = ((args.build_oiio or (self.buildUsdImaging
+                                               and self.buildTests))
+                          and not embedded)
+        if MacOS():
+            self.buildImageIO = args.build_imageio
         self.buildOCIO = args.build_ocio and not embedded
         self.buildAVIF = self.buildImaging and args.build_avif
 
         # - Alembic Plugin
         self.buildAlembic = args.build_alembic
-        self.enableHDF5 = self.buildAlembic and args.enable_hdf5
 
         # - Draco Plugin
         self.buildDraco = args.build_draco
@@ -2890,9 +2873,7 @@ if context.targetWasm and context.buildTests:
     requiredDependencies += [THREE]
 
 if context.buildAlembic:
-    if context.enableHDF5:
-        requiredDependencies += [ZLIB, HDF5]
-    requiredDependencies += [OPENEXR, ALEMBIC]
+    requiredDependencies += [ZLIB, OPENEXR, ALEMBIC]
 
 if context.buildDraco:
     requiredDependencies += [DRACO]
@@ -2933,7 +2914,7 @@ if context.buildUsdview:
 if context.buildAnimXTests:
     requiredDependencies += [ANIMX]
 
-# Linux provides zlib. Skipping it here avoids issues where a host 
+# Linux and MacOS provide zlib. Skipping it here avoids issues where a host 
 # application loads a different version of zlib than the one we build against.
 # Building zlib is the default when a dependency requires it, although OpenUSD
 # itself does not require it. The --no-zlib flag can be passed to the build
@@ -3145,8 +3126,10 @@ summaryMsg += """\
     Imaging                     {buildImaging}
       Ptex support:             {enablePtex}
       OpenVDB support:          {enableOpenVDB}
+      ImageIO support:          {buildImageIO}
       OpenImageIO support:      {buildOIIO} 
       OpenColorIO support:      {buildOCIO} 
+      Embree support:           {buildEmbree}
       PRMan support:            {buildPrman}
       Embree support:           {buildEmbree}
       AVIF support:             {buildAVIF}
@@ -3166,7 +3149,6 @@ summaryMsg += """\
     WebGPU                      {buildWebGPU}
     Tools                       {buildTools}
     Alembic Plugin              {buildAlembic}
-      HDF5 support:             {enableHDF5}
     Draco Plugin                {buildDraco}
 
   Dependencies                  {dependencies}"""
@@ -3184,6 +3166,23 @@ def FormatBuildArguments(buildArgs):
             name=AllDependenciesByName[depName].name,
             args=" ".join(args))
     return s.lstrip()
+
+# The USD build will automatically skip these utilities if Jinja2 is not
+# available. We inform the user here so they're not surprised later on.
+omitUsdGenSchemaMsg = context.buildPython and not JINJA2.Exists(context)
+
+omittedSchemaGenScripts = [
+    "usdGenSchema",
+    "usdgenschemafromsdr",
+    "usdInitSchema"
+]
+
+if omitUsdGenSchemaMsg:
+    summaryMsg += """
+\nOmitted (Jinja2 not found): {omittedSchemaGenScripts}."""
+
+# Make sure to have a newline at the end of the summary message
+summaryMsg += "\n"
 
 summaryMsg = summaryMsg.format(
     usdSrcDir=context.usdSrcDir,
@@ -3211,6 +3210,7 @@ summaryMsg = summaryMsg.format(
     buildImaging=("On" if context.buildImaging else "Off"),
     enablePtex=("On" if context.enablePtex else "Off"),
     enableOpenVDB=("On" if context.enableOpenVDB else "Off"),
+    buildImageIO=("On" if (MacOS() and context.buildImageIO) else "Off"),
     buildOIIO=("On" if context.buildOIIO else "Off"),
     buildOCIO=("On" if context.buildOCIO else "Off"),
     buildPrman=("On" if context.buildPrman else "Off"),
@@ -3234,8 +3234,8 @@ summaryMsg = summaryMsg.format(
     buildJsBindings=("On" if context.buildJsBindings else "Off"),
     buildMayapyTests=("On" if context.buildMayapyTests else "Off"),
     buildAnimXTests=("On" if context.buildAnimXTests else "Off"),
-    enableHDF5=("On" if context.enableHDF5 else "Off"),
-    buildWebGPU=("On" if context.buildWebGPU else "Off"))
+    buildWebGPU=("On" if context.buildWebGPU else "Off"),
+    omittedSchemaGenScripts=(", ".join(omittedSchemaGenScripts)))
 
 Print(summaryMsg)
 

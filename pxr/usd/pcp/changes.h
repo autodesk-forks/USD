@@ -11,6 +11,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/api.h"
+#include "pxr/usd/pcp/dependency.h"
 #include "pxr/usd/pcp/errors.h"
 #include "pxr/usd/pcp/layerStackIdentifier.h"
 #include "pxr/usd/sdf/changeList.h"
@@ -337,6 +338,29 @@ public:
     /// Applies the changes to the layer stacks and caches.
     PCP_API
     void Apply() const;
+
+    /// Returns dependencies of the given site of scene description.
+    /// This is similar to PcpCache::FindSiteDependencies but takes
+    /// into account additional information from changes processed
+    /// by this object.
+    PCP_API
+    PcpDependencyVector
+    FindSiteDependencies(const PcpCache* cache,
+                         const SdfLayerHandle& siteLayer,
+                         const SdfPath& sitePath,
+                         PcpDependencyFlags depMask,
+                         bool recurseOnSite,
+                         bool recurseOnIndex,
+                         bool filterForExistingCachesOnly) const;
+
+    /// Returns every layer stack that includes \p layer.
+    /// This is similar to PcpCache::FindAllLayerStacksUsingLayer but takes
+    /// into account additional information from changes processed
+    /// by this object.
+    PCP_API
+    const PcpLayerStackPtrVector& 
+    FindAllLayerStacksUsingLayer(const PcpCache* cache, 
+                                 const SdfLayerHandle& layer) const;
 
 private:
     // Internal data types for namespace edits from Sd.

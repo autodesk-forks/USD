@@ -13,7 +13,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 EsfPropertyInterface::~EsfPropertyInterface() = default;
 
-TfToken EsfPropertyInterface::GetBaseName(EsfJournal *journal) const
+TfToken
+EsfPropertyInterface::GetBaseName(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);
@@ -21,7 +22,8 @@ TfToken EsfPropertyInterface::GetBaseName(EsfJournal *journal) const
     return _GetBaseName();
 }
 
-TfToken EsfPropertyInterface::GetNamespace(EsfJournal *journal) const
+TfToken
+EsfPropertyInterface::GetNamespace(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);

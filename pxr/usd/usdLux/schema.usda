@@ -1038,6 +1038,7 @@ class "BoundableLightBase" (
     """
     customData = {
         string extraIncludes = """#include "pxr/usd/usdLux/lightAPI.h" """
+        token[] reflectedAPISchemas = ["LightAPI"]
     }
     prepend apiSchemas = ["LightAPI"]
 ) {
@@ -1052,6 +1053,7 @@ class "NonboundableLightBase" (
     """
     customData = {
         string extraIncludes = """#include "pxr/usd/usdLux/lightAPI.h" """
+        token[] reflectedAPISchemas = ["LightAPI"]
     }
     prepend apiSchemas = ["LightAPI"]
 ) {

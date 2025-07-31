@@ -87,6 +87,7 @@ public:
     /// @{
 
     /// Describes the result of a lookup into the uncompilation table.
+    ///
     struct Entry
     {
         /// The rule set corresponds to the scene object at this path.
@@ -94,6 +95,7 @@ public:
 
         /// Pointer to a rule set. Ownership of the rule set is shared by this
         /// object and the table that created it.
+        ///
         std::shared_ptr<Exec_UncompilationRuleSet> ruleSet;
 
         Entry() = default;
@@ -113,7 +115,9 @@ public:
         {}
 
         /// The entry evaluates true iff it contains a non-null rule set.
-        operator bool() const { return ruleSet != nullptr; }
+        operator bool() const {
+            return ruleSet != nullptr;
+        }
     };
 
     /// Locates the rule set for the given \p path.

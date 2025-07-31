@@ -106,6 +106,52 @@ TestVdfConnectorSpecErrorConditions()
     TF_AXIOM(spec->GetAssociatedOutputName() == TfToken(""));
 }
 
+static void
+TestVdfNodeDebugNameCallback()
+{
+    VdfNetwork net;
+    VdfNode *emptyNode = new VdfTestUtils::CallbackNode(&net, 
+        VdfInputSpecs(), 
+        VdfOutputSpecs(), 
+        &CallbackFunction); 
+
+    // Test that setting an invalid debug name callable triggers an error and
+    // does not crash when the debug name is retrieved.
+    {
+        TfErrorMark m;
+        emptyNode->SetDebugNameCallback(VdfNodeDebugNameCallback());
+        TF_AXIOM(!m.IsClean());
+        m.Clear();
+
+        const std::string debugName = emptyNode->GetDebugName();
+        TF_AXIOM(debugName == "VdfTestUtils::CallbackNode");
+    }
+
+    // The same test as above but with an l-value callback.
+    {
+        TfErrorMark m;
+        const VdfNodeDebugNameCallback callback;
+        emptyNode->SetDebugNameCallback(callback);
+        TF_AXIOM(!m.IsClean());
+        m.Clear();
+
+        const std::string debugName = emptyNode->GetDebugName();
+        TF_AXIOM(debugName == "VdfTestUtils::CallbackNode");
+    }
+
+    // Test setting a debug name lambda callback.
+    {
+        TfErrorMark m;
+        emptyNode->SetDebugNameCallback([] {
+            return std::string("callback");
+        });
+        TF_AXIOM(m.IsClean());
+
+        const std::string debugName = emptyNode->GetDebugName();
+        TF_AXIOM(debugName == "VdfTestUtils::CallbackNode callback");
+    }
+}
+
 int 
 main(int argc, char **argv) 
 {
@@ -114,6 +160,8 @@ main(int argc, char **argv)
     TestVdfContextErrorConditions();
 
     TestVdfConnectorSpecErrorConditions();
+
+    TestVdfNodeDebugNameCallback();
 
     return 0;
 }

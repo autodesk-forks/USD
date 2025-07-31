@@ -26,9 +26,10 @@
 #include "pxr/base/arch/attributes.h"
 #include "pxr/base/arch/functionLite.h"
 #include "pxr/base/tf/mallocTag.h"
-#include "pxr/base/tf/token.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+class TfToken;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///

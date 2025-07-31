@@ -18,7 +18,7 @@
 #include "pxr/exec/vdf/executorErrorLogger.h"
 #include "pxr/exec/vdf/executorInterface.h"
 #include "pxr/exec/vdf/executionStats.h"
-#include "pxr/exec/vdf/fallbackValueRegistry.h"
+#include "pxr/exec/vdf/executionTypeRegistry.h"
 #include "pxr/exec/vdf/mask.h"
 #include "pxr/exec/vdf/networkUtil.h"
 #include "pxr/exec/vdf/node.h"
@@ -1935,11 +1935,11 @@ VdfParallelExecutorEngineBase<Derived, DataManager>::_ComputeNode(
                 " named " + output.GetName().GetString());
 
             // Fill the output with a default value.
-            Vdf_FallbackValueRegistry::GetInstance().FillVector(
+            VdfExecutionTypeRegistry::FillVector(
                 output.GetSpec().GetType(),
+                schedule.GetRequestMask(outputId).GetSize(),
                 _dataManager->GetOrCreateOutputValueForWriting(
-                    output, dataHandle), 
-                schedule.GetRequestMask(outputId).GetSize());
+                    output, dataHandle));
         }
 
         // Make sure the output has been processed. This will take care of

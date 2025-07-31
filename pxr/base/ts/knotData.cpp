@@ -17,7 +17,7 @@ Ts_KnotData::Ts_KnotData()
       preTanWidth(0.0),
       postTanWidth(0.0),
       nextInterp(TsInterpHeld),
-      curveType(TsCurveTypeBezier),
+      curveType(TsCurveTypeBezier),  // curveType for knots is deprecated
       dualValued(false)
 {
 }
@@ -55,12 +55,14 @@ Ts_KnotData* Ts_KnotData::Create(const TfType valueType)
 
 bool Ts_KnotData::operator==(const Ts_KnotData &other) const
 {
+    // CurveType for knots has been deprecated and we no longer consider its
+    // value when testing for equality.
+
     return time == other.time
         && preTanWidth == other.preTanWidth
         && postTanWidth == other.postTanWidth
         && dualValued == other.dualValued
-        && nextInterp == other.nextInterp
-        && curveType == other.curveType;
+        && nextInterp == other.nextInterp;
 }
 
 // static

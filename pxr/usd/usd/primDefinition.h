@@ -490,6 +490,10 @@ private:
             const TfToken& fieldName, const TfToken& keyPath, T* value) const {
             return layer->HasFieldDictKey(path, fieldName, keyPath, value);
         }
+
+        explicit operator bool() const noexcept {
+            return layer;
+        }
     };
 
     /// It is preferable to use the _HasField and _HasFieldDictKey methods to 
@@ -563,11 +567,11 @@ private:
         const TfToken &propName,
         const _LayerAndPath &layerAndPath);
 
-    SdfPropertySpecHandle _FindOrCreatePropertySpecForComposition(
+    SdfSpecHandle _FindOrCreateSpecForComposition(
         const TfToken &propName,
         const _LayerAndPath &srcLayerAndPath);
 
-    SdfPropertySpecHandle _CreateComposedPropertyIfNeeded(
+    SdfSpecHandle _CreateComposedPrimOrPropertyIfNeeded(
         const TfToken &propName,
         const _LayerAndPath &strongProp, 
         const _LayerAndPath &weakProp);

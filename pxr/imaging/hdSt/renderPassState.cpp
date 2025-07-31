@@ -444,7 +444,8 @@ HdStRenderPassState::Prepare(
             !aovBindings.empty() && GetUseAovMultiSample()) {
         if (const auto* renderBuffer = dynamic_cast<HdStRenderBuffer*>(
                 aovBindings.front().renderBuffer)) {
-            multisampleCount = renderBuffer->GetMSAASampleCount();
+            multisampleCount = renderBuffer->IsMultiSampled() ?
+                renderBuffer->GetMSAASampleCount() : 1;
         }
     }
             
@@ -760,6 +761,10 @@ HdStRenderPassState::Bind(HgiCapabilities const &hgiCapabilities)
 
     if (_multiSampleEnabled) {
         glEnable(GL_MULTISAMPLE);
+        if (!hgiCapabilities.IsSet(HgiDeviceCapabilitiesBitsRoundPoints)) {
+            // Needed to get gl_pointCoord in FS.
+            glEnable(GL_POINT_SPRITE);
+        }
     } else {
         glDisable(GL_MULTISAMPLE);
         // If not using GL_MULTISAMPLE, use GL_POINT_SMOOTH to render points as 
@@ -810,6 +815,7 @@ HdStRenderPassState::Unbind(HgiCapabilities const &hgiCapabilities)
 
     glEnable(GL_MULTISAMPLE);
     glDisable(GL_POINT_SMOOTH);
+    glDisable(GL_POINT_SPRITE);
 }
 
 void
@@ -1038,10 +1044,12 @@ HdStRenderPassState::MakeGraphicsCmdsDesc(
 
         if (HdAovHasDepthSemantic(aov.aovName) ||
             HdAovHasDepthStencilSemantic(aov.aovName)) {
-            desc.depthAttachmentDesc = std::move(attachmentDesc);
-            desc.depthTexture = hgiTexHandle;
-            if (hgiResolveHandle) {
-                desc.depthResolveTexture = hgiResolveHandle;
+            if (_depthTestEnabled || _depthMaskEnabled) {
+                desc.depthAttachmentDesc = std::move(attachmentDesc);
+                desc.depthTexture = hgiTexHandle;
+                if (hgiResolveHandle) {
+                    desc.depthResolveTexture = hgiResolveHandle;
+                }
             }
         } else if (TF_VERIFY(desc.colorAttachmentDescs.size() < maxColorTex,
                    "Too many aov bindings for color attachments"))
@@ -1140,7 +1148,9 @@ HdStRenderPassState::_InitAttachmentState(
 
         if (HdAovHasDepthSemantic(binding.aovName) ||
             HdAovHasDepthStencilSemantic(binding.aovName)) {
-            pipeDesc->depthAttachmentDesc = attachment;
+            if (_depthTestEnabled || _depthMaskEnabled) {
+                pipeDesc->depthAttachmentDesc = attachment;
+            }
         } else {
             pipeDesc->colorAttachmentDescs.push_back(attachment);
         }

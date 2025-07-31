@@ -61,6 +61,7 @@ surfaceShader(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
 
     vec3 clearcoatColor      = vec3(1.0);
     float specularAmount     = 1.0;
+    const int opacityMode    = HdGet_opacityMode();
 
 #ifdef HD_MATERIAL_TAG_MASKED
 
@@ -100,11 +101,13 @@ surfaceShader(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
     // At this point, diffuseColor has had the pre-multiplication of the
     // original opacity removed if it was present, and any scale or biasing
     // applied to it.  And since the opacity has had its scale and/or biasing
-    // applied to it by this point, it can now be applied to diffuseColor.
-    //
-    // Note also that diffuseColor is the only component affected by opacity
-    // in conformance with the UsdPreviewSurface specification.
-    diffuseColor *= opacity;
+    // applied to it by this point, it can now be applied when appropriate.
+
+    // If opacityMode is "transparent", opacity should only apply to the
+    // diffuseColor component.
+    if (opacityMode == 1) {
+        diffuseColor *= opacity;
+    }
 
 #endif // HD_MATERIAL_TAG_MASKED
 
@@ -128,6 +131,11 @@ surfaceShader(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
         occlusion,
         Peye,
         perturbFragmentNormal(Peye.xyz, Neye));
+
+    // If opacityMode is "presence", opacity applies to all color components.
+    if (opacityMode == 0) {
+        c *= opacity;
+    }
 
     return vec4(c, opacity);
 }

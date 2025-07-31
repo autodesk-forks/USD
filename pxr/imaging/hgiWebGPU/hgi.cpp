@@ -225,6 +225,11 @@ HgiWebGPU::~HgiWebGPU()
     _PerformGarbageCollection();
 }
 
+void
+HgiWebGPU::GarbageCollect()
+{
+}
+
 bool
 HgiWebGPU::IsBackendSupported() const
 {

@@ -14,25 +14,20 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-VdfPoolChainIndexer::VdfPoolChainIndexer()
-{
-}
+VdfPoolChainIndexer::VdfPoolChainIndexer() = default;
 
-VdfPoolChainIndexer::~VdfPoolChainIndexer()
-{
-}
+VdfPoolChainIndexer::~VdfPoolChainIndexer() = default;
 
 VdfPoolChainIndex
 VdfPoolChainIndexer::GetIndex(const VdfOutput &output) const
 {
-    int priority = _sorter.GetPriority(&output);
-
-    if (priority != _PoolOutputSorter::InvalidPriority) {
+    if (const int priority = _sorter.GetPriority(&output);
+        priority != _PoolOutputSorter::InvalidPriority) {
         return VdfPoolChainIndex(priority, 0);
     }
 
     // GetIndex should only be called for a pool output
-    if (!TF_VERIFY(output.GetName() == _VdfPoolChainIndexTokens->pool)) {
+    if (!TF_VERIFY(Vdf_IsPoolOutput(output))) {
         return VdfPoolChainIndex(_PoolOutputSorter::InvalidPriority, 0);
     }
 
@@ -113,21 +108,21 @@ _MakePoolConnectedOutput(const VdfConnection &connection)
 
     // This function gets called for every connection and disconnection, which
     // results in too much trace overhead.  However, we'd like to keep an eye
-    // on the cost of getting the optional pool output.  The majority of calls
-    // to this function, which are not on pool connections, will exit on one
-    // of the conditions checked above.
+    // on the cost of finding the pool output.  The majority of calls to this
+    // function, which are not on pool connections, will exit on one of the
+    // conditions checked above.
     TRACE_FUNCTION_SCOPE("checking optional output");
 
     // If the target node has a pool output at all, consider this to
     // be a pool connection for the purpose of indexing.
-    const VdfInput &targetInput = connection.GetTargetInput();
-    const VdfOutput *poolOutput =
-        targetInput.GetNode().GetOptionalOutput(_VdfPoolChainIndexTokens->pool);
-    if (!poolOutput) {
-        return _PoolConnectedOutputs();
+    const VdfNode &targetNode = connection.GetTargetInput().GetNode();
+    for (const auto &[name, output] : targetNode.GetOutputsIterator()) {
+        if (Vdf_IsPoolOutput(*output)) {
+            return _PoolConnectedOutputs(&source, output);
+        }
     }
 
-    return _PoolConnectedOutputs(&source, poolOutput);
+    return _PoolConnectedOutputs();
 }
 
 void

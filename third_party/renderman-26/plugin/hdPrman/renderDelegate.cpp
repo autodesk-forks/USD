@@ -178,6 +178,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (DefaultMayaLight)
     (__FnKat_bbox)
     (viewerMouseClick)
+    ((houdiniInteractive, "houdini:interactive"))
 );
 
 TF_DEFINE_PUBLIC_TOKENS(HdPrmanRenderSettingsTokens,
@@ -818,7 +819,7 @@ HdPrmanRenderDelegate::SetRenderSetting(TfToken const &key,
     // Solaris will send mouse clicks to the render settings.
     // We want to ignore these as they will cause the render to restart which
     // can be frustrating for users.
-    if (key == _tokens->viewerMouseClick)
+    if (key == _tokens->viewerMouseClick || key == _tokens->houdiniInteractive)
         return;
 
     HdRenderDelegate::SetRenderSetting(key, value);

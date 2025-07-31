@@ -9,6 +9,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/work/api.h"
+#include "pxr/base/work/workTBB/impl.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -29,6 +30,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// with such a value, or if PXR_WORK_THREAD_LIMIT was set with such a value.
 ///
 WORK_API unsigned WorkGetConcurrencyLimit();
+
+/// Return the concurrency limit setting, computed from the physical
+/// concurrency limit and the PXR_WORK_THREAD_LIMIT env setting. This is the
+/// concurrency limit that work will try to implement at startup.
+/// The concurrency limit will either be "0", meaning work doesn't try to apply
+/// any concurrency limit, or a (normalized) positive number of threads.
+WORK_API unsigned WorkGetConcurrencyLimitSetting();
 
 /// Return true if WorkGetPhysicalConcurrencyLimit() returns a number greater
 /// than 1 and PXR_WORK_THREAD_LIMIT was not set in an attempt to limit the
@@ -80,6 +88,14 @@ WORK_API void WorkSetConcurrencyLimitArgument(int n);
 /// \endcode
 ///
 WORK_API void WorkSetMaximumConcurrencyLimit();
+
+/// Returns true if a limit between 1 and the physical concurrency can be set, 
+/// and the implementation will make a best effort to respect the limit.
+///
+/// Returns false if the implementation can only support 1 or the physical 
+/// concurrency. If there is an attempt to set a limit between 1 and the 
+/// physical concurrency the limit will default to the physical concurrency.
+WORK_API bool WorkSupportsGranularThreadLimits();
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

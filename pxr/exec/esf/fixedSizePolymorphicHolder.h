@@ -97,31 +97,12 @@ public:
     ///
     template <class Derived, class... Args>
     EsfFixedSizePolymorphicHolder(
-        std::in_place_type_t<Derived> derivedTypeHint,
-        Args &&...args)
-    {
-        TF_UNUSED(derivedTypeHint);
-
-        static_assert(
-            Compatibility::template FITS_IN_BUFFER<Derived>,
-            "The size of the derived type is larger than the availble "
-            "storage.");
-        static_assert(
-            Compatibility::template DERIVES_FROM_BASE<Derived>,
-            "Derived is not a derived class of Base.");
-        static_assert(
-            Compatibility::template HAS_ALIGNMENT<Derived>,
-            "The derived type has incompatible alignment.");
-
-        ::new (static_cast<void *>(_storage)) _Holder<Derived>(
-            std::forward<Args>(args)...);
-    }
+        std::in_place_type_t<Derived> derivedTypeHint, Args &&...args);
 
     /// Construct a holder containing a derived type instance that is copy-
     /// constructed from another holder.
     ///
-    EsfFixedSizePolymorphicHolder(const This &other)
-    {
+    EsfFixedSizePolymorphicHolder(const This &other) {
         other->_CopyTo(_storage);
     }
 
@@ -131,14 +112,13 @@ public:
     /// The moved-from holder continues to hold an object, but that object is
     /// moved-from.
     ///
-    EsfFixedSizePolymorphicHolder(This &&other)
-    {
+    EsfFixedSizePolymorphicHolder(This &&other) {
         other->_MoveTo(_storage);
     }
 
     /// Destroys the derived instance held by this object.
-    ~EsfFixedSizePolymorphicHolder()
-    {
+    ///
+    ~EsfFixedSizePolymorphicHolder() {
         Get()->~Base();
     }
 
@@ -148,8 +128,7 @@ public:
     /// This holder destroys its current instance before constructing the
     /// new instance.
     ///
-    This &operator=(const This &other)
-    {
+    This &operator=(const This &other) {
         if (this != &other) {
             Get()->~Base();
             other->_CopyTo(_storage);
@@ -164,8 +143,7 @@ public:
     /// instance. The moved-from holder continues to hold an object, but that
     /// object is moved-from.
     ///
-    This &operator=(This &&other)
-    {
+    This &operator=(This &&other) {
         if (this != &other) {
             Get()->~Base();
             other->_MoveTo(_storage);
@@ -178,33 +156,27 @@ public:
     /// Returns a pointer or reference to the held Base instance.
     ///
     /// \{
-    inline Base *Get()
-    {
+    inline Base *Get() {
         return reinterpret_cast<Base *>(_storage);
     }
 
-    inline const Base *Get() const
-    {
+    inline const Base *Get() const {
         return reinterpret_cast<const Base *>(_storage);
     }
 
-    inline Base *operator->()
-    {
+    inline Base *operator->() {
         return Get();
     }
 
-    inline const Base *operator->() const
-    {
+    inline const Base *operator->() const {
         return Get();
     }
 
-    inline Base &operator*()
-    {
+    inline Base &operator*() {
         return *Get();
     }
 
-    inline const Base &operator*() const
-    {
+    inline const Base &operator*() const {
         return *Get();
     }
     /// \}
@@ -235,17 +207,7 @@ public:
         /// check can only happen at runtime.
         ///
         template <class Derived>
-        static bool HasBaseAtSameAddress(const Derived &derived)
-        {
-            if constexpr (!DERIVES_FROM_BASE<Derived>) {
-                return false;
-            }
-
-            const Base *base = static_cast<const Base *>(&derived);
-            const void *baseAddress = static_cast<const void *>(base);
-            const void *derivedAddress = static_cast<const void *>(&derived);
-            return baseAddress == derivedAddress;
-        }
+        static bool HasBaseAtSameAddress(const Derived &derived);
     };
 
 private:
@@ -256,20 +218,17 @@ private:
     public:
         // Constructs a Derived instance from the provided constructor Args.
         template <class... Args>
-        _Holder(Args &&...args) : Derived(std::forward<Args>(args)...)
-        {
+        _Holder(Args &&...args) : Derived(std::forward<Args>(args)...) {
             TF_AXIOM(Compatibility::HasBaseAtSameAddress(*this));
         }
 
     private:
-        void _CopyTo(std::byte *storage) const final
-        {
+        void _CopyTo(std::byte *storage) const final {
             const Derived *thisDerived = static_cast<const Derived *>(this);
             ::new (static_cast<void *>(storage)) _Holder<Derived>(*thisDerived);
         }
 
-        void _MoveTo(std::byte *storage) final
-        {
+        void _MoveTo(std::byte *storage) final {
             Derived *thisDerived = static_cast<Derived *>(this);
             ::new (static_cast<void *>(storage)) _Holder<Derived>(
                 std::move(*thisDerived));
@@ -279,6 +238,44 @@ private:
     // Held instances are emplaced in this byte array.
     alignas(_REQUIRED_ALIGNMENT) std::byte _storage[BufferSize];
 };
+
+template <class Base, size_t BufferSize>
+template <class Derived, class... Args>
+EsfFixedSizePolymorphicHolder<Base, BufferSize>::EsfFixedSizePolymorphicHolder(
+    std::in_place_type_t<Derived> derivedTypeHint, Args &&...args)
+{
+    TF_UNUSED(derivedTypeHint);
+
+    static_assert(
+        Compatibility::template FITS_IN_BUFFER<Derived>,
+        "The size of the derived type is larger than the availble "
+        "storage.");
+    static_assert(
+        Compatibility::template DERIVES_FROM_BASE<Derived>,
+        "Derived is not a derived class of Base.");
+    static_assert(
+        Compatibility::template HAS_ALIGNMENT<Derived>,
+        "The derived type has incompatible alignment.");
+
+    ::new (static_cast<void *>(_storage)) _Holder<Derived>(
+        std::forward<Args>(args)...);
+}
+
+template <class Base, size_t BufferSize>
+template <class Derived>
+bool
+EsfFixedSizePolymorphicHolder<Base, BufferSize>::Compatibility::
+    HasBaseAtSameAddress(const Derived &derived)
+{
+    if constexpr (!DERIVES_FROM_BASE<Derived>) {
+        return false;
+    }
+
+    const Base *base = static_cast<const Base *>(&derived);
+    const void *baseAddress = static_cast<const void *>(base);
+    const void *derivedAddress = static_cast<const void *>(&derived);
+    return baseAddress == derivedAddress;
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

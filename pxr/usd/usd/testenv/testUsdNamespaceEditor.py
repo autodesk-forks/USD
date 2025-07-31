@@ -33,7 +33,7 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                 # that path. This is what we verify against the expected resyncs
                 # dictionary.
                 resyncedObjects = {
-                    str(resyncedPath) : notice.GetPrimResyncType(resyncedPath) \
+                    str(resyncedPath) : notice.GetPrimResyncType(resyncedPath)
                         for resyncedPath in notice.GetResyncedPaths()
                 }
                 self.assertEqual(resyncedObjects, expectedResyncNotices)

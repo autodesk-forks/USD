@@ -9,6 +9,8 @@
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/filteringSceneIndex.h"
+#include "pxr/usd/sdf/pathTable.h"
+#include "pxr/base/tf/smallVector.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -82,6 +84,9 @@ private:
 
     friend class _Observer;
 
+    // Rebuild _inputsPathTable from the current contents of _inputs.
+    void _RebuildInputsPathTable();
+
     class _Observer : public HdSceneIndexObserver
     {
     public:
@@ -123,9 +128,21 @@ private:
         }
     };
 
-    using _InputEntries = std::vector<_InputEntry>;
+    // We observe that most merging scene indexes have few inputs, such as 2.
+    // However, in the case of merging USD native instance prototypes in
+    // UsdImaging, we may have hundreds of inputs with non-overlapping
+    // sceneRoots .  To avoid an O(N) scan over all inputs when N grows
+    // large, we use an SdfPathTable to store ordered sub-list of inputs
+    // that pertain to an input prim path or input ancestor path.
+    using _InputEntries = TfSmallVector<_InputEntry, 4>;
+    using _InputEntriesByPathTable = SdfPathTable<_InputEntries>;
+
+    // Look up the input entries potentially relevant to the given path.
+    const _InputEntries &_GetInputEntriesByPath(SdfPath const& path) const;
 
     _InputEntries _inputs;
+    _InputEntriesByPathTable _inputsPathTable;
+
 };
 
 

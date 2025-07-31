@@ -123,7 +123,7 @@ public:
     TsInterpMode nextInterp : 3;
 
     // The spline type this knot belongs to, or is intended for.
-    TsCurveType curveType : 2;
+    TsCurveType curveType : 2;  // deprecated
 
     // Whether this knot is dual-valued (value discontinuity at the knot).
     bool dualValued : 1;
@@ -262,7 +262,9 @@ bool Ts_TypedKnotData<T>::operator==(
     COMP(postTanWidth);
     COMP(dualValued);
     COMP(nextInterp);
-    COMP(curveType);
+    // CurveType for knots has been deprecated and we no longer consider its
+    // value when testing for equality.
+    // COMP(curveType);
 
     COMP(value);
     COMP(preValue);

@@ -29,6 +29,7 @@ struct ExecProviderResolution {
     /// A path that describes the first part of provider resolution.
     ///
     /// This path is relative to the origin object.
+    /// 
     SdfPath localTraversal;
 
     /// An enum that indicates the part of provider resolution that is
@@ -36,15 +37,22 @@ struct ExecProviderResolution {
     ///
     /// This part of the traversal can search through the scene, apply
     /// predicates, and can branch out, potentially finding multiple providers.
+    /// 
     enum class DynamicTraversal {
-        Local,             ///< The localTraversal path directly indicates the
-                           ///  computation provider.
-        NamespaceAncestor, ///< Find the provider by traversing upward in
-                           ///  namespace
+        /// The localTraversal path directly indicates the computation provider.
+        Local,             
+
+        /// Find the providers by traversing relationship targets, applying any
+        /// relationship forwarding, to the targeted objects.
+        RelationshipTargetedObjects,
+
+        /// Find the provider by traversing upward in namespace
+        NamespaceAncestor,
     };
 
     /// An enum value that indicates the type of dynamic traversal used during
     /// provider resolution.
+    /// 
     DynamicTraversal dynamicTraversal;
 };
 

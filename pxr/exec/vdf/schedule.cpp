@@ -8,6 +8,7 @@
 
 #include "pxr/exec/vdf/connection.h"
 #include "pxr/exec/vdf/debugCodes.h"
+#include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/rootNode.h"
 #include "pxr/exec/vdf/scheduler.h"
 #include "pxr/exec/vdf/types.h"

@@ -171,13 +171,13 @@ def GetSamples(data, sampler="eval", antiRegressor=None):
                                   args.tolerance,
                                   withSources=False)
     if sampler == "sampleWithSources":
-        return Evaluator().SampleWithSources(adjustedData,
-                                             Gf.Interval(args.minTime,
-                                                         args.maxTime),
-                                             args.timeScale,
-                                             args.valueScale,
-                                             args.tolerance,
-                                             withSources=True)
+        return Evaluator().Sample(adjustedData,
+                                  Gf.Interval(args.minTime,
+                                              args.maxTime),
+                                  args.timeScale,
+                                  args.valueScale,
+                                  args.tolerance,
+                                  withSources=True)
     assert (sampler in ("bez", "eval", "sample", "sampleWithSources"))
             
     

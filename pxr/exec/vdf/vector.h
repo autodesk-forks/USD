@@ -534,7 +534,7 @@ public:
     bool Holds() const
     {
         static_assert(
-            !Vdf_IsBoxedContainer<TYPE>::value,
+            !Vdf_IsBoxedContainer<TYPE>,
             "VdfVector::Holds cannot check for boxed-ness");
 
         return TfSafeTypeCompare(_GetTypeInfo(), typeid(TYPE));

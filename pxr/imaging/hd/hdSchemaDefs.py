@@ -1250,8 +1250,11 @@
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('height', T_DOUBLE, {}),
-            # deprecated in favor of radiusTop and radiusBottom
-            ('radius', T_DOUBLE, {}), 
+            ('radius', T_DOUBLE,
+             dict(DOC = '''
+                Deprecated. Only use if no radiusTop or radiusBottom data
+                source. Comes from UsdGeom Cylinder which has been deprecated
+                in favor of Cylinder_1.''')),
             ('radiusTop', T_DOUBLE, {}),
             ('radiusBottom', T_DOUBLE, {}),
             ('axis', T_TOKEN, {}),
@@ -1270,8 +1273,11 @@
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('height', T_DOUBLE, {}),
-            # deprecated in favor of radiusTop and radiusBottom
-            ('radius', T_DOUBLE, {}), 
+            ('radius', T_DOUBLE,
+             dict(DOC = '''
+                Deprecated. Only use if no radiusTop or radiusBottom data
+                source. Comes from UsdGeom Capsule which has been deprecated
+                in favor of Capsule_1.''')),
             ('radiusTop', T_DOUBLE, {}),
             ('radiusBottom', T_DOUBLE, {}),
             ('axis', T_TOKEN, {}),

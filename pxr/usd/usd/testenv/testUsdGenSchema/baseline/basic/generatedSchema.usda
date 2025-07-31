@@ -419,3 +419,33 @@ class UsdContrivedNoAlias "UsdContrivedNoAlias"
 {
 }
 
+class "TestReflectedAPIBase" (
+    apiSchemas = ["TestReflectedInternalAPI", "TestReflectedExternalAPI"]
+)
+{
+}
+
+class "TestReflectedInternalAPI" (
+    apiSchemas = ["BuiltinAPI"]
+)
+{
+    int testAttrDuplicate
+    int testAttrInternal
+    rel testRelDuplicate
+    rel testRelInternal
+}
+
+class "TestPropertyOrderTyped"
+{
+    reorder properties = ["testAttrTwo", "testAttrOne"]
+    int testAttrOne
+    int testAttrTwo
+}
+
+class "TestPropertyOrderSingleApplyAPI"
+{
+    reorder properties = ["testAttrTwo", "testAttrOne"]
+    int testAttrOne
+    int testAttrTwo
+}
+

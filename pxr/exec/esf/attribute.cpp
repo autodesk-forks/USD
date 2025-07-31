@@ -22,4 +22,10 @@ EsfAttributeInterface::GetValueTypeName(EsfJournal *journal) const
     return _GetValueTypeName();
 }
 
+EsfAttributeQuery
+EsfAttributeInterface::GetQuery() const
+{
+    return _GetQuery();
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

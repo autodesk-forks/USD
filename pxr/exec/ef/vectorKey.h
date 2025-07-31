@@ -47,6 +47,7 @@ public:
 
     /// Destructor.
     ///
+    EF_API
     virtual ~Ef_VectorKey();
 
     /// Returns the wrapped VdfVector.

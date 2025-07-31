@@ -301,21 +301,28 @@ _GetInputType(
     return mxInputType;
 }
 
-// Between MaterialX versions nodeDef names may change or nodes may be removed.
-// So given the prevMxNodeDefName return the corresponding nodeDef appropriate 
-// for the version of MaterialX being used, or a temporary nodeDef if the node 
-// was removed. 
-static mx::NodeDefPtr
-_GetNodeDef(const mx::DocumentPtr& mxDoc, std::string const& prevMxNodeDefName)
+std::string 
+HdMtlxGetNodeDefName(std::string const& prevMxNodeDefName)
 {
-    // For nodeDef name changes or node removals between MaterialX v1.38 and 
-    // the current version
     std::string mxNodeDefName = prevMxNodeDefName;
+    // For nodeDef name changes between MaterialX v1.38 and the current version
 #if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION >= 39
     // The normalmap nodeDef name changed in v1.39
     if (prevMxNodeDefName == "ND_normalmap") {
         mxNodeDefName = "ND_normalmap_float";
     }
+#endif
+    return mxNodeDefName;
+}
+
+// Between MaterialX versions nodeDef names may change or nodes may be removed.
+// This function calls the above HdMtlxGetNodeDefName() to get the correct 
+// nodeDef name and returns a temporary nodeDef for nodes that have been removed
+static mx::NodeDefPtr
+_GetNodeDef(mx::DocumentPtr const& mxDoc, std::string const& prevMxNodeDefName)
+{
+    // For node removals between MaterialX v1.38 and the current version
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION >= 39
     // Swizzle nodes were deleted in v1.39, return a temporary NodeDef
     std::smatch match;
     static const auto swizzleRegex = std::regex("ND_swizzle_([^_]+)_([^_]+)");
@@ -331,6 +338,7 @@ _GetNodeDef(const mx::DocumentPtr& mxDoc, std::string const& prevMxNodeDefName)
         return swizzleNodeDef;
     }
 #endif
+    const std::string mxNodeDefName = HdMtlxGetNodeDefName(prevMxNodeDefName);
     return mxDoc->getNodeDef(mxNodeDefName);
 }
 

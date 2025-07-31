@@ -381,6 +381,11 @@ HgiMetal::EndFrame()
     _pool->Drain();
 }
 
+void
+HgiMetal::GarbageCollect()
+{
+}
+
 id<MTLCommandQueue>
 HgiMetal::GetQueue() const
 {

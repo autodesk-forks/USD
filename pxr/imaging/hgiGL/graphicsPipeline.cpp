@@ -150,6 +150,11 @@ HgiGLGraphicsPipeline::BindPipeline()
     //
     if (_descriptor.multiSampleState.multiSampleEnable) {
         glEnable(GL_MULTISAMPLE);
+        if (!_hgi->GetCapabilities()->IsSet(
+            HgiDeviceCapabilitiesBitsRoundPoints)) {
+            // Needed to get gl_pointCoord in FS.
+            glEnable(GL_POINT_SPRITE);
+        }
     } else {
         glDisable(GL_MULTISAMPLE);
         // If not using GL_MULTISAMPLE, use GL_POINT_SMOOTH to render points as 

@@ -12,7 +12,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 EsfFixedSizePolymorphicBase::~EsfFixedSizePolymorphicBase() = default;
 
-void EsfFixedSizePolymorphicBase::_CopyTo(std::byte *storage) const
+void
+EsfFixedSizePolymorphicBase::_CopyTo(std::byte *storage) const
 {
     TF_UNUSED(storage);
     TF_VERIFY(false,
@@ -20,7 +21,8 @@ void EsfFixedSizePolymorphicBase::_CopyTo(std::byte *storage) const
         "EsfFixedSizePolymorphicBase::_CopyTo");
 }
 
-void EsfFixedSizePolymorphicBase::_MoveTo(std::byte *storage)
+void
+EsfFixedSizePolymorphicBase::_MoveTo(std::byte *storage)
 {
     TF_UNUSED(storage);
     TF_VERIFY(false,

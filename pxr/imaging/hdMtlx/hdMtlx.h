@@ -61,6 +61,12 @@ HDMTLX_API
 std::string
 HdMtlxCreateNameFromPath(SdfPath const& path);
 
+/// NodeDef names may change between MaterialX versions, this function returns
+/// the nodeDef name appropriate for the version of MaterialX being used. 
+HDMTLX_API
+std::string
+HdMtlxGetNodeDefName(std::string const& prevMxNodeDefName);
+
 /// Creates and returns a MaterialX Document from the given HdMaterialNetwork2 
 /// Collecting the hdTextureNodes and hdPrimvarNodes as the network is 
 /// traversed as well as the Texture name mapping between MaterialX and Hydra.

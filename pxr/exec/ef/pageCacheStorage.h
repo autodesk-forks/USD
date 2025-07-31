@@ -153,11 +153,15 @@ public:
         const VdfNetwork &network,
         const tbb::concurrent_vector<VdfIndex> &nodes);
 
-    /// Call this to notify the page cache storage of nodes that have been
-    /// added to the network.
+    /// Resizes the internal structures of the page cache to be able to
+    /// accommodate output values for the provided \p network.
+    /// 
+    /// \note
+    /// It's not thread-safe to Resize() while the page cache storage is
+    /// concurrently being accessed.
     ///
     EF_API
-    void DidAddNode(const VdfNode &node);
+    void Resize(const VdfNetwork &network);
 
     /// Call this to notify the page cache storage of nodes that have been
     /// deleted from the network.

@@ -41,7 +41,7 @@ EfTime::GetAsString() const
         ? "(default)"
         : std::to_string(_timeCode.GetValue());
         
-    if (_location == EfTime::EvaluatePre) {
+    if (_timeCode.IsPreTime()) {
         res += " (pre)";
     }
    
@@ -63,10 +63,7 @@ operator<<(std::ostream &os, const EfTime &time)
         os << time.GetTimeCode().GetValue();
     }
 
-    os << " location="
-        << (time.GetEvaluationLocation() == EfTime::EvaluatePre 
-            ? "Pre"
-            : "AtTime");
+    os << " location=" << (time.GetTimeCode().IsPreTime() ? "Pre" : "AtTime");
 
     const EfTime::SplineEvaluationFlags flags = time.GetSplineEvaluationFlags();
     os << " flags=" << _SplineFlagsToString(flags);

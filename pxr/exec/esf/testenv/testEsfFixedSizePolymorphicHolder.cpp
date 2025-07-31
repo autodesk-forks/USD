@@ -137,24 +137,24 @@ using OtherBaseHolder = EsfFixedSizePolymorphicHolder<OtherBase, BIG>;
 using OverAlignedBaseHolder = EsfFixedSizePolymorphicHolder<OverAlignedBase>;
 }
 
+// Tests that EsfFixedSizePolymorphicHolder can be constructed from different
+// derived classes.
+//
 static void
 TestConstructor()
 {
-    // Tests that EsfFixedSizePolymorphicHolder can be constructed from
-    // different derived classes.
-
     BaseHolder h1(std::in_place_type<Derived1>);
     BaseHolder h2(std::in_place_type<Derived2>);
     TF_AXIOM(h1->GetDescription() == "Derived1");
     TF_AXIOM(h2->GetDescription() == "Derived2");
 }
 
+// instance when it is destroyed. Tests that EsfFixedSizePolymorphicHolder
+// properly destroys the held
+//
 static void
 TestDestructor()
 {
-    // Tests that EsfFixedSizePolymorphicHolder properly destroys the held
-    // instance when it is destroyed.
-
     Stats stats;
     {
         BaseHolder h(std::in_place_type<Derived1>, stats);
@@ -163,12 +163,12 @@ TestDestructor()
     TF_AXIOM(stats.numDtors == 1);
 }
 
+// Tests that EsfFixedSizePolymorphicHolder copys the held instance in the copy
+// constructor.
+//
 static void
 TestCopyConstructor()
 {
-    // Tests that EsfFixedSizePolymorphicHolder copys the held instance in
-    // the copy constructor.
-
     Stats stats;
     BaseHolder h1(std::in_place_type<Derived2>, stats);
     BaseHolder h2(h1);
@@ -178,12 +178,12 @@ TestCopyConstructor()
     TF_AXIOM(stats.numMoves == 0);
 }
 
+// Tests that EsfFixedSizePolymorphicHolder moves the held instance in the move
+// constructor.
+//
 static void
 TestMoveConstructor()
 {
-    // Tests that EsfFixedSizePolymorphicHolder moves the held instance in
-    // the move constructor.
-
     Stats stats;
     BaseHolder h1(std::in_place_type<Derived1>, stats);
     BaseHolder h2(std::move(h1));
@@ -193,13 +193,12 @@ TestMoveConstructor()
     TF_AXIOM(stats.numMoves == 1);
 }
 
+// Tests that EsfFixedSizePolymorphicHolder copies the held instance in the
+// copy-assignment operator. The existing instance must also be destroyed.
+//
 static void
 TestCopyAssignment()
 {
-    // Tests that EsfFixedSizePolymorphicHolder copies the held instance in
-    // the copy-assignment operator. The existing instance must also be
-    // destroyed.
-
     Stats stats;
     BaseHolder h1(std::in_place_type<Derived1>, stats);
     BaseHolder h2(std::in_place_type<Derived2>, stats);
@@ -210,13 +209,12 @@ TestCopyAssignment()
     TF_AXIOM(h1->GetDescription() == "Derived2");
 }
 
+// Tests that EsfFixedSizePolymorphicHolder moves the held instance in the
+// move-assignment operator. The existing instance must also be destroyed.
+//
 static void
 TestMoveAssignment()
 {
-    // Tests that EsfFixedSizePolymorphicHolder moves the held instance in
-    // the move-assignment operator. The existing instance must also be
-    // destroyed.
-
     Stats stats;
     BaseHolder h1(std::in_place_type<Derived1>, stats);
     BaseHolder h2(std::in_place_type<Derived2>, stats);
@@ -228,12 +226,12 @@ TestMoveAssignment()
     TF_AXIOM(h2->GetDescription() == "Derived1");
 }
 
+// Tests that EsfFixedSizePolymorphicHolder can hold derived types of different
+// sizes if the BufferSize parameter is large enough.
+//
 static void
 TestBigBuffer()
 {
-    // Tests that EsfFixedSizePolymorphicHolder can hold derived types of
-    // different sizes if the BufferSize parameter is large enough.
-
     BigBaseHolder h1(std::in_place_type<Derived1>);
     BigBaseHolder h2(std::in_place_type<Derived2>);
     BigBaseHolder h3(std::in_place_type<BigDerived>);
@@ -242,24 +240,24 @@ TestBigBuffer()
     TF_AXIOM(h3->GetDescription() == "BigDerived");
 }
 
+// Tests that EsfFixedSizePolymorphicHolder works with base classes that are
+// overaligned.
+//
 static void
 TestOverAlignedBase()
 {
-    // Tests that EsfFixedSizePolymorphicHolder works with base classes that
-    // are overaligned.
-
     OverAlignedBaseHolder h1(std::in_place_type<OverAlignedBaseImpl1>);
     OverAlignedBaseHolder h2(std::in_place_type<OverAlignedBaseImpl2>);
     h1 = h2;
     h1 = std::move(h2);
 }
 
+// Tests that certain derived instances are detected as not compatible with a
+// given EsfFixedSizePolymorphicHolder specialization.
+//
 static void
 TestCompatibility()
 {
-    // Tests that certain derived instances are detected as not compatible with
-    // a given EsfFixedSizePolymorphicHolder specialization.
-
     static_assert(!BaseHolder::Compatibility::FITS_IN_BUFFER<BigDerived>);
     static_assert(!BaseHolder::Compatibility::DERIVES_FROM_BASE<OtherBase>);
     static_assert(!OtherBaseHolder::Compatibility::DERIVES_FROM_BASE<Derived1>);
@@ -272,22 +270,22 @@ TestCompatibility()
     TF_AXIOM(!OtherBaseHolder::Compatibility::HasBaseAtSameAddress(derived));
 }
 
+// Tests that multiple-inherited derived classes work, so long as the derived
+// instance shares its address with its base instance.
+//
 static void
 TestMultipleInheritance()
 {
-    // Tests that multiple-inherited derived classes work, so long as the
-    // derived instance shares its address with its base instance.
-
     BigBaseHolder h1(std::in_place_type<MultiplyDerived>);
     TF_AXIOM(h1->GetDescription() == "MultiplyDerived");
 }
 
+// Tests that the move/copy constructors/assignment operators enable use of
+// EsfFixedSizePolymorphicHolder with std::vector.
+//
 static void
 TestVectorUsage()
 {
-    // Tests that the move/copy constructors/assignment operators enable use
-    // of EsfFixedSizePolymorphicHolder with std::vector.
-
     std::vector<BigBaseHolder> holders;
     holders.reserve(2);
     holders.emplace_back(std::in_place_type<Derived1>);

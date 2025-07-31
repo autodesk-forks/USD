@@ -446,15 +446,11 @@ _Sampler::_ExtrapLinear(
 
       case TsExtrapLinear:
         // Extrapolate a straight line continuation using the slope at the
-        // interpolated side of the end knot. If the end knot is dual valued
-        // or the end segment is held (XXX: or value blocked) then the slope
-        // is flat. If the end segment is linear the use the slope to the
-        // next-to-end knot. And if the end segment is curved, use the slope
-        // specified by the end knot's interpolated tangent.
-        //
-        // XXX: extrapolation should probably also be flat if the last segment
-        // of the spline uses TsInterpValueBlock, but eval does not do that
-        // yet.
+        // interpolated side of the end knot. If the end knot is dual valued or
+        // the end segment is held or value blocked then the slope is flat. If
+        // the end segment is linear the use the slope to the next-to-end
+        // knot. And if the end segment is curved, use the slope specified by
+        // the end knot's interpolated tangent.
         slope = 0.0;
 
         // If we have multiple knots and the knot at the end is not dual valued.
@@ -750,16 +746,8 @@ _Sampler::_SampleSegment(
         // No value, nothing to do.
         return;
     } else if (prevKnot->nextInterp == TsInterpCurve) {
-        // The segment is a curve that may need to be broken down. Ensure that
-        // this segment is not regressive.
-        Ts_DoubleKnotData pKnot = *prevKnot;
-        Ts_DoubleKnotData nKnot = *nextKnot;
-        Ts_RegressionPreventerBatchAccess::ProcessSegment(
-            &pKnot, &nKnot, TsAntiRegressionKeepRatio);
-
-        // Sample the (maybe now deregressed) segment.
-        _SampleCurveSegment(&pKnot,
-                            &nKnot,
+        _SampleCurveSegment(prevKnot,
+                            nextKnot,
                             segmentInterval,
                             source,
                             knotToSampleTimeScale,
@@ -816,33 +804,52 @@ _Sampler::_SampleCurveSegment(
     const double valueOffset,
     Ts_SampleDataInterface* sampledSpline)
 {
+    // Bezier control points. We sample the Bezier version even for Hermite
+    // curves since the math is equivalent.
+    GfVec2d cp[4];
+
     // A switch statement will generate a compile error if we ever add a new
     // curve type without adding a case for it.
-    switch (prevKnot->curveType) {
+    switch (_data->curveType) {
       case TsCurveTypeBezier:
         {
+            // Bezier curves may be regressive, prevent that.
+            Ts_DoubleKnotData pKnot = *prevKnot;
+            Ts_DoubleKnotData nKnot = *nextKnot;
+            Ts_RegressionPreventerBatchAccess::ProcessSegment(
+                &pKnot, &nKnot, TsAntiRegressionKeepRatio);
+
             // Get the 4 Bezier control points. Note that the value returned by
             // GetPreTanWidth() is always non-negative, but GetPreTanHeight()
             // has the correct sign.
-            GfVec2d cp[4];
-
-            cp[0] = GfVec2d(prevKnot->time, prevKnot->value);
-            cp[3] = GfVec2d(nextKnot->time, nextKnot->GetPreValue());
-            cp[1] = cp[0] + GfVec2d(prevKnot->GetPostTanWidth(),
-                                    prevKnot->GetPostTanHeight());
-            cp[2] = cp[3] + GfVec2d(-nextKnot->GetPreTanWidth(),
-                                    nextKnot->GetPreTanHeight());
-
-            _SampleBezier(cp, segmentInterval, source,
-                          knotToSampleTimeScale, knotToSampleTimeOffset,
-                          valueOffset, sampledSpline);
+            cp[0] = GfVec2d(pKnot.time, pKnot.value);
+            cp[3] = GfVec2d(nKnot.time, nKnot.GetPreValue());
+            cp[1] = cp[0] + GfVec2d(pKnot.GetPostTanWidth(),
+                                    pKnot.GetPostTanHeight());
+            cp[2] = cp[3] + GfVec2d(-nKnot.GetPreTanWidth(),
+                                    nKnot.GetPreTanHeight());
         }
         break;
 
       case TsCurveTypeHermite:
-        // XXX: Not implemented yet. See USD-10314
+        {
+            // Convert the Hermite curve to Bezier control points. Note, Hermite
+            // curves are never regressive so regression prevention is not
+            // needed.
+            const double dt = nextKnot->time - prevKnot->time;
+            const double dt_3 = dt / 3.0;
+
+            cp[0] = GfVec2d(prevKnot->time, prevKnot->value);
+            cp[3] = GfVec2d(nextKnot->time, nextKnot->GetPreValue());
+            cp[1] = cp[0] + GfVec2d(dt_3, dt_3 * prevKnot->GetPostTanSlope());
+            cp[2] = cp[3] - GfVec2d(dt_3, dt_3 * nextKnot->GetPreTanSlope());
+        }
         break;
     }
+
+    _SampleBezier(cp, segmentInterval, source,
+                  knotToSampleTimeScale, knotToSampleTimeOffset,
+                  valueOffset, sampledSpline);
 }
 
 void
@@ -1009,6 +1016,11 @@ _Sampler::_UnrollInnerLoops()
         return;
     }
 
+    // We're going to have to convert the knots and times info. Point _knots and
+    // _times at the internal arrays that we're about to populate.
+    _knots = &_internalKnots;
+    _times = &_internalTimes;
+
     // Inner loops are defined over a closed interval. The end of the looped
     // interval has a knot that is a copy of the knot at the start of the
     // interval. It will overrule any knot that may be in the spline data at
@@ -1057,7 +1069,15 @@ _Sampler::_UnrollInnerLoops()
         --preBegin;
     }
 
-    postEnd = std::upper_bound(preBegin, timesEnd, _timeInterval.GetMax());
+    // Find the knot at or after the end of _timeInterval. This is the knot on
+    // the far end of the last segment we are sampling (or is timesEnd if we're
+    // sampling past the last knot).
+    postEnd = std::lower_bound(preBegin, timesEnd, _timeInterval.GetMax());
+    if (postEnd != timesEnd) {
+        // Increment the iterator so copying [preBegin .. postEnd) will copy the
+        // last knot.
+        ++postEnd;
+    }
 
     if (loopedInterval.IsEmpty()) {
         // Even if there are inner loops, we're not interested in
@@ -1154,11 +1174,6 @@ _Sampler::_UnrollInnerLoops()
         _internalTimes.push_back(_data->times[i]);
         _internalKnots.push_back(_data->GetKnotDataAsDouble(i));
     }
-
-    // Finally, make sure that _knots and _times are pointing at the
-    // internal arrays.
-    _knots = &_internalKnots;
-    _times = &_internalTimes;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

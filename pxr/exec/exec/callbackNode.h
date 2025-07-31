@@ -22,7 +22,6 @@ class VdfInputSpecs;
 class VdfOutputSpecs;
 
 /// Execution node that invokes a provided callback.
-///
 class Exec_CallbackNode : public VdfNode
 {
 public:
@@ -30,9 +29,9 @@ public:
         VdfNetwork *network,
         const VdfInputSpecs &inputSpecs,
         const VdfOutputSpecs &outputSpecs,
-        const ExecCallbackFn &callback) :
-        VdfNode(network, inputSpecs, outputSpecs),
-        _callback(callback)
+        const ExecCallbackFn &callback)
+        : VdfNode(network, inputSpecs, outputSpecs)
+        , _callback(callback)
     {}
 
     void Compute(const VdfContext &context) const override;

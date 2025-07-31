@@ -6,18 +6,35 @@
 //
 #include "pxr/exec/exec/computationDefinition.h"
 
-#include <utility>
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 Exec_ComputationDefinition::Exec_ComputationDefinition(
     TfType resultType,
-    ExecCallbackFn &&callback,
-    Exec_InputKeyVector &&inputKeys)
+    const TfToken &computationName)
     : _resultType(resultType)
-    , _callback(std::move(callback))
-    , _inputKeys(std::move(inputKeys))
+    , _computationName(computationName)
 {        
+}
+
+Exec_ComputationDefinition::~Exec_ComputationDefinition() = default;
+
+TfType
+Exec_ComputationDefinition::GetResultType(
+    const EsfObjectInterface &,
+    EsfJournal *) const
+{
+    return _resultType;
+}
+
+TfType
+Exec_ComputationDefinition::GetExtractionType(
+    const EsfObjectInterface &) const
+{
+    // TODO: Currently, a computation cannot specify an extraction type that
+    // differs from its result type.  Extend the definition language to allow
+    // authors to specify whether the extracted value should be a scalar or
+    // array.
+    return _resultType;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

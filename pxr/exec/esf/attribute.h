@@ -12,13 +12,12 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/esf/api.h"
+#include "pxr/exec/esf/attributeQuery.h"
 #include "pxr/exec/esf/fixedSizePolymorphicHolder.h"
 #include "pxr/exec/esf/property.h"
 
-#include "pxr/base/vt/value.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/valueTypeName.h"
-#include "pxr/usd/usd/timeCode.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -41,18 +40,10 @@ public:
     /// \see UsdAttribute::GetValueTypeName
     ESF_API SdfValueTypeName GetValueTypeName(EsfJournal *journal) const;
 
-
-    /// Gets the resolved value of the attribute at a given time.
-    ///
-    /// This method is not called by exec compilation, and therefore does not
-    /// accept an EsfJournal argument.
-    ///
-    /// \see UsdAttribute::Get
-    ///
-    bool Get(VtValue *value, UsdTimeCode time) const
-    {
-        return _Get(value, time);
-    }
+    /// Returns an object for caching and querying value resolution information.
+    /// \see UsdAttributeQuery
+    /// 
+    ESF_API EsfAttributeQuery GetQuery() const;
 
 protected:
     /// This constructor may only be called by the scene adapter implementation.
@@ -61,7 +52,7 @@ protected:
 private:
     // These methods must be implemented by the scene adapter implementation.
     virtual SdfValueTypeName _GetValueTypeName() const = 0;
-    virtual bool _Get(VtValue *value, UsdTimeCode time) const = 0;
+    virtual EsfAttributeQuery _GetQuery() const = 0;
 };
 
 /// Holds an implementation of EsfAttributeInterface in a fixed-size buffer.

@@ -10,7 +10,9 @@
 #include "pxr/exec/vdf/output.h"
 #include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/node.h"
+#include "pxr/exec/vdf/request.h"
 #include "pxr/exec/vdf/types.h"
+#include "pxr/exec/vdf/vector.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 

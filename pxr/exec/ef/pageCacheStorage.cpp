@@ -458,25 +458,32 @@ EfPageCacheStorage::ClearNodes(
 }
 
 void
-EfPageCacheStorage::DidAddNode(const VdfNode &node)
+EfPageCacheStorage::Resize(const VdfNetwork &network)
 {
-    // Whenever a node is being added, make sure that the _nodeRefs array
-    // is still appropriately sized. Note, that we only do this from the
-    // main thread, and when all background threads are stopped. Otherwise,
-    // the _nodeRefs array could be in use by a background thread.
-    const VdfIndex nodeIndex = VdfNode::GetIndexFromId(node.GetId());
-    if (nodeIndex < _numNodeRefs) {
+    const size_t numNodes = network.GetNodeCapacity();
+
+    // Whenever the network is resized, make sure that the _nodeRefs array is
+    // still appropriately sized. Note, that we only do this from the main
+    // thread, and when all background threads are stopped. Otherwise, the
+    // _nodeRefs array could be in use by a background thread.
+    if (numNodes < _numNodeRefs) {
         return;
     }
 
-    // Allocate a new array. Grow exponentially here, so not to re-allocate
-    // the array every time a node is being added during first time compilation.
-    // In that case the network's node capacity would grow linearly with every
-    // invocation of DidAddNode.
-    const size_t newSize = nodeIndex + 1;
-    const size_t newCapacity = newSize + (newSize / 2);
+    // TODO: We can convert this to using a tbb::concurrent_vector, and
+    // dynamically resize _nodeRefs on access, rather than pre-size it here.
+    // We should revisit this once std::atomic_ref becomes available to us, so
+    // that we can work around the issue with concurrent_vector not
+    // synchronizing on element construction.
+
+    // Allocate a new array. Over-allocate, so not to re-allocate
+    // the array every time a few nodes are added to an existing network, e.g.,
+    // small incremental compilation after major first-time compilation.
+    // However, the constant below is just a guess at what might be sufficient
+    // over-allocation without going overboard.
+    const size_t newSize = numNodes + 1000;
     std::unique_ptr<std::atomic<bool>[]> newNodeRefs(
-        new std::atomic<bool>[newCapacity]);
+        new std::atomic<bool>[newSize]);
 
     // Copy all the existing values into the new array.
     for (size_t i = 0; i < _numNodeRefs; ++i) {
@@ -486,13 +493,13 @@ EfPageCacheStorage::DidAddNode(const VdfNode &node)
     }
 
     // Set all the tail in the new array to the initial values.
-    for (size_t i = _numNodeRefs; i < newCapacity; ++i) {
+    for (size_t i = _numNodeRefs; i < newSize; ++i) {
         newNodeRefs[i].store(false, std::memory_order_relaxed);
     }
 
     // Swap the array, and set the new size.
     _nodeRefs.swap(newNodeRefs);
-    _numNodeRefs = newCapacity;
+    _numNodeRefs = newSize;
 }
 
 void
@@ -504,11 +511,10 @@ EfPageCacheStorage::WillDeleteNode(const VdfNode &node)
     // If this node has not been referenced in the cache, we can bail out
     // right away. Note, that this is an acceleration structure. We add
     // node references, but never remove them unless the node was deleted.
-    // Hoewever, this prunes about 99% of the nodes in the network.
-    if (TF_VERIFY(_numNodeRefs > nodeIndex)) {
-        if (!_nodeRefs[nodeIndex].load(std::memory_order_acquire)) {
-            return;
-        }
+    // However, this prunes about 99% of the nodes in the network.
+    if (nodeIndex >= _numNodeRefs ||
+        !_nodeRefs[nodeIndex].load(std::memory_order_acquire)) {
+        return;
     }
 
     TRACE_FUNCTION();
@@ -542,9 +548,7 @@ EfPageCacheStorage::WillDeleteNode(const VdfNode &node)
         });
 
     // Remove the node reference.
-    if (_numNodeRefs > nodeIndex) {
-        _nodeRefs[nodeIndex].store(false, std::memory_order_release);
-    }
+    _nodeRefs[nodeIndex].store(false, std::memory_order_release);
 }
 
 bool
@@ -599,6 +603,15 @@ EfPageCacheStorage::_Commit(
         const VdfMask &mask = it->GetMask();
         if (const VdfVector *value =
             executor.GetOutputValue(*output, mask)) {
+            // The node references vector is expected to be appropriately sized.
+            // Note, this will be called from multiple threads, so the vector
+            // cannot be dynamically re-sized here.
+            const VdfIndex nodeIndex =
+                VdfNode::GetIndexFromId(output->GetNode().GetId());
+            if (!TF_VERIFY(nodeIndex < _numNodeRefs)) {
+                continue;
+            }
+
             // Note that we store the requested output value in its
             // entirety, rather than merely the time dependent bits in the
             // mask.
@@ -608,13 +621,7 @@ EfPageCacheStorage::_Commit(
             bytesStored += cacheAccess->SetValue(*output, *value, mask);
 
             // Mark the owning node as referenced.
-            // Note, that this will be called from multiple threads, so the
-            // vector must be appropriately sized.
-            const VdfIndex nodeIndex =
-                VdfNode::GetIndexFromId(output->GetNode().GetId());
-            if (_numNodeRefs > nodeIndex) {
-                _nodeRefs[nodeIndex].store(true, std::memory_order_release);
-            }
+            _nodeRefs[nodeIndex].store(true, std::memory_order_release);
         }
     }
 
@@ -636,6 +643,15 @@ EfPageCacheStorage::_Commit(
     const VdfOutput *output = maskedOutput.GetOutput();
     const VdfMask &mask = maskedOutput.GetMask();
 
+    // The node references vector is expected to be appropriately sized.
+    // Note, this will be called from multiple threads, so the vector cannot be
+    // dynamically re-sized here.
+    const VdfIndex nodeIndex =
+        VdfNode::GetIndexFromId(output->GetNode().GetId());
+    if (!TF_VERIFY(nodeIndex < _numNodeRefs)) {
+        return 0;
+    } 
+
     // Note that we store the requested output value in its entirety, rather
     // than merely the time dependent bits in the mask. We do this because in
     // order for lookups from the executor to get a cache hit, all the data
@@ -648,13 +664,8 @@ EfPageCacheStorage::_Commit(
         _numBytesUsed += bytesStored;
     }
 
-    // Mark the owning node as referenced. Note, that this will be called from
-    // multiple threads, so the vector must be appropriately sized.
-    const VdfIndex nodeIndex =
-        VdfNode::GetIndexFromId(output->GetNode().GetId());
-    if (_numNodeRefs > nodeIndex) {
-        _nodeRefs[nodeIndex].store(true, std::memory_order_release);
-    }
+    // Mark the owning node as referenced.
+    _nodeRefs[nodeIndex].store(true, std::memory_order_release);
 
     return bytesStored;
 }

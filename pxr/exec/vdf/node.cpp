@@ -127,6 +127,17 @@ VdfNode::SetDebugName(const std::string &name)
     SetDebugNameCallback([name] { return name; });
 }
 
+void
+VdfNode::SetDebugNameCallback(VdfNodeDebugNameCallback &&callback)
+{
+    if (!callback) {
+        TF_CODING_ERROR("Null callback for node: %s",
+                        ArchGetDemangled(typeid(*this)).c_str());
+    } else {
+        _network._RegisterNodeDebugName(*this, std::move(callback));
+    }  
+}
+
 const std::string
 VdfNode::GetDebugName() const
 {

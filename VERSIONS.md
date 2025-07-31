@@ -20,7 +20,7 @@ Our test machines have the following software versions installed.
 | Intel TBB     | 2020.3               | 2020.3                       | 2020.3                         |
 | OneTBB        | 2021.9               | 2021.9                       | 2021.9                         |
 | OpenSubdiv    | 3.6.0                | 3.6.0                        | 3.6.0                          |
-| OpenImageIO   | 2.3.21.0             | 2.3.21.0                     | 2.3.21.0                       |
+| OpenImageIO   | 2.5.16.0             | 2.5.16.0                     | 2.5.16.0                       |
 | OpenColorIO   | 2.1.3                | 2.1.3                        | 2.1.3                          |
 | OSL           | 1.10.9               |                              |                                |
 | Ptex          | 2.4.2                | 2.4.2                        | 2.4.2                          |

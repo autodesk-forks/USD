@@ -14,6 +14,7 @@
 #include "pxr/base/work/loops.h"
 #include "pxr/base/work/threadLimits.h"
 #include "pxr/exec/vdf/executionTypeRegistry.h"
+#include "pxr/exec/vdf/network.h"
 
 #include <iostream>
 #include <random>

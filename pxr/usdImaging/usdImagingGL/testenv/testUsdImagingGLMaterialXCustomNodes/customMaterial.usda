@@ -23,12 +23,13 @@ def Xform "lights"
     {
         asset inputs:texture:file = @./images/solidWhite.png@
         float xformOp:rotateX:Zup = 90
+        float inputs:intensity = 0.75
         uniform token[] xformOpOrder = ["xformOp:rotateX:Zup"]
     }
     def DistantLight "DistantLight"
     {
-        float inputs:angle = 50
-        float inputs:intensity = 5
+        float inputs:angle = 100
+        float inputs:intensity = 2
         float3 xformOp:rotateXYZ = (90, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
     }

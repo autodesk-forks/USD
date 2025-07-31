@@ -14,12 +14,14 @@ pxr_library(hdsi
         hf
         hd
         pxOsd
+        TBB::tbb
 
     PUBLIC_CLASSES
         computeSceneIndexDiff
         coordSysPrimSceneIndex
         debuggingSceneIndex
         debuggingSceneIndexPlugin
+        domeLightCameraVisibilitySceneIndex
         extComputationDependencySceneIndex
         extComputationPrimvarPruningSceneIndex
         implicitSurfaceSceneIndex
@@ -40,6 +42,7 @@ pxr_library(hdsi
         sceneGlobalsSceneIndex
         switchingSceneIndex
         tetMeshConversionSceneIndex
+        unboundMaterialPruningSceneIndex
         utils
         velocityMotionResolvingSceneIndex
 

@@ -405,7 +405,7 @@ My_TestGLDrawing::OffscreenTest()
             6  /*primsAndInstances*/,
             69 /*faces*/,
            135 /*edges*/,
-            41 /*points*/};
+            39 /*points*/};
         
         for (size_t i = 0; i < pickTargets.size(); i++) {
             allHits.clear();
@@ -427,7 +427,11 @@ My_TestGLDrawing::OffscreenTest()
             HdxPickTokens->pickPrimsAndInstances,
             HdxPickTokens->resolveAll,
             &allHits);
-        TF_VERIFY(allHits.size() == 22515);
+        constexpr size_t expectedHitCount = 22438;
+        std::cout << "allHits: " << allHits.size()
+                  << " expectedHitCount:  " << expectedHitCount
+                  << std::endl;
+        TF_VERIFY(allHits.size() == expectedHitCount);
     }
 }
 

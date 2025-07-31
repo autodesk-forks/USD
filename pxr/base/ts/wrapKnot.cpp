@@ -79,7 +79,7 @@ static TsKnot* _WrapInit(
     TsKnot *knot = new TsKnot(valueType);
 
     // Set fixed-type parameters.
-    SET(knot, SetCurveType, TsCurveType, curveType);
+    SET(knot, SetCurveType, TsCurveType, curveType);  // deprecated
     SET(knot, SetTime, TsTime, time);
     SET(knot, SetNextInterpolation, TsInterpMode, nextInterp);
     SET(knot, SetCustomData, VtDictionary, customData);
@@ -182,8 +182,8 @@ void wrapKnot()
         .def("GetPreValue", WRAP_GETTER(PreValue))
         .def("ClearPreValue", &This::ClearPreValue)
 
-        .def("SetCurveType", &This::SetCurveType)
-        .def("GetCurveType", &This::GetCurveType)
+        .def("SetCurveType", &This::SetCurveType)       // deprecated
+        .def("GetCurveType", &This::GetCurveType)       // deprecated
 
         .def("SetPreTanWidth", &This::SetPreTanWidth)
         .def("GetPreTanWidth", &This::GetPreTanWidth)

@@ -6,15 +6,17 @@
 //
 #include "pxr/exec/esf/prim.h"
 
+#include "pxr/exec/esf/attribute.h"
 #include "pxr/exec/esf/editReason.h"
 #include "pxr/exec/esf/journal.h"
-#include "pxr/exec/esf/attribute.h"
+#include "pxr/exec/esf/relationship.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 EsfPrimInterface::~EsfPrimInterface() = default;
 
-TfTokenVector EsfPrimInterface::GetAppliedSchemas(EsfJournal *journal) const
+const TfTokenVector &
+EsfPrimInterface::GetAppliedSchemas(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);
@@ -22,19 +24,34 @@ TfTokenVector EsfPrimInterface::GetAppliedSchemas(EsfJournal *journal) const
     return _GetAppliedSchemas();
 }
 
-EsfAttribute EsfPrimInterface::GetAttribute(
-    const TfToken &attrName,
+EsfAttribute
+EsfPrimInterface::GetAttribute(
+    const TfToken &attributeName,
     EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(
-            _GetPath().AppendProperty(attrName),
+            _GetPath().AppendProperty(attributeName),
             EsfEditReason::ResyncedObject);
     }
-    return _GetAttribute(attrName);
+    return _GetAttribute(attributeName);
 }
 
-EsfPrim EsfPrimInterface::GetParent(EsfJournal *journal) const
+EsfRelationship
+EsfPrimInterface::GetRelationship(
+    const TfToken &relationshipName,
+    EsfJournal *journal) const
+{
+    if (journal) {
+        journal->Add(
+            _GetPath().AppendProperty(relationshipName),
+            EsfEditReason::ResyncedObject);
+    }
+    return _GetRelationship(relationshipName);
+}
+
+EsfPrim
+EsfPrimInterface::GetParent(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);
@@ -42,7 +59,8 @@ EsfPrim EsfPrimInterface::GetParent(EsfJournal *journal) const
     return _GetParent();
 }
 
-TfType EsfPrimInterface::GetType(EsfJournal *journal) const
+TfType
+EsfPrimInterface::GetType(EsfJournal *journal) const
 {
     if (journal) {
         journal->Add(_GetPath(), EsfEditReason::ResyncedObject);

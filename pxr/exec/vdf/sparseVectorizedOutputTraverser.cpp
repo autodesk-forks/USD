@@ -7,6 +7,7 @@
 #include "pxr/exec/vdf/sparseVectorizedOutputTraverser.h"
 
 #include "pxr/exec/vdf/connection.h"
+#include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/node.h"
 #include "pxr/exec/vdf/output.h"
 

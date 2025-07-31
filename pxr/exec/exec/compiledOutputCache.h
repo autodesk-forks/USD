@@ -23,15 +23,14 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 /// The output cache stores a compiled masked output for a given output key.
-///
 class Exec_CompiledOutputCache
 {
 public:
+    Exec_CompiledOutputCache() = default;
+    
     Exec_CompiledOutputCache(const Exec_CompiledOutputCache &) = delete;
     Exec_CompiledOutputCache &operator=(const Exec_CompiledOutputCache &) =
         delete;
-
-    Exec_CompiledOutputCache() = default;
 
     /// Insert a masked output corresponding to the output key.
     ///
@@ -40,7 +39,7 @@ public:
     /// is not modified.
     ///
     bool Insert(
-        const Exec_OutputKey &key,
+        const Exec_OutputKey::Identity &key,
         const VdfMaskedOutput &maskedOutput);
 
     /// Find a masked output in the compiled output cache. Returns a tuple with
@@ -49,7 +48,7 @@ public:
     /// will be returned if no entry was found.
     ///
     std::tuple<const VdfMaskedOutput &, bool> Find(
-        const Exec_OutputKey &key) const;
+        const Exec_OutputKey::Identity &key) const;
 
     /// Erases all entries whose VdfMaskedOutput%s are owned by the node with
     /// id \p nodeId.
@@ -64,7 +63,8 @@ private:
 
     // Maps output keys to masked outputs.
     using _OutputMap =
-        tbb::concurrent_unordered_map<Exec_OutputKey, VdfMaskedOutput, TfHash>;
+        tbb::concurrent_unordered_map<
+            Exec_OutputKey::Identity, VdfMaskedOutput, TfHash>;
     _OutputMap _outputMap;
 
     // Maps nodes to output keys. This map is used for "reverse" lookups into
@@ -72,7 +72,7 @@ private:
     // be purged in response to uncompilation.
     using _ReverseMap =
         tbb::concurrent_unordered_map<
-            VdfId, tbb::concurrent_vector<Exec_OutputKey>>;
+            VdfId, tbb::concurrent_vector<Exec_OutputKey::Identity>>;
     _ReverseMap _reverseMap;
 };
 

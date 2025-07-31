@@ -44,9 +44,14 @@ public:
     /// If a journal entry already exists for \p path, then its edit reasons
     /// are extended by \p editReason.
     ///
-    void Add(const SdfPath &path, EsfEditReason editReason)
-    {
-        _hashMap[path] |= editReason;
+    /// Returns a reference to the current journal, so multiple Add calls can be
+    /// chained together.
+    ///
+    EsfJournal &Add(const SdfPath &path, EsfEditReason editReason) {
+        if (TF_VERIFY(path.IsAbsolutePath()) && TF_VERIFY(!path.IsEmpty())) {
+            _hashMap[path] |= editReason;
+        }
+        return *this;
     }
 
     /// Merges the entries from the \p other EsfJournal into this one.
@@ -54,11 +59,18 @@ public:
     /// If this journal and \p other have entries for the same path, then
     /// the merged entry contains the union of both reasons.
     ///
-    void Merge(const EsfJournal &other)
-    {
+    void Merge(const EsfJournal &other) {
         for (const value_type &entry : other) {
             _hashMap[entry.first] |= entry.second;
         }
+    }
+
+    bool operator==(const EsfJournal &other) const {
+        return _hashMap == other._hashMap;
+    }
+
+    bool operator!=(const EsfJournal &other) const {
+        return _hashMap != other._hashMap;
     }
 
     /// \name Iteration API
@@ -67,16 +79,34 @@ public:
     /// for-loops.
     ///
     /// @{
+    /// 
     using value_type = _HashMap::value_type;
     using iterator = _HashMap::iterator;
     using const_iterator = _HashMap::const_iterator;
 
-    iterator begin() & { return _hashMap.begin(); }
-    iterator end() & { return _hashMap.end(); }
-    const_iterator begin() const & { return _hashMap.begin(); }
-    const_iterator end() const & { return _hashMap.end(); }
-    const_iterator cbegin() const & { return _hashMap.begin(); }
-    const_iterator cend() const & { return _hashMap.end(); }
+    iterator begin() & {
+        return _hashMap.begin();
+    }
+
+    iterator end() & {
+        return _hashMap.end();
+    }
+
+    const_iterator begin() const & {
+        return _hashMap.begin();
+    }
+
+    const_iterator end() const & {
+        return _hashMap.end();
+    }
+
+    const_iterator cbegin() const & {
+        return _hashMap.begin();
+    }
+
+    const_iterator cend() const & {
+        return _hashMap.end();
+    }
     /// @}
 
 private:

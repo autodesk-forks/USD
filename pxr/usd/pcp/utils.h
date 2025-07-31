@@ -12,6 +12,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/errors.h"
 #include "pxr/usd/pcp/node.h"
+#include "pxr/usd/pcp/primIndex_Graph.h"
 #include "pxr/usd/sdf/layer.h"
 
 #include <string>
@@ -201,7 +202,7 @@ inline bool
 Pcp_IsPropagatedSpecializesNode(
     const PcpNodeRef& node)
 {
-    return (PcpIsSpecializeArc(node.GetArcType()) &&
+    return (PcpIsSpecializeArc(node._graph->GetArcType(node._nodeIdx)) &&
             node.GetParentNode() == node.GetRootNode() &&
             node.GetSite() == node.GetOriginNode().GetSite());
 }

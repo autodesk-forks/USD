@@ -732,6 +732,8 @@ pxr_register_test(testUsdviewSelectionHighlighting_Delegate
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=0
 )
 
 pxr_register_test(testUsdviewRenderMode

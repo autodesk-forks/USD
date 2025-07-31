@@ -419,7 +419,24 @@ private:
         // each piece of data. Once the checksum has reached a specific value,
         // all data is guaranteed to be constructed.
         //
-        std::atomic<uint8_t> constructionChecksum;
+        // The correctness of the checksum implementation requires that this
+        // member be initialized to zero prior to becoming visible to other
+        // threads.  Due to the design of concurrent_vector, zero_allocator is
+        // used to ensure that the storage is zeroed but the lifetime of the
+        // _OutputData object is not guaranteed to begin before other threads
+        // are able to observe its entry in the vector.  Aside from this
+        // undefined behavior, there is another issue.  As of C++20,
+        // std::atomic's default constructor does value-initialization.  This
+        // zeroes the checksum again *after* other threads may have already
+        // incremented its value.  Placing the checksum in a union and
+        // omitting any explicit initialization in the _OutputData constructor
+        // dodges this specific re-zeroing problem.  However, the workaround
+        // cannot solve the fundamental issue of object lifetime outlined
+        // above.
+        //
+        union {
+            std::atomic<uint8_t> constructionChecksum;
+        };
 
         // The invalidation timestamp. We store this information in the
         // generic data vector in order to make it available during evaluation

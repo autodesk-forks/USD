@@ -16,8 +16,9 @@
 #include "pxr/base/tf/bits.h"
 #include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/hashmap.h"
+#include "pxr/exec/vdf/mask.h"
+#include "pxr/exec/vdf/maskedOutputVector.h"
 #include "pxr/exec/vdf/request.h"
-#include "pxr/exec/vdf/vector.h"
 
 #include <tbb/spin_rw_mutex.h>
 
@@ -25,6 +26,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class VdfOutput;
 class VdfNode;
+class VdfVector;
 
 ///////////////////////////////////////////////////////////////////////////////
 ///

@@ -1361,7 +1361,7 @@ UsdPrim::_GetPropertyNames(
     return namesVec;
 }
 
-TfTokenVector
+const TfTokenVector &
 UsdPrim::GetAppliedSchemas() const
 {
     return GetPrimDefinition().GetAppliedAPISchemas();

@@ -103,8 +103,8 @@ class TestSdfBatchNamespaceEdit(unittest.TestCase):
 
         print('\nTest Process()')
 
-        layer = Sdf.Layer.FindOrOpen('testSdfBatchNamespaceEdit.testenv/test.sdf')
-        final = Sdf.Layer.FindOrOpen('testSdfBatchNamespaceEdit.testenv/final.sdf')
+        layer = Sdf.Layer.FindOrOpen('testSdfBatchNamespaceEdit.testenv/test.usda')
+        final = Sdf.Layer.FindOrOpen('testSdfBatchNamespaceEdit.testenv/final.usda')
         self.assertTrue(layer is not None)
         self.assertTrue(final is not None)
 
@@ -257,7 +257,7 @@ class TestSdfBatchNamespaceEdit(unittest.TestCase):
         moved.
         """
         layer = Sdf.Layer.CreateAnonymous()
-        layer.ImportFromString("""#sdf 1.4.32
+        layer.ImportFromString("""#usda 1.0
             def Prim "A" {
                 custom double a
                 def Prim "B" {
@@ -286,7 +286,7 @@ class TestSdfBatchNamespaceEdit(unittest.TestCase):
         should know that the child's former path is still empty ("deadspace").
         """
         layer = Sdf.Layer.CreateAnonymous()
-        layer.ImportFromString("""#sdf 1.4.32
+        layer.ImportFromString("""#usda 1.0
             def Prim "A" {
                 custom double a
                 def Prim "B" {
@@ -323,7 +323,7 @@ class TestSdfBatchNamespaceEdit(unittest.TestCase):
         itself." Instead, it should fail with "New parent was removed."
         """
         layer = Sdf.Layer.CreateAnonymous()
-        layer.ImportFromString("""#sdf 1.4.32
+        layer.ImportFromString("""#usda 1.0
             def Prim "A" {
                 def Prim "B" {}
             }

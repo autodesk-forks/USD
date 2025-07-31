@@ -92,6 +92,7 @@ public:
     static _TargetingPropertyDependencies GetDependencies(
         const UsdStageRefPtr &stage) 
     {
+        TRACE_FUNCTION();
         _TargetingPropertyDependencyCollector impl;
         impl._Run(stage);
         return std::move(impl._result);
@@ -422,6 +423,8 @@ UsdNamespaceEditor::ReparentProperty(
 bool 
 UsdNamespaceEditor::ApplyEdits()
 {
+    TRACE_FUNCTION();
+
     _ProcessEditsIfNeeded();
     if (!_processedEdit) {
         TF_CODING_ERROR("Failed to process edits");
@@ -506,6 +509,8 @@ UsdNamespaceEditor::ApplyEdits()
 bool 
 UsdNamespaceEditor::CanApplyEdits(std::string *whyNot) const
 {
+    TRACE_FUNCTION();
+
     _ProcessEditsIfNeeded();
     if (!_processedEdit) {
         TF_CODING_ERROR("Failed to process edits");
@@ -850,6 +855,8 @@ UsdNamespaceEditor::_EditProcessor::ProcessEdit(
     const _EditDescription &editDesc,
     const EditOptions &editOptions)
 {
+    TRACE_FUNCTION();
+    
     _ProcessedEdit processedEdit;
     _EditProcessor(stage, dependentStages, editDesc, editOptions, &processedEdit);
     return processedEdit;
@@ -925,6 +932,8 @@ UsdNamespaceEditor::_EditProcessor::_EditProcessor(
 bool
 UsdNamespaceEditor::_EditProcessor::_ProcessNewPath()
 {
+    TRACE_FUNCTION();
+
     // Empty path is a delete so the new path is automatically valid.
     if (_editDesc.newPath.IsEmpty()) {
         return true;
@@ -1005,6 +1014,8 @@ void
 UsdNamespaceEditor::_EditProcessor::_ProcessPrimEditRequiresRelocates(
     const PcpPrimIndex &primIndex)
 {
+    TRACE_FUNCTION();
+
     const bool requiresRelocatesAuthoring = [&](){
         // First check: if the path that is being moved or deleted is already
         // the target of a relocation in the local layer stack, then the 
@@ -1071,6 +1082,8 @@ void
 UsdNamespaceEditor::_EditProcessor::_ProcessPropEditRequiresRelocates(
     const PcpPrimIndex &primIndex)
 {
+    TRACE_FUNCTION();
+
     const TfToken &propName = _editDesc.oldPath.GetNameToken();
 
     // Check to see if there are any contributing specs that would require 
@@ -1132,6 +1145,8 @@ UsdNamespaceEditor::_EditProcessor::_ProcessPropEditRequiresRelocates(
 void 
 UsdNamespaceEditor::_EditProcessor::_GatherLayersToEdit()
 {
+    TRACE_FUNCTION();
+
     // Get all the layers in the layer stack where the edits will be performed.
     const SdfLayerRefPtrVector &layers = 
         _nodeForEditTarget.GetLayerStack()->GetLayers();
@@ -1160,6 +1175,8 @@ UsdNamespaceEditor::_EditProcessor::_GatherLayersToEdit()
 void 
 UsdNamespaceEditor::_EditProcessor::_GatherTargetListOpEdits()
 {
+    TRACE_FUNCTION();
+
     // Gather all the dependencies from stage namespace path to properties with 
     // relationship targets or attributes connections that depend on that 
     // namespace path.
@@ -1326,6 +1343,8 @@ static bool
 _ApplyLayerSpecMove(
     const SdfLayerHandle &layer, const SdfPath &oldPath, const SdfPath &newPath)
 {
+    TRACE_FUNCTION();
+
     // Create an SdfBatchNamespaceEdit for the path move. We use the index of
     // "Same" specifically so renames don't move the object out of its original
     // order (it has no effect for any edits other than rename)
@@ -1390,6 +1409,8 @@ _ApplyLayerSpecMove(
 bool 
 UsdNamespaceEditor::_ProcessedEdit::Apply()
 {
+    TRACE_FUNCTION();
+
     // This is to try to preemptively prevent partial edits when if any of the 
     // necessary specs can't be renamed.
     if (std::string errorMsg; !CanApply(&errorMsg)) {
@@ -1454,6 +1475,8 @@ UsdNamespaceEditor::_ProcessedEdit::Apply()
 void
 UsdNamespaceEditor::_EditProcessor::_GatherDependentStageEdits()
 {
+    TRACE_FUNCTION();
+
     // Composition dependencies are only relevant for prim namespace edits.
     if (_editDesc.IsPropertyEdit()) {
         return;

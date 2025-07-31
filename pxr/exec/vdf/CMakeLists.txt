@@ -25,6 +25,7 @@ pxr_library(vdf
         parallelSpeculationExecutorEngine.h
         dataManagerBasedExecutor.h
         dataManagerBasedSubExecutor.h
+        dataManagerFacade.h
         defaultInitAllocator.h
         estimateSize.h
         execNodeDebugName.h
@@ -48,6 +49,7 @@ pxr_library(vdf
         parallelExecutorDataManagerInterface.h
         parallelExecutorEngineBase.h
         parallelSpeculationExecutorEngine.h
+        poolChainIndex.h
         pullBasedExecutorEngine.h
         readIterator.h
         readIteratorRange.h
@@ -88,7 +90,6 @@ pxr_library(vdf
         executorInvalidator
         executorObserver
         extensibleNode
-        fallbackValueRegistry
         fixedSizeHolder
         grapher
         grapherOptions
@@ -116,7 +117,6 @@ pxr_library(vdf
         parallelExecutorEngine
         parallelTaskSync
         parallelTaskWaitlist
-        poolChainIndex
         rawValueAccessor
         request
         rootNode

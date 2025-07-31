@@ -10,46 +10,135 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/exec/api.h"
-#include "pxr/exec/exec/valueKey.h"
+#include "pxr/exec/exec/request.h"
+#include "pxr/exec/exec/types.h"
 
 #include "pxr/base/tf/bits.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
+#include "pxr/exec/ef/timeInterval.h"
 #include "pxr/exec/vdf/maskedOutput.h"
+#include "pxr/exec/vdf/types.h"
 
 #include <memory>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+class EfTime;
+class Exec_AuthoredValueInvalidationResult;
+class Exec_CacheView;
+class Exec_DisconnectedInputsInvalidationResult;
+class Exec_TimeChangeInvalidationResult;
+class Exec_ValueExtractor;
 class ExecSystem;
+class ExecValueKey;
+template <typename> class TfSpan;
 class VdfRequest;
 class VdfSchedule;
 
-// Contains data structures necessary to implement ExecRequest.
-//
+/// Contains data structures necessary to implement exec requests that are
+/// independent of scene description.
+///
+/// Concrete implementations inherit from Exec_RequestImpl to implement any
+/// functionality that is specific to the scene description system.
+///
 class Exec_RequestImpl
 {
+public:
+    /// Notify the request of invalid computed values as a consequence of
+    /// authored value invalidation.
+    /// 
+    void DidInvalidateComputedValues(
+        const Exec_AuthoredValueInvalidationResult &invalidationResult);
+
+    /// Notify the request of invalid computed values as a consequence of
+    /// uncompilation.
+    /// 
+    void DidInvalidateComputedValues(
+        const Exec_DisconnectedInputsInvalidationResult &invalidationResult);
+
+    /// Notify the request of time having changed.
+    void DidChangeTime(
+        const Exec_TimeChangeInvalidationResult &invalidationResult);
+
+protected:
+    EXEC_API
+    Exec_RequestImpl(
+        ExecSystem *system,
+        ExecRequestComputedValueInvalidationCallback &&valueCallback,
+        ExecRequestTimeChangeInvalidationCallback &&timeCallback);
+
     Exec_RequestImpl(const Exec_RequestImpl&) = delete;
     Exec_RequestImpl& operator=(const Exec_RequestImpl&) = delete;
 
-public:
-    explicit Exec_RequestImpl(std::vector<ExecValueKey> &&valueKeys);
+    EXEC_API
     ~Exec_RequestImpl();
 
-    void Compile(ExecSystem *system);
-    void Schedule();
+    /// Compiles outputs for the value keys in the request.
+    EXEC_API
+    void _Compile(TfSpan<const ExecValueKey> valueKeys);
+
+    /// Builds the schedule for the request.
+    EXEC_API
+    void _Schedule();
+
+    /// Computes the value keys in the request.
+    EXEC_API
+    Exec_CacheView _Compute();
+
+    /// Returns true if the request needs to be compiled.
+    ///
+    /// A request may skip compilation if its schedule is up-to-date and there
+    /// is no pending recompilation in the network.
+    ///
+    EXEC_API
+    bool _RequiresCompilation() const;
 
 private:
-    const std::vector<ExecValueKey> _valueKeys;
+    // Ensures the _leafNodeToIndex map is up-to-date.
+    EXEC_API
+    void _BuildLeafNodeToIndexMap();
 
-    // As an optimization, requesting values that don't actually require
-    // evaluating any computations are satisfied directly from value
-    // resolution.
-    TfBits _requiresComputation;
+    // Turns invalid leaf nodes into a set of requested - and not previously
+    // invalidated - indices.
+    // 
+    EXEC_API
+    void _InvalidateLeafOutputs(
+        bool isNewlyInvalidInterval,
+        TfSpan<const VdfNode *const> leafNodes,
+        ExecRequestIndexSet *invalidIndices);
 
+private:
+    // The system that issued this request.
+    ExecSystem *_system;
+
+    // The compiled leaf output.
     std::vector<VdfMaskedOutput> _leafOutputs;
 
+    // Value extractors corresponding to each requested value.
+    std::vector<Exec_ValueExtractor> _extractors;
+
+    // Maps leaf nodes to their index in the array of valueKeys the request
+    // was built with.
+    pxr_tsl::robin_map<VdfId, size_t> _leafNodeToIndex;
+
+    // The compute request to cache values with.
     std::unique_ptr<VdfRequest> _computeRequest;
+
+    // The schedule to cache values with.
     std::unique_ptr<VdfSchedule> _schedule;
+
+    // The combined time interval for which invalidation has been sent out.
+    EfTimeInterval _lastInvalidatedInterval;
+
+    // The combined set of indices for which invalidation has been sent out.
+    TfBits _lastInvalidatedIndices;
+
+    // The invalidation callback to invoke when computed values change.
+    ExecRequestComputedValueInvalidationCallback _valueCallback;
+
+    // The invalidation callback to invoke when time changes.
+    ExecRequestTimeChangeInvalidationCallback _timeCallback;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

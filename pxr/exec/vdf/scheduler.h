@@ -12,14 +12,15 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/vdf/api.h"
-#include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/poolChainIndex.h"
-#include "pxr/exec/vdf/request.h"
-#include "pxr/exec/vdf/schedule.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+class VdfMaskedOutput;
+using VdfMaskedOutputVector = std::vector<VdfMaskedOutput>;
+class VdfNetwork;
 class VdfNode;
+class VdfRequest;
 class VdfSchedule;
 class VdfScheduleNode;
 class VdfScheduleOutput;

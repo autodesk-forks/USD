@@ -20,6 +20,7 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 static int testCase = 0;
+static bool verbose = true;
 
 static
 bool
@@ -62,9 +63,9 @@ VerifySampleError(std::ostream& out,
             // Measure the error to each point
             //
             // It's tempting to just check the "vertical" distance in the values
-            // at the same time, but that's not the error tolerance contract.
-            // What we may need to find is the closest point on the spline,
-            // not the point vertically above or below the sampled polyline.
+            // but that's not the error tolerance contract.  What we may need to
+            // find is the closest point on the spline, not the point vertically
+            // above or below the sampled polyline.
             //
             // Finding the perpendicular distance from the line segment
             // to the spline involves changing coordinate systems and
@@ -85,7 +86,9 @@ VerifySampleError(std::ostream& out,
 
                 // Vertical distance was outside of tolerance, see if we can
                 // find a closer point. Because of the way we subdivide, the
-                // endpoints of each polyline segment are on the spline.
+                // endpoints of each polyline segment are on the spline. Note
+                // that this works for both Bezier and Hermite splines because
+                // we simply use Eval.
                 GfVec2d testPts[5] =
                 {
                     prev,
@@ -113,7 +116,7 @@ VerifySampleError(std::ostream& out,
 
                     if (minErrorSq < toleranceSq) {
                         // We're already close enough
-                        continue;
+                        break;
                     }
 
                     // Not close enough yet. See if we can get some closer
@@ -158,12 +161,12 @@ VerifySampleError(std::ostream& out,
 
     return true;
 }
-                
-            
+
+template <typename FLOAT, typename VERTEX>
 static
 void
 DoOneSample(std::ostream& out,
-            const TsSpline& spline,
+            const TsTest_SplineData& data,
             std::string sampleFunc,
             const GfInterval& timeInterval,
             double timeScale,
@@ -172,13 +175,24 @@ DoOneSample(std::ostream& out,
 {
     ++testCase;
 
+    const TfType valueType = Ts_GetType<FLOAT>();
+
+    const std::string valueTypeName = valueType.GetTypeName();
+    const std::string vertexTypeName = TfType::Find<VERTEX>().GetTypeName();
+    
     // Sample the spline and output the results
     out << "Test Case " << testCase << ": "
-        << sampleFunc << "("
+        << sampleFunc << "<"
+        << valueTypeName << ", "
+        << vertexTypeName << ">("
         << timeInterval << ", "
         << timeScale << ", "
         << valueScale << ", "
         << tolerance << ")\n";
+
+    // Convert the generic spline data to an actual spline
+    const TsTest_TsEvaluator evaluator;
+    const TsSpline spline = evaluator.SplineDataToSpline(data, valueType);
 
     bool result;
     if (sampleFunc == "Sample") {
@@ -192,11 +206,23 @@ DoOneSample(std::ostream& out,
         if (!result) {
             out << "No result!\n";
         } else {
-            for (size_t n = 0; n < samples.polylines.size(); ++n) {
-                out << n << ": (source n/a)\n";
-                for (const auto& vertex : samples.polylines[n]) {
-                    out << "    " << vertex << "\n";
+            if (verbose) {
+                for (size_t n = 0; n < samples.polylines.size(); ++n) {
+                    out << n << ": (source n/a)\n";
+                    for (const auto& vertex : samples.polylines[n]) {
+                        out << "    " << vertex << "\n";
+                    }
                 }
+            } else { // terse output
+                size_t vertexCount = 0;
+                for (const auto& polyline : samples.polylines) {
+                    vertexCount += polyline.size();
+                }
+                out << "    Returned "
+                    << vertexCount
+                    << " vertices in "
+                    << samples.polylines.size()
+                    << " polylines.\n";
             }
 
             TF_AXIOM(VerifySampleError(out,
@@ -205,6 +231,7 @@ DoOneSample(std::ostream& out,
                                        timeScale,
                                        valueScale,
                                        tolerance));
+            out.flush();
         }
     } else {
         TsSplineSamplesWithSources<GfVec2d> samples;
@@ -217,15 +244,27 @@ DoOneSample(std::ostream& out,
         if (!result) {
             out << "No result!\n";
         } else {
-            for (size_t n = 0; n < samples.polylines.size(); ++n) {
-                out << n
-                    << ": ("
-                    << TfEnum::GetName(samples.sources[n])
-                    << ")\n";
+            if (verbose) {
+                for (size_t n = 0; n < samples.polylines.size(); ++n) {
+                    out << n
+                        << ": ("
+                        << TfEnum::GetName(samples.sources[n])
+                        << ")\n";
 
-                for (const auto& vertex : samples.polylines[n]) {
-                    out << "    " << vertex << "\n";
+                    for (const auto& vertex : samples.polylines[n]) {
+                        out << "    " << vertex << "\n";
+                    }
                 }
+            } else { // terse output
+                size_t vertexCount = 0;
+                for (const auto& polyline : samples.polylines) {
+                    vertexCount += polyline.size();
+                }
+                out << "    Returned "
+                    << vertexCount
+                    << " vertices in "
+                    << samples.polylines.size()
+                    << " polylines.\n";
             }
 
             TF_AXIOM(VerifySampleError(out,
@@ -307,16 +346,16 @@ void DoTest(std::ostream& out, const std::string& sampleFunc)
             << std::endl;
 
         // Sample the knots.
-        DoOneSample(out, spline, sampleFunc,
-                    knotSpan, timeScale, valueScale, 1.0);
+        DoOneSample<float, GfVec2f>(out, data, sampleFunc,
+                                    knotSpan, timeScale, valueScale, 1.0);
 
         // Sample the extended range but with less rigor
-        DoOneSample(out, spline, sampleFunc,
-                    longSpan, timeScale, valueScale, 10.0);
+        DoOneSample<GfHalf, GfVec2h>(out, data, sampleFunc,
+                                     longSpan, timeScale, valueScale, 10.0);
 
         // Sample the short range but more rigor
-        DoOneSample(out, spline, sampleFunc,
-                    shortSpan, timeScale, valueScale, 0.5);
+        DoOneSample<double, GfVec2d>(out, data, sampleFunc,
+                                     shortSpan, timeScale, valueScale, 0.5);
     }
 }
 

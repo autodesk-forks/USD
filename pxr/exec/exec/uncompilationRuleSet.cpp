@@ -6,13 +6,29 @@
 //
 #include "pxr/exec/exec/uncompilationRuleSet.h"
 
+#include "pxr/exec/exec/uncompilationTarget.h"
+
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/exec/esf/editReason.h"
-#include "pxr/exec/vdf/node.h"
 
 #include <iterator>
 #include <sstream>
+#include <utility>
+#include <variant>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+std::string
+Exec_UncompilationRule::GetDescription() const
+{
+    const auto visitor = [](const auto &target) -> std::string {
+        return target.GetDescription();
+    };
+    return TfStringPrintf(
+        "%s: [%s]",
+        std::visit(visitor, target).c_str(),
+        reasons.GetDescription().c_str());
+}
 
 Exec_UncompilationRuleSet::iterator
 Exec_UncompilationRuleSet::erase(
@@ -20,7 +36,7 @@ Exec_UncompilationRuleSet::erase(
 {
     iterator last = std::prev(_rules.end());
     if (it != last) {
-        std::swap(*it, *last);
+        *it = std::move(*last);
     }
 
     // To handle the case of growing the vector, resize needs a value to
@@ -28,7 +44,9 @@ Exec_UncompilationRuleSet::erase(
     // this value will never be used.
     _rules.resize(
         _rules.size() - 1,
-        Exec_UncompilationRule(0, EsfEditReason::None));
+        Exec_UncompilationRule(
+            Exec_NodeUncompilationTarget(0),
+            EsfEditReason::None));
     return it;
 }
 
@@ -38,18 +56,11 @@ Exec_UncompilationRuleSet::GetDescription() const
     if (_rules.empty()) {
         return "{}";
     }
-    
+
     std::ostringstream str;
     str << "{\n";
     for (const Exec_UncompilationRule &rule : _rules) {
-        str << "("
-            << VdfNode::GetVersionFromId(rule.nodeId) << ", "
-            << VdfNode::GetIndexFromId(rule.nodeId);
-        if (!rule.inputName.IsEmpty()) {
-            str << ", " << rule.inputName.GetText();
-        }
-        str << "): "
-            << "[" << rule.reasons.GetDescription() << "],\n";
+        str << rule.GetDescription() << '\n';
     }
     str << '}';
 

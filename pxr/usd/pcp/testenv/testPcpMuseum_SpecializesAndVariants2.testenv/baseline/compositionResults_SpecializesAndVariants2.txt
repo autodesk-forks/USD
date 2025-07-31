@@ -1,38 +1,41 @@
-Loading @SpecializesAndVariants2/root.sdf@
+Loading @SpecializesAndVariants2/root.usda@
 
 ------------------------------------------------------------------------
 Layer Stack:
-     root.sdf
+     root.usda
 
 ------------------------------------------------------------------------
 Results for composing </element>
 
 Prim Stack:
-    root.sdf             /element
-    root.sdf             /_element_class
-    root.sdf             /middleman
-    root.sdf             /implementation
-    root.sdf             /implementation{testVariantSet=testVariant}
+    root.usda            /element
+    root.usda            /_element_class
+    root.usda            /middleman
+    root.usda            /referencedMiddleman
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
 
 Property names:
-     ['variantAttr']
+     ['variantAttr', 'referencedAttr']
 
 Property stacks:
+/element.referencedAttr:
+    root.usda            /referencedMiddleman.referencedAttr
 /element.variantAttr:
-    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 
 ------------------------------------------------------------------------
 Results for composing </_element_class>
 
 Prim Stack:
-    root.sdf             /_element_class
-    root.sdf             /middleman
-    root.sdf             /referencedMiddleman
-    root.sdf             /implementation
-    root.sdf             /implementation{testVariantSet=testVariant}
+    root.usda            /_element_class
+    root.usda            /middleman
+    root.usda            /referencedMiddleman
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
@@ -42,32 +45,38 @@ Property names:
 
 Property stacks:
 /_element_class.referencedAttr:
-    root.sdf             /referencedMiddleman.referencedAttr
+    root.usda            /referencedMiddleman.referencedAttr
 /_element_class.variantAttr:
-    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 
 ------------------------------------------------------------------------
 Results for composing </middleman>
 
 Prim Stack:
-    root.sdf             /middleman
-    root.sdf             /referencedMiddleman
-    root.sdf             /implementation
+    root.usda            /middleman
+    root.usda            /referencedMiddleman
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
+
+Variant Selections:
+    {testVariantSet = testVariant}
 
 Property names:
-     ['referencedAttr']
+     ['variantAttr', 'referencedAttr']
 
 Property stacks:
 /middleman.referencedAttr:
-    root.sdf             /referencedMiddleman.referencedAttr
+    root.usda            /referencedMiddleman.referencedAttr
+/middleman.variantAttr:
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 
 ------------------------------------------------------------------------
 Results for composing </referencedMiddleman>
 
 Prim Stack:
-    root.sdf             /referencedMiddleman
-    root.sdf             /implementation
-    root.sdf             /implementation{testVariantSet=testVariant}
+    root.usda            /referencedMiddleman
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
@@ -77,16 +86,16 @@ Property names:
 
 Property stacks:
 /referencedMiddleman.referencedAttr:
-    root.sdf             /referencedMiddleman.referencedAttr
+    root.usda            /referencedMiddleman.referencedAttr
 /referencedMiddleman.variantAttr:
-    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 
 ------------------------------------------------------------------------
 Results for composing </implementation>
 
 Prim Stack:
-    root.sdf             /implementation
-    root.sdf             /implementation{testVariantSet=testVariant}
+    root.usda            /implementation
+    root.usda            /implementation{testVariantSet=testVariant}
 
 Variant Selections:
     {testVariantSet = testVariant}
@@ -96,5 +105,5 @@ Property names:
 
 Property stacks:
 /implementation.variantAttr:
-    root.sdf             /implementation{testVariantSet=testVariant}.variantAttr
+    root.usda            /implementation{testVariantSet=testVariant}.variantAttr
 

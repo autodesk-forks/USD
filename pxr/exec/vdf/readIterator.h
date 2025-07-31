@@ -14,6 +14,7 @@
 #include "pxr/exec/vdf/connection.h"
 #include "pxr/exec/vdf/iterator.h"
 #include "pxr/exec/vdf/node.h"
+#include "pxr/exec/vdf/poolChainIndex.h"
 #include "pxr/exec/vdf/vector.h"
 
 #include "pxr/base/tf/diagnostic.h"
@@ -123,8 +124,9 @@ private:
     }
 
     // Returns the name of the current data source.
-    friend const TfToken &Vdf_GetIteratorSource(const VdfReadIterator &it) {
-        return (*it._input)[it._connectionIndex].GetSourceOutput().GetName();
+    friend bool Vdf_IsIteratorSourcePool(const VdfReadIterator &it) {
+        return Vdf_IsPoolOutput(
+            (*it._input)[it._connectionIndex].GetSourceOutput());
     }
 
     // Sets the current connection from our input connector and returns true if

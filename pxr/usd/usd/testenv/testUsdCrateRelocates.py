@@ -28,7 +28,7 @@ class TestUsdCrateRelocates(unittest.TestCase):
             # A newly created crate file that has never had relocates added will
             # be verion 0.8.0 or newer.
             majver, minver, patchver = map(
-                int, Usd.CrateInfo.Open(
+                int, Sdf.CrateInfo.Open(
                     crateFileName).GetFileVersion().split('.'))
             self.assertEqual(majver, 0)
             self.assertGreaterEqual(minver, 8)
@@ -46,7 +46,7 @@ class TestUsdCrateRelocates(unittest.TestCase):
             # A crate file that ever had relocates when it was created or saved
             # will have been upgraded to version 0.11
             self.assertEqual(
-                Usd.CrateInfo.Open(crateFileName).GetFileVersion(), 
+                Sdf.CrateInfo.Open(crateFileName).GetFileVersion(), 
                 '0.11.0')
             
             # The layer will have the expected relocates in its metadata.

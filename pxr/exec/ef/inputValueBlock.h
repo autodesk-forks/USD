@@ -14,7 +14,7 @@
 #include "pxr/exec/ef/api.h"
 
 #include "pxr/exec/vdf/maskedOutput.h"
-#include "pxr/exec/vdf/request.h"
+#include "pxr/exec/vdf/maskedOutputVector.h"
 #include "pxr/exec/vdf/typedVector.h"
 
 #include <vector>

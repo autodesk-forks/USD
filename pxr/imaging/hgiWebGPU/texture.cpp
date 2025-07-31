@@ -183,10 +183,10 @@ HgiWebGPUTexture::GetTextureView() const
     return _textureView;
 }
 
-void
+HgiTextureUsage
 HgiWebGPUTexture::SubmitLayoutChange(HgiTextureUsage newLayout)
 {
-    return;
+    return 0;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

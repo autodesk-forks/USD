@@ -46,14 +46,14 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         print("\ntest_FileFormat Start\n")
 
         # Open the cone.testpcpdynamic file with no arguments. This will
-        # read the contents in as a normal sdf file
+        # read the contents in as a normal usda file
         dynamicConeFile = 'cone.testpcpdynamic'
         noArgConeLayer = Sdf.Layer.FindOrOpen(dynamicConeFile)
         self.assertTrue(noArgConeLayer)
         self.assertEqual(noArgConeLayer.GetFileFormat().formatId,
                          "Test_PcpDynamicFileFormat")
         # Compare the contents against the no argument baseline.
-        baselineConeLayer = Sdf.Layer.FindOrOpen('baseline/cone_0.sdf')
+        baselineConeLayer = Sdf.Layer.FindOrOpen('baseline/cone_0.usda')
         self.assertTrue(baselineConeLayer)
         self.assertEqual(noArgConeLayer.ExportToString(),
                          baselineConeLayer.ExportToString())
@@ -63,14 +63,14 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
                          baselineConeLayer.ExportToString())
 
         # Open the sphere.testpcpdynamic file with no arguments. This will
-        # read the contents in as a normal sdf file
+        # read the contents in as a normal usda file
         dynamicSphereFile = 'sphere.testpcpdynamic'
         noArgSphereLayer = Sdf.Layer.FindOrOpen(dynamicSphereFile)
         self.assertTrue(noArgSphereLayer)
         self.assertEqual(noArgSphereLayer.GetFileFormat().formatId,
                         "Test_PcpDynamicFileFormat")
         # Compare the contents against the no argument baseline.
-        baselineSphereLayer = Sdf.Layer.FindOrOpen('baseline/sphere_0.sdf')
+        baselineSphereLayer = Sdf.Layer.FindOrOpen('baseline/sphere_0.usda')
         self.assertTrue(baselineSphereLayer)
         self.assertEqual(noArgSphereLayer.ExportToString(),
                          baselineSphereLayer.ExportToString())
@@ -91,16 +91,16 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         # using attribute inputs vs metadata inputs.
         if USE_ATTRS:
             baselineProcLayer = Sdf.Layer.FindOrOpen(
-                'baseline/proc_attr_3_2.sdf')
+                'baseline/proc_attr_3_2.usda')
         else:
             baselineProcLayer = Sdf.Layer.FindOrOpen(
-                'baseline/proc_metadata_3_2.sdf')
+                'baseline/proc_metadata_3_2.usda')
         self.assertTrue(baselineProcLayer)
         # The baseline comparison file uses a placeholder asset path so update
         # it with the cone file's real path (converted to '/' on windows) and 
         # then compare against the dynamic baseline
         refConeLayerPath = procConeLayer.realPath.replace('\\', '/')
-        baselineProcLayer.UpdateCompositionAssetDependency('placeholder.sdf', 
+        baselineProcLayer.UpdateCompositionAssetDependency('placeholder.usda', 
                                                            refConeLayerPath)
         self.assertEqual(procConeLayer.ExportToString(),
                          baselineProcLayer.ExportToString())
@@ -281,8 +281,8 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
     def test_BasicRead(self):
         print("\ntest_Read Start\n")
 
-        # Create a PcpCache for root.sdf. Has a dynamic root prim /RootCone
-        rootLayerFile = 'root.sdf'
+        # Create a PcpCache for root.usda. Has a dynamic root prim /RootCone
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -321,13 +321,13 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         print("\ntest_PayloadsInVariants start\n")
 
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
 
         # /Variant overrides the TestPcp_depth and TestPcp_num values that are
-        # originally defined in params.sdf.
+        # originally defined in params.usda.
         payloads = self._GeneratePrimIndexPaths("/Variant", 5, 4, 341)
         cache.RequestPayloads(payloads, [])
 
@@ -341,8 +341,8 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         # references to those constructs that don't resolve as expected.
         print("\ntest_NestedVariants start\n")
 
-        # Create a PcpCache for root.sdf. Has a dynamic root prim /RootCone
-        rootLayerFile = 'root.sdf'
+        # Create a PcpCache for root.usda. Has a dynamic root prim /RootCone
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -376,7 +376,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         print("\ntest_InheritsAndVariants start\n")
 
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -441,7 +441,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
     
         print("\ntest_WeakerOpinions start\n")
 
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -494,13 +494,13 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         print("\ntest_SiblingPayloads start\n")
         
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
 
         # /SiblingPayloads overrides the TestPcp_depth and TestPcp_num values that are
-        # originally defined in params.sdf.
+        # originally defined in params.usda.
         payloads = self._GeneratePrimIndexPaths("/SiblingPayloads", 2, 3, 4)
         cache.RequestPayloads(payloads, [])
 
@@ -525,7 +525,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         # Test that loading a dynamic payload when composing ancestral
         # opinions picks up the right arguments.
 
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -553,7 +553,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         # Test that payloads can pick up weaker opinions from parent siblings
         print("\ntest_PayloadInVariant start\n")
         
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -581,12 +581,12 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         rootLayer = Sdf.Layer.CreateAnonymous()
         rootLayer.ImportFromString("""
-        #sdf 1.4.32
+        #usda 1.0
 
         def "Root" (
             TestPcp_depth = 1
             TestPcp_num = 1
-            references = @./root.sdf@</SubrootReference>
+            references = @./root.usda@</SubrootReference>
         )
         {
             int TestPcp_depth = 1
@@ -596,7 +596,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         primSpec = Sdf.CreatePrimInLayer(rootLayer, "/Root")
         primSpec.referenceList.explicitItems = [ 
-            Sdf.Reference("root.sdf", "/SubrootReference") 
+            Sdf.Reference("root.usda", "/SubrootReference") 
         ]
         cache = self._CreatePcpCache(rootLayer)
 
@@ -619,8 +619,8 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         print("\ntest_AncestralPayloads3 start\n")
 
-        # Create a PcpCache for root.sdf. Has a dynamic root prim /RootCone
-        rootLayerFile = 'root.sdf'
+        # Create a PcpCache for root.usda. Has a dynamic root prim /RootCone
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -651,7 +651,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         print("\ntest_AncestralPayloadsAndVariants start\n")
 
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer)
@@ -686,9 +686,9 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         print("\ntest_Changes (cacheInUsdMode={}) Start\n".format(
                 cacheInUsdMode))
 
-        # Create a PcpCache for root.sdf. Has a dynamic root prim /RootSphere
+        # Create a PcpCache for root.usda. Has a dynamic root prim /RootSphere
         # and /RootMulti as well.
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer, usd=cacheInUsdMode)
@@ -772,12 +772,12 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         # Assert that we can find the params layer that was referenced by in by 
         # /RootSphere.
-        self.assertTrue(Sdf.Layer.Find("params.sdf"))
+        self.assertTrue(Sdf.Layer.Find("params.usda"))
         # FindOrOpen the params layer so that we still have an open reference
         # to it when we change it. Otherwise the layer might get deleted when
         # the prim indexes referencing it are invalidated and we could lose the
         # changes.
-        paramsLayer = Sdf.Layer.FindOrOpen("params.sdf")
+        paramsLayer = Sdf.Layer.FindOrOpen("params.usda")
         # Verify that changing num on the referenced prim causes a significant
         # change to /RootSphere as it is used to compose the dynamic arguments
         self._TestChangeValue(cache, paramsLayer.GetPrimAtPath('/Params'),
@@ -839,7 +839,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
 
         # Test changing a relevant value over a dynamic generated subprim spec.
         subprimSpec = rootLayer.GetPrimAtPath('/RootSphere/Xform__3_0')
-        # Note that we defined an over in root.sdf so that this spec would 
+        # Note that we defined an over in root.usda so that this spec would 
         # exist for convenience.
         self.assertTrue(subprimSpec)
         # Change the depth on the subprim. This causes a significant change to 
@@ -882,7 +882,7 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         # Test changing a relevant field/attribute on a dynamically generated 
         # subprim that is not itself dynamic.
         geomSpec = rootLayer.GetPrimAtPath('/RootSphere/geom')
-        # Note that we defined an over in root.sdf so that this spec would 
+        # Note that we defined an over in root.usda so that this spec would 
         # exist for convenience.
         self.assertTrue(geomSpec)
         self.assertTrue(cache.FindPrimIndex('/RootSphere/geom'))
@@ -908,9 +908,9 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         print("\ntest_ChangesMultiPayload (cacheInUsdMode={}) Start\n".format(
                 cacheInUsdMode))
 
-        # Create a PcpCache for root.sdf. Has a dynamic root prim /RootSphere
+        # Create a PcpCache for root.usda. Has a dynamic root prim /RootSphere
         # and /RootMulti as well.
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer, usd=cacheInUsdMode)
@@ -1117,10 +1117,10 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
             childRelevantFieldOrAttrNames.append("TestPcp_argDict")
             rootRelevantFieldOrAttrNames = childRelevantFieldOrAttrNames
 
-        # Create a PcpCache for subrootref.sdf. This file contains a single 
+        # Create a PcpCache for subrootref.usda. This file contains a single 
         # /Root prim with a subroot reference to a child of /RootMulti in 
-        # root.sdf
-        rootLayerFile = 'subrootref.sdf'
+        # root.usda
+        rootLayerFile = 'subrootref.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
         cache = self._CreatePcpCache(rootLayer, usd=cacheInUsdMode)
@@ -1165,14 +1165,14 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         self._ComputeAndVerifyDynamicPayloads(cache, childPayloads, 
             childRelevantFieldOrAttrNames)
 
-        # Assert that we can find root.sdf which was referenced in to /Root. It
+        # Assert that we can find root.usda which was referenced in to /Root. It
         # will already be open.
-        self.assertTrue(Sdf.Layer.Find("root.sdf"))
+        self.assertTrue(Sdf.Layer.Find("root.usda"))
         # FindOrOpen the layer so that we still have an open reference
         # to it when we change it. Otherwise the layer might get deleted when
         # the prim indexes referencing it are invalidated and we could lose the
         # changes.
-        refLayer = Sdf.Layer.FindOrOpen("root.sdf")
+        refLayer = Sdf.Layer.FindOrOpen("root.usda")
 
         # Change value of the "num" argument for just the payload with ID "Pl1" 
         # on /RootMulti on the referenced layer. Since /RootMulti is the 
@@ -1203,10 +1203,10 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
             childRelevantFieldOrAttrNames)
 
         # XXX: Todo: Add another case here for making a metadata change in 
-        # params.sdf which is referenced by root.sdf. This would be expected
-        # to propagate to /Root in subrootref.sdf. But right now there is 
+        # params.usda which is referenced by root.usda. This would be expected
+        # to propagate to /Root in subrootref.usda. But right now there is 
         # another bug related to subroot references which causes the node
-        # provided by params.sdf to be culled from the subroot ref tree.
+        # provided by params.usda to be culled from the subroot ref tree.
 
         print ("Computing prim index for " + "/SubrootGeomRef")
         # /SubrootGeomRef directly references a child prim of the dynamic 
@@ -1243,9 +1243,9 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         print("\ntest_AttrNamespaceEdits (cacheInUsdMode={}) Start\n".format(
                 cacheInUsdMode))
 
-        # Create a PcpCache for root.sdf. Has a dynamic root prim /RootSphere
+        # Create a PcpCache for root.usda. Has a dynamic root prim /RootSphere
         # and /RootCone as well.
-        rootLayerFile = 'root.sdf'
+        rootLayerFile = 'root.usda'
         rootLayer = Sdf.Layer.FindOrOpen(rootLayerFile)
         self.assertTrue(rootLayer)
 

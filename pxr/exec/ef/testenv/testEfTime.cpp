@@ -20,34 +20,33 @@ main()
     // Test default constructed time
     time = EfTime();
     TF_AXIOM(time.GetTimeCode().IsDefault());
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluateAtTime);
+    TF_AXIOM(!time.GetTimeCode().IsPreTime());
     TF_AXIOM(time.GetSplineEvaluationFlags() == 0);
 
     // Test constructors
     time = EfTime(UsdTimeCode::Default());
     TF_AXIOM(time.GetTimeCode().IsDefault());
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluateAtTime);
+    TF_AXIOM(!time.GetTimeCode().IsPreTime());
     TF_AXIOM(time.GetSplineEvaluationFlags() == 0);
 
-    time = EfTime(0.0, EfTime::EvaluateAtTime, CustomFlag);
+    time = EfTime(0.0, CustomFlag);
     TF_AXIOM(!time.GetTimeCode().IsDefault());
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluateAtTime);
+    TF_AXIOM(!time.GetTimeCode().IsPreTime());
     TF_AXIOM(time.GetSplineEvaluationFlags() == CustomFlag);
 
-    time = EfTime(0.0, EfTime::EvaluatePre);
+    time = EfTime(UsdTimeCode::PreTime(0));
     TF_AXIOM(!time.GetTimeCode().IsDefault());
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluatePre);
+    TF_AXIOM(time.GetTimeCode().IsPreTime());
     TF_AXIOM(time.GetSplineEvaluationFlags() == 0);
 
-    time = EfTime(0.0, EfTime::EvaluatePre, CustomFlag);
+    time = EfTime(UsdTimeCode::PreTime(0), CustomFlag);
     TF_AXIOM(!time.GetTimeCode().IsDefault());
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluatePre);
+    TF_AXIOM(time.GetTimeCode().IsPreTime());
     TF_AXIOM(time.GetSplineEvaluationFlags() == CustomFlag);
 
     // Verify that passing a 0 initializes the spline evaluation flags
-    time = EfTime(0.0, EfTime::EvaluateAtTime, 0);
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluateAtTime);
-    TF_AXIOM(EfTime::EvaluateAtTime == 1);
+    time = EfTime(0.0, 0);
+    TF_AXIOM(!time.GetTimeCode().IsPreTime());
     TF_AXIOM(time.GetSplineEvaluationFlags() == 0);
 
     // Test SetFrame
@@ -56,8 +55,8 @@ main()
     TF_AXIOM(time.GetTimeCode().GetValue() == 1.0);
 
     // Test evaluation location
-    time.SetEvaluationLocation(EfTime::EvaluatePre);
-    TF_AXIOM(time.GetEvaluationLocation() == EfTime::EvaluatePre);
+    time.SetTimeCode(UsdTimeCode::PreTime(1.0));
+    TF_AXIOM(time.GetTimeCode().IsPreTime());
 
     // Test SetSplineEvaluationFlags
     time.SetSplineEvaluationFlags(CustomFlag);
@@ -73,20 +72,12 @@ main()
     defaultWithFlag.SetSplineEvaluationFlags(CustomFlag);
     TF_AXIOM(defaultWithFlag == defaultTime);
 
-    EfTime defaultPre;
-    defaultPre.SetEvaluationLocation(EfTime::EvaluatePre);
-    TF_AXIOM(defaultPre == defaultTime);
-    TF_AXIOM(defaultWithFlag == defaultPre);
-
     // Test <
     TF_AXIOM(EfTime(0.0) < EfTime(1.0));
     TF_AXIOM(!(defaultTime < EfTime()));
-    TF_AXIOM(!(defaultPre < EfTime()));
-    TF_AXIOM(!(defaultPre < defaultTime));
-    TF_AXIOM(EfTime() < EfTime(0.0, EfTime::EvaluatePre));
-    TF_AXIOM(EfTime(0.0, EfTime::EvaluatePre) <
-        EfTime(0.0, EfTime::EvaluateAtTime));
-    TF_AXIOM(EfTime() < EfTime(0.0, EfTime::EvaluateAtTime, CustomFlag));
+    TF_AXIOM(EfTime() < EfTime(UsdTimeCode::PreTime(0.0)));
+    TF_AXIOM(EfTime(UsdTimeCode::PreTime(0.0)) < EfTime(0.0));
+    TF_AXIOM(EfTime() < EfTime(0.0, CustomFlag));
 
     // Test interval membership
     time = EfTime();
@@ -119,7 +110,7 @@ main()
         GfInterval(-1.0, 1.0, /* minClosed */ false, /* maxClosed */ false)))
         .Contains(time));
 
-    time = EfTime(-1.0, EfTime::EvaluatePre);
+    time = EfTime(UsdTimeCode::PreTime(-1.0));
     TF_AXIOM(!EfTimeInterval(GfInterval(-1.0, 1.0)).Contains(time));
     TF_AXIOM(!EfTimeInterval(
         GfInterval(-1.0, 1.0, /* minClosed */ false, /* maxClosed */ false))
@@ -130,7 +121,7 @@ main()
         GfInterval(-1.0, 1.0, /* minClosed */ false, /* maxClosed */ false)))
         .Contains(time));
 
-    time = EfTime(1.0, EfTime::EvaluatePre);
+    time = EfTime(UsdTimeCode::PreTime(1.0));
     TF_AXIOM(EfTimeInterval(GfInterval(-1.0, 1.0)).Contains(time));
     TF_AXIOM(EfTimeInterval(
         GfInterval(-1.0, 1.0, /* minClosed */ false, /* maxClosed */ false))

@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef PXR_EXEC_EXEC_REGISTER_SCHEMA_H
-#define PXR_EXEC_EXEC_REGISTER_SCHEMA_H
+#ifndef PXR_EXEC_EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA_H
+#define PXR_EXEC_EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA_H
 
 /// \file
 
@@ -22,7 +22,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 // Generates a schema computation registration function name.
 //
 /// \cond
-#define _EXEC_REGISTER_SCHEMA_NAME(SchemaType) Exec_RegisterSchema_##SchemaType
+#define _EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA_NAME(SchemaType) Exec_RegisterSchema_##SchemaType
 /// \endcond
 
 /// \ingroup group_Exec_ComputationDefinitionLanguage
@@ -39,7 +39,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// > register exec computations refer to the [Computation Definition
 /// > Language](#group_Exec_ComputationDefinitionLanguage) reference page.
 ///
-#define EXEC_REGISTER_SCHEMA(SchemaType)                                        \
+#define EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(SchemaType)                       \
                                                                                 \
     PXR_NAMESPACE_OPEN_SCOPE                                                    \
                                                                                 \
@@ -48,7 +48,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     /* arguments to .Inputs(), etc.                                          */ \
     namespace exec_registration {                                               \
         /* Forward declaration of the static registration function.          */ \
-        static void _EXEC_REGISTER_SCHEMA_NAME(SchemaType) (                    \
+        static void _EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA_NAME(SchemaType) (                    \
             PXR_NS::Exec_ComputationBuilder &self);                             \
     }                                                                           \
                                                                                 \
@@ -58,7 +58,7 @@ PXR_NAMESPACE_OPEN_SCOPE
         Exec_ComputationBuilder self =                                          \
             Exec_ComputationBuilder::ConstructionAccess::Construct(             \
                 TfType::FindByName(#SchemaType));                               \
-        PXR_NS::exec_registration::_EXEC_REGISTER_SCHEMA_NAME(SchemaType)(      \
+        PXR_NS::exec_registration::_EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA_NAME(SchemaType)(      \
             self);                                                              \
     }                                                                           \
                                                                                 \
@@ -67,7 +67,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     /* Define the schema computation registration function. The body of the  */ \
     /* function is provided by the client code that calls this macro.        */ \
     static void                                                                 \
-    PXR_NS::exec_registration::_EXEC_REGISTER_SCHEMA_NAME(SchemaType) (         \
+    PXR_NS::exec_registration::_EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA_NAME(SchemaType) (         \
         PXR_NS::Exec_ComputationBuilder &self)
 
 PXR_NAMESPACE_CLOSE_SCOPE

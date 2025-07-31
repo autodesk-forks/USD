@@ -21,6 +21,7 @@
 #include "pxr/exec/vdf/typedVector.h"
 
 #include "pxr/base/gf/vec3d.h"
+#include "pxr/base/tf/errorMark.h"
 #include "pxr/base/tf/staticTokens.h"
 
 #include <iostream>
@@ -32,6 +33,7 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     (axis)
     (moves)
+    (in)
     (input1)
     (input2)
     (out)
@@ -334,12 +336,26 @@ private :
     VdfGrapherOptions _options;
 };
 
-int 
-main(int argc, char **argv) 
+struct Filter {
+    bool operator()(const VdfNode *node) const {
+        printf("> asking: %s\n", node->GetDebugName().c_str());
+        return true;
+    }
+};
+
+// Filter that never allows anything to be deleted.
+struct FilterNever {
+    bool operator()(const VdfNode *node) const {
+        return false;
+    }
+};
+
+static int 
+TestIsolateBranch()
 {
     VdfTestUtils::Network graph;
 
-    VdfNode    *out = BuildTestNetwork1(graph);
+    VdfNode *const out = BuildTestNetwork1(graph);
     VdfNetwork &net = graph.GetNetwork();
 
     Runner runner(net, out);
@@ -357,34 +373,6 @@ main(int argc, char **argv)
     // Applying edit operation...
     std::cout << "/// Editing network..." << std::endl;
 
-    struct Filter : public VdfNetwork::EditFilter
-    {
-        Filter(Runner &runner)
-        :   _runner(runner),
-            _nodesAsked(0) {}
-
-        virtual bool CanDelete(const VdfNode *node)
-        {
-            printf("> asking: %s\n", node->GetDebugName().c_str());
-            _nodesAsked++;
-            return true;
-        }
-
-        Runner &_runner;
-        size_t  _nodesAsked;
-    };
-
-    // Filter that never allows anything to be deleted.
-    struct FilterNever : public VdfNetwork::EditFilter
-    {
-        virtual bool CanDelete(const VdfNode *node)
-        {
-            return false;
-        }
-    };
-
-    Filter filter(runner);
-
     VdfConnection *connection = graph.GetConnection(
         "Translate2_0:out -> AddPoints1:input2");
 
@@ -400,9 +388,8 @@ main(int argc, char **argv)
         "will remove the single connection regardless.\n");
 
     FilterNever never;
-
-    VdfIsolatedSubnetworkRefPtr branch =
-        VdfIsolatedSubnetwork::IsolateBranch(connection, &never);
+    std::unique_ptr<VdfIsolatedSubnetwork> branch =
+        VdfIsolatedSubnetwork::IsolateBranch(connection, never);
 
     TF_AXIOM(branch);
 
@@ -411,9 +398,11 @@ main(int argc, char **argv)
 
     printf("\nTesting that isolating a node works.\n");
 
-    branch = VdfIsolatedSubnetwork::IsolateBranch(sourceNode, &filter);
+    Filter always;
+    branch = VdfIsolatedSubnetwork::IsolateBranch(sourceNode, always);
 
-    printf("\nTesting that we isolated the right amount of nodes and connections.\n");
+    printf("\nTesting that we isolated the right number of nodes and "
+           "connections.\n");
     TF_AXIOM(branch->GetIsolatedNodes().size() == 3);
 
     printf("\nTesting that the network got reduced in size.\n");
@@ -431,4 +420,197 @@ main(int argc, char **argv)
     return 0;
 }
 
+std::vector<VdfNode *>
+BuildTestNetwork2(VdfTestUtils::Network &graph)
+{
+    // We're going to build a network like this:
+    //
+    //                                   RootNode           |
+    //                                  /       \           |
+    //                                Child1   Child2       |
+    //                                /   \     /   \       |
+    //                               GC1  GC2  GC3  GC4     |
 
+    VdfTestUtils::CallbackNodeType node(
+        +[](const VdfContext &ctx){});
+    node
+        .Read<double>(_tokens->in)
+        .Out<double>(_tokens->out);
+
+    graph.Add("RootNode", node);
+    graph.Add("Child1", node);
+    graph.Add("Child2", node);
+    graph.Add("Grandchild1", node);
+    graph.Add("Grandchild2", node);
+    graph.Add("Grandchild3", node);
+    graph.Add("Grandchild4", node);
+
+    const VdfMask oneOne = VdfMask::AllOnes(1);
+
+    graph["RootNode"] >> graph["Child1"].In(_tokens->in, oneOne);
+    graph["RootNode"] >> graph["Child2"].In(_tokens->in, oneOne);
+    graph["Child1"] >> graph["Grandchild1"].In(_tokens->in, oneOne);
+    graph["Child1"] >> graph["Grandchild2"].In(_tokens->in, oneOne);
+    graph["Child2"] >> graph["Grandchild3"].In(_tokens->in, oneOne);
+    graph["Child2"] >> graph["Grandchild4"].In(_tokens->in, oneOne);
+
+    return {graph["Grandchild1"], graph["Grandchild2"],
+        graph["Grandchild3"], graph["Grandchild4"]};
+}
+
+static int 
+TestAddIsolatedBranch(bool explicitlyRemoveIsolatedObjects)
+{
+    VdfTestUtils::Network graph;
+    std::vector<VdfNode *> out = BuildTestNetwork2(graph);
+    VdfNetwork &net = graph.GetNetwork();
+    Runner runner(net, /* out */ nullptr);
+
+    runner.Snapshot("isolate_multi_original", /* run */ false);
+
+    Filter always;
+
+    // Applying edit operation...
+    std::cout << "*** Editing network..." << std::endl;
+
+    TF_AXIOM(net.GetNumOwnedNodes() == 7);
+
+    {
+        const std::unique_ptr<VdfIsolatedSubnetwork> subnet =
+            VdfIsolatedSubnetwork::New(&net);
+        for (auto it = out.begin() + 2; it != out.end(); ++it) {
+            subnet->AddIsolatedBranch(*it, always);
+        }
+        TF_AXIOM(subnet);
+        TF_AXIOM(subnet->GetIsolatedNodes().size() == 3);
+        TF_AXIOM(subnet->GetIsolatedConnections().size() == 3);
+
+        if (explicitlyRemoveIsolatedObjects) {
+            subnet->RemoveIsolatedObjectsFromNetwork();
+        }
+    }
+
+    runner.Snapshot("isolate_multi_after", /* run */ false);
+
+    printf("\nTesting that the network got reduced in size.\n");
+    TF_AXIOM(net.GetNumOwnedNodes() == 4);
+
+    {
+        const std::unique_ptr<VdfIsolatedSubnetwork> subnet =
+            VdfIsolatedSubnetwork::New(&net);
+        for (auto it = out.begin(); it != out.begin() + 2; ++it) {
+            subnet->AddIsolatedBranch(*it, always);
+        }
+        TF_AXIOM(subnet);
+        TF_AXIOM(subnet->GetIsolatedNodes().size() == 4);
+        TF_AXIOM(subnet->GetIsolatedConnections().size() == 3);
+
+        if (explicitlyRemoveIsolatedObjects) {
+            subnet->RemoveIsolatedObjectsFromNetwork();
+        }
+    }
+
+    printf("\nTesting that all nodes were removed from the network.\n");
+    TF_AXIOM(net.GetNumOwnedNodes() == 0);
+
+    printf("\nOk.\n");
+
+    return 0;
+}
+
+static int
+TestErrorCases()
+{
+    TfErrorMark mark;
+    static const auto neverFilter = [](const VdfNode *) { return true; };
+
+    // Test null arguments
+
+    VdfIsolatedSubnetwork::IsolateBranch((VdfConnection*)nullptr, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    VdfIsolatedSubnetwork::IsolateBranch((VdfNode*)nullptr, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    VdfIsolatedSubnetwork::New(/* network */ nullptr);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    VdfNetwork network;
+    const std::unique_ptr<VdfIsolatedSubnetwork> subnetwork =
+        VdfIsolatedSubnetwork::New(&network);
+    TF_AXIOM(mark.IsClean());
+    TF_AXIOM(subnetwork);
+
+    subnetwork->AddIsolatedBranch((VdfConnection*)nullptr, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    subnetwork->AddIsolatedBranch((VdfNode*)nullptr, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    // Attempt to add an isolated branch with a node from a different network.
+    
+    VdfTestUtils::Network graph;
+    VdfNode *const out = BuildTestNetwork1(graph);
+    TF_AXIOM(out);
+
+    subnetwork->AddIsolatedBranch(out, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    // Attempt to add an isolated branch with a connection from a different
+    // network.
+
+    VdfConnection *const connection = graph.GetConnection(
+        "Translate2_0:out -> AddPoints1:input2");
+    TF_AXIOM(connection);
+
+    subnetwork->AddIsolatedBranch(connection, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    // Attempt to add a branch after isolated objects have been removed from the
+    // network.
+
+    VdfNode *const node = graph["Translate2_0"].GetVdfNode();
+    TF_AXIOM(node);
+
+    subnetwork->RemoveIsolatedObjectsFromNetwork();
+    TF_AXIOM(mark.IsClean());
+    subnetwork->AddIsolatedBranch(node, neverFilter);
+    TF_AXIOM(!mark.IsClean());
+    mark.Clear();
+
+    // Attempt to add a node that has output connections.
+    //
+    // No error is emitted, but no nodes are isolated.
+
+    VdfNetwork &network2 = graph.GetNetwork();
+    const std::unique_ptr<VdfIsolatedSubnetwork> subnetwork2 =
+        VdfIsolatedSubnetwork::New(&network2);
+    TF_AXIOM(subnetwork2);
+
+    const bool result = subnetwork2->AddIsolatedBranch(node, neverFilter);
+    TF_AXIOM(!result);
+    TF_AXIOM(mark.IsClean());
+    TF_AXIOM(subnetwork2->GetIsolatedNodes().empty());
+
+    return 0;
+}
+
+int 
+main(int argc, char **argv) 
+{
+    if (TestIsolateBranch() ||
+        TestAddIsolatedBranch(/* explicitlyRemoveIsolatedObjects */ true) ||
+        TestAddIsolatedBranch(/* explicitlyRemoveIsolatedObjects */ false) ||
+        TestErrorCases()) {
+        return 1;
+    }
+
+    return 0;
+}

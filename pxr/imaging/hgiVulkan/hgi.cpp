@@ -119,7 +119,16 @@ HgiTextureHandle
 HgiVulkan::CreateTexture(HgiTextureDesc const & desc)
 {
     return HgiTextureHandle(
-        new HgiVulkanTexture(this, GetPrimaryDevice(), desc),
+        new HgiVulkanTexture(this, GetPrimaryDevice(), desc, /*interop=*/false),
+        GetUniqueId());
+}
+
+/* Multi threaded */
+HgiTextureHandle
+HgiVulkan::CreateTextureForInterop(HgiTextureDesc const & desc)
+{
+    return HgiTextureHandle(
+        new HgiVulkanTexture(this, GetPrimaryDevice(), desc, /*interop=*/true),
         GetUniqueId());
 }
 
@@ -310,6 +319,19 @@ HgiVulkan::EndFrame()
         _EndFrameSync();
         HgiVulkanEndQueueLabel(GetPrimaryDevice());
     }
+}
+
+void
+HgiVulkan::GarbageCollect()
+{
+    if (ARCH_UNLIKELY(_threadId != std::this_thread::get_id())) {
+        TF_CODING_ERROR("Secondary thread violation");
+        return;
+    }
+    HgiVulkanDevice* device = GetPrimaryDevice();
+
+    // Perform garbage collection for each device.
+    _garbageCollector->PerformGarbageCollection(device);
 }
 
 /* Multi threaded */

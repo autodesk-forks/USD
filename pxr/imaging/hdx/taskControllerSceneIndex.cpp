@@ -559,7 +559,7 @@ _GetTaskParamsAtPath(HdSceneIndexBaseRefPtr const &sceneIndex,
     return _GetTaskParams<TaskParams>(prim.dataSource);
 }
 
-// Get pointer to task params from the retained scene index/
+// Get pointer to task params from the retained scene index.
 // Prim path is determined from prefix and task type.
 template<typename Task>
 typename Task::TaskParams *
@@ -588,13 +588,14 @@ _GetCollectionAtPath(HdSceneIndexBaseRefPtr const &sceneIndex,
 }
 
 // Get render tags from task data source
+template<typename TaskParams>
 TfTokenVector *
 _GetRenderTagsAtPath(HdSceneIndexBaseRefPtr const &sceneIndex,
                      const SdfPath &path)
 {
     HdSceneIndexPrim const prim = sceneIndex->GetPrim(path);
     auto const ds =
-        _GetTaskSchemaDataSource<HdxRenderTaskParams>(
+        _GetTaskSchemaDataSource<TaskParams>(
             prim.dataSource);
     if (!ds) {
         return nullptr;
@@ -602,6 +603,18 @@ _GetRenderTagsAtPath(HdSceneIndexBaseRefPtr const &sceneIndex,
     return &ds->renderTags;
 }
 
+// Get pointer to render tags from the retained scene index.
+// Prim path is determined from prefix and task type.
+template<typename Task>
+TfTokenVector *
+_GetRenderTagsForTask(HdSceneIndexBaseRefPtr const &sceneIndex,
+                      const SdfPath &prefix)
+{
+    using TaskParams = typename Task::TaskParams;
+
+    return _GetRenderTagsAtPath<TaskParams>(
+        sceneIndex, _TaskPrimPath<Task>(prefix));
+}
 
 // Entry to dirty task params in a retained scene index.
 // Prim Path is determined from prefix and task type.
@@ -1453,7 +1466,7 @@ HdxTaskControllerSceneIndex::SetRenderOutputs(
     if (_aovNames == aovNames) {
         return;
     }
-    _aovNames = _aovNames;
+    _aovNames = aovNames;
 
     _SetRenderOutputs(_ResolvedRenderOutputs(aovNames, _IsForStorm()));
 
@@ -1555,6 +1568,9 @@ HdxTaskControllerSceneIndex::_SetRenderOutputs(
     const SdfPath volumeId =
         _StormRenderTaskPath(_prefix, HdStMaterialTagTokens->volume);
 
+    const SdfPath translucentId =
+        _StormRenderTaskPath(_prefix, HdStMaterialTagTokens->translucent);
+
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
     // Set AOV bindings on render tasks
@@ -1568,8 +1584,8 @@ HdxTaskControllerSceneIndex::_SetRenderOutputs(
         }
 
         params->aovBindings = aovBindings;
-        if (taskPath == volumeId) {
-            // The Storm Volume tasks reads the depth AOV.
+        if (taskPath == volumeId || taskPath == translucentId) {
+            // The Storm Volume and OIT tasks reads the depth AOV.
             if (depthAovBindingIndex >= 0) {
                 params->aovInputBindings = { aovBindings[depthAovBindingIndex] };
             }
@@ -1974,7 +1990,8 @@ HdxTaskControllerSceneIndex::SetRenderTags(const TfTokenVector &renderTags)
 
     for (const SdfPath &taskPath : _renderTaskPaths) {
         TfTokenVector * const taskRenderTags =
-            _GetRenderTagsAtPath(_retainedSceneIndex, taskPath);
+            _GetRenderTagsAtPath<HdxRenderTaskParams>(
+                _retainedSceneIndex, taskPath);
         if (!taskRenderTags) {
             continue;
         }
@@ -1990,13 +2007,13 @@ HdxTaskControllerSceneIndex::SetRenderTags(const TfTokenVector &renderTags)
 
     {
         using Task = HdxPickTask;
-        const SdfPath taskPath = _TaskPrimPath<Task>(_prefix);
 
         if (TfTokenVector * const taskRenderTags =
-                _GetRenderTagsAtPath(_retainedSceneIndex, taskPath)) {
+                _GetRenderTagsForTask<Task>(_retainedSceneIndex, _prefix)) {
             if (*taskRenderTags != renderTags) {
                 *taskRenderTags = renderTags;
 
+                const SdfPath taskPath = _TaskPrimPath<Task>(_prefix);
                 static const HdDataSourceLocatorSet locators{
                     HdLegacyTaskSchema::GetRenderTagsLocator() };
                 dirtiedPrimEntries.push_back({ taskPath, locators });
@@ -2342,6 +2359,88 @@ HdxTaskControllerSceneIndex::SetRenderBufferSize(const GfVec2i &size)
     _renderBufferSize = size;
 
     _SetRenderBufferSize();
+}
+
+void
+HdxTaskControllerSceneIndex::_UpdateAovMSAADescriptor()
+{
+    HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
+
+    const SdfPath path = _AovScopePath(_prefix);
+    for (const SdfPath &renderBufferPath :
+            _retainedSceneIndex->GetChildPrimPaths(path)) {
+        HdSceneIndexPrim const prim =
+            _retainedSceneIndex->GetPrim(renderBufferPath);
+        _RenderBufferSchemaDataSourceHandle const ds =
+            _RenderBufferSchemaDataSource::Cast(
+                HdRenderBufferSchema::GetFromParent(prim.dataSource)
+                    .GetContainer());
+        if (!ds) {
+            continue;
+        }
+
+        if (ds->multiSampled == _enableMultisampling) {
+            continue;
+        }
+        ds->multiSampled = _enableMultisampling;
+
+        static const HdDataSourceLocatorSet locators{
+            HdRenderBufferSchema::GetMultiSampledLocator()};
+        dirtiedPrimEntries.push_back({renderBufferPath, locators});
+    }
+
+    if (!dirtiedPrimEntries.empty()) {
+        _retainedSceneIndex->DirtyPrims(dirtiedPrimEntries);
+    }
+}
+
+void
+HdxTaskControllerSceneIndex::_UpdateAovMSAASampleCount()
+{
+    HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
+
+    const SdfPath path = _AovScopePath(_prefix);
+    for (const SdfPath &renderBufferPath :
+            _retainedSceneIndex->GetChildPrimPaths(path)) {
+        HdSceneIndexPrim const prim =
+            _retainedSceneIndex->GetPrim(renderBufferPath);
+        _RenderBufferSchemaDataSourceHandle const ds =
+            _RenderBufferSchemaDataSource::Cast(
+                HdRenderBufferSchema::GetFromParent(prim.dataSource)
+                    .GetContainer());
+        if (!ds) {
+            continue;
+        }
+
+        if (ds->msaaSampleCount == _msaaSampleCount) {
+            continue;
+        }
+        ds->msaaSampleCount = _msaaSampleCount;
+
+        HdDataSourceLocator locator = HdRenderBufferSchema::GetDefaultLocator().Append(
+            HdStRenderBufferTokens->stormMsaaSampleCount);
+        static const HdDataSourceLocatorSet locators = {locator};
+        dirtiedPrimEntries.push_back({renderBufferPath, locators});
+    }
+
+    if (!dirtiedPrimEntries.empty()) {
+        _retainedSceneIndex->DirtyPrims(dirtiedPrimEntries);
+    }
+}
+
+void
+HdxTaskControllerSceneIndex::SetMultisampleState(
+    const size_t &msaaSampleCount, bool enableMultisampling)
+{
+    if (_enableMultisampling != enableMultisampling) {
+        _enableMultisampling = enableMultisampling;
+        _UpdateAovMSAADescriptor();
+    }
+
+    if (_msaaSampleCount != msaaSampleCount) {
+        _msaaSampleCount = msaaSampleCount;
+        _UpdateAovMSAASampleCount();
+    }
 }
 
 void

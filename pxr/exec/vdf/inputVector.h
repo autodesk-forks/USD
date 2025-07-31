@@ -73,9 +73,8 @@ public:
             network,
             VdfOutputSpecs()
                 .Connector<T>(VdfTokens->out),
-            VdfTypedVector<T>())
+            VdfTypedVector<T>::CreateWithSize(n))
     {
-        _values.Resize<T>(n);
     }
 
     /// Sets the value for the input stored at \p index.

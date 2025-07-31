@@ -11,10 +11,12 @@
 
 #include "pxr/exec/exec/api.h"
 
+#include "pxr/exec/esf/object.h"
+
 #include "pxr/base/tf/token.h"
-#include "pxr/usd/sdf/path.h"
 
 #include <string>
+#include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -26,32 +28,19 @@ PXR_NAMESPACE_OPEN_SCOPE
 class ExecValueKey
 {
 public:
-    ExecValueKey(const SdfPath& provider, const TfToken& computation) :
-        _provider(provider),
-        _computation(computation)
+    ExecValueKey(EsfObject&& provider, const TfToken& computationName)
+        : _provider(std::move(provider))
+        , _computationName(computationName)
     {}
 
-    const SdfPath& GetProviderPath() const {
+    /// Returns the provider object of the requested value.
+    const EsfObject& GetProvider() const {
         return _provider;
     }
 
-    const TfToken& GetComputationToken() const {
-        return _computation;
-    }
-
-    bool operator==(const ExecValueKey& rhs) const {
-        return _provider == rhs._provider &&
-            _computation == rhs._computation;
-    }
-
-    bool operator!=(const ExecValueKey& rhs) const {
-        return !(*this == rhs);
-    }
-
-    template <typename HashState>
-    friend void TfHashAppend(HashState& h, const ExecValueKey& key) {
-        h.Append(key._provider);
-        h.Append(key._computation);
+    /// Returns the name of the requested computation.
+    const TfToken& GetComputationName() const {
+        return _computationName;
     }
 
     /// Return a human-readable description of this value key for diagnostic
@@ -61,8 +50,8 @@ public:
     std::string GetDebugName() const;
 
 private:
-    SdfPath _provider;
-    TfToken _computation;
+    EsfObject _provider;
+    TfToken _computationName;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

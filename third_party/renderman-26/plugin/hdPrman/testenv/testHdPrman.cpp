@@ -44,6 +44,7 @@
 #include "pxr/usd/usdRender/var.h"
 
 #include "pxr/base/arch/env.h"
+#include "pxr/base/arch/stackTrace.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/stopwatch.h"
@@ -857,6 +858,10 @@ PrintUsage(const char* cmd, const char *err=nullptr)
 
 int main(int argc, char *argv[])
 {
+    TfInstallTerminateAndCrashHandlers();
+    ArchSetProgramNameForErrors("testHdPrman");
+    ArchSetFatalStackLogging(true);
+
     //////////////////////////////////////////////////////////////////////// 
     //
     // Parse args

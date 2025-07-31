@@ -12,15 +12,13 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE;
 
-namespace
-{
-
 constexpr EsfEditReason none = EsfEditReason::None;
 constexpr EsfEditReason resyncedObject = EsfEditReason::ResyncedObject;
 constexpr EsfEditReason changedPropertyList = EsfEditReason::ChangedPropertyList;
 constexpr EsfEditReason many = resyncedObject | changedPropertyList;
 
-void TestBitwiseLogic()
+static void
+TestBitwiseLogic()
 {
     TF_AXIOM(!none);
     TF_AXIOM(resyncedObject);
@@ -32,14 +30,13 @@ void TestBitwiseLogic()
     TF_AXIOM(!resyncedObject.Contains(many));
 }
 
-void TestGetDescription()
+static void
+TestGetDescription()
 {
     TF_AXIOM(none.GetDescription() == "None");
     TF_AXIOM(resyncedObject.GetDescription() == "ResyncedObject");
     TF_AXIOM(changedPropertyList.GetDescription() == "ChangedPropertyList");
     TF_AXIOM(many.GetDescription() == "ResyncedObject, ChangedPropertyList");
-}
-
 }
 
 int main()

@@ -57,8 +57,17 @@ public:
     /// Creates a knot with a specified value type.
     TS_API
     TsKnot(
+        TfType valueType);
+
+    /// Creates a knot with a specified value type and curve type.
+    ///
+    /// \deprecated The use of curveType for knots is deprecated, knots
+    /// now work in splines of any curve type. This constructor will be
+    /// removed in a future release.
+    TS_API
+    TsKnot(
         TfType valueType,
-        TsCurveType curveType = TsCurveTypeBezier);
+        TsCurveType curveType);
 
     TS_API
     TsKnot(const TsKnot &other);
@@ -158,11 +167,10 @@ public:
     /// @}
     /// \name Curve type
     ///
-    /// Each knot's curve type must match the curve type of the spline to which
-    /// it belongs.  Knot objects are Bezier by default.
-    ///
-    /// In a Hermite spline, tangent widths are determined automatically.  They
-    /// are always one-third of the width of the segment to which they belong.
+    /// \deprecated Knots no longer need to have a curve type that matches
+    /// the curve type of the spline. \c SetCurveType and \c GetCurveType
+    /// no longer do anything useful and will be removed in a future
+    /// release.
     ///
     /// @{
 
@@ -297,7 +305,6 @@ private:
     template <typename T>
     bool _CheckOutParam(T *valueOut) const;
 
-    bool _CheckGetWidth() const;
     bool _CheckSetWidth(TsTime width) const;
     bool _CheckInParamVt(VtValue value) const;
     bool _CheckOutParamVt(VtValue* value) const;

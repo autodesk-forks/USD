@@ -229,8 +229,6 @@ HdPrman_RenderParam::HdPrman_RenderParam(
     _lastLegacySettingsVersion(0),
     _resolution(0),
     _resolutionStr(""),
-    _displayFiltersDirty(false),
-    _sampleFiltersDirty(false),
     _sampleFilterId(riley::SampleFilterId::InvalidId()),
     _displayFilterId(riley::DisplayFilterId::InvalidId()),
     _renderDelegate(renderDelegate),
@@ -1299,9 +1297,18 @@ HdPrman_RenderParam::UpdateLegacyOptions()
         }
     }
 
-    // Force incremental to be enabled for interacive renders
+    // Force incremental to be enabled for interacive renders,
+    // and if threads has default value, remove it so fallback value,
+    // which has a reasonable value for interactive, will be used.
     if (_renderDelegate->IsInteractive() && !_usingHusk) {
         options.SetInteger(RixStr.k_hider_incremental, 1);
+        if( options.HasParam(RixStr.k_limits_threads) ) {
+            int nthreads = 0;
+            options.GetInteger(RixStr.k_limits_threads, nthreads);
+            if(nthreads == 0) {
+                options.Remove(RixStr.k_limits_threads);
+            }
+        }
     }
 
     // Apply the batch command line settings last, so that they can
@@ -1793,21 +1800,6 @@ HdPrman_RenderParam::SetFiltersFromRenderSettings(
             nodeIdx++;
         }
 
-        // Append filters collected from shading nodes,
-        // which is not currently the primary workflow,
-        // but they may be present
-        if (isSample) {
-            for (const auto& sampleFilter : _sampleFilters) {
-                nodes.push_back(sampleFilter.second);
-            }
-        } else {
-            for (const auto& displayFilter : _displayFilters) {
-                nodes.push_back(displayFilter.second);
-            }
-        }
-        _sampleFiltersDirty = false;
-        _displayFiltersDirty = false;
-
         if (!nodes.empty()) {
             for (auto const& entry : renderSettings) {
                 // Filter params in render settings map look like this:
@@ -1865,28 +1857,26 @@ HdPrman_RenderParam::SetFiltersFromRenderSettings(
         riley::ShadingNetwork const filterNetwork =
             { static_cast<uint32_t>(nodes.size()), nodes.data() };
 
-         if(isSample) {
-             if (_sampleFilterId != riley::SampleFilterId::InvalidId()) {
-                 riley->DeleteSampleFilter(_sampleFilterId);
-                 _sampleFilterId = riley::SampleFilterId::InvalidId();
-             }
-
-           _sampleFilterId = riley->CreateSampleFilter(
-                riley::UserId(stats::AddDataLocation("/sampleFilters").
-                              GetValue()),
-                filterNetwork,
+        if (isSample) {
+            if (_sampleFilterId != riley::SampleFilterId::InvalidId()) {
+                riley->DeleteSampleFilter(_sampleFilterId);
+                _sampleFilterId = riley::SampleFilterId::InvalidId();
+            }
+            if (!nodes.empty()) {
+            _sampleFilterId = riley->CreateSampleFilter(
+                riley::UserId(stats::AddDataLocation("/sampleFilters").GetValue()), filterNetwork,
                 RtParamList());
+            }
         } else {
             if (_displayFilterId != riley::DisplayFilterId::InvalidId()) {
                 riley->DeleteDisplayFilter(_displayFilterId);
                 _displayFilterId = riley::DisplayFilterId::InvalidId();
-             }
-
-            _displayFilterId = riley->CreateDisplayFilter(
-                riley::UserId(stats::AddDataLocation("/displayFilters").
-                              GetValue()),
-                filterNetwork,
-                RtParamList());
+            }
+            if (!nodes.empty()) {
+                _displayFilterId = riley->CreateDisplayFilter(
+                    riley::UserId(stats::AddDataLocation("/displayFilters").GetValue()), filterNetwork,
+                    RtParamList());
+            }
         }
     }
 }
@@ -2339,6 +2329,7 @@ _GetOutputDisplayDriverType(const TfToken &name)
     return _GetOutputDisplayDriverType(outputExt);
 }
 
+#if PXR_VERSION >= 2308
 // Overload used when creating the render view from a render settings' product.
 static
 RtUString
@@ -2370,6 +2361,7 @@ _GetOutputDisplayDriverType(
 
     return _GetOutputDisplayDriverType(outputExt);
 }
+#endif
 
 static
 HdPrman_RenderViewDesc
@@ -3671,7 +3663,7 @@ HdPrman_RenderParam::_CreateRileyDisplay(
                 }
                 driver = RtUString("quicklyNoiseless");
                 displayParams.SetString(RtUString("dspyDSOPath"), RtUString(hdPrmanPath.c_str()));
-                displayParams.SetInteger(RtUString("cheaPass"), (int) _qnCheapPass);
+                displayParams.SetInteger(RtUString("cheapPass"), (int) _qnCheapPass);
                 displayParams.SetInteger(RtUString("minSamples"), _qnMinSamples);
                 displayParams.SetInteger(RtUString("interval"), _qnInterval);
                 displayParams.SetInteger(RtUString("normalAsColor"), 1);
@@ -3844,8 +3836,10 @@ HdPrman_RenderParam::CreateFramebufferAndRenderViewFromAovs(
         _framebuffer = std::make_unique<HdPrmanFramebuffer>();
     }
 
+#if PXR_VERSION >= 2308
     static bool useRenderSettingsProductsForInteractiveRenderView =
         TfGetEnvSetting(HD_PRMAN_INTERACTIVE_RENDER_WITH_RENDER_SETTINGS);
+#endif
 
     const bool dirtyProductsOnRenderSettingsPrim =
 #if PXR_VERSION >= 2411
@@ -4811,7 +4805,7 @@ HdPrman_RenderParam::IsInteractive() const
     return _renderDelegate->IsInteractive();
 }
 
-#if HD_API_VERSION >=76
+#if HD_API_VERSION >= 76
 bool
 HdPrman_RenderParam::HasArbitraryValue(const TfToken& key) const
 {

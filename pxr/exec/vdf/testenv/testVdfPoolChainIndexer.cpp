@@ -17,6 +17,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 
     (childPoints)
+    (pool)
 );
 
 
@@ -33,20 +34,19 @@ BuildNetwork(VdfTestUtils::Network &graph)
 
     VdfTestUtils::CallbackNodeType moverType(&CallbackFunction);
     moverType
-        .ReadWrite<int>(
-            _VdfPoolChainIndexTokens->pool, _VdfPoolChainIndexTokens->pool)
+        .ReadWrite<int>(_tokens->pool, _tokens->pool)
         ;
 
     VdfTestUtils::CallbackNodeType parallelMoverType(&CallbackFunction);
     parallelMoverType
-        .ReadWrite<int>(
-            _VdfPoolChainIndexTokens->pool, _VdfPoolChainIndexTokens->pool)
+        .ReadWrite<int>(_tokens->pool, _tokens->pool)
         .Read<int>(_tokens->childPoints)
         ;
 
-    // Pool chain indexing doesn't consider masks, so just use the same one
-    // for everything in this test.
-    VdfMask mask = VdfMask::AllOnes(1);
+    // Pool chain indexing doesn't consider masks (other than checking if an
+    // output has an affects mask), so just use the same one for everything in
+    // this test.
+    const VdfMask mask = VdfMask::AllOnes(2);
 
     /* Build a network with a parallel mover where Mover3 & 4
      * feed into the childPoints of the parallel mover.
@@ -69,43 +69,55 @@ BuildNetwork(VdfTestUtils::Network &graph)
      *
      */
 
-    graph.Add("Mover1", moverType);
-    graph.Add("Mover2", moverType);
-    graph.Add("Mover3", moverType);
-    graph.Add("Mover4", moverType);
+    // Don't create the "movers" in the same order as the expected pool chain
+    // index order, since if we do so many of the pool chain index relationships
+    // that we test for here will be true, just by virtue of the order we
+    // create the outputs were created in.
     graph.Add("Mover5", moverType);
+    VdfTestUtils::Node &mover5 = graph["Mover5"];
+    mover5.GetVdfNode()->GetOutput()->SetAffectsMask(mask);
+
+    graph.Add("Mover4", moverType);
+    VdfTestUtils::Node &mover4 = graph["Mover4"];
+    mover4.GetVdfNode()->GetOutput()->SetAffectsMask(mask);
+
+    // We don't set affects masks for some movers, since pool index order
+    // shouldn't require affects masks.
+    graph.Add("Mover3", moverType);
+    VdfTestUtils::Node &mover3 = graph["Mover3"];
+
+    graph.Add("Mover2", moverType);
+    VdfTestUtils::Node &mover2 = graph["Mover2"];
+
+    graph.Add("Mover1", moverType);
+    VdfTestUtils::Node &mover1 = graph["Mover1"];
+    mover1.GetVdfNode()->GetOutput()->SetAffectsMask(mask);
 
     graph.Add("ParallelMover", parallelMoverType);
-
-    VdfTestUtils::Node &mover1 = graph["Mover1"];
-    VdfTestUtils::Node &mover2 = graph["Mover2"];
-    VdfTestUtils::Node &mover3 = graph["Mover3"];
-    VdfTestUtils::Node &mover4 = graph["Mover4"];
-    VdfTestUtils::Node &mover5 = graph["Mover5"];
-
     VdfTestUtils::Node &parallelMover = graph["ParallelMover"];
+    parallelMover.GetVdfNode()->GetOutput()->SetAffectsMask(mask);
 
-    mover1.Output(_VdfPoolChainIndexTokens->pool)
-        >> mover2.In(_VdfPoolChainIndexTokens->pool, mask);
+    mover1.Output(_tokens->pool)
+        >> mover2.In(_tokens->pool, mask);
 
     // Connect Mover2's pool output to the 3 targets:
     // (Mover3, Mover4, ParallelMover)
-    mover2.Output(_VdfPoolChainIndexTokens->pool)
-        >> mover3.In(_VdfPoolChainIndexTokens->pool, mask);
-    mover2.Output(_VdfPoolChainIndexTokens->pool)
-        >> mover4.In(_VdfPoolChainIndexTokens->pool, mask);
-    mover2.Output(_VdfPoolChainIndexTokens->pool)
-        >> parallelMover.In(_VdfPoolChainIndexTokens->pool, mask);
+    mover2.Output(_tokens->pool)
+        >> mover3.In(_tokens->pool, mask);
+    mover2.Output(_tokens->pool)
+        >> mover4.In(_tokens->pool, mask);
+    mover2.Output(_tokens->pool)
+        >> parallelMover.In(_tokens->pool, mask);
 
     // Connect childPoints into the parallel mover
-    mover3.Output(_VdfPoolChainIndexTokens->pool)
+    mover3.Output(_tokens->pool)
         >> parallelMover.In(_tokens->childPoints, mask);
-    mover4.Output(_VdfPoolChainIndexTokens->pool)
+    mover4.Output(_tokens->pool)
         >> parallelMover.In(_tokens->childPoints, mask);
 
     // Connect the Mover5 downstream of ParallelMover
-    parallelMover.Output(_VdfPoolChainIndexTokens->pool)
-        >> mover5.In(_VdfPoolChainIndexTokens->pool, mask);
+    parallelMover.Output(_tokens->pool)
+        >> mover5.In(_tokens->pool, mask);
 }
 
 int

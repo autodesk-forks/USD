@@ -858,22 +858,22 @@ _ConnectPrimvarNodesToTerminalNode(
 {
     SdrRegistry &sdrRegistry = SdrRegistry::GetInstance();
 
-    for (auto& hdNodePair: hdNetwork->nodes) {
+    for (const auto& [nodePath, hdNode] : hdNetwork->nodes) {
+        const TfToken mxNodeDefName(HdMtlxGetNodeDefName(hdNode.nodeTypeId));
         const SdrShaderNodeConstPtr mtlxSdrNode =
             sdrRegistry.GetShaderNodeByIdentifierAndType(
-                hdNodePair.second.nodeTypeId,_tokens->mtlx);
+                mxNodeDefName, _tokens->mtlx);
 
-        if (mtlxSdrNode->GetFamily() != _tokens->geompropvalue ||
+        if (mtlxSdrNode->GetFamily() != _tokens->geompropvalue &&
             !_NodeUsesTexcoordPrimvar(mtlxSdrNode)) {
-            return;
+            continue;
         }
 
         // Connect the primvar node to the terminal node for HdStMaterialNetwork
         // And create a unique name for the new connection.
-        const std::string newConnName =
-            hdNodePair.first.GetName() + "_primvarconn";
+        const std::string newConnName = nodePath.GetName() + "_primvarconn";
         HdMaterialConnection2 primvarConn;
-        primvarConn.upstreamNode = hdNodePair.first;
+        primvarConn.upstreamNode = nodePath;
         primvarConn.upstreamOutputName = TfToken(newConnName);
 
         hdNetwork->nodes[terminalNodePath]
@@ -1511,7 +1511,7 @@ HdSt_ApplyMaterialXFilter(
             sdrRegistry.GetShaderNodeFromSourceCode(
                 glslfxSourceCode,
                 HioGlslfxTokens->glslfx,
-                SdrTokenMap()); // metadata
+                mtlxSdrNode->GetMetadata());
         HdMaterialNode2 newTerminalNode;
         newTerminalNode.nodeTypeId = sdrNode->GetIdentifier();
         newTerminalNode.inputConnections = terminalNode.inputConnections;
