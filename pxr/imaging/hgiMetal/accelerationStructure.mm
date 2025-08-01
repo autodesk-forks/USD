@@ -30,7 +30,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 HgiMetalBuildableAccelerationStructure::HgiMetalBuildableAccelerationStructure(
     Hgi* pHgi, HgiAccelerationStructureTriangleGeometryDesc const& _hgiDesc)
-    : _type(Type::TriangleGeom), _isBuilt(false), _isPassthrough(false)
+    : _type(Type::TriangleGeom), _isBuilt(false), _isPassthrough(false), _instancesBuffer(nil)
 {
     _triangleGeomDesc = [MTLAccelerationStructureTriangleGeometryDescriptor new];
     

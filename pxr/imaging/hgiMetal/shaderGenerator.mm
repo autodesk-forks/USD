@@ -1507,76 +1507,38 @@ HgiMetalShaderGenerator::HgiMetalShaderGenerator(
 
 HgiMetalShaderGenerator::~HgiMetalShaderGenerator() = default;
 
+// TODO: This will be removed when HGI RT refactor is done
 void HgiMetalShaderGenerator::_ReplaceSourceCode(std::ostream &ss) {
-
-    NSString* shaderDirectory = [NSHomeDirectory() stringByAppendingPathComponent:@"Desktop/hgi_ray_tracing_shader_dir"];
-    shaderDirectory = [NSString stringWithUTF8String:TfGetenv("HGI_TEMP_RAY_GEN_SHADER_DIR", shaderDirectory.UTF8String).c_str()];
-
-    NSString* shaderHeaderSourcePath    = [shaderDirectory stringByAppendingPathComponent:@"header.metal"];
-    NSData* shaderHeader = [NSData dataWithContentsOfFile:shaderHeaderSourcePath];
-
-    if(!shaderHeader) {
-        ss << "oh no: can't find shader header";
-        return;
-    }
-
-    NSString* shaderHeaderStr = [[NSString alloc] initWithData:shaderHeader encoding:NSUTF8StringEncoding];
-
-    if(!shaderHeaderStr) {
-        ss << "oh no: invalid UTF8 data";
-        return;
-    }
-
-    // Header
-    ss << [shaderHeaderStr UTF8String];
-        
-    // Contents
-    if(_descriptor.debugName.compare("RayGenShader") == 0) {
-
-        NSString* shaderRayGenSourcePath    = [shaderDirectory stringByAppendingPathComponent:@"ray_gen.metal"];
-        NSData* shaderRayGen = [NSData dataWithContentsOfFile:shaderRayGenSourcePath];
-        if(!shaderRayGen) {
-            ss << "oh no: can't find ray gen shader";
-            return;
-        }
-        NSString* shaderRayGenStr = [[NSString alloc] initWithData:shaderRayGen encoding:NSUTF8StringEncoding];
-        if(!shaderRayGenStr) {
-            ss << "oh no: invalid UTF8 data";
-            return;
-        }
-
-        ss << [shaderRayGenStr UTF8String];
-    }
-    else if(_descriptor.debugName.compare("BackgroundMissShader") == 0) {
+    if(_descriptor.debugName.compare("BackgroundMissShader") == 0) {
         ss <<
-"[[visible]] int BackgroundMissShader(ray ray, thread RayPayload& rayPayload)\n"
-"{\n"
-"    return 1;\n"
-"}\n";
+            "[[visible]] int BackgroundMissShader()\n"
+            "{\n"
+            "    return 1;\n"
+            "}\n";
     }
     else if(_descriptor.debugName.compare("RadianceMissShader") == 0) {
         ss <<
-"[[visible]] int RadianceMissShader(ray ray, thread RayPayload& rayPayload)\n"
-"{\n"
-"    return 2;\n"
-"}\n";
+            "[[visible]] int RadianceMissShader()\n"
+            "{\n"
+            "    return 2;\n"
+            "}\n";
     }
     else if(_descriptor.debugName.compare("ShadowMissShader") == 0) {
         ss <<
-"[[visible]] int ShadowMissShader(ray ray, thread RayPayload& rayPayload)\n"
-"{\n"
-"    return 3;\n"
-"}\n";
+            "[[visible]] int ShadowMissShader()\n"
+            "{\n"
+            "    return 3;\n"
+            "}\n";
     }
     else if(_descriptor.debugName.compare("ClosestHitShader") == 0) {
         ss <<
-"[[visible]] int ClosestHitShader(ray ray, thread RayPayload& rayPayload)\n"
-"{\n"
-"    return 4;\n"
-"}\n";
+            "[[visible]] int ClosestHitShader()\n"
+            "{\n"
+            "    return 4;\n"
+            "}\n";
     }
     else {
-        ss << "oh no";
+        ss << "Error: Unrecognized shader";
     }
 }
 
@@ -1584,56 +1546,6 @@ void HgiMetalShaderGenerator::_MergeSourceCode(std::ostream &ss)
 {
     std::string storage = _GetShaderCode();
     ss << storage;
-//        else if (_descriptor.debugName.compare("postProcessulationComputeShader"))
-//        {
-//            
-//        }
-//        else if (_descriptor.debugName.compare("AccumulationComputeShader"))
-//        {
-//            
-//        }
-//        else if (_descriptor.debugName.compare("postProcessulationComputeShader"))
-//        {
-//            
-//        }
-//        else if (_descriptor.debugName.compare("postProcessulationComputeShader"))
-//        {
-//            
-//        }
-//        else if (_descriptor.debugName.compare("postProcessulationComputeShader"))
-//        {
-//            
-//        }
-        
-//        typedef msltranslate::glsl_skipper_grammar<std::string::const_iterator> glsl_skipper_grammar;
-//        glsl_skipper_grammar  skipper;
-//        
-//        typedef msltranslate::glsl_grammar<std::string::const_iterator, glsl_skipper_grammar> glsl_grammar;
-//        glsl_grammar          glsl;
-//        
-//        msltranslate::glsl_block ast;
-//        
-//        using boost::spirit::ascii::space;
-//        std::string::const_iterator iter = storage.begin();
-//        std::string::const_iterator end = storage.end();
-//        
-//        bool r = phrase_parse(iter, end, glsl, skipper, ast);
-//        
-//        if (r && iter == end)
-//        {
-//            std::cout << "-------------------------\n";
-//            std::cout << "Parsing succeeded\n";
-//            std::cout << "-------------------------\n";
-//        }
-//        else
-//        {
-//            std::string::const_iterator some = iter + std::min(30, int(end - iter));
-//            std::string context(iter, (some>end)?end:some);
-//            std::cout << "-------------------------\n";
-//            std::cout << "Parsing failed\n";
-//            std::cout << "stopped at: \"" << context << "...\"\n";
-//            std::cout << "-------------------------\n";
-//        }
 }
 
 void HgiMetalShaderGenerator::_Execute(std::ostream &ss)

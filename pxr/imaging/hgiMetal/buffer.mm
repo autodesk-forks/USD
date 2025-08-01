@@ -72,4 +72,11 @@ HgiMetalBuffer::GetCPUStagingAddress()
 
     return nullptr;
 }
+
+uint64_t
+HgiMetalBuffer::GetDeviceAddress() const
+{
+    uint64_t gpuAddress = [_bufferId gpuAddress];
+    return gpuAddress;
+}
 PXR_NAMESPACE_CLOSE_SCOPE

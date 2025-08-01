@@ -125,11 +125,8 @@ HgiMetal::HgiMetal(id<MTLDevice> device)
     _captureScopeFullFrame.label =
         [NSString stringWithFormat:@"Full Hydra Frame"];
     
-//    [[MTLCaptureManager sharedCaptureManager]
-//        setDefaultCaptureScope:_captureScopeFullFrame];
-    MTLCaptureDescriptor* desc = [MTLCaptureDescriptor new];
-    desc.captureObject = _device;
-    [[MTLCaptureManager sharedCaptureManager] startCaptureWithDescriptor:desc error:nil];
+    [[MTLCaptureManager sharedCaptureManager]
+        setDefaultCaptureScope:_captureScopeFullFrame];
 }
 
 HgiMetal::~HgiMetal()
@@ -384,8 +381,6 @@ HgiMetal::GetIndirectCommandEncoder() const
 void
 HgiMetal::StartFrame()
 {
-//    [[MTLCaptureManager sharedCaptureManager] startCaptureWithScope:_captureScopeFullFrame];
-
     _pool->Init();
 
     if (_frameDepth++ == 0) {
@@ -403,8 +398,6 @@ HgiMetal::StartFrame()
 void
 HgiMetal::EndFrame()
 {
-    [[MTLCaptureManager sharedCaptureManager] stopCapture];
-    
     if (--_frameDepth == 0) {
         [_captureScopeFullFrame endScope];
     }

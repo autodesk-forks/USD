@@ -189,6 +189,20 @@ HgiMetalRayTracingPipeline::~HgiMetalRayTracingPipeline()
 HGIMETAL_API
 void HgiMetalRayTracingPipeline::BindPipeline(id<MTLComputeCommandEncoder> computeEncoder)
 {
+    for (int i = 0; i < _descriptor.groups.size(); i++)
+    {
+        if (_descriptor.groups[i].closestHitShader != 0xFFFF)
+        {
+
+            HgiMetalBuffer* metalbuffer = static_cast<HgiMetalBuffer*>(_descriptor.groups[i].pShaderRecord);
+            id<MTLBuffer> bufferId = metalbuffer->GetBufferId();
+
+            MTLResourceUsage usage = MTLResourceUsageRead;
+            [computeEncoder useResource:bufferId
+                                  usage:usage];
+
+        }
+    }
     [computeEncoder setComputePipelineState:_pipelineState];
 }
 

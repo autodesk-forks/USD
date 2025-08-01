@@ -39,6 +39,9 @@ public:
     
     HGIMETAL_API
     void* GetCPUStagingAddress() override;
+    
+    HGIMETAL_API
+    uint64_t GetDeviceAddress() const override;
 
     id<MTLBuffer> GetBufferId() const {return _bufferId;}
 

@@ -211,54 +211,76 @@ HgiMetalResourceBindings::BindResources(
     id<MTLBuffer> argBuffer)
 {
     id<MTLArgumentEncoder> argEncoderBuffer = hgi->GetBufferArgumentEncoder();
-    id<MTLArgumentEncoder> argEncoderSampler = hgi->GetSamplerArgumentEncoder();
-    id<MTLArgumentEncoder> argEncoderTexture = hgi->GetTextureArgumentEncoder();
+    id<MTLArgumentEncoder> argEncoderSampler;
+    id<MTLArgumentEncoder> argEncoderTexture;
 
     //
     // Bind Textures and Samplers
     //
 
+    size_t offsetTexture = HgiMetalArgumentOffsetTextureCS;
     for (HgiTextureBindDesc const& texDesc : _descriptor.textures) {
-        // Both 0 (sampler without texture) and 1 (one texture) are valid.
-        if (texDesc.textures.size() > 1)
-        {
-            TF_CODING_ERROR("Only one texture per binding can be supported. "
-                "Found %zu textures.", texDesc.textures.size());
-            continue;
+        if (texDesc.textures.size() > 1) {
+            MTLArgumentDescriptor *argumentDescTexture =
+            [[MTLArgumentDescriptor alloc] init];
+            argumentDescTexture.dataType = MTLDataTypeTexture;
+            argumentDescTexture.arrayLength = texDesc.textures.size();
+            argEncoderTexture = [hgi->GetPrimaryDevice() newArgumentEncoderWithArguments:
+                                  @[argumentDescTexture]];
+            [argumentDescTexture release];
+            MTLArgumentDescriptor *argumentDescSampler =
+            [[MTLArgumentDescriptor alloc] init];
+            argumentDescSampler.dataType = MTLDataTypeSampler;
+            argumentDescSampler.arrayLength = texDesc.textures.size();
+            argEncoderSampler = [hgi->GetPrimaryDevice() newArgumentEncoderWithArguments:
+                                  @[argumentDescSampler]];
+            [argumentDescSampler release];
         }
+        else {
+            argEncoderTexture = hgi->GetTextureArgumentEncoder();
+            argEncoderSampler = hgi->GetSamplerArgumentEncoder();
+        }
+        
+        for (uint i = 0; i < texDesc.textures.size(); i++)
+        {
+            if ((texDesc.stageUsage & HgiShaderStageCompute) ||
+                (texDesc.stageUsage & HgiShaderStageRayGen) ||
+                (texDesc.stageUsage & HgiShaderStageClosestHit) ||
+                (texDesc.stageUsage & HgiShaderStageIntersection) ||
+                (texDesc.stageUsage & HgiShaderStageAnyHit) ||
+                (texDesc.stageUsage & HgiShaderStageCallable) ||
+                (texDesc.stageUsage & HgiShaderStageMiss)) {
+                HgiTextureHandle const& texHandle = texDesc.textures[i];
+                HgiMetalTexture* metalTexture =
+                static_cast<HgiMetalTexture*>(texHandle.Get());
+                HgiSamplerHandle const& smpHandle = texDesc.samplers.front();
+                HgiMetalSampler* metalSmp =
+                static_cast<HgiMetalSampler*>(smpHandle.Get());
+                
 
-        HgiTextureHandle const& texHandle = texDesc.textures.front();
-        HgiMetalTexture* metalTexture =
-            static_cast<HgiMetalTexture*>(texHandle.Get());
+                // Set Sampler
+                size_t offsetSampler = HgiMetalArgumentOffsetSamplerCS
+                                    + (texDesc.bindingIndex * sizeof(void*));
+                [argEncoderSampler setArgumentBuffer:argBuffer
+                                            offset:offsetSampler];
+                [argEncoderSampler setSamplerState:metalSmp->GetSamplerId() atIndex:i];
 
-        HgiSamplerHandle const& smpHandle = texDesc.samplers.front();
-        HgiMetalSampler* metalSmp =
-            static_cast<HgiMetalSampler*>(smpHandle.Get());
+                // Set Texture
+                offsetTexture = HgiMetalArgumentOffsetTextureCS + (texDesc.bindingIndex * sizeof(void*));
+                [argEncoderTexture setArgumentBuffer:argBuffer
+                                              offset:offsetTexture];
 
-        if ((texDesc.stageUsage & HgiShaderStageCompute) ||
-            (texDesc.stageUsage & HgiShaderStageRayGen) ||
-            (texDesc.stageUsage & HgiShaderStageClosestHit) ||
-            (texDesc.stageUsage & HgiShaderStageIntersection) ||
-            (texDesc.stageUsage & HgiShaderStageAnyHit) ||
-            (texDesc.stageUsage & HgiShaderStageCallable) ||
-            (texDesc.stageUsage & HgiShaderStageMiss)) {
-            size_t offsetSampler = HgiMetalArgumentOffsetSamplerCS
-                                 + (texDesc.bindingIndex * sizeof(void*));
-            [argEncoderSampler setArgumentBuffer:argBuffer
-                                          offset:offsetSampler];
-            [argEncoderSampler setSamplerState:metalSmp->GetSamplerId() atIndex:0];
-
-            size_t offsetTexture = HgiMetalArgumentOffsetTextureCS
-                                 + (texDesc.bindingIndex * sizeof(void*));
-            [argEncoderTexture setArgumentBuffer:argBuffer
-                                          offset:offsetTexture];
-            MTLResourceUsage usage = MTLResourceUsageRead;
-            if (texDesc.writable) {
-                usage |= MTLResourceUsageWrite;
+                MTLResourceUsage usage = MTLResourceUsageRead;
+                if (texDesc.writable) {
+                    usage |= MTLResourceUsageWrite;
+                }
+                [computeEncoder useResource:metalTexture->GetTextureId()
+                            usage:usage];
+                [argEncoderTexture setTexture:metalTexture->GetTextureId() atIndex:i];
             }
-            [argEncoderTexture setTexture:metalTexture->GetTextureId() atIndex:0];
-            [computeEncoder useResource:metalTexture->GetTextureId()
-                                  usage:usage];
+        }
+        if (texDesc.textures.size() > 1) {
+            [argEncoderTexture release];
         }
     }
 
@@ -268,7 +290,7 @@ HgiMetalResourceBindings::BindResources(
     [computeEncoder setBuffer:argBuffer
                        offset:HgiMetalArgumentOffsetTextureCS
                       atIndex:HgiMetalArgumentIndexTextures];
-
+    
     //
     // Bind Buffers
     //
@@ -277,7 +299,6 @@ HgiMetalResourceBindings::BindResources(
     // They are bound via the GraphicsEncoder.
 
     for (HgiBufferBindDesc const& bufDesc : _descriptor.buffers) {
-        if (!TF_VERIFY(bufDesc.buffers.size() == 1)) continue;
         if ((bufDesc.stageUsage & HgiShaderStageCompute) ||
             (bufDesc.stageUsage & HgiShaderStageRayGen) ||
             (bufDesc.stageUsage & HgiShaderStageClosestHit) ||

@@ -36,6 +36,10 @@ PXR_NAMESPACE_OPEN_SCOPE
 HgiMetalAccelerationStructureCmds::HgiMetalAccelerationStructureCmds(HgiMetal* hgi)
     : HgiAccelerationStructureCmds()
     , _hgi(hgi)
+    , _encoder(nil)
+    , _commandBuffer(nil)
+    , _secondaryCommandBuffer(false)
+    , _hasWork(false)
 {
 //    MTLCaptureManager* cptMgr = [MTLCaptureManager sharedCaptureManager];
 //    MTLCaptureDescriptor* cpt_desc = [MTLCaptureDescriptor new];
@@ -66,8 +70,9 @@ HgiMetalAccelerationStructureCmds::_CreateEncoder()
 void
 HgiMetalAccelerationStructureCmds::PushDebugGroup(const char* label)
 {
-    _CreateEncoder();
-    HGIMETAL_DEBUG_PUSH_GROUP(_encoder, label)
+    if (_encoder) {
+        HGIMETAL_DEBUG_PUSH_GROUP(_encoder, label)
+    }
 }
 
 void
@@ -83,6 +88,7 @@ void
 HgiMetalAccelerationStructureCmds::Build(HgiAccelerationStructureHandleVector accelStructures, const std::vector<HgiAccelerationStructureBuildRange>& ranges)
 {
     assert(ranges.size() == accelStructures.size());
+    assert(_encoder);
 
     id<MTLDevice> device = _hgi->GetPrimaryDevice();
     std::function<void(HgiMetalBuildableAccelerationStructure&)> buildStructure = [&](HgiMetalBuildableAccelerationStructure& structure) {

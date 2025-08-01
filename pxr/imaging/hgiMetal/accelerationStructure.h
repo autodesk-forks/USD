@@ -66,17 +66,17 @@ protected:
     Type                                _type;
     
     //TriangleGeom ONLY
-    MTLAccelerationStructureTriangleGeometryDescriptor* _triangleGeomDesc;
+    MTLAccelerationStructureTriangleGeometryDescriptor* _triangleGeomDesc = nil;
     
-    uint32_t                                             _entries;
+    uint32_t                                             _entries = 0;
     std::vector<HgiMetalBuildableAccelerationStructure*> _subStructures;
     
-    id<MTLBuffer>                                        _instancesBuffer;
-    MTLAccelerationStructureDescriptor*                  _accelerationStructureDesc;
+    id<MTLBuffer>                                        _instancesBuffer = nil;
+    MTLAccelerationStructureDescriptor*                  _accelerationStructureDesc = nil;
     MTLAccelerationStructureSizes                        _accelerationStructureSizes;
-    id<MTLAccelerationStructure>                         _accelerationStructure;
-    bool                                                 _isBuilt;
-    bool                                                 _isPassthrough;
+    id<MTLAccelerationStructure>                         _accelerationStructure = nil;
+    bool                                                 _isBuilt = false;
+    bool                                                 _isPassthrough = false;
     
     friend class HgiMetalAccelerationStructureCmds;
 };

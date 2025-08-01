@@ -427,6 +427,8 @@ struct HgiShaderFunctionDesc
     HgiShaderStage shaderStage;
     const char *shaderCodeDeclarations;
     const char *shaderCode;
+    int shaderByteCodeLength = -1;
+    const unsigned char *shaderByteCode;
     std::string *generatedShaderCodeOut;
     std::vector<HgiShaderFunctionTextureDesc> textures;
     std::vector<HgiShaderFunctionBufferDesc> buffers;
