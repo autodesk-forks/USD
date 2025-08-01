@@ -4,10 +4,12 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_SETTINGS_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_SETTINGS_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_SETTINGS_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_SETTINGS_H
 
 #include "pxr/pxr.h"
+#if PXR_VERSION >= 2308
+
 #include "pxr/imaging/hd/renderSettings.h"
 
 #include "RiTypesHelper.h" // for RtParamList
@@ -53,6 +55,9 @@ public:
                HdRenderParam *renderParam,
                const HdDirtyBits *dirtyBits) override;
 
+#if PXR_VERSION <= 2308
+    bool IsValid() const;
+#endif
 private:
     void _ProcessRenderTerminals(
         HdSceneDelegate *sceneDelegate,
@@ -67,4 +72,6 @@ private:
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_VOLUME_H
+#endif // PXR_VERSION >= 2308
+
+#endif // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_VOLUME_H

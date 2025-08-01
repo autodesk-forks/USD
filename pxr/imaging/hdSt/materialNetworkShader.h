@@ -17,6 +17,7 @@
 #include "pxr/base/tf/token.h"
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -88,8 +89,6 @@ public:
     HDST_API
     void SetFragmentSource(const std::string &source);
     HDST_API
-    void SetGeometrySource(const std::string &source);
-    HDST_API
     void SetDisplacementSource(const std::string &source);
     HDST_API
     void SetParams(const HdSt_MaterialParamVector &params);
@@ -118,6 +117,9 @@ public:
     HDST_API
     virtual void Reload();
 
+    HDST_API
+    const VtValue* GetFallbackValueForParam(TfToken const &paramName) const;
+
     /// Adds the fallback value of the given material param to
     /// buffer specs and sources using the param's name.
     ///
@@ -139,15 +141,16 @@ protected:
 
 private:
     std::string _fragmentSource;
-    std::string _geometrySource;
     std::string _displacementSource;
 
     // Shader Parameters
-    HdSt_MaterialParamVector       _params;
+    HdSt_MaterialParamVector    _params;
     HdBufferSpecVector          _paramSpec;
     HdBufferArrayRangeSharedPtr _paramArray;
     TfTokenVector               _primvarNames;
     bool                        _isEnabledPrimvarFiltering;
+    std::unordered_map<TfToken, VtValue,
+                       TfToken::HashFunctor> _paramToDefValue;
 
     mutable size_t              _computedHash;
     mutable bool                _isValidComputedHash;

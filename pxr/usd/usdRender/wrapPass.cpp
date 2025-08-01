@@ -15,13 +15,13 @@
 #include "pxr/base/tf/pyUtils.h"
 #include "pxr/base/tf/wrapTypeHelpers.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python.hpp"
 
 #include <string>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -51,13 +51,6 @@ _CreateFileNameAttr(UsdRenderPass &self,
                                       object defaultVal, bool writeSparsely) {
     return self.CreateFileNameAttr(
         UsdPythonToSdfType(defaultVal, SdfValueTypeNames->Asset), writeSparsely);
-}
-        
-static UsdAttribute
-_CreateDenoiseEnableAttr(UsdRenderPass &self,
-                                      object defaultVal, bool writeSparsely) {
-    return self.CreateDenoiseEnableAttr(
-        UsdPythonToSdfType(defaultVal, SdfValueTypeNames->Bool), writeSparsely);
 }
 
 static std::string
@@ -122,13 +115,6 @@ void wrapUsdRenderPass()
              &_CreateFileNameAttr,
              (arg("defaultValue")=object(),
               arg("writeSparsely")=false))
-        
-        .def("GetDenoiseEnableAttr",
-             &This::GetDenoiseEnableAttr)
-        .def("CreateDenoiseEnableAttr",
-             &_CreateDenoiseEnableAttr,
-             (arg("defaultValue")=object(),
-              arg("writeSparsely")=false))
 
         
         .def("GetRenderSourceRel",
@@ -140,11 +126,6 @@ void wrapUsdRenderPass()
              &This::GetInputPassesRel)
         .def("CreateInputPassesRel",
              &This::CreateInputPassesRel)
-        
-        .def("GetDenoisePassRel",
-             &This::GetDenoisePassRel)
-        .def("CreateDenoisePassRel",
-             &This::CreateDenoisePassRel)
         .def("__repr__", ::_Repr)
     ;
 

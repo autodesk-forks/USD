@@ -66,7 +66,9 @@ struct UsdUtils_LocalizationDelegate
         const SdfLayerRefPtr &layer,
         const std::string &keyPath,
         const std::string &authoredPath,
-        const std::vector<std::string> &dependencies) { return {}; }
+        const std::vector<std::string> &dependencies,
+        const bool processingMetadata = false,
+        const bool processingDictionary = false) { return {}; }
 
     virtual std::vector<std::string> ProcessValuePathArrayElement(
         const SdfLayerRefPtr &layer,
@@ -157,7 +159,9 @@ public:
         const SdfLayerRefPtr &layer,
         const std::string &keyPath,
         const std::string &authoredPath,
-        const std::vector<std::string> &dependencies) override;
+        const std::vector<std::string> &dependencies,
+        const bool processingMetadata = false,
+        const bool processingDictionary = false) override;
 
     virtual std::vector<std::string> ProcessValuePathArrayElement(
         const SdfLayerRefPtr &layer,
@@ -255,8 +259,12 @@ private:
 
     bool _keepEmptyPathsInArrays = false;
 
-    // Maps source layer identifiers to their anonymous writable copies.
-    std::map<SdfLayerRefPtr, SdfLayerRefPtr> _layerCopyMap;
+    // Maps source layer identifiers to their writable counterparts.
+    // If _editLayersInPlace is true, the layers will map to themselves,
+    // ensuring they stay alive for the duration of the localization process.
+    // Otherwise, source layers will map to an anonymous copy that will be
+    // used for all edits that would apply to the source layer
+    std::map<SdfLayerRefPtr, SdfLayerRefPtr> _writableLayerMap;
 };
 
 // This delegate provides clients with ReadOnly access to processed
@@ -273,7 +281,7 @@ public:
 
     virtual std::vector<std::string> ProcessPayloads(
         const SdfLayerRefPtr &layer,
-        const SdfPrimSpecHandle &primSpec);
+        const SdfPrimSpecHandle &primSpec) override;
 
     virtual std::vector<std::string> ProcessReferences(
         const SdfLayerRefPtr &layer,
@@ -283,7 +291,9 @@ public:
         const SdfLayerRefPtr &layer,
         const std::string &keyPath,
         const std::string &authoredPath,
-        const std::vector<std::string> &dependencies) override;
+        const std::vector<std::string> &dependencies,
+        const bool processingMetadata = false,
+        const bool processingDictionary = false) override;
 
     virtual std::vector<std::string> ProcessValuePathArrayElement(
         const SdfLayerRefPtr &layer,

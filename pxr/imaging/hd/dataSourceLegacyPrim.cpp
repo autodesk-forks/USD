@@ -8,6 +8,7 @@
 
 #include "pxr/imaging/hd/camera.h"
 #include "pxr/imaging/hd/dataSource.h"
+#include "pxr/imaging/hd/extComputationCpuCallback.h"
 #include "pxr/imaging/hd/material.h"
 #include "pxr/imaging/hd/light.h"
 #include "pxr/imaging/hd/meshTopology.h"
@@ -75,6 +76,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PUBLIC_TOKENS(HdLegacyPrimTypeTokens, HD_LEGACY_PRIMTYPE_TOKENS);
 
+TF_DEFINE_PUBLIC_TOKENS(HdLegacyFlagTokens, HD_LEGACY_FLAG_TOKENS);
+
 // XXX: currently private and duplicated where used so as to not yet formally
 //      define this convention.
 TF_DEFINE_PRIVATE_TOKENS(
@@ -97,49 +100,24 @@ HdLegacyPrimTypeIsVolumeField(TfToken const &primType)
 
 namespace {
 
-// Returns contributing sample times for the interval from startTime to endTime.
-//
-// If there is no time sample at startTime, this will include the sample time
-// of the sample just before startTime if it exists.
-// Similarly for endTime.
-//
-template<typename TimeSampleArray>
-static
-void _FillSampleTimes(
-    const TimeSampleArray &timeSamples,
-    const HdSampledDataSource::Time startTime,
-    const HdSampledDataSource::Time endTime,
-    std::vector<HdSampledDataSource::Time> * const outSampleTimes)
+class Hd_SceneDelegateExtComputationCpuCallback
+      : public HdExtComputationCpuCallback
 {
-    if (!outSampleTimes) {
-        return;
+public:
+    Hd_SceneDelegateExtComputationCpuCallback(
+        const SdfPath &id, HdSceneDelegate * const sceneDelegate)
+      : _id(id), _sceneDelegate(sceneDelegate) { }
+    
+    void Compute(HdExtComputationContext * const ctx) override
+    {
+        _sceneDelegate->InvokeExtComputation(_id, ctx);
     }
-    for (size_t i = 0; i < timeSamples.count; ++i) {
-        const float t = timeSamples.times[i];
-        if (outSampleTimes->empty()) {
-            if (t > startTime && i > 0) {
-                // Include sample just before the start time.
-                outSampleTimes->push_back(timeSamples.times[i - 1]);
-            }
-            if (t >= startTime) {
-                // Include sample at start time or the first sample
-                // after the start time.
-                outSampleTimes->push_back(timeSamples.times[i]);
-            }
-        } else {
-            outSampleTimes->push_back(timeSamples.times[i]);
-        }
-        if (t >= endTime) {
-            // We have sound the sample at the end time or beyond
-            // the end time. We are done.
-            break;
-        }
-    }
-    if (outSampleTimes->empty() && timeSamples.count > 0) {
-        outSampleTimes->push_back(timeSamples.times[0]);
-    }
-}
 
+private:
+    const SdfPath _id;
+    HdSceneDelegate * const _sceneDelegate;
+};
+  
 class Hd_DataSourceLegacyPrimvarValue : public HdSampledDataSource
 {
 public:
@@ -189,9 +167,8 @@ public:
         // XXX: Start and end times come from the sene delegate, so we can't
         // get samples outside of those provided. However, we can clamp
         // returned samples to be in the right range.
-        _FillSampleTimes(_timeSamples, startTime, endTime, outSampleTimes);
-
-        return outSampleTimes->size() > 1;
+        return _timeSamples.GetContributingSampleTimesForInterval(
+            startTime, endTime, outSampleTimes);
     }
 
 private:
@@ -251,7 +228,8 @@ public:
         // XXX: Start and end times come from the sene delegate, so we can't
         // get samples outside of those provided. However, we can clamp
         // returned samples to be in the right range.
-        _FillSampleTimes(_timeSamples, startTime, endTime, outSampleTimes);
+        _timeSamples.GetContributingSampleTimesForInterval(
+            startTime, endTime, outSampleTimes);
 
         return true;
     }
@@ -320,8 +298,8 @@ public:
         // XXX: Start and end times come from the sene delegate, so we can't
         // get samples outside of those provided. However, we can clamp
         // returned samples to be in the right range.
-        _FillSampleTimes(_timeSamples, startTime, endTime, outSampleTimes);
-
+        _timeSamples.GetContributingSampleTimesForInterval(
+            startTime, endTime, outSampleTimes);
         return true;
     }
 
@@ -474,8 +452,8 @@ public:
         // XXX: Start and end times come from the scene delegate, so we can't
         // get samples outside of those provided. However, we can clamp
         // returned samples to be in the right range.
-        _FillSampleTimes(_timeSamples, startTime, endTime, outSampleTimes);
-
+        _timeSamples.GetContributingSampleTimesForInterval(
+            startTime, endTime, outSampleTimes);
         return true;
     }
 
@@ -1067,6 +1045,11 @@ public:
             HdCameraSchemaTokens->shutterOpen,
             HdCameraSchemaTokens->shutterClose,
             HdCameraSchemaTokens->exposure,
+            HdCameraSchemaTokens->exposureTime,
+            HdCameraSchemaTokens->exposureIso,
+            HdCameraSchemaTokens->exposureFStop,
+            HdCameraSchemaTokens->exposureResponsivity,
+            HdCameraSchemaTokens->linearExposureScale,
             HdCameraSchemaTokens->focusOn,
             HdCameraSchemaTokens->dofAspect,
             HdCameraSchemaTokens->splitDiopter,
@@ -1506,6 +1489,7 @@ public:
         TfTokenVector results;
         results.push_back(HdInstancerTopologySchemaTokens->prototypes);
         results.push_back(HdInstancerTopologySchemaTokens->instanceIndices);
+        results.push_back(HdLegacyFlagTokens->isLegacyInstancer);
         return results;
     }
 
@@ -1517,6 +1501,8 @@ public:
         } else if (name == HdInstancerTopologySchemaTokens->instanceIndices) {
             return Hd_InstanceIndicesDataSource::New(
                     _id, _sceneDelegate, _protos);
+        } else if (name == HdLegacyFlagTokens->isLegacyInstancer) {
+            return HdRetainedTypedSampledDataSource<bool>::New(true);
         } else {
             return nullptr;
         }
@@ -1585,6 +1571,7 @@ public:
         results.push_back(HdLegacyDisplayStyleSchemaTokens->refineLevel);
         results.push_back(HdLegacyDisplayStyleSchemaTokens->flatShadingEnabled);
         results.push_back(HdLegacyDisplayStyleSchemaTokens->displacementEnabled);
+        results.push_back(HdLegacyDisplayStyleSchemaTokens->displayInOverlay);
         results.push_back(HdLegacyDisplayStyleSchemaTokens->occludedSelectionShowsThrough);
         results.push_back(HdLegacyDisplayStyleSchemaTokens->pointsShadingEnabled);
         results.push_back(HdLegacyDisplayStyleSchemaTokens->materialIsFinal);
@@ -1619,6 +1606,13 @@ public:
             }
             return HdRetainedTypedSampledDataSource<bool>::New(
                     _displayStyle.displacementEnabled);
+        } else if (name == HdLegacyDisplayStyleSchemaTokens->displayInOverlay) {
+            if (!_displayStyleRead) {
+                _displayStyle = _sceneDelegate->GetDisplayStyle(_id);
+                _displayStyleRead = true;
+            }
+            return HdRetainedTypedSampledDataSource<bool>::New(
+                    _displayStyle.displayInOverlay);
         } else if (name == HdLegacyDisplayStyleSchemaTokens->occludedSelectionShowsThrough) {
             if (!_displayStyleRead) {
                 _displayStyle = _sceneDelegate->GetDisplayStyle(_id);
@@ -1897,8 +1891,8 @@ public:
         // XXX: Start and end times come from the sene delegate, so we can't
         // get samples outside of those provided. However, we can clamp
         // returned samples to be in the right range.
-        _FillSampleTimes(_timeSamples, startTime, endTime, outSampleTimes);
-
+        _timeSamples.GetContributingSampleTimesForInterval(
+            startTime, endTime, outSampleTimes);
         return true;
     }
 
@@ -1958,12 +1952,14 @@ public:
 
     TfTokenVector GetNames() override
     {
-        TfTokenVector result;
-        result.push_back(HdExtComputationSchemaTokens->inputValues);
-        result.push_back(HdExtComputationSchemaTokens->inputComputations);
-        result.push_back(HdExtComputationSchemaTokens->outputs);
-        result.push_back(HdExtComputationSchemaTokens->glslKernel);
-        result.push_back(HdExtComputationSchemaTokens->cpuCallback);
+        static const TfTokenVector result = {
+            HdExtComputationSchemaTokens->inputValues,
+            HdExtComputationSchemaTokens->inputComputations,
+            HdExtComputationSchemaTokens->outputs,
+            HdExtComputationSchemaTokens->glslKernel,
+            HdExtComputationSchemaTokens->cpuCallback,
+            HdExtComputationSchemaTokens->dispatchCount,
+            HdExtComputationSchemaTokens->elementCount };
         return result;
     }
 
@@ -1973,16 +1969,16 @@ public:
             return Hd_DataSourceLegacyExtComputationInputValues::New(
                     _id, _sceneDelegate);
         } else if (name == HdExtComputationSchemaTokens->inputComputations) {
-            HdExtComputationInputDescriptorVector descs =
+            const HdExtComputationInputDescriptorVector descs =
                 _sceneDelegate->GetExtComputationInputDescriptors(_id);
-            std::vector<HdDataSourceBaseHandle> out;
-            out.reserve(descs.size());
+            std::vector<TfToken> names;
+            std::vector<HdDataSourceBaseHandle> dataSources;
+            names.reserve(descs.size());
+            dataSources.reserve(descs.size());
             for (const auto& desc : descs) {
-                out.push_back(
+                names.push_back(desc.name);
+                dataSources.push_back(
                     HdExtComputationInputComputationSchema::Builder()
-                        .SetName(
-                            HdRetainedTypedSampledDataSource<TfToken>::New(
-                                desc.name))
                         .SetSourceComputation(
                             HdRetainedTypedSampledDataSource<SdfPath>::New(
                                 desc.sourceComputationId))
@@ -1991,46 +1987,46 @@ public:
                                 desc.sourceComputationOutputName))
                         .Build());
             }
-            return HdRetainedSmallVectorDataSource::New(out.size(), out.data());
+            return HdRetainedContainerDataSource::New(
+                names.size(), names.data(), dataSources.data());
         } else if (name == HdExtComputationSchemaTokens->outputs) {
-            HdExtComputationOutputDescriptorVector descs =
+            const HdExtComputationOutputDescriptorVector descs =
                 _sceneDelegate->GetExtComputationOutputDescriptors(_id);
-            std::vector<HdDataSourceBaseHandle> out;
-            out.reserve(descs.size());
+            std::vector<TfToken> names;
+            std::vector<HdDataSourceBaseHandle> dataSources;
+            names.reserve(descs.size());
+            dataSources.reserve(descs.size());
             for (const auto& desc : descs) {
-                out.push_back(
+                names.push_back(desc.name);
+                dataSources.push_back(
                     HdExtComputationOutputSchema::Builder()
-                        .SetName(
-                            HdRetainedTypedSampledDataSource<TfToken>::New(
-                                desc.name))
                         .SetValueType(
                             HdRetainedTypedSampledDataSource<HdTupleType>::New(
                                 desc.valueType))
                         .Build());
             }
-            return HdRetainedSmallVectorDataSource::New(out.size(), out.data());
+            return HdRetainedContainerDataSource::New(
+                names.size(), names.data(), dataSources.data());
         } else if (name == HdExtComputationSchemaTokens->glslKernel) {
             std::string kernel = _sceneDelegate->GetExtComputationKernel(_id);
             return HdRetainedTypedSampledDataSource<std::string>::New(kernel);
         } else if (name == HdExtComputationSchemaTokens->cpuCallback) {
-            return HdExtComputationCallbackDataSource::New(
-                _id, _sceneDelegate);
+            return
+                HdRetainedTypedSampledDataSource<
+                    HdExtComputationCpuCallbackSharedPtr>::New(
+                        std::make_shared<
+                                Hd_SceneDelegateExtComputationCpuCallback>(
+                            _id, _sceneDelegate));
         } else if (name == HdExtComputationSchemaTokens->dispatchCount) {
-            size_t dispatchCount = 0;
-            VtValue vDispatch = _sceneDelegate->GetExtComputationInput(
+            const VtValue vDispatch = _sceneDelegate->GetExtComputationInput(
                 _id, HdTokens->dispatchCount);
-            if (vDispatch.IsHolding<size_t>()) {
-                dispatchCount = vDispatch.UncheckedGet<size_t>();
-            }
-            return HdRetainedTypedSampledDataSource<size_t>::New(dispatchCount);
+            return HdRetainedTypedSampledDataSource<size_t>::New(
+                vDispatch.GetWithDefault<size_t>(0));
         } else if (name == HdExtComputationSchemaTokens->elementCount) {
-            size_t elementCount = 0;
-            VtValue vElement = _sceneDelegate->GetExtComputationInput(
+            const VtValue vElement = _sceneDelegate->GetExtComputationInput(
                 _id, HdTokens->elementCount);
-            if (vElement.IsHolding<size_t>()) {
-                elementCount = vElement.UncheckedGet<size_t>();
-            }
-            return HdRetainedTypedSampledDataSource<size_t>::New(elementCount);
+            return HdRetainedTypedSampledDataSource<size_t>::New(
+                vElement.GetWithDefault<size_t>(0));
         } else {
             return nullptr;
         }
@@ -2090,24 +2086,6 @@ private:
 
 // ----------------------------------------------------------------------------
 
-static HdContainerDataSourceHandle
-_ToContainerDS(const VtDictionary &dict)
-{
-    std::vector<TfToken> names;
-    std::vector<HdDataSourceBaseHandle> values;
-    const size_t numDictEntries = dict.size();
-    names.reserve(numDictEntries);
-    values.reserve(numDictEntries);
-
-    for (const auto &pair : dict) {
-        names.push_back(TfToken(pair.first));
-        values.push_back(
-            HdRetainedSampledDataSource::New(pair.second));
-    }
-    return HdRetainedContainerDataSource::New(
-        names.size(), names.data(), values.data());
-}
-
 using HdRenderProducts = HdRenderSettings::RenderProducts;
 static HdVectorDataSourceHandle
 _ToVectorDS(const HdRenderProducts &hdProducts)
@@ -2134,7 +2112,8 @@ _ToVectorDS(const HdRenderProducts &hdProducts)
                         HdRetainedTypedSampledDataSource<TfToken>::New(
                             hdVar.sourceType))
                     .SetNamespacedSettings(
-                        _ToContainerDS(hdVar.namespacedSettings))
+                        HdUtils::ConvertVtDictionaryToContainerDS(
+                            hdVar.namespacedSettings))
                     .Build());
         }
 
@@ -2181,7 +2160,8 @@ _ToVectorDS(const HdRenderProducts &hdProducts)
                     HdRetainedTypedSampledDataSource<bool>::New(
                         hdProduct.disableDepthOfField))
                 .SetNamespacedSettings(
-                    _ToContainerDS(hdProduct.namespacedSettings))
+                    HdUtils::ConvertVtDictionaryToContainerDS(
+                        hdProduct.namespacedSettings))
                 .Build());
     }
 
@@ -2218,7 +2198,7 @@ public:
             const VtValue value = _sceneDelegate->Get(
                 _id, HdRenderSettingsPrimTokens->namespacedSettings);
             if (value.IsHolding<VtDictionary>()) {
-                return _ToContainerDS(
+                return HdUtils::ConvertVtDictionaryToContainerDS(
                     value.UncheckedGet<VtDictionary>());
             }
         }
@@ -2335,7 +2315,7 @@ public:
             const VtValue value = _sceneDelegate->Get(
                 _id, HdImageShaderSchemaTokens->constants);
             if (value.IsHolding<VtDictionary>()) {
-                return _ToContainerDS(
+                return HdUtils::ConvertVtDictionaryToContainerDS(
                     value.UncheckedGet<VtDictionary>());
             } else {
                 return nullptr;
@@ -2387,14 +2367,6 @@ TfToken _InterpolationAsToken(HdInterpolation interpolation)
 }
 
 } //anonymous namespace
-
-// ----------------------------------------------------------------------------
-
-void
-HdExtComputationCallbackDataSource::Invoke(HdExtComputationContext *context)
-{
-    _sceneDelegate->InvokeExtComputation(_id, context);
-}
 
 // ----------------------------------------------------------------------------
 
@@ -2518,6 +2490,9 @@ HdDataSourceLegacyPrim::GetNames()
         result.push_back(HdXformSchemaTokens->xform);
         result.push_back(HdInstancerTopologySchemaTokens->instancerTopology);
         result.push_back(HdInstanceCategoriesSchemaTokens->instanceCategories);
+
+        // This is relevant for instancer prims created for point instancers.
+        result.push_back(HdCategoriesSchemaTokens->categories);
     }
 
     if (_IsInstanceable()) {

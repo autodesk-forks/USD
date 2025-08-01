@@ -338,7 +338,6 @@ My_TestGLDrawing::Pick(GfVec2i const &startPos, GfVec2i const &endPos)
     frustum.SetWindow(GfRange2d(min, max));
 
     UsdImagingGLRenderParams params;
-    params.enableIdRender = true;
 
     GfVec3d outHitPoint;
     GfVec3d outHitNormal;

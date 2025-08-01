@@ -14,14 +14,8 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-#if PXR_VERSION > 2011
 HdPrman_Points::HdPrman_Points(SdfPath const& id)
     : BASE(id)
-#else
-HdPrman_Points::HdPrman_Points(SdfPath const& id,
-                               SdfPath const& instancerId)
-    : BASE(id, instancerId)
-#endif
 {
 }
 
@@ -45,25 +39,27 @@ HdPrman_Points::GetInitialDirtyBitsMask() const
     return (HdDirtyBits)mask;
 }
 
-RtPrimVarList
-HdPrman_Points::_ConvertGeometry(HdPrman_RenderParam *renderParam,
-                                  HdSceneDelegate *sceneDelegate,
-                                  const SdfPath &id,
-                                  RtUString *primType,
-                                  std::vector<HdGeomSubset> *geomSubsets)
+bool
+HdPrman_Points::_ConvertGeometry(
+    HdPrman_RenderParam *renderParam,
+    HdSceneDelegate *sceneDelegate,
+    const SdfPath &id,
+    RtUString *primType,
+    RtPrimVarList *primvars,
+    std::vector<HdGeomSubset> *geomSubsets,
+    std::vector<RtPrimVarList> *geomSubsetPrimvars)
 {
-    RtPrimVarList primvars;
-
     const size_t npoints =
         HdPrman_ConvertPointsPrimvarForPoints(
-            sceneDelegate, id, renderParam->GetShutterInterval(), primvars);
+            sceneDelegate, id, renderParam->GetShutterInterval(), *primvars);
 
     *primType = RixStr.k_Ri_Points;
 
-    HdPrman_ConvertPrimvars(sceneDelegate, id, primvars, 1,
-                            npoints, npoints, npoints);
+    HdPrman_ConvertPrimvars(sceneDelegate, id, *primvars, 1,
+                            npoints, npoints, npoints,
+                            renderParam->GetShutterInterval());
 
-    return primvars;
+    return true;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

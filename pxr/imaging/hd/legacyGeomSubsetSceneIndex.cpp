@@ -33,6 +33,7 @@
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/base/tf/token.h"
 #include "pxr/base/vt/types.h"
+#include "pxr/base/trace/trace.h"
 
 #include "pxr/pxr.h"
 
@@ -99,32 +100,32 @@ class _HdDataSourceLegacyGeomSubset
 {
 public:
     HD_DECLARE_DATASOURCE(_HdDataSourceLegacyGeomSubset);
-    
+
     TfTokenVector GetNames() override;
     HdDataSourceBaseHandle Get(const TfToken& name) override;
-    
+
 private:
     _HdDataSourceLegacyGeomSubset(
         const SdfPath& id,
         const SdfPath& parentId,
         const TfToken& parentType,
         HdSceneDelegate* sceneDelegate);
-    
+
     struct _Subset
     {
         TfToken type;
         VtIntArray indices;
         bool visibility = false;
         SdfPath materialBinding;
-        
+
         operator bool() const {
             return (!type.IsEmpty() && !indices.empty());
         }
     };
-    
+
     _Subset
     _FindSubset() const;
-    
+
     SdfPath _parentId;
     TfToken _parentType;
 };
@@ -166,7 +167,7 @@ _HdDataSourceLegacyGeomSubset::Get(const TfToken& name)
                 .Build();
         }
     }
-    
+
     // We must intercept visibility and materialBindings because the
     // base class does not know how to compute these for geom subsets.
     if (name == HdVisibilitySchema::GetSchemaToken()) {
@@ -202,14 +203,14 @@ _HdDataSourceLegacyGeomSubset::Get(const TfToken& name)
             HdPrimvarsSchema::BuildRetained(0, nullptr, nullptr);
         return emptyPrimvarsDs;
     }
-    
+
     // To block everything else, and so prevent calling something on the
     // sceneDelegate for a geom subset path about which it knows nothing, we
     // only defer to base class for sceneDelegate.
     if (name == HdSceneIndexEmulationTokens->sceneDelegate) {
         return HdDataSourceLegacyPrim::Get(name);
     }
-    
+
     return nullptr;
 }
 
@@ -313,7 +314,9 @@ void
 HdLegacyGeomSubsetSceneIndex::_PrimsAdded(
     const HdSceneIndexBase&  /*sender*/,
     const HdSceneIndexObserver::AddedPrimEntries& entries)
-{                
+{
+    TRACE_FUNCTION();
+
     HdSceneIndexObserver::AddedPrimEntries newEntries;
     for (const HdSceneIndexObserver::AddedPrimEntry& entry : entries) {
         if (!HdPrimTypeSupportsGeomSubsets(entry.primType)) {
@@ -326,7 +329,7 @@ HdLegacyGeomSubsetSceneIndex::_PrimsAdded(
             continue;
         }
         // Only add prims with subsets to _parentPrims to save on memory.
-        _parentPrims.insert({ entry.primPath, paths });        
+        _parentPrims.insert({ entry.primPath, paths });
         for (const SdfPath& path : paths) {
             newEntries.push_back({ path, HdPrimTypeTokens->geomSubset });
         }
@@ -343,20 +346,12 @@ HdLegacyGeomSubsetSceneIndex::_PrimsRemoved(
     const HdSceneIndexBase&  /*sender*/,
     const HdSceneIndexObserver::RemovedPrimEntries& entries)
 {
-    HdSceneIndexObserver::RemovedPrimEntries removedEntries;
     for (const HdSceneIndexObserver::RemovedPrimEntry& entry : entries) {
-        auto it = _parentPrims.find(entry.primPath);
-        if (it != _parentPrims.end()) {
-            for (const SdfPath& path : it->second) {
-                removedEntries.push_back({ path });
-            }
-            _parentPrims.erase(it);
+        auto it = _parentPrims.lower_bound(entry.primPath);
+        while (it != _parentPrims.end() &&
+            it->first.HasPrefix(entry.primPath)) {
+            it = _parentPrims.erase(it);
         }
-    }
-    if (!removedEntries.empty()) {
-        removedEntries.insert(
-            removedEntries.begin(), entries.cbegin(), entries.cend());
-        return _SendPrimsRemoved(removedEntries);
     }
     _SendPrimsRemoved(entries);
 }
@@ -366,6 +361,8 @@ HdLegacyGeomSubsetSceneIndex::_PrimsDirtied(
     const HdSceneIndexBase& /*sender*/,
     const HdSceneIndexObserver::DirtiedPrimEntries& entries)
 {
+    TRACE_FUNCTION();
+
     // XXX: We cache each parent prim's subset paths so we can tell when
     // dirty topology means one or more subsets were added or removed.
     // Otherwise, we would have to remove and add every subset every time the
@@ -378,11 +375,11 @@ HdLegacyGeomSubsetSceneIndex::_PrimsDirtied(
         HdMeshTopologySchema::GetDefaultLocator() };
     static const HdDataSourceLocatorSet emptyLocatorSet {
         HdDataSourceLocator::EmptyLocator() };
-        
+
     HdSceneIndexObserver::AddedPrimEntries addedEntries;
     HdSceneIndexObserver::RemovedPrimEntries removedEntries;
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedEntries;
-    
+
     for (const HdSceneIndexObserver::DirtiedPrimEntry& entry : entries) {
         if (!entry.dirtyLocators.Intersects(topologyLocators)) {
             // If the change didn't affect topology, we can continue. This is
@@ -453,7 +450,7 @@ HdLegacyGeomSubsetSceneIndex::_PrimsDirtied(
 SdfPathVector
 HdLegacyGeomSubsetSceneIndex::_ListDelegateSubsets(
     const SdfPath& parentPath,
-    const HdSceneIndexPrim& parentPrim) 
+    const HdSceneIndexPrim& parentPrim)
 {
     SdfPathVector paths;
     if (!parentPrim.dataSource ||
@@ -487,7 +484,7 @@ HdLegacyGeomSubsetSceneIndex::_ListDelegateSubsets(
                 paths.push_back(parentPath.AppendChild(
                     _tokens->invisiblePoints));
             }
-            
+
         }
     }
     return paths;

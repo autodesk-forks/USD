@@ -33,7 +33,6 @@ private:
     UsdImagingDataSourcePrimvars(
             const SdfPath &sceneIndexPath,
             UsdPrim const &usdPrim,
-            UsdGeomPrimvarsAPI usdPrimvars,
             const UsdImagingDataSourceStageGlobals &stageGlobals);
 
 private:
@@ -46,9 +45,6 @@ private:
 
     // Stage globals handle.
     const UsdImagingDataSourceStageGlobals &_stageGlobals;
-
-    using _NamespacedPrimvarsMap = std::map<TfToken, UsdGeomPrimvar>;
-    _NamespacedPrimvarsMap _namespacedPrimvars;
 };
 
 HD_DECLARE_DATASOURCE_HANDLES(UsdImagingDataSourcePrimvars);
@@ -141,7 +137,8 @@ private:
             UsdAttributeQuery valueQuery,
             UsdAttributeQuery indicesQuery,
             HdTokenDataSourceHandle interpolation,
-            HdTokenDataSourceHandle role);
+            HdTokenDataSourceHandle role,
+            HdIntDataSourceHandle elementSize = nullptr);
 
 private:
     const UsdImagingDataSourceStageGlobals &_stageGlobals;
@@ -149,6 +146,7 @@ private:
     UsdAttributeQuery _indicesQuery;
     HdTokenDataSourceHandle _interpolation;
     HdTokenDataSourceHandle _role;
+    HdIntDataSourceHandle _elementSize;
 };
 
 HD_DECLARE_DATASOURCE_HANDLES(UsdImagingDataSourcePrimvar);

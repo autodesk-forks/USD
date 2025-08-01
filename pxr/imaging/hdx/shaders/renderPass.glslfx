@@ -106,8 +106,24 @@ void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
     // There are two render passes for ordinary OIT geometry.
     // Fragments with alpha >= 1.0 are handled in the first (opaque)
     // render pass.
-    if (color.a < 1.0 && color.a >= 0.0001) {
-        RenderOutputImpl(Peye, Neye, color, patchCoord);
+
+    if (color.a < 1.0) {
+        // Default to presence opacityMode behavior if we are unable to query
+        // the mode directly.
+        int opacityMode = 0;
+    #ifdef HD_HAS_opacityMode
+        opacityMode = HdGet_opacityMode();
+    #endif
+
+        // Presence opacityMode -> ignore any colors with an opacity of 0.
+        const bool presencePass = opacityMode == 0 && color.a >= 0.0001;
+
+        // Transparent opacityMode -> write out all non-opaque colors.
+        const bool transparentPass = opacityMode == 1;
+
+        if (presencePass || transparentPass) {
+            RenderOutputImpl(Peye, Neye, color, patchCoord);
+        }
     }
 }
 
@@ -125,11 +141,11 @@ void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
 -- layout HdxRenderPass.RenderPick
 
 [
-    ["out", "vec4", "primIdOut"],
-    ["out", "vec4", "instanceIdOut"],
-    ["out", "vec4", "elementIdOut"],
-    ["out", "vec4", "edgeIdOut"],
-    ["out", "vec4", "pointIdOut"],
+    ["out", "int", "primIdOut"],
+    ["out", "int", "instanceIdOut"],
+    ["out", "int", "elementIdOut"],
+    ["out", "int", "edgeIdOut"],
+    ["out", "int", "pointIdOut"],
     ["out", "vec4", "neyeOut"],
     ["buffer readWrite", "CounterBuffer", "PickBuffer", ["atomic_int", "PickBuffer"]]
 ]
@@ -156,27 +172,21 @@ FORWARD_DECL(void RenderDeepPicks(int primId, int instanceId, int elementId, int
 
 void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
 {
-    int primId = HdGet_primID();
-    primIdOut = IntToVec4(primId);
+    primIdOut = HdGet_primID();
 
     // instanceIndex is a tuple of integers (num nested levels).
     // for picking, we store global instanceId (instanceIndex[0]) in the
     // selection framebuffer and then reconstruct the tuple in postprocess.
-    int instanceId = GetDrawingCoord().instanceIndex[0];
-    instanceIdOut = IntToVec4(instanceId);
+    instanceIdOut = GetDrawingCoord().instanceIndex[0];
 
-    int elementId = GetElementID();
-    int edgeId = GetPrimitiveEdgeId();
-    int pointId = GetPointId();
-
-    elementIdOut = IntToVec4(elementId);
-    edgeIdOut = IntToVec4(edgeId);
-    pointIdOut = IntToVec4(pointId);
+    elementIdOut = GetElementID();
+    edgeIdOut = GetPrimitiveEdgeId();
+    pointIdOut = GetPointId();
     
     neyeOut = IntToVec4(hd_vec4_2_10_10_10_set(vec4(Neye,0)));
 
 #if defined(HD_HAS_PickBuffer)
-    RenderDeepPicks(primId, instanceId, elementId, edgeId, pointId);
+    RenderDeepPicks(primIdOut, instanceIdOut, elementIdOut, edgeIdOut, pointIdOut);
 #endif
 }
 

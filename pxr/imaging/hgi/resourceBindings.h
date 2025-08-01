@@ -99,7 +99,7 @@ bool operator==(
     const HgiBufferBindDesc& rhs);
 
 HGI_API
-inline bool operator!=(
+bool operator!=(
     const HgiBufferBindDesc& lhs,
     const HgiBufferBindDesc& rhs);
 

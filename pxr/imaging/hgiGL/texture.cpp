@@ -6,9 +6,12 @@
 //
 #include "pxr/imaging/garch/glApi.h"
 
+#include "pxr/imaging/hgi/sampler.h"
 #include "pxr/imaging/hgiGL/diagnostic.h"
 #include "pxr/imaging/hgiGL/conversions.h"
 #include "pxr/imaging/hgiGL/texture.h"
+
+#include "pxr/imaging/hf/perfLog.h"
 
 #include <algorithm>
 
@@ -24,6 +27,8 @@ _GlTextureStorageND(
     const GfVec3i &dimensions,
     const GLsizei layerCount)
 {
+    HF_MALLOC_TAG("GL Driver Texture Storage");
+
     switch(textureType) {
     case HgiTextureType1D:
         glTextureStorage1D(texture,
@@ -254,7 +259,9 @@ HgiGLTexture::HgiGLTexture(HgiTextureDesc const & desc)
             glTextureParameterf(
                 _textureId,
                 GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                aniso);
+                std::min<float>(
+                    aniso,
+                    static_cast<float>(TfGetEnvSetting(HGI_MAX_ANISOTROPY))));
         }
 
         const uint16_t mips = desc.mipLevels;
@@ -268,6 +275,8 @@ HgiGLTexture::HgiGLTexture(HgiTextureDesc const & desc)
             glInternalFormat,
             desc.dimensions,
             desc.layerCount);
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         // Upload texel data
         if (desc.initialData && desc.pixelsByteSize > 0) {
@@ -435,10 +444,10 @@ HgiGLTexture::GetBindlessHandle()
     return _bindlessHandle;
 }
 
-void 
+HgiTextureUsage
 HgiGLTexture::SubmitLayoutChange(HgiTextureUsage newLayout)
 {
-    return;
+    return 0;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

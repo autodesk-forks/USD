@@ -12,16 +12,16 @@
 #include "pxr/base/tf/token.h"
 
 
-#include <boost/python.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/scope.hpp>
+#include "pxr/external/boost/python.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/scope.hpp"
 
 #include <sstream>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 static
 object
@@ -88,21 +88,6 @@ _WrapLocatorSetAsString(const HdDataSourceLocatorSet &self)
     }
 
     return buffer.str();
-}
-
-static
-list
-_WrapContainerDataSourceGetNames(const HdContainerDataSourceHandle &self)
-{
-    list result;
-
-    if (self) {
-        for (const TfToken &name : self->GetNames()) {
-            result.append(name);
-        }
-    }
-
-    return result;
 }
 
 static
@@ -277,10 +262,14 @@ void wrapHydraObserver()
 
             .def("TargetToNamedSceneIndex", &This::TargetToNamedSceneIndex)
             .def("TargetToInputSceneIndex", &This::TargetToInputSceneIndex)
+            .def("TargetToNestedInputSceneIndex",
+                 &This::TargetToNestedInputSceneIndex)
 
             .def("GetDisplayName", &This::GetDisplayName)
 
             .def("GetInputDisplayNames", &This::GetInputDisplayNames)
+            .def("GetNestedInputDisplayNames",
+                 &This::GetNestedInputDisplayNames)
 
             .def("GetChildPrimPaths", &This::GetChildPrimPaths)
             .def("GetPrim", &_WrapGetPrim)
@@ -361,7 +350,9 @@ void wrapHydraObserver()
     {
         using ThisHandle = HdContainerDataSourceHandle;
         class_<ThisHandle> ("ContainerDataSource", no_init)
-            .def("GetNames", &_WrapContainerDataSourceGetNames)
+            .def("GetNames",
+                 +[](const ThisHandle &handle) {
+                     return handle->GetNames(); })
             .def("Get", &_WrapContainerDataSourceGet)
             .def("Get", &_WrapContainerDataSourceGetGetFromLocator)
             ;

@@ -55,6 +55,10 @@ HdsiUtilsIsPruned(
     const SdfPath &primPath,
     const HdCollectionExpressionEvaluator &eval)
 {
+    if (eval.IsEmpty()) {
+        return false;
+    }
+
     return _GetPruneMatchResult(primPath, eval);
 }
 
@@ -64,6 +68,9 @@ HdsiUtilsRemovePrunedChildren(
     const HdCollectionExpressionEvaluator &eval,
     SdfPathVector *children)
 {
+    if (eval.IsEmpty()) {
+        return;
+    }
     if (!children) {
         TF_CODING_ERROR("Received null vector.");
         return;
@@ -97,7 +104,7 @@ HdsiUtilsRemovePrunedChildren(
     children->erase(
         std::remove_if(
             children->begin(), children->end(),
-            [&eval, &parentPath](const SdfPath &childPath) {
+            [&eval](const SdfPath &childPath) {
                 return eval.Match(childPath);
             }),
         children->end());

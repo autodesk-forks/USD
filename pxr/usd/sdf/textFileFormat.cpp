@@ -9,9 +9,11 @@
 
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/textFileFormat.h"
+#include "pxr/usd/sdf/usdaFileFormat.h"
 #include "pxr/usd/sdf/fileIO.h"
 #include "pxr/usd/sdf/fileIO_Common.h"
 #include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/sdf/usdaData.h"
 #include "pxr/usd/ar/asset.h"
 #include "pxr/usd/ar/resolvedPath.h"
 #include "pxr/usd/ar/resolver.h"
@@ -22,6 +24,7 @@
 #include "pxr/base/tf/fileUtils.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/staticData.h"
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/arch/fileSystem.h"
 
 #include <ostream>
@@ -32,31 +35,22 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PUBLIC_TOKENS(SdfTextFileFormatTokens, SDF_TEXT_FILE_FORMAT_TOKENS);
 
-TF_DEFINE_ENV_SETTING(
-    SDF_TEXTFILE_SIZE_WARNING_MB, 0,
-    "Warn when reading a text file larger than this number of MB "
-    "(no warnings if set to 0)");
-
-PXR_NAMESPACE_CLOSE_SCOPE
-
-// Our interface to the YACC layer parser for parsing to SdfData.
+// Our interface to the parser for parsing to SdfUsdaData.
 extern bool Sdf_ParseLayer(
     const string& context, 
     const std::shared_ptr<PXR_NS::ArAsset>& asset,
     const string& token,
     const string& version,
     bool metadataOnly,
-    PXR_NS::SdfDataRefPtr data,
+    PXR_NS::SdfUsdaDataRefPtr data,
     PXR_NS::SdfLayerHints *hints);
 
 extern bool Sdf_ParseLayerFromString(
     const std::string & layerString,
     const string& token,
     const string& version,
-    PXR_NS::SdfDataRefPtr data,
+    PXR_NS::SdfUsdaDataRefPtr data,
     PXR_NS::SdfLayerHints *hints);
-
-PXR_NAMESPACE_OPEN_SCOPE
 
 TF_REGISTRY_FUNCTION(TfType)
 {
@@ -100,22 +94,39 @@ _CanReadImpl(const std::shared_ptr<ArAsset>& asset,
              const std::string& cookie)
 {
     TfErrorMark mark;
-
-    char aLine[512];
-
-    size_t numToRead = std::min(sizeof(aLine), cookie.length());
-    if (asset->Read(aLine, numToRead, /* offset = */ 0) != numToRead) {
+    
+    constexpr size_t COOKIE_BUFFER_SIZE = 512;
+    char local[COOKIE_BUFFER_SIZE];
+    std::unique_ptr<char []> remote;
+    char *buf = local;
+    size_t cookieLength = cookie.length();
+    if (cookieLength > COOKIE_BUFFER_SIZE - 1) {
+        remote.reset(new char[cookieLength + 1]);
+        buf = remote.get();
+    }
+    if (asset->Read(buf, cookieLength, /* offset = */ 0) != cookieLength) {
         return false;
     }
 
-    aLine[numToRead] = '\0';
+    buf[cookieLength] = '\0';
 
     // Don't allow errors to escape this function, since this function is
     // just trying to answer whether the asset can be read.
-    return !mark.Clear() && TfStringStartsWith(aLine, cookie);
+    return !mark.Clear() && TfStringStartsWith(buf, cookie);
 }
 
 } // end anonymous namespace
+
+SdfAbstractDataRefPtr
+SdfTextFileFormat::InitData(const FileFormatArguments& args) const
+{
+    auto newData = new SdfUsdaData();
+
+    // The pseudo-root spec must always exist in a layer's SdfData, so
+    // add it here.
+    newData->CreateSpec(SdfPath::AbsoluteRootPath(), SdfSpecTypePseudoRoot);
+    return TfCreateRefPtr(newData);
+}
 
 bool
 SdfTextFileFormat::CanRead(const string& filePath) const
@@ -181,7 +192,7 @@ SdfTextFileFormat::_ReadFromAsset(
     SdfAbstractDataRefPtr data = InitData(layer->GetFileFormatArguments());
     if (!Sdf_ParseLayer(
             resolvedPath, asset, GetFormatId(), GetVersionString(), 
-            metadataOnly, TfDynamic_cast<SdfDataRefPtr>(data), &hints)) {
+            metadataOnly, TfDynamic_cast<SdfUsdaDataRefPtr>(data), &hints)) {
         return false;
     }
 
@@ -337,7 +348,7 @@ SdfTextFileFormat::WriteToFile(
         return false;
     }
 
-    Sdf_TextOutput out(std::move(asset));
+    Sdf_TextOutput out(std::move(asset), filePath);
 
     const bool ok = _WriteLayer(
         &layer, out, GetFileCookie(), GetVersionString(), comment);
@@ -357,9 +368,18 @@ SdfTextFileFormat::ReadFromString(
 {
     SdfLayerHints hints;
     SdfAbstractDataRefPtr data = InitData(layer->GetFileFormatArguments());
+
+    // XXX: Its possible that str has leading whitespace, owing to in-code layer
+    // constructions. This is currently allowed in flex+bison parser, but will
+    // be tightened with the pegtl parser. Note that this whitespace trimming 
+    // code will eventually be removed, it's being put in place so as to provide 
+    // backward compatibility for in-code layer constructs to work with pegtl 
+    // parser also. This code should be removed when (USD-9838) gets worked on.
+    const std::string trimmedStr = TfStringTrimLeft(str);
+    
     if (!Sdf_ParseLayerFromString(
-            str, GetFormatId(), GetVersionString(),
-            TfDynamic_cast<SdfDataRefPtr>(data), &hints)) {
+            trimmedStr, GetFormatId(), GetVersionString(),
+            TfDynamic_cast<SdfUsdaDataRefPtr>(data), &hints)) {
         return false;
     }
 

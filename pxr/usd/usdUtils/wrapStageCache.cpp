@@ -5,18 +5,15 @@
 // https://openusd.org/license.
 //
 #include "pxr/pxr.h"
-#include <boost/python/def.hpp>
-#include <boost/python.hpp>
+#include "pxr/external/boost/python/class.hpp"
 
 #include "pxr/usd/usdUtils/stageCache.h"
 
 #include "pxr/base/tf/pyResultConversions.h"
 
-using namespace std;
-using namespace boost::python;
-using namespace boost;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapStageCache()
 {

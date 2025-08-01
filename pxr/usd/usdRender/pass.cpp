@@ -137,23 +137,6 @@ UsdRenderPass::CreateFileNameAttr(VtValue const &defaultValue, bool writeSparsel
                        writeSparsely);
 }
 
-UsdAttribute
-UsdRenderPass::GetDenoiseEnableAttr() const
-{
-    return GetPrim().GetAttribute(UsdRenderTokens->denoiseEnable);
-}
-
-UsdAttribute
-UsdRenderPass::CreateDenoiseEnableAttr(VtValue const &defaultValue, bool writeSparsely) const
-{
-    return UsdSchemaBase::_CreateAttr(UsdRenderTokens->denoiseEnable,
-                       SdfValueTypeNames->Bool,
-                       /* custom = */ false,
-                       SdfVariabilityUniform,
-                       defaultValue,
-                       writeSparsely);
-}
-
 UsdRelationship
 UsdRenderPass::GetRenderSourceRel() const
 {
@@ -180,19 +163,6 @@ UsdRenderPass::CreateInputPassesRel() const
                        /* custom = */ false);
 }
 
-UsdRelationship
-UsdRenderPass::GetDenoisePassRel() const
-{
-    return GetPrim().GetRelationship(UsdRenderTokens->denoisePass);
-}
-
-UsdRelationship
-UsdRenderPass::CreateDenoisePassRel() const
-{
-    return GetPrim().CreateRelationship(UsdRenderTokens->denoisePass,
-                       /* custom = */ false);
-}
-
 namespace {
 static inline TfTokenVector
 _ConcatenateAttributeNames(const TfTokenVector& left,const TfTokenVector& right)
@@ -213,7 +183,6 @@ UsdRenderPass::GetSchemaAttributeNames(bool includeInherited)
         UsdRenderTokens->passType,
         UsdRenderTokens->command,
         UsdRenderTokens->fileName,
-        UsdRenderTokens->denoiseEnable,
     };
     static TfTokenVector allNames =
         _ConcatenateAttributeNames(

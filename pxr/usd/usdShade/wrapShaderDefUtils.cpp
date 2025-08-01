@@ -6,33 +6,33 @@
 //
 #include "pxr/pxr.h"
 
-#include <boost/python/class.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/scope.hpp>
-#include <boost/python/tuple.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/scope.hpp"
+#include "pxr/external/boost/python/tuple.hpp"
 
 #include "pxr/base/tf/pyResultConversions.h"
 
 #include "pxr/usd/usdShade/shaderDefUtils.h"
 #include "pxr/usd/usdShade/shader.h"
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapUsdShadeShaderDefUtils()
 {
     scope thisScope = class_<UsdShadeShaderDefUtils>("ShaderDefUtils", no_init)
-        .def("GetNodeDiscoveryResults", 
-             &UsdShadeShaderDefUtils::GetNodeDiscoveryResults,
+        .def("GetDiscoveryResults", 
+             &UsdShadeShaderDefUtils::GetDiscoveryResults,
              (arg("shaderDef"), arg("sourceUri")),
              return_value_policy<TfPySequenceToList>())
-        .staticmethod("GetNodeDiscoveryResults")
-        .def("GetShaderProperties", 
-             &UsdShadeShaderDefUtils::GetShaderProperties,
+        .staticmethod("GetDiscoveryResults")
+        .def("GetProperties", 
+             &UsdShadeShaderDefUtils::GetProperties,
              arg("shaderDef"),
              return_value_policy<TfPySequenceToList>())
-        .staticmethod("GetShaderProperties")
+        .staticmethod("GetProperties")
         .def("GetPrimvarNamesMetadataString", 
              &UsdShadeShaderDefUtils::GetPrimvarNamesMetadataString,
              (arg("metadata"), arg("shaderDef")))

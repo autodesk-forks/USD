@@ -1,4 +1,4 @@
-# To be sure our VtVisitValue polyfill works correctly, the preprocessor must 
+# To be sure our VtVisitValue polyfill works correctly, the preprocessor must
 # resolve the #include <pxr/base/vt/visitValue.h> in our identically-named
 # polyfill to the real one in libpxr. But CMAKE_INCLUDE_CURRENT_DIR injects the
 # cpp source directory as the first include search path. The preprocessor
@@ -17,6 +17,11 @@ set(PXR_PACKAGE hdPrman)
 # RiEntryPoints.h incorrectly makes libloadprman symbols DLL import
 # This is only temporary and will be removed shortly
 add_definitions(-DPRMANBUILDINGAPI)
+
+# Needed to prevent YY files trying to include unistd.h
+if (WIN32)
+    add_compile_definitions("YY_NO_UNISTD_H")
+endif()
 
 # TODO The pxr cmake macros don't provide a good way to link prman with link_directories
 # on Linux/OSX without resorting to absolute rpath. For now, simply avoid linking
@@ -72,6 +77,7 @@ pxr_plugin(${PXR_PACKAGE}
         hd
         hdsi
         hio
+        TBB::tbb
         usdRi
         usdVol
         usdVolImaging
@@ -89,6 +95,7 @@ pxr_plugin(${PXR_PACKAGE}
         coordSysPrimSceneIndexPlugin
         cylinder
         debugCodes
+        dependencySceneIndexPlugin
         dependencyForwardingSceneIndexPlugin
         displayFilter
         gprim
@@ -115,6 +122,7 @@ pxr_plugin(${PXR_PACKAGE}
         rileyFallbackMaterialSceneIndexPlugin
         rileyGeometryInstanceSchema
         rileyGeometryPrototypeSchema
+        rileyGlobalsSceneIndexPlugin
         rileyGlobalsSchema
         rileyIntegratorSchema
         rileyLightInstanceSchema
@@ -148,6 +156,7 @@ pxr_plugin(${PXR_PACKAGE}
         matfiltSceneIndexPlugins
         motionBlurSceneIndexPlugin
         pinnedCurveExpandingSceneIndexPlugin
+        previewSurfacePrimvarsSceneIndexPlugin
         renderBuffer
         renderParam
         renderPass
@@ -156,6 +165,7 @@ pxr_plugin(${PXR_PACKAGE}
         renderSettingsFilteringSceneIndexPlugin
         renderViewContext
         resourceRegistry
+        retesselationSceneIndexPlugin
         rileyCameraPrim
         rileyCoordinateSystemPrim
         rileyClippingPlanePrim
@@ -164,6 +174,7 @@ pxr_plugin(${PXR_PACKAGE}
         rileyDisplayPrim
         rileyGeometryInstancePrim
         rileyGeometryPrototypePrim
+        rileyGlobalsSceneIndex
         rileyGlobalsPrim
         rileyIntegratorPrim
         rileyLightInstancePrim
@@ -176,10 +187,11 @@ pxr_plugin(${PXR_PACKAGE}
         rileyRenderViewPrim
         rileySampleFilterPrim
         rileyTypes
-        terminalSceneIndexObserver
+        sceneIndexObserverApi
         updateObjectSettingsSceneIndex
         updateObjectSettingsSceneIndexPlugin
         utils
+        velocityMotionResolvingSceneIndexPlugin
         virtualStructResolvingSceneIndex
 
     PUBLIC_HEADERS
@@ -191,7 +203,6 @@ pxr_plugin(${PXR_PACKAGE}
         pxr/base/vt/typeHeaders.h # polyfill until USD 22.08
         pxr/base/vt/visitValue.h  # polyfill until USD 22.11
         rileyIds.h
-        sceneIndexObserverApi.h
         virtualStructConditionalGrammar.tab.h
 
     CPPFILES

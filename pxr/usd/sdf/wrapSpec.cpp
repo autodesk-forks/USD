@@ -15,11 +15,11 @@
 #include "pxr/base/tf/pyResultConversions.h"
 #include "pxr/base/tf/ostreamMethods.h"
 
-#include <boost/python/class.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python/class.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -101,7 +101,7 @@ void wrapSpec()
 {
     typedef SdfSpec This;
 
-    class_<This, SdfHandle<This>, boost::noncopyable>("Spec", no_init)
+    class_<This, SdfHandle<This>, noncopyable>("Spec", no_init)
         .def(SdfPyAbstractSpec())
 
         .add_property("layer", &This::GetLayer,

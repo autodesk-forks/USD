@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_SCENE_INDEX_OBSERVER_API_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_SCENE_INDEX_OBSERVER_API_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_SCENE_INDEX_OBSERVER_API_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_SCENE_INDEX_OBSERVER_API_H
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/version.h"
@@ -19,9 +19,9 @@
 // HdsiPrimManagingSceneIndexObserver and other new API for the implementation
 // as a scene index observer.
 //
-// We can only use for late enough versions of USD.
+// We can only use for late enough versions of USD (that is 24.03 or later).
 //
-#if HDSI_API_VERSION >= 12
+#if HDSI_API_VERSION >= 12 && (!defined(ARCH_OS_WINDOWS) || PXR_VERSION >= 2405)
 #define HDPRMAN_USE_SCENE_INDEX_OBSERVER
 #endif
 
@@ -43,4 +43,4 @@ PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // HDPRMAN_USE_SCENE_INDEX_OBSERVER
 
-#endif // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_SCENE_INDEX_OBSERVER_API_H
+#endif // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_SCENE_INDEX_OBSERVER_API_H

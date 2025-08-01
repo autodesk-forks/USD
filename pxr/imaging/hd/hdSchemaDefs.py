@@ -269,6 +269,11 @@
             ('indices', T_INTARRAY, {}),
             ('interpolation', T_TOKEN, {}),
             ('role', T_TOKEN, {}),
+            ('elementSize', T_INT,
+             dict(DOC = '''
+                 The number of values in the value array that must be aggregated
+                 for each element on the the primitive
+                 (same as UsdGeomPrimvar).'''))
         ],
         EXTRA_TOKENS = [
             'transform',
@@ -371,10 +376,38 @@
     # materialNode
     dict(
         SCHEMA_NAME = 'MaterialNode',
+        DOC = '''
+            The MaterialNode schema is a container schema that defines a 
+            particular node in a material network.
+
+            A material node defines its connections to other nodes via the
+            "inputConnections" member. For example, "albedo" would define that 
+            it receives its value from its connection to the node 
+            "Color_UnPreMult" and the output "resultRGB" with the following data
+            sources:
+                
+            ds at: material/<renderContext>/nodes/MaterialLayer/inputConnections
+                /albedo/[0]/upstreamNodePath = Color_UnPreMult
+
+            ds at: material/<renderContext>/nodes/MaterialLayer/inputConnections
+                /albedo/[0]/upstreamNodeOutputName = resultRGB
+            ''',
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         MEMBERS = [
-            ('parameters', 'HdMaterialNodeParameterContainerSchema', {}),
-            ('inputConnections', 'HdMaterialConnectionVectorContainerSchema', {}),
+            ('parameters', 'HdMaterialNodeParameterContainerSchema',
+             dict(DOC = '''
+                Maps parameter names to node parameters. Each node parameter
+                is a container that is defined by the MaterialNodeParameter
+                schema. Note that parameters are inputs that supply their value 
+                directly.
+                ''')),
+            ('inputConnections', 'HdMaterialConnectionVectorContainerSchema',
+             dict(DOC = '''
+                Maps input names to vectors of connections. Each connection is
+                defined by the MaterialConnection schema. Note that 
+                inputConnections are inputs that get their value from data flow 
+                over the connection.  
+                ''')),
             ('nodeIdentifier', T_TOKEN,
              dict(DOC = '''
                 This identifies the shader the node represents. The
@@ -405,10 +438,15 @@
     # materialNodeParameter
     dict(
         SCHEMA_NAME = 'MaterialNodeParameter',
+        DOC = '''
+            The MaterialNodeParameter schema defines the value data source for 
+            the parameter.
+            ''',
         MEMBERS = [
             ('value', T_SAMPLED, {}),
             # Parameter Metadata
             ('colorSpace', T_TOKEN, {}),
+            ('typeName', T_TOKEN, {})
         ],
     ),
 
@@ -416,6 +454,13 @@
     # materialConnection
     dict(
         SCHEMA_NAME = 'MaterialConnection',
+        DOC = '''
+            The MaterialConnection schema defines an upstream connected node and
+            output.
+
+            See MaterialNode schema's documentation on its
+            'inputConnections' member for an example.
+            ''',
         MEMBERS = [
             ('upstreamNodePath', T_TOKEN, {}),
             ('upstreamNodeOutputName', T_TOKEN, {}),
@@ -426,6 +471,13 @@
     # materialInterfaceMapping
     dict(
         SCHEMA_NAME = 'MaterialInterfaceMapping',
+        DOC = '''
+            The MaterialInterfaceMapping schema identifies a material node
+            parameter using its two members 'nodePath' and 'inputName'.  
+            
+            See MaterialNetwork schema's documentation on its 
+            'interfaceMappings' member for an example.
+            ''',
         MEMBERS = [
             ('nodePath', T_TOKEN, {}),
             ('inputName', T_TOKEN, {})
@@ -436,12 +488,59 @@
     # materialNetwork
     dict(
         SCHEMA_NAME = 'MaterialNetwork',
+        DOC = '''
+            The MaterialNetwork schema is a container schema that defines a
+            material for a specific render context. A network is composed of 
+            nodes, terminals, and interface mappings.    
+
+            Interface mappings define the material's public UI. For example, the
+            following data sources define a public UI "globalVal" that maps to 
+            two different node parameters:
+                
+            ds at: material/<renderContext>/interfaceMappings/globalVal/[0]/
+                nodePath = Color_Manipulate
+
+            ds at: material/<renderContext>/interfaceMappings/globalVal/[0]/
+                inputName = adjustVal
+
+            ds at: material/<renderContext>/interfaceMappings/globalVal/[1]/
+                nodePath = Color_RetargetLayer
+
+            ds at: material/<renderContext>/interfaceMappings/globalVal/[1]/
+                inputName = valRemapAmount
+                
+            The above means that the "globalVal" public UI name maps to the
+            following parameter data sources at:
+                
+            ds at: material/<renderContext>/nodes/Color_Manipulate/parameters/
+                adjustVal 
+                
+            ds at: material/<renderContext>/nodes/Color_RetargetLayer/
+                parameters/valRemapAmount
+
+            See also the Material schema documentation for ASCII art diagram.
+            ''',
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         MEMBERS = [
-            ('nodes', 'HdMaterialNodeContainerSchema', {}),
-            ('terminals', 'HdMaterialConnectionContainerSchema', {}),
-            ('interfaceMappings',
-                'HdMaterialInterfaceMappingsContainerSchema', {}),
+            ('nodes', 'HdMaterialNodeContainerSchema',
+             dict(DOC = '''
+                Maps node names to material nodes. Each material node is a
+                container that is defined by the MaterialNode schema. The
+                topology of the network is expressed by the connections found on
+                each material node.
+                ''')),
+            ('terminals', 'HdMaterialConnectionContainerSchema',
+             dict(DOC = '''
+                Maps terminal names to material connections. Each connection
+                is a container defined by the MaterialConnection schema.
+                ''')),
+            ('interfaceMappings', 'HdMaterialInterfaceMappingsContainerSchema',
+             dict(DOC = '''
+                Maps interface names (public UI names) to vectors of material 
+                node parameters. Each mapped material node parameter is a 
+                container defined by the InterfaceMappings schema.
+                ''')),
+            ('config', "HdSampledDataSourceContainerSchema", {}),
         ],
     ),
 
@@ -449,9 +548,27 @@
     # material
     dict(
         SCHEMA_NAME = 'Material',
+        DOC = '''
+            The Material schema is a container schema that provides the correct
+            material definition per render context.
+
+            For example, a material may specify several render contexts
+            like the universalRenderContext (""), Renderman ("ri"), 
+            Storm ("glslfx"), etc. Each render context will then provide the 
+            specific definition for the renderer, which is defined by the
+            MaterialNetwork schema. The universalRenderContext applies to all
+            renderers.
+
+            See "Custom Code: Schema Methods" section for ASCII art diagram.
+            ''',
         SCHEMA_TOKEN = 'material',
         EXTRA_TOKENS = [
             '(universalRenderContext, "")',
+            '(all, "__all")',
+            'terminals',
+            'surface',
+            'displacement',
+            'volume'
         ],
         ADD_DEFAULT_LOCATOR = True,
 
@@ -462,6 +579,69 @@
             # We provide a custom getter for the material network
             # to fallback to the universalRenderContext.
             dict(GETTER = False))
+    ),
+
+    #--------------------------------------------------------------------------
+    # materialOverride
+    dict(
+        SCHEMA_NAME = 'MaterialOverride',
+        DOC = '''
+            The MaterialOverride schema allows overrides to be made to the 
+            material's public UI. Overrides can be applied to both material or 
+            geometry scene index prim locations.
+
+            The following is an example of a material override. The data
+            source to author an override on the public UI name 
+            "globalSpecularKface" would look like this:
+
+            ds at: materialOverride/interfaceValues/globalSpecularKface/value =
+                0.666
+
+            There needs to be an interface mapping defined for 
+            "globalSpecularKface", which could look like this:
+
+            ds at: material/<renderContext>/interfaceMappings/
+                globalSpecularKface/[0]/nodePath = MaterialLayer
+                
+            ds at: material/<renderContext>/interfaceMappings/
+                globalSpecularKface/[0]/inputName = specularKface
+
+            The above means that the "globalSpecularKface" public UI name will 
+            map to the node parameter "specularKface", and for example, this 
+            node parameter may already have a data source for its value:
+
+            ds at: material/<renderContext>/nodes/MaterialLayer/parameters/
+                specularKface/value = 0.222
+
+            After resolving the material override, the data source of the 
+            node parameter's value is replaced by the overriding value data
+            source.
+
+            ds at: material/<renderContext>/nodes/MaterialLayer/parameters/
+                specularKface/value = 0.666
+
+            Note that the MaterialOverride schema does not specify a render 
+            context token because material overrides are high-level and do not 
+            need to know about implementation details--they just need to specify
+            an overriding data source. By contrast, the contents of a material 
+            network do specify a render context token in order to define the 
+            material nodes and interface mappings--you can imagine that a 
+            Renderman vs Storm implementation of a material network would be 
+            quite different.    
+
+            See also the Material schema documentation for ASCII art diagram.
+            ''',
+        SCHEMA_TOKEN = 'materialOverride',
+        SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
+        ADD_DEFAULT_LOCATOR = True,
+
+        MEMBERS = [
+            ('interfaceValues', 'HdMaterialNodeParameterContainerSchema',
+             dict(DOC = '''
+                Maps interface names (ie. public UI names) to overriding
+                data sources that follow the MaterialNodeParameter schema.
+                ''')),
+        ],
     ),
 
     #--------------------------------------------------------------------------
@@ -543,7 +723,7 @@
         SCHEMA_TOKEN = 'instancedBy',
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
-            ('paths', T_PATHARRAY, {}),
+            ('paths', T_PATHARRAY, dict(ADD_LOCATOR = True)),
             ('prototypeRoots', T_PATHARRAY, {}),
         ],
     ),
@@ -651,17 +831,17 @@
         SCHEMA_TOKEN = 'displayStyle',
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
             ('refineLevel', T_INT, {}),
             ('flatShadingEnabled', T_BOOL, {}),
             ('displacementEnabled', T_BOOL, {}),
+            ('displayInOverlay', T_BOOL, {}),
             ('occludedSelectionShowsThrough', T_BOOL, {}),
             ('pointsShadingEnabled', T_BOOL, {}),
             ('materialIsFinal', T_BOOL, {}),
             ('shadingStyle', T_TOKEN, {}),
-            ('reprSelector', T_TOKENARRAY,
-             dict(ADD_LOCATOR = True)),
-            ('cullStyle', T_TOKEN,
-             dict(ADD_LOCATOR = True)),
+            ('reprSelector', T_TOKENARRAY, {}),
+            ('cullStyle', T_TOKEN, {}),
         ],
     ),
 
@@ -698,6 +878,7 @@
         SCHEMA_NAME = 'RenderBuffer',
         SCHEMA_TOKEN = 'renderBuffer',
         MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
             ('dimensions', T_VEC3I, {}),
             ('format', T_FORMAT, {}),
             ('multiSampled', T_BOOL, {}),
@@ -878,7 +1059,12 @@
             ('focusDistance', T_FLOAT, {}),
             ('shutterOpen', T_DOUBLE, dict(ADD_LOCATOR = True)),
             ('shutterClose', T_DOUBLE, dict(ADD_LOCATOR = True)),
-            ('exposure', T_FLOAT, {}),
+            ('exposure', T_FLOAT, dict(ADD_LOCATOR = True)),
+            ('exposureTime', T_FLOAT, dict(ADD_LOCATOR = True)),
+            ('exposureIso', T_FLOAT, dict(ADD_LOCATOR = True)),
+            ('exposureFStop', T_FLOAT, dict(ADD_LOCATOR = True)),
+            ('exposureResponsivity', T_FLOAT, dict(ADD_LOCATOR = True)),
+            ('linearExposureScale', T_FLOAT, dict(ADD_LOCATOR = True)),
             ('focusOn', T_BOOL, {}),
             ('dofAspect', T_FLOAT, {}),
             ('splitDiopter', 'HdSplitDiopterSchema', {}),
@@ -973,6 +1159,8 @@
         SCHEMA_NAME = 'ExtComputationPrimvars',
         SCHEMA_TOKEN = 'extComputationPrimvars',
         ADD_DEFAULT_LOCATOR = True,
+        GENERIC_MEMBER = ('extComputationPrimvar', 'HdExtComputationPrimvarSchema', {}),
+        
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/extComputationPrimvarSchema'],
     ),
 
@@ -981,7 +1169,6 @@
     dict(
         SCHEMA_NAME = 'ExtComputationInputComputation',
         MEMBERS = [
-            ('name', T_TOKEN, {}),
             ('sourceComputation', T_PATH, {}),
             ('sourceComputationOutputName', T_TOKEN, {}),
         ],
@@ -992,7 +1179,6 @@
     dict(
         SCHEMA_NAME = 'ExtComputationOutput',
         MEMBERS = [
-            ('name', T_TOKEN, {}),
             ('valueType', T_TUPLE, {}),
         ],
     ),
@@ -1003,14 +1189,15 @@
         SCHEMA_NAME = 'ExtComputation',
         SCHEMA_TOKEN = 'extComputation',
         ADD_DEFAULT_LOCATOR = True,
+        SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         MEMBERS = [
             ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
             # inputValues should be a vector schema of typed data sources
-            ('inputValues', T_CONTAINER, {}),
-            ('inputComputations', T_VECTOR, {}),
-            ('outputs', T_VECTOR, {}),
+            ('inputValues', 'HdSampledDataSourceContainerSchema', {}),
+            ('inputComputations', 'HdExtComputationInputComputationContainerSchema', {}),
+            ('outputs', 'HdExtComputationOutputContainerSchema', {}),
             ('glslKernel', T_STRING, {}),
-            ('cpuCallback', T_BASE, {}),
+            ('cpuCallback', 'HdExtComputationCpuCallbackDataSource', {}),
             ('dispatchCount', T_SIZET, {}),
             ('elementCount', T_SIZET, {}),
         ],
@@ -1063,8 +1250,11 @@
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('height', T_DOUBLE, {}),
-            # deprecated in favor of radiusTop and radiusBottom
-            ('radius', T_DOUBLE, {}), 
+            ('radius', T_DOUBLE,
+             dict(DOC = '''
+                Deprecated. Only use if no radiusTop or radiusBottom data
+                source. Comes from UsdGeom Cylinder which has been deprecated
+                in favor of Cylinder_1.''')),
             ('radiusTop', T_DOUBLE, {}),
             ('radiusBottom', T_DOUBLE, {}),
             ('axis', T_TOKEN, {}),
@@ -1083,8 +1273,11 @@
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('height', T_DOUBLE, {}),
-            # deprecated in favor of radiusTop and radiusBottom
-            ('radius', T_DOUBLE, {}), 
+            ('radius', T_DOUBLE,
+             dict(DOC = '''
+                Deprecated. Only use if no radiusTop or radiusBottom data
+                source. Comes from UsdGeom Capsule which has been deprecated
+                in favor of Capsule_1.''')),
             ('radiusTop', T_DOUBLE, {}),
             ('radiusBottom', T_DOUBLE, {}),
             ('axis', T_TOKEN, {}),
@@ -1094,6 +1287,24 @@
             ('axis', ['X', 'Y', 'Z']),
         ],
 
+    ),
+
+    #--------------------------------------------------------------------------
+    # plane
+    dict(
+        SCHEMA_NAME = 'Plane',
+        SCHEMA_TOKEN = 'plane',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('doubleSided', T_BOOL, {}),
+            ('axis', T_TOKEN, {}),
+            ('length', T_DOUBLE, {}),
+            ('width', T_DOUBLE, {}),
+        ],
+
+        STATIC_TOKEN_DATASOURCE_BUILDERS = [
+            ('axis', ['X', 'Y', 'Z']),
+        ],
     ),
 
     #--------------------------------------------------------------------------
@@ -1143,9 +1354,10 @@
                  render. It currently houses the active render settings
                  and pass prim paths that describe the information
                  necessary to generate images from a single invocation
-                 of a renderer, and the active time sample range and current  
+                 of a renderer, the active time sample range and current  
                  frame number that may be relevant to downstream scene indices 
-                 (e.g. procedural evaluation).
+                 (e.g. procedural evaluation), the time codes per second (sometimes
+                 informally referred to as FPS), and the primary camera.
 
                  We shall use the convention of a container data source at the root prim
                  of the scene index that is populated with this global state.
@@ -1155,11 +1367,14 @@
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
+            ('primaryCameraPrim', T_PATH, {}),
             ('activeRenderPassPrim', T_PATH, {}),
             ('activeRenderSettingsPrim', T_PATH, {}),
             ('startTimeCode', T_DOUBLE, {}),
             ('endTimeCode', T_DOUBLE, {}),
+            ('timeCodesPerSecond', T_DOUBLE, {}),
             ('currentFrame', T_DOUBLE, {}),
+            ('sceneStateId', T_INT, {}),
         ],
     ),
 
@@ -1195,5 +1410,25 @@
         ],
         ADD_DEFAULT_LOCATOR = True,
     ),
+
     #--------------------------------------------------------------------------
+    # legacyTask
+    dict(
+        SCHEMA_NAME = 'LegacyTask',
+        DOC = '''The {{ SCHEMA_CLASS_NAME }} specifies a Hydra task by providing
+                 a task factory and data.''',
+        SCHEMA_TOKEN = 'task',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
+            ('factory', 'HdLegacyTaskFactoryDataSource', {}),
+            ('parameters', T_SAMPLED,
+             dict(DOC = '''
+                Parameters for task. Type depends on task type.
+                E.g. HdxRenderTaskParams if the factory produces HdxRenderTask
+                instances.''')),
+            ('collection', 'HdRprimCollectionDataSource', {}),
+            ('renderTags', 'HdTokenVectorDataSource', {}),
+        ],
+    ),
 ]

@@ -5,7 +5,7 @@
 # https://openusd.org/license.
 #
 
-from pxr import Usd, UsdGeom, UsdShade
+from pxr import Usd, UsdGeom, UsdShade, UsdSemantics
 from .qt import QtCore
 from .common import IncludedPurposes, Timer
 from pxr.UsdUtils.constantsGroup import ConstantsGroup
@@ -69,6 +69,8 @@ class RootDataModel(QtCore.QObject):
                 self._stage = value
 
             if self._stage:
+                self._frameRangeBegin = self._stage.GetStartTimeCode()
+                self._frameRangeEnd = self._stage.GetEndTimeCode()
                 from pxr import Tf
                 self._pcListener = \
                     Tf.Notice.Register(Usd.Notice.ObjectsChanged,
@@ -98,6 +100,44 @@ class RootDataModel(QtCore.QObject):
 
         self._emitPrimsChanged(primChange, propertyChange)
 
+    frameRangeChanged = QtCore.Signal(float, float)
+    currentFrameChanged = QtCore.Signal(Usd.TimeCode)
+
+    @property
+    def frameRangeBegin(self):
+        """Get the start of the current frame range"""
+        return self._frameRangeBegin
+
+    @frameRangeBegin.setter
+    def frameRangeBegin(self, value):
+        """Set the start of the current frame range"""
+        if value is None:
+            value = 0.0
+        if not isinstance(value, float):
+            raise ValueError("Expected float, got: {}".format(value))
+
+        if value != self._frameRangeBegin:
+            self._frameRangeBegin = value
+            self.frameRangeChanged.emit(
+                self._frameRangeBegin, self._frameRangeEnd)
+
+    @property
+    def frameRangeEnd(self):
+        """Get the end of the current frame range"""
+        return self._frameRangeEnd
+
+    @frameRangeEnd.setter
+    def frameRangeEnd(self, value):
+        """Set the end of the current frame range"""
+        if value is None:
+            value = 0.0
+        if not isinstance(value, float):
+            raise ValueError("Expected float, got: {}".format(value))
+        if value != self._frameRangeEnd:
+            self._frameRangeEnd = value
+            self.frameRangeChanged.emit(
+                self._frameRangeBegin, self._frameRangeEnd)
+
     @property
     def currentFrame(self):
         """Get a Usd.TimeCode object which represents the current frame being
@@ -111,8 +151,9 @@ class RootDataModel(QtCore.QObject):
 
         if not isinstance(value, Usd.TimeCode):
             raise ValueError("Expected Usd.TimeCode, got: {}".format(value))
-
-        self._currentFrame = value
+        if value != self._currentFrame:
+            self.currentFrameChanged.emit(value)
+            self._currentFrame = value
         self._bboxCache.SetTime(self._currentFrame)
         self._xformCache.SetTime(self._currentFrame)
 
@@ -209,3 +250,14 @@ class RootDataModel(QtCore.QObject):
         # We don't use the binding cache yet since it isn't exposed to python.
         return UsdShade.MaterialBindingAPI(
                 prim).ComputeBoundMaterial(purpose)
+
+    def getResolvedLabels(self, prim, frame):
+        """Compute the resolved labels for a prim."""
+        inheritedTaxonomies = \
+                UsdSemantics.LabelsAPI.ComputeInheritedTaxonomies(prim)
+        resolvedLabels: dict[str, list[str]] = {}
+        for taxonomy in inheritedTaxonomies:
+            query = UsdSemantics.LabelsQuery(taxonomy, frame)
+            labels = query.ComputeUniqueInheritedLabels(prim)
+            resolvedLabels[taxonomy] = list(labels)
+        return resolvedLabels

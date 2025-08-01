@@ -38,6 +38,37 @@ typedef Mangled Remangled;
 
 enum MangleEnum { ONE, TWO, THREE };
 
+static std::string
+GetAlternativeTemplateTypename(std::string typeName)
+{
+    // Since C++11, the parser specification has been improved to be
+    // able to interpret successive right angle brackets in nested template
+    // declarations. The implementation of the C++ ABI has been updated
+    // accordingly on some systems, e.g. starting with Clang 14 on macOS 13.3.
+    // We accept a demangled result without additional white space between
+    // successive right angle brackets.
+
+    const std::string oldStyle = "> >";
+    const std::string newStyle = ">>";
+
+    std::string::size_type pos = 0;
+    while ((pos = typeName.find(oldStyle, pos)) != std::string::npos) {
+        typeName.replace(pos, oldStyle.size(), newStyle);
+        pos += newStyle.size() - 1;
+    }
+
+    printf("\texpected alternative: '%s'\n", typeName.c_str());
+
+    return typeName;
+}
+
+static bool
+TypeNamesMatch(const std::string& demangledName, const std::string& expected)
+{
+    return (demangledName == expected) ||
+           (demangledName == GetAlternativeTemplateTypename(expected));
+}
+
 template <typename T>
 static bool
 TestDemangle(const std::string& typeName)
@@ -51,10 +82,10 @@ TestDemangle(const std::string& typeName)
     printf("ArchDemangle('%s') => '%s', expected '%s'\n",
         mangledName.c_str(), toBeDemangledName.c_str(), typeName.c_str());
 
-    ARCH_AXIOM(toBeDemangledName == typeName);
-    ARCH_AXIOM(ArchGetDemangled(mangledName) == typeName);
-    ARCH_AXIOM(ArchGetDemangled(typeInfo) == typeName);
-    ARCH_AXIOM(ArchGetDemangled<T>() == typeName);
+    ARCH_AXIOM(TypeNamesMatch(toBeDemangledName, typeName));
+    ARCH_AXIOM(TypeNamesMatch(ArchGetDemangled(mangledName), typeName));
+    ARCH_AXIOM(TypeNamesMatch(ArchGetDemangled(typeInfo), typeName));
+    ARCH_AXIOM(TypeNamesMatch(ArchGetDemangled<T>(), typeName));
 
     return true;
 }
@@ -82,20 +113,10 @@ int main()
     TestDemangle<unsigned long>("unsigned long");
     TestDemangle<MangledAlso<int> >("MangledAlso<int>");
 
-    // Since C++11, the parser specification has been improved to be able
-    // to interpret multiple right angle brackets in nested template
-    // declarations. The implementation of the C++ ABI has been updated
-    // accordingly starting with Clang 14 on macOS 13.3
-#if defined(MAC_OS_VERSION_13_3)
-    const bool improvedAngleBracketDemangling = true;
-#else
-    const bool improvedAngleBracketDemangling = false;
-#endif
-    const char* const nestedTemplateTypeName =
-        improvedAngleBracketDemangling
-            ? "MangledAlso<MangledAlso<int>>"
-            : "MangledAlso<MangledAlso<int> >";
-    TestDemangle<MangledAlso<MangledAlso<int> > >(nestedTemplateTypeName);
+    TestDemangle<MangledAlso<MangledAlso<int> > >(
+            "MangledAlso<MangledAlso<int> >");
+    TestDemangle<MangledAlso<MangledAlso<MangledAlso<int> > > >(
+            "MangledAlso<MangledAlso<MangledAlso<int> > >");
 
     const char* const badType = "type_that_doesnt_exist";
 #if defined(ARCH_OS_WINDOWS)

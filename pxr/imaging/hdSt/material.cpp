@@ -106,7 +106,8 @@ _GetTextureHandleHash(
         samplerParams.magFilter,
         samplerParams.borderColor,
         samplerParams.enableCompare,
-        samplerParams.compareFunction);
+        samplerParams.compareFunction,
+        samplerParams.maxAnisotropy);
 }
 
 void
@@ -153,7 +154,7 @@ HdStMaterial::_ProcessTextureDescriptors(
         texturesFromStorm->push_back(
             { desc.name,
               desc.type,
-              textureHandle,
+              { textureHandle },
               _isInitialized
                   ? hash_value(desc.texturePrim)
                   : _GetTextureHandleHash(textureHandle) });
@@ -186,11 +187,9 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
         return;
     }
 
-    bool needsRprimMaterialStateUpdate = false;
     bool markBatchesDirty = false;
 
     std::string fragmentSource;
-    std::string geometrySource;
     std::string displacementSource;
     std::string volumeSource;
     VtDictionary materialMetadata;
@@ -207,7 +206,6 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
                                                     resourceRegistry.get());
             fragmentSource = _networkProcessor.GetFragmentCode();
             volumeSource = _networkProcessor.GetVolumeCode();
-            geometrySource = _networkProcessor.GetGeometryCode();
             displacementSource = _networkProcessor.GetDisplacementCode();
             materialMetadata = _networkProcessor.GetMetadata();
             materialTag = _networkProcessor.GetMaterialTag();
@@ -217,16 +215,12 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
     }
 
     // Use fallback shader when there is no source for
-    // fragment and geometry and displacement shader.
+    // fragment and displacement shader.
     if (fragmentSource.empty() &&
-        geometrySource.empty() &&
         displacementSource.empty()) {
 
         _InitFallbackShader();
         fragmentSource = _fallbackGlslfx->GetSurfaceSource();
-        // Note that we don't want displacement on purpose for the 
-        // fallback material.
-        geometrySource = std::string();
         materialMetadata = _fallbackGlslfx->GetMetadata();
     }
 
@@ -249,42 +243,27 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
         }
     }
 
-    // If we're updating the fragment or geometry source, we need to
+    // If we're updating the fragment or displacement source, we need to
     // rebatch anything that uses this material.
     std::string const& oldFragmentSource = 
         _materialNetworkShader->GetSource(HdShaderTokens->fragmentShader);
-    std::string const& oldGeometrySource = 
-        _materialNetworkShader->GetSource(HdShaderTokens->geometryShader);
     std::string const& oldDisplacementSource =
         _materialNetworkShader->GetSource(HdShaderTokens->displacementShader);
 
     markBatchesDirty |= (oldFragmentSource!=fragmentSource) || 
-                        (oldGeometrySource!=geometrySource) ||
                         (oldDisplacementSource!=displacementSource);
 
     _materialNetworkShader->SetFragmentSource(fragmentSource);
-    _materialNetworkShader->SetGeometrySource(geometrySource);
     _materialNetworkShader->SetDisplacementSource(displacementSource);
 
-    bool hasDisplacement = !(displacementSource.empty());
+    _hasDisplacement = !(displacementSource.empty());
 
-    if (_hasDisplacement != hasDisplacement) {
-        _hasDisplacement = hasDisplacement;
-        needsRprimMaterialStateUpdate = true;
-    }
-
-    bool hasLimitSurfaceEvaluation =
+    _hasLimitSurfaceEvaluation =
         _GetHasLimitSurfaceEvaluation(materialMetadata);
-
-    if (_hasLimitSurfaceEvaluation != hasLimitSurfaceEvaluation) {
-        _hasLimitSurfaceEvaluation = hasLimitSurfaceEvaluation;
-        needsRprimMaterialStateUpdate = true;
-    }
 
     if (_materialTag != materialTag) {
         _materialTag = materialTag;
         _materialNetworkShader->SetMaterialTag(_materialTag);
-        needsRprimMaterialStateUpdate = true;
 
         // If the material tag changes, we'll need to rebatch.
         markBatchesDirty = true;
@@ -300,7 +279,7 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
     HdBufferSpecVector specs;
     HdBufferSourceSharedPtrVector sources;
 
-    bool hasPtex = false;
+    _hasPtex = false;
     for (HdSt_MaterialParam const & param: params) {
         if (param.IsPrimvarRedirect() || param.IsFallback() || 
             param.IsTransform2d()) {
@@ -310,7 +289,7 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
             HdSt_MaterialNetworkShader::AddFallbackValueToSpecsAndSources(
                 param, &specs, &sources);
             if (param.textureType == HdStTextureType::Ptex) {
-                hasPtex = true;
+                _hasPtex = true;
             }
         }
     }
@@ -345,26 +324,10 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
     _materialNetworkShader->SetBufferSources(
         specs, std::move(sources), resourceRegistry);
 
-    if (_hasPtex != hasPtex) {
-        _hasPtex = hasPtex;
-        needsRprimMaterialStateUpdate = true;
-    }
-
     if (markBatchesDirty && _isInitialized) {
         // Only invalidate batches if this isn't our first round through sync.
         // If this is the initial sync, we haven't formed batches yet.
         HdStMarkDrawBatchesDirty(renderParam);
-    }
-
-    if (needsRprimMaterialStateUpdate && _isInitialized) {
-        // XXX Forcing rprims to have a dirty material id to re-evaluate
-        // their material state as we don't know which rprims are bound to
-        // this one. We can skip this invalidation the first time this
-        // material is Sync'd since any affected Rprim should already be
-        // marked with a dirty material id.
-        HdChangeTracker& changeTracker =
-                         sceneDelegate->GetRenderIndex().GetChangeTracker();
-        changeTracker.MarkAllRprimsDirty(HdChangeTracker::DirtyMaterialId);
     }
 
     _isInitialized = true;

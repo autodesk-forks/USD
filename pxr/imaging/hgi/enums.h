@@ -58,6 +58,8 @@ using HgiBits = uint32_t;
 ///   The device requires workaround for primitive id</li>
 /// <li>HgiDeviceCapabilitiesBitsIndirectCommandBuffers:
 ///   Indirect command buffers are supported</li>
+/// <li>HgiDeviceCapabilitiesBitsRoundPoints:
+///   Points can be natively rasterized as disks</li>
 /// </ul>
 /// <li>HgiDeviceCapabilitiesBitsRayTracing:
 ///   The device supports ray tracing</li>
@@ -65,25 +67,27 @@ using HgiBits = uint32_t;
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
 {
-    HgiDeviceCapabilitiesBitsPresentation = 1 << 0,
-    HgiDeviceCapabilitiesBitsBindlessBuffers = 1 << 1,
-    HgiDeviceCapabilitiesBitsConcurrentDispatch = 1 << 2,
-    HgiDeviceCapabilitiesBitsUnifiedMemory = 1 << 3,
-    HgiDeviceCapabilitiesBitsBuiltinBarycentrics     = 1 << 4,
-    HgiDeviceCapabilitiesBitsShaderDrawParameters    = 1 << 5,
-    HgiDeviceCapabilitiesBitsMultiDrawIndirect       = 1 << 6,
-    HgiDeviceCapabilitiesBitsBindlessTextures        = 1 << 7,
-    HgiDeviceCapabilitiesBitsShaderDoublePrecision   = 1 << 8,
-    HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne = 1 << 9,
-    HgiDeviceCapabilitiesBitsCppShaderPadding        = 1 << 10,
-    HgiDeviceCapabilitiesBitsConservativeRaster      = 1 << 11,
-    HgiDeviceCapabilitiesBitsStencilReadback         = 1 << 12,
-    HgiDeviceCapabilitiesBitsCustomDepthRange        = 1 << 13,
-    HgiDeviceCapabilitiesBitsMetalTessellation       = 1 << 14,
-    HgiDeviceCapabilitiesBitsBasePrimitiveOffset     = 1 << 15,
-    HgiDeviceCapabilitiesBitsPrimitiveIdEmulation    = 1 << 16,
-    HgiDeviceCapabilitiesBitsIndirectCommandBuffers  = 1 << 17,
-    HgiDeviceCapabilitiesBitsRayTracing              = 1 << 18,
+    HgiDeviceCapabilitiesBitsPresentation  = 1 << 0,
+    HgiDeviceCapabilitiesBitsBindlessBuffers  = 1 << 1,
+    HgiDeviceCapabilitiesBitsConcurrentDispatch  = 1 << 2,
+    HgiDeviceCapabilitiesBitsUnifiedMemory  = 1 << 3,
+    HgiDeviceCapabilitiesBitsBuiltinBarycentrics      = 1 << 4,
+    HgiDeviceCapabilitiesBitsShaderDrawParameters     = 1 << 5,
+    HgiDeviceCapabilitiesBitsMultiDrawIndirect        = 1 << 6,
+    HgiDeviceCapabilitiesBitsBindlessTextures         = 1 << 7,
+    HgiDeviceCapabilitiesBitsShaderDoublePrecision    = 1 << 8,
+    HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne  = 1 << 9,
+    HgiDeviceCapabilitiesBitsCppShaderPadding         = 1 << 10,
+    HgiDeviceCapabilitiesBitsConservativeRaster       = 1 << 11,
+    HgiDeviceCapabilitiesBitsStencilReadback          = 1 << 12,
+    HgiDeviceCapabilitiesBitsCustomDepthRange         = 1 << 13,
+    HgiDeviceCapabilitiesBitsMetalTessellation        = 1 << 14,
+    HgiDeviceCapabilitiesBitsBasePrimitiveOffset      = 1 << 15,
+    HgiDeviceCapabilitiesBitsPrimitiveIdEmulation     = 1 << 16,
+    HgiDeviceCapabilitiesBitsIndirectCommandBuffers   = 1 << 17,
+    HgiDeviceCapabilitiesBitsRoundPoints              = 1 << 18,
+    HgiDeviceCapabilitiesBitsSingleSlotResourceArrays = 1 << 19,
+    HgiDeviceCapabilitiesBitsRayTracing               = 1 << 20,
 };
 
 using HgiDeviceCapabilities = HgiBits;

@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_UTILS_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_UTILS_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_UTILS_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_UTILS_H
 
 #include "pxr/pxr.h"
 #include "pxr/base/gf/matrix4d.h"
@@ -72,6 +72,7 @@ RtUString
 ResolveAssetToRtUString(
     SdfAssetPath const &asset,
     bool flipTexture = true,
+    bool writeAsset = false,
     char const *debugNodeType = nullptr);
 
 /// Some quantites previously given as options now need to be provided
@@ -145,4 +146,4 @@ Compose(Ts&& ...args)
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_UTILS_H
+#endif // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_UTILS_H

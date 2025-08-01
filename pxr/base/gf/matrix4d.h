@@ -52,9 +52,9 @@ class GfMatrix3d;
 ///
 /// The following methods interpret a GfMatrix4d as a 3D
 /// transformation: SetRotate(), SetScale(), SetTranslate(), SetLookAt(),
-/// Factor(), ExtractTranslation(), ExtractRotation(), Transform(), TransformDir().
-/// By convention, vectors are treated primarily as row vectors,
-/// implying the following:
+/// Factor(), ExtractTranslation(), ExtractRotation(), Transform(),
+/// TransformDir(). By convention, vectors are treated primarily as row
+/// vectors, implying the following:
 /// \li Transformation matrices are organized to deal with row
 ///        vectors, not column vectors. For example, the last row of a matrix
 ///        contains the translation amounts.
@@ -488,26 +488,6 @@ public:
                        vec[0] * m._mtx[0][3] + vec[1] * m._mtx[1][3] + vec[2] * m._mtx[2][3] + vec[3] * m._mtx[3][3]);
     }
 
-    /// Returns the product of a matrix \e m and a column vector \e vec.
-    /// Note that the return type is a \c GfVec4f.
-    ///
-    /// \deprecated
-    /// This function is deprecated, as it can result in unintentional loss of
-    /// precision. Call GfVec4d operator *(const GfMatrix4d&, const GfVec4d &)
-    /// instead and explicitly convert the result to GfVec3f, if necessary.
-    GF_API
-    friend GfVec4f operator *(const GfMatrix4d& m, const GfVec4f& vec);
-
-    /// Returns the product of row vector \e vec and a matrix \e m.
-    /// Note that the return type is a \c GfVec4f.
-    ///
-    /// \deprecated
-    /// This function is deprecated, as it can result in unintentional loss of
-    /// precision. Call GfVec4d operator *(const GfVec4d &, const GfMatrix4d&)
-    /// instead and explicitly convert the result to GfVec3f, if necessary.
-    GF_API
-    friend GfVec4f operator *(const GfVec4f &vec, const GfMatrix4d& m);
-
     /// Sets matrix to specify a uniform scaling by \e scaleFactor.
     GF_API
     GfMatrix4d& SetScale(double scaleFactor);
@@ -667,23 +647,6 @@ public:
             vec[0] * _mtx[0][3] + vec[1] * _mtx[1][3] + vec[2] * _mtx[2][3] + _mtx[3][3]));
     }
 
-    /// Transforms the row vector \e vec by the matrix, returning the result.
-    /// This treats the vector as a 4-component vector whose fourth component
-    /// is 1. This is an overloaded method; it differs from the other version
-    /// in that it returns a different value type.
-    ///
-    /// \deprecated
-    /// This method is deprecated, as it can result in unintentional loss of
-    /// precision. Call GfVec3d Transform(const GfVec3d &) instead and
-    /// explicitly convert the result to GfVec3f, if necessary.
-    GfVec3f Transform(const GfVec3f &vec) const {
-        return GfVec3f(GfProject(GfVec4d(
-            vec[0] * _mtx[0][0] + vec[1] * _mtx[1][0] + vec[2] * _mtx[2][0] + _mtx[3][0],
-            vec[0] * _mtx[0][1] + vec[1] * _mtx[1][1] + vec[2] * _mtx[2][1] + _mtx[3][1],
-            vec[0] * _mtx[0][2] + vec[1] * _mtx[1][2] + vec[2] * _mtx[2][2] + _mtx[3][2],
-            vec[0] * _mtx[0][3] + vec[1] * _mtx[1][3] + vec[2] * _mtx[2][3] + _mtx[3][3])));
-    }
-
     /// Transforms row vector \e vec by the matrix, returning the result. This
     /// treats the vector as a direction vector, so the translation
     /// information in the matrix is ignored. That is, it treats the vector as
@@ -695,46 +658,12 @@ public:
             vec[0] * _mtx[0][2] + vec[1] * _mtx[1][2] + vec[2] * _mtx[2][2]);
     }
 
-    /// Transforms row vector \e vec by the matrix, returning the result. This
-    /// treats the vector as a direction vector, so the translation
-    /// information in the matrix is ignored. That is, it treats the vector as
-    /// a 4-component vector whose fourth component is 0.  This is an
-    /// overloaded method; it differs from the other version in that it
-    /// returns a different value type.
-    ///
-    /// \deprecated
-    /// This method is deprecated, as it can result in unintentional loss of
-    /// precision. Call GfVec3d TransformDir(const GfVec3d &) instead and
-    /// explicitly convert the result to GfVec3f, if necessary.
-    GfVec3f TransformDir(const GfVec3f &vec) const {
-        return GfVec3f(
-            vec[0] * _mtx[0][0] + vec[1] * _mtx[1][0] + vec[2] * _mtx[2][0],
-            vec[0] * _mtx[0][1] + vec[1] * _mtx[1][1] + vec[2] * _mtx[2][1],
-            vec[0] * _mtx[0][2] + vec[1] * _mtx[1][2] + vec[2] * _mtx[2][2]);
-    }
-
     /// Transforms the row vector \e vec by the matrix, returning the result.
     /// This treats the vector as a 4-component vector whose fourth component
     /// is 1 and ignores the fourth column of the matrix (i.e. assumes it is
     /// (0, 0, 0, 1)).
     GfVec3d TransformAffine(const GfVec3d &vec) const {
         return GfVec3d(
-            vec[0] * _mtx[0][0] + vec[1] * _mtx[1][0] + vec[2] * _mtx[2][0] + _mtx[3][0],
-            vec[0] * _mtx[0][1] + vec[1] * _mtx[1][1] + vec[2] * _mtx[2][1] + _mtx[3][1],
-            vec[0] * _mtx[0][2] + vec[1] * _mtx[1][2] + vec[2] * _mtx[2][2] + _mtx[3][2]);
-    }
-
-    /// Transforms the row vector \e vec by the matrix, returning the result.
-    /// This treats the vector as a 4-component vector whose fourth component
-    /// is 1 and ignores the fourth column of the matrix (i.e. assumes it is
-    /// (0, 0, 0, 1)).
-    ///
-    /// \deprecated
-    /// This method is deprecated, as it can result in unintentional loss of
-    /// precision. Call GfVec3d TransformAffine(const GfVec3d &) instead and
-    /// explicitly convert the result to GfVec3f, if necessary.
-    GfVec3f TransformAffine(const GfVec3f &vec) const {
-        return GfVec3f(
             vec[0] * _mtx[0][0] + vec[1] * _mtx[1][0] + vec[2] * _mtx[2][0] + _mtx[3][0],
             vec[0] * _mtx[0][1] + vec[1] * _mtx[1][1] + vec[2] * _mtx[2][1] + _mtx[3][1],
             vec[0] * _mtx[0][2] + vec[1] * _mtx[1][2] + vec[2] * _mtx[2][2] + _mtx[3][2]);

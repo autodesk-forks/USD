@@ -66,8 +66,8 @@ Tf_HasAttribute(
     if (path.back() == '/' || path.back() == '\\')
         resolveSymlinks = true;
 
-    const DWORD attribs =
-        GetFileAttributesW(ArchWindowsUtf8ToUtf16(path).c_str());
+    std::wstring pathW = ArchWindowsUtf8ToUtf16(path);
+    DWORD attribs = GetFileAttributesW(pathW.c_str());
     if (attribs == INVALID_FILE_ATTRIBUTES) {
         if (attribute == 0 &&
             (GetLastError() == ERROR_FILE_NOT_FOUND ||
@@ -77,13 +77,51 @@ Tf_HasAttribute(
         }
         return false;
     }
+
+    // Ignore reparse points on network volumes. They can't be resolved
+    // properly, so simply remove the reparse point attribute and treat
+    // it like a regular file/directory. Also ignore reparse points where
+    // TfReadLink returns the passed in path. As described in ArchReadLink,
+    // this will happen in cases where the reparse points are NT Object
+    // Manager paths, which cannot be used as file paths. Or if TfReadLink
+    // returns an empty string, that means we could not resolve the link
+    // at all, so treat it as if it is not a link.
+    std::string linkPath;
+    if ((attribs & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        // Calling PathIsNetworkPath sometimes sets the "last error" to an
+        // error code indicating an incomplete overlapped I/O function. We
+        // want to ignore this error.
+        DWORD olderr = GetLastError();
+        linkPath = TfReadLink(path.c_str());
+        if (PathIsNetworkPathW(pathW.c_str()) ||
+            linkPath.empty() ||
+            path == linkPath) {
+            attribs &= ~FILE_ATTRIBUTE_REPARSE_POINT;
+        }
+        SetLastError(olderr);
+    }
+
+    // Because we remove the REPARSE_POINT attribute above for reparse points
+    // on network shares, the behavior of this bit of code will be slightly
+    // different than for reparse points on non-network volumes. We will not
+    // try to follow the link and get the attributes of the destination. This
+    // will result in a link to an invalid destination directory claiming that
+    // the directory exists. It might be possible to use some other function
+    // to test for the existence of the destination directory in this case
+    // (such as FindFirstFile), but doing this doesn't seem to be relevent
+    // to how USD uses this method.
     if (!resolveSymlinks || (attribs & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
         return attribute == 0 || (attribs & attribute) == expected;
     }
 
+    // At this point we know (attribs & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+    // or we would have returned in the if block above. This means linkPath
+    // will be holding the result of calling TfReadLink(path.c_str()). The
+    // code is separated in this way to avoid calling TfReadLink twice. This
+    // is why we can simply pass linkPath to the Tf_HasAttribute call below.
+
     // Read symlinks until we find the real file.
-    return Tf_HasAttribute(TfReadLink(path.c_str()), resolveSymlinks,
-                           attribute, expected);
+    return Tf_HasAttribute(linkPath, resolveSymlinks, attribute, expected);
 }
 
 // Same as above but the bits in attribute must all be set.

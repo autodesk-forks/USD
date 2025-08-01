@@ -10,52 +10,15 @@
 #include "pxr/usd/pcp/layerStack.h"
 #include "pxr/usd/sdf/siteUtils.h"
 #include "pxr/base/tf/pyResultConversions.h"
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
+using namespace pxr_boost::python;
+
 namespace {
 
-static SdfPrimSpecHandleVector
-_GetPrimStack(const PcpPrimIndex& self)
-{
-    SdfPrimSpecHandleVector primStack;
-
-    if (self.IsUsd()) {
-        // Prim ranges are not cached in USD so GetPrimRange will always 
-        // be empty. But since getting the primStack from prim index's prim 
-        // range is python only API, we can build the prim stack that matches
-        // what the prim range would be if we computed and cached it.
-        const PcpNodeRange nodeRange = self.GetNodeRange();
-        for (auto it = nodeRange.first; it != nodeRange.second; ++it) {
-            const PcpNodeRef &node = *it;
-            if (!node.CanContributeSpecs()) {
-                continue;
-            }
-            const SdfLayerRefPtrVector &layers = 
-                node.GetLayerStack()->GetLayers();
-            for (const auto &layer : layers) {
-                if (SdfPrimSpecHandle primSpec = 
-                        layer->GetPrimAtPath(node.GetPath())) {
-                    primStack.push_back(std::move(primSpec));
-                }
-            }
-        }
-    } else {
-        const PcpPrimRange primRange = self.GetPrimRange();
-
-        primStack.reserve(std::distance(primRange.first, primRange.second));
-        for(const auto &path : primRange) {
-            primStack.push_back(SdfGetPrimAtPath(path));
-        }
-    }
-
-    return primStack;
-}
-
-static boost::python::tuple
+static pxr_boost::python::tuple
 _ComputePrimChildNames( PcpPrimIndex &index )
 {
     TfTokenVector nameOrder;
@@ -63,7 +26,7 @@ _ComputePrimChildNames( PcpPrimIndex &index )
     index.ComputePrimChildNames(&nameOrder, &prohibitedNameSet);
     TfTokenVector prohibitedNamesVector(prohibitedNameSet.begin(),
                                         prohibitedNameSet.end());
-    return boost::python::make_tuple(nameOrder, prohibitedNamesVector);
+    return pxr_boost::python::make_tuple(nameOrder, prohibitedNamesVector);
 }
 
 static TfTokenVector
@@ -82,7 +45,7 @@ void wrapPrimIndex()
 
     class_<This>("PrimIndex", "", no_init)
         .add_property("primStack", 
-                      make_function(&_GetPrimStack,
+                      make_function(&PcpComputePrimStackForPrimIndex,
                                     return_value_policy<TfPySequenceToList>()))
         .add_property("rootNode", &This::GetRootNode)
         .add_property("hasAnyPayloads", &This::HasAnyPayloads)
@@ -91,6 +54,7 @@ void wrapPrimIndex()
                                     return_value_policy<TfPySequenceToList>()))
 
         .def("IsValid", &This::IsValid)
+        .def("IsUsd", &This::IsUsd)
         .def("IsInstanceable", &This::IsInstanceable)
 
         .def("ComputePrimChildNames", &_ComputePrimChildNames)

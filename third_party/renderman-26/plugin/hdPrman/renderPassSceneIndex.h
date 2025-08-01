@@ -3,17 +3,18 @@
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_SCENE_INDEX_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_SCENE_INDEX_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_SCENE_INDEX_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_SCENE_INDEX_H
 
 #include "pxr/pxr.h"
+#if PXR_VERSION >= 2408
 #include "pxr/imaging/hd/collectionExpressionEvaluator.h"
 #include "pxr/imaging/hd/filteringSceneIndex.h"
 #include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DECLARE_REF_PTRS(HdPrman_RenderPassSceneIndex);
+TF_DECLARE_WEAK_AND_REF_PTRS(HdPrman_RenderPassSceneIndex);
 
 /// HdPrman_RenderPassSceneIndex applies the active render pass
 /// specified in the HdSceneGlobalsSchema, modifying the scene
@@ -45,6 +46,8 @@ protected:
         const HdSceneIndexObserver::DirtiedPrimEntries &entries) override;
 
 private:
+    friend class HdPrman_RenderPass_PrimDataSource;
+
     // State specified by a render pass.
     // If renderPassPath is the empty path, no render pass is active.
     // Collection evaluators are set sparsely, corresponding to
@@ -91,3 +94,4 @@ private:
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif
+#endif // PXR_VERSION >= 2408

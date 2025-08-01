@@ -1,5 +1,5 @@
 //
-// Copyright 2023 Pixar
+// Copyright 2024 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
@@ -13,14 +13,17 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/diagnostic.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/scope.hpp"
+#include "pxr/external/boost/python/make_constructor.hpp"
+#include "pxr/external/boost/python/operators.hpp"
 #include <sstream>
 #include <string>
 #include <cstdio>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 using This = TsTest_SampleTimes;
 
@@ -60,9 +63,13 @@ _ConstructSampleTimes(
     {
         extract<std::vector<This::SampleTime>> extractor(times);
         if (extractor.check())
+        {
             sts = extractor();
+        }
         else
+        {
             TF_CODING_ERROR("Unexpected type for times");
+        }
     }
     result->AddTimes(sts);
 
@@ -138,10 +145,17 @@ void wrapTsTest_SampleTimes()
         .def("AddExtrapolationTimes", &This::AddExtrapolationTimes,
             (arg("extrapolationFactor")))
 
+        .def("AddExtrapolatingLoopTimes", &This::AddExtrapolatingLoopTimes,
+            (arg("numIterations"),
+             arg("numSamplesPerIteration")))
+
         .def("AddStandardTimes", &This::AddStandardTimes)
 
         .def("GetTimes", &This::GetTimes,
             return_value_policy<TfPySequenceToList>())
+
+        .def("GetMinTime", &This::GetMinTime)
+        .def("GetMaxTime", &This::GetMaxTime)
 
         ;
 }

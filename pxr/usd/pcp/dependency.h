@@ -10,6 +10,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/pcp/api.h"
 #include "pxr/usd/pcp/mapFunction.h"
+#include "pxr/usd/pcp/types.h"
 #include "pxr/usd/sdf/path.h"
 
 #include "pxr/base/tf/declarePtrs.h"
@@ -121,6 +122,8 @@ struct PcpCulledDependency
 {
     /// Flag representing the type of dependency.
     PcpDependencyFlags flags = PcpDependencyTypeNone;
+    /// Arc type for this dependency.
+    PcpArcType arcType = PcpArcTypeRoot;
     /// Layer stack containing the specs the prim index depends on.
     PcpLayerStackRefPtr layerStack;
     /// Path of the dependency specs in the layer stack.

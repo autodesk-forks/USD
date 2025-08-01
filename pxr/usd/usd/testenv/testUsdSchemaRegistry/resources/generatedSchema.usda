@@ -4,7 +4,9 @@
 )
 
 class "AbstractTest" (
-    doc = "Testing documentation metadata"
+    customData = {
+        string userDocBrief = "Testing documentation metadata."
+    }
     hidden = true
 )
 {
@@ -15,13 +17,12 @@ class "AbstractTest" (
         }
         displayGroup = "Display Group"
         displayName = "Display Name"
-        doc = "Testing documentation metadata"
         hidden = true
         testCustomMetadata = "garply"
         testDictionaryMetadata = {
             string name = "bar"
             int value = 3
-        }
+        }        
     )
 }
 
@@ -29,13 +30,12 @@ class MetadataTest "MetadataTest" (
     customData = {
         string userDocBrief = "Testing brief user doc for schema class"
     }
-    doc = "Testing documentation metadata"
     hidden = true
     testCustomMetadata = "garply"
     testDictionaryMetadata = {
         string name = "foo"
         int value = 2
-    }
+    }        
 )
 {
     string testAttr = "foo" (
@@ -45,13 +45,12 @@ class MetadataTest "MetadataTest" (
         }
         displayGroup = "Display Group"
         displayName = "Display Name"
-        doc = "Testing documentation metadata"
         hidden = true
         testCustomMetadata = "garply"
         testDictionaryMetadata = {
             string name = "bar"
             int value = 3
-        }
+        }        
     )
     rel testRel (
         customData = {
@@ -59,13 +58,66 @@ class MetadataTest "MetadataTest" (
         }
         displayGroup = "Display Group"
         displayName = "Display Name"
-        doc = "Testing documentation metadata"
         hidden = true
         testCustomMetadata = "garply"
         testDictionaryMetadata = {
             string name = "baz"
             int value = 5
-        }
+        }        
     )
+}
+
+class IdentifierMatchesAlias "IdentifierMatchesAlias" (
+    customData = {
+        string userDocBrief = "Ensures identifier and alias can be the same."
+    }
+    hidden = true
+)
+{
+}
+
+class IdentifierDoesNotMatchAlias "IdentifierDoesNotMatchAlias" (
+    customData = {
+        string userDocBrief = "Ensures identifier is chosen if present."
+    }
+    hidden = true
+)
+{
+}
+
+class NoIdentifier "NoIdentifier" (
+    customData = {
+        string userDocBrief = "Ensures alias is used if schemaIdentifier is not present."
+    }
+    hidden = true
+)
+{
+}
+
+class NoAlias "NoAlias" (
+    customData = {
+        string userDocBrief = "Ensures identifier is chosen if present."
+    }
+    hidden = true
+)
+{
+}
+
+class NoIdentifierAndNoAlias "NoIdentifierAndNoAlias" (
+    customData = {
+        string userDocBrief = "Invalid case."
+    }
+    hidden = true
+)
+{
+}
+
+class IdentifierMatchesClassName "IdentifierMatchesClassName" (
+    customData = {
+        string userDocBrief = "Ensures schemaIdentifier can match class name."
+    }
+    hidden = true
+)
+{
 }
 

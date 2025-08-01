@@ -14,8 +14,13 @@ option(PXR_BUILD_USD_TOOLS "Build commandline tools" ON)
 option(PXR_BUILD_IMAGING "Build imaging components" ON)
 option(PXR_BUILD_EMBREE_PLUGIN "Build embree imaging plugin" OFF)
 option(PXR_BUILD_OPENIMAGEIO_PLUGIN "Build OpenImageIO plugin" OFF)
+if(APPLE)
+    option(PXR_BUILD_IMAGEIO_PLUGIN "Build the ImageIO.framework plugin for Apple platforms" ON)
+endif()
 option(PXR_BUILD_OPENCOLORIO_PLUGIN "Build OpenColorIO plugin" OFF)
 option(PXR_BUILD_USD_IMAGING "Build USD imaging components" ON)
+option(PXR_BUILD_USD_VALIDATION "Build USD validation library and core USD validators" ON)
+option(PXR_BUILD_EXEC "Build the Exec libraries" ON)
 option(PXR_BUILD_USDVIEW "Build usdview" ON)
 option(PXR_BUILD_ALEMBIC_PLUGIN "Build the Alembic plugin for USD" OFF)
 option(PXR_BUILD_DRACO_PLUGIN "Build the Draco plugin for USD" OFF)
@@ -52,10 +57,18 @@ if(APPLE)
             MESSAGE(STATUS "Setting PXR_BUILD_USD_TOOLS=OFF because they are not supported on Apple embedded platforms")
             set(PXR_BUILD_USD_TOOLS OFF)
         endif()
-        if (${PXR_BUILD_IMAGING})
-            MESSAGE(STATUS "Setting PXR_BUILD_USD_IMAGING=OFF because it is not supported on Apple embedded platforms")
-            set(PXR_BUILD_IMAGING OFF)
-        endif ()
+        if(${PXR_BUILD_OPENCOLORIO_PLUGIN})
+            MESSAGE(STATUS "Setting PXR_BUILD_OPENCOLORIO_PLUGIN=OFF because it is not supported on Apple embedded platforms")
+            set(PXR_BUILD_OPENCOLORIO_PLUGIN OFF)
+        endif()
+        if(${PXR_BUILD_OPENIMAGEIO_PLUGIN})
+            MESSAGE(STATUS "Setting PXR_BUILD_OPENIMAGEIO_PLUGIN=OFF because it is not supported on Apple embedded platforms")
+            set(PXR_BUILD_OPENIMAGEIO_PLUGIN OFF)
+        endif()
+        if(${PXR_ENABLE_OPENVDB_SUPPORT})
+            MESSAGE(STATUS "Setting PXR_ENABLE_OPENVDB_SUPPORT=OFF because it is not supported on Apple embedded platforms")
+            set(PXR_ENABLE_OPENVDB_SUPPORT OFF)
+        endif()
     endif ()
 endif()
 
@@ -80,6 +93,12 @@ set(PXR_PRECOMPILED_HEADER_NAME "pch.h"
     CACHE
     STRING
     "Default name of precompiled header files"
+)
+
+set(PXR_WORK_IMPL ""
+    CACHE
+    STRING
+    "Name of CMake package containing custom implementation for libWork."
 )
 
 set(PXR_INSTALL_LOCATION ""

@@ -30,11 +30,15 @@ R"(
 
     // Calculate the worldspace tangent vector 
 #ifdef HD_HAS_%s
-    vec3 tangentWorld = ComputeTangentVector(positionWorld, normalWorld, HdGet_%s());
+    mat3 TBN = ComputeTBNMatrix(positionWorld, normalWorld, HdGet_%s());
+    vec3 tangentWorld = TBN[0];
+    vec3 bitangentWorld = TBN[1];
 #else 
-    vec3 tangentWorld = cross(normalWorld, vec3(0, 1, 0));
+    vec3 bitangentWorld = vec3(0, 1, 0);
+    vec3 tangentWorld = cross(normalWorld, bitangentWorld);
     if (length(tangentWorld) < M_FLOAT_EPS) {
-        tangentWorld = cross(normalWorld, vec3(1, 0, 0));
+        bitangentWorld = vec3(1, 0, 0);
+        tangentWorld = cross(normalWorld, bitangentWorld);
     }
 #endif
 
@@ -77,7 +81,9 @@ R"(#if NUM_LIGHTS > 0
             // Note: in Storm, diffuse = lightColor * intensity;
             float intensity = max( max(light.diffuse.r, light.diffuse.g), 
                                    light.diffuse.b);
-            $lightData[u_numActiveLightSources].color = light.diffuse.rgb/intensity;
+            vec3 lightColor = (intensity == 0.0) 
+                ? light.diffuse.rgb : light.diffuse.rgb/intensity;
+            $lightData[u_numActiveLightSources].color = lightColor;
             $lightData[u_numActiveLightSources].intensity = intensity;
             
             // Attenuation 
@@ -129,7 +135,9 @@ _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
 
 template<typename Base>
 void
-HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
+HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(
+    mx::GenContext& mxContext,
+    mx::ShaderStage& mxStage) const
 {
     // Glslfx version and configuration
     emitLine("-- glslfx version 0.1", mxStage, false);
@@ -156,13 +164,13 @@ HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
         Base::emitString(R"(    "attributes": {)" "\n", mxStage);
         std::string line = ""; unsigned int i = 0;
         for (mx::StringMap::const_reference primvarPair : _mxHdPrimvarMap) {
-            const mx::TypeDesc *mxType = mx::TypeDesc::get(primvarPair.second);
-            if (mxType == nullptr) {
+            const std::string type =
+                HdStMaterialXHelpers::MxGetTypeString(
+                    Base::_syntax, mxContext, primvarPair.second);
+            if (type.empty() ) {
                 TF_WARN("MaterialX geomprop '%s' has unknown type '%s'",
                         primvarPair.first.c_str(), primvarPair.second.c_str());
             }
-            const std::string type = mxType 
-                ? Base::_syntax->getTypeName(mxType) : "vec2";
 
             line += "        \"" + primvarPair.first + "\": {\n";
             line += "            \"type\": \"" + type + "\"\n";
@@ -285,12 +293,15 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
         if (outputConnection) {
 
             std::string finalOutput = outputConnection->getVariable();
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+            // channels feature removed in MaterialX 1.39
             const std::string& channels = outputSocket->getChannels();
             if (!channels.empty()) {
                 finalOutput = Base::_syntax->getSwizzledVariable(
                     finalOutput, outputConnection->getType(),
                     channels, outputSocket->getType());
             }
+#endif
 
             if (mxGraph.hasClassification(
                     mx::ShaderNode::Classification::SURFACE)) {
@@ -311,7 +322,8 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
                 }
             }
             else {
-                if (!outputSocket->getType()->isFloat4()) {
+                if (!HdStMaterialXHelpers::GetMxTypeDesc(
+                        outputSocket).isFloat4()) {
                     Base::toVec4(outputSocket->getType(), finalOutput);
                 }
                 emitLine(finalOutputReturn + 
@@ -323,7 +335,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
                 ? Base::_syntax->getValue(
                     outputSocket->getType(), *outputSocket->getValue()) 
                 : Base::_syntax->getDefaultValue(outputSocket->getType());
-            if (!outputSocket->getType()->isFloat4()) {
+            if (!HdStMaterialXHelpers::GetMxTypeDesc(outputSocket).isFloat4()) {
                 std::string finalOutput = outputSocket->getVariable() + "_tmp";
                 emitLine(Base::_syntax->getTypeName(outputSocket->getType()) 
                         + " " + finalOutput + " = " + outputValue, mxStage);
@@ -415,8 +427,9 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
         mxStage.getUniformBlock(mx::HW::PUBLIC_UNIFORMS);
     for (size_t i = 0; i < paramsBlock.size(); ++i) {
         const mx::ShaderPort* variable = paramsBlock[i];
-        const mx::TypeDesc* variableType = variable->getType();
-        if (!_IsHardcodedPublicUniform(*variableType)) {
+        const mx::TypeDesc variableType =
+            HdStMaterialXHelpers::GetMxTypeDesc(variable);
+        if (!_IsHardcodedPublicUniform(variableType)) {
             emitLine(variable->getVariable() + " = HdGet_" +
                 variable->getVariable() + "()", mxStage);
         }
@@ -523,7 +536,8 @@ HdStMaterialXShaderGen<Base>::_EmitMxVertexDataLine(
 
     if (mxVariableName.compare(mx::HW::T_POSITION_WORLD) == 0 ||
         mxVariableName.compare(mx::HW::T_NORMAL_WORLD) == 0 ||
-        mxVariableName.compare(mx::HW::T_TANGENT_WORLD) == 0) {
+        mxVariableName.compare(mx::HW::T_TANGENT_WORLD) == 0 ||
+        mxVariableName.compare(mx::HW::T_BITANGENT_WORLD) == 0) {
 
         // Calculated in MxHdWorldSpaceVectors
         hdVariableDef = mxVariableName.substr(1) + separator;
@@ -622,16 +636,17 @@ HdStMaterialXShaderGen<Base>::emitVariableDeclarations(
     {
         Base::emitLineBegin(stage);
         const mx::ShaderPort* variable = block[i];
-        const mx::TypeDesc* varType = variable->getType();
+        const mx::TypeDesc varType = HdStMaterialXHelpers::GetMxTypeDesc(variable);
 
         // If bindlessTextures are not enabled the Mx Smpler names are mapped 
         // to the Hydra equivalents in HdStMaterialXShaderGen*::_EmitMxFunctions
-        if (!_bindlessTexturesEnabled && varType == mx::Type::FILENAME) {
+        if (!_bindlessTexturesEnabled && 
+            HdStMaterialXHelpers::MxTypeDescIsFilename(varType)) {
             continue;
         }
 
         // Only declare the variables that we need to initialize with Hd Data
-        if ( (isPublicUniform && !_IsHardcodedPublicUniform(*varType))
+        if ( (isPublicUniform && !_IsHardcodedPublicUniform(varType))
             || MxHdVariables.count(variable->getName()) ) {
             Base::emitVariableDeclaration(variable, mx::EMPTY_STRING,
                                     context, stage, false /* assignValue */);
@@ -658,8 +673,9 @@ HdStMaterialXShaderGen<Base>::emitLine(
     // When emitting the Light loop code for the Surface node, the variable
     // 'occlusion' represents shadow occlusion. We don't use MaterialX's
     // shadow implementation (hwShadowMap is false). Instead, use our own 
-    // per-light occlusion value calculated in mxInit() and stored in lightData
-    if (_emittingSurfaceNode && str == "vec3 L = lightShader.direction") {
+    // per-light occlusion value calculated in mxInit() and stored in lightData.
+    if (_emittingSurfaceNode &&
+        TfStringEndsWith(str, "L = lightShader.direction")) {
         emitLine(
             "occlusion = u_lightData[activeLightIndex].shadowOcclusion", stage);
     }
@@ -864,7 +880,13 @@ namespace {
 template<>
 HdStMaterialXShaderGen<mx::GlslShaderGenerator>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
+#if (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38) || \
+    (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 39 && \
+     MATERIALX_BUILD_VERSION <= 2)
     : mx::GlslShaderGenerator(),
+#else
+    : mx::GlslShaderGenerator(mx::TypeSystem::create()),
+#endif
       _mxHdTextureMap(mxHdInfo.textureMap),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
@@ -920,7 +942,7 @@ HdStMaterialXShaderGenGlsl::_EmitGlslfxShader(
     addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
         "shadowOcclusion", mxStage);
 
-    _EmitGlslfxHeader(mxStage);
+    _EmitGlslfxHeader(mxContext, mxStage);
     _EmitMxFunctions(mxGraph, mxContext, mxStage);
     _EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
 }
@@ -1017,7 +1039,13 @@ namespace {
 template<>
 HdStMaterialXShaderGen<mx::VkShaderGenerator>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
+#if (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38) || \
+    (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 39 && \
+     MATERIALX_BUILD_VERSION <= 2)
     : mx::VkShaderGenerator(),
+#else
+    : mx::VkShaderGenerator(mx::TypeSystem::create()),
+#endif
       _mxHdTextureMap(mxHdInfo.textureMap),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
@@ -1073,7 +1101,7 @@ HdStMaterialXShaderGenVkGlsl::_EmitGlslfxShader(
     addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
         "shadowOcclusion", mxStage);
 
-    _EmitGlslfxHeader(mxStage);
+    _EmitGlslfxHeader(mxContext, mxStage);
     _EmitMxFunctions(mxGraph, mxContext, mxStage);
     _EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
 }
@@ -1169,7 +1197,13 @@ namespace {
 template<>
 HdStMaterialXShaderGen<mx::MslShaderGenerator>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
+#if (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38) || \
+    (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 39 && \
+     MATERIALX_BUILD_VERSION <= 2)
     : mx::MslShaderGenerator(),
+#else
+    : mx::MslShaderGenerator(mx::TypeSystem::create()),
+#endif
       _mxHdTextureMap(mxHdInfo.textureMap),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
@@ -1278,7 +1312,7 @@ HdStMaterialXShaderGenMsl::_EmitGlslfxMetalHeader(
     mx::GenContext& mxContext,
     mx::ShaderStage& mxStage) const
 {
-    _EmitGlslfxHeader(mxStage);
+    _EmitGlslfxHeader(mxContext, mxStage);
     emitLineBreak(mxStage);
     emitLineBreak(mxStage);
     emitLine("//Metal Shading Language version " + getVersion(), mxStage, false);
@@ -1295,11 +1329,11 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
     mx::ShaderStage& mxStage) const
 {
     mx::ShaderGenerator::emitLibraryInclude(
-        "pbrlib/" + mx::GlslShaderGenerator::TARGET
-        + "/lib/mx_microfacet.glsl", mxContext, mxStage);
-    mx::ShaderGenerator::emitLibraryInclude(
         "stdlib/" + mx::MslShaderGenerator::TARGET
         + "/lib/mx_math.metal", mxContext, mxStage);
+    mx::ShaderGenerator::emitLibraryInclude(
+        "pbrlib/" + mx::GlslShaderGenerator::TARGET
+        + "/lib/mx_microfacet.glsl", mxContext, mxStage);
     _EmitConstantsUniformsAndTypeDefs(
         mxContext, mxStage,_syntax->getConstantQualifier());
 
@@ -1348,5 +1382,76 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
         mxGraph, mxContext, mxStage, &_tokenSubstitutions);
 }
 
+
+// Helper functions to aid building both MaterialX 1.38.X and 1.39.X
+bool 
+HdStMaterialXHelpers::MxTypeIsNone(mx::TypeDesc typeDesc)
+{
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+    return typeDesc == *mx::Type::NONE;
+#else
+    return typeDesc == mx::Type::NONE;
+#endif
+}
+
+bool 
+HdStMaterialXHelpers::MxTypeIsSurfaceShader(mx::TypeDesc typeDesc)
+{
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+    return typeDesc == *mx::Type::SURFACESHADER;
+#else
+    return typeDesc == mx::Type::SURFACESHADER;
+#endif
+}
+
+bool 
+HdStMaterialXHelpers::MxTypeDescIsFilename(const mx::TypeDesc typeDesc)
+{
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+    return typeDesc == *mx::Type::FILENAME;
+#else
+    return typeDesc == mx::Type::FILENAME;
+#endif
+}
+
+const mx::TypeDesc 
+HdStMaterialXHelpers::GetMxTypeDesc(const mx::ShaderPort* port)
+{
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+    return port->getType() ? *(port->getType()) : *mx::Type::NONE;
+#else
+    return port->getType();
+#endif
+}
+
+const std::string 
+HdStMaterialXHelpers::MxGetTypeString(
+    mx::SyntaxPtr mxSyntax,
+    const mx::GenContext& mxContext,
+    const std::string& typeName)
+{
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+    const mx::TypeDesc* mxType = mx::TypeDesc::get(typeName);
+    if (!mxType) {
+        return mx::Type::NONE->getName();
+    }
+#elif MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION == 39 && \
+    MATERIALX_BUILD_VERSION <=2
+     const mx::TypeDesc mxType = mx::TypeDesc::get(typeName);
+#else
+    const mx::TypeDesc mxType = mxContext.getTypeDesc(typeName);
+#endif
+    return mxSyntax->getTypeName(mxType);
+}
+
+const std::string& 
+HdStMaterialXHelpers::GetVector2Name()
+{
+#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+    return mx::Type::VECTOR2->getName();
+#else
+    return mx::Type::VECTOR2.getName();
+#endif
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE

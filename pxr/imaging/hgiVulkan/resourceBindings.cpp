@@ -36,12 +36,12 @@ _CreateDescriptorSetLayout(
     setCreateInfo.pNext = nullptr;
 
     VkDescriptorSetLayout layout = nullptr;
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateDescriptorSetLayout(
             device->GetVulkanDevice(),
             &setCreateInfo,
             HgiVulkanAllocator(),
-            &layout) == VK_SUCCESS
+            &layout)
     );
 
     // Debug label
@@ -189,12 +189,12 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     pool_info.poolSizeCount = (uint32_t) poolSizes.size();
     pool_info.pPoolSizes = poolSizes.data();
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateDescriptorPool(
             _device->GetVulkanDevice(),
             &pool_info,
             HgiVulkanAllocator(),
-            &_vkDescriptorPool) == VK_SUCCESS
+            &_vkDescriptorPool)
     );
 
     // Debug label
@@ -217,11 +217,11 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     allocateInfo.descriptorSetCount = _descriptorSetCnt;
     allocateInfo.pSetLayouts = &_vkDescriptorSetLayout;
 
-    TF_VERIFY(
+    HGIVULKAN_VERIFY_VK_RESULT(
         vkAllocateDescriptorSets(
             _device->GetVulkanDevice(),
             &allocateInfo,
-            &_vkDescriptorSet) == VK_SUCCESS
+            &_vkDescriptorSet)
     );
 
     // Debug label
@@ -238,7 +238,7 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     // Setup limits for each resource type
     //
     VkPhysicalDeviceProperties const& devProps =
-        _device->GetDeviceCapabilities().vkDeviceProperties;
+        _device->GetDeviceCapabilities().vkDeviceProperties2.properties;
     VkPhysicalDeviceLimits const& limits = devProps.limits;
 
     uint32_t bindLimits[HgiBindResourceTypeCount][2] = {

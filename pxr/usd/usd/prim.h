@@ -92,7 +92,7 @@ class UsdPrimSubtreeRange;
 /// optionally making use of the \ref primFlags.h "prim predicates facility" 
 /// (GetChildren(), GetAllChildren(), GetFilteredChildren()).
 ///
-/// \section Lifetime Management
+/// \section UsdPrim_Lifetime_Management Lifetime Management
 ///
 /// Clients acquire UsdPrim objects, which act like weak/guarded pointers
 /// to persistent objects owned and managed by their originating UsdStage.
@@ -290,13 +290,16 @@ public:
     }
 
     /// Return a vector containing the names of API schemas which have
-    /// been applied to this prim. This includes both the authored API schemas
-    /// applied using the Apply() method on the particular schema class as 
-    /// well as any built-in API schemas that are automatically included 
-    /// through the prim type's prim definition.
+    /// been applied to this prim.
+    ///
+    /// The returned vector includes both the authored API schemas applied using
+    /// the Apply() method on the particular schema class as well as any
+    /// built-in API schemas that are automatically included through the prim
+    /// type's prim definition.
+    ///
     /// To get only the authored API schemas use GetPrimTypeInfo instead.
     USD_API
-    TfTokenVector GetAppliedSchemas() const;
+    const TfTokenVector &GetAppliedSchemas() const;
 
     /// Alias for the "predicate" function parameter passed into the various
     /// Get{Authored}{PropertyNames,Properties} methods.
@@ -1524,8 +1527,8 @@ public:
     /// \name Parent & Stage
     // --------------------------------------------------------------------- //
 
-    /// Return this prim's parent prim.  Return an invalid UsdPrim if this is a
-    /// root prim.
+    /// Return this prim's parent prim.  Return a pseudoroot UsdPrim if this is
+    /// a root prim.  Return an invalid UsdPrim if this is a pseudoroot prim.
     UsdPrim GetParent() const {
         Usd_PrimDataConstPtr prim = get_pointer(_Prim());
         SdfPath proxyPrimPath = _ProxyPrimPath();
@@ -2196,10 +2199,10 @@ private:
     friend class UsdSchemaBase;
     friend class UsdAPISchemaBase;
     friend class UsdStage;
-    friend class Usd_StageImplAccess;
     friend class UsdPrimRange;
     friend class Usd_PrimData;
     friend class Usd_PrimFlagsPredicate;
+    friend struct Usd_StageImplAccess;
     friend struct UsdPrim_RelTargetFinder;
     friend struct UsdPrim_AttrConnectionFinder;
 

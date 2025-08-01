@@ -19,14 +19,15 @@
 #include <atomic>
 #include <cinttypes>
 #include <cmath>
+#include <complex>
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <deque>
 #include <functional>
 #include <iosfwd>
+#include <iostream>
 #include <iterator>
 #include <limits>
 #include <list>
@@ -35,6 +36,7 @@
 #include <math.h>
 #include <memory>
 #include <new>
+#include <ostream>
 #include <set>
 #include <sstream>
 #include <stdarg.h>
@@ -45,21 +47,9 @@
 #include <type_traits>
 #include <typeindex>
 #include <typeinfo>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
-#include <boost/python/class.hpp>
-#include <boost/python/dict.hpp>
-#include <boost/python/module.hpp>
-#include <boost/python/object_fwd.hpp>
-#include <boost/python/object_operators.hpp>
-#if defined(__APPLE__) // Fix breakage caused by Python's pyport.h.
-#undef tolower
-#undef toupper
-#endif
-#endif // PXR_PYTHON_SUPPORT_ENABLED
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
 #include "pxr/base/tf/pySafePython.h"
 #endif // PXR_PYTHON_SUPPORT_ENABLED

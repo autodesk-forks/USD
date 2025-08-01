@@ -16,8 +16,11 @@
 #include "pxr/imaging/hd/dataSourceTypeDefs.h"
 #include "pxr/imaging/hd/dirtyBitsTranslator.h"
 #include "pxr/imaging/hd/enums.h"
+#include "pxr/imaging/hd/extComputationCpuCallback.h"
 #include "pxr/imaging/hd/field.h"
 #include "pxr/imaging/hd/geomSubset.h"
+#include "pxr/imaging/hd/legacyTaskFactory.h"
+#include "pxr/imaging/hd/legacyTaskSchema.h"
 #include "pxr/imaging/hd/light.h"
 #include "pxr/imaging/hd/material.h"
 #include "pxr/imaging/hd/meshTopology.h"
@@ -193,6 +196,40 @@ HdSceneIndexAdapterSceneDelegate::_GetInputPrim(SdfPath const& id)
 // ----------------------------------------------------------------------------
 // HdSceneIndexObserver interfaces
 
+static
+HdTaskSharedPtr _CreateTask(const HdSceneIndexPrim &prim,
+                            HdSceneDelegate * const delegate,
+                            const SdfPath &indexPath)
+{
+    const HdLegacyTaskSchema taskSchema =
+        HdLegacyTaskSchema::GetFromParent(prim.dataSource);
+    HdLegacyTaskFactoryDataSourceHandle const ds =
+        taskSchema.GetFactory();
+    if (!ds) {
+        TF_CODING_ERROR(
+            "When adding task %s in HdSceneIndexAdapterSceneDelegate: "
+            "No factory data source in HdLegacyTaskSchema.",
+            indexPath.GetText());
+        return nullptr;
+    }
+    HdLegacyTaskFactorySharedPtr const factory = ds->GetTypedValue(0.0f);
+    if (!factory) {
+        TF_CODING_ERROR(
+            "When adding task %s in HdSceneIndexAdapterSceneDelegate: "
+            "No factory in HdLegacyTaskSchema.",
+            indexPath.GetText());
+        return nullptr;
+    }
+    HdTaskSharedPtr const task = factory->Create(delegate, indexPath);
+    if (!task) {
+        TF_CODING_ERROR(
+            "When adding task %s in HdSceneIndexAdapterSceneDelegate: "
+            "No task from factory in HdLegacyTaskSchema.",
+            indexPath.GetText());
+    }
+    return task;
+}
+
 void
 HdSceneIndexAdapterSceneDelegate::_PrimAdded(
     const SdfPath &primPath,
@@ -207,12 +244,13 @@ HdSceneIndexAdapterSceneDelegate::_PrimAdded(
     //     and re-insert with the correct type.
     // (3) The prim exists, and has the right type; in this case, we don't
     //     remove the prim but we should invalidate all of its properties.
+    //     Note that we make an exception for tasks - which we handle like (2).
     bool isResync = false;
 
     if (it != _primCache.end()) {
         _PrimCacheEntry &entry = (*it).second;
         const TfToken &existingType = entry.primType;
-        if (primType != existingType) {
+        if (primType != existingType || primType == HdPrimTypeTokens->task) {
             if (GetRenderIndex().IsRprimTypeSupported(existingType)) {
                 GetRenderIndex()._RemoveRprim(indexPath);
             } else if (GetRenderIndex().IsSprimTypeSupported(existingType)) {
@@ -242,9 +280,14 @@ HdSceneIndexAdapterSceneDelegate::_PrimAdded(
         } else if (primType == HdPrimTypeTokens->geomSubset) {
             GetRenderIndex().GetChangeTracker()._MarkRprimDirty(
                 indexPath.GetParentPath(), HdChangeTracker::DirtyTopology);
+        } else if (primType == HdPrimTypeTokens->task) {
+            if (HdTaskSharedPtr const task =
+                    _CreateTask(_GetInputPrim(indexPath), this, indexPath)) {
+                GetRenderIndex()._InsertTask(this, indexPath, task);
+            }
         }
     }
-    
+
     if (it != _primCache.end()) {
         _PrimCacheEntry & entry = (*it).second;
 
@@ -270,9 +313,11 @@ HdSceneIndexAdapterSceneDelegate::_PrimAdded(
             GetRenderIndex().GetChangeTracker().
                 _MarkRprimDirty(indexPath, allDirtyRprim);
         } else if (GetRenderIndex().IsSprimTypeSupported(primType)) {
+            const TfTokenVector renderContexts =
+                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();    
             HdDirtyBits allDirtySprim =
                 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
-                    primType, allDirty);
+                    primType, allDirty, renderContexts);
             GetRenderIndex().GetChangeTracker().
                 _MarkSprimDirty(indexPath, allDirtySprim);
         } else if (GetRenderIndex().IsBprimTypeSupported(primType)) {
@@ -291,6 +336,11 @@ HdSceneIndexAdapterSceneDelegate::_PrimAdded(
             GetRenderIndex().GetChangeTracker()._MarkRprimDirty(
                 indexPath.GetParentPath(), HdChangeTracker::DirtyTopology);
         }
+    }
+
+    // Keep hints for prim paths that have been seen with geomSubset children.
+    if (primType == HdPrimTypeTokens->geomSubset) {
+        _geomSubsetParents.insert(primPath.GetParentPath());
     }
 }
 
@@ -361,6 +411,8 @@ HdSceneIndexAdapterSceneDelegate::PrimsRemoved(
                 GetRenderIndex().GetChangeTracker()._MarkRprimDirty(
                     entry.primPath.GetParentPath(),
                     HdChangeTracker::DirtyTopology);
+            } else if (primType == HdPrimTypeTokens->task) {
+                GetRenderIndex()._RemoveTask(entry.primPath);
             }
         } else {
             // Otherwise, there's a subtree and we need to call _RemoveSubtree.
@@ -412,9 +464,11 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
                     indexPath, dirtyBits);
             }
         } else if (GetRenderIndex().IsSprimTypeSupported(primType)) {
+            const TfTokenVector renderContexts =
+                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();    
             HdDirtyBits dirtyBits =
                 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
-                        primType, entry.dirtyLocators);
+                        primType, entry.dirtyLocators, renderContexts);
             if (dirtyBits != HdChangeTracker::Clean) {
                 GetRenderIndex().GetChangeTracker()._MarkSprimDirty(
                     indexPath, dirtyBits);
@@ -438,6 +492,14 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
         } else if (primType == HdPrimTypeTokens->geomSubset) {
             GetRenderIndex().GetChangeTracker()._MarkRprimDirty(
                 indexPath.GetParentPath(), HdChangeTracker::DirtyTopology);
+        } else if (primType == HdPrimTypeTokens->task) {
+            const HdDirtyBits dirtyBits =
+                HdDirtyBitsTranslator::TaskLocatorSetToDirtyBits(
+                    entry.dirtyLocators);
+            if (dirtyBits != HdChangeTracker::Clean) {
+                GetRenderIndex().GetChangeTracker()._MarkTaskDirty(
+                    indexPath, dirtyBits);
+            }
         }
 
         if (entry.dirtyLocators.Intersects(
@@ -476,11 +538,13 @@ _IsVisible(const HdContainerDataSourceHandle& primSource)
 }
 
 static SdfPath
-_GetBoundMaterialPath(const HdContainerDataSourceHandle& ds)
+_GetBoundMaterialPath(
+    const HdContainerDataSourceHandle& ds,
+    const TfToken& purpose)
 {
     if (const auto bindingsSchema = HdMaterialBindingsSchema::GetFromParent(ds)) {
         if (const HdMaterialBindingSchema bindingSchema =
-            bindingsSchema.GetMaterialBinding()) {
+            bindingsSchema.GetMaterialBinding(purpose)) {
             if (const HdPathDataSourceHandle ds = bindingSchema.GetPath()) {
                 return ds->GetTypedValue(0.0f);
             }
@@ -513,8 +577,10 @@ static void
 _GatherGeomSubsets(
     const SdfPath& parentPath,
     const HdSceneIndexBaseRefPtr& sceneIndex,
+    const TfToken& materialBindingPurpose,
     HdTopology* topology)
 {
+    TRACE_FUNCTION();
     TF_VERIFY(topology);
     HdGeomSubsets subsets;
     // Not all direct children are subsets, but all subsets are direct children.
@@ -522,6 +588,7 @@ _GatherGeomSubsets(
     // should report child prim paths in authored order.
     for (const SdfPath& childPath : sceneIndex->GetChildPrimPaths(parentPath)) {
         const HdSceneIndexPrim& child = sceneIndex->GetPrim(childPath);
+        // XXX lets keep track of subsets we see instead of doing this
         if (child.primType != HdPrimTypeTokens->geomSubset ||
             child.dataSource == nullptr) {
             continue;
@@ -562,19 +629,20 @@ _GatherGeomSubsets(
             }
             continue;
         }
-        const SdfPath materialId = _GetBoundMaterialPath(child.dataSource);
+        const SdfPath materialId = _GetBoundMaterialPath(
+            child.dataSource, materialBindingPurpose);
         if (materialId.IsEmpty()) {
             continue;
         }
         subsets.push_back({
-            
+
             // XXX: Hard-coded face type since it is the only one supported.
             HdGeomSubset::Type::TypeFaceSet,
             childPath,
             materialId,
             indices });
     }
-    
+
     if (auto* topo = dynamic_cast<HdMeshTopology*>(topology)) {
         topo->SetGeomSubsets(subsets);
     }
@@ -596,10 +664,10 @@ HdSceneIndexAdapterSceneDelegate::GetMeshTopology(SdfPath const &id)
         return HdMeshTopology();
     }
 
-    HdIntArrayDataSourceHandle faceVertexCountsDataSource = 
+    HdIntArrayDataSourceHandle faceVertexCountsDataSource =
             meshTopologySchema.GetFaceVertexCounts();
 
-    HdIntArrayDataSourceHandle faceVertexIndicesDataSource = 
+    HdIntArrayDataSourceHandle faceVertexIndicesDataSource =
             meshTopologySchema.GetFaceVertexIndices();
 
     if (!faceVertexCountsDataSource || !faceVertexIndicesDataSource) {
@@ -607,7 +675,7 @@ HdSceneIndexAdapterSceneDelegate::GetMeshTopology(SdfPath const &id)
     }
 
     TfToken scheme = PxOsdOpenSubdivTokens->none;
-    if (HdTokenDataSourceHandle schemeDs = 
+    if (HdTokenDataSourceHandle schemeDs =
             meshSchema.GetSubdivisionScheme()) {
         scheme = schemeDs->GetTypedValue(0.0f);
     }
@@ -630,8 +698,12 @@ HdSceneIndexAdapterSceneDelegate::GetMeshTopology(SdfPath const &id)
         faceVertexCountsDataSource->GetTypedValue(0.0f),
         faceVertexIndicesDataSource->GetTypedValue(0.0f),
         holeIndices);
-    
-    _GatherGeomSubsets(id, _inputSceneIndex, &meshTopology);
+
+    if (_geomSubsetParents.find(id) != _geomSubsetParents.end()) {
+        const TfToken purpose =
+            GetRenderIndex().GetRenderDelegate()->GetMaterialBindingPurpose();
+        _GatherGeomSubsets(id, _inputSceneIndex, purpose, &meshTopology);
+    }
 
     return meshTopology;
 }
@@ -643,7 +715,7 @@ HdSceneIndexAdapterSceneDelegate::GetDoubleSided(SdfPath const &id)
     HF_MALLOC_TAG_FUNCTION();
     HdSceneIndexPrim prim = _GetInputPrim(id);
 
-    HdMeshSchema meshSchema = 
+    HdMeshSchema meshSchema =
         HdMeshSchema::GetFromParent(prim.dataSource);
     if (meshSchema.IsDefined()) {
         HdBoolDataSourceHandle doubleSidedDs = meshSchema.GetDoubleSided();
@@ -653,7 +725,7 @@ HdSceneIndexAdapterSceneDelegate::GetDoubleSided(SdfPath const &id)
     } else if (prim.primType == HdPrimTypeTokens->basisCurves) {
         // TODO: We assume all basis curves are double-sided in Hydra. This is
         //       inconsistent with the USD schema, which allows sidedness to be
-        //       declared on the USD gprim. Note however that sidedness only 
+        //       declared on the USD gprim. Note however that sidedness only
         //       affects basis curves with authored normals (i.e., ribbons).
         return true;
     }
@@ -684,6 +756,28 @@ HdSceneIndexAdapterSceneDelegate::GetExtent(SdfPath const &id)
     return GfRange3d(min, max);
 }
 
+static
+bool
+_IsLegacyInstancer(const HdSceneIndexPrim &prim)
+{    
+    if (prim.primType != HdPrimTypeTokens->instancer) {
+        return false;
+    }
+
+    HdContainerDataSourceHandle const container =
+        HdInstancerTopologySchema::
+        GetFromParent(prim.dataSource).GetContainer();
+    if (!container) {
+        return false;
+    }
+    auto const ds = HdBoolDataSource::Cast(
+        container->Get(HdLegacyFlagTokens->isLegacyInstancer));
+    if(!ds) {
+        return false;
+    }
+    return ds->GetTypedValue(0.0f);
+}
+
 bool
 HdSceneIndexAdapterSceneDelegate::GetVisible(SdfPath const &id)
 {
@@ -691,6 +785,15 @@ HdSceneIndexAdapterSceneDelegate::GetVisible(SdfPath const &id)
     HF_MALLOC_TAG_FUNCTION();
     HdSceneIndexPrim prim = _GetInputPrim(id);
 
+    if (_IsLegacyInstancer(prim)) {
+        // For usdImaging delegate.
+        // When changing the visibility of a USD point instancer, the
+        // delegate does not properly update the visibility of the
+        // corresponding Hydra instancer. It actually invis's a point
+        // instancer by deleting all the prototype prims.
+        return true;
+    }
+    
     HdVisibilitySchema visibilitySchema =
         HdVisibilitySchema::GetFromParent(prim.dataSource);
     if (!visibilitySchema.IsDefined()) {
@@ -786,7 +889,7 @@ HdSceneIndexAdapterSceneDelegate::GetSubdivTags(SdfPath const &id)
     return tags;
 }
 
-HdBasisCurvesTopology 
+HdBasisCurvesTopology
 HdSceneIndexAdapterSceneDelegate::GetBasisCurvesTopology(SdfPath const &id)
 {
     TRACE_FUNCTION();
@@ -803,7 +906,7 @@ HdSceneIndexAdapterSceneDelegate::GetBasisCurvesTopology(SdfPath const &id)
         return HdBasisCurvesTopology();
     }
 
-    HdIntArrayDataSourceHandle curveVertexCountsDataSource = 
+    HdIntArrayDataSourceHandle curveVertexCountsDataSource =
             bcTopologySchema.GetCurveVertexCounts();
 
     if (!curveVertexCountsDataSource) {
@@ -840,7 +943,11 @@ HdSceneIndexAdapterSceneDelegate::GetBasisCurvesTopology(SdfPath const &id)
         curveVertexCountsDataSource->GetTypedValue(0.0f),
         curveIndices);
 
-    _GatherGeomSubsets(id, _inputSceneIndex, &result);
+    if (_geomSubsetParents.find(id) != _geomSubsetParents.end()) {
+        const TfToken purpose =
+            GetRenderIndex().GetRenderDelegate()->GetMaterialBindingPurpose();
+        _GatherGeomSubsets(id, _inputSceneIndex, purpose, &result);
+    }
 
     return result;
 }
@@ -854,7 +961,7 @@ HdSceneIndexAdapterSceneDelegate::GetCategories(SdfPath const &id)
 
     static const VtArray<TfToken> emptyResult;
 
-    HdCategoriesSchema categoriesSchema = 
+    HdCategoriesSchema categoriesSchema =
         HdCategoriesSchema::GetFromParent(
             prim.dataSource);
 
@@ -905,7 +1012,7 @@ HdSceneIndexAdapterSceneDelegate::GetVolumeFieldDescriptors(
     return result;
 }
 
-SdfPath 
+SdfPath
 HdSceneIndexAdapterSceneDelegate::GetMaterialId(SdfPath const & id)
 {
     TRACE_FUNCTION();
@@ -915,8 +1022,10 @@ HdSceneIndexAdapterSceneDelegate::GetMaterialId(SdfPath const & id)
     HdMaterialBindingsSchema materialBindings =
         HdMaterialBindingsSchema::GetFromParent(
             prim.dataSource);
+    const TfToken purpose =
+        GetRenderIndex().GetRenderDelegate()->GetMaterialBindingPurpose();
     HdMaterialBindingSchema materialBinding =
-        materialBindings.GetMaterialBinding();
+        materialBindings.GetMaterialBinding(purpose);
     if (HdPathDataSourceHandle const ds = materialBinding.GetPath()) {
         return ds->GetTypedValue(0.0f);
     }
@@ -1009,16 +1118,29 @@ _GetHdParamsFromDataSource(
             const TfToken cspName(
                 SdfPath::JoinIdentifier(
                     HdMaterialNodeParameterSchemaTokens->colorSpace, pName));
-            hdParams[cspName] = VtValue(colorSpaceDS->GetTypedValue(0));
+            const TfToken colorSpaceToken = colorSpaceDS->GetTypedValue(0);
+            if (!colorSpaceToken.IsEmpty()) {
+                hdParams[cspName] = VtValue(colorSpaceDS->GetTypedValue(0));
+            }
+        }
+        // TypeName Metadata
+        if (HdTokenDataSourceHandle typeNameDs = paramSchema.GetTypeName()) {
+            const TfToken typName(
+                SdfPath::JoinIdentifier(
+                    HdMaterialNodeParameterSchemaTokens->typeName, pName));
+            const TfToken typeNameToken = typeNameDs->GetTypedValue(0);
+            if (!typeNameToken.IsEmpty()) {
+                hdParams[typName] = VtValue(typeNameToken);
+            }
         }
     }
     return hdParams;
 }
 
 static
-void 
+void
 _Walk(
-    const SdfPath & nodePath, 
+    const SdfPath & nodePath,
     HdMaterialNodeContainerSchema nodesSchema,
     const TfTokenVector &renderContexts,
     std::unordered_set<SdfPath, SdfPath::Hash> * visitedSet,
@@ -1048,7 +1170,7 @@ _Walk(
         if (HdContainerDataSourceHandle idsDs =
                 nodeSchema.GetRenderContextNodeIdentifiers()) {
             for (const TfToken &name : renderContexts) {
-                
+
                 if (name.IsEmpty() && !nodeId.IsEmpty()) {
                     // The universal renderContext was requested, so
                     // use the universal nodeId if we found one above.
@@ -1077,24 +1199,24 @@ _Walk(
             if (!vectorSchema) {
                 continue;
             }
-            
+
             for (size_t i = 0 ; i < vectorSchema.GetNumElements() ; i++) {
                 HdMaterialConnectionSchema connSchema =
                     vectorSchema.GetElement(i);
                 if (!connSchema.IsDefined()) {
                     continue;
                 }
-            
+
                 TfToken p = connSchema.GetUpstreamNodePath()->GetTypedValue(0);
-                TfToken n = 
+                TfToken n =
                     connSchema.GetUpstreamNodeOutputName()->GetTypedValue(0);
                 _Walk(SdfPath(p.GetString()), nodesSchema, renderContexts,
                         visitedSet, netHd);
 
                 HdMaterialRelationship r;
-                r.inputId = SdfPath(p.GetString()); 
-                r.inputName = n; 
-                r.outputId = nodePath; 
+                r.inputId = SdfPath(p.GetString());
+                r.inputName = n;
+                r.outputId = nodePath;
                 r.outputName=connName;
                 netHd->relationships.push_back(r);
             }
@@ -1108,6 +1230,25 @@ _Walk(
     netHd->nodes.push_back(n);
 }
 
+// Note: Utility methods below expect a valid data source handle.
+VtDictionary
+_ToDictionary(HdSampledDataSourceContainerSchema schema)
+{
+    VtDictionary dict;
+    for (const TfToken& name : schema.GetNames()) {
+        if (HdSampledDataSourceHandle valueDs = schema.Get(name)) {
+            dict[name.GetString()] = valueDs->GetValue(0);
+        }
+    }
+    return dict;
+}
+
+VtDictionary
+_ToDictionary(HdContainerDataSourceHandle const &cds)
+{
+    return _ToDictionary(HdSampledDataSourceContainerSchema(cds));
+}
+
 static
 HdMaterialNetworkMap
 _ToMaterialNetworkMap(
@@ -1118,9 +1259,9 @@ _ToMaterialNetworkMap(
     // to be included regardless of whether they are reachable via
     // a terminal. While 100% accuracy in emulation would require that
     // behavior to be enabled by default, it is generally not desireable
-    // as it leads to a lot of unnecessary data duplication across 
+    // as it leads to a lot of unnecessary data duplication across
     // terminals.
-    // 
+    //
     // A renderer which wants this behavior can configure its networks
     // with an "includeDisconnectedNodes" data source.
     bool includeDisconnectedNodes = false;
@@ -1143,10 +1284,15 @@ _ToMaterialNetworkMap(
     HdMaterialConnectionContainerSchema terminalsSchema =
         netSchema.GetTerminals();
     const TfTokenVector names = terminalsSchema.GetNames();
-   
+
+    if (const HdSampledDataSourceContainerSchema config =
+                                                netSchema.GetConfig()) {
+        matHd.config = _ToDictionary(config);
+    }
+
     for (const auto & name : names) {
         visitedNodes.clear();
-        
+
         // Extract connections one by one
         HdMaterialConnectionSchema connSchema = terminalsSchema.Get(name);
         if (!connSchema.IsDefined()) {
@@ -1155,6 +1301,10 @@ _ToMaterialNetworkMap(
 
         // Keep track of the terminals
         TfToken pathTk = connSchema.GetUpstreamNodePath()->GetTypedValue(0);
+        if (pathTk.IsEmpty()) {
+            // Allow setting terminals to an empty string to disable them.
+            continue;
+        }
         SdfPath path(pathTk.GetString());
         matHd.terminals.push_back(path);
 
@@ -1174,7 +1324,7 @@ _ToMaterialNetworkMap(
     return matHd;
 }
 
-VtValue 
+VtValue
 HdSceneIndexAdapterSceneDelegate::GetMaterialResource(SdfPath const & id)
 {
     TRACE_FUNCTION();
@@ -1190,14 +1340,7 @@ HdSceneIndexAdapterSceneDelegate::GetMaterialResource(SdfPath const & id)
     // Query for a material network to match the requested render contexts
     const TfTokenVector renderContexts =
         GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();
-    HdMaterialNetworkSchema netSchema(nullptr);
-    for (TfToken const& networkSelector : renderContexts) {
-        netSchema = matSchema.GetMaterialNetwork(networkSelector);
-        if (netSchema) {
-            // Found a matching network
-            break;
-        }
-    }
+    HdMaterialNetworkSchema netSchema = matSchema.GetMaterialNetwork(renderContexts);
     if (!netSchema.IsDefined()) {
         return VtValue();
     }
@@ -1229,7 +1372,7 @@ _ParamNameToLocator(TfToken const &paramName)
 
     const TfTokenVector parts = _ToTokenVector(
         TfStringTokenize(paramName.GetString(), ":"));
-    
+
     return HdDataSourceLocator(parts.size(), parts.data());
 }
 
@@ -1359,25 +1502,6 @@ HdSceneIndexAdapterSceneDelegate::GetLightParamValue(
 namespace {
 // Note: Utility methods below expect a valid data source handle.
 
-VtDictionary
-_ToDictionary(
-    HdSampledDataSourceContainerSchema schema)
-{
-    VtDictionary dict;
-    for (const TfToken& name : schema.GetNames()) {
-        if (HdSampledDataSourceHandle valueDs = schema.Get(name)) {
-            dict[name.GetString()] = valueDs->GetValue(0);
-        }
-    }
-    return dict;
-}
-
-VtDictionary
-_ToDictionary(HdContainerDataSourceHandle const &cds)
-{
-    return _ToDictionary(HdSampledDataSourceContainerSchema(cds));
-}
-
 using _RenderVar = HdRenderSettings::RenderProduct::RenderVar;
 
 _RenderVar
@@ -1505,13 +1629,13 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
 
     if (key == HdRenderSettingsPrimTokens->namespacedSettings) {
         VtDictionary settings;
-        if (HdContainerDataSourceHandle namespacedSettingsDs = 
+        if (HdContainerDataSourceHandle namespacedSettingsDs =
                 rsSchema.GetNamespacedSettings()) {
 
             return VtValue(_ToDictionary(namespacedSettingsDs));
         }
     }
-    
+
     if (key == HdRenderSettingsPrimTokens->active) {
         if (HdBoolDataSourceHandle activeDS = rsSchema.GetActive()) {
             return VtValue(activeDS->GetTypedValue(0));
@@ -1521,7 +1645,7 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
     if (key == HdRenderSettingsPrimTokens->renderProducts) {
         if (HdRenderProductVectorSchema products =
                 rsSchema.GetRenderProducts()) {
-            
+
             return VtValue(_ToRenderProducts(products));
         }
     }
@@ -1529,7 +1653,7 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
     if (key == HdRenderSettingsPrimTokens->includedPurposes) {
         if (HdTokenArrayDataSourceHandle purposesDS =
                 rsSchema.GetIncludedPurposes()) {
-            
+
             return VtValue(purposesDS->GetTypedValue(0));
         }
     }
@@ -1537,7 +1661,7 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
     if (key == HdRenderSettingsPrimTokens->materialBindingPurposes) {
         if (HdTokenArrayDataSourceHandle purposesDS =
                 rsSchema.GetMaterialBindingPurposes()) {
-            
+
             return VtValue(purposesDS->GetTypedValue(0));
         }
     }
@@ -1545,7 +1669,7 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
     if (key == HdRenderSettingsPrimTokens->renderingColorSpace) {
         if (HdTokenDataSourceHandle colorSpaceDS =
                 rsSchema.GetRenderingColorSpace()) {
-            
+
             return VtValue(colorSpaceDS->GetTypedValue(0));
         }
     }
@@ -1553,7 +1677,7 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
     if (key == HdRenderSettingsPrimTokens->shutterInterval) {
         if (HdVec2dDataSourceHandle shutterIntervalDS =
                 rsSchema.GetShutterInterval()) {
-            
+
             return VtValue(shutterIntervalDS->GetTypedValue(0));
         }
     }
@@ -1716,6 +1840,9 @@ HdSceneIndexAdapterSceneDelegate::_ComputePrimvarDescriptors(
                 primvar.GetInterpolation();
 
             if (!interpolationDataSource) {
+                TF_WARN("HdSceneIndexAdapterSceneDelegate: Skipping primvar "
+                        "'%s' due to missing interpolation data source",
+                        name.GetText());
                 continue;
             }
 
@@ -1725,6 +1852,9 @@ HdSceneIndexAdapterSceneDelegate::_ComputePrimvarDescriptors(
                 Hd_InterpolationAsEnum(interpolationToken);
 
             if (interpolation >= HdInterpolationCount) {
+                TF_WARN("HdSceneIndexAdapterSceneDelegate: Skipping primvar "
+                        "'%s' due to invalid interpolation value %i",
+                        name.GetText(), interpolation);
                 continue;
             }
 
@@ -1796,7 +1926,8 @@ HdSceneIndexAdapterSceneDelegate::_ComputeExtCmpPrimvarDescriptors(
     if (HdExtComputationPrimvarsSchema primvars =
         HdExtComputationPrimvarsSchema::GetFromParent(primDataSource)) {
         for (const TfToken &name : primvars.GetExtComputationPrimvarNames()) {
-            HdExtComputationPrimvarSchema primvar = primvars.GetPrimvar(name);
+            HdExtComputationPrimvarSchema primvar =
+                primvars.GetExtComputationPrimvar(name);
             if (!primvar) {
                 continue;
             }
@@ -1851,7 +1982,7 @@ HdSceneIndexAdapterSceneDelegate::_ComputeExtCmpPrimvarDescriptors(
             std::move(descriptors));
 }
 
-VtValue 
+VtValue
 HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
 {
     TRACE_FUNCTION();
@@ -1879,7 +2010,7 @@ HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
             if (HdSampledDataSourceHandle valueDs =
                     HdSampledDataSource::Cast(drawTarget->Get(key))) {
                 return valueDs->GetValue(0.0f);
-            } 
+            }
         }
 
         return VtValue();
@@ -2031,6 +2162,26 @@ HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
         }
     }
 
+    // For tasks.
+    if (const HdLegacyTaskSchema task =
+            HdLegacyTaskSchema::GetFromParent(prim.dataSource)) {
+        if (key == HdTokens->params) {
+            if (HdSampledDataSourceHandle const ds = task.GetParameters()) {
+                return ds->GetValue(0.0f);
+            }
+        }
+        if (key == HdTokens->collection) {
+            if (HdRprimCollectionDataSourceHandle const ds = task.GetCollection()) {
+                return ds->GetValue(0.0f);
+            }
+        }
+        if (key == HdTokens->renderTags) {
+            if (HdTokenVectorDataSourceHandle const ds = task.GetRenderTags()) {
+                return ds->GetValue(0.0f);
+            }
+        }
+    }
+
     // Fallback for unknown prim conventions provided by emulated scene
     // delegate.
     if (HdTypedSampledDataSource<HdSceneDelegate*>::Handle sdDs =
@@ -2045,15 +2196,15 @@ HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
     return VtValue();
 }
 
-VtValue 
-HdSceneIndexAdapterSceneDelegate::GetIndexedPrimvar(SdfPath const &id, 
+VtValue
+HdSceneIndexAdapterSceneDelegate::GetIndexedPrimvar(SdfPath const &id,
     TfToken const &key, VtIntArray *outIndices)
 {
     return _GetPrimvar(id, key, outIndices);
 }
 
-VtValue 
-HdSceneIndexAdapterSceneDelegate::_GetPrimvar(SdfPath const &id, 
+VtValue
+HdSceneIndexAdapterSceneDelegate::_GetPrimvar(SdfPath const &id,
     TfToken const &key, VtIntArray *outIndices)
 {
     TRACE_FUNCTION();
@@ -2082,11 +2233,11 @@ HdSceneIndexAdapterSceneDelegate::_GetPrimvar(
     HdPrimvarsSchema primvars(primvarsDataSource);
     if (primvars) {
         if (HdPrimvarSchema primvar = primvars.GetPrimvar(key)) {
-            
+
             if (outIndices) {
                 if (HdSampledDataSourceHandle valueDataSource =
                     primvar.GetIndexedPrimvarValue()) {
-                    if (HdIntArrayDataSourceHandle 
+                    if (HdIntArrayDataSourceHandle
                         indicesDataSource = primvar.GetIndices()) {
                         *outIndices = indicesDataSource->GetTypedValue(0.f);
                     }
@@ -2107,7 +2258,7 @@ HdSceneIndexAdapterSceneDelegate::_GetPrimvar(
 size_t
 HdSceneIndexAdapterSceneDelegate::SamplePrimvar(
         SdfPath const &id, TfToken const &key,
-        size_t maxSampleCount, float *sampleTimes, 
+        size_t maxSampleCount, float *sampleTimes,
         VtValue *sampleValues)
 {
     return _SamplePrimvar(
@@ -2120,7 +2271,7 @@ size_t
 HdSceneIndexAdapterSceneDelegate::SamplePrimvar(
         SdfPath const &id, TfToken const &key,
         float startTime, float endTime,
-        size_t maxSampleCount, float *sampleTimes, 
+        size_t maxSampleCount, float *sampleTimes,
         VtValue *sampleValues)
 {
     return _SamplePrimvar(
@@ -2132,7 +2283,7 @@ HdSceneIndexAdapterSceneDelegate::SamplePrimvar(
 size_t
 HdSceneIndexAdapterSceneDelegate::SampleIndexedPrimvar(
         SdfPath const &id, TfToken const &key,
-        size_t maxSampleCount, float *sampleTimes, 
+        size_t maxSampleCount, float *sampleTimes,
         VtValue *sampleValues, VtIntArray *sampleIndices)
 {
     return _SamplePrimvar(
@@ -2145,7 +2296,7 @@ size_t
 HdSceneIndexAdapterSceneDelegate::SampleIndexedPrimvar(
         SdfPath const &id, TfToken const &key,
         float startTime, float endTime,
-        size_t maxSampleCount, float *sampleTimes, 
+        size_t maxSampleCount, float *sampleTimes,
         VtValue *sampleValues, VtIntArray *sampleIndices)
 {
     return _SamplePrimvar(
@@ -2158,7 +2309,7 @@ size_t
 HdSceneIndexAdapterSceneDelegate::_SamplePrimvar(
         SdfPath const &id, TfToken const &key,
         float startTime, float endTime,
-        size_t maxSampleCount, float *sampleTimes, 
+        size_t maxSampleCount, float *sampleTimes,
         VtValue *sampleValues, VtIntArray *sampleIndices)
 {
     TRACE_FUNCTION();
@@ -2168,7 +2319,7 @@ HdSceneIndexAdapterSceneDelegate::_SamplePrimvar(
 
     HdSampledDataSourceHandle valueSource = nullptr;
     HdIntArrayDataSourceHandle indicesSource = nullptr;
-    
+
     HdPrimvarsSchema primvars =
         HdPrimvarsSchema::GetFromParent(prim.dataSource);
     if (primvars) {
@@ -2250,14 +2401,14 @@ HdSceneIndexAdapterSceneDelegate::_SamplePrimvar(
         sampleValues[i] = valueSource->GetValue(times[i]);
         if (sampleIndices) {
             if (indicesSource) {
-                // Can assume indices source has same sample times as primvar 
+                // Can assume indices source has same sample times as primvar
                 // value source.
                 sampleIndices[i] = indicesSource->GetTypedValue(times[i]);
             } else {
                 sampleIndices[i].clear();
             }
         }
-        
+
     }
 
     return authoredSamples;
@@ -2476,7 +2627,7 @@ HdSceneIndexAdapterSceneDelegate::GetInstancerId(SdfPath const &id)
         }
 
         if (instancerIds.size() > 0) {
-            instancerId = instancerIds[0];
+            instancerId = instancerIds.cfront();
         }
     }
 
@@ -2490,16 +2641,12 @@ HdSceneIndexAdapterSceneDelegate::GetExtComputationSceneInputNames(
     TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
-    HdSceneIndexPrim prim = _GetInputPrim(computationId);
-    if (HdExtComputationSchema extComputation =
-            HdExtComputationSchema::GetFromParent(prim.dataSource)) {
-        if (HdContainerDataSourceHandle inputDs =
-                extComputation.GetInputValues()) {
-            return inputDs->GetNames();
-        }
-    }
-
-    return TfTokenVector();
+    const HdSceneIndexPrim prim = _GetInputPrim(computationId);
+    const HdExtComputationSchema extComputation =
+        HdExtComputationSchema::GetFromParent(prim.dataSource);
+    const HdSampledDataSourceContainerSchema inputValues =
+        extComputation.GetInputValues();
+    return inputValues.GetNames();
 }
 
 VtValue
@@ -2509,32 +2656,38 @@ HdSceneIndexAdapterSceneDelegate::GetExtComputationInput(
     TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
-    HdSceneIndexPrim prim = _GetInputPrim(computationId);
-    if (HdExtComputationSchema extComputation =
-            HdExtComputationSchema::GetFromParent(prim.dataSource)) {
-
-        if (input == HdTokens->dispatchCount) {
-            if (HdSizetDataSourceHandle dispatchDs =
-                    extComputation.GetDispatchCount()) {
-                return dispatchDs->GetValue(0);
-            }
-        } else if (input == HdTokens->elementCount) {
-            if (HdSizetDataSourceHandle elementDs =
-                    extComputation.GetElementCount()) {
-                return elementDs->GetValue(0);
-            }
-        } else {
-            if (HdContainerDataSourceHandle inputDs =
-                    extComputation.GetInputValues()) {
-                if (HdSampledDataSourceHandle valueDs =
-                        HdSampledDataSource::Cast(inputDs->Get(input))) {
-                    return valueDs->GetValue(0);
-                }
-            }
-        }
+    const HdSceneIndexPrim prim = _GetInputPrim(computationId);
+    const HdExtComputationSchema extComputation =
+        HdExtComputationSchema::GetFromParent(prim.dataSource);
+    if (!extComputation) {
+        return {};
     }
 
-    return VtValue();
+    if (input == HdTokens->dispatchCount) {
+        HdSizetDataSourceHandle const dispatchDs =
+            extComputation.GetDispatchCount();
+        if (!dispatchDs) {
+            return {};
+        }
+        return dispatchDs->GetValue(0);
+    }
+
+    if (input == HdTokens->elementCount) {
+        HdSizetDataSourceHandle const elementDs =
+            extComputation.GetElementCount();
+        if (!elementDs) {
+            return {};
+        }
+        return elementDs->GetValue(0);
+    }
+
+    const HdSampledDataSourceContainerSchema inputValues =
+        extComputation.GetInputValues();
+    HdSampledDataSourceHandle const valueDs = inputValues.Get(input);
+    if (!valueDs) {
+        return {};
+    }
+    return valueDs->GetValue(0);
 }
 
 size_t
@@ -2560,18 +2713,16 @@ HdSceneIndexAdapterSceneDelegate::SampleExtComputationInput(
     TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
-    HdSceneIndexPrim prim = _GetInputPrim(computationId);
-    HdExtComputationSchema extComputation =
+    const HdSceneIndexPrim prim = _GetInputPrim(computationId);
+    const HdExtComputationSchema extComputation =
         HdExtComputationSchema::GetFromParent(prim.dataSource);
     if (!extComputation) {
         return 0;
     }
-    HdContainerDataSourceHandle inputDs = extComputation.GetInputValues();
-    if (!inputDs) {
-        return 0;
-    }
-    HdSampledDataSourceHandle valueDs =
-        HdSampledDataSource::Cast(inputDs->Get(input));
+
+    const HdSampledDataSourceContainerSchema inputValues =
+        extComputation.GetInputValues();
+    HdSampledDataSourceHandle const valueDs = inputValues.Get(input);
     if (!valueDs) {
         return 0;
     }
@@ -2617,36 +2768,30 @@ HdSceneIndexAdapterSceneDelegate::GetExtComputationInputDescriptors(
 
     HdExtComputationInputDescriptorVector result;
 
-    HdSceneIndexPrim prim = _GetInputPrim(computationId);
-    if (HdExtComputationSchema extComputation =
-            HdExtComputationSchema::GetFromParent(prim.dataSource)) {
-        if (HdVectorDataSourceHandle vecDs =
-                extComputation.GetInputComputations()) {
-            size_t count = vecDs->GetNumElements();
-            result.reserve(count);
-            for (size_t i = 0; i < count; ++i) {
-                HdExtComputationInputComputationSchema input(
-                    HdContainerDataSource::Cast(vecDs->GetElement(i)));
-                if (!input) {
-                    continue;
-                }
-
-                HdExtComputationInputDescriptor desc;
-                if (HdTokenDataSourceHandle nameDs = input.GetName()) {
-                    desc.name = nameDs->GetTypedValue(0);
-                }
-                if (HdPathDataSourceHandle srcDs =
-                        input.GetSourceComputation()) {
-                    desc.sourceComputationId = srcDs->GetTypedValue(0);
-                }
-                if (HdTokenDataSourceHandle srcNameDs =
-                        input.GetSourceComputationOutputName()) {
-                    desc.sourceComputationOutputName =
-                        srcNameDs->GetTypedValue(0);
-                }
-                result.push_back(desc);
-            }
+    const HdSceneIndexPrim prim = _GetInputPrim(computationId);
+    const HdExtComputationSchema extComputation =
+        HdExtComputationSchema::GetFromParent(prim.dataSource);
+    const HdExtComputationInputComputationContainerSchema inputComputations =
+        extComputation.GetInputComputations();
+    const TfTokenVector names = inputComputations.GetNames();
+    result.reserve(names.size());
+    for (const TfToken &name : names) {
+        const HdExtComputationInputComputationSchema input =
+            inputComputations.Get(name);
+        if (!input) {
+            continue;
         }
+        HdExtComputationInputDescriptor desc;
+        desc.name = name;
+        if (HdPathDataSourceHandle const srcDs =
+                input.GetSourceComputation()) {
+            desc.sourceComputationId = srcDs->GetTypedValue(0);
+        }
+        if (HdTokenDataSourceHandle const srcNameDs =
+                input.GetSourceComputationOutputName()) {
+            desc.sourceComputationOutputName = srcNameDs->GetTypedValue(0);
+        }
+        result.push_back(desc);
     }
 
     return result;
@@ -2661,30 +2806,25 @@ HdSceneIndexAdapterSceneDelegate::GetExtComputationOutputDescriptors(
 
     HdExtComputationOutputDescriptorVector result;
 
-    HdSceneIndexPrim prim = _GetInputPrim(computationId);
-    if (HdExtComputationSchema extComputation =
-            HdExtComputationSchema::GetFromParent(prim.dataSource)) {
-        if (HdVectorDataSourceHandle vecDs = extComputation.GetOutputs()) {
-            size_t count = vecDs->GetNumElements();
-            result.reserve(count);
-            for (size_t i = 0; i < count; ++i) {
-                HdExtComputationOutputSchema output(
-                    HdContainerDataSource::Cast(vecDs->GetElement(i)));
-                if (!output) {
-                    continue;
-                }
-
-                HdExtComputationOutputDescriptor desc;
-                if (HdTokenDataSourceHandle nameDs = output.GetName()) {
-                    desc.name = nameDs->GetTypedValue(0);
-                }
-                if (HdTupleTypeDataSourceHandle typeDs =
-                        output.GetValueType()) {
-                    desc.valueType = typeDs->GetTypedValue(0);
-                }
-                result.push_back(desc);
-            }
+    const HdSceneIndexPrim prim = _GetInputPrim(computationId);
+    const HdExtComputationSchema extComputation =
+        HdExtComputationSchema::GetFromParent(prim.dataSource);
+    const HdExtComputationOutputContainerSchema outputs =
+        extComputation.GetOutputs();
+    const TfTokenVector names = outputs.GetNames();
+    result.reserve(names.size());
+    for (const TfToken &name : names) {
+        const HdExtComputationOutputSchema output = outputs.Get(name);
+        if (!output) {
+            continue;
         }
+
+        HdExtComputationOutputDescriptor desc;
+        desc.name = name;
+        if (HdTupleTypeDataSourceHandle const typeDs = output.GetValueType()) {
+            desc.valueType = typeDs->GetTypedValue(0);
+        }
+        result.push_back(desc);
     }
 
     return result;
@@ -2710,21 +2850,39 @@ HdSceneIndexAdapterSceneDelegate::GetExtComputationKernel(
 
 void
 HdSceneIndexAdapterSceneDelegate::InvokeExtComputation(
-        SdfPath const &computationId, HdExtComputationContext *context)
+        SdfPath const &computationId, HdExtComputationContext * const context)
 {
     TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
-    HdSceneIndexPrim prim = _GetInputPrim(computationId);
-    if (HdExtComputationSchema extComputation =
-            HdExtComputationSchema::GetFromParent(prim.dataSource)) {
-        HdExtComputationCallbackDataSourceHandle ds =
-            HdExtComputationCallbackDataSource::Cast(
-                extComputation.GetCpuCallback());
-        if (ds) {
-            ds->Invoke(context);
-        }
+    const HdSceneIndexPrim prim = _GetInputPrim(computationId);
+    const HdExtComputationSchema extComputation =
+        HdExtComputationSchema::GetFromParent(prim.dataSource);
+    HdExtComputationCpuCallbackDataSourceHandle const ds =
+        extComputation.GetCpuCallback();
+    if (!ds) {
+        return;
     }
+    HdExtComputationCpuCallbackSharedPtr const callback =
+        ds->GetTypedValue(0.0f);
+    if (!callback) {
+        return;
+    }
+    callback->Compute(context);
+}
+
+TfTokenVector
+HdSceneIndexAdapterSceneDelegate::GetTaskRenderTags(SdfPath const &taskId)
+{
+    TRACE_FUNCTION();
+    HF_MALLOC_TAG_FUNCTION();
+    const HdSceneIndexPrim prim = _GetInputPrim(taskId);
+    const HdLegacyTaskSchema task = HdLegacyTaskSchema::GetFromParent(prim.dataSource);
+    HdTokenVectorDataSourceHandle const ds = task.GetRenderTags();
+    if (!ds) {
+        return {};
+    }
+    return ds->GetTypedValue(0.0f);
 }
 
 void 
@@ -2749,7 +2907,7 @@ HdSceneIndexAdapterSceneDelegate::Sync(HdSyncRequestVector* request)
                     return;
                 }
 
-                HdTypedSampledDataSource<HdSceneDelegate*>::Handle ds = 
+                HdTypedSampledDataSource<HdSceneDelegate*>::Handle ds =
                     HdTypedSampledDataSource<HdSceneDelegate*>::Cast(
                         prim.dataSource->Get(
                             HdSceneIndexEmulationTokens->sceneDelegate));
@@ -2766,7 +2924,7 @@ HdSceneIndexAdapterSceneDelegate::Sync(HdSyncRequestVector* request)
     for (auto sd : _sceneDelegates) {
         if (TF_VERIFY(sd != nullptr)) {
             sd->Sync(request);
-        } 
+        }
     }
 }
 
@@ -2813,6 +2971,11 @@ HdSceneIndexAdapterSceneDelegate::GetDisplayStyle(SdfPath const &id)
         if (HdBoolDataSourceHandle ds =
                 styleSchema.GetDisplacementEnabled()) {
             result.displacementEnabled = ds->GetTypedValue(0.0f);
+        }
+
+        if (HdBoolDataSourceHandle ds =
+                styleSchema.GetDisplayInOverlay()) {
+            result.displayInOverlay = ds->GetTypedValue(0.0f);
         }
 
         if (HdBoolDataSourceHandle ds =

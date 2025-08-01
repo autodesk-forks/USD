@@ -105,6 +105,10 @@ HdConvertToHdMaterialNetwork2(
         // Transfer primvars:
         result.primvars = hdNetwork.primvars;
     }
+
+    // Transfer config dictionary
+    result.config = hdNetworkMap.config;
+
     return result;
 }
 
@@ -272,7 +276,8 @@ _GetSamplerParameters(
                  nodeTypeId, parameters, sdrNode, nodePath),
              HdBorderColorTransparentBlack, 
              /*enableCompare*/false, 
-             HdCmpFuncNever };
+             HdCmpFuncNever,
+             /*maxAnisotropy*/16 };
 }
 
 HdSamplerParameters
@@ -353,7 +358,8 @@ bool operator==(const HdMaterialNetworkMap& lhs,
                 const HdMaterialNetworkMap& rhs) 
 {
     return lhs.map == rhs.map &&
-           lhs.terminals == rhs.terminals;
+           lhs.terminals == rhs.terminals &&
+           lhs.config == rhs.config;
 }
 
 bool operator!=(const HdMaterialNetworkMap& lhs,

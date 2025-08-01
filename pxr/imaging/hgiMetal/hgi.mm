@@ -70,6 +70,7 @@ HgiMetal::HgiMetal(id<MTLDevice> device)
 , _pool(std::make_unique<AutoReleasePool>())
 {
     if (!_device) {
+#if defined(ARCH_OS_OSX)
         if( TfGetenvBool("HGIMETAL_USE_INTEGRATED_GPU", false)) {
             auto devices = MTLCopyAllDevices();
             for (id<MTLDevice> d in devices) {
@@ -79,7 +80,7 @@ HgiMetal::HgiMetal(id<MTLDevice> device)
                 }
             }
         }
-
+#endif
         if (!_device) {
             _device = MTLCreateSystemDefaultDevice();
         }
@@ -409,6 +410,11 @@ HgiMetal::EndFrame()
     }
 
     _pool->Drain();
+}
+
+void
+HgiMetal::GarbageCollect()
+{
 }
 
 HgiAccelerationStructureHandle HgiMetal::CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) 

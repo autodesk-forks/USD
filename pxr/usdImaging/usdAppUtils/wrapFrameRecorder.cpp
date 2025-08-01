@@ -7,15 +7,15 @@
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdAppUtils/frameRecorder.h"
 
-#include <boost/python.hpp>
-#include <boost/python/class.hpp>
-#include <boost/python/def.hpp>
-#include <boost/python/scope.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/scope.hpp"
 
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 
 void
@@ -23,11 +23,12 @@ wrapFrameRecorder()
 {
     using This = UsdAppUtilsFrameRecorder;
 
-    scope s = class_<This, boost::noncopyable>("FrameRecorder")
+    scope s = class_<This, noncopyable>("FrameRecorder")
         .def(init<>())
-        .def(init<const TfToken&, bool>(
-            (arg("rendererPluginId") = TfToken(), 
-             arg("gpuEnabled") = true)))
+        .def(init<const TfToken&, bool, bool>(
+            (arg("rendererPluginId") = TfToken(),
+             arg("gpuEnabled") = true,
+             arg("drawModeEnabled") = true)))
         .def("GetCurrentRendererId", &This::GetCurrentRendererId)
         .def("SetActiveRenderPassPrimPath",
             &This::SetActiveRenderPassPrimPath)
@@ -39,6 +40,7 @@ wrapFrameRecorder()
         .def("SetDomeLightVisibility", &This::SetDomeLightVisibility)
         .def("SetComplexity", &This::SetComplexity)
         .def("SetColorCorrectionMode", &This::SetColorCorrectionMode)
+        .def("SetPrimaryCameraPrimPath", &This::SetPrimaryCameraPrimPath)
         .def("SetIncludedPurposes", &This::SetIncludedPurposes,
              (arg("purposes")))
         .def(

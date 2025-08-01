@@ -478,6 +478,10 @@ UsdImagingGprimAdapter::ProcessPropertyChange(UsdPrim const& prim,
         return HdChangeTracker::DirtyMaterialId |
                HdChangeTracker::DirtyPrimvar;
     }
+    // Material property edits should invalidate primvars.
+    if (TfStringStartsWith(propertyName.GetString(), "inputs:")) {
+        return HdChangeTracker::DirtyPrimvar;
+    }
     
     // Note: This doesn't handle "built-in" attributes that are treated as
     // primvars. That responsibility falls on the child adapter.
@@ -605,7 +609,7 @@ UsdImagingGprimAdapter::GetExtent(UsdPrim const& prim,
         // Note:
         // Usd stores extent as 2 float vecs. We do an implicit 
         // conversion to doubles
-        return GfRange3d(extent[0], extent[1]);
+        return GfRange3d(extent.AsConst()[0], extent.AsConst()[1]);
     } else {
         // Return empty range if no value was found, or the wrong number of 
         // extent values were provided.        

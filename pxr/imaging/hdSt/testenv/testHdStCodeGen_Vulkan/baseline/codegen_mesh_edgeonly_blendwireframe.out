@@ -3,9 +3,9 @@
 #import $TOOLS/hdSt/shaders/mesh.glslfx
 -- configuration
 {"techniques": {"default": {
-"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "PointId.Vertex.None", "Mesh.Vertex"] }
-, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Flat", "MeshNormal.Geometry.NoFlat", "Selection.DecodeUtils", "Selection.Geometry.ElementSel", "Selection.Geometry.WireSelOffset", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Triangle"] }
-, "fragmentShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Fragment.SingleSided", "MeshFaceCull.Fragment.None", "MeshWire.Fragment.EdgeCoord.Barycentric", "MeshWire.Fragment.EdgeMaskTriangle", "MeshWire.Fragment.EdgeCommon", "MeshWire.Fragment.EdgeParam", "MeshWire.Fragment.FinalEdgeOpacityForce", "MeshWire.Fragment.EdgeOnlyBlendColor", "Fragment.CommonTerminals", "Fragment.Surface", "Fragment.ScalarOverride", "EdgeId.Fragment.Common", "EdgeId.Fragment.TriangleLines", "EdgeId.Fragment.TriangleParam", "PointId.Fragment.Fallback", "Visibility.Fragment.Fallback", "Mesh.Fragment.PatchCoord", "Mesh.Fragment"] }
+"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "PointId.Vertex.None", "PointDisk.Vertex.None", "Mesh.Vertex"] }
+, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Flat", "MeshNormal.Geometry.NoFlat", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Triangle"] }
+, "fragmentShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Fragment.SingleSided", "MeshFaceCull.Fragment.None", "MeshWire.Fragment.EdgeCoord.Barycentric", "MeshWire.Fragment.EdgeMaskTriangle", "MeshWire.Fragment.EdgeCommon", "MeshWire.Fragment.EdgeParam", "MeshWire.Fragment.FinalEdgeOpacityForce", "MeshWire.Fragment.EdgeOnlyBlendColor", "Fragment.CommonTerminals", "Fragment.Surface", "Fragment.ScalarOverride", "EdgeId.Fragment.Common", "EdgeId.Fragment.TriangleLines", "EdgeId.Fragment.TriangleParam", "PointId.Fragment.Fallback", "PointDisk.Fragment.None", "Visibility.Fragment.Fallback", "Mesh.Fragment.PatchCoord", "Mesh.Fragment"] }
 }}}
 -------------------------------------------------------
 =======================================================
@@ -28,6 +28,7 @@ int HgiGetBaseInstance() {
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -166,22 +167,14 @@ layout(location = 1) in vec3 normals;
 uint hd_VertexID = gl_VertexIndex;
 uint hd_InstanceID = gl_InstanceIndex;
 uint hd_BaseInstance = HgiGetBaseInstance();
-flat layout(location = 0) out int vs_dc_modelCoord;
-flat layout(location = 1) out int vs_dc_constantCoord;
-flat layout(location = 2) out int vs_dc_elementCoord;
-flat layout(location = 3) out int vs_dc_primitiveCoord;
-flat layout(location = 4) out int vs_dc_fvarCoord;
-flat layout(location = 5) out int vs_dc_shaderCoord;
-flat layout(location = 6) out int vs_dc_vertexCoord;
-flat layout(location = 7) out int vs_dc_topologyVisibilityCoord;
-flat layout(location = 8) out int vs_dc_varyingCoord;
-flat layout(location = 9) out int vs_dc_instanceIndexI0;
-flat layout(location = 10) out int vs_dc_instanceCoordsI0;
-layout(location = 11) out VertexData {
+flat layout(location = 0) out ivec4 vs_interstageDrawingCoord0;
+flat layout(location = 1) out ivec4 vs_interstageDrawingCoord1;
+flat layout(location = 2) out ivec4 vs_interstageDrawingCoord2;
+layout(location = 3) out VertexData {
   vec4 Peye;
   vec3 Neye;
 } outData;
-layout(location = 13) out PrimvarData {
+layout(location = 5) out PrimvarData {
   vec3 points;
   vec3 normals;
 } outPrimvars;
@@ -253,16 +246,16 @@ float HdGetScalar_normals() { return HdGet_normals(0).x; }
 // //////// Codegen Proc VS //////// 
 void ProcessPrimvarsIn() {
   hd_drawingCoord dc = GetDrawingCoord();
-  vs_dc_modelCoord = dc.modelCoord;
-  vs_dc_constantCoord = dc.constantCoord;
-  vs_dc_elementCoord = dc.elementCoord;
-  vs_dc_primitiveCoord = dc.primitiveCoord;
-  vs_dc_fvarCoord = dc.fvarCoord;
-  vs_dc_shaderCoord = dc.shaderCoord;
-  vs_dc_vertexCoord = dc.vertexCoord;
-  vs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  vs_dc_varyingCoord = dc.varyingCoord;
-  vs_dc_instanceIndexI0 = dc.instanceIndex[0];
+  vs_interstageDrawingCoord0[0] = dc.modelCoord;
+  vs_interstageDrawingCoord0[1] = dc.constantCoord;
+  vs_interstageDrawingCoord0[2] = dc.elementCoord;
+  vs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  vs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  vs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  vs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  vs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  vs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  vs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = points;
   outPrimvars.normals = normals;
 }
@@ -317,6 +310,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -646,6 +646,14 @@ void ProcessPointId(int pointId)
 
 
 
+float ApplyPointSizeBias(float pointSize)
+{
+    // do nothing
+    return pointSize;
+}
+
+
+
 // Fwd declare methods defined in pointId.glslfx, that are used below.
 FORWARD_DECL(int GetPointId());
 FORWARD_DECL(float GetPointRasterSize(int));
@@ -662,7 +670,7 @@ void main(void)
     outData.Neye = GetNormal(vec3(0), 0); // normalized
 
     int pointId = GetPointId();
-    gl_PointSize = GetPointRasterSize(pointId);
+    gl_PointSize = ApplyPointSizeBias(GetPointRasterSize(pointId));
     ProcessPointId(pointId);
 
     gl_Position = vec4(GetProjectionMatrix() * outData.Peye);
@@ -689,6 +697,7 @@ void main(void)
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -831,43 +840,27 @@ layout(std430, binding = 1) readonly buffer ssbo_primitiveParam { int primitiveP
 layout(std430, binding = 2) readonly buffer ssbo_edgeIndices { int edgeIndices[]; };
 layout(std430, binding = 3) readonly buffer ssbo_faceVisibility { float faceVisibility[]; };
 layout(std430, binding = 4) readonly buffer ssbo_dispTextureCoord { vec2 dispTextureCoord[]; };
-flat layout(location = 0) in int vs_dc_modelCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 1) in int vs_dc_constantCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 2) in int vs_dc_elementCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 3) in int vs_dc_primitiveCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 4) in int vs_dc_fvarCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 5) in int vs_dc_shaderCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 6) in int vs_dc_vertexCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 7) in int vs_dc_topologyVisibilityCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 8) in int vs_dc_varyingCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 9) in int vs_dc_instanceIndexI0[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 10) in int vs_dc_instanceCoordsI0[HD_NUM_PRIMITIVE_VERTS];
-layout(location = 11) in VertexData {
+flat layout(location = 0) in ivec4 vs_interstageDrawingCoord0[HD_NUM_PRIMITIVE_VERTS];
+flat layout(location = 1) in ivec4 vs_interstageDrawingCoord1[HD_NUM_PRIMITIVE_VERTS];
+flat layout(location = 2) in ivec4 vs_interstageDrawingCoord2[HD_NUM_PRIMITIVE_VERTS];
+layout(location = 3) in VertexData {
   vec4 Peye;
   vec3 Neye;
 } inData[3];
-layout(location = 13) in PrimvarData {
+layout(location = 5) in PrimvarData {
   vec3 points;
   vec3 normals;
 } inPrimvars[HD_NUM_PRIMITIVE_VERTS];
 layout(location = 2) out vec4 gsPatchCoord;
 noperspective layout(location = 3) out vec3 hd_barycentricCoord;
-flat layout(location = 7) out int gs_dc_modelCoord;
-flat layout(location = 8) out int gs_dc_constantCoord;
-flat layout(location = 9) out int gs_dc_elementCoord;
-flat layout(location = 10) out int gs_dc_primitiveCoord;
-flat layout(location = 11) out int gs_dc_fvarCoord;
-flat layout(location = 12) out int gs_dc_shaderCoord;
-flat layout(location = 13) out int gs_dc_vertexCoord;
-flat layout(location = 14) out int gs_dc_topologyVisibilityCoord;
-flat layout(location = 15) out int gs_dc_varyingCoord;
-flat layout(location = 16) out int gs_dc_instanceIndexI0;
-flat layout(location = 17) out int gs_dc_instanceCoordsI0;
+flat layout(location = 4) out ivec4 gs_interstageDrawingCoord0;
+flat layout(location = 5) out ivec4 gs_interstageDrawingCoord1;
+flat layout(location = 6) out ivec4 gs_interstageDrawingCoord2;
 layout(location = 0) out VertexData {
   vec4 Peye;
   vec3 Neye;
 } outData;
-layout(location = 4) out PrimvarData {
+layout(location = 7) out PrimvarData {
   vec3 points;
   vec3 normals;
   vec2 dispTextureCoord;
@@ -918,16 +911,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = vs_dc_modelCoord[0];
-  dc.constantCoord = vs_dc_constantCoord[0];
-  dc.elementCoord = vs_dc_elementCoord[0];
-  dc.primitiveCoord = vs_dc_primitiveCoord[0];
-  dc.fvarCoord = vs_dc_fvarCoord[0];
-  dc.shaderCoord = vs_dc_shaderCoord[0];
-  dc.vertexCoord = vs_dc_vertexCoord[0];
-  dc.topologyVisibilityCoord = vs_dc_topologyVisibilityCoord[0];
-  dc.varyingCoord = vs_dc_varyingCoord[0];
-  dc.instanceIndex[0] = vs_dc_instanceIndexI0[0];
+  dc.modelCoord = vs_interstageDrawingCoord0[0][0];
+  dc.constantCoord = vs_interstageDrawingCoord0[0][1];
+  dc.elementCoord = vs_interstageDrawingCoord0[0][2];
+  dc.primitiveCoord = vs_interstageDrawingCoord0[0][3];
+  dc.fvarCoord = vs_interstageDrawingCoord1[0][0];
+  dc.shaderCoord = vs_interstageDrawingCoord1[0][1];
+  dc.vertexCoord = vs_interstageDrawingCoord1[0][2];
+  dc.topologyVisibilityCoord = vs_interstageDrawingCoord1[0][3];
+  dc.varyingCoord = vs_interstageDrawingCoord2[0][0];
+  dc.instanceIndex[0] = vs_interstageDrawingCoord2[0][1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -1020,16 +1013,16 @@ void ProcessPrimvarsOut(int index) {
   );
   hd_barycentricCoord = coords[index];
   hd_drawingCoord dc = GetDrawingCoord();
-  gs_dc_modelCoord = dc.modelCoord;
-  gs_dc_constantCoord = dc.constantCoord;
-  gs_dc_elementCoord = dc.elementCoord;
-  gs_dc_primitiveCoord = dc.primitiveCoord;
-  gs_dc_fvarCoord = dc.fvarCoord;
-  gs_dc_shaderCoord = dc.shaderCoord;
-  gs_dc_vertexCoord = dc.vertexCoord;
-  gs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  gs_dc_varyingCoord = dc.varyingCoord;
-  gs_dc_instanceIndexI0 = dc.instanceIndex[0];
+  gs_interstageDrawingCoord0[0] = dc.modelCoord;
+  gs_interstageDrawingCoord0[1] = dc.constantCoord;
+  gs_interstageDrawingCoord0[2] = dc.elementCoord;
+  gs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  gs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  gs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  gs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  gs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  gs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  gs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = inPrimvars[index].points;
   outPrimvars.normals = inPrimvars[index].normals;
   outPrimvars.dispTextureCoord = HdGet_dispTextureCoord(index);
@@ -1085,6 +1078,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -1430,396 +1430,6 @@ vec3 GetQuadGeometryNormal(vec3 Neye,
 }
 
 
-/// Decoding utilities for selection highlighting.
-/// This mixin may be safely included by any shader stage. Its lone dependency
-/// on code generation is the hdxSelectionBuffer SSBO that holds the encoded
-/// selection state.
-
-// This should match the HdSelection enum.
-int GetMaxNumSelectionHighlightModes()
-{
-    return 2;
-}
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-// helper methods to decode hdxSelectionBuffer
-// ------ selection highlight mode specifics -------
-bool HighlightModeHasSelection(int offset)
-{
-    return (offset != 0);
-}
-
-int GetIndexOffsetForHighlightMode(int mode)
-{
-    return HdGet_hdxSelectionBuffer(mode + 1/*[0] holds #modes*/);
-}
-
-int GetNumSelectionHighlightModes()
-{
-    return HdGet_hdxSelectionBuffer(0);
-}
-
-// ------  selection offset specifics -------
-// Note: This should match the selection offset encoding in
-// hdx/SelectionTracker.cpp
-void DecodeSelOffset(int selOffset, REF(thread, bool) isSelected,
-                     REF(thread, int) nextOffset)
-{
-    isSelected = bool(selOffset & 0x1); // bit 0
-    nextOffset = selOffset >> 1;        // bits 31:1
-}
-
-// --------- subprim decoding ----------
-// Each subprims offsets' buffer encoding is:
-// [subprim-type][min][max][     selOffsets     ]
-// <----------3 ----------><--- max - min + 1 -->
-struct SubprimHeader {
-    int type;
-    int min;
-    int max;
-};
-SubprimHeader DecodeSubprimHeader(int offset)
-{
-    SubprimHeader header;
-    header.type = HdGet_hdxSelectionBuffer(offset    );
-    header.min  = HdGet_hdxSelectionBuffer(offset + 1);
-    header.max  = HdGet_hdxSelectionBuffer(offset + 2);
-    return header;
-}
-
-bool IsSubprimSelected(int id, int min, int max, int headerStart,
-                       REF(thread, int) nextSubprimOffset)
-{
-    const int SUBPRIM_SELOFFSETS_HEADER_SIZE  = 3;
-
-    nextSubprimOffset = 0; // initialize
-    bool isSelected = false;
-
-    if (id >= min && id < max) {
-        int netSubprimIndex =
-            headerStart + SUBPRIM_SELOFFSETS_HEADER_SIZE + id - min;
-        int selOffset = HdGet_hdxSelectionBuffer(netSubprimIndex);
-
-        DecodeSelOffset(selOffset, /*out*/isSelected, /*out*/nextSubprimOffset);
-    } else {
-        // The subprim id does not fall in the selected id range, so the subprim
-        // in question isn't selected. However, we can still have other
-        // subprim(s) selected. To get the offset to jump to, we mimic decoding
-        // the "min" subprim id.
-        int minSubprimIndex = headerStart + SUBPRIM_SELOFFSETS_HEADER_SIZE;
-        DecodeSelOffset(HdGet_hdxSelectionBuffer(minSubprimIndex),
-                        /*out*/isSelected, /*out*/nextSubprimOffset);
-        isSelected = false;
-    }
-
-    return isSelected;
-}
-#endif // HD_HAS_hdxSelectionBuffer
-
-// Keep the result struct definition outside guards.
-struct SubprimSelectionResult {
-    bool elementSelected;
-    bool edgeSelected;
-    bool pointSelected;
-    int  pointColorId;
-};
-
-SubprimSelectionResult InitSubprimSelectionResult(
-    bool _elementSelected,
-    bool _edgeSelected,
-    bool _pointSelected,
-    int _pointColorId)
-{
-    SubprimSelectionResult res;
-
-    res.elementSelected = _elementSelected;
-    res.edgeSelected = _edgeSelected;
-    res.pointSelected = _pointSelected;
-    res.pointColorId = _pointColorId;
-
-    return res;
-}
-
-bool IsAnySubprimSelected(SubprimSelectionResult s)
-{
-    return (s.elementSelected || s.edgeSelected || s.pointSelected);
-}
-bool HasCustomizedPointColor(SubprimSelectionResult s)
-{
-    // Use -1 to encode selected points that don't have a custom point color.
-    return (s.pointColorId != -1);
-}
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-// Note: These should match the SubprimType enum in hdx/SelectionTracker.cpp
-#define SUBPRIM_TYPE_ELEMENT 0
-#define SUBPRIM_TYPE_EDGE    1
-#define SUBPRIM_TYPE_POINT   2
-#define SUBPRIM_TYPE_INSTANCE 3
-
-SubprimSelectionResult GetSubprimSel(int offset,
-                                     int elementId, int edgeId, int pointId)
-{
-    SubprimSelectionResult s = InitSubprimSelectionResult(false, false, false, 0);
-
-    int nextSubprimOffset = 0;
-    SubprimHeader header = DecodeSubprimHeader(offset);
-
-    if (header.type == SUBPRIM_TYPE_ELEMENT) {
-        s.elementSelected =
-            IsSubprimSelected(elementId, header.min, header.max,
-                              offset, /*out*/nextSubprimOffset);
-
-        if (nextSubprimOffset != 0) {
-            // fragment has additional subprim(s) selected. update header.
-            header = DecodeSubprimHeader(nextSubprimOffset);
-            offset = nextSubprimOffset;
-        }
-    }
-
-    if (header.type == SUBPRIM_TYPE_EDGE) {
-        s.edgeSelected =
-            IsSubprimSelected(edgeId, header.min, header.max,
-                              offset, /*out*/nextSubprimOffset);
-
-        if (nextSubprimOffset != 0) {
-            // fragment has points selected. update header.
-            header = DecodeSubprimHeader(nextSubprimOffset);
-            offset = nextSubprimOffset;
-        }
-    }
-
-    if (header.type == SUBPRIM_TYPE_POINT) {
-        s.pointSelected =
-            IsSubprimSelected(pointId, header.min, header.max,
-                              offset, /*unused*/nextSubprimOffset);
-        // For points alone, since there isn't any subprim to follow it, the
-        // offset field is overriden to represent the index into the
-        // selectedPointColors buffer to support customized coloring of a set of
-        // selected points.
-        s.pointColorId = nextSubprimOffset;
-    }
-
-    return s;
-}
-
-// --------- instance decoding ----------
-bool IsInstanceSelected(int offset, REF(thread, int) nextOffset)
-{
-    // If we don't find an instance subprim block, pass the same offset to
-    // GetSubprimSel.
-    nextOffset = offset;
-    bool sel = false;
-
-    int instanceId = GetDrawingCoord().instanceIndex[0];
-
-    SubprimHeader header = DecodeSubprimHeader(offset);
-    if (header.type == SUBPRIM_TYPE_INSTANCE) {
-        sel =
-            IsSubprimSelected(instanceId, header.min, header.max,
-                              offset, /*out*/nextOffset);
-    }
-
-    return sel;
-}
-#endif // HD_HAS_hdxSelectionBuffer
-
-// --------- selection buffer decoding entry point ----------
-struct SelectionResult {
-    bool primOrInstanceSel;
-    SubprimSelectionResult subprimSel;
-};
-
-SelectionResult InitSelectionResult(
-    bool _primOrInstanceSel,
-    bool _elementSelected,
-    bool _edgeSelected,
-    bool _pointSelected,
-    int _pointColorId)
-{
-    SelectionResult res;
-
-    res.primOrInstanceSel = _primOrInstanceSel;
-    res.subprimSel = InitSubprimSelectionResult(
-                        _elementSelected, _edgeSelected,
-                        _pointSelected, _pointColorId);
-
-    return res;
-}
-
-
-// Decodes the selection buffer encoding scheme for a given mode, and returns
-// the selection result.
-SelectionResult GetSelectionResult(int mode,
-                                   int elementId, int edgeId, int pointId)
-{
-    SelectionResult res = InitSelectionResult(false, false, false, false, 0);
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-    // The hdxSelectionBuffer layout is:
-    // [#modes] [per-mode offset] [data mode0] ... [data modeM]
-    // [---------header---------]
-    // Each mode's data is laid out as:
-    // [ prims | points | edges | elements | instance level-N | ... | level 0 ]
-    //          <-------- subprims ------->  <----------- instances --------->
-    //          <---------------------- per prim ---------------------------->
-    // See hdx/SelectionTracker.cpp for details on the encoding scheme.
-    int modeOffset = GetIndexOffsetForHighlightMode(mode);
-    if (!HighlightModeHasSelection(modeOffset)) {
-        // highlight mode has no selected objects (prims/instances/elements)
-        return res;
-    }
-
-    const int PRIM_SELOFFSETS_HEADER_SIZE = 2;
-    const int primId = HdGet_primID();
-    int smin = HdGet_hdxSelectionBuffer(modeOffset);
-    int smax = HdGet_hdxSelectionBuffer(modeOffset + 1);
-
-    if (primId >= smin && primId < smax) {
-        int offset = modeOffset + PRIM_SELOFFSETS_HEADER_SIZE + primId - smin;
-        int nextOffset = 0;
-        bool sel = false;
-        DecodeSelOffset(HdGet_hdxSelectionBuffer(offset),
-                        /*out*/sel, /*out*/nextOffset);
-
-        // At this point, sel indicates whether the fragment corresponds to
-        // a prim that needs to be fully highlighted, while a non-zero
-        // nextOffset indicates whether additional decoding may be done.
-
-        // We don't currently differentiate between prim, instance and
-        // subprim selection highlighting (i.e., visually, they look the
-        // same), and thus can skip additional decoding if sel is true.
-        // We choose not to, for ease of future customization.
-        if (nextOffset != 0) {
-            // check if instance (or) subprim(s) are selected
-            offset = nextOffset;
-            sel = sel || IsInstanceSelected(offset, /*out*/nextOffset);
-
-            if (nextOffset != 0) {
-                res.subprimSel =
-                    GetSubprimSel(nextOffset, elementId, edgeId, pointId);
-            }
-        }
-        res.primOrInstanceSel = sel;
-    }
-#endif // HD_HAS_hdxSelectionBuffer
-
-    return res;
-}
-
-// Returns the logical OR of the inputs
-SelectionResult
-_CombineWithOr(SelectionResult a, SelectionResult b)
-{
-    SelectionResult res = InitSelectionResult(false, false, false, false, 0);
-
-    res.primOrInstanceSel = a.primOrInstanceSel || b.primOrInstanceSel;
-    res.subprimSel.elementSelected = a.subprimSel.elementSelected ||
-                                   b.subprimSel.elementSelected;
-    res.subprimSel.edgeSelected = a.subprimSel.edgeSelected ||
-                                b.subprimSel.edgeSelected;
-    res.subprimSel.pointSelected = a.subprimSel.pointSelected ||
-                                 b.subprimSel.pointSelected;
-    // pointColorIndex is ignored.
-    return res;
-}
-
-// Returns the net selection result aggregating the result of each selection
-// mode.
-SelectionResult GetNetSelectionResult(int elementId, int edgeId, int pointId)
-{
-    SelectionResult netResult = InitSelectionResult(false, false, false, false, 0);
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-    const int numSelectionModes = GetNumSelectionHighlightModes();
-    for (int mode = 0; mode < numSelectionModes; mode++) {
-        SelectionResult modeResult =
-            GetSelectionResult(mode, elementId, edgeId, pointId);
-        netResult = _CombineWithOr(modeResult, netResult);
-    }
-#endif
-    return netResult;
-}
-
-
-// Mixin for use in the geometry shader stage.
-// Helper functions to determine if the element (face) is selected for either
-// a given selection mode, or any of the modes.
-
-FORWARD_DECL(int GetElementID()); // code gen
-
-bool IsElementSelected(int mode)
-{
-    bool sel = false;
-    #if defined(HD_HAS_hdxSelectionBuffer)
-    const int numSelectionModes = GetNumSelectionHighlightModes();
-    if (mode < numSelectionModes) {
-        SelectionResult res =
-            GetSelectionResult(mode, GetElementID(),
-                               /*edgeId*/-1, /*pointId*/-1);
-        if (res.subprimSel.elementSelected) {
-            sel = true;
-        }
-    }
-    #endif
-    return sel;
-}
-
-bool IsSelected()
-{
-    // Edge and point selection aren't relevant at the GS stage.
-    SelectionResult res = GetNetSelectionResult(
-        GetElementID(), /*edgeId*/-1, /*pointId*/-1);
-
-   return res.primOrInstanceSel || res.subprimSel.elementSelected;
-}
-
-
-// Mixin for use in the geometry shader stage for wireframe rendering.
-// See comment below.
-
-FORWARD_DECL(int GetMaxNumSelectionHighlightModes());
-FORWARD_DECL(bool IsElementSelected(int mode));
-FORWARD_DECL(int GetElementID()); // code gen
-
-vec4 ComputeSelectionOffset()
-{
-    // For wireframe, we only render the edges of faces.  Because we don't have
-    // a way to control which face gets rasterized first, if face A is selected
-    // and face B is unselected, it's possible for face B to draw over face A
-    // and for the highlight to be dropped.
-
-    // To compensate for this, since we're running the geometry shader anyway,
-    // add a small polygon offset for selected faces, to push them in front of
-    // unselected faces.
-
-    // For doubly-selected faces (e.g. rollover & selection), apply a double
-    // offset.  The code below chooses a unique offset for each combination
-    // of selection modes by constructing a bitmask of selection modes for
-    // this face, and reinterpreting it as an integer.
-
-    int offset = 0;
-
-    int numModes = GetMaxNumSelectionHighlightModes();
-    for (int mode = 0; mode < numModes; ++mode) {
-        if (IsElementSelected(mode)) {
-            offset += (1 << mode);
-        }
-    }
-
-    // Note: for our base epsilon, we're choosing this somewhat arbitrarily.
-    // This is an eye space epsilon, so it's not dependent on distance-from-
-    // camera.  Rather, it's dependent on scene scale.  1e-3 works well for
-    // our scenes, but if this causes trouble we could use an epsilon based on
-    // the eye-space distance of a z-buffer bit flip, which would match the
-    // behavior of glPolygonOffset better, at the cost of more math and some
-    // extra shader uniforms.
-    float eps = 1e-3;
-
-    return vec4(0, 0, offset * eps, 0);
-}
-
-
 
 vec4 DisplacementTerminal(int index, vec4 Peye, vec3 Neye, vec4 patchCoord)
 {
@@ -1854,8 +1464,6 @@ void emit(int index, vec4 Peye, vec3 Neye)
     EmitVertex();
 }
 
-FORWARD_DECL(vec4 ComputeSelectionOffset()); // selection.glslfx
-
 void main(void)
 {
     gl_PrimitiveID = gl_PrimitiveIDIn;
@@ -1879,13 +1487,6 @@ void main(void)
     vec4 Peye2 = DisplacementTerminal(
         2, inData[2].Peye, Neye2, GetPatchCoord(2));
 
-    // For wireframe, add a polygon offset to selected faces to ensure they
-    // rasterize over unselected faces.
-    vec4 selOffset = ComputeSelectionOffset();
-    Peye0 += selOffset;
-    Peye1 += selOffset;
-    Peye2 += selOffset;
-
     // triangle 0: vertices (0,1,2)
     emit(0, Peye0, Neye0);
     emit(1, Peye1, Neye1);
@@ -1908,6 +1509,7 @@ void main(void)
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -2050,22 +1652,14 @@ layout(std430, binding = 3) readonly buffer ssbo_faceVisibility { float faceVisi
 layout(std430, binding = 4) readonly buffer ssbo_dispTextureCoord { vec2 dispTextureCoord[]; };
 layout(location = 2) in vec4 gsPatchCoord;
 noperspective layout(location = 3) in vec3 hd_barycentricCoord;
-flat layout(location = 7) in int gs_dc_modelCoord;
-flat layout(location = 8) in int gs_dc_constantCoord;
-flat layout(location = 9) in int gs_dc_elementCoord;
-flat layout(location = 10) in int gs_dc_primitiveCoord;
-flat layout(location = 11) in int gs_dc_fvarCoord;
-flat layout(location = 12) in int gs_dc_shaderCoord;
-flat layout(location = 13) in int gs_dc_vertexCoord;
-flat layout(location = 14) in int gs_dc_topologyVisibilityCoord;
-flat layout(location = 15) in int gs_dc_varyingCoord;
-flat layout(location = 16) in int gs_dc_instanceIndexI0;
-flat layout(location = 17) in int gs_dc_instanceCoordsI0;
+flat layout(location = 4) in ivec4 gs_interstageDrawingCoord0;
+flat layout(location = 5) in ivec4 gs_interstageDrawingCoord1;
+flat layout(location = 6) in ivec4 gs_interstageDrawingCoord2;
 layout(location = 0) in VertexData {
   vec4 Peye;
   vec3 Neye;
 } inData;
-layout(location = 4) in PrimvarData {
+layout(location = 7) in PrimvarData {
   vec3 points;
   vec3 normals;
   vec2 dispTextureCoord;
@@ -2121,16 +1715,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = gs_dc_modelCoord;
-  dc.constantCoord = gs_dc_constantCoord;
-  dc.elementCoord = gs_dc_elementCoord;
-  dc.primitiveCoord = gs_dc_primitiveCoord;
-  dc.fvarCoord = gs_dc_fvarCoord;
-  dc.shaderCoord = gs_dc_shaderCoord;
-  dc.vertexCoord = gs_dc_vertexCoord;
-  dc.topologyVisibilityCoord = gs_dc_topologyVisibilityCoord;
-  dc.varyingCoord = gs_dc_varyingCoord;
-  dc.instanceIndex[0] = gs_dc_instanceIndexI0;
+  dc.modelCoord = gs_interstageDrawingCoord0[0];
+  dc.constantCoord = gs_interstageDrawingCoord0[1];
+  dc.elementCoord = gs_interstageDrawingCoord0[2];
+  dc.primitiveCoord = gs_interstageDrawingCoord0[3];
+  dc.fvarCoord = gs_interstageDrawingCoord1[0];
+  dc.shaderCoord = gs_interstageDrawingCoord1[1];
+  dc.vertexCoord = gs_interstageDrawingCoord1[2];
+  dc.topologyVisibilityCoord = gs_interstageDrawingCoord1[3];
+  dc.varyingCoord = gs_interstageDrawingCoord2[0];
+  dc.instanceIndex[0] = gs_interstageDrawingCoord2[1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -2248,6 +1842,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -2384,9 +1985,34 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
+}
+
+
+
+void RenderId()
+{
+    // do nothing
+}
+
+
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
 }
 
 
@@ -2750,9 +2376,9 @@ vec4 GetEdgeDistanceQuad()
 
 
 
-vec4 ApplyFinalEdgeOpacity(vec4 Cfill)
+vec4 ApplyFinalEdgeOpacity(vec4 Cfill, float p)
 {
-    Cfill.a = 1.0;
+    Cfill.a = mix(Cfill.a, 1, p);
     return Cfill;
 }
 
@@ -2769,7 +2395,7 @@ vec4 ApplyEdgeColor(vec4 Cfill, vec4 patchCoord)
 
     Cfill.rgb = mix(Cfill.rgb, wireColor.rgb, wireColor.a);
 
-    return ApplyFinalEdgeOpacity(Cfill);
+    return ApplyFinalEdgeOpacity(Cfill, p);
 }
 
 
@@ -2842,6 +2468,9 @@ vec4 ShadingTerminal(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
                                          Neye,
                                          shadingColor);
 #endif
+
+        // Modify the shaded color by camera exposure.
+        shadingColor.rgb *= GetLinearExposure();
 
         reprColor.rgb = reprStyle.useSurfaceShaderColor ?
                         shadingColor.rgb :
@@ -2950,6 +2579,15 @@ vec3 ComputeBaseFaceEdgeDistanceTriangle()
     return vec3(edgePickRadius) * vec3(not(nearEdge));
 }
 
+bool SelectWireframeFaceEdges()
+{
+    // Make sure that edges of selected faces are highlighted correctly for
+    // wireframe lines, i.e. if an edge of an adjacent non-selected face
+    // draws over an edge of a selected face that the edge is drawn using
+    // the correct selection color.
+    return true;
+}
+
 
 
 float GetSelectedEdgeOpacity()
@@ -3017,6 +2655,13 @@ int GetPointId()
 }
 
 
+
+void ApplyDiskSampleMask()
+{
+    // do nothing
+}
+
+
 void DiscardBasedOnTopologicalVisibility()
 {
     // Nothing to do, since there's no authored opinion.
@@ -3064,6 +2709,8 @@ vec3 ComputeScreenSpaceNeye()
 
 void main(void)
 {
+    ApplyDiskSampleMask();
+
     bool isFlipped = IsFlipped();
 
     DiscardBasedOnShading(gl_FrontFacing, isFlipped);
@@ -3110,9 +2757,9 @@ void main(void)
 #import $TOOLS/hdSt/shaders/mesh.glslfx
 -- configuration
 {"techniques": {"default": {
-"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "PointId.Vertex.None", "Mesh.Vertex"] }
-, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Flat", "MeshNormal.Geometry.NoFlat", "Selection.DecodeUtils", "Selection.Geometry.ElementSel", "Selection.Geometry.WireSelOffset", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Quad"] }
-, "fragmentShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Fragment.SingleSided", "MeshFaceCull.Fragment.None", "MeshWire.Fragment.EdgeCoord.Barycentric", "MeshWire.Fragment.EdgeMaskQuad", "MeshWire.Fragment.EdgeCommon", "MeshWire.Fragment.EdgeParam", "MeshWire.Fragment.FinalEdgeOpacityForce", "MeshWire.Fragment.EdgeOnlyBlendColor", "Fragment.CommonTerminals", "Fragment.Surface", "Fragment.ScalarOverride", "EdgeId.Fragment.Common", "EdgeId.Fragment.QuadLines", "EdgeId.Fragment.QuadParam", "PointId.Fragment.Fallback", "Visibility.Fragment.Fallback", "Mesh.Fragment.PatchCoord", "Mesh.Fragment"] }
+"vertexShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "PointId.Vertex.None", "PointDisk.Vertex.None", "Mesh.Vertex"] }
+, "geometryShader" : { "source" : ["Instancing.Transform", "MeshNormal.Flat", "MeshNormal.Geometry.NoFlat", "Geometry.NoCustomDisplacement", "Mesh.Geometry.Quad"] }
+, "fragmentShader" : { "source" : ["Instancing.Transform", "MeshNormal.Pass", "MeshNormal.Fragment.SingleSided", "MeshFaceCull.Fragment.None", "MeshWire.Fragment.EdgeCoord.Barycentric", "MeshWire.Fragment.EdgeMaskQuad", "MeshWire.Fragment.EdgeCommon", "MeshWire.Fragment.EdgeParam", "MeshWire.Fragment.FinalEdgeOpacityForce", "MeshWire.Fragment.EdgeOnlyBlendColor", "Fragment.CommonTerminals", "Fragment.Surface", "Fragment.ScalarOverride", "EdgeId.Fragment.Common", "EdgeId.Fragment.QuadLines", "EdgeId.Fragment.QuadParam", "PointId.Fragment.Fallback", "PointDisk.Fragment.None", "Visibility.Fragment.Fallback", "Mesh.Fragment.PatchCoord", "Mesh.Fragment"] }
 }}}
 -------------------------------------------------------
 =======================================================
@@ -3135,6 +2782,7 @@ int HgiGetBaseInstance() {
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -3273,22 +2921,14 @@ layout(location = 1) in vec3 normals;
 uint hd_VertexID = gl_VertexIndex;
 uint hd_InstanceID = gl_InstanceIndex;
 uint hd_BaseInstance = HgiGetBaseInstance();
-flat layout(location = 0) out int vs_dc_modelCoord;
-flat layout(location = 1) out int vs_dc_constantCoord;
-flat layout(location = 2) out int vs_dc_elementCoord;
-flat layout(location = 3) out int vs_dc_primitiveCoord;
-flat layout(location = 4) out int vs_dc_fvarCoord;
-flat layout(location = 5) out int vs_dc_shaderCoord;
-flat layout(location = 6) out int vs_dc_vertexCoord;
-flat layout(location = 7) out int vs_dc_topologyVisibilityCoord;
-flat layout(location = 8) out int vs_dc_varyingCoord;
-flat layout(location = 9) out int vs_dc_instanceIndexI0;
-flat layout(location = 10) out int vs_dc_instanceCoordsI0;
-layout(location = 11) out VertexData {
+flat layout(location = 0) out ivec4 vs_interstageDrawingCoord0;
+flat layout(location = 1) out ivec4 vs_interstageDrawingCoord1;
+flat layout(location = 2) out ivec4 vs_interstageDrawingCoord2;
+layout(location = 3) out VertexData {
   vec4 Peye;
   vec3 Neye;
 } outData;
-layout(location = 13) out PrimvarData {
+layout(location = 5) out PrimvarData {
   vec3 points;
   vec3 normals;
 } outPrimvars;
@@ -3360,16 +3000,16 @@ float HdGetScalar_normals() { return HdGet_normals(0).x; }
 // //////// Codegen Proc VS //////// 
 void ProcessPrimvarsIn() {
   hd_drawingCoord dc = GetDrawingCoord();
-  vs_dc_modelCoord = dc.modelCoord;
-  vs_dc_constantCoord = dc.constantCoord;
-  vs_dc_elementCoord = dc.elementCoord;
-  vs_dc_primitiveCoord = dc.primitiveCoord;
-  vs_dc_fvarCoord = dc.fvarCoord;
-  vs_dc_shaderCoord = dc.shaderCoord;
-  vs_dc_vertexCoord = dc.vertexCoord;
-  vs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  vs_dc_varyingCoord = dc.varyingCoord;
-  vs_dc_instanceIndexI0 = dc.instanceIndex[0];
+  vs_interstageDrawingCoord0[0] = dc.modelCoord;
+  vs_interstageDrawingCoord0[1] = dc.constantCoord;
+  vs_interstageDrawingCoord0[2] = dc.elementCoord;
+  vs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  vs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  vs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  vs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  vs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  vs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  vs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = points;
   outPrimvars.normals = normals;
 }
@@ -3424,6 +3064,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -3753,6 +3400,14 @@ void ProcessPointId(int pointId)
 
 
 
+float ApplyPointSizeBias(float pointSize)
+{
+    // do nothing
+    return pointSize;
+}
+
+
+
 // Fwd declare methods defined in pointId.glslfx, that are used below.
 FORWARD_DECL(int GetPointId());
 FORWARD_DECL(float GetPointRasterSize(int));
@@ -3769,7 +3424,7 @@ void main(void)
     outData.Neye = GetNormal(vec3(0), 0); // normalized
 
     int pointId = GetPointId();
-    gl_PointSize = GetPointRasterSize(pointId);
+    gl_PointSize = ApplyPointSizeBias(GetPointRasterSize(pointId));
     ProcessPointId(pointId);
 
     gl_Position = vec4(GetProjectionMatrix() * outData.Peye);
@@ -3796,6 +3451,7 @@ void main(void)
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -3938,43 +3594,27 @@ layout(std430, binding = 1) readonly buffer ssbo_primitiveParam { int primitiveP
 layout(std430, binding = 2) readonly buffer ssbo_edgeIndices { ivec2 edgeIndices[]; };
 layout(std430, binding = 3) readonly buffer ssbo_faceVisibility { float faceVisibility[]; };
 layout(std430, binding = 4) readonly buffer ssbo_dispTextureCoord { vec2 dispTextureCoord[]; };
-flat layout(location = 0) in int vs_dc_modelCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 1) in int vs_dc_constantCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 2) in int vs_dc_elementCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 3) in int vs_dc_primitiveCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 4) in int vs_dc_fvarCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 5) in int vs_dc_shaderCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 6) in int vs_dc_vertexCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 7) in int vs_dc_topologyVisibilityCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 8) in int vs_dc_varyingCoord[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 9) in int vs_dc_instanceIndexI0[HD_NUM_PRIMITIVE_VERTS];
-flat layout(location = 10) in int vs_dc_instanceCoordsI0[HD_NUM_PRIMITIVE_VERTS];
-layout(location = 11) in VertexData {
+flat layout(location = 0) in ivec4 vs_interstageDrawingCoord0[HD_NUM_PRIMITIVE_VERTS];
+flat layout(location = 1) in ivec4 vs_interstageDrawingCoord1[HD_NUM_PRIMITIVE_VERTS];
+flat layout(location = 2) in ivec4 vs_interstageDrawingCoord2[HD_NUM_PRIMITIVE_VERTS];
+layout(location = 3) in VertexData {
   vec4 Peye;
   vec3 Neye;
 } inData[4];
-layout(location = 13) in PrimvarData {
+layout(location = 5) in PrimvarData {
   vec3 points;
   vec3 normals;
 } inPrimvars[HD_NUM_PRIMITIVE_VERTS];
 layout(location = 2) out vec4 gsPatchCoord;
 noperspective layout(location = 3) out vec3 hd_barycentricCoord;
-flat layout(location = 7) out int gs_dc_modelCoord;
-flat layout(location = 8) out int gs_dc_constantCoord;
-flat layout(location = 9) out int gs_dc_elementCoord;
-flat layout(location = 10) out int gs_dc_primitiveCoord;
-flat layout(location = 11) out int gs_dc_fvarCoord;
-flat layout(location = 12) out int gs_dc_shaderCoord;
-flat layout(location = 13) out int gs_dc_vertexCoord;
-flat layout(location = 14) out int gs_dc_topologyVisibilityCoord;
-flat layout(location = 15) out int gs_dc_varyingCoord;
-flat layout(location = 16) out int gs_dc_instanceIndexI0;
-flat layout(location = 17) out int gs_dc_instanceCoordsI0;
+flat layout(location = 4) out ivec4 gs_interstageDrawingCoord0;
+flat layout(location = 5) out ivec4 gs_interstageDrawingCoord1;
+flat layout(location = 6) out ivec4 gs_interstageDrawingCoord2;
 layout(location = 0) out VertexData {
   vec4 Peye;
   vec3 Neye;
 } outData;
-layout(location = 4) out PrimvarData {
+layout(location = 7) out PrimvarData {
   vec3 points;
   vec3 normals;
   vec2 dispTextureCoord;
@@ -4025,16 +3665,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = vs_dc_modelCoord[0];
-  dc.constantCoord = vs_dc_constantCoord[0];
-  dc.elementCoord = vs_dc_elementCoord[0];
-  dc.primitiveCoord = vs_dc_primitiveCoord[0];
-  dc.fvarCoord = vs_dc_fvarCoord[0];
-  dc.shaderCoord = vs_dc_shaderCoord[0];
-  dc.vertexCoord = vs_dc_vertexCoord[0];
-  dc.topologyVisibilityCoord = vs_dc_topologyVisibilityCoord[0];
-  dc.varyingCoord = vs_dc_varyingCoord[0];
-  dc.instanceIndex[0] = vs_dc_instanceIndexI0[0];
+  dc.modelCoord = vs_interstageDrawingCoord0[0][0];
+  dc.constantCoord = vs_interstageDrawingCoord0[0][1];
+  dc.elementCoord = vs_interstageDrawingCoord0[0][2];
+  dc.primitiveCoord = vs_interstageDrawingCoord0[0][3];
+  dc.fvarCoord = vs_interstageDrawingCoord1[0][0];
+  dc.shaderCoord = vs_interstageDrawingCoord1[0][1];
+  dc.vertexCoord = vs_interstageDrawingCoord1[0][2];
+  dc.topologyVisibilityCoord = vs_interstageDrawingCoord1[0][3];
+  dc.varyingCoord = vs_interstageDrawingCoord2[0][0];
+  dc.instanceIndex[0] = vs_interstageDrawingCoord2[0][1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -4127,16 +3767,16 @@ void ProcessPrimvarsOut(int index) {
   );
   hd_barycentricCoord = coords[index];
   hd_drawingCoord dc = GetDrawingCoord();
-  gs_dc_modelCoord = dc.modelCoord;
-  gs_dc_constantCoord = dc.constantCoord;
-  gs_dc_elementCoord = dc.elementCoord;
-  gs_dc_primitiveCoord = dc.primitiveCoord;
-  gs_dc_fvarCoord = dc.fvarCoord;
-  gs_dc_shaderCoord = dc.shaderCoord;
-  gs_dc_vertexCoord = dc.vertexCoord;
-  gs_dc_topologyVisibilityCoord = dc.topologyVisibilityCoord;
-  gs_dc_varyingCoord = dc.varyingCoord;
-  gs_dc_instanceIndexI0 = dc.instanceIndex[0];
+  gs_interstageDrawingCoord0[0] = dc.modelCoord;
+  gs_interstageDrawingCoord0[1] = dc.constantCoord;
+  gs_interstageDrawingCoord0[2] = dc.elementCoord;
+  gs_interstageDrawingCoord0[3] = dc.primitiveCoord;
+  gs_interstageDrawingCoord1[0] = dc.fvarCoord;
+  gs_interstageDrawingCoord1[1] = dc.shaderCoord;
+  gs_interstageDrawingCoord1[2] = dc.vertexCoord;
+  gs_interstageDrawingCoord1[3] = dc.topologyVisibilityCoord;
+  gs_interstageDrawingCoord2[0] = dc.varyingCoord;
+  gs_interstageDrawingCoord2[1] = dc.instanceIndex[0];
   outPrimvars.points = inPrimvars[index].points;
   outPrimvars.normals = inPrimvars[index].normals;
   outPrimvars.dispTextureCoord = HdGet_dispTextureCoord(index);
@@ -4192,6 +3832,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -4537,396 +4184,6 @@ vec3 GetQuadGeometryNormal(vec3 Neye,
 }
 
 
-/// Decoding utilities for selection highlighting.
-/// This mixin may be safely included by any shader stage. Its lone dependency
-/// on code generation is the hdxSelectionBuffer SSBO that holds the encoded
-/// selection state.
-
-// This should match the HdSelection enum.
-int GetMaxNumSelectionHighlightModes()
-{
-    return 2;
-}
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-// helper methods to decode hdxSelectionBuffer
-// ------ selection highlight mode specifics -------
-bool HighlightModeHasSelection(int offset)
-{
-    return (offset != 0);
-}
-
-int GetIndexOffsetForHighlightMode(int mode)
-{
-    return HdGet_hdxSelectionBuffer(mode + 1/*[0] holds #modes*/);
-}
-
-int GetNumSelectionHighlightModes()
-{
-    return HdGet_hdxSelectionBuffer(0);
-}
-
-// ------  selection offset specifics -------
-// Note: This should match the selection offset encoding in
-// hdx/SelectionTracker.cpp
-void DecodeSelOffset(int selOffset, REF(thread, bool) isSelected,
-                     REF(thread, int) nextOffset)
-{
-    isSelected = bool(selOffset & 0x1); // bit 0
-    nextOffset = selOffset >> 1;        // bits 31:1
-}
-
-// --------- subprim decoding ----------
-// Each subprims offsets' buffer encoding is:
-// [subprim-type][min][max][     selOffsets     ]
-// <----------3 ----------><--- max - min + 1 -->
-struct SubprimHeader {
-    int type;
-    int min;
-    int max;
-};
-SubprimHeader DecodeSubprimHeader(int offset)
-{
-    SubprimHeader header;
-    header.type = HdGet_hdxSelectionBuffer(offset    );
-    header.min  = HdGet_hdxSelectionBuffer(offset + 1);
-    header.max  = HdGet_hdxSelectionBuffer(offset + 2);
-    return header;
-}
-
-bool IsSubprimSelected(int id, int min, int max, int headerStart,
-                       REF(thread, int) nextSubprimOffset)
-{
-    const int SUBPRIM_SELOFFSETS_HEADER_SIZE  = 3;
-
-    nextSubprimOffset = 0; // initialize
-    bool isSelected = false;
-
-    if (id >= min && id < max) {
-        int netSubprimIndex =
-            headerStart + SUBPRIM_SELOFFSETS_HEADER_SIZE + id - min;
-        int selOffset = HdGet_hdxSelectionBuffer(netSubprimIndex);
-
-        DecodeSelOffset(selOffset, /*out*/isSelected, /*out*/nextSubprimOffset);
-    } else {
-        // The subprim id does not fall in the selected id range, so the subprim
-        // in question isn't selected. However, we can still have other
-        // subprim(s) selected. To get the offset to jump to, we mimic decoding
-        // the "min" subprim id.
-        int minSubprimIndex = headerStart + SUBPRIM_SELOFFSETS_HEADER_SIZE;
-        DecodeSelOffset(HdGet_hdxSelectionBuffer(minSubprimIndex),
-                        /*out*/isSelected, /*out*/nextSubprimOffset);
-        isSelected = false;
-    }
-
-    return isSelected;
-}
-#endif // HD_HAS_hdxSelectionBuffer
-
-// Keep the result struct definition outside guards.
-struct SubprimSelectionResult {
-    bool elementSelected;
-    bool edgeSelected;
-    bool pointSelected;
-    int  pointColorId;
-};
-
-SubprimSelectionResult InitSubprimSelectionResult(
-    bool _elementSelected,
-    bool _edgeSelected,
-    bool _pointSelected,
-    int _pointColorId)
-{
-    SubprimSelectionResult res;
-
-    res.elementSelected = _elementSelected;
-    res.edgeSelected = _edgeSelected;
-    res.pointSelected = _pointSelected;
-    res.pointColorId = _pointColorId;
-
-    return res;
-}
-
-bool IsAnySubprimSelected(SubprimSelectionResult s)
-{
-    return (s.elementSelected || s.edgeSelected || s.pointSelected);
-}
-bool HasCustomizedPointColor(SubprimSelectionResult s)
-{
-    // Use -1 to encode selected points that don't have a custom point color.
-    return (s.pointColorId != -1);
-}
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-// Note: These should match the SubprimType enum in hdx/SelectionTracker.cpp
-#define SUBPRIM_TYPE_ELEMENT 0
-#define SUBPRIM_TYPE_EDGE    1
-#define SUBPRIM_TYPE_POINT   2
-#define SUBPRIM_TYPE_INSTANCE 3
-
-SubprimSelectionResult GetSubprimSel(int offset,
-                                     int elementId, int edgeId, int pointId)
-{
-    SubprimSelectionResult s = InitSubprimSelectionResult(false, false, false, 0);
-
-    int nextSubprimOffset = 0;
-    SubprimHeader header = DecodeSubprimHeader(offset);
-
-    if (header.type == SUBPRIM_TYPE_ELEMENT) {
-        s.elementSelected =
-            IsSubprimSelected(elementId, header.min, header.max,
-                              offset, /*out*/nextSubprimOffset);
-
-        if (nextSubprimOffset != 0) {
-            // fragment has additional subprim(s) selected. update header.
-            header = DecodeSubprimHeader(nextSubprimOffset);
-            offset = nextSubprimOffset;
-        }
-    }
-
-    if (header.type == SUBPRIM_TYPE_EDGE) {
-        s.edgeSelected =
-            IsSubprimSelected(edgeId, header.min, header.max,
-                              offset, /*out*/nextSubprimOffset);
-
-        if (nextSubprimOffset != 0) {
-            // fragment has points selected. update header.
-            header = DecodeSubprimHeader(nextSubprimOffset);
-            offset = nextSubprimOffset;
-        }
-    }
-
-    if (header.type == SUBPRIM_TYPE_POINT) {
-        s.pointSelected =
-            IsSubprimSelected(pointId, header.min, header.max,
-                              offset, /*unused*/nextSubprimOffset);
-        // For points alone, since there isn't any subprim to follow it, the
-        // offset field is overriden to represent the index into the
-        // selectedPointColors buffer to support customized coloring of a set of
-        // selected points.
-        s.pointColorId = nextSubprimOffset;
-    }
-
-    return s;
-}
-
-// --------- instance decoding ----------
-bool IsInstanceSelected(int offset, REF(thread, int) nextOffset)
-{
-    // If we don't find an instance subprim block, pass the same offset to
-    // GetSubprimSel.
-    nextOffset = offset;
-    bool sel = false;
-
-    int instanceId = GetDrawingCoord().instanceIndex[0];
-
-    SubprimHeader header = DecodeSubprimHeader(offset);
-    if (header.type == SUBPRIM_TYPE_INSTANCE) {
-        sel =
-            IsSubprimSelected(instanceId, header.min, header.max,
-                              offset, /*out*/nextOffset);
-    }
-
-    return sel;
-}
-#endif // HD_HAS_hdxSelectionBuffer
-
-// --------- selection buffer decoding entry point ----------
-struct SelectionResult {
-    bool primOrInstanceSel;
-    SubprimSelectionResult subprimSel;
-};
-
-SelectionResult InitSelectionResult(
-    bool _primOrInstanceSel,
-    bool _elementSelected,
-    bool _edgeSelected,
-    bool _pointSelected,
-    int _pointColorId)
-{
-    SelectionResult res;
-
-    res.primOrInstanceSel = _primOrInstanceSel;
-    res.subprimSel = InitSubprimSelectionResult(
-                        _elementSelected, _edgeSelected,
-                        _pointSelected, _pointColorId);
-
-    return res;
-}
-
-
-// Decodes the selection buffer encoding scheme for a given mode, and returns
-// the selection result.
-SelectionResult GetSelectionResult(int mode,
-                                   int elementId, int edgeId, int pointId)
-{
-    SelectionResult res = InitSelectionResult(false, false, false, false, 0);
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-    // The hdxSelectionBuffer layout is:
-    // [#modes] [per-mode offset] [data mode0] ... [data modeM]
-    // [---------header---------]
-    // Each mode's data is laid out as:
-    // [ prims | points | edges | elements | instance level-N | ... | level 0 ]
-    //          <-------- subprims ------->  <----------- instances --------->
-    //          <---------------------- per prim ---------------------------->
-    // See hdx/SelectionTracker.cpp for details on the encoding scheme.
-    int modeOffset = GetIndexOffsetForHighlightMode(mode);
-    if (!HighlightModeHasSelection(modeOffset)) {
-        // highlight mode has no selected objects (prims/instances/elements)
-        return res;
-    }
-
-    const int PRIM_SELOFFSETS_HEADER_SIZE = 2;
-    const int primId = HdGet_primID();
-    int smin = HdGet_hdxSelectionBuffer(modeOffset);
-    int smax = HdGet_hdxSelectionBuffer(modeOffset + 1);
-
-    if (primId >= smin && primId < smax) {
-        int offset = modeOffset + PRIM_SELOFFSETS_HEADER_SIZE + primId - smin;
-        int nextOffset = 0;
-        bool sel = false;
-        DecodeSelOffset(HdGet_hdxSelectionBuffer(offset),
-                        /*out*/sel, /*out*/nextOffset);
-
-        // At this point, sel indicates whether the fragment corresponds to
-        // a prim that needs to be fully highlighted, while a non-zero
-        // nextOffset indicates whether additional decoding may be done.
-
-        // We don't currently differentiate between prim, instance and
-        // subprim selection highlighting (i.e., visually, they look the
-        // same), and thus can skip additional decoding if sel is true.
-        // We choose not to, for ease of future customization.
-        if (nextOffset != 0) {
-            // check if instance (or) subprim(s) are selected
-            offset = nextOffset;
-            sel = sel || IsInstanceSelected(offset, /*out*/nextOffset);
-
-            if (nextOffset != 0) {
-                res.subprimSel =
-                    GetSubprimSel(nextOffset, elementId, edgeId, pointId);
-            }
-        }
-        res.primOrInstanceSel = sel;
-    }
-#endif // HD_HAS_hdxSelectionBuffer
-
-    return res;
-}
-
-// Returns the logical OR of the inputs
-SelectionResult
-_CombineWithOr(SelectionResult a, SelectionResult b)
-{
-    SelectionResult res = InitSelectionResult(false, false, false, false, 0);
-
-    res.primOrInstanceSel = a.primOrInstanceSel || b.primOrInstanceSel;
-    res.subprimSel.elementSelected = a.subprimSel.elementSelected ||
-                                   b.subprimSel.elementSelected;
-    res.subprimSel.edgeSelected = a.subprimSel.edgeSelected ||
-                                b.subprimSel.edgeSelected;
-    res.subprimSel.pointSelected = a.subprimSel.pointSelected ||
-                                 b.subprimSel.pointSelected;
-    // pointColorIndex is ignored.
-    return res;
-}
-
-// Returns the net selection result aggregating the result of each selection
-// mode.
-SelectionResult GetNetSelectionResult(int elementId, int edgeId, int pointId)
-{
-    SelectionResult netResult = InitSelectionResult(false, false, false, false, 0);
-
-#if defined(HD_HAS_hdxSelectionBuffer)
-    const int numSelectionModes = GetNumSelectionHighlightModes();
-    for (int mode = 0; mode < numSelectionModes; mode++) {
-        SelectionResult modeResult =
-            GetSelectionResult(mode, elementId, edgeId, pointId);
-        netResult = _CombineWithOr(modeResult, netResult);
-    }
-#endif
-    return netResult;
-}
-
-
-// Mixin for use in the geometry shader stage.
-// Helper functions to determine if the element (face) is selected for either
-// a given selection mode, or any of the modes.
-
-FORWARD_DECL(int GetElementID()); // code gen
-
-bool IsElementSelected(int mode)
-{
-    bool sel = false;
-    #if defined(HD_HAS_hdxSelectionBuffer)
-    const int numSelectionModes = GetNumSelectionHighlightModes();
-    if (mode < numSelectionModes) {
-        SelectionResult res =
-            GetSelectionResult(mode, GetElementID(),
-                               /*edgeId*/-1, /*pointId*/-1);
-        if (res.subprimSel.elementSelected) {
-            sel = true;
-        }
-    }
-    #endif
-    return sel;
-}
-
-bool IsSelected()
-{
-    // Edge and point selection aren't relevant at the GS stage.
-    SelectionResult res = GetNetSelectionResult(
-        GetElementID(), /*edgeId*/-1, /*pointId*/-1);
-
-   return res.primOrInstanceSel || res.subprimSel.elementSelected;
-}
-
-
-// Mixin for use in the geometry shader stage for wireframe rendering.
-// See comment below.
-
-FORWARD_DECL(int GetMaxNumSelectionHighlightModes());
-FORWARD_DECL(bool IsElementSelected(int mode));
-FORWARD_DECL(int GetElementID()); // code gen
-
-vec4 ComputeSelectionOffset()
-{
-    // For wireframe, we only render the edges of faces.  Because we don't have
-    // a way to control which face gets rasterized first, if face A is selected
-    // and face B is unselected, it's possible for face B to draw over face A
-    // and for the highlight to be dropped.
-
-    // To compensate for this, since we're running the geometry shader anyway,
-    // add a small polygon offset for selected faces, to push them in front of
-    // unselected faces.
-
-    // For doubly-selected faces (e.g. rollover & selection), apply a double
-    // offset.  The code below chooses a unique offset for each combination
-    // of selection modes by constructing a bitmask of selection modes for
-    // this face, and reinterpreting it as an integer.
-
-    int offset = 0;
-
-    int numModes = GetMaxNumSelectionHighlightModes();
-    for (int mode = 0; mode < numModes; ++mode) {
-        if (IsElementSelected(mode)) {
-            offset += (1 << mode);
-        }
-    }
-
-    // Note: for our base epsilon, we're choosing this somewhat arbitrarily.
-    // This is an eye space epsilon, so it's not dependent on distance-from-
-    // camera.  Rather, it's dependent on scene scale.  1e-3 works well for
-    // our scenes, but if this causes trouble we could use an epsilon based on
-    // the eye-space distance of a z-buffer bit flip, which would match the
-    // behavior of glPolygonOffset better, at the cost of more math and some
-    // extra shader uniforms.
-    float eps = 1e-3;
-
-    return vec4(0, 0, offset * eps, 0);
-}
-
-
 
 vec4 DisplacementTerminal(int index, vec4 Peye, vec3 Neye, vec4 patchCoord)
 {
@@ -4961,8 +4218,6 @@ void emit(int index, vec4 Peye, vec3 Neye)
 
     EmitVertex();
 }
-
-FORWARD_DECL(vec4 ComputeSelectionOffset()); // selection.glslfx
 
 void main(void)
 {
@@ -5009,14 +4264,6 @@ void main(void)
     // In the case of flat normals, we use the vertex positions, so it doesn't
     // matter.
 
-    // For wireframe, add a polygon offset to selected faces to ensure they
-    // rasterize over unselected faces.
-    vec4 selOffset = ComputeSelectionOffset();
-    Peye0 += selOffset;
-    Peye1 += selOffset;
-    Peye2 += selOffset;
-    Peye3 += selOffset;
-
     // triangle 0: vertices (0,1,2)
     emit(0, Peye0, Neye0);
     emit(1, Peye1, Neye1);
@@ -5045,6 +4292,7 @@ void main(void)
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -5187,22 +4435,14 @@ layout(std430, binding = 3) readonly buffer ssbo_faceVisibility { float faceVisi
 layout(std430, binding = 4) readonly buffer ssbo_dispTextureCoord { vec2 dispTextureCoord[]; };
 layout(location = 2) in vec4 gsPatchCoord;
 noperspective layout(location = 3) in vec3 hd_barycentricCoord;
-flat layout(location = 7) in int gs_dc_modelCoord;
-flat layout(location = 8) in int gs_dc_constantCoord;
-flat layout(location = 9) in int gs_dc_elementCoord;
-flat layout(location = 10) in int gs_dc_primitiveCoord;
-flat layout(location = 11) in int gs_dc_fvarCoord;
-flat layout(location = 12) in int gs_dc_shaderCoord;
-flat layout(location = 13) in int gs_dc_vertexCoord;
-flat layout(location = 14) in int gs_dc_topologyVisibilityCoord;
-flat layout(location = 15) in int gs_dc_varyingCoord;
-flat layout(location = 16) in int gs_dc_instanceIndexI0;
-flat layout(location = 17) in int gs_dc_instanceCoordsI0;
+flat layout(location = 4) in ivec4 gs_interstageDrawingCoord0;
+flat layout(location = 5) in ivec4 gs_interstageDrawingCoord1;
+flat layout(location = 6) in ivec4 gs_interstageDrawingCoord2;
 layout(location = 0) in VertexData {
   vec4 Peye;
   vec3 Neye;
 } inData;
-layout(location = 4) in PrimvarData {
+layout(location = 7) in PrimvarData {
   vec3 points;
   vec3 normals;
   vec2 dispTextureCoord;
@@ -5258,16 +4498,16 @@ int GetPrimitiveIndex() {
 }
 hd_drawingCoord GetDrawingCoord() { 
   hd_drawingCoord dc; 
-  dc.modelCoord = gs_dc_modelCoord;
-  dc.constantCoord = gs_dc_constantCoord;
-  dc.elementCoord = gs_dc_elementCoord;
-  dc.primitiveCoord = gs_dc_primitiveCoord;
-  dc.fvarCoord = gs_dc_fvarCoord;
-  dc.shaderCoord = gs_dc_shaderCoord;
-  dc.vertexCoord = gs_dc_vertexCoord;
-  dc.topologyVisibilityCoord = gs_dc_topologyVisibilityCoord;
-  dc.varyingCoord = gs_dc_varyingCoord;
-  dc.instanceIndex[0] = gs_dc_instanceIndexI0;
+  dc.modelCoord = gs_interstageDrawingCoord0[0];
+  dc.constantCoord = gs_interstageDrawingCoord0[1];
+  dc.elementCoord = gs_interstageDrawingCoord0[2];
+  dc.primitiveCoord = gs_interstageDrawingCoord0[3];
+  dc.fvarCoord = gs_interstageDrawingCoord1[0];
+  dc.shaderCoord = gs_interstageDrawingCoord1[1];
+  dc.vertexCoord = gs_interstageDrawingCoord1[2];
+  dc.topologyVisibilityCoord = gs_interstageDrawingCoord1[3];
+  dc.varyingCoord = gs_interstageDrawingCoord2[0];
+  dc.instanceIndex[0] = gs_interstageDrawingCoord2[1];
   return dc; 
 }
 int HdGet_primitiveParam(int localIndex) {
@@ -5385,6 +4625,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -5521,9 +4768,34 @@ vec4 ApplyColorOverridesPostLighting(vec4 color)
 
 
 
-void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+void RenderColor(vec4 color)
 {
     colorOut = color;
+}
+
+
+
+void RenderId()
+{
+    // do nothing
+}
+
+
+
+void RenderNeye(vec3 Neye)
+{
+    // do nothing
+}
+
+
+
+void RenderOutput(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
+{
+    // Write to any desired AOVs here. The render pass shader configuation
+    // decides if any of these are no-ops.
+    RenderColor(color);
+    RenderId();
+    RenderNeye(Neye);
 }
 
 
@@ -5887,9 +5159,9 @@ vec4 GetEdgeDistanceQuad()
 
 
 
-vec4 ApplyFinalEdgeOpacity(vec4 Cfill)
+vec4 ApplyFinalEdgeOpacity(vec4 Cfill, float p)
 {
-    Cfill.a = 1.0;
+    Cfill.a = mix(Cfill.a, 1, p);
     return Cfill;
 }
 
@@ -5906,7 +5178,7 @@ vec4 ApplyEdgeColor(vec4 Cfill, vec4 patchCoord)
 
     Cfill.rgb = mix(Cfill.rgb, wireColor.rgb, wireColor.a);
 
-    return ApplyFinalEdgeOpacity(Cfill);
+    return ApplyFinalEdgeOpacity(Cfill, p);
 }
 
 
@@ -5979,6 +5251,9 @@ vec4 ShadingTerminal(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
                                          Neye,
                                          shadingColor);
 #endif
+
+        // Modify the shaded color by camera exposure.
+        shadingColor.rgb *= GetLinearExposure();
 
         reprColor.rgb = reprStyle.useSurfaceShaderColor ?
                         shadingColor.rgb :
@@ -6087,6 +5362,15 @@ vec4 ComputeBaseFaceEdgeDistanceQuad()
     return vec4(edgePickRadius) * vec4(not(nearEdge));
 }
 
+bool SelectWireframeFaceEdges()
+{
+    // Make sure that edges of selected faces are highlighted correctly for
+    // wireframe lines, i.e. if an edge of an adjacent non-selected face
+    // draws over an edge of a selected face that the edge is drawn using
+    // the correct selection color.
+    return true;
+}
+
 
 
 float GetSelectedEdgeOpacity()
@@ -6159,6 +5443,13 @@ int GetPointId()
 }
 
 
+
+void ApplyDiskSampleMask()
+{
+    // do nothing
+}
+
+
 void DiscardBasedOnTopologicalVisibility()
 {
     // Nothing to do, since there's no authored opinion.
@@ -6206,6 +5497,8 @@ vec3 ComputeScreenSpaceNeye()
 
 void main(void)
 {
+    ApplyDiskSampleMask();
+
     bool isFlipped = IsFlipped();
 
     DiscardBasedOnShading(gl_FrontFacing, isFlipped);

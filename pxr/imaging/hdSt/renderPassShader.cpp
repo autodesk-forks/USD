@@ -13,6 +13,7 @@
 #include "pxr/imaging/hdSt/materialParam.h"
 #include "pxr/imaging/hdSt/renderBuffer.h"
 #include "pxr/imaging/hdSt/renderPassShader.h"
+#include "pxr/imaging/hdSt/renderPassShaderKey.h"
 #include "pxr/imaging/hdSt/resourceBinder.h"
 #include "pxr/imaging/hdSt/textureBinder.h"
 #include "pxr/imaging/hdSt/textureHandle.h"
@@ -90,8 +91,11 @@ _AreHandlesValid(
         if (namedTextureHandle.name != namedTextureIdentifier.name) {
             return false;
         }
+        if (namedTextureHandle.handles.size() > 1) {
+            TF_CODING_ERROR("Don't support array of textures for AOV textures");
+        }
         const HdStTextureObjectSharedPtr &textureObject =
-            namedTextureHandle.handle->GetTextureObject();
+            namedTextureHandle.handles[0]->GetTextureObject();
         if (textureObject->GetTextureIdentifier() != namedTextureIdentifier.id) {
             return false;
         }
@@ -297,7 +301,9 @@ HdStRenderPassShader::UpdateAovInputTextures(
     for (const auto &namedTextureIdentifier : namedTextureIdentifiers) {
         static const HdSamplerParameters samplerParameters(
             HdWrapClamp, HdWrapClamp, HdWrapClamp,
-            HdMinFilterNearest, HdMagFilterNearest);
+            HdMinFilterNearest, HdMagFilterNearest,
+            HdBorderColorTransparentBlack, /*enableCompare*/false,
+            HdCmpFuncNever, /*maxAnisotropy*/1);
 
         // Allocate texture handle for given identifier.
         HdStTextureHandleSharedPtr textureHandle =
@@ -313,7 +319,7 @@ HdStRenderPassShader::UpdateAovInputTextures(
             HdStShaderCode::NamedTextureHandle{
                 namedTextureIdentifier.name,
                 HdStTextureType::Uv,
-                std::move(textureHandle),
+                { std::move(textureHandle) },
                 /* hash = */ 0});
         
         // Add a corresponding param so that codegen is
@@ -323,6 +329,51 @@ HdStRenderPassShader::UpdateAovInputTextures(
             namedTextureIdentifier.name,
             VtValue(GfVec4f(0,0,0,0)));
     }
+}
+
+namespace {
+size_t
+_GetRenderPassShaderHash(
+    HdRenderPassAovBindingVector const &aovBindings,
+    const HdStRenderPassState * const renderPassState)
+{
+    size_t hash = 0;
+
+    // Aov binding names determine the configuration of the render pass shader
+    // key.
+    for (const auto& aovBinding : aovBindings) {
+        hash = TfHash::Combine(hash, aovBinding.aovName);
+    }
+
+    // We want each renderPassState to have its own renderPassShader, so 
+    // include renderPassState in the hash.
+    hash = TfHash::Combine(hash, renderPassState);
+
+    return hash;
+}
+}
+
+// static
+HdStRenderPassShaderSharedPtr
+HdStRenderPassShader::CreateRenderPassShaderFromAovs(
+    HdStRenderPassState *renderPassState,
+    HdStResourceRegistrySharedPtr const &resourceRegistry,
+    HdRenderPassAovBindingVector const &aovBindings)
+{
+    HdInstance<HdStRenderPassShaderSharedPtr> renderPassShaderInstance =
+        resourceRegistry->RegisterRenderPassShader(
+            _GetRenderPassShaderHash(aovBindings, renderPassState));
+
+    if (renderPassShaderInstance.IsFirstInstance()) {
+        HdSt_RenderPassShaderKey shaderKey(aovBindings);
+        std::istringstream s(shaderKey.GetGlslfxString());
+        HioGlslfxSharedPtr glslfx = std::make_shared<HioGlslfx>(s);
+
+        renderPassShaderInstance.SetValue(
+            std::make_shared<HdStRenderPassShader>(glslfx));
+    }
+
+    return renderPassShaderInstance.GetValue();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

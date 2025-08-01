@@ -8,12 +8,14 @@
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hdSt/unitTestGLDrawing.h"
 #include "pxr/imaging/hdSt/unitTestHelper.h"
+#include "pxr/imaging/hdSt/vboMemoryManager.h"
+
+#include "pxr/imaging/hgi/capabilities.h"
 
 #include "pxr/base/gf/matrix4d.h"
 #include "pxr/base/gf/rotation.h"
 #include "pxr/base/gf/vec3d.h"
 #include "pxr/base/tf/errorMark.h"
-#include "pxr/base/tf/diagnostic.h"
 
 #include <iostream>
 #include <vector>
@@ -39,7 +41,7 @@ protected:
     void AddLargeCurve(HdUnitTestDelegate *delegate);
 
 private:
-    HdSt_TestDriver* _driver;
+    HdSt_TestDriverUniquePtr _driver;
 
     TfToken _reprName;
     int _refineLevel;
@@ -51,7 +53,7 @@ private:
 void
 My_TestGLDrawing::InitTest()
 {
-    _driver = new HdSt_TestDriver(_reprName);
+    _driver = std::make_unique<HdSt_TestDriver>(_reprName);
     HdUnitTestDelegate &delegate = _driver->GetDelegate();
     delegate.SetRefineLevel(_refineLevel);
    
@@ -118,12 +120,14 @@ My_TestGLDrawing::AddLargeCurve(HdUnitTestDelegate *delegate)
 {
     HdInterpolation colorInterp, widthInterp, opacityInterp;
     colorInterp = widthInterp = opacityInterp = HdInterpolationConstant;
-    
-    const size_t vboSizeLimit = 1 << 30; // see HD_MAX_VBO_SIZE
-    const size_t maxPointsInVBO = vboSizeLimit / sizeof(GfVec3f);
-    const size_t numControlVertsPerCurve = 1 << 2;
+
+    static size_t vboMaxSize = TfGetEnvSetting(HD_MAX_VBO_SIZE);
+    const size_t storageMaxSize = _driver->GetHgi()->GetCapabilities()->
+        GetMaxShaderStorageBlockSize();
+    const size_t maxPointsInVBO = std::min(storageMaxSize, vboMaxSize) / sizeof(GfVec3f);
+    static constexpr size_t numControlVertsPerCurve = 1 << 2;
     const size_t numCurves = maxPointsInVBO / numControlVertsPerCurve + 1;
-    
+
     std::vector<int> curveVertexCounts(numCurves, numControlVertsPerCurve);
     
     GfVec3f basePoints[] = {
@@ -157,7 +161,7 @@ My_TestGLDrawing::AddLargeCurve(HdUnitTestDelegate *delegate)
 
             GfRotation orientation(GfVec3d(1, 0, 0), rotDegrees);
             transform.SetTransform(orientation, translation);
-            tmpPoint = tmpPoint * transform;
+            tmpPoint = GfVec4f(tmpPoint * transform);
             
             points.emplace_back(GfVec3f( tmpPoint[0],
                                          tmpPoint[1],

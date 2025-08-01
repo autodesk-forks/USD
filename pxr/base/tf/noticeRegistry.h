@@ -72,8 +72,10 @@ public:
                  const std::type_info &senderType);
 
     // Remove listener instance indicated by \p key.  This is pass by
-    // reference so we can mark the key as having been revoked.
-    void _Revoke(TfNotice::Key& key);
+    // reference so we can mark the key as having been revoked.  If
+    // \p wait is true then don't return while any thread is invoking
+    // the handler.
+    void _Revoke(TfNotice::Key& key, bool wait = false);
 
     // Abort if casting of a notice failed; warn if it succeeded but
     // TfSafeDynamic_cast was required.

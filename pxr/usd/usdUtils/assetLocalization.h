@@ -88,6 +88,13 @@ public:
                                             dependenciesToSkip.end());
     }
 
+    // Controls udim path resolution.
+    // If this value is set to false, asset paths containing udim patterns
+    // be re returned untouched.
+    inline void SetResolveUdimPaths(bool resolveUdimPaths) {
+        _resolveUdimPaths = resolveUdimPaths;
+    }
+
 private:
     void _ProcessLayer(const SdfLayerRefPtr& layer);
     void _ProcessSublayers(const SdfLayerRefPtr&  layer);
@@ -105,17 +112,19 @@ private:
     void _ProcessAssetValue(const SdfLayerRefPtr&  layer, 
                                const std::string &key,
                                const VtValue &val,
-                               bool processingMetadata = false);
+                               bool processingMetadata = false,
+                               bool processingDictionary = false);
     void _ProcessAssetValue(const SdfLayerRefPtr&  layer, 
                              const VtValue &val,
-                             bool processingMetadata = false);
+                             bool processingMetadata = false,
+                             bool processingDictionary = false);
 
     // Searches for udim tiles associated with the given asset path.
-    static std::vector<std::string> _GetUdimTiles(const SdfLayerRefPtr& layer,
+    std::vector<std::string> _GetUdimTiles(const SdfLayerRefPtr& layer,
                                            const std::string &assetPath);
 
     // Discovers all dependencies for the supplied asset path
-    static std::vector<std::string> _GetDependencies(const SdfLayerRefPtr& layer,
+    std::vector<std::string> _GetDependencies(const SdfLayerRefPtr& layer,
                                            const std::string &assetPath);
     
     // Searches for the clips of a given templated string
@@ -158,6 +167,9 @@ private:
     // Specifies if metadata filtering should be enabled
     bool _metadataFilteringEnabled = false;
 
+    // Specifies if udim paths should be resolved during processing.
+    bool _resolveUdimPaths = true;
+
     // user supplied list of dependencies that will be skipped when 
     // processing the asset
     std::unordered_set<std::string> _dependenciesToSkip;
@@ -168,7 +180,8 @@ void UsdUtils_ExtractExternalReferences(
     const UsdUtils_LocalizationContext::ReferenceType refTypesToInclude,
     std::vector<std::string>* subLayers,
     std::vector<std::string>* references,
-    std::vector<std::string>* payloads);
+    std::vector<std::string>* payloads,
+    const UsdUtilsExtractExternalReferencesParams& params = {});
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

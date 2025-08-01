@@ -11,6 +11,7 @@
 #include "pxr/imaging/hdSt/bufferResource.h"
 #include "pxr/imaging/hdSt/bufferUtils.h"
 #include "pxr/imaging/hdSt/tokens.h"
+#include "pxr/imaging/hdSt/vboMemoryManager.h"
 #include "pxr/imaging/hdSt/vboSimpleMemoryManager.h"
 
 #include "pxr/imaging/hd/bufferArrayRange.h"
@@ -22,6 +23,7 @@
 #include "pxr/imaging/hgi/blitCmds.h"
 #include "pxr/imaging/hgi/blitCmdsOps.h"
 #include "pxr/imaging/hgi/buffer.h"
+#include "pxr/imaging/hgi/capabilities.h"
 
 #include "pxr/imaging/hf/perfLog.h"
 
@@ -29,8 +31,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-
-extern TfEnvSetting<int> HD_MAX_VBO_SIZE;
 
 // ---------------------------------------------------------------------------
 //  HdStVBOSimpleMemoryManager
@@ -342,7 +342,10 @@ size_t
 HdStVBOSimpleMemoryManager::_SimpleBufferArray::GetMaxNumElements() const
 {
     static size_t vboMaxSize = TfGetEnvSetting(HD_MAX_VBO_SIZE);
-    return vboMaxSize / _maxBytesPerElement;
+    Hgi* hgi = _resourceRegistry->GetHgi();
+    const size_t storageMaxSize = hgi->GetCapabilities()->
+        GetMaxShaderStorageBlockSize();
+    return std::min(storageMaxSize, vboMaxSize) / _maxBytesPerElement;
 }
 
 void

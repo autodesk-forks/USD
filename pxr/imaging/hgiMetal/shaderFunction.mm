@@ -44,7 +44,7 @@ HgiMetalShaderFunction::HgiMetalShaderFunction(
         if (@available(macOS 14.0, ios 17.0, *)) {
             options.languageVersion = MTLLanguageVersion3_1;
         } else if (@available(macOS 10.15, ios 13.0, *)) {
-            options.languageVersion = MTLLanguageVersion2_2;
+            options.languageVersion = MTLLanguageVersion2_3;
         } else {
             options.languageVersion = MTLLanguageVersion2_1;
         }

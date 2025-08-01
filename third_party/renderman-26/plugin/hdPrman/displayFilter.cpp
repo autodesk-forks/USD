@@ -6,7 +6,8 @@
 //
 #include "hdPrman/displayFilter.h"
 
-#include "hdPrman/renderDelegate.h"
+#if PXR_VERSION >= 2308
+
 #include "hdPrman/renderParam.h"
 #include "hdPrman/utils.h"
 
@@ -17,12 +18,17 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+
+#if PXR_VERSION < 2505
+using SdrTokenVec = NdrTokenVec;
+#endif
+
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (resource)
 );
 
-TF_MAKE_STATIC_DATA(NdrTokenVec, _sourceTypes) {
+TF_MAKE_STATIC_DATA(SdrTokenVec, _sourceTypes) {
     *_sourceTypes = { TfToken("OSL"), 
                       TfToken("RmanCpp"), }; }
 
@@ -58,7 +64,7 @@ HdPrman_DisplayFilter::_CreateRmanDisplayFilter(
                 displayFilterNode.nodeTypeId.GetText(), filterPrimPath.GetText());
         return;
     }
-    std::string shaderPath = sdrEntry->GetResolvedImplementationURI();
+    std::string shaderPath = sdrEntry->GetImplementationName();
     if (shaderPath.empty()) {
         TF_WARN("Shader '%s' did not provide a valid implementation path.",
                 sdrEntry->GetName().c_str());
@@ -95,13 +101,11 @@ HdPrman_DisplayFilter::Sync(
     HdPrman_RenderParam *param = static_cast<HdPrman_RenderParam*>(renderParam);
 
     if (*dirtyBits & HdChangeTracker::DirtyParams) {
-        // Only Create the DisplayFilter if connected to the RenderSettings
+        // Only Create the DisplayFilter if on the RenderSettings
         // Note that this works because the RenderSettings, being a Bprim,
         // always gets synced before the DisplayFilter Sprim.
-        const SdfPathVector& connectedFilters =
-            param->GetConnectedDisplayFilterPaths();
-        if (std::find(connectedFilters.begin(), connectedFilters.end(), id)
-            != connectedFilters.end()) {
+        const SdfPathVector& filters = param->GetDisplayFilterPaths();
+        if (std::find(filters.begin(), filters.end(), id) != filters.end()) {
             const VtValue displayFilterResourceValue =
                 sceneDelegate->Get(id, _tokens->resource);
 
@@ -133,3 +137,5 @@ HdDirtyBits HdPrman_DisplayFilter::GetInitialDirtyBitsMask() const
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
+
+#endif // PXR_VERSION >= 2308

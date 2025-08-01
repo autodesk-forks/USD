@@ -70,8 +70,8 @@ following ongoing production concerns:
       departments, or within the same department, to simultaneously work on
       the same asset or scene, by allowing each artist to work in their own
       file (called a :ref:`glossary:Layer`), all of which will be combined
-      and resolved in a :ref:`strength ordering <glossary:LIVRPS Strength
-      Ordering>` clearly specified in the USD files themselves. This ability
+      and resolved in a :ref:`strength ordering <usdglossary-livrpsstrengthordering>` 
+      clearly specified in the USD files themselves. This ability
       is not a magic bullet that can automatically adjust shading data in a
       stronger layer when the modeling artist changes the topology of
       geometry defined in a weaker layer, but it allows each artist to work
@@ -200,7 +200,7 @@ refinement of "base" in all views of your scene.
 The most powerful and unifying aspect of USD's composition semantics is that all
 of the above operators can be applied to any prim, in any combination, and the
 composition engine will :ref:`resolve the resulting graph in a predictable way
-<glossary:LIVRPS Strength Ordering>`. The other desirable
+<usdglossary-livrpsstrengthordering>`. The other desirable
 property that falls out of this uniform treatment of composition arcs is that
 stronger layers in a composition can override the scene description in weaker
 layers *uniformly*, regardless of whether the weaker layers were subLayered,
@@ -324,7 +324,10 @@ following plugin-points:
       your pipeline or package, with which you will be able to interact in your
       application-level plugins just as if they were native USD schemas. For
       typed schemas that are conceptually imageable, you can also teach Hydra
-      how to image them.
+      how to image them. You can additionally use 
+      :ref:`OpenExec <intro_to_openexec>` to register computations for schemas 
+      for better performance characteristics in addition to data invalidation 
+      and caching management.
 
 What can't USD do?
 ==================
@@ -347,16 +350,19 @@ operations run over a collection of assets is worth paying for the ease of asset
 construction and aggregation, and readable text asset representations that we
 get from namespace-paths as identifiers.
 
-Not an execution or rigging system
-**********************************
+Not a rigging system
+********************
 
 USD provides a lightweight, optimized scenegraph to facilitate authoring and
-efficient extraction of composed scene description. However, it provides no
-other behaviors than composition of a namespace hierarchy and property
-:ref:`glossary:Value Resolution`, and in the tradeoff space between "low-memory
-footprint, higher-latency data access" and "high-memory footprint, low-latency
-access to data", USD's scenegraph leans more towards the former, whereas a
-high-performance execution engine requires the latter.
+efficient extraction of composed scene description. However, USD's scenegraph
+leans towards a "low-memory footprint, higher-latency data access" tradeoff, 
+whereas a high-performance rigging system requires more of a "high-memory
+footprint, low-latency access to data" tradeoff.
+
+The :ref:`OpenExec <intro_to_openexec>` computation engine does provide a 
+general purpose computation framework that could be used to develop a rigging
+system, but OpenExec by itself is not a rigging system. See
+:ref:`openexec_is_not` for more details.
 
 Further, the more rigging behaviors and execution semantics we would add to USD,
 the more difficult it would become to interchange the data successfully between

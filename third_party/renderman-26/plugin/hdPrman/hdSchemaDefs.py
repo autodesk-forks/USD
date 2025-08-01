@@ -4,6 +4,9 @@
 # Licensed under the terms set forth in the LICENSE.txt file available at
 # https://openusd.org/license.
 #
+# To generate a schema class, run this command:
+# mc run hdGenSchema --name ${SCHEMA_NAME}
+#
 [
     dict(
         SCHEMA_NAME = 'ALL_SCHEMAS',

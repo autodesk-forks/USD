@@ -153,6 +153,8 @@ public:
     HGIMETAL_API
     void EndFrame() override;
 
+    HGIMETAL_API
+    void GarbageCollect() override;
 
     HGIMETAL_API
         HgiAccelerationStructureHandle CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) override;

@@ -588,6 +588,46 @@ TestVulkanBuffer(HgiVulkan& hgiVulkan)
         return false;
     }
 
+    // Test another CPU to GPU copy, this time with different src and dst
+    // offsets.
+
+    // Write new data into CPU staging area
+    stagingBlob[8] = 789;
+    stagingBlob[9] = 789;
+    stagingBlob[10] = 789;
+    stagingBlob[11] = 789;
+    memcpy(cpuAddress, stagingBlob.data() + 4, 8 * sizeof(blob[0]));
+
+    // Schedule copy from staging area to GPU device-local buffer.
+    HgiBufferCpuToGpuOp transferOp2;
+    transferOp2.byteSize = 8 * sizeof(blob[0]);
+    transferOp2.cpuSourceBuffer = cpuAddress;
+    transferOp2.sourceByteOffset = 0;
+    transferOp2.destinationByteOffset = 4 * sizeof(blob[0]);
+    transferOp2.gpuDestinationBuffer = buffer;
+
+    HgiBlitCmdsUniquePtr blitCmds4 = hgiVulkan.CreateBlitCmds();
+    blitCmds4->CopyBufferCpuToGpu(transferOp2);
+    hgiVulkan.SubmitCmds(blitCmds4.get(), HgiSubmitWaitTypeWaitUntilCompleted);
+
+    // Read back the transfer to confirm it worked
+    HgiBufferGpuToCpuOp copyOp3;
+    copyOp3.byteSize = desc.byteSize;
+    copyOp3.cpuDestinationBuffer = &transferBackBlob[0];
+    copyOp3.destinationByteOffset = 0;
+    copyOp3.gpuSourceBuffer = buffer;
+    copyOp3.sourceByteOffset = 0;
+
+    HgiBlitCmdsUniquePtr blitCmds5 = hgiVulkan.CreateBlitCmds();
+    blitCmds5->CopyBufferGpuToCpu(copyOp3);
+    hgiVulkan.SubmitCmds(blitCmds5.get(), HgiSubmitWaitTypeWaitUntilCompleted);
+
+    std::cout << std::endl;
+    if (transferBackBlob != stagingBlob) {
+        TF_CODING_ERROR("Transfer readback failed");
+        return false;
+    }
+
     // Put buffer in garbage collector
     device->WaitForIdle();
     hgiVulkan.DestroyBuffer(&buffer);
@@ -998,32 +1038,39 @@ TestVulkanComputeCmds(HgiVulkan& hgiVulkan)
     HgiShaderFunctionDesc csDesc;
     csDesc.shaderStage = HgiShaderStageCompute;
     csDesc.shaderCode = 
-        "#extension GL_EXT_nonuniform_qualifier : require \n"
-        "#extension GL_EXT_scalar_block_layout : require \n"
-        ""
-        "layout(push_constant) uniform PushConstantBuffer { \n"
-        "    layout(offset = 0) int index; \n"
-        "} pushConstants; \n"
-        ""
-        "layout (scalar, set=0, binding=0) uniform ParamsIn { \n"
-        "    float offset; \n"
-        "} paramsIn; \n"
-        ""
-        "layout (scalar, set=0, binding=1) buffer StorageBufferIn { \n"
-        "    vec4 value[]; \n"
-        "} storageBufferIn; \n"
-        ""
-        "layout (scalar, set=0, binding=2) buffer StorageBufferOut { \n"
-        "    vec4 value[]; \n"
-        "} storageBufferOut; \n"
-        ""
-        "layout (rgba32f, set=0, binding=3) uniform image2D ImageIn; \n"
-        ""
         "void main() { \n"
-        "    vec4 v = storageBufferIn.value[pushConstants.index]; \n"
-        "    v *= paramsIn.offset; \n"
-        "    storageBufferOut.value[pushConstants.index] = v; \n"
+        "    vec4 v = valueIn[index]; \n"
+        "    v *= offset; \n"
+        "    valueOut[index] = v; \n"
         "} \n";
+
+    // Declare resources used by the program
+    HgiShaderFunctionAddConstantParam(
+        &csDesc,
+        /*name=*/"index",
+        /*type=*/"int");
+    HgiShaderFunctionAddBuffer(
+        &csDesc,
+        /*name=*/"offset",
+        /*type=*/"float",
+        /*bindingIndex=*/0,
+        /*binding=*/HgiBindingTypeUniformValue);
+    HgiShaderFunctionAddBuffer(
+        &csDesc,
+        /*name=*/"valueIn",
+        /*type=*/"vec4",
+        /*bindingIndex=*/1,
+        /*binding=*/HgiBindingTypePointer);
+    HgiShaderFunctionAddWritableBuffer(
+        &csDesc,
+        /*name=*/"valueOut",
+        /*type=*/"vec4",
+        /*bindingIndex=*/2);
+    HgiShaderFunctionAddWritableTexture(
+        &csDesc,
+        /*name=*/"ImageIn",
+        /*bindIndex=*/0,
+        /*dimensions=*/2);
 
     csDesc.debugName = "debug cs shader";
     HgiShaderFunctionHandle cs = hgiVulkan.CreateShaderFunction(csDesc);

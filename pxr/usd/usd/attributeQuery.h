@@ -22,6 +22,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+class TsSpline;
 
 /// \class UsdAttributeQuery
 ///
@@ -36,7 +37,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// the attribute \em is affected by Value Clips, the performance gain will
 /// just be less.
 ///
-/// \section Resolve_targets Resolve targets
+/// \section UsdAttributeQuery_Resolve_targets Resolve targets
 /// An attribute query can also be constructed for an attribute along with a 
 /// UsdResolveTarget. A resolve target allows value resolution to consider only
 /// a subrange of the prim stack instead of the entirety of it. All of the methods 
@@ -45,11 +46,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// value of an attribute resolved up to a particular layer or for determining
 /// if a value authored on layer would be overridden by a stronger opinion.
 ///
-/// \section Thread_safety Thread safety
+/// \section UsdAttributeQuery_Thread_safety Thread safety
 /// This object provides the basic thread-safety guarantee.  Multiple threads
 /// may call the value accessor functions simultaneously.
 ///
-/// \section Invalidation
+/// \section UsdAttributeQuery_Invalidation Invalidation
 /// This object does not listen for change notification.  If a consumer is
 /// holding on to a UsdAttributeQuery, it is their responsibility to dispose
 /// of it in response to a resync change to the associated attribute. 
@@ -158,6 +159,13 @@ public:
     USD_API
     bool GetTimeSamples(std::vector<double>* times) const;
 
+    /// Returns a copy of the TsSpline associated with the resolved value.
+    ///
+    /// If the resolve value source is not a Spline, an empty Spline is 
+    /// returned.
+    USD_API
+    TsSpline GetSpline() const;
+
     /// Populates a vector with authored sample times in \p interval.
     /// Returns false only on an error.
     ///
@@ -217,12 +225,21 @@ public:
                                   bool* hasTimeSamples) const;
 
     /// Return true if the attribute associated with this query has an 
-    /// authored default value, authored time samples or a fallback value 
-    /// provided by a registered schema.
+    /// authored default value, authored time samples, authored spline or a 
+    /// fallback value provided by a registered schema.
     ///
     /// \sa UsdAttribute::HasValue
     USD_API
     bool HasValue() const;
+
+    /// Return true if the attribute associated with this query has an
+    /// a spline value as the strongest opinion.
+    ///
+    /// \sa UsdAttribute::HasSpline
+    /// \sa UsdAttributeQuery::GetSpline
+    /// \sa UsdAttributeQuery::ValueMightBeTimeVarying
+    USD_API
+    bool HasSpline() const;
 
     /// \deprecated This method is deprecated because it returns `true` even when
     /// an attribute is blocked.  Please use HasAuthoredValue() instead. If 

@@ -4,13 +4,14 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_DEBUG_UTIL_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_DEBUG_UTIL_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_DEBUG_UTIL_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_DEBUG_UTIL_H
 
 #include "pxr/pxr.h"
 
 #include "pxr/base/gf/matrix4d.h"
 
+#include "Riley.h"
 #include "RiTypesHelper.h"
 
 #include <string>
@@ -58,8 +59,11 @@ RileyIdVecToString(const std::vector<T>& vec)
 std::string
 SdfPathVecToString(const std::vector<SdfPath>& vec);
 
+std::string
+RileyOutputTypeToString(const riley::RenderOutputType type);
+
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_DEBUG_UTIL_H
+#endif // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_DEBUG_UTIL_H

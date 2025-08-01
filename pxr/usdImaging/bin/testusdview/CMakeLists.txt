@@ -269,6 +269,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdviewSelectionHighlighting
+    DEST testUsdviewSelectionHighlighting_Delegate
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdviewRenderMode
     DEST testUsdviewRenderMode
 )
@@ -441,7 +446,7 @@ pxr_register_test(testUsdviewFileArguments4
 pxr_register_test(testUsdviewFileArguments5
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testInvalidFileArg.py invalidSyntax.usda"
-    CLEAN_OUTPUT "(?:[A-Za-z]:)?/(?!refSphere2).*/"
+    CLEAN_OUTPUT "(?:[A-Za-z]:)?/.*(?=invalidSyntax)"
     STDERR_REDIRECT invalidSyntax_test_out
     DIFF_COMPARE invalidSyntax_test_out
     EXPECTED_RETURN_CODE 1
@@ -676,12 +681,30 @@ pxr_register_test(testUsdviewSelectionHighlighting
         sel_highlight.png
         sel_highlight_none.png
         sel_highlight_double.png
+        # UsdImaging 2.0 does not yet support selection highlighting of individual instances.
+        # sel_highlight_instance.png
+        sel_highlight_color.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdviewSelectionHighlighting_Delegate
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSelectionHighlighting.py test.usda"
+    IMAGE_DIFF_COMPARE
+        sel_highlight.png
+        sel_highlight_none.png
+        sel_highlight_double.png
         sel_highlight_instance.png
         sel_highlight_color.png
     FAIL 0.05
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=0
 )
 
 pxr_register_test(testUsdviewRenderMode
@@ -733,15 +756,15 @@ pxr_register_test(testUsdviewSceneLights
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneLights.py test.usda"
     IMAGE_DIFF_COMPARE
-        camera_noScene_GL.png
-        camera_scene_GL.png
-        domeVis_noScene_GL.png
-        domeVis_scene_GL.png
-        domeInvis_noScene_GL.png
-        domeInvis_scene_GL.png
-        sceneLights_GL.png
-        sceneLights_edit_GL.png
-        noLights_GL.png
+        camera_noScene_Storm.png
+        camera_scene_Storm.png
+        domeVis_noScene_Storm.png
+        domeVis_scene_Storm.png
+        domeInvis_noScene_Storm.png
+        domeInvis_scene_Storm.png
+        sceneLights_Storm.png
+        sceneLights_edit_Storm.png
+        noLights_Storm.png
     FAIL 0.05
     FAIL_PERCENT 0.03
     PERCEPTUAL
@@ -754,15 +777,15 @@ pxr_register_test(testUsdviewSceneLights_Delegate
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneLights.py test.usda"
     IMAGE_DIFF_COMPARE
-        camera_noScene_GL.png
-        camera_scene_GL.png
-        domeVis_noScene_GL.png
-        domeVis_scene_GL.png
-        domeInvis_noScene_GL.png
-        domeInvis_scene_GL.png
-        sceneLights_GL.png
-        sceneLights_edit_GL.png
-        noLights_GL.png
+        camera_noScene_Storm.png
+        camera_scene_Storm.png
+        domeVis_noScene_Storm.png
+        domeVis_scene_Storm.png
+        domeInvis_noScene_Storm.png
+        domeInvis_scene_Storm.png
+        sceneLights_Storm.png
+        sceneLights_edit_Storm.png
+        noLights_Storm.png
     FAIL 0.05
     FAIL_PERCENT 0.03
     PERCEPTUAL
@@ -870,12 +893,12 @@ pxr_register_test(testUsdviewDefaultMaterial
 
 pxr_register_test(testUsdviewCameraMaskMode
     PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --camera /camera --renderer GL --testScript testUsdviewCameraMaskMode.py test.usda"
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --camera /camera --renderer Storm --testScript testUsdviewCameraMaskMode.py test.usda"
     IMAGE_DIFF_COMPARE
-        none_gl.png
-        outline_gl.png
-        partial_gl.png
-        full_gl.png
+        none_storm.png
+        outline_storm.png
+        partial_storm.png
+        full_storm.png
     FAIL 0.05
     FAIL_PERCENT 0.03
     PERCEPTUAL
@@ -1037,6 +1060,8 @@ pxr_register_test(testUsdviewPrimvarEdits
         remove_fallback_primvar_wireOnSurf.png
         add_unused_primvars.png
         remove_unused_primvars.png
+        add_primvars_for_varname_edit.png
+        primvar_reader_varname_edit.png
     FAIL 0.05
     FAIL_PERCENT 0.03
     PERCEPTUAL
@@ -1149,6 +1174,10 @@ if(OPENCOLORIO_FOUND AND ${PXR_BUILD_OPENCOLORIO_PLUGIN})
             colorCorrectionOCIO_linear.png
             colorCorrectionSRGB.png
             colorCorrectionDisabled.png
+        FAIL 0.02
+        FAIL_PERCENT 0.01
+        WARN 0.01
+        WARN_PERCENT 0.005
         EXPECTED_RETURN_CODE 0
         ENV
             OCIO=test.ocio

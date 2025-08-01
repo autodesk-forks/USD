@@ -41,7 +41,6 @@ _CollectPrimvarNames(const HdSt_MaterialParamVector &params);
 HdSt_MaterialNetworkShader::HdSt_MaterialNetworkShader()
  : HdStShaderCode()
  , _fragmentSource()
- , _geometrySource()
  , _params()
  , _paramSpec()
  , _paramArray()
@@ -64,9 +63,6 @@ HdSt_MaterialNetworkShader::_SetSource(
     if (shaderStageKey == HdShaderTokens->fragmentShader) {
         _fragmentSource = source;
         _isValidComputedHash = false;
-    } else if (shaderStageKey == HdShaderTokens->geometryShader) {
-        _geometrySource = source;
-        _isValidComputedHash = false;
     } else if (shaderStageKey == HdShaderTokens->displacementShader) {
         _displacementSource = source;
         _isValidComputedHash = false;
@@ -83,8 +79,6 @@ HdSt_MaterialNetworkShader::GetSource(TfToken const &shaderStageKey) const
 {
     if (shaderStageKey == HdShaderTokens->fragmentShader) {
         return _fragmentSource;
-    } else if (shaderStageKey == HdShaderTokens->geometryShader) {
-        return _geometrySource;
     } else if (shaderStageKey == HdShaderTokens->displacementShader) {
         return _displacementSource;
     }
@@ -179,7 +173,6 @@ HdSt_MaterialNetworkShader::_ComputeHash() const
 
     hash = TfHash::Combine(hash, 
         ArchHash(_fragmentSource.c_str(), _fragmentSource.size()),
-        ArchHash(_geometrySource.c_str(), _geometrySource.size()),
         ArchHash(_displacementSource.c_str(), _displacementSource.size())
     );
 
@@ -203,7 +196,7 @@ HdSt_MaterialNetworkShader::_ComputeTextureSourceHash() const
     // easier for ourselves by having this function check and return 0 if
     // using bindless textures.
     const bool useBindlessHandles = _namedTextureHandles.empty() ? false :
-        _namedTextureHandles[0].handle->UseBindlessHandles();
+        _namedTextureHandles[0].handles[0]->UseBindlessHandles();
 
     if (useBindlessHandles) {
         return 0;
@@ -229,13 +222,6 @@ HdSt_MaterialNetworkShader::SetFragmentSource(const std::string &source)
 }
 
 void
-HdSt_MaterialNetworkShader::SetGeometrySource(const std::string &source)
-{
-    _geometrySource = source;
-    _isValidComputedHash = false;
-}
-
-void
 HdSt_MaterialNetworkShader::SetDisplacementSource(const std::string &source)
 {
     _displacementSource = source;
@@ -245,8 +231,13 @@ HdSt_MaterialNetworkShader::SetDisplacementSource(const std::string &source)
 void
 HdSt_MaterialNetworkShader::SetParams(const HdSt_MaterialParamVector &params)
 {
-    _params = params;
+   _params = params;
     _primvarNames = _CollectPrimvarNames(_params);
+    for (const HdSt_MaterialParam& param : params) {
+        if (param.fallbackValue.GetTypeid() != typeid(void)) {
+            _paramToDefValue[param.name] = param.fallbackValue;
+        }
+    }
     _isValidComputedHash = false;
 }
 
@@ -341,6 +332,53 @@ TF_DEFINE_PRIVATE_TOKENS(
     (maskWeight)                // renderPass shader
     (wireframeColor)            // renderPass shader
 );
+
+static const std::unordered_map<TfToken, VtValue, TfToken::HashFunctor>
+    _primvarDefaults = {
+            { HdTokens->displayColor, VtValue(GfVec3f(1.0f)) },
+            { HdTokens->displayOpacity, VtValue(1.0f) },
+
+            { _tokens->ptexFaceOffset, VtValue(0) },
+
+            { _tokens->displayMetallic, VtValue(0.0f) },
+            { _tokens->displayRoughness, VtValue(1.0f) },
+
+            { _tokens->hullColor, VtValue(GfVec3f(1.0f)) },
+            { _tokens->hullOpacity, VtValue(1.0f) },
+            { _tokens->scalarOverride, VtValue(1.0f) },
+            { _tokens->scalarOverrideColorRamp, VtValue(VtArray<GfVec4f>()) },
+            { _tokens->selectedWeight, VtValue(0.0f) },
+
+            { _tokens->indicatorColor, VtValue(GfVec4f(1.0f)) },
+            { _tokens->indicatorWeight, VtValue(0.0f) },
+            { _tokens->overrideColor, VtValue(GfVec4f(1.0f)) },
+            { _tokens->maskColor, VtValue(GfVec4f(1.0f)) },
+            { _tokens->maskWeight, VtValue(0.0f) },
+            { _tokens->wireframeColor, VtValue(GfVec4f(1.0f)) }
+};
+
+static const VtValue*
+_GetFallbackValueForPrimvarName(TfToken const &input)
+{
+    auto iter = _primvarDefaults.find(input);
+    if (iter != _primvarDefaults.end()) {
+        return &iter->second;
+    } else {
+        return nullptr;
+    }
+}
+
+const VtValue*
+HdSt_MaterialNetworkShader::GetFallbackValueForParam(
+    TfToken const &paramName) const
+{
+    auto foundVal = _paramToDefValue.find(paramName);
+    if (foundVal != _paramToDefValue.end()) {
+        return &foundVal->second;
+    } else {
+        return _GetFallbackValueForPrimvarName(paramName);
+    }
+}
 
 static TfTokenVector const &
 _GetExtraIncludedShaderPrimvarNames()

@@ -17,6 +17,7 @@
 #include "pxr/usd/sdf/fileFormat.h"
 #include "pxr/usd/sdf/layerUtils.h"
 
+#include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/trace/trace.h"
 
 #include <functional>
@@ -34,11 +35,12 @@ UsdUtilsExtractExternalReferences(
     const std::string& filePath,
     std::vector<std::string>* subLayers,
     std::vector<std::string>* references,
-    std::vector<std::string>* payloads)
+    std::vector<std::string>* payloads,
+    const UsdUtilsExtractExternalReferencesParams& params)
 {
     UsdUtils_ExtractExternalReferences(filePath, 
         UsdUtils_LocalizationContext::ReferenceType::All,
-        subLayers, references, payloads);
+        subLayers, references, payloads, params);
 }
 
 struct UsdUtils_ComputeAllDependenciesClient
@@ -125,7 +127,12 @@ struct UsdUtils_ComputeAllDependenciesClient
             }
         }
         else if (UsdStage::IsSupportedFile(anchoredPath)) {
-            layers.insert(SdfLayer::FindOrOpen(anchoredPath));
+            SdfLayerRefPtr dependencyLayer = SdfLayer::FindOrOpen(anchoredPath);
+            if (dependencyLayer) {
+                layers.insert(dependencyLayer);
+            } else {
+                TF_WARN("Failed to open dependency layer: %s (%s)", dependency.c_str(), anchoredPath.c_str());
+            }
         }
         else {
             assets.insert(resolvedPath);

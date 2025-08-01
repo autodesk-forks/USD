@@ -199,11 +199,12 @@ public:
     void InvokeExtComputation(SdfPath const &computationId,
                               HdExtComputationContext *context) override;
 
+    TfTokenVector GetTaskRenderTags(SdfPath const &taskId) override;
+    
     void Sync(HdSyncRequestVector* request) override;
     void PostSyncCleanup() override;
 
     // NOTE: The remaining scene delegate functions aren't used for emulation:
-    // - GetTaskRenderTags
     // - GetScenePrimPath
     // - IsEnabled
 
@@ -270,6 +271,14 @@ private:
 
     bool _sceneDelegatesBuilt;
     std::vector<HdSceneDelegate*> _sceneDelegates;
+
+    // Hint cache of all prim paths that have been populated with
+    // geomSubset children.  This is purely an optimization and
+    // not authoritative -- it may have false positioves, such as
+    // if subsets are removed later.  These hints provide a way
+    // to skip the expense of _GatherGeomSubsets() when no subsets
+    // have been populated.
+    std::unordered_set<SdfPath, SdfPath::Hash> _geomSubsetParents;
 
     // Cache for rprim locator set -> dirty bits translation.
     HdDataSourceLocatorSet _cachedLocatorSet;

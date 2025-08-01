@@ -13,9 +13,9 @@
 #include "pxr/base/tf/pyPtrHelpers.h"
 #include "pxr/base/tf/makePyConstructor.h"
 
-#include <boost/python/class.hpp>
-#include <boost/python/operators.hpp>
-#include <boost/python/tuple.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/operators.hpp"
+#include "pxr/external/boost/python/tuple.hpp"
 
 #include <string>
 #include <vector>
@@ -23,9 +23,9 @@
 using std::string;
 using std::vector;
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -87,7 +87,7 @@ _Get(const UsdAttributeQuery& self, UsdTimeCode time)
 
 void wrapUsdAttributeQuery()
 {
-    class_<UsdAttributeQuery, boost::noncopyable>
+    class_<UsdAttributeQuery, noncopyable>
         ("AttributeQuery", no_init)
         .def(init<const UsdAttribute&>(
                 (arg("attribute"))))
@@ -133,6 +133,7 @@ void wrapUsdAttributeQuery()
              arg("desiredTime"))
 
         .def("HasValue", &UsdAttributeQuery::HasValue)
+        .def("HasSpline", &UsdAttributeQuery::HasSpline)
         .def("HasAuthoredValueOpinion", 
                 &UsdAttributeQuery::HasAuthoredValueOpinion)
         .def("HasAuthoredValue", &UsdAttributeQuery::HasAuthoredValue)
@@ -142,6 +143,8 @@ void wrapUsdAttributeQuery()
              &UsdAttributeQuery::ValueMightBeTimeVarying)
 
         .def("Get", _Get, arg("time")=UsdTimeCode::Default())
+        .def("GetSpline", &UsdAttributeQuery::GetSpline,
+             return_value_policy<return_by_value>())
          
         ;
 

@@ -113,6 +113,7 @@ HdSt_TestDriver::_CreateRenderPassState()
             _GetRenderDelegate()->CreateRenderPassState()) };
     // set depthfunc to GL default
     _renderPassStates[0]->SetDepthFunc(HdCmpFuncLess);
+    _renderPassStates[0]->SetAlphaToCoverageEnabled(true);
 }
 
 HdRenderPassSharedPtr const &
@@ -217,8 +218,8 @@ HdSt_TestLightingShader::SetCamera(GfMatrix4d const &worldToViewMatrix,
     bool lightsChanged = false;
 
     for (int i = 0; i < 2; ++i) {
-        GfVec3f eyeDir =
-            worldToViewMatrix.TransformDir(_lights[i].dir).GetNormalized();
+        GfVec3f eyeDir = GfVec3f(
+            worldToViewMatrix.TransformDir(_lights[i].dir)).GetNormalized();
 
         if (_lights[i].eyeDir != eyeDir) {
             lightsChanged = true;
@@ -325,6 +326,11 @@ HdSt_TestLightingShader::SetLight(int light,
 
 HdSt_TextureTestDriver::HdSt_TextureTestDriver() :
     _hgi(Hgi::CreatePlatformDefaultHgi())
+  , _hgiDriver{HgiTokens->renderDriver, VtValue(_hgi.get())}
+  , _renderDelegate()
+  , _renderIndex(HdRenderIndex::New(&_renderDelegate, {&_hgiDriver}))
+  , _resourceRegistry(std::static_pointer_cast<HdStResourceRegistry>(
+        _renderIndex->GetResourceRegistry()))
   , _indexBuffer()
   , _vertexBuffer()
   , _shaderProgram()
@@ -351,6 +357,12 @@ HdSt_TextureTestDriver::~HdSt_TextureTestDriver()
     if (_pipeline) {
         _hgi->DestroyGraphicsPipeline(&_pipeline);
     }
+}
+
+HdStResourceRegistrySharedPtr const &
+HdSt_TextureTestDriver::GetResourceRegistry()
+{
+    return _resourceRegistry;
 }
 
 void
@@ -565,13 +577,13 @@ HdSt_TextureTestDriver::_CreateBufferResources()
     vboDesc.vertexStride = elementsPerVertex * sizeof(vertData[0]);
     _vertexBuffer = _hgi->CreateBuffer(vboDesc);
 
-    static const int32_t indices[3] = { 0, 1, 2 };
+    constexpr int32_t indices[3] = { 0, 1, 2 };
 
     HgiBufferDesc iboDesc;
     iboDesc.debugName = "HdSt_TextureTestDriver IndexBuffer";
     iboDesc.usage = HgiBufferUsageIndex32;
     iboDesc.initialData = indices;
-    iboDesc.byteSize = sizeof(indices) * sizeof(indices[0]);
+    iboDesc.byteSize = sizeof(indices);
     _indexBuffer = _hgi->CreateBuffer(iboDesc);
 }
 

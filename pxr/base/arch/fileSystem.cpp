@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cerrno>
+#include <filesystem>
 #include <memory>
 #include <utility>
 
@@ -142,7 +143,8 @@ int ArchRmDir(const char* path)
 bool
 ArchStatIsWritable(const ArchStatType *st)
 {
-#if defined(ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN)
+#if defined(ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     if (st) {
         return (st->st_mode & S_IWOTH) || 
             ((getegid() == st->st_gid) && (st->st_mode & S_IWGRP)) ||
@@ -179,7 +181,7 @@ ArchGetModificationTime(const char* pathname, double* time)
 double
 ArchGetModificationTime(const ArchStatType& st)
 {
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     return st.st_mtim.tv_sec + 1e-9*st.st_mtim.tv_nsec;
 #elif defined(ARCH_OS_DARWIN)
     return st.st_mtimespec.tv_sec + 1e-9*st.st_mtimespec.tv_nsec;
@@ -431,7 +433,7 @@ ArchGetStatMode(const char *pathname, int *mode)
 double
 ArchGetAccessTime(const struct stat& st)
 {
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     return st.st_atim.tv_sec + 1e-9*st.st_atim.tv_nsec;
 #elif defined(ARCH_OS_DARWIN)
     return st.st_atimespec.tv_sec + 1e-9*st.st_atimespec.tv_nsec;
@@ -446,7 +448,7 @@ ArchGetAccessTime(const struct stat& st)
 double
 ArchGetStatusChangeTime(const struct stat& st)
 {
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     return st.st_ctim.tv_sec + 1e-9*st.st_ctim.tv_nsec;
 #elif defined(ARCH_OS_DARWIN)
     return st.st_ctimespec.tv_sec + 1e-9*st.st_ctimespec.tv_nsec;
@@ -476,7 +478,8 @@ ArchGetFileLength(FILE *file)
 {
     if (!file)
         return -1;
-#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN)
+#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     struct stat buf;
     return fstat(fileno(file), &buf) < 0 ? -1 :
         static_cast<int64_t>(buf.st_size);
@@ -490,7 +493,8 @@ ArchGetFileLength(FILE *file)
 int64_t
 ArchGetFileLength(const char* fileName)
 {
-#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN)
+#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     struct stat buf;
     return stat(fileName, &buf) < 0 ? -1 : static_cast<int64_t>(buf.st_size);
 #elif defined (ARCH_OS_WINDOWS)
@@ -514,7 +518,7 @@ ArchGetFileLength(const char* fileName)
 string
 ArchGetFileName(FILE *file)
 {
-#if defined (ARCH_OS_LINUX)
+#if defined (ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     string result;
     char buf[PATH_MAX];
     ssize_t r = readlink(
@@ -532,24 +536,27 @@ ArchGetFileName(FILE *file)
     }
     return result;
 #elif defined (ARCH_OS_WINDOWS)
-    static constexpr DWORD bufSize =
-        sizeof(FILE_NAME_INFO) + sizeof(WCHAR) * 4096;
-    HANDLE hfile = _FileToWinHANDLE(file);
-    auto fileNameInfo = reinterpret_cast<PFILE_NAME_INFO>(malloc(bufSize));
     string result;
-    if (GetFileInformationByHandleEx(
-            hfile, FileNameInfo, static_cast<void *>(fileNameInfo), bufSize)) {
-        size_t outSize = WideCharToMultiByte(
-            CP_UTF8, 0, fileNameInfo->FileName,
-            fileNameInfo->FileNameLength/sizeof(WCHAR),
-            NULL, 0, NULL, NULL);
-        result.resize(outSize);
-        WideCharToMultiByte(
-            CP_UTF8, 0, fileNameInfo->FileName,
-            fileNameInfo->FileNameLength/sizeof(WCHAR),
-            &result.front(), outSize, NULL, NULL);
+    std::vector<WCHAR> filePath(MAX_PATH);
+    HANDLE hfile = _FileToWinHANDLE(file);
+    DWORD dwSize = GetFinalPathNameByHandleW(hfile, filePath.data(), MAX_PATH, VOLUME_NAME_DOS);
+    // * dwSize == 0. Fail.
+    // * dwSize < MAX_PATH. Success, and dwSize returns the size without null terminator.
+    // * dwSize >= MAX_PATH. Buffer is too small, and dwSize returns the size with null terminator.
+    if (dwSize >= MAX_PATH) {
+        filePath.resize(dwSize);
+        dwSize = GetFinalPathNameByHandleW(hfile, filePath.data(), dwSize, VOLUME_NAME_DOS);
     }
-    free(fileNameInfo);
+
+    if (dwSize != 0) {
+        // Strip path prefix if necessary.
+        // See https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
+        // for format of DOS device paths.
+        
+        auto canonicalPath = std::filesystem::canonical(
+            std::filesystem::path(filePath.begin(), filePath.begin() + dwSize));
+        result = ArchWindowsUtf16ToUtf8(canonicalPath.wstring());
+    }
     return result;                                        
 #else
 #error Unknown system architecture

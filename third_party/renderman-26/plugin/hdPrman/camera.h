@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_CAMERA_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_CAMERA_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_CAMERA_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_CAMERA_H
 
 #include "pxr/pxr.h"
 #include "hdPrman/api.h"
@@ -124,12 +124,19 @@ public:
         return _shutterCurve;
     }
 
+    /// Sets the camera and projection shader parameters as expected by Riley
+    /// from the USD physical camera params.
+    HDPRMAN_API
+    void SetRileyCameraParams(RtParamList& camParams,
+                              RtParamList& camParamsOverride,
+                              RtParamList& projParams) const;
+
     float GetApertureAngle() const {
         return _apertureAngle;
     }
 
     float GetApertureDensity() const {
-        return _apertureAngle;
+        return _apertureDensity;
     }
 
     float GetApertureNSides() const {
@@ -140,7 +147,16 @@ public:
         return _apertureRoundness;
     }
 
+    float GetDofMult() const {
+        return _dofMult;
+    }
+
 private:
+
+    void setFov(RtParamList& projParams) const;
+
+    void setScreenWindow(RtParamList& camParams, bool isPerspective) const;
+
     HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> _sampleXforms;
 
 #if HD_API_VERSION < 52
@@ -168,9 +184,12 @@ private:
     float _apertureDensity;
     int _apertureNSides;
     float _apertureRoundness;
+    float _dofMult;
+
+    VtDictionary _params;
 };
 
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif  // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_CAMERA_H
+#endif  // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_CAMERA_H

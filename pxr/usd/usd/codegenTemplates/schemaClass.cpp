@@ -22,12 +22,16 @@ TF_REGISTRY_FUNCTION(TfType)
         TfType::Bases< {{ cls.parentCppClassName }} > >();
     
 {% if cls.isConcrete %}
+{% if cls.cppClassName != cls.usdPrimTypeName %}
     // Register the usd prim typename as an alias under UsdSchemaBase. This
     // enables one to call
     // TfType::Find<UsdSchemaBase>().FindDerivedByName("{{ cls.usdPrimTypeName }}")
     // to find TfType<{{ cls.cppClassName }}>, which is how IsA queries are
     // answered.
     TfType::AddAlias<UsdSchemaBase, {{ cls.cppClassName }}>("{{ cls.usdPrimTypeName }}");
+{% else %}
+    // Skip registering an alias as it would be the same as the class name.
+{% endif %}
 {% endif %}
 }
 
@@ -366,6 +370,57 @@ TfTokenVector
 }
 
 {% endif %}
+{% for schema in appliedSchemas %}
+{% set schemaCls = classes[schema]%}
+{{ schemaCls.cppClassName }}
+{{ cls.cppClassName }}::{{ schema }}() const
+{
+    return {{ schemaCls.cppClassName }}(GetPrim());
+}
+
+{% for attrName in schemaCls.attrOrder %}
+{% set attr = schemaCls.attrs[attrName] %}
+{# Only emit Create/Get API and doxygen if apiName is not empty string. #}
+{% if attr.apiName != '' %}
+{% if attr.apiGet != "custom" %}
+UsdAttribute
+{{ cls.cppClassName }}::Get{{ Proper(attr.apiName) }}Attr() const
+{
+    return {{ schema }}().Get{{ Proper(attr.apiName) }}Attr();
+}
+{% endif %}
+
+UsdAttribute
+{{ cls.cppClassName }}::Create{{ Proper(attr.apiName) }}Attr(
+    VtValue const &defaultValue, bool writeSparsely) const
+{
+    return {{ schema }}().Create{{ Proper(attr.apiName) }}Attr(
+        defaultValue, writeSparsely);
+}
+
+{% endif %}
+{% endfor %}
+{% for relName in schemaCls.relOrder %}
+{% set rel = schemaCls.rels[relName] %}
+{# Only emit Create/Get API and doxygen if apiName is not empty string. #}
+{% if rel.apiName != '' %}
+{% if rel.apiGet != "custom" %}
+UsdRelationship
+{{ cls.cppClassName }}::Get{{ Proper(rel.apiName) }}Rel() const
+{
+    return {{ schema }}().Get{{ Proper(rel.apiName) }}Rel();
+}
+{% endif %}
+
+UsdRelationship
+{{ cls.cppClassName }}::Create{{ Proper(rel.apiName) }}Rel() const
+{
+    return {{ schema }}().Create{{ Proper(rel.apiName) }}Rel();
+}
+
+{% endif %}
+{% endfor %}
+{% endfor %}
 {% if useExportAPI %}
 {{ namespaceClose }}
 

@@ -15,13 +15,13 @@
 #include "pxr/base/tf/pyUtils.h"
 #include "pxr/base/tf/wrapTypeHelpers.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python.hpp"
 
 #include <string>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -175,8 +175,38 @@ WRAP_CUSTOM {
              arg("opSuffix")=TfToken(),
              arg("isInverseOp")=false))
 
+        .def("AddTranslateXOp", &This::AddTranslateXOp, 
+            (arg("precision")=UsdGeomXformOp::PrecisionDouble,
+             arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("AddTranslateYOp", &This::AddTranslateYOp, 
+            (arg("precision")=UsdGeomXformOp::PrecisionDouble,
+             arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("AddTranslateZOp", &This::AddTranslateZOp, 
+            (arg("precision")=UsdGeomXformOp::PrecisionDouble,
+             arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
         .def("AddTranslateOp", &This::AddTranslateOp, 
             (arg("precision")=UsdGeomXformOp::PrecisionDouble,
+             arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("AddScaleXOp", &This::AddScaleXOp, 
+            (arg("precision")=UsdGeomXformOp::PrecisionFloat,
+             arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("AddScaleYOp", &This::AddScaleYOp, 
+            (arg("precision")=UsdGeomXformOp::PrecisionFloat,
+             arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("AddScaleZOp", &This::AddScaleZOp, 
+            (arg("precision")=UsdGeomXformOp::PrecisionFloat,
              arg("opSuffix")=TfToken(),
              arg("isInverseOp")=false))
 
@@ -245,7 +275,31 @@ WRAP_CUSTOM {
              arg("opSuffix")=TfToken(),
              arg("isInverseOp")=false))
 
+        .def("GetTranslateXOp", &This::GetTranslateXOp, 
+            (arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("GetTranslateYOp", &This::GetTranslateYOp, 
+            (arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("GetTranslateZOp", &This::GetTranslateZOp, 
+            (arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
         .def("GetTranslateOp", &This::GetTranslateOp, 
+            (arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("GetScaleXOp", &This::GetScaleXOp, 
+            (arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("GetScaleYOp", &This::GetScaleYOp, 
+            (arg("opSuffix")=TfToken(),
+             arg("isInverseOp")=false))
+
+        .def("GetScaleZOp", &This::GetScaleZOp, 
             (arg("opSuffix")=TfToken(),
              arg("isInverseOp")=false))
 

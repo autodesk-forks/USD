@@ -40,6 +40,7 @@ TF_DECLARE_WEAK_AND_REF_PTRS(PcpPrimIndex_Graph);
 
 class ArResolver;
 class PcpCache;
+class PcpCacheChanges;
 class PcpPrimIndex;
 class PcpPrimIndexInputs;
 class PcpPrimIndexOutputs;
@@ -241,6 +242,14 @@ public:
     void ComputePrimChildNames(TfTokenVector *nameOrder,
                                PcpTokenSet *prohibitedNameSet) const;
 
+    /// Compute the prim child names for this prim when composed from only the
+    /// subtree starting at \p subtreeRootNode.
+    PCP_API
+    void ComputePrimChildNamesInSubtree(
+        const PcpNodeRef &subtreeRootNode,
+        TfTokenVector *nameOrder,
+        PcpTokenSet *prohibitedNameSet) const;
+
     /// Compute the prim property names for the given path. \p errors will
     /// contain any errors encountered while performing this operation.  The
     /// \p nameOrder vector must not contain any duplicate entries.
@@ -270,8 +279,10 @@ public:
 private:
     friend class PcpPrimIterator;
     friend struct Pcp_PrimIndexer;
-    friend void Pcp_RescanForSpecs(PcpPrimIndex*, bool usd,
-                                   bool updateHasSpecs);
+    friend void Pcp_RescanForSpecs(
+                    PcpPrimIndex*, bool usd,
+                    bool updateHasSpecs,
+                    const PcpCacheChanges *cacheChanges);
 
     // The node graph representing the compositional structure of this prim.
     PcpPrimIndex_GraphRefPtr _graph;
@@ -425,14 +436,14 @@ PcpComputePrimIndex(
     PcpPrimIndexOutputs* outputs,
     ArResolver* pathResolver = NULL);
 
-/// Returns true if the 'new' default standin behavior is enabled.
+/// Computes the list of prim specs that contribute opinions for the given
+/// \p primIndex in order from strongest to weakest. This should only be used
+/// when it is needed to be known what all the specs are that contribute to the
+/// prim index and it makes sense to potentially cache the result. This should
+/// never be used for value resolution as it is ineffecient for that purpose.
 PCP_API
-bool
-PcpIsNewDefaultStandinBehaviorEnabled();
-
-// Sets the prim stack in \p index.
-void
-Pcp_RescanForSpecs(PcpPrimIndex* index, bool usd);
+SdfPrimSpecHandleVector
+PcpComputePrimStackForPrimIndex(const PcpPrimIndex &primIndex);
 
 // Returns true if \p index should be recomputed due to changes to
 // any computed asset paths that were used to find or open layers

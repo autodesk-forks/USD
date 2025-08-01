@@ -14,8 +14,8 @@
 
 #include "pxr/usd/ar/resolver.h"
 #include "pxr/usd/sdf/assetPath.h"
+#include "pxr/usd/sdf/usdcFileFormat.h"
 #include "pxr/usd/usd/stage.h"
-#include "pxr/usd/usd/usdcFileFormat.h"
 #include "pxr/usd/usd/zipFile.h"
 
 #include "pxr/base/tf/fileUtils.h"
@@ -117,19 +117,27 @@ UsdUtilsCreateNewARKitUsdzPackage(
     // the composition of the stage.
     std::vector<std::string> sublayers, references, payloads;
 
+    // We are explicitly setting the UDIM path resolution option to false
+    // here because the following logic only cares if the root layer contains
+    // any external references and does reason about the contents of the
+    // results.  UDIM path resolution has the potential to be expensive, for
+    // example in the case of network filesystem paths.
+    UsdUtilsExtractExternalReferencesParams params;
+    params.SetResolveUdimPaths(false);
+
     UsdUtils_ExtractExternalReferences(resolvedPath, 
         UsdUtils_LocalizationContext::ReferenceType::CompositionOnly,
-        &sublayers, &references, &payloads);
+        &sublayers, &references, &payloads, params);
 
     // Ensure that the root layer has the ".usdc" extension.
     std::string targetBaseName = firstLayerName.empty() ? 
         TfGetBaseName(assetPath.GetAssetPath()) : firstLayerName;
     const std::string &fileExt = resolver.GetExtension(targetBaseName);
     bool renamingRootLayer = false;
-    if (fileExt != UsdUsdcFileFormatTokens->Id) {
+    if (fileExt != SdfUsdcFileFormatTokens->Id) {
         renamingRootLayer = true;
         targetBaseName = targetBaseName.substr(0, targetBaseName.rfind(".")+1) +  
-                UsdUsdcFileFormatTokens->Id.GetString();
+                SdfUsdcFileFormatTokens->Id.GetString();
     }
 
     // If there are no external dependencies needed for composition, we can 

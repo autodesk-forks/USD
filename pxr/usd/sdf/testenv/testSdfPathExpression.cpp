@@ -31,6 +31,11 @@ GetBasicPredicateLib() {
         .Define("isPropertyPath", [](SdfPath const &p) {
             return p.IsPropertyPath();
         })
+        .Define("capital", [](SdfPath const &p) {
+            std::string const &name = p.GetName();
+            auto isCap = [](char l) { return 'A' <= l && l <= 'Z'; };
+            return !name.empty() && isCap(name[0]);
+        })
         ;
     return theLib;
 }
@@ -52,6 +57,17 @@ struct MatchEval {
 static void
 TestBasics()
 {
+    {
+        auto eval = MatchEval { SdfPathExpression("/foo//") };
+        TF_AXIOM(eval.Match(SdfPath("/foo")));
+    }    
+
+    {
+        auto eval = MatchEval { 
+            SdfPathExpression("/foo//{isPrimPath}") };
+        TF_AXIOM(eval.Match(SdfPath("/foo")));
+    }    
+
     {
         // Allow leading & trailing whitespace.
         TF_AXIOM(SdfPathExpression("  /foo//bar").GetText() == "/foo//bar");
@@ -138,7 +154,9 @@ TestBasics()
         auto eval = MatchEval { 
             SdfPathExpression("/foo*//bar//{isPrimPath}") };
         
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar")));
         TF_AXIOM(eval.Match(SdfPath("/foo/bar/a")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/x/bar")));
         TF_AXIOM(eval.Match(SdfPath("/foo/x/bar/b")));
         TF_AXIOM(eval.Match(SdfPath("/foo/x/y/z/bar/c")));
         TF_AXIOM(eval.Match(SdfPath("/foo/x/y/z/bar/baz")));
@@ -147,7 +165,9 @@ TestBasics()
         TF_AXIOM(!eval.Match(SdfPath("/foo/x/y/z/bar/baz/qux.attr")));
         TF_AXIOM(!eval.Match(SdfPath("/foo/x/y/z/bar/baz/qux.ns:attr")));
 
+        TF_AXIOM(eval.Match(SdfPath("/fooXYZ/bar")));
         TF_AXIOM(eval.Match(SdfPath("/fooXYZ/bar/a")));
+        TF_AXIOM(eval.Match(SdfPath("/fooABC/x/bar")));
         TF_AXIOM(eval.Match(SdfPath("/fooABC/x/bar/a/b/c")));
         TF_AXIOM(eval.Match(SdfPath("/foo123/x/y/z/bar/x")));
         TF_AXIOM(eval.Match(SdfPath("/fooASDF/x/y/z/bar/baz")));
@@ -221,6 +241,7 @@ TestBasics()
         TF_AXIOM(!composed.ContainsExpressionReferences());
         TF_AXIOM(!composed.ContainsWeakerExpressionReference());
         TF_AXIOM(composed.IsComplete());
+        TF_AXIOM(composed == SdfPathExpression { "/a /b /c" });
         
         auto eval = MatchEval { composed };
 
@@ -228,6 +249,12 @@ TestBasics()
         TF_AXIOM(eval.Match(SdfPath("/b")));
         TF_AXIOM(eval.Match(SdfPath("/c")));
         TF_AXIOM(!eval.Match(SdfPath("/d")));
+
+        // Nothing over something should be Nothing.
+        const auto nothing = SdfPathExpression::Nothing();
+        TF_AXIOM(nothing.ComposeOver(a) == nothing);
+        TF_AXIOM(nothing.ComposeOver(b) == nothing);
+        TF_AXIOM(nothing.ComposeOver(c) == nothing);
     }
 
     {
@@ -323,14 +350,7 @@ static void
 TestSearch()
 {
     // Super simple predicate library for paths for testing.
-    auto predLib = SdfPredicateLibrary<SdfPath const &>()
-        .Define("isPrimPath", [](SdfPath const &p) {
-            return p.IsPrimPath();
-        })
-        .Define("isPropertyPath", [](SdfPath const &p) {
-            return p.IsPropertyPath();
-        })
-        ;
+    auto predLib = GetBasicPredicateLib();
 
     // Paths must follow a depth-first traversal order.
     SdfPathVector paths;
@@ -365,7 +385,11 @@ TestSearch()
         paths.push_back(SdfPath(pathStr));
     }
 
-    auto testSearch = [&predLib, &paths](
+    // Same set of paths above, but skip the `/` path.
+    SdfPathVector pathsNoRoot { std::next(paths.begin()), paths.end() };
+
+    auto testSearchWithPaths = [&predLib](
+        SdfPathVector const &paths,
         std::string const &exprStr,
         std::vector<std::string> const &expected) {
 
@@ -373,19 +397,47 @@ TestSearch()
             SdfPathExpression(exprStr), predLib);
         auto search = eval.MakeIncrementalSearcher(PathIdentity {});
 
-        std::vector<std::string> matches;
+        std::vector<std::string> searchMatches;
         for (SdfPath const &p: paths) {
             if (search.Next(p)) {
-                matches.push_back(p.GetAsString());
+                searchMatches.push_back(p.GetAsString());
             }
         }
-        if (matches != expected) {
-            TF_FATAL_ERROR("Incremental search yielded unexpected results:\n"
-                           "Expected : %s\n"
-                           "Actual   : %s",
-                           TfStringify(expected).c_str(),
-                           TfStringify(matches).c_str());
+        if (searchMatches != expected) {
+            TF_FATAL_ERROR("Incremental search for '%s' yielded unexpected "
+                           "results.\n"
+                           "Expected:\n"
+                           "  %s\n"
+                           "Actual:\n"
+                           "  %s\n",
+                           exprStr.c_str(),
+                           TfStringJoin(expected, "\n  ").c_str(),
+                           TfStringJoin(searchMatches, "\n  ").c_str());
         }
+
+        std::vector<std::string> matchMatches;
+        for (SdfPath const &p: paths) {
+            if (eval.Match(p, PathIdentity {})) {
+                matchMatches.push_back(p.GetAsString());
+            }
+        }
+        if (matchMatches != searchMatches) {
+            TF_FATAL_ERROR("Incremental search for '%s' inconsistent with "
+                           "individual Match()es.\n"
+                           "Search Results:\n"
+                           "  %s\n"
+                           "Match Results:\n"
+                           "  %s\n",
+                           exprStr.c_str(),
+                           TfStringJoin(searchMatches, "\n  ").c_str(),
+                           TfStringJoin(matchMatches, "\n  ").c_str());
+        }
+    };
+    
+    auto testSearch = [&testSearchWithPaths, &paths](
+        std::string const &exprStr,
+        std::vector<std::string> const &expected) {
+        return testSearchWithPaths(paths, exprStr, expected);
     };
 
     testSearch("/World",
@@ -429,6 +481,17 @@ TestSearch()
                  "/World/anim/chars/Sully/geom/body_sbdv",
                  "/World/anim/chars/Sully/geom/body_sbdv.points" });
 
+    testSearch("/World/anim/chars//",
+               { "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Mike/geom/body_sbdv.points",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/chars/Sully/geom/body_sbdv.points" });
+    
     testSearch("//{isPropertyPath}",
                { "/World/anim/chars/Mike/geom/body_sbdv.points",
                  "/World/anim/chars/Sully/geom/body_sbdv.points" });
@@ -450,6 +513,284 @@ TestSearch()
                { "/World/anim/chars/Mike",
                  "/World/anim/sets/Bedroom/Furniture" });
 
+    
+    testSearch("//",
+               { "/",
+                 "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Mike/geom/body_sbdv.points",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/chars/Sully/geom/body_sbdv.points",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearch("//*",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearch("//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearch("/World//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair" });
+
+    testSearch("//*{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearchWithPaths(pathsNoRoot, "//",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Mike/geom/body_sbdv.points",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/chars/Sully/geom/body_sbdv.points",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearchWithPaths(pathsNoRoot, "//*",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearchWithPaths(pathsNoRoot, "//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearchWithPaths(pathsNoRoot, "//{isPrimPath}//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar"
+               });
+
+    testSearchWithPaths(pathsNoRoot, "/World//{isPrimPath}//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair" });
+
+    testSearchWithPaths(pathsNoRoot, "/World/anim//{capital}//{isPrimPath}",
+               { "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair" });
+
+    testSearchWithPaths(pathsNoRoot, "//*{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar" });
 }
 
 static void

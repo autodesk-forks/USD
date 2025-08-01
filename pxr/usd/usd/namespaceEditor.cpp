@@ -92,6 +92,7 @@ public:
     static _TargetingPropertyDependencies GetDependencies(
         const UsdStageRefPtr &stage) 
     {
+        TRACE_FUNCTION();
         _TargetingPropertyDependencyCollector impl;
         impl._Run(stage);
         return std::move(impl._result);
@@ -294,6 +295,31 @@ UsdNamespaceEditor::UsdNamespaceEditor(
 {
 }
 
+void 
+UsdNamespaceEditor::AddDependentStage(const UsdStageRefPtr &stage)
+{
+    if (!stage || stage == _stage) {
+        return;
+    }
+    _ClearProcessedEdits();
+    _dependentStages.insert(stage);
+}
+
+void 
+UsdNamespaceEditor::RemoveDependentStage(const UsdStageRefPtr &stage)
+{
+    _ClearProcessedEdits();
+    _dependentStages.erase(stage);
+}
+
+void 
+UsdNamespaceEditor::SetDependentStages(const UsdStageRefPtrVector &stages)
+{   
+    for (const auto &stage : stages) {
+        AddDependentStage(stage);
+    }
+}
+
 bool 
 UsdNamespaceEditor::DeletePrimAtPath(
     const SdfPath &path)
@@ -397,11 +423,82 @@ UsdNamespaceEditor::ReparentProperty(
 bool 
 UsdNamespaceEditor::ApplyEdits()
 {
+    TRACE_FUNCTION();
+
     _ProcessEditsIfNeeded();
     if (!_processedEdit) {
         TF_CODING_ERROR("Failed to process edits");
         return false;
     }
+
+    // We create a namespace edit change block for each stage that is edited
+    // by this editor. This is so the stage can appropriately parse the layer 
+    // and PcpCache changes that are processed by the UsdStage and classify 
+    // namespace edits in the ObjectsChanged notice.
+    //
+    // Note that this only includes the primary edit stage and any explicitly
+    // added dependent stage. We do NOT attempt to search for open stages that
+    // just happen to be affected by the edits that will be applied.
+    std::vector<UsdStage::_NamespaceEditsChangeBlock> namespaceEditChangeBlocks;
+    namespaceEditChangeBlocks.reserve(_dependentStages.size() + 1);
+
+    auto addPrimChangesForStage = [&](const UsdStageRefPtr &stage) {
+        // The expected namespace changes to prim index paths are stored per
+        // PcpCache in the dependent namespace edits so we look up the expected
+        // changes for this stage's cache.
+        const auto *pathChangesForStage = TfMapLookupPtr(
+            _processedEdit->dependentStageNamespaceEdits.dependentCachePathChanges, 
+            stage->_GetPcpCache());
+        if (!pathChangesForStage) {
+            return;
+        }
+
+        // Convert the expected namespace changes to what's needed for the
+        // change block by removing old paths that don't exist as prims on the
+        // stage and computing the current prim stack for the old prim before
+        // edits are applied (to be compared with the prim stack after the
+        // edits are applied.)
+        UsdStage::_NamespaceEditsChangeBlock::ExpectedNamespaceEditChangeVector
+            changeBlockExpectedChanges;
+        changeBlockExpectedChanges.reserve(pathChangesForStage->size());
+        for (const auto &change : *pathChangesForStage) {
+            UsdPrim oldPrim = stage->GetPrimAtPath(change.oldPath);
+            if (!oldPrim) {
+                continue;
+            }
+            changeBlockExpectedChanges.push_back({
+                change.oldPath, change.newPath, oldPrim.GetPrimStack()});
+        }
+
+        // Create the change block for this stage's expected namespace changes.
+        namespaceEditChangeBlocks.emplace_back(
+            stage, std::move(changeBlockExpectedChanges));
+    };
+
+    if (_processedEdit->editDescription.IsPropertyEdit()) {
+        // For property edits we only edit the primary stage's root layer stack
+        // so we only have to log the expected property path change in a change
+        // block for that stage. Note that we don't need to compute and add
+        // a prim stack for properties as the change handling in UsdStage 
+        // doesn't need it.
+        // 
+        // XXX: WE don't currently look for downstream dependencies in dependent
+        // stages for property edits. This is something that will likely be
+        // needed so and we'll accordingly need to change block property changes
+        // for the affected dependent stages as well.
+        UsdStage::_NamespaceEditsChangeBlock::ExpectedNamespaceEditChangeVector
+            changeBlockExpectedChanges({
+                {_processedEdit->editDescription.oldPath, 
+                 _processedEdit->editDescription.newPath}});
+        namespaceEditChangeBlocks.emplace_back(
+            _stage, std::move(changeBlockExpectedChanges));
+    } else {
+        addPrimChangesForStage(_stage);
+        for (const auto &stage : _dependentStages) {
+            addPrimChangesForStage(stage);
+        }
+    }
+
     const bool success = _processedEdit->Apply();
 
     // Always clear the processed edits after applying them.
@@ -412,6 +509,8 @@ UsdNamespaceEditor::ApplyEdits()
 bool 
 UsdNamespaceEditor::CanApplyEdits(std::string *whyNot) const
 {
+    TRACE_FUNCTION();
+
     _ProcessEditsIfNeeded();
     if (!_processedEdit) {
         TF_CODING_ERROR("Failed to process edits");
@@ -560,12 +659,14 @@ public:
     // Creates a processed edit from an edit description.
     static UsdNamespaceEditor::_ProcessedEdit ProcessEdit(
         const UsdStageRefPtr &stage,
+        const _StageSet &dependentStages,
         const UsdNamespaceEditor::_EditDescription &editDesc,
         const UsdNamespaceEditor::EditOptions &editOptions);
 
 private:
     _EditProcessor(
         const UsdStageRefPtr &stage,
+        const _StageSet &_dependentStages,
         const UsdNamespaceEditor::_EditDescription &editDesc,
         const UsdNamespaceEditor::EditOptions &editOptions,
         _ProcessedEdit *processedEdit);
@@ -581,8 +682,11 @@ private:
     void _GatherLayersToEdit();
 
     void _GatherTargetListOpEdits();
-    
+
+    void _GatherDependentStageEdits();
+
     const UsdStageRefPtr & _stage;
+    const _StageSet &_dependentStages;
     const UsdNamespaceEditor::_EditDescription & _editDesc;
     const UsdEditTarget &_editTarget;
     const UsdNamespaceEditor::EditOptions & _editOptions;
@@ -601,7 +705,7 @@ UsdNamespaceEditor::_ProcessEditsIfNeeded() const
         return;
     }
     _processedEdit = UsdNamespaceEditor::_EditProcessor::ProcessEdit(
-        _stage, _editDescription, _editOptions);
+        _stage, _dependentStages, _editDescription, _editOptions);
 }
 
 static 
@@ -747,20 +851,25 @@ _IsValidNewParentPath(
 UsdNamespaceEditor::_ProcessedEdit 
 UsdNamespaceEditor::_EditProcessor::ProcessEdit(
     const UsdStageRefPtr &stage,
+    const _StageSet &dependentStages,
     const _EditDescription &editDesc,
     const EditOptions &editOptions)
 {
+    TRACE_FUNCTION();
+    
     _ProcessedEdit processedEdit;
-    _EditProcessor(stage, editDesc, editOptions, &processedEdit);
+    _EditProcessor(stage, dependentStages, editDesc, editOptions, &processedEdit);
     return processedEdit;
 }
 
 UsdNamespaceEditor::_EditProcessor::_EditProcessor(
     const UsdStageRefPtr &stage,
+    const _StageSet &dependentStages,
     const UsdNamespaceEditor::_EditDescription &editDesc,
     const UsdNamespaceEditor::EditOptions &editOptions,
     _ProcessedEdit *processedEdit)
     : _stage(stage)
+    , _dependentStages(dependentStages)
     , _editDesc(editDesc)
     , _editTarget(stage->GetEditTarget())
     , _editOptions(editOptions)
@@ -771,11 +880,8 @@ UsdNamespaceEditor::_EditProcessor::_EditProcessor(
         return;
     }
 
-    // Add the edit to the processed SdfBatchNamespaceEdit. We use the index of
-    // "Same" specifically so renames don't move the object (it has no effect
-    // for any edits other than rename)
-    _processedEdit->edits.Add(
-        editDesc.oldPath, editDesc.newPath, SdfNamespaceEdit::Same);
+    // Copy the edit description.
+    _processedEdit->editDescription = _editDesc;
 
     // Validate whether the stage has the prim or property at the original path
     // that can be namespace edited.
@@ -813,6 +919,10 @@ UsdNamespaceEditor::_EditProcessor::_EditProcessor(
     // to be edited when the edits are applied.
     _GatherLayersToEdit();
 
+    // Gather all edits that need to be performed on dependent stages for prim
+    // indexes that would be affected by the initial layer edits.
+    _GatherDependentStageEdits();
+
     // Gather all the edits that need to be made to target path listOps in 
     // property specs in order to "fix up" properties that have connections or 
     // relationship targets targeting the namespace edited object.
@@ -822,6 +932,8 @@ UsdNamespaceEditor::_EditProcessor::_EditProcessor(
 bool
 UsdNamespaceEditor::_EditProcessor::_ProcessNewPath()
 {
+    TRACE_FUNCTION();
+
     // Empty path is a delete so the new path is automatically valid.
     if (_editDesc.newPath.IsEmpty()) {
         return true;
@@ -837,19 +949,12 @@ UsdNamespaceEditor::_EditProcessor::_ProcessNewPath()
 
     // For reparenting we have additional behaviors and validation to perform.
     if (_editDesc.editType == _EditType::Reparent) {
-        // For each layer we edit, we may need to create new overs for the new 
-        // parent path and delete inert ancestor overs after moving a prim or 
-        // property from its original parent, so add this info to the processed 
-        // edit.
-        _processedEdit->createParentSpecIfNeededPath = 
-            _editDesc.newPath.GetParentPath();
-        _processedEdit->removeInertAncestorOvers = true;
 
         // Validate that the stage does have a prim at the new parent path to 
         // reparent to.
         std::string whyNot;
         if (!_IsValidNewParentPath(_stage, _editDesc.oldPath, 
-                _processedEdit->createParentSpecIfNeededPath, &whyNot)) {
+                _editDesc.newPath.GetParentPath(), &whyNot)) {
             _processedEdit->errors.push_back(std::move(whyNot));
             return false;
         }
@@ -909,6 +1014,8 @@ void
 UsdNamespaceEditor::_EditProcessor::_ProcessPrimEditRequiresRelocates(
     const PcpPrimIndex &primIndex)
 {
+    TRACE_FUNCTION();
+
     const bool requiresRelocatesAuthoring = [&](){
         // First check: if the path that is being moved or deleted is already
         // the target of a relocation in the local layer stack, then the 
@@ -966,22 +1073,17 @@ UsdNamespaceEditor::_EditProcessor::_ProcessPrimEditRequiresRelocates(
         return;
     }
 
-    // Otherwise, use the relocates builder to get all the relocates metadata
-    // that needs to be authored in each layer to move old path to new path.
-    PcpLayerRelocatesEditBuilder builder(
-        _nodeForEditTarget.GetLayerStack(), _editTarget.GetLayer());
-    std::string error;
-    if (!builder.Relocate(_editDesc.oldPath, _editDesc.newPath, &error)) {
-        TF_CODING_ERROR("Cannot get relocates edits because: %s", 
-            error.c_str());                       
-    }
-    _processedEdit->relocatesEdits = builder.GetEdits();
+    // Otherwise, log that we will author relocates so that this will be 
+    // accounted for when we compute the dependent stage namespace edits.
+    _processedEdit->willAuthorRelocates = true;
 }
 
 void 
 UsdNamespaceEditor::_EditProcessor::_ProcessPropEditRequiresRelocates(
     const PcpPrimIndex &primIndex)
 {
+    TRACE_FUNCTION();
+
     const TfToken &propName = _editDesc.oldPath.GetNameToken();
 
     // Check to see if there are any contributing specs that would require 
@@ -1043,6 +1145,8 @@ UsdNamespaceEditor::_EditProcessor::_ProcessPropEditRequiresRelocates(
 void 
 UsdNamespaceEditor::_EditProcessor::_GatherLayersToEdit()
 {
+    TRACE_FUNCTION();
+
     // Get all the layers in the layer stack where the edits will be performed.
     const SdfLayerRefPtrVector &layers = 
         _nodeForEditTarget.GetLayerStack()->GetLayers();
@@ -1063,40 +1167,16 @@ UsdNamespaceEditor::_EditProcessor::_GatherLayersToEdit()
         return;
     }
 
-    // Collect every prim spec that exists for this prim path in the layer 
-    // stack's layers.
-    for (const SdfLayerRefPtr &layer : layers) {
-        if (layer->HasSpec(_editDesc.oldPath)) {
-            _processedEdit->layersToEdit.push_back(layer);
-        }
-    }
-
-    // Validate whether the necessary spec edits can actually be performed on
-    // each layer that needs to be edited.
-    for (const auto &layer : _processedEdit->layersToEdit) {
-        // The layer itself needs to be editable  
-        if (!layer->PermissionToEdit()) {
-            _processedEdit->errors.push_back(TfStringPrintf("The spec @%s@<%s> "
-                "cannot be edited because the layer is not editable",
-                layer->GetIdentifier().c_str(),
-                _editDesc.oldPath.GetText()));
-        }
-        // If we're moving an object to a new path, the layer cannot have a
-        // spec already at the new path.
-        if (!_editDesc.newPath.IsEmpty() && layer->HasSpec(_editDesc.newPath)) {
-            _processedEdit->errors.push_back(TfStringPrintf("The spec @%s@<%s> "
-                "cannot be moved to <%s> because a spec already exists at "
-                "the new path",
-                layer->GetIdentifier().c_str(),
-                _editDesc.oldPath.GetText(),
-                _editDesc.newPath.GetText()));
-        }
-    }
+    _processedEdit->layersToEdit = PcpGatherLayersToEditForSpecMove(
+        _nodeForEditTarget.GetLayerStack(),
+        _editDesc.oldPath, _editDesc.newPath, &_processedEdit->errors);
 }
 
 void 
 UsdNamespaceEditor::_EditProcessor::_GatherTargetListOpEdits()
 {
+    TRACE_FUNCTION();
+
     // Gather all the dependencies from stage namespace path to properties with 
     // relationship targets or attributes connections that depend on that 
     // namespace path.
@@ -1178,10 +1258,10 @@ UsdNamespaceEditor::_EditProcessor::_GatherTargetListOpEdits()
             }
         }
 
-        // If we added relocates for this edit already, then the target paths
-        // authored across composition arcs will also be mapped by the
+        // If the edit will author relocates for the primary edit, then the target
+        // paths authored across composition arcs will also be mapped by the
         // relocation. 
-        if (!_processedEdit->relocatesEdits.empty()) {
+        if (_processedEdit->willAuthorRelocates) {
             continue;
         }
 
@@ -1259,52 +1339,53 @@ UsdNamespaceEditor::_ProcessedEdit::CanApply(std::string *whyNot) const
     return true;
 }
 
-bool 
-UsdNamespaceEditor::_ProcessedEdit::Apply()
+static bool 
+_ApplyLayerSpecMove(
+    const SdfLayerHandle &layer, const SdfPath &oldPath, const SdfPath &newPath)
 {
-    // This is to try to preemptively prevent partial edits when if any of the 
-    // necessary specs can't be renamed.
-    if (std::string errorMsg; !CanApply(&errorMsg)) {
-        TF_CODING_ERROR(TfStringPrintf("Failed to apply edits to the stage "
-            "because of the following errors: %s", errorMsg.c_str()));
-        return false;
-    }
+    TRACE_FUNCTION();
+
+    // Create an SdfBatchNamespaceEdit for the path move. We use the index of
+    // "Same" specifically so renames don't move the object out of its original
+    // order (it has no effect for any edits other than rename)
+    SdfBatchNamespaceEdit batchEdit;
+    batchEdit.Add(oldPath, newPath, SdfNamespaceEdit::Same);
 
     // Implementation function as this is optionally called with a cleanup 
     // enabler depending on the edit type.
-    auto applyEditsToLayersFn = [&]() {
-        for (const auto &layer : layersToEdit) {
-            // While we do require that the new parent exists on the composed 
-            // stage when doing a reparent operation, that doesn't guarantee 
-            // that parent spec exists on every layer in which we have to move
-            // the source spec. Thus we need to ensure the parent spec of the 
-            // new location exists by adding required overs if necessary. 
-            if (!createParentSpecIfNeededPath.IsEmpty() &&
-                !SdfJustCreatePrimInLayer(
-                    layer, createParentSpecIfNeededPath)) {
-                TF_CODING_ERROR("Failed to find or create new parent spec "
-                    "at path '%s' on layer '%s' which is necessary to "
-                    "apply edits. The edit will be incomplete.",
-                    createParentSpecIfNeededPath.GetText(),
-                    layer->GetIdentifier().c_str());
-                return false;
-            }
-
-            // Apply the namespace edits to the layer.
-            if (!layer->Apply(edits)) {
-                TF_CODING_ERROR("Failed to apply batch edit '%s' on layer '%s' "
-                    "which is necessary to apply edits. The edit will be "
-                    "incomplete.",
-                    TfStringify(edits.GetEdits()).c_str(),
-                    layer->GetIdentifier().c_str());
-                return false;
-            }
+    auto applyEditsToLayersFn = [&](const SdfPath &createParentSpecIfNeededPath) {
+        // While we do require that the new parent exists on the composed 
+        // stage when doing a reparent operation, that doesn't guarantee 
+        // that parent spec exists on every layer in which we have to move
+        // the source spec. Thus we need to ensure the parent spec of the 
+        // new location exists by adding required overs if necessary. 
+        if (!createParentSpecIfNeededPath.IsEmpty() &&
+            !SdfJustCreatePrimInLayer(
+                layer, createParentSpecIfNeededPath)) {
+            TF_CODING_ERROR("Failed to find or create new parent spec "
+                "at path '%s' on layer '%s' which is necessary to "
+                "apply edits. The edit will be incomplete.",
+                createParentSpecIfNeededPath.GetText(),
+                layer->GetIdentifier().c_str());
+            return false;
         }
+
+        // Apply the namespace edits to the layer.
+        if (!layer->Apply(batchEdit)) {
+            TF_CODING_ERROR("Failed to apply batch edit '%s' on layer '%s' "
+                "which is necessary to apply edits. The edit will be "
+                "incomplete.",
+                TfStringify(batchEdit.GetEdits()).c_str(),
+                layer->GetIdentifier().c_str());
+            return false;
+        }
+
         return true;
     };
 
-    SdfChangeBlock changeBlock;
-    if (removeInertAncestorOvers) {
+    const bool isReparent = !newPath.IsEmpty() &&
+        newPath.GetParentPath() != oldPath.GetParentPath();
+    if (isReparent) {
         // Moving a spec may leave the ancnestor specs as an inert overs. This
         // could easily be caused by reparenting a prim back to its original
         // parent (essentially an "undo") after a reparent that needed to create
@@ -1313,18 +1394,60 @@ UsdNamespaceEditor::_ProcessedEdit::Apply()
         // moved path so that a reparent plus an "undo" can effectively leave
         // layers in their original state.
         SdfCleanupEnabler cleanupEnabler;
-        if (!applyEditsToLayersFn()) {
+        if (!applyEditsToLayersFn(newPath.GetParentPath())) {
             return false;
         }
     } else {
-        if (!applyEditsToLayersFn()) {
+        if (!applyEditsToLayersFn(SdfPath::EmptyPath())) {
             return false;
         }
     }
 
-    // Set any necessary relocates.
-    for (const auto &[layer, relocatesValue] : relocatesEdits) {
-        layer->SetRelocates(relocatesValue);
+    return true;
+}
+
+bool 
+UsdNamespaceEditor::_ProcessedEdit::Apply()
+{
+    TRACE_FUNCTION();
+
+    // This is to try to preemptively prevent partial edits when if any of the 
+    // necessary specs can't be renamed.
+    if (std::string errorMsg; !CanApply(&errorMsg)) {
+        TF_CODING_ERROR(TfStringPrintf("Failed to apply edits to the stage "
+            "because of the following errors: %s", errorMsg.c_str()));
+        return false;
+    }
+
+    SdfChangeBlock changeBlock;
+
+    if (editDescription.IsPropertyEdit()) {
+        // For a property edit, we just have to move the specs in the layers to
+        // edit.
+        for (const auto &layer : layersToEdit) {
+            _ApplyLayerSpecMove(layer, 
+                editDescription.oldPath, editDescription.newPath);
+        }
+    } else {
+        // For prim edits, the dependent stage edits are always computed for 
+        // at least the primary stage so all necessary edits will be contained
+        // in those computed edits.
+        for (const auto &[layer, editVec] : 
+                dependentStageNamespaceEdits.layerSpecMoves) {
+            for (const auto &edit : editVec) {
+                _ApplyLayerSpecMove(layer, edit.oldPath, edit.newPath);
+            }
+        }
+
+        for (const auto &edit : 
+                dependentStageNamespaceEdits.compositionFieldEdits) {
+            edit.layer->SetField(edit.path, edit.fieldName, edit.newFieldValue);
+        }
+
+        for (const auto &[layer, relocates] : 
+                dependentStageNamespaceEdits.dependentRelocatesEdits) {
+            layer->SetRelocates(relocates);
+        }
     }
 
     // Perform any target path listOp fixups necessary now that the namespace 
@@ -1347,6 +1470,50 @@ UsdNamespaceEditor::_ProcessedEdit::Apply()
     }
 
     return true;
+}
+
+void
+UsdNamespaceEditor::_EditProcessor::_GatherDependentStageEdits()
+{
+    TRACE_FUNCTION();
+
+    // Composition dependencies are only relevant for prim namespace edits.
+    if (_editDesc.IsPropertyEdit()) {
+        return;
+    }
+
+    // Get the PcpCaches for each dependent stage. The primary stage is always
+    // a dependent so put its cache at the front. Note that _dependentStages 
+    // are a uniqued set and should never contain the primary stage.
+    std::vector<const PcpCache *> dependentCaches;
+    dependentCaches.reserve(_dependentStages.size() + 1);
+    dependentCaches.push_back(_stage->_GetPcpCache());
+    for (const auto &stage : _dependentStages) {
+        dependentCaches.push_back(stage->_GetPcpCache());
+    }
+
+    // If we need and allow relocates for the primary edit, then we pass the 
+    // layer stack where we'll author them to the dependent edits function
+    // which will compute the layer stack's relocates edits for us.
+    const PcpLayerStackRefPtr &addRelocatesToLayerStack = 
+        _processedEdit->willAuthorRelocates ?
+            _nodeForEditTarget.GetLayerStack() : PcpLayerStackRefPtr();
+
+    // Gather all the dependent edits for all stage PcpCaches.
+    _processedEdit->dependentStageNamespaceEdits = 
+        PcpGatherDependentNamespaceEdits(
+            _editDesc.oldPath, _editDesc.newPath, _processedEdit->layersToEdit,
+            addRelocatesToLayerStack, _editTarget.GetLayer(), 
+            dependentCaches);
+
+    // XXX: We may want an option to allow users to treat warnings as errors or
+    // to return warning as part of calling CanApplyEdits. But for now we just
+    // emit the warnings.
+    if (!_processedEdit->dependentStageNamespaceEdits.warnings.empty()) {
+        TF_WARN("Encountered warnings processing dependent namespace edits: %s",
+            TfStringJoin(_processedEdit->dependentStageNamespaceEdits.warnings, 
+                         "\n  ").c_str());
+    }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

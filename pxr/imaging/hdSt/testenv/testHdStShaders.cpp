@@ -54,7 +54,7 @@ private:
     void toggleUseSceneMaterials();
     void rebindMaterial(SdfPath const &rprimId, SdfPath const &materialId);
 
-    HdSt_TestDriver* _driver;
+    HdSt_TestDriverUniquePtr _driver;
 
     std::vector<HdStLightingShaderSharedPtr> _lightingShaders;
 
@@ -71,7 +71,7 @@ private:
 void
 My_TestGLDrawing::InitTest()
 {
-    _driver = new HdSt_TestDriver(_reprName);
+    _driver = std::make_unique<HdSt_TestDriver>(_reprName);
     HdUnitTestDelegate &delegate = _driver->GetDelegate();
     delegate.SetRefineLevel(_refineLevel);
 
@@ -181,25 +181,25 @@ My_TestGLDrawing::InitTest()
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     SdrShaderNodeConstPtr sdrSurfaceFallbackNode = 
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceFallbackSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     SdrShaderNodeConstPtr sdrSurfaceDisplacementNode = 
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceDisplacementSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     SdrShaderNodeConstPtr sdrSurfaceImageToWorldNode = 
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceImageToWorldSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     TfToken const& terminalType = HdMaterialTerminalTokens->surface;
 
@@ -450,7 +450,7 @@ My_TestGLDrawing::updateMaterial()
         shaderReg.GetShaderNodeFromSourceCode(
             shader1Source, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     TfToken const& terminalType = HdMaterialTerminalTokens->surface;
 

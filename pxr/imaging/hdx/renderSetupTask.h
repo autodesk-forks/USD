@@ -52,6 +52,8 @@ class HdStRenderPassState;
 class HdxRenderSetupTask : public HdTask
 {
 public:
+    using TaskParams = HdxRenderTaskParams;
+
     HDX_API
     HdxRenderSetupTask(HdSceneDelegate* delegate, SdfPath const& id);
 
@@ -88,7 +90,6 @@ public:
 private:
     HdRenderPassStateSharedPtr _renderPassState;
     HdStRenderPassShaderSharedPtr _colorRenderPassShader;
-    HdStRenderPassShaderSharedPtr _idRenderPassShader;
     SdfPath _cameraId;
     CameraUtilFraming _framing;
     std::optional<CameraUtilConformWindowPolicy> _overrideWindowPolicy;
@@ -99,8 +100,8 @@ private:
     HdRenderPassAovBindingVector _aovInputBindings;
 
     void _SetRenderpassShadersForStorm(
-        HdxRenderTaskParams const& params,
-        HdStRenderPassState *renderPassState);
+        HdStRenderPassState *renderPassState,
+        HdResourceRegistrySharedPtr const &resourceRegistry);
 
     HdRenderPassStateSharedPtr &_GetRenderPassState(HdRenderIndex* renderIndex);
 
@@ -125,7 +126,6 @@ struct HdxRenderTaskParams
         , pointColor(GfVec4f(0,0,0,1))
         , pointSize(3.0)
         , enableLighting(false)
-        , enableIdRender(false)
         , alphaThreshold(0.0)
         , enableSceneMaterials(true)
         , enableSceneLights(true)
@@ -175,7 +175,6 @@ struct HdxRenderTaskParams
     GfVec4f pointColor;
     float pointSize;
     bool enableLighting;
-    bool enableIdRender;
     float alphaThreshold;
     bool enableSceneMaterials;
     bool enableSceneLights;

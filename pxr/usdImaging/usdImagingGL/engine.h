@@ -10,6 +10,7 @@
 #ifndef PXR_USD_IMAGING_USD_IMAGING_GL_ENGINE_H
 #define PXR_USD_IMAGING_USD_IMAGING_GL_ENGINE_H
 
+#include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdImagingGL/api.h"
 #include "pxr/usdImaging/usdImagingGL/version.h"
@@ -56,6 +57,7 @@ class HdxTaskController;
 class UsdImagingDelegate;
 
 TF_DECLARE_WEAK_AND_REF_PTRS(GlfSimpleLightingContext);
+TF_DECLARE_REF_PTRS(HdNoticeBatchingSceneIndex);
 TF_DECLARE_REF_PTRS(UsdImagingStageSceneIndex);
 TF_DECLARE_REF_PTRS(UsdImagingRootOverridesSceneIndex);
 TF_DECLARE_REF_PTRS(UsdImagingSelectionSceneIndex);
@@ -63,6 +65,7 @@ TF_DECLARE_REF_PTRS(HdsiLegacyDisplayStyleOverrideSceneIndex);
 TF_DECLARE_REF_PTRS(HdsiPrimTypePruningSceneIndex);
 TF_DECLARE_REF_PTRS(HdsiSceneGlobalsSceneIndex);
 TF_DECLARE_REF_PTRS(HdSceneIndexBase);
+TF_DECLARE_REF_PTRS(HdxTaskControllerSceneIndex);
 
 using UsdStageWeakPtr = TfWeakPtr<class UsdStage>;
 
@@ -103,6 +106,9 @@ public:
         /// scene indices that asynchronous processing is allowow. Applications
         /// should perodically call PollForAsynchronousUpdates on the engine.
         bool allowAsynchronousSceneProcessing = false;
+        /// \p enableUsdDrawModes enables the UsdGeomModelAPI draw mode
+        /// feature.
+        bool enableUsdDrawModes = true;
     };
 
     // ---------------------------------------------------------------------
@@ -134,9 +140,10 @@ public:
                                         SdfPath::AbsoluteRootPath(),
                        const HdDriver& driver = HdDriver(),
                        const TfToken& rendererPluginId = TfToken(),
-                       bool gpuEnabled = true,
-                       bool displayUnloadedPrimsWithBounds = false,
-                       bool allowAsynchronousSceneProcessing = false);
+                       const bool gpuEnabled = true,
+                       const bool displayUnloadedPrimsWithBounds = false,
+                       const bool allowAsynchronousSceneProcessing = false,
+                       const bool enableUsdDrawModes = true);
 
     // Disallow copies
     UsdImagingGLEngine(const UsdImagingGLEngine&) = delete;
@@ -379,11 +386,22 @@ public:
         IntersectionResultVector* outResults);
 
     /// Decodes a pick result given hydra prim ID/instance ID (like you'd get
-    /// from an ID render).
+    /// from an ID render), where ID is represented as a vec4 color.
     USDIMAGINGGL_API
     bool DecodeIntersection(
         unsigned char const primIdColor[4],
         unsigned char const instanceIdColor[4],
+        SdfPath *outHitPrimPath = NULL,
+        SdfPath *outHitInstancerPath = NULL,
+        int *outHitInstanceIndex = NULL,
+        HdInstancerContext *outInstancerContext = NULL);
+
+    /// Decodes a pick result given hydra prim ID/instance ID (like you'd get
+    /// from an ID render), where ID is represented as a int.
+    USDIMAGINGGL_API
+    bool DecodeIntersection(
+        int primIdx,
+        int instanceIdx,
         SdfPath *outHitPrimPath = NULL,
         SdfPath *outHitInstancerPath = NULL,
         int *outHitInstanceIndex = NULL,
@@ -400,9 +418,15 @@ public:
     USDIMAGINGGL_API
     static TfTokenVector GetRendererPlugins();
 
-    /// Return the user-friendly description of a renderer plugin.
+    /// Return the user-friendly name of a renderer plugin.
     USDIMAGINGGL_API
     static std::string GetRendererDisplayName(TfToken const &id);
+
+    /// Return the user-friendly name of the Hgi implementation.
+    /// For example: OpenGL, Metal, Vulkan. This is only available
+    /// if a render plugin was set and it uses Hgi.
+    USDIMAGINGGL_API
+    std::string GetRendererHgiDisplayName() const;
 
     /// Return if the GPU is enabled and can be used for any rendering tasks.
     USDIMAGINGGL_API
@@ -431,6 +455,10 @@ public:
     /// Set the current renderer AOV to \p id.
     USDIMAGINGGL_API
     bool SetRendererAov(TfToken const& id);
+
+    /// Set the current renderer AOVs to a list of \p ids.
+    USDIMAGINGGL_API
+    bool SetRendererAovs(TfTokenVector const &ids);
 
     /// Returns an AOV texture handle for the given token.
     USDIMAGINGGL_API
@@ -648,9 +676,15 @@ protected:
     USDIMAGINGGL_API
     HdRenderIndex *_GetRenderIndex() const;
 
+    /// \deprecated.
+    /// Use _Execute(const UsdImaginGLRenderParams &, const SdfPathVector &).
     USDIMAGINGGL_API
     void _Execute(const UsdImagingGLRenderParams &params,
-                  HdTaskSharedPtrVector tasks);
+                  const HdTaskSharedPtrVector tasks);
+
+    USDIMAGINGGL_API
+    void _Execute(const UsdImagingGLRenderParams &params,
+                  const SdfPathVector &taskPaths);
 
     USDIMAGINGGL_API
     bool _CanPrepare(const UsdPrim& root);
@@ -746,6 +780,7 @@ protected:
     SdfPath const _sceneDelegateId;
 
     std::unique_ptr<HdxTaskController> _taskController;
+    HdxTaskControllerSceneIndexRefPtr _taskControllerSceneIndex;
 
     HdxSelectionTrackerSharedPtr _selTracker;
     HdRprimCollection _renderCollection;
@@ -788,6 +823,7 @@ private:
     // Note that we'll only ever use one of _sceneIndex/_sceneDelegate
     // at a time.
     UsdImagingStageSceneIndexRefPtr _stageSceneIndex;
+    HdNoticeBatchingSceneIndexRefPtr _postInstancingNoticeBatchingSceneIndex;
     UsdImagingSelectionSceneIndexRefPtr _selectionSceneIndex;
     UsdImagingRootOverridesSceneIndexRefPtr _rootOverridesSceneIndex;
     HdsiLegacyDisplayStyleOverrideSceneIndexRefPtr _displayStyleSceneIndex;
@@ -800,6 +836,7 @@ private:
     std::unique_ptr<HdEngine> _engine;
 
     bool _allowAsynchronousSceneProcessing = false;
+    bool _enableUsdDrawModes = true;
 };
 
 

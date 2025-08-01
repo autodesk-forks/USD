@@ -16,13 +16,13 @@
 #include "pxr/base/tf/pyUtils.h"
 #include "pxr/base/tf/wrapTypeHelpers.h"
 
-#include <boost/python.hpp>
+#include "pxr/external/boost/python.hpp"
 
 #include <string>
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -73,6 +73,13 @@ _CreateSizeAttr(UsdUINodeGraphNodeAPI &self,
                                       object defaultVal, bool writeSparsely) {
     return self.CreateSizeAttr(
         UsdPythonToSdfType(defaultVal, SdfValueTypeNames->Float2), writeSparsely);
+}
+        
+static UsdAttribute
+_CreateDocURIAttr(UsdUINodeGraphNodeAPI &self,
+                                      object defaultVal, bool writeSparsely) {
+    return self.CreateDocURIAttr(
+        UsdPythonToSdfType(defaultVal, SdfValueTypeNames->String), writeSparsely);
 }
 
 static std::string
@@ -177,6 +184,13 @@ void wrapUsdUINodeGraphNodeAPI()
              &This::GetSizeAttr)
         .def("CreateSizeAttr",
              &_CreateSizeAttr,
+             (arg("defaultValue")=object(),
+              arg("writeSparsely")=false))
+        
+        .def("GetDocURIAttr",
+             &This::GetDocURIAttr)
+        .def("CreateDocURIAttr",
+             &_CreateDocURIAttr,
              (arg("defaultValue")=object(),
               arg("writeSparsely")=false))
 

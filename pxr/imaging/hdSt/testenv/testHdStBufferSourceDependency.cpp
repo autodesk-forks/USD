@@ -7,7 +7,11 @@
 
 #include "pxr/imaging/glf/testGLContext.h"
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hd/driver.h"
+#include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
+#include "pxr/imaging/hgi/tokens.h"
 #include "pxr/base/tf/errorMark.h"
 
 #include <iostream>
@@ -85,10 +89,14 @@ int main()
     GlfTestGLContext::RegisterGLContextCallbacks();
     GlfSharedGLContextScopeHolder sharedContext;
 
-    std::unique_ptr<Hgi> hgi = Hgi::CreatePlatformDefaultHgi();
-
-    std::unique_ptr<HdStResourceRegistry> registry =
-        std::make_unique<HdStResourceRegistry>(hgi.get());
+    HgiUniquePtr const hgi = Hgi::CreatePlatformDefaultHgi();
+    HdDriver driver{HgiTokens->renderDriver, VtValue(hgi.get())};
+    HdStRenderDelegate renderDelegate;
+    std::unique_ptr<HdRenderIndex> const index(
+        HdRenderIndex::New(&renderDelegate, {&driver}));
+    HdStResourceRegistrySharedPtr const registry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            index->GetResourceRegistry());
 
     {
         // just a computation.

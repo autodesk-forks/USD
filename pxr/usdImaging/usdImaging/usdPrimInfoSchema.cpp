@@ -32,6 +32,41 @@ TF_DEFINE_PUBLIC_TOKENS(UsdImagingUsdPrimInfoSchemaTokens,
 // --(BEGIN CUSTOM CODE: Schema Methods)--
 // --(END CUSTOM CODE: Schema Methods)--
 
+HdTokenDataSourceHandle
+UsdImagingUsdPrimInfoSchema::GetSpecifier() const
+{
+    return _GetTypedDataSource<HdTokenDataSource>(
+        UsdImagingUsdPrimInfoSchemaTokens->specifier);
+}
+
+HdTokenDataSourceHandle
+UsdImagingUsdPrimInfoSchema::GetTypeName() const
+{
+    return _GetTypedDataSource<HdTokenDataSource>(
+        UsdImagingUsdPrimInfoSchemaTokens->typeName);
+}
+
+HdBoolDataSourceHandle
+UsdImagingUsdPrimInfoSchema::GetIsLoaded() const
+{
+    return _GetTypedDataSource<HdBoolDataSource>(
+        UsdImagingUsdPrimInfoSchemaTokens->isLoaded);
+}
+
+HdTokenArrayDataSourceHandle
+UsdImagingUsdPrimInfoSchema::GetApiSchemas() const
+{
+    return _GetTypedDataSource<HdTokenArrayDataSource>(
+        UsdImagingUsdPrimInfoSchemaTokens->apiSchemas);
+}
+
+HdTokenDataSourceHandle
+UsdImagingUsdPrimInfoSchema::GetKind() const
+{
+    return _GetTypedDataSource<HdTokenDataSource>(
+        UsdImagingUsdPrimInfoSchemaTokens->kind);
+}
+
 HdPathDataSourceHandle
 UsdImagingUsdPrimInfoSchema::GetNiPrototypePath() const
 {
@@ -46,13 +81,6 @@ UsdImagingUsdPrimInfoSchema::GetIsNiPrototype() const
         UsdImagingUsdPrimInfoSchemaTokens->isNiPrototype);
 }
 
-HdTokenDataSourceHandle
-UsdImagingUsdPrimInfoSchema::GetSpecifier() const
-{
-    return _GetTypedDataSource<HdTokenDataSource>(
-        UsdImagingUsdPrimInfoSchemaTokens->specifier);
-}
-
 HdContainerDataSourceHandle
 UsdImagingUsdPrimInfoSchema::GetPiPropagatedPrototypes() const
 {
@@ -60,27 +88,48 @@ UsdImagingUsdPrimInfoSchema::GetPiPropagatedPrototypes() const
         UsdImagingUsdPrimInfoSchemaTokens->piPropagatedPrototypes);
 }
 
-HdBoolDataSourceHandle
-UsdImagingUsdPrimInfoSchema::GetIsLoaded() const
-{
-    return _GetTypedDataSource<HdBoolDataSource>(
-        UsdImagingUsdPrimInfoSchemaTokens->isLoaded);
-}
-
 /*static*/
 HdContainerDataSourceHandle
 UsdImagingUsdPrimInfoSchema::BuildRetained(
+        const HdTokenDataSourceHandle &specifier,
+        const HdTokenDataSourceHandle &typeName,
+        const HdBoolDataSourceHandle &isLoaded,
+        const HdTokenArrayDataSourceHandle &apiSchemas,
+        const HdTokenDataSourceHandle &kind,
         const HdPathDataSourceHandle &niPrototypePath,
         const HdBoolDataSourceHandle &isNiPrototype,
-        const HdTokenDataSourceHandle &specifier,
-        const HdContainerDataSourceHandle &piPropagatedPrototypes,
-        const HdBoolDataSourceHandle &isLoaded
+        const HdContainerDataSourceHandle &piPropagatedPrototypes
 )
 {
-    TfToken _names[5];
-    HdDataSourceBaseHandle _values[5];
+    TfToken _names[8];
+    HdDataSourceBaseHandle _values[8];
 
     size_t _count = 0;
+
+    if (specifier) {
+        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->specifier;
+        _values[_count++] = specifier;
+    }
+
+    if (typeName) {
+        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->typeName;
+        _values[_count++] = typeName;
+    }
+
+    if (isLoaded) {
+        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->isLoaded;
+        _values[_count++] = isLoaded;
+    }
+
+    if (apiSchemas) {
+        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->apiSchemas;
+        _values[_count++] = apiSchemas;
+    }
+
+    if (kind) {
+        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->kind;
+        _values[_count++] = kind;
+    }
 
     if (niPrototypePath) {
         _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->niPrototypePath;
@@ -92,21 +141,51 @@ UsdImagingUsdPrimInfoSchema::BuildRetained(
         _values[_count++] = isNiPrototype;
     }
 
-    if (specifier) {
-        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->specifier;
-        _values[_count++] = specifier;
-    }
-
     if (piPropagatedPrototypes) {
         _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->piPropagatedPrototypes;
         _values[_count++] = piPropagatedPrototypes;
     }
-
-    if (isLoaded) {
-        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->isLoaded;
-        _values[_count++] = isLoaded;
-    }
     return HdRetainedContainerDataSource::New(_count, _names, _values);
+}
+
+UsdImagingUsdPrimInfoSchema::Builder &
+UsdImagingUsdPrimInfoSchema::Builder::SetSpecifier(
+    const HdTokenDataSourceHandle &specifier)
+{
+    _specifier = specifier;
+    return *this;
+}
+
+UsdImagingUsdPrimInfoSchema::Builder &
+UsdImagingUsdPrimInfoSchema::Builder::SetTypeName(
+    const HdTokenDataSourceHandle &typeName)
+{
+    _typeName = typeName;
+    return *this;
+}
+
+UsdImagingUsdPrimInfoSchema::Builder &
+UsdImagingUsdPrimInfoSchema::Builder::SetIsLoaded(
+    const HdBoolDataSourceHandle &isLoaded)
+{
+    _isLoaded = isLoaded;
+    return *this;
+}
+
+UsdImagingUsdPrimInfoSchema::Builder &
+UsdImagingUsdPrimInfoSchema::Builder::SetApiSchemas(
+    const HdTokenArrayDataSourceHandle &apiSchemas)
+{
+    _apiSchemas = apiSchemas;
+    return *this;
+}
+
+UsdImagingUsdPrimInfoSchema::Builder &
+UsdImagingUsdPrimInfoSchema::Builder::SetKind(
+    const HdTokenDataSourceHandle &kind)
+{
+    _kind = kind;
+    return *this;
 }
 
 UsdImagingUsdPrimInfoSchema::Builder &
@@ -126,14 +205,6 @@ UsdImagingUsdPrimInfoSchema::Builder::SetIsNiPrototype(
 }
 
 UsdImagingUsdPrimInfoSchema::Builder &
-UsdImagingUsdPrimInfoSchema::Builder::SetSpecifier(
-    const HdTokenDataSourceHandle &specifier)
-{
-    _specifier = specifier;
-    return *this;
-}
-
-UsdImagingUsdPrimInfoSchema::Builder &
 UsdImagingUsdPrimInfoSchema::Builder::SetPiPropagatedPrototypes(
     const HdContainerDataSourceHandle &piPropagatedPrototypes)
 {
@@ -141,23 +212,18 @@ UsdImagingUsdPrimInfoSchema::Builder::SetPiPropagatedPrototypes(
     return *this;
 }
 
-UsdImagingUsdPrimInfoSchema::Builder &
-UsdImagingUsdPrimInfoSchema::Builder::SetIsLoaded(
-    const HdBoolDataSourceHandle &isLoaded)
-{
-    _isLoaded = isLoaded;
-    return *this;
-}
-
 HdContainerDataSourceHandle
 UsdImagingUsdPrimInfoSchema::Builder::Build()
 {
     return UsdImagingUsdPrimInfoSchema::BuildRetained(
+        _specifier,
+        _typeName,
+        _isLoaded,
+        _apiSchemas,
+        _kind,
         _niPrototypePath,
         _isNiPrototype,
-        _specifier,
-        _piPropagatedPrototypes,
-        _isLoaded
+        _piPropagatedPrototypes
     );
 }
 

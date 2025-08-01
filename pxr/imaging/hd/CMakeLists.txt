@@ -15,10 +15,7 @@ pxr_library(hd
         hf
         pxOsd
         sdr
-        ${TBB_tbb_LIBRARY}
-
-    INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
+        TBB::tbb
 
     PUBLIC_CLASSES
         aov
@@ -31,6 +28,7 @@ pxr_library(hd
         bufferArrayRange
         bufferSource
         bufferSpec
+        cachingSceneIndex
         camera
         cameraSchema
         capsuleSchema
@@ -52,6 +50,7 @@ pxr_library(hd
         dataSource
         dataSourceHash
         dataSourceLegacyPrim
+        dataSourceLegacyTaskPrim
         dataSourceLocator
         dataSourceMaterialNetworkInterface
         debugCodes
@@ -68,6 +67,7 @@ pxr_library(hd
         extComputation
         extComputationContext
         extComputationContextInternal
+        extComputationCpuCallback
         extComputationInputComputationSchema
         extComputationOutputSchema
         extComputationPrimvarSchema
@@ -102,6 +102,8 @@ pxr_library(hd
         legacyDisplayStyleSchema
         legacyGeomSubsetSceneIndex
         legacyPrimSceneIndex
+        legacyTaskFactory
+        legacyTaskSchema
         lensDistortionSchema
         light
         lightSchema
@@ -116,6 +118,7 @@ pxr_library(hd
         materialNetwork2Interface
         materialNodeSchema
         materialNodeParameterSchema
+        materialOverrideSchema
         materialSchema
         mergingSceneIndex
         mesh
@@ -129,6 +132,7 @@ pxr_library(hd
         nurbsPatchTrimCurveSchema
         overlayContainerDataSource
         perfLog
+        planeSchema
         pluginRenderDelegateUniqueHandle
         points
         prefixingSceneIndex

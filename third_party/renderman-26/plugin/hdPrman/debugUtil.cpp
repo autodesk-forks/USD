@@ -98,6 +98,8 @@ _GetParamPrefix(const RtParamList::ParamInfo& info)
         case RtDataType::k_samplefilter: out += "samplefilter"; break;
         case RtDataType::k_displayfilter: out += "displayfilter"; break;
         case RtDataType::k_struct: out += "struct"; break;
+        default:
+            TF_WARN("Unknown type %d", static_cast<int>(info.type));
     }
     if (info.array) {
         out += TfStringPrintf("[%u]", info.length);
@@ -570,6 +572,10 @@ _FormatParam(
             }
             break;
         }
+        default:
+        {
+            TF_WARN("Unknown type %d", static_cast<int>(info.type));
+        }
     }
     return prefix + val;
 }
@@ -626,6 +632,23 @@ SdfPathVecToString(const std::vector<SdfPath>& vec)
         out += TfStringPrintf("<%s>", path.GetText());
     }
     return out;
+}
+
+std::string
+RileyOutputTypeToString(const riley::RenderOutputType type)
+{
+    switch (type) {
+    case riley::RenderOutputType::k_Float:
+        return std::string("Float");
+    case riley::RenderOutputType::k_Integer:
+        return std::string("Integer");
+    case riley::RenderOutputType::k_Color:
+        return std::string("Color");
+    case riley::RenderOutputType::k_Vector:
+        return std::string("Vector");
+    default:
+        return std::string("Unknown");
+    }
 }
 
 }

@@ -91,9 +91,27 @@
 // 69 -> 70: Add dirty bit translation for light filter prims in backend
 //           emulation.
 // 70 -> 71: Add virtual HdRenderDelegate::IsParallelSyncEnabled.
-//
+// 71 -> 72: Add render index API to batch notices sent by the merging scene
+//           index.
+// 72 -> 73: Adds HdExtComputationUtils::SampleComputedPrimvarValues with
+//           startTime and endTime
+// 73 -> 74: Extended HdMeshReprDesc to support optional generation of
+//           surface edge ids.
+// 74 -> 75: Added overload of HdSceneIndexPlugin::_AppendSceneIndex that
+//           passes the renderInstanceId to the plugin callback.
+// 75 -> 76: Added Scene State ID tunneling through the Hydra pipeline and
+//           arbitrary values Setter/Getter to HdRenderParam.
+// 76 -> 77: Added GetInputPrimType() to HdFlattenedDataSourceProvider::Context.
+//           The Context now stores an HdSceneIndexPrim containing the data
+//           source and prim type.
+// 77 -> 78: Removed the widget renderTag and added a displayInOverlay boolean
+//           attribute to serve the same purpose that widget signified.
+// 78 -> 79: Added Hgi::GarbageCollect.
+// 79 -> 80: Added refinedSolidWireOnSurf and solidWireOnSurf to HD_REPR_TOKENS.
+// 80 -> 81: Added IsValid() to HdRenderParam.
+// 81 -> 82: Added hgi/version.h
 
-#define HD_API_VERSION 71
+#define HD_API_VERSION 82
 
 // 1  ->  2: SimpleLighting -> FallbackLighting
 #define HD_SHADER_API 2

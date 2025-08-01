@@ -27,6 +27,7 @@
 #include "pxr/base/tf/instantiateSingleton.h"
 #include "pxr/base/tf/unicodeUtils.h"
 #include "pxr/base/trace/trace.h"
+#include "pxr/base/ts/spline.h"
 #include "pxr/base/vt/dictionary.h"
 
 #include <deque>
@@ -759,6 +760,7 @@ SdfSchemaBase::_RegisterStandardFields()
     _DoRegisterField(SdfFieldKeys->SessionOwner, "");
     _DoRegisterField(SdfFieldKeys->Specializes, SdfPathListOp())
         .ListValueValidator(&_ValidateSpecializesPath);
+    _DoRegisterField(SdfFieldKeys->Spline, TsSpline());
     _DoRegisterField(SdfFieldKeys->Suffix, "");
     _DoRegisterField(SdfFieldKeys->SuffixSubstitutions, VtDictionary())
         .MapKeyValidator(&_ValidateIsNonEmptyString)
@@ -919,7 +921,6 @@ SdfSchemaBase::_RegisterStandardFields()
 
         .Field(SdfFieldKeys->Comment)
         .Field(SdfFieldKeys->Default)
-        .Field(SdfFieldKeys->TimeSamples)
 
         .MetadataField(SdfFieldKeys->AssetInfo,
                        SdfMetadataDisplayGroupTokens->core)
@@ -951,9 +952,12 @@ SdfSchemaBase::_RegisterStandardFields()
         .CopyFrom(property)
         .Field(SdfFieldKeys->TypeName,                /* required = */ true)
 
+        .Field(SdfFieldKeys->Spline)
         .Field(SdfChildrenKeys->ConnectionChildren)
         .Field(SdfFieldKeys->ConnectionPaths)
         .Field(SdfFieldKeys->DisplayUnit)
+        .Field(SdfFieldKeys->TimeSamples)
+
         .MetadataField(SdfFieldKeys->AllowedTokens,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->ColorSpace, 
@@ -1116,6 +1120,13 @@ SdfSchemaBase::_CheckAndGetSpecDefinition(SdfSpecType specType) const
     }
 
     return def;
+}
+
+const SdfSchemaBase::SpecDefinition* 
+SdfSchemaBase::_IssueErrorForInvalidSpecType(SdfSpecType specType) const
+{
+    TF_RUNTIME_ERROR("Invalid spec type %d", static_cast<int>(specType));
+    return nullptr;
 }
 
 bool 

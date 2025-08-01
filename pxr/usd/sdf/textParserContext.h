@@ -8,7 +8,6 @@
 #define PXR_USD_SDF_TEXT_PARSER_CONTEXT_H
 
 #include "pxr/pxr.h"
-#include "pxr/usd/sdf/data.h"
 #include "pxr/usd/sdf/layerHints.h"
 #include "pxr/usd/sdf/layerOffset.h"
 #include "pxr/usd/sdf/listOp.h"
@@ -16,28 +15,88 @@
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/payload.h"
 #include "pxr/usd/sdf/reference.h"
+#include "pxr/usd/sdf/usdaData.h"
 #include "pxr/usd/sdf/types.h"
+
+#include "pxr/base/ts/spline.h"
+#include "pxr/base/ts/knotMap.h"
+#include "pxr/base/ts/knot.h"
+#include "pxr/base/ts/types.h"
 
 #include "pxr/base/vt/dictionary.h"
 
 #include "pxr/base/tf/token.h"
 
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
 
-// Lexical scanner type.
-typedef void *yyscan_t;
-
 PXR_NAMESPACE_OPEN_SCOPE
+
+
+// Contains symbolic names for states the parser can
+// be in when traversing the scene hierarchy during
+// a parse run such that simple values can be
+// disambiguated
+enum class Sdf_TextParserCurrentParsingContext {
+    LayerSpec,
+    PrimSpec,
+    AttributeSpec,
+    RelationshipSpec,
+    Metadata,
+    KeyValueMetadata,
+    ListOpMetadata,
+    DocMetadata,
+    PermissionMetadata,
+    SymmetryFunctionMetadata,
+    DisplayUnitMetadata,
+    Dictionary,
+    DictionaryTypeName,
+    DictionaryKey,
+    ConnectAttribute,
+    ReorderRootPrims,
+    ReorderNameChildren,
+    ReorderProperties,
+    ReferencesListOpMetadata,
+    PayloadListOpMetadata,
+    InheritsListOpMetadata,
+    SpecializesListOpMetadata,
+    VariantsMetadata,
+    VariantSetsMetadata,
+    RelocatesMetadata,
+    KindMetadata,
+    RelationshipAssignment,
+    RelationshipTarget,
+    RelationshipDefault,
+    TimeSamples,
+    SplineValues,
+    SplineKnotItem,
+    SplinePostExtrapItem,
+    SplinePreExtrapItem,
+    SplineExtrapSloped,
+    SplineKeywordLoop,
+    SplineKnotParam,
+    SplineTangent,
+    SplineTangentWithWidth,
+    SplineInterpMode,
+    ReferenceParameters,
+    LayerOffset,
+    LayerScale,
+    VariantSetStatement,
+    VariantStatementList,
+    PrefixSubstitutionsMetadata,
+    SuffixSubstitutionsMetadata,
+    SubLayerMetadata
+};
 
 // This class contains the global state while parsing an sdf file.
 // It contains the data structures that we use to create the scene description
 // from the file.
-
 class Sdf_TextParserContext {
 public:
     // Constructor.
+    SDF_API
     Sdf_TextParserContext();
     
     std::string magicIdentifierToken;
@@ -53,6 +112,15 @@ public:
 
     // State for sublayer offsets
     std::vector<SdfLayerOffset> subLayerOffsets;
+
+    // state for building up different type names
+    std::string primTypeName;
+    std::string attributeTypeName;
+    std::string dictionaryTypeName;
+    std::string symmetryFunctionName;
+
+    // state for various parsing contexts 
+    std::vector<Sdf_TextParserCurrentParsingContext> parsingContext;
 
     // String list currently being built
     std::vector<TfToken> nameVector;
@@ -90,6 +158,12 @@ public:
 
     // helper for relocates parsing
     SdfRelocates relocatesParsing;
+    SdfPath relocatesKey;
+    bool seenFirstRelocatesPath;
+
+    // helper for string dictionaries
+    std::string stringDictionaryKey;
+    bool seenStringDictionaryKey;
 
     // helpers for generic metadata
     TfToken genericMetadataKey;
@@ -104,19 +178,15 @@ public:
     // Vector of dictionaries used to parse nested dictionaries.  
     // The first element in the vector contains the last parsed dictionary.
     std::vector<VtDictionary> currentDictionaries;
-
-    bool seenError;
+    std::vector<std::string> currentDictionaryKey;
+    std::vector<bool> expectDictionaryValue;
 
     bool custom;
     SdfSpecifier specifier;
-    SdfDataRefPtr data;
+    SdfUsdaDataRefPtr data;
     SdfPath path;
-    TfToken typeName;
     VtValue variability;
     VtValue assoc;
-
-    // Should we only read metadata from the file?
-    bool metadataOnly;
 
     // Hints to fill in about the layer's contents.
     SdfLayerHints layerHints;
@@ -138,10 +208,21 @@ public:
     // Stack of names of variants for the variant sets being built
     std::vector<std::vector<std::string> > currentVariantNames;
 
-    unsigned int sdfLineNo;
-
-    // Used by flex for reentrant parsing
-    yyscan_t scanner;
+    // Working state for splines.
+    bool splineValid;
+    TsSpline spline;
+    TsExtrapolation splineExtrap;
+    TsKnotMap splineKnotMap;
+    TsKnot splineKnot;
+    Sdf_ParserHelpers::Value splineKnotValue;
+    Sdf_ParserHelpers::Value splineKnotPreValue;
+    Sdf_ParserHelpers::Value splineTangentSlopeValue;
+    Sdf_ParserHelpers::Value splineTangentWidthValue;
+    TsTangentAlgorithm splineTangentAlgorithm;
+    std::string splineTangentIdentifier;
+    bool splineTanIsPre;
+    TsInterpMode splineInterp;
+    std::array<double, 5> splineLoopItem;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

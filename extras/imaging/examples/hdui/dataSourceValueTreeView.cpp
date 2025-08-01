@@ -6,6 +6,7 @@
 //
 #include "dataSourceValueTreeView.h"
 #include "pxr/imaging/hd/dataSourceTypeDefs.h"
+#include "pxr/base/gf/matrix4f.h"
 
 #include <QAbstractItemModel>
 #include <QHeaderView>
@@ -185,7 +186,7 @@ public:
             return QVariant();
         }
 
-        return QVariant("(unsuppored type)");
+        return QVariant("(unsupported type)");
     }
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override {
@@ -235,6 +236,10 @@ Hdui_GetModelFromValue(VtValue value, QObject *parent = nullptr)
 
     if (value.IsHolding<VtArray<GfMatrix4d>>()) {
         return new Hdui_TypedArrayValueItemModel<GfMatrix4d>(value, parent);
+    }
+
+    if (value.IsHolding<VtArray<GfMatrix4f>>()) {
+        return new Hdui_TypedArrayValueItemModel<GfMatrix4f>(value, parent);
     }
 
     if (value.IsHolding<VtArray<GfVec2f>>()) {

@@ -26,6 +26,7 @@ pxr_library(hgiVulkan
         computeCmds
         computePipeline
         conversions
+        descriptorSetLayouts
         device
         diagnostic
         garbageCollector
@@ -51,7 +52,7 @@ pxr_library(hgiVulkan
         vulkan.h
 
     PRIVATE_CLASSES
-        spirv_reflect
+        debugCodes
 
     RESOURCE_FILES
         plugInfo.json
@@ -96,6 +97,9 @@ pxr_register_test(testHgiVulkan
     FAIL_PERCENT 0.001
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+    ENV
+        HGI_ENABLE_VULKAN=1
+        HGIVULKAN_DEBUG=1
 )
 
 # This test is not currently supported on static builds as it relies on 

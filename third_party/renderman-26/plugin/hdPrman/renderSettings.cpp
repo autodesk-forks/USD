@@ -5,10 +5,16 @@
 // https://openusd.org/license.
 //
 #include "hdPrman/renderSettings.h"
+
+#if PXR_VERSION >= 2308
+
 #include "hdPrman/debugCodes.h"
 #include "hdPrman/debugUtil.h"
 #include "hdPrman/camera.h"
 #include "hdPrman/cameraContext.h"
+#if PXR_VERSION <= 2308
+#include "hdPrman/renderDelegate.h"
+#endif
 #include "hdPrman/renderParam.h"
 #include "hdPrman/renderViewContext.h"
 #include "hdPrman/rixStrings.h"
@@ -21,6 +27,8 @@
 #include "pxr/imaging/hd/sceneIndexPrimView.h"
 #include "pxr/imaging/hd/utils.h"
 #include "pxr/imaging/hdsi/renderSettingsFilteringSceneIndex.h"
+
+#include "pxr/usdImaging/usdImaging/renderSettingsAdapter.h"
 
 #include "pxr/base/tf/getenv.h"
 #include "pxr/base/tf/envSetting.h"
@@ -41,12 +49,29 @@ TF_DEFINE_ENV_SETTING(HD_PRMAN_RENDER_SETTINGS_DRIVE_RENDER_PASS, false,
                       "the render settings prim when the render pass has "
                       "AOV bindings.");
 
+TF_DEFINE_ENV_SETTING(HD_PRMAN_RENDER_SETTINGS_BUNDLE_RENDER_PRODUCTS, false,
+                      "If true, all render products for the active render "
+                      "settings are rendered within the same render view.");
+
 TF_DEFINE_PRIVATE_TOKENS(
     _renderTerminalTokens, // properties in PxrRenderTerminalsAPI
+    ((riIntegrator, "ri:integrator"))
+    ((riSampleFilters, "ri:sampleFilters"))
+    ((riDisplayFilters, "ri:displayFilters"))
+    // Legacy terminal connections. Remove in a future USD version.
     ((outputsRiIntegrator, "outputs:ri:integrator"))
     ((outputsRiSampleFilters, "outputs:ri:sampleFilters"))
     ((outputsRiDisplayFilters, "outputs:ri:displayFilters"))
 );
+
+#if PXR_VERSION <= 2308
+TF_DEFINE_PRIVATE_TOKENS(
+    _legacyTokens,
+    ((fallbackPath, "/Render/__HdsiRenderSettingsFilteringSceneIndex__FallbackSettings"))
+    ((renderScope, "/Render"))
+    (shutterInterval)
+);
+#endif
 
 
 namespace {
@@ -81,10 +106,13 @@ _GenerateParamList(VtDictionary const &settings)
         // Skip render terminal connections.
         const std::string &name = pair.first;
         const TfToken tokenName(name);
-        if (tokenName == _renderTerminalTokens->outputsRiIntegrator    ||
+        if (tokenName == _renderTerminalTokens->riIntegrator ||
+            tokenName == _renderTerminalTokens->riSampleFilters ||
+            tokenName == _renderTerminalTokens->riDisplayFilters ||
+            // Legacy terminal connections. Remove in a future USD version.
+            tokenName == _renderTerminalTokens->outputsRiIntegrator ||
             tokenName == _renderTerminalTokens->outputsRiSampleFilters ||
             tokenName == _renderTerminalTokens->outputsRiDisplayFilters) {
-
             continue;
         }
 
@@ -111,10 +139,15 @@ _HasNonFallbackRenderSettingsPrim(const HdSceneIndexBaseRefPtr &si)
         return false;
     }
     
+#if PXR_VERSION >= 2311
     const SdfPath &renderScope =
         HdsiRenderSettingsFilteringSceneIndex::GetRenderScope();
     const SdfPath &fallbackPrimPath =
         HdsiRenderSettingsFilteringSceneIndex::GetFallbackPrimPath();
+#else
+    const SdfPath &renderScope = SdfPath(_legacyTokens->renderScope);
+    const SdfPath &fallbackPrimPath = SdfPath(_legacyTokens->fallbackPath);
+#endif
 
     for (const SdfPath &path : HdSceneIndexPrimView(si, renderScope)) {
         if (path != fallbackPrimPath &&
@@ -124,6 +157,34 @@ _HasNonFallbackRenderSettingsPrim(const HdSceneIndexBaseRefPtr &si)
     }
     return false;
 }
+
+#if PXR_VERSION <= 2308
+CameraUtilConformWindowPolicy
+_ToConformWindowPolicy(const TfToken &token)
+{
+    if (token == HdAspectRatioConformPolicyTokens->adjustApertureWidth) {
+        return CameraUtilMatchVertically;
+    }
+    if (token == HdAspectRatioConformPolicyTokens->adjustApertureHeight) {
+        return CameraUtilMatchHorizontally;
+    }
+    if (token == HdAspectRatioConformPolicyTokens->expandAperture) {
+        return CameraUtilFit;
+    }
+    if (token == HdAspectRatioConformPolicyTokens->cropAperture) {
+        return CameraUtilCrop;
+    }
+    if (token == HdAspectRatioConformPolicyTokens->adjustPixelAspectRatio) {
+        return CameraUtilDontConform;
+    }
+
+    TF_WARN(
+        "Invalid aspectRatioConformPolicy value '%s', "
+        "falling back to expandAperture.", token.GetText());
+
+    return CameraUtilFit;
+}
+#endif
 
 // Update the camera path, framing and shutter curve on the camera context from
 // the render product.
@@ -149,7 +210,11 @@ _UpdateCameraContextFromProduct(
         CameraUtilFraming(
             displayWindow, dataWindow, product.pixelAspectRatio));
     cameraContext->SetWindowPolicy(
+#if PXR_VERSION <= 2308
+        _ToConformWindowPolicy(product.aspectRatioConformPolicy));
+#else
         HdUtils::ToConformWindowPolicy(product.aspectRatioConformPolicy));
+#endif
 #if HD_API_VERSION >= 64
     cameraContext->SetDisableDepthOfField(product.disableDepthOfField);
 #endif
@@ -175,6 +240,7 @@ _UpdateRileyCamera(
     }
 }
 
+#if PXR_VERSION >= 2407
 // Update the Frame number from the Stage Global Scene Index
 void
 _UpdateFrame(
@@ -196,18 +262,19 @@ _UpdateFrame(
         RixStr.k_Ri_Frame, VtValue(intFrame),
         /* role */ TfToken(), options);
 }
+#endif
 
 // Create/update the render view and associated resources based on the
 // render product.
 void
 _UpdateRenderViewContext(
-    HdRenderSettings::RenderProduct const &product,
+    HdRenderSettings::RenderProducts const &products,
     HdPrman_RenderParam *param,
     HdPrman_RenderViewContext *renderViewContext)
 {
     // The (lone) render view is managed by render param currently.
-    param->CreateRenderViewFromRenderSettingsProduct(
-        product, renderViewContext);
+    param->CreateRenderViewFromRenderSettingsProducts(
+        products, renderViewContext);
 }
 
 // Factor the product's motion blur opinion and camera's shutter.
@@ -309,7 +376,7 @@ HdPrman_RenderSettings::DriveRenderPass(
         (driveRenderPassWithAovBindings || !renderPassHasAovBindings) &&
         !interactive;
 
-    TF_DEBUG(HDPRMAN_RENDER_PASS).Msg(
+    TF_DEBUG(HDPRMAN_RENDER_SETTINGS).Msg(
         "Drive with RenderSettingsPrim = %d\n"
         " - HD_PRMAN_RENDER_SETTINGS_DRIVE_RENDER_PASS = %d\n"
         " - valid = %d\n"
@@ -362,12 +429,21 @@ HdPrman_RenderSettings::UpdateAndRender(
     for (size_t prodIdx = 0; prodIdx < numProducts; prodIdx++) {
         auto const &product = GetRenderProducts().at(prodIdx);
 
+        if (product.renderVars.empty()) {
+            TF_WARN("--- Skipping empty render product %s ...\n",
+                    product.name.GetText());
+            continue;
+        }
+
         TF_DEBUG(HDPRMAN_RENDER_PASS).Msg(
             "--- Processing render product %s ...\n", product.name.GetText()); 
 
         // XXX This can be moved to _Sync once we have a camera context
         //     per-product.
         _UpdateCameraContextFromProduct(product, &cameraContext);
+
+        // Some camera params may override values on the integrator. 
+        param->UpdateIntegrator(renderIndex);
 
         // This _cannot_ be moved to Sync since the camera Sprim wouldn't have
         // been updated.
@@ -382,9 +458,16 @@ HdPrman_RenderSettings::UpdateAndRender(
 
         // This _cannot_ be moved to Sync either because the render terminal
         // Sprims wouldn't have been updated.
-        _UpdateRenderViewContext(product, param, &renderViewContext);
+
+        if (TfGetEnvSetting(HD_PRMAN_RENDER_SETTINGS_BUNDLE_RENDER_PRODUCTS)) {
+            _UpdateRenderViewContext(
+                GetRenderProducts(), param, &renderViewContext);
+        } else {
+            _UpdateRenderViewContext(
+                {product}, param, &renderViewContext);
+        }
         
-        bool result =
+        const bool result =
             _SetOptionsAndRender(
                 cameraContext,
                 renderViewContext,
@@ -404,6 +487,11 @@ HdPrman_RenderSettings::UpdateAndRender(
         }
 
         success = success && result;
+
+        if (TfGetEnvSetting(HD_PRMAN_RENDER_SETTINGS_BUNDLE_RENDER_PRODUCTS)) {
+            // Done.
+            break;
+        }
     }
 
     return success;
@@ -453,7 +541,11 @@ void HdPrman_RenderSettings::_Sync(
     // against the fallback prim's opinion being committed on the first
     // SetOptions when an authored prim is present.
     //
+#if PXR_VERSION >= 2311
     if (GetId() == HdsiRenderSettingsFilteringSceneIndex::GetFallbackPrimPath()
+#else
+    if (GetId() == SdfPath(_legacyTokens->fallbackPath)
+#endif
         && _HasNonFallbackRenderSettingsPrim(terminalSi)) {
 
         TF_DEBUG(HDPRMAN_RENDER_SETTINGS).Msg(
@@ -470,6 +562,7 @@ void HdPrman_RenderSettings::_Sync(
         _settingsOptions = _GenerateParamList(GetNamespacedSettings());
     }
 
+#if PXR_VERSION >= 2311
     if (*dirtyBits & HdRenderSettings::DirtyShutterInterval ||
         *dirtyBits & HdRenderSettings::DirtyNamespacedSettings) {
         if (GetShutterInterval().IsHolding<GfVec2d>()) {
@@ -480,10 +573,26 @@ void HdPrman_RenderSettings::_Sync(
                 &_settingsOptions);
         }
     }
+#endif
 
+#if PXR_VERSION >= 2407
     if (*dirtyBits & HdRenderSettings::DirtyFrameNumber ||
         *dirtyBits & HdRenderSettings::DirtyNamespacedSettings) {
         _UpdateFrame(terminalSi, &_settingsOptions);
+    }
+#else
+    // Ignore the frame here for older usd versions.
+    // It doesn't get updated properly, but if we leave it here,
+    // it will win in composition in HdPrman_RenderParam::SetRileyOptions().
+    _settingsOptions.Remove(RixStr.k_Ri_Frame);
+#endif
+
+    // If threads has default value, remove it so fallback value,
+    // which has a reasonable value for interactive, will be used.
+    int nthreads = 0;
+    _settingsOptions.GetInteger(RixStr.k_limits_threads, nthreads);
+    if(nthreads == 0) {
+        _settingsOptions.Remove(RixStr.k_limits_threads);
     }
 
     // XXX Preserve existing data flow for clients that don't populate the
@@ -503,10 +612,19 @@ void HdPrman_RenderSettings::_Sync(
 
         param->SetDrivingRenderSettingsPrimPath(GetId());
 
+#if PXR_VERSION >= 2407
         if (*dirtyBits & HdRenderSettings::DirtyNamespacedSettings ||
             *dirtyBits & HdRenderSettings::DirtyActive ||
-            *dirtyBits & HdRenderSettings::DirtyShutterInterval || 
+            *dirtyBits & HdRenderSettings::DirtyShutterInterval ||
             *dirtyBits & HdRenderSettings::DirtyFrameNumber) {
+#elif PXR_VERSION >= 2311
+        if (*dirtyBits & HdRenderSettings::DirtyNamespacedSettings ||
+            *dirtyBits & HdRenderSettings::DirtyActive ||
+            *dirtyBits & HdRenderSettings::DirtyShutterInterval) {
+#else
+        if (*dirtyBits & HdRenderSettings::DirtyNamespacedSettings ||
+            *dirtyBits & HdRenderSettings::DirtyActive) {
+#endif
             
             // Handle attributes ...
             param->SetRenderSettingsPrimOptions(_settingsOptions);
@@ -537,36 +655,100 @@ HdPrman_RenderSettings::_ProcessRenderTerminals(
 {
     const VtDictionary& namespacedSettings = GetNamespacedSettings();
 
-    // Set the integrator connected to this Render Settings prim
+#if _PRMANAPI_VERSION_MAJOR_ <= 26
+    const bool rsSchemaHasRelationships = false;
+#else
+    const bool rsSchemaHasRelationships = true;
+#endif
+
+#if PXR_VERSION >= 2505
+    const bool terminalsWarn =
+        TfGetEnvSetting(LEGACY_PXR_RENDER_TERMINALS_API_ALLOWED_AND_WARN);
+#else
+    const bool terminalsWarn = true;
+#endif
+
+    // Set the integrator on this Render Settings prim
     {
         // XXX Should use SdfPath rather than a vector.
-        const SdfPathVector paths = VtDictionaryGet<SdfPathVector>(
-            namespacedSettings,
-            _renderTerminalTokens->outputsRiIntegrator.GetString(),
-            VtDefault = SdfPathVector());
+        SdfPathVector paths;
+        if (rsSchemaHasRelationships) {
+            paths = VtDictionaryGet<SdfPathVector>(
+                namespacedSettings,
+                _renderTerminalTokens->riIntegrator.GetString(),
+                VtDefault = SdfPathVector());
+        }
+
+        // Fallback to legacy terminal connection
+        // (Remove in a future USD version)
+        if (paths.empty() && (!rsSchemaHasRelationships || terminalsWarn)) {
+            paths = VtDictionaryGet<SdfPathVector>(
+                namespacedSettings,
+                _renderTerminalTokens->outputsRiIntegrator.GetString(),
+                VtDefault = SdfPathVector());
+
+            if (!paths.empty() && rsSchemaHasRelationships && terminalsWarn) {
+                TF_WARN("outputs:ri:integrator on RenderSettings is "
+                        "deprecated in favor of ri:integrator.");
+            }
+        }
 
         param->SetRenderSettingsIntegratorPath(sceneDelegate,
             paths.empty()? SdfPath::EmptyPath() : paths.front());
     }
 
-    // Set the SampleFilters connected to this Render Settings prim
+    // Set the SampleFilters on this Render Settings prim
     {
-        const SdfPathVector paths = VtDictionaryGet<SdfPathVector>(
-            namespacedSettings,
-            _renderTerminalTokens->outputsRiSampleFilters.GetString(),
-            VtDefault = SdfPathVector());
+        SdfPathVector paths;
+        if (rsSchemaHasRelationships) {
+            paths = VtDictionaryGet<SdfPathVector>(
+                namespacedSettings,
+                _renderTerminalTokens->riSampleFilters.GetString(),
+                VtDefault = SdfPathVector());
+        }
+        
+        // Fallback to legacy terminal connection
+        // (Remove in a future USD version)
+        if (paths.empty() && (!rsSchemaHasRelationships || terminalsWarn)) {
+            paths = VtDictionaryGet<SdfPathVector>(
+                namespacedSettings,
+                _renderTerminalTokens->outputsRiSampleFilters.GetString(),
+                VtDefault = SdfPathVector());
 
-        param->SetConnectedSampleFilterPaths(sceneDelegate, paths);
+            if (!paths.empty() && rsSchemaHasRelationships && terminalsWarn) {
+                TF_WARN("outputs:ri:sampleFilters on RenderSettings is "
+                        "deprecated in favor of ri:sampleFilters.");
+            }
+        }
+
+        param->SetSampleFilterPaths(sceneDelegate, paths);
     }
 
-    // Set the DisplayFilters connected to this Render Settings prim
+    // Set the DisplayFilters on this Render Settings prim
     {
-        const SdfPathVector paths = VtDictionaryGet<SdfPathVector>(
-            namespacedSettings,
-            _renderTerminalTokens->outputsRiDisplayFilters.GetString(),
-            VtDefault = SdfPathVector());
+        SdfPathVector paths;
+        if (rsSchemaHasRelationships) {
+            paths = VtDictionaryGet<SdfPathVector>(
+                namespacedSettings,
+                _renderTerminalTokens->riDisplayFilters.GetString(),
+                VtDefault = SdfPathVector());
+        }
 
-        param->SetConnectedDisplayFilterPaths(sceneDelegate, paths);
+        // Fallback to legacy terminal connection
+        // (Remove in a future USD version)
+        if (paths.empty() && (!rsSchemaHasRelationships || terminalsWarn)) {
+            paths = VtDictionaryGet<SdfPathVector>(
+                namespacedSettings,
+                _renderTerminalTokens->outputsRiDisplayFilters.GetString(),
+                VtDefault = SdfPathVector());
+
+            if (!paths.empty() && rsSchemaHasRelationships && terminalsWarn) {
+                TF_WARN("outputs:ri:displayFilters on RenderSettings is "
+                        "deprecated in favor of ri:displayFilters.");
+            }
+        }
+
+        param->SetDisplayFilterPaths(sceneDelegate, paths);
     }
 }
 
@@ -584,7 +766,11 @@ HdPrman_RenderSettings::_ProcessRenderProducts(HdPrman_RenderParam *param)
     // during HdPrmanCamera::Sync. The riley shutter interval needs to
     // be set before any time-sampled primvars are synced.
     // 
+#if PXR_VERSION >= 2311
     if (GetShutterInterval().IsEmpty()) {
+#else
+    {
+#endif
         // Set the camera path here so that HdPrmanCamera::Sync can detect
         // whether it is syncing the current camera to set the riley shutter
         // interval. See SetRileyShutterIntervalFromCameraContextCameraPath
@@ -593,10 +779,22 @@ HdPrman_RenderSettings::_ProcessRenderProducts(HdPrman_RenderParam *param)
         param->GetCameraContext().SetCameraPath(cameraPath);
     }
 
+#if HD_API_VERSION >= 64
     // This will override the f-stop value on the camera
     param->GetCameraContext().SetDisableDepthOfField(
         GetRenderProducts().at(0).disableDepthOfField);
-    
+#endif
 }
 
+#if PXR_VERSION <= 2308
+bool
+HdPrman_RenderSettings::IsValid() const
+{
+    return (!GetRenderProducts().empty() &&
+            !GetRenderProducts()[0].cameraPath.IsEmpty());
+}
+#endif
+
 PXR_NAMESPACE_CLOSE_SCOPE
+
+#endif // PXR_VERSION >= 2308

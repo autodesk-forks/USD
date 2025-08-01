@@ -232,12 +232,57 @@ UsdGeomXformable::GetXformOp(UsdGeomXformOp::Type const opType,
     return UsdGeomXformOp(xformOpAttr, isInverseOp);
 }
 
+UsdGeomXformOp
+UsdGeomXformable::AddTranslateXOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeTranslateX, precision, opSuffix,
+                      isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::AddTranslateYOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeTranslateY, precision, opSuffix,
+                      isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::AddTranslateZOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeTranslateZ, precision, opSuffix,
+                      isInverseOp);
+}
+
 UsdGeomXformOp 
 UsdGeomXformable::AddTranslateOp(UsdGeomXformOp::Precision const precision,
     TfToken const &opSuffix, bool isInverseOp) const
 {
     return AddXformOp(UsdGeomXformOp::TypeTranslate, precision, opSuffix,
                       isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::GetTranslateXOp(
+    TfToken const &opSuffix, bool isInverseOp) const 
+{
+    return GetXformOp(UsdGeomXformOp::TypeTranslateX, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::GetTranslateYOp(
+    TfToken const &opSuffix, bool isInverseOp) const 
+{
+    return GetXformOp(UsdGeomXformOp::TypeTranslateY, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp
+UsdGeomXformable::GetTranslateZOp(
+    TfToken const &opSuffix, bool isInverseOp) const 
+{
+    return GetXformOp(UsdGeomXformOp::TypeTranslateZ, opSuffix, isInverseOp);
 }
 
 UsdGeomXformOp 
@@ -247,11 +292,53 @@ UsdGeomXformable::GetTranslateOp(TfToken const &opSuffix, bool isInverseOp) cons
 }
 
 UsdGeomXformOp 
+UsdGeomXformable::AddScaleXOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeScaleX, precision, opSuffix, 
+                      isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::AddScaleYOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeScaleY, precision, opSuffix, 
+                      isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::AddScaleZOp(UsdGeomXformOp::Precision const precision,
+    TfToken const &opSuffix, bool isInverseOp) const
+{
+    return AddXformOp(UsdGeomXformOp::TypeScaleZ, precision, opSuffix, 
+                      isInverseOp);
+}
+
+UsdGeomXformOp 
 UsdGeomXformable::AddScaleOp(UsdGeomXformOp::Precision const precision,
     TfToken const &opSuffix, bool isInverseOp) const
 {
     return AddXformOp(UsdGeomXformOp::TypeScale, precision, opSuffix, 
                       isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::GetScaleXOp(TfToken const &opSuffix, bool isInverseOp) const
+{
+    return GetXformOp(UsdGeomXformOp::TypeScaleX, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::GetScaleYOp(TfToken const &opSuffix, bool isInverseOp) const
+{
+    return GetXformOp(UsdGeomXformOp::TypeScaleY, opSuffix, isInverseOp);
+}
+
+UsdGeomXformOp 
+UsdGeomXformable::GetScaleZOp(TfToken const &opSuffix, bool isInverseOp) const
+{
+    return GetXformOp(UsdGeomXformOp::TypeScaleZ, opSuffix, isInverseOp);
 }
 
 UsdGeomXformOp 
@@ -551,8 +638,8 @@ UsdGeomXformable::_GetOrderedXformOps(bool *resetsXformStack,
     result.reserve(opOrderVec.size());
 
     UsdPrim thisPrim = GetPrim();
-    for (VtTokenArray::iterator it = opOrderVec.begin() ; 
-         it != opOrderVec.end(); ++it) {
+    for (VtTokenArray::const_iterator it = opOrderVec.cbegin() ; 
+         it != opOrderVec.cend(); ++it) {
 
         const TfToken &opName = *it;
 
@@ -659,9 +746,8 @@ UsdGeomXformable::TransformMightBeTimeVarying() const
     if (opOrderVec.size() == 0) {
         return false;
     }
-
-    for (VtTokenArray::reverse_iterator it = opOrderVec.rbegin() ; 
-         it != opOrderVec.rend(); ++it) {
+    for (VtTokenArray::const_reverse_iterator it = opOrderVec.crbegin() ; 
+         it != opOrderVec.crend(); ++it) {
 
         const TfToken &opName = *it;
 
@@ -844,15 +930,14 @@ UsdGeomXformable::GetLocalTransformation(
     if (opOrderVec.size() == 0) {
         return true;
     }
-    
-    for (VtTokenArray::reverse_iterator it = opOrderVec.rbegin() ; 
-         it != opOrderVec.rend(); ++it) {
+    for (VtTokenArray::const_reverse_iterator it = opOrderVec.crbegin() ; 
+         it != opOrderVec.crend(); ++it) {
             
         const TfToken &opName = *it;
 
         // Skip the current xformOp and the next one if they're inverses of 
         // each other.
-        if ((it+1) != opOrderVec.rend()) {
+        if ((it+1) != opOrderVec.crend()) {
             const TfToken &nextOpName = *(it+1);
             if (_AreInverseXformOps(opName, nextOpName)) {
                 ++it;

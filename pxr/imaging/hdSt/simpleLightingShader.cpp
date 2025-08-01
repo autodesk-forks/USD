@@ -49,6 +49,12 @@ HdStSimpleLightingShader::HdStSimpleLightingShader()
     : _lightingContext(GlfSimpleLightingContext::New())
     , _useLighting(true)
     , _glslfx(std::make_unique<HioGlslfx>(HdStPackageSimpleLightingShader()))
+    , _shadowTextureHandle(
+        NamedTextureHandle{ 
+            HdStTokens->shadowCompareTextures,
+            HdStTextureType::Uv,
+            {},
+            HdStTokens->shadowCompareTextures.Hash()})
     , _renderParam(nullptr)
 {
 }
@@ -293,9 +299,11 @@ _GetResolvedDomeLightEnvironmentFilePath(
 const HdStTextureHandleSharedPtr &
 HdStSimpleLightingShader::GetTextureHandle(const TfToken &name) const
 {
+    // This is used specfically for dome lights, so ok to just return first 
+    // handle.
     for (auto const & namedTextureHandle : _namedTextureHandles) {
         if (namedTextureHandle.name == name) {
-            return namedTextureHandle.handle;
+            return namedTextureHandle.handles[0];
         }
     }
 
@@ -321,7 +329,10 @@ _MakeNamedTextureHandle(
 
     const HdSamplerParameters samplerParameters(
         wrapModeS, wrapModeT, wrapModeR,
-        minFilter, HdMagFilterLinear);
+        minFilter, HdMagFilterLinear,
+        HdBorderColorTransparentBlack,
+        /*enableCompare*/false, HdCmpFuncNever,
+        /*maxAnisotropy*/1);
 
     HdStTextureHandleSharedPtr const textureHandle =
         resourceRegistry->AllocateTextureHandle(
@@ -333,7 +344,7 @@ _MakeNamedTextureHandle(
 
     return { name,
              HdStTextureType::Uv,
-             textureHandle,
+             { textureHandle },
              name.Hash() };
 }
 
@@ -407,7 +418,7 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
 
     if (!useShadows) {
         _CleanupAovBindings();
-        _shadowTextureHandles.clear();
+        _shadowTextureHandle.handles.clear();
     }
 
     if (resolvedPath.empty() && !useShadows) {
@@ -451,7 +462,10 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
 
         static const HdSamplerParameters envSamplerParameters(
             HdWrapRepeat, HdWrapClamp, HdWrapClamp,
-            HdMinFilterLinearMipmapLinear, HdMagFilterLinear);
+            HdMinFilterLinearMipmapLinear, HdMagFilterLinear,
+            HdBorderColorTransparentBlack,
+            /*enableCompare*/false, HdCmpFuncNever,
+            /*maxAnisotropy*/1);
 
         _domeLightEnvironmentTextureHandle =
             resourceRegistry->AllocateTextureHandle(
@@ -541,7 +555,7 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
                 HdWrapClamp, HdWrapClamp, HdWrapClamp,
                 HdMinFilterLinear, HdMagFilterLinear,
                 HdBorderColorOpaqueWhite, /*enableCompare*/true, 
-                HdCmpFuncLEqual};
+                HdCmpFuncLEqual, /*maxAnisotropy*/16};
 
             for (size_t i = prevNumShadowPasses; i < numShadowPasses; i++) {
                 HdStTextureHandleSharedPtr const textureHandle =
@@ -551,26 +565,16 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
                         shadowSamplerParameters,
                         /* memoryRequest = */ 0,
                         shared_from_this());
-
-                TfToken const shadowTextureName = TfToken(
-                    HdStTokens->shadowCompareTextures.GetString() + 
-                    std::to_string(i));
-                _shadowTextureHandles.push_back(
-                    NamedTextureHandle{ 
-                        shadowTextureName,
-                        HdStTextureType::Uv,
-                        textureHandle,
-                        shadowTextureName.Hash()});
+                _shadowTextureHandle.handles.push_back(textureHandle);
             }
         } else if (prevNumShadowPasses > numShadowPasses) {
-            _shadowTextureHandles.resize(numShadowPasses);
+            _shadowTextureHandle.handles.resize(numShadowPasses);
         }
     }
 
-    _namedTextureHandles.insert(
-        _namedTextureHandles.end(), 
-        _shadowTextureHandles.begin(),
-        _shadowTextureHandles.end());
+    if (useShadows) {
+        _namedTextureHandles.push_back(_shadowTextureHandle);
+    }
 }
 
 void

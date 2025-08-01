@@ -21,6 +21,8 @@
 #include "pxr/base/tf/ostreamMethods.h"
 #include "pxr/base/trace/trace.h"
 
+#include "pxr/base/ts/spline.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 SDF_DEFINE_SPEC(
@@ -147,6 +149,109 @@ SdfAttributeSpec::ClearConnectionPaths()
 
 // Attribute Value API
 
+SDF_DEFINE_GET(Spline, SdfFieldKeys->Spline, TsSpline)
+
+void
+SdfAttributeSpec::SetSpline(const TsSpline& spline)
+{
+    if (!PermissionToEdit()) {
+        TF_CODING_ERROR("Cannot set spline on spec <%s> because owning layer "
+                        "@%s@ is not editable", GetPath().GetText(),
+                        GetLayer()->GetIdentifier().c_str());
+    }
+
+    TfType valueType;
+    TfToken valueTypeName;
+    if (HasField(SdfFieldKeys->TypeName, &valueTypeName)) {
+        valueType = GetLayer()->GetSchema().FindType(valueTypeName).GetType();
+    }
+
+    if (!valueType) {
+        TF_CODING_ERROR("Cannot determine value type for attribute spec <%s>",
+                        GetPath().GetText());
+        return;
+    }
+
+    if (!TsSpline::IsSupportedValueType(valueType)) {
+        TF_CODING_ERROR("Cannot set spline on spec <%s> because the value "
+                        "type '%s' is not supported for splines",
+                        GetPath().GetText(),
+                        valueType.GetTypeName().c_str());
+        return;
+    }
+
+    if (spline.GetValueType() != valueType) {
+        TF_CODING_ERROR("Cannot set spline on spec <%s> because the value "
+                        "type '%s' does not match the attribute value type "
+                        "'%s'",
+                        GetPath().GetText(),
+                        spline.GetValueType().GetTypeName().c_str(),
+                        valueType.GetTypeName().c_str());
+        return;
+    }
+
+    return GetLayer()->SetField(GetPath(), SdfFieldKeys->Spline, spline);
+}
+
+SDF_DEFINE_CLEAR(Spline, SdfFieldKeys->Spline)
+
+SdfTimeSampleMap
+SdfAttributeSpec::GetTimeSampleMap() const
+{
+    return GetFieldAs<SdfTimeSampleMap>(SdfFieldKeys->TimeSamples);
+}
+
+std::set<double>
+SdfAttributeSpec::ListTimeSamples() const
+{
+    return GetLayer()->ListTimeSamplesForPath(GetPath());
+}
+
+size_t
+SdfAttributeSpec::GetNumTimeSamples() const
+{
+    return GetLayer()->GetNumTimeSamplesForPath(GetPath());
+}
+
+bool
+SdfAttributeSpec::GetBracketingTimeSamples(double time, double* tLower,
+                                          double* tUpper) const
+{
+    return GetLayer()->GetBracketingTimeSamplesForPath(GetPath(), time,
+                                                       tLower, tUpper);
+}
+
+bool
+SdfAttributeSpec::QueryTimeSample(double time, VtValue* value) const
+{
+    return GetLayer()->QueryTimeSample(GetPath(), time, value);
+}
+
+bool
+SdfAttributeSpec::QueryTimeSample(double time, SdfAbstractDataValue* value) const
+{
+    return GetLayer()->QueryTimeSample(GetPath(), time, value);
+}
+
+void
+SdfAttributeSpec::SetTimeSample(double time, const VtValue& value)
+{
+    GetLayer()->SetTimeSample(GetPath(), time, value);
+}
+
+void
+SdfAttributeSpec::SetTimeSample(double time,
+                               const SdfAbstractDataConstValue& value)
+{
+    GetLayer()->SetTimeSample(GetPath(), time, value);
+}
+
+void
+SdfAttributeSpec::EraseTimeSample(double time)
+{
+    GetLayer()->EraseTimeSample(GetPath(), time);
+}
+
 SDF_DEFINE_GET_SET_HAS_CLEAR(AllowedTokens, SdfFieldKeys->AllowedTokens, VtTokenArray)
 
 SDF_DEFINE_GET_SET_HAS_CLEAR(ColorSpace, SdfFieldKeys->ColorSpace, TfToken)
@@ -180,6 +285,21 @@ SDF_DEFINE_CLEAR(DisplayUnit, SdfFieldKeys->DisplayUnit)
 // Defined in primSpec.cpp.
 bool
 Sdf_UncheckedCreatePrimInLayer(SdfLayer *layer, SdfPath const &primPath);
+
+SdfAttributeSpecHandle
+SdfCreatePrimAttributeInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &attrPath,
+    const SdfValueTypeName &typeName,
+    SdfVariability variability,
+    bool isCustom)
+{
+    if (SdfJustCreatePrimAttributeInLayer(layer, attrPath, typeName,
+                                          variability, isCustom)) {
+        return layer->GetAttributeAtPath(attrPath);
+    }
+    return TfNullPtr;
+}
 
 bool
 SdfJustCreatePrimAttributeInLayer(

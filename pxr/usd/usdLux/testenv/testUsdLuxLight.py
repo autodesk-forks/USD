@@ -374,7 +374,7 @@ class TestUsdLuxLight(unittest.TestCase):
 
         cylLight.CreateRadiusAttr(4.0)
         cylLight.CreateLengthAttr(10.0)
-        _VerifyExtentAndBBox(cylLight, [(-4.0, -4.0, -5.0), (4.0, 4.0, 5.0)])
+        _VerifyExtentAndBBox(cylLight, [(-5.0, -4.0, -4.0), (5.0, 4.0, 4.0)])
 
         sphereLight.CreateRadiusAttr(3.0)
         _VerifyExtentAndBBox(sphereLight, [(-3.0, -3.0, -3.0), (3.0, 3.0, 3.0)])
@@ -505,7 +505,8 @@ class TestUsdLuxLight(unittest.TestCase):
             # shaderId as sdr Identifier) in usdLux domain will have an 
             # SdrShaderNode with source type 'USD' registered for it under its 
             # USD schema type name. 
-            node = Sdr.Registry().GetNodeByIdentifier(sdrIdentifier, ['USD'])
+            node = Sdr.Registry().GetShaderNodeByIdentifier(
+                sdrIdentifier, ['USD'])
             self.assertTrue(node is not None)
             self.assertIn(sdrIdentifier, expectedLightNodes)
 
@@ -537,7 +538,7 @@ class TestUsdLuxLight(unittest.TestCase):
             self.assertFalse(node.GetDepartments())
             self.assertFalse(node.GetFamily())
             self.assertFalse(node.GetLabel())
-            self.assertFalse(node.GetVersion())
+            self.assertFalse(node.GetShaderVersion())
             self.assertFalse(node.GetAllVstructNames())
             self.assertEqual(node.GetPages(), [''])
 
@@ -575,11 +576,12 @@ class TestUsdLuxLight(unittest.TestCase):
                 # Verify the node's input type maps back to USD property's type
                 # (with the noted above exceptions).
                 self.assertEqual(
-                    nodeInput.GetTypeAsSdfType()[0], expectedTypeName,
+                    nodeInput.GetTypeAsSdfType().GetSdfType(),
+                    expectedTypeName,
                     msg="{}.{} Type {} != {}".format(
                         str(node.GetName()),
                         str(nodeInput.GetName()),
-                        str(nodeInput.GetTypeAsSdfType()[0]),
+                        str(nodeInput.GetTypeAsSdfType().GetSdfType()),
                         str(expectedTypeName)))
                 # If the USD property type is an Asset, it will be listed in 
                 # the node's asset identifier inputs.
@@ -596,16 +598,16 @@ class TestUsdLuxLight(unittest.TestCase):
                 expectedLightInputNames + expectedLightNodes[sdrIdentifier]
             # Verify node has exactly the expected inputs.
             self.assertEqual(sorted(expectedInputNames),
-                             sorted(node.GetInputNames()))
+                             sorted(node.GetShaderInputNames()))
             # Verify each node input matches a prim input.
             for inputName in expectedInputNames:
-                nodeInput = node.GetInput(inputName)
+                nodeInput = node.GetShaderInput(inputName)
                 primInput = light.GetInput(inputName)
                 self.assertFalse(nodeInput.IsOutput())
                 _CompareLightPropToNodeProp(nodeInput, primInput)
 
             # None of the UsdLux base lights have outputs
-            self.assertEqual(node.GetOutputNames(), [])
+            self.assertEqual(node.GetShaderOutputNames(), [])
             self.assertEqual(light.GetOutputs(onlyAuthored=False), [])
 
             # The reverse is tested just above, but for all asset identifier

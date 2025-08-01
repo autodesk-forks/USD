@@ -1,5 +1,5 @@
 //
-// Copyright 2022 Pixar
+// Copyright 2025 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
@@ -7,6 +7,7 @@
 #include "hdPrman/matfiltSceneIndexPlugins.h"
 #include "hdPrman/material.h"
 #include "hdPrman/matfiltConvertPreviewMaterial.h"
+#include "hdPrman/tokens.h"
 
 #ifdef PXR_MATERIALX_SUPPORT_ENABLED
 #include "hdPrman/matfiltMaterialX.h"
@@ -21,6 +22,9 @@
 #include "pxr/imaging/hd/materialNetworkInterface.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneIndexPluginRegistry.h"
+#if HD_API_VERSION >= 76
+#include "pxr/imaging/hdsi/nodeIdentifierResolvingSceneIndex.h"
+#endif
 
 #include <string>
 #include <vector>
@@ -30,9 +34,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (applyConditionals)
+    (OSL)
     ((previewMatPluginName, "HdPrman_PreviewMaterialFilteringSceneIndexPlugin"))
     ((materialXPluginName,  "HdPrman_MaterialXFilteringSceneIndexPlugin"))
     ((vstructPluginName,    "HdPrman_VirtualStructResolvingSceneIndexPlugin"))
+    ((nodeIdPluginName, "HdPrman_NodeIdentifierResolvingSceneIndexPlugin"))
 );
 
 /// Ordering of the matfilt operations. This is necessary when using scene
@@ -42,7 +48,8 @@ enum _MatfiltOrder
 {
     Start = 0,
     ConnectionResolve = 100, // vstruct
-    NodeTranslation = 110, // matx, preview surface
+    NodeTranslation = 110, // matx, preview surface,
+    NodeIdResolution = 120, // nodeId's for sourceAsset shaders
     End = 200,
 };
 
@@ -50,7 +57,6 @@ enum _MatfiltOrder
 // Plugin registrations
 ////////////////////////////////////////////////////////////////////////////////
 
-static const char * const _rendererDisplayName = "Prman";
 // XXX: Hardcoded for now to match the legacy matfilt logic.
 static const bool _resolveVstructsWithConditionals = true;
 
@@ -64,36 +70,50 @@ TF_REGISTRY_FUNCTION(TfType)
     
     HdSceneIndexPluginRegistry::Define<
         HdPrman_VirtualStructResolvingSceneIndexPlugin>();
+
+#if HD_API_VERSION >= 76
+    HdSceneIndexPluginRegistry::Define<
+        HdPrman_NodeIdentifierResolvingSceneIndexPlugin>();
+#endif
 }
 
 TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
 {
-    HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
-        _rendererDisplayName,
-        _tokens->previewMatPluginName,
-        nullptr, // no argument data necessary
-        _MatfiltOrder::NodeTranslation,
-        HdSceneIndexPluginRegistry::InsertionOrderAtStart);
-    
-    HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
-        _rendererDisplayName,
-        _tokens->materialXPluginName,
-        nullptr, // no argument data necessary
-        _MatfiltOrder::NodeTranslation,
-        HdSceneIndexPluginRegistry::InsertionOrderAtStart);
-    
-    HdContainerDataSourceHandle const inputArgs =
-        HdRetainedContainerDataSource::New(
-            _tokens->applyConditionals,
-            HdRetainedTypedSampledDataSource<bool>::New(
-                _resolveVstructsWithConditionals));
+    for( auto const& rendererDisplayName : HdPrman_GetPluginDisplayNames() ) {
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            rendererDisplayName,
+            _tokens->previewMatPluginName,
+            nullptr, // no argument data necessary
+            _MatfiltOrder::NodeTranslation,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
 
-    HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
-        _rendererDisplayName,
-        _tokens->vstructPluginName,
-        inputArgs,                        
-        _MatfiltOrder::ConnectionResolve,
-        HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            rendererDisplayName,
+            _tokens->materialXPluginName,
+            nullptr, // no argument data necessary
+            _MatfiltOrder::NodeTranslation,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+
+        HdContainerDataSourceHandle const inputArgs =
+            HdRetainedContainerDataSource::New(
+                _tokens->applyConditionals,
+                HdRetainedTypedSampledDataSource<bool>::New(
+                    _resolveVstructsWithConditionals));
+
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            rendererDisplayName,
+            _tokens->vstructPluginName,
+            inputArgs,
+            _MatfiltOrder::ConnectionResolve,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            rendererDisplayName,
+            _tokens->nodeIdPluginName,
+            inputArgs,
+            _MatfiltOrder::NodeIdResolution,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -254,5 +274,22 @@ HdPrman_VirtualStructResolvingSceneIndexPlugin::_AppendSceneIndex(
     return HdPrman_VirtualStructResolvingSceneIndex::New(
                 inputScene, applyConditionals);
 }
+
+/// ----------------------------------------------------------------------------
+
+#if HD_API_VERSION >= 76
+HdPrman_NodeIdentifierResolvingSceneIndexPlugin::
+HdPrman_NodeIdentifierResolvingSceneIndexPlugin() = default;
+
+HdSceneIndexBaseRefPtr
+HdPrman_NodeIdentifierResolvingSceneIndexPlugin::_AppendSceneIndex(
+        const HdSceneIndexBaseRefPtr &inputScene,
+        const HdContainerDataSourceHandle &inputArgs)
+{
+    TF_UNUSED(inputArgs);
+    return HdSiNodeIdentifierResolvingSceneIndex::New(
+                inputScene, /* sourceType */_tokens->OSL);
+}
+#endif
 
 PXR_NAMESPACE_CLOSE_SCOPE

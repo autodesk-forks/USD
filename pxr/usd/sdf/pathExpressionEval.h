@@ -67,23 +67,18 @@ protected:
     class _PatternIncrSearchState {
         friend class _PatternImplBase;
     public:
-        void Pop(int newDepth) {
-            while (!_segmentMatchDepths.empty() &&
-                   _segmentMatchDepths.back() >= newDepth) {
-                _segmentMatchDepths.pop_back();
-            }
-            if (newDepth <= _constantDepth) {
-                _constantDepth = -1;
-            }
-        }
+        SDF_API void Pop(int newDepth);
     private:
         std::vector<int> _segmentMatchDepths;
-        int _constantDepth = -1; // 0 means constant at the _prefix level.
+        int _constantDepth = -1;
         bool _constantValue = false;
     };
 
     class _PatternImplBase {
     protected:
+        using _RunNthPredFn =
+            TfFunctionRef<SdfPredicateFunctionResult (int, SdfPath const &)>;
+        
         // This is not a constructor because the subclass wants to invoke this
         // from its ctor, TfFunctionRef currently requires an lvalue, which is
         // hard to conjure in a ctor initializer list.
@@ -94,17 +89,13 @@ protected:
 
         SDF_API
         SdfPredicateFunctionResult
-        _Match(
-            SdfPath const &path,
-            TfFunctionRef<SdfPredicateFunctionResult (int, SdfPath const &)>
-            runNthPredicate) const;
+        _Match(SdfPath const &path, _RunNthPredFn runNthPredicate) const;
 
         SDF_API
         SdfPredicateFunctionResult
         _Next(_PatternIncrSearchState &searchState,
-              SdfPath const &path,
-              TfFunctionRef<SdfPredicateFunctionResult (int, SdfPath const &)>
-              runNthPredicate) const;
+              SdfPath const &path, _RunNthPredFn runNthPredicate) const;
+
 
         enum _ComponentType {
             ExplicitName,      // an explicit name (not a glob pattern).
@@ -125,6 +116,50 @@ protected:
             size_t GetSize() const { return end - begin; }
             size_t begin, end;
         };
+        
+        bool _IsBarePredicate(_Component const &comp) const {
+            // An empty explicit name component with a predicate is a "bare
+            // predicate".
+            return comp.type == ExplicitName &&
+                _explicitNames[comp.patternIndex].empty() &&
+                comp.predicateIndex != -1;
+        }
+
+        size_t _SegmentMinMatchElts(_Segment const &seg) const {
+            // If a segment starts with a bare predicate, it may match the bare
+            // predicate to the *prior* path element, so it requires one fewer
+            // path element to match than the number of segment components.
+            return seg.GetSize() - (_IsBarePredicate(
+                                        _components[seg.begin]) ? 1 : 0);
+        }
+
+        // Check if \p seg matches at exactly \p pathIterInOut.  Update \p
+        // pathIterInOut to the position past this match if there is a match and
+        // return a truthy result.  Otherwise leave \p pathIterInOut untouched
+        // and return a falsey result.
+        SDF_API
+        SdfPredicateFunctionResult
+        _CheckExactMatch(_Segment const &seg,
+                         _RunNthPredFn runNthPredicate,
+                         SdfPathVector::const_iterator pathIterEnd,
+                         SdfPathVector::const_iterator &pathIterInOut) const;
+
+        // Check if \p seg matches at \p pathIterInOut, or at
+        // `std::prev(pathIterInOut)` if \p seg starts with a bare predicate
+        // (like //{predicate}).  Update \p pathIterInOut to the position past
+        // the match if there is a match and return a truthy result.  Otherwise
+        // leave \p pathIterInOut untouched and return a falsey result.  The key
+        // difference between _CheckMatch() and _CheckExactMatch() is that if \p
+        // seg begins with a bare predicate, it can potentially match at
+        // `std::prev(pathIterInOut)`.
+        SDF_API
+        SdfPredicateFunctionResult
+        _CheckMatch(_Segment const &seg, 
+                    _RunNthPredFn runNthPredicate,
+                    SdfPathVector::const_iterator pathIterBegin,
+                    SdfPathVector::const_iterator pathIterEnd,
+                    SdfPathVector::const_iterator &pathIterInOut) const;
+        
         
         SdfPath _prefix;
         std::vector<_Component> _components;
@@ -279,16 +314,17 @@ public:
         Next(SdfPath const &objPath) {
             auto patternImplIter = _eval->_patternImpls.begin();
             auto stateIter = _incrSearchStates.begin();
-            int newDepth = objPath.GetPathElementCount();
-            const int popLevel = (newDepth <= _lastPathDepth) ? newDepth : 0;
+            const int newDepth = objPath.GetPathElementCount();
+            const bool pop = newDepth <= _lastPathDepth;
             auto patternStateNext = [&](bool skip) {
-                if (popLevel) {
-                    stateIter->Pop(popLevel);
+                if (pop) {
+                    stateIter->Pop(newDepth);
                 }
+                auto const &patternImpl = *patternImplIter++;
+                auto &state = *stateIter++;
                 return skip
-                    ? (++patternImplIter, SdfPredicateFunctionResult())
-                    : (*patternImplIter++).Next(objPath, *stateIter++,
-                                                _pathToObj);
+                    ? SdfPredicateFunctionResult {}
+                    : patternImpl.Next(objPath, state, _pathToObj);
             };
             _lastPathDepth = newDepth;
             return _eval->_EvalExpr(patternStateNext);

@@ -7,6 +7,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/work/dispatcher.h"
+#include "pxr/base/work/isolatingDispatcher.h"
 
 #include "pxr/base/tf/iterator.h"
 #include "pxr/base/tf/stopwatch.h"
@@ -366,10 +367,13 @@ _TestDispatcherCancellation(Graph *graph)
     DispatcherType parentDispatcher;
 
     parentDispatcher.Run(&_DelayedGraphTask<DispatcherType>, graph);
+    TF_AXIOM(!parentDispatcher.IsCancelled());
     std::this_thread::sleep_for(std::chrono::seconds(1));
     std::cout << "\tCancelling..." << std::endl;
     parentDispatcher.Cancel();
+    TF_AXIOM(parentDispatcher.IsCancelled());
     parentDispatcher.Wait();
+    TF_AXIOM(!parentDispatcher.IsCancelled());
     
     return graph->GetNumNodesRun() == numNodesPerLevel * numLevels;
 }
@@ -401,6 +405,19 @@ main(int argc, char **argv)
         }
 
         if (!_TestDispatcherCancellation<WorkDispatcher>(graph.get())) {
+            return 1;
+        }
+    }
+
+    // Test the isolating dispatcher.
+    {
+        std::cout << "Using the isolating dispatcher" << std::endl;
+        if (!_TestDispatcher<WorkIsolatingDispatcher>(graph.get())) {
+            return 1;
+        }
+
+        if (!_TestDispatcherCancellation<WorkIsolatingDispatcher>(
+                graph.get())) {
             return 1;
         }
     }

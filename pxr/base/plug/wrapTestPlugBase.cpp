@@ -7,16 +7,17 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/plug/testPlugBase.h"
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/args.hpp"
 #include "pxr/base/tf/makePyConstructor.h"
 #include "pxr/base/tf/pyPtrHelpers.h"
 #include "pxr/base/tf/pyContainerConversions.h"
 
-#include <boost/noncopyable.hpp>
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -25,7 +26,7 @@ void wrap_TestPlugBase(const std::string & name)
 {
     typedef T This;
     typedef TfWeakPtr<T> ThisPtr;
-    class_<This, ThisPtr, boost::noncopyable> ( name.c_str(), no_init )
+    class_<This, ThisPtr, noncopyable> ( name.c_str(), no_init )
         .def(TfPyRefAndWeakPtr())
         .def(TfMakePyConstructor(&This::New))
 
@@ -33,6 +34,9 @@ void wrap_TestPlugBase(const std::string & name)
         .def(TfMakePyConstructor(&This::Manufacture))
 
         .def("GetTypeName", &This::GetTypeName)
+
+        .def("TestAcceptPluginSequence", &This::TestAcceptPluginSequence,
+             (arg("plugins")));
 
         ;
 }

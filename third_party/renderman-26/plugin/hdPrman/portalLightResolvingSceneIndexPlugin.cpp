@@ -8,9 +8,15 @@
 
 #include "pxr/base/gf/rotation.h"
 #include "pxr/base/gf/vec3f.h"
+#include "pxr/base/gf/matrix3d.h"
+#if PXR_VERSION >= 2311
+#include "pxr/base/tf/hash.h"
+#endif
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/imaging/hd/dataSource.h"
 #include "pxr/imaging/hd/dataSourceMaterialNetworkInterface.h"
+#include "pxr/imaging/hd/dependencySchema.h"
+#include "pxr/imaging/hd/dependenciesSchema.h"
 #include "pxr/imaging/hd/filteringSceneIndex.h"
 #include "pxr/imaging/hd/light.h"
 #include "pxr/imaging/hd/lightSchema.h"
@@ -23,8 +29,11 @@
 #include "pxr/imaging/hd/visibilitySchema.h"
 #include "pxr/imaging/hd/xformSchema.h"
 #include "pxr/usd/sdf/assetPath.h"
+#include "hdPrman/tokens.h"
 
+#if PXR_VERSION <= 2308
 #include <boost/functional/hash.hpp>
+#endif
 
 #include <algorithm>
 #include <iterator>
@@ -40,6 +49,9 @@ TF_DEFINE_PRIVATE_TOKENS(
     (PxrPortalLight)
     ((sceneIndexPluginName, "HdPrman_PortalLightResolvingSceneIndexPlugin"))
 
+    // light schema tokens
+    (domeOffset)
+
     // material network tokens
     (color)
     ((colorMap,                "texture:file"))
@@ -47,6 +59,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (exposure)
     (intensity)
     ((intensityMult,           "ri:light:intensityMult"))
+    ((exposureAdjust,          "ri:light:exposureAdjust"))
     ((portalName,              "ri:light:portalName"))
     ((portalToDome,            "ri:light:portalToDome"))
     ((tint,                    "ri:light:tint"))
@@ -77,8 +90,6 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((visibleInRefractionPath, "ri:light:visibleInRefractionPath"))
 );
 
-static const char* const _pluginDisplayName = "Prman";
-
 TF_REGISTRY_FUNCTION(TfType)
 {
     HdSceneIndexPluginRegistry::Define<
@@ -90,26 +101,36 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
     // We need an insertion point that's *after* general material resolve.
     const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 115;
 
-    HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
-        _pluginDisplayName,
-        _tokens->sceneIndexPluginName,
-        nullptr,
-        insertionPhase,
-        HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+    for(const auto& pluginDisplayName : HdPrman_GetPluginDisplayNames()) {
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            pluginDisplayName,
+            _tokens->sceneIndexPluginName,
+            nullptr,
+            insertionPhase,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+    }
 }
+
+#if PXR_VERSION >= 2502 // only from H21
 
 namespace {
 
-bool
-_IsPortalLight(const HdSceneIndexPrim& prim, const SdfPath& primPath)
+HdContainerDataSourceHandle
+_GetMaterialDataSource(const HdContainerDataSourceHandle &primDataSource)
 {
-    auto matDataSource =
-        HdMaterialSchema::GetFromParent(prim.dataSource)
+    return HdMaterialSchema::GetFromParent(primDataSource)
             .GetMaterialNetwork(_tokens->renderContext)
 #if HD_API_VERSION >= 63
             .GetContainer()
 #endif
         ;
+}
+
+bool
+_IsPortalLight(const HdSceneIndexPrim& prim, const SdfPath& primPath)
+{
+    const HdContainerDataSourceHandle matDataSource =
+        _GetMaterialDataSource(prim.dataSource);
     HdDataSourceMaterialNetworkInterface matInterface(primPath, matDataSource,
                                                       prim.dataSource);
 
@@ -133,7 +154,8 @@ template <typename T>
 T
 _GetLightData(
     const HdContainerDataSourceHandle& primDataSource,
-    const TfToken& name)
+    const TfToken& name,
+    const T defaultValue=T())
 {
     if (auto lightSchema = HdLightSchema::GetFromParent(primDataSource)) {
         if (auto dataSource = HdTypedSampledDataSource<T>::Cast(
@@ -142,7 +164,22 @@ _GetLightData(
         }
     }
 
-    return {};
+    return defaultValue;
+}
+
+TfToken
+_ResolveLinking(
+    const HdContainerDataSourceHandle& portalDataSource,
+    const HdContainerDataSourceHandle& domeDataSource,
+    const TfToken& linkType)
+{
+    // Light/shadow linking set directly on the portal light wins, if present.
+    // Otherwise, fall back to linking set on the dome light.
+    TfToken linking = _GetLightData<TfToken>(portalDataSource, linkType);
+    if (linking.IsEmpty()) {
+        linking = _GetLightData<TfToken>(domeDataSource, linkType);
+    }
+    return linking;
 }
 
 SdfPathVector
@@ -163,23 +200,64 @@ _GetPortalName(
     const GfMatrix4d& domeXform,
     const GfMatrix4d& portalXform)
 {
+#if PXR_VERSION >= 2311
+    size_t hashValue = TfHash::Combine(
+        domeColorMap, 
+        domeXform.ExtractRotationMatrix(),
+        portalXform.ExtractRotationMatrix());
+#else
     size_t hashValue = 0;
     boost::hash_combine(hashValue, domeColorMap);
-    boost::hash_combine(hashValue, domeXform.ExtractRotation());
-    boost::hash_combine(hashValue, portalXform.ExtractRotation());
+    boost::hash_combine(hashValue, domeXform.ExtractRotationMatrix());
+    boost::hash_combine(hashValue, portalXform.ExtractRotationMatrix());
+#endif
 
     return std::to_string(hashValue);
 }
 
-HdContainerDataSourceHandle
-_BuildDomeLightDataSource(
-    const SdfPath& domePrimPath,
-    const HdSceneIndexBaseRefPtr& inputSceneIndex)
+// Prim-level data source for dome lights.
+//
+class HdPrman_DomeLightDataSource : public HdContainerDataSource
 {
-    const auto domePrim = inputSceneIndex->GetPrim(domePrimPath);
+public:
+    HD_DECLARE_DATASOURCE(HdPrman_DomeLightDataSource);
 
-    // The dome light has portals, or we wouldn't be calling this function.
-    // Mute the dome light so that it doesn't show up in the render.
+    TfTokenVector GetNames() override;
+    HdDataSourceBaseHandle Get(const TfToken &name) override;
+
+    HdPrman_DomeLightDataSource(
+        SdfPath const& domePrimPath,
+        HdContainerDataSourceHandle const& domePrimDataSource)
+     : _domePrimPath(domePrimPath)
+     , _domePrimDataSource(domePrimDataSource)
+    {
+    }
+
+    const SdfPath _domePrimPath;
+    const HdContainerDataSourceHandle _domePrimDataSource;
+};
+
+TfTokenVector
+HdPrman_DomeLightDataSource::GetNames()
+{
+    if (!_domePrimDataSource) {
+        return TfTokenVector();
+    }
+    TfTokenVector names = _domePrimDataSource->GetNames();
+    // Add HdDependenciesSchema.
+    if (std::find(names.cbegin(), names.cend(),
+                  HdDependenciesSchema::GetSchemaToken()) == names.cend()) {
+        names.push_back(HdDependenciesSchema::GetSchemaToken());
+    }
+    return names;
+}
+
+HdDataSourceBaseHandle
+HdPrman_DomeLightDataSource::Get(const TfToken &name)
+{
+    if (!_domePrimDataSource) {
+        return nullptr;
+    }
 
     // XXX -- Maybe we should also clear the filters in the dome's light data
     //        source. These filters will apply directly to the dome's portals
@@ -189,49 +267,130 @@ _BuildDomeLightDataSource(
     //        the scene index class (lest they be cleared prematurely here)
     //        so we won't bother for now.
 
-    const HdContainerDataSourceHandle visibilityDataSource =
-        HdVisibilitySchema::Builder()
-            .SetVisibility(HdRetainedTypedSampledDataSource<bool>::New(false))
-            .Build();
+    // Domes with portals are not visible.
+    if (name == HdVisibilitySchema::GetSchemaToken()) {
+        if (!_GetPortalPaths(_domePrimDataSource).empty()) {
+            static const HdContainerDataSourceHandle invisDs =
+                HdVisibilitySchema::Builder()
+                    .SetVisibility(
+                        HdRetainedTypedSampledDataSource<bool>::New(false))
+                    .Build();
+            return invisDs;
+        }
+    }
 
-    return HdOverlayContainerDataSource::New(
-        HdRetainedContainerDataSource::New(
-            HdVisibilitySchemaTokens->visibility, visibilityDataSource),
-        domePrim.dataSource);
+    HdDataSourceBaseHandle ds = _domePrimDataSource->Get(name);
+
+    if (name == HdDependenciesSchema::GetSchemaToken()) {
+        // Dome light visibility depends on its portals.
+        static const std::vector<TfToken> names = {
+            TfToken("visibility_depOn_portals") };
+        const std::vector<HdDataSourceBaseHandle> sources = {
+            HdDependencySchema::Builder()
+                .SetDependedOnPrimPath(
+                    HdRetainedTypedSampledDataSource<SdfPath>::New(
+                        _domePrimPath))
+                .SetDependedOnDataSourceLocator(
+                    HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+                        HdLightSchema::GetDefaultLocator()
+                            .Append(HdTokens->portals)))
+                .SetAffectedDataSourceLocator(
+                    HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+                        HdVisibilitySchema::GetDefaultLocator()))
+                .Build() };
+        const HdContainerDataSourceHandle overlayDs =
+            HdDependenciesSchema::BuildRetained(
+                names.size(), names.data(), sources.data());
+        if (auto dependenciesDs = HdContainerDataSource::Cast(ds)) {
+            return HdOverlayContainerDataSource::New(overlayDs, dependenciesDs);
+        }
+        return overlayDs;
+    }
+
+    return ds;
 }
 
-HdContainerDataSourceHandle
-_BuildPortalLightDataSource(
-    const SdfPath& domePrimPath,
-    const SdfPath& portalPrimPath,
-    const HdSceneIndexBaseRefPtr& inputSceneIndex)
+// Prim-level data source for portal lights.
+//
+class HdPrman_PortalLightDataSource : public HdContainerDataSource
 {
-    const auto domePrim   = inputSceneIndex->GetPrim(domePrimPath);
-    const auto portalPrim = inputSceneIndex->GetPrim(portalPrimPath);
+public:
+    HD_DECLARE_DATASOURCE(HdPrman_PortalLightDataSource);
 
-    if (!domePrim.dataSource || !_IsPortalLight(portalPrim, portalPrimPath)) {
+    TfTokenVector GetNames() override;
+    HdDataSourceBaseHandle Get(const TfToken &name) override;
+
+    HdPrman_PortalLightDataSource(
+        SdfPath const& portalPrimPath,
+        HdContainerDataSourceHandle const& portalPrimDataSource,
+        SdfPath const& domePrimPath,
+        HdContainerDataSourceHandle const& domePrimDataSource)
+     : _portalPrimPath(portalPrimPath)
+     , _portalPrimDataSource(portalPrimDataSource)
+     , _domePrimPath(domePrimPath)
+     , _domePrimDataSource(domePrimDataSource)
+    {
+    }
+
+    HdDataSourceBaseHandle _GetMaterial();
+    HdDataSourceBaseHandle _GetLight();
+    HdDataSourceBaseHandle _GetDependencies();
+
+    const SdfPath _portalPrimPath;
+    const HdContainerDataSourceHandle _portalPrimDataSource;
+    const SdfPath _domePrimPath;
+    const HdContainerDataSourceHandle _domePrimDataSource;
+};
+
+TfTokenVector
+HdPrman_PortalLightDataSource::GetNames()
+{
+    if (!_portalPrimDataSource) {
+        return TfTokenVector();
+    }
+    TfTokenVector names = _portalPrimDataSource->GetNames();
+    // Add HdDependenciesSchema.
+    if (std::find(names.cbegin(), names.cend(),
+                  HdDependenciesSchema::GetSchemaToken()) == names.cend()) {
+        names.push_back(HdDependenciesSchema::GetSchemaToken());
+    }
+    return names;
+}
+
+HdDataSourceBaseHandle
+HdPrman_PortalLightDataSource::Get(const TfToken &name)
+{
+    if (name == HdMaterialSchema::GetSchemaToken()) {
+        return _GetMaterial();
+    }
+    if (name == HdLightSchema::GetSchemaToken()) {
+        return _GetLight();
+    }
+    if (name == HdDependenciesSchema::GetSchemaToken()) {
+        return _GetDependencies();
+    }
+    return _portalPrimDataSource->Get(name);
+}
+
+HdDataSourceBaseHandle
+HdPrman_PortalLightDataSource::_GetMaterial()
+{
+    if (!_domePrimDataSource) {
         // Without a dome prim there's nothing to do here.
-        return portalPrim.dataSource;
+        return _portalPrimDataSource->Get(HdMaterialSchema::GetSchemaToken());
     }
 
     // Get data sources for the associated dome light.
     // -------------------------------------------------------------------------
-    const HdContainerDataSourceHandle domeMatDataSource = 
-        HdMaterialSchema::GetFromParent(domePrim.dataSource)
-            .GetMaterialNetwork(_tokens->renderContext)
-#if HD_API_VERSION >= 63
-            .GetContainer()
-#endif
-        ;
-    HdDataSourceMaterialNetworkInterface domeMatInterface(domePrimPath,
-                                                          domeMatDataSource,
-                                                          domePrim.dataSource);
-
+    const HdContainerDataSourceHandle domeMatDataSource =
+        _GetMaterialDataSource(_domePrimDataSource);
+    HdDataSourceMaterialNetworkInterface domeMatInterface(
+        _domePrimPath, domeMatDataSource, _domePrimDataSource);
     const auto domeMatTerminal =
         domeMatInterface.GetTerminalConnection(HdMaterialTerminalTokens->light);
 
     HdXformSchema domeXformSchema =
-        HdXformSchema::GetFromParent(domePrim.dataSource);
+        HdXformSchema::GetFromParent(_domePrimDataSource);
 
     // Get some relevant values from the dome light's data sources.
     // -------------------------------------------------------------------------
@@ -241,19 +400,37 @@ _BuildPortalLightDataSource(
                 domeMatTerminal.second.upstreamNodeName, paramName);
         };
 
+    // Note that the attribute name for colorMap is "texture:file";
+    // That is the attribute name used by USD, and reflected in the
+    // RenderMan light plugin args files for most light types -- with
+    // the exception of portals, which is why map it to domeColorMap.
     const VtValue domeColorMapVal  = getDomeMatVal(_tokens->colorMap);
     const VtValue domeColorVal     = getDomeMatVal(_tokens->color);
     const VtValue domeIntensityVal = getDomeMatVal(_tokens->intensity);
     const VtValue domeExposureVal  = getDomeMatVal(_tokens->exposure);
 
-    const std::string domeColorMap =
+    // Use the resolved path of the asset if available, otherwise
+    // pass through the original asset path.  This is important in
+    // order to support RenderMan's texture plugin system, which
+    // uses texture paths of the form "rtxplugin:...".
+    const SdfAssetPath domeColorMapAssetPath =
         domeColorMapVal.IsHolding<SdfAssetPath>()
-            ? domeColorMapVal.UncheckedGet<SdfAssetPath>().GetResolvedPath()
-            : "";
+        ? domeColorMapVal.UncheckedGet<SdfAssetPath>() : SdfAssetPath();
+    const std::string domeColorMap =
+        domeColorMapAssetPath.GetResolvedPath().empty()
+        ? domeColorMapAssetPath.GetAssetPath()
+        : domeColorMapAssetPath.GetResolvedPath();
 
     const auto domeColor     = domeColorVal.GetWithDefault(GfVec3f(1.0f));
     const auto domeIntensity = domeIntensityVal.GetWithDefault(1.0f);
     const auto domeExposure  = domeExposureVal.GetWithDefault(0.0f);
+
+    // domeOffset exists in the light schema, not in the material netowrk.
+    // See UsdImaging/domeLight_1_Adapter.cpp for an example provider,
+    // and hdPrman/light.cpp for where this is used.
+    GfMatrix4d domeOffset =
+        _GetLightData<GfMatrix4d>(_domePrimDataSource, _tokens->domeOffset,
+                                  GfMatrix4d(1.0));
 
     GfMatrix4d domeXform;
     if (const auto origDomeXform = domeXformSchema.GetMatrix()) {
@@ -264,8 +441,8 @@ _BuildPortalLightDataSource(
                                                     -1.0, 0.0,  0.0, 0.0,
                                                      0.0, 1.0,  0.0, 0.0,
                                                      0.0, 0.0,  0.0, 1.0);
-
-        domeXform = domeXformAdjustment * origDomeXform->GetTypedValue(0.0f);
+        domeXform = domeXformAdjustment * domeOffset *
+            origDomeXform->GetTypedValue(0.0f);
     }
     else {
         domeXform.SetIdentity();
@@ -273,23 +450,16 @@ _BuildPortalLightDataSource(
 
     // Get data sources for the portal light.
     // -------------------------------------------------------------------------
-    const HdContainerDataSourceHandle portalMatDataSource = 
-        HdMaterialSchema::GetFromParent(portalPrim.dataSource)
-            .GetMaterialNetwork(_tokens->renderContext)
-#if HD_API_VERSION >= 63
-            .GetContainer()
-#endif
-        ;
-
+    const HdContainerDataSourceHandle portalMatDataSource =
+        _GetMaterialDataSource(_portalPrimDataSource);
     HdDataSourceMaterialNetworkInterface portalMatInterface(
-        portalPrimPath, portalMatDataSource, portalPrim.dataSource);
-
+        _portalPrimPath, portalMatDataSource, _portalPrimDataSource);
     const auto portalMatTerminal =
         portalMatInterface.GetTerminalConnection(
             HdMaterialTerminalTokens->light);
 
     HdXformSchema portalXformSchema =
-        HdXformSchema::GetFromParent(portalPrim.dataSource);
+        HdXformSchema::GetFromParent(_portalPrimDataSource);
 
     // Get some relevant values from the portal light's data sources.
     // -------------------------------------------------------------------------
@@ -301,9 +471,11 @@ _BuildPortalLightDataSource(
 
     const VtValue portalTintVal    = getPortalMatVal(_tokens->tint);
     const VtValue portalIntMultVal = getPortalMatVal(_tokens->intensityMult);
+    const VtValue portalExpAdjtVal = getPortalMatVal(_tokens->exposureAdjust);
 
     const auto portalTint    = portalTintVal.GetWithDefault(GfVec3f(1.0f));
     const auto portalIntMult = portalIntMultVal.GetWithDefault(1.0f);
+    const auto portalExpAdj  = portalExpAdjtVal.GetWithDefault(0.0f);
 
     GfMatrix4d portalXform;
     if (const auto origPortalXform = portalXformSchema.GetMatrix()) {
@@ -334,12 +506,12 @@ _BuildPortalLightDataSource(
 
     const auto computedPortalColor = GfCompMult(portalTint, domeColor);
     const auto computedPortalIntensity = portalIntMult * domeIntensity *
-                                         powf(2.0f, domeExposure);
+                                         powf(2.0f, domeExposure+portalExpAdj);
     const auto computedPortalToDome = portalXform * domeXform.GetInverse();
     const auto computedPortalName = _GetPortalName(domeColorMap, domeXform,
                                                    portalXform);
 
-    setPortalParamVal(_tokens->domeColorMap, VtValue(domeColorMap));
+    setPortalParamVal(_tokens->domeColorMap, VtValue(domeColorMapAssetPath));
     setPortalParamVal(_tokens->color,        VtValue(computedPortalColor));
     setPortalParamVal(_tokens->intensity,    VtValue(computedPortalIntensity));
     setPortalParamVal(_tokens->portalToDome, VtValue(computedPortalToDome));
@@ -355,6 +527,18 @@ _BuildPortalLightDataSource(
         setPortalParamVal(attr, getDomeMatVal(attr));
     }
 
+    HdDataSourceBaseHandle updateMat = portalMatInterface.Finish();
+    return HdMaterialSchema::BuildRetained(
+        1, &_tokens->renderContext, &updateMat);
+}
+
+HdDataSourceBaseHandle
+HdPrman_PortalLightDataSource::_GetLight()
+{
+    HdContainerDataSourceHandle lightDs =
+        HdContainerDataSource::Cast(
+            _portalPrimDataSource->Get( HdLightSchema::GetSchemaToken() ));
+
     // Compute new values for the portal's light data source.
     // -------------------------------------------------------------------------
     // All we're going to do is copy the light filter paths from the dome's
@@ -362,39 +546,61 @@ _BuildPortalLightDataSource(
     // This means that the filter prims will still just exist under the dome
     // and filter xforms will be relative to the dome, not the portal. That
     // xform behavior is expected; it matches what happens in Katana.
-    SdfPathVector domeFilters = _GetLightFilterPaths(domePrim.dataSource);
-    SdfPathVector allFilters  = _GetLightFilterPaths(portalPrim.dataSource);
+    SdfPathVector domeFilters = _GetLightFilterPaths(_domePrimDataSource);
+    SdfPathVector allFilters  = _GetLightFilterPaths(_portalPrimDataSource);
     allFilters.insert(allFilters.end(),
                       std::make_move_iterator(domeFilters.begin()),
                       std::make_move_iterator(domeFilters.end()));
     const auto computedFiltersDataSource =
         HdRetainedTypedSampledDataSource<SdfPathVector>::New(allFilters);
 
-    // XXX -- If the portal has an authored shadowLink value, we shouldn't
-    //        overwrite it. (The shadowLink code should be updated when we have
-    //        a good way to tell whether values are authored.)
+    // Resolve light and shadow linking.
+    const auto lightLink = _ResolveLinking(
+        _portalPrimDataSource, _domePrimDataSource, HdTokens->lightLink);
+    const auto shadowLink = _ResolveLinking(
+        _portalPrimDataSource, _domePrimDataSource, HdTokens->shadowLink);
+    const auto computedLightLinkDataSource =
+        HdRetainedTypedSampledDataSource<TfToken>::New(lightLink);
     const auto computedShadowLinkDataSource =
-        HdRetainedTypedSampledDataSource<TfToken>::New(
-            _GetLightData<TfToken>(domePrim.dataSource, HdTokens->shadowLink));
-
-    // Assemble the final data source for the portal light.
-    // -------------------------------------------------------------------------
-    std::vector<TfToken> names;
-    std::vector<HdDataSourceBaseHandle> sources;
-
-    names.push_back(HdMaterialSchemaTokens->material);
-    sources.push_back(HdRetainedContainerDataSource::New(
-        _tokens->renderContext, portalMatInterface.Finish()));
-
-    names.push_back(HdLightSchemaTokens->light);
-    sources.push_back(HdRetainedContainerDataSource::New(
-        HdTokens->filters,    computedFiltersDataSource,
-        HdTokens->shadowLink, computedShadowLinkDataSource));
+        HdRetainedTypedSampledDataSource<TfToken>::New(shadowLink);
 
     return HdOverlayContainerDataSource::New(
         HdRetainedContainerDataSource::New(
-            names.size(), names.data(), sources.data()),
-        portalPrim.dataSource);
+        HdTokens->filters,    computedFiltersDataSource,
+        HdTokens->lightLink,  computedLightLinkDataSource,
+            HdTokens->shadowLink, computedShadowLinkDataSource),
+        lightDs);
+}
+
+HdDataSourceBaseHandle
+HdPrman_PortalLightDataSource::_GetDependencies()
+{
+    HdContainerDataSourceHandle depsDs =
+        HdContainerDataSource::Cast(
+            _portalPrimDataSource->Get(
+                HdDependenciesSchema::GetSchemaToken() ));
+
+    // Record the dependency of the portal on its dome.
+    // (If the dome xform or light parameters change, we need to update
+    // the attached portals.)
+    static const TfToken depNames[] = { TfToken("dome") };
+    const HdDataSourceBaseHandle depDataSources[] = {
+        HdDependencySchema::Builder()
+            .SetDependedOnPrimPath(
+                HdRetainedTypedSampledDataSource<SdfPath>::New(
+                    _domePrimPath))
+            // Specify a root dependency.
+            .SetDependedOnDataSourceLocator(
+                HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+                    HdDataSourceLocator::EmptyLocator()))
+            .SetAffectedDataSourceLocator(
+                HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
+                    HdDataSourceLocator::EmptyLocator()))
+            .Build() };
+    return HdOverlayContainerDataSource::New(
+        HdDependenciesSchema::BuildRetained(
+            std::size(depNames), depNames, depDataSources),
+        depsDs);
 }
 
 //
@@ -469,32 +675,25 @@ _PortalLightResolvingSceneIndex::GetPrim(
 {
     auto prim = _GetInputSceneIndex()->GetPrim(primPath);
 
-    if (prim.primType != HdPrimTypeTokens->light &&
-        prim.primType != HdPrimTypeTokens->domeLight) {
-        // No special behavior for prims that aren't portals or domes.
+    if (prim.primType == HdPrimTypeTokens->light) {
+        // Check for portal
+        const auto portalIt = _portalsToDomes.find(primPath);
+        if (portalIt != _portalsToDomes.end() &&
+            _IsPortalLight(prim, primPath)) {
+            const auto domePrimPath = portalIt->second;
+            HdSceneIndexPrim domePrim =
+                _GetInputSceneIndex()->GetPrim(domePrimPath);
+            prim.dataSource = HdPrman_PortalLightDataSource::New(
+                primPath, prim.dataSource,
+                domePrimPath, domePrim.dataSource);
+            return prim;
+        }
+    }
+
+    if (prim.primType == HdPrimTypeTokens->domeLight) {
+        prim.dataSource =
+            HdPrman_DomeLightDataSource::New(primPath, prim.dataSource);
         return prim;
-    }
-
-    // Check for portal
-    const auto portalIt = _portalsToDomes.find(primPath);
-    if (portalIt != _portalsToDomes.end()) {
-        const auto domePrimPath = portalIt->second;
-        return {
-            prim.primType,
-            _BuildPortalLightDataSource(domePrimPath, primPath,
-                                        _GetInputSceneIndex())
-        };
-    }
-
-    // Check for dome
-    const auto domeIt = _domesWithPortals.find(primPath);
-    // If the dome has associated portals, wrap the data source.
-    // Otherwise, pass it through as-is.
-    if (domeIt != _domesWithPortals.end() && domeIt->second) {
-        return {
-            prim.primType,
-            _BuildDomeLightDataSource(primPath, _GetInputSceneIndex())
-        };
     }
 
     return prim;
@@ -555,6 +754,8 @@ _PortalLightResolvingSceneIndex::_PrimsDirtied(
     static const auto& lightLocator    = HdLightSchema::GetDefaultLocator();
     static const auto& materialLocator = HdMaterialSchema::GetDefaultLocator();
     static const auto& xformLocator    = HdXformSchema::GetDefaultLocator();
+    static const HdDataSourceLocatorSet portalLocators =    
+        {materialLocator, lightLocator, xformLocator};
 
     HdSceneIndexObserver::DirtiedPrimEntries dirtied;
     SdfPathSet dirtiedPortals;
@@ -562,7 +763,7 @@ _PortalLightResolvingSceneIndex::_PrimsDirtied(
         auto domeIt = _domesWithPortals.find(entry.primPath);
         if (domeIt != _domesWithPortals.end()) {
             // entry.primPath is a known dome
-            if (entry.dirtyLocators.Contains(lightLocator)) {
+            if (entry.dirtyLocators.Intersects(lightLocator)) {
                 // The dome's portals may have changed.
                 auto removedPortals =
                     _RemoveMappingsForDome(entry.primPath);
@@ -572,9 +773,7 @@ _PortalLightResolvingSceneIndex::_PrimsDirtied(
                     std::make_move_iterator(removedPortals.begin()),
                     std::make_move_iterator(removedPortals.end()));
             }
-            if (entry.dirtyLocators.Contains(lightLocator) ||
-                entry.dirtyLocators.Contains(materialLocator) ||
-                entry.dirtyLocators.Contains(xformLocator)) {
+            if (entry.dirtyLocators.Intersects(portalLocators)) {
                 // Assume that the dome's portals should be considered dirty.
                 for (const auto& [portalPath, domePath]: _portalsToDomes) {
                     if (domePath == entry.primPath) {
@@ -585,7 +784,7 @@ _PortalLightResolvingSceneIndex::_PrimsDirtied(
             dirtied.push_back(entry);
         }
         else if (_portalsToDomes.count(entry.primPath) &&
-                 entry.dirtyLocators.Contains(xformLocator)) {
+                 entry.dirtyLocators.Intersects(xformLocator)) {
             // An xform change will affect portalToDome and portalName,
             // so we need to make sure the material data source gets dirtied.
             HdSceneIndexObserver::DirtiedPrimEntry newEntry(entry);
@@ -603,17 +802,13 @@ _PortalLightResolvingSceneIndex::_PrimsDirtied(
             // If the portal is already in the dirtied vector, we don't want to
             // add it again.
             dirtiedPortals.erase(entry.primPath);
-
-            // We do, however, want to ensure that the material and light data
-            // sources are considered dirty.
-            entry.dirtyLocators.insert({materialLocator, lightLocator});
+            // We do, however, need to invalidate the portal data sources.
+            entry.dirtyLocators.insert(portalLocators);
         }
     }
 
     for (const auto& portalPath: dirtiedPortals) {
-        dirtied.emplace_back(
-            portalPath,
-            HdDataSourceLocatorSet{materialLocator, lightLocator});
+        dirtied.emplace_back(portalPath, portalLocators);
     }
 
     _SendPrimsDirtied(dirtied);
@@ -631,7 +826,7 @@ _PortalLightResolvingSceneIndex::_AddMappingsForDome(
                         "domeLight path <%s>", domePrimPath.GetText());
         return SdfPathVector();
     }
-
+    
     SdfPathVector portalPaths = _GetPortalPaths(domePrim.dataSource);
 
     _domesWithPortals[domePrimPath] = !portalPaths.empty();
@@ -677,6 +872,8 @@ _PortalLightResolvingSceneIndex::_RemoveMappingsForDome(
 
 } // anonymous namespace
 
+#endif
+
 //
 // HdPrman_PortalLightResolvingSceneIndexPlugin
 //
@@ -689,7 +886,11 @@ HdPrman_PortalLightResolvingSceneIndexPlugin::_AppendSceneIndex(
     const HdSceneIndexBaseRefPtr& inputScene,
     const HdContainerDataSourceHandle& inputArgs)
 {
+#if PXR_VERSION >= 2502
     return _PortalLightResolvingSceneIndex::New(inputScene);
+#else
+    return inputScene;
+#endif
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

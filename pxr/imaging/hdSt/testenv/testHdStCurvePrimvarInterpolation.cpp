@@ -41,7 +41,7 @@ _TransformPoints(GfVec3f *pointsOut, GfVec3f *pointsIn, size_t numPoints,
     for (size_t i = 0; i < numPoints; ++ i) {
         GfVec4f point = GfVec4f(pointsIn[i][0], pointsIn[i][1],
                                 pointsIn[i][2], 1.0f);
-        point = point *  mat;
+        point = GfVec4f(point *  mat);
         pointsOut[i] = GfVec3f(point[0], point[1], point[2]);
     }
 }
@@ -66,7 +66,7 @@ protected:
     void ParseArgs(int argc, char *argv[]) override;
 
 private:
-    HdSt_TestDriver* _driver;
+    HdSt_TestDriverUniquePtr _driver;
 
     TfToken _reprName;
     int _refineLevel;
@@ -78,7 +78,7 @@ private:
 void
 My_TestGLDrawing::InitTest()
 {
-    _driver = new HdSt_TestDriver(_reprName);
+    _driver = std::make_unique<HdSt_TestDriver>(_reprName);
     HdUnitTestDelegate &delegate = _driver->GetDelegate();
     delegate.SetRefineLevel(_refineLevel);
 

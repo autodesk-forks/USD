@@ -7,7 +7,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/refPtr.h"
-#include "pxr/usd/ndr/debugCodes.h"
+#include "pxr/usd/sdr/debugCodes.h"
 #include "pxr/usd/sdf/valueTypeName.h"
 #include "pxr/usd/sdr/shaderMetadataHelpers.h"
 #include "pxr/usd/sdr/shaderNode.h"
@@ -28,31 +28,47 @@ TF_DEFINE_PUBLIC_TOKENS(SdrNodeContext, SDR_NODE_CONTEXT_TOKENS);
 TF_DEFINE_PUBLIC_TOKENS(SdrNodeRole, SDR_NODE_ROLE_TOKENS);
 
 SdrShaderNode::SdrShaderNode(
-    const NdrIdentifier& identifier,
-    const NdrVersion& version,
+    const SdrIdentifier& identifier,
+    const SdrVersion& version,
     const std::string& name,
     const TfToken& family,
     const TfToken& context,
     const TfToken& sourceType,
     const std::string& definitionURI,
     const std::string& implementationURI,
-    NdrPropertyUniquePtrVec&& properties,
-    const NdrTokenMap& metadata,
+    SdrShaderPropertyUniquePtrVec&& properties,
+    const SdrTokenMap& metadata,
     const std::string &sourceCode)
-    : NdrNode(identifier, version, name, family,
-              context, sourceType, definitionURI, implementationURI,
-              std::move(properties), metadata, sourceCode)
+    : _identifier(identifier),
+      _version(version),
+      _name(name),
+      _family(family),
+      _context(context),
+      _sourceType(sourceType),
+      _definitionURI(definitionURI),
+      _implementationURI(implementationURI),
+      _properties(std::move(properties)),
+      _metadata(metadata),
+      _sourceCode(sourceCode)
 {
-    // Cast inputs to shader inputs
-    for (const auto& input : _inputs) {
-        _shaderInputs[input.first] =
-            dynamic_cast<SdrShaderPropertyConstPtr>(input.second);
-    }
+    // If the properties are not empty, that signifies that the node was parsed
+    // successfully, and thus the node is valid.
+    _isValid = !_properties.empty();
 
-    // ... and the same for outputs
-    for (const auto& output : _outputs) {
-        _shaderOutputs[output.first] =
-            dynamic_cast<SdrShaderPropertyConstPtr>(output.second);
+    // Build a map of input/output name -> SdrShaderProperty.
+    // This could also be done lazily if needed.
+    size_t numProperties = _properties.size();
+    for (size_t i = 0; i < numProperties; i++) {
+        SdrShaderPropertyConstPtr property = _properties[i].get();
+        const TfToken& propertyName = property->GetName();
+
+        if (property->IsOutput()) {
+            _outputNames.push_back(propertyName);
+            _outputs.insert({propertyName, property});
+        } else {
+            _inputNames.push_back(propertyName);
+            _inputs.insert({propertyName, property});
+        }
     }
 
     _InitializePrimvars();
@@ -77,11 +93,10 @@ SdrShaderNode::_PostProcessProperties()
         IntVal(SdrNodeMetadata->SdrUsdEncodingVersion, _metadata,
                DEFAULT_ENCODING);
 
-    const NdrTokenVec vsNames = GetAllVstructNames();
+    const SdrTokenVec vsNames = GetAllVstructNames();
 
-    for (const NdrPropertyUniquePtr& property : _properties) {
-        SdrShaderPropertyConstPtr constShaderProperty =
-            dynamic_cast<SdrShaderPropertyConstPtr>(property.get());
+    for (const SdrShaderPropertyUniquePtr& property : _properties) {
+        SdrShaderPropertyConstPtr constShaderProperty = property.get();
         // This function, and only this function, has special permission (is a
         // friend function of SdrProperty) to call private methods and so we
         // need a non-const pointer.
@@ -104,27 +119,62 @@ SdrShaderNode::_PostProcessProperties()
     }
 }
 
+SdrShaderNode::~SdrShaderNode()
+{
+    // nothing yet
+}
+
+std::string
+SdrShaderNode::GetInfoString() const
+{
+    return TfStringPrintf(
+        "%s (context: '%s', version: '%s', family: '%s'); definition URI: '%s';"
+        " implementation URI: '%s'",
+        SdrGetIdentifierString(_identifier).c_str(), _context.GetText(),
+        _version.GetString().c_str(), _family.GetText(), 
+        _definitionURI.c_str(), _implementationURI.c_str()
+    );
+}
+
+const SdrTokenVec&
+SdrShaderNode::GetShaderInputNames() const {
+    return _inputNames;
+}
+
+const SdrTokenVec&
+SdrShaderNode::GetShaderOutputNames() const {
+    return _outputNames;
+}
+
 SdrShaderPropertyConstPtr
 SdrShaderNode::GetShaderInput(const TfToken& inputName) const
 {
-    return dynamic_cast<SdrShaderPropertyConstPtr>(
-        NdrNode::GetInput(inputName)
-    );
+    SdrShaderPropertyMap::const_iterator it = _inputs.find(inputName);
+
+    if (it != _inputs.end()) {
+        return it->second;
+    }
+
+    return nullptr;
 }
 
 SdrShaderPropertyConstPtr
 SdrShaderNode::GetShaderOutput(const TfToken& outputName) const
 {
-    return dynamic_cast<SdrShaderPropertyConstPtr>(
-        NdrNode::GetOutput(outputName)
-    );
+    SdrShaderPropertyMap::const_iterator it = _outputs.find(outputName);
+
+    if (it != _outputs.end()) {
+        return it->second;
+    }
+
+    return nullptr;
 }
 
-NdrTokenVec
+SdrTokenVec
 SdrShaderNode::GetAssetIdentifierInputNames() const
 {
-    NdrTokenVec result;
-    for (const auto &inputName : GetInputNames()) {
+    SdrTokenVec result;
+    for (const auto &inputName : GetShaderInputNames()) {
         if (auto input = GetShaderInput(inputName)) {
             if (input->IsAssetIdentifier()) {
                 result.push_back(input->GetName());
@@ -138,7 +188,7 @@ SdrShaderPropertyConstPtr
 SdrShaderNode::GetDefaultInput() const
 {
     std::vector<SdrShaderPropertyConstPtr> result;
-    for (const auto &inputName : GetInputNames()) {
+    for (const auto &inputName : GetShaderInputNames()) {
         if (auto input = GetShaderInput(inputName)) {
             if (input->IsDefaultInput()) {
                 return input;
@@ -146,6 +196,12 @@ SdrShaderNode::GetDefaultInput() const
         }
     }
     return nullptr;
+}
+
+const SdrTokenMap&
+SdrShaderNode::GetMetadata() const
+{
+    return _metadata;
 }
 
 std::string
@@ -166,35 +222,32 @@ SdrShaderNode::GetRole() const
     return StringVal(SdrNodeMetadata->Role, _metadata, GetName());
 }
 
-NdrTokenVec
+SdrTokenVec
 SdrShaderNode::GetPropertyNamesForPage(const std::string& pageName) const
 {
-    NdrTokenVec propertyNames;
+    SdrTokenVec propertyNames;
 
-    for (const NdrPropertyUniquePtr& property : _properties) {
-        const SdrShaderPropertyConstPtr shaderProperty =
-            dynamic_cast<const SdrShaderPropertyConstPtr>(property.get());
-
-        if (shaderProperty->GetPage() == pageName) {
-            propertyNames.push_back(shaderProperty->GetName());
+    for (const SdrShaderPropertyUniquePtr& property : _properties) {
+        if (property->GetPage() == pageName) {
+            propertyNames.push_back(property->GetName());
         }
     }
 
     return propertyNames;
 }
 
-NdrTokenVec
+SdrTokenVec
 SdrShaderNode::GetAllVstructNames() const
 {
     std::unordered_set<std::string> vstructs;
 
     auto hasVstructMetadata = [] (const SdrShaderPropertyConstPtr& property) {
-        const NdrTokenMap& metadata = property->GetMetadata();
+        const SdrTokenMap& metadata = property->GetMetadata();
         const auto t = metadata.find(SdrPropertyMetadata->Tag);
         return (t != metadata.end() && t->second == "vstruct");
     };
 
-    for (const auto& input : _shaderInputs) {
+    for (const auto& input : _inputs) {
 
         if (hasVstructMetadata(input.second)) {
             vstructs.insert(input.first);
@@ -207,12 +260,12 @@ SdrShaderNode::GetAllVstructNames() const
 
         const TfToken& head = input.second->GetVStructMemberOf();
 
-        if (_shaderInputs.count(head)) {
+        if (_inputs.count(head)) {
             vstructs.insert(head);
         }
     }
 
-    for (const auto& output : _shaderOutputs) {
+    for (const auto& output : _outputs) {
 
         if (hasVstructMetadata(output.second)) {
             vstructs.insert(output.first);
@@ -225,13 +278,13 @@ SdrShaderNode::GetAllVstructNames() const
 
         const TfToken& head = output.second->GetVStructMemberOf();
 
-        if (_shaderOutputs.count(head)) {
+        if (_outputs.count(head)) {
             vstructs.insert(head);
         }
     }
 
     // Transform the set into a vector
-    return NdrTokenVec(vstructs.begin(), vstructs.end());
+    return SdrTokenVec(vstructs.begin(), vstructs.end());
 }
 
 /* static */
@@ -243,7 +296,7 @@ SdrShaderNode::CheckPropertyCompliance(
         propertyMap;
     SdrShaderNode::ComplianceResults result;
     for (SdrShaderNodeConstPtr shaderNode : shaderNodes) {
-        for (const TfToken &propName : shaderNode->GetInputNames()) {
+        for (const TfToken &propName : shaderNode->GetShaderInputNames()) {
             if (SdrShaderPropertyConstPtr sdrProp = 
                  shaderNode->GetShaderInput(propName)) {
                 auto propIt = propertyMap.find(propName);
@@ -261,7 +314,7 @@ SdrShaderNode::CheckPropertyCompliance(
                         auto resultIt = result.find(propName);
                         if (resultIt == result.end()) {
                             result.emplace(propName, 
-                                           std::vector<NdrIdentifier>{
+                                           std::vector<SdrIdentifier>{
                                                shaderNode->GetIdentifier()});
                         } else {
                             resultIt->second.push_back(
@@ -278,12 +331,12 @@ SdrShaderNode::CheckPropertyCompliance(
 void
 SdrShaderNode::_InitializePrimvars()
 {
-    NdrTokenVec primvars;
-    NdrTokenVec primvarNamingProperties;
+    SdrTokenVec primvars;
+    SdrTokenVec primvarNamingProperties;
 
     // The "raw" list of primvars contains both ordinary primvars, and the names
     // of properties whose values contain additional primvar names
-    const NdrStringVec rawPrimvars =
+    const SdrStringVec rawPrimvars =
         StringVecVal(SdrNodeMetadata->Primvars, _metadata);
 
     for (const std::string& primvar : rawPrimvars) {
@@ -297,7 +350,7 @@ SdrShaderNode::_InitializePrimvars()
                     TfToken(std::move(propertyName))
                 );
             } else {
-                TF_DEBUG(NDR_PARSING).Msg(
+                TF_DEBUG(SDR_PARSING).Msg(
                     "Found a node [%s] whose metadata "
                     "indicates a primvar naming property [%s] "
                     "but the property's type is not string; ignoring.",  
@@ -312,14 +365,13 @@ SdrShaderNode::_InitializePrimvars()
     _primvarNamingProperties = primvarNamingProperties;
 }
 
-NdrTokenVec
+SdrTokenVec
 SdrShaderNode::_ComputePages() const
 {
-    NdrTokenVec pages;
+    SdrTokenVec pages;
 
-    for (const NdrPropertyUniquePtr& property : _properties) {
-        auto sdrProperty = static_cast<SdrShaderPropertyPtr>(property.get());
-        const TfToken& page = sdrProperty->GetPage();
+    for (const SdrShaderPropertyUniquePtr& property : _properties) {
+        const TfToken& page = property->GetPage();
 
         // Exclude duplicate pages
         if (std::find(pages.begin(), pages.end(), page) != pages.end()) {

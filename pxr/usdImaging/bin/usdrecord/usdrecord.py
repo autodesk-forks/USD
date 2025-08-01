@@ -7,9 +7,9 @@
 #
 
 from pxr import Usd
-from pxr import UsdRender
+from pxr import UsdGeom, UsdRender
 from pxr import Sdf
-from pxr import UsdAppUtils
+from pxr import UsdUtils, UsdAppUtils
 from pxr import Tf
 
 import argparse
@@ -78,6 +78,32 @@ def _SetupOpenGLContext(width=100, height=100):
 
     return glWidget
 
+def _DumpMallocTags(stage, contextStr):
+    if not Tf.MallocTag.IsInitialized():
+        _Msg("Unable to accumulate memory usage since the Pxr MallocTag "
+            "system was not initialized")
+        return
+
+    callTree = Tf.MallocTag.GetCallTree()
+    memInMb = Tf.MallocTag.GetTotalBytes() / (1024.0 * 1024.0)
+
+    import os.path as path
+    import tempfile
+    layerName = path.basename(stage.GetRootLayer().identifier)
+    # CallTree.Report() gives us the most informative (and processable)
+    # form of output, but it only accepts a fileName argument.  So we
+    # use NamedTemporaryFile just to get a filename.
+    statsFile = tempfile.NamedTemporaryFile(
+        prefix=layerName+'.',
+        suffix='.mallocTag',
+        delete=False)
+    statsFile.close()
+    reportName = statsFile.name
+    callTree.Report(reportName)
+    _Msg("Memory consumption of %s for %s is %d Mb" %
+        (contextStr, layerName, memInMb))
+    _Msg("For detailed analysis, see " + reportName)
+
 def main() -> int:
     programName = os.path.basename(sys.argv[0])
     parser = argparse.ArgumentParser(prog=programName,
@@ -126,6 +152,16 @@ def main() -> int:
             'the CPU, but additionally it will prevent any tasks that require '
             'the GPU from being invoked.'))
 
+    # Note: The argument passed via the command line (disableDrawMode) is
+    # inverted from the variable in which it is stored (drawModeEnabled).
+    parser.add_argument('--disableDrawMode', action='store_false',
+        dest='drawModeEnabled',
+        help=(
+            "Disables support for USD draw modes. If set, UsdGeomModelAPI's "
+            'draw modes will be ignored, and no geometry will be replaced '
+            'with a draw mode standin. Everything will render as if '
+            'applyDrawMode = false.'))
+
     # Note: The argument passed via the command line (disableCameraLight)
     # is inverted from the variable in which it is stored (cameraLightEnabled)
     parser.add_argument('--disableCameraLight', action='store_false',
@@ -144,7 +180,9 @@ def main() -> int:
         default=960,
         help=(
             'Width of the output image. The height will be computed from this '
-            'value and the camera\'s aspect ratio (default=%(default)s)'))
+            'value and the camera\'s aspect ratio (default=%(default)s). '
+            'Note that this only affects the command-line output image; '
+            'it does not affect any render products in scene description.'))
 
     parser.add_argument('--enableDomeLightVisibility', action='store_true',
         dest='domeLightVisibility',
@@ -156,28 +194,55 @@ def main() -> int:
     parser.add_argument('--renderPassPrimPath', '-rp', action='store', 
         type=str, dest='rpPrimPath', 
         help=(
-            'Specify the Render Pass Prim to use to render the given '
-            'usdFile. '
-            'Note that if a renderSettingsPrimPath has been specified in the '
-            'stage metadata, using this argument will override that opinion. '
-            'Furthermore any properties authored on the RenderSettings will '
-            'override other arguments (imageWidth, camera, outputImagePath)'))
+            'Specify the RenderPass prim to use. This overrides any '
+            'renderSettingsPrimPath specified in stage metadata.'))
 
     parser.add_argument('--renderSettingsPrimPath', '-rs', action='store', 
         type=str, dest='rsPrimPath', 
         help=(
-            'Specify the Render Settings Prim to use to render the given '
-            'usdFile. '
-            'Note that if a renderSettingsPrimPath has been specified in the '
-            'stage metadata, using this argument will override that opinion. '
-            'Furthermore any properties authored on the RenderSettings will '
-            'override other arguments (imageWidth, camera, outputImagePath)'))
+            'Specify the RenderSettings prim to use. This overrides any '
+            'renderSettingsPrimPath specified in stage metadata.'))
+
+    parser.add_argument('--traceToFile', action='store',
+        type=str, dest='traceToFile', default=None,
+        help=(
+            'Start tracing at application startup and '
+            'write --traceFormat specified format output to the '
+            'specified trace file when the application quits'))
+
+    parser.add_argument('--traceFormat', action='store',
+        type=str, dest='traceFormat', default='chrome',
+        choices=['chrome', 'trace'],
+        help=(
+            'Output format for trace file specified by '
+            '--traceToFile. \'chrome\' files can be read in '
+            'chrome, \'trace\' files are simple text reports. '
+            '(default=%(default)s)'))
+
+    parser.add_argument('--memstats', action='store_true',
+        default=False, dest='memstats',
+        help=(
+            'Use the Pxr MallocTags memory accounting system to profile '
+            'USD, saving results to a tmp file, with a summary to the console. '
+            'Will have no effect if MallocTags are not supported in the '
+            'USD installation.'))
 
     args = parser.parse_args()
 
     args.imageWidth = max(args.imageWidth, 1)
 
     purposes = args.purposes.replace(',', ' ').split()
+
+    # Track allocations
+    if args.memstats:
+        Tf.MallocTag.Initialize()
+
+    # Begin tracing
+    traceCollector = None
+    if args.traceToFile:
+        from pxr import Trace
+        traceCollector = Trace.Collector()
+        traceCollector.enabled = True
 
     # Load the root layer.
     rootLayer = Sdf.Layer.FindOrOpen(args.usdFilePath)
@@ -213,9 +278,6 @@ def main() -> int:
     UsdAppUtils.framesArgs.ValidateCmdlineArgs(parser, args, usdStage,
         frameFormatArgName='outputImagePath')
 
-    # Get the camera at the given path (or with the given name).
-    usdCamera = UsdAppUtils.GetCameraAtPath(usdStage, args.camera)
-
     # Get the RenderSettings Prim Path.
     # It may be specified directly (--renderSettingsPrimPath),
     # via a render pass (--renderPassPrimPath),
@@ -242,6 +304,24 @@ def main() -> int:
         # Fall back to stage metadata.
         args.rsPrimPath = usdStage.GetMetadata('renderSettingsPrimPath')
 
+    # Get the camera.
+    usdCamera = None
+    # If a camera was specified directly, use that.
+    if args.camera:
+        usdCamera = UsdAppUtils.GetCameraAtPath(usdStage, args.camera)
+    # If render settings were specified, use the associated camera.
+    if not usdCamera and args.rsPrimPath:
+        rs = UsdRender.Settings(usdStage.GetPrimAtPath(args.rsPrimPath))
+        if rs:
+            cameraTargets = rs.GetCameraRel().GetTargets()
+            if len(cameraTargets) == 1:
+                usdCamera = UsdGeom.Camera(
+                    usdStage.GetPrimAtPath(cameraTargets[0]))
+    # If no camera has been found, use the pipeline configured default.
+    if not usdCamera:
+        usdCamera = UsdAppUtils.GetCameraAtPath(usdStage,
+            UsdUtils.GetPrimaryCameraName())
+
     if args.gpuEnabled:
         # UsdAppUtils.FrameRecorder will expect that an OpenGL context has
         # been created and made current if the GPU is enabled.
@@ -256,7 +336,7 @@ def main() -> int:
 
     # Initialize FrameRecorder 
     frameRecorder = UsdAppUtils.FrameRecorder(
-        rendererPluginId, args.gpuEnabled)
+        rendererPluginId, args.gpuEnabled, args.drawModeEnabled)
     if args.rpPrimPath:
         frameRecorder.SetActiveRenderPassPrimPath(args.rpPrimPath)
     if args.rsPrimPath:
@@ -267,6 +347,7 @@ def main() -> int:
     frameRecorder.SetColorCorrectionMode(args.colorCorrectionMode)
     frameRecorder.SetIncludedPurposes(purposes)
     frameRecorder.SetDomeLightVisibility(args.domeLightVisibility)
+    frameRecorder.SetPrimaryCameraPrimPath(usdCamera.GetPath())
 
     _Msg('Camera: %s' % usdCamera.GetPath().pathString)
     _Msg('Renderer plugin: %s' % frameRecorder.GetCurrentRendererId())
@@ -277,7 +358,6 @@ def main() -> int:
         try:
             frameRecorder.Record(usdStage, usdCamera, timeCode, outputImagePath)
         except Tf.ErrorException as e:
-
             _Err("Recording aborted due to the following failure at time code "
                  "{0}: {1}".format(timeCode, str(e)))
             return 1
@@ -285,6 +365,23 @@ def main() -> int:
     # Release our reference to the frame recorder so it can be deleted before
     # the Qt stuff.
     frameRecorder = None
+
+    # End tracing and report results.
+    if traceCollector:
+        traceCollector.enabled = False
+        if args.traceFormat == 'trace':
+            Trace.Reporter.globalReporter.Report(
+                args.traceToFile)
+        elif args.traceFormat == 'chrome':
+            Trace.Reporter.globalReporter.ReportChromeTracingToFile(
+                args.traceToFile)
+        else:
+            Tf.RaiseCodingError("Invalid trace format option provided: %s -"
+                    "trace/chrome are the valid options" %
+                    args.traceFormat)
+    if args.memstats:
+        _DumpMallocTags(usdStage, programName)
+
     return 0
 
 

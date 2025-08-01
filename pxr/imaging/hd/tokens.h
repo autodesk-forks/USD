@@ -134,8 +134,10 @@ PXR_NAMESPACE_OPEN_SCOPE
     (refined)                                   \
     (refinedWire)                               \
     (refinedWireOnSurf)                         \
+    (refinedSolidWireOnSurf)                    \
     (wire)                                      \
-    (wireOnSurf)
+    (wireOnSurf)                                \
+    (solidWireOnSurf)
 
 #define HD_CULLSTYLE_TOKENS \
     (dontCare) \
@@ -205,6 +207,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (cullStyle)                                 \
     (drawRange)                                 \
     (environmentMap)                            \
+    (linearExposure)                            \
     (displacementShader)                        \
     (fragmentShader)                            \
     (geometryShader)                            \
@@ -231,7 +234,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     (worldToViewMatrix)                         \
     (worldToViewInverseMatrix)                  \
     (stepSize)                                  \
-    (stepSizeLighting)
+    (stepSizeLighting)                          \
+    (multisampleCount)
 
 // Deprecated. Use: HdStMaterialTagTokens
 #define HD_MATERIALTAG_TOKENS                   \
@@ -252,8 +256,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (guide)                                     \
     (hidden)                                    \
     (proxy)                                     \
-    (render)                                    \
-    (widget)
+    (render)
 
 #define HD_RENDER_CONTEXT_TOKENS                \
     ((universal, ""))
@@ -264,17 +267,16 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define HD_RPRIMTYPE_TOKENS                     \
     /* Rprims */                                \
     (capsule)                                   \
-    (capsule_1)                                 \
     (cone)                                      \
     (cube)                                      \
     (cylinder)                                  \
-    (cylinder_1)                                \
     (geomSubset)                                \
     (mesh)                                      \
     (tetMesh)                                   \
     (nurbsPatch)                                \
     (basisCurves)                               \
     (nurbsCurves)                               \
+    (plane)                                     \
     (points)                                    \
     (sphere)                                    \
     (volume)                                    \
@@ -326,7 +328,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     HD_SPRIMTYPE_TOKENS                         \
     HD_BPRIMTYPE_TOKENS                         \
     /* Scene-index-only prim types */           \
-    (renderPass)
+    (renderPass)                                \
+    (task)
 
 HD_API
 bool HdPrimTypeIsGprim(TfToken const& primType);
@@ -433,6 +436,7 @@ TfToken HdAovTokensMakeShader(TfToken const& shader);
     (enableShadows)                                   \
     (enableSceneMaterials)                            \
     (enableSceneLights)                               \
+    (enableExposureCompensation)                      \
     (domeLightCameraVisibility)                       \
     /* Raytracer sampling settings */                 \
     (convergedVariance)                               \

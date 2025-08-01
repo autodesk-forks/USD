@@ -11,12 +11,13 @@
 /// \file sdr/shaderProperty.h
 
 #include "pxr/pxr.h"
-#include "pxr/usd/sdr/api.h"
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/base/tf/token.h"
 #include "pxr/base/tf/weakBase.h"
 #include "pxr/base/vt/value.h"
-#include "pxr/usd/ndr/property.h"
+#include "pxr/usd/sdr/api.h"
+#include "pxr/usd/sdr/declare.h"
+#include "pxr/usd/sdr/sdfTypeIndicator.h"
 #include "pxr/usd/sdr/shaderNode.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -81,9 +82,14 @@ TF_DECLARE_PUBLIC_TOKENS(SdrPropertyTokens, SDR_API, SDR_PROPERTY_TOKENS);
 
 /// \class SdrShaderProperty
 ///
-/// A specialized version of `NdrProperty` which holds shading information.
+/// Represents a property (input or output) that is part of a `SdrShaderNode`
+/// instance.
 ///
-class SdrShaderProperty : public NdrProperty
+/// A property must have a name and type, but may also specify a host of
+/// additional metadata. Instances can also be queried to determine if another
+/// `SdrShaderProperty` instance can be connected to it.
+///
+class SdrShaderProperty
 {
 public:
     // Constructor.
@@ -94,10 +100,62 @@ public:
         const VtValue& defaultValue,
         bool isOutput,
         size_t arraySize,
-        const NdrTokenMap& metadata,
-        const NdrTokenMap& hints,
-        const NdrOptionVec& options
+        const SdrTokenMap& metadata,
+        const SdrTokenMap& hints,
+        const SdrOptionVec& options
     );
+
+    /// Destructor.
+    SDR_API
+    virtual ~SdrShaderProperty();
+
+    /// \name The Basics
+    /// @{
+
+    /// Gets the name of the property.
+    SDR_API
+    const TfToken& GetName() const { return _name; }
+
+    /// Gets the type of the property.
+    SDR_API
+    const TfToken& GetType() const { return _type; }
+
+    /// Gets this property's default value associated with the type of the
+    /// property.
+    /// 
+    /// \sa GetType()
+    SDR_API
+    const VtValue& GetDefaultValue() const { return _defaultValue; }
+
+    /// Whether this property is an output.
+    SDR_API
+    bool IsOutput() const { return _isOutput; }
+
+    /// Whether this property's type is an array type.
+    SDR_API
+    bool IsArray() const { return (_arraySize > 0) || _isDynamicArray; }
+
+    /// Whether this property's array type is dynamically-sized.
+    SDR_API
+    bool IsDynamicArray() const { return _isDynamicArray; };
+
+    /// Gets this property's array size.
+    ///
+    /// If this property is a fixed-size array type, the array size is returned.
+    /// In the case of a dynamically-sized array, this method returns the array
+    /// size that the parser reports, and should not be relied upon to be
+    /// accurate. A parser may report -1 for the array size, for example, to
+    /// indicate a dynamically-sized array. For types that are not a fixed-size
+    /// array or dynamic array, this returns 0.
+    SDR_API
+    int GetArraySize() const { return _arraySize; }
+
+    /// Gets a string with basic information about this property. Helpful for
+    /// things like adding this property to a log.
+    SDR_API
+    std::string GetInfoString() const;
+
+    /// @}
 
     /// \name Metadata
     /// The metadata returned here is a direct result of what the parser plugin
@@ -105,6 +163,10 @@ public:
     /// specific parser plugin to get help on what the parser is looking for to
     /// populate these values.
     /// @{
+
+    /// All of the metadata that came from the parse process.
+    SDR_API
+    const SdrTokenMap& GetMetadata() const { return _metadata; }
 
     /// The label assigned to this property, if any. Distinct from the name
     /// returned from `GetName()`. In the context of a UI, the label value
@@ -131,13 +193,13 @@ public:
     /// Any UI "hints" that are associated with this property. "Hints" are
     /// simple key/value pairs.
     SDR_API
-    const NdrTokenMap& GetHints() const { return _hints; }
+    const SdrTokenMap& GetHints() const { return _hints; }
 
     /// If the property has a set of valid values that are pre-determined, this
     /// will return the valid option names and corresponding string values (if
     /// the option was specified with a value).
     SDR_API
-    const NdrOptionVec& GetOptions() const { return _options; }
+    const SdrOptionVec& GetOptions() const { return _options; }
 
     /// Returns the implementation name of this property.  The name of the
     /// property is how to refer to the property in shader networks.  The
@@ -192,20 +254,20 @@ public:
     /// returns `true`, connectability to a specific property can be tested via
     /// `CanConnectTo()`.
     SDR_API
-    bool IsConnectable() const override { return _isConnectable; }
+    bool IsConnectable() const { return _isConnectable; }
 
     /// Gets the list of valid connection types for this property. This value
     /// comes from shader metadata, and may not be specified. The value from
-    /// `NdrProperty::GetType()` can be used as a fallback, or you can use the
-    /// connectability test in `CanConnectTo()`.
+    /// `SdrShaderProperty::GetType()` can be used as a fallback, or you can
+    /// use the connectability test in `CanConnectTo()`.
     SDR_API
-    const NdrTokenVec& GetValidConnectionTypes() const {
+    const SdrTokenVec& GetValidConnectionTypes() const {
         return _validConnectionTypes;
     }
 
     /// Determines if this property can be connected to the specified property.
     SDR_API
-    bool CanConnectTo(const NdrProperty& other) const override;
+    bool CanConnectTo(const SdrShaderProperty& other) const;
 
     /// @}
 
@@ -213,18 +275,20 @@ public:
     /// \name Utilities
     /// @{
 
-    /// Converts the property's type from `GetType()` into a `SdfValueTypeName`.
+    /// Converts the property's type from `GetType()` into a
+    /// `SdrSdfTypeIndicator`.
     ///
     /// Two scenarios can result: an exact mapping from property type to Sdf
-    /// type, and an inexact mapping. In the first scenario, the first element
-    /// in the pair will be the cleanly-mapped Sdf type, and the second element,
-    /// a TfToken, will be empty. In the second scenario, the Sdf type will be
-    /// set to `Token` to indicate an unclean mapping, and the second element
-    /// will be set to the original type returned by `GetType()`.
+    /// type, and an inexact mapping. In the first scenario,
+    /// SdrSdfTypeIndicator will contain a cleanly-mapped Sdf type. In the
+    /// second scenario, the SdrSdfTypeIndicator will contain an Sdf type
+    /// set to `Token` to indicate an unclean mapping, and
+    /// SdrSdfTypeIndicator::GetSdrType will be set to the original type
+    /// returned by `GetType()`.
     ///
-    /// \sa GetDefaultValueAsSdfType
+    /// \sa GetDefaultValueAsSdfType()
     SDR_API
-    const NdrSdfTypeIndicator GetTypeAsSdfType() const override;
+    SdrSdfTypeIndicator GetTypeAsSdfType() const;
 
     /// Accessor for default value corresponding to the SdfValueTypeName
     /// returned by GetTypeAsSdfType. Note that this is different than 
@@ -234,7 +298,7 @@ public:
     ///
     /// \sa GetTypeAsSdfType
     SDR_API
-    const VtValue& GetDefaultValueAsSdfType() const override {
+    const VtValue& GetDefaultValueAsSdfType() const {
         return _sdfTypeDefaultValue;
     }
 
@@ -276,13 +340,22 @@ protected:
     // property to take some extra steps once all information is available.
     void _FinalizeProperty();
 
+    TfToken _name;
+    TfToken _type;
+    VtValue _defaultValue;
+    bool _isOutput;
+    size_t _arraySize;
+    bool _isDynamicArray;
+    bool _isConnectable;
+    SdrTokenMap _metadata;
+
     // Some metadata values cannot be returned by reference from the main
     // metadata dictionary because they need additional parsing.
-    const NdrTokenMap _hints;
-    const NdrOptionVec _options;
+    const SdrTokenMap _hints;
+    const SdrOptionVec _options;
 
     // Tokenized metadata
-    NdrTokenVec _validConnectionTypes;
+    SdrTokenVec _validConnectionTypes;
     TfToken _label;
     TfToken _page;
     TfToken _widget;

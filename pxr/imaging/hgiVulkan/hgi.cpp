@@ -51,15 +51,17 @@ HgiVulkan::HgiVulkan()
 
 HgiVulkan::~HgiVulkan()
 {
-    HgiVulkanCommandQueue* queue = _device->GetCommandQueue();
+    if (HgiVulkanCommandQueue* queue = _device->GetCommandQueue()) {
+        // Wait for command buffers to complete, then reset command buffers for
+        // each device's queue.
+        queue->ResetConsumedCommandBuffers(
+            HgiSubmitWaitTypeWaitUntilCompleted);
 
-    // Wait for command buffers to complete, then reset command buffers for 
-    // each device's queue.
-    queue->ResetConsumedCommandBuffers(HgiSubmitWaitTypeWaitUntilCompleted);
+        // Wait for all devices and perform final garbage collection.
+        _device->WaitForIdle();
+        _garbageCollector->PerformGarbageCollection(_device);
+    }
 
-    // Wait for all devices and perform final garbage collection.
-    _device->WaitForIdle();
-    _garbageCollector->PerformGarbageCollection(_device);
     delete _garbageCollector;
     delete _device;
     delete _instance;
@@ -68,6 +70,11 @@ HgiVulkan::~HgiVulkan()
 bool
 HgiVulkan::IsBackendSupported() const
 {
+    // Check if we at least found a usable device.
+    if (!_device->GetVulkanDevice()) {
+        return false;
+    }
+
     // Want Vulkan 1.2 or higher.
     const uint32_t apiVersion = GetCapabilities()->GetAPIVersion();
     const uint32_t majorVersion = VK_VERSION_MAJOR(apiVersion);
@@ -127,8 +134,19 @@ HgiTextureHandle
 HgiVulkan::CreateTexture(HgiTextureDesc const & desc)
 {
     return HgiTextureHandle(
-        new HgiVulkanTexture(this, GetPrimaryDevice(), desc),
-        GetUniqueId());
+        new HgiVulkanTexture(this, GetPrimaryDevice(), desc,
+            /*optimalTiling=*/ true, /*interop=*/false), GetUniqueId());
+}
+
+/* Multi threaded */
+HgiTextureHandle
+HgiVulkan::CreateTextureForInterop(
+    HgiTextureDesc const & desc,
+    bool optimalTiling)
+{
+    return HgiTextureHandle(
+        new HgiVulkanTexture(this, GetPrimaryDevice(), desc,
+            optimalTiling, /*interop=*/true), GetUniqueId());
 }
 
 /* Multi threaded */
@@ -327,6 +345,19 @@ HgiVulkan::EndFrame()
         _EndFrameSync();
         HgiVulkanEndQueueLabel(GetPrimaryDevice());
     }
+}
+
+void
+HgiVulkan::GarbageCollect()
+{
+    if (ARCH_UNLIKELY(_threadId != std::this_thread::get_id())) {
+        TF_CODING_ERROR("Secondary thread violation");
+        return;
+    }
+    HgiVulkanDevice* device = GetPrimaryDevice();
+
+    // Perform garbage collection for each device.
+    _garbageCollector->PerformGarbageCollection(device);
 }
 
 /* Multi threaded */

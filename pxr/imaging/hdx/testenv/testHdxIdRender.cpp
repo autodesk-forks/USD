@@ -90,7 +90,6 @@ Hdx_TestDriver::Draw(GfVec4d const &viewport, PickParam const * pickParam)
 
     HdxRenderTaskParams param = delegate.GetTaskParam(
         renderSetupTask, HdTokens->params).Get<HdxRenderTaskParams>();
-    param.enableIdRender = (pickParam != nullptr);
     param.viewport = viewport;
     param.aovBindings = pickParam ? _pickableAovBindings : _aovBindings;
     delegate.SetTaskParam(renderSetupTask, HdTokens->params, VtValue(param));
@@ -175,7 +174,7 @@ Hdx_TestDriver::ReadAovBuffer(TfToken const &aovName)
         if (texture) {
             size_t bufferSize = 0;
             return HdStTextureUtils::HgiTextureReadback<T>(
-                                        _GetHgi(), texture, &bufferSize);
+                GetHgi(), texture, &bufferSize);
         }
     }
 

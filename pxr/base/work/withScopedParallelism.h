@@ -12,9 +12,9 @@
 #include "pxr/pxr.h"
 #include "pxr/base/work/api.h"
 #include "pxr/base/work/dispatcher.h"
+#include "pxr/base/work/impl.h"
 #include "pxr/base/tf/pyLock.h"
 
-#include <tbb/task_arena.h>
 
 #include <utility>
 
@@ -85,6 +85,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///     }
 ///     return *accessor.first;
 /// }
+/// \endcode
 ///
 /// This limits parallelism by only a small degree.  It's only the waiting
 /// thread that restricts the tasks it can take to the protected scope: all
@@ -98,13 +99,13 @@ template <class Fn>
 auto
 WorkWithScopedParallelism(Fn &&fn, bool dropPythonGIL=true)
 {
+    PXR_WORK_IMPL_NAMESPACE_USING_DIRECTIVE;
+
     if (dropPythonGIL) {
         TF_PY_ALLOW_THREADS_IN_SCOPE();
-        return tbb::this_task_arena::isolate(std::forward<Fn>(fn));
+        return WorkImpl_WithScopedParallelism(std::forward<Fn>(fn));
     }
-    else {
-        return tbb::this_task_arena::isolate(std::forward<Fn>(fn));
-    }
+    return WorkImpl_WithScopedParallelism(std::forward<Fn>(fn));
 }
 
 /// Similar to WorkWithScopedParallelism(), but pass a WorkDispatcher instance

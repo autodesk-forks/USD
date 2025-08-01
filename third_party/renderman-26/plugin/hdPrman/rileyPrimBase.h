@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RILEY_PRIM_BASE_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RILEY_PRIM_BASE_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RILEY_PRIM_BASE_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RILEY_PRIM_BASE_H
 
 #include "pxr/pxr.h"
 #include "hdPrman/api.h"
@@ -38,6 +38,10 @@ protected:
     riley::Riley * _AcquireRiley();
 
     const GfVec2f &_GetShutterInterval();
+
+    // Merges the given params with various legacy params to call
+    // Riley::SetOptions.
+    void _SetRileyOptions(const RtParamList &params);
 
 private:
     HdPrman_RenderParam * const _renderParam;

@@ -11,6 +11,13 @@ set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /EHsc")
 # Standards compliant.
 set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:rvalueCast /Zc:strictStrings")
 
+# Visual Studio sets the value of __cplusplus to 199711L regardless of
+# the C++ standard actually being used, unless /Zc:__cplusplus is enabled.
+#
+# For more details, see:
+# https://learn.microsoft.com/en-us/cpp/build/reference/zc-cplusplus
+set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:__cplusplus")
+
 # The /Zc:inline option strips out the "arch_ctor_<name>" symbols used for
 # library initialization by ARCH_CONSTRUCTOR starting in Visual Studio 2019, 
 # causing release builds to fail. Disable the option for this and later 
@@ -87,10 +94,6 @@ _add_define("_SCL_SECURE_NO_WARNINGS")
 # will conflict with std::min() and std::max().
 _add_define("NOMINMAX")
 
-# Needed to prevent YY files trying to include unistd.h
-# (which doesn't exist on Windows)
-_add_define("YY_NO_UNISTD_H")
-
 # Forces all libraries that have separate source to be linked as
 # DLL's rather than static libraries on Microsoft Windows, unless
 # explicitly told otherwise.
@@ -134,3 +137,9 @@ set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Gm-")
 # with no symbols in it.  We do this a lot because of a pattern of having
 # a C++ source file for many header-only facilities, e.g. tf/bitUtils.cpp.
 set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /IGNORE:4221")
+
+# Enforce synchronous PDB writes when using Ninja
+# (this prevents "permission denied" compile errors on program databases)
+if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+    set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /FS")
+endif()

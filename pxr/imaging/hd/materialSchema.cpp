@@ -54,6 +54,70 @@ HdMaterialSchema::GetMaterialNetwork(TfToken const &context)
                 HdMaterialSchemaTokens->universalRenderContext));
 }
 
+HdMaterialNetworkSchema
+HdMaterialSchema::GetMaterialNetwork(TfTokenVector const &contexts)
+{
+    for (TfToken const &context : contexts) {
+        if (auto b = _GetTypedDataSource<HdContainerDataSource>(context)) {
+            return HdMaterialNetworkSchema(b);
+        }
+    }
+
+    // If we can't find the context-specific binding, return the fallback.
+    return
+        HdMaterialNetworkSchema(
+            _GetTypedDataSource<HdContainerDataSource>(
+                HdMaterialSchemaTokens->universalRenderContext));
+}
+
+/*static*/
+TfToken
+HdMaterialSchema::GetLocatorTerminal(HdDataSourceLocator const& locator)
+{
+    return GetLocatorTerminal(locator, TfTokenVector());
+}
+
+/*static*/
+TfToken
+HdMaterialSchema::GetLocatorTerminal(HdDataSourceLocator const& locator, TfToken const &context)
+{
+    return GetLocatorTerminal(locator, TfTokenVector({context}));
+}
+
+/*static*/
+TfToken
+HdMaterialSchema::GetLocatorTerminal(
+        HdDataSourceLocator const& locator, TfTokenVector const& contexts)
+{
+    if (locator.GetElementCount() >= 4) {
+
+        // Always check the universal render context
+        static const HdDataSourceLocator universalTerminalLocator(
+            HdMaterialSchema::GetSchemaToken(),
+            HdMaterialSchemaTokens->universalRenderContext,
+            HdMaterialSchemaTokens->terminals
+        );
+        if (locator.Intersects(universalTerminalLocator)) {
+            return locator.GetElement(3);
+        }
+
+        // Check the render specific contexts
+        for (const TfToken& context : contexts) {
+            const HdDataSourceLocator terminalLocator(
+                HdMaterialSchema::GetSchemaToken(),
+                context,
+                HdMaterialSchemaTokens->terminals
+            );
+            if (locator.Intersects(terminalLocator)) {
+                return locator.GetElement(3);
+            }
+        }
+
+    }
+
+    return TfToken();
+}
+
 // --(END CUSTOM CODE: Schema Methods)--
 
 /*static*/

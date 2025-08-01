@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_H
-#define EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_H
 
 #include "pxr/imaging/hd/renderPass.h"
 
@@ -20,6 +20,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 class HdPrman_RenderParam;
 class HdPrman_CameraContext;
 class HdPrman_RenderSettings;
+class HdPrmanRenderDelegate;
 
 class HdPrman_RenderPass final : public HdRenderPass
 {
@@ -47,6 +48,7 @@ private:
     
     bool _UpdateCameraFramingAndWindowPolicy(
         const HdRenderPassStateSharedPtr &renderPassState,
+        HdPrmanRenderDelegate * const renderDelegate,
         HdPrman_CameraContext *cameraContext);
 
     void _UpdateActiveRenderTagsIfChanged(
@@ -61,9 +63,10 @@ private:
     int _lastRprimRenderTagVersion;
 
     std::chrono::steady_clock::time_point _frameStart;
+    std::string _projection;
     float _quickIntegrateTime;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // EXT_RMANPKG_25_0_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_H
+#endif // EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_H

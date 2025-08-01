@@ -8,9 +8,9 @@
 /// \file usdUtils/wrapDependencies.cpp
 
 #include "pxr/pxr.h"
-#include <boost/python/def.hpp>
-#include <boost/python/list.hpp>
-#include <boost/python/tuple.hpp>
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/list.hpp"
+#include "pxr/external/boost/python/tuple.hpp"
 
 #include "pxr/base/tf/makePyConstructor.h"
 #include "pxr/base/tf/pyFunction.h"
@@ -19,19 +19,20 @@
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/usdUtils/dependencies.h"
 
-namespace bp = boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+namespace bp = pxr_boost::python;
 
 namespace {
 
 static bp::tuple
 _ExtractExternalReferences(
-    const std::string& filePath)
+    const std::string& filePath,
+    const UsdUtilsExtractExternalReferencesParams& params = {})
 {
     std::vector<std::string> subLayers, references, payloads;
     UsdUtilsExtractExternalReferences(filePath,
-        &subLayers, &references, &payloads);
+        &subLayers, &references, &payloads, params);
     return bp::make_tuple(subLayers, references, payloads);
 }
 
@@ -65,8 +66,15 @@ _ComputeAllDependencies(
 
 void wrapDependencies()
 {
+    typedef UsdUtilsExtractExternalReferencesParams ExtractRefParams;
+    bp::class_<ExtractRefParams>("ExtractExternalReferencesParams")
+        .def("SetResolveUdimPaths", &ExtractRefParams::SetResolveUdimPaths)
+        .def("GetResolveUdimPaths", &ExtractRefParams::GetResolveUdimPaths)
+        ;
+
     bp::def("ExtractExternalReferences", _ExtractExternalReferences,
-            bp::arg("filePath"));
+            (bp::arg("filePath"),
+             bp::arg("parameters") = ExtractRefParams()));
 
     bp::def("CreateNewUsdzPackage", UsdUtilsCreateNewUsdzPackage,
             (bp::arg("assetPath"),

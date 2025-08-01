@@ -28,11 +28,34 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+/// Structure which controls aspects of the 
+/// \ref UsdUtilsExtractExternalReferences function.
+class UsdUtilsExtractExternalReferencesParams {
+public:
+    /// Specifies whether UDIM template paths should be resolved when extracting
+    /// references. If true, the resolved paths for all discovered UDIM tiles
+    /// will be included in the references bucket and the template path will be
+    /// discarded. If false, no resolution will take place and the template path
+    /// will appear in the references bucket.
+    inline void SetResolveUdimPaths(bool resolveUdimPaths) {
+        _resolveUdimPaths = resolveUdimPaths;
+    }
+
+
+    inline bool GetResolveUdimPaths() const { return _resolveUdimPaths; }
+
+private:
+    bool _resolveUdimPaths = false;
+};
+
 /// Parses the file at \p filePath, identifying external references, and
 /// sorting them into separate type-based buckets. Sublayers are returned in
 /// the \p sublayers vector, references, whether prim references, value clip 
 /// references or values from asset path attributes, are returned in the 
 /// \p references vector. Payload paths are returned in \p payloads.
+/// The \p params parameter controls various settings that affect the
+/// extraction process. See \ref UsdUtilsExtractExternalReferencesParams for
+/// additional details.
 /// 
 /// \note No recursive chasing of dependencies is performed; that is the
 /// client's responsibility, if desired.
@@ -45,7 +68,8 @@ void UsdUtilsExtractExternalReferences(
     const std::string& filePath,
     std::vector<std::string>* subLayers,
     std::vector<std::string>* references,
-    std::vector<std::string>* payloads);
+    std::vector<std::string>* payloads,
+    const UsdUtilsExtractExternalReferencesParams& params = {});
 
 /// Recursively computes all the dependencies of the given asset and populates
 /// \p layers with all the dependencies that can be opened as an SdfLayer. 

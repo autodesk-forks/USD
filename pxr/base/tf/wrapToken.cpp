@@ -10,25 +10,26 @@
 #include "pxr/base/tf/token.h"
 
 #include "pxr/base/tf/pyContainerConversions.h"
+#include "pxr/base/tf/pyOptional.h"
 
-#include <boost/python/def.hpp>
-#include <boost/python/to_python_converter.hpp>
-#include <boost/python/str.hpp>
-#include <boost/python/object.hpp>
+#include "pxr/external/boost/python/def.hpp"
+#include "pxr/external/boost/python/to_python_converter.hpp"
+#include "pxr/external/boost/python/str.hpp"
+#include "pxr/external/boost/python/object.hpp"
 
 #include <set>
 #include <string>
 #include <utility>
 
-namespace bp = boost::python;
+PXR_NAMESPACE_USING_DIRECTIVE
+
+namespace bp = pxr_boost::python;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 void TfDumpTokenStats(); // Defined in token.cpp.
 
 PXR_NAMESPACE_CLOSE_SCOPE
-
-PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace {
 
@@ -86,6 +87,8 @@ void wrapToken()
     bp::to_python_converter<
         std::pair<TfToken, TfToken>,
         TfPyContainerConversions::to_tuple<std::pair<TfToken, TfToken>>>();
+
+    TfPyOptional::python_optional<TfToken>();
 
     // Stats.
     bp::def("DumpTokenStats", TfDumpTokenStats);

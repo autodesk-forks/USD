@@ -16,6 +16,8 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+struct HdxColorChannelTaskParams;
+
 /// \class HdxColorChannelTask
 ///
 /// A task for choosing a color channel for display.
@@ -23,6 +25,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 class HdxColorChannelTask : public HdxTask
 {
 public:
+    using TaskParams = HdxColorChannelTaskParams;
+
     HDX_API
     HdxColorChannelTask(HdSceneDelegate* delegate, SdfPath const& id);
 
@@ -53,9 +57,6 @@ private:
     // Utility function to update the shader uniform parameters.
     // Returns true if the values were updated. False if unchanged.
     bool _UpdateParameterBuffer(float screenSizeX, float screenSizeY);
-
-    /// Apply the color channel filtering.
-    void _ApplyColorChannel();
 
     // This struct must match ParameterBuffer in colorChannel.glslfx.
     // Be careful to remember the std430 rules.

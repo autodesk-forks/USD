@@ -5,21 +5,21 @@
 // https://openusd.org/license.
 //
 
-#include <boost/python/class.hpp>
+#include "pxr/external/boost/python/class.hpp"
 
 #include "pxr/pxr.h"
 #include "pxr/usd/ar/defaultResolver.h"
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void
 wrapDefaultResolver()
 {
     using This = ArDefaultResolver;
 
-    class_<This, bases<ArResolver>, boost::noncopyable>
+    class_<This, bases<ArResolver>, noncopyable>
         ("DefaultResolver", no_init)
 
         .def("SetDefaultSearchPath", &This::SetDefaultSearchPath,

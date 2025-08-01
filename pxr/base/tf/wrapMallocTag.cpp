@@ -16,8 +16,8 @@
 #include "pxr/base/arch/fileSystem.h"
 #include "pxr/base/arch/symbols.h"
 
-#include <boost/python/class.hpp>
-#include <boost/python/scope.hpp>
+#include "pxr/external/boost/python/class.hpp"
+#include "pxr/external/boost/python/scope.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -28,9 +28,9 @@
 using std::string;
 using std::vector;
 
-using namespace boost::python;
-
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -159,9 +159,15 @@ _LogReport(
     std::string const &rootName)
 {
     string tmpFile;
-    ArchMakeTmpFile(std::string("callSiteReport") +
+    int fd = ArchMakeTmpFile(std::string("callSiteReport") +
         (rootName.empty() ? "" : "_") + rootName, &tmpFile);
+    if (fd == -1) {
+        TF_RUNTIME_ERROR(
+            "Failed to make temporary file '%s'.", tmpFile.c_str());
+        return std::string();
+    }
 
+    ArchCloseFile(fd);
     _ReportToFile(self, tmpFile, rootName);
     return tmpFile;
 }

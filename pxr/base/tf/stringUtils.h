@@ -22,6 +22,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <list>
+#include <locale>
 #include <set>
 #include <sstream>
 #include <string>
@@ -559,6 +560,7 @@ TfStringify(const T& v)
     }
     else {
         std::ostringstream stream;
+        stream.imbue(std::locale::classic());
         stream << v;
         return stream.str();
     }
@@ -642,18 +644,18 @@ std::string TfStringGlobToRegex(const std::string& s);
 ///
 /// The following escape sequences are accepted:
 ///
-/// \li \\\\:    backslash
-/// \li \\a:     ring the bell
-/// \li \\b:     backspace
-/// \li \\f:     form feed
-/// \li \\n:     new line
-/// \li \\r:     carriage return
-/// \li \\t:     tab
-/// \li \\v:     vertical tab
-/// \li \\xdd:   hex constant
-/// \li \\ddd:   octal constant
+/// \li `\\`:    backslash
+/// \li `\a`:     ring the bell
+/// \li `\b`:     backspace
+/// \li `\f`:     form feed
+/// \li `\n`:     new line
+/// \li `\r`:     carriage return
+/// \li `\t`:     tab
+/// \li `\v`:     vertical tab
+/// \li `\xdd`:   hex constant
+/// \li `\ddd`:   octal constant
 ///
-/// So, if the two-character sequence "\\n" appears in the string, it is
+/// So, if the two-character sequence `\n` appears in the string, it is
 /// replaced by an actual newline.  Each hex and octal constant translates into
 /// one character in the output string.  Hex constants can be up to 2 digits,
 /// octal constants can be up to 3 digits.  Both are terminated by a character
@@ -661,12 +663,12 @@ std::string TfStringGlobToRegex(const std::string& s);
 /// and octal constants with maximum width (2 and 3 digits, respectively) using
 /// leading zeroes if necessary.  This avoids problems where characters after
 /// the hex/octal constant that shouldn't be part of the constant get
-/// interpreted as part of it.  For example, the sequence "\x2defaced" will
+/// interpreted as part of it.  For example, the sequence `\x2defaced` will
 /// produce the characters "-efaced" when what was probably intended was the
 /// character 0x02 (STX) followed by "defaced".
 //
 /// Illegal escape sequences are replaced by the character following the
-/// backslash, so the two character sequence "\\c" would become "c".  Processing
+/// backslash, so the two character sequence `\c` would become "c".  Processing
 /// continues until the input hits a NUL character in the input string -
 /// anything appearing after the NUL will be ignored.
 TF_API std::string TfEscapeString(const std::string &in);

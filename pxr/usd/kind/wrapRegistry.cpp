@@ -10,18 +10,18 @@
 #include "pxr/base/tf/pyResultConversions.h"
 #include "pxr/base/tf/pySingleton.h"
 
-#include <boost/python.hpp>
-
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 void wrapRegistry()
 {
     typedef KindRegistry This;
     typedef TfWeakPtr<KindRegistry> ThisPtr;
 
-   class_<This, ThisPtr, boost::noncopyable>("Registry", no_init)
+   class_<This, ThisPtr, noncopyable>("Registry", no_init)
         .def(TfPySingleton())
         .def("HasKind", &This::HasKind)
         .staticmethod("HasKind")

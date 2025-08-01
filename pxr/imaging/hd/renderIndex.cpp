@@ -7,6 +7,7 @@
 #include "pxr/imaging/hd/renderIndex.h"
 
 #include "pxr/imaging/hd/basisCurves.h"
+#include "pxr/imaging/hd/cachingSceneIndex.h"
 #include "pxr/imaging/hd/dataSourceLegacyPrim.h"
 #include "pxr/imaging/hd/debugCodes.h"
 #include "pxr/imaging/hd/dirtyList.h"
@@ -52,14 +53,92 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_ENV_SETTING(HD_ENABLE_SCENE_INDEX_EMULATION, true,
                       "Enable scene index emulation in the render index.");
+TF_DEFINE_ENV_SETTING(HD_ENABLE_TERMINAL_CACHING_SCENE_INDEX, false,
+                  "Enable terminal HdCachingSceneIndex in the render index.");
+
+TF_DEFINE_PRIVATE_TOKENS(
+    _noticeBatchingTokens,
+    ((postEmulation, "Post-Emulation Notice Batching Scene Index"))
+    ((postMerging, "Post-Merging Notice Batching Scene Index"))
+);
+
 
 static bool
 _IsEnabledSceneIndexEmulation()
 {
-    static bool enabled = 
-        (TfGetEnvSetting(HD_ENABLE_SCENE_INDEX_EMULATION) == true);
+    static bool enabled = TfGetEnvSetting(HD_ENABLE_SCENE_INDEX_EMULATION);
     return enabled;
 }
+
+static bool
+_IsEnabledTerminalCachingSceneIndex()
+{
+    static bool enabled =
+        TfGetEnvSetting(HD_ENABLE_TERMINAL_CACHING_SCENE_INDEX);
+    return enabled;
+}
+
+// -------------------------------------------------------------------------- //
+
+/// Object that manages a notice batching scene index with support for nested
+/// calls to BeginBatching/EndBatching.
+///
+class HdRenderIndex::_NoticeBatchingContext
+{
+public:
+    _NoticeBatchingContext(const TfToken &displayName)
+    : _displayName(displayName) {}
+
+    ~_NoticeBatchingContext()
+    {
+        if (_batchingDepth != 0) {
+            TF_CODING_ERROR("Imbalanced batch begin/end calls for %s.\n",
+                _displayName.GetText());
+        }
+    }
+
+    /// Creates and returns a notice batching scene index that takes \p inputSi
+    /// as its input.
+    HdSceneIndexBaseRefPtr Append(
+        HdSceneIndexBaseRefPtr const &inputSi)
+    {
+        _nbSi = HdNoticeBatchingSceneIndex::New(inputSi);
+        _nbSi->SetDisplayName(_displayName.GetString());
+        return _nbSi;
+    }
+
+    void BeginBatching()
+    {
+        if (_nbSi) {
+            if (_batchingDepth == 0) {
+                _nbSi->SetBatchingEnabled(true);
+            }
+            ++_batchingDepth;
+        }
+    }
+
+    void EndBatching()
+    {
+        if (_nbSi) {
+            if (_batchingDepth > 0) {
+                --_batchingDepth;
+
+                if (_batchingDepth == 0) {
+                    _nbSi->SetBatchingEnabled(false);
+                }
+            } else {
+                TF_CODING_ERROR("Imbalanced batch begin/end calls for %s.\n",
+                    _displayName.GetText());
+            }
+        }
+    }
+private:
+    HdNoticeBatchingSceneIndexRefPtr _nbSi;
+    unsigned int _batchingDepth = 0;
+    const TfToken _displayName;
+};
+
+// -------------------------------------------------------------------------- //
 
 bool
 HdRenderIndex::IsSceneIndexEmulationEnabled()
@@ -70,8 +149,12 @@ HdRenderIndex::IsSceneIndexEmulationEnabled()
 HdRenderIndex::HdRenderIndex(
     HdRenderDelegate *renderDelegate,
     HdDriverVector const& drivers,
-    const std::string &instanceName)
-    : _noticeBatchingDepth(0)
+    const std::string &instanceName,
+    const std::string &appName)
+    : _emulationBatchingCtx(std::make_unique<_NoticeBatchingContext>(
+        _noticeBatchingTokens->postEmulation))
+    , _mergingBatchingCtx(std::make_unique<_NoticeBatchingContext>(
+        _noticeBatchingTokens->postMerging))
     , _renderDelegate(renderDelegate)
     , _drivers(drivers)
     , _instanceName(instanceName)
@@ -102,16 +185,23 @@ HdRenderIndex::HdRenderIndex(
     // data structures now.
     if (_IsEnabledSceneIndexEmulation()) {
         _emulationSceneIndex = HdLegacyPrimSceneIndex::New();
-        _emulationNoticeBatchingSceneIndex =
-            HdNoticeBatchingSceneIndex::New(_emulationSceneIndex);
+
+        // The legacy prim scene index holds prims contributed from
+        // upstream scene delegates.  Convert any legacy subsets
+        // to HdGeomSubsetSchema.  Since legacy prims are typically
+        // populated iteratively, use notice batching upstream from
+        // scanning for geom subsets.
+        HdLegacyGeomSubsetSceneIndexRefPtr legacyGeomSubsetSceneIndex =
+            HdLegacyGeomSubsetSceneIndex::New(
+                _emulationBatchingCtx->Append(_emulationSceneIndex));
+
         _mergingSceneIndex = HdMergingSceneIndex::New();
         _mergingSceneIndex->AddInputScene(
-            _emulationNoticeBatchingSceneIndex, SdfPath::AbsoluteRootPath());
+            legacyGeomSubsetSceneIndex,
+            SdfPath::AbsoluteRootPath());
 
-        _terminalSceneIndex = _mergingSceneIndex;
-        
-        _terminalSceneIndex = HdLegacyGeomSubsetSceneIndex::New(
-            _terminalSceneIndex);
+        _terminalSceneIndex =
+            _mergingBatchingCtx->Append(_mergingSceneIndex);
 
         _terminalSceneIndex =
             HdSceneIndexAdapterSceneDelegate::AppendDefaultSceneFilters(
@@ -124,7 +214,13 @@ HdRenderIndex::HdRenderIndex(
             _terminalSceneIndex =
                 HdSceneIndexPluginRegistry::GetInstance()
                     .AppendSceneIndicesForRenderer(
-                        rendererDisplayName, _terminalSceneIndex, instanceName);
+                        rendererDisplayName, _terminalSceneIndex,
+                        instanceName, appName);
+        }
+
+        if (_IsEnabledTerminalCachingSceneIndex()) {
+            _terminalSceneIndex =
+                HdCachingSceneIndex::New(_terminalSceneIndex);
         }
 
         _siSd = std::make_unique<HdSceneIndexAdapterSceneDelegate>(
@@ -153,24 +249,21 @@ HdRenderIndex::~HdRenderIndex()
     }
 
     _DestroyFallbackPrims();
-
-    if (_noticeBatchingDepth != 0) {
-        TF_CODING_ERROR("Imbalanced batch begin/end calls");
-    }
 }
 
 HdRenderIndex*
 HdRenderIndex::New(
     HdRenderDelegate *renderDelegate,
     HdDriverVector const& drivers,
-    const std::string &instanceName)
+    const std::string &instanceName,
+    const std::string &appName)
 {
     if (renderDelegate == nullptr) {
         TF_CODING_ERROR(
             "Null Render Delegate provided to create render index");
         return nullptr;
     }
-    return new HdRenderIndex(renderDelegate, drivers, instanceName);
+    return new HdRenderIndex(renderDelegate, drivers, instanceName, appName);
 }
 
 void
@@ -179,6 +272,8 @@ HdRenderIndex::InsertSceneIndex(
     SdfPath const& scenePathPrefix,
     bool needsPrefixing/* = true*/)
 {
+    TRACE_FUNCTION();
+
     if (!_IsEnabledSceneIndexEmulation()) {
         TF_WARN("Unable to add scene index at prefix %s because emulation is off.",
                 scenePathPrefix.GetText());
@@ -212,6 +307,8 @@ void
 HdRenderIndex::RemoveSceneIndex(
     const HdSceneIndexBaseRefPtr &inputScene)
 {
+    TRACE_FUNCTION();
+
     if (!_IsEnabledSceneIndexEmulation()) {
         return;
     }
@@ -279,6 +376,7 @@ HdRenderIndex::_RemoveSubtree(
     _sprimIndex.RemoveSubtree(root, sceneDelegate, _tracker, _renderDelegate);
     _bprimIndex.RemoveSubtree(root, sceneDelegate, _tracker, _renderDelegate);
     _RemoveInstancerSubtree(root, sceneDelegate);
+    _RemoveTaskSubtree(root, sceneDelegate);
 }
 
 
@@ -518,6 +616,7 @@ HdRenderIndex::_Clear()
 
     // Clear instancers.
     _RemoveInstancerSubtree(SdfPath::AbsoluteRootPath(), nullptr);
+    _RemoveTaskSubtree(SdfPath::AbsoluteRootPath(), nullptr);
     _instancerMap.clear();
 }
 
@@ -526,9 +625,10 @@ HdRenderIndex::_Clear()
 // -------------------------------------------------------------------------- //
 
 void
-HdRenderIndex::_TrackDelegateTask(HdSceneDelegate* delegate,
-                                  SdfPath const& taskId,
-                                  HdTaskCreateFnc taskCreateFnc)
+HdRenderIndex::_InsertSceneDelegateTask(
+        HdSceneDelegate* const delegate, 
+        SdfPath const& taskId,
+        HdLegacyTaskFactorySharedPtr factory)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -537,9 +637,26 @@ HdRenderIndex::_TrackDelegateTask(HdSceneDelegate* delegate,
         return;
     }
 
-    HdTaskSharedPtr task = taskCreateFnc(delegate, taskId);
-    _tracker.TaskInserted(taskId, task->GetInitialDirtyBitsMask());
-    _taskMap.emplace(taskId, _TaskInfo{delegate, task});
+    if (_IsEnabledSceneIndexEmulation()) {
+        _emulationSceneIndex->AddLegacyTask(
+            taskId, delegate, std::move(factory));
+        return;
+    }
+
+    HdTaskSharedPtr const task = factory->Create(delegate, taskId);
+    _InsertTask(delegate, taskId, task);
+}
+
+void
+HdRenderIndex::_InsertTask(HdSceneDelegate* delegate,
+                           SdfPath const &id,
+                           HdTaskSharedPtr const &task)
+{
+    HD_TRACE_FUNCTION();
+    HF_MALLOC_TAG_FUNCTION();
+
+    _tracker.TaskInserted(id, task->GetInitialDirtyBitsMask());
+    _taskMap.emplace(id, _TaskInfo{delegate, task});
 }
 
 HdTaskSharedPtr const&
@@ -555,6 +672,17 @@ HdRenderIndex::GetTask(SdfPath const& id) const {
 
 void
 HdRenderIndex::RemoveTask(SdfPath const& id)
+{
+    if (_IsEnabledSceneIndexEmulation()) {
+        _emulationSceneIndex->RemovePrim(id);
+        return;
+    }
+
+    _RemoveTask(id);
+}
+
+void
+HdRenderIndex::_RemoveTask(SdfPath const& id)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -581,7 +709,7 @@ HdRenderIndex::_RemoveTaskSubtree(const SdfPath &root,
         const SdfPath &id = it->first;
         const _TaskInfo &taskInfo = it->second;
 
-        if ((taskInfo.sceneDelegate == sceneDelegate) &&
+        if ((sceneDelegate == nullptr || taskInfo.sceneDelegate == sceneDelegate ) &&
             (id.HasPrefix(root))) {
             _tracker.TaskRemoved(id);
 
@@ -755,28 +883,25 @@ HdRenderIndex::GetResourceRegistry() const
 void
 HdRenderIndex::SceneIndexEmulationNoticeBatchBegin()
 {
-    if (_emulationNoticeBatchingSceneIndex) {
-        if (_noticeBatchingDepth == 0) {
-            _emulationNoticeBatchingSceneIndex->SetBatchingEnabled(true);
-        }
-        ++_noticeBatchingDepth;
-    }
+    _emulationBatchingCtx->BeginBatching();
 }
 
 void
 HdRenderIndex::SceneIndexEmulationNoticeBatchEnd()
 {
-    if (_emulationNoticeBatchingSceneIndex) {
-        if (_noticeBatchingDepth > 0) {
-            --_noticeBatchingDepth;
+    _emulationBatchingCtx->EndBatching();
+}
 
-            if (_noticeBatchingDepth == 0) {
-                _emulationNoticeBatchingSceneIndex->SetBatchingEnabled(false);
-            }
-        } else {
-            TF_CODING_ERROR("Imbalanced batch begin/end calls");
-        }
-    }
+void
+HdRenderIndex::MergingSceneIndexNoticeBatchBegin()
+{
+    _mergingBatchingCtx->BeginBatching();
+}
+
+void
+HdRenderIndex::MergingSceneIndexNoticeBatchEnd()
+{
+    _mergingBatchingCtx->EndBatching();
 }
 
 std::string
@@ -837,6 +962,13 @@ HdRenderIndex::_ConfigureReprs()
                                          /*flatShadingEnabled=*/false,
                                          /*blendWireframeColor=*/true,
                                          /*forceOpaqueEdges=*/false));
+    HdMesh::ConfigureRepr(HdReprTokens->solidWireOnSurf,
+                          HdMeshReprDesc(HdMeshGeomStyleHullEdgeOnSurf,
+                                         HdCullStyleDontCare,
+                                         HdMeshReprDescTokens->surfaceShader,
+                                         /*flatShadingEnabled=*/false,
+                                         /*blendWireframeColor=*/true,
+                                         /*forceOpaqueEdges=*/true));
     HdMesh::ConfigureRepr(HdReprTokens->refined,
                           HdMeshReprDesc(HdMeshGeomStyleSurf,
                                          HdCullStyleDontCare,
@@ -856,6 +988,13 @@ HdRenderIndex::_ConfigureReprs()
                                          /*flatShadingEnabled=*/false,
                                          /*blendWireframeColor=*/true,
                                          /*forceOpaqueEdges=*/false));
+    HdMesh::ConfigureRepr(HdReprTokens->refinedSolidWireOnSurf,
+                          HdMeshReprDesc(HdMeshGeomStyleEdgeOnSurf,
+                                         HdCullStyleDontCare,
+                                         HdMeshReprDescTokens->surfaceShader,
+                                         /*flatShadingEnabled=*/false,
+                                         /*blendWireframeColor=*/true,
+                                         /*forceOpaqueEdges=*/true));
     HdMesh::ConfigureRepr(HdReprTokens->points,
                           HdMeshReprDesc(HdMeshGeomStylePoints,
                                          HdCullStyleNothing,
@@ -871,11 +1010,15 @@ HdRenderIndex::_ConfigureReprs()
                                  HdBasisCurvesGeomStyleWire);
     HdBasisCurves::ConfigureRepr(HdReprTokens->wireOnSurf,
                                  HdBasisCurvesGeomStylePatch);
+    HdBasisCurves::ConfigureRepr(HdReprTokens->solidWireOnSurf,
+                                 HdBasisCurvesGeomStylePatch);
     HdBasisCurves::ConfigureRepr(HdReprTokens->refined,
                                  HdBasisCurvesGeomStylePatch);
     HdBasisCurves::ConfigureRepr(HdReprTokens->refinedWire,
                                  HdBasisCurvesGeomStyleWire);
     HdBasisCurves::ConfigureRepr(HdReprTokens->refinedWireOnSurf,
+                                 HdBasisCurvesGeomStylePatch);
+    HdBasisCurves::ConfigureRepr(HdReprTokens->refinedSolidWireOnSurf,
                                  HdBasisCurvesGeomStylePatch);
     HdBasisCurves::ConfigureRepr(HdReprTokens->points,
                                  HdBasisCurvesGeomStylePoints);
@@ -888,11 +1031,15 @@ HdRenderIndex::_ConfigureReprs()
                             HdPointsGeomStylePoints);
     HdPoints::ConfigureRepr(HdReprTokens->wireOnSurf,
                             HdPointsGeomStylePoints);
+    HdPoints::ConfigureRepr(HdReprTokens->solidWireOnSurf,
+                            HdPointsGeomStylePoints);
     HdPoints::ConfigureRepr(HdReprTokens->refined,
                             HdPointsGeomStylePoints);
     HdPoints::ConfigureRepr(HdReprTokens->refinedWire,
                             HdPointsGeomStylePoints);
     HdPoints::ConfigureRepr(HdReprTokens->refinedWireOnSurf,
+                            HdPointsGeomStylePoints);
+    HdPoints::ConfigureRepr(HdReprTokens->refinedSolidWireOnSurf,
                             HdPointsGeomStylePoints);
     HdPoints::ConfigureRepr(HdReprTokens->points,
                             HdPointsGeomStylePoints);

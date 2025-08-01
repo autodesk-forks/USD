@@ -94,6 +94,28 @@ public:
     HD_API
     static const HdDataSourceLocator &GetDefaultLocator();
 
+    /// @}
+
+    /// \name Data source locators for members
+    ///
+    /// The following methods return an HdDataSourceLocator (relative to the
+    /// prim-level data source) where the data source for a member can be found.
+    ///
+    /// This is often useful for checking intersection against the
+    /// HdDataSourceLocatorSet sent with HdDataSourceObserver::PrimsDirtied.
+    /// @{
+
+    /// Prim-level relative data source locator to locate dimensions.
+    HD_API
+    static const HdDataSourceLocator &GetDimensionsLocator();
+
+    /// Prim-level relative data source locator to locate format.
+    HD_API
+    static const HdDataSourceLocator &GetFormatLocator();
+
+    /// Prim-level relative data source locator to locate multiSampled.
+    HD_API
+    static const HdDataSourceLocator &GetMultiSampledLocator();
     /// @} 
 
     /// \name Schema construction

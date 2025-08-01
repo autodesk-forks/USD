@@ -144,26 +144,31 @@ public:
 
     /// Set an override color for rendering where the R, G and B components
     /// are the color and the alpha component is the blend value
+    /// The color is specified in the render color space
     HD_API
     void SetOverrideColor(GfVec4f const &color);
     const GfVec4f& GetOverrideColor() const { return _overrideColor; }
 
     /// Set a wireframe color for rendering where the R, G and B components
     /// are the color and the alpha component is the blend value
+    /// The color is specified in the render color space
     HD_API
     void SetWireframeColor(GfVec4f const &color);
     const GfVec4f& GetWireframeColor() const { return _wireframeColor; }
 
+    /// The color is specified in the render color space
     HD_API
     void SetMaskColor(GfVec4f const &color);
     const GfVec4f& GetMaskColor() const { return _maskColor; }
 
+    /// The color is specified in the render color space
     HD_API
     void SetIndicatorColor(GfVec4f const &color);
     const GfVec4f& GetIndicatorColor() const { return _indicatorColor; }
 
     /// Set a point color for rendering where the R, G and B components
     /// are the color and the alpha component is the blend value
+    /// The color is specified in the render color space
     HD_API
     void SetPointColor(GfVec4f const &color);
     const GfVec4f& GetPointColor() const { return _pointColor; }
@@ -186,6 +191,10 @@ public:
     HD_API
     void SetClippingEnabled(bool enabled);
     bool GetClippingEnabled() const { return _clippingEnabled; }
+
+    HD_API
+    void SetEnableExposureCompensation(bool enableExposureCompensation);
+    bool GetEnableExposureCompensation() const { return _enableExposureCompensation; }
 
     // ---------------------------------------------------------------------- //
     /// \name Render pipeline state
@@ -295,6 +304,8 @@ public:
     HdBlendOp GetBlendAlphaOp() { return _blendAlphaOp; }
     HdBlendFactor GetBlendAlphaSrcFactor() { return _blendAlphaSrcFactor; }
     HdBlendFactor GetBlendAlphaDstFactor() { return _blendAlphaDstFactor; }
+
+    // Blend constant color is specified in the render color space
     HD_API
     void SetBlendConstantColor(GfVec4f const & color);
     const GfVec4f& GetBlendConstantColor() const { return _blendConstantColor; }
@@ -350,6 +361,7 @@ protected:
     float _pointSize;
     bool _lightingEnabled;
     bool _clippingEnabled;
+    bool _enableExposureCompensation;
 
     GfVec4f _maskColor;
     GfVec4f _indicatorColor;

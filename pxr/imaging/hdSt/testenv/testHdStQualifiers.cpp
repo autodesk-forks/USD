@@ -99,7 +99,7 @@ protected:
 
 private:
     bool _testResult;
-    HdSt_TestDriver* _driver;
+    HdSt_TestDriverUniquePtr _driver;
     std::string _outputFilePath;
     std::vector<MemberWithQualifiers> _testMembers;
 };
@@ -107,7 +107,7 @@ private:
 void
 My_TestGLDrawing::InitTest()
 {
-    _driver = new HdSt_TestDriver();
+    _driver = std::make_unique<HdSt_TestDriver>();
     GfVec3f center(0);
 
     // center camera
@@ -249,7 +249,7 @@ My_TestGLDrawing::DrawTest()
         _tokens->glslfxFilename, _tokens->defaultToken);
     HdStShaderCodeSharedPtrVector shaders = { renderPassShader, shader };
     
-    HdSt_PointsShaderKey shaderKey = HdSt_PointsShaderKey();
+    HdSt_PointsShaderKey shaderKey{/*nativeRoundPoints*/false};
 
     // Create the geometric shader.
     HdInstance<HdSt_GeometricShaderSharedPtr> geometricShaderInstance =

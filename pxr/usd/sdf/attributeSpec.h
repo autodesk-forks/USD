@@ -19,6 +19,8 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+class TsSpline;
+
 /// \class SdfAttributeSpec
 ///
 /// A subclass of SdfPropertySpec that holds typed data.
@@ -119,12 +121,13 @@ public:
     SDF_API
     void ClearDisplayUnit();
 
-    /// Returns the color-space in which a color or texture valued attribute 
-    /// is authored.
+    /// Returns the color space in which a color or texture valued attribute 
+    /// is authored. Refer to GfColorSpaceNames for the list of built in
+    /// color spaces.
     SDF_API
     TfToken GetColorSpace() const;
 
-    /// Sets the color-space in which a color or texture valued attribute is 
+    /// Sets the color space in which a color or texture valued attribute is 
     /// authored.
     SDF_API
     void SetColorSpace(const TfToken &colorSpace);
@@ -148,7 +151,101 @@ public:
     TfToken GetRoleName() const;
 
     /// @}
+    
+    /// \name Spline API
+    /// @{
+    /// Returns the TsSpline at this attribute spec if a spec exists, otherwise
+    /// an empty spline is returned.
+    SDF_API
+    TsSpline GetSpline() const;
+
+    /// Set the provided value as the spline for this attribute spec.
+    SDF_API
+    void SetSpline(const TsSpline& value);
+
+    /// Clear the spline from this attribute spec.
+    SDF_API
+    void ClearSpline();
+
+    /// @}
+
+    /// \name Time-sample API
+    /// @{
+    /// Returns the entire set of time samples.
+    SDF_API
+    SdfTimeSampleMap GetTimeSampleMap() const;
+
+    SDF_API
+    std::set<double> ListTimeSamples() const;
+
+    SDF_API
+    size_t GetNumTimeSamples() const;
+
+    SDF_API
+    bool GetBracketingTimeSamples(double time, double* tLower,
+                                  double* tUpper) const;
+
+    SDF_API
+    bool QueryTimeSample(double time, VtValue *value=NULL) const;
+    SDF_API
+    bool QueryTimeSample(double time, SdfAbstractDataValue *value) const;
+
+    template <class T>
+    bool QueryTimeSample(double time, T* data) const
+    {
+        if (!data) {
+            return QueryTimeSample(time);
+        }
+
+        SdfAbstractDataTypedValue<T> outValue(data);
+        const bool hasValue = QueryTimeSample(
+            time, static_cast<SdfAbstractDataValue *>(&outValue));
+
+        if (std::is_same<T, SdfValueBlock>::value) {
+            return hasValue && outValue.isValueBlock;
+        }
+
+        return hasValue && (!outValue.isValueBlock);
+    }
+
+    SDF_API
+    void SetTimeSample(double time, const VtValue & value);
+    SDF_API
+    void SetTimeSample(double time, const SdfAbstractDataConstValue& value);
+
+    template <class T>
+    void SetTimeSample(double time, const T& value)
+    {
+        const SdfAbstractDataConstTypedValue<T> inValue(&value);
+        const SdfAbstractDataConstValue& untypedInValue = inValue;
+        return SetTimeSample(time, untypedInValue);
+    }
+
+    SDF_API
+    void EraseTimeSample(double time);
+
+    /// @}
 };
+
+/// Convenience function to create an attributeSpec on a primSpec at the given
+/// path, and any necessary parent primSpecs, in the given layer.
+///
+/// If an attributeSpec already exists at the given path,
+/// author typeName, variability, and custom according to passed arguments
+/// and return an attribute spec handle.
+///
+/// Any newly created prim specs have SdfSpecifierOver and an empty type (as if
+/// created by SdfJustCreatePrimInLayer()).  attrPath must be a valid prim
+/// property path (see SdfPath::IsPrimPropertyPath()).  Return false and issue
+/// an error if we fail to author the required scene description.
+SDF_API
+SdfAttributeSpecHandle
+SdfCreatePrimAttributeInLayer(
+    const SdfLayerHandle &layer,
+    const SdfPath &attrPath,
+    const SdfValueTypeName &typeName,
+    SdfVariability variability = SdfVariabilityVarying,
+    bool isCustom = false);
 
 /// Convenience function to create an attributeSpec on a primSpec at the given
 /// path, and any necessary parent primSpecs, in the given layer.
@@ -160,6 +257,9 @@ public:
 /// created by SdfJustCreatePrimInLayer()).  attrPath must be a valid prim
 /// property path (see SdfPath::IsPrimPropertyPath()).  Return false and issue
 /// an error if we fail to author the required scene description.
+///
+/// Differs only from SdfCreatePrimAttributeInLayer only in that a bool, not
+/// a handle, is returned.
 SDF_API
 bool
 SdfJustCreatePrimAttributeInLayer(

@@ -96,7 +96,15 @@ HdSt_PipelineDrawBatch::HdSt_PipelineDrawBatch(
     _Init(drawItemInstance);
 }
 
-HdSt_PipelineDrawBatch::~HdSt_PipelineDrawBatch() = default;
+HdSt_PipelineDrawBatch::~HdSt_PipelineDrawBatch()
+{
+    if (_resultBuffer) {
+        _DestroyBuffer(_resultBuffer);
+    }
+    if (_tessFactorsBuffer) {
+        _DestroyBuffer(_tessFactorsBuffer);
+    }
+}
 
 /*virtual*/
 void
@@ -944,6 +952,9 @@ HdSt_PipelineDrawBatch::PrepareDraw(
 {
     TRACE_FUNCTION();
 
+    // Needed to cleanup resources in the destructor
+    _resourceRegistry = resourceRegistry;
+
     if (!_dispatchBuffer) {
         _CompileBatch(resourceRegistry);
     }
@@ -1046,6 +1057,9 @@ _BindingState::GetBindingsForViewTransformation(
     binder.GetInterleavedBufferArrayBindingDesc(
         bindingsDesc, constantBar, _tokens->constantPrimvars);
 
+    binder.GetInterleavedBufferArrayBindingDesc(
+        bindingsDesc, topVisBar, HdTokens->topologyVisibility);
+
     // Bind the instance buffers to support instance transformations.
     if (instanceIndexBar) {
         for (size_t level = 0; level < instancePrimvarBars.size(); ++level) {
@@ -1065,9 +1079,6 @@ _BindingState::GetBindingsForDrawing(
     GetBindingsForViewTransformation(bindingsDesc);
 
     bindingsDesc->debugName = "PipelineDrawBatch.Drawing";
-
-    binder.GetInterleavedBufferArrayBindingDesc(
-        bindingsDesc, topVisBar, HdTokens->topologyVisibility);
 
     binder.GetBufferArrayBindingDesc(bindingsDesc, indexBar);
     if (!geometricShader->IsPrimTypePoints()) {
@@ -1877,7 +1888,8 @@ HdSt_PipelineDrawBatch::_BeginGPUCountVisibleInstances(
 
         _resultBuffer =
             resourceRegistry->RegisterBufferResource(
-                _tokens->drawIndirectResult, tupleType, HgiBufferUsageStorage);
+                _tokens->drawIndirectResult, tupleType, HgiBufferUsageStorage,
+                "PipelineDrawBatch Visible Instances");
     }
 
     // Reset visible item count
@@ -1920,6 +1932,19 @@ HdSt_PipelineDrawBatch::_EndGPUCountVisibleInstances(
     resourceRegistry->SubmitBlitWork(HgiSubmitWaitTypeWaitUntilCompleted);
 
     *result = count;
+}
+
+void
+HdSt_PipelineDrawBatch::_DestroyBuffer(
+    const HdStBufferResourceSharedPtr & bufferResource)
+{
+    if (!TF_VERIFY(bufferResource) || !TF_VERIFY(_resourceRegistry)) {
+        return;
+    }
+
+    HgiBufferHandle& buffer = bufferResource->GetHandle();
+    _resourceRegistry->GetHgi()->DestroyBuffer(&buffer);
+    bufferResource->SetAllocation(HgiBufferHandle(), 0);
 }
 
 void

@@ -345,7 +345,7 @@ public:
     ///
     /// \see Barrett, Cassels, Haahr, Moon, Playford, Withington.
     ///   "A Monotonic Superclass Linearization for Dylan."  OOPSLA 96.
-    ///   http://www.webcom.com/haahr/dylan/linearization-oopsla96.html
+    ///   https://opendylan.org/_static/c3-linearization.pdf
     ///
     TF_API
     void GetAllAncestorTypes(std::vector<TfType> *result) const;
@@ -404,7 +404,7 @@ public:
     ///
     /// This is what the C++ sizeof operator returns for the type, so this
     /// value is not very useful for Python types (it will always be
-    /// sizeof(boost::python::object)).
+    /// sizeof(pxr_boost::python::object)).
     ///
     TF_API
     size_t GetSizeof() const;
@@ -574,13 +574,13 @@ public:
     /// has methods to instantiate the type given various arguments and must
     /// inherit from \c FactoryBase.  The factory cannot be changed once set.
     TF_API
-    void SetFactory(std::unique_ptr<FactoryBase> factory) const;
+    void SetFactory(std::unique_ptr<FactoryBase> &&factory) const;
 
     /// Sets the factory object for this type.  A type's factory typically
     /// has methods to instantiate the type given various arguments and must
     /// inherit from \c FactoryBase.  The factory cannot be changed once set.
     template <class T>
-    void SetFactory(std::unique_ptr<T>& factory) const {
+    void SetFactory(std::unique_ptr<T> &&factory) const {
         SetFactory(std::unique_ptr<FactoryBase>(std::move(factory)));
     }
 
@@ -592,7 +592,7 @@ public:
     /// Sets the factory object for this type.  A type's factory typically
     /// has methods to instantiate the type given various arguments and must
     /// inherit from \c FactoryBase.  The factory cannot be changed once set.
-    const TfType& Factory(std::unique_ptr<FactoryBase> factory) const {
+    const TfType& Factory(std::unique_ptr<FactoryBase> &&factory) const {
         SetFactory(std::move(factory));
         return *this;
     }
@@ -601,7 +601,7 @@ public:
     /// has methods to instantiate the type given various arguments and must
     /// inherit from \c FactoryBase.  The factory cannot be changed once set.
     template <class T>
-    const TfType& Factory(std::unique_ptr<T>& factory) const
+    const TfType& Factory(std::unique_ptr<T> &&factory) const
     {
         SetFactory(std::unique_ptr<FactoryBase>(std::move(factory)));
         return *this;

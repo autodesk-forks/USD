@@ -48,8 +48,9 @@ bool Sdf_CanCreateNewLayerWithIdentifier(
     std::string* whyNot);
 
 /// Returns the resolved path for \p layerPath if an asset exists at that
-/// path. Otherwise, returns an empty ArResolvedPath. Populates \p assetInfo
-/// if it's non-nullptr.
+/// path. The returned path is stripped of its file format arguments.
+/// If an asset does not exist at that path, returns an empty ArResolvedPath. 
+/// Populates \p assetInfo if it's non-nullptr.
 ArResolvedPath Sdf_ResolvePath(
     const std::string& layerPath,
     ArAssetInfo* assetInfo = nullptr);
@@ -115,8 +116,8 @@ bool Sdf_StripIdentifierArgumentsIfPresent(
     std::string *strippedIdentifier);
 
 /// Splits the given \p identifier into two portions: the layer path and the
-/// arguments. For example, given the identifier foo.sdf:SDF_FORMAT_ARGS:a=b,
-/// this function will set \p layerPath to "foo.sdf" and \p arguments to
+/// arguments. For example, given the identifier foo.usda:SDF_FORMAT_ARGS:a=b,
+/// this function will set \p layerPath to "foo.usda" and \p arguments to
 /// ":SDF_FORMAT_ARGS:a=b".
 bool Sdf_SplitIdentifier(
     const std::string& identifier,

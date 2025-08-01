@@ -10,6 +10,7 @@
 #include "pxr/usd/pcp/dependency.h"
 #include "pxr/usd/pcp/node.h"
 #include "pxr/usd/pcp/types.h"
+#include "pxr/usd/pcp/utils.h"
 #include "pxr/base/tf/enum.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -34,8 +35,16 @@ PcpNodeIntroducesDependency(const PcpNodeRef &node)
 {
     if (node.IsInert()) {
         switch(node.GetArcType()) {
-        case PcpArcTypeInherit:
         case PcpArcTypeSpecialize:
+            // Every specializes node that is not introduced under the root
+            // node will be inert and have a copy propagated to the root
+            // node, so specializes nodes that aren't under the root
+            // do not represent dependencies.
+            if (node.GetParentNode() != node.GetRootNode()) {
+                return false;
+            }
+            // Fall through
+        case PcpArcTypeInherit:
             // Special case: inert, propagated class-based arcs do not
             // represent dependencies.
             if (node.GetOriginNode() != node.GetParentNode()) {
@@ -84,6 +93,13 @@ PcpClassifyNodeDependency(const PcpNodeRef &node)
     bool anyDirect = false;
     bool anyAncestral = false;
     for (PcpNodeRef p = node; p.GetParentNode(); p = p.GetParentNode()) {
+        // For propagated specializes nodes, we want to continue the
+        // traversal from its origin to pick up dependency information
+        // from the site where the arc was introduced.
+        if (Pcp_IsPropagatedSpecializesNode(p)) {
+            p = p.GetOriginNode();
+        }
+
         if (p.IsDueToAncestor()) {
             anyAncestral = true;
         } else {

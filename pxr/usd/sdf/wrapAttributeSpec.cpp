@@ -17,12 +17,15 @@
 #include "pxr/usd/sdf/pySpec.h"
 #include "pxr/usd/sdf/relationshipSpec.h"
 #include "pxr/base/tf/pyContainerConversions.h"
+#include "pxr/base/tf/pyResultConversions.h"
 
-#include <boost/python.hpp>
+#include "pxr/base/ts/spline.h"
 
-using namespace boost::python;
+#include "pxr/external/boost/python.hpp"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+using namespace pxr_boost::python;
 
 namespace {
 
@@ -45,10 +48,60 @@ _WrapSetAllowedTokens(
     spec.SetAllowedTokens(tokenArray);
 }
 
+static
+std::set<double>
+_ListTimeSamples(SdfAttributeSpec const &self)
+{
+    return self.ListTimeSamples();
+}
+
+static
+size_t
+_GetNumTimeSamples(SdfAttributeSpec const &self)
+{
+    return self.GetNumTimeSamples();
+}
+
+static
+VtValue
+_QueryTimeSample(SdfAttributeSpec const &self, double time)
+{
+    VtValue value;
+    self.QueryTimeSample(time, &value);
+    return value;
+}
+
+static
+tuple
+_GetBracketingTimeSamples(SdfAttributeSpec const &self, double time)
+{
+    double tLower = 0, tUpper = 0;
+    bool found = self.GetBracketingTimeSamples(time, &tLower, &tUpper);
+    return pxr_boost::python::make_tuple(found, tLower, tUpper);
+}
+
+static
+void
+_SetTimeSample(SdfAttributeSpec &self,
+               double time, const VtValue& value)
+{
+    self.SetTimeSample(time, value);
+}
+
+static
+void
+_EraseTimeSample(SdfAttributeSpec &self, double time)
+{
+    self.EraseTimeSample(time);
+}
+
 } // anonymous namespace 
 
 void wrapAttributeSpec()
 {
+    def("CreatePrimAttributeInLayer", SdfCreatePrimAttributeInLayer,
+        (arg("layer"), arg("attrPath"), arg("typeName"),
+         arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
     def("JustCreatePrimAttributeInLayer", SdfJustCreatePrimAttributeInLayer,
         (arg("layer"), arg("attrPath"), arg("typeName"),
          arg("variability")=SdfVariabilityVarying, arg("isCustom")=false));
@@ -68,14 +121,14 @@ void wrapAttributeSpec()
                                   bool) = &This::New;
                                 
     class_<This, SdfHandle<This>, 
-           bases<SdfPropertySpec>, boost::noncopyable>
+           bases<SdfPropertySpec>, noncopyable>
         ("AttributeSpec", no_init)
         
         .def(SdfPySpec())
         .def("__unused__",
             SdfMakePySpecConstructor(wrapNewPrimAttr,
                 "__init__(ownerPrimSpec, name, typeName, "
-                "variability = Sd.VariabilityVarying, "
+                "variability = Sdf.VariabilityVarying, "
                 "declaresCustom = False)\n"
                 "ownerPrimSpec : PrimSpec\n"
                 "name : string\n"
@@ -117,9 +170,9 @@ void wrapAttributeSpec()
             "value or as a set of list editing operations.  See GdListEditor "
             "for more information.")
 
-	.add_property("allowedTokens",
-	    &_WrapGetAllowedTokens,
-	    &_WrapSetAllowedTokens,
+        .add_property("allowedTokens",
+            &_WrapGetAllowedTokens,
+            &_WrapSetAllowedTokens,
 	    "The allowed value tokens for this property")
 
         .add_property("colorSpace",
@@ -129,6 +182,24 @@ void wrapAttributeSpec()
 
         .def("HasColorSpace", &This::HasColorSpace)
         .def("ClearColorSpace", &This::ClearColorSpace)
+
+        .def("ListTimeSamples", &_ListTimeSamples,
+             return_value_policy<TfPySequenceToList>())
+        .def("GetNumTimeSamples", &_GetNumTimeSamples)
+        .def("GetBracketingTimeSamples",
+             &_GetBracketingTimeSamples)
+        .def("QueryTimeSample",
+             &_QueryTimeSample)
+        .def("SetTimeSample", &_SetTimeSample)
+        .def("EraseTimeSample", &_EraseTimeSample)
+
+        .def("GetSpline",
+             &This::GetSpline,
+             return_value_policy<return_by_value>())
+        .def("SetSpline",
+             &This::SetSpline, arg("spline"))
+        .def("ClearSpline",
+             &This::ClearSpline)
 
         // property keys
         // XXX DefaultValueKey are actually
