@@ -810,7 +810,11 @@ HioOIIO_Image::Write(StorageSpec const & storage,
     }
 
     // Read from storage
+#if OIIO_VERSION >= 20605
+    ImageBuf src(spec, storage.data);
+#else
     ImageBuf src(_filename, spec, storage.data);
+#endif
     ImageBuf *image = &src;
 
     // Flip top-to-bottom
