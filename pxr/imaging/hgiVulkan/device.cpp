@@ -184,11 +184,12 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         "VK_KHR_pipeline_library",
         "VK_KHR_maintenance3",
         "VK_KHR_maintenance1"
-};
+    };
 
     // Not available if we're surfaceless (minimal Lavapipe build for example).
     if (IsSupportedExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
         extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
 
     // Allow certain buffers/images to have dedicated memory allocations to
     // improve performance on some GPUs.
@@ -486,7 +487,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     vkGetPhysicalDeviceProperties2(_vkPhysicalDevice, &deviceProperties2);
 
     // Get acceleration structure properties, which will be used later on in the sample
-    accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    _accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
     VkPhysicalDeviceFeatures2 deviceFeatures2{};
     deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     deviceFeatures2.pNext = &_accelerationStructureFeatures;
