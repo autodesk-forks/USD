@@ -260,7 +260,8 @@ _GetFragmentBarycentricSupport(
         resourceRegistry->GetHgi()->GetCapabilities();
     const bool hasBuiltinBarycentrics = capabilities->IsSet(HgiDeviceCapabilitiesBitsBuiltinBarycentrics);
     const bool hasMetalTessellation = capabilities->IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
-    return hasBuiltinBarycentrics || hasMetalTessellation;
+    const bool hasGeometricStage = capabilities->IsSet(HgiDeviceCapabilitiesBitsGeometricStage);
+    return hasBuiltinBarycentrics || hasMetalTessellation || hasGeometricStage;
 }
 
 int

@@ -588,6 +588,8 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
                 FS[fsIndex++] = _tokens->edgeIdQuadSurfFS;
             }
             FS[fsIndex++] = _tokens->edgeIdQuadParamFS;
+        } else {
+            FS[fsIndex++] = _tokens->edgeIdNoneFS;
         }
     } else if (!isPrimTypePoints) {
         FS[fsIndex++] = _tokens->edgeIdNoneFS;
