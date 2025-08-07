@@ -195,18 +195,9 @@ if (PXR_BUILD_IMAGING)
             # XXX This is fixed in cmake 3.18+
             include_directories(BEFORE SYSTEM $ENV{VULKAN_SDK} $ENV{VULKAN_SDK}/include $ENV{VULKAN_SDK}/lib $ENV{VULKAN_SDK}/source)
             set(ENV{PATH} "$ENV{VULKAN_SDK}:$ENV{VULKAN_SDK}/include:$ENV{VULKAN_SDK}/lib:$ENV{VULKAN_SDK}/source:$ENV{PATH}")
-            find_package(Vulkan REQUIRED)
+            find_package(Vulkan MODULE REQUIRED COMPONENTS shaderc_combined)
             list(APPEND VULKAN_LIBS Vulkan::Vulkan)
-
-            # Find the extra vulkan libraries we need
-            set(EXTRA_VULKAN_LIBS shaderc_combined)
-            if (WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-                set(EXTRA_VULKAN_LIBS shaderc_combinedd)
-            endif()
-            foreach(EXTRA_LIBRARY ${EXTRA_VULKAN_LIBS})
-                find_library("${EXTRA_LIBRARY}_PATH" NAMES "${EXTRA_LIBRARY}" PATHS $ENV{VULKAN_SDK}/lib)
-                list(APPEND VULKAN_LIBS "${${EXTRA_LIBRARY}_PATH}")
-            endforeach()
+            list(APPEND VULKAN_LIBS Vulkan::shaderc_combined)
 
             # Find the OS specific libs we need
             if (UNIX AND NOT APPLE)
