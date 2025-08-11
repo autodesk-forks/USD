@@ -177,27 +177,6 @@ wgpu::Texture HgiWebGPUMipmapGenerator::generateMipmap(const wgpu::Texture& text
 
         uint32_t dstMipLevel = renderToSource ? 1 : 0;
 
-        wgpu::BindGroupEntry samplerEntry = {};
-        samplerEntry.sampler = _sampler;
-        samplerEntry.binding = 0;
-
-        wgpu::BindGroupEntry textureEntry = {};
-        textureEntry.textureView = srcView;
-        textureEntry.binding = 1;
-
-        const std::vector<wgpu::BindGroupEntry> entries = {
-                samplerEntry,
-                textureEntry
-        };
-
-        wgpu::BindGroupDescriptor bindGroupDsc = {};
-        std::string bindGroupDscLabel = "Mipmap BindGroupDescriptor";
-        bindGroupDsc.label = bindGroupDscLabel.c_str();
-        bindGroupDsc.layout = bindGroupLayout;
-        bindGroupDsc.entryCount = entries.size();
-        bindGroupDsc.entries = entries.data();
-        const wgpu::BindGroup bindGroup = _device.CreateBindGroup(&bindGroupDsc);
-
         for (uint32_t i = 1; i < mipLevelCount; ++i) {
             wgpu::TextureViewDescriptor dstViewDesc = {};
             dstViewDesc.baseMipLevel = dstMipLevel++;
@@ -217,6 +196,27 @@ wgpu::Texture HgiWebGPUMipmapGenerator::generateMipmap(const wgpu::Texture& text
             passDesc.colorAttachments = &colorAttachment;
             const wgpu::RenderPassEncoder passEncoder = commandEncoder.BeginRenderPass(&passDesc);
 
+            wgpu::BindGroupEntry samplerEntry = {};
+            samplerEntry.sampler = _sampler;
+            samplerEntry.binding = 0;
+
+            wgpu::BindGroupEntry textureEntry = {};
+            textureEntry.textureView = srcView;
+            textureEntry.binding = 1;
+
+            const std::vector<wgpu::BindGroupEntry> entries = {
+                    samplerEntry,
+                    textureEntry
+            };
+
+            wgpu::BindGroupDescriptor bindGroupDsc = {};
+            std::string bindGroupDscLabel = "Mipmap BindGroupDescriptor";
+            bindGroupDsc.label = bindGroupDscLabel.c_str();
+            bindGroupDsc.layout = bindGroupLayout;
+            bindGroupDsc.entryCount = entries.size();
+            bindGroupDsc.entries = entries.data();
+            const wgpu::BindGroup bindGroup = _device.CreateBindGroup(&bindGroupDsc);
+
             passEncoder.SetPipeline(pipeline);
             passEncoder.SetBindGroup(0, bindGroup);
             passEncoder.Draw(3, 1, 0, 0);
@@ -230,8 +230,8 @@ wgpu::Texture HgiWebGPUMipmapGenerator::generateMipmap(const wgpu::Texture& text
     // to the source.
     if (!renderToSource) {
         wgpu::Extent3D mipLevelSize = {};
-        mipLevelSize.width = std::ceil(width / 2);
-        mipLevelSize.height = std::ceil(height / 2);
+        mipLevelSize.width = std::max(1.0, std::ceil(width / 2));
+        mipLevelSize.height = std::max(1.0, std::ceil(height / 2));
         mipLevelSize.depthOrArrayLayers = arrayLayerCount;
 
         for (uint32_t i = 1; i < mipLevelCount; ++i) {
@@ -243,8 +243,8 @@ wgpu::Texture HgiWebGPUMipmapGenerator::generateMipmap(const wgpu::Texture& text
             imageCopyTextureDst.mipLevel = i;
             commandEncoder.CopyTextureToTexture(&imageCopyTextureSrc, &imageCopyTextureDst, &mipLevelSize);
 
-            mipLevelSize.width = std::ceil(mipLevelSize.width / 2);
-            mipLevelSize.height = std::ceil(mipLevelSize.height / 2);
+            mipLevelSize.width = std::max(1.0, std::ceil(mipLevelSize.width / 2));
+            mipLevelSize.height = std::max(1.0, std::ceil(mipLevelSize.height / 2));
         }
     }
     const wgpu::CommandBuffer commands = commandEncoder.Finish();
