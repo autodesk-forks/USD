@@ -40,7 +40,6 @@ verbosity = 1
 EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-sSTACK_SIZE=5MB -sSTACK_SIZE=5MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB'
 EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
 TARGET_WASM='wasm'
-TARGET_WASM_NODE='node'
 
 def Print(msg):
     if verbosity > 0:
@@ -88,11 +87,11 @@ def GetBuildTargetDefault():
 def GetBuildTargets():
     # The wasm build has been tested only in MacOS so far
     if MacOS():
-        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM_NODE]
+        return apple_utils.GetBuildTargets() + [TARGET_WASM]
     elif Linux():
-        return [TARGET_WASM, TARGET_WASM_NODE]
+        return [TARGET_WASM]
     elif Windows():
-        return [TARGET_WASM, TARGET_WASM_NODE]        
+        return [TARGET_WASM]  
     else:
         return []
 
@@ -2343,8 +2342,7 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
-        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM_NODE)
-        self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
+        self.targetWasm = (args.build_target == TARGET_WASM)
         self.buildTarget = args.build_target
         if MacOS():
             apple_utils.SetTarget(self, self.buildTarget)
@@ -2542,7 +2540,7 @@ if context.buildAnimXTests:
 # Building zlib is the default when a dependency requires it, although OpenUSD
 # itself does not require it. The --no-zlib flag can be passed to the build
 # script to allow the dependency to find zlib in the build environment.
-if (Linux() or MacOS() or context.targetWasm or not context.buildZlib) and ZLIB in requiredDependencies:
+if (Linux() or MacOS() or not context.buildZlib) and ZLIB in requiredDependencies:
     requiredDependencies = [r for r in requiredDependencies if r != ZLIB]
 
 # Error out if user is building monolithic library on windows with draco plugin
