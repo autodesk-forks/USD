@@ -231,10 +231,34 @@ HgiWebGPUBlitCmds::CopyBufferGpuToGpu(
 
     _CreateEncoder();
 
-    _blitEncoder.CopyBufferToBuffer(
-        srcBuffer->GetBufferHandle(), copyOp.sourceByteOffset,
-        dstBuffer->GetBufferHandle(), copyOp.destinationByteOffset,
-        copyOp.byteSize);
+    // WebGPU does not allow copying from a buffer to itself, even for non-overlapping ranges
+    // Use a temporary buffer for same-buffer copies
+    if (srcBufHandle.Get() == dstBufHandle.Get()) {
+        // Create a temporary buffer for the intermediate copy
+        wgpu::Device device = _hgi->GetPrimaryDevice();
+        wgpu::BufferDescriptor desc;
+        desc.label = "TempBuffer";
+        desc.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
+        desc.size = copyOp.byteSize;
+        wgpu::Buffer tempBuffer = device.CreateBuffer(&desc);
+
+        // Copy from source to temp buffer
+        _blitEncoder.CopyBufferToBuffer(
+            srcBuffer->GetBufferHandle(), copyOp.sourceByteOffset,
+            tempBuffer, 0,
+            copyOp.byteSize);
+
+        // Copy from temp buffer to destination
+        _blitEncoder.CopyBufferToBuffer(
+            tempBuffer, 0,
+            dstBuffer->GetBufferHandle(), copyOp.destinationByteOffset,
+            copyOp.byteSize);
+    } else {
+        _blitEncoder.CopyBufferToBuffer(
+            srcBuffer->GetBufferHandle(), copyOp.sourceByteOffset,
+            dstBuffer->GetBufferHandle(), copyOp.destinationByteOffset,
+            copyOp.byteSize);
+        }
 }
 
 void HgiWebGPUBlitCmds::CopyBufferCpuToGpu(
