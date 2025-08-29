@@ -27,6 +27,8 @@ TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_UMA, true,
                       "Use Vulkan with UMA (if device supports)");
 TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_REBAR, false,
                       "Use Vulkan with ReBAR (if device supports)");
+TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_HOST_IMAGE_COPY, true,
+                      "Use Vulkan direct image copy from host");
 
 static void _DumpDeviceDeviceMemoryProperties(
     const VkPhysicalDeviceMemoryProperties& vkMemoryProperties)
@@ -181,6 +183,19 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
     vkPhysicalDeviceIdProperties.pNext = vkDeviceProperties2.pNext;
     vkDeviceProperties2.pNext =  &vkPhysicalDeviceIdProperties;
 
+    // Host image copy feature
+    const bool hostImageCopyExtAvailable =
+        TfGetEnvSetting(HGIVULKAN_ENABLE_HOST_IMAGE_COPY) &&
+        device->IsSupportedExtension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+    if (hostImageCopyExtAvailable) {
+        vkHostImageCopyProperties.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES_EXT;
+        vkHostImageCopyProperties.pNext = vkDeviceProperties2.pNext;
+        vkHostImageCopyProperties.pCopyDstLayouts = vkHostImageCopyDstLayouts.data();
+        vkHostImageCopyProperties.copyDstLayoutCount = vkHostImageCopyDstLayouts.size();
+        vkDeviceProperties2.pNext =  &vkHostImageCopyProperties;
+    }
+
     // Query device properties
     vkGetPhysicalDeviceProperties2(physicalDevice, &vkDeviceProperties2);
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &vkMemoryProperties);
@@ -223,7 +238,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
     vkVertexAttributeDivisorFeatures.pNext = vkDeviceFeatures2.pNext;
     vkDeviceFeatures2.pNext = &vkVertexAttributeDivisorFeatures;
 
-    // Barycentric features
+    // Barycentric feature
     const bool barycentricExtSupported = device->IsSupportedExtension(
         VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
     if (barycentricExtSupported) {
@@ -232,8 +247,8 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         vkBarycentricFeatures.pNext = vkDeviceFeatures2.pNext;
         vkDeviceFeatures2.pNext =  &vkBarycentricFeatures;
     }
-    
-    // Line rasterization features
+
+    // Line rasterization feature
     const bool lineRasterizationExtSupported = device->IsSupportedExtension(
         VK_KHR_LINE_RASTERIZATION_EXTENSION_NAME);
     if (lineRasterizationExtSupported) {
@@ -241,6 +256,14 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_KHR;
         vkLineRasterizationFeatures.pNext = vkDeviceFeatures2.pNext;
         vkDeviceFeatures2.pNext =  &vkLineRasterizationFeatures;
+    }
+
+    // Host image copy feature
+    if (hostImageCopyExtAvailable) {
+        vkHostImageCopyFeatures.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT;
+        vkHostImageCopyFeatures.pNext = vkDeviceFeatures2.pNext;
+        vkDeviceFeatures2.pNext =  &vkHostImageCopyFeatures;
     }
 
     // Query device features

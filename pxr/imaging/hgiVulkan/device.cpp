@@ -114,7 +114,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
             continue;
         }
 
-        if (props.apiVersion < VK_API_VERSION_1_0) continue;
+        if (props.apiVersion < VK_API_VERSION_1_3) continue;
 
         // Try to find a preferred device type. Until we find one, store the
         // first non-preferred device as fallback in case we never find a
@@ -264,6 +264,11 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         extensions.push_back(VK_KHR_LINE_RASTERIZATION_EXTENSION_NAME);
     }
 
+    // Allow use of host image copy
+    if (IsSupportedExtension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
+        extensions.push_back(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+    }
+
     // This extension is needed to allow the viewport to be flipped in Y so that
     // shaders and vertex data can remain the same between opengl and vulkan.
     extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
@@ -351,6 +356,16 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         features2.pNext = &lineRasterFeatures;
     }
 
+    VkPhysicalDeviceHostImageCopyFeaturesEXT hostImageCopyFeatures {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT
+    };
+    if (IsSupportedExtension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
+        hostImageCopyFeatures.hostImageCopy =
+            _capabilities->vkHostImageCopyFeatures.hostImageCopy;
+        hostImageCopyFeatures.pNext = features2.pNext;
+        features2.pNext = &hostImageCopyFeatures;
+    }
+
     VkDeviceCreateInfo createInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueInfo;
@@ -373,23 +388,30 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     //
 
     vkCreateRenderPass2KHR = (PFN_vkCreateRenderPass2KHR)
-    vkGetDeviceProcAddr(_vkDevice, "vkCreateRenderPass2KHR");
+        vkGetDeviceProcAddr(_vkDevice, "vkCreateRenderPass2KHR");
 
     if (_capabilities->supportsNativeInterop) {
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
         vkGetMemoryWin32HandleKHR = (PFN_vkGetMemoryWin32HandleKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryWin32HandleKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryWin32HandleKHR");
 
         vkGetSemaphoreWin32HandleKHR = (PFN_vkGetSemaphoreWin32HandleKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreWin32HandleKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreWin32HandleKHR");
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
         vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryFdKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryFdKHR");
 
         vkGetSemaphoreFdKHR = (PFN_vkGetSemaphoreFdKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreFdKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreFdKHR");
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
 #endif
+    }
+
+    if (_capabilities->vkHostImageCopyFeatures.hostImageCopy) {
+        vkTransitionImageLayoutEXT = (PFN_vkTransitionImageLayoutEXT)
+            vkGetDeviceProcAddr(_vkDevice, "vkTransitionImageLayoutEXT");
+        vkCopyMemoryToImageEXT = (PFN_vkCopyMemoryToImageEXT)
+            vkGetDeviceProcAddr(_vkDevice, "vkCopyMemoryToImageEXT");
     }
 
     //

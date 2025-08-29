@@ -125,14 +125,14 @@ _TextureUsageTable[][2] =
 };
 static_assert(HgiTextureUsageCustomBitsBegin == 1 << 5, "");
 
-static const uint32_t
-_FormatFeatureTable[][2] =
+static const uint64_t
+_FormatFeature2Table[][2] =
 {
-    {HgiTextureUsageBitsColorTarget,   VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT},
-    {HgiTextureUsageBitsDepthTarget,   VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT},
-    {HgiTextureUsageBitsStencilTarget, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT},
-    {HgiTextureUsageBitsShaderRead,    VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT},
-    {HgiTextureUsageBitsShaderWrite,   VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT},
+    {HgiTextureUsageBitsColorTarget,   VK_FORMAT_FEATURE_2_COLOR_ATTACHMENT_BIT},
+    {HgiTextureUsageBitsDepthTarget,   VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT},
+    {HgiTextureUsageBitsStencilTarget, VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT},
+    {HgiTextureUsageBitsShaderRead,    VK_FORMAT_FEATURE_2_SAMPLED_IMAGE_BIT},
+    {HgiTextureUsageBitsShaderWrite,   VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT},
 };
 static_assert(HgiTextureUsageCustomBitsBegin == 1 << 5, "");
 
@@ -440,11 +440,11 @@ HgiVulkanConversions::GetTextureUsage(HgiTextureUsage tu)
     return vkFlags;
 }
 
-VkFormatFeatureFlags
-HgiVulkanConversions::GetFormatFeature(HgiTextureUsage tu)
+VkFormatFeatureFlags2
+HgiVulkanConversions::GetFormatFeature2(HgiTextureUsage tu)
 {
-    VkFormatFeatureFlags vkFlags = 0;
-    for (const auto& f : _FormatFeatureTable) {
+    VkFormatFeatureFlags2 vkFlags = 0;
+    for (const auto& f : _FormatFeature2Table) {
         if (tu & f[0]) vkFlags |= f[1];
     }
 

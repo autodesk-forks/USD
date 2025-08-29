@@ -12,6 +12,7 @@
 #include "pxr/imaging/hgiVulkan/api.h"
 #include "pxr/imaging/hgiVulkan/vulkan.h"
 
+#include <array>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -41,10 +42,13 @@ public:
     bool supportsNativeInterop;
 
     VkPhysicalDeviceProperties2 vkDeviceProperties2 {};
+    VkPhysicalDeviceMemoryProperties vkMemoryProperties {};
+    VkPhysicalDeviceIDProperties vkPhysicalDeviceIdProperties {};
     VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT
         vkVertexAttributeDivisorProperties {};
-    
-    VkPhysicalDeviceMemoryProperties vkMemoryProperties {};
+    VkPhysicalDeviceHostImageCopyPropertiesEXT vkHostImageCopyProperties {};
+    // Storage for VkPhysicalDeviceHostImageCopyProperties::pCopyDstLayouts
+    std::array<VkImageLayout, 32> vkHostImageCopyDstLayouts {};
 
     VkPhysicalDeviceFeatures2 vkDeviceFeatures2 {};
     VkPhysicalDeviceVulkan11Features vkVulkan11Features {};
@@ -53,8 +57,7 @@ public:
     VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR
         vkBarycentricFeatures {};
     VkPhysicalDeviceLineRasterizationFeaturesKHR vkLineRasterizationFeatures {};
-
-    VkPhysicalDeviceIDProperties vkPhysicalDeviceIdProperties {};
+    VkPhysicalDeviceHostImageCopyFeaturesEXT vkHostImageCopyFeatures {};
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
