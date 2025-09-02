@@ -482,16 +482,18 @@ HdStRenderPassState::Prepare(
                 _ComputeDataWindow(
                     _framing, _viewport))));
 
-    if (clipPlanes.size() > 0) {
-        sources.push_back(
-            std::make_shared<HdVtBufferSource>(
-                HdShaderTokens->clipPlanes,
-                VtValue(clipPlanes),
-                clipPlanes.size()));
+    if (_clippingEnabled) {
         sources.push_back(
         std::make_shared<HdVtBufferSource>(
             HdShaderTokens->numClipPlanes,
             VtValue(uint32_t(clipPlanes.size()))));
+        if (clipPlanes.size() > 0) {
+            sources.push_back(
+                std::make_shared<HdVtBufferSource>(
+                    HdShaderTokens->clipPlanes,
+                    VtValue(clipPlanes),
+                    clipPlanes.size()));
+        }
     }
 
     hdStResourceRegistry->AddSources(_renderPassStateBar, std::move(sources));
