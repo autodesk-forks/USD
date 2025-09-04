@@ -185,8 +185,7 @@ _ValidateCompilation(
         output << shaderSource;
         output.close();
 
-        std::cout << "Write " << fname
-                  << " (size=" << shaderSource.size() << ")\n";
+        TF_STATUS("Dumping Shader Sourcefile: "+fname);
     }
 
     if (!shaderFn->IsValid()) {

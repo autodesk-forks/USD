@@ -251,6 +251,9 @@ pxr_library(tf
         emscriptenTypeRegistration.h
         wrapTokenJs.h
 
+    JS_CPPFILES
+        wrapDebugJs.cpp
+
     PYTHON_PUBLIC_HEADERS
         py3Compat.h
         pySafePython.h

@@ -171,14 +171,23 @@ _CreateHdStMaterialXContext(
     HdSt_MxShaderGenInfo const& mxHdInfo,
     TfToken const& apiName)
 {
+#ifdef PXR_METAL_SUPPORT_ENABLED
     if (apiName == HgiTokens->Metal) {
         return HdStMaterialXShaderGenMsl::create(mxHdInfo);
     }
+#endif
     if (apiName == HgiTokens->Vulkan) {
         return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
     }
     if (apiName == HgiTokens->OpenGL) {
         return HdStMaterialXShaderGenGlsl::create(mxHdInfo);
+    }
+    if (apiName == HgiTokens->WebGPU) {
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 4)
+        return HdStMaterialXShaderGenVkGlsl::create(mxHdInfo);
+#else
+        return HdStMaterialXShaderGenWgslGlsl::create(mxHdInfo);
+#endif
     }
     else {
         TF_CODING_ERROR(
@@ -205,6 +214,7 @@ HdSt_GenMaterialXShader(
     mxContext.getOptions().hwTransparency
         = mxHdInfo.materialTag != HdStMaterialTagTokens->defaultMaterialTag;
 
+    // @REVISIT
     // Starting from MaterialX 1.38.4 at PR 877, we must remove the "libraries" part:
     mx::FileSearchPath libSearchPaths;
     for (const mx::FilePath &path : searchPaths) {
@@ -657,14 +667,14 @@ _GetMxTypeDescription(std::string const& typeName)
 
     const auto typeDescIt = _typeLibrary.find(typeName);
     if (typeDescIt != _typeLibrary.end()) {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
       return *typeDescIt->second;
 #else
       return typeDescIt->second;
 #endif
     }
 
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MATERIALX_VERSION_INDEX < MATERIALX_GENERATE_INDEX(1, 39, 0)
     return *mx::Type::NONE;
 #else
     return mx::Type::NONE;

@@ -71,9 +71,12 @@ pxr_library(usd
 
     JS_CPPFILES
         wrapAttributeJs.cpp
+        wrapObjectJs.cpp
         wrapPrimJs.cpp
         wrapReferencesJs.cpp
         wrapStageJs.cpp
+        wrapVariantSetsJs.cpp
+        wrapTimeCodeJs.cpp
 
     PYTHON_PUBLIC_CLASSES
         pyEditContext
@@ -96,6 +99,7 @@ pxr_library(usd
 
     JS_PUBLIC_HEADERS
         emscriptenPtrRegistrationHelper.h
+        wrapTimeCodeJs.h
 
     PUBLIC_HEADERS
         api.h

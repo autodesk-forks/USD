@@ -20,7 +20,7 @@
 #include "pxr/usd/usdShade/shader.h"
 
 #include <MaterialXCore/Document.h>
-#include <MaterialXCore/Generated.h>
+#include <MaterialXCore/Library.h>
 #include <MaterialXCore/Node.h>
 #include <MaterialXFormat/Util.h>
 #include <MaterialXFormat/XmlIo.h>
@@ -39,7 +39,6 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((mtlxSurface, "mtlx:surface"))
     (surface)
 );
-
 
 namespace {
 
@@ -128,12 +127,14 @@ void _BakeMtlxDocument(
         : mx::Image::BaseType::UINT8;
 
     // Construct a Texture Baker.
-#if MATERIALX_MAJOR_VERSION <= 1 && MATERIALX_MINOR_VERSION <= 38 && \
-    MATERIALX_BUILD_VERSION <= 6
+#if MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 38, 6)
     mx::TextureBakerPtr baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
-#else
+#elif MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 39, 3)
     mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
+        textureWidth, textureHeight, baseType);
+#else
+    mx::TextureBakerGlslPtr baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #endif
     baker->setupUnitSystem(stdLibraries);

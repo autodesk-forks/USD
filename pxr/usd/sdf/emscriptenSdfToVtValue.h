@@ -11,6 +11,23 @@
 #include <functional>
 #include <iostream>
 
+
+// == Get ==
+template <typename T>
+emscripten::val GetAndReturnEmscriptenValFromVtValue(const T& self) {
+    pxr::VtValue value;
+    self.Get(&value);
+    return value._GetJsVal();
+};
+
+template <typename T>
+emscripten::val GetAndReturnEmscriptenValFromVtValue_TimeCode(const T& self, pxr::UsdTimeCode time) {
+    pxr::VtValue value;
+    self.Get(&value, time);
+    return value._GetJsVal();
+};
+
+// == Set ==
 typedef std::function<pxr::VtValue (const emscripten::val& jsVal)> SdfToVtValueFunc;
 
 SdfToVtValueFunc* UsdJsToSdfType(pxr::SdfValueTypeName const &targetType);
@@ -24,6 +41,19 @@ bool SetVtValueFromEmscriptenVal(T& self, const emscripten::val& value) {
     if (sdfToValue != NULL) {
         pxr::VtValue vtValue = (*sdfToValue)(value);
         result = self.Set(vtValue);
+    } else {
+        std::cerr << "Couldn't find a VtValue mapping for " << self.GetTypeName() << std::endl;
+    }
+    return result;
+}
+
+template <typename T>
+bool SetVtValueFromEmscriptenVal_TimeCode(T& self, const emscripten::val& value, pxr::UsdTimeCode time) {
+    SdfToVtValueFunc* sdfToValue = UsdJsToSdfType(self.GetTypeName());
+    bool result = false;
+    if (sdfToValue != NULL) {
+        pxr::VtValue vtValue = (*sdfToValue)(value);
+        result = self.Set(vtValue, time);
     } else {
         std::cerr << "Couldn't find a VtValue mapping for " << self.GetTypeName() << std::endl;
     }

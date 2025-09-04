@@ -110,6 +110,9 @@ EMSCRIPTEN_BINDINGS(UsdStage) {
     .class_function("Open", &Open)
     .class_function("Open", select_overload<pxr::UsdStageRefPtr(const pxr::SdfLayerHandle &layer, pxr::UsdStage::InitialLoadSet)>(&pxr::UsdStage::Open))
 
+    .class_function("CreateInMemory", select_overload<pxr::UsdStageRefPtr(pxr::UsdStage::InitialLoadSet)>(&pxr::UsdStage::CreateInMemory))
+    .class_function("CreateInMemory", select_overload<pxr::UsdStageRefPtr(const std::string& identifier, pxr::UsdStage::InitialLoadSet)>(&pxr::UsdStage::CreateInMemory))
+
     .class_function("Exit", &MyExit)
     .function("ExportToString", &exportToString<pxr::UsdStage>)
     .function("DefinePrim", &pxr::UsdStage::DefinePrim)
@@ -123,5 +126,12 @@ EMSCRIPTEN_BINDINGS(UsdStage) {
     .function("GetStartTimeCode", &pxr::UsdStage::GetStartTimeCode)
     .function("GetEndTimeCode", &pxr::UsdStage::GetEndTimeCode)
     .function("GetTimeCodesPerSecond", &pxr::UsdStage::GetTimeCodesPerSecond)
+    .function("GetSessionLayer", &pxr::UsdStage::GetSessionLayer)
+    .function("GetDefaultPrim", &pxr::UsdStage::GetDefaultPrim)
+    .function("GetPseudoRoot", &pxr::UsdStage::GetPseudoRoot)
+    //.function("GetPropertyAtPath", &pxr::UsdStage::GetPropertyAtPath)
+    .function("RemovePrim", &pxr::UsdStage::RemovePrim)
+    //.function("GetRelationshipAtPath", &pxr::UsdStage::GetRelationshipAtPath)
+
     ;
 }

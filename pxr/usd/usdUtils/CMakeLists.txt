@@ -69,6 +69,9 @@ pxr_library(usdUtils
         updateSchemaWithSdrNode.py
         usdzUtils.py
 
+    JS_CPPFILES
+        wrapDependenciesJs.cpp
+
     DOXYGEN_FILES
         overview.dox
 )

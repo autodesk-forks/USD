@@ -26,6 +26,10 @@
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usd/prim.h"
 #include "pxr/usd/usd/references.h"
+#include "pxr/usd/sdf/path.h"
+#include "pxr/usd/sdf/wrapPathJs.h"
+#include "pxr/usd/usd/variantSets.h"
+
 
 #include <emscripten/bind.h>
 using namespace emscripten;
@@ -36,12 +40,25 @@ GetPropertyNames(pxr::UsdPrim& self)
     return self.GetPropertyNames();
 };
 
+pxr::SdfPath
+GetPath(const pxr::UsdPrim& self)
+{
+  return self.GetPath();
+}
+
+
 EMSCRIPTEN_BINDINGS(UsdPrim) {
-  class_<pxr::UsdPrim>("UsdPrim")
+  class_<pxr::UsdPrim, base<pxr::UsdObject>>("UsdPrim")
+    .constructor<>()
     .function("GetAttribute", &pxr::UsdPrim::GetAttribute)
     .function("GetTypeName", &pxr::UsdPrim::GetTypeName)
     .function("GetAttributes", &pxr::UsdPrim::GetAttributes)
     .function("GetPropertyNames", &GetPropertyNames)
+    .function("GetPath", &GetPath)
     .function("GetReferences", &pxr::UsdPrim::GetReferences)
+    .function("HasAuthoredReferences", &pxr::UsdPrim::HasAuthoredReferences)
+    .function("GetVariantSets", &pxr::UsdPrim::GetVariantSets)
+    .function("GetVariantSet", &pxr::UsdPrim::GetVariantSet)
+    .function("HasVariantSets", &pxr::UsdPrim::HasVariantSets)
     ;
 }

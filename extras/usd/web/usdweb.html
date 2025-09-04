@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <link rel="icon" type="image/svg+xml" href="USDLogoUnsized.svg">
+    <title>USD Web Viewport</title>
+    <style>body {
+        font-family: arial;
+        margin: 0;
+        padding: none;
+        overflow: hidden;
+    }
+    /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+    canvas {
+        border: 0px none;
+        background-color: black;
+    }
+
+    .spinner {
+        top: 50%;
+        left: 50%;
+        width: 100px;
+        height: 100px;
+        margin: 0;
+        translate: -50px -50px;
+
+        -webkit-animation: rotation .8s linear infinite;
+        -moz-animation: rotation .8s linear infinite;
+        -o-animation: rotation .8s linear infinite;
+        animation: rotation 0.8s linear infinite;
+
+        border-left: 5px solid rgb(235, 235, 235);
+        border-right: 5px solid rgb(235, 235, 235);
+        border-bottom: 5px solid rgb(235, 235, 235);
+        border-top: 5px solid rgb(120, 120, 120);
+
+        border-radius: 100%;
+        background-color: rgb(189, 215, 46);
+    }
+
+    @-webkit-keyframes rotation {
+        from {-webkit-transform: rotate(0deg);}
+        to {-webkit-transform: rotate(360deg);}
+    }
+    @-moz-keyframes rotation {
+        from {-moz-transform: rotate(0deg);}
+        to {-moz-transform: rotate(360deg);}
+    }
+    @-o-keyframes rotation {
+        from {-o-transform: rotate(0deg);}
+        to {-o-transform: rotate(360deg);}
+    }
+    @keyframes rotation {
+        from {transform: rotate(0deg);}
+        to {transform: rotate(360deg);}
+    }
+
+
+    #container {
+        position: relative;
+        width: 100%;
+        height: 80%;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    .spinner, #canvasContainer {
+        position: absolute;
+    }
+
+    body, html, #canvasContainer {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <div class="spinner" id="spinner"></div>
+    <div id="canvasContainer" class="hidden">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
+    </div>
+</div>
+
+<div id="footer">
+    <script>
+        async function loadscene_with_deps_and_actions(scenefile, depfiles=[], callback_func=null)
+        {
+            const container = container_clear( get_actionbar_container() );
+            if (depfiles.length > 0) {
+                depPromises = depfiles.map( depfile => fetchFileToFS(depfile) );
+                await Promise.all(depPromises);
+            }
+            stage = await openStageFromUsdfile(scenefile);
+            if (callback_func != null) {
+                callback_func(stage);
+            }
+            return stage;
+        }
+
+        function get_actionbar_container()
+        {
+            const container_id = 'SceneActionsBar'; 
+            const container = document.getElementById(container_id)
+            if (!container) {
+                console.error('Unable to find container id='+container_id+' to add new elements.  Exiting.')
+                return;
+            }   
+            return container;             
+        }
+
+        function container_clear(container)
+        {
+            // Clear all elements in the container
+            console.log('Removing elements from container:' + container.id);
+            while (container.firstChild) {
+                container.removeChild(container.lastChild);
+            }
+            return container;
+        }
+
+        function create_element_button(name, onclick_func) 
+        {
+            console.log('Adding Button '+name);
+            const newInput = document.createElement('input');
+            newInput.type = 'button'
+            newInput.id = 'ActionsBar_'+name;
+            newInput.value = name;
+            newInput.onclick = onclick_func;
+            return newInput;
+        }        
+    </script>
+    Lighting: 
+    <input type="checkbox" id="Lighting_Camera" checked />Camera
+    <input type="checkbox" id="Lighting_Scene"  checked />Scene
+    <input type="checkbox" id="Lighting_Dome" />Dome
+    <script>
+        document.getElementById("Lighting_Camera").onclick = (event) => {
+            Usd.UsdwebSetCameraLightEnabled( event.target.checked );
+        }
+        document.getElementById("Lighting_Scene").onclick = (event) => {
+            Usd.UsdwebSetSceneLightsEnabled( event.target.checked );
+        }
+        document.getElementById("Lighting_Dome").onclick = (event) => {
+            Usd.UsdwebSetDomeLightEnabled( event.target.checked );
+        }
+    </script>
+    <br>
+    USD Tests
+    <input type="button" id="blue_sphere" value="blue_sphere">
+    <input type="button" id="TexQuad_Usd"  value="TexQuad_Usd"/>
+    <input type="button" id="StdShrBallGrnd"  value="StdShrBallGrnd"/>
+    <br>
+    MaterialX Tests
+    <input type="button" id="sphere_mtlx" value="sphere_mtlx">
+    <input type="button" id="TexQuad_Mtlx" value="TexQuad_Mtlx"/>
+    <input type="button" id="sample_mtlx_brick" value="sample_mtlx_brick">
+    <script>
+        document.getElementById("blue_sphere").onclick = () => loadscene_with_deps_and_actions("assets/blue_sphere.usda");
+        document.getElementById("TexQuad_Usd").onclick  = () => {loadscene_with_deps_and_actions("assets/textured_quad.usda", ["assets/uvgrid.png"]);};
+        document.getElementById("StdShrBallGrnd").onclick = () => {loadscene_with_deps_and_actions("assets/standard_shader_ball_ground.usda", ["assets/uvgrid.png"]);};
+        document.getElementById("sphere_mtlx").onclick = () => loadscene_with_deps_and_actions("assets/sphere_mtlx.usdz");
+        document.getElementById("TexQuad_Mtlx").onclick = () => {loadscene_with_deps_and_actions("assets/textured_quad_mtlx.usda", ["assets/uvgrid.png"]);};
+        document.getElementById("sample_mtlx_brick").onclick = () => loadscene_with_deps_and_actions("assets/sample_mtlx_brick.usdz", [], (stage)=>{prim = stage.GetPrimAtPath('/World/Sphere'); imageable = new Usd.UsdGeomImageable(prim); imageable.MakeInvisible(); });
+    </script>
+    <br>   
+    Samples:
+    <input type="button" id="Standard_ShaderBall" value="Standard ShaderBall">
+    <input type="button" id="Vehicles" value="Vehicles">
+    <br>
+    Download Samples:
+    <input type="button" id="FancyTeapot" value="FancyTeapot">
+    <input type="button" id="CarbonFrameBike" value="CarbonFrameBike">
+    <input type="button" id="DamagedHelmet" value="DamagedHelmet">
+    <br>
+    <script>
+        async function shaderball_scene_callback(stage)
+        {
+            // Configure stage
+            prim = stage.GetPrimAtPath('/standard_shader_ball_scene/shader_ball');
+            Usd.UsdwebFitCamera(prim);
+            prim = stage.GetPrimAtPath('/standard_shader_ball_scene');
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("surface_geometry");
+            vset.SetVariantSelection("triangulated");
+            vset = vsets.GetVariantSet("scene_lights");
+            vset.SetVariantSelection("on");
+            vset = vsets.GetVariantSet("internal_emitter");
+            vset.SetVariantSelection("off");
+            vset = vsets.GetVariantSet("example_material");
+            vset.SetVariantSelection("none");
+            // Add Variant button actions
+            const container = get_actionbar_container();
+            const variant_names = vset.GetVariantNames();
+            for (const variant_name of variant_names) {
+                newInput = create_element_button(variant_name, 
+                    () => { vset.SetVariantSelection(variant_name); } );
+                container.appendChild(newInput);
+            }
+        }
+
+        async function vehicles_callback(stage)
+        {
+            // Configure stage
+            prim = stage.GetPrimAtPath('/vehicleVariant');
+            vsets = prim.GetVariantSets();
+            vset = vsets.GetVariantSet("wheels");
+            // Add Variant button actions
+            const container = get_actionbar_container();
+            const variant_names = vset.GetVariantNames();
+            for (const variant_name of variant_names) {
+                newInput = create_element_button(variant_name, 
+                    () => { vset.SetVariantSelection(variant_name); } );
+                container.appendChild(newInput);
+            }
+        }
+
+        async function CarbonFrameBike_callback(stage) 
+        {
+            const container = get_actionbar_container();
+            newInput = create_element_button("ShowFrontWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); 
+                imageable = new Usd.UsdGeomImageable(prim); 
+                imageable.MakeVisible(); 
+            });
+            container.appendChild(newInput);
+            newInput = create_element_button("HideFrontWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); 
+                imageable = new Usd.UsdGeomImageable(prim); 
+                imageable.MakeInvisible(); 
+            });
+            container.appendChild(newInput);        
+            newInput = create_element_button("ViewFrontWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Lenker/Federung/RadVorn"); 
+                Usd.UsdwebFitCamera( prim );
+            });
+            container.appendChild(newInput); 
+            newInput = create_element_button("ViewRearWheel", () => { 
+                prim = stage.GetPrimAtPath("/CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/RadHinten"); 
+                Usd.UsdwebFitCamera( prim );
+            });
+            container.appendChild(newInput); 
+        }
+
+        document.getElementById("Standard_ShaderBall").onclick = () => loadscene_with_deps_and_actions("assets/standard_shader_ball_scene.usdz", [], shaderball_scene_callback);
+        document.getElementById("Vehicles").onclick = () => loadscene_with_deps_and_actions("assets/vehicles.usdz", [], vehicles_callback);
+        document.getElementById("FancyTeapot").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/Teapot/geo/FancyTeapot.usd");
+        document.getElementById("CarbonFrameBike").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/full_assets/CarbonFrameBike/CarbonFrameBike.usdz", [], CarbonFrameBike_callback);
+        document.getElementById("DamagedHelmet").onclick = () => loadscene_with_deps_and_actions("https://github.com/usd-wg/assets/blob/main/test_assets/USDZ/DamagedHelmet/DamagedHelmet.usdz");
+
+    </script>
+    SceneActions:
+    <span id="SceneActionsBar">
+    </span>
+
+</div>
+
+<script type='text/javascript'>
+    // For GLFW3 (JavaScript implementation)
+    // (Note that --use-port=contrib.glfw3 from https://github.com/pongasoft/emscripten-glfw is different)
+    //
+    // The usdweb.js code generated by Emscripten with WebGPU is hardcoded to
+    // use Module["canvas"], so we need to create that Module datastructure 
+    // and assign Module["canvas"] to an existing <canvas> element in the HTML document.
+    //
+    // Emscripten GLFW3 Generated JavaScript (usdweb.js) uses:
+    //      Required:
+    //      * Module["canvas"]                     (specified in usdweb.html)
+    //      * Module["preinitializedWebGPUDevice"] (specified in usdweb.cpp: ems_setup() )
+    //      Optional:
+    //      * Module["setStatus"](text)        function: called by internal emscripten functions
+    //      * Module["monitorRunDependencies"](int) function: (referenced by addRunDependency() removeRunDependency() )
+    //      * Module["onFullScreen"](bool)     function: callback if the window goes full screen
+    //      * Module["forcedAspectRatio"] 
+    //      * Module["noInitialRun"]           bool: skips calling main()
+    //      * Module["onRuntimeInitialized"]() function: called directly before calling main()
+    //      * Module["preMainLoop"]()          function: called once before the main loop
+    //      * Module["postMainLoop"]()         function: called once before the main loop
+    //      Internal Data:
+    //      * Module["ctx"]                    (set internally by createContext() )
+    //      * Module["setImmediates"]          (populate by MainLoop.setImmediate(func) )
+    //      * Module["dataFileDownloads"][packageName] record on what files were donwnloaded
+    //      EmscriptenTrace (memory, etc)
+    //      * See usdweb.js for details on using
+    //
+    // TODO:
+    //    1) Revise the code in usdewb.cpp so that it does not have any hardcodes
+    //       past Module["canvas"].
+    //          a) const webgpuCanvas = document.createElement("canvas");
+    //          b) const canvasContainer = document.getElementById("canvasContainer");
+    //          c) const mainCanvas = document.getElementById("canvas");
+    //          d) in initialize(): canvasDesc.selector = "#webgpuCanvas";
+    //    2) Look into createBlitPipeline() to understand it
+
+    // Create Module[] used by usdweb.js (hardcoded)
+    //    1) set Module["canvas"] var to a canvas html element. <REQUIRED>
+    //    2) add any helper callbacks to Module
+    console.log('Creating Module in JavaScript in usdweb.html.');
+    var spinnerElement = document.getElementById('spinner');
+    var canvasContainer = document.getElementById('canvasContainer');
+    var Module = {
+        print: (function () {
+            return function (text) {
+                if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                console.log(text);
+            };
+        })(),
+        canvas: (() => {
+            var canvas = document.getElementById('canvas');
+
+            // Assign a listener to the element specified here by Module["canvas"] 
+            // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+            // application robust, you may want to override this behavior before shipping!
+            // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+            canvas.addEventListener("webglcontextlost", (e) => {
+                alert('WebGL context lost. You will need to reload the page.');
+                e.preventDefault();
+            }, false);
+
+            return canvas;
+        })(),
+        setStatus: (text) => {
+            console.log('Status: '+text); // print any status messages also to the console for debugging
+            if (!Module.setStatus.last) Module.setStatus.last = {time: Date.now(), text: ''};
+            if (text === Module.setStatus.last.text) return;
+            var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+            var now = Date.now();
+            if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
+            Module.setStatus.last.time = now;
+            Module.setStatus.last.text = text;
+            if (m) {
+                text = m[1];
+                spinnerElement.hidden = false;
+            } else {
+                if (!text) {
+                    spinnerElement.style.display = 'none';
+                    canvasContainer.className = '';
+                }
+            }
+        },
+        monitorRunDependencies: (left) => {
+            if (this.totalDependencies === undefined) {
+                this.totalDependencies = 0;
+            }
+            this.totalDependencies = Math.max(this.totalDependencies, left);
+            Module.setStatus(`Downloaded: ${this.totalDependencies - left}/${this.totalDependencies} Remaining=${left}`);
+        },
+        onRuntimeInitialized: () => {
+            console.log('onRuntimeInitialized');
+        },
+    };
+    console.log('Module structure declared.');
+    //console.log('Downloading...');
+    Module.setStatus('Downloading...');
+    window.onerror = (event) => {
+        // TODO: do not warn on ok events like simulating an infinite loop or exitStatus
+        Module.setStatus('Exception thrown, see JavaScript console');
+        spinnerElement.style.display = 'none';
+        Module.setStatus = (text) => {
+            if (text) console.error('[post-exception status] ' + text);
+        };
+    };
+
+    Usd = Module;
+
+    async function downloadTextFileFromFS(fs_filename, filename="")
+    {        
+        const text = FS.readFile(fs_filename, {encoding:'utf8'});
+        if (filename == "") {
+            filename = fs_filename.split('/').pop(); // basename
+        }
+        console.log('Downloading ' + fs_filename + ' to ' + filename);
+
+        // From downloadJs
+       let element = document.createElement("a");
+       element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
+       element.setAttribute("download", filename);
+       element.style.display = "none";
+       document.body.appendChild(element);
+       element.click();
+       document.body.removeChild(element);        
+    }
+
+    // Handle file load into browser FS.
+    // Works with local files as well as http and github.com.
+    async function fetchFileToFS(filename, fs_filename = null)
+    {
+        // Workaround for CORS errors when using github.com. 
+        if (filename.includes("github.com")) {
+            filename = filename.replace("github.com", "raw.githubusercontent.com");
+            filename = filename.replace("/blob/", "/");
+        }
+        
+        if (fs_filename == null) {
+            fs_filename = filename.split('/').reverse()[0];
+        }
+        if (!FS.analyzePath(fs_filename).exists) {
+            console.log('Fetching '+filename+' to '+fs_filename);
+            const blob = await fetch(filename);
+            const arrayBuffer = await blob.arrayBuffer();
+            Usd.FS_createDataFile("", fs_filename, new Uint8Array(arrayBuffer), true, true, true);
+        }
+        return fs_filename;
+    }
+
+    async function openStageFromUsdfile(filename)
+    {
+        console.log('openStageFromUsdfile: '+filename);
+        let fs_filename = filename.split('/').reverse()[0];
+        await fetchFileToFS(filename);
+        console.log('Setting USDStage: '+fs_filename);
+        stage = Usd.UsdStage.Open(fs_filename);
+        Usd.UsdwebSetStage(stage);
+        return stage;        
+    }
+
+    document.body.onkeyup = function(e){
+        console.log("==Last key released: " + event.key);
+        if (e.keyCode == 37) { // ArrowLeft
+            let t = Usd.UsdwebGetRenderParamsTime();
+            t -= 1;
+            Usd.UsdwebSetRenderParamsTime(t);
+        }
+        else if (e.keyCode == 39) { // ArrowRight
+            let t = Usd.UsdwebGetRenderParamsTime();
+            t += 1;
+            Usd.UsdwebSetRenderParamsTime(t);
+        }
+        else if (e.keyCode == 70) { // KeyF
+            Usd.UsdwebFitCamera( Usd.UsdwebGetStage().GetPseudoRoot() );
+        }
+    }
+</script>
+<script>
+    function afterModuleLoad() 
+    {
+        console.log('usdweb.js load complete.')
+        //Module.UsdwebInit();
+    }
+</script>
+<script async type="text/javascript" src="usdweb.js" onload="afterModuleLoad()"></script>
+</body>
+</html>

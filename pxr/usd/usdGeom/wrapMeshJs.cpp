@@ -9,14 +9,9 @@ using namespace emscripten;
 EMSCRIPTEN_ENABLE_WEAK_PTR_CAST(UsdStage)
 
 EMSCRIPTEN_BINDINGS(UsdGeomMesh) {
-    class_<pxr::UsdGeomBoundable>("UsdGeomBoundable");
-    class_<pxr::UsdGeomPointBased, base<pxr::UsdGeomBoundable>>("UsdGeomPointBased");
     class_<pxr::UsdGeomMesh, base<pxr::UsdGeomPointBased>>("UsdGeomMesh")
+        .constructor<const pxr::UsdPrim &>()
         .class_function("Define", &pxr::UsdGeomMesh::Define)
-        .function("GetPointsAttr", &pxr::UsdGeomPointBased::GetPointsAttr)
-        .function("CreatePointsAttr",
-                  &SetCustomAttributeFromEmscriptenVal<pxr::UsdGeomPointBased,
-                      &pxr::UsdGeomPointBased::CreatePointsAttr>)
         .function("GetFaceVertexCountsAttr", &pxr::UsdGeomMesh::GetFaceVertexCountsAttr)
         .function("CreateFaceVertexCountsAttr",
                   &SetCustomAttributeFromEmscriptenVal<pxr::UsdGeomMesh, &pxr::UsdGeomMesh::CreateFaceVertexCountsAttr>)
@@ -24,8 +19,5 @@ EMSCRIPTEN_BINDINGS(UsdGeomMesh) {
         .function("CreateFaceVertexIndicesAttr",
                   &SetCustomAttributeFromEmscriptenVal<pxr::UsdGeomMesh,
                       &pxr::UsdGeomMesh::CreateFaceVertexIndicesAttr>)
-        .function("GetExtentAttr", &pxr::UsdGeomBoundable::GetExtentAttr)
-        .function("CreateExtentAttr",
-                  &SetCustomAttributeFromEmscriptenVal<pxr::UsdGeomBoundable, &pxr::UsdGeomBoundable::CreateExtentAttr>)
         ;
 }

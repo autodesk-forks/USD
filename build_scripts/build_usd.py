@@ -1638,22 +1638,45 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.39.3.zip"
 
 def InstallMaterialX(context, force, buildArgs):
+    if context.targetWasm:
+        # For Wasm WebGPU/WGSL shader generation for MaterialX, 
+        # MaterialX as of 6/9/2025 needs to be used with the 
+        # "WGSL/WebGPU GLSL ShaderGenerator" pull request integrated.
+        # The full MaterialX release with this enhancement should be 
+        # the pending version 1.39.4.
+        global MATERIALX_URL
+        #MATERIALX_URL = 'https://github.com/AcademySoftwareFoundation/MaterialX/archive/8eaf80cf7b6a27c1a7b3eeb8c9bc8872fddb4d60.zip'
+        MATERIALX_URL = 'https://github.com/scotbrew/MaterialX/archive/refs/heads/brews/feature/wgsl_texsampler_code_replace.zip'
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON',
-                        '-DMATERIALX_BUILD_TESTS=OFF'
+                        '-DMATERIALX_BUILD_TESTS=OFF',
         ]
 
         if context.targetWasm:
             cmakeOptions.extend([
-                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"',
-                '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
-                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"',
+                 # For Wasm
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"', # removed:  + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_C_FLAGS="'   + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"', # removed:  + ' -s SIDE_MODULE=1"',
+                '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' -s MAIN_MODULE=1"',
+                '-DBUILD_SHARED_LIBS=OFF',
+                # MaterialX config
                 '-DMATERIALX_BUILD_JS=OFF', # We don't need the js bindings
                 '-DMATERIALX_BUILD_TESTS=OFF',
                 '-DMATERIALX_BUILD_RENDER=ON',
                 '-DMATERIALX_BUILD_RENDER_PLATFORMS=OFF',
                 '-DMATERIALX_BUILD_GEN_OSL=OFF',
-                '-DMATERIALX_BUILD_GEN_MDL=OFF'])
+                '-DMATERIALX_BUILD_GEN_MDL=OFF',
+                '-DMATERIALX_BUILD_GEN_GLSL=ON',
+                '-DMATERIALX_BUILD_GEN_MSL=OFF',
+                ])
+            # MaterialX/source/MaterialXRenderGlsl/CMakeLists.txt will error if compiling 
+            # on MacOS and APPLE=ON is not set.
+            # Consider change to MaterialX to move find_package(OpenGL REQUIRED) outside of the platform
+            # if(APPLE/UNIX) block
+            # Note: USD requires -DMATERIALX_BUILD_RENDER=ON tools for materialXFilter.cpp
+            #       so we cannot just disable that compiler flag.
+            if MacOS():
+                cmakeOptions.append('-DAPPLE=ON')
 
 
         elif MacOSTargetEmbedded(context):
@@ -2164,6 +2187,9 @@ def InstallUSD(context, force, buildArgs):
 
         if context.buildMaterialX:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=ON')
+            if context.targetWasm:
+                # build is failing without this being set
+                extraArgs.append(f'-DMaterialX_DIR="{context.instDir}/lib/cmake/MaterialX"')
         else:
             extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=OFF')
 
@@ -2190,6 +2216,7 @@ def InstallUSD(context, force, buildArgs):
         extraArgs += buildArgs
 
         if context.targetWasm:
+            extraArgs.append('-DPXR_ENABLE_METAL_SUPPORT=OFF')
 
             if context.buildJsBindings:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=ON')
@@ -2393,15 +2420,6 @@ if MacOS():
                        default=codesignDefault, action="store_true",
                        help=("Enable code signing for macOS builds "
                              "(defaults to enabled on Apple Silicon)"))
-
-group.add_argument("--webgpu", dest="buildWebGPU", action="store_true",
-                    help="Build WebGPU Hgi")
-
-subgroup = group.add_mutually_exclusive_group()
-subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_true",
-                    default=True, help="Build with JavaScript bindings")
-subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
-                    help="Do not build with JavaScript bindings")
 
 if Linux():
     group.add_argument("--use-cxx11-abi", type=int, choices=[0, 1],
@@ -2632,6 +2650,15 @@ subgroup.add_argument("--no-animx-tests",
                       dest="build_animx_tests", action="store_false",
                       help="Do not build AnimX spline tests (default)")
 
+group = parser.add_argument_group(title="Web")
+group.add_argument("--webgpu", dest="buildWebGPU", action="store_true",
+                    help="Build WebGPU Hgi")
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_true",
+                    default=True, help="Build with JavaScript bindings")
+subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
+                    help="Do not build with JavaScript bindings")
+
 args = parser.parse_args()
 
 class InstallContext:
@@ -2712,7 +2739,7 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
-        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM_NODE or args.build_target == TARGET_WASM64)
+        self.targetWasm = ( args.build_target in (TARGET_WASM, TARGET_WASM_NODE, TARGET_WASM64) ) # bool
         self.targetWasm64 = (args.build_target == TARGET_WASM64)
 
         self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
@@ -3163,11 +3190,13 @@ summaryMsg += """\
       AnimX Tests:              {buildAnimXTests}
     Examples                    {buildExamples}
     Tutorials                   {buildTutorials}
-    WebGPU                      {buildWebGPU}
     Tools                       {buildTools}
     Alembic Plugin              {buildAlembic}
       HDF5 support:             {enableHDF5}
     Draco Plugin                {buildDraco}
+    Web
+      Javascript Bindings       {buildJsBindings}
+      WebGPU                    {buildWebGPU}
 
   Dependencies                  {dependencies}"""
 

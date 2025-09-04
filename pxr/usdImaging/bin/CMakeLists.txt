@@ -12,6 +12,6 @@ if (${PXR_ENABLE_MATERIALX_SUPPORT} AND NOT EMSCRIPTEN)
     add_subdirectory(usdBakeMtlx)
 endif()
 
-if (${PXR_ENABLE_WEBGPU_SUPPORT} AND EMSCRIPTEN)
+if (${PXR_BUILD_JS_USDVIEWWEB})
     add_subdirectory(usdviewweb)
 endif()
