@@ -41,3 +41,19 @@ python3 ./wasm-server.py
 See [usdweb.html](usdweb.html)
 <br>or<br> 
 from the Chrome Developer Console, type `Module` to see the commands exposed.
+
+# Implementation Notes
+## Useful functions in usdweb.html
+
+Here are some Javascript functions in `usdweb.html` worth highlighting:
+- **fetchFileToFS()**
+Lower level function that will load a file into the virtual filesystem.  It works with local files as well as http and github.com.
+
+- **openStageFromUsdfile()**
+Loads the specified file into the virtual filesystem and then loads it.  Calls fetchFileToFS().
+
+- **loadscene_with_deps_and_actions()**
+Higher-level function that loads the USD stage, allows for specifying additional dependencies to fetch to the virtual filesystem.  It also has a callback hook so one can execute a script after the USD stage has loaded.
+
+- **downloadTextFileFromFS()**
+This allows one to download a resulting text file (often a logfile) from the virtual system to the main filesystem.
