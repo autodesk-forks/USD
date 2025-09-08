@@ -1467,6 +1467,8 @@ namespace {
             }
         }
 
+        std::sort(reprs.begin(), reprs.end());
+
         return reprs;
     }
 };
