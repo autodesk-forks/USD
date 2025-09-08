@@ -11,7 +11,7 @@ if (PXR_ENABLE_MATERIALX_SUPPORT)
         sdrGlslfx
     )
     list(APPEND optionalLinkOptions
-        "--preload-file ${CMAKE_INSTALL_PREFIX}/libraries@/libraries/ "
+        "--preload-file ${MATERIALX_STDLIB_DIR}@/libraries/ "
     )
 endif()
 

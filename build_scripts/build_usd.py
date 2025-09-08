@@ -768,7 +768,7 @@ def InstallZlib(context, force, buildArgs):
         PatchFile("CMakeLists.txt",
                   [("install(TARGETS zlib zlibstatic",
                     "install(TARGETS zlibstatic")])
-        extraArgs = ['-DZLIB_BUILD_EXAMPLES=OFF'] + HIDDEN_SYMBOLS
+        extraArgs = ['-DZLIB_BUILD_EXAMPLES=OFF', '-DBUILD_SHARED_LIBS=OFF'] + HIDDEN_SYMBOLS
         RunCMake(context, force, buildArgs + extraArgs)
 
 ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
@@ -1516,10 +1516,13 @@ def InstallOpenSubdiv(context, force, buildArgs):
             '-DNO_TBB=ON',
         ]
         if context.targetWasm:
-            extraArgs.append('-DBUILD_SHARED_LIB=OFF')
-            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
-            extraArgs.append('-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
+            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
+            win32Macros = '-DNOMINMAX -D_USE_MATH_DEFINES'
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + win32Macros + ' ' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_C_FLAGS="' + win32Macros + ' ' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
+            extraArgs.append('-DCMAKE_C_FLAGS=" -DNOMINMAX -D_USE_MATH_DEFINES '+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
             extraArgs.append('-DNO_METAL=ON')
+            extraArgs.append('-DOSD_GPU=OFF')
 
         # Use Metal for macOS and all Apple embedded systems.
         if MacOS() and not context.buildWebGPU:
@@ -2713,7 +2716,7 @@ class InstallContext:
 
         # Emscripten only supports MinGW on Windows
         if self.targetWasm and Windows():
-            self.cmakeGenerator = 'MinGW Makefiles'
+            self.cmakeGenerator = 'Ninja'
 
         # WebGPU is the default graphics API for wasm
         self.buildWebGPU = args.buildWebGPU or self.targetWasm
