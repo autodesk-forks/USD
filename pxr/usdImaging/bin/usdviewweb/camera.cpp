@@ -256,3 +256,22 @@ const pxr::GfMatrix4d Camera::getProjectionMatrix() {
     frustum.SetPerspective(fov * (180/3.14), screenDimensions[2] / screenDimensions[3], diameter / 100, diameter * 10);
     return frustum.ComputeProjectionMatrix();
 }
+
+pxr::GfMatrix4d Camera::pickingMatrix(double x, double y) const {
+    double width =  screenDimensions[2], height = screenDimensions[3];
+    pxr::GfFrustum frustum;
+    frustum.SetPerspective(fov * (180/3.14), screenDimensions[2] / screenDimensions[3], diameter / 100, diameter * 10);
+    pxr::GfVec2i startPos = pxr::GfVec2i(x - 1, y - 1);
+    pxr::GfVec2i endPos   = pxr::GfVec2i(x + 1, y + 1);
+
+    pxr::GfVec2d min(2.0*startPos[0]/width-1, 1-2*startPos[1]/height);
+    pxr::GfVec2d max(2.0*(endPos[0]+1)/width-1, 1-2*(endPos[1]+1)/height);
+    // scale window
+    pxr::GfVec2d origin = frustum.GetWindow().GetMin();
+    pxr::GfVec2d scale = frustum.GetWindow().GetMax() - frustum.GetWindow().GetMin();
+    min = origin + pxr::GfCompMult(scale, 0.5 * (pxr::GfVec2d(1.0, 1.0) + min));
+    max = origin + pxr::GfCompMult(scale, 0.5 * (pxr::GfVec2d(1.0, 1.0) + max));
+
+    frustum.SetWindow(pxr::GfRange2d(min, max));
+    return frustum.ComputeProjectionMatrix();
+}

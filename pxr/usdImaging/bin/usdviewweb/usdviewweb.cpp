@@ -316,6 +316,7 @@ struct VertexOutput {
         renderParams.colorCorrectionMode = pxr::HdxColorCorrectionTokens->sRGB;
         renderParams.highlight = true;
         renderParams.clearColor = pxr::GfVec4f(0.5f);
+        glEngine->SetSelectionColor(pxr::GfVec4f(1, 1, 0, 1));
     }
 
     void setupDefaults(pxr::GfVec3d const &lightPosition) {
@@ -438,9 +439,42 @@ struct VertexOutput {
             window.dispatchEvent(event);
         });
         int frameIndex = 0;
+
+        SdfPathVector selection;
+
+        auto returnHits = [&selection,&wstate](UsdImagingGLEngine::IntersectionResultVector outResults) -> void {
+            selection.clear();
+            if (outResults.size() > 0) {
+                std::cout << "Hit "
+                    << outResults[0].hitPoint << ", "
+                    << outResults[0].hitNormal << ", "
+                    << outResults[0].hitPrimPath << ", "
+                    << outResults[0].hitInstancerPath << ", "
+                    << outResults[0].hitInstanceIndex << "\n";
+                selection.push_back(outResults[0].hitPrimPath);
+            } else {
+                std::cout << "No hit " << std::endl;
+            }
+            wstate.pickingState = PickingState::Ready;
+        };
         loop = [&]() {
 
             glfwSwapInterval(1);
+            glfwPollEvents();
+            if (wstate.pickingState == PickingState::Requested) {
+                pxr::UsdImagingGLEngine::PickParams pickParams = {
+                    HdxPickTokens->resolveNearestToCenter,
+                };
+                UsdImagingGLRenderParams params;
+                glEngine->TestIntersection(
+                        pickParams,
+                        camera.getViewMatrix(),
+                        camera.pickingMatrix(wstate.mouseX, wstate.mouseY),
+                        stage->GetPseudoRoot(),
+                        params,
+                        returnHits);
+                wstate.pickingState = PickingState::Processing;
+            }
             // update the uniforms
             // blit the texture data to the OpenGL framebuffer
             camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));
@@ -469,6 +503,7 @@ struct VertexOutput {
                 const event = new CustomEvent('onframechanged', {detail: {frameIndex: $0}});
                 window.dispatchEvent(event);
             }, frameIndex);
+            glEngine->SetSelected(selection);
             glEngine->Render(stage->GetPseudoRoot(), renderParams);
             EM_ASM({
                 const frameIndex = $0;
@@ -549,7 +584,6 @@ struct VertexOutput {
             device.GetQueue().Submit(1, &commands);
             if (numFrames > 0) frameIndex++;
 
-            glfwPollEvents();
             if (numFrames > 0 && frameIndex == numFrames) {
                 emscripten_cancel_main_loop();
                 glfwDestroyWindow(window);
@@ -560,7 +594,6 @@ struct VertexOutput {
                 surface.Present();
                 instance.ProcessEvents();
             #endif
-
         };
         emscripten_set_main_loop(main_loop, 0, true);
         glfwDestroyWindow(window);

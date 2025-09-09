@@ -393,7 +393,7 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
         // doesn't like an emscripten_sleep within another block containing and emscripten_sleep
         for(std::unique_ptr<StagingData>& stagingData : _stagingDataItems)
         {
-            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->size, wgpu::CallbackMode::AllowProcessEvents,
+            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->size, wgpu::CallbackMode::AllowSpontaneous,
                 [](wgpu::MapAsyncStatus status, wgpu::StringView message, StagingData* rawStagingData)
             {
                 std::unique_ptr<StagingData> stagingData{rawStagingData};

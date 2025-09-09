@@ -47,11 +47,10 @@ public:
 	void setViewport(pxr::GfVec4d screenDims) { screenDimensions = screenDims; }
 
 	const pxr::GfMatrix4d &getViewMatrix() const { return viewMatrix; }
-    const pxr::GfMatrix4d getProjectionMatrix();
-    pxr::GfMatrix4d pickingMatrix(double x, double y) const;
+	const pxr::GfMatrix4d getProjectionMatrix();
+	pxr::GfMatrix4d pickingMatrix(double x, double y) const;
 
-
-    bool sphere(double d);
+	bool sphere(double d);
 
 	void update();
 	void mouseUp();
@@ -90,7 +89,6 @@ protected:
 
 private:
     double diameter = 0;
-    double distance = 0;
     double fov = 45;
 };
 

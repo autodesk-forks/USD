@@ -1124,7 +1124,8 @@ UsdImagingGLEngine::TestIntersection(
     pickCtxParams.clipPlanes = params.clipPlanes;
     pickCtxParams.collection = _intersectCollection;
     pickCtxParams.outHits = &allHits;
-    pickCtxParams.returnHits = [&](pxr::HdxPickHitVector allHits){
+    // Capture what we need by value to avoid dangling references in async callback
+    pickCtxParams.returnHits = [returnHits, this](pxr::HdxPickHitVector allHits){
         IntersectionResultVector outResults;
 
         for(HdxPickHit& hit : allHits)
@@ -1151,13 +1152,20 @@ UsdImagingGLEngine::TestIntersection(
 
             outResults.push_back(res);
         }
-        returnHits(outResults);
-
+        returnHits(std::move(outResults));
     };
     const VtValue vtPickCtxParams(pickCtxParams);
 
     _engine->SetTaskContextData(HdxPickTokens->pickParams, vtPickCtxParams);
-    _Execute(params, _taskController->GetPickingTasks());
+    if (_taskControllerSceneIndex) {
+        _Execute(params, _taskControllerSceneIndex->GetPickingTaskPaths());
+    }
+    else if (_taskController) {
+        _Execute(params, _taskController->GetPickingTaskPaths());
+    }
+    else {
+        TF_CODING_ERROR("No task controller or task controller scene index.");
+    }
 }
 
 bool

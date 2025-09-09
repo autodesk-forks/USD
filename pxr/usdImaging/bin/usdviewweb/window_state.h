@@ -41,15 +41,22 @@ static void error_callback(int error, const char *description)
     std::cout << "Error: " << description << std::endl;
 }
 
+enum class PickingState {
+    Ready,
+    Processing,
+    Requested
+};
+
 // GLFW window state data
 struct WindowState
 {
     WindowState()
-            : mouseX(0.0), mouseY(0.0), mouseButton(-1), mouseButtonState(-1)
+            : mouseX(0.0), mouseY(0.0), mouseButton(-1), mouseButtonState(-1), pickingState(PickingState::Ready)
     { }
     double mouseX, mouseY;
     int mouseButton;
     int mouseButtonState;
+    PickingState pickingState;
     Camera *camera;
 };
 
@@ -59,6 +66,9 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     windowState->mouseButton = button;
     windowState->mouseButtonState = action;
     windowState->camera->mouseDown(button, action, mods, (int)windowState->mouseX, (int)windowState->mouseY);
+    if (action == GLFW_PRESS && windowState->pickingState == PickingState::Ready) {
+        windowState->pickingState = PickingState::Requested;
+    }
 }
 
 void cursor_position_callback(GLFWwindow* window, double x, double y)
