@@ -258,7 +258,7 @@ HgiWebGPUBlitCmds::CopyBufferGpuToGpu(
             srcBuffer->GetBufferHandle(), copyOp.sourceByteOffset,
             dstBuffer->GetBufferHandle(), copyOp.destinationByteOffset,
             copyOp.byteSize);
-        }
+    }
 }
 
 void HgiWebGPUBlitCmds::CopyBufferCpuToGpu(

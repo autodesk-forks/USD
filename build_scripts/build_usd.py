@@ -1520,7 +1520,6 @@ def InstallOpenSubdiv(context, force, buildArgs):
             win32Macros = '-DNOMINMAX -D_USE_MATH_DEFINES'
             extraArgs.append('-DCMAKE_CXX_FLAGS="' + win32Macros + ' ' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
             extraArgs.append('-DCMAKE_C_FLAGS="' + win32Macros + ' ' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
-            extraArgs.append('-DCMAKE_C_FLAGS=" -DNOMINMAX -D_USE_MATH_DEFINES '+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "')
             extraArgs.append('-DNO_METAL=ON')
             extraArgs.append('-DOSD_GPU=OFF')
 
