@@ -105,6 +105,16 @@ HgiGLCapabilities::_LoadCapabilities()
     glGetIntegerv(GL_MAX_CLIP_PLANES, &maxClipDistances);
     _maxClipDistances = maxClipDistances;
 
+    // 1D and 2D
+    GLint maxTextureSize = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    _maxTextureDimension[0] = _maxTextureDimension[1] =
+        static_cast<uint32_t>(maxTextureSize);
+    // 3D
+    GLint max3dTextureSize = 0;
+    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &max3dTextureSize);
+    _maxTextureDimension[2] = static_cast<uint32_t>(max3dTextureSize);
+
     // initialize by Core versions
     if (_glVersion >= 310) {
         GLint maxUniformBlockSize = 0;
