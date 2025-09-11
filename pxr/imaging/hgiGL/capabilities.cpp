@@ -200,6 +200,7 @@ HgiGLCapabilities::_LoadCapabilities()
     _SetFlag(HgiDeviceCapabilitiesBitsRoundPoints,
         nativeRoundPointsEnabled);
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, true);
+    _SetFlag(HgiDeviceCapabilitiesBitsPackedInt1010102Vertices, true);
 
     if (TfDebug::IsEnabled(HGI_DEBUG_DEVICE_CAPABILITIES)) {
         std::cout

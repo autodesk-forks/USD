@@ -1527,7 +1527,7 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
 
             if (primvar.name == HdTokens->normals) {
                 if (isNormalsComputedPrimvar) {
-                    HF_VALIDATION_WARN(id, 
+                    HF_VALIDATION_WARN(id,
                         "'normals' specified as both computed and authored "
                         "primvar. Skipping authored value.");
                     continue;
@@ -2120,7 +2120,7 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
 
         if (source->GetName() == HdTokens->normals) {
             if (!TF_VERIFY(!isNormalsComputedPrimvar)) {
-                HF_VALIDATION_WARN(id, 
+                HF_VALIDATION_WARN(id,
                     "'normals' specified as both computed and authored "
                     "primvar. Skipping authored value.");
                 continue;
@@ -2173,18 +2173,18 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
         (*dirtyBits & HdChangeTracker::DirtyNormals) ||
         (*dirtyBits & HdChangeTracker::DirtyWidths);
 
-    HdBufferSpecVector removedSpecs;
-    if (hasDirtyPrimvarDesc) {
-        // no internally generated facevarying primvars
-        TfTokenVector internallyGeneratedPrimvars; // empty
-        removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
-            internallyGeneratedPrimvars, id);
-    }
-
     HdBufferSpecVector bufferSpecs;
     HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
     HdBufferSpec::GetBufferSpecs(reserveOnlySources, &bufferSpecs);
     HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
+
+    HdBufferSpecVector removedSpecs;
+    if (hasDirtyPrimvarDesc) {
+        // no internally generated facevarying primvars
+        TfTokenVector internallyGeneratedPrimvars; // empty
+        removedSpecs = HdStGetRemovedOrReplacedPrimvarBufferSpecs(bar, primvars,
+            internallyGeneratedPrimvars, bufferSpecs, id);
+    }
 
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
@@ -2360,6 +2360,10 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
         (*dirtyBits & HdChangeTracker::DirtyNormals) ||
         (*dirtyBits & HdChangeTracker::DirtyWidths);
 
+    HdBufferSpecVector bufferSpecs;
+    HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
+    HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
+
     HdBufferSpecVector removedSpecs;
     if (hasDirtyPrimvarDesc) {
         // If we've just generated normals then make sure those
@@ -2373,13 +2377,9 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
                 { HdStTokens->packedFlatNormals, HdStTokens->flatNormals };
         }
 
-        removedSpecs = HdStGetRemovedPrimvarBufferSpecs(bar, primvars, 
-            internallyGeneratedPrimvars, id);
+        removedSpecs = HdStGetRemovedOrReplacedPrimvarBufferSpecs(bar, primvars,
+            internallyGeneratedPrimvars, bufferSpecs, id);
     }
-
-    HdBufferSpecVector bufferSpecs;
-    HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
-    HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
 
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
@@ -2698,7 +2698,7 @@ HdStMesh::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
         HdStPopulateConstantPrimvars(this,
                                      &_sharedData,
                                      sceneDelegate,
-                                     renderParam, 
+                                     renderParam,
                                      drawItem,
                                      dirtyBits,
                                      repr,
@@ -2710,7 +2710,7 @@ HdStMesh::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
                                      &hasNormals);
 
         _hasMirroredTransform = hasMirroredTransform;
-        
+
         // Check if normals are provided as a constant primvar
         if (hasNormals) {
             _sceneNormalsInterpolation = HdInterpolationConstant;
@@ -3391,4 +3391,3 @@ HdStMesh::GetInitialDirtyBitsMask() const
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-
