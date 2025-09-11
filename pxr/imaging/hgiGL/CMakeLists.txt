@@ -93,6 +93,8 @@ pxr_register_test(testHgiGL
     FAIL_PERCENT 0.001
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+    ENV
+        HGI_ENABLE_VULKAN=0
 )
 
 # This test is not currently supported on static builds as it relies on 
@@ -111,6 +113,8 @@ pxr_register_test(testHgiGLCommand
     FAIL_PERCENT 0.001
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
+    ENV
+        HGI_ENABLE_VULKAN=0
 )
 
 endif() # BUILD_SHARED_LIBS

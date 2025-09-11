@@ -64,6 +64,7 @@ HgiGLCapabilities::_LoadCapabilities()
     bool builtinBarycentricsEnabled   = false;
     bool shaderDrawParametersEnabled  = false;
     bool conservativeRasterEnabled    = false;
+    bool gpuMemoryInfoEnabled         = false;
     bool nativeRoundPointsEnabled     = true;
 
     const char *glVendorStr = (const char*)glGetString(GL_VENDOR);
@@ -159,6 +160,9 @@ HgiGLCapabilities::_LoadCapabilities()
     if (GARCH_GLAPI_HAS(NV_conservative_raster)) {
         conservativeRasterEnabled = true;
     }
+    if (GARCH_GLAPI_HAS(NVX_gpu_memory_info)) {
+        gpuMemoryInfoEnabled = true;
+    }
 
     // Environment variable overrides (only downgrading is possible)
     if (!TfGetEnvSetting(HGIGL_ENABLE_BINDLESS_TEXTURE)) {
@@ -244,6 +248,8 @@ HgiGLCapabilities::_LoadCapabilities()
             <<    bindlessBufferEnabled << "\n"
             << "  NV_conservative_raster             = "
             <<    conservativeRasterEnabled << "\n"
+            << "  NVX_gpu_memory_info                = "
+            <<    gpuMemoryInfoEnabled << "\n"
             ;
     }
 }
