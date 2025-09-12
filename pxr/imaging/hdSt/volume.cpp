@@ -623,7 +623,7 @@ HdStVolume::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
 
         const HdSt_VolumeShaderKey shaderKey;
         drawItem->SetGeometricShader(
-            HdSt_GeometricShader::Create(shaderKey, resourceRegistry));
+            HdSt_GeometricShader::Create(shaderKey, {}, {}, resourceRegistry));
 
         /* TRIANGLE INDICES */
         {
