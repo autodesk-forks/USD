@@ -39,7 +39,7 @@ from shutil import which
 # Helpers for printing output
 verbosity = 1
 EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-pthread'
-EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread'
+EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread --use-port=zlib'
 TARGET_WASM='wasm'
 TARGET_WASM64='wasm64'
 TARGET_WASM_NODE='node'
