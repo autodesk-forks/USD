@@ -73,7 +73,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <tbb/blocked_range.h>
 #include <tbb/cache_aligned_allocator.h>
 #include <tbb/combinable.h>
 #include <tbb/concurrent_hash_map.h>
@@ -82,12 +81,8 @@
 #include <tbb/concurrent_unordered_set.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/enumerable_thread_specific.h>
-#include <tbb/parallel_for.h>
-#include <tbb/parallel_for_each.h>
 #include <tbb/spin_mutex.h>
 #include <tbb/spin_rw_mutex.h>
-#include <tbb/task.h>
-#include <tbb/task_group.h>
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
 #include "pxr/base/tf/pySafePython.h"
 #endif // PXR_PYTHON_SUPPORT_ENABLED

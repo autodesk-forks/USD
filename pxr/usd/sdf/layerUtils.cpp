@@ -193,4 +193,22 @@ SdfComputeAssetPathRelativeToLayer(
     return Sdf_CreateIdentifier(resolver.CreateIdentifier(strippedAssetPath, anchor->GetResolvedPath()), layerArgs);
 }
 
+std::string
+SdfResolveAssetPathRelativeToLayer(
+    const SdfLayerHandle& anchor,
+    const std::string& assetPath)
+{
+    if (assetPath.empty() ||
+        SdfLayer::IsAnonymousLayerIdentifier(assetPath)) {
+        return assetPath;
+    }
+    const std::string computedAssetPath = 
+        SdfComputeAssetPathRelativeToLayer(anchor, assetPath);
+    if (computedAssetPath.empty()) {
+        return computedAssetPath;
+    }
+
+    return ArGetResolver().Resolve(computedAssetPath);
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

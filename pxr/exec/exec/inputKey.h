@@ -42,8 +42,13 @@ struct Exec_InputKey
     ///
     ExecProviderResolution providerResolution;
 
+    /// Indicates whether or not the input will fall back to looking for a
+    /// dispatched computation if a local computation can't be found.
+    ///
+    bool fallsBackToDispatched:1;
+
     /// Indicates whether or not the input is optional.
-    bool optional;
+    bool optional:1;
 };
 
 /// A vector of input keys.

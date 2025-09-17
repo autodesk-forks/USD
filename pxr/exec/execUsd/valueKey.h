@@ -23,6 +23,16 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class ExecValueKey;
 
+/// Represents expired value keys.
+///
+/// Records the path and computation for debugging purposes.
+///
+struct ExecUsd_ExpiredValueKey
+{
+    SdfPath path;
+    TfToken computation;
+};
+
 /// Represents attribute value keys.
 struct ExecUsd_AttributeValueKey
 {
@@ -60,7 +70,12 @@ private:
     template <typename Visitor>
     friend auto ExecUsd_VisitValueKey(Visitor &&, const ExecUsdValueKey &);
 
+    // Expires a value key by replacing it with an ExecUsd_ExpiredValueKey.
+    friend void
+    ExecUsd_ExpireValueKey(ExecUsdValueKey *);
+
     std::variant<
+        ExecUsd_ExpiredValueKey,
         ExecUsd_AttributeValueKey,
         ExecUsd_PrimComputationValueKey
     > _key;

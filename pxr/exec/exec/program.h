@@ -19,6 +19,7 @@
 #include "pxr/base/ts/spline.h"
 #include "pxr/exec/ef/leafNodeCache.h"
 #include "pxr/exec/ef/time.h"
+#include "pxr/exec/esf/schemaConfigKey.h"
 #include "pxr/exec/vdf/isolatedSubnetwork.h"
 #include "pxr/exec/vdf/maskedOutput.h"
 #include "pxr/exec/vdf/maskedOutputVector.h"
@@ -279,10 +280,12 @@ public:
     void SetNodeRecompilationInfo(
         const VdfNode *node,
         const EsfObject &provider,
+        const EsfSchemaConfigKey dispatchingSchemaId,
         Exec_InputKeyVectorConstRefPtr &&inputKeys) {
         _nodeRecompilationInfoTable.SetNodeRecompilationInfo(
             node,
             provider,
+            dispatchingSchemaId,
             std::move(inputKeys));
     }
 

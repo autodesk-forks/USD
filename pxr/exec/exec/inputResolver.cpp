@@ -48,10 +48,12 @@ public:
     static Exec_OutputKeyVector ResolveInput(
         const EsfStage &stage,
         const EsfObject &origin,
+        const EsfSchemaConfigKey dispatchingSchemaKey,
         const Exec_InputKey &inputKey,
         EsfJournal *const journal)
     {
-        _InputResolver resolver(stage, origin, journal);
+        _InputResolver resolver(stage, origin, journal, dispatchingSchemaKey);
+
         return resolver._ResolveInput(inputKey);
     }
 
@@ -62,11 +64,13 @@ private:
     _InputResolver(
         const EsfStage &stage,
         const EsfObject &origin,
-        EsfJournal *const journal)
+        EsfJournal *const journal,
+        const EsfSchemaConfigKey dispatchingSchemaKey)
         : _currentObject(nullptr)
         , _currentPrim(nullptr)
         , _currentAttribute(nullptr)
         , _journal(journal)
+        , _dispatchingSchemaKey(dispatchingSchemaKey)
         , _stage(stage.Get())
         , _definitionRegistry(Exec_DefinitionRegistry::GetInstance())
     {
@@ -286,6 +290,24 @@ private:
         return true;
     }
 
+    // Returns the schema config key to use in an output key for the given
+    // computation definition; i.e., this config key will be used for
+    // computation lookup for any inputs that request dispatched computations.
+    //
+    EsfSchemaConfigKey _GetDispatchingConfigKeyForOutputKey(
+        const Exec_ComputationDefinition *const computationDefinition)
+    {
+        // If we found a dispatched computation, then we pass along the
+        // dispatching schema config key, to support recursive dispatching.
+        if (computationDefinition->IsDispatched()) {
+            TF_VERIFY(_dispatchingSchemaKey != EsfSchemaConfigKey());
+            return _dispatchingSchemaKey;
+        }
+
+        // Otherwise, return the current provider's schema config key.
+        return _currentObject->GetSchemaConfigKey(_journal);
+    }
+
     // Returns the ouput keys for the objects targeted by the forwarded targets
     // of the currrent relationship, for the computation of the given name and
     // result type.
@@ -313,6 +335,7 @@ private:
                 _FindComputationDefinition(computationName, resultType)) {
                 outputKeys.emplace_back(
                     _currentObject->AsObject(),
+                    _GetDispatchingConfigKeyForOutputKey(computationDefinition),
                     computationDefinition);
             }
         }
@@ -359,6 +382,7 @@ private:
                 _definitionRegistry.GetComputationDefinition(
                     *_currentPrim,
                     computationName,
+                    _dispatchingSchemaKey,
                     _journal);
             
             if (computationDefinition &&
@@ -385,7 +409,7 @@ private:
     // If found, the returned definition may refer to a prim computation or an
     // attribute computation. If not found, this returns nullptr.
     // 
-    const Exec_ComputationDefinition * _FindComputationDefinition(
+    const Exec_ComputationDefinition *_FindComputationDefinition(
         const TfToken &computationName,
         const TfType resultType) const
     {
@@ -396,6 +420,7 @@ private:
                 _definitionRegistry.GetComputationDefinition(
                     *_currentPrim,
                     computationName,
+                    _dispatchingSchemaKey,
                     _journal);
         }
         else if (_currentAttribute) {
@@ -490,7 +515,9 @@ private:
         }
 
         return {
-            {_currentObject->AsObject(), computationDefinition}
+            {_currentObject->AsObject(),
+             _GetDispatchingConfigKeyForOutputKey(computationDefinition),
+             computationDefinition}
         };
     }
 
@@ -510,6 +537,7 @@ private:
 
     // Scene traversals log entries to this journal.
     EsfJournal *const _journal;
+    const EsfSchemaConfigKey _dispatchingSchemaKey;
     const EsfStageInterface *const _stage;
     const Exec_DefinitionRegistry &_definitionRegistry;
 };
@@ -520,11 +548,13 @@ Exec_OutputKeyVector
 Exec_ResolveInput(
     const EsfStage &stage,
     const EsfObject &origin,
+    const EsfSchemaConfigKey dispatchingSchemaKey,
     const Exec_InputKey &inputKey,
     EsfJournal *const journal)
 {
     TRACE_FUNCTION();
-    return _InputResolver::ResolveInput(stage, origin, inputKey, journal);
+    return _InputResolver::ResolveInput(
+        stage, origin, dispatchingSchemaKey, inputKey, journal);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

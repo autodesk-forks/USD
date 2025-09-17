@@ -1437,5 +1437,115 @@ class TestPcpDynamicFileFormatPlugin(unittest.TestCase):
         print("test_AttrNamespaceEdits (cacheInUsdMode={}) Success\n".format(
                 cacheInUsdMode))
 
+    def test_AssetPathArgResolution(self):
+        """Tests that dynamic payloads can resolve asset path inputs when 
+        generating file format arguments."""
+
+        # Helper for getting a list of all payload nodes in a primIndex
+        def _GetAllPayloadNodes(primIndex):
+            nodes = []
+            def _TraverseSubtree(root):
+                if root.arcType == Pcp.ArcTypePayload:
+                    nodes.append(root)
+                for child in root.children:
+                    _TraverseSubtree(child)
+            _TraverseSubtree(primIndex.rootNode)
+            return nodes
+
+        # Helper for verifying that a node has the expected file format 
+        # arguments as specified in the keyword arguments for this function.
+        def _VerifyFileFormatArguments(node, **expectedFileFormatArgs):
+            # Get the file format arguments for the node's layer stack.
+            fileFormatArgs = (
+                node.site.layerStack.identifier.rootLayer.GetFileFormatArguments())
+            # The file format args dictionary should match the expected args
+            # keyword dictionary.
+            self.assertEqual(fileFormatArgs, expectedFileFormatArgs)
+
+        # Get the working directory which will be different depending where the
+        # test is run but is necessary to create the absolute resolved paths
+        # of the assets paths that we expect the dynamic payload to produce.
+        workingDir = os.getcwd()
+
+        # Create a layer with single prim with a payload to the asset path using
+        # the dynamic file format that takes asset path inputs. See the 
+        # TestPcpAssetPathDynamicFileFormatPlugin for the details of what inputs
+        # it takes and how it coverts them into file format arguments.
+        mainLayer = Sdf.Layer.CreateAnonymous("main.usda")
+        mainLayer.ImportFromString('''#usda 1.0
+            def "Root" (
+                payload = @anon:dummy:placeholder.testassetpathpcpdynamic@
+            ) {
+            }
+        ''')
+
+        # Create a PcpCache and load payloads for /Root so we process the 
+        # dynamic payload.
+        cache = self._CreatePcpCache(mainLayer, usd=True)
+        cache.RequestPayloads(['/Root'], [])
+
+        # Compute the prim index for root.
+        pi, _ = cache.ComputePrimIndex("/Root")
+
+        # Verify that we have a single payload node but it has no file format
+        # arguments as we haven't provided any opinions that would be parsed
+        # into file format arguments.
+        payloadNodes = _GetAllPayloadNodes(pi)
+        self.assertEqual(len(payloadNodes), 1)
+        _VerifyFileFormatArguments(payloadNodes[0])
+
+        # Add a reference to assetDir1/ref1.usda to the Root prim. This provides
+        # the two argument parameters:
+        # asset TestPcp_assetPath = @`"./${X}.usda"`@
+        # asset[] TestPcp_assetPathArray = [@`"./${X}.usda"`@, @localLayer.usda@]
+        rootSpec = mainLayer.GetPrimAtPath("/Root")
+        with Pcp._TestChangeProcessor(cache):
+            rootSpec.referenceList.Prepend(
+                Sdf.Reference(os.path.join(workingDir, 'assetDir1/ref1.usda')))
+
+        # Recompute the updated prim index for /Root
+        pi, _ = cache.ComputePrimIndex("/Root")
+
+        # Verify that we have a single payload node but it has now has computed
+        # file format arguments. The resolved path arguments have their 
+        # expression variables substituted and paths resolved relative to the
+        # layer the arguments were defined in, i.e. assetDir1/ref1.usda.
+        payloadNodes = _GetAllPayloadNodes(pi)
+        self.assertEqual(len(payloadNodes), 1)
+        resolvedAssetPath = os.path.join(workingDir, 'assetDir1', 'localLayer.usda')
+        _VerifyFileFormatArguments(payloadNodes[0], 
+            TestPcp_assetPath='./localLayer.usda',
+            TestPcp_resolvedAssetPath= resolvedAssetPath,
+            TestPcp_assetPathArray='[./localLayer.usda,localLayer.usda]',
+            TestPcp_resolvedAssetPathArray=
+                '[{path},{path}]'.format(path=resolvedAssetPath))
+
+        # Add a stronger reference to assetDir2/ref2.usda to the Root prim. This 
+        # provides the two argument parameters:
+        # asset TestPcp_assetPath = "localLayer.usda"
+	    # asset[] TestPcp_assetPathArray = ["./localLayer.usda", "localLayer.usda"]
+        rootSpec = mainLayer.GetPrimAtPath("/Root")
+        with Pcp._TestChangeProcessor(cache):
+            rootSpec.referenceList.Prepend(Sdf.Reference(
+                os.path.join(workingDir, 'assetDir2/ref2.usda')))
+
+        # Recompute the updated prim index for /Root
+        pi, _ = cache.ComputePrimIndex("/Root")
+
+        # Verify that we have a single payload node but it now with different
+        # computed file format arguments. The resolved path arguments have their 
+        # paths resolved relative to the stronger reference layer the arguments
+        # were defined in which is now assetDir2/ref2.usda.
+        payloadNodes = _GetAllPayloadNodes(pi)
+        self.assertEqual(len(payloadNodes), 1)
+        resolvedAssetPath = os.path.join(workingDir, 'assetDir2', 'localLayer.usda')
+        _VerifyFileFormatArguments(payloadNodes[0], 
+            TestPcp_assetPath='localLayer.usda',
+            TestPcp_resolvedAssetPath=resolvedAssetPath,
+            TestPcp_assetPathArray='[./localLayer.usda,localLayer.usda]',
+            TestPcp_resolvedAssetPathArray=
+                '[{path},{path}]'.format(path=resolvedAssetPath))
+
+
 if __name__ == "__main__":
     unittest.main()

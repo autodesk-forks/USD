@@ -16,6 +16,8 @@
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/token.h"
 
+#include <memory>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 class EsfJournal;
@@ -39,13 +41,29 @@ public:
     /// callback. The \p inputKeys indicate how to source the computation's
     /// input values.
     ///
+    /// If \p dispatchesOntoSchemas is null, the computation is non-dispatched.
+    /// Otherwise, it is a dispatched computation that dispatches onto prim with
+    /// the given list of schemas, or to all prims, if the list is empty.
+    ///
     Exec_PluginComputationDefinition(
         TfType resultType,
         const TfToken &computationName,
         ExecCallbackFn &&callback,
-        Exec_InputKeyVectorRefPtr &&inputKeys);
+        Exec_InputKeyVectorRefPtr &&inputKeys,
+        std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas = {});
 
     ~Exec_PluginComputationDefinition() override;
+
+    bool IsDispatched() const override;
+
+    /// Returns the list of schemas used to restrict the prims this computation
+    /// dispatches onto, if it is a dispatched computation.
+    ///
+    /// \warning
+    /// An error is emitted if the computation definition is for a
+    /// non-dispatched computation.
+    ///
+    const ExecDispatchesOntoSchemas &GetDispatchesOntoSchemas() const;
 
     Exec_InputKeyVectorConstRefPtr GetInputKeys(
         const EsfObjectInterface &providerObject,
@@ -59,6 +77,7 @@ public:
 private:
     const ExecCallbackFn _callback;
     const Exec_InputKeyVectorConstRefPtr _inputKeys;
+    const std::unique_ptr<ExecDispatchesOntoSchemas> _dispatchesOntoSchemas;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

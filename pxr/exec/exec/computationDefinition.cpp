@@ -37,4 +37,10 @@ Exec_ComputationDefinition::GetExtractionType(
     return _resultType;
 }
 
+bool
+Exec_ComputationDefinition::IsDispatched() const
+{
+    return false;
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -13,6 +13,9 @@
 
 #include "pxr/exec/vdf/parallelExecutorEngineBase.h"
 
+#include "pxr/base/work/taskGraph.h"
+#include "pxr/base/work/withScopedParallelism.h"
+
 #include <tbb/concurrent_unordered_map.h>
 
 #include <atomic>
@@ -28,9 +31,10 @@ template <typename> class VdfParallelSpeculationExecutorEngine;
 ///
 /// \class VdfParallelExecutorEngine
 ///
-/// A generic, parallel executor engine, deriving from
-/// VdfParallelExecutorEngineBase. The engine supports arena execution,
-/// locking, and touching. This engine does not do cycle detection.
+/// A generic, but fully-featured parallel executor engine, deriving from
+/// VdfParallelExecutorEngineBase.
+/// 
+/// This engine does not perform cycle detection.
 ///
 template < typename DataManagerType >
 class VdfParallelExecutorEngine :
@@ -156,7 +160,7 @@ private:
 
     // TBB task wrapping for publishing locked data to public buffers.
     //
-    class _PublishLockedDataTask : public tbb::task 
+    class _PublishLockedDataTask : public WorkTaskGraph::BaseTask 
     {
     public:
         // Constructor. Note that the task takes ownership of lockedData and
@@ -173,7 +177,7 @@ private:
 
         // Task execution entry point.
         //
-        tbb::task *execute() override;
+        WorkTaskGraph::BaseTask *execute() override;
 
     private:
         DataManagerType *_dataManager;
@@ -285,33 +289,26 @@ VdfParallelExecutorEngine<DataManagerType>::_PublishLockedBuffers()
 
     PEE_TRACE_SCOPE("VdfParallelExecutorEngine::_PublishLockedBuffers");
 
-    // Get a pointer to the TBB root task for synchronization.
-    tbb::empty_task *rootTask = Base::_rootTask;
+    WorkWithScopedParallelism(
+        [&lockedDataMap = _lockedDataMap, &taskGraph = Base::_taskGraph,
+            &dataManager = Base::_dataManager] {
+        // For each entry in the locked data map, spawn a new task to publish
+        // the locked data.
+        for (const auto &data : lockedDataMap) {
+            // Allocate a new task responsible for publishing the data. Note
+            // that the _PublishLockedDataTask will take ownership of the locked
+            // data structure, and is responsible for deallocating it.
+            _PublishLockedDataTask * const task =
+                taskGraph.template AllocateTask<_PublishLockedDataTask>(
+                    dataManager, data.first, data.second);
+            taskGraph.RunTask(task);
+        }
 
-    // For each entry in the locked data map, spawn a new task to publish the
-    // locked data.
-    for (const auto &data : _lockedDataMap) {
-        // Allocate a new task responsible for publishing the data. Note that
-        // the _PublishLockedDataTask will take ownership of the locked data
-        // structure, and is responsible for deallocating it.
-        tbb::task *task =
-            new (tbb::task::allocate_additional_child_of(*rootTask))
-                _PublishLockedDataTask(
-                    Base::_dataManager, data.first, data.second);
+        // Clear the map, while the data is still being published.
+        lockedDataMap.clear();
 
-        // Spawn the newly allocated task in this engine's own arena.
-        Base::_ArenaExecute([task]{
-            tbb::task::spawn(*task);
-        });
-    }
-
-    // Clear the map, while the data is still being published.
-    _lockedDataMap.clear();
-
-    // Wait for all the publishing to complete, while joining the arena to
-    // help out with any of the remaining work.
-    Base::_ArenaExecute([rootTask]{
-        rootTask->wait_for_all();
+        // Wait for all the publishing to complete.
+        taskGraph.Wait();
     });
 }
 
@@ -354,7 +351,9 @@ VdfParallelExecutorEngine<DataManagerType>::_InsertLockedData(
     // some of these compute tasks not being invoked, and cause the locked
     // buffer to be incomplete.
     else if (tasks.size() > 1) {
-        Base::_InvokeComputeTasks(tasks, state, node, Base::_rootTask, nullptr);
+        Base::_taskGraph.RunTask(
+            Base::_taskGraph.template AllocateTask<
+                typename Base::_ComputeAllTask>(this, state, node));
     }
 
     // Return a pointer to the locked data structure instance (either the newly
@@ -363,7 +362,7 @@ VdfParallelExecutorEngine<DataManagerType>::_InsertLockedData(
 }
 
 template < typename DataManagerType >
-tbb::task *
+WorkTaskGraph::BaseTask *
 VdfParallelExecutorEngine<DataManagerType>::_PublishLockedDataTask::execute()
 {
     // We are going to publish the locked data to the public buffer.

@@ -1,6 +1,8 @@
 add_subdirectory(rmanArgsParser)
 add_subdirectory(rmanDiscovery)
 add_subdirectory(hdPrman)
+add_subdirectory(hdPrmanLoader)
+add_subdirectory(hdPrmanXpuLoader)
 add_subdirectory(rtx_hioImage)
 add_subdirectory(usdRiPxr)
 add_subdirectory(rmanUsdValidators)

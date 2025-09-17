@@ -251,8 +251,10 @@ HdSt_GenMaterialXShader(
 
     // Should have exactly one renderable element (material).
     if (renderableElements.size() != 1) {
-        TF_CODING_ERROR("Generated MaterialX Document does not "
-                        "have 1 material");
+        TF_CODING_ERROR(
+            "Generated MaterialX Document has %lu materials, should only have "
+            "1.\nMake sure mtlx files containing custom node definitions do "
+            "not contain multiple materials.", renderableElements.size());
         return nullptr;
     }
 
@@ -458,10 +460,10 @@ _UpdateMxHdTextureMap(
 
     // Check the terminal node for any filename inputs requiring special
     // handling due to node remapping:
-    const mx::NodeDefPtr mxMaterialNodeDef =
-        HdMtlxStdLibraries()->getNodeDef(hdTerminalNode.nodeTypeId.GetString());
-    if (mxMaterialNodeDef) {
-        for (auto const& mxInput : mxMaterialNodeDef->getActiveInputs()) {
+    const mx::NodeDefPtr terminalNodeDef =
+        HdMtlxGetNodeDef(hdTerminalNode.nodeTypeId);
+    if (terminalNodeDef) {
+        for (auto const& mxInput : terminalNodeDef->getActiveInputs()) {
             if (mxInput->getType() == _tokens->filename) {
                 (*mxHdTextureMap)[mxInput->getName()] = mxInput->getName();
             }
@@ -687,8 +689,12 @@ _AddStrippedSurfaceNode(
     HdMaterialNetwork2 const& hdNetwork)
 {
     // Add the hdNode to the mxDocument
-    mx::NodeDefPtr mxNodeDef =
-        HdMtlxStdLibraries()->getNodeDef(hdNode.nodeTypeId.GetString());
+    mx::NodeDefPtr mxNodeDef = HdMtlxGetNodeDef(hdNode.nodeTypeId);
+    if (!mxNodeDef) {
+        TF_WARN("Unable to find the nodeDef for '%s'.", 
+            hdNode.nodeTypeId.GetText());
+        return mx::NodePtr();
+    }
     mx::NodePtr mxNode = mxDocument->addNodeInstance(mxNodeDef, nodeName);
 
     // Add inputs to the hdNode for each connection
@@ -797,9 +803,13 @@ _GetMaterialTag(
     }
 
     // For terminal nodes not fully specified we require more MaterialX info
-    const mx::DocumentPtr& stdLibraries = HdMtlxStdLibraries();
     mx::NodeDefPtr mxNodeDef =
-        stdLibraries->getNodeDef(mtlxSdrNode->GetIdentifier().GetString());
+        HdMtlxGetNodeDef(TfToken(mtlxSdrNode->GetIdentifier()));
+    if (!mxNodeDef) {
+        TF_WARN("Unable to find the nodeDef for '%s'.", 
+            mtlxSdrNode->GetIdentifier().GetText());
+        return HdStMaterialTagTokens->defaultMaterialTag.GetString();
+    }
 
     const auto activeOutputs = mxNodeDef->getActiveOutputs();
     if (activeOutputs.size() != 1 || 
@@ -842,10 +852,14 @@ _NodeUsesTexcoordPrimvar(const SdrShaderNodeConstPtr mtlxSdrNode)
         return true;
     }
 
-    const mx::DocumentPtr& stdLibraries = HdMtlxStdLibraries();
-    mx::NodeDefPtr mxNodeDef =
-        stdLibraries->getNodeDef(mtlxSdrNode->GetIdentifier().GetString());
-    mx::InterfaceElementPtr impl = mxNodeDef->getImplementation();
+    const mx::NodeDefPtr mxNodeDef =
+        HdMtlxGetNodeDef(TfToken(mtlxSdrNode->GetIdentifier()));
+    if (!mxNodeDef) {
+        TF_WARN("Unable to find the nodeDef for '%s'.", 
+            mtlxSdrNode->GetIdentifier().GetText());
+        return false;
+    }
+    const mx::InterfaceElementPtr impl = mxNodeDef->getImplementation();
     if (impl && impl->isA<mx::NodeGraph>()) {
         mx::NodeGraphPtr nodegraph = impl->asA<mx::NodeGraph>();
         if (!nodegraph->getNodes(_tokens->texcoord).empty()) {
@@ -919,7 +933,7 @@ _UpdateTextureNode(
     // Gather the default Texture Parameters
     std::map<TfToken, VtValue> hdParameters;
     _AddDefaultMtlxTextureValues(
-        HdMtlxStdLibraries()->getNodeDef(hdTextureNode.nodeTypeId.GetString()), 
+        HdMtlxGetNodeDef(hdTextureNode.nodeTypeId),
         &hdParameters);
 
     // Gather the authored Texture Parameters
@@ -950,8 +964,7 @@ _ReplaceFilenameInput(
     std::string const& mxFilenameInputName)
 {
     const auto& hdTerminalNode = hdNetwork->nodes.at(hdTerminalNodePath);
-    const mx::NodeDefPtr mxNodeDef =
-        HdMtlxStdLibraries()->getNodeDef(hdTerminalNode.nodeTypeId.GetString());
+    const mx::NodeDefPtr mxNodeDef = HdMtlxGetNodeDef(hdTerminalNode.nodeTypeId);
     if (!mxNodeDef) {
         return;
     }

@@ -12,6 +12,7 @@
 
 #include "pxr/base/arch/fileSystem.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/errorMark.h"
 #include "pxr/base/tf/pathUtils.h"
 #include "pxr/base/tf/safeOutputFile.h"
@@ -27,6 +28,19 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 namespace
 {
+
+TF_DEFINE_ENV_SETTING(SDF_MAX_ZIPFILE_SIZE, -1,
+"When writing SdfZipFiles, ensure that the length of the archive does not "
+"exceed this size.  If adding a file or saving the archive would push the size "
+"over this value an error will be generated. A negative value indicates that "
+"the maximum allowable size, which is UINT32_MAX, should be used. "
+"This setting is usually only modified for testing purposes. "
+"The default value is -1");
+
+static inline int64_t Sdf_GetMaxZipFileSize() {
+    const int envVal = TfGetEnvSetting(SDF_MAX_ZIPFILE_SIZE);
+    return envVal < 0 ? std::numeric_limits<uint32_t>::max() : envVal;
+}
 
 // Metafunction that determines if a T instance can be read/written by simple
 // bitwise copy.
@@ -104,11 +118,13 @@ struct _OutputStream
         static_assert(_IsBitwiseReadWrite<T>::value, 
                       "Cannot fwrite non-trivially-copyable type");
         fwrite(&value, sizeof(T), 1, _f);
+        _CheckLimit();
     }
 
     inline void Write(const char* buffer, size_t numBytes)
     {
         fwrite(buffer, /* size = */ 1, /* count = */ numBytes, _f);
+        _CheckLimit();
     }
 
     inline long Tell() const
@@ -117,6 +133,17 @@ struct _OutputStream
     }
 
 private:
+    enum _WriteError
+    {
+        MaxArchiveSizeExceeded,
+    };
+
+    inline void _CheckLimit() const {
+        if (Tell() > Sdf_GetMaxZipFileSize()) {
+            TF_ERROR(MaxArchiveSizeExceeded, "Max Archive Size Exceeded");
+        }
+    }
+
     FILE* _f;
 };
 
@@ -929,6 +956,24 @@ SdfZipFileWriter::~SdfZipFileWriter()
     }
 }
 
+static inline bool 
+Sdf_CheckZipFileWriteOperation(const TfErrorMark& mark) {
+    // The zip file writing code and associated mark that this function
+    // is meant to validate should only generate MaxArchiveSizeExceeded errors.
+    // Therefore we do not interrogate individual errors contained in the mark.
+    if (!mark.IsClean()) {
+        mark.Clear();
+        TF_RUNTIME_ERROR(
+            "Zipfile is larger than maximum size allowed by Zip32 (%ld)", 
+                Sdf_GetMaxZipFileSize()
+        );
+
+        return false;
+    }
+
+    return true;
+}
+
 std::string
 SdfZipFileWriter::AddFile(
     const std::string& filePath,
@@ -991,7 +1036,12 @@ SdfZipFileWriter::AddFile(
 
     h.dataStart = mapping.get();
 
+    TfErrorMark mark;
     _WriteLocalFileHeader(outStream, h);
+    if (!Sdf_CheckZipFileWriteOperation(mark)) {
+        return {};
+    }
+
     _impl->addedFiles.emplace_back(zipFilePath, h.f, offset);
 
     return zipFilePath;
@@ -1005,6 +1055,7 @@ SdfZipFileWriter::Save()
         return false;
     }
 
+    TfErrorMark mark;
     _OutputStream outStream(_impl->outputFile.Get());
 
     // Write central directory headers for each file added to the zip archive.
@@ -1042,6 +1093,12 @@ SdfZipFileWriter::Save()
         h.commentStart = nullptr;
 
         _WriteCentralDirectoryHeader(outStream, h);
+        if (!Sdf_CheckZipFileWriteOperation(mark)) {
+            _impl->outputFile.Close();
+            _impl.reset();
+
+            return false;
+        }
     }
 
     const long centralDirectoryEnd = outStream.Tell();
@@ -1065,7 +1122,7 @@ SdfZipFileWriter::Save()
     _impl->outputFile.Close();
     _impl.reset();
 
-    return true;
+    return Sdf_CheckZipFileWriteOperation(mark);
 }
 
 void 

@@ -23,7 +23,7 @@ ExecUsdRequest::~ExecUsdRequest() = default;
 bool
 ExecUsdRequest::IsValid() const
 {
-    return static_cast<bool>(_impl);
+    return _impl && !_impl->GetExpiredIndices().IsAnySet();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -310,6 +310,9 @@ HdStRenderPassState::Prepare(
             HdShaderTokens->lightingBlendAmount,
             HdTupleType{HdTypeFloat, 1});
         bufferSpecs.emplace_back(
+            HdShaderTokens->linearExposure,
+            HdTupleType{HdTypeFloat, 1});
+        bufferSpecs.emplace_back(
             HdShaderTokens->stepSize,
             HdTupleType{HdTypeFloat, 1});
         bufferSpecs.emplace_back(
@@ -365,6 +368,11 @@ HdStRenderPassState::Prepare(
     // Lighting hack supports different blending amounts, but we are currently
     // only using the feature to turn lighting on and off.
     float lightingBlendAmount = (_lightingEnabled ? 1.0f : 0.0f);
+
+    // Camera exposure (linear-encoded)
+    float linearExposure =
+        ((_camera && _enableExposureCompensation)
+         ? _camera->GetLinearExposureScale() : 1.0f);
 
     GfMatrix4d const& worldToViewMatrix = GetWorldToViewMatrix();
     GfMatrix4d projMatrix = GetProjectionMatrix();
@@ -431,6 +439,9 @@ HdStRenderPassState::Prepare(
         std::make_shared<HdVtBufferSource>(
             HdShaderTokens->lightingBlendAmount,
             VtValue(lightingBlendAmount)),
+        std::make_shared<HdVtBufferSource>(
+            HdShaderTokens->linearExposure,
+            VtValue(linearExposure)),
         std::make_shared<HdVtBufferSource>(
             HdShaderTokens->stepSize,
             VtValue(_stepSize)),

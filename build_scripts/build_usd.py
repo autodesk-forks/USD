@@ -33,7 +33,7 @@ import sysconfig
 import zipfile
 import google_depot_tools
 
-from urllib.request import urlopen
+from urllib.request import urlopen  
 from shutil import which
 
 # Helpers for printing output
@@ -382,17 +382,7 @@ def AppendCXX11ABIArg(buildFlag, context, buildArgs):
     buildArgs.append('{flag}="{flags}"'.format(
         flag=buildFlag, flags=" ".join(cxxFlags)))
 
-def FormatMultiProcs(numJobs, generator):
-    tag = "-j"
-    if generator:
-        if "Visual Studio" in generator:
-            tag = "/M:" # This will build multiple projects at once.
-        elif "Xcode" in generator:
-            tag = "-j "
-
-    return "{tag}{procs}".format(tag=tag, procs=numJobs)
-
-def RunCMake(context, force, extraArgs=None, *, buildDirName=None, target="install"):
+def RunCMake(context, force, extraArgs = None, installDir = None, buildDirName=None, target="install"):
     """Invoke CMake to configure, build, and install a library whose 
     source code is located in the current working directory."""
     # Create a directory for out-of-source builds in the build directory
@@ -403,11 +393,11 @@ def RunCMake(context, force, extraArgs=None, *, buildDirName=None, target="insta
         # ensure we can freely modify our extraArgs without affecting caller
         extraArgs = list(extraArgs)
 
+    instDir = installDir if installDir else context.instDir
+
     if context.cmakeBuildArgs:
         extraArgs.insert(0, context.cmakeBuildArgs)
     srcDir = os.getcwd()
-    instDir = (context.usdInstDir if srcDir == context.usdSrcDir
-               else context.instDir)
     buildDir = os.path.join(context.buildDir, buildDirName if buildDirName
                             else os.path.split(srcDir)[1])
     if force and os.path.isdir(buildDir):
@@ -496,11 +486,14 @@ def RunCMake(context, force, extraArgs=None, *, buildDirName=None, target="insta
                     generator=(generator or ""),
                     toolset=(toolset or ""),
                     extraArgs=(" ".join(extraArgs) if extraArgs else "")))
+        # As of CMake 3.12, the -j parameter for `cmake --build` allows
+        # specifying the number of parallel build jobs, forwarding it to the
+        # underlying native build tool.
         Run(('{} '.format('emmake.bat' if Windows() else 'emmake') if context.targetWasm else '') +
-            "cmake --build . --config {config} --target {target} -- {multiproc}"
+            "cmake --build . --config {config} --target {target} -j {numJobs}"
             .format(config=config,
                     target=target,
-                    multiproc=FormatMultiProcs(context.numJobs, generator)))
+                    numJobs=context.numJobs))
         return buildDir
 
 
@@ -793,13 +786,13 @@ ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
 # this script.
 BOOST_VERSION_FILES = [
     "include/boost/version.hpp",
-    "include/boost-1_76/boost/version.hpp",
+    "include/boost-1_80/boost/version.hpp",
     "include/boost-1_82/boost/version.hpp",
     "include/boost-1_86/boost/version.hpp"
 ]
 
 def InstallBoost_Helper(context, force, buildArgs):
-    # In general we use boost 1.76.0 to adhere to VFX Reference Platform CY2022.
+    # In general we use boost 1.80.0 to adhere to VFX Reference Platform CY2023.
     # However, there are some cases where a newer version is required.
     # - Building with Visual Studio 2022 with the 14.4x toolchain requires boost
     #   1.86.0 or newer, we choose it for all Visual Studio 2022 versions for
@@ -816,8 +809,8 @@ def InstallBoost_Helper(context, force, buildArgs):
         BOOST_VERSION = (1, 82, 0)
         BOOST_SHA256 = "f7c9e28d242abcd7a2c1b962039fcdd463ca149d1883c3a950bbcc0ce6f7c6d9"
     else:
-        BOOST_VERSION = (1, 76, 0)
-        BOOST_SHA256 = "0fd43bb53580ca54afc7221683dfe8c6e3855b351cd6dce53b1a24a7d7fbeedd"
+        BOOST_VERSION = (1, 80, 0)
+        BOOST_SHA256 = "e34756f63abe8ac34b35352743f17d061fcc825969a2dd8458264edb38781782"
 
     # Documentation files in the boost archive can have exceptionally
     # long paths. This can lead to errors when extracting boost on Windows,
@@ -1222,7 +1215,8 @@ def InstallJPEG(context, force, buildArgs):
         extraJPEGArgs = buildArgs
         if not which("nasm"):
             extraJPEGArgs.append("-DWITH_SIMD=FALSE")
-
+        if context.targetWasm:
+            extraJPEGArgs.append('-DENABLE_SHARED=OFF')
         RunCMake(context, force, extraJPEGArgs)
         return os.getcwd()
 
@@ -1274,6 +1268,8 @@ def InstallPNG(context, force, buildArgs):
         # OpenImageIO v2.5.16.0 runs into linker issues otherwise.
         macArgs = ["-DPNG_FRAMEWORK=OFF"]
 
+        if context.targetWasm:
+            macArgs += ["-DPNG_SHARED=OFF"]
         if MacOS() and apple_utils.IsTargetArm(context):
             # Ensure libpng's build doesn't erroneously activate inappropriate
             # Neon extensions
@@ -1348,26 +1344,23 @@ BLOSC = Dependency("Blosc", InstallBLOSC, "include/blosc.h")
 ############################################################
 # OpenVDB
 
-OPENVDB_URL = "https://github.com/AcademySoftwareFoundation/openvdb/archive/refs/tags/v9.1.0.zip"
-
-# OpenVDB v9.1.0 requires TBB 2019.0 or above, but this script installs
-# TBB 2018 on macOS Intel systems for reasons documented above. So we
-# keep OpenVDB at the version specified for the VFX Reference Platform
-# CY2021, which is the last version that supported 2018.
-OPENVDB_INTEL_URL = "https://github.com/AcademySoftwareFoundation/openvdb/archive/refs/tags/v8.2.0.zip"
+OPENVDB_URL = "https://github.com/AcademySoftwareFoundation/openvdb/archive/refs/tags/v10.1.0.zip"
 
 def InstallOpenVDB(context, force, buildArgs):
-    openvdb_url = OPENVDB_URL
-    if MacOS() and not apple_utils.IsTargetArm(context):
-        openvdb_url = OPENVDB_INTEL_URL
-
-    with CurrentWorkingDirectory(DownloadURL(openvdb_url, context, force)):
+    with CurrentWorkingDirectory(DownloadURL(OPENVDB_URL, context, force)):
         # Back-port patch from OpenVDB PR #1977 to avoid errors when building
         # with Xcode 16.3+. This fix is anticipated to be part of an OpenVDB
         # 12.x release, which is in the VFX Reference Platform CY2025 and is
         # several major versions ahead of what we currently use.
         PatchFile("openvdb/openvdb/tree/NodeManager.h",
                   [("OpT::template eval", "OpT::eval")])
+
+        # Replace BOOST_STATIC_ASSERT to workaround an "identifier not found"
+        # build failure on Windows with Visual Studio 2022. This change already
+        # exists upstream in OpenVDB 11.0.0+.
+        PatchFile("openvdb/openvdb/tools/VelocityFields.h",
+                  [("BOOST_STATIC_ASSERT(OrderRK <= 4);",
+                    "static_assert(OrderRK <= 4);")])
 
         extraArgs = [
             '-DOPENVDB_BUILD_PYTHON_MODULE=OFF',
@@ -1470,12 +1463,11 @@ OPENIMAGEIO = Dependency("OpenImageIO", InstallOpenImageIO,
 ############################################################
 # OpenColorIO
 
-OCIO_URL = "https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/refs/tags/v2.1.3.zip"
+OCIO_URL = "https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/refs/tags/v2.2.1.zip"
 
 def InstallOpenColorIO(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OCIO_URL, context, force)):
         extraArgs = ['-DOCIO_BUILD_APPS=OFF',
-                     '-DOCIO_BUILD_NUKE=OFF',
                      '-DOCIO_BUILD_DOCS=OFF',
                      '-DOCIO_BUILD_TESTS=OFF',
                      '-DOCIO_BUILD_GPU_TESTS=OFF',
@@ -1606,12 +1598,12 @@ ALEMBIC = Dependency("Alembic", InstallAlembic, "include/Alembic/Abc/Base.h")
 ############################################################
 # Draco
 
-DRACO_URL = "https://github.com/google/draco/archive/refs/tags/1.3.6.zip"
+DRACO_URL = "https://github.com/google/draco/archive/refs/tags/1.5.6.zip"
 
 def InstallDraco(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(DRACO_URL, context, force)):
         cmakeOptions = [
-            '-DBUILD_USD_PLUGIN=ON',
+            '-DBUILD_SHARED_LIBS=ON',
         ]
         cmakeOptions += buildArgs
         RunCMake(context, force, cmakeOptions)
@@ -1937,11 +1929,35 @@ def InstallEmbree(context, force, buildArgs):
             '-DEMBREE_TUTORIALS=OFF',
             '-DEMBREE_ISPC_SUPPORT=OFF'
         ]
-
-        if MacOS() and context.targetUniversal:
-            extraArgs += [
-                '-DEMBREE_MAX_ISA=NEON',
-                '-DEMBREE_ISA_NEON=ON']
+        if MacOS():
+            # Backport fix for clang build errors in debug output operators
+            # to Embree 3.13.3. This is fixed in Embree 4.3.2.
+            # https://github.com/RenderKit/embree/issues/486
+            PatchFile("kernels/subdiv/bezier_curve.h",
+                [('return cout << "QuadraticBezierCurve ( (" << a.u.lower << ", " << a.u.upper << "), " << a.v0 << ", " << a.v1 << ", " << a.v2 << ")";',
+                'return cout << "QuadraticBezierCurve (" << a.v0 << ", " << a.v1 << ", " << a.v2 << ")";'),
+                ]
+            )
+            PatchFile("kernels/geometry/pointi.h",
+                [("friend __forceinline embree_ostream operator<<(embree_ostream cout, const PointMi& line)",
+                "friend __forceinline embree_ostream operator<<(embree_ostream cout, const PointMi& point)"),
+                ('return cout << "Line" << M << "i {" << line.v0 << ", " << line.geomID() << ", " << line.primID() << "}";',
+                'return cout << "Point" << M << "i {" << point.geomID() << ", " << point.primID() << "}";')
+                ]
+            )
+            # Suppress clang build warnings as errors
+            PatchFile("kernels/CMakeLists.txt",
+                [("DISABLE_STACK_PROTECTOR_FOR_INTERSECTORS(${EMBREE_LIBRARY_FILES})\n"
+                "ADD_LIBRARY(embree ${EMBREE_LIB_TYPE} ${EMBREE_LIBRARY_FILES})\n",
+                "DISABLE_STACK_PROTECTOR_FOR_INTERSECTORS(${EMBREE_LIBRARY_FILES})\n"
+                "ADD_LIBRARY(embree ${EMBREE_LIB_TYPE} ${EMBREE_LIBRARY_FILES})\n"
+                "target_compile_options(embree PRIVATE -Wno-unused-but-set-variable)\n")],
+                multiLineMatches=True,
+            )
+            if context.targetUniversal:
+                extraArgs += [
+                    '-DEMBREE_MAX_ISA=NEON',
+                    '-DEMBREE_ISA_NEON=ON']
 
         extraArgs += buildArgs
 
@@ -2220,7 +2236,7 @@ def InstallUSD(context, force, buildArgs):
         if context.buildWebGPU:
             extraArgs.append('-DPXR_ENABLE_WEBGPU_SUPPORT=ON')
 
-        RunCMake(context, force, extraArgs)
+        RunCMake(context, force, extraArgs, installDir=context.usdInstDir)
 
 USD = Dependency("USD", InstallUSD, "include/pxr/pxr.h")
 

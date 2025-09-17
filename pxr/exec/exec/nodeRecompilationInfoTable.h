@@ -14,6 +14,8 @@
 #include "pxr/exec/exec/inputKey.h"
 #include "pxr/exec/exec/nodeRecompilationInfo.h"
 
+#include "pxr/base/work/zeroAllocator.h"
+
 #include <tbb/concurrent_vector.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -38,6 +40,7 @@ public:
     void SetNodeRecompilationInfo(
         const VdfNode *node,
         const EsfObject &provider,
+        EsfSchemaConfigKey dispatchingSchemaId,
         Exec_InputKeyVectorConstRefPtr &&inputKeys);
 
     /// Gets the recompiation info for the given \p node.
@@ -65,14 +68,15 @@ private:
 
         // True if the buffer holds an emplaced Exec_NodeRecompilationInfo.
         //
-        // Instances of _Storage are allocated by a tbb::zero_allocator.
+        // Instances of _Storage are allocated by a zero allocator. 
         // Therefore, if memory for a _Storage has been allocated, this flag
         // will be false, even if the _Storage has not been constructed.
         bool isInfoConstructed;
     };
 
     using _StorageVector =
-        tbb::concurrent_vector<_Storage, tbb::zero_allocator<_Storage>>;
+        tbb::concurrent_vector<_Storage, 
+            WorkZeroAllocator<_Storage>>;
     _StorageVector _storageVector;
 };
 

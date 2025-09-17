@@ -48,6 +48,7 @@ void
 Exec_NodeRecompilationInfoTable::SetNodeRecompilationInfo(
     const VdfNode *const node,
     const EsfObject &provider,
+    const EsfSchemaConfigKey dispatchingSchemaId,
     Exec_InputKeyVectorConstRefPtr &&inputKeys)
 {
     // TODO: This tag currently fails to collect any allocations because the
@@ -77,7 +78,7 @@ Exec_NodeRecompilationInfoTable::SetNodeRecompilationInfo(
     // If this node index had previously stored recompilation info, then it
     // cleared the `isInfoConstructed` flag when the node was deleted. If this
     // is the first time using the _Storage at `nodeIndex`, then the flag will
-    // be false, because the memory was provided by a tbb::zero_allocator.
+    // be false, because the memory was provided by a zero allocator. 
     //
     // This flag is true iff recompilation info has been emplaced in the
     // storage's buffer, in which case it is an error to re-use this storage.
@@ -92,6 +93,7 @@ Exec_NodeRecompilationInfoTable::SetNodeRecompilationInfo(
     // Initialize recompilation info in the storage's buffer.
     ::new (storage->buffer) Exec_NodeRecompilationInfo(
         provider,
+        dispatchingSchemaId,
         std::move(inputKeys));
     storage->isInfoConstructed = true;
 }

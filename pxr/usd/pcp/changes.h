@@ -151,6 +151,20 @@ private:
     using _ProcessedLayerSublayerPathPairsKey = 
         std::pair<SdfLayerHandle, std::string>;
 
+    using _LayerToLayerStacks = 
+        std::unordered_map<SdfLayerHandle, PcpLayerStackPtrVector, TfHash>;
+
+    /// Sets a list of layer stacks that should override query results for the
+    /// supplied layer.  In practice, this is used during change processing for
+    /// layers that are being unmuted or sublayers that are being added.
+    void _SetLayerStacksUsingLayerOverride(
+        const SdfLayerHandle& layer, 
+        const PcpLayerStackPtrVector& layerStacks);
+
+    /// Returns the overrides set for the supplied layer.
+    const PcpLayerStackPtrVector&
+    _GetLayerStacksUsingLayerOverride(const SdfLayerHandle& layer) const;
+
     // Set of hashed layer / sublayer path pairs that have been processed in
     // in this round of changes.  These values are checked in order to avoid
     // recursively processing cycles created in layer stacks.
@@ -169,6 +183,9 @@ private:
     // ancestor specs in this set and processing children iteratively when
     // applying changes to the cache.
     SdfPathSet _didChangePrimSpecsAndChildrenInternal;
+
+    // Holds layer stack overrides set for individual layers
+    _LayerToLayerStacks _layerToLayerStackOverrides;
 };
 
 /// Structure used to temporarily retain layers and layerStacks within

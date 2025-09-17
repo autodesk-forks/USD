@@ -29,6 +29,7 @@ pxr_library(exec
         builtinComputations
         cacheView
         computationBuilders
+        debugCodes
         requestImpl
         system
         systemChangeProcessor

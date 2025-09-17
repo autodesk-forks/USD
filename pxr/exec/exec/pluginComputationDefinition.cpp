@@ -20,16 +20,38 @@ Exec_PluginComputationDefinition::Exec_PluginComputationDefinition(
     TfType resultType,
     const TfToken &computationName,
     ExecCallbackFn &&callback,
-    Exec_InputKeyVectorRefPtr &&inputKeys)
+    Exec_InputKeyVectorRefPtr &&inputKeys,
+    std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas)
     : Exec_ComputationDefinition(
         resultType,
         computationName)
     , _callback(std::move(callback))
     , _inputKeys(inputKeys)
+    , _dispatchesOntoSchemas(std::move(dispatchesOntoSchemas))
 {
 }
 
 Exec_PluginComputationDefinition::~Exec_PluginComputationDefinition() = default;
+
+bool
+Exec_PluginComputationDefinition::IsDispatched() const
+{
+    return static_cast<bool>(_dispatchesOntoSchemas);
+}
+
+const ExecDispatchesOntoSchemas &
+Exec_PluginComputationDefinition::GetDispatchesOntoSchemas() const
+{
+    if (_dispatchesOntoSchemas) {
+        return *_dispatchesOntoSchemas;
+    }
+
+    TF_CODING_ERROR(
+        "Attempt to access dispatched-on schemas for a non-dispatched "
+        "computation '%s'", GetComputationName().GetText());
+    static const ExecDispatchesOntoSchemas empty;
+    return empty;
+}
 
 Exec_InputKeyVectorConstRefPtr
 Exec_PluginComputationDefinition::GetInputKeys(

@@ -7,9 +7,11 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/vt/array.h"
+#include "pxr/base/vt/arrayEdit.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/base/vt/streamOut.h"
+#include "pxr/base/vt/traits.h"
 #include "pxr/base/vt/types.h"
 #include "pxr/base/vt/visitValue.h"
 
@@ -77,6 +79,17 @@ static void die(const std::string &msg) {
 }
 
 static void testArray() {
+
+    // Test traits.
+    static_assert(VtIsArray<VtIntArray>::value);
+    static_assert(!VtIsArray<VtIntArrayEdit>::value);
+    static_assert(!VtIsArray<int>::value);
+    static_assert(!VtIsArray<std::vector<int>>::value);
+
+    static_assert(!VtIsArrayEdit<VtIntArray>::value);
+    static_assert(VtIsArrayEdit<VtIntArrayEdit>::value);
+    static_assert(!VtIsArrayEdit<int>::value);
+    static_assert(!VtIsArrayEdit<std::vector<int>>::value);
 
     VtDoubleArray da(60);
 
@@ -1442,6 +1455,15 @@ static void testValue() {
         TF_AXIOM(v.IsArrayValued());
         TF_AXIOM(v.GetElementTypeid() == typeid(GfVec2i));
         TF_AXIOM(vclone.Get<VtVec2iArray>().size() == 2);
+    }
+
+    // Element type of VtValue holding VtArrayEdit.
+    {
+        VtDoubleArrayEdit dae;
+        VtValue v { dae };
+        TF_AXIOM(v.IsHolding<VtDoubleArrayEdit>());
+        TF_AXIOM(!v.IsArrayValued());
+        TF_AXIOM(v.GetElementTypeid() == typeid(double));
     }
 
     // Precision-casting of VtArrays

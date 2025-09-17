@@ -6,7 +6,13 @@
 //
 #include "pxr/exec/execUsd/valueKey.h"
 
+#include "pxr/base/arch/demangle.h"
+#include "pxr/base/tf/diagnostic.h"
 #include "pxr/exec/exec/builtinComputations.h"
+
+#include <typeinfo>
+#include <utility>
+#include <variant>
 
 PXR_NAMESPACE_OPEN_SCOPE
 

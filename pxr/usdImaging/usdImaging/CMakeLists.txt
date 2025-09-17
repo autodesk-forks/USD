@@ -143,6 +143,7 @@ pxr_library(usdImaging
     PRIVATE_CLASSES
         adapterManager
         drawModeStandin
+        instanceProxyPathTranslationSceneIndex
         niInstanceAggregationSceneIndex
         niPrototypePruningSceneIndex
         niPrototypeSceneIndex

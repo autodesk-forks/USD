@@ -110,6 +110,9 @@ INSTANCE_NAME_PLACEHOLDER = \
 # Custom metadata tokens for user doc
 USERDOC_BRIEF = "userDocBrief"
 USERDOC_FULL = "userDoc"
+# Arbitrarily picked max length for userDocBrief -- if we end up having to use
+# documentation metadata as a fallback, we truncate to this length.
+MAX_LENGTH_FOR_USERDOCBRIEF = 500
 
 #------------------------------------------------------------------------------#
 # Parsed Objects                                                               #
@@ -1646,7 +1649,7 @@ def _MakeFlattenedRegistryLayer(filePath):
             cls.typeName = demangle(cls.typeName)
 
     # In order to prevent derived classes from inheriting base class
-    # documentation metadata, we must manually replace docs here.
+    # documentation metadata, we manually replace docs here
     for layer in stage.GetLayerStack():
         for cls in layer.rootPrims:
             flatCls = flatLayer.GetPrimAtPath(cls.path)
@@ -1700,14 +1703,33 @@ def _GetUserDocForSchemaObj(obj, userDocSchemaObj):
     """
     Find brief user doc for a schema object, in either the specifically authored
     user doc info in userDocSchemaObj, or the schema obj itself.
-    Returns brief user doc string, or None if no reasonable brief user doc found
+    Returns brief user doc string (with leading and trailing whitespace 
+    stripped) or None if no reasonable brief user doc found.
     """
     # Start by looking at userDocSchemaObj for USERDOC_BRIEF customData
-    if userDocSchemaObj is not None and USERDOC_BRIEF in userDocSchemaObj.GetCustomData():
-        return userDocSchemaObj.GetCustomData().get(USERDOC_BRIEF)
-    else:
+    if (userDocSchemaObj is not None 
+        and USERDOC_BRIEF in userDocSchemaObj.GetCustomData()):
+        return userDocSchemaObj.GetCustomData().get(USERDOC_BRIEF).strip()
+    elif USERDOC_BRIEF in obj.customData:
         # See if USERDOC_BRIEF exists on schema object's custom data
-        return obj.customData.get(USERDOC_BRIEF)
+        return obj.customData.get(USERDOC_BRIEF).strip()
+    elif obj.GetInfo('documentation'):
+        # Try and use the first sentence of 'documentation' if no 
+        # userDocBrief authored. Use a regex to deal with sentences with
+        # "." file extensions. 
+        sentenceExp = r'\. |\.\n' # Look for ". " or ".\n" as end of sentence
+        workDoc = re.split(sentenceExp, obj.GetInfo('documentation'), 
+            maxsplit=1)[0].strip()
+        # Truncate very long sentences to MAX_LENGTH_FOR_USERDOCBRIEF chars
+        if len(workDoc) > MAX_LENGTH_FOR_USERDOCBRIEF:
+            workDoc = workDoc[:MAX_LENGTH_FOR_USERDOCBRIEF] + "..."
+        else:
+            # Append "." if needed (regex will omit it in match results)
+            if len(workDoc) > 0 and not workDoc.endswith('.'):
+                workDoc = workDoc + '.'
+        return workDoc
+    else:
+        return None
 
 def _UpdateUserDocForRegistry(filePath, flatLayer):
     """
@@ -1761,6 +1783,17 @@ def GenerateRegistry(codeGenPath, filePath, classes, validate, env):
     # Gather schema class and property brief user doc if found.
     # Do this here, before we strip out customData.
     briefDict = _UpdateUserDocForRegistry(filePath, flatLayer)
+
+    # Remove 'documentation' metadata (after we've gathered brief user
+    # doc, in case we needed to substitute first sentence of documentation
+    # metadata). We no longer propagate API docs to the schema registry. Note 
+    # that 'documentation' is still used in the GenerateCode process.
+    for cls in flatLayer.rootPrims:
+        flatCls = flatLayer.GetPrimAtPath(cls.path)
+        flatCls.ClearInfo('documentation')
+        for clsProp in cls.properties:
+            flatClsProp = flatCls.GetPropertyAtPath(clsProp.path)
+            flatClsProp.ClearInfo('documentation')
 
     pathsToDelete = []
     primsToKeep = {cls.usdPrimTypeName : cls for cls in classes}
@@ -1850,6 +1883,15 @@ def GenerateRegistry(codeGenPath, filePath, classes, validate, env):
             p.SetCustomDataByKey(USERDOC_BRIEF, briefDict[workPathStr])
         for myproperty in p.GetAuthoredProperties():
             workPathStr = myproperty.GetPath()
+            if Usd.SchemaRegistry.IsMultipleApplyNameTemplate(
+                myproperty.GetName()):
+                # myproperty property name has been updated with instance
+                # information via _RenamePropertiesWithInstanceablePrefix
+                # earlier, however we populated briefDict with the original 
+                # property names from schema.usda/schemaUserDoc.usda. Resort
+                # to looking up myproperty's primPath + baseName in briefDict.
+                workPathStr = myproperty.GetPrimPath().AppendProperty(
+                    myproperty.GetBaseName())
             if workPathStr in briefDict:
                 myproperty.SetCustomDataByKey(USERDOC_BRIEF,
                  briefDict[workPathStr])

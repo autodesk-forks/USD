@@ -20,6 +20,7 @@
 #include "pxr/usd/sdf/fileIO.h"
 #include "pxr/usd/sdf/fileIO_Common.h"
 #include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/sdf/usdaData.h"
 #include "pxr/usd/sdf/usdFileFormat.h"
 #include "pxr/usd/sdf/usdaFileFormat.h"
 
@@ -44,6 +45,14 @@ TF_DEFINE_ENV_SETTING(SDF_FILE_FORMAT_LEGACY_IMPORT, "allow",
     "'error', strings imported with the sdf header will no longer be ingested "
     "and an error will be emitted.");
 
+#define DEFAULT_NEW_VERSION "1.0"
+TF_DEFINE_ENV_SETTING(
+    USD_WRITE_NEW_USDA_FILES_AS_VERSION, DEFAULT_NEW_VERSION,
+    "When writing new usda files, write them as this version."
+    " This must have the same major version as the software and have less or"
+    " equal minor and patch versions. This is only for new files; saving"
+    " edits to an existing file preserves its version.");
+
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 
@@ -54,21 +63,80 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((modernCookie, "#usda 1.0"))
 );
 
-// Our interface to the parser for parsing to SdfData.
+// Version history
+// 1.1: Support for splines with tangent algorithms None, Custom, or AutoEase.
+// 1.0: Initial release of usda format (plus numerous unfortunately unversioned
+//      updates).
+
+// Current version of usda that can be read/written
+constexpr uint8_t USDA_MAJOR = 1;
+constexpr uint8_t USDA_MINOR = 1;
+constexpr uint8_t USDA_PATCH = 0;
+
+// Caveat developer!
+//
+// The text file format starts off with a header that looks like "#usda 1.0\n"
+// and is followed immediately by more text. As we write the text file, we may
+// encounter features that require a newer version of the file format. If that
+// happens, at then end of writing the file, we seek back to the beginning and
+// overwrite the header with the new version, say "#usda 1.1\n". This works only
+// until we have a version that's more than 3 characters long.
+//
+// There are several options for dealing with this.
+//   1. Add padding to the original header line (i.e. "#usda 1.0        \n").
+//      Eight spaces would give us enough room for "#usda 255.255.255\n".
+//      Unfortunately, this introduces differences between newly generated files
+//      and existing files that show up in our tests (baseline comparisons
+//      fail) and schema generation (generated schema files have an extra white
+//      space difference).
+//
+//   2. Declare that the version string is hexadecimal and always has been. :-)
+//      So after version "1.9" we get "1.a". This will take us safely through
+//      minor version 15. We could even declare them to be base-36 and go all
+//      the way to "1.z" before we would get to "1.10".
+//
+//   3. Rewrite the file if we hit a version string that is longer than the
+//      initial version string.
+//
+//      a. If the version string length increases (say, "1.10"), throw an
+//         exception that unwinds everything, start over with "#usda 1.10\n",
+//         and try again.
+//
+//      b. Always write the file to a string. When we're done, then write the
+//         header with the final version followed by the string contents.
+//
+//   4. Scan the entire scene to determine the necessary version before writing
+//      anything. This requires a new "traverse for version" pass.
+//
+// Option 2 is the simplest. It doesn't completely solve the problem but it
+// defers it for quite a while with no significant code changes. Option 2 can
+// also be implemented in addition to the others.
+//
+// If we ever switch to a new major version of the file format, we should add
+// trailing white space padding immediately. So version 2.0 will just have a
+// header like "#usda 2.0        \n"
+//
+// For now, we're deferring working on a full solution and simply ensuring that
+// the base-10 version string is not more than 3 characters long.
+static_assert(USDA_MAJOR == 1 &&
+              USDA_MINOR < 10 &&
+              USDA_PATCH == 0);
+
+// Our interface to the parser for parsing to SdfUsdaData.
 extern bool Sdf_ParseLayer(
     const string& context, 
     const std::shared_ptr<PXR_NS::ArAsset>& asset,
     const string& token,
     const string& version,
     bool metadataOnly,
-    PXR_NS::SdfDataRefPtr data,
+    PXR_NS::SdfUsdaDataRefPtr data,
     PXR_NS::SdfLayerHints *hints);
 
 extern bool Sdf_ParseLayerFromString(
     const std::string & layerString,
     const string& token,
     const string& version,
-    PXR_NS::SdfDataRefPtr data,
+    PXR_NS::SdfUsdaDataRefPtr data,
     PXR_NS::SdfLayerHints *hints);
 
 TF_REGISTRY_FUNCTION(TfType)
@@ -113,7 +181,7 @@ _CanReadImpl(const std::shared_ptr<ArAsset>& asset,
              const std::string& cookie)
 {
     TfErrorMark mark;
-    
+
     constexpr size_t COOKIE_BUFFER_SIZE = 512;
     char local[COOKIE_BUFFER_SIZE];
     std::unique_ptr<char []> remote;
@@ -135,6 +203,18 @@ _CanReadImpl(const std::shared_ptr<ArAsset>& asset,
 }
 
 } // end anonymous namespace
+
+// override
+SdfAbstractDataRefPtr
+SdfUsdaFileFormat::InitData(const FileFormatArguments& args) const
+{
+    auto newData = std::make_unique<SdfUsdaData>();
+
+    // The pseudo-root spec must always exist in a layer's SdfData, so
+    // add it here.
+    newData->CreateSpec(SdfPath::AbsoluteRootPath(), SdfSpecTypePseudoRoot);
+    return TfCreateRefPtr(newData.release());
+}
 
 bool
 SdfUsdaFileFormat::CanRead(const string& filePath) const
@@ -199,8 +279,8 @@ SdfUsdaFileFormat::_ReadFromAsset(
     SdfLayerHints hints;
     SdfAbstractDataRefPtr data = InitData(layer->GetFileFormatArguments());
     if (!Sdf_ParseLayer(
-            resolvedPath, asset, GetFormatId(), GetVersionString(), 
-            metadataOnly, TfDynamic_cast<SdfDataRefPtr>(data), &hints)) {
+            resolvedPath, asset, GetFormatId(), GetVersionString(),
+            metadataOnly, TfDynamic_cast<SdfUsdaDataRefPtr>(data), &hints)) {
         return false;
     }
 
@@ -213,7 +293,7 @@ SdfUsdaFileFormat::_ReadFromAsset(
 struct Sdf_IsLayerMetadataField : public Sdf_IsMetadataField
 {
     Sdf_IsLayerMetadataField() : Sdf_IsMetadataField(SdfSpecTypePseudoRoot) { }
-    
+
     bool operator()(const TfToken& field) const
     { 
         return (Sdf_IsMetadataField::operator()(field) ||
@@ -234,12 +314,15 @@ _WriteLayer(
     const SdfLayer* l,
     Sdf_TextOutput& out,
     const string& cookie,
-    const string& versionString,
+    const SdfFileVersion& version,
     const string& commentOverride)
 {
     TRACE_FUNCTION();
 
-    _Write(out, 0, "%s %s\n", cookie.c_str(), versionString.c_str());
+    // If the output version is invalid then the env setting
+    // USD_WRITE_NEW_USDA_FILES_AS_VERSION or the hard coded default
+    // will be used.
+    out.WriteHeader(cookie, version);
 
     // Grab the pseudo-root, which is where all layer-specific
     // fields live.
@@ -328,7 +411,7 @@ _WriteLayer(
         _WriteNameVector(out, 0, rootPrimNames);
         _Write(out, 0, "\n");
     }
-        
+
     // Root prims
     for (const SdfPrimSpecHandle& rootPrim : l->GetRootPrims()) {
         _Write(out, 0,"\n");
@@ -356,10 +439,53 @@ SdfUsdaFileFormat::WriteToFile(
         return false;
     }
 
-    Sdf_TextOutput out(std::move(asset));
+    Sdf_TextOutput out(std::move(asset), filePath);
 
-    const bool ok = _WriteLayer(
-        &layer, out, GetFileCookie(), GetVersionString(), comment);
+    const bool ok = _WriteLayer(&layer,
+                                out,
+                                GetFileCookie(),
+                                SdfFileVersion(),  // will use default version
+                                comment);
+
+    if (ok && !out.Close()) {
+        TF_RUNTIME_ERROR("Could not close %s", filePath.c_str());
+        return false;
+    }
+
+    return ok;
+}
+
+bool
+SdfUsdaFileFormat::SaveToFile(
+    const SdfLayer& layer,
+    const std::string& filePath,
+    const std::string& comment,
+    const FileFormatArguments& args) const
+{
+    std::shared_ptr<ArWritableAsset> asset = 
+        ArGetResolver().OpenAssetForWrite(
+            ArResolvedPath(filePath), ArResolver::WriteMode::Replace);
+    if (!asset) {
+        TF_RUNTIME_ERROR(
+            "Unable to open %s for write", filePath.c_str());
+        return false;
+    }
+
+    // If this layer was read from an existing usda file, write a file that
+    // starts with the input layer's version and may upgrade from there.
+    SdfFileVersion outVersion;  // invalid version means use the default version
+    const SdfAbstractDataConstPtr absData = _GetLayerData(layer);
+    if (const auto textData = TfDynamic_cast<SdfUsdaDataConstPtr>(absData)) {
+        outVersion = textData->GetLayerVersion();
+    }
+
+    Sdf_TextOutput out(std::move(asset), filePath);
+
+    const bool ok = _WriteLayer(&layer,
+                                out,
+                                GetFileCookie(),
+                                outVersion,
+                                comment);
 
     if (ok && !out.Close()) {
         TF_RUNTIME_ERROR("Could not close %s", filePath.c_str());
@@ -384,7 +510,7 @@ SdfUsdaFileFormat::ReadFromString(
     // backward compatibility for in-code layer constructs to work with pegtl 
     // parser also. This code should be removed when (USD-9838) gets worked on.
     std::string trimmedStr = TfStringTrimLeft(str);
-    
+
     // The legacy sdf format is deprecated in favor of the usda format.
     // Since `sdf 1.4.32` is equivalent in content to `usda 1.0`, allow
     // imported strings headed with the former to be read by the latter.
@@ -413,7 +539,7 @@ SdfUsdaFileFormat::ReadFromString(
 
     if (!Sdf_ParseLayerFromString(
             trimmedStr, GetFormatId(), GetVersionString(),
-            TfDynamic_cast<SdfDataRefPtr>(data), &hints)) {
+            TfDynamic_cast<SdfUsdaDataRefPtr>(data), &hints)) {
         return false;
     }
 
@@ -430,7 +556,7 @@ SdfUsdaFileFormat::WriteToString(
     Sdf_StringOutput out;
 
     if (!_WriteLayer(
-            &layer, out, GetFileCookie(), GetVersionString(), comment)) {
+            &layer, out, GetFileCookie(), SdfFileVersion(), comment)) {
         return false;
     }
 
@@ -451,6 +577,54 @@ bool
 SdfUsdaFileFormat::_ShouldSkipAnonymousReload() const
 {
     return false;
+}
+
+// static
+SdfFileVersion SdfUsdaFileFormat::GetMinInputVersion()
+{
+    return GetMinOutputVersion();
+}
+// static
+SdfFileVersion SdfUsdaFileFormat::GetMinOutputVersion()
+{
+    static constexpr SdfFileVersion minVersion(1, 0, 0);
+    return minVersion;
+}
+
+// static
+SdfFileVersion SdfUsdaFileFormat::GetMaxInputVersion()
+{
+    return GetMaxOutputVersion();
+}
+
+// static
+SdfFileVersion SdfUsdaFileFormat::GetMaxOutputVersion()
+{
+    static constexpr SdfFileVersion maxVersion(USDA_MAJOR, USDA_MINOR, USDA_PATCH);
+    return maxVersion;
+}
+
+static SdfFileVersion _GetDefaultOutputVersion()
+{
+    std::string setting = TfGetEnvSetting(USD_WRITE_NEW_USDA_FILES_AS_VERSION);
+    SdfFileVersion ver = SdfFileVersion::FromString(setting);
+    if (!ver || !SdfUsdaFileFormat::GetMaxOutputVersion().CanWrite(ver))
+    {
+        TF_WARN("Invalid value '%s' for USD_WRITE_NEW_USDA_FILES_AS_VERSION - "
+                "falling back to default '%s'",
+                setting.c_str(), DEFAULT_NEW_VERSION);
+        ver = SdfFileVersion::FromString(DEFAULT_NEW_VERSION);
+    }
+
+    return ver;
+}
+
+// static
+SdfFileVersion SdfUsdaFileFormat::GetDefaultOutputVersion()
+{
+    static const SdfFileVersion defVersion = _GetDefaultOutputVersion();
+
+    return defVersion;
 }
 
 

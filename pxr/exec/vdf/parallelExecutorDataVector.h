@@ -15,6 +15,8 @@
 #include "pxr/exec/vdf/output.h"
 #include "pxr/exec/vdf/types.h"
 
+#include "pxr/base/work/zeroAllocator.h"
+
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_mutex.h>
 
@@ -587,7 +589,7 @@ private:
     // The output data.
     //
     using _OutputDataVector =
-        tbb::concurrent_vector<_OutputData, tbb::zero_allocator<_OutputData>>;
+        tbb::concurrent_vector<_OutputData, WorkZeroAllocator<_OutputData>>;
     mutable _OutputDataVector _outputData;
 
     // The arrays of buffer data corresponding with the output data.

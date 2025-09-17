@@ -13,6 +13,8 @@
 #include "pxr/pxr.h"
 #include "pxr/base/vt/api.h"
 
+#include "pxr/base/tf/hash.h"
+
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -104,6 +106,11 @@ private:
     friend class VtArrayEditBuilder;
 
     friend class Vt_ArrayEditOpsBuilder;
+
+    template <class HashState>
+    friend void TfHashAppend(HashState &h, Vt_ArrayEditOps const &self) {
+        h.Append(self._ins);
+    }
 
     friend bool
     operator==(Vt_ArrayEditOps const &l, Vt_ArrayEditOps const &r) {

@@ -8,26 +8,16 @@
 //
 
 #include "pxr/pxr.h"
+#include "pxr/base/work/impl.h"
 #include "pxr/base/work/threadLimits.h"
 
 #include "pxr/base/tf/envSetting.h"
-
-// Blocked range is not used in this file, but this header happens to pull in
-// the TBB version header in a way that works in all TBB versions.
-#include <tbb/blocked_range.h>
-#include <tbb/task_arena.h>
-
-#if TBB_INTERFACE_VERSION_MAJOR >= 12
-#include <tbb/global_control.h>
-#include <tbb/info.h>
-#else
-#include <tbb/task_scheduler_init.h>
-#endif
 
 #include <algorithm>
 #include <atomic>
 
 PXR_NAMESPACE_USING_DIRECTIVE
+PXR_WORK_IMPL_NAMESPACE_USING_DIRECTIVE;
 
 // The environment variable used to limit the number of threads the application
 // may spawn:
@@ -140,7 +130,7 @@ WorkSetConcurrencyLimit(unsigned n)
         // Use the current thread limit.
         threadLimit = WorkGetConcurrencyLimit();
     }
-     WorkImpl_SetConcurrencyLimit(threadLimit);
+    WorkImpl_SetConcurrencyLimit(threadLimit);
 }
 
 void 

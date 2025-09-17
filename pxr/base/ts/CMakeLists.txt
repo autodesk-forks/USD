@@ -211,6 +211,7 @@ pxr_test_scripts(
     testenv/testTsRegressionPreventer.py
     testenv/testTsSplineAPIPy.py
     testenv/testTsSplineValueBlock.py
+    testenv/testTsTangentAlgorithms.py
     testenv/tsTest_TsFramework.py
     testenv/tsTest_TsVsBezier.py
 )
@@ -258,6 +259,12 @@ pxr_register_test(
     testTsSplineValueBlock
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineValueBlock"
+)
+
+pxr_register_test(
+    testTsTangentAlgorithms
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsTangentAlgorithms"
 )
 
 pxr_register_test(

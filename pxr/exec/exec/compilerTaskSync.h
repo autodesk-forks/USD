@@ -46,7 +46,7 @@ public:
 
     ~Exec_CompilerTaskSync();
 
-    class WaitlistNode;
+    struct WaitlistNode;
 
     /// Run a concurrent compilation task on the work dispatcher.
     void Run(Exec_CompilationTask *task) const;

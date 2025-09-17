@@ -13,13 +13,14 @@
 
 #include "pxr/exec/vdf/api.h"
 
+#include "pxr/base/work/taskGraph.h"
+
 #include <tbb/concurrent_vector.h>
 
 #include <atomic>
 
-namespace tbb { class task; }
-
 PXR_NAMESPACE_OPEN_SCOPE
+
 /// VdfParallelTaskWaitlist
 /// 
 /// This class manages lists of tasks waiting on uncompleted work. One instance
@@ -44,8 +45,7 @@ class VdfParallelTaskWaitlist
 public:
     /// Represents a node in one of the waiting queues.
     ///
-    class Node;
-
+    struct Node;
     /// This type denotes the head of an independent waitlist. Clients are
     /// expected to instantiate this one of these for each independent list.
     ///
@@ -83,20 +83,20 @@ public:
     /// now successfully waiting for the list to be closed.
     ///
     VDF_API
-    bool WaitOn(HeadPtr *headPtr, tbb::task *successor);
+    bool WaitOn(HeadPtr *headPtr, WorkTaskGraph::BaseTask *successor);
 
     /// Closes the list denoted by \p headPtr, and notifies any tasks that are
     /// waiting on this list. Returns \c false if the list had already been
     /// closed prior to calling CloseAndNotify().
     ///
     VDF_API
-    bool CloseAndNotify(HeadPtr *headPtr);
+    bool CloseAndNotify(HeadPtr *headPtr, WorkTaskGraph *taskGraph);
 
 private:
     // Allocate a new node for a waiting queue.
     //
     VDF_API
-    Node *_AllocateNode(tbb::task *task, Node *next);
+    Node *_AllocateNode(WorkTaskGraph::BaseTask *task, Node *next);
 
     // A simple vector that serves as a way of scratch-allocating new
     // waiting nodes.

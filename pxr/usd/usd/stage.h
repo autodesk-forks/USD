@@ -1880,8 +1880,9 @@ private:
 
     // Pushes changes through PCP to determine invalidation based on 
     // composition metadata.
-    // Returns a value indicating if notices were sent during execution.
-    bool _ProcessChangeLists(const SdfLayerChangeListVec &);
+    // Note: This method will not perform any processing or notification
+    // Refer to _ProcessPendingChanges()
+    void _ComputePendingChanges(const SdfLayerChangeListVec &);
 
     // Update stage contents in response to changes to the asset resolver.
     void _HandleResolverDidChange(const ArNotice::ResolverChanged &);

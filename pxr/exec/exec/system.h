@@ -25,6 +25,7 @@ class Exec_RequestTracker;
 class Exec_Runtime;
 class ExecValueKey;
 class SdfPath;
+template <typename> class TfFunctionRef;
 template <typename> class TfSpan;
 class VdfMaskedOutput;
 class VdfRequest;
@@ -70,6 +71,16 @@ protected:
     void _Compute(
         const VdfSchedule &schedule,
         const VdfRequest &computeRequest);
+
+    /// Invoke \p f on each outstanding exec request.
+    ///
+    /// \p f is executed with the request tracker mutex held so it must not
+    /// re-enter the request tracker.  This method may execute \p f for
+    /// multiple requests concurrently.
+    ///
+    EXEC_API
+    void _ParallelForEachRequest(
+        TfFunctionRef<void(Exec_RequestImpl&)> f) const;
 
     /// Derived systems instantiate this class to deliver scene changes to exec.
     class _ChangeProcessor;

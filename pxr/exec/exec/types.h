@@ -18,6 +18,8 @@
 
 #include "pxr/pxr.h"
 
+#include "pxr/base/tf/smallVector.h"
+
 #include <functional>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -31,6 +33,11 @@ using ExecCallbackFn = std::function<void (const class VdfContext &context)>;
 /// Exec_DefinitionRegistry itself, to allow that type to remain private.
 /// 
 struct ExecDefinitionRegistryTag {};
+
+// A vector of schema types used to restrict the schemas that dispatched
+// compuations dispatch onto.
+//
+using ExecDispatchesOntoSchemas = TfSmallVector<class TfType, 1>;
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

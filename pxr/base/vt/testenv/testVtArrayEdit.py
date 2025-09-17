@@ -21,6 +21,12 @@ class TestVtArrayEdit(unittest.TestCase):
         self.assertEqual(ident.ComposeOver(empty),empty)
         self.assertEqual(ident.ComposeOver(Vt.IntArray(one23)), one23)
 
+        self.assertEqual(hash(ident), hash(Vt.IntArrayEdit()))
+        emptyDense = Vt.IntArrayEdit(empty)
+        self.assertEqual(hash(emptyDense), hash(Vt.IntArrayEdit(Vt.IntArray())))
+        self.assertEqual(hash(Vt.IntArrayEdit(one23)),
+                         hash(Vt.IntArrayEdit(Vt.IntArray(range(1,4)))))
+
     def test_BuilderAndComposition(self):
 
         empty = Vt.IntArray()

@@ -224,7 +224,8 @@ public:
         const TfToken &computationName,
         TfType resultType,
         ExecProviderResolution &&providerResolution,
-        const TfToken &inputName);
+        const TfToken &inputName,
+        bool fallsBackToDispatched);
 
     EXEC_API
     Exec_ComputationBuilderValueSpecifierBase(
@@ -239,6 +240,9 @@ protected:
 
     EXEC_API
     void _SetOptional (const bool optional);
+
+    EXEC_API
+    void _SetFallsBackToDispatched(bool fallsBackToDispatched);
 
 private:
     // Only computation builders can get the input key.
@@ -265,12 +269,14 @@ struct Exec_ComputationBuilderComputationValueSpecifier
 {
     Exec_ComputationBuilderComputationValueSpecifier(
         const TfToken &computationName,
-        TfType resultType,
-        ExecProviderResolution &&providerResolution)
+        const TfType resultType,
+        ExecProviderResolution &&providerResolution,
+        const bool fallsBackToDispatched = false)
         : Exec_ComputationBuilderValueSpecifierBase(
             computationName, resultType,
             std::move(providerResolution),
-            computationName)
+            computationName /* inputName */,
+            fallsBackToDispatched)
     {
     }
     
@@ -336,6 +342,44 @@ struct Exec_ComputationBuilderComputationValueSpecifier
     Required()
     {
         _SetOptional(false);
+        return *this;
+    }
+
+    /// Declares the input can find dispatched computations *if* the requested
+    /// computation name doesn't match a local computation on the provider.
+    ///
+    /// \see [DispatchedPrimComputation](#Exec_ComputationBuilder::DispatchedPrimComputation)
+    ///
+    /// # Example
+    ///
+    /// ```{.cpp}
+    /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+    /// {
+    ///     // Register a dispatched prim computation.
+    ///     self.DispatchedPrimComputation(_tokens->myDispatchedComputation)
+    ///         .Callback<double>(+[](const VdfContext &) { return 11.0; })
+    ///
+    ///     // Register a prim computation that requests the above dispatched
+    ///     // computation via uses relationship targets.
+    ///     self.PrimComputation(_tokens->myComputation)
+    ///         .Callback<double>(+[](const VdfContext &ctx) {
+    ///             const double *const valuePtr =
+    ///                 ctx.GetInputValuePtr<double>(
+    ///                     _tokens->myDispatchedComputation);
+    ///             return valuePtr ? *valuePtr : -1.0;
+    ///         })
+    ///         .Inputs(
+    ///             Relationship(_tokens->myRelationship)
+    ///                 .TargetedObjects<double>(
+    ///                     _tokens->myDispatchedComputation)
+    ///                 .FallsBackToDispatched())
+    /// }
+    /// ```
+    ///
+    This&
+    FallsBackToDispatched()
+    {
+        _SetFallsBackToDispatched(true);
         return *this;
     }
 
@@ -829,8 +873,71 @@ public:
     Exec_PrimComputationBuilder 
     PrimComputation(const TfToken &computationName);
 
+    /// Registers a dispatched prim computation named \p computationName.
+    ///
+    /// A dispatched prim computation is only visible to computations on the
+    /// prim that does the dispatching. I.e., the computation registrations for
+    /// a schema can include dispatched computations and inputs to computations
+    /// registered on the same schema can request the dispatched computations,
+    /// using the input option FallsBackToDispatched(), from *other provider
+    /// prims* and find them there. *Other schema computation registrations*
+    /// will not be able to find the dispatched computations, however.
+    ///
+    /// Dispatched computations can be restricted as to which prims they can
+    /// dispatch onto, based on the typed and applied schemas of a given target
+    /// prim. The second parameter to the DispatchedPrimComputation registration
+    /// function can be used to specify zero or more schema types (as
+    /// TfType%s). If any types are given, the dispatched computation will only
+    /// be found on a target prim if that prim's typed schema type (or one of
+    /// its base type) is among the given schema types or if the fully expanded
+    /// list of API schemas applied to the prim includes a schema that is among
+    /// the given schema types.
+    ///
+    /// # Example
+    ///
+    /// ```{.cpp}
+    /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+    /// {
+    ///     // Register a dispatched prim computation that can be found on
+    ///     // scopes.
+    ///     const TfType scopeType = TfType::FindByName("UsdGeomScope");
+    ///     self.DispatchedPrimComputation(_tokens->eleven, scopeType)
+    ///         .Callback<double>(+[](const VdfContext &) { return 11.0; })
+    ///
+    ///     // Register a prim computation that requests the above dispatched
+    ///     // computation via uses relationship targets.
+    ///     self.PrimComputation(_tokens->myComputation)
+    ///         .Callback<double>(+[](const VdfContext &ctx) {
+    ///             const double *const valuePtr =
+    ///                 ctx.GetInputValuePtr<double>(_tokens->eleven);
+    ///             return valuePtr ? *valuePtr : -1.0;
+    ///         })
+    ///         .Inputs(
+    ///
+    ///             // This input opts-in to finding dispatched computations.
+    ///             Relationship(_tokens->myRelationship)
+    ///                 .TargetedObjects<double>(_tokens->eleven)
+    ///                 .FallsBackToDispatched())
+    /// }
+    /// ```
+    ///
+    EXEC_API
+    Exec_PrimComputationBuilder 
+    DispatchedPrimComputation(
+        const TfToken &computationName,
+        ExecDispatchesOntoSchemas &&ontoSchemas);
+
+    // Convenience variadic template overload that takes zero or more schema
+    // types.
+    template <class... DispatchedOntoSchemaTypes>
+    Exec_PrimComputationBuilder
+    DispatchedPrimComputation(
+        const TfToken &computationName,
+        DispatchedOntoSchemaTypes &&...schemaTypes);
+
     // XXX:TODO
-    // AttributeComputation
+    // - AttributeComputation
+    // - DispatchedAttributeComputation
 
     ///  @}
 
@@ -849,7 +956,9 @@ class Exec_PrimComputationBuilder
     EXEC_API
     Exec_PrimComputationBuilder(
         TfType schemaType,
-        const TfToken &computationName);
+        const TfToken &computationName,
+        bool dispatched = false,
+        ExecDispatchesOntoSchemas &&dispatchesOntoSchemas = {});
 
 public:
     EXEC_API
@@ -1000,6 +1109,21 @@ Exec_PrimComputationBuilder::_ValidateInputs() {
     static_assert(
         regType::allowedProviders & allowed,
         "Input is not allowed on a provider of this type.");
+}
+
+template <class... DispatchedOntoSchemaTypes>
+Exec_PrimComputationBuilder
+Exec_ComputationBuilder::DispatchedPrimComputation(
+    const TfToken &computationName,
+    DispatchedOntoSchemaTypes &&...schemaTypes)
+{
+    static_assert(
+        (std::is_same_v<
+             std::decay_t<DispatchedOntoSchemaTypes>, TfType> && ...));
+
+    return DispatchedPrimComputation(
+        computationName,
+        {std::forward<DispatchedOntoSchemaTypes>(schemaTypes)...});
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

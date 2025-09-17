@@ -86,6 +86,11 @@ HdxRenderSetupTask::Prepare(HdTaskContext* ctx,
             HdStVolume::defaultStepSizeLighting);
     renderPassState->SetVolumeRenderingConstants(stepSize, stepSizeLighting);
 
+    const bool enableExposureCompensation = renderIndex->GetRenderDelegate()->
+        GetRenderSetting<bool>(
+            HdRenderSettingsTokens->enableExposureCompensation, true);
+    renderPassState->SetEnableExposureCompensation(enableExposureCompensation);
+
     if (HdStRenderPassState * const hdStRenderPassState =
             dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
         _SetRenderpassShadersForStorm(hdStRenderPassState,

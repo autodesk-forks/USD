@@ -38,6 +38,7 @@
 #include "pxr/usd/pcp/layerStackIdentifier.h"
 #include "pxr/usd/pcp/site.h"
 
+#include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/attributeSpec.h"
 #include "pxr/usd/sdf/changeBlock.h"
 #include "pxr/usd/sdf/layerUtils.h"
@@ -477,33 +478,6 @@ _CreatePathResolverContext(
     return ArGetResolver().CreateDefaultContext();
 }
 
-static std::string
-_AnchorAssetPathRelativeToLayer(
-    const SdfLayerHandle& anchor,
-    const std::string& assetPath)
-{
-    if (assetPath.empty() ||
-        SdfLayer::IsAnonymousLayerIdentifier(assetPath)) {
-        return assetPath;
-    }
-
-    return SdfComputeAssetPathRelativeToLayer(anchor, assetPath);
-}
-
-static std::string
-_ResolveAssetPathRelativeToLayer(
-    const SdfLayerHandle& anchor,
-    const std::string& assetPath)
-{
-    const std::string computedAssetPath = 
-        _AnchorAssetPathRelativeToLayer(anchor, assetPath);
-    if (computedAssetPath.empty()) {
-        return computedAssetPath;
-    }
-
-    return ArGetResolver().Resolve(computedAssetPath);
-}
-
 // If forFlattening is true, this function will only
 // update the authored assetPaths by anchoring them to the
 // anchor layer; it will not fill in the resolved path field.
@@ -515,48 +489,23 @@ _MakeResolvedAssetPathsImpl(const Usd_AssetPathContext &assetContext,
                             bool forFlattening)
 {
     ArResolverContextBinder binder(resolverContext);
-    for (size_t i = 0; i != numAssetPaths; ++i) {
 
-        if (SdfVariableExpression::IsExpression(assetPaths[i].GetAuthoredPath())) {
-            const PcpExpressionVariables& exprVars =
+    if (assetContext) {
+        const PcpExpressionVariables& exprVars =
                 assetContext.node.GetLayerStack()->GetExpressionVariables();
-
-            SdfVariableExpression::Result r = 
-                SdfVariableExpression(assetPaths[i].GetAuthoredPath())
-                .EvaluateTyped<std::string>(exprVars.GetVariables());
-
-            if (!r.errors.empty()) {
-                assetContext.ReportErrors(r.errors);
-                continue;
-            }
-
-            if (r.value.IsHolding<std::string>()) {
-                assetPaths[i].SetEvaluatedPath(
-                    r.value.UncheckedGet<std::string>());
-            }
-        }
-
-        // When flattening, if the resolver can't handle this path 
-        // (e.g., it's a URI and no associated URI resolver is registered),
-        // the result of anchoring may be non-sensical. We try to detect this 
-        // by comparing the anchored result to the unanchored identifier.  
-        // If they're the same, then we assume the path is absolute since the 
-        // anchor had no effect, and we can just leave the path as-is.
+        std::vector<std::string> errors;
         if (forFlattening) {
-            const std::string anchoredPath = _AnchorAssetPathRelativeToLayer(
-                    assetContext.layer, assetPaths[i].GetAssetPath());
-
-            const std::string unanchoredPath = ArGetResolver().CreateIdentifier(
-                    assetPaths[i].GetAssetPath());
-
-            if (anchoredPath != unanchoredPath) {
-                assetPaths[i] = SdfAssetPath(anchoredPath);
-            }
+            SdfAnchorAssetPaths(
+                assetContext.layer, exprVars.GetVariables(), 
+                TfSpan<SdfAssetPath>(assetPaths, numAssetPaths), &errors);
+        } else {
+            SdfResolveAssetPaths(
+                assetContext.layer, exprVars.GetVariables(), 
+                TfSpan<SdfAssetPath>(assetPaths, numAssetPaths), &errors);
         }
-        else {
-            assetPaths[i].SetResolvedPath(_ResolveAssetPathRelativeToLayer(
-                assetContext.layer, assetPaths[i].GetAssetPath())
-            );
+
+        if (!errors.empty()) {
+            assetContext.ReportErrors(errors);
         }
     }
 }
@@ -4128,11 +4077,15 @@ UsdStage::MuteAndUnmuteLayers(const std::vector<std::string> &muteLayers,
         return;
     }
 
+    // Note: we need to compute and process changes for all layers that were
+    // affected by muting.  This operation may have resulted in additional
+    // changelists being generated for sublayers of such layers.  All relevant
+    // changelists are computed and processed below.
     const auto& cacheChanges = _pendingChanges->pcpChanges.GetCacheChanges();
     const auto result = cacheChanges.find(_cache.get());
     if (result != cacheChanges.end()) {
-        const bool noticesDispatched = 
-            _ProcessChangeLists(result->second.layerChangeListVec);
+            _ComputePendingChanges(result->second.layerChangeListVec);
+            const bool noticesDispatched = _ProcessPendingChanges();
         
         // In order to preserve behavior that existed before finer grained 
         // change notifications, if all layers that were muted and unmuted were
@@ -4259,7 +4212,9 @@ _Stringify(const ChangedPaths& paths)
 // the vector and extraData is ignored.
 template <class ChangedPaths, class... ExtraData>
 static void
-_AddAffectedStagePaths(const SdfLayerHandle &layer, const SdfPath &path,
+_AddAffectedStagePaths(const PcpChanges &pcpChanges,
+                       const SdfLayerHandle &layer,
+                       const SdfPath &path,
                        const PcpCache &cache,
                        ChangedPaths *changedPaths,
                        const ExtraData&... extraData)
@@ -4282,13 +4237,26 @@ _AddAffectedStagePaths(const SdfLayerHandle &layer, const SdfPath &path,
     // We do this instead of including PcpDependencyTypeRoot in depTypes
     // because we do not want to include root deps on those sites, just
     // the other kinds of inbound deps.
-    if (cache.GetLayerStack()->HasLayer(layer) && 
-            !path.ContainsPrimVariantSelection()) {
-        _AddToChangedPaths(changedPaths, path, extraData...);
+    // Note: if searching the cache's layer stack does not contain the layer
+    // in question we use FindAllLayerStacksUsingLayer which will consider
+    // stacks for which the layer will be added to (in the case of sublayer
+    // insertion or layer unmuting)
+    if (!path.ContainsPrimVariantSelection()) {
+        if (cache.GetLayerStack()->HasLayer(layer)) {
+            _AddToChangedPaths(changedPaths, path, extraData...);
+        } else {
+            const PcpLayerStackPtrVector& layerStackVec = 
+                pcpChanges.FindAllLayerStacksUsingLayer(&cache, layer);
+
+            if (std::find(layerStackVec.begin(), layerStackVec.end(),
+                cache.GetLayerStack()) != layerStackVec.end()) {
+                _AddToChangedPaths(changedPaths, path, extraData...);
+            }
+        }
     }
 
     for (const PcpDependency& dep:
-         cache.FindSiteDependencies(layer, path, depTypes,
+        pcpChanges.FindSiteDependencies(&cache, layer, path, depTypes,
                                     /* recurseOnSite */ true,
                                     /* recurseOnIndex */ false,
                                     filterForExistingCachesOnly)) {
@@ -4436,18 +4404,41 @@ UsdStage::_HandleLayersDidChange(
     // composition metadata (reference, inherits, variant selections, etc).
     _pendingChanges->pcpChanges.DidChange(_cache.get(), n.GetChangeListVec());
 
-    _ProcessChangeLists(n.GetChangeListVec());
+    _ComputePendingChanges(n.GetChangeListVec());
+
+    // It is possible that some additional computation may be necessary if
+    // the changes contained sublayer operations such as layer muting / unmuting
+    // or sublayer insertion / removal.  In this case, there will be additional
+    // changelists for affected sublayers.  We want to ensure that we compute
+    // pending changes for these lists as well.
+    const auto& cacheChanges = _pendingChanges->pcpChanges.GetCacheChanges();
+    const auto result = cacheChanges.find(_cache.get());
+    if (result != cacheChanges.end()) {
+        _ComputePendingChanges(result->second.layerChangeListVec);
+    }
+
+    // Normally we'd call _ProcessPendingChanges only if _pendingChanges
+    // pointed to localPendingChanges. If it didn't, it would mean that an
+    // upstream caller initialized _pendingChanges and that caller would be
+    // expected to call _ProcessPendingChanges itself.
+    // 
+    // However, the _PathsToChangesMap objects in _pendingChanges may hold
+    // raw pointers to entries stored in the notice, so we must process these
+    // changes immediately while the notice is still alive.
+    _ProcessPendingChanges();
 }
 
-bool UsdStage::_ProcessChangeLists(
+void UsdStage::_ComputePendingChanges(
     const SdfLayerChangeListVec & changeListVec)
 {
     // Callers of this function are expected to have  set up _PendingChanges.
     // We will merge in all of the information from layer changes so it can 
     // be processed later.
     if (!TF_VERIFY(_pendingChanges)) {
-        return false;
+        return;
     }
+
+    const PcpChanges& pcpChanges = _pendingChanges->pcpChanges;
 
     // Keep track of paths to USD objects that need to be recomposed or
     // have otherwise changed.
@@ -4485,7 +4476,8 @@ bool UsdStage::_ProcessChangeLists(
     for(const auto& layerAndChangelist : changeListVec) {
         // If this layer does not pertain to us, skip.
         const SdfLayerHandle &layer = layerAndChangelist.first;
-        if (_cache->FindAllLayerStacksUsingLayer(layer).empty()) {
+        if (pcpChanges.FindAllLayerStacksUsingLayer(
+            _cache.get(), layer).empty()) {
             continue;
         }
 
@@ -4559,14 +4551,14 @@ bool UsdStage::_ProcessChangeLists(
                 }
 
                 if (willRecompose) {
-                    _AddAffectedStagePaths(layer, sdfPath, 
+                    _AddAffectedStagePaths(pcpChanges, layer, sdfPath, 
                                            *_cache, &recomposeChanges, &entry);
                 } else if (willChangePrimTypeInfo) {
-                    _AddAffectedStagePaths(layer, sdfPath, 
+                    _AddAffectedStagePaths(pcpChanges, layer, sdfPath, 
                                            *_cache, &primTypeInfoChanges, &entry);
                 }
                 if (didChangeActive) {
-                    _AddAffectedStagePaths(layer, sdfPath, 
+                    _AddAffectedStagePaths(pcpChanges, layer, sdfPath, 
                                            *_cache, &changedActivePaths);
                 }
             }
@@ -4578,8 +4570,8 @@ bool UsdStage::_ProcessChangeLists(
                      entry.flags.didRemoveProperty);
 
                 if (willRecompose) {
-                    _AddAffectedStagePaths(
-                        layer, sdfPath, *_cache, &otherResyncChanges, &entry);
+                    _AddAffectedStagePaths(pcpChanges, layer, sdfPath,
+                         *_cache, &otherResyncChanges, &entry);
                 }
             }
 
@@ -4587,7 +4579,7 @@ bool UsdStage::_ProcessChangeLists(
             // scene paths separately so we can notify clients about the
             // changes.
             if (!willRecompose) {
-                _AddAffectedStagePaths(layer, sdfPath, 
+                _AddAffectedStagePaths(pcpChanges, layer, sdfPath, 
                         *_cache, &otherInfoChanges, &entry);
 
                 // In the special case where a variant spec was added or 
@@ -4630,8 +4622,9 @@ bool UsdStage::_ProcessChangeLists(
                     // Add any paths that depend on the prim path of the variant
                     // selection as these will have their composed variants 
                     // potentially changed.
-                    _AddAffectedStagePaths(layer, sdfPath.GetPrimPath(), 
-                        *_cache, &otherInfoChanges, &variantEntry);
+                    _AddAffectedStagePaths(pcpChanges, layer,  
+                        sdfPath.GetPrimPath(), *_cache, &otherInfoChanges,
+                        &variantEntry);
                 }
             }
         }
@@ -4670,15 +4663,6 @@ bool UsdStage::_ProcessChangeLists(
         }
     }
 
-    // Normally we'd call _ProcessPendingChanges only if _pendingChanges
-    // pointed to localPendingChanges. If it didn't, it would mean that an
-    // upstream caller initialized _pendingChanges and that caller would be
-    // expected to call _ProcessPendingChanges itself.
-    // 
-    // However, the _PathsToChangesMap objects in _pendingChanges may hold
-    // raw pointers to entries stored in the notice, so we must process these
-    // changes immediately while the notice is still alive.
-    return _ProcessPendingChanges();
 }
 
 bool
@@ -4741,22 +4725,6 @@ UsdStage::_ProcessPendingChanges()
     remapChangesToPrototypes(&otherResyncChanges);
     remapChangesToPrototypes(&otherInfoChanges);
 
-    // XXX: Check Pcp Changes to see if a sublayer was added / removed or a
-    // layer was muted / unmuted
-    // If so, we will trigger a resync on `/`. This preserves existing 
-    // notification behavior and insulates third party clients from the finer
-    // grained changes that Pcp is now generating. This will be removed in a 
-    // future change.
-
-    const PcpCacheChanges* cacheChanges = 
-        TfMapLookupPtr(changes.GetCacheChanges(), _cache.get());
-
-    if (cacheChanges && 
-        (cacheChanges->didAddOrRemoveNonEmptySublayer ||
-        cacheChanges->didMuteOrUnmuteNonEmptyLayer))
-    {
-        recomposeChanges[SdfPath::AbsoluteRootPath()];
-    }
 
     // Before processing any prim type info changes, remove any that would
     // already have been covered by the recomposed prims.
@@ -5678,21 +5646,35 @@ _CopyProperty(const UsdProperty &prop,
 
         _CopyAuthoredMetadata(attr, sdfAttr);
 
-        // Copy the default & time samples, if present. We get the
-        // correct timeSamples/default value resolution here because
-        // GetBracketingTimeSamples sets hasSamples=false when the
-        // default value is stronger.
+        // Following composition strength order, if the resolve info value
+        // source is samples or clips, we write out samples.  Otherwise if the
+        // source is a spline, we write out the spline.  We always write out the
+        // default if one is authored, to handle calls to Get() with the default
+        // time.
 
-        double lower = 0.0, upper = 0.0;
-        bool hasSamples = false;
-        if (attr.GetBracketingTimeSamples(
-            0.0, &lower, &upper, &hasSamples) && hasSamples) {
+        UsdResolveInfo resolveInfo = attr.GetResolveInfo();
+
+        if (resolveInfo.GetSource() == UsdResolveInfoSourceTimeSamples ||
+            resolveInfo.GetSource() == UsdResolveInfoSourceValueClips) {
             SdfTimeSampleMap ts;
             if (Usd_FlattenAccess::MakeTimeSampleMapForFlatten(
                     attr, timeOffset, &ts)) {
                 sdfAttr->SetInfo(SdfFieldKeys->TimeSamples, VtValue::Take(ts));
             }
         }
+        else if (resolveInfo.GetSource() == UsdResolveInfoSourceSpline) {
+            TsSpline spline = attr.GetSpline();
+
+            if (!timeOffset.IsIdentity()) {
+                TsSpline mappedSpline = spline;
+                // Apply layer offset.
+                Usd_ApplyLayerOffsetToValue(&mappedSpline, timeOffset);
+                spline = std::move(mappedSpline);
+            }
+            sdfAttr->SetInfo(SdfFieldKeys->Spline, VtValue::Take(spline));
+        }
+
+        // Always write default if we have one.
         if (attr.HasAuthoredMetadata(SdfFieldKeys->Default)) {
             VtValue defaultValue;
             if (attr.Get(&defaultValue)) {
@@ -10203,7 +10185,7 @@ UsdStage::ResolveIdentifierToEditTarget(std::string const &identifier) const
 
     // Handles non-relative paths also
     const std::string resolved = 
-        _ResolveAssetPathRelativeToLayer(anchor, identifier);
+        SdfResolveAssetPathRelativeToLayer(anchor, identifier);
     TF_DEBUG(USD_PATH_RESOLUTION).Msg("Resolved identifier \"%s\" against layer "
                                       "@%s@ to: \"%s\"\n",
                                       identifier.c_str(), 

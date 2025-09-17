@@ -8,6 +8,8 @@
 
 #include "pxr/usdImaging/usdImaging/drawModeSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/extentResolvingSceneIndex.h"
+#include "pxr/usdImaging/usdImaging/instanceProxyPathTranslationSceneIndex.h"
+// #include "pxr/usdImaging/usdImaging/instanceProxyPathTranslationSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/materialBindingsResolvingSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/niPrototypePropagatingSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/piPrototypePropagatingSceneIndex.h"
@@ -24,6 +26,7 @@
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/purposeSchema.h"
+#include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
 #include "pxr/imaging/hd/sceneIndexUtil.h"
 
 #include "pxr/base/tf/envSetting.h"
@@ -140,6 +143,28 @@ _InstanceDataSourceNames()
     return result;
 };
 
+static
+TfTokenVector
+_ProxyPathTranslationDataSourceNames()
+{
+    TRACE_FUNCTION();
+    
+    TfTokenVector result = {
+        // Translate material bindings to instance proxies.
+        UsdImagingMaterialBindingsSchema::GetSchemaToken(),
+    };
+
+    for (const UsdImagingSceneIndexPluginUniquePtr &plugin :
+             UsdImagingSceneIndexPlugin::GetAllSceneIndexPlugins()) {
+        for (const TfToken &name :
+             plugin->ProxyPathTranslationDataSourceNames()) {
+            result.push_back(name);
+        }
+    }
+
+    return result;
+};
+
 UsdImagingSceneIndices
 UsdImagingCreateSceneIndices(
     const UsdImagingCreateSceneIndicesInfo &createInfo)
@@ -226,6 +251,18 @@ UsdImagingCreateSceneIndices(
             UsdImagingNiPrototypePropagatingSceneIndex::New(
                 sceneIndex, instanceDataSourceNames, callback);
     }
+
+    sceneIndex = result.postInstancingNoticeBatchingSceneIndex =
+        HdNoticeBatchingSceneIndex::New(sceneIndex);
+
+    // Names of data sources that contain SdfPath-valued data
+    // sources that may target instance proxies, and which require
+    // translation to corresponding prototype paths.
+    static const TfTokenVector proxyPathTranslationDataSourceNames =
+        _ProxyPathTranslationDataSourceNames();
+
+    sceneIndex = UsdImaging_InstanceProxyPathTranslationSceneIndex::New(
+        sceneIndex, proxyPathTranslationDataSourceNames);
 
     sceneIndex = UsdImagingMaterialBindingsResolvingSceneIndex::New(
                         sceneIndex, /* inputArgs = */ nullptr);
