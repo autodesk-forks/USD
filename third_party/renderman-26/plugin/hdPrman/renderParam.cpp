@@ -170,8 +170,6 @@ TF_DEFINE_ENV_SETTING(HD_PRMAN_DISABLE_HIDER_JITTER, false,
                       "Disable hider jitter");
 TF_DEFINE_ENV_SETTING(HD_PRMAN_DEFER_SET_OPTIONS, true,
                       "Defer first SetOptions call to render settings prim sync.");
-TF_DEFINE_ENV_SETTING(RMAN_XPU_GPUCONFIG, "0",
-                      "A comma separated list of integers for which GPU devices to use.");
 TF_DEFINE_ENV_SETTING(HD_PRMAN_DISABLE_ADAPTIVE_SAMPLING, false,
                       "Disable adaptive sampling.");
 
@@ -2120,31 +2118,11 @@ HdPrman_RenderParam::_CreateRiley(const std::string &rileyVariant,
     RtParamList renderConfigParams;
     if(IsXpu())
     {
-        // Allow xpuGpuConfig to be overridden with RMAN_XPU_GPUCONFIG env var
-        std::vector<int> xpuGpuConfigOverride;
-        if(!xpuGpuConfig.empty()) {
-            const std::string envXpuConfig =
-                TfGetenv("RMAN_XPU_GPUCONFIG", "");
-            if(!envXpuConfig.empty()) {
-                std::vector<std::string> toks = TfStringSplit(envXpuConfig, ",");
-                for(auto tok=toks.begin(); tok != toks.end(); ++tok) {
-                    if(!tok->empty()) {
-                        xpuGpuConfigOverride.push_back(atoi(tok->c_str()));
-                    }
-                }
-            }
-        }
-
         static const RtUString us_cpuConfig("xpu:cpuconfig");
         static const RtUString us_gpuConfig("xpu:gpuconfig");
         renderConfigParams.SetInteger(us_cpuConfig, xpuCpuConfig);
-        renderConfigParams.SetIntegerArray(us_gpuConfig,
-                                            xpuGpuConfigOverride.empty() ?
-                                                xpuGpuConfig.data() :
-                                                xpuGpuConfigOverride.data(),
-                                            xpuGpuConfigOverride.empty() ?
-                                                xpuGpuConfig.size() :
-                                                xpuGpuConfigOverride.size());
+        renderConfigParams.SetIntegerArray(
+            us_gpuConfig, xpuGpuConfig.data(), xpuGpuConfig.size());
     }
 
     static const RtUString us_statsSessionName("statsSessionName");
@@ -2157,6 +2135,22 @@ HdPrman_RenderParam::_CreateRiley(const std::string &rileyVariant,
     if(!_riley) {
         TF_RUNTIME_ERROR("Could not initialize riley API.");
         return;
+    }
+
+    if (IsXpu()) {
+        TF_DEBUG(HDPRMAN_RILEY).Msg("Riley Instance Created for XPU:\n");
+        TF_DEBUG(HDPRMAN_RILEY).Msg(xpuCpuConfig ? "\tCPU Enabled\n" : "\tCPU Disabled\n");
+        if (xpuGpuConfig.empty()) {
+            TF_DEBUG(HDPRMAN_RILEY).Msg("\tGPU Disabled\n");
+        }
+        else {
+            for (const int& gpu : xpuGpuConfig) {
+                TF_DEBUG(HDPRMAN_RILEY).Msg("\tGPU%d Enabled\n", gpu);
+            }
+        }
+    }
+    else {
+        TF_DEBUG(HDPRMAN_RILEY).Msg("Riley Instance Created for RIS\n");
     }
 }
 

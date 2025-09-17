@@ -43,6 +43,7 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     (inputName)
     (customComputation)
+    (dispatchedComputation)
     (nonExistentComputation)
 );
 
@@ -57,9 +58,11 @@ TF_DEFINE_PRIVATE_TOKENS(
         }                                                                      \
     }()
 
-#define ASSERT_OUTPUT_KEY(actual, expectedProvider, expectedDefinition)        \
+#define ASSERT_OUTPUT_KEY(                                                     \
+    actual, expectedProvider, expectedSchemaKey, expectedDefinition)           \
     {                                                                          \
-        const Exec_OutputKey expected{expectedProvider, expectedDefinition};   \
+        const Exec_OutputKey expected{                                         \
+            expectedProvider, expectedSchemaKey, expectedDefinition};          \
         const Exec_OutputKey::Identity actualOutputKeyIdentity =               \
             (actual).MakeIdentity();                                           \
         const Exec_OutputKey::Identity expectedOutputKeyIdentity =             \
@@ -98,12 +101,16 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(TestExecInputResolverCustomSchema)
 {
     self.PrimComputation(_tokens->customComputation)
         .Callback<int>(+[](const VdfContext &){ return 0; });
+
+    self.DispatchedPrimComputation(_tokens->dispatchedComputation)
+        .Callback<int>(+[](const VdfContext &){ return 0; });
 }
 
 class Fixture
 {
 public:
     const Exec_ComputationDefinition *customComputationDefinition;
+    const Exec_ComputationDefinition *dispatchedComputationDefinition;
     const Exec_ComputationDefinition *timeComputationDefinition;
     EsfJournal journal;
 
@@ -124,18 +131,27 @@ public:
         const EsfPrim prim =
             stage->GetPrimAtPath(SdfPath("/Prim"), nullJournal);
         TF_AXIOM(prim->IsValid(nullJournal));
+
         customComputationDefinition =
             reg.GetComputationDefinition(
-                *prim.Get(), _tokens->customComputation, nullJournal);
+                *prim.Get(), _tokens->customComputation,
+                EsfSchemaConfigKey(), nullJournal);
+        TF_AXIOM(customComputationDefinition);
+
+        dispatchedComputationDefinition =
+            reg.GetComputationDefinition(
+                *prim.Get(), _tokens->dispatchedComputation,
+                prim->GetSchemaConfigKey(nullJournal), nullJournal);
         TF_AXIOM(customComputationDefinition);
 
         const EsfPrim pseudoRoot =
             stage->GetPrimAtPath(SdfPath("/"), nullJournal);
         TF_AXIOM(pseudoRoot->IsValid(nullJournal));
+
         timeComputationDefinition =
             reg.GetComputationDefinition(
-                *pseudoRoot.Get(),
-                ExecBuiltinComputations->computeTime, nullJournal);
+                *pseudoRoot.Get(), ExecBuiltinComputations->computeTime,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(timeComputationDefinition);
     }
 
@@ -153,10 +169,14 @@ public:
         const EsfObject &origin,
         const TfToken &computationName,
         const TfType resultType,
+        const EsfSchemaConfigKey dispatchingSchemaKey,
         const SdfPath &localTraversal,
         const ExecProviderResolution::DynamicTraversal dynamicTraversal)
     {
         TF_AXIOM(origin->IsValid(nullptr));
+
+        const bool fallsBackToDispatched =
+            (dispatchingSchemaKey != EsfSchemaConfigKey());
 
         const Exec_InputKey inputKey {
             _tokens->inputName,
@@ -165,9 +185,12 @@ public:
             ExecProviderResolution {
                 localTraversal,
                 dynamicTraversal
-            }
+            },
+            fallsBackToDispatched,
+            false, /* optional */ 
         };
-        return Exec_ResolveInput(*_stage, origin, inputKey, &journal);
+        return Exec_ResolveInput(
+            *_stage, origin, dispatchingSchemaKey, inputKey, &journal);
     }
 
 private:
@@ -200,6 +223,7 @@ TestResolveToComputationOrigin(Fixture &fixture)
         fixture.GetObjectAtPath("/Origin"),
         _tokens->customComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath("."),
         ExecProviderResolution::DynamicTraversal::Local);
 
@@ -207,6 +231,7 @@ TestResolveToComputationOrigin(Fixture &fixture)
     ASSERT_OUTPUT_KEY(
         outputKeys[0],
         fixture.GetObjectAtPath("/Origin"),
+        EsfSchemaConfigKey(),
         fixture.customComputationDefinition);
 
     EsfJournal expectedJournal;
@@ -229,6 +254,7 @@ TestResolveToComputationOrigin_NoSuchComputation(Fixture &fixture)
         fixture.GetObjectAtPath("/Origin"),
         _tokens->nonExistentComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath("."),
         ExecProviderResolution::DynamicTraversal::Local);
 
@@ -255,6 +281,7 @@ TestResolveToComputationOrigin_WrongResultType(Fixture &fixture)
         fixture.GetObjectAtPath("/Origin"),
         _tokens->customComputation,
         TfType::Find<double>(),
+        EsfSchemaConfigKey(),
         SdfPath("."),
         ExecProviderResolution::DynamicTraversal::Local);
 
@@ -288,6 +315,7 @@ TestResolveToNamespaceAncestor(Fixture &fixture)
         fixture.GetObjectAtPath("/Root/Ancestor/Scope1/Scope2/Origin"),
         _tokens->customComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath("."),
         ExecProviderResolution::DynamicTraversal::NamespaceAncestor);
 
@@ -295,6 +323,7 @@ TestResolveToNamespaceAncestor(Fixture &fixture)
     ASSERT_OUTPUT_KEY(
         outputKeys[0], 
         fixture.GetObjectAtPath("/Root/Ancestor"), 
+        EsfSchemaConfigKey(),
         fixture.customComputationDefinition);
 
     EsfJournal expectedJournal;
@@ -329,6 +358,7 @@ TestResolveToNamespaceAncestor_NoSuchAncestor(Fixture &fixture)
         fixture.GetObjectAtPath("/Root/Parent/Origin"),
         _tokens->customComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath("."),
         ExecProviderResolution::DynamicTraversal::NamespaceAncestor);
 
@@ -365,6 +395,7 @@ TestResolveToNamespaceAncestor_WrongResultType(Fixture &fixture)
         fixture.GetObjectAtPath("/Root/Parent/Origin"),
         _tokens->customComputation,
         TfType::Find<double>(),
+        EsfSchemaConfigKey(),
         SdfPath("."),
         ExecProviderResolution::DynamicTraversal::NamespaceAncestor);
 
@@ -397,6 +428,7 @@ TestResolveToOwningPrim(Fixture &fixture)
         fixture.GetObjectAtPath("/OwningPrim.origin"),
         _tokens->customComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath(".."),
         ExecProviderResolution::DynamicTraversal::Local);
 
@@ -404,6 +436,7 @@ TestResolveToOwningPrim(Fixture &fixture)
     ASSERT_OUTPUT_KEY(
         outputKeys[0], 
         fixture.GetObjectAtPath("/OwningPrim"), 
+        EsfSchemaConfigKey(),
         fixture.customComputationDefinition);
 
     EsfJournal expectedJournal;
@@ -433,6 +466,7 @@ TestResolveToTargetedObjects(Fixture &fixture)
         fixture.GetObjectAtPath("/Origin"),
         _tokens->customComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath(".myRel"),
         ExecProviderResolution::DynamicTraversal::RelationshipTargetedObjects);
 
@@ -440,10 +474,12 @@ TestResolveToTargetedObjects(Fixture &fixture)
     ASSERT_OUTPUT_KEY(
         outputKeys[0], 
         fixture.GetObjectAtPath("/Origin/A"), 
+        EsfSchemaConfigKey(),
         fixture.customComputationDefinition);
     ASSERT_OUTPUT_KEY(
         outputKeys[1], 
         fixture.GetObjectAtPath("/Origin/B"), 
+        EsfSchemaConfigKey(),
         fixture.customComputationDefinition);
 
     EsfJournal expectedJournal;
@@ -473,6 +509,7 @@ TestResolveToTargetedObjects_MissingTarget(Fixture &fixture)
         fixture.GetObjectAtPath("/Origin"),
         _tokens->customComputation,
         TfType::Find<int>(),
+        EsfSchemaConfigKey(),
         SdfPath(".myRel"),
         ExecProviderResolution::DynamicTraversal::RelationshipTargetedObjects);
 
@@ -480,6 +517,7 @@ TestResolveToTargetedObjects_MissingTarget(Fixture &fixture)
     ASSERT_OUTPUT_KEY(
         outputKeys[0], 
         fixture.GetObjectAtPath("/Origin/A"), 
+        EsfSchemaConfigKey(),
         fixture.customComputationDefinition);
 
     EsfJournal expectedJournal;
@@ -503,12 +541,11 @@ TestResolveToStage(Fixture &fixture)
         }
     )usd");
 
-    const EsfObject root = fixture.GetObjectAtPath("/");
-
     const Exec_OutputKeyVector outputKeys = fixture.ResolveInput(
         fixture.GetObjectAtPath("/Root") /* origin */,
         ExecBuiltinComputations->computeTime,
         TfType::Find<EfTime>(),
+        EsfSchemaConfigKey(),
         SdfPath("/") /* localTraversal */,
         ExecProviderResolution::DynamicTraversal::Local);
 
@@ -516,11 +553,106 @@ TestResolveToStage(Fixture &fixture)
     ASSERT_OUTPUT_KEY(
         outputKeys[0], 
         fixture.GetObjectAtPath("/"),
+        EsfSchemaConfigKey(),
         fixture.timeComputationDefinition);
 
     EsfJournal expectedJournal;
     expectedJournal
         .Add(SdfPath("/"), EsfEditReason::ResyncedObject);
+    ASSERT_EQ(fixture.journal, expectedJournal);
+}
+
+// Directly test dispatched input resolution here by resolving using the parent
+// prim as the origin, but providing the config key for the child prim's schema,
+// which is the schema that dispatches the computation we request.
+//
+static void
+TestResolveForDispatchedComputation(Fixture &fixture)
+{
+    fixture.NewStageFromLayer(R"usd(#usda 1.0
+        def Scope "Parent" {
+            def CustomSchema "Child" {
+            }
+        }
+    )usd");
+
+    constexpr EsfJournal *nullJournal = nullptr;
+
+    const EsfObject parent = fixture.GetObjectAtPath("/Parent");
+    TF_AXIOM(parent->IsValid(nullJournal));
+    TF_AXIOM(parent->IsPrim());
+    const EsfObject child = fixture.GetObjectAtPath("/Parent/Child");
+    TF_AXIOM(child->IsValid(nullJournal));
+    TF_AXIOM(child->IsPrim());
+
+    const Exec_OutputKeyVector outputKeys = fixture.ResolveInput(
+        parent /* origin */,
+        _tokens->dispatchedComputation,
+        TfType::Find<int>(),
+        child->GetSchemaConfigKey(nullJournal),
+        SdfPath(".") /* localTraversal */,
+        ExecProviderResolution::DynamicTraversal::Local);
+
+    ASSERT_EQ(outputKeys.size(), 1);
+    ASSERT_OUTPUT_KEY(
+        outputKeys[0], 
+        parent,
+        child->GetSchemaConfigKey(nullJournal),
+        fixture.dispatchedComputationDefinition);
+
+    EsfJournal expectedJournal;
+    expectedJournal
+        .Add(SdfPath("/Parent"), EsfEditReason::ResyncedObject);
+    ASSERT_EQ(fixture.journal, expectedJournal);
+}
+
+// Test resolving an input from a dispatched computation via relationship
+// targets.
+//
+static void
+TestResolveForDispatchedComputation_RelTarget(Fixture &fixture)
+{
+    fixture.NewStageFromLayer(R"usd(#usda 1.0
+        def Scope "Parent" {
+            def CustomSchema "Child" {
+                add rel myRel = </Parent/A>
+            }
+            def Scope "A" {}
+        }
+    )usd");
+
+    constexpr EsfJournal *nullJournal = nullptr;
+
+    const EsfObject parent = fixture.GetObjectAtPath("/Parent");
+    TF_AXIOM(parent->IsValid(nullJournal));
+    TF_AXIOM(parent->IsPrim());
+    const EsfObject child = fixture.GetObjectAtPath("/Parent/Child");
+    TF_AXIOM(child->IsValid(nullJournal));
+    TF_AXIOM(child->IsPrim());
+
+
+    const Exec_OutputKeyVector outputKeys = fixture.ResolveInput(
+        fixture.GetObjectAtPath("/Parent/Child"),
+        _tokens->dispatchedComputation,
+        TfType::Find<int>(),
+        child->GetSchemaConfigKey(nullJournal),
+        SdfPath(".myRel"),
+        ExecProviderResolution::DynamicTraversal::
+        RelationshipTargetedObjects);
+
+    ASSERT_EQ(outputKeys.size(), 1);
+    ASSERT_OUTPUT_KEY(
+        outputKeys[0], 
+        fixture.GetObjectAtPath("/Parent/A"), 
+        child->GetSchemaConfigKey(nullJournal),
+        fixture.dispatchedComputationDefinition);
+
+    EsfJournal expectedJournal;
+    expectedJournal
+        .Add(SdfPath("/Parent/Child"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Parent/Child.myRel"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Parent/Child.myRel"), EsfEditReason::ChangedTargetPaths)
+        .Add(SdfPath("/Parent/A"), EsfEditReason::ResyncedObject);
     ASSERT_EQ(fixture.journal, expectedJournal);
 }
 
@@ -547,6 +679,8 @@ int main()
         TestResolveToTargetedObjects,
         TestResolveToTargetedObjects_MissingTarget,
         TestResolveToStage,
+        TestResolveForDispatchedComputation,
+        TestResolveForDispatchedComputation_RelTarget,
     };
     for (const auto &test : tests) {
         Fixture fixture;

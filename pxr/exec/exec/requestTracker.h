@@ -11,6 +11,10 @@
 
 #include "pxr/base/tf/pxrTslRobinMap/robin_set.h"
 #include "pxr/base/tf/spinMutex.h"
+#include "pxr/base/work/loops.h"
+#include "pxr/base/work/withScopedParallelism.h"
+
+#include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -23,6 +27,15 @@ class Exec_TimeChangeInvalidationResult;
 class Exec_RequestTracker
 {
 public:
+    /// Expires all outstanding requests.
+    ///
+    /// Destroying the tracker invalidates all request indices over all time
+    /// and resets internal request state.  Expired requests will not receive
+    /// any future invalidation.  This does not delete impl objects as these
+    /// are owned exclusively by their request.
+    ///
+    ~Exec_RequestTracker();
+
     /// Add \p impl to the collection of outstanding requets.
     ///
     /// The tracker does not take ownership of the request impl.  It is
@@ -53,10 +66,33 @@ public:
     void DidChangeTime(
         const Exec_TimeChangeInvalidationResult &invalidationResult) const;
 
+    /// Invoke \p f on each tracked request.
+    ///
+    /// \p f is executed with the request mutex held so it must not re-enter
+    /// the request tracker.  The method may execute \p f for multiple
+    /// requests concurrently.
+    ///
+    template <typename Function>
+    void ParallelForEachRequest(Function &&f) const;
+
 private:
     mutable TfSpinMutex _requestsMutex;
     pxr_tsl::robin_set<Exec_RequestImpl *> _requests;
 };
+
+template <typename Function>
+void
+Exec_RequestTracker::ParallelForEachRequest(Function &&f) const
+{
+    TfSpinMutex::ScopedLock lock{_requestsMutex};
+    WorkWithScopedParallelism([&] {
+        WorkParallelForEach(
+            _requests.begin(), _requests.end(), 
+            [func=std::forward<Function>(f)](Exec_RequestImpl *const impl) {
+                func(*impl);
+            });
+    });
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

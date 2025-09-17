@@ -48,6 +48,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     (attributeName)
     (baseAndDerivedSchemaComputation)
     (derivedSchemaComputation)
+    (dispatchedPrimComputation)
+    (dispatchedPrimComputationOnCustomSchema)
     (emptyComputation)
     (missingComputation)
     (multiApplySchemaComputation)
@@ -142,7 +144,18 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
                 .Computation<double>(ExecBuiltinComputations->computeValue)
         );
 
+    // A computation that is registered on both the base and derived schemas.
     self.PrimComputation(_tokens->baseAndDerivedSchemaComputation)
+        .Callback(+[](const VdfContext &) { return 1.0; });
+
+    // A dispatched prim computation.
+    self.DispatchedPrimComputation(_tokens->dispatchedPrimComputation)
+        .Callback(+[](const VdfContext &) { return 1.0; });
+
+    // A dispatched prim computation that only applies to CustomSchema.
+    self.DispatchedPrimComputation(
+        _tokens->dispatchedPrimComputationOnCustomSchema,
+        TfType::FindByName("TestExecComputationRegistrationCustomSchema"))
         .Callback(+[](const VdfContext &) { return 1.0; });
 }
 
@@ -420,6 +433,7 @@ TestRegistrationErrors()
             reg.GetComputationDefinition(
                 *prim,
                 TfToken("conflictingRegistrationComputation"),
+                EsfSchemaConfigKey(),
                 nullJournal);
         TF_AXIOM(primCompDef);
     }
@@ -438,7 +452,7 @@ TestRegistrationErrors()
             reg.GetComputationDefinition(
                 *prim,
                 TfToken("nonComputationalSchemaComputation"),
-                nullJournal);
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(!primCompDef);
     }
 
@@ -457,7 +471,7 @@ TestRegistrationErrors()
             reg.GetComputationDefinition(
                 *prim,
                 TfToken("nonComputationalSchemaComputation"),
-                nullJournal);
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(!primCompDef);
     }
 }
@@ -483,7 +497,8 @@ TestUnknownSchemaType()
         // Look up a computation registered for the applied schema type.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->appliedSchemaComputation, nullJournal);
+                *prim, _tokens->appliedSchemaComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
     }
 }
@@ -505,7 +520,8 @@ TestStageBuiltinComputationOnPrim()
 
     const Exec_ComputationDefinition *const primCompDef =
         reg.GetComputationDefinition(
-            *prim, ExecBuiltinComputations->computeTime, nullJournal);
+            *prim, ExecBuiltinComputations->computeTime,
+            EsfSchemaConfigKey(), nullJournal);
     TF_AXIOM(!primCompDef);
 }
 
@@ -526,7 +542,8 @@ TestTypedSchemaComputationRegistration()
         // Look up a computation that wasn't registered.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->missingComputation, nullJournal);
+                *prim, _tokens->missingComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(!primCompDef);
     }
 
@@ -537,7 +554,8 @@ TestTypedSchemaComputationRegistration()
         // want some kind of validation to ensure we end up with a callback.)
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->emptyComputation, nullJournal);
+                *prim, _tokens->emptyComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         ASSERT_EQ(
@@ -549,7 +567,8 @@ TestTypedSchemaComputationRegistration()
         // Look up a computation with no inputs.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->noInputsComputation, nullJournal);
+                *prim, _tokens->noInputsComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         ASSERT_EQ(
@@ -561,7 +580,8 @@ TestTypedSchemaComputationRegistration()
         // Look up a stage bultin computation.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *pseudoroot, ExecBuiltinComputations->computeTime, nullJournal);
+                *pseudoroot, ExecBuiltinComputations->computeTime,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         ASSERT_EQ(
@@ -573,7 +593,8 @@ TestTypedSchemaComputationRegistration()
         // Look up a plugin computation on the stage pseudo-root.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *pseudoroot, _tokens->noInputsComputation, nullJournal);
+                *pseudoroot, _tokens->noInputsComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(!primCompDef);
     }
 
@@ -581,7 +602,8 @@ TestTypedSchemaComputationRegistration()
         // Look up a computation with multiple inputs.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->primComputation, nullJournal);
+                *prim, _tokens->primComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         const auto inputKeys =
@@ -656,7 +678,8 @@ TestTypedSchemaComputationRegistration()
     {
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->stageAccessComputation, nullJournal);
+                *prim, _tokens->stageAccessComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         const auto inputKeys =
@@ -679,7 +702,7 @@ TestTypedSchemaComputationRegistration()
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
                 *prim, _tokens->attributeComputedValueComputation,
-                nullJournal);
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         const auto inputKeys =
@@ -715,7 +738,8 @@ TestDerivedSchemaComputationRegistration()
         // Look up a computation registered for the derived schema type.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->derivedSchemaComputation, nullJournal);
+                *prim, _tokens->derivedSchemaComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
     }
 
@@ -724,7 +748,8 @@ TestDerivedSchemaComputationRegistration()
         // types.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->baseAndDerivedSchemaComputation, nullJournal);
+                *prim, _tokens->baseAndDerivedSchemaComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         // Make sure we got the definition from the derived schema (i.e., the
@@ -738,7 +763,8 @@ TestDerivedSchemaComputationRegistration()
         // Look up a computation registered for the base schema type.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, _tokens->noInputsComputation, nullJournal);
+                *prim, _tokens->noInputsComputation,
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
     }
 }
@@ -761,7 +787,8 @@ TestAppliedSchemaComputationRegistration()
             // Look up a computation registered for the applied schema type.
             const Exec_ComputationDefinition *const primCompDef =
                 reg.GetComputationDefinition(
-                    *prim, _tokens->appliedSchemaComputation, nullJournal);
+                    *prim, _tokens->appliedSchemaComputation,
+                    EsfSchemaConfigKey(), nullJournal);
             TF_AXIOM(primCompDef);
         }
 
@@ -770,7 +797,8 @@ TestAppliedSchemaComputationRegistration()
             // applied schema, with no inputs.
             const Exec_ComputationDefinition *const primCompDef =
                 reg.GetComputationDefinition(
-                    *prim, _tokens->primComputation, nullJournal);
+                    *prim, _tokens->primComputation,
+                    EsfSchemaConfigKey(), nullJournal);
             TF_AXIOM(primCompDef);
             const auto inputKeys =
                 primCompDef->GetInputKeys(*prim, nullJournal);
@@ -793,7 +821,8 @@ TestAppliedSchemaComputationRegistration()
             // schema type.
             const Exec_ComputationDefinition *const primCompDef =
                 reg.GetComputationDefinition(
-                    *prim, _tokens->appliedSchemaComputation, nullJournal);
+                    *prim, _tokens->appliedSchemaComputation,
+                    EsfSchemaConfigKey(), nullJournal);
             TF_AXIOM(primCompDef);
         }
 
@@ -802,7 +831,8 @@ TestAppliedSchemaComputationRegistration()
             // schema and verify that the typed schema wins.
             const Exec_ComputationDefinition *const primCompDef =
                 reg.GetComputationDefinition(
-                    *prim, _tokens->primComputation, nullJournal);
+                    *prim, _tokens->primComputation,
+                    EsfSchemaConfigKey(), nullJournal);
             TF_AXIOM(primCompDef);
             const auto inputKeys =
                 primCompDef->GetInputKeys(*prim, nullJournal);
@@ -824,7 +854,8 @@ TestAppliedSchemaComputationRegistration()
             // Look up a computation registered for the applied schema type.
             const Exec_ComputationDefinition *const primCompDef =
                 reg.GetComputationDefinition(
-                    *prim, _tokens->multiApplySchemaComputation, nullJournal);
+                    *prim, _tokens->multiApplySchemaComputation,
+                    EsfSchemaConfigKey(), nullJournal);
             TF_AXIOM(!primCompDef);
         }
     }
@@ -862,7 +893,8 @@ TestPluginSchemaComputationRegistration()
         // be loaded.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, TfToken("myComputation"), nullJournal);
+                *prim, TfToken("myComputation"),
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         const auto inputKeys =
@@ -879,7 +911,8 @@ TestPluginSchemaComputationRegistration()
 
             const Exec_ComputationDefinition *const primDef =
                 reg.GetComputationDefinition(
-                    *prim, TfToken("unregisteredComputation"), nullJournal);
+                    *prim, TfToken("unregisteredComputation"),
+                    EsfSchemaConfigKey(), nullJournal);
             TF_AXIOM(!primDef);
         }
     }
@@ -889,7 +922,8 @@ TestPluginSchemaComputationRegistration()
         // loaded.
         const Exec_ComputationDefinition *const primCompDef =
             reg.GetComputationDefinition(
-                *prim, TfToken("anotherComputation"), nullJournal);
+                *prim, TfToken("anotherComputation"),
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(primCompDef);
 
         const auto inputKeys =
@@ -907,12 +941,85 @@ TestPluginSchemaComputationRegistration()
 
         const Exec_ComputationDefinition *const extraPrimCompDef =
             reg.GetComputationDefinition(
-                *extraPrim, TfToken("myComputation"), nullJournal);
+                *extraPrim, TfToken("myComputation"),
+                EsfSchemaConfigKey(), nullJournal);
         TF_AXIOM(extraPrimCompDef);
 
         const auto inputKeys =
             extraPrimCompDef->GetInputKeys(*extraPrim, nullJournal);
         ASSERT_EQ(inputKeys->Get().size(), 0);
+    }
+}
+
+static void
+TestDispatchedComputations()
+{
+    EsfJournal *const nullJournal = nullptr;
+    const Exec_DefinitionRegistry &reg = Exec_DefinitionRegistry::GetInstance();
+    const EsfStage stage = _NewStageFromLayer(R"usd(#usda 1.0
+        def CustomSchema "Prim" {
+        }
+        def Scope "Scope" {
+        }
+    )usd");
+    const EsfPrim prim = stage->GetPrimAtPath(SdfPath("/Prim"), nullJournal);
+    TF_AXIOM(prim->IsValid(nullJournal));
+
+    const EsfPrim scope = stage->GetPrimAtPath(SdfPath("/Scope"), nullJournal);
+    TF_AXIOM(scope->IsValid(nullJournal));
+
+    {
+        // Look up a dispatched prim computation, which is keyed off of the
+        // schema config key.
+        const Exec_ComputationDefinition *const primCompDef =
+            reg.GetComputationDefinition(
+                *prim, _tokens->dispatchedPrimComputation,
+                prim->GetSchemaConfigKey(nullJournal), nullJournal);
+        TF_AXIOM(primCompDef);
+    }
+
+    {
+        // Attempt to look up a dispatched prim computation that only dispatches
+        // onto CustomSchema.
+        const Exec_ComputationDefinition *const primCompDef =
+            reg.GetComputationDefinition(
+                *scope, _tokens->dispatchedPrimComputationOnCustomSchema,
+                prim->GetSchemaConfigKey(nullJournal), nullJournal);
+        TF_AXIOM(!primCompDef);
+    }
+
+    {
+        // Look up the same dispatched prim computation on a prim with the
+        // matching schema.
+        const Exec_ComputationDefinition *const primCompDef =
+            reg.GetComputationDefinition(
+                *prim, _tokens->dispatchedPrimComputationOnCustomSchema,
+                prim->GetSchemaConfigKey(nullJournal), nullJournal);
+        TF_AXIOM(primCompDef);
+    }
+
+    {
+        // Attempt to look up a dispatched prim computation with a different
+        // schema config key.
+
+        TF_AXIOM(prim->GetSchemaConfigKey(nullJournal) !=
+                 scope->GetSchemaConfigKey(nullJournal));
+
+        const Exec_ComputationDefinition *const primCompDef =
+            reg.GetComputationDefinition(
+                *scope, _tokens->dispatchedPrimComputation,
+                scope->GetSchemaConfigKey(nullJournal), nullJournal);
+        TF_AXIOM(!primCompDef);
+    }
+
+    {
+        // Attempt to look up a dispatched prim computation with an empty
+        // schema config key.
+        const Exec_ComputationDefinition *const primCompDef =
+            reg.GetComputationDefinition(
+                *prim, _tokens->dispatchedPrimComputation,
+                EsfSchemaConfigKey(), nullJournal);
+        TF_AXIOM(!primCompDef);
     }
 }
 
@@ -951,6 +1058,7 @@ int main()
     TestDerivedSchemaComputationRegistration();
     TestAppliedSchemaComputationRegistration();
     TestPluginSchemaComputationRegistration();
+    TestDispatchedComputations();
 
     return 0;
 }

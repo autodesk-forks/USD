@@ -54,6 +54,9 @@ public:
     virtual TfType GetExtractionType(
         const EsfObjectInterface &providerObject) const;
 
+    /// Returns `true` if this computation is a dispatched computation.
+    virtual bool IsDispatched() const;
+
     /// Returns the keys that indicate how to source the input values required
     /// to evaluate the computation when the provider is \p providerObject.
     ///

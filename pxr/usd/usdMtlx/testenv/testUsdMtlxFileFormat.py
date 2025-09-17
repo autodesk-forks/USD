@@ -228,13 +228,16 @@ class TestFileFormat(unittest.TestCase):
         self.assertTrue(input)
         self.assertEqual(input.GetFullName(),"inputs:specularColor")
     
-    def test_customNodeDefs(self):
+    def test_localCustomNodes(self):
         """
-        Test that custom nodedefs are flattend out and replaced with 
-        their associated nodegraph
+        Test that locally defined custom nodes are flattend out and replaced
+        with their associated nodegraph, or we add the appropriate sourceAsset 
+        information for custom surface shader nodes. 
         """
-        stage = UsdMtlx._TestFile('CustomNodeDef.mtlx')
-        stage.GetRootLayer().Export('CustomNodeDef.usda')
+        stage = UsdMtlx._TestFile('LocalCustomNodes.mtlx')
+        stage.GetRootLayer().Export('LocalCustomNodes.usda')
+        stage = UsdMtlx._TestFile('NestedLocalCustomNodes.mtlx')
+        stage.GetRootLayer().Export('NestedLocalCustomNodes.usda')
 
     @unittest.skipIf(not hasattr(Ar.Resolver, "CreateIdentifier"),
                      "Requires Ar 2.0")

@@ -15,6 +15,7 @@
 #include "pxr/exec/exec/runtime.h"
 #include "pxr/exec/exec/timeChangeInvalidationResult.h"
 
+#include "pxr/base/tf/functionRef.h"
 #include "pxr/base/tf/span.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/work/withScopedParallelism.h"
@@ -91,6 +92,13 @@ ExecSystem::_Compute(
 
     // Run the executor to compute the values.
     _runtime->ComputeValues(schedule, computeRequest);
+}
+
+void
+ExecSystem::_ParallelForEachRequest(
+    TfFunctionRef<void(Exec_RequestImpl&)> f) const
+{
+    _requestTracker->ParallelForEachRequest(f);
 }
 
 std::vector<VdfMaskedOutput>

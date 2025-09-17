@@ -207,6 +207,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (cullStyle)                                 \
     (drawRange)                                 \
     (environmentMap)                            \
+    (linearExposure)                            \
     (displacementShader)                        \
     (fragmentShader)                            \
     (geometryShader)                            \
@@ -435,6 +436,7 @@ TfToken HdAovTokensMakeShader(TfToken const& shader);
     (enableShadows)                                   \
     (enableSceneMaterials)                            \
     (enableSceneLights)                               \
+    (enableExposureCompensation)                      \
     (domeLightCameraVisibility)                       \
     /* Raytracer sampling settings */                 \
     (convergedVariance)                               \

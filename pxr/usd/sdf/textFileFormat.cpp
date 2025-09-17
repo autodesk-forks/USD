@@ -13,6 +13,7 @@
 #include "pxr/usd/sdf/fileIO.h"
 #include "pxr/usd/sdf/fileIO_Common.h"
 #include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/sdf/usdaData.h"
 #include "pxr/usd/ar/asset.h"
 #include "pxr/usd/ar/resolvedPath.h"
 #include "pxr/usd/ar/resolver.h"
@@ -34,21 +35,21 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PUBLIC_TOKENS(SdfTextFileFormatTokens, SDF_TEXT_FILE_FORMAT_TOKENS);
 
-// Our interface to the parser for parsing to SdfData.
+// Our interface to the parser for parsing to SdfUsdaData.
 extern bool Sdf_ParseLayer(
     const string& context, 
     const std::shared_ptr<PXR_NS::ArAsset>& asset,
     const string& token,
     const string& version,
     bool metadataOnly,
-    PXR_NS::SdfDataRefPtr data,
+    PXR_NS::SdfUsdaDataRefPtr data,
     PXR_NS::SdfLayerHints *hints);
 
 extern bool Sdf_ParseLayerFromString(
     const std::string & layerString,
     const string& token,
     const string& version,
-    PXR_NS::SdfDataRefPtr data,
+    PXR_NS::SdfUsdaDataRefPtr data,
     PXR_NS::SdfLayerHints *hints);
 
 TF_REGISTRY_FUNCTION(TfType)
@@ -116,6 +117,17 @@ _CanReadImpl(const std::shared_ptr<ArAsset>& asset,
 
 } // end anonymous namespace
 
+SdfAbstractDataRefPtr
+SdfTextFileFormat::InitData(const FileFormatArguments& args) const
+{
+    auto newData = new SdfUsdaData();
+
+    // The pseudo-root spec must always exist in a layer's SdfData, so
+    // add it here.
+    newData->CreateSpec(SdfPath::AbsoluteRootPath(), SdfSpecTypePseudoRoot);
+    return TfCreateRefPtr(newData);
+}
+
 bool
 SdfTextFileFormat::CanRead(const string& filePath) const
 {
@@ -180,7 +192,7 @@ SdfTextFileFormat::_ReadFromAsset(
     SdfAbstractDataRefPtr data = InitData(layer->GetFileFormatArguments());
     if (!Sdf_ParseLayer(
             resolvedPath, asset, GetFormatId(), GetVersionString(), 
-            metadataOnly, TfDynamic_cast<SdfDataRefPtr>(data), &hints)) {
+            metadataOnly, TfDynamic_cast<SdfUsdaDataRefPtr>(data), &hints)) {
         return false;
     }
 
@@ -336,7 +348,7 @@ SdfTextFileFormat::WriteToFile(
         return false;
     }
 
-    Sdf_TextOutput out(std::move(asset));
+    Sdf_TextOutput out(std::move(asset), filePath);
 
     const bool ok = _WriteLayer(
         &layer, out, GetFileCookie(), GetVersionString(), comment);
@@ -367,7 +379,7 @@ SdfTextFileFormat::ReadFromString(
     
     if (!Sdf_ParseLayerFromString(
             trimmedStr, GetFormatId(), GetVersionString(),
-            TfDynamic_cast<SdfDataRefPtr>(data), &hints)) {
+            TfDynamic_cast<SdfUsdaDataRefPtr>(data), &hints)) {
         return false;
     }
 

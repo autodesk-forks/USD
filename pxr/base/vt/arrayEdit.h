@@ -15,8 +15,10 @@
 #include "pxr/base/vt/array.h"
 #include "pxr/base/vt/arrayEditOps.h"
 #include "pxr/base/vt/streamOut.h"
+#include "pxr/base/vt/traits.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/hash.h"
 #include "pxr/base/trace/trace.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -189,6 +191,11 @@ public:
     
 private:
     friend class VtArrayEditBuilder<ELEM>;
+
+    template <class HashState>
+    friend void TfHashAppend(HashState &h, VtArrayEdit const &self) {
+        h.Append(self._denseOrLiterals, self._ops, self._isDense);
+    }
     
     using _Ops = Vt_ArrayEditOps;
     
@@ -369,6 +376,10 @@ VtArrayEdit<ELEM>::_ComposeEdits(VtArrayEdit &&weaker) &&
 
     return std::move(weaker);
 }
+
+// Specialize traits for VtArrayEdit.
+template <typename T>
+struct VtIsArrayEdit<VtArrayEdit<T>> : public std::true_type {};
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

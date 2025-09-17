@@ -14,11 +14,15 @@
 #include "pxr/usd/sdf/api.h"
 #include "pxr/usd/sdf/declareHandles.h" 
 #include "pxr/usd/sdf/fileFormat.h"
+#include "pxr/usd/sdf/fileVersion.h"
 
 #include <iosfwd>
 #include <string>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+SDF_API
+extern TfEnvSetting<std::string> USD_WRITE_NEW_USDA_FILES_AS_VERSION;
 
 #define SDF_USDA_FILE_FORMAT_TOKENS \
     ((Id,      "usda"))             \
@@ -50,6 +54,10 @@ class SdfUsdaFileFormat : public SdfFileFormat
 public:
     // SdfFileFormat overrides.
     SDF_API
+    virtual SdfAbstractDataRefPtr InitData(
+        const FileFormatArguments& args) const override;
+
+    SDF_API
     virtual bool CanRead(const std::string &file) const override;
 
     SDF_API
@@ -58,8 +66,19 @@ public:
         const std::string& resolvedPath,
         bool metadataOnly) const override;
 
+    /// \brief \c WriteToFile writes the layer contents to the file starting
+    /// with the default output version and upgrading as needed.
     SDF_API
     virtual bool WriteToFile(
+        const SdfLayer& layer,
+        const std::string& filePath,
+        const std::string& comment = std::string(),
+        const FileFormatArguments& args = FileFormatArguments()) const override;
+
+    /// \brief \c SaveToFile writes the layer contents to the file starting
+    /// with the loaded layer's file version and upgrading as needed.
+    SDF_API
+    virtual bool SaveToFile(
         const SdfLayer& layer,
         const std::string& filePath,
         const std::string& comment = std::string(),
@@ -81,6 +100,30 @@ public:
         const SdfSpecHandle &spec,
         std::ostream& out,
         size_t indent) const override;
+
+public:
+    /// These methods return version info for the current version of the
+    /// \c SdfUsdaFileFormat. These versions will be kept in sync with the
+    /// abilities of the parsing and writing code, but it's convenient to
+    /// gather them all here.
+    /// @{
+
+    /// Return the minimum version that is is possible for the software to read.
+    static SdfFileVersion GetMinInputVersion();
+
+    /// Return the minimum version that it is possible for the software to write.
+    static SdfFileVersion GetMinOutputVersion();
+
+    /// Return the maximum version that is is possible for the software to read.
+    static SdfFileVersion GetMaxInputVersion();
+
+    /// Return the maximum version that it is possible for the software to write.
+    static SdfFileVersion GetMaxOutputVersion();
+
+    /// Return the default version for newly created files.
+    static SdfFileVersion GetDefaultOutputVersion();
+
+    /// @}
 
 protected:
     SDF_FILE_FORMAT_FACTORY_ACCESS;

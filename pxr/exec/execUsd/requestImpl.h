@@ -11,6 +11,7 @@
 
 #include "pxr/exec/execUsd/api.h"
 
+#include "pxr/base/tf/bits.h"
 #include "pxr/exec/exec/request.h"
 #include "pxr/exec/exec/requestImpl.h"
 
@@ -38,6 +39,11 @@ public:
 
     ~ExecUsd_RequestImpl();
 
+    /// Returns per-index expiration state.
+    const TfBits &GetExpiredIndices() const {
+        return _expired;
+    }
+
     /// Compile the request.
     void Compile();
 
@@ -47,8 +53,19 @@ public:
     /// Computes the value keys in the request.
     ExecUsdCacheView Compute();
 
+    /// Expires the request based on providers that have become invalid.
+    void ExpireInvalidIndices();
+
+    /// Removes the request from the system.
+    ///
+    /// This prevents any further notification and releases internal request
+    /// data structures.
+    ///
+    void Discard();
+
 private:
     std::vector<ExecUsdValueKey> _valueKeys;
+    TfBits _expired;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

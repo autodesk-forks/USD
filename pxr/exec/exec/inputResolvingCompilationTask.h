@@ -16,6 +16,7 @@
 #include "pxr/exec/exec/outputKey.h"
 
 #include "pxr/base/tf/smallVector.h"
+#include "pxr/exec/esf/schemaConfigKey.h"
 #include "pxr/exec/vdf/maskedOutput.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -30,9 +31,10 @@ class Exec_CompilationState;
 /// This tasks traverses the scene to find the ultimate provider object of the
 /// computation specified in the input key. The type of the scene traversal that
 /// leads to the provider object is specified with the provider resolution mode
-/// in the input key. The provider object and computation name are used to
-/// construct output keys for Exec_OutputProvidingCompilationTasks, which are
-/// then kicked off to populate the source masked outputs.
+/// in the input key. The provider object; the computation name; and, if the
+/// input requests dispatched computations, the dispatching schema config key
+/// are used to construct output keys for Exec_OutputProvidingCompilationTask%s,
+/// which are then kicked off to populate the source masked outputs.
 /// 
 class Exec_InputResolvingCompilationTask : public Exec_CompilationTask
 {
@@ -47,11 +49,13 @@ public:
         Exec_CompilationState &compilationState,
         const Exec_InputKey &inputKey,
         const EsfObject &originObject,
+        const EsfSchemaConfigKey dispatchingSchemaKey,
         TfSmallVector<VdfMaskedOutput, 1> *resultOutputs,
         EsfJournal *journal)
         : Exec_CompilationTask(compilationState)
         , _inputKey(inputKey)
         , _originObject(originObject)
+        , _dispatchingSchemaKey(dispatchingSchemaKey)
         , _journal(journal)
         , _resultOutputs(resultOutputs)
     {}
@@ -67,6 +71,10 @@ private:
     // The scene object at which the scene traversal is started for the
     // specified provider resolution mode.
     const EsfObject &_originObject;
+
+    // The schema config key of the dispatching prim, used if this input
+    // requests dispatched computations.
+    const EsfSchemaConfigKey _dispatchingSchemaKey;
 
     // The journal that records the traversal performed by the resolution.
     EsfJournal *_journal;

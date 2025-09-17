@@ -61,6 +61,13 @@ public:
     void DidChangeTime(
         const Exec_TimeChangeInvalidationResult &invalidationResult);
 
+    /// Expires all request indices and discards the request.
+    ///
+    /// Sends value invalidation for all indicies over all time and renders
+    /// the request unusuable for any future operation.
+    ///
+    void Expire();
+
 protected:
     EXEC_API
     Exec_RequestImpl(
@@ -94,15 +101,30 @@ protected:
     EXEC_API
     bool _RequiresCompilation() const;
 
+    /// Expires the indices in \p expired.
+    ///
+    /// Invalidation callbacks will be invoked for these indices one final
+    /// time.  No values will be extractable and no further invalidation will
+    /// be sent for these indices.
+    ///
+    EXEC_API
+    void _ExpireIndices(const ExecRequestIndexSet &expired);
+
+    /// Removes the request from the system.
+    ///
+    /// This prevents any further notification and releases internal request
+    /// data structures.
+    ///
+    EXEC_API
+    void _Discard();
+
 private:
     // Ensures the _leafNodeToIndex map is up-to-date.
-    EXEC_API
     void _BuildLeafNodeToIndexMap();
 
     // Turns invalid leaf nodes into a set of requested - and not previously
     // invalidated - indices.
     // 
-    EXEC_API
     void _InvalidateLeafOutputs(
         bool isNewlyInvalidInterval,
         TfSpan<const VdfNode *const> leafNodes,

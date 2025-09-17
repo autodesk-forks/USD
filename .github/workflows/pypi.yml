@@ -197,7 +197,7 @@ jobs:
             TAG: cp312
           - VERSION_SPEC: '3.13.5'
             TAG: cp313
-    runs-on: windows-2019
+    runs-on: windows-2022
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -214,7 +214,7 @@ jobs:
         shell: cmd
       - name: Build USD
         run: |
-          call C:\"Program Files (x86)"\"Microsoft Visual Studio"\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat
+          call C:\"Program Files (x86)"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           set BOOST_ROOT=
           python --version
           python build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_ENABLE_PRECOMPILED_HEADERS=OFF -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build USDgen/build --src USDgen/src USDinst -v
@@ -317,27 +317,27 @@ jobs:
             PYTHON_INTERPRETER: python3
           - NAME: Windows_Python38
             PYTHON_VERSION_SPEC: '3.8'
-            IMAGE: windows-2019
+            IMAGE: windows-2022
             PYTHON_INTERPRETER: python3
           - NAME: Windows_Python39
             PYTHON_VERSION_SPEC: '3.9'
-            IMAGE: windows-2019
+            IMAGE: windows-2022
             PYTHON_INTERPRETER: python3
           - NAME: Windows_Python310
             PYTHON_VERSION_SPEC: '3.10'
-            IMAGE: windows-2019
+            IMAGE: windows-2022
             PYTHON_INTERPRETER: python3
           - NAME: Windows_Python311
             PYTHON_VERSION_SPEC: '3.11'
-            IMAGE: windows-2019
+            IMAGE: windows-2022
             PYTHON_INTERPRETER: python3
           - NAME: Windows_Python312
             PYTHON_VERSION_SPEC: '3.12'
-            IMAGE: windows-2019
+            IMAGE: windows-2022
             PYTHON_INTERPRETER: python3
           - NAME: Windows_Python313
             PYTHON_VERSION_SPEC: '3.13.5'
-            IMAGE: windows-2019
+            IMAGE: windows-2022
             PYTHON_INTERPRETER: python3
     runs-on: ${{ matrix.BUILD_CONFIG.IMAGE }}
     steps:

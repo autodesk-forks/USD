@@ -7,8 +7,7 @@
 #include "pxr/exec/vdf/parallelTaskWaitlist.h"
 
 #include "pxr/base/arch/threads.h"
-
-#include <tbb/task.h>
+#include "pxr/base/work/taskGraph.h"
 
 #include <thread>
 
@@ -55,14 +54,12 @@ private:
 
 }
 
-class VdfParallelTaskWaitlist::Node {
-    friend class VdfParallelTaskWaitlist;
-    friend class tbb::concurrent_vector<Node>;
+struct VdfParallelTaskWaitlist::Node {
 
-    Node(tbb::task *t, Node *n) : task(t), next(n) {}
+    Node(WorkTaskGraph::BaseTask *t, Node *n) : task(t), next(n) {}
 
     // The waiting task.
-    tbb::task *task;
+    WorkTaskGraph::BaseTask *task;
 
     // The next node in the queue.
     Node *next;
@@ -87,7 +84,8 @@ VdfParallelTaskWaitlist::Rewind()
 }
 
 bool
-VdfParallelTaskWaitlist::WaitOn(HeadPtr *headPtr, tbb::task *successor)
+VdfParallelTaskWaitlist::WaitOn(
+    HeadPtr *headPtr, WorkTaskGraph::BaseTask *successor)
 {
     // Get the head of the waiting queue.
     Node *headNode = headPtr->load(std::memory_order_acquire);
@@ -102,7 +100,7 @@ VdfParallelTaskWaitlist::WaitOn(HeadPtr *headPtr, tbb::task *successor)
 
     // Increment the reference count of the successor task to indicate that
     // it has one more unfulfilled dependency.
-    successor->increment_ref_count();
+    successor->AddChildReference();
 
     // Allocate a new node to be added to the waiting queue.
     Node *newHead = _AllocateNode(successor, headNode);
@@ -115,7 +113,7 @@ VdfParallelTaskWaitlist::WaitOn(HeadPtr *headPtr, tbb::task *successor)
         // another thread has not already signaled all the queued up tasks.
         // Instead, we immediately signal the successor and bail out.
         if (headNode == _NotifiedTag) {
-            successor->decrement_ref_count();
+            successor->RemoveChildReference();
             return false;
         }
 
@@ -132,7 +130,8 @@ VdfParallelTaskWaitlist::WaitOn(HeadPtr *headPtr, tbb::task *successor)
 }
 
 bool
-VdfParallelTaskWaitlist::CloseAndNotify(HeadPtr *headPtr)
+VdfParallelTaskWaitlist::CloseAndNotify(
+    HeadPtr *headPtr, WorkTaskGraph *taskGraph)
 {
     // Get the the head of the waiting queue and replace it with the
     // notified tag to indicate that this queue is now closed.
@@ -149,8 +148,8 @@ VdfParallelTaskWaitlist::CloseAndNotify(HeadPtr *headPtr)
         // reference count is greater than 0, the task still has unfulfilled
         // dependencies and will be spawn later when the last dependency has
         // been fulfilled.
-        if (headNode->task->decrement_ref_count() == 0) {
-            tbb::task::spawn(*headNode->task);
+        if (headNode->task->RemoveChildReference() == 0) {
+            taskGraph->RunTask(headNode->task);
         }
 
         // Move on to the next entry in the queue.
@@ -161,7 +160,8 @@ VdfParallelTaskWaitlist::CloseAndNotify(HeadPtr *headPtr)
 }
 
 VdfParallelTaskWaitlist::Node *
-VdfParallelTaskWaitlist::_AllocateNode(tbb::task *task, Node *next)
+VdfParallelTaskWaitlist::_AllocateNode(
+    WorkTaskGraph::BaseTask *task, Node *next)
 {
     return &(*_allocator.emplace_back(task, next));
 }

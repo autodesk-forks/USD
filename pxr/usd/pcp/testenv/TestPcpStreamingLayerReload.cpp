@@ -6,7 +6,7 @@
 //
 #include "pxr/pxr.h"
 #include "pxr/base/tf/staticTokens.h"
-#include "pxr/usd/sdf/data.h"
+#include "pxr/usd/sdf/usdaData.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/usdaFileFormat.h"
 
@@ -14,7 +14,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 // Our SdfData subclass overrides StreamsData() to return true for testing.
-class Test_PcpStreamingData : public SdfData
+class Test_PcpStreamingData : public SdfUsdaData
 {
     virtual ~Test_PcpStreamingData();
     virtual bool StreamsData() const {

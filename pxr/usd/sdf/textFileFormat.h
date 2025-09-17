@@ -48,6 +48,10 @@ class SdfTextFileFormat : public SdfFileFormat
 public:
     // SdfFileFormat overrides.
     SDF_API
+    virtual SdfAbstractDataRefPtr InitData(
+        const FileFormatArguments& args) const override;
+
+    SDF_API
     virtual bool CanRead(const std::string &file) const override;
 
     SDF_API

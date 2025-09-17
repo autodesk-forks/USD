@@ -17,6 +17,7 @@
 #include "pxr/exec/esf/editReason.h"
 #include "pxr/exec/esf/journal.h"
 #include "pxr/exec/esf/object.h"
+#include "pxr/exec/esf/schemaConfigKey.h"
 #include "pxr/exec/exec/providerResolution.h"
 
 #include <initializer_list>
@@ -52,6 +53,7 @@ Exec_LeafCompilationTask::_Compile(
             compilationState,
             _inputKeys->Get()[0],
             *_originObject,
+            EsfSchemaConfigKey(),
             &_resultOutputs,
             &_journal);
     },
@@ -103,6 +105,7 @@ Exec_LeafCompilationTask::_Compile(
         compilationState.GetProgram()->SetNodeRecompilationInfo(
             leafNode, 
             _valueKey.GetProvider(), 
+            EsfSchemaConfigKey(),
             std::move(_inputKeys));
 
         compilationState.GetProgram()->SetCompiledLeafNode(_valueKey, leafNode);
@@ -129,6 +132,7 @@ _MakeInputKeyVector(const ExecValueKey &valueKey)
                     SdfPath::ReflexiveRelativePath(),
                     ExecProviderResolution::DynamicTraversal::Local
                 },
+                false, /* fallsBackToDispatched */
                 false /* optional */
             }
         }

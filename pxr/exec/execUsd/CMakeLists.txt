@@ -56,6 +56,29 @@ pxr_register_test(testExecUsdBasicCompilation
     TESTENV testExecUsdBasicCompilation
 )
 
+pxr_build_test(testExecUsdDispatchedComputations
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdDispatchedComputations.cpp
+)
+
+pxr_install_test_dir(
+    SRC testenv/testExecUsdDispatchedComputations
+    DEST testExecUsdDispatchedComputations
+)
+
+pxr_register_test(testExecUsdDispatchedComputations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdDispatchedComputations"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testExecUsdDispatchedComputations
+)
+
 pxr_build_test(testExecUsdRecompilation
     LIBRARIES
         exec
@@ -99,6 +122,9 @@ pxr_register_test(testExecUsdRecompilation
         TestRecompileAfterChangingOldRelationshipTarget-2.dot                  \
         TestRecompileAfterChangingOldRelationshipTarget-3.dot                  \
         TestRecompileAfterChangingOldRelationshipTarget-4.dot                  \
+        TestRecompileDuplicateInputNames-1.dot                                 \
+        TestRecompileDuplicateInputNames-2.dot                                 \
+        TestRecompileDuplicateInputNames-3.dot                                 \
         "
     DIFF_COMPARE TestRecompileDisconnectedAttributeInput-1.out
     DIFF_COMPARE TestRecompileDisconnectedAttributeInput-2.out
@@ -121,6 +147,9 @@ pxr_register_test(testExecUsdRecompilation
     DIFF_COMPARE TestRecompileAfterChangingOldRelationshipTarget-2.out
     DIFF_COMPARE TestRecompileAfterChangingOldRelationshipTarget-3.out
     DIFF_COMPARE TestRecompileAfterChangingOldRelationshipTarget-4.out
+    DIFF_COMPARE TestRecompileDuplicateInputNames-1.out
+    DIFF_COMPARE TestRecompileDuplicateInputNames-2.out
+    DIFF_COMPARE TestRecompileDuplicateInputNames-3.out
 )
 
 pxr_build_test(testExecUsdRequest
@@ -144,6 +173,23 @@ pxr_install_test_dir(
 
 pxr_register_test(testExecUsdRequest
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRequest"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdRequestExpiration
+    LIBRARIES
+        tf
+        ef
+        esf
+        exec
+        execUsd
+        vdf
+    CPPFILES
+        testenv/testExecUsdRequestExpiration.cpp
+)
+
+pxr_register_test(testExecUsdRequestExpiration
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRequestExpiration"
     EXPECTED_RETURN_CODE 0
 )
 

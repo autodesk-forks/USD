@@ -9,13 +9,17 @@
 #include "pxr/exec/execUsd/cacheView.h"
 #include "pxr/exec/execUsd/request.h"
 #include "pxr/exec/execUsd/requestImpl.h"
+#include "pxr/exec/execUsd/valueKey.h"
 
 #include "pxr/base/tf/declarePtrs.h"
+#include "pxr/base/tf/functionRef.h"
 #include "pxr/base/tf/notice.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/exec/exec/systemChangeProcessor.h"
 #include "pxr/exec/esfUsd/sceneAdapter.h"
 #include "pxr/usd/usd/notice.h"
+
+#include <tbb/concurrent_vector.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -93,13 +97,13 @@ ExecUsdSystem::Compute(const ExecUsdRequest &request)
     TRACE_FUNCTION();
 
     if (!request.IsValid()) {
-        TF_CODING_ERROR("Cannot cache an expired request");
+        TF_CODING_ERROR("Cannot compute an expired request");
         return ExecUsdCacheView();
     }
 
     ExecUsd_RequestImpl &requestImpl = request._GetImpl();
 
-    // Before caching values, make sure that the request has been prepared.
+    // Before computing values, make sure that the request has been prepared.
     requestImpl.Compile();
     requestImpl.Schedule();
 
@@ -129,9 +133,33 @@ ExecUsdSystem::_NoticeListener::_DidObjectsChanged(
 {
     TRACE_FUNCTION();
 
+    const UsdNotice::ObjectsChanged::PathRange resyncedPaths =
+        objectsChanged.GetResyncedPaths();
+
+    // If any objects were resynced, check for request expiration.
+    if (!resyncedPaths.empty()) {
+        TRACE_FUNCTION_SCOPE("check for expired requests");
+
+        tbb::concurrent_vector<ExecUsd_RequestImpl*> expired;
+        const auto expireRequests = [&expired] (Exec_RequestImpl &base) {
+            ExecUsd_RequestImpl& impl = static_cast<ExecUsd_RequestImpl&>(base);
+            impl.ExpireInvalidIndices();
+            // We cannot discard requests from within this callback because the
+            // request tracker is locked during its execution.
+            if (impl.GetExpiredIndices().AreAllSet()) {
+                expired.push_back(&impl);
+            }
+        };
+        _system->_ParallelForEachRequest(expireRequests);
+
+        for (ExecUsd_RequestImpl *impl : expired) {
+            impl->Discard();
+        }
+    }
+
     ExecSystem::_ChangeProcessor changeProcessor(_system);
 
-    for (const SdfPath &path : objectsChanged.GetResyncedPaths()) {
+    for (const SdfPath &path : resyncedPaths) {
         changeProcessor.DidResync(path);
     }
 

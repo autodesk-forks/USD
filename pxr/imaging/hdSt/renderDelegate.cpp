@@ -205,6 +205,10 @@ HdStRenderDelegate::HdStRenderDelegate(HdRenderSettingsMap const& settingsMap)
         HdRenderSettingDescriptor{
             "Dome light camera visibility",
             HdRenderSettingsTokens->domeLightCameraVisibility,
+            VtValue(true) },
+        HdRenderSettingDescriptor{
+            "Enable exposure compensation",
+            HdRenderSettingsTokens->enableExposureCompensation,
             VtValue(true) }
     };
 

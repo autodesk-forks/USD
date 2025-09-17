@@ -80,6 +80,13 @@ static void testBasics()
     VtIntArray one23 { 1, 2, 3 };
     TF_AXIOM(ident.ComposeOver(one23).IsDenseArray());
     CHECK_EQUAL(ident.ComposeOver(one23).GetDenseArray(), one23);
+
+    // Hash
+    TfHash h;
+    CHECK_EQUAL(h(ident), h(VtIntArrayEdit {}));
+    CHECK_EQUAL(h(emptyDense), h(VtIntArrayEdit{ VtIntArray{} }));
+    CHECK_EQUAL(h(VtIntArrayEdit{ one23 }),
+                h(VtIntArrayEdit{ VtIntArray { 1, 2, 3 } }));
 }
 
 static void testBuilderAndComposition()
@@ -213,6 +220,30 @@ static void testBuilderAndComposition()
         CHECK_EQUAL(
             size7Fill3.ComposeOver(VtIntArray(27, 9)).GetDenseArray(),
             (VtIntArray(7, 9)));
+
+        // Check that the serialization data will reproduce an equivalent edit.
+        {
+            VtIntArray vals;
+            std::vector<int64_t> indexes;
+
+            auto check = [&](VtIntArrayEdit const &test) {
+                VtIntArrayEditBuilder::
+                    GetSerializationData(test, &vals, &indexes);
+                VtIntArrayEdit reconstituted =
+                    VtIntArrayEditBuilder::CreateFromSerializationData(
+                        vals, indexes, test.IsDenseArray());
+                TF_AXIOM(test == reconstituted);
+            };
+
+            check(size7Fill3);
+            check(size7);
+            check(size10to15);
+            check(minSize10Fill9);
+            check(zeroNineMixAndTrim);
+
+            check({}); // identity.
+            check(VtIntArray {}); // empty dense array.
+        }
     }
 }
 

@@ -20,6 +20,7 @@
 
 #include "pxr/imaging/hd/materialBindingsSchema.h"
 #include "pxr/imaging/hd/light.h"
+#include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
 #include "pxr/imaging/hd/renderBuffer.h"
 #include "pxr/imaging/hd/rendererPlugin.h"
 #include "pxr/imaging/hd/rendererPluginRegistry.h"
@@ -76,6 +77,31 @@ struct _AppSceneIndices {
 };
 
 namespace {
+
+// RAII helper to enable and disable notice batching when using the stage scene
+// index.
+class _ScopedHydraNoticeBatch
+{
+public:
+    _ScopedHydraNoticeBatch(
+         const HdNoticeBatchingSceneIndexRefPtr &noticeBatchingSceneIndex)
+        : _noticeBatchingSceneIndex(noticeBatchingSceneIndex)
+    {
+        if (_noticeBatchingSceneIndex) {
+            _noticeBatchingSceneIndex->SetBatchingEnabled(true);
+        }
+    }
+
+    ~_ScopedHydraNoticeBatch()
+    {
+        if (_noticeBatchingSceneIndex) {
+            _noticeBatchingSceneIndex->SetBatchingEnabled(false);
+        }
+    }
+
+private:
+    HdNoticeBatchingSceneIndexRefPtr _noticeBatchingSceneIndex;
+};
 
 // Use a static tracker to accommodate the use-case where an application spawns
 // multiple engines.
@@ -386,6 +412,9 @@ UsdImagingGLEngine::PrepareBatch(
     if (!_isPopulated) {
         auto stage = root.GetStage();
         if (_GetUseSceneIndices()) {
+            _ScopedHydraNoticeBatch noticeBatch(
+                _postInstancingNoticeBatchingSceneIndex);
+
             // Set timeCodesPerSecond in HdsiSceneGlobalsSceneIndex.
             if (_appSceneIndices) {
                 if (auto &sgsi = _appSceneIndices->sceneGlobalsSceneIndex) {
@@ -1667,6 +1696,8 @@ UsdImagingGLEngine::_SetRenderDelegate(
             UsdImagingCreateSceneIndices(info);
 
         _stageSceneIndex = sceneIndices.stageSceneIndex;
+        _postInstancingNoticeBatchingSceneIndex =
+            sceneIndices.postInstancingNoticeBatchingSceneIndex;
         _selectionSceneIndex = sceneIndices.selectionSceneIndex;
         _sceneIndex = sceneIndices.finalSceneIndex;
 
@@ -2266,6 +2297,9 @@ UsdImagingGLEngine::_PreSetTime(const UsdImagingGLRenderParams& params)
         // We force the value here upon all prims.
         _displayStyleSceneIndex->SetRefineLevel({true, refineLevel});
 
+        _ScopedHydraNoticeBatch noticeBatch(
+                _postInstancingNoticeBatchingSceneIndex);
+
         _stageSceneIndex->ApplyPendingUpdates();
     } else {
         // Set the fallback refine level; if this changes from the
@@ -2450,7 +2484,8 @@ UsdImagingGLEngine::_GetDefaultRendererPluginId()
 
     // Look for the one with the matching display name
     for (size_t i = 0; i < pluginDescs.size(); ++i) {
-        if (pluginDescs[i].displayName == defaultRendererDisplayName) {
+        if (pluginDescs[i].displayName == defaultRendererDisplayName
+        ||  pluginDescs[i].id == defaultRendererDisplayName) {
             return pluginDescs[i].id;
         }
     }

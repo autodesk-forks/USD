@@ -139,6 +139,8 @@ class TestSdfBatchNamespaceEdit(unittest.TestCase):
 
         edit.Add('/S', '/T')                        # Rename prim used in targets
 
+        edit.Add('/V{v=three}.x', '/V{v2=three}.x') # Same variant name
+        edit.Add('/V{v=three}X', '/V{v2=three}X')   # Same variant name
         edit.Add('/V{v=one}U', '/V{v=two}W/U')      # Variant prim reparent/rename
         edit.Add('/V{v=two}W', Sdf.Path.emptyPath)  # Variant prim remove
         edit.Add('/V{v=one}.u', '/V{v=two}.u')      # Variant property reparent/rename
@@ -239,6 +241,8 @@ class TestSdfBatchNamespaceEdit(unittest.TestCase):
         edit.Add('/P.i', '/Q.h')            # Prim property reparent/rename
         edit.Add('/P.x', Sdf.Path.emptyPath)# Prim property remove
 
+        edit.Add('/V{v=three}.x', '/V{v2=three}.x') # Same variant name
+        edit.Add('/V{v=three}X', '/V{v2=three}X')   # Same variant name
         edit.Add('/V{v=one}U', '/V{v=two}W/U')      # Variant prim reparent/rename
         edit.Add('/V{v=two}W', Sdf.Path.emptyPath)  # Variant prim remove
         edit.Add('/V{v=one}.u', '/V{v=two}.u')      # Variant property reparent/rename

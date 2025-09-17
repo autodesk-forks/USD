@@ -6,11 +6,26 @@
 //
 #include "pxr/exec/exec/requestTracker.h"
 
+#include "pxr/exec/exec/debugCodes.h"
 #include "pxr/exec/exec/requestImpl.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/trace/trace.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+Exec_RequestTracker::~Exec_RequestTracker()
+{
+    TRACE_FUNCTION();
+
+    TF_DEBUG(EXEC_REQUEST_EXPIRATION)
+        .Msg("[Exec_RequestTracker] Expiring %zu requests\n",
+             _requests.size());
+
+    for (Exec_RequestImpl * const impl : _requests) {
+        impl->Expire();
+    }
+}
 
 void
 Exec_RequestTracker::Insert(Exec_RequestImpl *impl)
@@ -38,39 +53,27 @@ void
 Exec_RequestTracker::DidInvalidateComputedValues(
     const Exec_AuthoredValueInvalidationResult &invalidationResult)
 {
-    TfSpinMutex::ScopedLock lock{_requestsMutex};
-    for (Exec_RequestImpl * const impl : _requests) {
-        // TODO: Once we expect the system to contain more than a handful of
-        // requests, we should do this in parallel. We might still want to
-        // invoke the invalidation callbacks serially, though.
-        impl->DidInvalidateComputedValues(invalidationResult);
-    }
+    ParallelForEachRequest([&invalidationResult](Exec_RequestImpl &impl) {
+        impl.DidInvalidateComputedValues(invalidationResult);
+    });
 }
 
 void
 Exec_RequestTracker::DidInvalidateComputedValues(
     const Exec_DisconnectedInputsInvalidationResult &invalidationResult)
 {
-    TfSpinMutex::ScopedLock lock{_requestsMutex};
-    for (Exec_RequestImpl * const impl : _requests) {
-        // TODO: Once we expect the system to contain more than a handful of
-        // requests, we should do this in parallel. We might still want to
-        // invoke the invalidation callbacks serially, though.
-        impl->DidInvalidateComputedValues(invalidationResult);
-    }
+    ParallelForEachRequest([&invalidationResult](Exec_RequestImpl &impl) {
+        impl.DidInvalidateComputedValues(invalidationResult);
+    });
 }
 
 void
 Exec_RequestTracker::DidChangeTime(
     const Exec_TimeChangeInvalidationResult &invalidationResult) const
 {
-    TfSpinMutex::ScopedLock lock{_requestsMutex};
-    for (Exec_RequestImpl * const impl : _requests) {
-        // TODO: Once we expect the system to contain more than a handful of
-        // requests, we should do this in parallel. We might still want to
-        // invoke the invalidation callbacks serially, though.
-        impl->DidChangeTime(invalidationResult);
-    }
+    ParallelForEachRequest([&invalidationResult](Exec_RequestImpl &impl) {
+        impl.DidChangeTime(invalidationResult);
+    });
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

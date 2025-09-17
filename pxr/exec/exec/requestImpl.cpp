@@ -8,6 +8,7 @@
 
 #include "pxr/exec/exec/authoredValueInvalidationResult.h"
 #include "pxr/exec/exec/cacheView.h"
+#include "pxr/exec/exec/debugCodes.h"
 #include "pxr/exec/exec/definitionRegistry.h"
 #include "pxr/exec/exec/disconnectedInputsInvalidationResult.h"
 #include "pxr/exec/exec/program.h"
@@ -33,6 +34,8 @@
 #include "pxr/exec/vdf/scheduler.h"
 #include "pxr/exec/vdf/types.h"
 
+#include <string_view>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 Exec_RequestImpl::Exec_RequestImpl(
@@ -56,11 +59,46 @@ Exec_RequestImpl::~Exec_RequestImpl()
     }
 }
 
+static void
+_OutputInvalidationResultDebugMsg(
+    const std::string_view label,
+    const ExecRequestIndexSet &indices)
+{
+    TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+        "[%.*s]\n",
+        static_cast<int>(label.size()), label.data());
+
+    std::vector<int> sortedIndices(indices.begin(), indices.end());
+    std::sort(sortedIndices.begin(), sortedIndices.end());
+    TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg("    indices:");
+    for (const int index : sortedIndices) {
+        TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(" %d", index);
+    }
+}
+
+static void
+_OutputInvalidationResultDebugMsg(
+    const std::string_view label,
+    const ExecRequestIndexSet &indices,
+    const EfTimeInterval &interval)
+{
+    _OutputInvalidationResultDebugMsg(label, indices);
+
+    TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+        "\n    interval: %s\n",
+        interval.GetAsString().c_str());
+}
+
 void 
 Exec_RequestImpl::DidInvalidateComputedValues(
     const Exec_AuthoredValueInvalidationResult &invalidationResult)
 {
     if (!_valueCallback || _leafOutputs.empty()) {
+        TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+            "[%s] %s\n", TF_FUNC_NAME().c_str(),
+            !_valueCallback
+            ? "No value invalidation callback"
+            : "Request has not been prepared");
         return;
     }
 
@@ -91,6 +129,10 @@ Exec_RequestImpl::DidInvalidateComputedValues(
     // Only invoke the invalidation callback if there are any invalid indices
     // from this request.
     if (!invalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), invalidIndices, invalidInterval);
+        }
         TRACE_FUNCTION_SCOPE("value invalidation callback");
         _valueCallback(invalidIndices, invalidInterval);
     }
@@ -101,6 +143,11 @@ Exec_RequestImpl::DidInvalidateComputedValues(
     const Exec_DisconnectedInputsInvalidationResult &invalidationResult)
 {
     if (!_valueCallback || _leafOutputs.empty()) {
+        TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+            "[%s] %s\n", TF_FUNC_NAME().c_str(),
+            !_valueCallback
+            ? "No value invalidation callback"
+            : "Request has not been prepared");
         return;
     }
 
@@ -130,6 +177,10 @@ Exec_RequestImpl::DidInvalidateComputedValues(
     // Only invoke the invalidation callback if there are any invalid indices
     // from this request.
     if (!invalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), invalidIndices, invalidInterval);
+        }
         TRACE_FUNCTION_SCOPE("value invalidation callback");
         _valueCallback(invalidIndices, invalidInterval);
     }
@@ -140,6 +191,11 @@ Exec_RequestImpl::DidChangeTime(
     const Exec_TimeChangeInvalidationResult &invalidationResult)
 {
     if (!_timeCallback || _leafOutputs.empty()) {
+        TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+            "[%s] %s\n", TF_FUNC_NAME().c_str(),
+            !_valueCallback
+            ? "No time invalidation callback"
+            : "Request has not been prepared");
         return;
     }
 
@@ -168,9 +224,46 @@ Exec_RequestImpl::DidChangeTime(
     // Only invoke the invalidation callback if there are any invalid indices
     // from this request.
     if (!invalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), invalidIndices);
+        }
         TRACE_FUNCTION_SCOPE("time change callback");
         _timeCallback(invalidIndices);
     }
+}
+
+void
+Exec_RequestImpl::Expire()
+{
+    TF_DEBUG(EXEC_REQUEST_EXPIRATION)
+        .Msg("[%s] Expiring request %p\n", TF_FUNC_NAME().c_str(), this);
+
+    if (!TF_VERIFY(_system, "Attempted to expire an expired request")) {
+        return;
+    }
+
+    TRACE_FUNCTION();
+
+    // If the request has never been prepared (or just contains no values to
+    // compute) there's no need push index-specific expiration.
+    if (!_leafOutputs.empty()) {
+        TRACE_FUNCTION_SCOPE("Expiring all indices");
+
+        ExecRequestIndexSet allIndices;
+        const size_t numLeafOutputs = _leafOutputs.size();
+        allIndices.reserve(numLeafOutputs);
+        for (size_t i=0; i<numLeafOutputs; ++i) {
+            allIndices.insert(i);
+        }
+        _ExpireIndices(allIndices);
+    }
+
+    // Because we're expiring the whole request, we do more than just expiring
+    // all the indices.  It is guaranteed that no more invalidation can occur
+    // so the request removes itself from the system's tracker and drops all
+    // its data structures.
+    _Discard();
 }
 
 // Returns a value extractor suitable for the given value key according to its
@@ -185,20 +278,24 @@ _GetValueExtractor(
     const ExecTypeRegistry &typeReg,
     const ExecValueKey &vk)
 {
+    EsfJournal *const nullJournal = nullptr;
+
     const EsfObject &provider = vk.GetProvider();
-    if (!provider->IsValid(nullptr)) {
+    if (!provider->IsValid(nullJournal)) {
         TF_CODING_ERROR("Invalid provider");
         return Exec_ValueExtractor();
     }
 
     const TfToken &computationName = vk.GetComputationName();
     const Exec_ComputationDefinition *def = defReg.GetComputationDefinition(
-        *provider, computationName, /* journal */ nullptr);
+        *provider, computationName,
+        EsfSchemaConfigKey(),
+        nullJournal);
 
     if (!def) {
         TF_CODING_ERROR("Failed to find computation '%s' on provider '%s'",
                         computationName.GetText(),
-                        provider->GetPath(nullptr).GetText());
+                        provider->GetPath(nullJournal).GetText());
         return Exec_ValueExtractor();
     }
 
@@ -271,7 +368,9 @@ Exec_RequestImpl::_Compile(
     _computeRequest.reset();
     _schedule.reset();
     _lastInvalidatedIndices.Resize(_leafOutputs.size());
-    _lastInvalidatedIndices.ClearAll();
+    // These bits are set instead of cleared because clients are notified of
+    // invalidation only after computing values.
+    _lastInvalidatedIndices.SetAll();
 
     // We must greedily build the leaf node to index map. When requests are
     // informed of network edits, some leaf nodes may have already been
@@ -283,6 +382,12 @@ void
 Exec_RequestImpl::_Schedule()
 {
     TfAutoMallocTag tag("Exec", __ARCH_PRETTY_FUNCTION__);
+
+    // If there's nothing to compute, there's nothing to schedule.
+    if (_leafOutputs.empty()) {
+        _schedule.reset();
+        return;
+    }
 
     // The compute request only needs to be rebuilt if the compiled outputs
     // change.
@@ -312,7 +417,7 @@ Exec_RequestImpl::_Compute()
 {
     TfAutoMallocTag tag("Exec", __ARCH_PRETTY_FUNCTION__);
 
-    if (!TF_VERIFY(_system)) {
+    if (!TF_VERIFY(_system) || !_schedule) {
         return Exec_CacheView();
     }
 
@@ -339,6 +444,60 @@ Exec_RequestImpl::_RequiresCompilation() const
 }
 
 void
+Exec_RequestImpl::_ExpireIndices(const ExecRequestIndexSet &expired)
+{
+    // If the request has never been prepared, there's no invalidation to push
+    // to clients.
+    if (_leafOutputs.empty()) {
+        return;
+    }
+
+    TRACE_FUNCTION();
+
+    TF_DEBUG(EXEC_REQUEST_EXPIRATION)
+        .Msg("[%s] Expiring %zu indices\n",
+             TF_FUNC_NAME().c_str(), expired.size());
+
+    const bool isNewlyInvalidInterval =
+        !_lastInvalidatedInterval.IsFullInterval();
+    ExecRequestIndexSet newlyInvalidIndices;
+    newlyInvalidIndices.reserve(expired.size());
+    for (const int idx : expired) {
+        if (isNewlyInvalidInterval || !_lastInvalidatedIndices.IsSet(idx)) {
+            newlyInvalidIndices.insert(idx);
+            _lastInvalidatedIndices.Set(idx);
+        }
+        _leafOutputs[idx] = VdfMaskedOutput();
+        _extractors[idx] = Exec_ValueExtractor();
+    }
+    _schedule.reset();
+    _computeRequest.reset();
+
+    if (_valueCallback && !newlyInvalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), expired, EfTimeInterval::GetFullInterval());
+        }
+        TRACE_FUNCTION_SCOPE("value invalidation callback");
+        _valueCallback(expired, EfTimeInterval::GetFullInterval());
+    }
+
+    _lastInvalidatedInterval = EfTimeInterval::GetFullInterval();
+}
+
+void
+Exec_RequestImpl::_Discard()
+{
+    _system->_requestTracker->Remove(this);
+    _system = nullptr;
+    TfReset(_leafOutputs);
+    TfReset(_extractors);
+    TfReset(_leafNodeToIndex);
+    _valueCallback = nullptr;
+    _timeCallback = nullptr;
+}
+
+void
 Exec_RequestImpl::_BuildLeafNodeToIndexMap()
 {
     // We only need to populate this map for client notification, so if there
@@ -355,6 +514,9 @@ Exec_RequestImpl::_BuildLeafNodeToIndexMap()
     _leafNodeToIndex.reserve(_leafOutputs.size());
     for (size_t i = 0; i < _leafOutputs.size(); ++i) {
         const VdfMaskedOutput &sourceOutput = _leafOutputs[i];
+        if (!sourceOutput) {
+            continue;
+        }
         for (const VdfConnection *const connection :
                 sourceOutput.GetOutput()->GetConnections()) {
             const VdfNode &targetNode = connection->GetTargetNode();

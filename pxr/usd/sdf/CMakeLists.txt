@@ -32,6 +32,7 @@ pxr_library(sdf
         data
         declareHandles
         fileFormat
+        fileVersion
         identity
         layer
         layerOffset
@@ -74,6 +75,7 @@ pxr_library(sdf
         tokens
         types
         usdFileFormat
+        usdaData
         usdaFileFormat
         usdcFileFormat
         usdzFileFormat
@@ -230,12 +232,14 @@ pxr_test_scripts(
     testenv/testSdfReference.py
     testenv/testSdfRelocates.py
     testenv/testSdfSpecHash.py
+    testenv/testSdfSplineVersioning.py
     testenv/testSdfTargetFileFormat.py
     testenv/testSdfTimeCode.py
     testenv/testSdfTypes.py
     testenv/testSdfVariableExpression.py
     testenv/testSdfVariants.py
     testenv/testSdfZipFile.py
+    testenv/testSdfZipFileLimits.py
 )
 
 pxr_build_test_shared_lib(TestSdfFileFormatCapabilities
@@ -380,22 +384,20 @@ pxr_build_test(testSdfPredicateExpression_Cpp
         testenv/testSdfPredicateExpression.cpp
 )
 
+pxr_build_test(testSdfTextFile
+    LIBRARIES
+        sdf
+        tf
+    CPPFILES
+        testenv/testSdfTextFile.cpp
+)
+
 pxr_build_test(testSdfUsdaFileFormatParsing
     LIBRARIES
         sdf
         tf
     CPPFILES
         testenv/testSdfUsdaFileFormatParsing.cpp
-)
-
-pxr_build_test(testSdfZipFile_CPP
-    LIBRARIES
-        ar
-        arch
-        tf
-        sdf
-    CPPFILES
-        testenv/testSdfZipFile.cpp
 )
 
 pxr_build_test(testSdfUsdzResolver
@@ -406,6 +408,24 @@ pxr_build_test(testSdfUsdzResolver
         sdf
     CPPFILES
         testenv/testSdfUsdzResolver.cpp
+)
+
+pxr_build_test(testSdfFileVersion_Cpp
+    LIBRARIES
+        tf
+        sdf
+    CPPFILES
+        testenv/testSdfFileVersion.cpp
+) 
+
+pxr_build_test(testSdfZipFile_CPP
+    LIBRARIES
+        ar
+        arch
+        tf
+        sdf
+    CPPFILES
+        testenv/testSdfZipFile.cpp
 )
 
 pxr_install_test_dir(
@@ -646,9 +666,23 @@ pxr_register_test(testSdfSpecHash
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfSpecHash"
 )
+pxr_register_test(testSdfSplineVersioning
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfSplineVersioning"
+)
 pxr_register_test(testSdfTargetFileFormat
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTargetFileFormat"
+)
+pxr_register_test(testSdfTextFile
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
+    EXPECTED_RETURN_CODE 0
+)
+pxr_register_test(testSdfTextFile_1.1
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
+    EXPECTED_RETURN_CODE 0
+    ENV
+        USD_WRITE_NEW_USDA_FILES_AS_VERSION=1.1
 )
 pxr_register_test(testSdfTimeCode
     PYTHON
@@ -662,6 +696,13 @@ pxr_register_test(testSdfZipFile
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile"
     EXPECTED_RETURN_CODE 0
+)
+pxr_register_test(testSdfZipFileLimits
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFileLimits"
+    EXPECTED_RETURN_CODE 0
+    ENV 
+        SDF_MAX_ZIPFILE_SIZE=195
 )
 pxr_register_test(testSdfZipFile_CPP
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile_CPP"

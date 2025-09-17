@@ -561,6 +561,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLCameraExposure
+    DEST testUsdImagingGLCameraExposure
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdImagingGLClippingPlanes
     DEST testUsdImagingGLClippingPlanes
 )
@@ -4269,6 +4274,19 @@ pxr_register_test(testUsdImagingGLAnimatedCamera
     TESTENV testUsdImagingGLAnimatedCamera
 )
 
+pxr_register_test(testUsdImagingGLCameraExposure
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -frameAll -camera /World/main_cam -times 1 2 3 -stage cameraExposure.usda -write testUsdImagingGLCameraExposure.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLCameraExposure_001.png
+        testUsdImagingGLCameraExposure_002.png
+        testUsdImagingGLCameraExposure_003.png
+    FAIL 1
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLCameraExposure
+)
+
 pxr_register_test(testUsdImagingGLAnimatedLights
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -frameAll -times 1 2 3 -stage lightMoving.usda -write testUsdImagingGLAnimatedLights.png"
     IMAGE_DIFF_COMPARE
@@ -5316,18 +5334,6 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
         TESTENV testUsdImagingGLMaterialXTextured
     )
 
-    pxr_register_test(testUsdImagingGLMaterialXTextured_mxCustomNodeDef
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage mxCustomNodeDef.usda -write mxCustomNodeDef.png"
-        IMAGE_DIFF_COMPARE
-            mxCustomNodeDef.png
-        FAIL 0.5
-        FAIL_PERCENT 0.005
-        WARN 0.05
-        WARN_PERCENT 0.02
-        EXPECTED_RETURN_CODE 0
-        TESTENV testUsdImagingGLMaterialXTextured
-    )
-
     pxr_register_test(testUsdImagingGLMaterialXTextured_mxTexColorspaces
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -frameAll -stage mxTexColorspaces.usda -write mxTexColorspaces.png"
         IMAGE_DIFF_COMPARE
@@ -5526,50 +5532,91 @@ if (MaterialX_FOUND AND ${PXR_ENABLE_MATERIALX_SUPPORT})
     # )
 
     pxr_install_test_dir(
-        SRC testenv/testUsdImagingGLMaterialXCustomNodes
-        DEST testUsdImagingGLMaterialXCustomNodes
+        SRC testenv/testUsdImagingGLMaterialXLocalCustomNodes
+        DEST testUsdImagingGLMaterialXLocalCustomNodes
     )
 
-    pxr_register_test(testUsdImagingGLMaterialXCustomNodes_customTexNode
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage customTexNode.usda -write customTexNode.png"
+    pxr_register_test(testUsdImagingGLMaterialXLocalCustomNodes_simpleNodes
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage simpleNodes.usda -write simpleNodes.png"
         IMAGE_DIFF_COMPARE
-            customTexNode.png
+            simpleNodes.png
+        FAIL 0.1
+        FAIL_PERCENT 0.005
+        WARN 0.05
+        WARN_PERCENT 0.2
+        EXPECTED_RETURN_CODE 0
+        TESTENV testUsdImagingGLMaterialXLocalCustomNodes
+    )
+
+    pxr_register_test(testUsdImagingGLMaterialXLocalCustomNodes_nestedNodes
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage nestedNodes.usda -write nestedNodes.png"
+        IMAGE_DIFF_COMPARE
+            nestedNodes.png
+        FAIL 0.1
+        FAIL_PERCENT 0.005
+        WARN 0.05
+        WARN_PERCENT 0.2
+        EXPECTED_RETURN_CODE 0
+        TESTENV testUsdImagingGLMaterialXLocalCustomNodes
+    )
+
+    pxr_register_test(testUsdImagingGLMaterialXLocalCustomNodes_surfaceShaderNodes
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage surfaceShaderNodes.usda -write surfaceShaderNodes.png"
+        IMAGE_DIFF_COMPARE
+            surfaceShaderNodes.png
+        FAIL 0.1
+        FAIL_PERCENT 0.005
+        WARN 0.05
+        WARN_PERCENT 0.2
+        EXPECTED_RETURN_CODE 0
+        TESTENV testUsdImagingGLMaterialXLocalCustomNodes
+    )
+
+    pxr_install_test_dir(
+        SRC testenv/testUsdImagingGLMaterialXLibraryCustomNodes
+        DEST testUsdImagingGLMaterialXLibraryCustomNodes
+    )
+
+    pxr_register_test(testUsdImagingGLMaterialXLibraryCustomNodes_colorNode
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage colorNode.usda -write colorNode.png"
+        IMAGE_DIFF_COMPARE
+            colorNode.png
+        FAIL 0.1
+        FAIL_PERCENT 0.005
+        WARN 0.05
+        WARN_PERCENT 0.2
+        EXPECTED_RETURN_CODE 0
+        TESTENV testUsdImagingGLMaterialXLibraryCustomNodes
+        ENV
+            PXR_MTLX_PLUGIN_SEARCH_PATHS=./libraryNodes
+    )
+
+    pxr_register_test(testUsdImagingGLMaterialXLibraryCustomNodes_texcoordNodes
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage texcoordNodes.usda -write texcoordNodes.png"
+        IMAGE_DIFF_COMPARE
+            texcoordNodes.png
         FAIL 0.5
         FAIL_PERCENT 0.005
         WARN 0.05
         WARN_PERCENT 0.2
         EXPECTED_RETURN_CODE 0
-        TESTENV testUsdImagingGLMaterialXCustomNodes
+        TESTENV testUsdImagingGLMaterialXLibraryCustomNodes
         ENV
-            PXR_MTLX_PLUGIN_SEARCH_PATHS=./customNodeDefs
+            PXR_MTLX_PLUGIN_SEARCH_PATHS=./libraryNodes
     )
 
-    pxr_register_test(testUsdImagingGLMaterialXCustomNodes_customMaterial
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage customMaterial.usda -write customMaterial.png"
+    pxr_register_test(testUsdImagingGLMaterialXLibraryCustomNodes_surfaceShaderNodes
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage surfaceShaderNodes.usda -write surfaceShaderNodes.png"
         IMAGE_DIFF_COMPARE
-            customMaterial.png
+            surfaceShaderNodes.png
         FAIL 0.1
         FAIL_PERCENT 0.005
         WARN 0.05
         WARN_PERCENT 0.2
         EXPECTED_RETURN_CODE 0
-        TESTENV testUsdImagingGLMaterialXCustomNodes
+        TESTENV testUsdImagingGLMaterialXLibraryCustomNodes
         ENV
-            PXR_MTLX_PLUGIN_SEARCH_PATHS=./customNodeDefs
-    )
-
-    pxr_register_test(testUsdImagingGLMaterialXCustomNodes_customColor
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -lighting -sceneLights -shading smooth -complexity 1.3 -offscreen -camera /Camera -stage customColor.usda -write customColor.png"
-        IMAGE_DIFF_COMPARE
-            customColor.png
-        FAIL 0.1
-        FAIL_PERCENT 0.005
-        WARN 0.05
-        WARN_PERCENT 0.2
-        EXPECTED_RETURN_CODE 0
-        TESTENV testUsdImagingGLMaterialXCustomNodes
-        ENV
-            PXR_MTLX_PLUGIN_SEARCH_PATHS=./customNodeDefs
+            PXR_MTLX_PLUGIN_SEARCH_PATHS=./libraryNodes
     )
 
     # Not a MaterialX test as such, but requires MaterialX support

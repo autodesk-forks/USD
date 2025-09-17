@@ -70,6 +70,28 @@ Pcp_SubsumeDescendants(SdfPathSet* pathSet, const SdfPath& prefix)
     pathSet->erase(first, last);
 }
 
+void PcpCacheChanges::_SetLayerStacksUsingLayerOverride(
+    const SdfLayerHandle& layer, 
+    const PcpLayerStackPtrVector& layerStacks)
+{
+    _layerToLayerStackOverrides[layer] = layerStacks;
+}
+
+const PcpLayerStackPtrVector&
+PcpCacheChanges::_GetLayerStacksUsingLayerOverride(
+    const SdfLayerHandle& layer) const
+{
+    static const PcpLayerStackPtrVector _emptyLayerStackOverrides;
+
+    if (_layerToLayerStackOverrides.empty()) {
+        return _emptyLayerStackOverrides;
+    }
+
+    auto layerStackOverrides = _layerToLayerStackOverrides.find(layer);
+    return layerStackOverrides != _layerToLayerStackOverrides.end() ?
+        layerStackOverrides->second : _emptyLayerStackOverrides;
+}
+
 PcpLifeboat::PcpLifeboat()
 {
     // Do nothing
@@ -112,9 +134,7 @@ PcpChanges::PcpChanges()
 
 PcpChanges::~PcpChanges()
 {
-    for (auto & changes : _cacheChanges) {
-        changes.first->_layerStackCache->ClearLayerStackVectorOverrides();
-    }
+    // Do nothing
 }
 
 #define PCP_APPEND_DEBUG(...)                       \
@@ -1661,7 +1681,7 @@ PcpChanges::_DidUnmuteLayer(
             debugSummary);
     }
     else {
-        cache->_layerStackCache->SetLayerStackVectorOverride(
+        cacheChanges._SetLayerStacksUsingLayerOverride(
             unmutedLayer, layerStacks);
 
         SdfLayerRefPtr empty = SdfLayer::CreateAnonymous( 
@@ -1833,9 +1853,6 @@ _NoLongerHasAnySpecs(const PcpCacheChanges& changes, const PcpPrimIndex& primInd
     return true;
 }
 
-// XXX: We would like to make this method a static method specific to this
-// file.  It should be more straightforward to do this when the layer stack
-// override logic is moved from PcpLayerStackRegistry to PcpChanges.
 const PcpLayerStackPtrVector&
 PcpChanges::FindAllLayerStacksUsingLayer(
     const PcpCache* cache,
@@ -1850,7 +1867,7 @@ PcpChanges::FindAllLayerStacksUsingLayer(
         // processing and analysis before they are applied.  This aids in
         // creating fine grained change change lists for sublayer operations.
         const PcpLayerStackPtrVector& overrideVec = 
-            cache->_layerStackCache->GetLayerStackVectorOverride(layer);
+            changes->second._GetLayerStacksUsingLayerOverride(layer);
 
         if (!overrideVec.empty()) {
             return overrideVec;
@@ -1918,7 +1935,49 @@ PcpChanges::DidChangeSpecs(
             }
 
             const PcpNodeRef nodeForChangedSpec = 
-                primIndex->GetNodeProvidingSpec(changedLayer, changedPath);
+            [this, &primIndex, &changedLayer, &changedPath, &cache]() {
+                const PcpNodeRef nodeProvidingSpec = 
+                    primIndex->GetNodeProvidingSpec(changedLayer, changedPath);
+            
+                if (nodeProvidingSpec) {
+                    return nodeProvidingSpec;
+                }
+            
+                // If we are unable to find a node above, we want to check the
+                // case where the node's layer stack is is being unmuted or
+                // inserted as part of a sublayer operation.  If this is the
+                // case we can query the overrides set for such layers and see
+                // if any node's layer stack is among them
+                const PcpLayerStackPtrVector& layerStackVecOverride = 
+                    _GetCacheChanges(cache)._GetLayerStacksUsingLayerOverride(
+                        changedLayer);
+            
+                if (layerStackVecOverride.empty()) {
+                    return PcpNodeRef();
+                }
+            
+                for (const PcpNodeRef &node: primIndex->GetNodeRange()) {
+                    if (!node.CanContributeSpecs() || 
+                        node.GetPath() != changedPath ) 
+                    {
+                        continue;
+                    }
+            
+                    const PcpLayerStackPtr nodeLayerStack = 
+                        node.GetLayerStack();
+                    
+                    if (std::find(layerStackVecOverride.begin(), 
+                            layerStackVecOverride.end(), nodeLayerStack) != 
+                                layerStackVecOverride.end())
+                    {
+                        return node;
+                    }
+                    
+                }
+            
+                return PcpNodeRef();
+            }();
+
             if (nodeForChangedSpec) {
                 // If this prim index is instanceable, the addition or removal
                 // of an inert spec could affect whether this node is considered
@@ -2358,7 +2417,7 @@ PcpChanges::_DidAddOrRemoveSublayer(
                 sublayer->GetFileFormatArguments());
 
             if (sublayerChange == _SublayerAdded) {
-                cache->_layerStackCache->SetLayerStackVectorOverride(
+                cacheChanges._SetLayerStacksUsingLayerOverride(
                     sublayer, layerStacks);
                 changes.emplace_back(std::make_pair(
                     sublayer, empty->CreateDiff(

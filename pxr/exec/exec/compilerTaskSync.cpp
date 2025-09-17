@@ -58,10 +58,7 @@ private:
 
 }
 
-class Exec_CompilerTaskSync::WaitlistNode {
-    friend class Exec_CompilerTaskSync;
-    friend class tbb::concurrent_vector<WaitlistNode>;
-
+struct Exec_CompilerTaskSync::WaitlistNode {
     WaitlistNode(Exec_CompilationTask *t, WaitlistNode *n) : task(t), next(n) {}
 
     // The waiting task.

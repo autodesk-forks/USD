@@ -59,6 +59,7 @@ Exec_OutputProvidingCompilationTask::_Compile(
                 compilationState,
                 _inputKeys->Get()[i],
                 _outputKey.GetProviderObject(),
+                _outputKey.GetDispatchingSchemaKey(),
                 &_inputSources[i],
                 &_inputJournals[i]);
         }
@@ -86,6 +87,7 @@ Exec_OutputProvidingCompilationTask::_Compile(
         compilationState.GetProgram()->SetNodeRecompilationInfo(
             node,
             _outputKey.GetProviderObject(),
+            _outputKey.GetDispatchingSchemaKey(),
             Exec_InputKeyVectorConstRefPtr(_inputKeys));
 
         for (size_t i = 0; i < _inputSources.size(); ++i) {

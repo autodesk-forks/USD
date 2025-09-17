@@ -19,6 +19,7 @@
 #include "pxr/base/vt/streamOut.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/span.h"
 
 #include <unordered_map>
 
@@ -205,6 +206,38 @@ public:
     /// represents a dense array or is the identity, return it unmodified.
     static VtArrayEdit<ELEM> Optimize(VtArrayEdit<ELEM> &&in);
 
+    // Return data for serializing `edit`, so it can be reconstructed later by
+    // CreateFromSerializationData().  Note that VtArrayEdit::IsDense() is also
+    // required, but can be obtained by calling that public API.
+    //
+    // This API is intended to be called only by storage/transmission
+    // implementations.
+    static void
+    GetSerializationData(VtArrayEdit<ELEM> const &edit,
+                         VtArray<ELEM> *valuesOut,
+                         std::vector<int64_t> *indexesOut) {
+        if (TF_VERIFY(valuesOut) && TF_VERIFY(indexesOut)) {
+            *valuesOut = edit._denseOrLiterals;
+            *indexesOut = edit._ops._ins;
+        }
+    }
+
+    // Construct an array edit using serialization data previously obtained from
+    // GetSerializationData() and VtArrayEdit::IsDense().
+    //
+    // This API is intended to be called only by storage/transmission
+    // implementations.
+    static VtArrayEdit<ELEM>
+    CreateFromSerializationData(VtArray<ELEM> const &values,
+                                TfSpan<int64_t> indexes,
+                                bool isDense) {
+        VtArrayEdit<ELEM> result;
+        result._denseOrLiterals = values;
+        result._ops._ins = std::vector<int64_t>(indexes.begin(), indexes.end());
+        result._isDense = isDense;
+        return result;
+    }
+    
 private:
     int64_t _FindOrAddLiteral(ElementType const &elem) {
         auto iresult = _literalToIndex.emplace(elem, _literals.size());

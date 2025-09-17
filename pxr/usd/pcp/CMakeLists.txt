@@ -130,6 +130,17 @@ pxr_build_test_shared_lib(TestPcpDynamicFileFormatPlugin
         testenv/TestPcpDynamicFileFormatPlugin.cpp
 )
 
+pxr_build_test_shared_lib(TestPcpAssetPathDynamicFileFormatPlugin
+    INSTALL_PREFIX PcpPlugins
+    LIBRARIES
+        tf
+        pcp
+        sdf
+        
+    CPPFILES
+        testenv/TestPcpAssetPathDynamicFileFormatPlugin.cpp
+)
+
 pxr_build_test_shared_lib(TestPcpStreamingLayerReload
     INSTALL_PREFIX PcpPlugins
     LIBRARIES

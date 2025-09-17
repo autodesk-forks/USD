@@ -118,7 +118,7 @@ pxr_register_test(testUsdMtlxDiscovery
 pxr_register_test(testUsdMtlxFileFormat
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdMtlxFileFormat"
-    DIFF_COMPARE Looks.usda NodeGraphs.usda GraphlessNodes.usda usd_preview_surface_gold.usda Include.usda Include_From_Usdz.usda CustomNodeDef.usda
+    DIFF_COMPARE Looks.usda NodeGraphs.usda GraphlessNodes.usda usd_preview_surface_gold.usda Include.usda Include_From_Usdz.usda LocalCustomNodes.usda NestedLocalCustomNodes.usda
     EXPECTED_RETURN_CODE 0
 )
 

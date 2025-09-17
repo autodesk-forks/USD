@@ -55,7 +55,7 @@ def Scope "S"
 }
 
 def Scope "V" (
-    variantSets = "v"
+    variantSets = ["v", "v2"]
 )
 {
     variantSet "v" = {
@@ -65,6 +65,19 @@ def Scope "V" (
         "two" {
             custom double u
 
+        }
+        "three" {
+
+        }
+    }
+
+    variantSet "v2" = {
+        "three" {
+            custom double x
+
+            def Scope "X"
+            {
+            }
         }
     }
 }

@@ -44,12 +44,20 @@ _ExpectedLimit(const int envVal, const size_t n)
 {
     // If envVal is non-zero, it wins over n!
     // envVal may also be a negative number, which means all but that many
-    // cores.
-    const size_t val = envVal ? 
+    // cores in a granular thread limiting implementation. If the implementation
+    // is non granular then envVal will limit to the max physical concurrency if 
+    // it's value has not been set to 1. 
+    if (WorkSupportsGranularThreadLimits()) {
+        const size_t val = envVal ? 
         (envVal < 0 ?
             std::max<int>(1, envVal+WorkGetPhysicalConcurrencyLimit()) : envVal)
         : n;
-
+        return val;
+    }
+    const size_t val = envVal ? 
+        (envVal == 1 ?
+            envVal : WorkGetPhysicalConcurrencyLimit())
+        : n;
     return val;
 }
 

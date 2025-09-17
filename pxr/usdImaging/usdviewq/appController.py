@@ -1213,6 +1213,12 @@ class AppController(QtCore.QObject):
         if self._mallocTags != 'none':
             Tf.MallocTag.Initialize()
 
+        # Pull on the asset resolver here so that the "open stage" time does
+        # not include its initialization time for consistency with previous
+        # behavior. Otherwise, it would be instantiated when binding the
+        # resolver context prior to opening the root layer.
+        resolver = Ar.GetResolver()
+
         with self._makeTimer('open stage "%s"' % usdFilePath):
             loadSet = Usd.Stage.LoadNone if (self._unloaded or muteLayersRe) \
                                          else Usd.Stage.LoadAll

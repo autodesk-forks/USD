@@ -12,14 +12,13 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/vdf/api.h"
-
 #include "pxr/exec/vdf/parallelTaskWaitlist.h"
+
+#include "pxr/base/work/taskGraph.h"
 
 #include <atomic>
 #include <cstdint>
 #include <memory>
-
-namespace tbb { class task; }
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -42,7 +41,11 @@ public:
 
     /// Constructor.
     ///
-    VdfParallelTaskSync() : _waitlists(1000), _num(0) {}
+    VdfParallelTaskSync(WorkTaskGraph *taskGraph) 
+        : _waitlists(1000)
+        , _num(0)
+        , _taskGraph(taskGraph)
+    {}
 
     /// Resets the state of all tasks in the graph. Ensures that \p num
     /// entries are available for use.
@@ -72,7 +75,7 @@ public:
     /// the reference count of \p successor to be automatically decremented as
     /// soon as the task completes.
     ///
-    inline State Claim(const size_t idx, tbb::task *successor);
+    inline State Claim(const size_t idx, WorkTaskGraph::BaseTask *successor);
 
     /// Mark the task \p idx as done. 
     ///
@@ -84,7 +87,6 @@ public:
 private:
 
     // The different states a task can be in. 
-    //
     enum _TaskState : uint8_t {
         _TaskStateUnclaimed,
         _TaskStateClaimed,
@@ -92,27 +94,26 @@ private:
     };
 
     // A byte-array indicating the state of each task.
-    //
     std::unique_ptr<std::atomic<uint8_t>[]> _state;
 
     // A pointer to the waiting queue head for each task.
-    //
     std::unique_ptr<VdfParallelTaskWaitlist::HeadPtr[]> _waiting;
 
     // The waitlist instance for managing the queues.
-    //
     VdfParallelTaskWaitlist _waitlists;
 
     // The number of tasks in this graph.
-    //
     size_t _num;
+
+    // The task graph for running pending tasks. 
+    WorkTaskGraph *_taskGraph;
 
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 VdfParallelTaskSync::State
-VdfParallelTaskSync::Claim(const size_t idx, tbb::task *successor)
+VdfParallelTaskSync::Claim(const size_t idx, WorkTaskGraph::BaseTask *successor)
 {
     // Get the current task state.
     uint8_t state = _state[idx].load(std::memory_order_acquire);
@@ -143,7 +144,7 @@ VdfParallelTaskSync::MarkDone(const size_t idx)
     _state[idx].store(_TaskStateDone, std::memory_order_release);
 
     // Close the corresponding wait list and notify all waiting tasks.
-    _waitlists.CloseAndNotify(&_waiting[idx]);
+    _waitlists.CloseAndNotify(&_waiting[idx], _taskGraph);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
