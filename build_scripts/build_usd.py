@@ -1268,6 +1268,8 @@ def InstallPNG(context, force, buildArgs):
         # OpenImageIO v2.5.16.0 runs into linker issues otherwise.
         macArgs = ["-DPNG_FRAMEWORK=OFF"]
 
+        if context.targetWasm:
+            macArgs += ["-DPNG_SHARED=OFF"]
         if MacOS() and apple_utils.IsTargetArm(context):
             # Ensure libpng's build doesn't erroneously activate inappropriate
             # Neon extensions
