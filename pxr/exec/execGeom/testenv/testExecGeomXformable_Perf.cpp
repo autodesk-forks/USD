@@ -360,7 +360,7 @@ private:
 
         // Write the value to the perfstats file.
         static const char *const metricTemplate =
-            "{'profile':'%s','metric':'memory','value':%s,'samples':1}\n";
+            "{'profile':'%s','metric':'malloc_size','value':%s,'samples':1}\n";
         file << TfStringPrintf(
             metricTemplate, tag.c_str(), memInMiBString.c_str());
     }

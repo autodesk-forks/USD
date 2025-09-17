@@ -36,6 +36,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 ((SdfFieldKeys->Active,                  bool))                          \
 ((SdfFieldKeys->AllowedTokens,           VtTokenArray))                  \
 ((SdfFieldKeys->AssetInfo,               VtDictionary))                  \
+((SdfFieldKeys->Clips,                   VtDictionary))                  \
+((SdfFieldKeys->ClipSets,                SdfStringListOp))               \
 ((SdfFieldKeys->ColorConfiguration,      SdfAssetPath))                  \
 ((SdfFieldKeys->ColorManagementSystem,   TfToken))                       \
 ((SdfFieldKeys->ColorSpace,              TfToken))                       \

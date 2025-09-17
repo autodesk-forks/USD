@@ -3,6 +3,12 @@
         {
             "Info": {
                 "Types": {
+                    "HdPrman_WorldOffsetSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman World Offset Scene Index"
+                    },
                     "HdPrman_MotionBlurSceneIndexPlugin" : {
                         "bases": ["HdSceneIndexPlugin"],
                         "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],

@@ -66,6 +66,36 @@ class "TestSingleApplyAPI"
     )
 }
 
+class "TestComposeMetadataAPI"
+(
+    inherits = </APISchemaBase>
+    customData = {
+        string className = "ComposeMetadataAPI"
+        token[] apiSchemaAutoApplyTo = [
+            "TestTypedSchemaForAutoApplyConcreteBase", 
+            "TestTypedSchemaForAutoApplyAbstractBase",
+            "TestAutoAppliedToAPI"
+        ] 
+    }
+    doc = """Test single apply API schema"""
+)
+{
+    reorder properties = ['compose:relationship', 'compose:token_attr', 'compose:bool_attr']
+    uniform token compose:token_attr = "bar" (
+        allowedTokens = ["foo", "bar", "baz"]
+        doc = """Token attribute"""
+    )
+    uniform bool compose:bool_attr = true (
+        doc = """Boolean attribute"""
+    )
+    rel compose:relationship (
+        doc = """Relationship"""
+    )
+    uniform bool single:bool_attr = true (
+        doc = """Testing duplicate ignore"""
+    )
+}
+
 class "TestSingleCanApplyAPI"
 (
     inherits = </APISchemaBase>
@@ -154,7 +184,7 @@ class TestTypedSchema "TestTypedSchema" (
 class TestWithBuiltinAppliedSchema "TestWithBuiltinAppliedSchema" (
     inherits = </Typed>
     doc = """Test with built-in API schemas"""
-    prepend apiSchemas = ["TestSingleApplyAPI", "TestMultiApplyAPI:builtin"]
+    prepend apiSchemas = ["TestSingleApplyAPI", "TestMultiApplyAPI:builtin", "TestComposeMetadataAPI"]
     hidden = false
 )
 {

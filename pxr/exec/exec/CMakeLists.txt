@@ -78,6 +78,9 @@ pxr_library(exec
 
     RESOURCE_FILES
         plugInfo.json
+
+    DOXYGEN_FILES
+        README.md        
 )
 
 #

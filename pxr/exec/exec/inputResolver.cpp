@@ -428,6 +428,7 @@ private:
                 _definitionRegistry.GetComputationDefinition(
                     *_currentAttribute,
                     computationName,
+                    _dispatchingSchemaKey,
                     _journal);
         }
 

@@ -28,6 +28,12 @@ pxr_library(execUsd
 
     RESOURCE_FILES
         plugInfo.json
+
+    DOXYGEN_FILES
+        README.md        
+        docs/overview.md
+        docs/tutorial1ComputingValues.md
+        docs/tutorial2DefiningComputations.md
 )
 
 pxr_build_test(testExecUsdBasicCompilation
@@ -54,6 +60,52 @@ pxr_register_test(testExecUsdBasicCompilation
     POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFile.py testCompiler.dot testCompiler.out"
     DIFF_COMPARE testCompiler.out
     TESTENV testExecUsdBasicCompilation
+)
+
+pxr_build_test(testExecUsdAttributeComputations
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdAttributeComputations.cpp
+)
+
+pxr_install_test_dir(
+    SRC testenv/testExecUsdAttributeComputations
+    DEST testExecUsdAttributeComputations
+)
+
+pxr_register_test(testExecUsdAttributeComputations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeComputations"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testExecUsdAttributeComputations
+)
+
+pxr_build_test(testExecUsdComputations
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdComputations.cpp
+)
+
+pxr_install_test_dir(
+    SRC testenv/testExecUsdComputations
+    DEST testExecUsdComputations
+)
+
+pxr_register_test(testExecUsdComputations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdComputations"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testExecUsdComputations
 )
 
 pxr_build_test(testExecUsdDispatchedComputations

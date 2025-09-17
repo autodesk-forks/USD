@@ -1798,6 +1798,11 @@ struct Stringify
         return TfStringPrintf("array: sz=%zu", arr.size());
     }
     
+    template <class T>
+    std::string operator()(VtArrayEdit<T> const &arrayEdit) const {
+        return "array edit";
+    }
+
     std::string operator()(VtValue const &unknown) const {
         return "unknown type";
     }
@@ -1819,6 +1824,11 @@ struct GetArraySize
         return array.size();
     }
 
+    template <class T>
+    size_t operator()(VtArrayEdit<T> const &arrayEdit) const {
+        return 0xED17;
+    }
+
     size_t operator()(VtValue const &val) const {
         return ~0;
     }
@@ -1834,6 +1844,8 @@ testVisitValue()
     VtValue sv(std::string("hello"));
     VtValue av(VtArray<float>(123));
     VtValue ov(std::vector<float>(123));
+    VtValue evf(VtArrayEdit<float> {});
+    VtValue evi(VtArrayEdit<int> {});
 
     TF_AXIOM(VtVisitValue(iv, Stringify()) == "int: 123");
     TF_AXIOM(VtVisitValue(dv, Stringify()) == "double: 1.23");
@@ -1842,6 +1854,8 @@ testVisitValue()
     TF_AXIOM(VtVisitValue(sv, Stringify()) == "string: 'hello'");
     TF_AXIOM(VtVisitValue(av, Stringify()) == "array: sz=123");
     TF_AXIOM(VtVisitValue(ov, Stringify()) == "unknown type");
+    TF_AXIOM(VtVisitValue(evf, Stringify()) == "array edit");
+    TF_AXIOM(VtVisitValue(evi, Stringify()) == "array edit");
     
     TF_AXIOM(VtVisitValue(iv, RoundOrMinusOne()) == 123);
     TF_AXIOM(VtVisitValue(dv, RoundOrMinusOne()) == 1);
@@ -1850,11 +1864,15 @@ testVisitValue()
     TF_AXIOM(VtVisitValue(sv, RoundOrMinusOne()) == -1);
     TF_AXIOM(VtVisitValue(av, RoundOrMinusOne()) == -1);
     TF_AXIOM(VtVisitValue(ov, RoundOrMinusOne()) == -1);
+    TF_AXIOM(VtVisitValue(evf, RoundOrMinusOne()) == -1);
+    TF_AXIOM(VtVisitValue(evi, RoundOrMinusOne()) == -1);
     
     TF_AXIOM(VtVisitValue(av, GetArraySize()) == 123);
     TF_AXIOM(VtVisitValue(iv, GetArraySize()) == size_t(~0));
     TF_AXIOM(VtVisitValue(
                  VtValue(VtArray<GfVec3d>(234)), GetArraySize()) == 234);
+    TF_AXIOM(VtVisitValue(evf, GetArraySize()) == 0xED17);
+    TF_AXIOM(VtVisitValue(evi, GetArraySize()) == 0xED17);
 
 }
 

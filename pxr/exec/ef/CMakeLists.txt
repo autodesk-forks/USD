@@ -33,6 +33,7 @@ pxr_library(ef
         leafNode
         leafNodeCache
         leafNodeIndexer
+        loftedOutputSet
         maskedSubExecutor
         outputValueCache
         pageCache
@@ -42,6 +43,9 @@ pxr_library(ef
         timeInputNode
         timeInterval
         vectorKey
+
+    DOXYGEN_FILES
+        README.md
 )
 
 pxr_build_test(testEfDependencyCache

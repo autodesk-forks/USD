@@ -185,7 +185,9 @@ _AddNodeToNodeGraph(
         addedNodeNames->insert(mxNodeName);
         mx::NodePtr mxNode = mxNodeGraph->addNode(
             mxNodeCategory, mxNodeName, mxNodeType);
-        mxNode->setNodeDefString(mxNodeDefString);
+        if (mxNode->getNodeDef()) {
+            mxNode->setNodeDefString(mxNodeDefString);
+        }
         return mxNode;
     }
     // Otherwise get the existing node from the mxNodeGraph

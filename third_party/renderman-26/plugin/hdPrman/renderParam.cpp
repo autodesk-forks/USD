@@ -21,6 +21,7 @@
 #include "hdPrman/rixStrings.h"
 #include "hdPrman/utils.h"
 #include "hdPrman/tokens.h"
+#include "hdPrman/worldOffsetSceneIndexPlugin.h"
 
 #include "pxr/imaging/hd/aov.h"
 #include "pxr/imaging/hd/enums.h"
@@ -3259,6 +3260,29 @@ HdPrman_RenderParam::SetRileyOptions()
             prunedOptions = HdPrman_Utils::PruneBatchOnlyOptions(prunedOptions);
         }
 
+        // Set the world origin as "world offset" and the world offset as our camera/offset.
+        // Geometry/Lights/Camera all enter into riley in "world offset" space.
+        // This is handled by the world offset scene index plugin.
+        // However we still need this setting so that we can transform them back to world space
+        // in certain tasks like AOVs and OSL patterns.
+        // We always set this as "world offset" and set it with the exact offset the scene index
+        // is using. If we set to camera it may use all the time samples where as the scene index is
+        // only transforming around time zero for simplicity.
+        // TODO: This task should be moved into the scene index itself. However we cannot do this
+        // yet as there is a dependency on knowing  which rendersetting/camera is being used in 
+        // the scene which is not known until after the scene index. If we change the rendersetting 
+        // in the scene index it would be pushed forward to the render delegate, which would pass 
+        // it back to the scene index, which would be pushed forward to the render delegate,
+        // creating a feedback loop.
+        // Once the SceneGlobals is properly supported we can move everything into the scene index
+        // plugin.
+        const GfVec3f worldOffset = GfVec3f(
+            HdPrman_WorldOffsetSceneIndexPlugin::GetCameraOffset() + 
+            HdPrman_WorldOffsetSceneIndexPlugin::GetWorldOffset()
+        );
+        prunedOptions.SetFloatArray(RixStr.k_trace_worldoffset, worldOffset.GetArray(), 3);
+        prunedOptions.SetString(RixStr.k_trace_worldorigin, RixStr.k_worldoffset);
+
         riley::Riley * const riley = AcquireRiley();
         riley->SetOptions(prunedOptions);
 
@@ -3330,6 +3354,7 @@ HdPrman_RenderParam::StartRender()
 void
 HdPrman_RenderParam::End()
 {
+    StopRender(true);
     DeleteRenderThread();
     _framebuffer.reset();
     _DestroyRiley();

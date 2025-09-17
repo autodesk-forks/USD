@@ -21,6 +21,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             Tf.Type(Usd.SchemaBase).FindDerivedByName("TestSingleApplyAPI")
         cls.MultiApplyAPIType = \
             Tf.Type(Usd.SchemaBase).FindDerivedByName("TestMultiApplyAPI")
+        cls.ComposeMetadataAPIType = \
+            Tf.Type(Usd.SchemaBase).FindDerivedByName("TestComposeMetadataAPI")
         cls.SingleCanApplyAPIType = \
             Tf.Type(Usd.SchemaBase).FindDerivedByName("TestSingleCanApplyAPI")
         cls.MultiCanApplyAPIType = \
@@ -140,8 +142,11 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "TestWithBuiltinAppliedSchema")
         self.assertTrue(primDef)
         self.assertEqual(primDef.GetAppliedAPISchemas(), [
-            "TestSingleApplyAPI", "TestMultiApplyAPI:builtin"])
+            "TestSingleApplyAPI", "TestMultiApplyAPI:builtin", "TestComposeMetadataAPI"])
         self.assertEqual(sorted(primDef.GetPropertyNames()), [
+            "compose:bool_attr", 
+            "compose:relationship", 
+            "compose:token_attr", 
             "multi:builtin:bool_attr", 
             "multi:builtin:relationship",
             "multi:builtin:token_attr", 
@@ -244,22 +249,26 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
                          [])
         self.assertEqual(untypedPrim.GetPropertyNames(), [])
 
-        # Add an api schema to the prim's metadata.
+        # Add api schemas to the prim's metadata.
         untypedPrim.ApplyAPI(self.SingleApplyAPIType)
+        untypedPrim.ApplyAPI(self.ComposeMetadataAPIType)
 
         # Prim still has no type but does have applied schemas
         self.assertEqual(untypedPrim.GetTypeName(), '')
-        self.assertEqual(untypedPrim.GetAppliedSchemas(), ["TestSingleApplyAPI"])
+        self.assertEqual(untypedPrim.GetAppliedSchemas(), 
+                         ["TestSingleApplyAPI", "TestComposeMetadataAPI"])
         self.assertEqual(untypedPrim.GetPrimTypeInfo().GetTypeName(), '')
         self.assertEqual(untypedPrim.GetPrimTypeInfo().GetAppliedAPISchemas(), 
-                         ["TestSingleApplyAPI"])
+                         ["TestSingleApplyAPI", "TestComposeMetadataAPI"])
         self.assertTrue(untypedPrim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(untypedPrim.HasAPI(self.ComposeMetadataAPIType))
 
         # The prim has properties from the applied schema and value resolution
         # returns the applied schema's property fallback value. These properties
         # come with a property order, which is why they are not in alphabetical order.
         self.assertEqual(untypedPrim.GetPropertyNames(), [
-            "single:relationship", "single:token_attr", "single:bool_attr"])
+            "single:relationship", "single:token_attr", "single:bool_attr", 
+            "compose:relationship", "compose:token_attr", "compose:bool_attr"])
         self.assertEqual(untypedPrim.GetAttribute("single:token_attr").Get(), 
                          "bar")
 
@@ -271,7 +280,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertIsNone(untypedPrim.GetMetadata("hidden"))
         self.assertFalse(untypedPrim.HasAuthoredMetadata("hidden"))
 
-        # The only metadata single applied API schemas can define is "propertyOrder".
+        # Single applied API schemas can define "propertyOrder".
         self.assertTrue("propertyOrder" in untypedPrim.GetAllMetadata())
         self.assertIsNotNone(untypedPrim.GetMetadata("propertyOrder"))
         # "propertyOrder" is defined in the API schema, not authored on the prim.
@@ -308,31 +317,37 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertFalse(typedPrim.HasAuthoredMetadata("propertyOrder"))
 
         typedPrim.ApplyAPI(self.MultiApplyAPIType, "garply")
+        typedPrim.ApplyAPI(self.ComposeMetadataAPIType)
 
         # Prim has the same type and now has API schemas. The properties have
         # been expanded to include properties from the API schemas
         self.assertEqual(typedPrim.GetTypeName(), 'TestTypedSchema')
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
-                         ["TestSingleApplyAPI", "TestMultiApplyAPI:garply"])
+                         ["TestSingleApplyAPI", "TestMultiApplyAPI:garply", 
+                          "TestComposeMetadataAPI"])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestTypedSchema')
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetAppliedAPISchemas(),
-                         ["TestSingleApplyAPI", "TestMultiApplyAPI:garply"])
+                         ["TestSingleApplyAPI", "TestMultiApplyAPI:garply", 
+                          "TestComposeMetadataAPI"])
 
-        # Since TestSingleApplyAPI has specified a property order, those
-        # properties are moved to the front. Other properties follow 
-        # alphabetical order.
+        # Since TestTypedSchema, TestSingleApplyAPI, and TestComposeMetadataAPI 
+        # specify a property order, those properties are moved to the front in 
+        # the order they were applied. Other properties follow alphabetical order.
         self.assertTrue(typedPrim.HasAPI(self.SingleApplyAPIType))
         self.assertTrue(typedPrim.HasAPI(self.MultiApplyAPIType))
         self.assertEqual(typedPrim.GetPropertyNames(), [
             "testRel",
-            "testAttr", 
+            "testAttr",  
+            "single:relationship", 
+            "single:token_attr", 
+            "single:bool_attr", 
+            "compose:relationship", 
+            "compose:token_attr", 
+            "compose:bool_attr", 
             "multi:garply:bool_attr", 
             "multi:garply:relationship", 
-            "multi:garply:token_attr", 
-            "single:bool_attr", 
-            "single:relationship", 
-            "single:token_attr"]) 
+            "multi:garply:token_attr"]) 
 
         # Property fallback comes from TestSingleApplyAPI
         attr = typedPrim.GetAttribute("single:token_attr")
@@ -376,7 +391,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         typedPrim = stage.DefinePrim("/TypedPrim", "TestWithBuiltinAppliedSchema")
         self.assertEqual(typedPrim.GetTypeName(), 'TestWithBuiltinAppliedSchema')
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
-                         ["TestSingleApplyAPI", "TestMultiApplyAPI:builtin"])
+                         ["TestSingleApplyAPI", "TestMultiApplyAPI:builtin", 
+                          "TestComposeMetadataAPI"])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestWithBuiltinAppliedSchema')
         # Note that prim type info does NOT contain the built-in applied API
@@ -386,10 +402,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         self.assertTrue(typedPrim.HasAPI(self.SingleApplyAPIType))
         self.assertTrue(typedPrim.HasAPI(self.MultiApplyAPIType))
+        self.assertTrue(typedPrim.HasAPI(self.ComposeMetadataAPIType))
         self.assertEqual(typedPrim.GetPropertyNames(), [
             "single:relationship", 
             "single:token_attr", 
             "single:bool_attr",
+            "compose:relationship", 
+            "compose:token_attr", 
+            "compose:bool_attr",
             "multi:builtin:bool_attr", 
             "multi:builtin:relationship",
             "multi:builtin:token_attr", 
@@ -408,6 +428,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
             ["TestSingleApplyAPI", 
              "TestMultiApplyAPI:builtin",
+             "TestComposeMetadataAPI", 
              "TestMultiApplyAPI:garply",])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestWithBuiltinAppliedSchema')
@@ -428,6 +449,9 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
                 "single:relationship", 
                 "single:token_attr", 
                 "single:bool_attr", 
+                "compose:relationship", 
+                "compose:token_attr", 
+                "compose:bool_attr",
                 "multi:builtin:bool_attr", 
                 "multi:builtin:relationship",
                 "multi:builtin:token_attr", 
@@ -495,7 +519,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
             ["TestSingleApplyAPI", 
              "TestMultiApplyAPI:builtin",
-             "TestMultiApplyAPI:garply",])
+             "TestComposeMetadataAPI",
+             "TestMultiApplyAPI:garply"])
         
         # Verify the prim has all the same expected data as before we reapplied
         # the built-ins.
@@ -524,7 +549,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
                          ["TestMultiApplyAPI:builtin", 
                           "TestSingleApplyAPI",
-                          "TestMultiApplyAPI:autoFoo"])
+                          "TestMultiApplyAPI:autoFoo",
+                          "TestComposeMetadataAPI"])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestTypedSchemaForAutoApply')
         # Note that prim type info does NOT contain the applied API
@@ -534,10 +560,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         self.assertTrue(typedPrim.HasAPI(self.MultiApplyAPIType))
         self.assertTrue(typedPrim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(typedPrim.HasAPI(self.ComposeMetadataAPIType))
         self.assertEqual(typedPrim.GetPropertyNames(), [
             "single:relationship", 
             "single:token_attr", 
             "single:bool_attr", 
+            "compose:relationship", 
+            "compose:token_attr", 
+            "compose:bool_attr", 
             "multi:autoFoo:bool_attr", 
             "multi:autoFoo:relationship",
             "multi:autoFoo:token_attr", 
@@ -554,7 +584,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetTypeName(), 
                          'TestTypedSchemaForAutoApplyConcreteBase')
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
-                         ["TestSingleApplyAPI"])
+                         ["TestSingleApplyAPI", "TestComposeMetadataAPI"])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestTypedSchemaForAutoApplyConcreteBase')
         # Note that prim type info does NOT contain the auto applied API
@@ -563,10 +593,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetAppliedAPISchemas(), [])
 
         self.assertTrue(typedPrim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(typedPrim.HasAPI(self.ComposeMetadataAPIType))
         self.assertEqual(typedPrim.GetPropertyNames(), [
             "single:relationship", 
             "single:token_attr", 
             "single:bool_attr", 
+            "compose:relationship", 
+            "compose:token_attr", 
+            "compose:bool_attr", 
             "testAttr", 
             "testRel"])
 
@@ -579,7 +613,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetTypeName(), 
                          'TestDerivedTypedSchemaForAutoApplyConcreteBase')
         self.assertEqual(typedPrim.GetAppliedSchemas(), 
-                         ["TestSingleApplyAPI"])
+                         ["TestSingleApplyAPI", "TestComposeMetadataAPI"])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestDerivedTypedSchemaForAutoApplyConcreteBase')
         # Note that prim type info does NOT contain the auto applied API
@@ -588,10 +622,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetAppliedAPISchemas(), [])
 
         self.assertTrue(typedPrim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(typedPrim.HasAPI(self.ComposeMetadataAPIType))
         self.assertEqual(typedPrim.GetPropertyNames(), [
             "single:relationship", 
             "single:token_attr", 
             "single:bool_attr", 
+            "compose:relationship", 
+            "compose:token_attr", 
+            "compose:bool_attr", 
             "testAttr", 
             "testRel"])
 
@@ -607,7 +645,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         typedPrim.SetTypeName("TestDerivedTypedSchemaForAutoApplyAbstractBase")
         self.assertEqual(typedPrim.GetTypeName(), 
                          'TestDerivedTypedSchemaForAutoApplyAbstractBase')
-        self.assertEqual(typedPrim.GetAppliedSchemas(), ['TestSingleApplyAPI'])
+        self.assertEqual(typedPrim.GetAppliedSchemas(), ['TestSingleApplyAPI', 
+                                                         'TestComposeMetadataAPI'])
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetTypeName(), 
                          'TestDerivedTypedSchemaForAutoApplyAbstractBase')
         # Note that prim type info does NOT contain the auto applied API
@@ -616,10 +655,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(typedPrim.GetPrimTypeInfo().GetAppliedAPISchemas(), [])
 
         self.assertTrue(typedPrim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(typedPrim.HasAPI(self.ComposeMetadataAPIType))
         self.assertEqual(typedPrim.GetPropertyNames(), [
             "single:relationship", 
             "single:token_attr", 
             "single:bool_attr",
+            "compose:relationship", 
+            "compose:token_attr", 
+            "compose:bool_attr", 
             "testAttr", 
             "testRel"])
 
@@ -2183,11 +2226,15 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "TestSingleApplyAPI",
             # Defined in plugin metadata that 'TestMultiApplyAPI:autoFoo' auto
             # applies to 'TestAutoAppliedToAPI'
-            "TestMultiApplyAPI:autoFoo"])
+            "TestMultiApplyAPI:autoFoo",
+            # 'TestComposeMetadataAPI' defines in its schema def that it auto 
+            # applies to 'TestAutoAppliedToAPI'
+            "TestComposeMetadataAPI"])
         self.assertTrue(prim.HasAPI(self.AutoAppliedToAPIType))
         self.assertTrue(prim.HasAPI(self.MultiApplyAPIType, "builtin"))
         self.assertTrue(prim.HasAPI(self.MultiApplyAPIType, "autoFoo"))
         self.assertTrue(prim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(prim.HasAPI(self.ComposeMetadataAPIType))
 
         # Prim's authored type is empty and its authored API schemas is just the
         # single authored schema.
@@ -2200,6 +2247,9 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "single:relationship",
             "single:token_attr",
             "single:bool_attr",
+            "compose:relationship",
+            "compose:token_attr",
+            "compose:bool_attr",
             "multi:autoFoo:bool_attr",
             "multi:autoFoo:relationship",
             "multi:autoFoo:token_attr",
@@ -2232,13 +2282,17 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "TestSingleApplyAPI",
             # Defined in plugin metadata that 'TestMultiApplyAPI:autoFoo' auto
             # applies to 'TestAutoAppliedToAPI'
-            "TestMultiApplyAPI:autoFoo"])
+            "TestMultiApplyAPI:autoFoo",
+            # 'TestComposeMetadataAPI' defines in its schema def that it auto 
+            # applies to 'TestAutoAppliedToAPI'
+            "TestComposeMetadataAPI"])
         self.assertTrue(prim.HasAPI(self.NestedAutoAppliedToAPIType))
         self.assertTrue(prim.HasAPI(self.AutoAppliedToAPIType))
         self.assertTrue(prim.HasAPI(self.MultiApplyAPIType, "foo"))
         self.assertTrue(prim.HasAPI(self.MultiApplyAPIType, "builtin"))
         self.assertTrue(prim.HasAPI(self.MultiApplyAPIType, "autoFoo"))
         self.assertTrue(prim.HasAPI(self.SingleApplyAPIType))
+        self.assertTrue(prim.HasAPI(self.ComposeMetadataAPIType))
 
         # Prim's authored type is empty and its authored API schemas is just the
         # single authored schema.
@@ -2251,6 +2305,9 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "single:relationship",
             "single:token_attr",
             "single:bool_attr",
+            "compose:relationship",
+            "compose:token_attr",
+            "compose:bool_attr",
             "multi:autoFoo:bool_attr",
             "multi:autoFoo:relationship",
             "multi:autoFoo:token_attr",
@@ -2287,7 +2344,10 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "TestSingleApplyAPI",
             # Defined in plugin metadata that 'TestMultiApplyAPI:autoFoo' auto
             # applies to 'TestAutoAppliedToAPI'
-            "TestMultiApplyAPI:autoFoo"])
+            "TestMultiApplyAPI:autoFoo",
+            # 'TestComposeMetadataAPI' defines in its schema def that it auto 
+            # applies to 'TestAutoAppliedToAPI'
+            "TestComposeMetadataAPI"])
 
         # Prim's authored applied API schemas is empty as the API schemas are
         # part of the type (through auto apply).
@@ -2306,6 +2366,9 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "single:relationship",
             "single:token_attr",
             "single:bool_attr",
+            "compose:relationship",
+            "compose:token_attr",
+            "compose:bool_attr",
             "multi:autoFoo:bool_attr",
             "multi:autoFoo:relationship",
             "multi:autoFoo:token_attr",

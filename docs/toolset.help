@@ -139,7 +139,7 @@ optional arguments:
                         last element in the prim path), or as a full prim
                         path. Note that if only the prim name is used, and
                         more than one camera exists with the name, which is
-                        used will be effectively random (default=main_cam)
+                        used will be effectively random (default=None)
   --mask PRIMPATH[,PRIMPATH...]
                         Limit stage population to these prims, their
                         descendants and ancestors. To specify multiple paths,
@@ -218,7 +218,7 @@ Detached Layers:
 usage: usdrecord [-h] [--mask PRIMPATH[,PRIMPATH...]]
                  [--purposes PURPOSE[,PURPOSE...]]
                  [--sessionLayer SESSIONLAYER] [--disableGpu]
-                 [--disableCameraLight] [--camera CAMERA]
+                 [--disableDrawMode] [--disableCameraLight] [--camera CAMERA]
                  [--defaultTime | --frames FRAMESPEC[,FRAMESPEC...]]
                  [--complexity {low,medium,high,veryhigh}]
                  [--colorCorrectionMode {disabled,sRGB,openColorIO}]
@@ -263,6 +263,10 @@ optional arguments:
                         which only run on the CPU, but additionally it will
                         prevent any tasks that require the GPU from being
                         invoked.
+  --disableDrawMode     Disables support for USD draw modes. If set,
+                        UsdGeomModelAPI's draw modes will be ignored, and no
+                        geometry will be replaced with a draw mode standin.
+                        Everything will render as if applyDrawMode = false.
   --disableCameraLight  Indicates if the default camera lights should not be
                         used for rendering.
   --camera CAMERA, -cam CAMERA
@@ -271,7 +275,7 @@ optional arguments:
                         prim path), or as a full prim path. Note that if only
                         the prim name is used and more than one camera exists
                         with that name, which one is used will effectively be
-                        random (default=main_cam)
+                        random (default=None)
   --defaultTime, -d     explicitly operate at the Default time code (the
                         default behavior is to operate at the startTimeCode
                         authored on the UsdStage which defaults to 0.0)
@@ -674,8 +678,11 @@ Options:
                               'outline' is a flat text report of paths and fields,
                               'pseudoLayer' is similar to the usda file format but with truncated
                               array values and timeSamples for human readability, and 'layer' is
-                              true layer output, with the format controlled by the 'outputFile'
+                              true layer output, with the format controlled by the 'out'
                               and 'outputFormat' arguments. Default: outline
+  --outputFormat TEXT         Supply this as the 'format' entry of SdfFileFormatArguments for
+                              'layer' output to a file.  Requires both 'layer' output and a
+                              specified output file.                              
   --sortBy path|field         Group 'outline' output by either path or field.  Ignored for other
                               output types. Default: path
   --noValues                  Do not report field values.
@@ -758,9 +765,8 @@ optional arguments:
   -t TEMPLATEPATH, --templates TEMPLATEPATH
                         Directory containing schema class templates. [Default:
                         first directory that exists from this list:
-                        /home/dsyu/temp/usdInitSchema-build/bin/codegenTemplat
-                        es:/home/dsyu/temp/usdInitSchema-
-                        build/lib/usd/usd/resources/codegenTemplates]
+                        <usd install dir>/bin/codegenTemplat
+                        es:<usd install dir>/lib/usd/usd/resources/codegenTemplates]
   -hts HEADERTERMINATORSTRING, --headerTerminatorString HEADERTERMINATORSTRING
                         The string used to terminate generated C++ header
                         files, after the custom code section. [Default:
@@ -981,8 +987,7 @@ optional arguments:
   -t TEMPLATEPATH, --templates TEMPLATEPATH
                         Directory containing schema class templates. [Default:
                         first directory that exists from this list:
-                        /home/dsyu/temp/usdInitSchema-build/bin/codegenTemplat
-                        es:/home/dsyu/temp/usdInitSchema-
-                        build/lib/usd/usd/resources/codegenTemplates]
+                        <usd install dir>/bin/codegenTemplat
+                        es:<usd install dir>/lib/usd/usd/resources/codegenTemplates]
 
 ==== usdInitSchema end ====

@@ -31,10 +31,10 @@ pxr_library(vt
         traits.h
         typeHeaders.h
         visitValue.h
-        wrapArrayEdit.h
     
     PYTHON_PUBLIC_HEADERS
         pyOperators.h
+        wrapArrayEdit.h
 
     PYMODULE_CPPFILES
         module.cpp

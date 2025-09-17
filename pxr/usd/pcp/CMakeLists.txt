@@ -593,6 +593,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testPcpMuseum_SpecializesAndVariants4.testenv
+    DEST testPcpMuseum_SpecializesAndVariants4
+)
+
+pxr_install_test_dir(
     SRC testenv/testPcpMuseum_SubrootInheritsAndVariants.testenv
     DEST testPcpMuseum_SubrootInheritsAndVariants
 )
@@ -1429,6 +1434,13 @@ pxr_register_test(testPcpMuseum_SpecializesAndVariants3
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd SpecializesAndVariants3/root.usda" 
     STDOUT_REDIRECT compositionResults_SpecializesAndVariants3.txt
     DIFF_COMPARE compositionResults_SpecializesAndVariants3.txt 
+)
+
+pxr_register_test(testPcpMuseum_SpecializesAndVariants4
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd SpecializesAndVariants4/root.usda" 
+    STDOUT_REDIRECT compositionResults_SpecializesAndVariants4.txt
+    DIFF_COMPARE compositionResults_SpecializesAndVariants4.txt 
 )
 
 pxr_register_test(testPcpMuseum_SubrootInheritsAndVariants

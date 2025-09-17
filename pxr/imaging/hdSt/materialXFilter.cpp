@@ -883,8 +883,8 @@ _ConnectPrimvarNodesToTerminalNode(
             sdrRegistry.GetShaderNodeByIdentifierAndType(
                 mxNodeDefName, _tokens->mtlx);
 
-        if (mtlxSdrNode->GetFamily() != _tokens->geompropvalue &&
-            !_NodeUsesTexcoordPrimvar(mtlxSdrNode)) {
+        if (!mtlxSdrNode || (mtlxSdrNode->GetFamily() != _tokens->geompropvalue 
+            && !_NodeUsesTexcoordPrimvar(mtlxSdrNode))) {
             continue;
         }
 

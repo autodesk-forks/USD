@@ -110,8 +110,10 @@
 // 79 -> 80: Added refinedSolidWireOnSurf and solidWireOnSurf to HD_REPR_TOKENS.
 // 80 -> 81: Added IsValid() to HdRenderParam.
 // 81 -> 82: Added hgi/version.h
+// 82 -> 83: Added overloads for HdRendererPlugin::IsSupported and
+//           HdRendererPluginRegistry::GetDefaultPluginId.
 
-#define HD_API_VERSION 82
+#define HD_API_VERSION 83
 
 // 1  ->  2: SimpleLighting -> FallbackLighting
 #define HD_SHADER_API 2
