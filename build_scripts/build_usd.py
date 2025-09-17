@@ -1215,7 +1215,8 @@ def InstallJPEG(context, force, buildArgs):
         extraJPEGArgs = buildArgs
         if not which("nasm"):
             extraJPEGArgs.append("-DWITH_SIMD=FALSE")
-
+        if context.targetWasm:
+            extraJPEGArgs.append('-DENABLE_SHARED=OFF')
         RunCMake(context, force, extraJPEGArgs)
         return os.getcwd()
 
