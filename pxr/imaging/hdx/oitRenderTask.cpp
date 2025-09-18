@@ -236,8 +236,9 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
         extendedState->SetBlendEnabled(false);
         extendedState->SetAlphaToCoverageEnabled(false);
         extendedState->SetAlphaThreshold(0.f);
-    // We render into an SSBO -- not MSAA compatible
-    renderPassState->SetMultiSampleEnabled(false);
+        // We render into an SSBO -- not MSAA compatible
+        renderPassState->SetMultiSampleEnabled(false);
+    }
 
     //
     // 1. Opaque pixels pass
@@ -247,6 +248,7 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
     // This can reduce the data written to the OIT SSBO buffers because of
     // improved depth testing.
     //
+    {
         HdxRenderTask::Execute(ctx);
     }
 
