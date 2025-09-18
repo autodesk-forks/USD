@@ -104,9 +104,9 @@ private:
     EXEC_API
     void _InvalidateDisconnectedInputs();
 
-    // Notifies the system of authored value invalidation.
+    // Notifies the system of attribute value invalidation.
     EXEC_API
-    void _InvalidateAuthoredValues(TfSpan<const SdfPath> invalidProperties);
+    void _InvalidateAttributeValues(TfSpan<const SdfPath> invalidAttributes);
 
 private:
     EsfStage _stage;

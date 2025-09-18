@@ -513,7 +513,7 @@ HdPrman_RenderPass::_Execute(
     
     if (driveWithRenderSettingsPrim) {
         HdPrman_RenderParam * const param = _renderParam.get();
-        
+
         const bool success =
             rsPrim->UpdateAndRender(GetRenderIndex(), isInteractive, param);
 
@@ -527,6 +527,17 @@ HdPrman_RenderPass::_Execute(
                 _MarkBindingsAsConverged(aovBindings, GetRenderIndex());
             }
             _converged = true;
+
+            // Write the id info for batch renders if the render pass contains 
+            // an idMap product.
+            if (!isInteractive) {
+                TfToken idMapProductName =
+                    _renderParam->GetIdMapProductName(rsPrim);
+                if (!idMapProductName.IsEmpty()) {
+                    _renderParam->WriteIdMap(
+                        GetRenderIndex(), idMapProductName);
+                }
+            }
 
             return;
         }

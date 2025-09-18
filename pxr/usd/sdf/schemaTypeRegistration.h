@@ -64,6 +64,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ((SdfFieldKeys->Instanceable,            bool))                          \
 ((SdfFieldKeys->Kind,                    TfToken))                       \
 ((SdfFieldKeys->LayerRelocates,          SdfRelocates))                  \
+((SdfFieldKeys->Limits,                  VtDictionary))                  \
 ((SdfFieldKeys->Owner,                   std::string))                   \
 ((SdfFieldKeys->PrimOrder,               std::vector<TfToken>))          \
 ((SdfFieldKeys->NoLoadHint,              bool))                          \

@@ -232,7 +232,8 @@ struct VertexOutput {
                 const requiredLimits = {
                     maxStorageBuffersPerShaderStage: 10,
                     maxColorAttachmentBytesPerSample: 64,
-                    maxBufferSize: 0x40000000
+                    maxBufferSize: adapter.limits.maxBufferSize,
+                    maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize
                 };
                 const device = await adapter.requestDevice({
                     requiredFeatures: requiredFeatures,

@@ -19,6 +19,7 @@
 #include "pxr/pxr.h"
 
 #include <atomic>
+#include <mutex>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -98,6 +99,7 @@ protected:
 
 private:
     std::atomic_bool _primvarsBuilt;
+    std::mutex _primvarsMutex;
     bool _extComputationPrimvarsBuilt : 1;
 
     HdContainerDataSourceAtomicHandle _primvars;

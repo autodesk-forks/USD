@@ -71,6 +71,7 @@ pxr_library(sdf
         spec
         specType
         textFileFormat
+        textParserUtils
         timeCode
         tokens
         types
@@ -400,6 +401,15 @@ pxr_build_test(testSdfUsdaFileFormatParsing
         testenv/testSdfUsdaFileFormatParsing.cpp
 )
 
+
+pxr_build_test(testSdfUsdaFileFormatValueParsing
+    LIBRARIES
+        sdf
+        tf
+    CPPFILES
+        testenv/testSdfUsdaFileFormatValueParsing.cpp
+)
+
 pxr_build_test(testSdfUsdzResolver
     LIBRARIES
         ar
@@ -644,6 +654,10 @@ pxr_register_test(testSdfPredicateExpression_Cpp
 
 pxr_register_test(testSdfUsdaFileFormatParsing
    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdaFileFormatParsing"
+)
+
+pxr_register_test(testSdfUsdaFileFormatValueParsing
+   COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdaFileFormatValueParsing"
 )
 
 pxr_register_test(testSdfPayload

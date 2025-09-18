@@ -28,6 +28,7 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usd/timeCode.h"
 
@@ -195,7 +196,18 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
             // defines the same computation, assigning the input a unique
             // name.
             NamespaceAncestor<bool>(_tokens->primComputation)
-                .InputName(_tokens->namespaceAncestorInput)
+                .InputName(_tokens->namespaceAncestorInput),
+
+            // Take input from prim metadata.
+            Metadata<std::string>(SdfFieldKeys->Documentation),
+
+            // Take input from attribute metadata.
+            Attribute(_tokens->attributeName)
+                .Metadata<std::string>(SdfFieldKeys->Documentation),
+
+            // Take input from relationship metadata.
+            Relationship(_tokens->relationshipName)
+                .Metadata<std::string>(SdfFieldKeys->Documentation)
         );
 
     // An attribute computation.
@@ -222,7 +234,19 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
             Prim()
                 .Relationship(_tokens->relationshipName)
                 .TargetedObjects<int>(_tokens->primComputation)
-                .InputName(_tokens->relationshipTargetsInput)
+                .InputName(_tokens->relationshipTargetsInput),
+
+            // Take input from attribute metadata.
+            Metadata<std::string>(SdfFieldKeys->Documentation),
+
+            // Take input from metadata on the owninbg prim.
+            Prim()
+                .Metadata<std::string>(SdfFieldKeys->Documentation),
+
+            // Take input from metadata on a sibling attribute.
+            Prim()
+                .Attribute(_tokens->otherAttr)
+                .Metadata<std::string>(SdfFieldKeys->Documentation)
         );
 
     // A prim computation that returns the current time.
@@ -793,7 +817,7 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             primCompDef->GetInputKeys(*prim, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 5);
+        ASSERT_EQ(inputKeys->Get().size(), 8);
 
         _PrintInputKeys(inputKeys->Get());
 
@@ -870,7 +894,7 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             attrCompDef->GetInputKeys(*attribute, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 5);
+        ASSERT_EQ(inputKeys->Get().size(), 8);
 
         _PrintInputKeys(inputKeys->Get());
 
@@ -1098,7 +1122,7 @@ TestAppliedSchemaComputationRegistration()
             TF_AXIOM(primCompDef);
             const auto inputKeys =
                 primCompDef->GetInputKeys(*prim, nullJournal);
-            ASSERT_EQ(inputKeys->Get().size(), 5);
+            ASSERT_EQ(inputKeys->Get().size(), 8);
         }
     }
 

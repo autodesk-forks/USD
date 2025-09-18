@@ -42,8 +42,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 class EfTime;
 class EfTimeInputNode;
 class EsfJournal;
-class Exec_AuthoredValueInvalidationResult;
-class Exec_DisconnectedInputsInvalidationResult;
+struct Exec_AttributeValueInvalidationResult;
+struct Exec_DisconnectedInputsInvalidationResult;
 class Exec_TimeChangeInvalidationResult;
 class TfBits;
 template <typename> class TfSpan;
@@ -180,10 +180,10 @@ public:
     Exec_DisconnectedInputsInvalidationResult InvalidateDisconnectedInputs();
 
     /// Gathers the information required to invalidate the system and notify
-    /// requests after authored value invalidation.
+    /// requests after attribute authored value invalidation.
     /// 
-    Exec_AuthoredValueInvalidationResult InvalidateAuthoredValues(
-        TfSpan<const SdfPath> invalidProperties);
+    Exec_AttributeValueInvalidationResult InvalidateAttributeAuthoredValues(
+        TfSpan<const SdfPath> invalidAttributes);
 
     /// Resets the accumulated set of uninitialized input nodes.
     /// 
@@ -316,11 +316,11 @@ private:
     // Updates data structures for a newly-added node.
     void _AddNode(const EsfJournal &journal, const VdfNode *node);
 
-    // Registers an input node for authored value initialization.
-    void _RegisterInputNode(Exec_AttributeInputNode *inputNode);
+    // Registers an attribute input node for authored value initialization.
+    void _RegisterAttributeInputNode(Exec_AttributeInputNode *inputNode);
 
-    // Unregisters an input node from authored value initialization.
-    void _UnregisterInputNode(const Exec_AttributeInputNode *inputNode);
+    // Unregisters an attribute input node from authored value initialization.
+    void _UnregisterAttributeInputNode(const Exec_AttributeInputNode *inputNode);
 
     // Notifies the program of a new or deleted connection between the time
     // input node and the given target node.
@@ -354,14 +354,15 @@ private:
     // an aribrary node or output in the network.
     EfLeafNodeCache _leafNodeCache;
 
-    // Collection of compiled input nodes.
-    struct _InputNodeEntry {
+    // Collection of compiled attribute input nodes.
+    struct _AttributeInputNodeEntry {
         Exec_AttributeInputNode *node;
         std::optional<TsSpline> oldSpline;
     };
-    using _InputNodesMap =
-        tbb::concurrent_unordered_map<SdfPath, _InputNodeEntry, SdfPath::Hash>;
-    _InputNodesMap _inputNodes;
+    using _AttributeInputNodesMap =
+        tbb::concurrent_unordered_map<
+        SdfPath, _AttributeInputNodeEntry, SdfPath::Hash>;
+    _AttributeInputNodesMap _attributeInputNodes;
 
     // Array of outputs connected to the time input node.
     VdfMaskedOutputVector _timeDependentOutputs;
@@ -405,7 +406,7 @@ NodeType *Exec_Program::CreateNode(
 
     // Input nodes are tracked for authored value initialization.
     if constexpr (std::is_same_v<Exec_AttributeInputNode, NodeType>) {
-        _RegisterInputNode(node);
+        _RegisterAttributeInputNode(node);
     }
 
     return node;

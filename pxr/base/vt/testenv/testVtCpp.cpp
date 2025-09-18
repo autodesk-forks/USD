@@ -588,6 +588,26 @@ static void testArray() {
             // pass
         }
     }
+    {
+        // Test that checks that MakeUnique creates a unique copy of the data 
+        // if necessary.
+        VtIntArray v1 = {0,1,2,3,4,5};
+        VtIntArray v2 (v1);
+
+        // this call should create a copy since v1 and v2 share the same data
+        TF_AXIOM(v1.IsIdentical(v2));
+        TF_AXIOM (v2.MakeUnique());
+        TF_AXIOM(!v1.IsIdentical(v2));
+        // v2's data should be unique by this point so calling MakeUnique should
+        // not make any copies.
+        TF_AXIOM (!v2.MakeUnique());
+        
+        TF_AXIOM(v2.size() == v1.size());
+        for (int i = 0; i < (int)v1.size(); ++i) {
+            TF_AXIOM(v1[i] == i);
+            TF_AXIOM(v2[i] == i);
+        }
+    }
 }
 
 static void testRecursiveDictionaries()
@@ -1453,6 +1473,7 @@ static void testValue() {
         v = b;
         TF_AXIOM(v.Get<VtVec2iArray>().size() == 3);
         TF_AXIOM(v.IsArrayValued());
+        TF_AXIOM(!v.IsArrayEditValued());
         TF_AXIOM(v.GetElementTypeid() == typeid(GfVec2i));
         TF_AXIOM(vclone.Get<VtVec2iArray>().size() == 2);
     }
@@ -1463,6 +1484,7 @@ static void testValue() {
         VtValue v { dae };
         TF_AXIOM(v.IsHolding<VtDoubleArrayEdit>());
         TF_AXIOM(!v.IsArrayValued());
+        TF_AXIOM(v.IsArrayEditValued());
         TF_AXIOM(v.GetElementTypeid() == typeid(double));
     }
 
@@ -1689,6 +1711,7 @@ testTypedVtValueProxy()
     TF_AXIOM(varrayProxy.IsHolding<_TypedProxy<VtFloatArray>>());
     
     TF_AXIOM(varrayProxy.IsArrayValued());
+    TF_AXIOM(!varrayProxy.IsArrayEditValued());
     TF_AXIOM(varrayProxy.GetArraySize() == 7);
     TF_AXIOM(varrayProxy.GetElementTypeid() == typeid(float));
     TF_AXIOM(varrayProxy.Get<VtFloatArray>() == fa);

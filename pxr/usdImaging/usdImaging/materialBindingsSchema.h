@@ -44,15 +44,15 @@ TF_DECLARE_PUBLIC_TOKENS(UsdImagingMaterialBindingsSchemaTokens, USDIMAGING_API,
 
 //-----------------------------------------------------------------------------
 
-// The UsdImagingMaterialBindingsSchema specifies a container for all the
-// material bindings declared on a prim. The material binding purpose serves
-// as the key, with the value being a vector of
-// UsdImagingMaterialBindingSchema. While one entry (element) would suffice
-// for a prim's material bindings opinion, we use a vector for aggregating
-// ancestor material bindings to model the inheritance semantics of
-// UsdShadeMaterialBindingAPI.
-//
 
+/// The UsdImagingMaterialBindingsSchema specifies a container for all the
+/// material bindings declared on a prim. The material binding purpose serves
+/// as the key, with the value being a vector of
+/// UsdImagingMaterialBindingSchema. While one entry (element) would suffice
+/// for a prim's material bindings opinion, we use a vector for aggregating
+/// ancestor material bindings to model the inheritance semantics of
+/// UsdShadeMaterialBindingAPI.
+///
 class UsdImagingMaterialBindingsSchema : public HdSchema
 {
 public:

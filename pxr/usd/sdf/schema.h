@@ -613,6 +613,7 @@ SDF_API_TEMPLATE_CLASS(TfSingleton<SdfSchema>);
     ((Instanceable, "instanceable"))                         \
     ((Kind, "kind"))                                         \
     ((LayerRelocates, "layerRelocates"))                     \
+    ((Limits, "limits"))                                     \
     ((PrimOrder, "primOrder"))                               \
     ((NoLoadHint, "noLoadHint"))                             \
     ((Owner, "owner"))                                       \

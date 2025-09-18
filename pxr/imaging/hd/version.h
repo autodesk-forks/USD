@@ -112,8 +112,9 @@
 // 81 -> 82: Added hgi/version.h
 // 82 -> 83: Added overloads for HdRendererPlugin::IsSupported and
 //           HdRendererPluginRegistry::GetDefaultPluginId.
+// 83 -> 84: Added HdDataSourceLocatorSentinelTokens.
 
-#define HD_API_VERSION 83
+#define HD_API_VERSION 84
 
 // 1  ->  2: SimpleLighting -> FallbackLighting
 #define HD_SHADER_API 2

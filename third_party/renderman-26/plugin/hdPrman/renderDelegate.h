@@ -77,7 +77,8 @@ TF_DECLARE_PUBLIC_TOKENS(HdPrmanIntegratorTokens, HDPRMAN_API,
     (productName) \
     (productType) \
     (orderedVars) \
-    (sourcePrim)
+    (sourcePrim)  \
+    (idMap)
 
 TF_DECLARE_PUBLIC_TOKENS(
     HdPrmanRenderProductTokens, HDPRMAN_API,

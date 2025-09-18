@@ -195,7 +195,6 @@ struct Exec_InputKey;
 /// 
 enum class Exec_ComputationBuilderProviderTypes: unsigned char
 {
-    None = 0,
     Prim = 1 << 0,
     Attribute = 1 << 1,
     Any = 0xff
@@ -208,6 +207,22 @@ constexpr bool operator&(
     return static_cast<unsigned char>(a) & static_cast<unsigned char>(b);
 }
 
+template <Exec_ComputationBuilderProviderTypes allowed>
+class Exec_ComputationBuilderComputationValueSpecifier;
+
+// Common base class for value specifiers and object accessors.
+class Exec_ComputationBuilderCommonBase
+{
+protected:
+    // Returns a value specifier for computing a metadata value.
+    template <Exec_ComputationBuilderProviderTypes allowed>
+    EXEC_API
+    static Exec_ComputationBuilderComputationValueSpecifier<allowed>
+    _GetMetadataValueSpecifier(
+        const TfType resultType,
+        const SdfPath &localTraversal,
+        const TfToken &metadataKey);
+};
 
 /// Untemplated value specifier base class.
 ///
@@ -215,6 +230,7 @@ constexpr bool operator&(
 /// value at exec compilation time.
 ///
 class Exec_ComputationBuilderValueSpecifierBase
+    : public Exec_ComputationBuilderCommonBase
 {
 public:
     EXEC_API
@@ -223,7 +239,7 @@ public:
         TfType resultType,
         ExecProviderResolution &&providerResolution,
         const TfToken &inputName,
-        bool fallsBackToDispatched);
+        const TfToken &metadataKey);
 
     EXEC_API
     Exec_ComputationBuilderValueSpecifierBase(
@@ -269,12 +285,12 @@ struct Exec_ComputationBuilderComputationValueSpecifier
         const TfToken &computationName,
         const TfType resultType,
         ExecProviderResolution &&providerResolution,
-        const bool fallsBackToDispatched = false)
+        const TfToken &metadataKey = TfToken())
         : Exec_ComputationBuilderValueSpecifierBase(
             computationName, resultType,
             std::move(providerResolution),
             computationName /* inputName */,
-            fallsBackToDispatched)
+            metadataKey)
     {
     }
     
@@ -386,8 +402,11 @@ struct Exec_ComputationBuilderComputationValueSpecifier
 };
 
 
-/// Untemplated object accessor base class.
-struct Exec_ComputationBuilderAccessorBase {
+// Untemplated object accessor base class.
+struct Exec_ComputationBuilderAccessorBase
+    : public Exec_ComputationBuilderCommonBase
+{
+
     Exec_ComputationBuilderAccessorBase(const SdfPath &localTraversal)
         : _localTraversal(localTraversal)
     {
@@ -439,8 +458,19 @@ struct Exec_ComputationBuilderAccessor
              ExecProviderResolution::DynamicTraversal::Local});
     }
 
-    // XXX:TODO
-    // - Metadata
+    /// See [Metadata()](#exec_registration::Metadata)
+    template <typename ResultType>
+    ValueSpecifier
+    Metadata(const TfToken &metadataKey)
+    {
+        static_assert(!VtIsArray<ResultType>::value,
+                      "VtArray is not a supported result type");
+
+        return _GetMetadataValueSpecifier<allowed>(
+            ExecTypeRegistry::GetInstance().CheckForRegistration<ResultType>(),
+            _GetLocalTraversal(),
+            metadataKey);
+    }
 
     /// @} // Value specifiers
 };
@@ -539,7 +569,7 @@ namespace exec_registration {
 
 
 /// Attribute accessor, valid for providing input to a prim computation.
-struct Attribute
+struct Attribute final
     : public Exec_ComputationBuilderAttributeAccessor<
         Exec_ComputationBuilderProviderTypes::Prim>
 {
@@ -580,7 +610,7 @@ struct Attribute
 
 
 /// Relationship accessor, valid for providing input to a prim computation.
-struct Relationship
+struct Relationship final
     : public Exec_ComputationBuilderRelationshipAccessor<
         Exec_ComputationBuilderProviderTypes::Prim>
 {
@@ -606,7 +636,7 @@ struct Relationship
 
 
 /// Prim accessor, valid for providing input to an attribute computation.
-struct Prim
+struct Prim final
     : public Exec_ComputationBuilderAccessor<
         Exec_ComputationBuilderProviderTypes::Attribute>
 {
@@ -681,7 +711,7 @@ struct Prim
 
 
 /// Provides access to the stage, valid for providing input to any computation.
-struct Stage
+struct Stage final
     : public Exec_ComputationBuilderAccessor<
         Exec_ComputationBuilderProviderTypes::Any>
 {
@@ -728,7 +758,7 @@ struct Stage
 
 /// Computation value specifier, valid for providing input to any computation.
 template <typename ValueType>
-struct Computation
+struct Computation final
     : public Exec_ComputationBuilderComputationValueSpecifier<
         Exec_ComputationBuilderProviderTypes::Any>
 {
@@ -773,13 +803,59 @@ struct Computation
     /// @}
 };
 
+/// Metadata value specifier, valid on a prim or attribute computation
+template <typename ValueType>
+struct Metadata final
+    : public Exec_ComputationBuilderComputationValueSpecifier<
+        Exec_ComputationBuilderProviderTypes::Any>
+{
+    /// \addtogroup group_Exec_ValueSpecifiers
+    /// @{
+
+    /// Requests an input value from the metadata field indicated by \p
+    /// metadataKey, of type \p ResultType.
+    ///
+    /// The default input name is \p metadataKey; use InputName to specify a
+    /// different input name.
+    /// 
+    /// # Example
+    /// 
+    /// ```{.cpp}
+    /// self.PrimComputation(_tokens->computeDocMetadata)
+    ///     .Callback<std::string>(+[](const VdfContext &ctx) {
+    ///          return ctx.GetInputValue<std::string>(
+    ///              SdfFieldKeys->Documentation);
+    ///     })
+    ///     .Inputs(
+    ///         Metadata<std::string>(SdfFieldKeys->Documentation).Required()
+    ///     );
+    /// ```
+    ///
+    Metadata(const TfToken &metadataKey)
+        : Exec_ComputationBuilderComputationValueSpecifier<
+            Exec_ComputationBuilderProviderTypes::Any>(
+                _GetMetadataValueSpecifier<allowedProviders>(
+                    ExecTypeRegistry::GetInstance()
+                        .CheckForRegistration<ValueType>(),
+                    SdfPath::ReflexiveRelativePath(),
+                    metadataKey))
+    {
+        static_assert(!VtIsArray<ValueType>::value,
+                      "VtArray is not a supported result type");
+
+        InputName(metadataKey);
+    }
+
+    /// @}
+};
+
 // XXX:TODO
 // This should be implemented as an alias for an accessor that takes a predicate
 // plus .Compute(), but that requires implementing predicates plus having a way
 // to express the computation name and result type as computation parameters.
 // Therefore, for now, this is implemented as a value specifier.
 template <typename ValueType>
-struct NamespaceAncestor
+struct NamespaceAncestor final
     : public Exec_ComputationBuilderComputationValueSpecifier<
         Exec_ComputationBuilderProviderTypes::Prim>
 {
@@ -828,7 +904,7 @@ struct NamespaceAncestor
 };
 
 // XXX:TODO
-// Metadata, AnimSpline
+// AnimSpline
 
 
 /// \addtogroup group_Exec_Aliases

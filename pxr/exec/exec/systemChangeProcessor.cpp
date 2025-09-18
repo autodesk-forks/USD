@@ -21,11 +21,11 @@ struct ExecSystem::_ChangeProcessor::_State {
         : uncompiler(system->_program.get(), system->_runtime.get())
     {}
 
-    // Accumulate scene paths to attributes with invalid authored values, so
+    // Accumulates scene paths to attributes with invalid authored values, so
     // that program and executor invalidation can be batch-processed.
     TfSmallVector<SdfPath, 1> attributesWithInvalidAuthoredValues;
     
-    // Uncompile changed network.
+    // Uncompiles changed network.
     Exec_Uncompiler uncompiler;
 };
 
@@ -58,14 +58,14 @@ ExecSystem::_ChangeProcessor::DidChangeInfoOnly(
     const TfTokenVector &changedFields)
 {
     if (path.IsPropertyPath()) {
-        bool didRecordAuthoredValueChange = false;
+        bool didRecordAttributeValueChange = false;
         for (const TfToken &field : changedFields) {
-            if (!didRecordAuthoredValueChange &&
-                    (field == SdfFieldKeys->Default ||
-                    field == SdfFieldKeys->Spline ||
-                    field == SdfFieldKeys->TimeSamples)) {
+            if (!didRecordAttributeValueChange &&
+                (field == SdfFieldKeys->Default ||
+                 field == SdfFieldKeys->Spline ||
+                 field == SdfFieldKeys->TimeSamples)) {
                 _state->attributesWithInvalidAuthoredValues.push_back(path);
-                didRecordAuthoredValueChange = true;
+                didRecordAttributeValueChange = true;
             }
             else if (field == SdfFieldKeys->TargetPaths) {
                 _state->uncompiler.UncompileForSceneChange(
@@ -83,7 +83,7 @@ ExecSystem::_ChangeProcessor::_PostProcessChanges()
     }
 
     if (!_state->attributesWithInvalidAuthoredValues.empty()) {
-        _system->_InvalidateAuthoredValues(
+        _system->_InvalidateAttributeValues(
             _state->attributesWithInvalidAuthoredValues);
     }
 }

@@ -213,6 +213,7 @@ public:
             _tokens->inputName,
             computationName,
             resultType,
+            /* metadataKey */ TfToken(),
             ExecProviderResolution {
                 localTraversal,
                 dynamicTraversal

@@ -8,8 +8,57 @@
 
 #include "pxr/exec/exec/definitionRegistry.h"
 #include "pxr/exec/exec/inputKey.h"
+#include "pxr/exec/exec/privateBuiltinComputations.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+//
+// Exec_ComputationBuilderCommonBase
+//
+
+template <Exec_ComputationBuilderProviderTypes allowed>
+Exec_ComputationBuilderComputationValueSpecifier<allowed>
+Exec_ComputationBuilderCommonBase::_GetMetadataValueSpecifier(
+    const TfType resultType,
+    const SdfPath &localTraversal,
+    const TfToken &metadataKey)
+{
+    return Exec_ComputationBuilderComputationValueSpecifier<allowed>(
+        Exec_PrivateBuiltinComputations->computeMetadata,
+        resultType,
+        {localTraversal, ExecProviderResolution::DynamicTraversal::Local},
+        metadataKey)
+        .InputName(metadataKey);
+}
+
+// Explicit template instantiations
+
+template Exec_ComputationBuilderComputationValueSpecifier<
+    Exec_ComputationBuilderProviderTypes::Prim>
+EXEC_API
+Exec_ComputationBuilderCommonBase::_GetMetadataValueSpecifier<
+    Exec_ComputationBuilderProviderTypes::Prim>(
+        TfType resultType,
+        const SdfPath &localTraversal,
+        const TfToken &metadataKey);
+
+template Exec_ComputationBuilderComputationValueSpecifier<
+    Exec_ComputationBuilderProviderTypes::Attribute>
+EXEC_API
+Exec_ComputationBuilderCommonBase::_GetMetadataValueSpecifier<
+    Exec_ComputationBuilderProviderTypes::Attribute>(
+        TfType resultType,
+        const SdfPath &localTraversal,
+        const TfToken &metadataKey);
+
+template Exec_ComputationBuilderComputationValueSpecifier<
+    Exec_ComputationBuilderProviderTypes::Any>
+EXEC_API
+Exec_ComputationBuilderCommonBase::_GetMetadataValueSpecifier<
+    Exec_ComputationBuilderProviderTypes::Any>(
+        TfType resultType,
+        const SdfPath &localTraversal,
+        const TfToken &metadataKey);
 
 
 //
@@ -41,14 +90,15 @@ Exec_ComputationBuilderValueSpecifierBase(
     TfType resultType,
     ExecProviderResolution &&providerResolution,
     const TfToken &inputName,
-    bool fallsBackToDispatched)
+    const TfToken &metadataKey)
     : _data(
         _Data::Create(
             inputName,
             computationName,
             resultType,
+            metadataKey,
             std::move(providerResolution),
-            fallsBackToDispatched,
+            /* fallsBackToDispatched */ false,
             /* optional */ true))
 {}
 
