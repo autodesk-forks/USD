@@ -417,7 +417,7 @@ struct VertexOutput {
         camera.sphere(diameter);
         camera.setPosition(bounds.GetMax() * 2.f);
         camera.setTarget(center);
-        camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));
+        camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferHeight));
         camera.update();
         setupDefaults(camera.getPosition());
         // attach the camera to the window state object
@@ -477,7 +477,7 @@ struct VertexOutput {
             }
             // update the uniforms
             // blit the texture data to the OpenGL framebuffer
-            camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferWidth));
+            camera.setViewport(pxr::GfVec4d(0.f, 0.f, framebufferWidth, framebufferHeight));
 
             // glEngine update
             glEngine->SetRenderBufferSize(pxr::GfVec2i(framebufferWidth, framebufferHeight));
