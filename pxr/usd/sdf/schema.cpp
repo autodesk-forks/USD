@@ -702,6 +702,8 @@ SdfSchemaBase::_RegisterStandardFields()
         .MapKeyValidator(&_ValidateIdentifier)
         .MapValueValidator(&_ValidateIsSceneDescriptionValue);
     _DoRegisterField(SdfFieldKeys->TimeSamples, SdfTimeSampleMap());
+    _DoRegisterField(SdfFieldKeys->Clips, VtDictionary());
+    _DoRegisterField(SdfFieldKeys->ClipSets, SdfStringListOp());
     _DoRegisterField(SdfFieldKeys->ColorConfiguration, SdfAssetPath());
     _DoRegisterField(SdfFieldKeys->ColorManagementSystem, TfToken());
     _DoRegisterField(SdfFieldKeys->ColorSpace, TfToken());
@@ -875,6 +877,10 @@ SdfSchemaBase::_RegisterStandardFields()
         .MetadataField(SdfFieldKeys->Active,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->AssetInfo,
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->Clips,
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->ClipSets,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->CustomData,
                        SdfMetadataDisplayGroupTokens->core)

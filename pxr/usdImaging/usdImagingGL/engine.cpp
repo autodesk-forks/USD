@@ -1443,18 +1443,23 @@ UsdImagingGLEngine::SetRendererPlugin(TfToken const &id)
     HdRendererPluginRegistry &registry =
         HdRendererPluginRegistry::GetInstance();
 
+    HdRendererCreateArgs rendererCreateArgs;
+    rendererCreateArgs.gpuEnabled = _gpuEnabled;
+    rendererCreateArgs.hgi = _hgi.get();
+
     TfToken resolvedId;
     if (id.IsEmpty()) {
         // Special case: id == TfToken() selects the first supported plugin in
         // the list.
-        resolvedId = registry.GetDefaultPluginId(_gpuEnabled);
+        resolvedId = registry.GetDefaultPluginId(rendererCreateArgs);
     } else {
         HdRendererPluginHandle plugin = registry.GetOrCreateRendererPlugin(id);
-        if (plugin && plugin->IsSupported(_gpuEnabled)) {
+        std::string errorStr;
+        if (plugin && plugin->IsSupported(rendererCreateArgs, &errorStr)) {
             resolvedId = id;
         } else {
-            TF_CODING_ERROR("Invalid plugin id or plugin is unsupported: %s",
-                            id.GetText());
+            TF_CODING_ERROR("Invalid plugin id or plugin %s is unsupported: %s",
+                            id.GetText(), errorStr.c_str());
             return false;
         }
     }
@@ -2471,7 +2476,6 @@ UsdImagingGLEngine::_ComputeRenderTags(UsdImagingGLRenderParams const& params,
 TfToken
 UsdImagingGLEngine::_GetDefaultRendererPluginId()
 {
-    // XXX clachanski
     static const std::string defaultRendererDisplayName =
         TfGetenv("HD_DEFAULT_RENDERER", "");
 

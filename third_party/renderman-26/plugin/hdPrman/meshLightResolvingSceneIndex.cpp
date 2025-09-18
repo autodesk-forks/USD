@@ -1158,6 +1158,9 @@ HdPrmanMeshLightResolvingSceneIndex::_PrimsDirtied(
             if ((dirtyLocs.Intersects(lightLoc) && !_IsMeshLight(prim)) ||
                 (dirtyLocs.Intersects(matLoc) && !_HasValidMaterialNetwork(prim))) {
                 _RemoveMeshLight(entry.primPath, &removed);
+                // The original mesh must be re-added because its prim type
+                // will change as a result of this. See GetPrim().
+                added.emplace_back(entry.primPath, prim.primType);
                 continue;
             }
 

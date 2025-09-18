@@ -126,7 +126,7 @@ void GfColorSpace::ConvertRGBASpan(const GfColorSpace& to, TfSpan<float> rgba) c
         return;
     }
     NcTransformColorsWithAlpha(to._data->colorSpace, _data->colorSpace, 
-                               rgba.data(), (int) count);
+                               (NcRGBA*) rgba.data(), (int) count);
 }
 
 GfColor GfColorSpace::Convert(const GfColorSpace& srcColorSpace, const GfVec3f& rgb) const
@@ -154,6 +154,13 @@ GfMatrix3f GfColorSpace::GetRGBToXYZ() const
     return GfMatrix3f(m[0], m[1], m[2],
                       m[3], m[4], m[5],
                       m[6], m[7], m[8]);
+}
+ 
+GfMatrix3f GfColorSpace::GetRGBToRGB(const GfColorSpace& srcColorSpace) const 
+{
+    const GfMatrix3f A = srcColorSpace.GetRGBToXYZ();
+    const GfMatrix3f B_inv = GetRGBToXYZ().GetInverse();
+    return B_inv * A;
 }
 
 float GfColorSpace::GetLinearBias() const

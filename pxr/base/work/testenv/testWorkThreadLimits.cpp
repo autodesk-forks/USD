@@ -183,27 +183,46 @@ main(int argc, char **argv)
         _ExpectedLimit(envVal, 1));
     _TestThreadLimit(envVal, 1);
 
+    // Max value for thread limits dependant on if the thread limit has been set
+    // higher than the number of cores available.
+    size_t upperBoundLimit;
+
     // Test with 2 threads.
     std::cout << "Testing with 2 threads...\n";
     WorkSetConcurrencyLimit(2);
-    TF_AXIOM(_IsValidLimit(WorkGetConcurrencyLimit(), 
-        _ExpectedLimit(envVal, numCores)));
-    _TestThreadLimit(envVal, numCores);
+    upperBoundLimit = std::max(2, numCores);
+    if(WorkSupportsGranularThreadLimits()) {
+        TF_AXIOM(WorkGetConcurrencyLimit() <=
+            _ExpectedLimit(envVal, upperBoundLimit));
+        _TestThreadLimit(envVal, upperBoundLimit);
+    } else {
+        TF_AXIOM(WorkGetConcurrencyLimit() ==
+            _ExpectedLimit(envVal, numCores));
+        _TestThreadLimit(envVal, numCores);
+    }
 
     // Test with 4 threads.
     std::cout << "Testing with 4 threads...\n";
     WorkSetConcurrencyLimit(4);
-    TF_AXIOM(_IsValidLimit(WorkGetConcurrencyLimit(), 
-        _ExpectedLimit(envVal, numCores)));
-    _TestThreadLimit(envVal, numCores);
+    upperBoundLimit = std::max(4, numCores);
+    if(WorkSupportsGranularThreadLimits()) {
+        TF_AXIOM(WorkGetConcurrencyLimit() <=
+            _ExpectedLimit(envVal, upperBoundLimit));
+        _TestThreadLimit(envVal, upperBoundLimit);
+    } else {
+        TF_AXIOM(WorkGetConcurrencyLimit() ==
+            _ExpectedLimit(envVal, numCores));
+        _TestThreadLimit(envVal, numCores);
+    }
 
     // Test with 1000 threads.
     std::cout << "Testing with 1000 threads...\n";
     WorkSetConcurrencyLimit(1000);
+    upperBoundLimit = std::max(1000, numCores);
     if(WorkSupportsGranularThreadLimits()) {
         TF_AXIOM(WorkGetConcurrencyLimit() <=
-            _ExpectedLimit(envVal, 1000));
-        _TestThreadLimit(envVal, 1000);
+            _ExpectedLimit(envVal, upperBoundLimit));
+        _TestThreadLimit(envVal, upperBoundLimit);
     } else {
         TF_AXIOM(WorkGetConcurrencyLimit() ==
             _ExpectedLimit(envVal, numCores));

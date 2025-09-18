@@ -119,7 +119,7 @@ multiple triplets of accessibility information for a Prim.
 
 ```{code-block} usda
 def Mesh "Cube" (
-    prepend apiSchemas = ["AccessibilityAPI"]
+    prepend apiSchemas = ["AccessibilityAPI:default", "AccessibilityAPI:size"]
 ) {
     string accessibility:default:label = "Regular cube"
     string accessibility:default:description = "A plain featureless cube"

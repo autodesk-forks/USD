@@ -188,6 +188,7 @@ pxr_plugin(${PXR_PACKAGE}
         rileySampleFilterPrim
         rileyTypes
         sceneIndexObserverApi
+        worldOffsetSceneIndexPlugin
         updateObjectSettingsSceneIndex
         updateObjectSettingsSceneIndexPlugin
         utils

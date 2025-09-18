@@ -27,6 +27,9 @@ pxr_library(esf
 
     RESOURCE_FILES
         plugInfo.json
+
+    DOXYGEN_FILES
+        README.md
 )
 
 pxr_build_test(testEsfFixedSizePolymorphicHolder

@@ -157,6 +157,9 @@ pxr_library(vdf
         maskRegistry
         poolChainIndexer
         scheduleInvalidator
+
+    DOXYGEN_FILES
+        README.md
 )
 
 pxr_install_test_dir(

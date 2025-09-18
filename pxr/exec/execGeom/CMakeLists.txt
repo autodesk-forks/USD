@@ -23,6 +23,9 @@ pxr_library(execGeom
 
     RESOURCE_FILES
         plugInfo.json
+
+    DOXYGEN_FILES
+        README.md
 )
 
 #

@@ -32,6 +32,7 @@
 
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/token.h"
+#include "hdPrman/worldOffsetSceneIndexPlugin.h"
 
 #include <Riley.h>
 
@@ -575,6 +576,33 @@ HdPrman_RenderPass::_Execute(
     const bool frameChanged = _renderParam->frame != frame;
     _renderParam->frame = frame;
 
+    // Update World Offset
+    {
+        // Although it's incorrect we are defaulting to world origin as world
+        // (instead of camera) to try and avoid slow camera movement.
+        const std::string worldOrigin
+            = renderDelegate->GetRenderSetting<std::string>(
+                HdPrmanRenderSettingsTokens->worldOrigin, "world");
+        GfVec3d worldOffset = (worldOrigin != "world")
+            ? renderDelegate->GetRenderSetting<GfVec3d>(
+                HdPrmanRenderSettingsTokens->worldOffset,
+                GfVec3d(0.0, 0.0, 0.0))
+            : GfVec3d(0.0, 0.0, 0.0);
+        SdfPath renderCamera = (worldOrigin == "camera")
+            ? cameraContext.GetCameraPath()
+            : SdfPath::EmptyPath();
+
+        if (worldOffset != HdPrman_WorldOffsetSceneIndexPlugin::GetWorldOffset()
+        || renderCamera != HdPrman_WorldOffsetSceneIndexPlugin::GetRenderCamera()) {
+            HdPrman_WorldOffsetSceneIndexPlugin::SetWorldOffset(worldOffset);
+            HdPrman_WorldOffsetSceneIndexPlugin::SetRenderCamera(renderCamera);
+            // Mark Some Prims Dirty To Trigger Re-Cook
+            GetRenderIndex()->GetChangeTracker().MarkSprimDirty(
+                cameraContext.GetCameraPath(), HdChangeTracker::DirtyTransform);
+            GetRenderIndex()->GetChangeTracker().MarkAllRprimsDirty(
+                HdChangeTracker::DirtyTransform);
+        }
+    }
 
     //
     // ------------------------------------------------------------------------

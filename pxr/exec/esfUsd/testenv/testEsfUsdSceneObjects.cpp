@@ -9,7 +9,9 @@
 #include "pxr/exec/esfUsd/sceneAdapter.h"
 
 #include "pxr/base/tf/diagnosticLite.h"
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 #include "pxr/base/tf/token.h"
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/exec/esf/attribute.h"
 #include "pxr/exec/esf/attributeQuery.h"
@@ -18,6 +20,7 @@
 #include "pxr/exec/esf/property.h"
 #include "pxr/exec/esf/stage.h"
 #include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdf/types.h"
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usd/attributeQuery.h"
@@ -28,6 +31,17 @@
 #include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE;
+
+#define ASSERT_EQ(expr, expected)                                              \
+    [&] {                                                                      \
+        auto&& expr_ = expr;                                                   \
+        if (expr_ != expected) {                                               \
+            TF_FATAL_ERROR(                                                    \
+                "Expected " TF_PP_STRINGIZE(expr) " == '%s'; got '%s'",        \
+                TfStringify(expected).c_str(),                                 \
+                TfStringify(expr_).c_str());                                   \
+        }                                                                      \
+    }()
 
 namespace
 {
@@ -45,14 +59,17 @@ struct Fixture
             #usda 1.0
             def Scope "Prim1" (
                 prepend apiSchemas = ["CollectionAPI:collection1"]
+                doc = "prim doc"
             ) {
+                int attr1 (doc = "attr doc")
                 int attr1 = 1
+                int ns1:ns2:attr2 (doc = "prop doc")
                 int ns1:ns2:attr2 = 2
                 double attr3.spline = {
                     1: 0,
                     2: 1,
                 }
-                rel rel1
+                rel rel1 (doc = "rel doc")
             }
             def Scope "Prim2" (
                 prepend apiSchemas = ["CollectionAPI:collection1"]
@@ -71,6 +88,25 @@ struct Fixture
 };
 
 } // anonymous namespace
+
+template <typename ObjectType>
+static void
+_TestMetadata(
+    Fixture &fixture,
+    const ObjectType &object,
+    const std::string &expectedValue)
+{
+    TF_AXIOM(
+        object->IsValidMetadataKey(SdfFieldKeys->Documentation));
+    TF_AXIOM(
+        !object->IsValidMetadataKey(TfToken("bogusMetadataKey")));
+    ASSERT_EQ(
+        object->GetMetadataValueType(SdfFieldKeys->Documentation),
+        TfType::Find<std::string>());
+    ASSERT_EQ(
+        object->GetMetadata(SdfFieldKeys->Documentation),
+        expectedValue);
+}
 
 // Tests that EsfUsd_Stage behaves as UsdStage.
 static void
@@ -98,14 +134,17 @@ TestObject(Fixture &fixture)
     const EsfObject primObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Prim1")));
     TF_AXIOM(primObject->IsValid(fixture.journal));
+    _TestMetadata(fixture, primObject, "prim doc");
 
     const EsfObject attrObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Prim1.attr1")));
     TF_AXIOM(attrObject->IsValid(fixture.journal));
+    _TestMetadata(fixture, attrObject, "attr doc");
 
     const EsfObject relObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Prim1.rel1")));
     TF_AXIOM(relObject->IsValid(fixture.journal));
+    _TestMetadata(fixture, relObject, "rel doc");
 
     const EsfObject invalidObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Does/Not/Exist")));
@@ -119,6 +158,7 @@ TestPrim(Fixture &fixture)
     const EsfPrim prim = EsfUsdSceneAdapter::AdaptPrim(
         fixture.stage->GetPrimAtPath(SdfPath("/Prim1")));
     TF_AXIOM(prim->IsValid(fixture.journal));
+    _TestMetadata(fixture, prim, "prim doc");
 
     const EsfPrim pseudoRootPrim = prim->GetParent(fixture.journal);
     TF_AXIOM(pseudoRootPrim->IsValid(fixture.journal));
@@ -143,6 +183,7 @@ TestProperty(Fixture &fixture)
     const EsfProperty prop = EsfUsdSceneAdapter::AdaptProperty(
         fixture.stage->GetPropertyAtPath(SdfPath("/Prim1.ns1:ns2:attr2")));
     TF_AXIOM(prop->IsValid(fixture.journal));
+    _TestMetadata(fixture, prop, "prop doc");
 
     TF_AXIOM(prop->GetBaseName(fixture.journal) == TfToken("attr2"));
     TF_AXIOM(prop->GetNamespace(fixture.journal) == TfToken("ns1:ns2"));
@@ -155,10 +196,10 @@ TestAttribute(Fixture &fixture)
     const EsfAttribute attr = EsfUsdSceneAdapter::AdaptAttribute(
         fixture.stage->GetAttributeAtPath(SdfPath("/Prim1.attr1")));
     TF_AXIOM(attr->IsValid(fixture.journal));
+    _TestMetadata(fixture, attr, "attr doc");
 
     TF_AXIOM(attr->GetValueTypeName(fixture.journal) == SdfValueTypeNames->Int);
 }
-
 
 // Tests that ExecUsd_AttributeQuery behaves as UsdAttributeQuery.
 static void

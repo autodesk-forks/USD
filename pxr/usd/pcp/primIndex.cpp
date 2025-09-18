@@ -3267,11 +3267,29 @@ _AddClassBasedArc(
             // EvalImpliedSpecializes task.
             // 
             // If we're _not_ in a recursive prim indexing call we can
-            // immediately do the propagation to avoid going the task
+            // immediately do the propagation to avoid paying the task
             // overhead. See also _FindSpecializesToPropagateToRoot.
             if (!indexer->previousFrame && placeholder &&
                 !_IsRelocatesPlaceholderImpliedArc(placeholder)) {
-                return _PropagateNodeToRoot(placeholder, indexer);
+
+                PcpNodeRef propagatedNode = 
+                    _PropagateNodeToRoot(placeholder, indexer);
+
+                // If a new node was created to propagate the placeholder
+                // to the root, tasks will have been enqueued to continue
+                // implying the class to the root of the prim index.
+                //
+                // If a pre-existing node was found instead (i.e., the 
+                // returned node's origin isn't the placeholder), we need
+                // to manually enqueue tasks on the placeholder to continue
+                // that process.
+                if (propagatedNode && 
+                    propagatedNode.GetOriginNode() != placeholder) {
+                    indexer->AddTasksForNode(
+                        placeholder, Task::EvalImpliedClasses);
+                }
+
+                return propagatedNode;
             }
 
             return placeholder;

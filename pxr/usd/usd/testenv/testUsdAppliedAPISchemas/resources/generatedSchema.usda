@@ -36,6 +36,23 @@ class "TestSingleApplyAPI" (
     )
 }
 
+class "TestComposeMetadataAPI" (
+    doc = "Test single apply API schema"
+)
+{
+    reorder properties = ["compose:relationship", "compose:token_attr", "compose:bool_attr"]
+    uniform bool compose:bool_attr = 1 (
+        doc = "Boolean attribute"
+    )
+    rel compose:relationship (
+        doc = "Relationship"
+    )
+    uniform token compose:token_attr = "bar" (
+        allowedTokens = ["foo", "bar", "baz"]
+        doc = "Token attribute"
+    )
+}
+
 class "TestSingleCanApplyAPI" (
     doc = "Test single apply API schema with canOnlyApplyTo restrictions"
 )
@@ -85,7 +102,7 @@ class TestTypedSchema "TestTypedSchema" (
 }
 
 class TestWithBuiltinAppliedSchema "TestWithBuiltinAppliedSchema" (
-    apiSchemas = ["TestSingleApplyAPI", "TestMultiApplyAPI:builtin"]
+    apiSchemas = ["TestSingleApplyAPI", "TestMultiApplyAPI:builtin", "TestComposeMetadataAPI"]
     doc = "Test with built-in API schemas"
     hidden = false
 )

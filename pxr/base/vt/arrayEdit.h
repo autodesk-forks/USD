@@ -21,6 +21,8 @@
 #include "pxr/base/tf/hash.h"
 #include "pxr/base/trace/trace.h"
 
+#include <type_traits>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 template <class ELEM>
@@ -191,11 +193,7 @@ public:
     
 private:
     friend class VtArrayEditBuilder<ELEM>;
-
-    template <class HashState>
-    friend void TfHashAppend(HashState &h, VtArrayEdit const &self) {
-        h.Append(self._denseOrLiterals, self._ops, self._isDense);
-    }
+    friend class Vt_ArrayEditHashAccess;
     
     using _Ops = Vt_ArrayEditOps;
     
@@ -225,6 +223,20 @@ private:
     VT_API_TEMPLATE_CLASS(VtArrayEdit< VT_TYPE(elem) >);
 TF_PP_SEQ_FOR_EACH(VT_ARRAY_EDIT_EXTERN_TMPL, ~, VT_SCALAR_VALUE_TYPES)
 #undef VT_ARRAY_EDIT_EXTERN_TMPL
+
+struct Vt_ArrayEditHashAccess
+{
+    template <class HashState, class Edit>
+    static void Append(HashState &h, Edit const &edit) {
+        h.Append(edit._denseOrLiterals, edit._ops, edit._isDense);
+    }
+};
+
+template <class HashState, class ELEM>
+std::enable_if_t<VtIsHashable<ELEM>()>
+TfHashAppend(HashState &h, VtArrayEdit<ELEM> const &edit) {
+    Vt_ArrayEditHashAccess::Append(h, edit);
+}
 
 template <class ELEM>
 VtArray<ELEM>

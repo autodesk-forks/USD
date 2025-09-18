@@ -199,6 +199,12 @@ public:
     GF_API 
     GfMatrix3f GetRGBToXYZ() const;
 
+    /// Get the RGB to RGB conversion matrix from srcColorSpace to "this" color space.
+    /// \param srcColorSpace The source color space.
+    /// \return The RGB to RGB conversion matrix.
+    GF_API 
+    GfMatrix3f GetRGBToRGB(const GfColorSpace& srcColorSpace) const;
+
     /// Get the gamma value of the color space.
     ///
     /// \return The gamma value of the color space.

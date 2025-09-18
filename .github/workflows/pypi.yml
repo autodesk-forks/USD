@@ -78,7 +78,7 @@ jobs:
           # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP flag will ensure that we never try to
           # link against this library anyway, so it doesn't matter.
           docker exec usdmanylinux ${{ matrix.PYTHON.INTERPRETER }} -c "import pathlib,sysconfig; pathlib.Path(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')).touch()"
-          docker exec usdmanylinux ${{ matrix.PYTHON.INTERPRETER }}  build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build /opt/USD/gen/build --src /opt/USD/gen/src /opt/USD/inst -v
+          docker exec usdmanylinux ${{ matrix.PYTHON.INTERPRETER }}  build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build /opt/USD/gen/build --src /opt/USD/gen/src /opt/USD/inst -v
       - name: Creating packaging directory
         run: |
           docker exec usdmanylinux mkdir ./packaging
@@ -143,7 +143,7 @@ jobs:
       - name: Build USD
         run: |
           sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
-          ${{ matrix.PYTHON.INTERPRETER }} build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_INSTALL_LOCATION=../pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --generator Xcode --build-target universal --build $GITHUB_WORKSPACE/USDgen/build --src $GITHUB_WORKSPACE/USDgen/src $GITHUB_WORKSPACE/USDinst -v
+          ${{ matrix.PYTHON.INTERPRETER }} build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --generator Xcode --build-target universal --build $GITHUB_WORKSPACE/USDgen/build --src $GITHUB_WORKSPACE/USDgen/src $GITHUB_WORKSPACE/USDinst -v
       - name: Packaging USD
         run: |
           pwd
@@ -217,7 +217,7 @@ jobs:
           call C:\"Program Files (x86)"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           set BOOST_ROOT=
           python --version
-          python build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_ENABLE_PRECOMPILED_HEADERS=OFF -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build USDgen/build --src USDgen/src USDinst -v
+          python build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_ENABLE_PRECOMPILED_HEADERS=OFF -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build USDgen/build --src USDgen/src USDinst -v
         shell: cmd
       - name: Packaging USD
         run: |
