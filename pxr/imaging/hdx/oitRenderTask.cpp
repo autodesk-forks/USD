@@ -173,6 +173,16 @@ HdxOitRenderTask::Prepare(HdTaskContext* ctx,
 
 }
 
+static
+bool
+_HasColorAov(HdRenderPassAovBindingVector const& aovBindings)
+{
+    return std::find_if(aovBindings.begin(), aovBindings.end(),
+        [](HdRenderPassAovBinding const& binding){
+            return binding.aovName == HdAovTokens->color; })
+                != aovBindings.end();
+}
+
 void
 HdxOitRenderTask::Execute(HdTaskContext* ctx)
 {
@@ -184,11 +194,24 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
     if (!_isOitEnabled || !HdxRenderTask::_HasDrawItems()) {
         return;
     }
-
-    if (!TF_VERIFY(_translucentRenderPassState)) return;
-
+    
     HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
     if (!TF_VERIFY(renderPassState)) return;
+    if (!TF_VERIFY(_translucentRenderPassState)) return;
+
+    HdStRenderPassState* extendedState =
+        dynamic_cast<HdStRenderPassState*>(renderPassState.get());
+    if (!TF_VERIFY(extendedState, "OIT only works with HdSt")) {
+        return;
+    }
+    
+    // If there are aovs, but none of them are color, skip rendering for this 
+    // task.
+    HdRenderPassAovBindingVector const& aovBindings =
+        renderPassState->GetAovBindings();
+    if (!aovBindings.empty() && !_HasColorAov(aovBindings)) {
+        return;
+    }
 
     //
     // Pre Execute Setup
@@ -206,6 +229,16 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
         }
     }
 
+    // Render pass state overrides
+    {
+        extendedState->SetUseSceneMaterials(true);
+        // blending is relevant only for the oitResolve task.
+        extendedState->SetBlendEnabled(false);
+        extendedState->SetAlphaToCoverageEnabled(false);
+        extendedState->SetAlphaThreshold(0.f);
+    // We render into an SSBO -- not MSAA compatible
+    renderPassState->SetMultiSampleEnabled(false);
+
     //
     // 1. Opaque pixels pass
     //
@@ -214,7 +247,6 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
     // This can reduce the data written to the OIT SSBO buffers because of
     // improved depth testing.
     //
-    {
         HdxRenderTask::Execute(ctx);
     }
 

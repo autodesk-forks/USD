@@ -37,6 +37,7 @@ pxr_library(sdr
         wrapFilesystemDiscoveryHelpers.cpp
         wrapRegistry.cpp
         wrapSdfTypeIndicator.cpp
+        wrapShaderMetadataHelpers.cpp
         wrapShaderNode.cpp
         wrapShaderNodeDiscoveryResult.cpp
         wrapShaderProperty.cpp
@@ -78,6 +79,22 @@ pxr_build_test_shared_lib(TestSdrRegistry
         testenv/TestSdrRegistry_argsParserPlugin.cpp
         testenv/TestSdrRegistry_discoveryPlugin.cpp
         testenv/TestSdrRegistry_oslParserPlugin.cpp
+)
+
+pxr_build_test(testSdrParseValue
+    LIBRARIES
+        gf
+        sdf
+        sdr
+        tf
+        vt
+    CPPFILES
+        testenv/testSdrParseValue.cpp
+)
+
+pxr_register_test(testSdrParseValue
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdrParseValue"
+    EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testSdrRegistry

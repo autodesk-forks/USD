@@ -18,6 +18,7 @@
 #include "pxr/exec/esf/object.h"
 #include "pxr/exec/esf/prim.h"
 #include "pxr/exec/esf/property.h"
+#include "pxr/exec/esf/relationship.h"
 #include "pxr/exec/esf/stage.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/schema.h"
@@ -28,19 +29,22 @@
 #include "pxr/usd/usd/timeCode.h"
 #include "pxr/usd/usdGeom/scope.h"
 
+#include <iostream>
 #include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE;
 
-#define ASSERT_EQ(expr, expected)                                              \
-    [&] {                                                                      \
-        auto&& expr_ = expr;                                                   \
-        if (expr_ != expected) {                                               \
-            TF_FATAL_ERROR(                                                    \
-                "Expected " TF_PP_STRINGIZE(expr) " == '%s'; got '%s'",        \
-                TfStringify(expected).c_str(),                                 \
-                TfStringify(expr_).c_str());                                   \
-        }                                                                      \
+#define ASSERT_EQ(expr, expected)                                       \
+    [&] {                                                               \
+        std::cout << std::flush;                                        \
+        std::cerr << std::flush;                                        \
+        auto&& expr_ = expr;                                            \
+        if (expr_ != expected) {                                        \
+            TF_FATAL_ERROR(                                             \
+                "Expected " TF_PP_STRINGIZE(expr) " == '%s'; got '%s'", \
+                TfStringify(expected).c_str(),                          \
+                TfStringify(expr_).c_str());                            \
+        }                                                               \
     }()
 
 namespace
@@ -63,6 +67,7 @@ struct Fixture
             ) {
                 int attr1 (doc = "attr doc")
                 int attr1 = 1
+                int attr1.connect = [</Prim1.ns1:ns2:attr2>, </Prim1.attr3>]
                 int ns1:ns2:attr2 (doc = "prop doc")
                 int ns1:ns2:attr2 = 2
                 double attr3.spline = {
@@ -70,6 +75,8 @@ struct Fixture
                     2: 1,
                 }
                 rel rel1 (doc = "rel doc")
+                rel rel1 = [</Prim1.attr1>, </Prim1.rel2>]
+                rel rel2 = [</Prim2>, </Prim3>]
             }
             def Scope "Prim2" (
                 prepend apiSchemas = ["CollectionAPI:collection1"]
@@ -127,7 +134,7 @@ TestStage(Fixture &fixture)
     TF_AXIOM(prop->IsValid(fixture.journal));
 }
 
-// Tests that ExecUsd_Objects behave as UsdObjects.
+// Tests that EsfUsd_Objects behave as UsdObjects.
 static void
 TestObject(Fixture &fixture)
 {
@@ -151,7 +158,7 @@ TestObject(Fixture &fixture)
     TF_AXIOM(!invalidObject->IsValid(fixture.journal));
 }
 
-// Tests that ExecUsd_Prims behave as UsdPrims.
+// Tests that EsfUsd_Prims behave as UsdPrims.
 static void
 TestPrim(Fixture &fixture)
 {
@@ -176,7 +183,7 @@ TestPrim(Fixture &fixture)
     TF_AXIOM(attr->GetPath(fixture.journal) == SdfPath("/Prim1.attr1"));
 }
 
-// Tests that ExecUsd_Properties behave as UsdProperties.
+// Tests that EsfUsd_Properties behave as UsdProperties.
 static void
 TestProperty(Fixture &fixture)
 {
@@ -189,7 +196,33 @@ TestProperty(Fixture &fixture)
     TF_AXIOM(prop->GetNamespace(fixture.journal) == TfToken("ns1:ns2"));
 }
 
-// Tests that ExecUsd_Attributes behave as UsdAttributes.
+// Tests that EsfUsd_Relationships behave as UsdRelationships.
+static void
+TestRelationship(Fixture &fixture)
+{
+    const EsfObject object = EsfUsdSceneAdapter::AdaptObject(
+        fixture.stage->GetObjectAtPath(SdfPath("/Prim1.rel1")));
+    TF_AXIOM(object->IsRelationship());
+    const EsfRelationship rel = object->AsRelationship();
+    TF_AXIOM(rel->IsValid(fixture.journal));
+    _TestMetadata(fixture, rel, "rel doc");
+
+    const SdfPathVector targets = rel->GetTargets(fixture.journal);
+    ASSERT_EQ(targets.size(), 2);
+    TF_AXIOM(
+        targets ==
+        SdfPathVector({SdfPath("/Prim1.attr1"), SdfPath("/Prim1.rel2")}));
+
+    const SdfPathVector forwardedTargets =
+        rel->GetForwardedTargets(fixture.journal);
+    ASSERT_EQ(forwardedTargets.size(), 3);
+    TF_AXIOM(
+        forwardedTargets ==
+        SdfPathVector(
+            {SdfPath("/Prim1.attr1"), SdfPath("/Prim2"), SdfPath("/Prim3")}));
+}
+
+// Tests that EsfUsd_Attributes behave as UsdAttributes.
 static void
 TestAttribute(Fixture &fixture)
 {
@@ -199,9 +232,16 @@ TestAttribute(Fixture &fixture)
     _TestMetadata(fixture, attr, "attr doc");
 
     TF_AXIOM(attr->GetValueTypeName(fixture.journal) == SdfValueTypeNames->Int);
+
+    const SdfPathVector targets = attr->GetConnections(fixture.journal);
+    ASSERT_EQ(targets.size(), 2);
+    TF_AXIOM(
+        targets ==
+        SdfPathVector({
+            SdfPath("/Prim1.ns1:ns2:attr2"), SdfPath("/Prim1.attr3")}));
 }
 
-// Tests that ExecUsd_AttributeQuery behaves as UsdAttributeQuery.
+// Tests that EsfUsd_AttributeQuery behaves as UsdAttributeQuery.
 static void
 TestAttributeQuery(Fixture &fixture)
 {
@@ -228,7 +268,7 @@ TestAttributeQuery(Fixture &fixture)
         UsdTimeCode::Default(), UsdTimeCode(0.0)));
 }
 
-// Tests ExecUsd_AttributeQuery with a time-varying spline attribute.
+// Tests EsfUsd_AttributeQuery with a time-varying spline attribute.
 static void
 TestSplineAttributeQuery(Fixture &fixture)
 {
@@ -303,6 +343,7 @@ int main()
         TestObject,
         TestPrim,
         TestProperty,
+        TestRelationship,
         TestAttribute,
         TestAttributeQuery,
         TestSplineAttributeQuery,

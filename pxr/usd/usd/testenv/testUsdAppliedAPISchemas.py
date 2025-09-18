@@ -88,7 +88,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertTrue(primDef)
         self.assertEqual(primDef.GetPropertyNames(), ["testAttr", "testRel"])
         self.assertEqual(primDef.GetAppliedAPISchemas(), [])
-        self.assertEqual(primDef.GetDocumentation(), "Testing typed schema")
+        self.assertEqual(primDef.GetDocumentation(), "Testing typed schema.")
 
         # Verify properties exist for all named properties.
         for propName in primDef.GetPropertyNames():
@@ -118,7 +118,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(singleApplyAPIDef.GetPropertyNames(), [
             "single:bool_attr", "single:relationship", "single:token_attr"])
         self.assertEqual(singleApplyAPIDef.GetDocumentation(),
-            "Test single apply API schema")
+            "Test single apply API schema.")
 
         # Find the prim definition for the test multi apply schema. It has
         # some properties defined. Note that the properties in the multi apply
@@ -133,7 +133,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "multi:__INSTANCE_NAME__:relationship",
             "multi:__INSTANCE_NAME__:token_attr"])
         self.assertEqual(multiApplyAPIDef.GetDocumentation(),
-            "Test multi-apply API schema")
+            "Test multi-apply API schema.")
 
         # Find the prim definition for the concrete prim type with built-in
         # API schemas. You can query its API schemas and it will have properties
@@ -158,7 +158,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # Note that prim def documentation does not come from the built-in API
         # schemas.
         self.assertEqual(primDef.GetDocumentation(), 
-                         "Test with built-in API schemas")
+                         "Test with built-in API schemas.")
 
         # Verify property specs for all named properties.
         for propName in primDef.GetPropertyNames():
@@ -373,10 +373,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertFalse(typedPrim.HasAuthoredMetadata("hidden"))
         self.assertFalse("hidden" in typedPrim.GetAllAuthoredMetadata())
 
-        # Documentation metadata comes from prim type definition even with API
-        # schemas applied.
-        self.assertEqual(typedPrim.GetMetadata("documentation"), 
-                         "Testing typed schema")
+        # Schema documentation metadata is not available on prim instances.
+        self.assertIsNone(typedPrim.GetMetadata("documentation"))
 
     def test_TypedPrimsOnStageWithBuiltinAPISchemas(self):
         """
@@ -492,10 +490,9 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             self.assertFalse(prim.HasAuthoredMetadata("hidden"))
             self.assertFalse("hidden" in typedPrim.GetAllAuthoredMetadata())
 
-            # Documentation metadata comes from prim type definition even with API
-            # schemas applied.
-            self.assertEqual(prim.GetMetadata("documentation"), 
-                            "Test with built-in API schemas")
+            # Documentation in the prim type definition is inaccessible to prim
+            # instances.
+            self.assertIsNone(prim.GetMetadata("documentation"))
 
         # Verify the prim has all the data we expect.
         _VerifyExpectedPrimData(typedPrim)
@@ -1293,7 +1290,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(innerSingleApplyAPIDef.GetPropertyNames()),
                          sorted(expectedPropNames))
         self.assertEqual(innerSingleApplyAPIDef.GetDocumentation(),
-            "Test nested single apply API schema: inner schema")
+            "Test nested single apply API schema: inner schema.")
 
         # Add a prim with no type and apply the TestNestedOuterSingleApplyAPI.
         outerSinglePrim = stage.DefinePrim("/OuterSingle")
@@ -1377,7 +1374,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(outerSingleApplyAPIDef.GetPropertyNames()),
                          sorted(expectedPropNames))
         self.assertEqual(outerSingleApplyAPIDef.GetDocumentation(),
-            "Test nested single apply API schema: outer schema")
+            "Test nested single apply API schema: outer schema.")
 
         # Apply the TestNestedInnerSingleApplyAPI to the same prim. This API
         # is already included through the TestNestedOuterSingleApplyAPI.
@@ -1562,7 +1559,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(innerMultiApplyAPIDef.GetPropertyNames()),
                          expectedPropNames)
         self.assertEqual(innerMultiApplyAPIDef.GetDocumentation(),
-            "Test nested multi apply API schema: inner schema derived")
+            "Test nested multi apply API schema: inner schema derived.")
 
         # Add a prim with no type and apply the TestNestedOuterMultiApplyAPI 
         # with the instance "foo".
@@ -1687,7 +1684,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(outerMultiApplyAPIDef.GetPropertyNames()),
                          expectedPropNames)
         self.assertEqual(outerMultiApplyAPIDef.GetDocumentation(),
-            "Test nested multi apply API schema: outer schema")
+            "Test nested multi apply API schema: outer schema.")
 
         # Add a prim with no type and apply the 
         # TestNestedMultiApplyInSingleApplyAPI.
@@ -1799,7 +1796,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
                          expectedPropNames)
         self.assertEqual(singleApplyAPIDef.GetDocumentation(),
             "Test single apply API with builtin nested multi apply API schema "
-            "instances")
+            "instances.")
 
     def test_NestedCycleAPISchema(self):
         """
@@ -1911,7 +1908,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(cycle1APIDef.GetPropertyNames()),
                          expectedPropNames)
         self.assertEqual(cycle1APIDef.GetDocumentation(),
-            "Test nested single apply API schema with a cycle #1")
+            "Test nested single apply API schema with a cycle #1.")
 
         cycle2APIDef = Usd.SchemaRegistry().FindAppliedAPIPrimDefinition(
             "TestNestedCycle2API")
@@ -1923,7 +1920,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(cycle2APIDef.GetPropertyNames()),
                          expectedPropNames)
         self.assertEqual(cycle2APIDef.GetDocumentation(),
-            "Test nested single apply API schema with a cycle #2")
+            "Test nested single apply API schema with a cycle #2.")
 
         cycle3APIDef = Usd.SchemaRegistry().FindAppliedAPIPrimDefinition(
             "TestNestedCycle3API")
@@ -1935,7 +1932,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(cycle3APIDef.GetPropertyNames()),
                          expectedPropNames)
         self.assertEqual(cycle3APIDef.GetDocumentation(),
-            "Test nested single apply API schema with a cycle #3")
+            "Test nested single apply API schema with a cycle #3.")
 
     def test_NestedMultiApplyCycleAPISchema(self):
         """
@@ -2199,7 +2196,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(sorted(typedPrimDef.GetPropertyNames()),
                          sorted(expectedPropNames))
         self.assertEqual(typedPrimDef.GetDocumentation(),
-            "Test with built-in nested API schemas")
+            "Test with built-in nested API schemas.")
 
     @unittest.skipIf(Tf.GetEnvSetting('USD_DISABLE_AUTO_APPLY_API_SCHEMAS'),
                     "Auto apply API schemas are disabled")
@@ -2500,6 +2497,8 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             # Verify type name, variability, and doc string.
             self.assertEqual(attr.GetTypeName(), typeName)
             self.assertEqual(attr.GetVariability(), variability)
+
+            # Documentation from the schema is only available in the prim/property definion.
             self.assertEqual(attr.GetDocumentation(), doc)
 
             # The attribute may or may not be expected to have default value;
@@ -2534,14 +2533,6 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # separate built-in API schema type.
         compPrimTypeName = "TestPropCompsPrim"
 
-        # Each of the defined schema types above uses a single doc string for
-        # all of it properties which we can use to help verify which schemas
-        # the property definitions come from.
-        oneAPIDoc = "From TestPropCompOneAPI"
-        twoAPIDoc = "From TestPropCompTwoAPI"
-        nestedAPIDoc = "From TestPropCompNestedAPI"
-        primDoc = "From TestPropCompsPrim"
-
         # Test 1: Prim with no type name; apply the OneAPI schema.
         prim = stage.DefinePrim("/UntypedPrim")
         prim.AddAppliedSchema(oneAPIName)
@@ -2550,41 +2541,25 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         # Verify the expected attributes all match the attributes as defined in
         # OneAPI schema.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = oneAPIDoc, 
-            default = 1, 
-            hidden = False)
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = oneAPIDoc, 
-            default = 1.0)
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = oneAPIDoc, 
-            hidden = False)
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = oneAPIDoc)
-        _VerifyAttribute(prim, "oneAttr5", "token", doc = oneAPIDoc)
+        _VerifyAttribute(prim, "oneAttr1", "int", default = 1, hidden = False)
+        _VerifyAttribute(prim, "oneAttr2", "double", default = 1.0)
+        _VerifyAttribute(prim, "oneAttr3", "color3f", hidden = False)
+        _VerifyAttribute(prim, "oneAttr4", "token")
+        _VerifyAttribute(prim, "oneAttr5", "token")
 
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = oneAPIDoc, 
-            default = 1, 
+        _VerifyAttribute(prim, "twoAttr1", "int", default = 1, hidden = True)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 1.0, hidden = True)
+        _VerifyAttribute(prim, "twoAttr3", "color3f", default = (1.0, 1.0, 1.0), 
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = oneAPIDoc, 
-            default = 1.0, 
-            hidden = True)
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = oneAPIDoc, 
-            default = (1.0, 1.0, 1.0), 
-            hidden = True)
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = oneAPIDoc, 
-            default = "one", 
-            hidden = True)
-        _VerifyAttribute(prim, "twoAttr5", "float", doc = oneAPIDoc, 
-            default = 1.0,
-            hidden = True)
+        _VerifyAttribute(prim, "twoAttr4", "token", default = "one", hidden = True)
+        _VerifyAttribute(prim, "twoAttr5", "float", default = 1.0, hidden = True)
 
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = oneAPIDoc, 
-            default = "one", 
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "one", 
             hidden = True)
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = oneAPIDoc,
-            hidden = True)
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = oneAPIDoc, 
-            default = 1.0, 
+        _VerifyAttribute(prim, "nestedAttr2", "int", hidden = True)
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 1.0, 
             hidden = True),
-        _VerifyAttribute(prim, "nestedAttr4", "point3f", doc = oneAPIDoc, 
+        _VerifyAttribute(prim, "nestedAttr4", "point3f", 
             default = (1.0, 1.0, 1.0), 
             hidden = False)
 
@@ -2612,46 +2587,35 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         # OneAPI has opinions for both "default" and "hidden", so TwoAPI will
         # not contribute opinions to this attribute.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = oneAPIDoc, 
-            default = 1,                  
-            hidden = False)
+        _VerifyAttribute(prim, "oneAttr1", "int",  default = 1, hidden = False)
         # OneAPI has no opinion about "hidden", but TwoAPI has hidden = true 
         # so hidden = true is composed in..
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = oneAPIDoc, 
-            default = 1.0,                
+        _VerifyAttribute(prim, "oneAttr2", "double", default = 1.0,                
             hidden = True)
         # OneAPI has no opinion about "default", but TwoAPI has it set to
         # (2,2,2) so default = (2,2,2) is composed in.
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = oneAPIDoc, 
-            default = (2.0, 2.0, 2.0),    
+        _VerifyAttribute(prim, "oneAttr3", "color3f", default = (2.0, 2.0, 2.0),    
             hidden = False)
         # OneAPI has no opinion about "default" or "hidden", but TwoAPI 
         # has default = "two" and hidden = true so both are composed in.
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = oneAPIDoc, 
-            default = "two",              
+        _VerifyAttribute(prim, "oneAttr4", "token", default = "two",              
             hidden = True)
         # OneAPI has no opinion about default or hidden, but TwoAPI has this
         # attribute as typeName = "string". This is a typeName conflict with
         # OneAPI's typeName = "token", so all of TwoAPI's opinions are ignored.
-        _VerifyAttribute(prim, "oneAttr5", "token", doc = oneAPIDoc)
+        _VerifyAttribute(prim, "oneAttr5", "token")
 
         # OneAPI has opinions for both "default" and "hidden" for all of 
         # these attributes, so TwoAPI will not contribute opinions to any of
         # these attributes.
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = oneAPIDoc, 
-            default = 1,                  
+        _VerifyAttribute(prim, "twoAttr1", "int", default = 1, hidden = True)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 1.0,                
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = oneAPIDoc, 
-            default = 1.0,                
+        _VerifyAttribute(prim, "twoAttr3", "color3f", default = (1.0, 1.0, 1.0),    
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = oneAPIDoc, 
-            default = (1.0, 1.0, 1.0),    
+        _VerifyAttribute(prim, "twoAttr4", "token", default = "one",              
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = oneAPIDoc, 
-            default = "one",              
-            hidden = True)
-        _VerifyAttribute(prim, "twoAttr5", "float", doc = oneAPIDoc, 
-            default = 1.0,                
+        _VerifyAttribute(prim, "twoAttr5", "float", default = 1.0,                
             hidden = True)
 
         # For these four attributes, OneAPI has opinions for both "default"
@@ -2659,16 +2623,13 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # has no opinion for "default"). Thus TwoAPI only contributes 
         # default = 2 to "nestedAttr2", otherwise everything else comes from
         # OneAPI.
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = oneAPIDoc, 
-            default = "one",           
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "one",           
             hidden = True)
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = oneAPIDoc, 
-            default = 2,               
+        _VerifyAttribute(prim, "nestedAttr2", "int", default = 2,               
             hidden = True)
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = oneAPIDoc, 
-            default = 1.0,             
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 1.0,             
             hidden = True)
-        _VerifyAttribute(prim, "nestedAttr4", "point3f", doc = oneAPIDoc, 
+        _VerifyAttribute(prim, "nestedAttr4", "point3f",  
             default = (1.0, 1.0, 1.0), 
             hidden = False)
 
@@ -2693,46 +2654,41 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         # Verify the expected attributes all match the attributes as defined in
         # TwoAPI schema.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr1", "int", 
             variability = Sdf.VariabilityUniform,
             default = 2, 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr2", "double", 
             variability = Sdf.VariabilityUniform,
             default = 2.0,
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr3", "color3f", 
             variability = Sdf.VariabilityUniform,
             default = (2.0, 2.0, 2.0),
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr4", "token", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr5", "string", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr5", "string", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
 
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "twoAttr1", "int", 
             default = 2, 
             hidden = False)
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = twoAPIDoc, 
-            default = 2.0)
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = twoAPIDoc, 
-            hidden = False)
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = twoAPIDoc)
-        _VerifyAttribute(prim, "twoAttr5", "double", doc = twoAPIDoc)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 2.0)
+        _VerifyAttribute(prim, "twoAttr3", "color3f", hidden = False)
+        _VerifyAttribute(prim, "twoAttr4", "token")
+        _VerifyAttribute(prim, "twoAttr5", "double")
 
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = twoAPIDoc, 
-            default = "two", 
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "two", 
             hidden = True)
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = twoAPIDoc,
-            default = 2)
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = twoAPIDoc, 
-            default = 2.0, 
+        _VerifyAttribute(prim, "nestedAttr2", "int", default = 2)
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 2.0, 
             hidden = True),
-        _VerifyAttribute(prim, "nestedAttr4", "color3f", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "nestedAttr4", "color3f", 
             default = (2.0, 2.0, 2.0), 
             hidden = True)
 
@@ -2742,7 +2698,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # property. This contrasts with the case where OneAPI is applied before
         # TwoAPI which prevents the metadata other than default and hidden from
         # coming through.
-        _VerifyAttribute(prim, "otherMetadataAttr", "token", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "otherMetadataAttr", "token", 
             default = "two",
             hidden = False,
             displayGroup = "Two Group",
@@ -2765,67 +2721,56 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # TwoAPI has opinions for both "default" and "hidden" for all of 
         # these attributes, so OneAPI will not contribute opinions to any of
         # these attributes.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr1", "int",  
             variability = Sdf.VariabilityUniform,
             default = 2, 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr2", "double", 
             variability = Sdf.VariabilityUniform,
             default = 2.0,
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr3", "color3f", 
             variability = Sdf.VariabilityUniform,
             default = (2.0, 2.0, 2.0),
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr4", "token", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr5", "string", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr5", "string", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
 
         # TwoAPI has opinions for both "default" and "hidden", so OneAPI will
         # not contribute opinions to this attribute.
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = twoAPIDoc, 
-            default = 2, 
-            hidden = False)
+        _VerifyAttribute(prim, "twoAttr1", "int", default = 2, hidden = False)
         # TwoAPI has no opinion about "hidden", but OneAPI has hidden = true 
         # so hidden = true is composed in..
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = twoAPIDoc, 
-            default = 2.0,
-            hidden = True)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 2.0, hidden = True)
         # TwoAPI has no opinion about "default", but OneAPI has 
         # default = (1.0, 1.0, 1.0), so default = (1.0, 1.0, 1.0) is composed in.
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = twoAPIDoc, 
-            default = (1.0, 1.0, 1.0),
+        _VerifyAttribute(prim, "twoAttr3", "color3f", default = (1.0, 1.0, 1.0),
             hidden = False)
         # TwoAPI has no opinion about "default" or "hidden", but OneAPI 
         # has default = "one" and hidden = true so both are composed in.
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = twoAPIDoc, 
-            default = "one",
-            hidden = True)
+        _VerifyAttribute(prim, "twoAttr4", "token", default = "one", hidden = True)
         # TwoAPI has no opinion about default or hidden, but OneAPI has this
         # attribute as typeName = "float".  This is a typeName conflict with
         # TwoAPI's typeName = "double", so all of OneAPI's opinions are ignored.
-        _VerifyAttribute(prim, "twoAttr5", "double", doc = twoAPIDoc)
+        _VerifyAttribute(prim, "twoAttr5", "double")
 
         # For these four attributes, TwoAPI has opinions for both "default"
         # and "hidden" with the exception of "nestedAttr2" (for which TwoAPI
         # has no opinion for "hidden"). Thus OneAPI only contributes 
         # hidden = true to "nestedAttr2", otherwise everything else comes from
         # TwoAPI.
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = twoAPIDoc, 
-            default = "two", 
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "two", 
             hidden = True)
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = twoAPIDoc,
-            default = 2,
-            hidden = True)
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = twoAPIDoc, 
-            default = 2.0, 
+        _VerifyAttribute(prim, "nestedAttr2", "int", default = 2, hidden = True)
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 2.0, 
             hidden = True),
-        _VerifyAttribute(prim, "nestedAttr4", "color3f", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "nestedAttr4", "color3f", 
             default = (2.0, 2.0, 2.0), 
             hidden = True)
 
@@ -2835,7 +2780,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # is present on the property as OneAPI is weaker and doesn't prevent the
         # metadata other than default and hidden from coming through like it 
         # does when OneAPI is applied first.
-        _VerifyAttribute(prim, "otherMetadataAttr", "token", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "otherMetadataAttr", "token", 
             default = "two",
             hidden = False,
             displayGroup = "Two Group",
@@ -2856,64 +2801,50 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # NestedAPI has no opinions about these attributes so they will
         # be identical to test case 2 where OneAPI and TwoAPI are applied
         # in the same order.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = oneAPIDoc, 
-            default = 1,                  
-            hidden = False)
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = oneAPIDoc, 
-            default = 1.0,                
+        _VerifyAttribute(prim, "oneAttr1", "int", default = 1, hidden = False)
+        _VerifyAttribute(prim, "oneAttr2", "double", default = 1.0,                
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = oneAPIDoc, 
-            default = (2.0, 2.0, 2.0),    
+        _VerifyAttribute(prim, "oneAttr3", "color3f", default = (2.0, 2.0, 2.0),    
             hidden = False)
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = oneAPIDoc, 
-            default = "two",              
+        _VerifyAttribute(prim, "oneAttr4", "token", default = "two",              
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr5", "token", doc = oneAPIDoc)
+        _VerifyAttribute(prim, "oneAttr5", "token")
 
         # Same for these attributes, NestedAPI has no opinions and they 
         # match test case 2.
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = oneAPIDoc, 
-            default = 1,                  
+        _VerifyAttribute(prim, "twoAttr1", "int", default = 1, hidden = True)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 1.0,                
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = oneAPIDoc, 
-            default = 1.0,                
+        _VerifyAttribute(prim, "twoAttr3", "color3f", default = (1.0, 1.0, 1.0),    
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = oneAPIDoc, 
-            default = (1.0, 1.0, 1.0),    
+        _VerifyAttribute(prim, "twoAttr4", "token", default = "one",              
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = oneAPIDoc, 
-            default = "one",              
-            hidden = True)
-        _VerifyAttribute(prim, "twoAttr5", "float", doc = oneAPIDoc, 
-            default = 1.0,                
+        _VerifyAttribute(prim, "twoAttr5", "float", default = 1.0,                
             hidden = True)
 
         # NestedAPI has opinions for both "default" and "hidden", so OneAPI and 
         # TwoAPI will not contribute opinions to this attribute.
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = nestedAPIDoc, 
-            default = "nested",           
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "nested",           
             hidden = False)
         # NestedAPI has no opinion about "default" or "hidden".
         # OneAPI has hidden = true, but no opinion about "default".
         # TwoAPI has default = 2.
         # Thus we get the following attribute composed with fields from all 3 
         # API schemas.
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = nestedAPIDoc, 
-            default = 2,               
+        _VerifyAttribute(prim, "nestedAttr2", "int", default = 2,               
             hidden = True)
         # NestedAPI has no opinion for "default" but does have hidden = false.
         # OneAPI has default = 1.0 so its default value is composed in. 
         # No opinions from TwoAPI are used as the stronger API schemas have
         # opinions for the composable fields.
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = nestedAPIDoc, 
-            default = 1.0,             
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 1.0,             
             hidden = False)
         # NestedAPI has no opinion about "default" or "hidden".
         # OneAPI has this attribute with typeName = "point3f" which is a type
         # conflict with typeName = "color3f" so all of its opinions are ignored.
         # TwoAPI has default = (2.0, 2.0, 2.0) and hidden = true so both of 
         # these opinions are composed in.
-        _VerifyAttribute(prim, "nestedAttr4", "color3f", doc = nestedAPIDoc, 
+        _VerifyAttribute(prim, "nestedAttr4", "color3f", 
             default = (2.0, 2.0, 2.0), 
             hidden = True)
 
@@ -2926,58 +2857,52 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         # The prim type schema has no opinions about the following attributes
         # so they get all their values from TwoAPI.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr1", "int", 
             variability = Sdf.VariabilityUniform,
             default = 2, 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr2", "double", 
             variability = Sdf.VariabilityUniform,
             default = 2.0,
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr3", "color3f", 
             variability = Sdf.VariabilityUniform,
             default = (2.0, 2.0, 2.0),
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr4", "token", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr5", "string", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr5", "string", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
 
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = twoAPIDoc, 
-            default = 2, 
+        _VerifyAttribute(prim, "twoAttr1", "int", default = 2, 
             hidden = False)
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = twoAPIDoc, 
-            default = 2.0)
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = twoAPIDoc, 
-            hidden = False)
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = twoAPIDoc)
-        _VerifyAttribute(prim, "twoAttr5", "double", doc = twoAPIDoc)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 2.0)
+        _VerifyAttribute(prim, "twoAttr3", "color3f", hidden = False)
+        _VerifyAttribute(prim, "twoAttr4", "token")
+        _VerifyAttribute(prim, "twoAttr5", "double")
 
         # PrimType schema has opinions for both "default" and "hidden", so  
         # TwoAPI will not contribute opinions to this attribute.
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = primDoc, 
-            default = "prim",           
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "prim",           
             hidden = False)
         # PrimType schema has no opinion about "default" or "hidden".
         # TwoAPI has default = 2, but still no opinion about "hidden", so the
         # attribute composes in default = 2 but remains with no opinion about
         # "hidden".
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = primDoc, 
-            default = 2)
+        _VerifyAttribute(prim, "nestedAttr2", "int", default = 2)
         # PrimType schema has no opinion for "default" but does have 
         # hidden = false.
         # TwoAPI has default = 2.0 so its default value is composed in. 
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = primDoc, 
-            default = 2.0,             
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 2.0,             
             hidden = False)
         # PrimType schema has no opinion about "default" or "hidden".
         # TwoAPI has this attribute with typeName = "color3f" which is a type
         # conflict with typeName = "point3f" so all of its opinions are ignored.
-        _VerifyAttribute(prim, "nestedAttr4", "point3f", doc = primDoc)
+        _VerifyAttribute(prim, "nestedAttr4", "point3f")
 
         # Test 7: Take the same prim from Test 6 above, with type name set to 
         # the compPrimType, and author nestedAPI. This gives us a prim with
@@ -2996,45 +2921,39 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # NestedAPI (though they are include through its built-ins). These 
         # attributes match test case 2 where TwoAPI is applied followed by
         # OneAPI.
-        _VerifyAttribute(prim, "oneAttr1", "int", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr1", "int", 
             variability = Sdf.VariabilityUniform,
             default = 2, 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr2", "double", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr2", "double", 
             variability = Sdf.VariabilityUniform,
             default = 2.0,
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr3", "color3f", doc = twoAPIDoc, 
+        _VerifyAttribute(prim, "oneAttr3", "color3f", 
             variability = Sdf.VariabilityUniform,
             default = (2.0, 2.0, 2.0),
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr4", "token", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr4", "token", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
-        _VerifyAttribute(prim, "oneAttr5", "string", doc = twoAPIDoc,
+        _VerifyAttribute(prim, "oneAttr5", "string", 
             variability = Sdf.VariabilityUniform,
             default = "two", 
             hidden = True)
 
-        _VerifyAttribute(prim, "twoAttr1", "int", doc = twoAPIDoc, 
-            default = 2, 
-            hidden = False)
-        _VerifyAttribute(prim, "twoAttr2", "double", doc = twoAPIDoc, 
-            default = 2.0,
+        _VerifyAttribute(prim, "twoAttr1", "int", default = 2, hidden = False)
+        _VerifyAttribute(prim, "twoAttr2", "double", default = 2.0,
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr3", "color3f", doc = twoAPIDoc, 
-            default = (1.0, 1.0, 1.0), 
+        _VerifyAttribute(prim, "twoAttr3", "color3f", default = (1.0, 1.0, 1.0), 
             hidden = False)
-        _VerifyAttribute(prim, "twoAttr4", "token", doc = twoAPIDoc,
-            default = "one", 
+        _VerifyAttribute(prim, "twoAttr4", "token", default = "one", 
             hidden = True)
-        _VerifyAttribute(prim, "twoAttr5", "double", doc = twoAPIDoc)
+        _VerifyAttribute(prim, "twoAttr5", "double")
 
         # PrimType schema has opinions for both "default" and "hidden", so none 
         # of the API schemas contribute opinions to this attribute.
-        _VerifyAttribute(prim, "nestedAttr1", "string", doc = primDoc, 
-            default = "prim",           
+        _VerifyAttribute(prim, "nestedAttr1", "string", default = "prim",           
             hidden = False)
         # PrimType schema has no opinion about "default" or "hidden".
         # TwoAPI has default = 2, but no opinion about hidden.
@@ -3042,16 +2961,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # OneAPI has hidden = true.
         # Thus we get the following PrimType's attribute composed with fields 
         # from TwoAPI (default) and OneAPI (hidden).
-        _VerifyAttribute(prim, "nestedAttr2", "int", doc = primDoc, 
-            default = 2,               
+        _VerifyAttribute(prim, "nestedAttr2", "int", default = 2,               
             hidden = True)
         # PrimType schema has no opinion for "default" but does have 
         # hidden = false.
         # TwoAPI has default = 2.0 so its default value is composed in. 
         # No opinions from NestedAPI and OneAPI are used as the stronger API 
         # schemas have opinions for the composable fields.
-        _VerifyAttribute(prim, "nestedAttr3", "double", doc = primDoc, 
-            default = 2.0,             
+        _VerifyAttribute(prim, "nestedAttr3", "double", default = 2.0,             
             hidden = False)
         # PrimType schema has no opinion about "default" or "hidden".
         # TwoAPI has this attribute with typeName = "color3f" which is a type
@@ -3067,7 +2984,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # built-in of NestedAPI means it is only used to compose into NestedAPI's
         # definition of the property and is not considered on its own. (See the
         # next test case.)
-        _VerifyAttribute(prim, "nestedAttr4", "point3f", doc = primDoc)
+        _VerifyAttribute(prim, "nestedAttr4", "point3f")
 
         # Test 8: This is purely to test an edge case with nested API schemas
         # and property type conflicts. Take the same prim from the previous
@@ -3099,7 +3016,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # NestedAPI. And since OneAPI has a compatible typeName of "point3f" and
         # opinions for default = (1.0, 1.0, 1.0) and hidden = false these 
         # opinions are composed into the property definition.
-        _VerifyAttribute(prim, "nestedAttr4", "point3f", doc = primDoc,
+        _VerifyAttribute(prim, "nestedAttr4", "point3f", 
             default = (1.0, 1.0, 1.0),
             hidden = False)
 
@@ -3343,7 +3260,6 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # Defined in PropertyOversTwoAPI
         #   value = "two"
         #   allowedTokens = "two", "2"
-        #   doc = "Defined in Two"
         # Override in PropertyOversOneAPI sets default value to "1"
         # Override in PropertyOversThreeAPI tries to set doc string
         # Override in PropertyOversFourAPI tries to set default value to "4"
@@ -3353,13 +3269,11 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # are ignored because they don't affect sibling TwoAPI. 
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["two", "2"]),
-                         default = "1",
-                         documentation = "Defined in Two")
+                         default = "1")
         # Matches def in TwoAPI as there are no overrides.
         _VerifyAttribute(prim_2, propName, 'token',
                          allowedTokens = Vt.TokenArray(["two", "2"]),
-                         default = "two",
-                         documentation = "Defined in Two")
+                         default = "two")
         # ThreeAPI and FourAPI only define overrides but there's no actual
         # property def included in their built-ins, so the properties don't
         # exist.
@@ -3371,12 +3285,10 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # default value override.
         _VerifyAttribute(primBase, propName, 'token',
                          allowedTokens = Vt.TokenArray(["two", "2"]),
-                         default = "base_over",
-                         documentation = "Defined in Two")
+                         default = "base_over")
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["two", "2"]),
-                         default = "base_over",
-                         documentation = "Defined in Two")
+                         default = "base_over")
 
         # Property: defined_in_three
         # Defined in PropertyOversThreeAPI
@@ -3391,16 +3303,14 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # across sibling API schemas.
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "three",
-                         documentation = "Defined in Three")
+                         default = "three")
         # TwoAPI defines an override but doesn't include any API schemas that
         # define this property.
         self.assertFalse(prim_2.GetAttribute(propName))
         # Matches def in ThreeAPI as there are no overrides.
         _VerifyAttribute(prim_3, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "three",
-                         documentation = "Defined in Three")
+                         default = "three")
         # Not defined in FourAPI at all.
         self.assertFalse(prim_4.GetAttribute(propName))
 
@@ -3412,14 +3322,12 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertFalse(primBase.GetAttribute(propName))
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "base_over",
-                         documentation = "Defined in Three")
+                         default = "base_over")
 
         # Property: defined_in_four_1
         # Defined in PropertyOversFourAPI
         #   value = "four"
         #   allowedTokens = "four", "4"
-        #   doc = "Defined in Four"
         # Override in PropertyOversOneAPI sets default value to "1"
         # Override in PropertyOversTwoAPI sets default value to "2" and
         #   allowedTokens to ["two", "2"]
@@ -3432,8 +3340,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # OneAPI's value.
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["four", "4"]),
-                         default = "1",
-                         documentation = "Defined in Four")
+                         default = "1")
         # TwoAPI defines an override but doesn't include any API schemas that
         # define this property.
         self.assertFalse(prim_2.GetAttribute(propName))
@@ -3441,12 +3348,10 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # FourAPI match the defined property.
         _VerifyAttribute(prim_3, propName, 'token',
                          allowedTokens = Vt.TokenArray(["four", "4"]),
-                         default = "four",
-                         documentation = "Defined in Four")
+                         default = "four")
         _VerifyAttribute(prim_4, propName, 'token',
                          allowedTokens = Vt.TokenArray(["four", "4"]),
-                         default = "four",
-                         documentation = "Defined in Four")
+                         default = "four")
 
         # The TypedPrimDerived includes PropertyOversFourAPI and overrides the
         # default value. The base type does not include this API schema and
@@ -3454,14 +3359,12 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertFalse(primBase.GetAttribute(propName))
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["four", "4"]),
-                         default = "derived_over",
-                         documentation = "Defined in Four")
+                         default = "derived_over")
 
         # Property: defined_in_four_2
         # Defined in PropertyOversFourAPI
         #   value = "four"
         #   allowedTokens = "four", "4"
-        #   doc = "Defined in Four also"
         # Override in PropertyOversOneAPI sets default value to "1"
         # Override in PropertyOversThreeAPI sets default value to "3" and
         #   allowedTokens to ["three", "3"]
@@ -3476,20 +3379,17 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # through.
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "1",
-                         documentation = "Defined in Four also")
+                         default = "1")
         # TwoAPI doesn't include FourAPI
         self.assertFalse(prim_2.GetAttribute(propName))
         # ThreeAPI overrides both the default value and the allowed tokens.
         _VerifyAttribute(prim_3, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "3",
-                         documentation = "Defined in Four also")
+                         default = "3")
         # FourAPI defines the property. 
         _VerifyAttribute(prim_4, propName, 'token',
                          allowedTokens = Vt.TokenArray(["four", "4"]),
-                         default = "four",
-                         documentation = "Defined in Four also")
+                         default = "four")
 
         # TypedPrimDerived includes PropertyOversThreeAPI (which includes 
         # PropertyOversFourAPI) and overrides the default value. But it also
@@ -3503,14 +3403,12 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertFalse(primBase.GetAttribute(propName))
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["base_over", "over_base"]),
-                         default = "derived_over",
-                         documentation = "Defined in Four also")
+                         default = "derived_over")
 
         # Property: multi:two:defined_in_m1
         # Defined in PropertyOversMultiOneAPI as multi:_INST_:defined_in_m1
         #   value = "multi_one"
         #   allowedTokens = "multi_one", "m1"
-        #   doc = "Defined in MultiOne"
         # Override in PropertyOversOneAPI sets default value to "1"
         # Override in PropertyOversTypedPrimDerived sets default value to
         # "derived_over"
@@ -3519,18 +3417,15 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # set its value to "1"
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_one", "m1"]),
-                         default = "1",
-                         documentation = "Defined in MultiOne")
+                         default = "1")
         # TwoAPI includes MultiOneAPI:two but doesn't override this property
         _VerifyAttribute(prim_2, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_one", "m1"]),
-                         default = "multi_one",
-                         documentation = "Defined in MultiOne")
+                         default = "multi_one")
         # MultiOneAPI:two defines this property
         _VerifyAttribute(prim_m_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_one", "m1"]),
-                         default = "multi_one",
-                         documentation = "Defined in MultiOne")
+                         default = "multi_one")
         # MulitTwoAPI doesn't include a def for this property.
         self.assertFalse(prim_m_2.GetAttribute(propName))
 
@@ -3540,18 +3435,15 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # derived type prim.
         _VerifyAttribute(primBase, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_one", "m1"]),
-                         default = "multi_one",
-                         documentation = "Defined in MultiOne")
+                         default = "multi_one")
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_one", "m1"]),
-                         default = "derived_over",
-                         documentation = "Defined in MultiOne")
+                         default = "derived_over")
 
         # Property: multi:two:defined_in_m2
         # Defined in PropertyOversMultiTwoAPI as multi:_INST_:defined_in_m2
         #   value = "multi_two"
         #   allowedTokens = "multi_two", "m2"
-        #   doc = "Defined in MultiTwo"
         # Override of multi:_INST_:defined_in_m2 in PropertyOversMultiOneAPI
         #   sets default value to "m1"
         # 
@@ -3566,22 +3458,18 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # indirectly include an instance of MultiOneAPI
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "m1")
         _VerifyAttribute(prim_2, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "m1")
         _VerifyAttribute(prim_m_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "m1")
         # The prim that only includes the MultiTwoAPI:two instance uses
         # MultiTwo's definition of the prim as it is defined.
         _VerifyAttribute(prim_m_2, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "multi_two",
-                         documentation = "Defined in MultiTwo")
+                         default = "multi_two")
 
         # TypedPrimBase includes OversTwoAPI which includes MultiTwoAPI:two
         # so this property is present. Since TypedPrimBase overrides the
@@ -3589,22 +3477,19 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # TypedPrimBase prim
         _VerifyAttribute(primBase, propName, 'token',
                          allowedTokens = Vt.TokenArray(["base_over", "over_base"]),
-                         default = "base_over",
-                         documentation = "Defined in MultiTwo")
+                         default = "base_over")
         # TypedPrimDerived additionally overrides the default value with its
         # own override so its default value is used. The override for allowed
         # tokens from TypedPrimBase is used since the TypedPrimDerived doesn't
         # specify its own value for the field.
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["base_over", "over_base"]),
-                         default = "derived_over",
-                         documentation = "Defined in MultiTwo")
+                         default = "derived_over")
 
         # Property: multi:two:multiOne:defined_in_m2
         # Defined in PropertyOversMultiTwoAPI as multi:_INST_:defined_in_m2
         #   value = "multi_two"
         #   allowedTokens = "multi_two", "m2"
-        #   doc = "Defined in MultiTwo"
         # Override of multi:_INST_:multiOne:defined_in_m2 in
         #   PropertyOversMultiOneAPI sets default value to "m1"
         propName = "multi:two:multiOne:defined_in_m2"
@@ -3621,16 +3506,13 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # case overriding the default value to "multiOne:m1"
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "multiOne:m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "multiOne:m1")
         _VerifyAttribute(prim_2, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "multiOne:m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "multiOne:m1")
         _VerifyAttribute(prim_m_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "multiOne:m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "multiOne:m1")
         # This prim includes MultiTwoAPI:two not MultiTwoAPI:two:multiOne, so
         # it doesn't have this property.
         self.assertFalse(prim_m_2.GetAttribute(propName))
@@ -3639,12 +3521,10 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # so the properties match the one's from the other prim's above.
         _VerifyAttribute(primBase, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "multiOne:m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "multiOne:m1")
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_two", "m2"]),
-                         default = "multiOne:m1",
-                         documentation = "Defined in MultiTwo")
+                         default = "multiOne:m1")
 
         # XXX: This case is meant to test the behavior of overriding an property
         # in a multiple apply API schema that includes another multiple apply
@@ -3660,7 +3540,6 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # Defined in PropertyOversMultiThreeAPI as otherMulti:_INST_:defined_in_m3
         #   value = "multi_three"
         #   allowedTokens = "multi_three", "m3"
-        #   doc = "Defined in MultiThree"
         # Override of otherMulti:_INST_:multiOne:defined_in_m3 in
         #   PropertyOversMultiOneAPI sets default value to "m1"
         propName = "otherMulti:two:multiOne:defined_in_m3"
@@ -3673,33 +3552,27 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # override using the correct prefix.
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_three", "m3"]),
-                         default = "m1",
-                         documentation = "Defined in MultiThree")
+                         default = "m1")
         _VerifyAttribute(prim_2, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_three", "m3"]),
-                         default = "m1",
-                         documentation = "Defined in MultiThree")
+                         default = "m1")
         _VerifyAttribute(prim_m_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_three", "m3"]),
-                         default = "m1",
-                         documentation = "Defined in MultiThree")
+                         default = "m1")
         self.assertFalse(prim_m_2.GetAttribute(propName))
 
         # No overrides in the typed prim schemas.
         _VerifyAttribute(primBase, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_three", "m3"]),
-                         default = "m1",
-                         documentation = "Defined in MultiThree")
+                         default = "m1")
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["multi_three", "m3"]),
-                         default = "m1",
-                         documentation = "Defined in MultiThree")
+                         default = "m1")
 
         # Property: int_defined_in_two
         # Defined in PropertyOversTwoAPI
         #   value = 2
         #   typeName = int
-        #   doc = "Defined in Two"
         # Override in PropertyOversOneAPI tries to override the typeName to 
         #   'token' and set the value to "1"
         # Override in PropertyOversTypedPrimBase overrides the default value to 
@@ -3710,33 +3583,28 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # It is invalid for an override to change the typeName of the defined
         # property. The override in OneAPI is ignored.
         _VerifyAttribute(prim_1, propName, 'int',
-                         default = 2,
-                         documentation = "Int defined in Two")
+                         default = 2)
         _VerifyAttribute(prim_2, propName, 'int',
-                         default = 2,
-                         documentation = "Int defined in Two")
+                         default = 2)
 
         # TypedPrimBase includes PropertyOversTwoAPI and has an override for
         # the property (using the correct type) that sets the default to 10 and
         # changes the doc string.
         _VerifyAttribute(primBase, propName, 'int',
-                         default = 10,
-                         documentation = "Int override in Base")
+                         default = 10)
         # TypedPrimDerived has an override with a mismatched typeName. We 
         # however compose all type inheritance first so the override from the 
         # TypedPrimDerived is composed over TypedPrimBase's override before it
         # is composed with the API schema properties so no override of this 
         # property is applied because of the type mismatch. 
         _VerifyAttribute(primDerived, propName, 'int',
-                         default = 2,
-                         documentation = "Int defined in Two")
+                         default = 2)
 
         # Property: uniform_token_defined_in_four
         # Defined in PropertyOversFourAPI
         #   value = "unt_form"
         #   variability = uniform
         #   allowedTokens = "uni_four", "uni_4"
-        #   doc = "Uniform token defined in Four"
         # Override in PropertyOversThreeAPI overrides the default value and 
         #   allowed tokens. The override attribute is declared as a non-uniform
         #   token attribute, but the attempt to override variability is ignored.
@@ -3756,21 +3624,18 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         _VerifyAttribute(prim_1, propName, 'token',
                          variability = Sdf.VariabilityUniform,
                          allowedTokens = Vt.TokenArray(["uni_three", "uni_3"]),
-                         default = "uni_1",
-                         documentation = "Uniform token defined in Four")
+                         default = "uni_1")
         self.assertFalse(prim_2.GetAttribute(propName))
         # OversThreeAPI overrides default and allowedTokens. The variability 
         # of the override is always ignored.
         _VerifyAttribute(prim_3, propName, 'token',
                          variability = Sdf.VariabilityUniform,
                          allowedTokens = Vt.TokenArray(["uni_three", "uni_3"]),
-                         default = "uni_3",
-                         documentation = "Uniform token defined in Four")
+                         default = "uni_3")
         _VerifyAttribute(prim_4, propName, 'token',
                          variability = Sdf.VariabilityUniform,
                          allowedTokens = Vt.TokenArray(["uni_four", "uni_4"]),
-                         default = "uni_four",
-                         documentation = "Uniform token defined in Four")
+                         default = "uni_four")
 
         # TypedPrimBase does not include the property. 
         # OversThreeAPI overrides the allowed tokens and is the strongest 
@@ -3783,14 +3648,12 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         _VerifyAttribute(primDerived, propName, 'token',
                          variability = Sdf.VariabilityUniform,
                          allowedTokens = Vt.TokenArray(["uni_three", "uni_3"]),
-                         default = "uni_derived",
-                         documentation = "Uniform token defined in Four")
+                         default = "uni_derived")
 
         # Property: defined_in_auto
         # Defined in PropertyOversAutoApplyAPI
         #   value = "auto"
         #   allowedTokens = "auto"
-        #   doc = "Defined in Auto"
         # Override in PropertyOversOneAPI sets default value to "1"
         # Override in PropertyOversThreeAPI sets default value to "3" and
         #   allowedTokens to ["three", "3"]
@@ -3806,8 +3669,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # the auto apply schemas attribute definition.
         _VerifyAttribute(prim_1, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "1",
-                         documentation = "Defined in Auto")
+                         default = "1")
         # TwoAPI does not include AutoApplyAPI
         self.assertFalse(prim_2.GetAttribute(propName))
         # AutoApplyAPI is auto applied to ThreeAPI so ThreeAPI has the attribute
@@ -3817,8 +3679,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # the override is not composed.
         _VerifyAttribute(prim_3, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "3",
-                         documentation = "Defined in Auto")
+                         default = "3")
         # FourAPI defines an override for the attribute, but it does not include
         # the AutoApplyAPI so it does not have the attribute.
         self.assertFalse(prim_4.GetAttribute(propName))
@@ -3830,8 +3691,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         prim_auto.ApplyAPI(self.PropertyOversAutoApplyAPIType)
         _VerifyAttribute(prim_auto, propName, 'token',
                          allowedTokens = Vt.TokenArray(["auto"]),
-                         default = "auto",
-                         documentation = "Defined in Auto")
+                         default = "auto")
 
         # The TypedPrimDerived includes PropertyOversThreeAPI with no overrides
         # of its own so the value matches ThreeAPI. The base type does not 
@@ -3839,14 +3699,12 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertFalse(primBase.GetAttribute(propName))
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["three", "3"]),
-                         default = "3",
-                         documentation = "Defined in Auto")
+                         default = "3")
 
         # Property: defined_in_base
         # Defined in PropertyOversTypedPrimBase
         #   value = "base_def"
         #   allowedTokens = "base_def", "def_base"
-        #   doc = "Defined in Base"
         # Property also defined in PropertyOversTypedPrimDerived setting just
         #   the default value to "derived_over"
         propName = "defined_in_base"
@@ -3855,20 +3713,17 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # composition happens for Typed schema inheritance.
         _VerifyAttribute(primBase, propName, 'token',
                          allowedTokens = Vt.TokenArray(["base_def", "def_base"]),
-                         default = "base_def",
-                         documentation = "Defined in Base")
+                         default = "base_def")
         # The derived schema's default value composes with the property 
         # defintion from the base class.
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["base_def", "def_base"]),
-                         default = "derived_over",
-                         documentation = "Defined in Base")
+                         default = "derived_over")
         
         # Property: over_in_base
         # Defined in PropertyOversTypedPrimBase
         #   value = "base_over"
         #   allowedTokens = "base_over", "over_base"
-        #   doc = "Override in Base"
         #   apiSchemaOverride = true
         #
         # Defined in PropertyOversTypedPrimDerived
@@ -3890,8 +3745,7 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         # override.
         _VerifyAttribute(primDerived, propName, 'token',
                          allowedTokens = Vt.TokenArray(["base_over", "over_base"]),
-                         default = "derived_def",
-                         documentation = "Override in Base")
+                         default = "derived_def")
 
 if __name__ == "__main__":
     unittest.main()

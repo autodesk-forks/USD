@@ -744,6 +744,7 @@ SdfSchemaBase::_RegisterStandardFields()
     _DoRegisterField(SdfFieldKeys->InheritPaths, SdfPathListOp())
         .ListValueValidator(&_ValidateInheritPath);
     _DoRegisterField(SdfFieldKeys->Kind, TfToken());
+    _DoRegisterField(SdfFieldKeys->Limits, VtDictionary());
     _DoRegisterField(SdfFieldKeys->Owner, "");
     _DoRegisterField(SdfFieldKeys->PrimOrder, std::vector<TfToken>())
         .ListValueValidator(&_ValidateIdentifierToken);
@@ -967,6 +968,8 @@ SdfSchemaBase::_RegisterStandardFields()
         .MetadataField(SdfFieldKeys->AllowedTokens,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->ColorSpace, 
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->Limits,
                        SdfMetadataDisplayGroupTokens->core)
         ;
 

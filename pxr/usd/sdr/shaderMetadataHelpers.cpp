@@ -5,8 +5,12 @@
 // https://openusd.org/license.
 //
 
+#include "pxr/base/tf/error.h"
+#include "pxr/base/tf/errorMark.h"
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/base/tf/stringUtils.h"
+#include "pxr/usd/sdf/textParserUtils.h"
+#include "pxr/usd/sdf/types.h"
 #include "pxr/usd/sdr/shaderMetadataHelpers.h"
 #include "pxr/usd/sdr/shaderProperty.h"
 
@@ -260,6 +264,61 @@ namespace ShaderMetadataHelpers
         }
         // Return an empty token if no "role" metadata or acceptable value found
         return TfToken();
+    }
+
+    // -------------------------------------------------------------------------
+
+    VtValue
+    ParseSdfValue(const std::string& valueStr,
+                  const SdrShaderPropertyConstPtr& property,
+                  std::string* err)
+    {
+        const SdrSdfTypeIndicator indicator = property->GetTypeAsSdfType();
+        const TfToken sdrType = property->GetType();
+        const SdfValueTypeName sdfType = indicator.GetSdfType();
+
+        std::string normalizedStr = valueStr;
+        if (property->IsDynamicArray() ||
+                sdrType == SdrPropertyTypes->Vector) {
+            normalizedStr = TfStringTrim(normalizedStr);
+            normalizedStr = '[' + normalizedStr + ']';
+        } else if (property->IsArray() ||
+                   sdrType == SdrPropertyTypes->Color  ||
+                   sdrType == SdrPropertyTypes->Color4 ||
+                   sdrType == SdrPropertyTypes->Point  ||
+                   sdrType == SdrPropertyTypes->Normal) {
+            normalizedStr = TfStringTrim(normalizedStr);
+            normalizedStr = '(' + normalizedStr + ')';
+        } else if (sdfType == SdfValueTypeNames->String ||
+                   sdfType == SdfValueTypeNames->Token) {
+            normalizedStr = Sdf_QuoteString(normalizedStr);
+        } else if (sdfType == SdfValueTypeNames->Asset) {
+            if (normalizedStr.empty()) {
+                *err = "Attempted parse of invalid empty asset path";
+                return VtValue();
+            }
+            normalizedStr = Sdf_QuoteAssetPath(normalizedStr);
+        } else {
+            normalizedStr = TfStringTrim(normalizedStr);
+        }
+
+        // We transform any TfErrors into messages that are concatenated to the
+        // provided err output, so that Python users don't need to deal with
+        // a thrown exception.
+        TfErrorMark m;
+        VtValue outputValue = Sdf_ParseValueFromString(normalizedStr, sdfType);
+        if (!m.IsClean()) {
+            for (TfError const &tfErr: m) {
+                if (err->empty()) {
+                    *err = tfErr.GetCommentary();
+                } else {
+                    *err = TfStringPrintf("%s; %s", err->c_str(),
+                                          tfErr.GetCommentary().c_str());
+                }
+            }
+            m.Clear();
+        }
+        return outputValue;
     }
 }
 

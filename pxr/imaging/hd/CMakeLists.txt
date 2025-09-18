@@ -136,7 +136,6 @@ pxr_library(hd
         pluginRenderDelegateUniqueHandle
         points
         prefixingSceneIndex
-        primDataSourceOverlayCache
         primGather
         primOriginSchema
         primTypeIndex

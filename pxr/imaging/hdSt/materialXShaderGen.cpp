@@ -138,7 +138,7 @@ template<typename Base>
 HdStMaterialXShaderGen<Base>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
     : Base( mx::TypeSystem::create() ),
-      _mxHdTextureMap(mxHdInfo.textureMap),
+      _mxHdTextureNames(mxHdInfo.textureNames),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
       _materialTag(mxHdInfo.materialTag),
@@ -200,12 +200,12 @@ HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(
         Base::emitString(R"(    }, )""\n", mxStage);
     }
     // insert texture information if needed
-    if (!_mxHdTextureMap.empty()) {
+    if (!_mxHdTextureNames.empty()) {
         Base::emitString(R"(    "textures": {)" "\n", mxStage);
         std::string line = ""; unsigned int i = 0;
-        for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-            line += "        \"" + texturePair.second + "\": {\n        }";
-            line += (i < _mxHdTextureMap.size() - 1) ? ",\n" : "\n";
+        for (std::string const& textureName : _mxHdTextureNames) {
+            line += "        \"" + textureName + "\": {\n        }";
+            line += (i < _mxHdTextureNames.size() - 1) ? ",\n" : "\n";
             i++;
         }
         Base::emitString(line, mxStage);
@@ -472,14 +472,15 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     Base::emitLineBreak(mxStage);
 
     // Initialize MaterialX Texture samplers with HdGetSampler equivalents
-    if (_bindlessTexturesEnabled && !_mxHdTextureMap.empty()) {
+    if (_bindlessTexturesEnabled && !_mxHdTextureNames.empty()) {
         Base::emitComment("Initialize Material Textures", mxStage);
-        for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-            if (texturePair.first == "domeLightFallback") {
+        for (std::string const& textureName : _mxHdTextureNames) {
+            if (textureName == "domeLightFallback") {
                 continue;
             }
-            emitLine(texturePair.first + " = "
-                    "HdGetSampler_" + texturePair.second + "()", mxStage);
+            emitLine(TfStringPrintf("%s = HdGetSampler_%s()",
+                        textureName.c_str(), textureName.c_str()),
+                mxStage);
         }
         Base::emitLineBreak(mxStage);
     }
@@ -957,16 +958,14 @@ HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions(
         this->emitLineBreak(mxStage);
 
         // Define mappings for the MaterialX Textures
-        if (!this->_mxHdTextureMap.empty()) {
+        if (!this->_mxHdTextureNames.empty()) {
             this->emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : this->_mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
+            for (std::string const& textureName : this->_mxHdTextureNames) {
+                if (textureName == "domeLightFallback") {
                     continue;
                 }
-                this->emitLine(TfStringPrintf(
-                    "#define %s HdGetSampler_%s()",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str()),
+                this->emitLine(TfStringPrintf("#define %s HdGetSampler_%s()",
+                        textureName.c_str(), textureName.c_str()),
                     mxStage, false);
             }
             this->emitLineBreak(mxStage);
@@ -1104,6 +1103,8 @@ void HdStMaterialXShaderGenWgslGlsl::_EmitAdditionalDefines(MaterialX::GenContex
     this->emitComment("WGSL Specific Items", mxStage);
     // Define mappings for the DomeLight Textures
     //   See HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions()
+    this->emitLine("#define HW_SEPARATE_SAMPLERS", mxStage, false);
+    this->emitLineBreak(mxStage);
     this->emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
     this->emitLine("#define u_envRadiance_texture textureBind_domeLightPrefilter", mxStage, false);
     this->emitLine("#define u_envRadiance_sampler samplerBind_domeLightPrefilter", mxStage, false);
@@ -1118,24 +1119,15 @@ void HdStMaterialXShaderGenWgslGlsl::_EmitAdditionalDefines(MaterialX::GenContex
     this->emitLineBreak(mxStage);
 
     // Define mappings for the MaterialX Textures
-    if (!this->_mxHdTextureMap.empty()) {
-        this->emitComment("Define MaterialX to Hydra Sampler mappings (WGSL)", mxStage);
-        for (mx::StringMap::const_reference texturePair : this->_mxHdTextureMap) {
-            if (texturePair.first == "domeLightFallback") {
+    if (!_mxHdTextureNames.empty()) {
+        this->emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
+        for (std::string const& textureName : _mxHdTextureNames) {
+            if (textureName == "domeLightFallback") {
                 continue;
             }
-            this->emitLine(TfStringPrintf(
-                "#define %s_texture textureBind_%s",
-                texturePair.first.c_str(),
-                texturePair.second.c_str()),
-                mxStage, false
-            );
-            this->emitLine(TfStringPrintf(
-                "#define %s_sampler samplerBind_%s",
-                texturePair.first.c_str(),
-                texturePair.second.c_str()),
-                mxStage, false
-            );
+            this->emitLine(TfStringPrintf("#define %s HdGetSampler_%s()",
+                    textureName.c_str(), textureName.c_str()),
+                mxStage, false);
         }
         this->emitLineBreak(mxStage);
     }
@@ -1318,17 +1310,17 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
         emitLineBreak(mxStage);
 
         // Define mappings for the MaterialX Textures
-        if (!_mxHdTextureMap.empty()) {
+        if (!_mxHdTextureNames.empty()) {
             emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
+            for (std::string const &textureName : _mxHdTextureNames) {
+                if (textureName == "domeLightFallback") {
                     continue;
                 }
                 emitLine(TfStringPrintf(
                     "#define %s MetalTexture{HdGetSampler_%s(), samplerBind_%s}",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str(),
-                        texturePair.second.c_str()),
+                        textureName.c_str(),
+                        textureName.c_str(),
+                        textureName.c_str()),
                     mxStage, false);
             }
             emitLineBreak(mxStage);

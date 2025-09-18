@@ -28,6 +28,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// UsdUIPropertyHints, and UsdUIAttributeHints), and provides convenient API
 /// for using those fields. However, it is not formally a schema and does not
 /// derive from UsdSchemaBase.
+///
+/// See \ref usdUI_hintsOverview for an overview of UI hints.
 class UsdUIPrimHints : public UsdUIObjectHints
 {
 public:

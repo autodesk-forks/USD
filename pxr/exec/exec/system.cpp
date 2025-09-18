@@ -6,9 +6,8 @@
 //
 #include "pxr/exec/exec/system.h"
 
-#include "pxr/exec/exec/authoredValueInvalidationResult.h"
 #include "pxr/exec/exec/compiler.h"
-#include "pxr/exec/exec/disconnectedInputsInvalidationResult.h"
+#include "pxr/exec/exec/invalidationResult.h"
 #include "pxr/exec/exec/program.h"
 #include "pxr/exec/exec/requestImpl.h"
 #include "pxr/exec/exec/requestTracker.h"
@@ -83,7 +82,7 @@ ExecSystem::_Compute(
 
     // Reset the accumulated uninitialized input nodes on the program, and
     // retain the invalidation request for executor invalidation below.
-    VdfMaskedOutputVector invalidationRequest =
+    const VdfMaskedOutputVector invalidationRequest =
         _program->ResetUninitializedInputNodes();
 
     // Make sure that the executor data manager is properly invalidated for any
@@ -150,7 +149,8 @@ ExecSystem::_InvalidateDisconnectedInputs()
         (WorkDispatcher &dispatcher){
         // Invalidate the executor data manager.
         dispatcher.Run([&](){
-            runtime->InvalidateExecutor(invalidationResult.invalidationRequest);
+            runtime->InvalidateExecutor(
+                invalidationResult.invalidationRequest);
         });
 
         // Invalidate values in the page cache.
@@ -171,12 +171,12 @@ ExecSystem::_InvalidateDisconnectedInputs()
 }
 
 void
-ExecSystem::_InvalidateAuthoredValues(TfSpan<const SdfPath> invalidProperties)
+ExecSystem::_InvalidateAttributeValues(TfSpan<const SdfPath> invalidAttributes)
 {
     TRACE_FUNCTION();
 
-    const Exec_AuthoredValueInvalidationResult invalidationResult =
-        _program->InvalidateAuthoredValues(invalidProperties);
+    const Exec_AttributeValueInvalidationResult invalidationResult =
+        _program->InvalidateAttributeAuthoredValues(invalidAttributes);
 
     // Invalidate the executor and send request invalidation.
     WorkWithScopedDispatcher(
@@ -202,7 +202,7 @@ ExecSystem::_InvalidateAuthoredValues(TfSpan<const SdfPath> invalidProperties)
 
         // Notify all the requests of computed value invalidation. Not all the
         // requests will contain all the invalid leaf nodes or invalid
-        // properties, and the request impls are responsible for filtering the
+        // attributes, and the request impls are responsible for filtering the
         // provided information.
         requestTracker->DidInvalidateComputedValues(invalidationResult);
     });

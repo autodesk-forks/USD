@@ -6,11 +6,10 @@
 //
 #include "pxr/exec/exec/requestImpl.h"
 
-#include "pxr/exec/exec/authoredValueInvalidationResult.h"
 #include "pxr/exec/exec/cacheView.h"
 #include "pxr/exec/exec/debugCodes.h"
 #include "pxr/exec/exec/definitionRegistry.h"
-#include "pxr/exec/exec/disconnectedInputsInvalidationResult.h"
+#include "pxr/exec/exec/invalidationResult.h"
 #include "pxr/exec/exec/program.h"
 #include "pxr/exec/exec/requestTracker.h"
 #include "pxr/exec/exec/runtime.h"
@@ -91,7 +90,7 @@ _OutputInvalidationResultDebugMsg(
 
 void 
 Exec_RequestImpl::DidInvalidateComputedValues(
-    const Exec_AuthoredValueInvalidationResult &invalidationResult)
+    const Exec_AttributeValueInvalidationResult &invalidationResult)
 {
     if (!_valueCallback || _leafOutputs.empty()) {
         TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(

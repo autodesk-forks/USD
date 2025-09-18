@@ -92,6 +92,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <functional>
 #include <iterator>
 #include <map>
@@ -2293,7 +2294,7 @@ _ToRtParamList(VtDictionary const& dict, TfToken prefix=TfToken())
 }
 
 static
-RtUString
+TfToken
 _GetOutputDisplayDriverType(const std::string &extension)
 {
     static const std::map<std::string,TfToken> extToDisplayDriver{
@@ -2305,19 +2306,19 @@ _GetOutputDisplayDriverType(const std::string &extension)
 
     const auto it = extToDisplayDriver.find(extension);
     if (it != extToDisplayDriver.end()) {
-        return RtUString(it->second.GetText());
+        return it->second;
     }
 
     TF_WARN(
         "Could not determine display driver for product filename extension %s."
         "Falling back to openexr.", extension.c_str());
 
-    return RtUString(_tokens->openexr.GetText());
+    return _tokens->openexr;
 }
 
 // Overload used when creating the render view from a renderSpec dict.
 static
-RtUString
+TfToken
 _GetOutputDisplayDriverType(const TfToken &name)
 {
     const std::string outputExt = TfGetExtension(name.GetString());
@@ -2327,7 +2328,7 @@ _GetOutputDisplayDriverType(const TfToken &name)
 #if PXR_VERSION >= 2308
 // Overload used when creating the render view from a render settings' product.
 static
-RtUString
+TfToken
 _GetOutputDisplayDriverType(
     const VtDictionary &productSettings,
     const TfToken &productName,
@@ -2335,14 +2336,20 @@ _GetOutputDisplayDriverType(
 {
     // Use "ri:productType" from the product's namespaced settings if
     // available.
-    const TfToken driverName =
+    const TfToken riProductType =
         VtDictionaryGet<TfToken>(
             productSettings,
             _tokens->riProductType.GetText(),
             VtDefault = TfToken());
 
-    if (!driverName.IsEmpty()) {
-        return RtUString(driverName.GetText());
+    if (riProductType == HdPrmanRenderProductTokens->idMap) {
+        // The idMap product is not a standard display output, instead produced
+        // by a file write on render pass execution completion.
+        return TfToken("");
+    }
+
+    if (!riProductType.IsEmpty()) {
+        return riProductType;
     }
 
     // Otherwise, use the extension from the product name and product type
@@ -2351,7 +2358,7 @@ _GetOutputDisplayDriverType(
     const std::string outputExt = TfGetExtension(productName.GetString());
 
     if (productType == _tokens->deepRaster && outputExt == std::string("exr")) {
-        return RtUString(_tokens->deepexr.GetText());
+        return _tokens->deepexr;
     }
 
     return _GetOutputDisplayDriverType(outputExt);
@@ -2440,7 +2447,8 @@ _ComputeRenderViewDesc(
                 HdPrmanExperimentalRenderSpecTokens->name));
 
         displayDesc.name = RtUString(name.GetText());
-        displayDesc.driver = _GetOutputDisplayDriverType(name);
+        displayDesc.driver = RtUString(
+            _GetOutputDisplayDriverType(name).GetText());
         displayDesc.params = _ToRtParamList(
             VtDictionaryGet<VtDictionary>(
                 renderProduct,
@@ -2502,13 +2510,19 @@ _ComputeRenderViewDesc(
 
 
     for (const HdRenderSettings::RenderProduct &product : products) {
+
+        const TfToken driverType = _GetOutputDisplayDriverType(
+            product.namespacedSettings, product.name, product.type);
+        if (driverType.IsEmpty()) {
+            continue;
+        }
+
         // Create a DisplayDesc for this RenderProduct
         HdPrman_RenderViewDesc::DisplayDesc displayDesc;
         displayDesc.name = RtUString(product.name.GetText());
         displayDesc.params = _ToRtParamList(product.namespacedSettings,
             _tokens->riDisplayDriverNamespace);
-        displayDesc.driver = _GetOutputDisplayDriverType(
-            product.namespacedSettings, product.name, product.type);
+        displayDesc.driver = RtUString(driverType.GetText());
 
         /* RenderVar */
         for (const HdRenderSettings::RenderProduct::RenderVar &renderVar :
@@ -4879,6 +4893,50 @@ HdPrman_RenderParam::_UpdateShutterInterval(const RtParamList& composedParams)
     // a workaround to provide it.
     HdPrman_MotionBlurSceneIndexPlugin::SetShutterInterval(
         _shutterInterval[0], _shutterInterval[1]);
+}
+
+TfToken
+HdPrman_RenderParam::GetIdMapProductName(HdPrman_RenderSettings* renderSettings)
+{
+    for (const auto& product : renderSettings->GetRenderProducts()) {
+        const TfToken productType =
+            VtDictionaryGet<TfToken>(
+                product.namespacedSettings,
+                _tokens->riProductType.GetText(),
+                VtDefault = TfToken());
+
+        if (productType == HdPrmanRenderProductTokens->idMap) {
+            return product.name;
+        }
+    }
+
+    return TfToken();
+}
+
+void
+HdPrman_RenderParam::WriteIdMap(
+    HdRenderIndex* renderIndex,
+    const TfToken& productName)
+{
+    std::ofstream outFile(productName.GetText(), std::ios::binary);
+    if (!outFile) {
+        TF_WARN("Failed to create ID file '%s'", productName.GetText());
+        return;
+    }
+
+    for (const auto& path : renderIndex->GetRprimIds()) {
+        const int64_t pathLen = path.GetString().size() + 1;
+        const int64_t id = renderIndex->GetRprim(path)->GetPrimId() + 1;
+
+        outFile.write(reinterpret_cast<const char*>(&id), sizeof(int64_t))
+               .write(reinterpret_cast<const char*>(&pathLen), sizeof(pathLen))
+               .write(path.GetText(), pathLen);
+
+        if (!outFile) {
+            TF_WARN("Writing ID file failed on '%s'", path.GetText());
+            return;
+        }
+    }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

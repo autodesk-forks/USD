@@ -838,10 +838,6 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
             if (!domeLightCamVis) {
                 attrs.SetInteger(RixStr.k_visibility_camera, 0);
             }
-
-            if (!domeLightCamVis) {
-                attrs.SetInteger(RixStr.k_visibility_camera, 0);
-            }
         }
 
         // Light linking

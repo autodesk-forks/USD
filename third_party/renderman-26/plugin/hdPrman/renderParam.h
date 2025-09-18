@@ -59,11 +59,7 @@ constexpr int HDPRMAN_MAX_TIME_SAMPLES = 4;
 #endif
 
 #define HDPRMAN_SHUTTEROPEN_DEFAULT 0.f
-#ifdef PIXAR_ANIM
-#define HDPRMAN_SHUTTERCLOSE_DEFAULT 0.5f
-#else
 #define HDPRMAN_SHUTTERCLOSE_DEFAULT 0.f
-#endif
 
 // Render Param for HdPrman to communicate with an instance of PRMan.
 class HdPrman_RenderParam : public HdRenderParam
@@ -80,7 +76,7 @@ public:
     ~HdPrman_RenderParam() override;
 
     HDPRMAN_API
-    void Begin(HdPrmanRenderDelegate *renderDelegate); 
+    void Begin(HdPrmanRenderDelegate *renderDelegate);
 
     // Convert any Hydra primvars that should be Riley instance attributes.
     // Stores visibility state in *visible (if provided) in addition to
@@ -111,7 +107,7 @@ public:
         SdfPath const& id,
         VtArray<TfToken> const& categories,
         RtParamList& attrs);
-    
+
     /// Prepends the given \p renderTag to grouping:membership in \p params.
     HDPRMAN_API
     static void AddRenderTagToGroupingMembership(
@@ -183,7 +179,7 @@ public:
 
     // Register a callback to process integrator settings
     HDPRMAN_API
-    static void 
+    static void
     RegisterIntegratorCallbackForCamera(
         IntegratorCameraCallback const& callback);
 
@@ -234,7 +230,7 @@ public:
 
     // Invalidate texture at path.
     void InvalidateTexture(const std::string &path);
-    
+
     /// Call this from RenderPass to set which render tags should be enabled.
     /// Calling will always trigger a render index traversal, and may trigger an
     /// intergrator update, so only call it if you strongly suspect that either
@@ -256,7 +252,7 @@ public:
     bool HasSceneLights() const { return _sceneLightCount > 0; }
     void IncreaseSceneLightCount() { ++_sceneLightCount; }
     void DecreaseSceneLightCount() { --_sceneLightCount; }
-    
+
     // Provides external access to resources used to set parameters for
     // scene options from the render settings map.
     RtParamList &GetLegacyOptions() { return _legacyOptions; }
@@ -372,8 +368,8 @@ public:
 
     // Riley Data from the Sample Filter Prim
     void AddSampleFilter(
-        HdSceneDelegate *sceneDelegate, 
-        SdfPath const& path, 
+        HdSceneDelegate *sceneDelegate,
+        SdfPath const& path,
         riley::ShadingNode const& node);
     void CreateSampleFilterNetwork(HdSceneDelegate *sceneDelegate);
     riley::SampleFilterList GetSampleFilterList();
@@ -387,8 +383,8 @@ public:
 
     // Riley Data from the Display Filter Prim
     void AddDisplayFilter(
-        HdSceneDelegate *sceneDelegate, 
-        SdfPath const& path, 
+        HdSceneDelegate *sceneDelegate,
+        SdfPath const& path,
         riley::ShadingNode const& node);
     void CreateDisplayFilterNetwork(HdSceneDelegate *sceneDelegate);
     riley::DisplayFilterList GetDisplayFilterList();
@@ -425,6 +421,14 @@ public:
     bool SetArbitraryValue(const TfToken& key, const VtValue& value) override;
 #endif
 
+    // Return the id map product name (ri:productType=idMap) in the provided
+    // provided render settings. Returns an empty token if not found.
+    static TfToken GetIdMapProductName(HdPrman_RenderSettings* renderSettings); 
+
+    // Write the path to id mapping to a file with the provided name.
+    static void WriteIdMap(HdRenderIndex* renderIndex, 
+                           const TfToken& productName);
+
 private:
     void _CreateStatsSession();
     void _CreateRiley(const std::string &rileyVariant,
@@ -432,7 +436,7 @@ private:
                       const std::vector<int>& xpuGpuConfig,
                       const std::vector<std::string>& extraArgs);
 
-    // Creation of riley prims that are either not backed by the scene 
+    // Creation of riley prims that are either not backed by the scene
     // (e.g., fallback materials) OR those that are
     // currently managed by render param (such as the camera, render view and
     // render terminals).
@@ -442,7 +446,7 @@ private:
     void _CreateFallbackLight();
     void _CreateIntegrator(HdRenderDelegate * renderDelegate);
     void _CreateQuickIntegrator(HdRenderDelegate * renderDelegate);
-    
+
     void _DestroyRiley();
     void _DestroyStatsSession();
 
@@ -477,9 +481,9 @@ private:
         HdPrman_RenderViewDesc& renderViewDesc,
         const std::vector<size_t>& renderOutputIndices,
         RtParamList& displayParams, bool isXpu);
-    
+
     void _UpdateShutterInterval(const RtParamList &composedParams);
-    
+
     static
     void _SetExcludeSubset(
         const TfToken::Set& excludedTags,
@@ -550,7 +554,7 @@ private:
 
     // Fallback material for volumes that don't have materials.
     riley::MaterialId _fallbackVolumeMaterialId;
-    
+
     TfToken::Set _lastExcludedRenderTags;
 
     riley::IntegratorId _quickIntegratorId;
@@ -597,9 +601,9 @@ private:
     RtParamList _renderSettingsPrimOptions;
 
     // Render terminals
-    // Since parallel sync is enabled for sample and display filters, filter 
+    // Since parallel sync is enabled for sample and display filters, filter
     // nodes may be addeed in parallel via AddSampleFilter/AddDisplayFilter.
-    using _PathToRileyFilterMap = 
+    using _PathToRileyFilterMap =
         tbb::concurrent_unordered_map<SdfPath, riley::ShadingNode, SdfPath::Hash>;
 
     SdfPath _renderSettingsIntegratorPath;
@@ -636,7 +640,7 @@ private:
 
     // Solaris Legacy Sample & Display Filter Support
     riley::SampleFilterId _sampleFilterId;
-    riley::DisplayFilterId _displayFilterId;    
+    riley::DisplayFilterId _displayFilterId;
 
     RtUString _pixelFilter;
     GfVec2f _pixelFilterWidth;
@@ -672,7 +676,7 @@ HdPrman_ConvertPointsPrimvar(
 
 /// Count hydra points to set element count on primvars and then
 /// convert them to Riley point primvar.
-/// 
+///
 size_t
 HdPrman_ConvertPointsPrimvarForPoints(
     HdSceneDelegate* sceneDelegate,
