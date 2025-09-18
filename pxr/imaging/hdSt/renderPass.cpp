@@ -365,7 +365,7 @@ HdSt_RenderPass::_UpdateCommandBuffer(
 
     size_t renderPassStateBarVersion = renderPassState->GetRenderPassStateBarVersion();
     if (_renderPassStateBarVersion != renderPassStateBarVersion) {
-        renderPassStateBarVersion = _renderPassStateBarVersion;
+        _renderPassStateBarVersion = renderPassStateBarVersion;
         _recordedCmds.reset();
     }
 
