@@ -1030,7 +1030,7 @@ _ResourceGenerator::_GenerateHgiTextureResources(
     using TextureType = HioGlslfxResourceLayout::TextureType;
 
     for (auto const & texture : textureElements) {
-        HgiShaderTextureType const textureType = _textureTypeMap[texture.textureType];
+        HgiShaderTextureType const hgiTextureType = _textureTypeMap[texture.textureType];
         HdFormat const hdTextureFormat =
             HdStHioConversions::GetHdFormat(texture.format);
         if (texture.arraySize > 0) {

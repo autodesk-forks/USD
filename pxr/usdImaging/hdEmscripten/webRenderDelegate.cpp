@@ -261,11 +261,12 @@ private:
                                 HdVtBufferSource buffer(primvar.name, value);
 
                                 VtValue triangulated;
-                                if (!_meshUtil->ComputeTriangulatedFaceVaryingPrimvar(
-                                        buffer.GetData(),
-                                        buffer.GetNumElements(),
-                                        buffer.GetTupleType().type,
-                                        &triangulated)) {
+                                HdMeshComputationResult result = _meshUtil->ComputeTriangulatedFaceVaryingPrimvar(
+                                    buffer.GetData(),
+                                    buffer.GetNumElements(),
+                                    buffer.GetTupleType().type,
+                                    &triangulated);
+                                if (result != HdMeshComputationResult::Success) {
                                     TF_CODING_ERROR("[%s] Could not triangulate face-varying data.",
                                         primvar.name.GetText());
                                     continue;
