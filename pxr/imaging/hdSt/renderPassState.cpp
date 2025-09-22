@@ -783,6 +783,9 @@ HdStRenderPassState::Bind(HgiCapabilities const &hgiCapabilities)
         // XXX Switch points rendering to emit quad with FS that draws circle.
         glEnable(GL_POINT_SMOOTH);
     }
+
+    // Default to seamless cubemap sampling.
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 }
 
 void

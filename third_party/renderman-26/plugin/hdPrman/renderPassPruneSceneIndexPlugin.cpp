@@ -1,39 +1,38 @@
 //
-// Copyright 2024 Pixar
+// Copyright 2025 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 
-#include "hdPrman/renderPassSceneIndexPlugin.h"
+#include "hdPrman/renderPassPruneSceneIndexPlugin.h"
 
 #if PXR_VERSION >= 2408
 
 #include "hdPrman/tokens.h"
 
-#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneIndexPluginRegistry.h"
-#include "pxr/imaging/hd/tokens.h"
-#include "hdPrman/renderPassSceneIndex.h"
+#include "pxr/imaging/hdsi/renderPassPruneSceneIndex.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
-    ((sceneIndexPluginName, "HdPrman_RenderPassSceneIndexPlugin"))
+    ((sceneIndexPluginName, "HdPrman_RenderPassPruneSceneIndexPlugin"))
 );
 
 TF_REGISTRY_FUNCTION(TfType)
 {
     HdSceneIndexPluginRegistry
-        ::Define<HdPrman_RenderPassSceneIndexPlugin>();
+        ::Define<HdPrman_RenderPassPruneSceneIndexPlugin>();
 }
 
 TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
 {
-    // We need an "insertion point" that's *after* general material resolve.
-    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 115;
+    // Run after the scene is assembled and scene globals are authored, but
+    // before procedurals are expanded.
+    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 1;
 
-    for( auto const& pluginDisplayName : HdPrman_GetPluginDisplayNames()) {
+    for (auto const& pluginDisplayName : HdPrman_GetPluginDisplayNames()) {
         HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
             pluginDisplayName,
             _tokens->sceneIndexPluginName,
@@ -43,15 +42,15 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
     }
 }
 
-HdPrman_RenderPassSceneIndexPlugin::
-HdPrman_RenderPassSceneIndexPlugin() = default;
+HdPrman_RenderPassPruneSceneIndexPlugin::
+HdPrman_RenderPassPruneSceneIndexPlugin() = default;
 
 HdSceneIndexBaseRefPtr
-HdPrman_RenderPassSceneIndexPlugin::_AppendSceneIndex(
+HdPrman_RenderPassPruneSceneIndexPlugin::_AppendSceneIndex(
     const HdSceneIndexBaseRefPtr &inputScene,
     const HdContainerDataSourceHandle &inputArgs)
 {
-    return HdPrman_RenderPassSceneIndex::New(inputScene);
+    return HdsiRenderPassPruneSceneIndex::New(inputScene);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

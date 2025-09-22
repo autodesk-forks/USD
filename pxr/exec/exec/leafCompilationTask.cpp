@@ -127,8 +127,8 @@ _MakeInputKeyVector(const ExecValueKey &valueKey)
             Exec_InputKey {
                 EfLeafTokens->in,
                 valueKey.GetComputationName(),
+                /* disambiguatingId */ TfToken(),
                 TfType(),
-                /* metadataKey */ TfToken(),
                 ExecProviderResolution {
                     SdfPath::ReflexiveRelativePath(),
                     ExecProviderResolution::DynamicTraversal::Local

@@ -44,13 +44,9 @@ public:
     }
 
     /// Returns the type of values that are produced by this computation.
-    ///
-    /// \note
-    /// \p metadataKey is only used for the computeMetadata builtin computation.
-    ///
     virtual TfType GetResultType(
         const EsfObjectInterface &providerObject,
-        const TfToken &metadataKey,
+        const TfToken &disambiguatingId,
         EsfJournal *journal) const;
 
     /// Returns the type of values returned to external clients of execution
@@ -83,12 +79,9 @@ public:
     /// The information in \p nodeJournal will be used to determine when the
     /// node must be uncompiled.
     ///
-    /// \note
-    /// \p metadataKey is only used for the computeMetadata builtin computation.
-    ///
     virtual VdfNode *CompileNode(
         const EsfObjectInterface &providerObject,
-        const TfToken &metadataKey,
+        const TfToken &disambiguatingId,
         EsfJournal *nodeJournal,
         Exec_Program *program) const = 0;
 

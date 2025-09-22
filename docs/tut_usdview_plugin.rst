@@ -77,7 +77,7 @@ lets libplug find the container later. We also need to create a new
 plugInfo.json file in our plugin directory, so we'll do that now.
 
 .. code-block:: json
-   :caption: plugInfo.json
+   :caption: tutorialPlugin/plugInfo.json
 
    {
        "Plugins": [

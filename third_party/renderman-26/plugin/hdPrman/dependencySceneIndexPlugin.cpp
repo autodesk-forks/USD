@@ -153,10 +153,6 @@ _ComputeVolumeFieldBindingDependencies(
 HdContainerDataSourceHandle
 _BuildLightFilterDependenciesDs(const SdfPathVector &filterPaths)
 {
-    if (filterPaths.empty()) {
-        return nullptr;
-    }
-
     TfTokenVector names;
     std::vector<HdDataSourceBaseHandle> deps;
     const size_t numFilters = filterPaths.size();

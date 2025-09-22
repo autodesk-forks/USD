@@ -31,12 +31,26 @@ class "TestSingleApplyAPI" (
     customData = {
         string userDocBrief = "Test single apply API schema."
     }
+    uiHints = {
+        dictionary customDict = {
+            string TestCompose = "TestSingleApplyAPI"
+            int TestSingleApplyAPI = 3
+        }
+        string displayGroup = "TestSingleApplyAPI group"
+    }
 )
 {
     reorder properties = ["single:relationship", "single:token_attr", "single:bool_attr"]
     uniform bool single:bool_attr = 1 (
         customData = {
             string userDocBrief = "Boolean attribute."
+        }
+        uiHints = {
+            string displayGroup = "single:bool_attr group"
+            dictionary valueLabels = {
+                bool TestCompose = 1
+                bool single_bool_attr = 0
+            }
         }
     )
     rel single:relationship (
@@ -55,6 +69,13 @@ class "TestSingleApplyAPI" (
 class "TestComposeMetadataAPI" (
     customData = {
         string userDocBrief = "Test single apply API schema."
+    }
+    uiHints = {
+        dictionary customDict = {
+            string TestCompose = "TestComposeMetadataAPI"
+            int TestComposeMetadataAPI = 1
+        }
+        string displayGroup = "TestComposeMetadataAPI group"
     }
 )
 {
@@ -78,6 +99,13 @@ class "TestComposeMetadataAPI" (
     uniform bool single:bool_attr = 1 (
         customData = {
             string userDocBrief = "Testing duplicate ignore."
+        }
+        uiHints = {
+            string displayGroup = "single:bool_attr group"
+            dictionary valueLabels = {
+                bool TestCompose = 0
+                bool compose_bool_attr = 1
+            }
         }
     )
 }
@@ -158,6 +186,13 @@ class TestWithBuiltinAppliedSchema "TestWithBuiltinAppliedSchema" (
         string userDocBrief = "Test with built-in API schemas."
     }
     hidden = false
+    uiHints = {
+        dictionary customDict = {
+            string TestCompose = "TestWithBuiltinAppliedSchema"
+            int TestWithBuiltinAppliedSchema = 2
+        }
+        string displayGroup = "TestWithBuiltinAppliedSchema group"
+    }
 )
 {
     uniform bool multi:builtin:bool_attr = 0 (

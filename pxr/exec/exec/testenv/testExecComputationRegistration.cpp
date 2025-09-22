@@ -182,6 +182,12 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
             Attribute(_tokens->attributeName)
                 .Computation<int>(_tokens->attributeComputation),
 
+            // Take input from a computation provided by any objects targeted
+            // by attribute connections on an attribute on the prim.
+            Attribute(_tokens->attributeName)
+                .ConnectionTargetedObjects<int>(
+                    _tokens->attributeComputation),
+
             // Take input from the value of an attribute, marking it as a
             // required input.
             AttributeValue<int>(_tokens->attributeName)
@@ -218,6 +224,10 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
         .Inputs(
             // Take input from another computation provided by the attribute.
             Computation<double>(ExecBuiltinComputations->computeValue),
+
+            // Take input from the objects targeted by this attribute's
+            // connections.
+            ConnectionTargetedObjects<double>(_tokens->otherComputation),
 
             // Take input from a computation on the attribute's owning prim.
             Prim().Computation<double>(_tokens->primComputation),
@@ -817,7 +827,7 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             primCompDef->GetInputKeys(*prim, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 8);
+        ASSERT_EQ(inputKeys->Get().size(), 9);
 
         _PrintInputKeys(inputKeys->Get());
 
@@ -842,6 +852,19 @@ TestTypedSchemaComputationRegistration()
                       SdfPath(".attributeName"));
             ASSERT_EQ(key.providerResolution.dynamicTraversal,
                       ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->attributeComputation);
+            ASSERT_EQ(key.computationName, _tokens->attributeComputation);
+            ASSERT_EQ(key.resultType, TfType::Find<int>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath(".attributeName"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::
+                          ConnectionTargetedObjects);
             ASSERT_EQ(key.optional, true);
         }
 
@@ -894,7 +917,7 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             attrCompDef->GetInputKeys(*attribute, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 8);
+        ASSERT_EQ(inputKeys->Get().size(), 9);
 
         _PrintInputKeys(inputKeys->Get());
 
@@ -908,6 +931,18 @@ TestTypedSchemaComputationRegistration()
             ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("."));
             ASSERT_EQ(key.providerResolution.dynamicTraversal,
                       ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->otherComputation);
+            ASSERT_EQ(key.computationName, _tokens->otherComputation);
+            ASSERT_EQ(key.resultType, TfType::Find<double>());
+            ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("."));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::
+                          ConnectionTargetedObjects);
             ASSERT_EQ(key.optional, true);
         }
 
@@ -1122,7 +1157,7 @@ TestAppliedSchemaComputationRegistration()
             TF_AXIOM(primCompDef);
             const auto inputKeys =
                 primCompDef->GetInputKeys(*prim, nullJournal);
-            ASSERT_EQ(inputKeys->Get().size(), 8);
+            ASSERT_EQ(inputKeys->Get().size(), 9);
         }
     }
 

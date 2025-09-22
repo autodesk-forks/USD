@@ -47,8 +47,19 @@ TF_DECLARE_PUBLIC_TOKENS(HdMaterialInterfaceMappingSchemaTokens, HD_API,
 /// The MaterialInterfaceMapping schema identifies a material node parameter
 /// using its two members 'nodePath' and 'inputName'.
 ///
-/// See MaterialNetwork schema's documentation on its 'interfaceMappings'
-/// member for an example.
+/// For example, if we are looking at some material network at
+/// material/<renderContext>/... and we have a mapping target defined by the
+/// following data sources:
+///
+/// ds at: material/<renderContext>/.../nodePath = Color_Manipulate
+///
+/// ds at: material/<renderContext>/.../inputName = adjustVal
+///
+/// The above defines a mapping target to the material node parameter under
+/// that material network, eg:
+///
+/// ds at: material/<renderContext>/nodes/Color_Manipulate/parameters/
+/// adjustVal
 ///
 class HdMaterialInterfaceMappingSchema : public HdSchema
 {

@@ -443,7 +443,7 @@ struct Exec_ComputationBuilderAccessor
     /// \addtogroup group_Exec_ValueSpecifiers
     /// @{
 
-    /// See [Computation()](#exec_registration::Computation)
+    /// See [Computation()](#exec_registration::Computation::Computation)
     template <typename ResultType>
     ValueSpecifier
     Computation(const TfToken &computationName)
@@ -496,8 +496,30 @@ struct Exec_ComputationBuilderAttributeAccessor
     {
     }
 
+    using ValueSpecifier =
+        Exec_ComputationBuilderComputationValueSpecifier<allowed>;
+
+    /// \addtogroup group_Exec_ValueSpecifiers
+    /// @{
+
+    /// See
+    /// [ConnectionTargetedObjects()](#exec_registration::ConnectionTargetedObjects)
+    template <typename ResultType>
+    ValueSpecifier
+    ConnectionTargetedObjects(const TfToken &computationName)
+    {
+        return ValueSpecifier(
+            computationName,
+            ExecTypeRegistry::GetInstance().CheckForRegistration<ResultType>(),
+            {Exec_ComputationBuilderAccessorBase::_GetLocalTraversal(),
+             ExecProviderResolution::DynamicTraversal::
+                 ConnectionTargetedObjects});
+    }
+
+    /// @}
+
     // XXX:TODO
-    // Accessors for AnimSpline, Connections, IncomingConnections
+    // Accessors for AnimSpline, IncomingConnections
 };
 
 /// Relationship accessor
@@ -524,8 +546,8 @@ struct Exec_ComputationBuilderRelationshipAccessor
     /// another relationship, the targets are transitively expanded, resulting
     /// in the ultimately targeted, non-relationship objects.
     ///
-    /// The default input name is \p computationName; use InputName to specify a
-    /// different input name.
+    /// The default input name is \p computationName; use `InputName` to specify
+    /// a different input name.
     ///
     /// # Example
     ///
@@ -652,7 +674,7 @@ struct Prim final
     /// {
     ///     // Register an attribute computation on 'attr' that yields the
     ///     // value of a sibling attribute 'otherAttr'.
-    ///     self.AttributComputation(
+    ///     self.AttributeComputation(
     ///         _tokens->attr,
     ///         _tokens->myComputation)
     ///         .Callback<int>(+[](const VdfContext &ctx) {
@@ -768,8 +790,8 @@ struct Computation final
     /// Requests an input value from the computation \p computationName of type
     /// \p ResultType.
     ///
-    /// The default input name is \p computationName; use InputName to specify a
-    /// different input name.
+    /// The default input name is \p computationName; use `InputName` to specify
+    /// a different input name.
     /// 
     /// # Example
     ///
@@ -866,8 +888,8 @@ struct NamespaceAncestor final
     /// \p computationName of type \p ResultType on the nearest namespace
     /// ancestor prim.
     ///
-    /// The default input name is \p computationName; use InputName to specify a
-    /// different input name.
+    /// The default input name is \p computationName; use `InputName` to specify
+    /// a different input name.
     ///
     /// # Example
     ///
@@ -959,6 +981,55 @@ AttributeValue(const TfToken &attributeName)
 
 /// @} // Aliases
 
+/// \addtogroup group_Exec_ValueSpecifiers
+/// @{
+
+/// As a direct input to an attribute computation or after an
+/// [Attribute()](#exec_registration::Attribute::Attribute) accessor, requests
+/// input values from the computation \p computationName of type \p ResultType
+/// on the objects targeted by the attribute's connections.
+///
+/// The default input name is \p computationName; use `InputName` to specify a
+/// different input name.
+///
+/// # Example
+///
+/// ```{.cpp}
+/// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+/// {
+///     // Register an attribute computation on the attribute 'myAttr' that
+///     // sums the results of the integer-valued 'computeValue' computations
+///     // on the objects targeted by myAttr's connections.
+///     self.AttributeComputation(_tokens->myAttr, _tokens->computeSum)
+///         .Callback<int>(+[](const VdfContext &ctx) {
+///             int sum = 0;
+///             for (VdfReadIterator<int> it(
+///                      ExecBuiltinComputations->computeValue);
+///                  !it.IsAtEnd(); ++it) {
+///                  sum += *it;
+///             }
+///             return sum;
+///         })
+///         .Inputs(
+///             ConnectionTargetedObjects<int>(
+///                 ExecBuiltinComputations->computeValue));
+/// }
+/// ```
+///
+template <typename ResultType>
+auto
+ConnectionTargetedObjects(const TfToken &computationName)
+{
+    return Exec_ComputationBuilderComputationValueSpecifier<
+        Exec_ComputationBuilderProviderTypes::Attribute>(
+            computationName,
+            ExecTypeRegistry::GetInstance().CheckForRegistration<ResultType>(),
+            {SdfPath::ReflexiveRelativePath(),
+             ExecProviderResolution::DynamicTraversal::
+                 ConnectionTargetedObjects});
+}
+
+/// @} // Value Specifiers
 
 } // namespace exec_registration
 

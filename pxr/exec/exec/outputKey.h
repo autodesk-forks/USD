@@ -32,11 +32,11 @@ public:
         const EsfObject &providerObject,
         const EsfSchemaConfigKey dispatchingSchemaKey,
         const Exec_ComputationDefinition *const computationDefinition,
-        const TfToken &metadataKey = {})
+        const TfToken &disambiguatingId = {})
         : _providerObject(providerObject)
         , _dispatchingSchemaKey(dispatchingSchemaKey)
         , _computationDefinition(computationDefinition)
-        , _metadataKey(metadataKey)
+        , _disambiguatingId(disambiguatingId)
     {}
 
     /// Returns the object that provides the computation.
@@ -61,11 +61,11 @@ public:
         return _computationDefinition;
     }
 
-    /// Returns the metadataKey *if* this key identifies a computeMetadata
-    /// output; otherwise returns an empty token.
+    /// Returns a token that can be used to distinguish different computations
+    /// that share the same computationName.
     ///
-    const TfToken &GetMetadataKey() const {
-        return _metadataKey;
+    const TfToken &GetDisambiguatingId() const {
+        return _disambiguatingId;
     }
 
     /// Identity class. See Exec_OutputKey::Identity below.
@@ -78,7 +78,7 @@ private:
     EsfObject _providerObject;
     EsfSchemaConfigKey _dispatchingSchemaKey;
     const Exec_ComputationDefinition *_computationDefinition;
-    TfToken _metadataKey;
+    TfToken _disambiguatingId;
 };
 
 /// Lightweight identity that represents an Exec_OutputKey.
@@ -96,14 +96,14 @@ public:
     explicit Identity(const Exec_OutputKey &key)
         : _providerPath(key._providerObject->GetPath(nullptr))
         , _computationDefinition(key._computationDefinition)
-        , _metadataKey(key._metadataKey)
+        , _disambiguatingId(key._disambiguatingId)
     {}
 
     bool operator==(const Exec_OutputKey::Identity &rhs) const {
         return
             _providerPath == rhs._providerPath &&
             _computationDefinition == rhs._computationDefinition &&
-            _metadataKey == rhs._metadataKey;
+            _disambiguatingId == rhs._disambiguatingId;
     }
 
     bool operator!=(const Exec_OutputKey::Identity &rhs) const {
@@ -115,7 +115,7 @@ public:
         HashState& h, const Exec_OutputKey::Identity& identity) {
         h.Append(identity._providerPath);
         h.Append(identity._computationDefinition);
-        h.Append(identity._metadataKey);
+        h.Append(identity._disambiguatingId);
     }
 
     /// Return a human-readable description of this value key for diagnostic
@@ -126,13 +126,7 @@ public:
 private:
     SdfPath _providerPath;
     const Exec_ComputationDefinition *_computationDefinition;
-
-    // TODO: For now, the metadata key is treated specially here, but in the
-    // future we may need to add other values to distinguish computation
-    // outputs. When we do so, we may change this to use a variant (if the
-    // values are mutually exclusive), or maybe even some kind of map. That
-    // may raise prickly questions including how to hash quickly.
-    TfToken _metadataKey;
+    TfToken _disambiguatingId;
 };
 
 Exec_OutputKey::Identity 

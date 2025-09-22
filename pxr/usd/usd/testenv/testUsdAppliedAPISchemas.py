@@ -172,21 +172,30 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
 
         self.assertTrue(primDef.GetRelationshipDefinition("testRel"))
 
-        def _VerifySameMetadata(prop1, prop2):
-            self.assertEqual(prop1.ListMetadataFields(), 
-                             prop2.ListMetadataFields())
+        def _VerifySameMetadata(prop1, prop2, fieldstoExclude=[]):
+            self.assertEqual(sorted(prop1.ListMetadataFields()), 
+                             sorted(prop2.ListMetadataFields()))
             for field in prop1.ListMetadataFields():
-                self.assertEqual(prop1.GetMetadata(field),
-                                 prop2.GetMetadata(field))
+                if field not in fieldstoExclude:
+                    self.assertEqual(prop1.GetMetadata(field),
+                                     prop2.GetMetadata(field))
 
         # Verify fallback value and type for properties from the single applied
         # schema. These properties will return the same property spec as the
-        # API schema prim definition.
+        # API schema prim definition with the exception of single:bool_attr, 
+        # which merges the value of the 'uiHints' metadata between 
+        # TestSingleApplyAPI and TestComposeMetadataAPI.
         singleBoolAttr = primDef.GetAttributeDefinition("single:bool_attr")
         _VerifySameMetadata(singleBoolAttr, 
-            singleApplyAPIDef.GetAttributeDefinition("single:bool_attr"))
+            singleApplyAPIDef.GetAttributeDefinition("single:bool_attr"), ["uiHints"])
         self.assertEqual(singleBoolAttr.GetFallbackValue(), True)
         self.assertEqual(singleBoolAttr.GetTypeName(), Sdf.ValueTypeNames.Bool)
+        # Verify that dictionary metadata will compose across API schemas.
+        self.assertEqual(singleBoolAttr.GetMetadata("uiHints"), 
+                         {'displayGroup': 'single:bool_attr group', 
+                          'valueLabels': {'TestCompose': True, 
+                                          'compose_bool_attr': True, 
+                                          'single_bool_attr':False}})
 
 
         singleTokenAttr = primDef.GetAttributeDefinition("single:token_attr")
@@ -232,6 +241,18 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertEqual(apiBoolAttr.GetFallbackValue(), True)
         self.assertEqual(multiBoolAttr.GetTypeName(), Sdf.ValueTypeNames.Bool)
         self.assertEqual(apiBoolAttr.GetTypeName(), Sdf.ValueTypeNames.Bool)
+
+        # Verify that dictionary-valued prim metadata composes recursively.
+        self.assertTrue('uiHints' in primDef.ListMetadataFields())
+        uiHints = primDef.GetMetadata('uiHints')
+        self.assertEqual(uiHints['displayGroup'], 'TestWithBuiltinAppliedSchema group')
+        self.assertEqual(str(uiHints['customDict']), 
+                         '{\'TestCompose\': \'TestWithBuiltinAppliedSchema\', '
+                         '\'TestComposeMetadataAPI\': 1, '
+                         '\'TestSingleApplyAPI\': 3, '
+                         '\'TestWithBuiltinAppliedSchema\': 2}')
+        
+        # Verify that dictionary-valued property metadata composes recursively.
 
     def test_UntypedPrimOnStage(self):
         """
@@ -285,6 +306,17 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertIsNotNone(untypedPrim.GetMetadata("propertyOrder"))
         # "propertyOrder" is defined in the API schema, not authored on the prim.
         self.assertFalse(untypedPrim.HasAuthoredMetadata("propertyOrder"))
+
+        # Verify that dictionary-valued metadata composes recursively.
+        self.assertTrue("uiHints" in untypedPrim.GetAllMetadata())
+        self.assertIsNotNone(untypedPrim.GetMetadata("uiHints"))
+        self.assertFalse(untypedPrim.HasAuthoredMetadata("uiHints"))
+        uiHints = untypedPrim.GetMetadata('uiHints')
+        self.assertEqual(uiHints['displayGroup'], 'TestSingleApplyAPI group')
+        self.assertEqual(str(uiHints['customDict']), 
+                         '{\'TestCompose\': \'TestSingleApplyAPI\', '
+                         '\'TestComposeMetadataAPI\': 1, '
+                         '\'TestSingleApplyAPI\': 3}')
 
         # Untyped prim still has no documentation even with API schemas applied.
         self.assertIsNone(untypedPrim.GetMetadata("documentation"))
@@ -629,6 +661,17 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
             "compose:bool_attr", 
             "testAttr", 
             "testRel"])
+        
+        # Verify that dictionary-valued metadata composes recursively.
+        self.assertTrue("uiHints" in typedPrim.GetAllMetadata())
+        self.assertIsNotNone(typedPrim.GetMetadata("uiHints"))
+        self.assertFalse(typedPrim.HasAuthoredMetadata("uiHints"))
+        uiHints = typedPrim.GetMetadata('uiHints')
+        self.assertEqual(uiHints['displayGroup'], 'TestSingleApplyAPI group')
+        self.assertEqual(str(uiHints['customDict']), 
+                         '{\'TestCompose\': \'TestSingleApplyAPI\', '
+                         '\'TestComposeMetadataAPI\': 1, '
+                         '\'TestSingleApplyAPI\': 3}')
 
         # Add a concrete typed prim which receives an auto applied API schema
         # because it is derived from a base class type that does.

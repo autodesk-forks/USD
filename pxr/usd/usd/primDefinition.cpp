@@ -505,10 +505,13 @@ UsdPrimDefinition::_CreateComposedPrimOrPropertyIfNeeded(
         Property(&weakProp).GetSpecType());
 
     for (const TfToken &field : Property(&weakProp).ListMetadataFields()) {        
-        // PropertyOrder is allowed to merge with the value from weaker prim 
-        // definitions. propertyOrder from the weaker prim definitions will be
-        // appended on to the stronger value.
-        bool allowedMerge = (field == SdfFieldKeys->PropertyOrder);
+        // Dictionary-valued metadata and the PropertyOrder field are allowed 
+        // to merge with the value from weaker prim definitions. propertyOrder 
+        // from the weaker prim definitions will be appended on to the stronger 
+        // value, while dictionary metadata will be merged recursively.
+        VtValue mergeValue = weakProp.GetField(field);
+        bool allowedMerge = (field == SdfFieldKeys->PropertyOrder) || 
+                            (mergeValue.IsHolding<VtDictionary>());
         if (!allowedMerge) {
             // If the stronger property already has the field, skip it.
             if (strongProp && strongProp.HasField<VtValue>(field, nullptr)) {
@@ -524,23 +527,31 @@ UsdPrimDefinition::_CreateComposedPrimOrPropertyIfNeeded(
 
         // If the field can merge with a weaker field, copy the stronger field 
         // value and merge the weaker value into it.
-        VtValue mergeValue = weakProp.GetField(field);
         if (strongProp && allowedMerge) {
             VtValue strongValue;
             if (strongProp.HasField<VtValue>(field, &strongValue)) {
-                std::vector<TfToken> weakVec = mergeValue.Get<std::vector<TfToken>>();
-                std::vector<TfToken> strongVec = strongValue.Get<std::vector<TfToken>>();
-                TfToken::Set uniqueElements(strongVec.begin(), strongVec.end());
+                if (strongValue.IsHolding<std::vector<TfToken>>()) {
+                    // Append the contents of the weaker value after the stronger values.
+                    std::vector<TfToken> weakVec = mergeValue.Get<std::vector<TfToken>>();
+                    std::vector<TfToken> strongVec = strongValue.Get<std::vector<TfToken>>();
+                    TfToken::Set uniqueElements(strongVec.begin(), strongVec.end());
 
-                // We don't want duplicates in the combined list of fields, so
-                // silently skip any we encounter from the weaker list.
-                for (TfToken& field : weakVec) {
-                    if (uniqueElements.insert(field).second) {
-                        strongVec.push_back(field);
+                    // We don't want duplicates in the combined list of fields, so
+                    // silently skip any we encounter from the weaker list.
+                    for (TfToken& field : weakVec) {
+                        if (uniqueElements.insert(field).second) {
+                            strongVec.push_back(field);
+                        }
                     }
-                }
 
-                mergeValue.Swap(strongVec);
+                    mergeValue.Swap(strongVec);
+                } else if (strongValue.IsHolding<VtDictionary>()) {
+                    // Merge dictionaries.
+                    VtDictionary weakDict = mergeValue.Get<VtDictionary>();
+                    VtDictionary strongDict= strongValue.Get<VtDictionary>();
+                    VtDictionary mergeDict = VtDictionaryOverRecursive(strongDict, weakDict);
+                    mergeValue.Swap(mergeDict);
+                }
             }
         }
 

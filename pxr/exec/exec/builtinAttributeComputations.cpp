@@ -108,8 +108,8 @@ Exec_ComputeValueComputationDefinition::_MakeInputKeys()
         Exec_InputKeyVector::MakeShared(std::initializer_list<Exec_InputKey>{{
                 Exec_AttributeInputNodeTokens->time,
                 ExecBuiltinComputations->computeTime,
+                /* disambiguatingId */ TfToken(),
                 TfType::Find<EfTime>(),
-                /* metadataKey */ TfToken(),
                 ExecProviderResolution{
                     SdfPath::AbsoluteRootPath(),
                     ExecProviderResolution::DynamicTraversal::Local

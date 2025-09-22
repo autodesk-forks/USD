@@ -7,6 +7,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/attributeSpec.h"
 #include "pxr/usd/sdf/changeManager.h"
+#include "pxr/usd/sdf/fileIO_Common.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/notice.h"
 #include "pxr/usd/sdf/path.h"
@@ -914,6 +915,24 @@ _TestSdfQuoteUtilities()
     TF_AXIOM(Sdf_QuoteAssetPath("a@@@p") == "@@@a\\@@@p@@@");
 }
 
+static void
+_TestSdfFileIOQuote()
+{
+    auto Quote = [](std::string const &str, bool allowTriple=true) {
+        return Sdf_FileIOUtility::Quote(str, allowTriple);
+    };
+    
+    TF_AXIOM(Quote("hello world") == "\"hello world\"");
+    TF_AXIOM(Quote("hello\nworld") == "\"\"\"hello\nworld\"\"\"");
+    TF_AXIOM(Quote("hello\nworld",
+                   /*allowTriple=*/false) == "\"hello\\nworld\"");
+
+    TF_AXIOM(Quote("hello \"world\"") == "'hello \"world\"'");
+    TF_AXIOM(Quote("hello\n\"world\"") == "'''hello\n\"world\"'''");
+    TF_AXIOM(Quote("hello\n\"world\"",
+                   /*allowTriple=*/false) == "'hello\\n\"world\"'");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -934,6 +953,7 @@ main(int argc, char **argv)
     _TestSdfMapEditorProxyOperators();
     _TestSdfAbstractDataValue();
     _TestSdfQuoteUtilities();
+    _TestSdfFileIOQuote();
 
     return 0;
 }

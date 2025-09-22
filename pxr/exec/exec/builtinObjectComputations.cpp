@@ -34,10 +34,10 @@ Exec_ComputeMetadataComputationDefinition::
 TfType
 Exec_ComputeMetadataComputationDefinition::GetResultType(
     const EsfObjectInterface &providerObject,
-    const TfToken &metadataKey,
+    const TfToken &disambiguatingId,
     EsfJournal *const journal) const
 {
-    return providerObject.GetMetadataValueType(metadataKey);
+    return providerObject.GetMetadataValueType(disambiguatingId);
 }
 
 TfType
@@ -59,7 +59,7 @@ Exec_ComputeMetadataComputationDefinition::GetInputKeys(
 VdfNode *
 Exec_ComputeMetadataComputationDefinition::CompileNode(
     const EsfObjectInterface &providerObject,
-    const TfToken &metadataKey,
+    const TfToken &disambiguatingId,
     EsfJournal *const nodeJournal,
     Exec_Program *const program) const
 {
@@ -69,18 +69,18 @@ Exec_ComputeMetadataComputationDefinition::CompileNode(
     if (!TF_VERIFY(program, "Null program")) {
         return nullptr;
     }
-    if (!providerObject.IsValidMetadataKey(metadataKey)) {
+    if (!providerObject.IsValidMetadataKey(disambiguatingId)) {
         TF_CODING_ERROR(
             "Skipping compilation of input node for invalid metadata key '%s'",
-            metadataKey.GetText());
+            disambiguatingId.GetText());
         return nullptr;
     }
 
     return program->CreateNode<Exec_MetadataInputNode>(
         *nodeJournal,
         providerObject.AsObject(),
-        metadataKey,
-        GetResultType(providerObject, metadataKey, nodeJournal));
+        disambiguatingId,
+        GetResultType(providerObject, disambiguatingId, nodeJournal));
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

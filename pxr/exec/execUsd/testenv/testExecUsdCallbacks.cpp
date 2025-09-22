@@ -59,7 +59,7 @@ _CallbackFunctionVoidReturn(const VdfContext &ctx) {
 }
 
 EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
-    TestExecUsdComputationsCustomSchema)
+    TestExecUsdCallbacksCustomSchema)
 {
     //
     // Test different kinds of callback functions.
@@ -169,7 +169,7 @@ int main()
     const PlugPluginPtrVector testPlugins = PlugRegistry::GetInstance()
         .RegisterPlugins(TfAbsPath("resources"));
     ASSERT_EQ(testPlugins.size(), 1);
-    ASSERT_EQ(testPlugins[0]->GetName(), "testExecUsdComputations");
+    ASSERT_EQ(testPlugins[0]->GetName(), "testExecUsdCallbacks");
 
     TestCallbackFunctions();
 

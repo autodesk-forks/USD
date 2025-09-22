@@ -33,7 +33,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 // --(BEGIN CUSTOM CODE: Declares)--
 using UsdImagingCollectionMaterialBindingVectorSchema =
-    HdSchemaBasedVectorSchema<class UsdImagingCollectionMaterialBindingSchema>;
+    HdVectorOfSchemasSchema<class UsdImagingCollectionMaterialBindingSchema>;
 // --(END CUSTOM CODE: Declares)--
 
 #define USD_IMAGING_MATERIAL_BINDING_SCHEMA_TOKENS \

@@ -32,7 +32,7 @@ public:
 
     VdfNode *CompileNode(
         const EsfObjectInterface &providerObject,
-        const TfToken &metadataKey,
+        const TfToken &disambiguatingId,
         EsfJournal *nodeJournal,
         Exec_Program *program) const override;
 };

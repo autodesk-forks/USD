@@ -31,7 +31,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 // --(BEGIN CUSTOM CODE: Declares)--
-using UsdImagingMaterialBindingVectorSchema = HdSchemaBasedVectorSchema<
+using UsdImagingMaterialBindingVectorSchema = HdVectorOfSchemasSchema<
     class UsdImagingMaterialBindingSchema>;
 // --(END CUSTOM CODE: Declares)--
 

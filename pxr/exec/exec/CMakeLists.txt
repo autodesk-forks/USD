@@ -41,7 +41,6 @@ pxr_library(exec
         compilationState.h
         inputKey.h
         invalidationResult.h
-        parallelForRange.h
         timeChangeInvalidationResult.h
 
     PRIVATE_CLASSES
@@ -73,6 +72,7 @@ pxr_library(exec
         registrationBarrier
         requestTracker
         runtime
+        taskCycleDetector
         uncompilationRuleSet
         uncompilationTable
         uncompilationTarget

@@ -308,6 +308,17 @@ HdPrman_Mesh::_ConvertGeometry(
     // bound attribute to a geom subset that binds it.
     geomSubsetPrimvars->resize(geomSubsets->size());
     for (size_t i=0, n=geomSubsets->size(); i<n; ++i) {
+        // Establish matching dimensions.
+        (*geomSubsetPrimvars)[i] = RtPrimVarList(
+            /* numUniform = */ nverts.size(),
+            /* numVertex = */ npoints,
+            /* numVarying = */ npoints,
+            /* numFacevarying = */ verts.size());
+
+        // Establish matching time samples.
+        (*geomSubsetPrimvars)[i].SetTimes(
+            primvars->GetNumTimes(), primvars->GetTimes());
+
         // Convert primvars specific to this subset.
         HdPrman_ConvertPrimvars(
             sceneDelegate,
@@ -315,11 +326,6 @@ HdPrman_Mesh::_ConvertGeometry(
             ((*geomSubsetPrimvars)[i]),
             nverts.size(), npoints, npoints, verts.size(),
             renderParam->GetShutterInterval());
-
-        // Resize details to match the parent mesh. Otherwise
-        // Inherit() will skip anything that isn't constant.
-        (*geomSubsetPrimvars)[i].SetDetail(
-            nverts.size(), npoints, npoints, verts.size());
 
         // Inherit primvars from the parent mesh. Any already
         // present on the subset are ignored.

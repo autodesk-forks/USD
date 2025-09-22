@@ -226,6 +226,8 @@ _Insert(const TfTokenVector &vec,
 TfTokenVector
 _PrimLevelWrappingDataSource::GetNames()
 {
+    TRACE_FUNCTION();
+    
     HdContainerDataSourceHandle const primSource = _GetPrimSource();
 
     if (!primSource) {
@@ -241,6 +243,8 @@ HdDataSourceBaseHandle
 _PrimLevelWrappingDataSource::Get(
         const TfToken &name)
 {
+    TRACE_FUNCTION();
+
     const TfTokenVector &dataSourceNames =
         _flatteningSceneIndex.GetFlattenedDataSourceNames();
     const HdFlattenedDataSourceProviderSharedPtrVector &providers =
@@ -274,6 +278,8 @@ _PrimLevelWrappingDataSource::Get(
 HdContainerDataSourceHandle
 _PrimLevelWrappingDataSource::_GetPrimSource()
 {
+    TRACE_FUNCTION();
+
     if (std::optional<HdContainerDataSourceHandle> const primSource =
             _primSourceCache.Get()) {
         return *primSource;
@@ -323,6 +329,8 @@ HdFlatteningSceneIndex::~HdFlatteningSceneIndex() = default;
 HdSceneIndexPrim
 HdFlatteningSceneIndex::GetPrim(const SdfPath &primPath) const
 {
+    TRACE_FUNCTION();
+    
     // Check the hierarchy cache
     const _PrimTable::const_iterator i = _prims.find(primPath);
     // SdfPathTable will default-construct entries for ancestors

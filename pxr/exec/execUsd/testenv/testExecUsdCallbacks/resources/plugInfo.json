@@ -6,7 +6,7 @@
         {
             "Info": {
                 "Types": {
-                    "TestExecUsdComputationsCustomSchema": {
+                    "TestExecUsdCallbacksCustomSchema": {
                         "alias": {
                             "UsdSchemaBase": "CustomSchema"
                         },
@@ -19,7 +19,7 @@
                     }
                 }
             }, 
-            "Name": "testExecUsdComputations", 
+            "Name": "testExecUsdCallbacks", 
             "ResourcePath": ".", 
             "Type": "resource"
         }
