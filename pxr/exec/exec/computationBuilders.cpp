@@ -90,13 +90,13 @@ Exec_ComputationBuilderValueSpecifierBase(
     TfType resultType,
     ExecProviderResolution &&providerResolution,
     const TfToken &inputName,
-    const TfToken &metadataKey)
+    const TfToken &disambiguatingId)
     : _data(
         _Data::Create(
             inputName,
             computationName,
+            disambiguatingId,
             resultType,
-            metadataKey,
             std::move(providerResolution),
             /* fallsBackToDispatched */ false,
             /* optional */ true))

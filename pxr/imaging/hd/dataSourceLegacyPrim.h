@@ -13,13 +13,13 @@
 
 #include "pxr/usd/sdf/path.h"
 
+#include "pxr/base/tf/spinMutex.h"
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/base/tf/token.h"
 
 #include "pxr/pxr.h"
 
 #include <atomic>
-#include <mutex>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -99,7 +99,7 @@ protected:
 
 private:
     std::atomic_bool _primvarsBuilt;
-    std::mutex _primvarsMutex;
+    TfSpinMutex _primvarsMutex;
     bool _extComputationPrimvarsBuilt : 1;
 
     HdContainerDataSourceAtomicHandle _primvars;

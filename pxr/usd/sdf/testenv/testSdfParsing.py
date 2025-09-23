@@ -47,6 +47,7 @@ class TestSdfParsing(unittest.TestCase):
         # This will mean that your new test runs first and you can spot
         # failures much quicker.
         testFiles = '''
+        227_arrayEdits.usda
         226_version_1.1.usda
         225_multiline_with_SplineKnotParamList.usda
         224_spline_post_shaping_with_comment.usda

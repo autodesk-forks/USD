@@ -988,10 +988,8 @@ Sdf_FileIOUtility::WriteLayerOffset(
 }
 
 string
-Sdf_FileIOUtility::Quote(const string &str)
+Sdf_FileIOUtility::Quote(const string &str, const bool allowTripleQuotes)
 {
-    const bool allowTripleQuotes = true;
-
     string result;
 
     // Choose quotes, double quote preferred.
@@ -1075,9 +1073,9 @@ Sdf_FileIOUtility::Quote(const string &str)
 }
 
 string 
-Sdf_FileIOUtility::Quote(const TfToken &token)
+Sdf_FileIOUtility::Quote(const TfToken &token, const bool allowTripleQuotes)
 {
-    return Quote(token.GetString());
+    return Quote(token.GetString(), allowTripleQuotes);
 }
 
 string

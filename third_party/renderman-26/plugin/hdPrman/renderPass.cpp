@@ -54,7 +54,6 @@ HdPrman_RenderPass::HdPrman_RenderPass(
 , _lastRenderedVersion(0)
 , _lastTaskRenderTagsVersion(0)
 , _lastRprimRenderTagVersion(0)
-, _projection(HdPrmanProjectionTokens->PxrPerspective)
 , _quickIntegrateTime(0.2f)
 {
     TF_VERIFY(_renderParam);
@@ -742,18 +741,22 @@ HdPrman_RenderPass::_Execute(
         _renderParam->UpdateLegacyOptions();
 
         // Set Projection Settings
-        _projection = renderDelegate->GetRenderSetting<std::string>(
+        std::string projection = renderDelegate->GetRenderSetting<std::string>(
             HdPrmanRenderSettingsTokens->projectionName,
-            _projection);
+            "");
 
-        RtParamList projectionParams;
-        _renderParam->SetProjectionParamsFromRenderSettings(
-            (HdPrmanRenderDelegate*)renderDelegate,
-            _projection,
-             projectionParams);
+        if (!projection.empty()) {
+            RtParamList projectionParams;
+            _renderParam->SetProjectionParamsFromRenderSettings(
+                (HdPrmanRenderDelegate*)renderDelegate,
+                projection,
+                projectionParams);
 
-        cameraContext.SetProjectionOverride(RtUString(_projection.c_str()),
-                                            projectionParams);
+            if (projectionParams.GetNumParams() != 0) {
+                cameraContext.SetProjectionOverride(
+                    RtUString(projection.c_str()), projectionParams);
+            }
+        }
 
         // Set Resolution, Crop Window, Pixel Aspect Ratio,
         // and update camera settings.

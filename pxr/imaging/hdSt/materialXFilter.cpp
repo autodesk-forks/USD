@@ -83,6 +83,10 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     // Primvar detection constants
     (geompropvalue)
+
+    // Normalmap node Tokens
+    (ND_normalmap)
+    (space)
 );
 
 TF_DEFINE_PRIVATE_TOKENS(
@@ -1416,6 +1420,18 @@ _BuildEquivalentMaterialNetwork(
                     }
                 }
             }
+
+            // Normal map nodes in v1.38 included a 'space' parameter that 
+            // needs to be in the anonymized network otherwise it may not be 
+            // correctly translated into v1.39.
+            if (TfStringStartsWith(
+                    inNode.nodeTypeId.GetString(), _tokens->ND_normalmap)) {
+                const auto spaceIt = inNode.parameters.find(_tokens->space);
+                if (spaceIt != inNode.parameters.end()) {
+                    outNode.parameters.insert(*spaceIt);
+                }
+            }
+            
         }
 
         for (const auto& connPair : inNode.inputConnections) {

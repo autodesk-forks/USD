@@ -72,7 +72,7 @@ Exec_OutputProvidingCompilationTask::_Compile(
 
         VdfNode *const node = computationDefinition->CompileNode(
             *_outputKey.GetProviderObject(),
-            _outputKey.GetMetadataKey(),
+            _outputKey.GetDisambiguatingId(),
             &_nodeJournal,
             compilationState.GetProgram());
 

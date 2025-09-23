@@ -7,27 +7,36 @@
 #ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
 #define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PARAM_H
 
-#include "pxr/pxr.h"
 #include "hdPrman/api.h"
-#include "hdPrman/xcpt.h"
 #include "hdPrman/cameraContext.h"
 #include "hdPrman/renderViewContext.h"
-#include "pxr/base/gf/vec2f.h"
-#include "pxr/imaging/hd/sceneDelegate.h"
-#include "pxr/imaging/hd/renderDelegate.h"
-#if PXR_VERSION >= 2308
-#include "pxr/imaging/hd/renderSettings.h"
-#endif
+#include "hdPrman/xcpt.h"
+
 #include "pxr/imaging/hd/material.h"
-#if PXR_VERSION >= 2302
-#include "pxr/imaging/hd/retainedSceneIndex.h"
-#endif
-#include <tbb/concurrent_unordered_map.h>
+#include "pxr/imaging/hd/renderDelegate.h"
+#include "pxr/imaging/hd/sceneDelegate.h"
+
+#include "pxr/base/gf/vec2f.h"
+#include "pxr/base/tf/token.h"
+
+#include "pxr/pxr.h"
 
 #include "Riley.h"
 #include "RixEventCallbacks.h"
-#include <unordered_map>
+#include <RiTypesHelper.h>
+
+#include <tbb/concurrent_unordered_map.h>
+
+#include <functional>
 #include <mutex>
+#include <unordered_map>
+
+#if PXR_VERSION >= 2308
+#include "pxr/imaging/hd/renderSettings.h"
+#endif
+#if PXR_VERSION >= 2302
+#include "pxr/imaging/hd/retainedSceneIndex.h"
+#endif
 
 class RixRiCtl;
 
@@ -182,6 +191,16 @@ public:
     static void
     RegisterIntegratorCallbackForCamera(
         IntegratorCameraCallback const& callback);
+
+    using RileyOptionsCallback = std::function<void(RtParamList&)>;
+
+    HDPRMAN_API
+    static void
+    RegisterRileyOptionsCallback(const RileyOptionsCallback& callback);
+
+    HDPRMAN_API
+    static void
+    SetDefaultIntegratorOverride(const TfToken& integrator);
 
     HDPRMAN_API
     void SetFiltersFromRenderSettings(
@@ -423,10 +442,10 @@ public:
 
     // Return the id map product name (ri:productType=idMap) in the provided
     // provided render settings. Returns an empty token if not found.
-    static TfToken GetIdMapProductName(HdPrman_RenderSettings* renderSettings); 
+    static TfToken GetIdMapProductName(HdPrman_RenderSettings* renderSettings);
 
     // Write the path to id mapping to a file with the provided name.
-    static void WriteIdMap(HdRenderIndex* renderIndex, 
+    static void WriteIdMap(HdRenderIndex* renderIndex,
                            const TfToken& productName);
 
 private:

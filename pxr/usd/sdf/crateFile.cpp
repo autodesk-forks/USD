@@ -1770,12 +1770,6 @@ struct CrateFile::_ValueHandler : _ValueHandlerBase
 
         *out = VtArrayEditBuilder<T>::CreateFromSerializationData(
             valuesArray, indexesArray, reader.template Read<bool>());
-
-        if (SafetyOverSpeed) {
-            // Run the edit through the builder's Optimize() function to clear
-            // out any out-of-bounds accesses.
-            *out = VtArrayEditBuilder<T>::Optimize(std::move(*out));
-        }
     }
 
     ValueRep PackVtValue(_Writer w, VtValue const &v) {

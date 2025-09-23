@@ -2388,7 +2388,7 @@ HdDataSourceLegacyPrim::PrimDirtied(const HdDataSourceLocatorSet &locators)
 {
     if (locators.Intersects(HdPrimvarsSchema::GetDefaultLocator())) {
         {
-            std::lock_guard<std::mutex> lock(_primvarsMutex);
+            TfSpinMutex::ScopedLock lock(_primvarsMutex);
             HdContainerDataSource::AtomicStore(_primvars, nullptr);
             _primvarsBuilt.store(false);
         }
@@ -2608,7 +2608,7 @@ HdDataSourceLegacyPrim::_GetPrimvarsDataSource()
 
     // Serialize this section so that only one thread invokes that non-threadsafe
     // code path GetPrimvarDescriptors().
-    std::lock_guard<std::mutex> lock(_primvarsMutex);
+    TfSpinMutex::ScopedLock lock(_primvarsMutex);
 
     // Check if another thread completed this computation.
     if (_primvarsBuilt.load()) {

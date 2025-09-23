@@ -28,6 +28,7 @@ class EfTime;
 struct Exec_AttributeValueInvalidationResult;
 class Exec_CacheView;
 struct Exec_DisconnectedInputsInvalidationResult;
+struct Exec_MetadataInvalidationResult;
 class Exec_TimeChangeInvalidationResult;
 class Exec_ValueExtractor;
 class ExecSystem;
@@ -50,6 +51,12 @@ public:
     /// 
     void DidInvalidateComputedValues(
         const Exec_AttributeValueInvalidationResult &invalidationResult);
+
+    /// Notify the request of invalid computed values as a consequence of
+    /// metadata authored value invalidation.
+    /// 
+    void DidInvalidateComputedValues(
+        const Exec_MetadataInvalidationResult &invalidationResult);
 
     /// Notify the request of invalid computed values as a consequence of
     /// uncompilation.

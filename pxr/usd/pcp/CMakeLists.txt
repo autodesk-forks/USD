@@ -2256,16 +2256,8 @@ pxr_register_test(testPcpLayerRelocatesEditBuilder
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testPcpNegativeOffsetScaleAllowed
-    PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpNegativeOffsetScale"
-    EXPECTED_RETURN_CODE 0
-)
-
 pxr_register_test(testPcpNegativeOffsetScale
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpNegativeOffsetScale"
     EXPECTED_RETURN_CODE 0
-    ENV 
-        PCP_ALLOW_NEGATIVE_LAYER_OFFSET_SCALE=0
 )

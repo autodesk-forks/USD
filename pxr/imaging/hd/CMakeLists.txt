@@ -114,6 +114,8 @@ pxr_library(hd
         materialConnectionSchema
         materialFilteringSceneIndexBase
         materialInterfaceMappingSchema
+        materialInterfaceParameterSchema
+        materialInterfaceSchema
         materialNetworkSchema
         materialNetwork2Interface
         materialNodeSchema

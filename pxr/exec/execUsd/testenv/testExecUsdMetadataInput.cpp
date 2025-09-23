@@ -25,6 +25,7 @@
 #include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/usd/stage.h"
 
+#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -43,6 +44,43 @@ PXR_NAMESPACE_USING_DIRECTIVE
                 TfStringify(expr_).c_str());                                   \
         }                                                                      \
     }()
+
+namespace {
+
+// Structure for keeping track of invalidation state as received from request
+// callback invocations.
+// 
+struct _InvalidationState {
+    // Map from invalid index to number of times invalidated.
+    std::unordered_map<int, int> indices;
+
+    // Number of times the callback has been invoked.
+    int numInvoked = 0;
+
+    // Reset the invalidation state.
+    void Reset() {
+        indices.clear();
+        numInvoked = 0;
+    }
+
+    // The value invalidation callback invoked by the request.
+    void ValueCalback(
+        const ExecRequestIndexSet &invalidIndices,
+        const EfTimeInterval &invalidInterval)
+    {
+        // Add all invalid indices to the map and increment the invalidation
+        // count for each entry.
+        for (const int i : invalidIndices) {
+            auto [it, emplaced] = indices.emplace(i, 0);
+            ++it->second;
+        }
+
+        // Increment the number of times the callback has been invoked.
+        ++numInvoked;
+    }
+};
+
+}
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
@@ -121,6 +159,8 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
 static void
 TestMetadataBasic()
 {
+    _InvalidationState invalidation;
+
     const SdfLayerRefPtr layer = SdfLayer::CreateAnonymous(".usda");
     layer->ImportFromString(R"usd(#usda 1.0
         def CustomSchema "Prim" (
@@ -145,14 +185,23 @@ TestMetadataBasic()
         {attr, _tokens->computePrimDocumentationMetadata},
     };
 
-    ExecUsdRequest request = execSystem.BuildRequest(std::move(valueKeys));
+    ExecUsdRequest request = execSystem.BuildRequest(
+        std::move(valueKeys),
+        std::bind(
+            &_InvalidationState::ValueCalback, &invalidation,
+            std::placeholders::_1,
+            std::placeholders::_2));
     TF_AXIOM(request.IsValid());
 
     execSystem.PrepareRequest(request);
     TF_AXIOM(request.IsValid());
 
-    const auto TestValues = [&execSystem, &request, &prim, &attr] {
+    const auto TestValues =
+        [&execSystem, &request, &invalidation, &prim, &attr]
+        (int numInvalidations) {
+
         ExecUsdCacheView view = execSystem.Compute(request);
+        ASSERT_EQ(invalidation.numInvoked, numInvalidations);
         VtValue v;
         int index = 0;
 
@@ -175,12 +224,14 @@ TestMetadataBasic()
         ASSERT_EQ(v.Get<std::string>(), primDocValue);
     };
 
-    TestValues();
+    TestValues(/* numInvalidations */ 0);
+    invalidation.Reset();
 
-// TODO: Push exec invalidation in response to metadata value changes.
-//     prim.SetMetadata(SdfFieldKeys->Documentation, "new prim doc");
-//     attr.SetMetadata(SdfFieldKeys->Documentation, "new attribute doc");
-//     TestValues();
+    // Author new metadata values and re-compute.
+    prim.SetMetadata(SdfFieldKeys->Documentation, "new prim doc");
+    attr.SetMetadata(SdfFieldKeys->Documentation, "new attribute doc");
+    TestValues(/* numInvalidations */ 2);
+    invalidation.Reset();
 }
 
 // Test error cases involving metadata computation inputs.

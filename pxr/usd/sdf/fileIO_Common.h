@@ -114,11 +114,16 @@ public:
     // === String production and transformation helpers
 
     /// Quote \p str, adding quotes before and after and escaping
-    /// unprintable characters and the quote character itself.  If
-    /// the string contains newlines it's quoted with triple quotes
-    /// and the newlines are not escaped.
-    static std::string Quote(const std::string &str);
-    static std::string Quote(const TfToken &token);
+    /// unprintable characters and the quote character itself.
+    ///
+    /// If `allowTripleQuotes` is true and the string contains newlines it's
+    /// quoted with triple quotes and the newlines are not escaped.
+    SDF_API
+    static std::string
+    Quote(const std::string &str, bool allowTripleQuotes=true);
+    SDF_API
+    static std::string
+    Quote(const TfToken &token, bool allowTripleQuotes=true);
 
     /// Add @'s around a given path to produce a string representation of
     /// an asset path. If the path contains @, @@@ will be added around the

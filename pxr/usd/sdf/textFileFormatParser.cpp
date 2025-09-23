@@ -8,18 +8,20 @@
 /// \file Sdf/textFileFormatParser.cpp
 
 #include "pxr/pxr.h"
-#include "pxr/base/trace/trace.h"
-#include "pxr/base/pegtl/pegtl/contrib/trace.hpp"
-#include "pxr/usd/ar/asset.h"
 #include "pxr/usd/sdf/fileIO.h"
 #include "pxr/usd/sdf/textParserContext.h"
 #include "pxr/usd/sdf/textFileFormatParser.h"
 #include "pxr/usd/sdf/debugCodes.h"
 #include "pxr/usd/sdf/usdaData.h"
 #include "pxr/usd/sdf/textParserHelpers.h"
+
+#include "pxr/base/pegtl/pegtl/contrib/trace.hpp"
+#include "pxr/base/tf/stringUtils.h"
+#include "pxr/base/trace/trace.h"
 #include "pxr/base/ts/raii.h"
 #include "pxr/base/ts/spline.h"
 #include "pxr/base/ts/valueTypeDispatch.h"
+#include "pxr/usd/ar/asset.h"
 
 #include <cmath>
 #include <memory>
@@ -193,6 +195,297 @@ struct TextParserAction<KeywordAnimationBlock>
         {
             _SetDefault(context.path, VtValue(SdfAnimationBlock()), context);
         }
+    }
+};
+
+template <class Input>
+static int64_t
+_TextToInteger(const Input& in, Sdf_TextParserContext& context)
+{
+    std::string_view str = in.string_view();
+
+    const auto isDigit = [](char x) { return '0' <= x && x <= '9'; };
+    
+    // Check for valid starting characters.
+    const bool looksValid =
+        (!str.empty() && isDigit(str[0])) ||
+        (str.size() >= 2 && str[0] == '-' && isDigit(str[1]));
+
+    std::string errMsg;
+    if (!looksValid) {
+        errMsg = TfStringPrintf(
+            "Text format grammar rules for integer matched non-integer text: "
+            "'%s'", in.string().c_str());
+        TF_CODING_ERROR(errMsg);
+    }
+
+    bool outOfRange = false;
+    int64_t val = TfStringToInt64(str.data(), &outOfRange);
+
+    if (outOfRange) {
+        errMsg = TfStringPrintf("Integer '%s' out-of-range for int64_t",
+                                in.string().c_str());
+    }
+    
+    if (!errMsg.empty()) {
+        Sdf_TextFileFormatParser_Err(
+            context, in.input(), in.position(), errMsg);
+        throw PEGTL_NS::parse_error(errMsg, in);
+    }
+    return val;
+}
+
+template <int N>
+struct TextParserAction<ArrayEditReferenceIndex<N>>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // Evaluate the integer value and store it in \p context.
+        context.arrayEditReferenceIndexes[N] = _TextToInteger(in, context);
+        context.arrayEditReferencePresence |= 1 << N;
+    }
+};
+
+template struct TextParserAction<ArrayEditReferenceIndex<0>>;
+template struct TextParserAction<ArrayEditReferenceIndex<1>>;
+
+template <>
+struct TextParserAction<ArrayEditSizeArg>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // Evaluate the integer value and store it in \p context.
+        context.arrayEditSizeArg = _TextToInteger(in, context);
+    }
+};
+
+template <>
+struct TextParserAction<KeywordFill>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        context.arrayEditHasFill = true;
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditPrepend>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // If we have an index for arg 0 this is writing a reference, otherwise
+        // writing a literal.
+        const bool writeRef = context.arrayEditReferencePresence & 1;
+        if (writeRef) {
+            context.arrayEditFactory->PrependRef(
+                context.arrayEditReferenceIndexes[0]);
+        }
+        else {
+            context.arrayEditFactory->Prepend(context.currentValue);
+        }
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditAppend>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // If we have an index for arg 0 this is writing a reference, otherwise
+        // writing a literal.
+        const bool writeRef = context.arrayEditReferencePresence & 1;
+        if (writeRef) {
+            context.arrayEditFactory->AppendRef(
+                context.arrayEditReferenceIndexes[0]);
+        }
+        else {
+            context.arrayEditFactory->Append(context.currentValue);
+        }
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditWrite>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // If we have an index for arg 0 this is writing a reference, otherwise
+        // writing a literal.
+        const bool writeRef = context.arrayEditReferencePresence & 1;
+        if (writeRef) {
+            context.arrayEditFactory->WriteRef(
+                context.arrayEditReferenceIndexes[0],
+                context.arrayEditReferenceIndexes[1]);
+        }
+        else {
+            context.arrayEditFactory->Write(
+                context.currentValue,
+                context.arrayEditReferenceIndexes[1]);
+        }
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditInsert>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // If we have an index for arg 0 this is inserting a reference,
+        // otherwise inserting a literal.
+        const bool insertRef = context.arrayEditReferencePresence & 1;
+        if (insertRef) {
+            context.arrayEditFactory->InsertRef(
+                context.arrayEditReferenceIndexes[0],
+                context.arrayEditReferenceIndexes[1]);
+        }
+        else {
+            context.arrayEditFactory->Insert(
+                context.currentValue,
+                context.arrayEditReferenceIndexes[1]);
+        }
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditErase>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        TF_DEV_AXIOM(context.arrayEditReferencePresence == 1);
+        context.arrayEditFactory->EraseRef(
+            context.arrayEditReferenceIndexes[0]);
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditMinSize>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        if (context.arrayEditHasFill) {
+            context.arrayEditFactory->MinSizeFill(context.arrayEditSizeArg,
+                                                  context.currentValue);
+        }
+        else {
+            context.arrayEditFactory->MinSize(context.arrayEditSizeArg);
+        }
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditResize>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        if (context.arrayEditHasFill) {
+            context.arrayEditFactory->SetSizeFill(context.arrayEditSizeArg,
+                                                  context.currentValue);
+        }
+        else {
+            context.arrayEditFactory->SetSize(context.arrayEditSizeArg);
+        }
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditMaxSize>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        context.arrayEditFactory->MaxSize(context.arrayEditSizeArg);
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditInstruction>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+        // When we complete parsing an instruction, reset per-instruction
+        // context.
+        context.arrayEditSizeArg = -1;
+        context.arrayEditHasFill = false;
+        context.arrayEditReferenceIndexes[0] = 0;
+        context.arrayEditReferenceIndexes[1] = 0;
+        context.arrayEditReferencePresence = 0;
+    }
+};
+
+template <>
+struct TextParserAction<KeywordEdit>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context) {
+
+        auto error = [&](std::string const &errMsg) {
+            Sdf_TextFileFormatParser_Err(
+                context, in.input(), in.position(), errMsg);
+            throw PEGTL_NS::parse_error(errMsg, in);
+        };
+
+        // We do two things here.  First, we ensure that the valueTypeName we're
+        // parsing is in fact an array type.  We then create an array edit
+        // factory.  Finally we switch the context.values to the array element
+        // (scalar) type.  We do this so it can pick up the literal elements in
+        // the array edit instructions.  We restore context.values to the array
+        // type when we finish parsing the edit, in the action for
+        // ArrayEditValue.
+
+        const SdfValueTypeName arrayType =
+            SdfSchema::GetInstance().FindType(context.values.valueTypeName);
+        
+        if (!arrayType.IsArray()) {
+            error(TfStringPrintf("Array edit specified for non-array type '%s'",
+                                 context.values.valueTypeName.c_str()));
+        }
+
+        const std::string &scalarTypeName =
+            arrayType.GetScalarType().GetAsToken();
+        
+        auto editFactory =
+            Sdf_ParserHelpers::MakeArrayEditFactoryForMenvaName(scalarTypeName);
+        if (!editFactory) {
+            error(TfStringPrintf("Unsupported array edit for type '%s'",
+                                 scalarTypeName.c_str()));
+        }
+        context.arrayEditFactory = std::move(editFactory);
+
+        // Reconfigure the values context for the scalar type.
+        context.values.SetupFactory(arrayType.GetScalarType().GetAsToken());
+    }
+};
+
+template <>
+struct TextParserAction<ArrayEditValue>
+{
+    template <class Input>
+    static void apply(const Input& in, Sdf_TextParserContext& context)
+    {
+        VtValue arrayEdit = context.arrayEditFactory->FinalizeAndReset();
+        if (arrayEdit.IsEmpty()) {
+            std::string errMsg = TfStringPrintf(
+                "Failed to produce VtArrayEdit instance: %s",
+                context.arrayEditFactory->GetErrorMessage().c_str());
+            Sdf_TextFileFormatParser_Err(
+                context, in.input(), in.position(), errMsg);
+            throw PEGTL_NS::parse_error(errMsg, in);
+        }
+        
+        if (context.parsingContext.back() ==
+            Sdf_TextParserCurrentParsingContext::AttributeSpec)
+        {
+            _SetDefault(context.path, arrayEdit, context);
+        }
+        else if(context.parsingContext.back() ==
+            Sdf_TextParserCurrentParsingContext::TimeSamples)
+        {
+            context.timeSamples[context.timeSampleTime] = arrayEdit;
+        }
+
+        // Reset the value context back to the array type.
+        const SdfValueTypeName scalarType =
+            SdfSchema::GetInstance().FindType(context.values.valueTypeName);
+        context.values.SetupFactory(scalarType.GetArrayType().GetAsToken());
     }
 };
 

@@ -31,6 +31,12 @@ struct Exec_InvalidationResult
     const std::vector<const VdfNode *> &invalidLeafNodes;
 };
 
+/// Communicates the results of authored value invalidation for metadata.
+struct Exec_MetadataInvalidationResult final
+    : public Exec_InvalidationResult
+{
+};
+
 /// Communicates the results of authored value invalidation for attributes.
 struct Exec_AttributeValueInvalidationResult final
     : public Exec_InvalidationResult

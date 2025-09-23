@@ -139,6 +139,50 @@ Exec_RequestImpl::DidInvalidateComputedValues(
 
 void 
 Exec_RequestImpl::DidInvalidateComputedValues(
+    const Exec_MetadataInvalidationResult &invalidationResult)
+{
+    if (!_valueCallback || _leafOutputs.empty()) {
+        TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+            "[%s] %s\n", TF_FUNC_NAME().c_str(),
+            !_valueCallback
+            ? "No value invalidation callback"
+            : "Request has not been prepared");
+        return;
+    }
+
+    TRACE_FUNCTION();
+
+    // For metadata value changes, we always invalidate over the entire time
+    // range. This is considered new invalidation if the last invalidation
+    // interval isn't already over the entire time range.
+    const EfTimeInterval &invalidInterval = EfTimeInterval::GetFullInterval();
+    const bool isNewlyInvalidInterval =
+        !_lastInvalidatedInterval.IsFullInterval();
+    if (isNewlyInvalidInterval) {
+        _lastInvalidatedInterval = invalidInterval;
+    }
+
+    // Build a set of invalid indices from the provided invalid leaf nodes.
+    ExecRequestIndexSet invalidIndices;
+    _InvalidateLeafOutputs(
+        isNewlyInvalidInterval,
+        invalidationResult.invalidLeafNodes,
+        &invalidIndices);
+
+    // Only invoke the invalidation callback if there are any invalid indices
+    // from this request.
+    if (!invalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), invalidIndices, invalidInterval);
+        }
+        TRACE_FUNCTION_SCOPE("value invalidation callback");
+        _valueCallback(invalidIndices, invalidInterval);
+    }
+}
+
+void 
+Exec_RequestImpl::DidInvalidateComputedValues(
     const Exec_DisconnectedInputsInvalidationResult &invalidationResult)
 {
     if (!_valueCallback || _leafOutputs.empty()) {

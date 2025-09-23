@@ -12,10 +12,13 @@
 
 #include "pxr/pxr.h"
 #include "pxr/usd/sdr/api.h"
+#include "pxr/base/tf/functionRef.h"
 #include "pxr/base/tf/token.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/usd/sdr/declare.h"
+#include "pxr/usd/sdr/shaderNode.h"
 #include "pxr/usd/sdr/shaderProperty.h"
+#include "pxr/usd/sdf/valueTypeName.h"
 
 #include <limits>
 
@@ -92,7 +95,7 @@ namespace ShaderMetadataHelpers
     IsPropertyATerminal(const SdrTokenMap& metadata);
 
     /// Gets the "role" from metadata if one is provided. Only returns a value
-    // if it's a valid role as defined by SdrPropertyRole tokens.
+    /// if it's a valid role as defined by SdrPropertyRole tokens.
     SDR_API
     TfToken
     GetRoleFromMetadata(const SdrTokenMap& metadata);
@@ -118,6 +121,17 @@ namespace ShaderMetadataHelpers
     ParseSdfValue(const std::string& valueStr,
                   const SdrShaderPropertyConstPtr& property,
                   std::string* err);
+
+    /// Synthesizes a "shownIf" expression from conditional visibility metadata
+    /// in \p property, expressed according to Katana's "args" format.
+    /// The sibling properties should be provided in \p allProperties and will
+    /// be referenced when resolving relative paths (`../../some/property`) and
+    /// when parsing embedded property values.
+    SDR_API
+    std::string
+    ComputeShownIfFromMetadata(SdrShaderPropertyConstPtr property,
+        const SdrShaderPropertyUniquePtrVec& allProperties,
+        SdrShaderNodeConstPtr shader);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

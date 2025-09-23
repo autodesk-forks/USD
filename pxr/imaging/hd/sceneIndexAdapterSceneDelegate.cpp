@@ -126,6 +126,13 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+// Defining tokens here to avoid adding a dependency on usdRiPxrImaging
+TF_DEFINE_PRIVATE_TOKENS(
+    _projectionPluginTokens,
+    (projection)
+    (resource)
+);
+
 //
 // If the input prim is a datasource prim, we need some sensible default
 // here...  For now, we pass [0,0] to turn off multisampling.
@@ -2178,6 +2185,31 @@ HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
         if (key == HdTokens->renderTags) {
             if (HdTokenVectorDataSourceHandle const ds = task.GetRenderTags()) {
                 return ds->GetValue(0.0f);
+            }
+        }
+    }
+
+    if (prim.primType == _projectionPluginTokens->projection) {
+        if (key == _projectionPluginTokens->resource) {
+            auto projection = HdContainerDataSource::Cast(
+                prim.dataSource->Get(_projectionPluginTokens->projection));
+            if (projection) {
+                HdMaterialNodeSchema resource =
+                    HdContainerDataSource::Cast(
+                        projection->Get(_projectionPluginTokens->resource));
+                if (resource) {
+                    HdMaterialNode2 hdNode2;
+                    HdTokenDataSourceHandle nodeTypeDS =
+                        resource.GetNodeIdentifier();
+                    if (nodeTypeDS) {
+                        hdNode2.nodeTypeId = nodeTypeDS->GetTypedValue(0);
+                    }
+                
+                    hdNode2.parameters = _GetHdParamsFromDataSource(
+                        resource.GetParameters());
+                
+                    return VtValue(hdNode2);
+                }
             }
         }
     }

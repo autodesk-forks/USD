@@ -212,8 +212,8 @@ public:
         const Exec_InputKey inputKey {
             _tokens->inputName,
             computationName,
-            resultType,
             /* metadataKey */ TfToken(),
+            resultType,
             ExecProviderResolution {
                 localTraversal,
                 dynamicTraversal
@@ -509,9 +509,9 @@ TestResolveToOwningPrim(Fixture &fixture)
     ASSERT_EQ(fixture.journal, expectedJournal);
 }
 
-// Test that Exec_ResolveInput finds a computation on the owning prim when the
-// origin is a prim, the local traversal is the relative path to a relationship
-// and the dynamic traversal is TargetedObjects.
+// Test that Exec_ResolveInput finds computations on the targeted objects when
+// the origin is a prim, the local traversal is the relative path to a
+// relationship and the dynamic traversal is TargetedObjects.
 //
 static void
 TestResolveToTargetedObjects(Fixture &fixture)
@@ -590,6 +590,100 @@ TestResolveToTargetedObjects_MissingTarget(Fixture &fixture)
         .Add(SdfPath("/Origin.myRel"), EsfEditReason::ChangedTargetPaths)
         .Add(SdfPath("/Origin/A"), EsfEditReason::ResyncedObject)
         .Add(SdfPath("/Origin/B"), EsfEditReason::ResyncedObject);
+    ASSERT_EQ(fixture.journal, expectedJournal);
+}
+
+// Test that Exec_ResolveInput finds computations on the targeted objects
+// when the origin is a prim, the local traversal is the relative path to an
+// attribute and the dynamic traversal is ConnectionTargetedObjects.
+//
+static void
+TestResolveToConnectionTargetedObjects(Fixture &fixture)
+{
+    // TODO: When we provide a way for prims to register 'computeValue'
+    // computations, we can add an attribute connection that targets a prim
+    // here.
+    fixture.NewStageFromLayer(R"usd(#usda 1.0
+        def CustomSchema "Origin" {
+            int myAttr.connect = [</Origin/A.attr>, </Origin/B.attr>]
+            def CustomSchema "A" {
+                int attr
+            }
+            def CustomSchema "B" {
+                int attr
+            }
+        }
+    )usd");
+
+    const Exec_OutputKeyVector outputKeys = fixture.ResolveInput(
+        fixture.GetObjectAtPath("/Origin"),
+        _tokens->attributeComputation,
+        TfType::Find<int>(),
+        EsfSchemaConfigKey(),
+        SdfPath(".myAttr"),
+        ExecProviderResolution::DynamicTraversal::ConnectionTargetedObjects);
+
+    ASSERT_EQ(outputKeys.size(), 2);
+    ASSERT_OUTPUT_KEY(
+        outputKeys[0], 
+        fixture.GetObjectAtPath("/Origin/A.attr"), 
+        EsfSchemaConfigKey(),
+        fixture.attributeComputationDefinition);
+    ASSERT_OUTPUT_KEY(
+        outputKeys[1], 
+        fixture.GetObjectAtPath("/Origin/B.attr"), 
+        EsfSchemaConfigKey(),
+        fixture.attributeComputationDefinition);
+
+    EsfJournal expectedJournal;
+    expectedJournal
+        .Add(SdfPath("/Origin"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin.myAttr"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin.myAttr"), EsfEditReason::ChangedConnectionPaths)
+        .Add(SdfPath("/Origin/A"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/A.attr"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/B"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/B.attr"), EsfEditReason::ResyncedObject);
+    ASSERT_EQ(fixture.journal, expectedJournal);
+}
+
+// Test that Exec_ResolveInput silently ignores missing connection targets.
+static void
+TestResolveToConnectionTargetedObjects_MissingConnectionTarget(
+    Fixture &fixture)
+{
+    fixture.NewStageFromLayer(R"usd(#usda 1.0
+        def CustomSchema "Origin" {
+            int myAttr.connect = [</Origin/A.attr>, </Origin/B.attr>]
+            def CustomSchema "A" {
+                int attr
+            }
+        }
+    )usd");
+
+    const Exec_OutputKeyVector outputKeys = fixture.ResolveInput(
+        fixture.GetObjectAtPath("/Origin"),
+        _tokens->attributeComputation,
+        TfType::Find<int>(),
+        EsfSchemaConfigKey(),
+        SdfPath(".myAttr"),
+        ExecProviderResolution::DynamicTraversal::ConnectionTargetedObjects);
+
+    ASSERT_EQ(outputKeys.size(), 1);
+    ASSERT_OUTPUT_KEY(
+        outputKeys[0], 
+        fixture.GetObjectAtPath("/Origin/A.attr"), 
+        EsfSchemaConfigKey(),
+        fixture.attributeComputationDefinition);
+
+    EsfJournal expectedJournal;
+    expectedJournal
+        .Add(SdfPath("/Origin"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin.myAttr"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin.myAttr"), EsfEditReason::ChangedConnectionPaths)
+        .Add(SdfPath("/Origin/A"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/A.attr"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/B.attr"), EsfEditReason::ResyncedObject);
     ASSERT_EQ(fixture.journal, expectedJournal);
 }
 
@@ -789,6 +883,8 @@ int main()
         TestResolveToOwningPrim,
         TestResolveToTargetedObjects,
         TestResolveToTargetedObjects_MissingTarget,
+        TestResolveToConnectionTargetedObjects,
+        TestResolveToConnectionTargetedObjects_MissingConnectionTarget,
         TestResolveToStage,
         TestResolveForDispatchedPrimComputation,
         TestResolveForDispatchedAttributeComputation,

@@ -80,6 +80,7 @@ struct Utf8NoEolf : PEGTL_NS::minus<Utf8, Eol> {};
 struct KeywordAdd : PXR_PEGTL_KEYWORD("add") {};
 struct KeywordAnimationBlock : PXR_PEGTL_KEYWORD("AnimationBlock") {};
 struct KeywordAppend : PXR_PEGTL_KEYWORD("append") {};
+struct KeywordAt : PXR_PEGTL_KEYWORD("at") {};
 struct KeywordAutoEase : PXR_PEGTL_KEYWORD("autoEase") {};
 struct KeywordBezier: PXR_PEGTL_KEYWORD("bezier") {};
 struct KeywordClass : PXR_PEGTL_KEYWORD("class") {};
@@ -94,12 +95,18 @@ struct KeywordDelete : PXR_PEGTL_KEYWORD("delete") {};
 struct KeywordDictionary : PXR_PEGTL_KEYWORD("dictionary") {};
 struct KeywordDisplayUnit : PXR_PEGTL_KEYWORD("displayUnit") {};
 struct KeywordDoc : PXR_PEGTL_KEYWORD("doc") {};
+struct KeywordEdit : PXR_PEGTL_KEYWORD("edit") {};
+struct KeywordErase : PXR_PEGTL_KEYWORD("erase") {};
+struct KeywordFill : PXR_PEGTL_KEYWORD("fill") {};
 struct KeywordHeld : PXR_PEGTL_KEYWORD("held") {};
 struct KeywordHermite : PXR_PEGTL_KEYWORD("hermite") {};
 struct KeywordInherits : PXR_PEGTL_KEYWORD("inherits") {};
+struct KeywordInsert : PXR_PEGTL_KEYWORD("insert") {};
 struct KeywordKind : PXR_PEGTL_KEYWORD("kind") {};
 struct KeywordLinear : PXR_PEGTL_KEYWORD("linear") {};
 struct KeywordLoop : PXR_PEGTL_KEYWORD("loop") {};
+struct KeywordMaxsize : PXR_PEGTL_KEYWORD("maxsize") {};
+struct KeywordMinsize : PXR_PEGTL_KEYWORD("minsize") {};
 struct KeywordNameChildren : PXR_PEGTL_KEYWORD("nameChildren") {};
 struct KeywordNone : PXR_PEGTL_KEYWORD("None") {};
 struct KeywordNone_LC : PXR_PEGTL_KEYWORD("none") {};
@@ -117,6 +124,7 @@ struct KeywordReferences : PXR_PEGTL_KEYWORD("references") {};
 struct KeywordRelocates : PXR_PEGTL_KEYWORD("relocates") {};
 struct KeywordRel : PXR_PEGTL_KEYWORD("rel") {};
 struct KeywordReorder : PXR_PEGTL_KEYWORD("reorder") {};
+struct KeywordResize : PXR_PEGTL_KEYWORD("resize") {};
 struct KeywordRootPrims : PXR_PEGTL_KEYWORD("rootPrims") {};
 struct KeywordRepeat : PXR_PEGTL_KEYWORD("repeat") {};
 struct KeywordReset : PXR_PEGTL_KEYWORD("reset") {};
@@ -129,11 +137,13 @@ struct KeywordSpline : PXR_PEGTL_KEYWORD("spline") {};
 struct KeywordSymmetryArguments : PXR_PEGTL_KEYWORD("symmetryArguments") {};
 struct KeywordSymmetryFunction : PXR_PEGTL_KEYWORD("symmetryFunction") {};
 struct KeywordTimeSamples : PXR_PEGTL_KEYWORD("timeSamples") {};
+struct KeywordTo : PXR_PEGTL_KEYWORD("to") {};
 struct KeywordUniform : PXR_PEGTL_KEYWORD("uniform") {};
 struct KeywordVariantSet : PXR_PEGTL_KEYWORD("variantSet") {};
 struct KeywordVariantSets : PXR_PEGTL_KEYWORD("variantSets") {};
 struct KeywordVariants : PXR_PEGTL_KEYWORD("variants") {};
 struct KeywordVarying : PXR_PEGTL_KEYWORD("varying") {};
+struct KeywordWrite: PXR_PEGTL_KEYWORD("write") {};
 
 struct Keywords : PEGTL_NS::sor<
 KeywordAdd,
@@ -295,6 +305,12 @@ struct Number : PEGTL_NS::sor<
                       NumberLeadingDot,
                       MathKeywordInf>>,
     MathKeywordNan> {};
+
+// Integer = (-)? (Digit)+
+struct Integer : PEGTL_NS::seq<
+    PEGTL_NS::opt<Minus>,
+    PEGTL_NS::plus<Digit>
+    > {};
 
 // strings
 // EscapedDoubleQuote = \"
@@ -530,6 +546,82 @@ struct DictionaryValue : PEGTL_NS::if_must<
                       MultilinePadding>,
     DictionaryValueClose> {};
 
+template <int N>
+struct ArrayEditReferenceIndex : Integer {};
+
+template <int N>
+struct ArrayEditReference : PEGTL_NS::if_must<
+    LeftBracket,
+    PEGTL_NS::pad<ArrayEditReferenceIndex<N>, InlinePadding>,
+    RightBracket> {};
+
+struct ArrayEditLiteral : PEGTL_NS::sor<
+    AtomicValue,
+    TypedTupleValue
+    > {};
+
+struct ArrayEditReference0OrLiteral : PEGTL_NS::sor<
+    ArrayEditReference<0>, ArrayEditLiteral> {};
+
+struct ArrayEditPrepend : PEGTL_NS::if_must<
+    KeywordPrepend,
+    PEGTL_NS::pad<ArrayEditReference0OrLiteral, InlinePadding>> {};
+
+struct ArrayEditAppend : PEGTL_NS::if_must<
+    KeywordAppend,
+    PEGTL_NS::pad<ArrayEditReference0OrLiteral, InlinePadding>> {};
+
+struct ArrayEditWrite : PEGTL_NS::if_must<
+    KeywordWrite,
+    PEGTL_NS::pad<ArrayEditReference0OrLiteral, InlinePadding>,
+    KeywordTo,
+    PEGTL_NS::pad<ArrayEditReference<1>, InlinePadding>> {};
+
+struct ArrayEditInsert : PEGTL_NS::if_must<
+    KeywordInsert,
+    PEGTL_NS::pad<ArrayEditReference0OrLiteral, InlinePadding>,
+    KeywordAt,
+    PEGTL_NS::pad<ArrayEditReference<1>, InlinePadding>> {};
+
+struct ArrayEditErase : PEGTL_NS::if_must<
+    KeywordErase,
+    PEGTL_NS::pad<ArrayEditReference<0>, InlinePadding>> {};
+
+struct ArrayEditSizeArg : Integer {};
+
+struct ArrayEditMinSize : PEGTL_NS::if_must<
+    KeywordMinsize, PEGTL_NS::pad<ArrayEditSizeArg, InlinePadding>,
+    PEGTL_NS::opt_must<
+        KeywordFill, PEGTL_NS::pad<ArrayEditLiteral, InlinePadding>>
+    > {};
+
+struct ArrayEditResize : PEGTL_NS::if_must<
+    KeywordResize, PEGTL_NS::pad<ArrayEditSizeArg, InlinePadding>,
+    PEGTL_NS::opt_must<
+        KeywordFill, PEGTL_NS::pad<ArrayEditLiteral, InlinePadding>>
+    > {};
+
+struct ArrayEditMaxSize : PEGTL_NS::if_must<
+    KeywordMaxsize, PEGTL_NS::pad<ArrayEditSizeArg, InlinePadding>> {};
+
+struct ArrayEditInstruction : PEGTL_NS::sor<
+    ArrayEditPrepend,
+    ArrayEditAppend,
+    ArrayEditWrite,
+    ArrayEditInsert,
+    ArrayEditErase,
+    ArrayEditMinSize,
+    ArrayEditResize,
+    ArrayEditMaxSize
+    > {};
+
+struct ArrayEditValue : PEGTL_NS::if_must<
+    KeywordEdit,
+    PEGTL_NS::pad<LeftBracket, InlinePadding>,
+    PEGTL_NS::pad_opt<StatementSequenceOf<ArrayEditInstruction>,
+                      MultilinePadding>,
+    RightBracket> {};
+
 // shared metadata
 // MetadataOpen = LeftParen
 // MetadataClose = RightParen
@@ -677,6 +769,7 @@ struct TimeSample : PEGTL_NS::seq<
     PEGTL_NS::pad<NamespaceSeparator, InlinePadding>,
     PEGTL_NS::sor<
         KeywordNone,
+        ArrayEditValue,
         TypedValue>> {};
 
 // TimeSampleMap = { (NewLines)? ((TokenSeparator)? TimeSample 
@@ -929,14 +1022,16 @@ struct AttributeDeclaration : PEGTL_NS::seq<
     TokenSeparator,
     NamespacedName> {};
 
-// AttributeValue = None / AnimationBlock / TypedValue
+// AttributeValue = None / AnimationBlock / ArrayEditValue / TypedValue
 // AttributeAssignment = Assignment AttributeValue
 struct AttributeAssignment : PEGTL_NS::seq<
     Assignment,
     PEGTL_NS::sor<
         KeywordNone,
         KeywordAnimationBlock,
-        TypedValue>> {};
+        ArrayEditValue,
+        TypedValue
+        >> {};
 struct AttributeAssignmentOptional : PEGTL_NS::opt<
     AttributeAssignment> {};
 

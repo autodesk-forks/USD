@@ -85,7 +85,8 @@ Exec_PluginComputationDefinition::CompileNode(
 
     VdfOutputSpecs outputSpecs;
     outputSpecs.Connector(
-        GetResultType(providerObject, /* metadataKey */ TfToken(), nodeJournal),
+        GetResultType(
+            providerObject, /* disambiguatingId */ TfToken(), nodeJournal),
         VdfTokens->out);
 
     return program->CreateNode<Exec_CallbackNode>(

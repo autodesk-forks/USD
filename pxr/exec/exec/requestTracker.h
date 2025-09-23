@@ -20,6 +20,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 struct Exec_AttributeValueInvalidationResult;
 struct Exec_DisconnectedInputsInvalidationResult;
+struct Exec_MetadataInvalidationResult;
 class Exec_RequestImpl;
 class Exec_TimeChangeInvalidationResult;
 
@@ -55,6 +56,12 @@ public:
     /// 
     void DidInvalidateComputedValues(
         const Exec_AttributeValueInvalidationResult &invalidationResult);
+
+    /// Notify all requests of invalid computed values as a consequence of
+    /// metadata authored value invalidation.
+    /// 
+    void DidInvalidateComputedValues(
+        const Exec_MetadataInvalidationResult &invalidationResult);
 
     /// Notify all requests of invalid computed values as a consequence of
     /// uncompilation.

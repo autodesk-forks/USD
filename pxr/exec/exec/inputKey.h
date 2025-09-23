@@ -34,14 +34,13 @@ struct Exec_InputKey
     /// The requested computation name.
     TfToken computationName;
 
+    /// A token that can be used to distinguish different computations that
+    /// share the same computationName.
+    ///
+    TfToken disambiguatingId;
+
     /// The requested computation result type.
     TfType resultType;
-
-    // TODO: For now, the metadata key is treated specially here, but in the
-    // future we may need to add other values to distinguish requested
-    // inputs. When we do so, we may change this to use a variant (if the values
-    // are mutually exclusive), or maybe even some kind of map.
-    TfToken metadataKey;
 
     /// Describes how we find the provider, starting from the object that owns
     /// the computation to which this key provides an input.

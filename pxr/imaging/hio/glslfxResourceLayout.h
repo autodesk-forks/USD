@@ -150,6 +150,7 @@ public:
         TEXTURE,                // a texture
         SHADOW_TEXTURE,         // a texture used as a shadow
         ARRAY_TEXTURE,          // e.g. texture1DArray, texture2DArray, etc.
+        CUBEMAP_TEXTURE,        // a cubemap texture
         DEPTH_TEXTURE           // e.g. depth texture
     };
 

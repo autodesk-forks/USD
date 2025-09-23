@@ -60,6 +60,15 @@ Exec_RequestTracker::DidInvalidateComputedValues(
 
 void
 Exec_RequestTracker::DidInvalidateComputedValues(
+        const Exec_MetadataInvalidationResult &invalidationResult)
+{
+    ParallelForEachRequest([&invalidationResult](Exec_RequestImpl &impl) {
+        impl.DidInvalidateComputedValues(invalidationResult);
+    });
+}
+
+void
+Exec_RequestTracker::DidInvalidateComputedValues(
     const Exec_DisconnectedInputsInvalidationResult &invalidationResult)
 {
     ParallelForEachRequest([&invalidationResult](Exec_RequestImpl &impl) {

@@ -127,7 +127,11 @@ _InstanceDataSourceNames()
     TRACE_FUNCTION();
     
     TfTokenVector result = {
+        // We include the UsdImagingMaterialBindingsSchema in order to aggregate
+        // scene indices by inherited material bindings.
         UsdImagingMaterialBindingsSchema::GetSchemaToken(),
+        // We include the UsdImagingImageable schema in order to aggregate
+        // scene indices by purpose.
         HdPurposeSchema::GetSchemaToken(),
         // We include the geom model schema in order to aggregate scene indices
         // by draw mode.

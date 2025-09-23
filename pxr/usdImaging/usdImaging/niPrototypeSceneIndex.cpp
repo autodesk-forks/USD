@@ -168,7 +168,7 @@ UsdImaging_NiPrototypeSceneIndex::GetPrim(
     }
 
     if (_IsUsdInstance(prim.dataSource)) {
-        SetEmptyPrimType(prim);
+        SetEmptyPrimType(&prim.primType);
         return prim;
     }
 

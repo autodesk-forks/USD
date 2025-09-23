@@ -24,24 +24,30 @@ template <typename T>
 class Vdf_FixedSizeHolderRemoteStorage
 {
 public:
+    Vdf_FixedSizeHolderRemoteStorage() {
+        TfAutoMallocTag tag("Vdf", "Vdf_FixedSizeHolder::ctor",
+                            __ARCH_PRETTY_FUNCTION__);
+        _pointer.reset(new T);
+    }        
+    
     template <typename U>
     explicit Vdf_FixedSizeHolderRemoteStorage(U &&value) {
-        TfAutoMallocTag2 tag2("Vdf", "Vdf_FixedSizeHolder::ctor");
-        TfAutoMallocTag tag(__ARCH_PRETTY_FUNCTION__);
+        TfAutoMallocTag tag("Vdf", "Vdf_FixedSizeHolder::ctor",
+                            __ARCH_PRETTY_FUNCTION__);
         _pointer.reset(new T(std::forward<U>(value)));
     }
 
     Vdf_FixedSizeHolderRemoteStorage(
         Vdf_FixedSizeHolderRemoteStorage const &other) {
-        TfAutoMallocTag2 tag2("Vdf", "Vdf_FixedSizeHolder::copy ctor");
-        TfAutoMallocTag tag(__ARCH_PRETTY_FUNCTION__);
+        TfAutoMallocTag tag("Vdf", "Vdf_FixedSizeHolder::copy ctor",
+                            __ARCH_PRETTY_FUNCTION__);
         _pointer.reset(new T(other.Get()));
     }
     Vdf_FixedSizeHolderRemoteStorage &operator=(
         Vdf_FixedSizeHolderRemoteStorage const &other) {
         if (this != &other) {
-            TfAutoMallocTag2 tag2("Vdf", "Vdf_FixedSizeHolder::assignment");
-            TfAutoMallocTag tag(__ARCH_PRETTY_FUNCTION__);
+            TfAutoMallocTag tag("Vdf", "Vdf_FixedSizeHolder::assignment",
+                                __ARCH_PRETTY_FUNCTION__);
             _pointer.reset(new T(other.Get()));
         }
         return *this;
@@ -68,6 +74,8 @@ template <typename T>
 class Vdf_FixedSizeHolderLocalStorage
 {
 public:
+    Vdf_FixedSizeHolderLocalStorage() = default;
+    
     template <typename U>
     explicit Vdf_FixedSizeHolderLocalStorage(U &&value)
         : _value(std::forward<U>(value))
@@ -111,6 +119,8 @@ class Vdf_FixedSizeHolder
     >::type _StorageType;
 
 public:
+
+    Vdf_FixedSizeHolder() : _storage() {}
 
     //! Construct a fixed size holder holding \a obj.
     explicit Vdf_FixedSizeHolder(T const &obj) : _storage(obj)

@@ -1,28 +1,26 @@
 //
-// Copyright 2024 Pixar
+// Copyright 2025 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 
-#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_SCENE_INDEX_PLUGIN_H
-#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_SCENE_INDEX_PLUGIN_H
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_VISIBILITY_SCENE_INDEX_PLUGIN_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_RENDER_PASS_VISIBILITY_SCENE_INDEX_PLUGIN_H
 
 #include "pxr/pxr.h"
 #if PXR_VERSION >= 2408
 #include "pxr/imaging/hd/sceneIndexPlugin.h"
-#include "hdPrman/api.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-/// \class HdPrman_RenderPassSceneIndexPlugin
+/// \class HdPrman_RenderPassVisibilitySceneIndexPlugin
 ///
-/// Applies the active scene index in HdSceneGlobalsSchema
-/// to the scene contents.
+/// Appends the HdPrman_RenderPassVisibilitySceneIndex.
 ///
-class HdPrman_RenderPassSceneIndexPlugin : public HdSceneIndexPlugin
+class HdPrman_RenderPassVisibilitySceneIndexPlugin : public HdSceneIndexPlugin
 {
 public:
-    HdPrman_RenderPassSceneIndexPlugin();
+    HdPrman_RenderPassVisibilitySceneIndexPlugin();
 
 protected:
     HdSceneIndexBaseRefPtr _AppendSceneIndex(

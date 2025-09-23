@@ -42,7 +42,18 @@ _AppendPathList(
         // Anchor all relative paths to the shared library path.
         const bool isLibraryRelativePath = TfIsRelativePath(path);
         if (isLibraryRelativePath) {
-            result->push_back(TfStringCatPaths(sharedLibPath, path));
+            std::string libraryRelativePath = 
+                TfStringCatPaths(sharedLibPath, path);
+            // TfStringCatPaths will strip a trailing '/' character in path 
+            // via ArchNormPath. This can cause the library relative path
+            // to be treated as a file path downstream. Here we detect that case
+            // and add the trailing '/' back if necessary. Note: trailing '\' is
+            // converted to '/' on Windows.
+            if (path.back() == '/') {
+                libraryRelativePath += path.back();
+            }
+            
+            result->push_back(libraryRelativePath);
         }
         else {
             result->push_back(path);
