@@ -610,24 +610,32 @@ UsdImagingDataSourceMaterial::~UsdImagingDataSourceMaterial()
 TfTokenVector 
 UsdImagingDataSourceMaterial::GetNames()
 {
-    if (!_fixedTerminalName.IsEmpty()) {
-        return { HdMaterialSchemaTokens->universalRenderContext };
-    }
-
     TfTokenVector renderContexts;
-    for (const UsdShadeOutput &output :
-             UsdShadeNodeGraph(_usdPrim).GetOutputs()) {
-        const TfToken renderContext = _GetRenderContextForShaderOutput(output);
-        // Only add a renderContext if it has not been added before so
-        // we do not have duplicates (there may be multiple outputs for
-        // the same renderContext).
-        if (!_Contains(renderContexts, renderContext)) {
-            renderContexts.push_back(renderContext);
+
+    if (!_fixedTerminalName.IsEmpty()) {
+        // XXX Returns the list of all built network names because Get() will 
+        // build a network for any render context requested if it doesn't exist
+        // (see HYD-3424).
+        for (const auto& network : _networks) {
+            renderContexts.push_back(network.first);
         }
     }
+    else {
+        for (const UsdShadeOutput &output :
+                 UsdShadeNodeGraph(_usdPrim).GetOutputs()) {
+            const TfToken renderContext = _GetRenderContextForShaderOutput(output);
+            // Only add a renderContext if it has not been added before so
+            // we do not have duplicates (there may be multiple outputs for
+            // the same renderContext).
+            if (!_Contains(renderContexts, renderContext)) {
+                renderContexts.push_back(renderContext);
+            }
+        }
 
-    // Always add the 'all' render context
-    renderContexts.push_back(HdMaterialSchemaTokens->all);
+        // Always add the 'all' render context
+        renderContexts.push_back(HdMaterialSchemaTokens->all);
+    }
+
     return renderContexts;
 }
 

@@ -18,6 +18,7 @@ pxr_library(vdf
         api.h
         boxedContainer.h
         boxedContainerTraits.h
+        connectorMap.h
         countingIterator.h
         parallelExecutorDataManager.h
         parallelExecutorDataManagerInterface.h
@@ -41,7 +42,6 @@ pxr_library(vdf
         inputValuesPointer.h
         iteratorRange.h
         iterators.h
-        linearMap.h
         lruCache.h
         maskMemoizer.h
         maskedIterator.h
@@ -323,12 +323,12 @@ pxr_build_test(testVdfIterators
         testenv/testVdfIterators.cpp
 )
 
-pxr_build_test(testVdfLinearMap
+pxr_build_test(testVdfConnectorMap
     LIBRARIES
         vdf
 
     CPPFILES
-        testenv/testVdfLinearMap.cpp
+        testenv/testVdfConnectorMap.cpp
 )
 
 pxr_build_test(testVdfMask
@@ -516,8 +516,8 @@ pxr_register_test(testVdfIterators
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testVdfLinearMap
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testVdfLinearMap"
+pxr_register_test(testVdfConnectorMap
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testVdfConnectorMap"
     EXPECTED_RETURN_CODE 0
 )
 

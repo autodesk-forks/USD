@@ -52,12 +52,9 @@ TF_WRAP_MODULE
     TF_WRAP(UsdAttributeLimits);
     TF_WRAP(UsdAttributeQuery);
     TF_WRAP(UsdCollectionMembershipQuery);
-    TF_WRAP(UsdCrateInfo);
-    TF_WRAP(UsdFileFormat);
     TF_WRAP(UsdNamespaceEditor);
     TF_WRAP(UsdResolveInfo);
     TF_WRAP(Version);
-    TF_WRAP(UsdZipFile);
     TF_WRAP(UsdPrimCompositionQueryArc);
     TF_WRAP(UsdPrimCompositionQuery);
     TF_WRAP(UsdFlattenUtils);

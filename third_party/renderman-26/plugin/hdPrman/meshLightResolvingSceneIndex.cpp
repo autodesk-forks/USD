@@ -45,6 +45,8 @@
 
 #include "pxr/base/tf/debug.h"
 #include "pxr/base/trace/trace.h"
+#include "pxr/base/work/loops.h"
+#include <mutex>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -1078,36 +1080,56 @@ HdPrmanMeshLightResolvingSceneIndex::_PrimsAdded(
 
     TRACE_FUNCTION();
 
-    HdSceneIndexObserver::AddedPrimEntries added;
+    // Use a parallel loop to scan entries for mesh lights.
+    // A mutex will serialize additions to the hash map.
+    std::mutex meshLightPrimsMutex;
+    std::unordered_map<SdfPath, HdSceneIndexPrim, SdfPath::Hash> meshLightPrims;
 
-    for (const auto& entry : entries) {
-        if ((entry.primType == HdPrimTypeTokens->mesh) ||
-            (entry.primType == HdPrimTypeTokens->volume)) {
-            HdSceneIndexPrim prim = _GetInputSceneIndex()->
-                GetPrim(entry.primPath);
+    WorkParallelForEach(
+        entries.begin(), entries.end(),
+        [&](const HdSceneIndexObserver::AddedPrimEntry &entry)
+        {
+            if ((entry.primType == HdPrimTypeTokens->mesh) ||
+                (entry.primType == HdPrimTypeTokens->volume)) {
+                HdSceneIndexPrim prim = _GetInputSceneIndex()->
+                    GetPrim(entry.primPath);
 
-            // The prim is a mesh light if light.isLight is true. But a mesh
-            // light also needs a valid light shader network [material
-            // resource], which it won't have when stage scene index is not
-            // enabled.
-            //
-            // Mesh lights are not supported without stage scene index;
-            // we should not insert the light, source, or stripped-down mesh
-            // unless it is enabled. If it is disabled, we should instead
-            // just forward the origin prim along unmodified at its original
-            // path; downstream HdPrman will treat it as the mesh its prim type
-            // declares it to be.
+                // The prim is a mesh light if light.isLight is true. But a mesh
+                // light also needs a valid light shader network [material
+                // resource], which it won't have when stage scene index is not
+                // enabled.
+                //
+                // Mesh lights are not supported without stage scene index;
+                // we should not insert the light, source, or stripped-down mesh
+                // unless it is enabled. If it is disabled, we should instead
+                // just forward the origin prim along unmodified at its original
+                // path; downstream HdPrman will treat it as the mesh its prim
+                // type declares it to be.
 
-            if (_IsMeshLight(prim) && _HasValidMaterialNetwork(prim)) {
-                _AddMeshLight(entry.primPath, prim, &added);
+                if (_IsMeshLight(prim) && _HasValidMaterialNetwork(prim)) {
+                    std::lock_guard<std::mutex> lock(meshLightPrimsMutex);
+                    meshLightPrims[entry.primPath] = prim;
+                }
+            }
+        });
 
-                // skip fallback insertion
-                continue;
+    if (meshLightPrims.empty()) {
+        // Fast path.  No mesh lights were discovered.
+        _SendPrimsAdded(entries);
+    } else {
+        // Mesh lights were discovered.
+        HdSceneIndexObserver::AddedPrimEntries added;
+        for (const auto& entry: entries) {
+            const auto it = meshLightPrims.find(entry.primPath);
+            if (it != meshLightPrims.end()) {
+                _AddMeshLight(entry.primPath, it->second, &added);
+            } else {
+                // Not a mesh light.  Use the added entry as-is.
+                added.push_back(entry);
             }
         }
-        added.push_back(entry);
+        _SendPrimsAdded(added);
     }
-    _SendPrimsAdded(added);
 }
 
 void

@@ -527,7 +527,7 @@ Exec_DefinitionRegistry::_ValidateComputationRegistration(
 }
 
 void
-Exec_DefinitionRegistry::_RegisterPrimComputation(
+Exec_DefinitionRegistry::RegisterPrimComputation(
     TfType schemaType,
     const TfToken &computationName,
     TfType resultType,
@@ -571,7 +571,7 @@ Exec_DefinitionRegistry::_RegisterPrimComputation(
 }
 
 void
-Exec_DefinitionRegistry::_RegisterAttributeComputation(
+Exec_DefinitionRegistry::RegisterAttributeComputation(
     const TfToken &attributeName,
     TfType schemaType,
     const TfToken &computationName,
@@ -623,6 +623,31 @@ Exec_DefinitionRegistry::_RegisterAttributeComputation(
             attributeName.GetText(),
             schemaType.GetTypeName().c_str());
     }
+}
+
+TfToken
+Exec_DefinitionRegistry::RegisterConstantValue(VtValue &&value)
+{
+    auto [it, inserted] = _constantValueToToken.try_emplace(value);
+    TfToken &uniqueToken = it.value();
+    if (inserted) {
+        uniqueToken = TfToken(
+            "constant_" + value.GetType().GetTypeName() + "_" +
+            TfStringify(_constantValueIndex++), TfToken::Immortal);
+        _tokenToConstantValue.emplace(uniqueToken, std::move(value));
+    }
+    return uniqueToken;
+}
+
+VtValue
+Exec_DefinitionRegistry::GetConstantValue(const TfToken &uniqueKey) const
+{
+    const auto it = _tokenToConstantValue.find(uniqueKey);
+    if (!TF_VERIFY(it != _tokenToConstantValue.end())) {
+        return {};
+    }
+
+    return it->second;
 }
 
 void
@@ -703,20 +728,29 @@ Exec_DefinitionRegistry::_RegisterBuiltinAttributeComputation(
 void
 Exec_DefinitionRegistry::_RegisterBuiltinComputations()
 {
+    // Stage computations
+
+    _RegisterBuiltinStageComputation(
+        Exec_PrivateBuiltinComputations->computeConstant,
+        std::make_unique<Exec_ComputeConstantComputationDefinition>());
+
     _RegisterBuiltinStageComputation(
         ExecBuiltinComputations->computeTime,
         std::make_unique<Exec_TimeComputationDefinition>());
+
+    // Attribute computations
 
     _RegisterBuiltinAttributeComputation(
         ExecBuiltinComputations->computeValue,
         std::make_unique<Exec_ComputeValueComputationDefinition>());
 
-    // Register object computations for prims and attributes.
+    // Object computations
     //
     // We register each computation twice, but count it once for the purposes
     // of validating that the expected number of builtin computations is
     // registered.
     size_t numObjectComputations = 0;
+
     _RegisterBuiltinPrimComputation(
         Exec_PrivateBuiltinComputations->computeMetadata,
         std::make_unique<Exec_ComputeMetadataComputationDefinition>());
@@ -790,7 +824,7 @@ Exec_DefinitionRegistry::_IsComputationRegistrationComplete(
 }
 
 void
-Exec_DefinitionRegistry::_SetComputationRegistrationComplete(
+Exec_DefinitionRegistry::SetComputationRegistrationComplete(
     const TfType schemaType)
 {
     _computationsRegisteredForSchema.emplace(schemaType, true);

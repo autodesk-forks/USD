@@ -1,14 +1,18 @@
+//
 // Copyright 2025 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 
-#include "hdPrman/renderPassVisibilitySceneIndex.h"
+#include "hdPrman/renderPassVisibilityAndMatteSceneIndexPlugin.h"
+
 #if PXR_VERSION >= 2408
+
 #include "hdPrman/tokens.h"
 
 #include "pxr/imaging/hd/version.h"
 
+#include "pxr/imaging/hd/collectionExpressionEvaluator.h"
 #include "pxr/imaging/hd/collectionsSchema.h"
 #include "pxr/imaging/hd/containerDataSourceEditor.h"
 #include "pxr/imaging/hd/dataSourceLocator.h"
@@ -18,6 +22,7 @@
 #include "pxr/imaging/hd/primvarsSchema.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneGlobalsSchema.h"
+#include "pxr/imaging/hd/sceneIndexPluginRegistry.h"
 #include "pxr/imaging/hd/sceneIndexPrimView.h"
 #include "pxr/imaging/hd/schema.h" 
 #include "pxr/imaging/hd/tokens.h"
@@ -34,21 +39,28 @@ TF_DEFINE_PRIVATE_TOKENS(
     (matte)
     ((riAttributesRiMatte, "ri:attributes:Ri:Matte"))
     ((riAttributesVisibilityCamera, "ri:attributes:visibility:camera"))
+    ((sceneIndexPluginName, "HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin"))
 );
 
-/* static */
-HdPrman_RenderPassVisibilitySceneIndexRefPtr
-HdPrman_RenderPassVisibilitySceneIndex::New(
-    const HdSceneIndexBaseRefPtr& inputSceneIndex)
+TF_REGISTRY_FUNCTION(TfType)
 {
-    return TfCreateRefPtr(  
-        new HdPrman_RenderPassVisibilitySceneIndex(inputSceneIndex));
+    HdSceneIndexPluginRegistry
+        ::Define<HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin>();
 }
 
-HdPrman_RenderPassVisibilitySceneIndex::HdPrman_RenderPassVisibilitySceneIndex(
-    const HdSceneIndexBaseRefPtr &inputSceneIndex)
-: HdSingleInputFilteringSceneIndexBase(inputSceneIndex)
+TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
 {
+    // We need an "insertion point" that's *after* general material resolve.
+    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 115;
+
+    for (auto const& pluginDisplayName : HdPrman_GetPluginDisplayNames()) {
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            pluginDisplayName,
+            _tokens->sceneIndexPluginName,
+            nullptr, // No input args.
+            insertionPhase,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+    }
 }
 
 namespace {
@@ -112,45 +124,110 @@ _IsVisibleToCamera(const HdContainerDataSourceHandle& primSource)
     return true;
 }
 
-} // anon
+////////////////////////////////////////////
+// Render Pass Visibility And Matte State //
+////////////////////////////////////////////
 
-bool
-HdPrman_RenderPassVisibilitySceneIndex::_RenderPassVisState::DoesOverrideMatte(
-    SdfPath const& primPath,
-    HdSceneIndexPrim const& prim) const
-{
-    return matteEval
-        && _IsGeometryType(prim.primType)
-        && matteEval->Match(primPath);
-}
+struct _RenderPassVisibilityAndMatteState {
+    SdfPath renderPassPath;
 
-bool
-HdPrman_RenderPassVisibilitySceneIndex::_RenderPassVisState::DoesOverrideVis(
-    SdfPath const& primPath,
-    HdSceneIndexPrim const& prim) const
-{
-    return renderVisEval
-        && _ShouldApplyPassVisibility(prim.primType)
-        && !renderVisEval->Match(primPath)
-        && _IsVisible(prim.dataSource);
-}
+    // Retain the expressions so we can compare old vs. new state.
+    SdfPathExpression matteExpr;
+    SdfPathExpression renderVisExpr;
+    SdfPathExpression cameraVisExpr;
 
-bool
-HdPrman_RenderPassVisibilitySceneIndex::_RenderPassVisState::DoesOverrideCameraVis(
-    SdfPath const& primPath,
-    HdSceneIndexPrim const& prim) const
-{
-    return cameraVisEval
-        && _ShouldApplyPassVisibility(prim.primType)
-        && !cameraVisEval->Match(primPath)
-        && _IsVisibleToCamera(prim.dataSource);
-}
+    // Evalulators for each pattern expression.
+    std::optional<HdCollectionExpressionEvaluator> matteEval;
+    std::optional<HdCollectionExpressionEvaluator> renderVisEval;
+    std::optional<HdCollectionExpressionEvaluator> cameraVisEval;
 
-// Prim data source for applying render pass visibility overrides to a prim.
-class HdPrman_RenderPassVis_PrimDataSource : public HdContainerDataSource
+    bool DoesOverrideMatte(
+        const SdfPath &primPath,
+        HdSceneIndexPrim const& prim) const
+    {
+        return matteEval
+            && _IsGeometryType(prim.primType)
+            && matteEval->Match(primPath);
+    }
+
+    bool DoesOverrideVis(
+        const SdfPath &primPath,
+        HdSceneIndexPrim const& prim) const
+    {
+        return renderVisEval
+            && _ShouldApplyPassVisibility(prim.primType)
+            && !renderVisEval->Match(primPath)
+            && _IsVisible(prim.dataSource);
+    }
+
+    bool DoesOverrideCameraVis(
+        const SdfPath &primPath,
+        HdSceneIndexPrim const& prim) const
+    {
+        return cameraVisEval
+            && _ShouldApplyPassVisibility(prim.primType)
+            && !cameraVisEval->Match(primPath)
+            && _IsVisibleToCamera(prim.dataSource);
+    }
+};
+
+//////////////////////////////////////////////////
+// Render Pass Visibility And Matte Scene Index //
+//////////////////////////////////////////////////
+
+TF_DECLARE_WEAK_AND_REF_PTRS(_RenderPassVisibilityAndMatteSceneIndex);
+
+class _RenderPassVisibilityAndMatteSceneIndex :
+    public HdSingleInputFilteringSceneIndexBase
 {
 public:
-    HD_DECLARE_DATASOURCE(HdPrman_RenderPassVis_PrimDataSource);
+    static _RenderPassVisibilityAndMatteSceneIndexRefPtr
+    New(const HdSceneIndexBaseRefPtr& inputSceneIndex)
+    {
+        return TfCreateRefPtr(
+            new _RenderPassVisibilityAndMatteSceneIndex(inputSceneIndex));
+    }
+
+    HdSceneIndexPrim GetPrim(const SdfPath &primPath) const override;
+    SdfPathVector GetChildPrimPaths(const SdfPath &primPath) const override;
+
+protected:
+    _RenderPassVisibilityAndMatteSceneIndex(
+        const HdSceneIndexBaseRefPtr &inputSceneIndex)
+     : HdSingleInputFilteringSceneIndexBase(inputSceneIndex)
+    {
+    }
+
+    void _PrimsAdded(
+        const HdSceneIndexBase &sender,
+        const HdSceneIndexObserver::AddedPrimEntries &entries) override;
+    void _PrimsRemoved(
+        const HdSceneIndexBase &sender,
+        const HdSceneIndexObserver::RemovedPrimEntries &entries) override;
+    void _PrimsDirtied(
+        const HdSceneIndexBase &sender,
+        const HdSceneIndexObserver::DirtiedPrimEntries &entries) override;
+
+private:
+    friend class _RenderPassVisibilityAndMatteDataSource;
+
+    // Pull on the scene globals schema for the active render pass,
+    // computing and caching its visibility state in _activeRenderPass.
+    void _UpdateActiveRenderPassState(
+        HdSceneIndexObserver::DirtiedPrimEntries *dirtyEntries);
+
+    // Visibility and matte state for the active render pass.
+    _RenderPassVisibilityAndMatteState _activeRenderPass;
+};
+
+//////////////////////////////////////////////////
+// Render Pass Visibility And Matte Data Source //
+//////////////////////////////////////////////////
+
+class _RenderPassVisibilityAndMatteDataSource : public HdContainerDataSource
+{
+public:
+    HD_DECLARE_DATASOURCE(_RenderPassVisibilityAndMatteDataSource);
 
     TfTokenVector GetNames() override {
         return _prim.dataSource->GetNames();
@@ -159,8 +236,8 @@ public:
     HdDataSourceBaseHandle Get(const TfToken &name) override;
 
 private:
-    HdPrman_RenderPassVis_PrimDataSource(
-        HdPrman_RenderPassVisibilitySceneIndexConstPtr const& sceneIndex,
+    _RenderPassVisibilityAndMatteDataSource(
+        _RenderPassVisibilityAndMatteSceneIndexConstPtr const& sceneIndex,
         SdfPath const& primPath,
         HdSceneIndexPrim const& prim)
      : _sceneIndex(sceneIndex)
@@ -170,20 +247,20 @@ private:
     }
 
     // This dataSource accesses scene state tracked by the scene index.
-    const HdPrman_RenderPassVisibilitySceneIndexConstPtr _sceneIndex;
+    const _RenderPassVisibilityAndMatteSceneIndexConstPtr _sceneIndex;
     const SdfPath _primPath;
     const HdSceneIndexPrim _prim;
 };
 
 HdDataSourceBaseHandle
-HdPrman_RenderPassVis_PrimDataSource::Get(const TfToken &name)
+_RenderPassVisibilityAndMatteDataSource::Get(const TfToken &name)
 {
     if (!_sceneIndex || !_prim.dataSource) {
         return nullptr;
     }
 
     // State from the scene index.
-    HdPrman_RenderPassVisibilitySceneIndex::_RenderPassVisState const& renderPass =
+    _RenderPassVisibilityAndMatteState const& renderPass =
         _sceneIndex->_activeRenderPass;
 
     // Primvars
@@ -254,15 +331,19 @@ HdPrman_RenderPassVis_PrimDataSource::Get(const TfToken &name)
     return _prim.dataSource->Get(name);
 }
 
+//////////////////////////////////////////////////////////
+// Render Pass Visibility And Matte Scene Index (cont.) //
+//////////////////////////////////////////////////////////
+
 HdSceneIndexPrim 
-HdPrman_RenderPassVisibilitySceneIndex::GetPrim(
+_RenderPassVisibilityAndMatteSceneIndex::GetPrim(
     const SdfPath &primPath) const
 {
     HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
 
     if (prim.dataSource) {
         // Overrides happen in the prim-level data source.
-        prim.dataSource = HdPrman_RenderPassVis_PrimDataSource::New(
+        prim.dataSource = _RenderPassVisibilityAndMatteDataSource::New(
             TfCreateWeakPtr(this), primPath, prim);
     }
 
@@ -270,7 +351,7 @@ HdPrman_RenderPassVisibilitySceneIndex::GetPrim(
 }
 
 SdfPathVector 
-HdPrman_RenderPassVisibilitySceneIndex::GetChildPrimPaths(
+_RenderPassVisibilityAndMatteSceneIndex::GetChildPrimPaths(
     const SdfPath &primPath) const
 {
     return _GetInputSceneIndex()->GetChildPrimPaths(primPath);
@@ -296,8 +377,6 @@ General notes on change processing and invalidation:
 
 */
 
-namespace {
-
 // Helper to scan an entry vector for an entry that
 // could affect the active render pass.
 template <typename ENTRIES>
@@ -317,10 +396,8 @@ _EntryCouldAffectPass(
     return false;
 }
 
-} // anon
-
 void
-HdPrman_RenderPassVisibilitySceneIndex::_PrimsAdded(
+_RenderPassVisibilityAndMatteSceneIndex::_PrimsAdded(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::AddedPrimEntries &entries)
 {
@@ -336,7 +413,7 @@ HdPrman_RenderPassVisibilitySceneIndex::_PrimsAdded(
 }
 
 void 
-HdPrman_RenderPassVisibilitySceneIndex::_PrimsRemoved(
+_RenderPassVisibilityAndMatteSceneIndex::_PrimsRemoved(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::RemovedPrimEntries &entries)
 {
@@ -352,7 +429,7 @@ HdPrman_RenderPassVisibilitySceneIndex::_PrimsRemoved(
 }
 
 void
-HdPrman_RenderPassVisibilitySceneIndex::_PrimsDirtied(
+_RenderPassVisibilityAndMatteSceneIndex::_PrimsDirtied(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::DirtiedPrimEntries &entries)
 {
@@ -367,17 +444,15 @@ HdPrman_RenderPassVisibilitySceneIndex::_PrimsDirtied(
     _SendPrimsDirtied(extraDirtyEntries);
 }
 
-HdPrman_RenderPassVisibilitySceneIndex::~HdPrman_RenderPassVisibilitySceneIndex() = default;
-
 void
-HdPrman_RenderPassVisibilitySceneIndex::_UpdateActiveRenderPassState(
+_RenderPassVisibilityAndMatteSceneIndex::_UpdateActiveRenderPassState(
     HdSceneIndexObserver::DirtiedPrimEntries *dirtyEntries)
 {
     TRACE_FUNCTION();
 
     // Swap out the prior pass state to compare against.
-    _RenderPassVisState &state = _activeRenderPass;
-    _RenderPassVisState priorState;
+    _RenderPassVisibilityAndMatteState &state = _activeRenderPass;
+    _RenderPassVisibilityAndMatteState priorState;
     std::swap(state, priorState);
 
     // Check upstream scene index for an active render pass.
@@ -451,6 +526,23 @@ HdPrman_RenderPassVisibilitySceneIndex::_UpdateActiveRenderPassState(
             dirtyEntries->push_back({path, locators});
         }
     }
+}
+
+} // anon
+
+/////////////////////////////////////////////////////////
+// Render Pass Visibility And Matte Scene Index Plugin //
+/////////////////////////////////////////////////////////
+
+HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin::
+HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin() = default;
+
+HdSceneIndexBaseRefPtr
+HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin::_AppendSceneIndex(
+    const HdSceneIndexBaseRefPtr &inputScene,
+    const HdContainerDataSourceHandle &inputArgs)
+{
+    return _RenderPassVisibilityAndMatteSceneIndex::New(inputScene);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

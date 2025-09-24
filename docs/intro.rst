@@ -229,10 +229,12 @@ respect to weaker layers:
       are enumerated in dictionary order
 
     * **Override the value of any attribute** (an override value blocks all
-      weaker timeSamples)
+      weaker timeSamples/splines)
 
     * :ref:`Block the value<glossary:Attribute Block>` of an
-      attribute, so that it will appear to have no authored value
+      attribute, so that it will appear to have no authored value (or no
+      authored animated value, if using an 
+      :ref:`animation block <usdglossary-animationblock>`)
 
     * **Add, remove, and reorder targets on a relationship or attribute
       connection**
@@ -242,9 +244,9 @@ expand the types and scale of datasets encodable in USD. The two most
 prominent are :ref:`native prim Instancing<glossary:Instancing>` for very
 compactly encoding (and processing) large numbers of instances/copies of a
 referenced asset or prim, applicable when the copies do not need to be deeply
-edited; and :ref:`glossary:Value Clips`, which allow timeSamples for a set of
-prims to be distributed across many files, and (re-)sequenced and retimed
-non-destructively.
+edited; and :ref:`glossary:Value Clips`, which allow timeSamples for 
+a set of prims to be distributed across many files, and (re-)sequenced and 
+retimed non-destructively.
 
 USD/Hydra can image:
 ********************

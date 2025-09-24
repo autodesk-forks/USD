@@ -25,7 +25,8 @@ _RegisterBuiltin(const std::string &name)
 }
 
 Exec_PrivateBuiltinComputationsStruct::Exec_PrivateBuiltinComputationsStruct()
-    : computeMetadata(_RegisterBuiltin("computeMetadata"))
+    : computeConstant(_RegisterBuiltin("computeConstant"))
+    , computeMetadata(_RegisterBuiltin("computeMetadata"))
 {
 }
 

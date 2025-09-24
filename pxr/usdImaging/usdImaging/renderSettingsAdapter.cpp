@@ -23,13 +23,12 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_ENV_SETTING(LEGACY_PXR_RENDER_TERMINALS_API_ALLOWED_AND_WARN, true,
-    "By default, we allow specification of connections for display "
-    "filters, sample filters, and integrators to propagate to RenderSettings "
-    "while producing a warning prompting users to specify relationships "
-    "instead. In a future release, this will be updated to 'false', "
-    "disallowing specification of connections and requiring relationships "
-    "to specify display filters, sample filters, and integrators.");
+TF_DEFINE_ENV_SETTING(LEGACY_PXR_RENDER_TERMINALS_API_ALLOWED_AND_WARN, false,
+    "By default, we disallow specification of connections for display "
+    "filters, sample filters, and integrators to propagate to RenderSettings. "
+    "We require relationships to specify the aforementioned propagations to "
+    "RenderSettings instead. If set to true, warnings will be emitted "
+    "when connections are used.");
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,

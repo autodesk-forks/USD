@@ -117,6 +117,11 @@ HdPrmanLight::Finalize(HdRenderParam *renderParam)
         riley->DeleteLightShader(_shaderId);
         _shaderId = riley::LightShaderId::InvalidId();
     }
+    if (_lightFilterParentCoordSysId != riley::CoordinateSystemId::InvalidId()) {
+        TRACE_SCOPE("riley::DeleteCoordinateSystem");
+        riley->DeleteCoordinateSystem(_lightFilterParentCoordSysId);
+        _lightFilterParentCoordSysId = riley::CoordinateSystemId::InvalidId();
+    }
     _lightShaderType = RtUString();
     _geometryPrototypeId = riley::GeometryPrototypeId::InvalidId();
     _sourceGeomPath = SdfPath();
@@ -187,6 +192,8 @@ _AddLightFilterCombiner(std::vector<riley::ShadingNode>* lightFilterNodes)
     static RtUString max("max");
     static RtUString min("min");
     static RtUString screen("screen");
+    static RtUString combineShadows("combineShadows");
+    static RtUString cheatShadowName("PxrCheatShadowLightFilter");
 
     riley::ShadingNode combiner = riley::ShadingNode {
         riley::ShadingNode::Type::k_LightFilter,
@@ -198,6 +205,7 @@ _AddLightFilterCombiner(std::vector<riley::ShadingNode>* lightFilterNodes)
     // Build a map of light filter handles grouped by mode.
     std::unordered_map<RtUString, std::vector<RtUString>> modeMap;
 
+    bool shouldCombineShadows = false;
     for (const auto& lightFilterNode : *lightFilterNodes) {
         RtUString mode;
         lightFilterNode.params.GetString(combineMode, mode);
@@ -206,6 +214,10 @@ _AddLightFilterCombiner(std::vector<riley::ShadingNode>* lightFilterNodes)
         } else {
             modeMap[mode].push_back(lightFilterNode.handle);
         }
+
+        shouldCombineShadows = 
+            (shouldCombineShadows ||
+            lightFilterNode.name == cheatShadowName);
     }
 
     // Set the combiner light filter reference array for each mode.
@@ -214,6 +226,10 @@ _AddLightFilterCombiner(std::vector<riley::ShadingNode>* lightFilterNodes)
             combiner.params.SetLightFilterReferenceArray(
                 entry.first, entry.second.data(), entry.second.size());
         }
+    }
+
+    if (shouldCombineShadows) {
+        combiner.params.SetInteger(combineShadows, 1);
     }
 
     lightFilterNodes->push_back(combiner);
@@ -316,6 +332,27 @@ _PopulateLightFilterNodes(
     if (lightFilterNodes->size() > 1) {
         _AddLightFilterCombiner(lightFilterNodes);
     }
+}
+
+static riley::Transform
+_GetTransform(
+    HdSceneDelegate *sceneDelegate,
+    const SdfPath &id,
+    HdPrman_RenderParam *param)
+{
+    HdTimeSampleArray<GfMatrix4d, HDPRMAN_MAX_TIME_SAMPLES> xf;
+    sceneDelegate->SampleTransform(id,
+#if HD_API_VERSION >= 68
+                                   param->GetShutterInterval()[0],
+                                   param->GetShutterInterval()[1],
+#endif
+                                   &xf);
+    TfSmallVector<RtMatrix4x4, HDPRMAN_MAX_TIME_SAMPLES> xf_rt_values(xf.count);
+    for (size_t i = 0; i < xf.count; ++i) {
+        xf_rt_values[i] = HdPrman_Utils::GfMatrixToRtMatrix(xf.values[i]);
+    }
+    return riley::Transform{
+        unsigned(xf.count), xf_rt_values.data(), xf.times.data()};
 }
 
 /* virtual */
@@ -746,6 +783,21 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
         }
         std::vector<riley::ShadingNode> filterNodes;
 
+        if (!filters.empty() &&
+                _lightFilterParentCoordSysId ==
+                riley::CoordinateSystemId::InvalidId()) {
+
+            static const char* coordSysName = "__lightFilterParent";
+            RtParamList attrs;
+            attrs.SetString(RixStr.k_name, RtUString(coordSysName));
+
+            _lightFilterParentCoordSysId =
+                riley->CreateCoordinateSystem(
+                    riley::UserId(stats::AddDataLocation(coordSysName).GetValue()),
+                    _GetTransform(sceneDelegate, id, param),
+                    attrs);
+        }
+
         // _PopulateLightFilterNodes also gives us the coordinate systems.
         // We store them so we can have them on later calls where only the
         // light instance is dirty. Note above that dirty light filters mean
@@ -774,6 +826,10 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
             TRACE_SCOPE("riley::ModifyLightShader");
             riley->ModifyLightShader(_shaderId, &light, &filter);
         }
+    }
+
+    if (_lightFilterParentCoordSysId != riley::CoordinateSystemId::InvalidId()) {
+        coordSysIds.push_back(_lightFilterParentCoordSysId);
     }
 
     if (dirtyLightInstance) {

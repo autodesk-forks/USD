@@ -222,6 +222,19 @@ _GetPriority(const TfToken &primType) const
     return priority;
 }
 
+size_t
+HdsiPrimTypeNoticeBatchingSceneIndex::
+_GetPriority(const SdfPath &primPath) const
+{
+    if (!_primTypePriorityFunctor) {
+        return 0;
+    }
+
+    const TfToken primType =
+        _GetInputSceneIndex()->GetPrim(primPath).primType;
+    return _GetPriority(primType);
+}
+
 void
 HdsiPrimTypeNoticeBatchingSceneIndex::Flush()
 {
@@ -265,10 +278,7 @@ HdsiPrimTypeNoticeBatchingSceneIndex::Flush()
                 } else {
                     const _PrimDirtiedEntry &dirtiedEntry =
                         std::get<_PrimDirtiedEntry>(entry);
-                    // Prim type needs to be pulled from input scene.
-                    const TfToken primType =
-                        _GetInputSceneIndex()->GetPrim(path).primType;
-                    const size_t priority = _GetPriority(primType);
+                    const size_t priority = _GetPriority(path);
                     dirtiedEntries[priority].push_back(
                         {path, dirtiedEntry.dirtyLocators});
                 }

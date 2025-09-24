@@ -143,6 +143,10 @@ TestSdrParseValue()
     TF_VERIFY(val.IsHolding<SdfAssetPath>());
     TF_VERIFY((val == SdfAssetPath("/@some/@path")));
     TF_VERIFY(err.empty());
+    val = ShaderMetadataHelpers::ParseSdfValue("", &propAsset, &err);
+    TF_VERIFY(val.IsHolding<SdfAssetPath>());
+    TF_VERIFY((val == SdfAssetPath()));
+    TF_VERIFY(err.empty());
 }
 
 int main()

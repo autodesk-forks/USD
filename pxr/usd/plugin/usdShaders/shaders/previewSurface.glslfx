@@ -345,16 +345,14 @@ evaluateIndirectLighting(
 
     // Diffuse Component
     vec3 dir = normalize((transformationMatrix * vec4(Neye,0.0)).xyz);
-    vec2 coord = ProjectToLatLong(dir);
-    vec3 diffuse = HdGet_domeLightIrradiance(coord).rgb;
+    vec3 diffuse = HdGet_domeLightIrradiance(dir).rgb;
 
     // Specular Component 
     const float MAX_REFLECTION_LOD = 
         textureQueryLevels(HdGetSampler_domeLightPrefilter());
     float lod = roughness * MAX_REFLECTION_LOD;
     vec3 Rdir = normalize((transformationMatrix * vec4(Reye,0.0)).xyz);
-    vec2 Rcoord = ProjectToLatLong(Rdir);
-    vec3 prefilter = HdTextureLod_domeLightPrefilter(Rcoord, lod).rgb;
+    vec3 prefilter = HdTextureLod_domeLightPrefilter(Rdir, lod).rgb;
 
     vec2 brdf = HdGet_domeLightBRDF(vec2(NdotE, roughness)).rg;
 
@@ -368,7 +366,7 @@ evaluateIndirectLighting(
             clearcoatColor,         // Clearcoat F90
             fresnel);
         lod = clearcoatRoughness * MAX_REFLECTION_LOD;
-        prefilter = HdTextureLod_domeLightPrefilter(Rcoord, lod).rgb;
+        prefilter = HdTextureLod_domeLightPrefilter(Rdir, lod).rgb;
         brdf = HdGet_domeLightBRDF(vec2(NdotE, clearcoatRoughness)).rg;
         clearcoat = prefilter * (clearcoatF * brdf.x + brdf.y);
     }

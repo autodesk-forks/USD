@@ -117,6 +117,12 @@ public:
     const HdStTextureHandleSharedPtr &GetTextureHandle(
         const TfToken &name) const;
 
+    /// The dome light environment cubemap texture generated from the
+    /// latlong dome light texture.
+    HDST_API
+    const HdStTextureHandleSharedPtr &
+    GetDomeLightEnvironmentCubemapTextureHandle() const;
+
     HdRenderPassAovBindingVector const& GetShadowAovBindings() {
         return _shadowAovBindings;
     }

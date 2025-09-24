@@ -27,7 +27,9 @@
 #include "pxr/base/tf/token.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/base/vt/traits.h"
+#include "pxr/base/vt/value.h"
 #include "pxr/exec/vdf/context.h"
+#include "pxr/exec/vdf/traits.h"
 #include "pxr/usd/sdf/path.h"
 
 #include <memory>
@@ -224,11 +226,11 @@ protected:
         const TfToken &metadataKey);
 };
 
-/// Untemplated value specifier base class.
-///
-/// This class builds up an Exec_InputKey that specifies how to source an input
-/// value at exec compilation time.
-///
+// Untemplated value specifier base class.
+//
+// This class builds up an Exec_InputKey that specifies how to source an input
+// value at exec compilation time.
+//
 class Exec_ComputationBuilderValueSpecifierBase
     : public Exec_ComputationBuilderCommonBase
 {
@@ -239,7 +241,7 @@ public:
         TfType resultType,
         ExecProviderResolution &&providerResolution,
         const TfToken &inputName,
-        const TfToken &metadataKey);
+        const TfToken &disambiguatingId);
 
     EXEC_API
     Exec_ComputationBuilderValueSpecifierBase(
@@ -272,11 +274,28 @@ private:
     const std::unique_ptr<_Data> _data;
 };
 
-/// A value specifier that requests the value of a computation.
-///
-/// The template parameter determines which types of providers the input
-/// registration is allowed to be used on.
-/// 
+// A value specifier that requests a constant value, valid on a prim or
+// attribute computation
+//
+struct Exec_ComputationBuilderConstantValueSpecifier final
+    : public Exec_ComputationBuilderValueSpecifierBase
+{
+    static constexpr Exec_ComputationBuilderProviderTypes allowedProviders =
+        Exec_ComputationBuilderProviderTypes::Any;
+
+    EXEC_API
+    Exec_ComputationBuilderConstantValueSpecifier(
+        const TfType resultType,
+        const SdfPath &localTraversal,
+        const TfToken &inputName,
+        VtValue &&constantValue);
+};
+
+// A value specifier that requests the value of a computation.
+//
+// The template parameter determines which types of providers the input
+// registration is allowed to be used on.
+// 
 template <Exec_ComputationBuilderProviderTypes allowed>
 struct Exec_ComputationBuilderComputationValueSpecifier
     : public Exec_ComputationBuilderValueSpecifierBase
@@ -285,19 +304,19 @@ struct Exec_ComputationBuilderComputationValueSpecifier
         const TfToken &computationName,
         const TfType resultType,
         ExecProviderResolution &&providerResolution,
-        const TfToken &metadataKey = TfToken())
+        const TfToken &disambiguatingId = TfToken())
         : Exec_ComputationBuilderValueSpecifierBase(
             computationName, resultType,
             std::move(providerResolution),
             computationName /* inputName */,
-            metadataKey)
+            disambiguatingId)
     {
     }
     
     using This = Exec_ComputationBuilderComputationValueSpecifier<allowed>;
 
-    static constexpr Exec_ComputationBuilderProviderTypes
-        allowedProviders = allowed;
+    static constexpr Exec_ComputationBuilderProviderTypes allowedProviders =
+        allowed;
 
     /// \addtogroup group_Exec_InputOptions
     /// @{
@@ -420,6 +439,37 @@ protected:
 private:
     // The relative path used for the first phase of provider resolution.
     SdfPath _localTraversal;
+};
+
+// Untemplated base class for accessors used to provide constant values as
+// computation inputs.
+//
+struct Exec_ComputationBuilderConstantAccessorBase
+    : public Exec_ComputationBuilderAccessorBase
+{
+    // We specialize the InputName() accessor because it is required for
+    // constant values. I.e., Constant() returns an accessor, and the
+    // InputName() option must be used to generate a value specifier.
+    //
+    Exec_ComputationBuilderConstantValueSpecifier
+    InputName(const TfToken &inputName) &&
+    { 
+        return Exec_ComputationBuilderConstantValueSpecifier(
+            _valueType,
+            _GetLocalTraversal(),
+            inputName,
+            std::move(_constantValue));
+    }
+
+protected:
+    EXEC_API
+    Exec_ComputationBuilderConstantAccessorBase(
+        VtValue &&constantValue,
+        TfType valueType);
+
+private:
+    VtValue _constantValue;
+    const TfType _valueType;
 };
 
 /// Accessor common to all scene object types that support requesting
@@ -779,7 +829,7 @@ struct Stage final
 
 
 /// Computation value specifier, valid for providing input to any computation.
-template <typename ValueType>
+template <typename ResultType>
 struct Computation final
     : public Exec_ComputationBuilderComputationValueSpecifier<
         Exec_ComputationBuilderProviderTypes::Any>
@@ -816,7 +866,7 @@ struct Computation final
             Exec_ComputationBuilderProviderTypes::Any>(
                 computationName, 
                 ExecTypeRegistry::GetInstance().
-                    CheckForRegistration<ValueType>(),
+                    CheckForRegistration<ResultType>(),
                 {SdfPath::ReflexiveRelativePath(),
                  ExecProviderResolution::DynamicTraversal::Local})
     {
@@ -871,12 +921,147 @@ struct Metadata final
     /// @}
 };
 
+// Constant accessor
+template <typename ValueType>
+struct Constant final
+    : public Exec_ComputationBuilderConstantAccessorBase
+{
+    /// \addtogroup group_Exec_ValueSpecifiers
+    /// @{
+
+    /// Requests a constant input value of type \p ValueType.
+    ///
+    /// \note
+    /// No default input name is assigned. `Constant(value)` *must* be
+    /// followed by `.InputName(name)`.
+    /// 
+    /// This kind of input isn't necessarily useful when used with a
+    /// self-contained computation definition. But it becomes useful for more
+    /// complicated registrations, where one piece of code registers a callback
+    /// that configures its evaluation-time behavior based on an input value and
+    /// a separate piece of code registers a constant input that selects the
+    /// desired behavior.
+    /// 
+    /// This can happen:
+    /// - When computation definitions are assembled programatically by
+    ///   parameterized registration code that is called to register various
+    ///   versions of a computation, possibly for multiple schemas
+    /// - When computation definitions are composed from registrations made for
+    ///   different schemas on the same prim (support for composed computation
+    ///   definitions is still TBD in OpenExec)
+    /// - When computation registration is configured (also TBD), allowing
+    ///   registrations for a single schema to be dynamic, depending on metadata
+    ///   values that drive the configuration process
+    /// 
+    /// # Simple Example
+    ///
+    /// This simple example shows the mechanics of using a constant input,
+    /// without being suggestive of how it might be useful.
+    ///
+    /// ```{.cpp}
+    /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+    /// {
+    ///     // Register a prim computation that returns the value of its
+    ///     // constant input.
+    ///     self.PrimComputation(_tokens->myComputation)
+    ///         .Callback<double>(+[](const VdfContext &ctx) {
+    ///             return ctx.GetInputValue<double>(_tokens->myConstant);
+    ///         })
+    ///         .Inputs(
+    ///             Constant(42.0).InputName(_tokens->myConstant));
+    /// }
+    /// ```
+    ///
+    /// # Complex Example
+    ///
+    /// This example demonstrate how more complicated registration code might
+    /// make use of constant inputs to configure the behavior of a callback at
+    /// evaluation time.
+    ///
+    /// ```{.cpp}
+    /// template <typename RegistrationType>
+    /// void RegisterCallback(RegistrationType &reg)
+    /// {
+    ///     reg.Callback<std::string>(+[](const VdfContext &ctx) {
+    ///         const TfToken &mode = ctx.GetInputValue<TfToken>(_tokens->mode);
+    ///         if (mode == _tokens->mode1) {
+    ///             return "Mode 1 selected";
+    ///         else if (mode == _tokens->mode2) {
+    ///             return "Mode 2 selected";
+    ///         }
+    /// }
+    ///
+    /// template <typename RegistrationType>
+    /// void RegisterInput(RegistrationType &reg, const int mode)
+    /// {
+    ///     if (mode == 1) {
+    ///         reg.Inputs(Constant(_tokens->mode1).InputName(_tokens->mode));
+    ///     } else if (mode == 2) {
+    ///         reg.Inputs(Constant(_tokens->mode2).InputName(_tokens->mode));
+    ///     }
+    /// }
+    ///
+    /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+    /// {
+    ///     auto reg = self.PrimComputation(_tokens->myComputation);
+    /// 
+    ///     // ...
+    /// 
+    ///     RegisterCallback(reg);
+    /// 
+    ///     // ...
+    /// 
+    ///     RegisterInput(reg, mode);
+    /// }
+    /// ```
+    ///
+    Constant(
+        ValueType &&constantValue)
+        : Exec_ComputationBuilderConstantAccessorBase(
+            VtValue(std::move(constantValue)),
+            ExecTypeRegistry::GetInstance().
+                CheckForRegistration<ValueType>())
+    {
+        static_assert(
+            !std::is_same_v<std::decay_t<ValueType>, char*> &&
+            !std::is_same_v<std::decay_t<ValueType>, const char*>,
+            "Must use std::string to represent string literal types.");
+        static_assert(
+            VtIsHashable<ValueType>(),
+            "Types used to provide constant input values must be hashable.");
+    }
+
+    Constant(
+        const ValueType &constantValue)
+        : Exec_ComputationBuilderConstantAccessorBase(
+            VtValue(constantValue),
+            ExecTypeRegistry::GetInstance().
+                CheckForRegistration<ValueType>())
+    {
+        static_assert(
+            !std::is_same_v<std::decay_t<ValueType>, char*> &&
+            !std::is_same_v<std::decay_t<ValueType>, const char*>,
+            "Must use std::string to represent string literal types.");
+        static_assert(
+            VtIsHashable<ValueType>(),
+            "Types used to provide constant input values must be hashable.");
+    }
+
+    /// @}
+};
+
+// Deduction guides that ensure std::string is the value type used to store
+// character string literals.
+Constant(const char *) -> Constant<std::string>;
+Constant(char *) -> Constant<std::string>;
+
+
 // XXX:TODO
 // This should be implemented as an alias for an accessor that takes a predicate
 // plus .Compute(), but that requires implementing predicates plus having a way
 // to express the computation name and result type as computation parameters.
 // Therefore, for now, this is implemented as a value specifier.
-template <typename ValueType>
+template <typename ResultType>
 struct NamespaceAncestor final
     : public Exec_ComputationBuilderComputationValueSpecifier<
         Exec_ComputationBuilderProviderTypes::Prim>
@@ -916,7 +1101,7 @@ struct NamespaceAncestor final
             Exec_ComputationBuilderProviderTypes::Prim>(
                 computationName,
                 ExecTypeRegistry::GetInstance().
-                    CheckForRegistration<ValueType>(),
+                    CheckForRegistration<ResultType>(),
                 {SdfPath::ReflexiveRelativePath(),
                  ExecProviderResolution::DynamicTraversal::NamespaceAncestor})
     {
@@ -1449,6 +1634,9 @@ Exec_ComputationBuilderBase::_ValidateInputs() {
     static_assert(
         !std::is_base_of_v<Exec_ComputationBuilderAccessorBase, regType>,
         "Accessor can't provide an input value.");
+    static_assert(
+        !std::is_same_v<Exec_ComputationBuilderConstantAccessorBase, regType>,
+        "Constant(value) must be followed by .InputName(inputNameToken)");
     static_assert(
         std::is_base_of_v<Exec_ComputationBuilderValueSpecifierBase, regType>,
         "Invalid type used as an input registration.");

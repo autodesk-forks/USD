@@ -12,7 +12,7 @@
 #include "pxr/usd/sdf/fileFormatRegistry.h"
 #include "pxr/usd/sdf/debugCodes.h"
 #include "pxr/usd/sdf/fileFormat.h"
-#include "pxr/usd/sdf/textFileFormat.h"
+#include "pxr/usd/sdf/usdaFileFormat.h"
 #include "pxr/usd/sdf/usdcFileFormat.h"
 #include "pxr/base/plug/plugin.h"
 #include "pxr/base/plug/registry.h"
@@ -272,10 +272,10 @@ Sdf_FileFormatRegistry::_RegisterFormatPlugins()
 
     TF_DESCRIBE_SCOPE("Registering file format plugins");
 
-    // Demand that we find the plugin for the built-in SdfTextFileFormat and
+    // Demand that we find the plugin for the built-in SdfUsdaFileFormat and
     // SdfUsdcFileFormat (which are in this library).  These calls will abort if
     // the plugin isn't found.
-    reg.DemandPluginForType(TfType::Find<SdfTextFileFormat>());
+    reg.DemandPluginForType(TfType::Find<SdfUsdaFileFormat>());
     reg.DemandPluginForType(TfType::Find<SdfUsdcFileFormat>());
 
     std::set<TfType> formatTypes;

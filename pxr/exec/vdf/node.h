@@ -12,10 +12,10 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/vdf/api.h"
+#include "pxr/exec/vdf/connectorMap.h"
 #include "pxr/exec/vdf/connectorSpecs.h"
 #include "pxr/exec/vdf/input.h"
 #include "pxr/exec/vdf/inputAndOutputSpecs.h"
-#include "pxr/exec/vdf/linearMap.h"
 #include "pxr/exec/vdf/mask.h"
 #include "pxr/exec/vdf/output.h"
 #include "pxr/exec/vdf/request.h"
@@ -55,11 +55,11 @@ private:
 
     // Map of tokens to output connectors.
     //
-    typedef VdfLinearMap<TfToken, VdfOutput *> _TokenOutputMap;
+    using _TokenOutputMap = VdfConnectorMap<VdfOutput>;
 
     // Map of tokens to input connectors.
     //
-    typedef VdfLinearMap<TfToken, VdfInput *> _TokenInputMap;
+    using _TokenInputMap = VdfConnectorMap<VdfInput>;
 
 public:
 

@@ -34,13 +34,13 @@ using _InfoSharedPtr = std::shared_ptr<_Info>;
 ///
 /// The scene index can be disabled.
 ///
-/// If enabled, prims of type material are prunned unless the bool data
+/// If enabled, prims of type material are pruned unless the bool data
 /// source at a specified locator return true. The locator can be specified
 /// by giving a builtinMaterialLocator to the inputArgs when constructing
 /// the scene index.
 ///
 /// Furthermore, for a prim that is not a material, the materialBindings are
-/// prunned unless the bool data source for materialIsFinal of the
+/// pruned unless the bool data source for materialIsFinal of the
 /// HdLegacyDisplayStyleSchema returns true.
 ///
 /// Note that an alternative implementation could prune a material if the
@@ -57,7 +57,7 @@ public:
     New(HdSceneIndexBaseRefPtr const &inputSceneIndex,
         HdContainerDataSourceHandle const &inputArgs);
 
-    /// Is scene index actually prunning?
+    /// Is scene index actually pruning?
     HDSI_API
     bool GetEnabled() const;
     /// Enable scene index to prune.

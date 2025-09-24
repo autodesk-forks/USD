@@ -7,6 +7,7 @@
 #include "pxr/imaging/plugin/hdEmbree/light.h"
 
 #include "light.h"
+#include "pxr/imaging/plugin/hdEmbree/debugCodes.h"
 #include "pxr/imaging/plugin/hdEmbree/renderParam.h"
 #include "pxr/imaging/plugin/hdEmbree/renderer.h"
 
@@ -27,6 +28,9 @@ HdEmbree_Light::HdEmbree_Light(SdfPath const& id, TfToken const& lightType)
     if (id.IsEmpty()) {
         return;
     }
+
+    TF_DEBUG(HDEMBREE_LIGHT_CREATE).Msg(
+            "Creating light %s: %s\n", id.GetText(), lightType.GetText());
 
     // Set the variant to the right type - Sync will fill rest of data
     if (lightType == HdSprimTypeTokens->cylinderLight) {

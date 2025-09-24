@@ -6,9 +6,7 @@
 //
 #include "pxr/pxr.h"
 
-#include "pxr/exec/vdf/linearMap.h"
-
-#include "pxr/base/tf/iterator.h"
+#include "pxr/exec/vdf/connectorMap.h"
 
 #include <iostream>
 #include <utility>
@@ -16,19 +14,23 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
-typedef std::vector< std::pair<int, int> > ResultType;
+namespace {
+struct TestConnector
+{
+};
+}
 
-typedef VdfLinearMap<int, int> MapType;
-
+using MapType = VdfConnectorMap<TestConnector>;
+using ResultType = std::vector<std::pair<TfToken, TestConnector*>>;
 
 // Tests that the result of Find is as expected.
 //
 bool
 _TestFind(const MapType &map,
-          int key,
-          int expected)
+          const TfToken &key,
+          TestConnector *expected)
 {
-    int result = map.find(key)->second;
+    TestConnector *result = map.find(key)->second;
 
     if (result != expected) {
         std::cerr << "Found the wrong value.  Expected "
@@ -56,9 +58,7 @@ _TestMapContents(const MapType &map,
 
     // Test iteration over the map.
     int index = 0;
-    TF_FOR_ALL(i, map) {
-        int resultKey = i->first;
-        int result = i->second;
+    for (const auto &[resultKey, result] : map) {
 
         if (resultKey != expected[index].first) {
             std::cerr << "Got wrong key for result element " << index
@@ -94,8 +94,14 @@ main(int argc, char **argv)
         numErrors++;
     }
 
-    map.insert( std::make_pair(1, 10) );
-    map.insert( std::make_pair(2, 20) );
+    // Create some entry keys to use as values.
+    TfToken a("a");
+    TfToken b("b");
+
+    // VdfConnectorMap owns the TestConnector objects and returns
+    // pointers to them.
+    TestConnector * aptr = map.try_emplace(a).first->second;
+    TestConnector * bptr = map.try_emplace(b).first->second;
 
     if (map == emptyMap) {
         std::cerr << "Maps should have been unequal."
@@ -106,8 +112,8 @@ main(int argc, char **argv)
     // Test the contents of the map.
     {
         ResultType result;
-        result.push_back( std::make_pair(1, 10) );
-        result.push_back( std::make_pair(2, 20) );
+        result.push_back( std::make_pair(a, aptr) );
+        result.push_back( std::make_pair(b, bptr) );
 
         if ( !_TestMapContents(map, result) ) {
             ++numErrors;
@@ -115,19 +121,12 @@ main(int argc, char **argv)
     }
 
     // Find individual entries in the map.
-    if (!_TestFind(map, 1, 10)) {
+    if (!_TestFind(map, a, aptr)) {
         ++numErrors;
     }
 
-    if (!_TestFind(map, 2, 20)) {
+    if (!_TestFind(map, b, bptr)) {
         ++numErrors;
-    }
-
-    // Test count().
-    if (map.count(1) != 1) {
-        std::cerr << "Wrong result from count()"
-                  << std::endl;
-        numErrors++;
     }
 
     // Swap maps.
@@ -139,7 +138,18 @@ main(int argc, char **argv)
     }
 
     // Swap back.
-    map.swap(emptyMap);
+    using std::swap;
+    swap(map, emptyMap);
+    if (map.size() != 2) {
+        std::cerr << "Wrong size for map.  Expected 2, got "
+                  << map.size() << std::endl;
+        numErrors++;
+    }
+    if (!emptyMap.empty()) {
+        std::cerr << "Empty map is not empty.  Contains "
+                  << emptyMap.size() << " elements." << std::endl;
+        numErrors++;
+    }
 
     // Clear the map.
     map.clear();
@@ -148,14 +158,6 @@ main(int argc, char **argv)
                   << map.size() << std::endl;
         numErrors++;
     }
-
-    // This coveres max_size.
-    if (map.size() > map.max_size()) {
-        std::cerr << "Bad max_size = "
-                  << map.max_size() << std::endl;
-        numErrors++;
-    }
-
 
     return numErrors;
 }

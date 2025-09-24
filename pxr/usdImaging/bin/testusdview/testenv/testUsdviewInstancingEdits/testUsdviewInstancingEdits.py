@@ -53,7 +53,25 @@ def _testDeactivatingInstanceParent11237(appController):
     instance.SetActive(False)
     appController._takeShot("instanceWithParentDeactivated.png")
 
+#
+# Tests where we force a resync by changing subLayerPaths in a shot that has
+# native instances.
+#
+def _testCompleteResyncWithNativeInstances(appController):
+    from pxr import Sdf, Usd
+
+    appController._dataModel.stage.GetRootLayer().Clear()
+
+    appController._dataModel.stage.GetRootLayer().subLayerPaths = ["usd-11280/skel_1.usda"]
+    appController._dataModel._viewSettingsDataModel.cameraPath = Sdf.Path('/main_cam')
+    appController._takeShot("completeResyncWithNativeInstances1.png")
+
+    appController._dataModel.stage.GetRootLayer().subLayerPaths = ["usd-11280/skel_2.usda"]
+    appController._dataModel._viewSettingsDataModel.cameraPath = Sdf.Path('/main_cam')
+    appController._takeShot("completeResyncWithNativeInstances2.png")
+
 def testUsdviewInputFunction(appController):
     _modifySettings(appController)
     _testInstancingEdits6146(appController)
     _testDeactivatingInstanceParent11237(appController)
+    _testCompleteResyncWithNativeInstances(appController)

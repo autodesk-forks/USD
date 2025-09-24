@@ -163,8 +163,7 @@ pxr_plugin(${PXR_PACKAGE}
         renderParam
         renderPass
         renderPassPruneSceneIndexPlugin
-        renderPassVisibilitySceneIndex
-        renderPassVisibilitySceneIndexPlugin
+        renderPassVisibilityAndMatteSceneIndexPlugin
         renderSettingsFilteringSceneIndexPlugin
         renderViewContext
         resourceRegistry

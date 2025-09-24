@@ -315,6 +315,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testUsdviewSceneMaterials
+    DEST testUsdviewSceneMaterials
+)
+
+pxr_install_test_dir(
     SRC testenv/testUsdviewLightVisibility
     DEST testUsdviewLightVisibility
 )
@@ -822,6 +827,21 @@ pxr_register_test(testUsdviewSceneLights_Delegate
         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=0
 )
 
+
+pxr_register_test(testUsdviewSceneMaterials
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneMaterials.py test.usda"
+    IMAGE_DIFF_COMPARE
+        enabledSceneMaterials.png
+        disabledSceneMaterials.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
+)
+
 pxr_register_test(testUsdviewLightVisibility
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLightVisibility.py test.usda"
@@ -1200,6 +1220,8 @@ pxr_register_test(testUsdviewInstancingEdits
     IMAGE_DIFF_COMPARE
         instanceWithParent.png
         instanceWithParentDeactivated.png
+        completeResyncWithNativeInstances1.png
+        completeResyncWithNativeInstances2.png
     FAIL 0.04
     FAIL_PERCENT 0.1
     WARN 0.02
@@ -1215,6 +1237,8 @@ pxr_register_test(testUsdviewInstancingEdits_SceneIndex
     IMAGE_DIFF_COMPARE
         instanceWithParent.png
         instanceWithParentDeactivated.png
+        completeResyncWithNativeInstances1.png
+        completeResyncWithNativeInstances2.png
     FAIL 0.04
     FAIL_PERCENT 0.1
     WARN 0.02

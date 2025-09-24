@@ -151,6 +151,11 @@ have these.
         - <name> (HdMaterialNodeParameterSchema)
             - value (HdSampledDataSource)
             - _Optional_ - colorSpace (TfToken)
+    - parameterValues (HdNodeToInputToMaterialNodeParameterSchema)
+        - <shaderNodeName> (HdContainerDataSource)
+            - <name> (HdMaterialNodeParameterSchema)
+                - value (HdSampledDataSource)
+                - _Optional_ - colorSpace (TfToken)
 - primvars (HdPrimvarsSchema)
 
 The following diagram depicts an example scene index prim "Plastic_Material".

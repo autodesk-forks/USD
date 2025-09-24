@@ -115,6 +115,16 @@ R"(#if NUM_LIGHTS > 0
 #endif
 )";
 
+static const std::string MxHdLatLongLookupCubemap = 
+R"(
+vec3 mx_latlong_map_lookup(vec3 dir, mat4 transform, float lod, samplerCube envSampler)
+{
+    vec3 envDir = normalize((transform * vec4(dir,0.0)).xyz);
+    return textureLod(envSampler, envDir, lod).rgb;
+}
+
+)";
+
 static bool 
 _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
 {
@@ -410,6 +420,10 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     mx::VariableBlock const& vertexData,
     mx::ShaderStage& mxStage) const
 {
+    // Emit an overload of mx_latlong_map_lookup that is able to query the
+    // cubemaps generated for the dome light.
+    Base::emitString(MxHdLatLongLookupCubemap, mxStage);
+
     Base::setFunctionName("mxInit", mxStage);
     emitLine("void mxInit(vec4 Peye, vec3 Neye)", mxStage, false);
     Base::emitScopeBegin(mxStage);
@@ -485,14 +499,14 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
         Base::emitLineBreak(mxStage);
     }
 
-    // Gather Direct light data from Hydra and apply the Hydra transformation 
+    // Gather Direct light data from Hydra and assign the Hydra transformation 
     // matrix to the environment map matrix (u_envMatrix) to account for the
     // domeLight's transform. 
-    // Note: MaterialX initializes u_envMatrix as a 180 rotation about the 
-    // Y-axis (Y-up)
+    // Note: We are ignoring default MaterialX initialization of u_envMatrix as
+    // a 180 rotation about the Y-axis (Y-up).
     emitLine("mat4 hdTransformationMatrix = mat4(1.0)", mxStage);
     Base::emitString(MxHdLightString, mxStage);
-    emitLine("u_envMatrix = u_envMatrix * hdTransformationMatrix", mxStage);
+    emitLine("u_envMatrix = hdTransformationMatrix", mxStage);
 
     Base::emitScopeEnd(mxStage);
     Base::emitLineBreak(mxStage);

@@ -62,8 +62,7 @@ HdSceneIndexPrim
 UsdImaging_DrawModeStandin::GetPrim(const SdfPath& path) const
 {
     const SdfPath relPath = path.MakeRelativePath(_path);
-    return { _GetPrimType(relPath), _GetPrimSource(relPath)
-    };
+    return { _GetPrimType(relPath), _GetPrimSource(relPath) };
 }
 
 SdfPathVector
@@ -386,6 +385,8 @@ public:
                     .SetCullStyle(
                         HdRetainedTypedSampledDataSource<TfToken>::New(
                             HdCullStyleTokens->back))
+                    .SetMaterialIsFinal(
+                        HdRetainedTypedSampledDataSource<bool>::New(true))
                     .Build();
             return src;
         }

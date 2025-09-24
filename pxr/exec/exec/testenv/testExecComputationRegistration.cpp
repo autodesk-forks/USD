@@ -9,7 +9,9 @@
 #include "pxr/exec/exec/builtinComputations.h"
 #include "pxr/exec/exec/computationDefinition.h"
 #include "pxr/exec/exec/definitionRegistry.h"
+#include "pxr/exec/exec/privateBuiltinComputations.h"
 #include "pxr/exec/exec/registerSchema.h"
+#include "pxr/exec/exec/typeRegistry.h"
 
 #include "pxr/exec/ef/time.h"
 #include "pxr/exec/esf/stage.h"
@@ -21,6 +23,7 @@
 #include "pxr/base/tf/callContext.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/errorMark.h"
+#include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/pathUtils.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/smallVector.h"
@@ -33,6 +36,7 @@
 #include "pxr/usd/usd/timeCode.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <iterator>
 #include <set>
@@ -48,7 +52,9 @@ TF_DEFINE_PRIVATE_TOKENS(
     (attributeComputedValueComputation)
     (attributeName)
     (baseAndDerivedSchemaComputation)
+    (constantValue)
     (convertibleReturnTypeComputation)
+    (computeConstants)
     (derivedSchemaComputation)
     (dispatchedAttributeComputation)
     (dispatchedPrimComputation)
@@ -108,6 +114,27 @@ _CallbackFunction(const VdfContext &) {
 static void
 _CallbackFunctionVoidReturn(const VdfContext &ctx) {
     ctx.SetOutput<double>(1.0);
+}
+
+struct CustomType {
+    int i;
+    std::string s;
+
+    friend
+    bool operator==(const CustomType &a, const CustomType &b) {
+        return a.i == b.i && a.s == b.s;
+    }
+
+    template <typename HashState>
+    friend
+    void TfHashAppend(HashState &h, const CustomType &s) {
+        h.Append(s.i, s.s);
+    }
+};
+
+TF_REGISTRY_FUNCTION(ExecTypeRegistry)
+{
+    ExecTypeRegistry::RegisterType(CustomType{});
 }
 
 // Register computations for a typed schema.
@@ -174,6 +201,9 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
     self.PrimComputation(_tokens->primComputation)
         .Callback<double>(+[](const VdfContext &ctx) { ctx.SetOutput(11.0); })
         .Inputs(
+            // Take a constant value as input.
+            Constant(42.0).InputName(_tokens->constantValue),
+
             // Take input from another computation provided by the prim.
             Computation<double>(_tokens->otherComputation),
 
@@ -222,6 +252,9 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
         _tokens->attributeComputation)
         .Callback<double>(+[](const VdfContext &ctx) { ctx.SetOutput(11.0); })
         .Inputs(
+            // Take a constant value as input.
+            Constant(42.0).InputName(_tokens->constantValue),
+
             // Take input from another computation provided by the attribute.
             Computation<double>(ExecBuiltinComputations->computeValue),
 
@@ -258,6 +291,47 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
                 .Attribute(_tokens->otherAttr)
                 .Metadata<std::string>(SdfFieldKeys->Documentation)
         );
+
+    constexpr const char *const constStringLiteral = "a string";
+
+    char *const nonConstStringLiteral = new char[9];
+    std::memcpy(nonConstStringLiteral, constStringLiteral, 9);
+
+    const std::string constString("a string");
+
+    // A prim computation that exercises constant inputs.
+    self.PrimComputation(_tokens->computeConstants)
+        .Callback<double>(+[](const VdfContext &ctx) { ctx.SetOutput(11.0); })
+        .Inputs(
+            // Note that if we were compiling this compuation, it wouldn't make
+            // sense (or be valid) to have multiple inputs with the same name
+            // but different result types. But since this is just a test of
+            // registrations, it's fine in this context.
+
+            // Take a constant value as input.
+            Constant<float>(42.0).InputName(_tokens->constantValue),
+
+            // Take a constant string as an input, passing a char array.
+            Constant("a string").InputName(_tokens->constantValue),
+
+            // Take a constant string as an input, passing const char *.
+            Constant(constStringLiteral).InputName(_tokens->constantValue),
+
+            // Take a constant string as an input, passing char *.
+            Constant(nonConstStringLiteral).InputName(_tokens->constantValue),
+
+            // Take a constant value as input, passing a string.
+            Constant(constString).InputName(_tokens->constantValue),
+
+            // Take a constant value as input, passing an r-value reference to
+            // a string.
+            Constant(std::string("a string")).InputName(_tokens->constantValue),
+
+            // Take a constant value as input, using a plugin-defined type.
+            Constant(CustomType{-1, "a string"})
+                .InputName(_tokens->constantValue)
+        );
+
 
     // A prim computation that returns the current time.
     self.PrimComputation(_tokens->stageAccessComputation)
@@ -827,11 +901,23 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             primCompDef->GetInputKeys(*prim, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 9);
+        ASSERT_EQ(inputKeys->Get().size(), 10);
 
         _PrintInputKeys(inputKeys->Get());
 
         size_t index = 0;
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->constantValue);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeConstant);
+            ASSERT_EQ(key.resultType, TfType::Find<double>());
+            ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
         {
             const Exec_InputKey &key = inputKeys->Get()[index++];
             ASSERT_EQ(key.inputName, _tokens->otherComputation);
@@ -905,6 +991,47 @@ TestTypedSchemaComputationRegistration()
                           NamespaceAncestor);
             ASSERT_EQ(key.optional, true);
         }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, SdfFieldKeys->Documentation);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeMetadata);
+            ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath("."));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, SdfFieldKeys->Documentation);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeMetadata);
+            ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath(".attributeName"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, SdfFieldKeys->Documentation);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeMetadata);
+            ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath(".relationshipName"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        ASSERT_EQ(inputKeys->Get().size(), index);
     }
 
     {
@@ -917,11 +1044,23 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             attrCompDef->GetInputKeys(*attribute, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 9);
+        ASSERT_EQ(inputKeys->Get().size(), 10);
 
         _PrintInputKeys(inputKeys->Get());
 
         size_t index = 0;
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->constantValue);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeConstant);
+            ASSERT_EQ(key.resultType, TfType::Find<double>());
+            ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
         {
             const Exec_InputKey &key = inputKeys->Get()[index++];
             ASSERT_EQ(key.inputName, ExecBuiltinComputations->computeValue);
@@ -994,6 +1133,47 @@ TestTypedSchemaComputationRegistration()
                           RelationshipTargetedObjects);
             ASSERT_EQ(key.optional, true);
         }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, SdfFieldKeys->Documentation);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeMetadata);
+            ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath("."));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, SdfFieldKeys->Documentation);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeMetadata);
+            ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath(".."));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, SdfFieldKeys->Documentation);
+            ASSERT_EQ(key.computationName,
+                      Exec_PrivateBuiltinComputations->computeMetadata);
+            ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath("../.otherAttr"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::Local);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        ASSERT_EQ(inputKeys->Get().size(), index);
     }
 
     {
@@ -1157,7 +1337,7 @@ TestAppliedSchemaComputationRegistration()
             TF_AXIOM(primCompDef);
             const auto inputKeys =
                 primCompDef->GetInputKeys(*prim, nullJournal);
-            ASSERT_EQ(inputKeys->Get().size(), 9);
+            ASSERT_EQ(inputKeys->Get().size(), 10);
         }
     }
 
@@ -1360,6 +1540,119 @@ TestDispatchedComputations()
 }
 
 static void
+TestConstantInputRegistrations()
+{
+    EsfJournal *const nullJournal = nullptr;
+    const Exec_DefinitionRegistry &reg = Exec_DefinitionRegistry::GetInstance();
+    const EsfStage stage = _NewStageFromLayer(R"usd(#usda 1.0
+        def CustomSchema "Prim" {
+        }
+    )usd");
+
+    const EsfPrim prim = stage->GetPrimAtPath(SdfPath("/Prim"), nullJournal);
+    TF_AXIOM(prim->IsValid(nullJournal));
+
+    const Exec_ComputationDefinition *const primCompDef =
+        reg.GetComputationDefinition(
+            *prim, _tokens->computeConstants,
+            EsfSchemaConfigKey(), nullJournal);
+    TF_AXIOM(primCompDef);
+
+    const auto inputKeys =
+        primCompDef->GetInputKeys(*prim, nullJournal);
+    ASSERT_EQ(inputKeys->Get().size(), 7);
+
+    _PrintInputKeys(inputKeys->Get());
+
+    size_t index = 0;
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<float>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<std::string>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    {
+        const Exec_InputKey &key = inputKeys->Get()[index++];
+        ASSERT_EQ(key.inputName, _tokens->constantValue);
+        ASSERT_EQ(key.computationName,
+                  Exec_PrivateBuiltinComputations->computeConstant);
+        ASSERT_EQ(key.resultType, TfType::Find<CustomType>());
+        ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("/"));
+        ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                  ExecProviderResolution::DynamicTraversal::Local);
+        ASSERT_EQ(key.optional, true);
+    }
+
+    ASSERT_EQ(inputKeys->Get().size(), index);
+}
+
+static void
 _SetupTestPlugins()
 {
     const std::string pluginPath =
@@ -1396,6 +1689,7 @@ int main()
     TestAppliedSchemaComputationRegistration();
     TestPluginSchemaComputationRegistration();
     TestDispatchedComputations();
+    TestConstantInputRegistrations();
 
     return 0;
 }

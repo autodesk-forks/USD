@@ -131,6 +131,33 @@ pxr_register_test(testExecUsdConnectionTargetedObjects
     TESTENV testExecUsdConnectionTargetedObjects
 )
 
+pxr_build_test(testExecUsdConstantInput
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdConstantInput.cpp
+)
+
+pxr_install_test_dir(
+    SRC testenv/testExecUsdConstantInput
+    DEST testExecUsdConstantInput
+)
+
+pxr_register_test(testExecUsdConstantInput
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConstantInput"
+    EXPECTED_RETURN_CODE 0
+    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py testConstantInput.dot"
+    DIFF_COMPARE testConstantInput.out
+    TESTENV testExecUsdConstantInput
+)
+
 pxr_build_test(testExecUsdDispatchedComputations
     LIBRARIES
         tf
