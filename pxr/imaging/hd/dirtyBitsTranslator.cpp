@@ -502,6 +502,12 @@ _FindLocator(HdDataSourceLocator const& locator,
         return false;
     }
 
+    // Check for a universal locator set.  If we find it we never want
+    // to advance regardless of advanceToNext.
+    if ((*it)->IsEmpty()) {
+        return true;
+    }
+
     // The range between *it and end can be divided into:
     // 1.) items < locator and not a prefix.
     // 2.) items < locator and a prefix.

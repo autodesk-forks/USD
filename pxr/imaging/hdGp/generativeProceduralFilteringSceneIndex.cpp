@@ -98,6 +98,9 @@ HdGpGenerativeProceduralFilteringSceneIndex::_PrimsAdded(
     // Apply filtering
     HdSceneIndexObserver::AddedPrimEntries filteredEntries = entries;
     for (HdSceneIndexObserver::AddedPrimEntry &entry : filteredEntries) {
+        if (entry.primType != _targetPrimTypeName) {
+            continue;
+        }
         const HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(entry.primPath);
         switch (_ShouldSkipPrim(prim)) {
             case _ShouldSkipResult::Ignore: {

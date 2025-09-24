@@ -222,6 +222,10 @@ Hdui_GetModelFromValue(VtValue value, QObject *parent = nullptr)
         return new Hdui_TypedArrayValueItemModel<TfToken>(value, parent);
     }
 
+    if (value.IsHolding<VtArray<std::string>>()) {
+        return new Hdui_TypedArrayValueItemModel<std::string>(value, parent);
+    }
+
     if (value.IsHolding<VtArray<SdfPath>>()) {
         return new Hdui_TypedArrayValueItemModel<SdfPath>(value, parent);
     }

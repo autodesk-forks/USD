@@ -5470,3 +5470,41 @@ class AppController(QtCore.QObject):
             return
         if self._stageView.PollForAsynchronousUpdates():
             self._usdviewApi.UpdateViewport()
+
+    def getActiveRenderSettingsPrim(self):
+        """Returns the active render settings prim, if any. Called when
+           populating the context menu on a render settings prim."""
+        if self._stageView:
+            activeRspPath = self._stageView.GetActiveRenderSettingsPrimPath()
+
+            if activeRspPath != Sdf.Path.emptyPath:
+                return self._dataModel.stage.GetPrimAtPath(activeRspPath)
+
+        return None
+
+    def getActiveRenderPassPrim(self):
+        """Returns the active render pass prim, if any. Called when populating
+           the context menu on a render pass prim."""
+        if self._stageView:
+            activeRpPath = self._stageView.GetActiveRenderPassPrimPath()
+
+            if activeRpPath != Sdf.Path.emptyPath:
+                return self._dataModel.stage.GetPrimAtPath(activeRpPath)
+
+        return None
+
+    def setActiveRenderSettingsPrim(self, prim):
+        if not prim or not prim.IsValid():
+            return
+        
+        if self._stageView:
+            self._stageView.SetActiveRenderSettingsPrim(prim)
+            self._stageView.updateView()
+    
+    def setActiveRenderPassPrim(self, prim):
+        if not prim or not prim.IsValid():
+            return
+        
+        if self._stageView:
+            self._stageView.SetActiveRenderPassPrim(prim)
+            self._stageView.updateView()

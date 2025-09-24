@@ -510,17 +510,15 @@ public:
     USD_API
     bool Set(const VtValue& value, UsdTimeCode time = UsdTimeCode::Default()) const;
 
-    /// Returns true if the attribute has a spline as a value source.
-    ///
-    /// That is if a stronger default value is authored over weaker spline
-    /// value, the default value will hide the spline value and return false.
+    /// Returns true if this attribute has a spline as the strongest value
+    /// source.
     USD_API
     bool HasSpline() const;
 
-    /// Returns a copy of the spline.
+    /// Returns a copy of the resolved spline if the spline is the strongest value
+    /// source.
     ///
-    /// If a stronger default value is authored over weaker spline value, the
-    /// default value will hide the spline value.
+    /// If the strongest opinion is not a spline, returns an empty spline.
     USD_API
     TsSpline GetSpline() const;
 

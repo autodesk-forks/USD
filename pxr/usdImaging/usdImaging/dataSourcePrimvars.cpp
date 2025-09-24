@@ -84,6 +84,10 @@ UsdImagingDataSourcePrimvars::GetNames()
 
     TfTokenVector result;
 
+    if (!_usdPrim) {
+        return result;
+    }
+
     // Enumerate primvar names using UsdGeomPrimvarsAPI.
     // This API filters out supporting attributes such as
     // "primvars:indexedPrimvar:indices".
@@ -118,6 +122,10 @@ UsdImagingDataSourcePrimvars::Get(const TfToken & name)
     TRACE_FUNCTION();
 
     if (_RejectPrimvar(name)) {
+        return nullptr;
+    }
+
+    if (!_usdPrim) {
         return nullptr;
     }
 
@@ -189,7 +197,11 @@ HdDataSourceBaseHandle
 UsdImagingDataSourceCustomPrimvars::Get(const TfToken &name)
 {
     TRACE_FUNCTION();
-    
+
+    if (!_usdPrim) {
+        return nullptr;
+    }
+
     for (const Mapping &mapping : _mappings) {
         if (mapping.primvarName != name) {
             continue;

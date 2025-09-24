@@ -42,8 +42,8 @@ _RaiseCodingError(string const &msg,
                  string const& fileName, int lineNo)
 {
     TfDiagnosticMgr::
-        ErrorHelper(Tf_PythonCallContext(fileName.c_str(), moduleName.c_str(),
-                                          functionName.c_str(), lineNo),
+        ErrorHelper(Tf_PythonCallContext(fileName, moduleName,
+                                          functionName, lineNo),
                     TF_DIAGNOSTIC_CODING_ERROR_TYPE,
                     TfEnum::GetName(TfEnum(TF_DIAGNOSTIC_CODING_ERROR_TYPE)).
                     c_str()).
@@ -56,8 +56,8 @@ _RaiseRuntimeError(string const &msg,
                  string const& fileName, int lineNo)                  
 {
     TfDiagnosticMgr::
-        ErrorHelper(Tf_PythonCallContext(fileName.c_str(), moduleName.c_str(),
-                                          functionName.c_str(), lineNo),
+        ErrorHelper(Tf_PythonCallContext(fileName, moduleName,
+                                          functionName, lineNo),
                     TF_DIAGNOSTIC_RUNTIME_ERROR_TYPE,
                     TfEnum::GetName(TfEnum(TF_DIAGNOSTIC_RUNTIME_ERROR_TYPE)).c_str()).
         Post("Python runtime error: " + msg);
@@ -68,8 +68,8 @@ static void
 _Fatal(string const &msg, string const& moduleName, string const& functionName,
       string const& fileName, int lineNo)
 {
-    TfDiagnosticMgr::FatalHelper(Tf_PythonCallContext(fileName.c_str(), moduleName.c_str(),
-                                                      functionName.c_str(), lineNo),
+    TfDiagnosticMgr::FatalHelper(Tf_PythonCallContext(fileName, moduleName,
+                                                      functionName, lineNo),
          TF_DIAGNOSTIC_FATAL_ERROR_TYPE). Post("Python Fatal Error: " + msg);
 }
 // CODE_COVERAGE_ON

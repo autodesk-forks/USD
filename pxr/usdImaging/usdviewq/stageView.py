@@ -2426,3 +2426,19 @@ class StageView(QGLWidget):
             return False
 
         return self._renderer.PollForAsynchronousUpdates()
+    
+    def GetActiveRenderSettingsPrimPath(self):
+        # This queries the terminal scene index to get the currently active
+        # render settings prim path.
+        return self._getRenderer().GetActiveRenderSettingsPrimPath()
+    
+    def GetActiveRenderPassPrimPath(self):
+        # This queries the terminal scene index to get the currently active
+        # render pass prim path.
+        return self._getRenderer().GetActiveRenderPassPrimPath()
+
+    def SetActiveRenderSettingsPrim(self, prim):
+        self._getRenderer().SetActiveRenderSettingsPrimPath(prim.GetPath())
+
+    def SetActiveRenderPassPrim(self, prim):
+        self._getRenderer().SetActiveRenderPassPrimPath(prim.GetPath())

@@ -15,15 +15,11 @@
 
 #include "pxr/exec/vdf/context.h"
 #include "pxr/exec/vdf/dataManagerVector.h"
+#include "pxr/exec/vdf/debugCodes.h"
 #include "pxr/exec/vdf/evaluationState.h"
 #include "pxr/exec/vdf/node.h"
 #include "pxr/exec/vdf/requiredInputsPredicate.h"
 #include "pxr/exec/vdf/speculationExecutorBase.h"
-
-#define _VDF_SEE_TRACE_ON 0
-#if _VDF_SEE_TRACE_ON
-#include <iostream>
-#endif
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -238,9 +234,7 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
     TfBits *executedNodes,
     TfBits *speculatedNodes)
 {
-#if _VDF_SEE_TRACE_ON
-    std::cout << "{ SpeculationOutputExecuteBegin();" << std::endl; 
-#endif
+    TF_DEBUG(VDF_SEE_TRACE).Msg("{ SpeculationOutputExecuteBegin();\n");
 
     // The current schedule
     const VdfSchedule &schedule = state.GetSchedule();
@@ -284,10 +278,9 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
 
         case Base::ExecutionStageStart:
 
-#if _VDF_SEE_TRACE_ON
-            std::cout << "{ SpeculationBeginNode(" << &node << ", \"" 
-                      << node.GetDebugName() << "\");" << std::endl;
-#endif
+            TF_DEBUG(VDF_SEE_TRACE)
+                .Msg("{ SpeculationBeginNode(%p, \"%s\");\n",
+                     &node, node.GetDebugName().c_str());
 
             // If this is the node that started the speculation, we need to
             // skip it. Note that this means we encountered a true data
@@ -297,10 +290,10 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
                     Base::_GetExecutor()).IsSpeculatingNode(&node)) {
                 speculated.push_back(true);
                 outputsStack.pop_back();
-#if _VDF_SEE_TRACE_ON
-                std::cout << "SpeculationEndNodeSpeculationNode(); (cycle) }" 
-                          << std::endl; 
-#endif
+
+                TF_DEBUG(VDF_SEE_TRACE)
+                    .Msg("SpeculationEndNodeSpeculationNode(); (cycle) }\n");
+
                 continue;
             }
 
@@ -312,10 +305,9 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
                 speculated.push_back(speculatedNodes->IsSet(
                     VdfNode::GetIndexFromId(node.GetId())));
                 outputsStack.pop_back();
-#if _VDF_SEE_TRACE_ON
-                std::cout << "SpeculationEndNodeRedundantCompute(); }" 
-                          << std::endl; 
-#endif
+
+                TF_DEBUG(VDF_SEE_TRACE)
+                    .Msg("SpeculationEndNodeRedundantCompute(); }\n");
 
                 continue;
             }
@@ -327,9 +319,10 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
                     schedule.GetRequestMask(outputId))) {
                 speculated.push_back(false);
                 outputsStack.pop_back();
-#if _VDF_SEE_TRACE_ON
-                std::cout << "SpeculationEndNodeFoundCache(); }" << std::endl; 
-#endif
+
+                TF_DEBUG(VDF_SEE_TRACE)
+                    .Msg("SpeculationEndNodeFoundCache(); }\n");
+
                 continue;
             }
 
@@ -460,11 +453,10 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
             // If any of our inputs speculated, there is nothing we can do.
             // Skip this node, but make sure to still touch its outputs.
             if (outputsStack.back().inputsSpeculate) {
-#if _VDF_SEE_TRACE_ON
-                std::cout << "SpeculationSkipNode (cycle) (\""
-                          << node.GetDebugName() 
-                          << "\"); }" << std::endl;
-#endif
+
+                TF_DEBUG(VDF_SEE_TRACE)
+                    .Msg("SpeculationSkipNode (cycle) (\"%s\"); }\n",
+                         node.GetDebugName().c_str());
 
                 // This node has speculated inputs
                 speculatedNodes->Set(VdfNode::GetIndexFromId(node.GetId()));
@@ -478,11 +470,9 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
                 Base::_ComputeNode(state, node);
                 speculated.push_back(false);
 
-#if _VDF_SEE_TRACE_ON
-                std::cout << "SpeculationComputedNode(\""
-                          << node.GetDebugName() 
-                          << "\"); }" << std::endl; 
-#endif
+                TF_DEBUG(VDF_SEE_TRACE)
+                    .Msg("SpeculationComputedNode(\"%s\"); }\n",
+                         node.GetDebugName().c_str());
 
             // The node is not affective, and none of its reads or read/writes
             // did speculate.
@@ -492,11 +482,10 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
                 // by passing through all the outputs with associated
                 // inputs and use the fallback value for all the outputs
                 // that don't.
-#if _VDF_SEE_TRACE_ON
-                std::cout << "SpeculationPassThrough(\""
-                          << node.GetDebugName() 
-                          << "\"); }" << std::endl; 
-#endif
+                TF_DEBUG(VDF_SEE_TRACE)
+                    .Msg("SpeculationPassThrough(\"%s\"); }\n",
+                         node.GetDebugName().c_str());
+
                 Base::_PassThroughNode(schedule, node);
                 speculated.push_back(false);
 
@@ -531,9 +520,7 @@ VdfSpeculationExecutorEngine<DataManagerType>::_ExecuteOutputForSpeculation(
         }
     }
 
-#if _VDF_SEE_TRACE_ON
-    std::cout << "SpeculationOutputExecuteEnd(); }" << std::endl; 
-#endif
+    TF_DEBUG(VDF_SEE_TRACE).Msg("SpeculationOutputExecuteEnd(); }\n");
 }
 
 template <typename DataManagerType>

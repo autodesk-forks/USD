@@ -75,8 +75,12 @@ public:
     ///
     template <typename ValueType>
     static void RegisterType(const ValueType &fallback) {
-        static_assert(!VtIsArray<ValueType>::value,
-                      "VtArray is not a supported execution value type");
+        static_assert(
+            !VtIsArray<ValueType>::value,
+            "VtArray is not a supported execution value type.");
+        static_assert(
+            VdfIsEqualityComparable<ValueType>,
+            "Equality comparison is required for execution value types.");
         _GetInstanceForRegistration()._RegisterType(fallback);
     }
 

@@ -2898,13 +2898,6 @@ pxr_register_test(testHdStInstancingUnbalancedNoBindless
         TF_DEBUG=HD_SAFE_MODE
 )
 if (${PXR_ENABLE_MATERIALX_SUPPORT})
-pxr_register_test(testHdStMaterialXShaderGen_SSdefault
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStMaterialXShaderGen --filename standard_surface_default.mtlx"
-    EXPECTED_RETURN_CODE 0
-    STDOUT_REDIRECT shadergen_SSdefault.out
-    DIFF_COMPARE shadergen_SSdefault.out
-    TESTENV testHdStMaterialXShaderGen
-)
 pxr_register_test(testHdStMaterialXShaderGen_UsdPSdefault
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStMaterialXShaderGen --filename usd_preview_surface_default.mtlx"
     EXPECTED_RETURN_CODE 0
@@ -2924,6 +2917,13 @@ pxr_register_test(testHdStMaterialXShaderGen_SScopper
     EXPECTED_RETURN_CODE 0
     STDOUT_REDIRECT shadergen_SScopper.out
     DIFF_COMPARE shadergen_SScopper.out
+    TESTENV testHdStMaterialXShaderGen
+)
+pxr_register_test(testHdStMaterialXShaderGen_SSdefault
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStMaterialXShaderGen --filename standard_surface_default.mtlx --config materialTag:customTag"
+    EXPECTED_RETURN_CODE 0
+    STDOUT_REDIRECT shadergen_SSdefault.out
+    DIFF_COMPARE shadergen_SSdefault.out
     TESTENV testHdStMaterialXShaderGen
 )
 pxr_register_test(testHdStMaterialXShaderGen_UsdPStextured

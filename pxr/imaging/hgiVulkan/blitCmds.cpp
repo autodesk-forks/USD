@@ -64,6 +64,31 @@ _GetImageAspectMaskForCopy(HgiTextureUsage textureUsage)
     return aspectFlags;
 }
 
+static
+std::pair<VkAccessFlags, VkPipelineStageFlags>
+_GetOldAccessAndPipelineStageFlags(const VkImageLayout oldLayout)
+{
+    VkAccessFlags srcAccess = VK_ACCESS_NONE;
+    VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+    switch (oldLayout) {
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            srcAccess = VK_ACCESS_SHADER_READ_BIT;
+            break;
+        default:
+            break;
+    }
+
+    return {srcAccess, srcStage};
+}
+
 void
 HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback)
@@ -114,16 +139,18 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     region.imageSubresource = imageSub;
 
     // Transition image to TRANSFER_READ
-    VkImageLayout oldLayout = srcTexture->GetImageLayout();
-    srcTexture->TransitionImageBarrier(
+    const VkImageLayout oldLayout = srcTexture->GetImageLayout();
+    const auto [srcAccess, srcStage] =
+        _GetOldAccessAndPipelineStageFlags(oldLayout);
+    HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         srcTexture,
         oldLayout,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // transition tex to this layout
-        HgiVulkanTexture::NO_PENDING_WRITES,  // no pending writes
-        VK_ACCESS_TRANSFER_READ_BIT,          // type of access
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    // producer stage
-        VK_PIPELINE_STAGE_TRANSFER_BIT);      // consumer stage
+        srcAccess,
+        VK_ACCESS_TRANSFER_READ_BIT, // type of access
+        srcStage,
+        VK_PIPELINE_STAGE_TRANSFER_BIT); // consumer stage
 
     // Copy gpu texture to gpu staging buffer.
     // We reuse the texture's staging buffer, assuming that any new texel
@@ -144,8 +171,7 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     // Transition image back to what it was.
     VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
         srcTexture->GetDescriptor().usage);
-
-    srcTexture->TransitionImageBarrier(
+    HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         srcTexture,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -313,28 +339,32 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
     region.dstSubresource = imageSub;
 
     // Transition src image to TRANSFER_READ
-    VkImageLayout oldLayoutSrc = srcTexture->GetImageLayout();
-    srcTexture->TransitionImageBarrier(
+    const VkImageLayout oldLayoutSrc = srcTexture->GetImageLayout();
+    const auto [srcAccessSrc, srcStageSrc] =
+        _GetOldAccessAndPipelineStageFlags(oldLayoutSrc);
+    HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         srcTexture,
         oldLayoutSrc,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // transition tex to this layout
-        HgiVulkanTexture::NO_PENDING_WRITES,  // no pending writes
-        VK_ACCESS_TRANSFER_READ_BIT,          // type of access
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    // producer stage
-        VK_PIPELINE_STAGE_TRANSFER_BIT);      // consumer stage
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        srcAccessSrc,
+        VK_ACCESS_TRANSFER_READ_BIT,
+        srcStageSrc,
+        VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     // Transition dst image to TRANSFER_WRITE
-    VkImageLayout oldLayoutDst = dstTexture->GetImageLayout();
-    dstTexture->TransitionImageBarrier(
+    const VkImageLayout oldLayoutDst = dstTexture->GetImageLayout();
+    const auto [srcAccessDst, srcStageDst] =
+        _GetOldAccessAndPipelineStageFlags(oldLayoutDst);
+    HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         dstTexture,
         oldLayoutDst,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // transition tex to this layout
-        HgiVulkanTexture::NO_PENDING_WRITES,  // no pending writes
-        VK_ACCESS_TRANSFER_WRITE_BIT,          // type of access
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    // producer stage
-        VK_PIPELINE_STAGE_TRANSFER_BIT);      // consumer stage
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        srcAccessDst,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        srcStageDst,
+        VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     vkCmdBlitImage(_commandBuffer->GetVulkanCommandBuffer(),
         srcTexture->GetImage(),
@@ -346,32 +376,30 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
         VK_FILTER_NEAREST);
 
     // Transition src image back to what it was.
-    VkAccessFlags accessSrc = HgiVulkanTexture::GetDefaultAccessFlags(
+    const VkAccessFlags accessSrc = HgiVulkanTexture::GetDefaultAccessFlags(
         srcTexture->GetDescriptor().usage);
-
-    srcTexture->TransitionImageBarrier(
+    HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         srcTexture,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        oldLayoutSrc,                        // transition tex to this layout
-        HgiVulkanTexture::NO_PENDING_WRITES, // no pending writes
-        accessSrc,                           // type of access
-        VK_PIPELINE_STAGE_TRANSFER_BIT,      // producer stage
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT); // consumer stage
+        oldLayoutSrc,
+        HgiVulkanTexture::NO_PENDING_WRITES,
+        accessSrc,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 
     // Transition dst image back to what it was.
-    VkAccessFlags accessDst = HgiVulkanTexture::GetDefaultAccessFlags(
+    const VkAccessFlags accessDst = HgiVulkanTexture::GetDefaultAccessFlags(
         dstTexture->GetDescriptor().usage);
-
-    dstTexture->TransitionImageBarrier(
+    HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         dstTexture,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        oldLayoutDst,                        // transition tex to this layout
-        HgiVulkanTexture::NO_PENDING_WRITES, // no pending writes
-        accessDst,                           // type of access
-        VK_PIPELINE_STAGE_TRANSFER_BIT,      // producer stage
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT); // consumer stage
+        oldLayoutDst,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        accessDst,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 }
 
 void HgiVulkanBlitCmds::CopyBufferCpuToGpu(
@@ -510,14 +538,16 @@ HgiVulkanBlitCmds::CopyTextureToBuffer(HgiTextureToBufferOp const& copyOp)
 
     // Transition image layout to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
     VkImageLayout oldLayout = srcTexture->GetImageLayout();
+    const auto [srcAccess, srcStage] =
+        _GetOldAccessAndPipelineStageFlags(oldLayout);
     HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         srcTexture,
         /*oldLayout*/oldLayout,
         /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        /*producerAccess*/HgiVulkanTexture::GetDefaultAccessFlags(texDesc.usage),
+        /*producerAccess*/srcAccess,
         /*consumerAccess*/VK_ACCESS_TRANSFER_READ_BIT,
-        /*producerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+        /*producerStage*/srcStage,
         /*consumerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
         copyOp.mipLevel);
 
@@ -555,13 +585,15 @@ HgiVulkanBlitCmds::CopyTextureToBuffer(HgiTextureToBufferOp const& copyOp)
     );
 
     // Transition image layout back to original layout.
+    const VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
+        srcTexture->GetDescriptor().usage);
     HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         srcTexture,
         /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         /*newLayout*/oldLayout,
         /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-        /*consumerAccess*/HgiVulkanTexture::GetDefaultAccessFlags(texDesc.usage),
+        /*consumerAccess*/access,
         /*producerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
         /*consumerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
         copyOp.mipLevel);
@@ -595,14 +627,16 @@ HgiVulkanBlitCmds::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
 
     // Transition image layout to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
     VkImageLayout oldLayout = dstTexture->GetImageLayout();
+    const auto [srcAccess, srcStage] =
+        _GetOldAccessAndPipelineStageFlags(oldLayout);
     HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         dstTexture,
         /*oldLayout*/oldLayout,
         /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        /*producerAccess*/HgiVulkanTexture::GetDefaultAccessFlags(texDesc.usage),
+        /*producerAccess*/srcAccess,
         /*consumerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-        /*producerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+        /*producerStage*/srcStage,
         /*consumerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
         copyOp.mipLevel);
 
@@ -639,13 +673,15 @@ HgiVulkanBlitCmds::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
         &region);
 
     // Transition image layout back to original layout.
+    const VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
+        dstTexture->GetDescriptor().usage);
     HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         dstTexture,
         /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         /*newLayout*/oldLayout,
         /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-        /*consumerAccess*/HgiVulkanTexture::GetDefaultAccessFlags(texDesc.usage),
+        /*consumerAccess*/access,
         /*producerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
         /*consumerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
         copyOp.mipLevel);
@@ -680,17 +716,19 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
         return;                    
     }
 
-    VkImageLayout const oldLayout = vkTex->GetImageLayout();
 
     // Transition first mip to TRANSFER_SRC so we can read it
+    const VkImageLayout oldLayout = vkTex->GetImageLayout();
+    const auto [srcAccess, srcStage] =
+        _GetOldAccessAndPipelineStageFlags(oldLayout);
     HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         vkTex,
         oldLayout,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        HgiVulkanTexture::NO_PENDING_WRITES,
+        srcAccess,
         VK_ACCESS_TRANSFER_READ_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        srcStage,
         VK_PIPELINE_STAGE_TRANSFER_BIT,
         0);
 
@@ -720,9 +758,9 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
             vkTex,
             oldLayout,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            HgiVulkanTexture::NO_PENDING_WRITES,
+            srcAccess,
             VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            srcStage,
             VK_PIPELINE_STAGE_TRANSFER_BIT,
             i);
 
@@ -750,14 +788,16 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
             i);
     }
 
-    // Return all mips from TRANSFER_SRC to their default (usually SHADER_READ)
+    // Return all mips from TRANSFER_SRC to their original layout
+    const VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
+        vkTex->GetDescriptor().usage);
     HgiVulkanTexture::TransitionImageBarrier(
         _commandBuffer,
         vkTex,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        HgiVulkanTexture::GetDefaultImageLayout(desc.usage),
+        oldLayout,
         VK_ACCESS_TRANSFER_READ_BIT,
-        HgiVulkanTexture::GetDefaultAccessFlags(desc.usage),
+        access,
         VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 }

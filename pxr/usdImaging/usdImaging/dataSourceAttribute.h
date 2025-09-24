@@ -42,6 +42,9 @@ public:
     {
         // Zero-initialization for numerical types.
         T result{};
+        if (!_usdAttrQuery) {
+            return result;
+        }
         UsdTimeCode time = _stageGlobals.GetTime();
         if (time.IsNumeric()) {
             time = UsdTimeCode(time.GetValue() + shutterOffset);
@@ -58,6 +61,10 @@ public:
             HdSampledDataSource::Time endTime,
             std::vector<HdSampledDataSource::Time> *outSampleTimes) override
     {
+        if (!_usdAttrQuery) {
+            return false;
+        }
+
         UsdTimeCode time = _stageGlobals.GetTime();
         if (!_usdAttrQuery.ValueMightBeTimeVarying() ||
             !time.IsNumeric()) {

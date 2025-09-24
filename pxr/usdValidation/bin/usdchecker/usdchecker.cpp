@@ -61,7 +61,7 @@ struct Args {
     bool dumpRules = false;
     bool verbose = false;
     bool strict = false;
-    bool useNewValidationFramework = false;
+    bool useOldComplianceCheckerInterface = false;
 };
 
 static
@@ -108,8 +108,13 @@ _Configure(CLI::App* app, Args& args) {
         "Return failure code even if only warnings are issued, for stricter\n"
         "compliance.");
     app->add_flag(
-        "--useNewValidationFramework", args.useNewValidationFramework, 
-        "Enable the new validation framework.");
+        "--useNewValidationFramework",
+        "Default behavior, this option is IGNORED but retained to avoid client "
+        "code breakage.")->group("");
+    app->add_flag(
+        "--useOldComplianceCheckerInterface", 
+        args.useOldComplianceCheckerInterface, 
+        "Use the old and now deprecated Compliance Checker interface.");
     app->add_option(
         "--variantSets", args.variantSets,
         "List of variantSets to validate. All variants for the given\n"
@@ -153,15 +158,15 @@ _ValidateArgs(const Args& args) {
     }
 
     // variants option is only valid when using new validation framework.
-    if (!args.variants.empty() && !args.useNewValidationFramework) {
+    if (!args.variants.empty() && args.useOldComplianceCheckerInterface) {
         std::cerr<<"Error: The --variants option is only valid when using the "
-            "--useNewValidationFramework option."<<"\n";
+            "new ValidationFramework."<<"\n";
         return false;
     }
 
-    if (!args.variantSets.empty() && !args.useNewValidationFramework) {
+    if (!args.variantSets.empty() && args.useOldComplianceCheckerInterface) {
         std::cerr<<"Error: The --variantSets option is only valid when using "
-            "the --useNewValidationFramework option."<<"\n";
+            "the new ValidationFramework."<<"\n";
         return false;
     }
 
@@ -540,7 +545,7 @@ _UsdChecker(const Args& args)
         return 1;
     }
 
-    if (args.useNewValidationFramework) {
+    if (!args.useOldComplianceCheckerInterface) {
         UsdValidationRegistry &validationReg = 
             UsdValidationRegistry::GetInstance();
         UsdValidationValidatorMetadataVector metadata = 
@@ -671,7 +676,7 @@ _UsdChecker(const Args& args)
 
     std::cerr<<"usdchecker using UsdUtilsComplianceChecker requires Python "
         "support to be enabled in the build of USD. Its recommended to use "
-        "--useNewValidationFramework which doesn't require any python "
+        "the new ValidationFramework which doesn't require any python "
         "support.\n";
     return 1;
 
@@ -786,8 +791,8 @@ main(int argc, char const *argv[]) {
         "attribute is checked, currently.  General USD checks are always "
         "performed, and more restrictive checks targeted at distributable "
         "consumer content are also applied when the \"--arkit\" option is "
-        "specified. In order to use the new validation framework provide the "
-        "'--useNewValidationFramework' option.");
+        "specified. In order to use the old compliance checker (deprecated) "
+        "provide the '--useOldComplianceCheckerInterface' option.");
 
     Args args;
     _Configure(&app, args);

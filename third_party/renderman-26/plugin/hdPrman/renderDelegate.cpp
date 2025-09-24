@@ -37,6 +37,7 @@
 #include "pxr/imaging/hd/version.h"
 
 #include "pxr/usd/sdf/path.h"
+#include "pxr/usd/sdr/registry.h"
 
 #include "pxr/base/gf/vec3f.h"
 #include "pxr/base/gf/vec4f.h"
@@ -339,6 +340,9 @@ HdPrmanRenderDelegate::IsInteractive() const
 void
 HdPrmanRenderDelegate::_Initialize()
 {
+    // Ensure Sdr shader registry is initialized.
+    (void) SdrRegistry::GetInstance();
+
     // Prepare list of render settings descriptors
     // TODO: With this approach some settings will need to be updated as the
     // defaults change in Renderman. Although these defaults are unlikely to

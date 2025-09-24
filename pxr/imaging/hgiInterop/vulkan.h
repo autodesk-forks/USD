@@ -151,6 +151,10 @@ private:
 
     std::unique_ptr<InteropSemaphore> _vkComplete;
     std::unique_ptr<InteropSemaphore> _glComplete;
+
+    // Used to wait at the end of native interop due to HgiVulkan
+    // synchronization relying on per-frame sync.
+    VkFence _interopComplete = VK_NULL_HANDLE;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

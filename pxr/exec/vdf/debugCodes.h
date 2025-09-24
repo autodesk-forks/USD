@@ -23,6 +23,24 @@ TF_DEBUG_CODES(
     VDF_SCHEDULING
 );
 
+// Debugging Symbols for tracing executor engines.
+//
+// Executor engine performance is a high priority so these debug flags are
+// compiled out by default.  They can be turned on at compile time by setting
+// the first argument value to `true`.
+
+// Pull-based Executor Engine debug output
+TF_CONDITIONALLY_COMPILE_TIME_ENABLED_DEBUG_CODES(
+    false,
+    VDF_PBEE_TRACE
+);
+
+// Speculation Executor Engine debug output
+TF_CONDITIONALLY_COMPILE_TIME_ENABLED_DEBUG_CODES(
+    false,
+    VDF_SEE_TRACE
+);
+
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif

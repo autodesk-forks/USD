@@ -7,15 +7,14 @@
 #ifndef PXR_USD_IMAGING_USD_IMAGING_PROTOTYPE_SCENE_INDEX_UTILS_H
 #define PXR_USD_IMAGING_USD_IMAGING_PROTOTYPE_SCENE_INDEX_UTILS_H
 
-#include "pxr/base/tf/token.h"
 #include "pxr/pxr.h"
-#include "pxr/usdImaging/usdImaging/api.h"
+
+#include "pxr/base/tf/token.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 namespace UsdImaging_PrototypeSceneIndexUtils {
 
-USDIMAGING_API
 void
 SetEmptyPrimType(TfToken * primType);
 

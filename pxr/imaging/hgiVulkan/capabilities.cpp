@@ -199,7 +199,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         vkVertexAttributeDivisorFeatures.vertexAttributeInstanceRateDivisor);
 
     if (HgiVulkanIsDebugEnabled()) {
-        TF_WARN("Selected GPU %s", vkDeviceProperties2.properties.deviceName);
+        TF_STATUS("Selected GPU %s", vkDeviceProperties2.properties.deviceName);
     }
 
     _maxClipDistances = vkDeviceProperties2.properties.limits.maxClipDistances;

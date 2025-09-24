@@ -60,6 +60,7 @@ T_TUPLE = "HdTupleTypeDataSource"
 T_SIZET = "HdSizetDataSource"
 T_BASE = "HdDataSourceBase"
 T_STRING = "HdStringDataSource"
+T_STRINGARRAY = "HdStringArrayDataSource"
 T_VECTOR = "HdVectorDataSource"
 T_RESOLVERCONTEXT = "HdResolverContextDataSource"
 

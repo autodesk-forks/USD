@@ -191,7 +191,6 @@ pxr_library(tf
         pyAnnotatedBoolResult
         pyArg
         pyCall
-        pyCallContext
         pyClassMethod
         pyContainerConversions
         pyEnum
@@ -261,6 +260,7 @@ pxr_library(tf
         unicodeCharacterClasses
 
     PYTHON_PRIVATE_CLASSES
+        pyCallContext
         pyErrorInternal
 
     PRIVATE_HEADERS

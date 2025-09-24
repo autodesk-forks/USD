@@ -563,54 +563,54 @@ HgiVulkanTexture::SubmitLayoutChange(HgiTextureUsage newLayout)
     HgiVulkanCommandQueue* queue = _device->GetCommandQueue();
     HgiVulkanCommandBuffer* cb = queue->AcquireResourceCommandBuffer();
 
-    VkAccessFlags srcAccessMask, dstAccessMask = VK_ACCESS_NONE;
-
     // The following cases are based on few initial assumptions to provide
     // an infrastructure for access mask selection based on layouts.
     // Feel free to update depending on need and use cases.
+    VkAccessFlags srcAccessMask = VK_ACCESS_NONE;
+    VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
     switch (oldVkLayout) {
     case VK_IMAGE_LAYOUT_PREINITIALIZED:
-        srcAccessMask =
-            VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+        srcAccessMask = VK_ACCESS_HOST_WRITE_BIT |
+            VK_ACCESS_TRANSFER_WRITE_BIT;
         break;
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
         srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         break;
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
         srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         break;
     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
         srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        break;
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
         break;
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
         srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
         break;
     default:
-        srcAccessMask = VK_ACCESS_NONE;
         break;
     }
 
+    VkAccessFlags dstAccessMask = VK_ACCESS_NONE;
+    VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
     switch (newVkLayout) {
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-        dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-        srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
-        dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        break;
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-        srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         break;
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
         dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         break;
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-        srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
         dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         break;
     default:
-        dstAccessMask = VK_ACCESS_NONE;
         break;
     }
 
@@ -621,8 +621,8 @@ HgiVulkanTexture::SubmitLayoutChange(HgiTextureUsage newLayout)
         newVkLayout,
         srcAccessMask, 
         dstAccessMask,
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+        srcStageMask,
+        dstStageMask);
 
     return _VkImageLayoutToHgiTextureUsage(oldVkLayout);
 }
@@ -703,15 +703,17 @@ HgiVulkanTexture::GetDefaultAccessFlags(HgiTextureUsage usage)
         TF_CODING_ERROR("Cannot determine image layout from invalid usage.");
     }
 
+    VkAccessFlags flags = VK_ACCESS_NONE;
     if (usage & HgiTextureUsageBitsShaderRead) {
-        return VK_ACCESS_SHADER_READ_BIT;
-    } else if (usage & HgiTextureUsageBitsDepthTarget) {
-        return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    } else if (usage & HgiTextureUsageBitsColorTarget) {
-        return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        flags |= VK_ACCESS_SHADER_READ_BIT;
     }
-
-    return VK_ACCESS_SHADER_READ_BIT;
+    if (usage & HgiTextureUsageBitsDepthTarget) {
+        flags |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    } else if (usage & HgiTextureUsageBitsColorTarget) {
+        flags |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    }
+   
+    return flags;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
