@@ -145,24 +145,6 @@ _GetUseTaskControllerSceneIndex()
     return result;
 }
 
-bool
-_AreTasksConverged(HdRenderIndex * const renderIndex,
-                   const SdfPathVector &taskPaths)
-{
-    // This needs to reach into the render index to work.
-    //
-    for (const SdfPath &taskPath : taskPaths) {
-        if (auto const progressiveTask =
-                std::dynamic_pointer_cast<HdxTask>(
-                    renderIndex->GetTask(taskPath))) {
-            if (!progressiveTask->IsConverged()) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 // Convert UsdImagingGLCullStyle to a HdCullStyleTokens value.
 static TfToken
 _CullStyleEnumToToken(UsdImagingGLCullStyle cullStyle)
@@ -685,12 +667,12 @@ UsdImagingGLEngine::IsConverged() const
     }
 
     if (_taskControllerSceneIndex) {
-        return _AreTasksConverged(
-            _renderIndex.get(),
+        return HdxTask::AreTasksConverged(
+            _renderIndex.get(), 
             _taskControllerSceneIndex->GetRenderingTaskPaths());
     } else if (_taskController) {
-        return _AreTasksConverged(
-            _renderIndex.get(),
+        return HdxTask::AreTasksConverged(
+            _renderIndex.get(), 
             _taskController->GetRenderingTaskPaths());
     } else {
         TF_CODING_ERROR("No task controller or task controller scene index.");
@@ -1931,6 +1913,59 @@ UsdImagingGLEngine::SetRendererSetting(TfToken const& id, VtValue const& value)
     _renderDelegate->SetRenderSetting(id, value);
 }
 
+SdfPath
+UsdImagingGLEngine::GetActiveRenderPassPrimPath() const
+{
+    if (ARCH_UNLIKELY(!_renderIndex)) {
+        return SdfPath::EmptyPath();
+    }
+
+    SdfPath activeRenderPassPath;
+    if (HdUtils::HasActiveRenderPassPrim(
+            _renderIndex->GetTerminalSceneIndex(), &activeRenderPassPath)) {
+        return activeRenderPassPath;
+    }
+
+    return SdfPath::EmptyPath();
+}
+
+SdfPath
+UsdImagingGLEngine::GetActiveRenderSettingsPrimPath() const
+{
+    if (ARCH_UNLIKELY(!_renderIndex)) {
+        return SdfPath::EmptyPath();
+    }
+
+    SdfPath activeRenderSettingsPath;
+    if (HdUtils::HasActiveRenderSettingsPrim(
+            _renderIndex->GetTerminalSceneIndex(), &activeRenderSettingsPath)) {
+        return activeRenderSettingsPath;
+    }
+
+    return SdfPath::EmptyPath();
+}
+
+/* static */
+SdfPathVector
+UsdImagingGLEngine::GetAvailableRenderSettingsPrimPaths(UsdPrim const& root)
+{
+    // UsdRender OM uses the convention that all render settings prims must
+    // live under /Render.
+    static const SdfPath renderRoot("/Render");
+
+    const auto stage = root.GetStage();
+
+    SdfPathVector paths;
+    if (UsdPrim render = stage->GetPrimAtPath(renderRoot)) {
+        for (const UsdPrim child : render.GetChildren()) {
+            if (child.IsA<UsdRenderSettings>()) {
+                paths.push_back(child.GetPrimPath());
+            }
+        }
+    }
+    return paths;
+}
+
 void
 UsdImagingGLEngine::SetActiveRenderPassPrimPath(SdfPath const &path)
 {
@@ -1976,27 +2011,6 @@ void UsdImagingGLEngine::_SetSceneGlobalsCurrentFrame(UsdTimeCode const &time)
     }
 
     sgsi->SetCurrentFrame(time.GetValue());
-}
-
-/* static */
-SdfPathVector
-UsdImagingGLEngine::GetAvailableRenderSettingsPrimPaths(UsdPrim const& root)
-{
-    // UsdRender OM uses the convention that all render settings prims must
-    // live under /Render.
-    static const SdfPath renderRoot("/Render");
-
-    const auto stage = root.GetStage();
-
-    SdfPathVector paths;
-    if (UsdPrim render = stage->GetPrimAtPath(renderRoot)) {
-        for (const UsdPrim child : render.GetChildren()) {
-            if (child.IsA<UsdRenderSettings>()) {
-                paths.push_back(child.GetPrimPath());
-            }
-        }
-    }
-    return paths;
 }
 
 void

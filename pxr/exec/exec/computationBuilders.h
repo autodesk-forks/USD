@@ -208,7 +208,7 @@ constexpr bool operator&(
 }
 
 template <Exec_ComputationBuilderProviderTypes allowed>
-class Exec_ComputationBuilderComputationValueSpecifier;
+struct Exec_ComputationBuilderComputationValueSpecifier;
 
 // Common base class for value specifiers and object accessors.
 class Exec_ComputationBuilderCommonBase

@@ -16,7 +16,6 @@ import sys
 import os
 
 inputFiles = sys.argv[1:]
-outputFile = sys.argv[2]
 
 pattern = re.compile(r'0x\w*')
 replacement = 'xxxxxxx'

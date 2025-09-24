@@ -40,6 +40,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
     (mtlx)
+    ((mtlxMaterialTag, "mtlx:materialTag"))
 
     // Default Texture Coordinate Token
     (st)
@@ -768,6 +769,14 @@ _GetMaterialTag(
     HdMaterialNetwork2 const& hdNetwork,
     HdMaterialNode2 const& terminal)
 {
+    // Return the custom material tag if specified in the config Dictionary.
+    const auto tagIt = hdNetwork.config.find(_tokens->mtlxMaterialTag);
+    if (tagIt != hdNetwork.config.end()) {
+        if (tagIt->second.IsHolding<std::string>()) {
+            return tagIt->second.Get<std::string>();
+        }
+    }
+
     SdrRegistry &sdrRegistry = SdrRegistry::GetInstance();
     const SdrShaderNodeConstPtr mtlxSdrNode =
         sdrRegistry.GetShaderNodeByIdentifierAndType(

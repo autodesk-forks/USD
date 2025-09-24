@@ -425,9 +425,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                     texture,
                     /*oldLayout*/oldVkLayout,
                     /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    /*producerAccess*/0,
+                    /*producerAccess*/VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                     /*consumerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                    /*producerStage*/VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    /*producerStage*/VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                     /*consumerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT);
                 
                 vkCmdClearColorImage(
@@ -444,9 +444,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                     /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     /*newLayout*/oldVkLayout,
                     /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                    /*consumerAccess*/VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                    /*consumerAccess*/VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                     /*producerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
-                    /*consumerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+                    /*consumerStage*/VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
             }
 
             if (_descriptor.colorResolveTextures.size() > i &&
@@ -472,9 +472,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                     texture,
                     /*oldLayout*/oldVkLayout,
                     /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    /*producerAccess*/0,
+                    /*producerAccess*/VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                     /*consumerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                    /*producerStage*/VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    /*producerStage*/VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                     /*consumerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT);
                 
                 vkCmdClearColorImage(
@@ -491,9 +491,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                     /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     /*newLayout*/oldVkLayout,
                     /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                    /*consumerAccess*/VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                    /*consumerAccess*/VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                     /*producerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
-                    /*consumerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+                    /*consumerStage*/VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
             }
         }
     }
@@ -527,9 +527,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                 texture,
                 /*oldLayout*/oldVkLayout,
                 /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                /*producerAccess*/0,
+                /*producerAccess*/VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 /*consumerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                /*producerStage*/VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                /*producerStage*/VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                 /*consumerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT);
             
             vkCmdClearDepthStencilImage(
@@ -546,9 +546,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                 /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 /*newLayout*/oldVkLayout,
                 /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                /*consumerAccess*/VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                /*consumerAccess*/VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 /*producerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
-                /*consumerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+                /*consumerStage*/VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
         }
 
         if (_descriptor.depthResolveTexture) {
@@ -572,9 +572,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                 texture,
                 /*oldLayout*/oldVkLayout,
                 /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                /*producerAccess*/0,
+                /*producerAccess*/VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 /*consumerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                /*producerStage*/VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                /*producerStage*/VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                 /*consumerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT);
             
             vkCmdClearDepthStencilImage(
@@ -591,9 +591,9 @@ HgiVulkanGraphicsCmds::_ClearAttachmentsIfNeeded()
                 /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 /*newLayout*/oldVkLayout,
                 /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
-                /*consumerAccess*/VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                /*consumerAccess*/VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 /*producerStage*/VK_PIPELINE_STAGE_TRANSFER_BIT,
-                /*consumerStage*/VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+                /*consumerStage*/VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
         }
     }
 }

@@ -251,7 +251,7 @@ public:
 
 private:
     friend class VtArrayEditBuilder<ELEM>;
-    friend class Vt_ArrayEditHashAccess;
+    friend struct Vt_ArrayEditHashAccess;
 
     friend
     std::ostream &Vt_ArrayEditStreamImpl(

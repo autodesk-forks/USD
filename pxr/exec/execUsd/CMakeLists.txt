@@ -80,7 +80,7 @@ pxr_install_test_dir(
 pxr_register_test(testExecUsdBasicCompilation
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdBasicCompilation"
     EXPECTED_RETURN_CODE 0
-    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFile.py testCompiler.dot testCompiler.out"
+    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py testCompiler.dot"
     DIFF_COMPARE testCompiler.out
     TESTENV testExecUsdBasicCompilation
 )

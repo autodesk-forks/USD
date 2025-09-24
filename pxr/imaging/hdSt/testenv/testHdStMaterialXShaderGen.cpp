@@ -117,7 +117,11 @@ void TestShaderGen(
         std::cerr << message;
     }
 
-    mxHdInfo->materialTag = _GetMaterialTag(mxDoc);
+    // Custom material tags should already be set below through the config arg:
+    // --config materialTag:<customTagName>
+    if (mxHdInfo->materialTag == HdStMaterialTagTokens->defaultMaterialTag) {
+        mxHdInfo->materialTag = _GetMaterialTag(mxDoc);
+    }
 
     // Generate the HdSt MaterialX Shader
     mx::ShaderPtr glslfx = HdSt_GenMaterialXShader(
@@ -158,6 +162,22 @@ int main(int argc, char *argv[])
         }
         if (arg == "--bindless") {
             mxHdInfo.bindlessTexturesEnabled = true;
+        }
+        if (arg == "--config") {
+            const std::string config(argv[++i]);
+            auto const& npos = config.find(":");
+            if (npos != std::string::npos) {
+                const std::string name = config.substr(0, npos);
+                const std::string tag = config.substr(npos + 1);
+                if (name == "materialTag") {
+                    mxHdInfo.materialTag = tag;
+                }
+            }
+            else {
+                std::cerr << "config input not formatted correctly.\n";
+                std::cerr << "ex: '--config materialTag:<materialTagName>'\n";
+                return EXIT_FAILURE;
+            }
         }
     }
     TestShaderGen(mtlxFile, &mxHdInfo);

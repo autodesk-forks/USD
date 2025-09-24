@@ -35,7 +35,7 @@ bool
 Vdf_AllocateBoxedValue(
     const VdfContext &context,
     const TfToken &name,
-    Args... args)
+    Args&&... args)
 {
     // Allocate a new VdfVector for storing a boxed value. This function will
     // return nullptr if the output is not requested, or if an error occurred.

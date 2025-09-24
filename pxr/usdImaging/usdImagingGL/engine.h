@@ -511,6 +511,21 @@ public:
     /// @{
     // ---------------------------------------------------------------------
 
+    /// Returns the active render pass prim path by querying the terminal scene
+    /// index. Returns an empty path if none was found. 
+    USDIMAGINGGL_API
+    SdfPath GetActiveRenderPassPrimPath() const;
+
+    /// Returns the active render settings prim path by querying the terminal
+    /// scene index. Returns an empty path if none was found.
+    USDIMAGINGGL_API
+    SdfPath GetActiveRenderSettingsPrimPath() const;
+
+    /// Utility method to query available render settings prims.
+    USDIMAGINGGL_API
+    static SdfPathVector
+    GetAvailableRenderSettingsPrimPaths(UsdPrim const &root);
+
     /// Set active render pass prim to use to drive rendering.
     USDIMAGINGGL_API
     void SetActiveRenderPassPrimPath(SdfPath const &);
@@ -519,10 +534,6 @@ public:
     USDIMAGINGGL_API
     void SetActiveRenderSettingsPrimPath(SdfPath const &);
 
-    /// Utility method to query available render settings prims.
-    USDIMAGINGGL_API
-    static SdfPathVector
-    GetAvailableRenderSettingsPrimPaths(UsdPrim const &root);
 
     /// @}
 

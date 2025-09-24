@@ -5,9 +5,9 @@
 // https://openusd.org/license.
 //
 
-#include "pxr/imaging/hd/tokens.h"
+#include "pxr/usdImaging/usdImaging/prototypeSceneIndexUtils.h"
 
-#include "pxr/pxr.h"
+#include "pxr/imaging/hd/tokens.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -18,7 +18,7 @@ static const TfToken::Set primTypeWhitelist {
 namespace UsdImaging_PrototypeSceneIndexUtils {
 
 void
-SetEmptyPrimType(TfToken * primType)
+SetEmptyPrimType(TfToken * const primType)
 {
     if (!primType) {
         return;

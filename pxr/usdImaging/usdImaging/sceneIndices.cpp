@@ -126,15 +126,14 @@ _InstanceDataSourceNames()
 {
     TRACE_FUNCTION();
     
+    // In order for USD instances to share a prototype they must share the
+    // following Hydra schemas, which are used for Hydra-side instance
+    // aggregation.  Due to their inheritance semantics these schemas may
+    // require different aggregation of prototypes in Hydra as compared
+    // to the underlying USD stage prototypes.
     TfTokenVector result = {
-        // We include the UsdImagingMaterialBindingsSchema in order to aggregate
-        // scene indices by inherited material bindings.
         UsdImagingMaterialBindingsSchema::GetSchemaToken(),
-        // We include the UsdImagingImageable schema in order to aggregate
-        // scene indices by purpose.
         HdPurposeSchema::GetSchemaToken(),
-        // We include the geom model schema in order to aggregate scene indices
-        // by draw mode.
         UsdImagingGeomModelSchema::GetSchemaToken(),
         // We include the model schema in order to aggregate scene indices by
         // assetInfo, which may be used in material networks for texture

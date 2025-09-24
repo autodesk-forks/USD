@@ -158,6 +158,7 @@ _DoSerializationTest(
 
         if (isEmpty) {
             TF_AXIOM(!attr2.HasSpline());
+            TF_AXIOM(attr2.GetSpline().IsEmpty());
         } else {
             TF_AXIOM(attr2.HasSpline());
             const TsSpline spline2 = attr2.GetSpline();
@@ -406,6 +407,67 @@ TestInvalidType()
     TF_AXIOM(!attr.ValueMightBeTimeVarying());
 }
 
+static
+void
+TestClobbered()
+{
+    UsdStageRefPtr stage = UsdStage::CreateInMemory();
+    const UsdPrim prim = stage->DefinePrim(SdfPath("/MyPrim"));
+    UsdAttribute attr = prim.CreateAttribute(
+        TfToken("myAttr"), SdfValueTypeNames->Double);
+    const TsSpline spline = _GetTestSpline(SdfValueTypeNames->Double);
+
+    attr.SetSpline(spline);
+    TF_AXIOM(attr.HasSpline());
+    TF_AXIOM(attr.GetSpline() == spline);
+    attr.Set(100.0, 1);
+
+    TF_AXIOM(!attr.HasSpline());
+    TF_AXIOM(attr.GetSpline().IsEmpty());
+    attr.SetSpline(spline);
+    TF_AXIOM(!attr.HasSpline());
+    TF_AXIOM(attr.GetSpline().IsEmpty());
+
+    double value;
+    attr.Get(&value, 1);
+    TF_AXIOM(value == 100.0);
+}
+
+static
+void
+TestWeakerSplineOpinion()
+{
+    UsdStageRefPtr stage = UsdStage::CreateInMemory();
+    SdfLayerRefPtr rootLayer = stage->GetRootLayer();
+    const SdfLayerRefPtr subLayer = SdfLayer::CreateAnonymous();
+    rootLayer->SetSubLayerPaths({subLayer->GetIdentifier()});
+
+    // Set spline in the subLayer
+    stage->SetEditTarget(stage->GetEditTargetForLocalLayer(subLayer));
+    const UsdPrim prim = stage->DefinePrim(SdfPath("/MyPrim"));
+    UsdAttribute attr = prim.CreateAttribute(TfToken("myAttr"),
+                                             SdfValueTypeNames->Double);
+    TsSpline spline = _GetTestSpline();
+    attr.SetSpline(spline);
+    TF_AXIOM(attr.HasSpline());
+    TF_AXIOM(attr.GetSpline() == spline);
+
+    // Set stronger time samples in the rootLayer
+    stage->SetEditTarget(stage->GetEditTargetForLocalLayer(rootLayer));
+    const UsdPrim rootPrim = stage->DefinePrim(SdfPath("/MyPrim"));
+    UsdAttribute rootAttr = prim.CreateAttribute(TfToken("myAttr"),
+                                                 SdfValueTypeNames->Double);
+    TF_AXIOM(attr.HasSpline());
+    TF_AXIOM(attr.GetSpline() == spline);
+    rootAttr.Set(100.0, 1);
+    TF_AXIOM(!attr.HasSpline());
+    TF_AXIOM(attr.GetSpline().IsEmpty());
+
+    double value;
+    attr.Get(&value, 1);
+    TF_AXIOM(value == 100.0);
+}
+
 int main()
 {
     TestSerializationEmpty();
@@ -416,5 +478,7 @@ int main()
     TestLayerOffsets();
     TestLayerOffsetsTimeCode();
     TestInvalidType();
+    TestClobbered();
+    TestWeakerSplineOpinion();
     return 0;
 }

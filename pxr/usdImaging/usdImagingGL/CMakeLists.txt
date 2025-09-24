@@ -162,6 +162,14 @@ pxr_build_test(testUsdImagingGLTaskController
         testenv/testUsdImagingGLTaskController.cpp
 )
 
+pxr_build_test(testUsdImagingGLTextureResync
+    LIBRARIES
+        ${TEST_LIBS}
+    CPPFILES
+        unitTestGLDrawing.cpp
+        testenv/testUsdImagingGLTextureResync.cpp
+)
+
 if (${PXR_HEADLESS_TEST_MODE})
     message(STATUS "Skipping ${PXR_PACKAGE} tests because PXR_HEADLESS_TEST_MODE is ON")
     return()
@@ -703,6 +711,11 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testUsdImagingGLUsdRenderPass
     DEST testUsdImagingGLUsdRenderPass
+)
+
+pxr_install_test_dir(
+    SRC testenv/testUsdImagingGLTextureResync
+    DEST testUsdImagingGLTextureResync
 )
 
 pxr_install_test_dir(
@@ -5107,6 +5120,17 @@ pxr_register_test(testUsdImagingGLUsdRenderPass
     TESTENV testUsdImagingGLUsdRenderPass
     ENV
        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true)
+
+pxr_register_test(testUsdImagingGLTextureResync
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLTextureResync --stage testUsdImagingGLTextureResync.usda --deactivate /Scene/Looks/Material1/Texture --deactivate /Scene/Looks/Material2/Texture --write testUsdImagingGLTextureResync.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLTextureResync.png
+    FAIL .001
+    FAIL_PERCENT .001
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLTextureResync
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true)
 
 #
 # Conditionally install and register MaterialX tests

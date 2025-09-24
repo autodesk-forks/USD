@@ -544,6 +544,14 @@ HgiInteropVulkan::HgiInteropVulkan(Hgi* hgiVulkan)
         _glComplete = std::make_unique<InteropSemaphore>(_hgiVulkan);
         _colorTex = std::make_unique<InteropTexNative>();
         _depthTex = std::make_unique<InteropTexNative>();
+        
+        VkFenceCreateInfo info = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            nullptr, 0};
+        HGIVULKAN_VERIFY_VK_RESULT(vkCreateFence(
+            _hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(),
+            &info,
+            HgiVulkanAllocator(),
+            &_interopComplete));
     } else {
         _colorTex = std::make_unique<InteropTexEmulated>();
         _depthTex = std::make_unique<InteropTexEmulated>();
@@ -563,6 +571,10 @@ HgiInteropVulkan::~HgiInteropVulkan()
     glDeleteBuffers(1, &_vertexBuffer);
     if (_vertexArray) {
         glDeleteVertexArrays(1, &_vertexArray);
+    }
+    if (_interopComplete != VK_NULL_HANDLE) {
+        vkDestroyFence(_hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(),
+            _interopComplete, HgiVulkanAllocator());
     }
 
     const GLenum error = glGetError();
@@ -806,7 +818,18 @@ HgiInteropVulkan::CompositeToInterop(
 
         HGIVULKAN_VERIFY_VK_RESULT(
             vkQueueSubmit(commandQueue->GetVulkanGraphicsQueue(),
-                1, &submitInfoAfter, VK_NULL_HANDLE));
+                1, &submitInfoAfter, _interopComplete));
+
+        if (_interopComplete != VK_NULL_HANDLE) {
+            // Perform sync in interop because HgiVulkan currently requires
+            // a per-frame sync
+            HGIVULKAN_VERIFY_VK_RESULT(
+                vkWaitForFences(_hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(),
+                    1, &_interopComplete, true, UINT64_MAX));
+            HGIVULKAN_VERIFY_VK_RESULT(
+                vkResetFences(_hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(),
+                    1, &_interopComplete));
+        }
     }
 
     {

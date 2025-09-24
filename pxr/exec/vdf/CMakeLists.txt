@@ -487,7 +487,7 @@ pxr_register_test(testVdfVector
 pxr_register_test(testVdfGrapher
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testVdfGrapher"
     EXPECTED_RETURN_CODE 0
-    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFile.py test.dot test.out"
+    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py test.dot"
     DIFF_COMPARE test.out
     DIFF_COMPARE traverse.out
     DIFF_COMPARE network.dot

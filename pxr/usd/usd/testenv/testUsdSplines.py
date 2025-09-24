@@ -70,6 +70,7 @@ class TestUsdSplines(unittest.TestCase):
 
             if isEmpty:
                 self.assertFalse(attr2.HasSpline())
+                self.assertTrue(attr2.GetSpline().IsEmpty())
             else:
                 self.assertTrue(attr2.HasSpline())
                 spline2 = attr2.GetSpline()
@@ -317,6 +318,56 @@ class TestUsdSplines(unittest.TestCase):
         self.assertFalse(attr.HasSpline())
         self.assertFalse(attr.ValueMightBeTimeVarying())
 
+    def test_Clobbered(self):
+        """
+        Verify that splines that are clobbered by time samples aren't
+        visible on the attribute.
+        """
+        stage = Usd.Stage.CreateInMemory()
+        prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
+        attr = prim.CreateAttribute("myAttr", Sdf.ValueTypeNames.Double)
+        spline = self._GetTestSpline(Sdf.ValueTypeNames.Double)
+        attr.SetSpline(spline)
+        self.assertTrue(attr.HasSpline())
+        self.assertEqual(attr.GetSpline(), spline)
+        attr.Set(100.0, 1)
+
+        self.assertFalse(attr.HasSpline())
+        self.assertTrue(attr.GetSpline().IsEmpty())
+        attr.SetSpline(spline)
+        self.assertFalse(attr.HasSpline())
+        self.assertTrue(attr.GetSpline().IsEmpty())
+        self.assertEqual(attr.Get(1), 100.0)
+
+    def test_WeakerSplineOpinion(self):
+        """
+        Verify that splines that are a weaker opinion than a non-spline
+        are not visible on the attribute.
+        """
+        stage = Usd.Stage.CreateInMemory()
+        rootLayer = stage.GetRootLayer()
+        subLayer = Sdf.Layer.CreateAnonymous()
+        rootLayer.subLayerPaths = [subLayer.identifier]
+
+        # Set spline in the subLayer
+        stage.SetEditTarget(stage.GetEditTargetForLocalLayer(subLayer))
+        spline = self._GetTestSpline(Sdf.ValueTypeNames.Double)
+        prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
+        attr = prim.CreateAttribute("myAttr", Sdf.ValueTypeNames.Double)
+        attr.SetSpline(spline)
+        self.assertTrue(attr.HasSpline())
+        self.assertEqual(attr.GetSpline(), spline)
+        
+        # Set stronger time samples in the rootLayer
+        stage.SetEditTarget(stage.GetEditTargetForLocalLayer(rootLayer))
+        prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
+        attr = prim.CreateAttribute("myAttr", Sdf.ValueTypeNames.Double)
+        self.assertTrue(attr.HasSpline())
+        self.assertEqual(attr.GetSpline(), spline)
+        attr.Set(100.0, 1)
+        self.assertFalse(attr.HasSpline())
+        self.assertTrue(attr.GetSpline().IsEmpty())
+        self.assertEqual(attr.Get(1), 100.0)
 
 if __name__ == "__main__":
 

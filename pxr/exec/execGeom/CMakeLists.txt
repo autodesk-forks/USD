@@ -52,7 +52,7 @@ if (BUILD_SHARED_LIBS)
     pxr_register_test(testExecGeomXformable
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecGeomXformable"
         EXPECTED_RETURN_CODE 0
-        POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFile.py testCompiler.dot testCompiler.out"
+        POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py testCompiler.dot"
         DIFF_COMPARE testCompiler.out
         TESTENV testExecGeomXformable
     )

@@ -531,8 +531,9 @@ SdrRegistry::GetShaderNodeFromAsset(
     const TfToken &sourceType)
 {
     // Ensure there is a parser plugin that can handle this asset.
-    TfToken discoveryType(ArGetResolver().GetExtension(
-        shaderAsset.GetAssetPath()));
+    std::string resolvedUri = shaderAsset.GetResolvedPath().empty() ? 
+        shaderAsset.GetAssetPath() : shaderAsset.GetResolvedPath();
+    TfToken discoveryType(ArGetResolver().GetExtension(resolvedUri));
     auto parserIt = _parserPluginMap.find(discoveryType);
 
     // Ensure that there is a parser registered corresponding to the 
@@ -566,10 +567,6 @@ SdrRegistry::GetShaderNodeFromAsset(
 
     // Construct a SdrShaderNodeDiscoveryResult object to pass into the parser 
     // plugin's ParseShaderNode() method.
-    // XXX: Should we try resolving the assetPath if the resolved path is empty.
-    std::string resolvedUri = shaderAsset.GetResolvedPath().empty() ? 
-        shaderAsset.GetAssetPath() : shaderAsset.GetResolvedPath();
-
     SdrShaderNodeDiscoveryResult dr(identifier,
                                     SdrVersion(), /* use an invalid version */
                                     /* name */ TfGetBaseName(resolvedUri),

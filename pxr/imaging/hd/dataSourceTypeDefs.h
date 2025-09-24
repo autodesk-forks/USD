@@ -62,6 +62,8 @@ using HdPathArrayDataSourceHandle = HdPathArrayDataSource::Handle;
 
 using HdStringDataSource = HdTypedSampledDataSource<std::string>;
 using HdStringDataSourceHandle = HdStringDataSource::Handle;
+using HdStringArrayDataSource = HdTypedSampledDataSource<VtArray<std::string>>;
+using HdStringArrayDataSourceHandle = HdStringArrayDataSource::Handle;
 
 using HdAssetPathDataSource = HdTypedSampledDataSource<SdfAssetPath>;
 using HdAssetPathDataSourceHandle = HdAssetPathDataSource::Handle;
