@@ -88,7 +88,6 @@ void HdxWbOitResolveTask::Execute(HdTaskContext* ctx)
         HgiBlendFactor::HgiBlendFactorOneMinusSrcAlpha,
         HgiBlendOp::HgiBlendOpAdd
     );
-    _shader->SetAttachmentLoadStoreOp(HgiAttachmentLoadOp::HgiAttachmentLoadOpLoad, HgiAttachmentStoreOp::HgiAttachmentStoreOpStore);
     _shader->Draw(aovTexture, {});
 
     buffer0->SubmitLayoutChange(HgiTextureUsageBitsColorTarget);
