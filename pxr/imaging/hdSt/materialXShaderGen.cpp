@@ -1103,8 +1103,6 @@ void HdStMaterialXShaderGenWgslGlsl::_EmitAdditionalDefines(MaterialX::GenContex
     this->emitComment("WGSL Specific Items", mxStage);
     // Define mappings for the DomeLight Textures
     //   See HdStMaterialXShaderGenBaseGlsl<Base>::_EmitMxFunctions()
-    this->emitLine("#define HW_SEPARATE_SAMPLERS", mxStage, false);
-    this->emitLineBreak(mxStage);
     this->emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
     this->emitLine("#define u_envRadiance_texture textureBind_domeLightPrefilter", mxStage, false);
     this->emitLine("#define u_envRadiance_sampler samplerBind_domeLightPrefilter", mxStage, false);
@@ -1125,9 +1123,18 @@ void HdStMaterialXShaderGenWgslGlsl::_EmitAdditionalDefines(MaterialX::GenContex
             if (textureName == "domeLightFallback") {
                 continue;
             }
-            this->emitLine(TfStringPrintf("#define %s HdGetSampler_%s()",
-                    textureName.c_str(), textureName.c_str()),
-                mxStage, false);
+            this->emitLine(TfStringPrintf(
+                "#define %s_texture textureBind_%s",
+                textureName.c_str(),
+                textureName.c_str()),
+                mxStage, false
+            );
+            this->emitLine(TfStringPrintf(
+                "#define %s_sampler samplerBind_%s",
+                textureName.c_str(),
+                textureName.c_str()),
+                mxStage, false
+            );
         }
         this->emitLineBreak(mxStage);
     }
