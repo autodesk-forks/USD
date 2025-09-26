@@ -139,6 +139,8 @@ protected:
 
     size_t _GetPriority(const TfToken &primType) const;
 
+    size_t _GetPriority(const SdfPath &primPath) const;
+
     PrimTypePriorityFunctorHandle const _primTypePriorityFunctor;
     const size_t _numPriorities;
 

@@ -159,6 +159,13 @@ struct mxVertexData
 mxVertexData vd;
 
 
+
+vec3 mx_latlong_map_lookup(vec3 dir, mat4 transform, float lod, samplerCube envSampler)
+{
+    vec3 envDir = normalize((transform * vec4(dir,0.0)).xyz);
+    return textureLod(envSampler, envDir, lod).rgb;
+}
+
 void mxInit(vec4 Peye, vec3 Neye)
 {
     // Convert HdData to MxData
@@ -292,7 +299,7 @@ void mxInit(vec4 Peye, vec3 Neye)
         }
     }
 #endif
-    u_envMatrix = u_envMatrix * hdTransformationMatrix;
+    u_envMatrix = hdTransformationMatrix;
 }
 
 #define M_PI 3.1415926535897932

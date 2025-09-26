@@ -213,20 +213,11 @@ HdMergingSceneIndex::InsertInputScenes(
         _inputs.insert(
             _inputs.begin() + std::min(inputScene.pos, _inputs.size()),
             {inputScene.scene, inputScene.activeInputSceneRoot});
+
+        inputScene.scene->AddObserver(HdSceneIndexObserverPtr(&_observer));
     }
 
     _RebuildInputsPathTable();
-
-    for (const InputScene &inputScene : inputScenes) {
-        if (!inputScene.scene) {
-            continue;
-        }
-        if (!inputScene.activeInputSceneRoot.IsAbsoluteRootOrPrimPath()) {
-            // TF_CODING_ERROR already raised.
-            continue;
-        }
-        inputScene.scene->AddObserver(HdSceneIndexObserverPtr(&_observer));
-    }
 
     if (!_IsObserved()) {
         return;
@@ -248,7 +239,7 @@ HdMergingSceneIndex::InsertInputScenes(
         // Old scene indices might have a prim of different type at the given path,
         // so we need to query the merging scene index itself here.
         queue.emplace(inputScene.activeInputSceneRoot,
-                       GetPrim(inputScene.activeInputSceneRoot).primType);
+                      GetPrim(inputScene.activeInputSceneRoot).primType);
 
         WorkDispatcher dispatcher;
         _FillAddedChildEntriesRecursively(
@@ -270,59 +261,76 @@ HdMergingSceneIndex::RemoveInputScenes(
 {
     TRACE_FUNCTION();
 
-    // Vectorization not implemented yet :(
-
-    for (const HdSceneIndexBaseRefPtr &sceneIndex : sceneIndices) {
-        RemoveInputScene(sceneIndex);
-    }
-}
-
-void
-HdMergingSceneIndex::RemoveInputScene(const HdSceneIndexBaseRefPtr &sceneIndex)
-{
-    TRACE_FUNCTION();
-
-    auto it = std::find_if(
-        _inputs.begin(), _inputs.end(),
-        [&sceneIndex](const _InputEntry &entry) {
-            return sceneIndex == entry.sceneIndex; });
-
-    if (it == _inputs.end()) {
+    if (sceneIndices.empty()) {
         return;
     }
 
-    std::vector<SdfPath> removalTestQueue = { it->sceneRoot };
+    // Remove our observer from the scene indices being removed.
+    HdSceneIndexObserverPtr observerPtr(&_observer);
+    for (const HdSceneIndexBaseRefPtr &sceneIndex : sceneIndices) {
+        sceneIndex->RemoveObserver(observerPtr);
+    }
 
-    sceneIndex->RemoveObserver(HdSceneIndexObserverPtr(&_observer));
-    _inputs.erase(it);
+    // Remove the scene indices from our list of inputs, and record a list of
+    // their scene roots for generating the added/removed notifications below.
+    std::vector<_InputEntry> removedInputs;
+    {
+        const std::unordered_set<HdSceneIndexBaseRefPtr, TfHash>
+            sceneIndicesSet(sceneIndices.begin(), sceneIndices.end());
+
+        auto it = std::stable_partition(
+            _inputs.begin(), _inputs.end(),
+            [&sceneIndicesSet](const _InputEntry &entry) {
+              return !sceneIndicesSet.count(entry.sceneIndex); });
+
+        removedInputs.assign(it, _inputs.end());
+        _inputs.erase(it, _inputs.end());
+    }
+
     _RebuildInputsPathTable();
 
     if (!_IsObserved()) {
         return;
     }
 
-    // prims unique to this input get removed
+    // prims unique to these inputs get removed
     HdSceneIndexObserver::RemovedPrimEntries removedEntries;
 
-    // prims which this input contributed to are resynced via
+    // prims which these inputs contributed to are resynced via
     // PrimsAdded.
     HdSceneIndexObserver::AddedPrimEntries addedEntries;
 
-    // signal removal for anything not present once this scene is
-    // removed
-    while (!removalTestQueue.empty()) {
-        const SdfPath path = removalTestQueue.back();
-        removalTestQueue.pop_back();
+    // Set to prevent sending duplicate notifications.
+    std::unordered_set<SdfPath, SdfPath::Hash> visitedPaths;
 
-        const HdSceneIndexPrim prim = GetPrim(path);
-        if (!prim.dataSource
-                 && GetChildPrimPaths(path).empty()) {
-            removedEntries.emplace_back(path);
-        } else {
-            addedEntries.emplace_back(path, prim.primType);
-            for (const SdfPath &childPath :
-                     sceneIndex->GetChildPrimPaths(path)) {
-                removalTestQueue.push_back(childPath);
+    std::vector<SdfPath> removalTestQueue;
+    for (const _InputEntry &removedInput : removedInputs) {
+        // signal removal for anything not present once this scene is
+        // removed
+        removalTestQueue.push_back(removedInput.sceneRoot);
+
+        while (!removalTestQueue.empty()) {
+            const SdfPath path = removalTestQueue.back();
+            removalTestQueue.pop_back();
+
+            const HdSceneIndexPrim prim = GetPrim(path);
+            const bool hasPrim =
+                !prim.primType.IsEmpty() ||
+                prim.dataSource ||
+                _Contains(path, GetChildPrimPaths(path.GetParentPath()));
+            
+            if (hasPrim) {
+                if (visitedPaths.insert(path).second) {
+                    addedEntries.emplace_back(path, prim.primType);
+                }
+                for (const SdfPath &childPath :
+                         removedInput.sceneIndex->GetChildPrimPaths(path)) {
+                    removalTestQueue.push_back(childPath);
+                }
+            } else {
+                if (visitedPaths.insert(path).second) {
+                    removedEntries.emplace_back(path);
+                }
             }
         }
     }
@@ -333,6 +341,12 @@ HdMergingSceneIndex::RemoveInputScene(const HdSceneIndexBaseRefPtr &sceneIndex)
     if (!addedEntries.empty()) {
         _SendPrimsAdded(addedEntries);
     }
+}
+
+void
+HdMergingSceneIndex::RemoveInputScene(const HdSceneIndexBaseRefPtr &sceneIndex)
+{
+    RemoveInputScenes({sceneIndex});
 }
 
 std::vector<HdSceneIndexBaseRefPtr>

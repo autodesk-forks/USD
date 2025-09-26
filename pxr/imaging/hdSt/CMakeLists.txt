@@ -114,7 +114,6 @@ pxr_library(hdSt
         renderDelegate
         renderParam
         renderPass
-        renderPassPruneSceneIndexPlugin
         renderPassShader
         renderPassState
         resourceRegistry
@@ -177,6 +176,7 @@ pxr_library(hdSt
         pipelineDrawBatch
         pointsShaderKey
         quadrangulate
+        renderPassPruneSceneIndexPlugin
         renderPassShaderKey
         resourceBinder
         shaderKey

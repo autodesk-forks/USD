@@ -26,6 +26,12 @@ struct Exec_PrivateBuiltinComputationsStruct
     EXEC_API
     Exec_PrivateBuiltinComputationsStruct();
 
+    // Computes a constant value.
+    //
+    // The computation provider must be the stage.
+    //
+    const TfToken computeConstant;
+
     // Computes a given metadatum on the computation provider.
     //
     // NOTE: The computation provider can be any type of scene object *except*

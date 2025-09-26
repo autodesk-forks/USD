@@ -117,8 +117,8 @@ class UsdzAssetIterator(object):
         if (not usdzFile.endswith('.usdz')):
             return False
 
-        from pxr import Usd, Tf
-        with Usd.ZipFileWriter.CreateNew(usdzFile) as usdzWriter:
+        from pxr import Sdf, Tf
+        with Sdf.ZipFileWriter.CreateNew(usdzFile) as usdzWriter:
             # Note that any exception raised here will result in ZipFileWriter's 
             # exit discarding the usdzFile. 
             for f in filesToAdd:

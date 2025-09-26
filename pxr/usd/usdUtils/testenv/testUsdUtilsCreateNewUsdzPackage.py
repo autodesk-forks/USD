@@ -66,7 +66,7 @@ if __name__ == '__main__':
             layerShouldBeDirty = layer in expectedDirtyLayers
             assert layer.dirty is layerShouldBeDirty
 
-    zipFile = Usd.ZipFile.Open(args.usdzFile)
+    zipFile = Sdf.ZipFile.Open(args.usdzFile)
     assert zipFile
 
     with stream(args.outfile, 'w') as ofp:

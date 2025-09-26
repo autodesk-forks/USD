@@ -518,6 +518,7 @@ class ClassInfo(object):
         self.rels = {}
         self.attrOrder = []
         self.relOrder = []
+        self.propertyOrder = []
         self.apiSchemaOverridePropertyNames = []
         self.tokens = set()
 
@@ -901,6 +902,13 @@ def _GenerateClassInfo(stage, sdfPrims, useLiteralIdentifier):
 
         classes.append(classInfo)
         classInfos[classInfo.usdPrimTypeName] = classInfo
+
+        # Store property order 
+        for propName in sdfPrim.propertyOrder:
+            name, _ = _GetNameAndGeneratedSchemaPropNameForPropInfo(
+                propName, classInfo)
+            classInfo.propertyOrder.append(name)
+
         #
         # We don't want to use the composed property names here because we only
         # want the local properties declared directly on the class, which the

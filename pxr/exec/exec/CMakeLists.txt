@@ -55,6 +55,7 @@ pxr_library(exec
         compiler
         compilerTaskSync
         computationDefinition
+        constantValueNode
         definitionRegistry
         inputRecompilationTask
         inputResolver

@@ -45,6 +45,7 @@ pxr_plugin(hdEmbree
         renderParam.h
 
     PRIVATE_CLASSES
+        debugCodes
         implicitSurfaceSceneIndexPlugin
 
     RESOURCE_FILES

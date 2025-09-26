@@ -71,7 +71,6 @@ pxr_library(sdf
         siteUtils
         spec
         specType
-        textFileFormat
         textParserUtils
         timeCode
         tokens

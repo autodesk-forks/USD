@@ -3113,6 +3113,20 @@ pxr_register_test(testUsdImagingGLPreviewSurface_OpacityModePresence
         HGIGL_ENABLE_BINDLESS_TEXTURE=1
 )
 
+pxr_register_test(testUsdImagingGLPreviewSurface_DomeLight
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -sceneLights -shading smooth -frameAll -renderSetting domeLightCameraVisibility bool false -camera /Scene/Top -stage testPreviewSurfaceDomeLight.usda -write testPreviewSurfaceDomeLight.png"
+    IMAGE_DIFF_COMPARE
+        testPreviewSurfaceDomeLight.png
+    FAIL 0.02
+    FAIL_PERCENT 0.01
+    WARN 0.01
+    WARN_PERCENT 0.005
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLPreviewSurface
+    ENV
+        HGIGL_ENABLE_BINDLESS_TEXTURE=1
+)
+
 pxr_register_test(testUsdImagingGLPreviewSurfaceNonBindless_Fallback
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -shading smooth -frameAll -stage testPreviewSurfaceFallback.usda -write testPreviewSurfaceFallback.png"
     IMAGE_DIFF_COMPARE
@@ -3433,6 +3447,20 @@ pxr_register_test(testUsdImagingGLPreviewSurfaceNonBindless_OpacityModePresence
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -shading smooth -frameAll -renderSetting domeLightCameraVisibility bool false -stage testPreviewSurfaceOpacityModePresence.usda -write testPreviewSurfaceOpacityModePresence.png"
     IMAGE_DIFF_COMPARE
         testPreviewSurfaceOpacityModePresence.png
+    FAIL 0.02
+    FAIL_PERCENT 0.01
+    WARN 0.01
+    WARN_PERCENT 0.005
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLPreviewSurface
+    ENV
+        HGIGL_ENABLE_BINDLESS_TEXTURE=0
+)
+
+pxr_register_test(testUsdImagingGLPreviewSurfaceNonBindless_DomeLight
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -sceneLights -shading smooth -frameAll -renderSetting domeLightCameraVisibility bool false -camera /Scene/Top -stage testPreviewSurfaceDomeLight.usda -write testPreviewSurfaceDomeLight.png"
+    IMAGE_DIFF_COMPARE
+        testPreviewSurfaceDomeLight.png
     FAIL 0.02
     FAIL_PERCENT 0.01
     WARN 0.01

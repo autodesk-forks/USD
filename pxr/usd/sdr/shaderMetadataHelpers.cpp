@@ -296,10 +296,6 @@ namespace ShaderMetadataHelpers
                    sdfType == SdfValueTypeNames->Token) {
             normalizedStr = Sdf_QuoteString(normalizedStr);
         } else if (sdfType == SdfValueTypeNames->Asset) {
-            if (normalizedStr.empty()) {
-                *err = "Attempted parse of invalid empty asset path";
-                return VtValue();
-            }
             normalizedStr = Sdf_QuoteAssetPath(normalizedStr);
         } else {
             normalizedStr = TfStringTrim(normalizedStr);

@@ -97,13 +97,13 @@
                         "bases": ["HdSceneIndexPlugin"],
                         "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
                         "priority": 0,
-                        "displayName": "Prman Render Pass Prune Scene Index"
+                        "displayName": "Scene Index to resolve render pass prune rules."
                     },
-                    "HdPrman_RenderPassVisibilitySceneIndexPlugin" : {
+                    "HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin" : {
                         "bases": ["HdSceneIndexPlugin"],
                         "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
                         "priority": 0,
-                        "displayName": "Prman Render Pass Visibility Scene Index"
+                        "displayName": "Scene Index to resolve render pass visibility and matte rules."
                     },
                     "HdPrman_RenderSettingsFilteringSceneIndexPlugin" : {
                         "bases": ["HdSceneIndexPlugin"],

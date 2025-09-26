@@ -26,16 +26,20 @@
 #include "pxr/imaging/hd/schema.h"
 
 // --(BEGIN CUSTOM CODE: Includes)--
+#include "pxr/imaging/hd/materialNodeParameterSchema.h"
 // --(END CUSTOM CODE: Includes)--
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 // --(BEGIN CUSTOM CODE: Declares)--
+using HdNodeToInputToMaterialNodeParameterSchema = 
+    HdContainerOfSchemasSchema<HdMaterialNodeParameterContainerSchema>;
 // --(END CUSTOM CODE: Declares)--
 
 #define HD_MATERIAL_OVERRIDE_SCHEMA_TOKENS \
     (materialOverride) \
     (interfaceValues) \
+    (parameterValues) \
 
 TF_DECLARE_PUBLIC_TOKENS(HdMaterialOverrideSchemaTokens, HD_API,
     HD_MATERIAL_OVERRIDE_SCHEMA_TOKENS);
@@ -45,24 +49,24 @@ TF_DECLARE_PUBLIC_TOKENS(HdMaterialOverrideSchemaTokens, HD_API,
 
 /// \class HdMaterialOverrideSchema
 ///
-/// The MaterialOverride schema allows overrides to be made to the material's
-/// public UI. Overrides can be applied to both material or geometry scene
-/// index prim locations.
+/// The MaterialOverride schema allows overrides to be made to various parts of
+/// materials, such as the public UI or shader nodes' parameters. Overrides can
+/// be applied to material scene index prim locations.
 ///
-/// The following is an example of a material override. The data source to
-/// author an override on the public UI name "globalSpecularKface" would look
-/// like this:
+/// The following is an example of a material override affecting a material's
+/// public UI. The data source to author an override on the public UI name
+/// "globalSpecularKface" would look like this:
 ///
 /// ds at: materialOverride/interfaceValues/globalSpecularKface/value = 0.666
 ///
 /// There needs to be an interface mapping defined for "globalSpecularKface",
 /// which could look like this:
 ///
-/// ds at: material/<renderContext>/interfaceMappings/
-/// globalSpecularKface/[0]/nodePath = MaterialLayer
+/// ds at: material/<renderContext>/interface/parameters/
+/// globalSpecularKface/mappings/[0]/nodePath = MaterialLayer
 ///
-/// ds at: material/<renderContext>/interfaceMappings/
-/// globalSpecularKface/[0]/inputName = specularKface
+/// ds at: material/<renderContext>/interface/parameters/
+/// globalSpecularKface/mappings/[0]/inputName = specularKface
 ///
 /// The above means that the "globalSpecularKface" public UI name will map to
 /// the node parameter "specularKface", and for example, this node parameter
@@ -77,6 +81,19 @@ TF_DECLARE_PUBLIC_TOKENS(HdMaterialOverrideSchemaTokens, HD_API,
 /// ds at: material/<renderContext>/nodes/MaterialLayer/parameters/
 /// specularKface/value = 0.666
 ///
+/// The following is an example of a material override affecting a shader
+/// node's input parameter value. The data source to author to an override on
+/// the input parameter called "useClamp" on shader node named
+/// "ManipulateColor" would look like this:
+///
+/// ds at: materialOverride/parameterValues/ManipulateColor/useClamp/ value = 0
+///
+/// The data source of the node parameter's value will be replaced by the
+/// overriding value data source.
+///
+/// ds at: material/<renderContext>/nodes/ManipulateColor/parameters/
+/// useClamp/value = 0
+///
 /// Note that the MaterialOverride schema does not specify a render context
 /// token because material overrides are high-level and do not need to know
 /// about implementation details--they just need to specify an overriding data
@@ -84,6 +101,10 @@ TF_DECLARE_PUBLIC_TOKENS(HdMaterialOverrideSchemaTokens, HD_API,
 /// context token in order to define the material nodes and interface mappings
 /// --you can imagine that a Renderman vs Storm implementation of a material
 /// network would be quite different.
+///
+/// In the event where the same parameter has conflicting overrides applied
+/// both though interface and parameter values, the overrides set through the
+/// interface values will take precedence.
 ///
 /// See also the Material schema documentation for ASCII art diagram.
 ///
@@ -108,6 +129,14 @@ public:
     /// @}
 
 // --(BEGIN CUSTOM CODE: Schema Methods)--
+
+    /// Utility method to retrieve the data source for a parameter edit override.
+    /// Returns the data source for the parameter edit of the parameter named
+    /// \p parameterName owned by shader node named \p shaderNodeName.
+    HD_API
+    HdMaterialNodeParameterSchema GetParameterOverride(
+        const TfToken& shaderNodeName, const TfToken& parameterName) const;
+
 // --(END CUSTOM CODE: Schema Methods)--
 
     /// \name Member accessor
@@ -116,7 +145,13 @@ public:
     /// Maps interface names (ie. public UI names) to overriding data sources
     /// that follow the MaterialNodeParameter schema.
     HD_API
-    HdMaterialNodeParameterContainerSchema GetInterfaceValues() const; 
+    HdMaterialNodeParameterContainerSchema GetInterfaceValues() const;
+
+    /// Contains names of shader nodes whose parameters values are overridden.
+    /// Each parameter within a shader node locator contains overriding data
+    /// sources that follow the MaterialNodeParameter schema.
+    HD_API
+    HdNodeToInputToMaterialNodeParameterSchema GetParameterValues() const; 
 
     /// @}
 
@@ -148,7 +183,8 @@ public:
     HD_API
     static HdContainerDataSourceHandle
     BuildRetained(
-        const HdContainerDataSourceHandle &interfaceValues
+        const HdContainerDataSourceHandle &interfaceValues,
+        const HdContainerDataSourceHandle &parameterValues
     );
 
     /// \class HdMaterialOverrideSchema::Builder
@@ -163,6 +199,9 @@ public:
         HD_API
         Builder &SetInterfaceValues(
             const HdContainerDataSourceHandle &interfaceValues);
+        HD_API
+        Builder &SetParameterValues(
+            const HdContainerDataSourceHandle &parameterValues);
 
         /// Returns a container data source containing the members set thus far.
         HD_API
@@ -170,6 +209,7 @@ public:
 
     private:
         HdContainerDataSourceHandle _interfaceValues;
+        HdContainerDataSourceHandle _parameterValues;
 
     };
 

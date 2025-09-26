@@ -11,15 +11,22 @@
 #include "pxr/exec/exec/registerSchema.h"
 
 #include "pxr/base/gf/matrix4d.h"
+#include "pxr/base/tf/staticTokens.h"
 
 PXR_NAMESPACE_USING_DIRECTIVE
+
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+
+    ((xformOpsTransform, "xformOps:transform"))
+);
 
 static GfMatrix4d
 _ComputeLocalToWorldTransform(const VdfContext &ctx)
 {
     const GfMatrix4d *const localToParent =
         ctx.GetInputValuePtr<GfMatrix4d>(
-            ExecGeomXformableTokens->transform);
+            _tokens->xformOpsTransform);
 
     const GfMatrix4d *const parentToWorld =
         ctx.GetInputValuePtr<GfMatrix4d>(
@@ -46,7 +53,7 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(UsdGeomXformable)
         .Callback<GfMatrix4d>(&_ComputeLocalToWorldTransform)
         .Inputs(
             AttributeValue<GfMatrix4d>(
-                ExecGeomXformableTokens->transform),
+                _tokens->xformOpsTransform),
             NamespaceAncestor<GfMatrix4d>(
                 ExecGeomXformableTokens->computeLocalToWorldTransform)
         );

@@ -1374,6 +1374,7 @@ _GetCullPipeline(
         pipeDesc.primitiveType = HgiPrimitiveTypePointList;
         pipeDesc.shaderProgram = shaderProgram->GetProgram();
         pipeDesc.rasterizationState.rasterizerEnabled = false;
+        pipeDesc.debugName = "FrustumCulling Pipeline";
 
         Hgi* hgi = resourceRegistry->GetHgi();
         HgiGraphicsPipelineHandle pso = hgi->CreateGraphicsPipeline(pipeDesc);

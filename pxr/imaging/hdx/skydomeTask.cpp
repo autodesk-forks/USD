@@ -235,25 +235,25 @@ HdxSkydomeTask::_GetSkydomeTexture(HdTaskContext* ctx)
     if (!haveLightingShader) {
         return false;
     }
-    HdStSimpleLightingShader *simpleLightingShader = 
-        dynamic_cast<HdStSimpleLightingShader*>(lightingShader.get());
+    const auto * const simpleLightingShader = 
+        dynamic_cast<const HdStSimpleLightingShader*>(lightingShader.get());
     if (!simpleLightingShader) {
         return false;
     }
-    HdStTextureHandleSharedPtr domeLightTextureHandle = 
-        simpleLightingShader->GetDomeLightEnvironmentTextureHandle();
-    if (!domeLightTextureHandle) {
+    const HdStTextureHandleSharedPtr domeLightCubemapHandle = 
+        simpleLightingShader->GetDomeLightEnvironmentCubemapTextureHandle();
+    if (!domeLightCubemapHandle) {
         return false;
     }
-    const HdStUvTextureObject *const domeLightTextureObject =
-        dynamic_cast<HdStUvTextureObject*>(
-            domeLightTextureHandle->GetTextureObject().get());
+    const auto * const domeLightTextureObject =
+        dynamic_cast<const HdStCubemapTextureObject*>(
+            domeLightCubemapHandle->GetTextureObject().get());
     if (!domeLightTextureObject->IsValid()) {
         return false;
     }
-    const HdStUvSamplerObject *const domeLightSamplerObject =
-        dynamic_cast<HdStUvSamplerObject*>(
-            domeLightTextureHandle->GetSamplerObject().get());
+    const auto * const domeLightSamplerObject =
+        dynamic_cast<const HdStCubemapSamplerObject*>(
+            domeLightCubemapHandle->GetSamplerObject().get());
     if (!domeLightSamplerObject) {
         return false;
     }
@@ -271,7 +271,12 @@ HdxSkydomeTask::_SetFragmentShader()
     fragDesc.shaderStage = HgiShaderStageFragment;
 
     HgiShaderFunctionAddStageInput(&fragDesc, "uvOut", "vec2");
-    HgiShaderFunctionAddTexture(&fragDesc, "skydomeTexture");
+    HgiShaderFunctionAddTexture(&fragDesc,
+        "skydomeTexture",
+        /* bindIndex = */0,
+        /* dimensions = */2,
+        HgiFormatFloat16Vec4,
+        HgiShaderTextureTypeCubemapTexture);
     HgiShaderFunctionAddStageOutput(&fragDesc, "hd_FragColor", "vec4", "color");
     HgiShaderFunctionAddStageOutput(
         &fragDesc, "gl_FragDepth", "float", "depth(any)");

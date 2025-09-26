@@ -140,6 +140,41 @@ Exec_ComputationBuilderValueSpecifierBase::_GetInputKey(
 }
 
 //
+// Exec_ComputationBuilderConstantValueSpecifier
+//
+
+Exec_ComputationBuilderConstantValueSpecifier::
+Exec_ComputationBuilderConstantValueSpecifier(
+    const TfType resultType,
+    const SdfPath &localTraversal,
+    const TfToken &inputName,
+    VtValue &&constantValue)
+    : Exec_ComputationBuilderValueSpecifierBase(
+        Exec_PrivateBuiltinComputations->computeConstant,
+        resultType,
+        {localTraversal, ExecProviderResolution::DynamicTraversal::Local},
+        inputName,
+        Exec_DefinitionRegistry::RegistrationAccess::
+            _GetInstanceForRegistration().RegisterConstantValue(
+                std::move(constantValue)))
+{
+}
+
+//
+// Exec_ComputationBuilderConstantAccessorBase
+//
+
+Exec_ComputationBuilderConstantAccessorBase::
+Exec_ComputationBuilderConstantAccessorBase(
+    VtValue &&constantValue,
+    const TfType valueType)
+    : Exec_ComputationBuilderAccessorBase(SdfPath::AbsoluteRootPath())
+    , _constantValue(VtValue(std::move(constantValue)))
+    , _valueType(valueType)
+{
+}
+
+//
 // Exec_ComputationBuilderBase
 //
 
@@ -271,13 +306,14 @@ Exec_PrimComputationBuilder::~Exec_PrimComputationBuilder()
 {
     _Data &data = _GetData();
 
-    Exec_DefinitionRegistry::ComputationBuilderAccess::_RegisterPrimComputation(
-        data.schemaType,
-        data.computationName,
-        data.resultType,
-        std::move(data.callback),
-        std::move(data.inputKeys),
-        _GetDispatchesOntoSchemas());
+    Exec_DefinitionRegistry::RegistrationAccess::
+        _GetInstanceForRegistration().RegisterPrimComputation(
+            data.schemaType,
+            data.computationName,
+            data.resultType,
+            std::move(data.callback),
+            std::move(data.inputKeys),
+            _GetDispatchesOntoSchemas());
 }
 
 //
@@ -303,8 +339,8 @@ Exec_AttributeComputationBuilder::~Exec_AttributeComputationBuilder()
 {
     _Data &data = _GetData();
 
-    Exec_DefinitionRegistry::ComputationBuilderAccess::
-        _RegisterAttributeComputation(
+    Exec_DefinitionRegistry::RegistrationAccess::
+        _GetInstanceForRegistration().RegisterAttributeComputation(
             data.attributeName,
             data.schemaType,
             data.computationName,
@@ -326,8 +362,9 @@ Exec_ComputationBuilder::Exec_ComputationBuilder(
 
 Exec_ComputationBuilder::~Exec_ComputationBuilder()
 {
-    Exec_DefinitionRegistry::ComputationBuilderAccess::
-        _SetComputationRegistrationComplete(_schemaType);
+    Exec_DefinitionRegistry::RegistrationAccess::
+        _GetInstanceForRegistration().SetComputationRegistrationComplete(
+            _schemaType);
 }
 
 Exec_PrimComputationBuilder 
