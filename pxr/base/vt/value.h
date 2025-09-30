@@ -159,6 +159,8 @@ class VtValue
     static const unsigned int _LocalFlag       = 1 << 0;
     static const unsigned int _TrivialCopyFlag = 1 << 1;
     static const unsigned int _ProxyFlag       = 1 << 2;
+    static const unsigned int _AllFlags = 
+        _LocalFlag | _TrivialCopyFlag | _ProxyFlag;
 
     template <class T>
     struct _Counted {
@@ -208,7 +210,9 @@ class VtValue
         std::is_nothrow_move_assignable<T>::value>;
 
     // Type information base class.
-    struct _TypeInfo {
+    // We force alignment here in order to ensure that TfPointerAndBits has
+    // enough room to store all TypeInfo related flags.
+    struct alignas(8) _TypeInfo {
     private:
         using _CopyInitFunc = void (*)(_Storage const &, _Storage &);
         using _DestroyFunc = void (*)(_Storage &);
@@ -895,6 +899,9 @@ class VtValue
     struct _Init {
         using StoredType = typename Vt_ValueGetStored<T>::Type;
         using TypeInfo = _TypeInfoFor<StoredType>;
+
+        static_assert(
+            TfPointerAndBits<const _TypeInfo>::GetMaxValue() >= _AllFlags);
 
         static TfPointerAndBits<const _TypeInfo> _GetTypeInfo() {
             static const TypeInfo ti;

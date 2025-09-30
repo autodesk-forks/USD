@@ -10274,9 +10274,11 @@ TF_PP_SEQ_FOR_EACH(_INSTANTIATE_GET, ~, SDF_VALUE_TYPES)
 #undef _INSTANTIATE_GET
 
 // In addition to the Sdf value types, _SetValue can also be called with an 
-// SdfValueBlock.
+// SdfValueBlock or SdfAnimationBlock
 template bool UsdStage::_SetValue(
     UsdTimeCode, const UsdAttribute&, const SdfValueBlock &);
+template bool UsdStage::_SetValue(
+    UsdTimeCode, const UsdAttribute&, const SdfAnimationBlock &);
 
 // Explicitly instantiate the templated _SetEditTargetMappedMetadata and
 // _GetTypeSpecificResolvedMetadata functions for the types that support each. 

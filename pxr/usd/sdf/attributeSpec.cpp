@@ -149,6 +149,7 @@ SdfAttributeSpec::ClearConnectionPaths()
 
 // Attribute Value API
 
+SDF_DEFINE_HAS(Spline, SdfFieldKeys->Spline)
 SDF_DEFINE_GET(Spline, SdfFieldKeys->Spline, TsSpline)
 
 void
@@ -257,6 +258,8 @@ SDF_DEFINE_GET_SET_HAS_CLEAR(AllowedTokens, SdfFieldKeys->AllowedTokens, VtToken
 SDF_DEFINE_GET_SET_HAS_CLEAR(Limits, SdfFieldKeys->Limits, VtDictionary)
 
 SDF_DEFINE_GET_SET_HAS_CLEAR(ColorSpace, SdfFieldKeys->ColorSpace, TfToken)
+
+SDF_DEFINE_GET_SET_HAS_CLEAR(ArraySizeConstraint, SdfFieldKeys->ArraySizeConstraint, int64_t)
 
 TfEnum
 SdfAttributeSpec::GetDisplayUnit() const

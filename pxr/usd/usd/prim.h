@@ -467,7 +467,10 @@ public:
     /// Because this method can only remove opinions about the property from
     /// the current EditTarget, you may generally find it more useful to use
     /// UsdAttribute::Block(), which will ensure that all values from the 
-    /// EditTarget and weaker layers for the property will be ignored.
+    /// EditTarget and weaker layers for the property will be ignored, or 
+    /// UsdAttribute::BlockAnimation(), which will ensure that all timeSamples
+    /// or spline values from the EditTarget and weaker layers for the property
+    /// will be ignored.
     USD_API
     bool RemoveProperty(const TfToken &propName);
 

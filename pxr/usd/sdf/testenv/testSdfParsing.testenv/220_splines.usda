@@ -61,6 +61,22 @@ def Xform "Prim4"
     }
 }
 
+# Test some specific reported bugs
+def Xform "Prim5"
+{
+    # Empty splines (no knots)
+    double empty.spline = {
+    }
+    float nearlyEmpty.spline = {
+        post: sloped(0.5),
+    }
+    # Extra whitespace with preValues
+    double whitespace.spline = {
+        7:  5.5   &   7.21  ;  post  held ,
+        15: 8.18 ; post curve ( 2.49, 1.17 ) ; { string comment = "climb!" },
+    }
+}
+
 def Xform "BadLoopParams"
 {
     # Loop params are invalid, because no knot at time 5.

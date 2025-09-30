@@ -40,8 +40,7 @@ class TestUsdSplines(unittest.TestCase):
 
     def _DoSerializationTest(
             self, case, spline,
-            attrType = Sdf.ValueTypeNames.Double,
-            isEmpty = False):
+            attrType = Sdf.ValueTypeNames.Double):
         """
         Write a spline to a file, copy the file, read the copy, and verify the
         original and round-tripped spline are identical.
@@ -67,22 +66,44 @@ class TestUsdSplines(unittest.TestCase):
             stage2 = Usd.Stage.Open(filename2)
 
             attr2 = stage2.GetAttributeAtPath("/MyPrim.myAttr")
+            self.assertTrue(attr2.HasSpline())
 
-            if isEmpty:
-                self.assertFalse(attr2.HasSpline())
-                self.assertTrue(attr2.GetSpline().IsEmpty())
-            else:
-                self.assertTrue(attr2.HasSpline())
-                spline2 = attr2.GetSpline()
-                print(f"Round-tripped spline, {case}, {format}:")
-                print(spline2)
-                self.assertEqual(spline, spline2)
+            spline2 = attr2.GetSpline()
+            print(f"Round-tripped spline, {case}, {format}:")
+            print(spline2)
+            self.assertEqual(spline, spline2)
 
     def test_Serialization_Empty(self):
         """
         Test serialization of empty splines.
         """
-        self._DoSerializationTest("Empty", Ts.Spline(), isEmpty = True)
+        spline = Ts.Spline()
+        self._DoSerializationTest("Empty", spline)
+
+        spline = Ts.Spline()
+        spline.SetCurveType(Ts.CurveTypeHermite)
+        self._DoSerializationTest("Empty_Hermite", spline)
+
+        extrap = Ts.Extrapolation(Ts.ExtrapLinear)
+        extrap.slope = 2.0
+
+        spline = Ts.Spline()
+        spline.SetPreExtrapolation(extrap)
+        self._DoSerializationTest("Empty_PreExtrap", spline)
+
+        spline = Ts.Spline()
+        spline.SetPostExtrapolation(extrap)
+        self._DoSerializationTest("Empty_PostExtrap", spline)
+
+        lp = Ts.LoopParams()
+        lp.protoStart = 1
+        lp.protoEnd = 2
+        lp.numPreLoops = 3
+        lp.numPostLoops = 4
+
+        spline = Ts.Spline()
+        spline.SetInnerLoopParams(lp)
+        self._DoSerializationTest("Empty_LoopParams", spline)
 
     def test_Serialization_Museum(self):
         """

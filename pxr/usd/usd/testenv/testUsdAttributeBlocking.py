@@ -5,7 +5,7 @@
 # Licensed under the terms set forth in the LICENSE.txt file available at
 # https://openusd.org/license.
 
-from pxr import Sdf, Usd 
+from pxr import Sdf, Ts, Usd 
 
 startTime = 101
 endTime   = 120
@@ -54,6 +54,75 @@ def TestDefaultValueBlocking(sampleAttr, defAttr):
     assert not defAttr.Get()
     assert defAttr.GetResolveInfo().ValueIsBlocked()
 
+    
+def CreateTestAssetsForSpline(fileName):
+    stage = Usd.Stage.CreateNew(fileName)
+    prim = stage.DefinePrim("/Sphere")
+    splineAttr = prim.CreateAttribute("points", Sdf.ValueTypeNames.Double, False)
+    spline = Ts.Spline()
+    for sample in range(startTime, endTime):
+        spline.SetKnot(Ts.Knot(time=sample, value=sample,
+                               nextInterp=Ts.InterpHeld))
+    splineAttr.SetSpline(spline)
+
+    return stage, splineAttr
+
+# Test blocking of values on with splines
+def TestSplineValueBlocking(splineAttr):
+    # Initially nothing should be blocked.
+    t0 = float(startTime - 1)
+    t1 = float(endTime)
+
+    t = t0
+    while t < t1:
+        assert splineAttr.Get(t) is not None
+        t += 0.5
+
+    # Test extrapolation blocking
+    spline = splineAttr.GetSpline()
+
+    extrap = Ts.Extrapolation(Ts.ExtrapValueBlock)
+    spline.SetPreExtrapolation(extrap)
+    spline.SetPostExtrapolation(extrap)
+
+    assert splineAttr.Get(t0 - 1) is not None
+    assert splineAttr.Get(t1 + 1) is not None
+
+    splineAttr.SetSpline(spline)
+
+    assert splineAttr.Get(t0 - 1) is None
+    assert splineAttr.Get(t1 + 1) is None
+
+    # Test interpolation blocking. Every other knot is a block
+    for sample in range(startTime, endTime, 2):
+        spline.SetKnot(Ts.Knot(time=sample, value=sample,
+                               nextInterp=Ts.InterpValueBlock))
+    splineAttr.SetSpline(spline)
+
+    # Test the value-blocked knots
+    for sample in range(startTime, endTime, 2):
+        assert splineAttr.Get(sample) is None
+        assert splineAttr.Get(sample + 0.5) is None
+    # Test the non-value-blocked knots
+    for sample in range(startTime + 1, endTime - 1, 2):
+        assert splineAttr.Get(sample) is not None
+        assert splineAttr.Get(sample + 0.5) is not None
+
+    # An empty spline is effectively a value block, it has no value
+    # at all times.
+    spline = Ts.Spline("double")
+    splineAttr.SetSpline(spline)
+
+    # Note that ValueIsBlocked() only returns true if there is a default whose
+    # value is blocked. If the attribute's value is time-dependent (either a
+    # spline or timeSamples) then ValueIsBlocked() always returns false; the
+    # time-dependent value is not examined.
+    assert not splineAttr.GetResolveInfo().ValueIsBlocked()
+    t = t0
+    while t < t1:
+        assert splineAttr.Get(t) is None
+        t += 0.5
+        
 
 def CreateTestAssetsForAnimationBlock(fileName):
     # Create the weakest layer first
@@ -105,8 +174,6 @@ def Xform "Human"
         2: 20; post held,
     }
 
-    int c = AnimationBlock
-
     double d = AnimationBlock
 
     double e = AnimationBlock
@@ -123,6 +190,8 @@ def Xform "Human"
 
     # Create the UsdStage from the root layer
     stage = Usd.Stage.Open(rootLayer)
+    attrC = stage.GetAttributeAtPath("/Human.c")
+    attrC.BlockAnimation()
     return stage
 
 def TestAnimationBlock(stage):
@@ -202,6 +271,10 @@ if __name__ == '__main__':
         stage, defAttr, sampleAttr = CreateTestAssets('test' + fmt)
         TestDefaultValueBlocking(sampleAttr, defAttr)
         del stage, defAttr, sampleAttr
+
+        stage, splineAttr = CreateTestAssetsForSpline('test' + fmt)
+        TestSplineValueBlocking(splineAttr)
+        del stage, splineAttr
 
         stage = CreateTestAssetsForAnimationBlock('test' + fmt)
         TestAnimationBlock(stage)

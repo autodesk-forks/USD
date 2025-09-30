@@ -810,7 +810,7 @@ HioOIIO_Image::Write(StorageSpec const & storage,
     }
 
     // Read from storage
-    ImageBuf src(_filename, spec, storage.data);
+    ImageBuf src(spec, storage.data);
     ImageBuf *image = &src;
 
     // Flip top-to-bottom

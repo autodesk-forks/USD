@@ -19,7 +19,6 @@
 #include "pxr/exec/vdf/executionStats.h"
 #include "pxr/exec/vdf/executionTypeRegistry.h"
 #include "pxr/exec/vdf/mask.h"
-#include "pxr/exec/vdf/network.h"
 #include "pxr/exec/vdf/networkUtil.h"
 #include "pxr/exec/vdf/node.h"
 #include "pxr/exec/vdf/output.h"
@@ -332,7 +331,7 @@ VdfPullBasedExecutorEngine<DataManagerType>::RunSchedule(
     _dataManager->Resize(*schedule.GetNetwork());
 
     // Indicates which nodes have been executed.
-    TfBits executedNodes(schedule.GetNetwork()->GetNodeCapacity());
+    TfBits executedNodes(schedule.GetScheduleNodeVector().size());
 
     // The persistent evaluation state
     VdfEvaluationState state(_GetExecutor(), schedule, errorLogger);
@@ -751,7 +750,7 @@ VdfPullBasedExecutorEngine<DataManagerType>::_ExecuteOutput(
             //     schedule.
             output = schedule.GetOutput(outputId);
             requestMask = &schedule.GetRequestMask(outputId);
-            if (executedNodes->IsSet(VdfNode::GetIndexFromId(node.GetId())) ||
+            if (executedNodes->IsSet(schedule.GetScheduleNodeIndex(outputId)) ||
                 _GetExecutor().GetOutputValue(*output, *requestMask)) {
 
                 // Pop off the top of the output stack
@@ -876,7 +875,7 @@ VdfPullBasedExecutorEngine<DataManagerType>::_ExecuteOutput(
         default:
 
             // Set a bit indicating that this node has been executed.
-            executedNodes->Set(VdfNode::GetIndexFromId(node.GetId()));
+            executedNodes->Set(schedule.GetScheduleNodeIndex(outputId));
 
             // Compute the node.
             if (affective) {

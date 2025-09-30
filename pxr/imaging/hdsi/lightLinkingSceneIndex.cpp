@@ -255,9 +255,13 @@ public:
     /// Processes the queued dirty state and updates \p dirtiedEntries to
     /// invalidate targeted prims and/or lights.
     ///
+    /// \a populating indicates that this is the first time prims are
+    /// being populated, so invalidation of existing prims is not required.
+    ///
     void
     InvalidatePrimsAndClearDirtyState(
-        HdSceneIndexObserver::DirtiedPrimEntries *dirtiedEntries)
+        HdSceneIndexObserver::DirtiedPrimEntries *dirtiedEntries,
+        bool populating)
     {
         if (!dirtiedEntries) {
             TF_CODING_ERROR("Null dirty notice vector provided\n");
@@ -265,6 +269,13 @@ public:
         }
 
         if (_dirtyState.empty()) {
+            return;
+        }
+
+        // If we are processing the initial population of the scene,
+        // we can skip scanning for existing prims to invalidate.
+        if (populating) {
+            _dirtyState.clear();
             return;
         }
 
@@ -1171,6 +1182,9 @@ HdsiLightLinkingSceneIndex::_PrimsAdded(
     
     TRACE_FUNCTION();
 
+    const bool populating = !_wasPopulated;
+    _wasPopulated = true;
+
     // Notices for prims that need to refetch their categories.
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedEntries;
 
@@ -1203,7 +1217,7 @@ HdsiLightLinkingSceneIndex::_PrimsAdded(
         }
     }
 
-    _cache->InvalidatePrimsAndClearDirtyState(&dirtiedEntries);
+    _cache->InvalidatePrimsAndClearDirtyState(&dirtiedEntries, populating);
 
     _SendPrimsAdded(entries);
     _SendPrimsDirtied(dirtiedEntries);
@@ -1288,7 +1302,8 @@ HdsiLightLinkingSceneIndex::_PrimsRemoved(
         _lightAndFilterPrimPaths.erase(begin, end);
     }
 
-    _cache->InvalidatePrimsAndClearDirtyState(&dirtiedEntries);
+    _cache->InvalidatePrimsAndClearDirtyState(&dirtiedEntries,
+                                              /* populating = */ false);
 
     _SendPrimsRemoved(entries);
     _SendPrimsDirtied(dirtiedEntries);
@@ -1375,7 +1390,8 @@ HdsiLightLinkingSceneIndex::_PrimsDirtied(
         }
     }
 
-    _cache->InvalidatePrimsAndClearDirtyState(&newEntries);
+    _cache->InvalidatePrimsAndClearDirtyState(&newEntries,
+                                              /* populating = */ false);
 
     _SendPrimsDirtied(entries);
     _SendPrimsDirtied(newEntries);

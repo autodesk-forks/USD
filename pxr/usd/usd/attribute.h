@@ -149,6 +149,14 @@ typedef std::vector<UsdAttribute> UsdAttributeVector;
 /// *true* (because they do not and cannot consider time-varying blocks), but
 /// Get() may yet return *false* over some intervals.
 ///
+/// \subsection Usd_AttributeAnimationBlocking Attribute Animation Blocking
+///
+/// In addition to blocking all authored values, one can block only the 
+/// animation (time samples and spline) on an attribute in the intermediate
+/// layers, allowing default values from the weaker layers to shine through.
+///
+/// One blocks an attribute's animation using UsdAttribute::BlockAnimation(),
+///
 /// \section Usd_AssetPathValuedAttributes Attributes of type SdfAssetPath and UsdAttribute::Get()
 ///
 /// If an attribute's value type is SdfAssetPath or SdfAssetPathArray, Get()
@@ -165,6 +173,13 @@ typedef std::vector<UsdAttribute> UsdAttributeVector;
 /// employ an ArResolverScopedCache to improve asset path resolution
 /// performance.
 ///
+/// \section Usd_AttributeArraySizeConstraint Array Size Constraint
+///
+/// For array-valued attributes, the value returned by GetArraySizeConstraint()
+/// encodes information about the expected number of elements as well as the
+/// tuple-length (i.e., column count). See \ref
+/// Usd_AttributeArraySizeConstraintAPI "Array Size Constraint" for details of
+/// the encoding.
 class UsdAttribute : public UsdProperty {
 public:
     /// Construct an invalid attribute.
@@ -496,7 +511,8 @@ public:
     bool Set(const T& value, UsdTimeCode time = UsdTimeCode::Default()) const {
         static_assert(!std::is_pointer<T>::value, "");
         static_assert(SdfValueTypeTraits<T>::IsValueType ||
-                      std::is_same<T, SdfValueBlock>::value, "");
+                      std::is_same<T, SdfValueBlock>::value ||
+                      std::is_same<T, SdfAnimationBlock>::value, "");
         return _Set(value, time);
     }
 
@@ -553,7 +569,7 @@ public:
     USD_API
     bool ClearDefault() const;
 
-    /// Remove all time samples on an attribute and author a *block*
+    /// Remove all time samples or spline on an attribute and author a *block*
     /// \c default value. This causes the attribute to resolve as 
     /// if there were no authored value opinions in weaker layers.
     ///
@@ -561,6 +577,17 @@ public:
     /// information on time-varying blocking.
     USD_API
     void Block() const;
+
+    /// Remove any timeSamples or spline on an attribute and authors an
+    /// *AnimationBlock* \c default value.
+    ///
+    /// This causes the attribute to resolve as if there were no authored
+    /// animation (time samples or spline) opinions but still allows default
+    /// values shine through.
+    ///
+    /// See \ref Usd_AttributeAnimationBlocking for more information.
+    USD_API
+    void BlockAnimation() const;
 
     /// @}
 
@@ -725,7 +752,6 @@ public:
     /// UsdAttribute's value authoring API does not enforce limits constraints,
     /// but authored values that lie outside the hard limits will trigger
     /// validation errors.
-
     ///
     /// @{
 
@@ -800,6 +826,46 @@ public:
     /// \sa GetSoftLimits(), GetHardLimits()
     USD_API
     UsdAttributeLimits GetLimits(const TfToken& key) const;
+
+    /// @}
+
+    /// \anchor Usd_AttributeArraySizeConstraintAPI
+    /// \name Array Size Constraint
+    ///
+    /// For array-valued attributes, the array size constraint value encodes
+    /// information about the expected number of elements and the tuple-length
+    /// (i.e., column count):
+    ///
+    /// \li If the value is 0 (the fallback), the array is dynamic and its size
+    /// is unrestricted.
+    /// \li If the value is greater than 0, it indicates the exact, fixed size
+    /// of the array.
+    /// \li If the value is less than 0, its absolute value is the array's
+    /// tuple-length. The array's size is unrestricted, but must be a multiple
+    /// of this tuple-length.
+    ///
+    /// UsdAttribute's value authoring API does not enforce these constraints,
+    /// but violating them will trigger validation errors.
+    ///
+    /// @{
+
+    /// Return the array size constraint value for this attribute.
+    USD_API
+    int64_t GetArraySizeConstraint() const;
+
+    /// Set the array size constraint value for this attribute.
+    USD_API
+    bool SetArraySizeConstraint(int64_t constraint) const;
+
+    /// Return whether an array size constraint value is authored on this
+    /// attribute.
+    USD_API
+    bool HasAuthoredArraySizeConstraint() const;
+
+    /// Clear the authored array size constraint value for this attribute at
+    /// the current edit target.
+    USD_API
+    bool ClearArraySizeConstraint() const;
 
     /// @}
 

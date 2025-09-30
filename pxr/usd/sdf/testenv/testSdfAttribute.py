@@ -197,6 +197,22 @@ class TestSdfAttributeBase():
         self.assertFalse(attr.HasInfo('displayGroup'))
         self.assertEqual(attr.displayGroup, '')
 
+        # arraySizeConstraint
+        self.assertFalse(attr.HasArraySizeConstraint())
+        self.assertEqual(attr.arraySizeConstraint, 0)
+
+        attr.arraySizeConstraint = 10
+        self.assertEqual(attr.arraySizeConstraint, 10)
+        self.assertTrue(attr.HasArraySizeConstraint())
+
+        attr.arraySizeConstraint = -10
+        self.assertEqual(attr.arraySizeConstraint, -10)
+        self.assertTrue(attr.HasArraySizeConstraint())
+
+        attr.ClearArraySizeConstraint()
+        self.assertEqual(attr.arraySizeConstraint, 0)
+        self.assertFalse(attr.HasArraySizeConstraint())
+
     def test_ClearUnexpectedField(self):
         layer = self.CreateAnonymous()
         layer.ImportFromString(
@@ -479,11 +495,14 @@ def Xform "Prim"
     int e
 }
 ''')
-        # Test GetSpline, SetSpline and ClearSpline works on compatible types
+        # Test HasSpline, GetSpline, SetSpline and ClearSpline works on
+        # compatible types
         self.assertTrue(splineLayer)
         a = splineLayer.GetAttributeAtPath('/Prim.a')
         splineA = a.GetSpline()
         self.assertTrue(splineA)
+        self.assertTrue(a.HasInfo('spline'))
+        self.assertTrue(a.HasSpline())
         self.assertFalse(splineA.IsEmpty())
         self.assertEqual(len(splineA.GetKnots()), 2)
         self.assertEqual(splineA.GetValueTypeName(), "double")
@@ -491,17 +510,20 @@ def Xform "Prim"
         a2 = splineLayer.GetAttributeAtPath('/Prim.a2')
         self.assertTrue(a2)
         self.assertFalse(a2.HasInfo('spline'))
+        self.assertFalse(a2.HasSpline())
         self.assertTrue(a2.GetSpline().IsEmpty())
         a2.SetSpline(splineA)
         splineA2 = a2.GetSpline()
         self.assertTrue(splineA2)
         self.assertTrue(a2.HasInfo('spline'))
+        self.assertTrue(a2.HasSpline())
         self.assertFalse(splineA2.IsEmpty())
         self.assertEqual(len(splineA2.GetKnots()), 2)
         b = splineLayer.GetAttributeAtPath('/Prim.b')
         splineB = b.GetSpline()
         self.assertTrue(splineB)
         self.assertTrue(b.HasInfo('spline'))
+        self.assertTrue(b.HasSpline())
         self.assertFalse(splineB.IsEmpty())
         self.assertEqual(len(splineB.GetKnots()), 1)
         self.assertEqual(splineB.GetValueTypeName(), "float")
@@ -509,7 +531,9 @@ def Xform "Prim"
         a.ClearSpline()
         b.ClearSpline()
         self.assertFalse(a.HasInfo('spline'))
+        self.assertFalse(a.HasSpline())
         self.assertFalse(b.HasInfo('spline'))
+        self.assertFalse(b.HasSpline())
 
         # Test that SetSpline results in a coding error when trying to set a 
         # float spline on a double attribute.
@@ -518,12 +542,14 @@ def Xform "Prim"
             a.SetSpline(splineB)
         # No spline gets set on a
         self.assertFalse(a.HasInfo('spline'))
+        self.assertFalse(a.HasSpline())
 
         # Test that HasInfo returns false when spline is not set, yet GetSpline
         # returns an empty spline.
         c = splineLayer.GetAttributeAtPath('/Prim.c')
         self.assertTrue(c)
         self.assertFalse(c.HasInfo('spline'))
+        self.assertFalse(c.HasSpline())
         self.assertTrue(c.GetSpline().IsEmpty())
 
         # Test that SetSpline results in a coding error when trying to set a
@@ -532,10 +558,12 @@ def Xform "Prim"
         e = splineLayer.GetAttributeAtPath('/Prim.e')
         self.assertFalse(Ts.Spline.IsSupportedValueType(e.typeName.type))
         self.assertFalse(e.HasInfo('spline'))
+        self.assertFalse(e.HasSpline())
         with self.assertRaises(RuntimeError):
             e.SetSpline(splineA)
         # No spline was set on e
         self.assertFalse(e.HasInfo('spline'))
+        self.assertFalse(e.HasSpline())
 
     def test_Limits(self):
         """

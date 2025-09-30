@@ -698,6 +698,8 @@ SdfSchemaBase::_RegisterStandardFields()
     // Regular Fields
     _DoRegisterField(SdfFieldKeys->Active, true);
     _DoRegisterField(SdfFieldKeys->AllowedTokens, VtTokenArray());
+    _DoRegisterField(SdfFieldKeys->ArraySizeConstraint,
+                     static_cast<int64_t>(0));
     _DoRegisterField(SdfFieldKeys->AssetInfo, VtDictionary())
         .MapKeyValidator(&_ValidateIdentifier)
         .MapValueValidator(&_ValidateIsSceneDescriptionValue);
@@ -966,6 +968,8 @@ SdfSchemaBase::_RegisterStandardFields()
         .Field(SdfFieldKeys->TimeSamples)
 
         .MetadataField(SdfFieldKeys->AllowedTokens,
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->ArraySizeConstraint,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->ColorSpace, 
                        SdfMetadataDisplayGroupTokens->core)

@@ -135,6 +135,15 @@ void wrapUsdAttribute()
         .def("GetSoftLimits", &UsdAttribute::GetSoftLimits)
         .def("GetHardLimits", &UsdAttribute::GetHardLimits)
 
+        .def("GetArraySizeConstraint",
+             &UsdAttribute::GetArraySizeConstraint)
+        .def("SetArraySizeConstraint",
+             &UsdAttribute::SetArraySizeConstraint)
+        .def("HasAuthoredArraySizeConstraint",
+             &UsdAttribute::HasAuthoredArraySizeConstraint)
+        .def("ClearArraySizeConstraint",
+             &UsdAttribute::ClearArraySizeConstraint)
+
         .def("GetTimeSamples", _GetTimeSamples,
              return_value_policy<TfPySequenceToList>())
 
@@ -186,6 +195,7 @@ void wrapUsdAttribute()
         .def("ClearDefault", &UsdAttribute::ClearDefault)
 
         .def("Block", &UsdAttribute::Block)
+        .def("BlockAnimation", &UsdAttribute::BlockAnimation)
 
         .def("AddConnection", &UsdAttribute::AddConnection,
              (arg("source"),
