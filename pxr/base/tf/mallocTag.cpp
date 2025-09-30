@@ -115,10 +115,10 @@ struct Tf_MallocBlockInfo {
     Tf_MallocPathNode *pathNode = nullptr;
 };
 
-#if defined (__wasm64__)
+#if defined(ARCH_OS_WASM_VM) && defined(ARCH_BITS_64)
 static_assert(sizeof(Tf_MallocBlockInfo) == 16,
           "Unexpected size for Tf_MallocBlockInfo");
-#elif defined (__wasm32__)
+#elif defined(ARCH_OS_WASM_VM) && defined(ARCH_BITS_32)
 static_assert(sizeof(Tf_MallocBlockInfo) == 8,
           "Unexpected size for Tf_MallocBlockInfo");
 #elif !defined(ARCH_OS_WINDOWS)

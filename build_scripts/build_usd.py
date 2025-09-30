@@ -37,6 +37,8 @@ from shutil import which
 
 # Helpers for printing output
 verbosity = 1
+EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-pthread'
+EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread --use-port=zlib'
 
 def Print(msg):
     if verbosity > 0:
@@ -82,14 +84,15 @@ def GetBuildTargetDefault():
         return ''
 
 TARGET_WASM='wasm'
+TARGET_WASM64='wasm64'
 
 def GetBuildTargets():
     if MacOS():
-        return apple_utils.GetBuildTargets() + [TARGET_WASM]
+        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM64]
     elif Linux():
-        return [TARGET_WASM]
+        return [TARGET_WASM, TARGET_WASM64]
     elif Windows():
-        return [TARGET_WASM]        
+        return [TARGET_WASM, TARGET_WASM64]
     else:
         return []
 
@@ -1007,7 +1010,10 @@ def InstallOneTBB(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ONETBB_URL, context, force)):
         cmakeOptions = ['-DTBB_TEST=OFF', '-DTBB_STRICT=OFF']
         if context.targetWasm:
-            cmakeOptions += ['-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_CXX_FLAGS="-pthread"']
+            cmakeOptions += [
+                '-DBUILD_SHARED_LIBS=OFF',
+                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"'
+            ]
 
         cmakeOptions += buildArgs
         RunCMake(context, force, cmakeOptions)
@@ -1878,6 +1884,10 @@ def InstallUSD(context, force, buildArgs):
 
             extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
 
+            extraArgs.append('-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_C_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"')
+            extraArgs.append('-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + '"')
+
         RunCMake(context, force, extraArgs, context.usdInstDir)
 
 USD = Dependency("USD", InstallUSD, "include/pxr/pxr.h")
@@ -2339,7 +2349,7 @@ class InstallContext:
 
         self.ignorePaths = args.ignore_paths or []
         # Build target and code signing
-        self.targetWasm = (args.build_target == TARGET_WASM)
+        self.targetWasm = (args.build_target == TARGET_WASM or args.build_target == TARGET_WASM64)
         self.buildTarget = args.build_target
         if MacOS():
             apple_utils.SetTarget(self, self.buildTarget)
@@ -2459,6 +2469,10 @@ except Exception as e:
     sys.exit(1)
 
 verbosity = args.verbosity
+
+if args.build_target == TARGET_WASM64:
+    EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS+=' -sMEMORY64=1'
+    EMSCRIPTEN_CMAKE_CXX_FLAGS+=' -sMEMORY64=1'
 
 # Augment PATH on Windows so that 3rd-party dependencies can find libraries
 # they depend on. In particular, this is needed for building IlmBase/OpenEXR.

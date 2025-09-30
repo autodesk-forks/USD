@@ -39,3 +39,5 @@ Our test machines have the following software versions installed.
 | OpenVDB       | 10.1.0               | 10.1.0                       | 10.1.0                         |
 | Vulkan SDK    | 1.4.321.0            | 1.4.321.0                    | 1.4.321.0                      |
 | Draco         | 1.5.6                | 1.5.6                        | 1.5.6                          |
+| Emscripten    | 4.0.15               | 4.0.15                       | 4.0.15                         |
+| node          | 24.9.0               | 24.9.0                       | 24.9.0                         |
