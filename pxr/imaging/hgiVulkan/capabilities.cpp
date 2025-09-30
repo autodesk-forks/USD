@@ -196,7 +196,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
     vkDeviceFeatures2.pNext = &vkVulkan11Features;
 
     // Interop features
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     if (TfGetEnvSetting(HGIVULKAN_ENABLE_NATIVE_INTEROP) &&
         device->IsSupportedExtension(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) &&
         device->IsSupportedExtension(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME) &&
@@ -204,7 +204,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         device->IsSupportedExtension(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME)) {
         supportsNativeInterop = true;
     }
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
     if (TfGetEnvSetting(HGIVULKAN_ENABLE_NATIVE_INTEROP) &&
         device->IsSupportedExtension(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) &&
         device->IsSupportedExtension(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME) &&
@@ -212,9 +212,6 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         device->IsSupportedExtension(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME)) {
         supportsNativeInterop = true;
     }
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-    // To be added, either through MoltenVK adding GL interop,
-    // or a later change if necessary
 #endif
 
     // Vertex attribute divisor features ext

@@ -206,7 +206,6 @@ if (PXR_BUILD_IMAGING)
             # Find the OS specific libs we need
             if (UNIX AND NOT APPLE)
                 find_package(X11 REQUIRED)
-                list(APPEND VULKAN_LIBS ${X11_LIBRARIES})
             elseif (WIN32)
                 # No extra libs required
             endif()

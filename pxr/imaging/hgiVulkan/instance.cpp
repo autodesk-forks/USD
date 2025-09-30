@@ -93,7 +93,6 @@ HgiVulkanInstance::HgiVulkanInstance()
     , vkCreateDebugUtilsMessengerEXT(nullptr)
     , vkDestroyDebugUtilsMessengerEXT(nullptr)
     , _vkInstance(nullptr)
-    , _hasPresentation(false)
 {
     VkApplicationInfo appInfo = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
     appInfo.apiVersion = VK_API_VERSION_1_3;
@@ -105,17 +104,18 @@ HgiVulkanInstance::HgiVulkanInstance()
     std::vector<const char*> extensions = {
         VK_KHR_SURFACE_EXTENSION_NAME,
 
-        // Pick platform specific surface extension
-        #if defined(VK_USE_PLATFORM_WIN32_KHR)
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-        #elif defined(VK_USE_PLATFORM_XLIB_KHR)
-            VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
-        #elif defined(VK_USE_PLATFORM_METAL_EXT)
-            VK_EXT_METAL_SURFACE_EXTENSION_NAME,
-            // See: https://github.com/KhronosGroup/MoltenVK/blob/main/Docs/MoltenVK_Runtime_UserGuide.md#interacting-with-the-moltenvk-runtime
-            VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
-        #else
-            #error Unsupported Platform
+        // Pick platform specific surface extension. We're not using the
+        // *_EXTENSION_NAME macros to avoid having to include platform-specific
+        // vulkan headers which in turn include system headers.
+        // See: https://registry.khronos.org/vulkan/specs/latest/man/html/WSIheaders.html
+        #if defined(ARCH_OS_WINDOWS)
+            "VK_KHR_win32_surface",
+        #endif
+        #if defined(PXR_X11_SUPPORT_ENABLED)
+            "VK_KHR_xlib_surface",
+        #endif
+        #if defined(ARCH_OS_OSX)
+            "VK_EXT_metal_surface",
         #endif
 
         // Extensions for interop with OpenGL
@@ -123,6 +123,11 @@ HgiVulkanInstance::HgiVulkanInstance()
         VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
 
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+
+        #if defined(ARCH_OS_OSX)
+            // See: https://github.com/KhronosGroup/MoltenVK/blob/main/Docs/MoltenVK_Runtime_UserGuide.md#interacting-with-the-moltenvk-runtime
+            VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
+        #endif
     };
 
     std::vector<const char*> layers;
@@ -150,18 +155,13 @@ HgiVulkanInstance::HgiVulkanInstance()
     layers = _RemoveUnsupportedInstanceLayers(layers);
     extensions = _RemoveUnsupportedInstanceExtensions(extensions);
 
-    _hasPresentation = std::any_of(extensions.begin(), extensions.end(),
-        [](const char* extensionName) {
-            return strcmp(extensionName, VK_KHR_SURFACE_EXTENSION_NAME) == 0;
-        });
-
     createInfo.ppEnabledLayerNames = layers.data();
     createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
     createInfo.enabledExtensionCount =
         static_cast<uint32_t>(extensions.size());
 
-    #if defined(VK_USE_PLATFORM_METAL_EXT)
+    #if defined(ARCH_OS_OSX)
         if (std::find(extensions.begin(), extensions.end(),
                 VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) !=
                 extensions.end()) {

@@ -49,7 +49,7 @@ public:
     HGIVULKAN_API
     VmaPool GetVMAPoolForInterop(VkImageCreateInfo imageInfo);
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     HGIVULKAN_API
     HANDLE GetWin32HandleForMemory(VkDeviceMemory memory);
 #endif
@@ -84,21 +84,20 @@ public:
     bool IsSupportedExtension(const char* extensionName) const;
 
     /// Device extension function pointers
-    PFN_vkCreateRenderPass2KHR vkCreateRenderPass2KHR = 0;
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-    PFN_vkGetMemoryWin32HandleKHR vkGetMemoryWin32HandleKHR = 0;
-    PFN_vkGetSemaphoreWin32HandleKHR vkGetSemaphoreWin32HandleKHR = 0;
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR = 0;
-    PFN_vkGetSemaphoreFdKHR vkGetSemaphoreFdKHR = 0;
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
+    PFN_vkCreateRenderPass2KHR vkCreateRenderPass2KHR = nullptr;
+#if defined(ARCH_OS_WINDOWS)
+    PFN_vkGetMemoryWin32HandleKHR vkGetMemoryWin32HandleKHR = nullptr;
+    PFN_vkGetSemaphoreWin32HandleKHR vkGetSemaphoreWin32HandleKHR = nullptr;
+#elif defined(PXR_X11_SUPPORT_ENABLED)
+    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR = nullptr;
+    PFN_vkGetSemaphoreFdKHR vkGetSemaphoreFdKHR = nullptr;
 #endif
-    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT = 0;
-    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT = 0;
-    PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT = 0;
-    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = 0;
-    PFN_vkQueueBeginDebugUtilsLabelEXT vkQueueBeginDebugUtilsLabelEXT = 0;
-    PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT = 0;
+    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT = nullptr;
+    PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT = nullptr;
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = nullptr;
+    PFN_vkQueueBeginDebugUtilsLabelEXT vkQueueBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT = nullptr;
 
 private:
     HgiVulkanDevice() = delete;
@@ -112,7 +111,7 @@ private:
     VmaAllocator _vmaAllocator;
     std::mutex _vmaInteropPoolsLock;
     std::unordered_map<uint32_t, VmaPool> _vmaInteropPoolsForMemoryType;
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     // A temporary fix until we bump the Vulkan SDK to have VMA v3.2.0+
     // (Vulkan SDK 1.4.304.0+)
     std::mutex _vmaInteropWin32HandleLock;

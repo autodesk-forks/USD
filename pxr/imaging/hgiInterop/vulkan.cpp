@@ -263,10 +263,10 @@ HgiInteropVulkan::InteropTexNative::_Reset(
 
     HgiVulkanTexture* vkDestCast = static_cast<HgiVulkanTexture*>(_vkTex.Get());
     VmaAllocationInfo2 allocInfo = vkDestCast->GetAllocationInfo();
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     _handle = _hgiVulkan->GetPrimaryDevice()
         ->GetWin32HandleForMemory(allocInfo.allocationInfo.deviceMemory);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
     VkMemoryGetFdInfoKHR getInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR };
     getInfo.memory = allocInfo.allocationInfo.deviceMemory;
     getInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
@@ -277,7 +277,6 @@ HgiInteropVulkan::InteropTexNative::_Reset(
             _hgiVulkan->GetPrimaryDevice()->GetVulkanDevice(),
             &getInfo,
             &fd));
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
 #endif
 
     glCreateMemoryObjectsEXT(1, &_glMemoryObject);
@@ -286,19 +285,18 @@ HgiInteropVulkan::InteropTexNative::_Reset(
     glMemoryObjectParameterivEXT(_glMemoryObject,
             GL_DEDICATED_MEMORY_OBJECT_EXT, &isDedicated);
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     glImportMemoryWin32HandleEXT(
         _glMemoryObject,
         allocInfo.blockSize,
         GL_HANDLE_TYPE_OPAQUE_WIN32_EXT,
         _handle);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
     glImportMemoryFdEXT(
         _glMemoryObject,
         allocInfo.blockSize,
         GL_HANDLE_TYPE_OPAQUE_FD_EXT,
         fd); // GL takes ownership of fd, don't need to close
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
 #endif
     glGenTextures(1, &_glTex);
     glBindTexture(GL_TEXTURE_2D, _glTex);
@@ -330,7 +328,7 @@ void
 HgiInteropVulkan::InteropTexNative::_Clear()
 {
     if (_vkTex) {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
         CloseHandle(_handle);
 #endif
         glDeleteTextures(1, &_glTex);
@@ -419,12 +417,12 @@ HgiInteropVulkan::InteropSemaphore::InteropSemaphore(HgiVulkan* hgiVulkan)
     glGenSemaphoresEXT(1, &_glSemaphore);
     VkExportSemaphoreCreateInfo exportInfo =
         { VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO };
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     exportInfo.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
     exportInfo.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT;
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-    TF_CODING_ERROR("Native MoltenVK interop not supported");
+#else
+    TF_CODING_ERROR("Native interop not supported");
 #endif
     HgiVulkanDevice* device = hgiVulkan->GetPrimaryDevice();
 
@@ -436,7 +434,7 @@ HgiInteropVulkan::InteropSemaphore::InteropSemaphore(HgiVulkan* hgiVulkan)
         vkCreateSemaphore(device->GetVulkanDevice(), &createInfo,
             HgiVulkanAllocator(), &_vkSemaphore));
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     VkSemaphoreGetWin32HandleInfoKHR getInfo =
         { VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR };
     getInfo.semaphore = _vkSemaphore;
@@ -447,7 +445,7 @@ HgiInteropVulkan::InteropSemaphore::InteropSemaphore(HgiVulkan* hgiVulkan)
 
     glImportSemaphoreWin32HandleEXT(
         _glSemaphore, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
     int fd;
     VkSemaphoreGetFdInfoKHR getInfo =
         { VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR };
@@ -457,13 +455,12 @@ HgiInteropVulkan::InteropSemaphore::InteropSemaphore(HgiVulkan* hgiVulkan)
     device->vkGetSemaphoreFdKHR(device->GetVulkanDevice(), &getInfo, &fd);
 
     glImportSemaphoreFdEXT(_glSemaphore, GL_HANDLE_TYPE_OPAQUE_FD_EXT, fd);
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
 #endif
 }
 
 HgiInteropVulkan::InteropSemaphore::~InteropSemaphore()
 {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     CloseHandle(_handle);
 #endif
     HgiVulkanDevice* device = _hgiVulkan->GetPrimaryDevice();
@@ -529,17 +526,16 @@ HgiInteropVulkan::HgiInteropVulkan(Hgi* hgiVulkan)
         && _hgiVulkan->GetCapabilities()->supportsNativeInterop
         && GARCH_GLAPI_HAS(EXT_memory_object)
         && GARCH_GLAPI_HAS(EXT_semaphore)
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
         && GARCH_GLAPI_HAS(EXT_memory_object_win32)
-        && GARCH_GLAPI_HAS(EXT_semaphore_win32)) {
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-        && GARCH_GLAPI_HAS(EXT_memory_object_fd)
-        && GARCH_GLAPI_HAS(EXT_semaphore_fd)) {
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-        // To be added, either through MoltenVK adding GL interop,
-        // or a later change if necessary
-        && false) {
+        && GARCH_GLAPI_HAS(EXT_semaphore_win32)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
+        && GARCH_GL_EXT_memory_object_fd
+        && GARCH_GL_EXT_semaphore_fd
+#else
+        && false
 #endif
+    ) {
         _vkComplete = std::make_unique<InteropSemaphore>(_hgiVulkan);
         _glComplete = std::make_unique<InteropSemaphore>(_hgiVulkan);
         _colorTex = std::make_unique<InteropTexNative>();

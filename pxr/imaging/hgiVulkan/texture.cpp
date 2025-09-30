@@ -116,7 +116,7 @@ HgiVulkanTexture::HgiVulkanTexture(
     VkExternalMemoryImageCreateInfo exportInfo =
         { VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO };
     exportInfo.pNext = nullptr;
-    exportInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_AUTO;
+    exportInfo.handleTypes = PXR_VK_EXTERNAL_MEMORY_HANDLE;
     if (interop) {
         exportInfo.pNext = imageCreateInfo.pNext;
         imageCreateInfo.pNext = &exportInfo;

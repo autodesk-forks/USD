@@ -27,7 +27,7 @@ static VkExportMemoryAllocateInfoKHR _exportInfo =
 {
     VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
     nullptr,
-    VK_EXTERNAL_MEMORY_HANDLE_AUTO
+    PXR_VK_EXTERNAL_MEMORY_HANDLE
 };
 
 static uint32_t
@@ -50,29 +50,6 @@ _GetGraphicsQueueFamilyIndex(VkPhysicalDevice physicalDevice)
     }
 
     return VK_QUEUE_FAMILY_IGNORED;
-}
-
-static bool
-_SupportsPresentation(
-    VkPhysicalDevice physicalDevice,
-    uint32_t familyIndex)
-{
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-        return vkGetPhysicalDeviceWin32PresentationSupportKHR(
-                    physicalDevice, familyIndex);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-        Display* dsp = XOpenDisplay(nullptr);
-        VisualID visualID = XVisualIDFromVisual(
-            DefaultVisual(dsp, DefaultScreen(dsp)));
-        return vkGetPhysicalDeviceXlibPresentationSupportKHR(
-                    physicalDevice, familyIndex, dsp, visualID);
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-        // Presentation currently always supported on Metal / MoltenVk
-        return true;
-#else
-        #error Unsupported Platform
-        return true;
-#endif
 }
 
 HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
@@ -106,15 +83,13 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         uint32_t familyIndex =
             _GetGraphicsQueueFamilyIndex(physicalDevices[i]);
 
-        if (familyIndex == VK_QUEUE_FAMILY_IGNORED) continue;
-
-        // Assume we always want a presentation capable device for now.
-        if (instance->HasPresentation() &&
-            !_SupportsPresentation(physicalDevices[i], familyIndex)) {
+        if (familyIndex == VK_QUEUE_FAMILY_IGNORED) {
             continue;
         }
 
-        if (props.apiVersion < VK_API_VERSION_1_0) continue;
+        if (props.apiVersion < VK_API_VERSION_1_3) {
+            continue;
+        }
 
         // Try to find a preferred device type. Until we find one, store the
         // first non-preferred device as fallback in case we never find a
@@ -190,7 +165,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
 
     // Allow OpenGL interop
     // Note requires four extensions in HgiVulkanInstance.
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
     if (IsSupportedExtension(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) &&
         IsSupportedExtension(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME) &&
         IsSupportedExtension(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME) &&
@@ -200,7 +175,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         extensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
         extensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME);
     }
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+#elif defined(PXR_X11_SUPPORT_ENABLED)
     if (IsSupportedExtension(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) &&
         IsSupportedExtension(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME) &&
         IsSupportedExtension(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) &&
@@ -210,9 +185,6 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         extensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
         extensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME);
     }
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-    // To be added, either through MoltenVK adding GL interop,
-    // or a later change if necessary
 #endif
 
     // Memory budget query extension
@@ -268,7 +240,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     // shaders and vertex data can remain the same between opengl and vulkan.
     extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
 
-#ifdef VK_USE_PLATFORM_METAL_EXT
+#ifdef ARCH_OS_OSX
     if (IsSupportedExtension(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
         extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
     }
@@ -376,19 +348,18 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     vkGetDeviceProcAddr(_vkDevice, "vkCreateRenderPass2KHR");
 
     if (_capabilities->supportsNativeInterop) {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
         vkGetMemoryWin32HandleKHR = (PFN_vkGetMemoryWin32HandleKHR)
         vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryWin32HandleKHR");
 
         vkGetSemaphoreWin32HandleKHR = (PFN_vkGetSemaphoreWin32HandleKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreWin32HandleKHR");
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+            vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreWin32HandleKHR");
+#elif defined(PXR_X11_SUPPORT_ENABLED)
         vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)
         vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryFdKHR");
 
         vkGetSemaphoreFdKHR = (PFN_vkGetSemaphoreFdKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreFdKHR");
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
+            vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreFdKHR");
 #endif
     }
 
@@ -493,7 +464,7 @@ HgiVulkanDevice::GetVMAPoolForInterop(VkImageCreateInfo imageInfo)
     return iter->second;
 }
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(ARCH_OS_WINDOWS)
 HANDLE
 HgiVulkanDevice::GetWin32HandleForMemory(VkDeviceMemory memory)
 {
