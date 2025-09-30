@@ -155,7 +155,37 @@ public:
     /// Clears the colorSpace metadata value set on this attribute.
     SDF_API
     void ClearColorSpace();
-    
+
+    /// Returns the array size constraint value for this attribute.
+    ///
+    /// For array-valued attributes, this value encodes information about the
+    /// expected number of elements and the tuple-length (i.e., column count):
+    ///
+    /// \li If the value is 0 (the fallback), the array is dynamic and its size
+    /// is unrestricted.
+    /// \li If the value is greater than 0, it indicates the exact, fixed size
+    /// of the array.
+    /// \li If the value is less than 0, its absolute value is the array's
+    /// tuple-length. The array's size is unrestricted, but must be a multiple
+    /// of this tuple-length.
+    SDF_API
+    int64_t GetArraySizeConstraint() const;
+
+    /// Sets the array size constraint value for this attribute.
+    ///
+    /// \sa GetArraySizeConstraint() for a description of this value's encoding.
+    SDF_API
+    void SetArraySizeConstraint(int64_t constraint);
+
+    /// Returns \c true if this attribute has an array size constraint value
+    /// authored.
+    SDF_API
+    bool HasArraySizeConstraint() const;
+
+    /// Clears the array size constraint value for this attribute.
+    SDF_API
+    void ClearArraySizeConstraint();
+
     /// @}
     /// \name Spec properties
     /// @{
@@ -170,6 +200,10 @@ public:
     
     /// \name Spline API
     /// @{
+    /// Returns true if this attribute has a TsSpline value authored.
+    SDF_API
+    bool HasSpline() const;
+
     /// Returns the TsSpline at this attribute spec if a spec exists, otherwise
     /// an empty spline is returned.
     SDF_API

@@ -155,15 +155,11 @@ _DoSerializationTest(
         UsdStageRefPtr stage2 = UsdStage::Open(filename2);
         const UsdAttribute attr2 = stage2->GetAttributeAtPath(
             SdfPath("/MyPrim.myAttr"));
+        TF_AXIOM(attr2.HasSpline());
 
-        if (isEmpty) {
-            TF_AXIOM(!attr2.HasSpline());
-            TF_AXIOM(attr2.GetSpline().IsEmpty());
-        } else {
-            TF_AXIOM(attr2.HasSpline());
-            const TsSpline spline2 = attr2.GetSpline();
-            TF_AXIOM(spline == spline2);
-        }
+        const TsSpline spline2 = attr2.GetSpline();
+        TF_AXIOM(spline2.IsEmpty() == isEmpty);
+        TF_AXIOM(spline == spline2);
     }
 }
 

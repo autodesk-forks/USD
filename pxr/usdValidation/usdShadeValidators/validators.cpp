@@ -793,7 +793,7 @@ _NormalMapTextureValidator(const UsdPrim& usdPrim,
                 UsdValidationErrorSite(usdPrim.GetStage(), sourcePrim.GetPath())
             },
             TfStringPrintf("UsdUVTexture prim <%s> (connected through "
-                           " validating prim <%s>) reads an 8 bit Normal "
+                           "validating prim <%s>) reads an 8 bit Normal "
                            "Map, but has non-standard inputs:bias value of "
                            "(%.6g, %.6g, %.6g, %.6g). inputs:bias must be "
                            "set to [-1,-1,-1,0] so as to fulfill the "

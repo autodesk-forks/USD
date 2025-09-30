@@ -5,11 +5,15 @@
 // https://openusd.org/license.
 //
 #include "pxr/imaging/hd/mergingSceneIndex.h"
+
 #include "pxr/imaging/hd/overlayContainerDataSource.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneIndexPrimView.h"
+
 #include "pxr/base/tf/denseHashSet.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/work/dispatcher.h"
+
 #include <tbb/concurrent_queue.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -41,7 +45,7 @@ _FillAddedChildEntriesRecursively(
 
         dispatcher->Run([=]() {
             _FillAddedChildEntriesRecursively(
-                dispatcher, mergingSceneIndex, 
+                dispatcher, mergingSceneIndex,
                 inputSceneIndex, childPath, queue);
             });
     }
@@ -62,7 +66,7 @@ HdMergingSceneIndex::InsertInputScene(
     const SdfPath &activeInputSceneRoot)
 {
     InsertInputScenes({{inputScene, activeInputSceneRoot, pos}});
-}   
+}
 
 const HdMergingSceneIndex::_InputEntries&
 HdMergingSceneIndex::_GetInputEntriesByPath(SdfPath const& primPath) const
@@ -174,7 +178,7 @@ HdMergingSceneIndex::InsertInputScenes(
                 continue;
             }
 
-            
+
             // Before adding the new scene index, check for which prefixes
             // of the activeInputSceneRoot another scene index was giving
             // a prim already.
@@ -318,7 +322,7 @@ HdMergingSceneIndex::RemoveInputScenes(
                 !prim.primType.IsEmpty() ||
                 prim.dataSource ||
                 _Contains(path, GetChildPrimPaths(path.GetParentPath()));
-            
+
             if (hasPrim) {
                 if (visitedPaths.insert(path).second) {
                     addedEntries.emplace_back(path, prim.primType);
@@ -377,10 +381,14 @@ HdMergingSceneIndex::GetPrim(const SdfPath &primPath) const
         return _inputs[0].sceneIndex->GetPrim(primPath);
     }
 
+    bool hasSceneRootPrefix = false;
+
     TfSmallVector<HdContainerDataSourceHandle, 8> contributingDataSources;
     for (const _InputEntry &entry: _GetInputEntriesByPath(primPath)) {
         if (primPath.HasPrefix(entry.sceneRoot)) {
-            HdSceneIndexPrim prim = entry.sceneIndex->GetPrim(primPath);
+            hasSceneRootPrefix = true;
+
+            const HdSceneIndexPrim prim = entry.sceneIndex->GetPrim(primPath);
 
             // Use first non-empty prim type so that sparsely overlaid
             // inputs can contribute data sources without defining type or type
@@ -392,6 +400,16 @@ HdMergingSceneIndex::GetPrim(const SdfPath &primPath) const
             if (prim.dataSource) {
                 contributingDataSources.push_back(prim.dataSource);
             }
+        }
+    }
+
+    if (!hasSceneRootPrefix) {
+        if (_inputsPathTable.find(primPath) == _inputsPathTable.end()) {
+            return { TfToken(), nullptr };
+        } else {
+            static HdContainerDataSourceHandle const empty =
+                HdRetainedContainerDataSource::New();
+            return { TfToken(), empty };
         }
     }
 
@@ -477,7 +495,7 @@ HdMergingSceneIndex::_PrimsAdded(
                 get_pointer(inputEntry.sceneIndex) == &sender
                 ? entry.primType
                 : inputEntry.sceneIndex->GetPrim(entry.primPath).primType;
-            
+
             // If the primType is not empty, use it.
             // Break so that we stop after the first contributing data source.
             if (!primType.IsEmpty()) {

@@ -218,6 +218,9 @@ private:
 
     // Visibility and matte state for the active render pass.
     _RenderPassVisibilityAndMatteState _activeRenderPass;
+
+    // Flag used to track the first time prims have been added.
+    bool _hasPopulated = false;
 };
 
 //////////////////////////////////////////////////
@@ -408,6 +411,13 @@ _RenderPassVisibilityAndMatteSceneIndex::_PrimsAdded(
         _UpdateActiveRenderPassState(&extraDirtyEntries);
     }
 
+    // Fast path: If this is the first time we are adding prims,
+    // we do not need to check for invalidation of existing prims
+    // inside _UpdateActiveRenderPassState().  From now on, we will.
+    if (!_hasPopulated) {
+        _hasPopulated = true;
+    }
+
     _SendPrimsAdded(entries);
     _SendPrimsDirtied(extraDirtyEntries);
 }
@@ -493,8 +503,9 @@ _RenderPassVisibilityAndMatteSceneIndex::_UpdateActiveRenderPassState(
         state.renderVisExpr != priorState.renderVisExpr ||
         state.cameraVisExpr != priorState.cameraVisExpr;
 
-    if (!visOrMatteExprDidChange) {
-        // No patterns changed; nothing to invalidate.
+    if (!visOrMatteExprDidChange || !_hasPopulated) {
+        // No patterns changed or no prims have been populated previously;
+        // nothing to invalidate.
         return;
     }
 

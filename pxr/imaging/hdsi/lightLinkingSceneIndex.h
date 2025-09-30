@@ -129,6 +129,9 @@ private:
     const VtArray<TfToken> _lightPrimTypes;
     const VtArray<TfToken> _lightFilterPrimTypes;
     const VtArray<TfToken> _geometryPrimTypes;
+
+    // Flag tracking first population.
+    bool _wasPopulated;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

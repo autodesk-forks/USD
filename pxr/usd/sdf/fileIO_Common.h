@@ -806,20 +806,12 @@ Sdf_WriteAttribute(
     if (!variabilityStr.empty())
         variabilityStr += ' ';
 
-    // Retrieve spline, if any.  If the attribute has a spline, but it's empty,
-    // treat that the same as not having a spline.  We don't serialize empty
-    // splines, because they don't affect anything.
-    const VtValue splineVal = attr.GetField(SdfFieldKeys->Spline);
-    const TsSpline spline =
-        (splineVal.IsHolding<TsSpline>() ?
-            splineVal.UncheckedGet<TsSpline>() : TsSpline());
-
     bool hasComment           = !attr.GetComment().empty();
     bool hasDefault           = attr.HasField(SdfFieldKeys->Default);
     bool hasCustomDeclaration = attr.IsCustom();
     bool hasConnections       = attr.HasField(SdfFieldKeys->ConnectionPaths);
     bool hasTimeSamples       = attr.HasField(SdfFieldKeys->TimeSamples);
-    bool hasSpline            = !spline.IsEmpty();
+    bool hasSpline            = attr.HasSpline();
 
     std::string typeName =
         SdfValueTypeNames->GetSerializationName(attr.GetTypeName()).GetString();
@@ -915,6 +907,8 @@ Sdf_WriteAttribute(
     }
 
     if (hasSpline) {
+        const TsSpline spline = attr.GetSpline();
+
         Sdf_FileIOUtility::Write(out, indent, "%s%s %s.spline = {\n",
                                  variabilityStr.c_str(),
                                  typeName.c_str(), attr.GetName().c_str() );

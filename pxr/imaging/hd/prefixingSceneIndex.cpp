@@ -289,7 +289,13 @@ HdSceneIndexPrim
 HdPrefixingSceneIndex::GetPrim(const SdfPath &primPath) const
 {
     if (!primPath.HasPrefix(_prefix)) {
-        return {TfToken(), nullptr};
+        if (_prefix.HasPrefix(primPath)) {
+            static HdContainerDataSourceHandle const empty =
+                HdRetainedContainerDataSource::New();
+            return {TfToken(), empty};
+        } else {
+            return {TfToken(), nullptr};
+        }
     }
 
     const SdfPath inputScenePath = _RemovePathPrefix(primPath);

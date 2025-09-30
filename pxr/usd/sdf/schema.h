@@ -585,6 +585,7 @@ SDF_API_TEMPLATE_CLASS(TfSingleton<SdfSchema>);
 #define SDF_FIELD_KEYS                                       \
     ((Active, "active"))                                     \
     ((AllowedTokens, "allowedTokens"))                       \
+    ((ArraySizeConstraint, "arraySizeConstraint"))           \
     ((AssetInfo, "assetInfo"))                               \
     ((Clips, "clips"))                                       \
     ((ClipSets, "clipSets"))                                 \

@@ -61,6 +61,19 @@ def Xform "Prim4"
     }
 }
 
+def Xform "Prim5"
+{
+    double empty.spline = {
+    }
+    float nearlyEmpty.spline = {
+        post: sloped(0.5),
+    }
+    double whitespace.spline = {
+        7: 5.5 & 7.21; pre (0, 0); post held,
+        15: 8.18; post curve (2.49, 1.17); { string comment = "climb!" },
+    }
+}
+
 def Xform "BadLoopParams"
 {
     double kwerb.spline = {

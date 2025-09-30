@@ -74,6 +74,9 @@ private:
 
     // Prune state for the active render pass.
     _RenderPassPruneState _activeRenderPass;
+
+    // Flag used to track the first time prims have been added.
+    bool _hasPopulated = false;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

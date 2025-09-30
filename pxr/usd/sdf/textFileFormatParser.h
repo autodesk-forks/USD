@@ -948,7 +948,7 @@ struct SplineKnotValueWithoutPreValue : PEGTL_NS::seq<
 struct SplineKnotValueWithPreValue : PEGTL_NS::seq<
     SplineKnotPreValue,
     PEGTL_NS::pad<SplineKnotPreValueSeparator, InlinePadding>,
-    SplineKnotValue> {};
+    PEGTL_NS::pad<SplineKnotValue, InlinePadding>> {};
 
 // SplineKnotValues = SplineKnotValueWithoutPreValue / 
 // SplineKnotValueWithPreValue
@@ -976,8 +976,8 @@ struct SplineItem : PEGTL_NS::sor<
 
 // SplineValue = { (MultilinePadding)? (SplineItem (MultilinePadding)?)* }
 struct SplineValue : PEGTL_NS::if_must<
-    LeftBrace,
-    PEGTL_NS::pad<ListOf<SplineItem>, MultilinePadding>,
+    PEGTL_NS::pad<LeftBrace, InlinePadding, MultilinePadding>,
+    PEGTL_NS::opt<PEGTL_NS::pad<ListOf<SplineItem>, MultilinePadding>>,
     RightBrace> {};
 
 // prim attribute metadata

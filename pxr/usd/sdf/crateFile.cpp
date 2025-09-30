@@ -2871,10 +2871,6 @@ CrateFile::_AddSpec(const SdfPath &path, SdfSpecType type,
             // format instead of having a mix of formats depending on the order 
             // we wrote our payload values in.
             versionUpgradePendingFields.push_back(p);
-        } else if (p.second.IsHolding<TsSpline>()
-            && p.second.UncheckedGet<TsSpline>().IsEmpty()) {
-            // Don't serialize empty splines, because they don't affect
-            // anything.
         } else {
             ordinaryFields.push_back(_AddField(p));
         }

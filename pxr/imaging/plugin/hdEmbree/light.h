@@ -20,6 +20,79 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+/// Reference implementation of USD Lux support, for the hdEmbree renderer.
+///
+/// This is a reference implementation of USD Lux support, for the hdEmbree
+/// renderer. It is not intented for use in production, but instead as useful
+/// reference for understanding how to implement USD Lux support for other
+/// renderers.
+///
+/// Supported Features:
+/// - LightAPI:
+///   - inputs:intensity
+///   - inputs:exposure
+///   - inputs:normalize
+///   - inputs:color
+///   - inputs:enableColorTemperature
+///   - inputs:colorTemperature
+/// - DiskLight
+///   - inputs:radius
+/// - RectLight
+///   - inputs:width
+///   - inputs:height
+/// - SphereLight
+///   - inputs:radius
+/// - CylinderLight
+///   - inputs:radius
+///   - inputs:length
+/// - ShapingAPI
+///   - inputs:shaping:focus
+///   - inputs:shaping:focusTint
+///   - inputs:shaping:cone:angle
+///   - inputs:shaping:cone:softness
+/// - Respects double-sidedness of meshes
+///
+/// Currently Unsupported Features / Limitations:
+/// - Surface shaders (all surfaces are assumed to be 100% reflective diffuse
+///   BRDFs)
+/// - Light shaders
+/// - Unsupported light types:
+///   - MeshLightAPI
+///   - VolumeLightAPI
+///   - DistantLight
+///   - GeometryLight
+///   - DomeLight
+///   - PortalLight
+///   - PluginLight
+/// - Unsupported UsdLux APIS:
+///   - LightListAPI
+///   - ListAPI
+///   - ShadowAPI (shadows are rendered, but are unaffected by this API)
+///   - LightFilter
+/// - Unsupported attributes on supported light types / APIs:
+///   - LightAPI:
+///     - collection:lightLink:includeRoot
+///     - collection:shadowLink:includeRoot
+///     - light:shaderId
+///     - light:materialSyncMode
+///     - inputs:diffuse
+///     - inputs:specular
+///     - light:filters
+///   - RectLight
+///     - inputs:texture:file
+///   - SphereLight:
+///     - treatAsPoint
+///   - CylinderLight:
+///     - inputs:treatAsLine
+/// - ShapingAPI
+///   - inputs:shaping:ies:file
+///   - inputs:shaping:ies:angleScale
+///   - inputs:shaping:ies:normalize
+/// - No support for direct-camera visibility
+/// - No support for motion blur (currently, if motion blur is enabled, all
+///   samples taken at the first time sample, ie, when the shutter opens).
+/// - No support for instanced lights
+
 class HdEmbreeRenderer;
 
 struct HdEmbree_UnknownLight

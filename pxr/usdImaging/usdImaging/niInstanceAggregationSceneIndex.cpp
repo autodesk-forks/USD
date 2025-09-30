@@ -206,20 +206,20 @@ class _PrimvarValueDataSourceFactory
 {
 public:
     template <class T>
-    HdDataSourceBaseHandle operator()(const T &v) const
+    HdDataSourceBaseHandle operator()(const T &) const
     {
-        return _PrimvarValueDataSource<T>::New(
-            _inputSceneIndex, _instances, _primvarName);
-
+        return _MakeDataSource<T>();
     }
 
     template <class T>
-    HdDataSourceBaseHandle operator()(const VtArray<T> &array) const {
-        return _PrimvarValueDataSource<T>::New(
-            _inputSceneIndex, _instances, _primvarName);
+    HdDataSourceBaseHandle operator()(const VtArray<T> &) const {
+        return _MakeDataSource<T>();
     }
 
     HdDataSourceBaseHandle operator()(const VtValue &v) const {
+        if (v.IsHolding<SdfAssetPath>()) {
+            return _MakeDataSource<SdfAssetPath>();
+        }
         return nullptr;
     }
 
@@ -234,6 +234,13 @@ public:
     }
 
 private:
+    template<class T>
+    HdDataSourceBaseHandle _MakeDataSource() const
+    {
+        return _PrimvarValueDataSource<T>::New(
+            _inputSceneIndex, _instances, _primvarName);
+    }
+
     HdSceneIndexBaseRefPtr const _inputSceneIndex;
     std::shared_ptr<SdfPathSet> const _instances;
     TfToken const _primvarName;

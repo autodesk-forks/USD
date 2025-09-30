@@ -335,6 +335,35 @@ class TestUsdMetadata(unittest.TestCase):
                 self.assertFalse(prop.HasAuthoredDisplayGroup())
                 self.assertEqual(prop.GetMetadata("displayGroup"), None)
 
+    def test_ArraySizeConstraint(self):
+        print("Test array size constraint metadata and explicit API...")
+        for fmt in allFormats:
+            stage = Usd.Stage.CreateInMemory('TestArraySizeConstraint.'+fmt)
+            stageRoot = stage.GetPseudoRoot()
+            prim = stage.OverridePrim("/Prim")
+            attr = prim.CreateAttribute("attr", Sdf.ValueTypeNames.StringArray)
+
+            for val in (10, -10, 0):
+                # Unauthored
+                self.assertEqual(attr.GetArraySizeConstraint(), 0)
+                self.assertFalse(attr.HasAuthoredArraySizeConstraint())
+
+                # Set
+                self.assertEqual(attr.SetArraySizeConstraint(val), True)
+                self.assertEqual(attr.GetArraySizeConstraint(), val)
+                self.assertTrue(attr.HasAuthoredArraySizeConstraint())
+                self.assertEqual(
+                    attr.GetMetadata(Sdf.AttributeSpec.ArraySizeConstraintKey),
+                    val)
+
+                # Clear
+                self.assertEqual(attr.ClearArraySizeConstraint(), True)
+                self.assertEqual(attr.GetArraySizeConstraint(), 0)
+                self.assertFalse(attr.HasAuthoredArraySizeConstraint())
+                self.assertEqual(
+                    attr.GetMetadata(Sdf.AttributeSpec.ArraySizeConstraintKey),
+                    None)
+
     def test_BasicCustomData(self):
         '''Test basic CustomData API, including by-key-path API'''
         from pxr import Vt

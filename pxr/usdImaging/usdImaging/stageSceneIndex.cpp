@@ -14,8 +14,9 @@
 #include "pxr/usdImaging/usdImaging/primAdapter.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 
-#include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/dataSourceTypeDefs.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 
 #include "pxr/base/tf/denseHashSet.h"
 
@@ -272,9 +273,18 @@ UsdImagingStageSceneIndex::GetPrim(const SdfPath &path) const
     const AdapterEntries &entries =
         _adapterManager->LookupAdapters(prim).allAdapters;
 
+    HdContainerDataSourceHandle dataSource =
+        _GetImagingSubprimData(entries, prim, subprim, _stageGlobals);
+
+    if (subprim.IsEmpty() && !dataSource) {
+        static HdContainerDataSourceHandle const empty =
+            HdRetainedContainerDataSource::New();
+        dataSource = empty;
+    }
+
     return {
         _GetImagingSubprimType(entries, prim, subprim),
-        _GetImagingSubprimData(entries, prim, subprim, _stageGlobals)
+        dataSource
     };
 }
 

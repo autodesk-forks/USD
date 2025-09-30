@@ -35,6 +35,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define _SDF_FIELDS                                                      \
 ((SdfFieldKeys->Active,                  bool))                          \
 ((SdfFieldKeys->AllowedTokens,           VtTokenArray))                  \
+((SdfFieldKeys->ArraySizeConstraint,     int64_t))                       \
 ((SdfFieldKeys->AssetInfo,               VtDictionary))                  \
 ((SdfFieldKeys->Clips,                   VtDictionary))                  \
 ((SdfFieldKeys->ClipSets,                SdfStringListOp))               \

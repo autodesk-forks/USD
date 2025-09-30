@@ -16,6 +16,8 @@
 #include "pxr/usd/usd/attributeQuery.h"
 #include "pxr/usd/usd/references.h"
 
+#include "pxr/base/ts/spline.h"
+
 #include <cstdlib>
 #include <iostream>
 #include <vector>
@@ -58,6 +60,31 @@ _GenerateStage(const string& fmt) {
     localRefAttr.Block();
 
     return std::make_tuple(stage, defAttr, sampleAttr, localRefAttr);
+}
+
+tuple<UsdStageRefPtr, UsdAttribute>
+_GenerateStageForSpline(const string& fmt) {
+    const TfToken splineAttrTk = TfToken("points");
+    const SdfPath primPath = SdfPath("/Sphere");
+
+    auto stage = UsdStage::CreateInMemory("testSpline" + fmt);
+    auto prim = stage->DefinePrim(primPath);
+
+    auto splineAttr = prim.CreateAttribute(splineAttrTk, 
+                                           SdfValueTypeNames->Double);
+
+    TsSpline spline;
+    for (size_t i = TIME_SAMPLE_BEGIN; i < TIME_SAMPLE_END; ++i) {
+        const auto sample = static_cast<double>(i);
+        TsKnot knot;
+        knot.SetTime(sample);
+        knot.SetValue(sample);
+        knot.SetNextInterpolation(TsInterpHeld);
+        spline.SetKnot(knot);
+    }
+    splineAttr.SetSpline(spline);
+
+    return std::make_tuple(stage, splineAttr);
 }
 
 UsdStageRefPtr
@@ -114,8 +141,6 @@ def Xform "Human"
         2: 20; post held,
     }
 
-    int c = AnimationBlock
-
     double d = AnimationBlock
 
     double e = AnimationBlock
@@ -126,7 +151,11 @@ def Xform "Human"
         {strongerLayer->GetIdentifier(),
          weakLayer->GetIdentifier(),
          weakerLayer->GetIdentifier()});
-    return UsdStage::Open(rootLayer);
+    auto stage = UsdStage::Open(rootLayer);
+    auto attrC = stage->GetAttributeAtPath(SdfPath("/Human.c"));
+    TF_AXIOM(attrC);
+    attrC.BlockAnimation();
+    return stage;
 }
 
 template <typename T>
@@ -194,6 +223,70 @@ _CheckSampleBlocked(UsdAttribute& attr, const double time)
     TF_AXIOM(!query.Get<T>(&value, time));
     TF_AXIOM(!attr.Get(&untypedValue, time));
     TF_AXIOM(!query.Get(&untypedValue, time));
+}
+
+void
+_CheckSplineBlocking(UsdAttribute& splineAttr)
+{
+    // Initially nothing should be blocked.
+    TsTime t0 = TIME_SAMPLE_BEGIN;
+    TsTime t1 = TIME_SAMPLE_END;
+
+    double value;
+    for (TsTime t = t0; t < t1; t += 0.5) {
+        TF_AXIOM(splineAttr.Get(&value, t));
+    }
+    // Test extrapolation blocking
+    TsSpline spline = splineAttr.GetSpline();
+
+    auto extrap = TsExtrapolation(TsExtrapValueBlock);
+    spline.SetPreExtrapolation(extrap);
+    spline.SetPostExtrapolation(extrap);
+
+    TF_AXIOM(splineAttr.Get(&value, t0 - 1));
+    TF_AXIOM(splineAttr.Get(&value, t1 + 1));
+
+    splineAttr.SetSpline(spline);
+
+    TF_AXIOM(!splineAttr.Get(&value, t0 - 1));
+    TF_AXIOM(!splineAttr.Get(&value, t1 + 1));
+
+    // Test interpolation blocking. Every other knot is a block
+    for (TsTime t = t0; t < t1; t += 2) {
+        TsKnot knot;
+        TF_AXIOM(spline.GetKnot(t, &knot));
+        knot.SetNextInterpolation(TsInterpValueBlock);
+        spline.SetKnot(knot);
+    }
+
+    splineAttr.SetSpline(spline);
+
+    // Test the value-blocked knots
+    for (TsTime t = t0; t < t1; t += 2) {
+        TF_AXIOM(!splineAttr.Get(&value, t));
+        TF_AXIOM(!splineAttr.Get(&value, t + 0.5));
+    }
+
+    // Test the non-value-blocked knots
+    for (TsTime t = t0 + 1; t < t1; t += 2) {
+        TF_AXIOM(splineAttr.Get(&value, t));
+        TF_AXIOM(splineAttr.Get(&value, t + 0.5));
+    }
+
+    // An empty spline is effectively a value block, it has no value
+    // at all times.
+    spline = TsSpline(TfType::Find<double>());
+    splineAttr.SetSpline(spline);
+
+    // Note that ValueIsBlocked() only returns true if there is a default whose
+    // value is blocked. If the attribute's value is time-dependent (either a
+    // spline or timeSamples) then ValueIsBlocked() always returns false; the
+    // time-dependent value is not examined.
+    TF_AXIOM(!splineAttr.GetResolveInfo().ValueIsBlocked());
+
+    for (TsTime t = t0 - 1; t < t1 + 1; t += 0.5) {
+        TF_AXIOM(!splineAttr.Get(&value, t));
+    }
 }
 
 void
@@ -434,6 +527,10 @@ int main(int argc, char** argv) {
                 _CheckSampleNotBlocked(sampleAttr, sample+1.0, sample+1.0);
             }
         }
+
+        UsdAttribute splineAttr;
+        std::tie(stage, splineAttr) = _GenerateStageForSpline(fmt);
+        _CheckSplineBlocking(splineAttr);
 
         std::cout << "Testing animation block" << std::endl;
         _CheckAnimationBlock(_GenerateStageForAnimationBlock(fmt));
