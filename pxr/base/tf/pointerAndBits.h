@@ -45,11 +45,11 @@ public:
     {
     }
 
-    constexpr uintptr_t GetMaxValue() const {
+    static constexpr uintptr_t GetMaxValue() {
         return std::numeric_limits<uint32_t>::max();
     }
 
-    constexpr uintptr_t GetNumBitsValues() const {
+    static constexpr uintptr_t GetNumBitsValues() {
         return 32;
     }
 
