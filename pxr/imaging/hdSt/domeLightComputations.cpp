@@ -360,6 +360,7 @@ HdSt_DomeLightComputationGPU::Execute(
     texViewDesc.format = HgiFormatFloat16Vec4;
     texViewDesc.sourceFirstLayer = 0;
     texViewDesc.sourceFirstMip = _level;
+    texViewDesc.writable = true;
     texViewDesc.sourceTexture = _GetTextureHandle(dstTextureObject);
 
     auto* hdStResourceRegistry =

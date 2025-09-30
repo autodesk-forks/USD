@@ -147,10 +147,16 @@ void HgiWebGPUShaderFunction::_CreateTexturesGroupLayoutEntries(
         if (t.writable) {
             // TODO: This is the only access storage for now
             textureEntry.storageTexture.access = wgpu::StorageTextureAccess::WriteOnly;
-            textureEntry.storageTexture.viewDimension = HgiWebGPUConversions::GetTextureViewDimension(t.dimensions);
+            if (t.textureType == HgiShaderTextureTypeCubemapTexture) {
+                textureEntry.storageTexture.viewDimension = wgpu::TextureViewDimension::e2DArray;
+            } else {
+                textureEntry.storageTexture.viewDimension = 
+                    HgiWebGPUConversions::GetTextureViewDimension(t.dimensions, t.textureType);
+            }
             textureEntry.storageTexture.format = HgiWebGPUConversions::GetPixelFormat(t.format);
         } else {
-            textureEntry.texture.viewDimension = HgiWebGPUConversions::GetTextureViewDimension(t.dimensions);
+            textureEntry.texture.viewDimension = 
+                HgiWebGPUConversions::GetTextureViewDimension(t.dimensions, t.textureType);
             textureEntry.texture.sampleType = HgiWebGPUConversions::GetTextureSampleType(t.format);
             if (t.textureType == HgiShaderTextureTypeDepth) {
                 textureEntry.texture.sampleType = wgpu::TextureSampleType::UnfilterableFloat;

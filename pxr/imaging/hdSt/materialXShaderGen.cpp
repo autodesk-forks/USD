@@ -125,6 +125,16 @@ vec3 mx_latlong_map_lookup(vec3 dir, mat4 transform, float lod, samplerCube envS
 
 )";
 
+static const std::string MxHdLatLongLookupCubemapSplit = 
+R"(
+vec3 mx_latlong_map_lookup(vec3 dir, mat4 transform, float lod, textureCube tex_texture, sampler tex_sampler)
+{
+    vec3 envDir = normalize((transform * vec4(dir,0.0)).xyz);
+    return textureLod(samplerCube(tex_texture, tex_sampler), envDir, lod).rgb;
+}
+
+)";
+
 static bool 
 _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
 {
@@ -423,6 +433,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     // Emit an overload of mx_latlong_map_lookup that is able to query the
     // cubemaps generated for the dome light.
     Base::emitString(MxHdLatLongLookupCubemap, mxStage);
+    Base::emitString(MxHdLatLongLookupCubemapSplit, mxStage);
 
     Base::setFunctionName("mxInit", mxStage);
     emitLine("void mxInit(vec4 Peye, vec3 Neye)", mxStage, false);

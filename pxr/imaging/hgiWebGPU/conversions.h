@@ -104,7 +104,10 @@ public:
     static wgpu::PrimitiveTopology GetPrimitiveTopology(HgiPrimitiveType const &type);
 
     HGIWEBGPU_API
-    static wgpu::TextureViewDimension GetTextureViewDimension(uint32_t const dimensions);
+    static wgpu::TextureViewDimension GetTextureViewDimension(GfVec3i const &dimensions, HgiTextureType type);
+
+    HGIWEBGPU_API
+    static wgpu::TextureViewDimension GetTextureViewDimension(uint32_t const dimensions, HgiShaderTextureType type);
 
     HGIWEBGPU_API
     static wgpu::TextureSampleType GetTextureSampleType(HgiFormat const &type);

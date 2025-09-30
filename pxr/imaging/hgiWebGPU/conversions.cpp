@@ -395,8 +395,9 @@ struct {
     {HgiTextureType1D,           wgpu::TextureDimension::e1D},
     {HgiTextureType2D,           wgpu::TextureDimension::e2D},
     {HgiTextureType3D,           wgpu::TextureDimension::e3D},
-    {HgiTextureType1DArray,      wgpu::TextureDimension::e1D}, // TODO: Not the correct conversion
-    {HgiTextureType2DArray,      wgpu::TextureDimension::e1D}, // TODO: Not the correct conversion
+    {HgiTextureTypeCubemap,      wgpu::TextureDimension::e2D},
+    {HgiTextureType1DArray,      wgpu::TextureDimension::e1D},
+    {HgiTextureType2DArray,      wgpu::TextureDimension::e2D},
 };
 
 static_assert(TfArraySize(_textureTypeTable) == HgiTextureTypeCount,
@@ -674,13 +675,32 @@ HgiWebGPUConversions::GetPrimitiveTopology(HgiPrimitiveType const &type)
 }
 
 wgpu::TextureViewDimension
-HgiWebGPUConversions::GetTextureViewDimension(uint32_t const dimensions)
+HgiWebGPUConversions::GetTextureViewDimension(GfVec3i const &dimensions, HgiTextureType type)
+{
+    if (type == HgiTextureTypeCubemap) {
+        return wgpu::TextureViewDimension::Cube;
+    }
+
+    if (dimensions[1] <= 0) {
+        return wgpu::TextureViewDimension::e1D;
+    } else if (dimensions[2] <= 1) {
+        return wgpu::TextureViewDimension::e2D;
+    } else {
+        return wgpu::TextureViewDimension::e3D;
+    }
+}
+
+wgpu::TextureViewDimension
+HgiWebGPUConversions::GetTextureViewDimension(uint32_t const dimensions, HgiShaderTextureType type)
 {
     if (dimensions < 1 || dimensions > 3) {
         TF_CODING_ERROR("Invalid TextureViewDimension " + std::to_string(dimensions));
         return wgpu::TextureViewDimension::Undefined;
     }
-    // TODO: Handle rest of wgpu::TextureViewDimension (e.g. wgpu::TextureViewDimension_CubeArray)
+    if (type == HgiShaderTextureTypeCubemapTexture) {
+        return wgpu::TextureViewDimension::Cube;
+    }
+
     switch (dimensions) {
         case 1:
             return wgpu::TextureViewDimension::e1D;

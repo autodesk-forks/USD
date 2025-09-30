@@ -234,6 +234,7 @@ struct HgiTextureViewDesc
     , sourceTexture()
     , sourceFirstLayer(0)
     , sourceFirstMip(0)
+    , writable(false)
     {}
 
     std::string debugName;
@@ -243,6 +244,7 @@ struct HgiTextureViewDesc
     HgiTextureHandle sourceTexture;
     uint16_t sourceFirstLayer;
     uint16_t sourceFirstMip;
+    bool writable;
 };
 
 HGI_API
