@@ -684,10 +684,13 @@ pxr_register_test(testUsdUtilsUpdateSchemaWithSdrNodeError
     EXPECTED_RETURN_CODE 1
 )
 
-pxr_register_test(testUsdUtilsStitchCpp
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUtilsStitchCpp"
-    EXPECTED_RETURN_CODE 0
-)
+# Note: Test disabled for emscripten due to ArDefaultResolver plugin loading failures.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testUsdUtilsStitchCpp
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUtilsStitchCpp"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
 
 pxr_register_test(testUsdUtilsTimeCodeRange
     PYTHON

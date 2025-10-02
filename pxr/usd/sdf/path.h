@@ -45,9 +45,15 @@ void TfDelegatedCountDecrement(Sdf_PathNode const *) noexcept;
 struct Sdf_PathPrimTag;
 struct Sdf_PathPropTag;
 
+// SdfPath always contains two 32-bit handles (primPart and propPart), regardless of architecture.
+static constexpr size_t Sdf_SizeofSdfPath = 2 * sizeof(uint32_t);
+
 // These are validated below.
-static constexpr size_t Sdf_SizeofPrimPathNode = sizeof(void *) * 3;
-static constexpr size_t Sdf_SizeofPropPathNode = sizeof(void *) * 3;
+static constexpr size_t Sdf_SizeofPrimPathNode = sizeof(TfToken) + 2 * sizeof(unsigned int) + sizeof(void*);
+// Property nodes can have either TfToken or SdfPath members. SdfPath (8 bytes) is larger than 
+// TfToken (4 bytes) on 32-bit architectures. Use the larger size to accommodate all node types.
+static constexpr size_t Sdf_SizeofPropPathNode =
+    (sizeof(TfToken) > Sdf_SizeofSdfPath ? sizeof(TfToken) : Sdf_SizeofSdfPath) + 2 * sizeof(unsigned int) + sizeof(void*);
 
 using Sdf_PathPrimPartPool = Sdf_Pool<
     Sdf_PathPrimTag, Sdf_SizeofPrimPathNode, /*regionBits=*/8>;
@@ -1424,7 +1430,11 @@ PXR_NAMESPACE_CLOSE_SCOPE
 PXR_NAMESPACE_OPEN_SCOPE
 
 static_assert(Sdf_SizeofPrimPathNode == sizeof(Sdf_PrimPathNode), "");
-static_assert(Sdf_SizeofPropPathNode == sizeof(Sdf_PrimPropertyPathNode), "");
+// Property pool must be sized for the largest property node type.
+// Sdf_TargetPathNode has an SdfPath member (8 bytes) which is larger than TfToken (4 bytes on 32-bit).
+static_assert(Sdf_SizeofPropPathNode >= sizeof(Sdf_PrimPropertyPathNode), "");
+static_assert(Sdf_SizeofPropPathNode >= sizeof(Sdf_RelationalAttributePathNode), "");
+static_assert(Sdf_SizeofPropPathNode >= sizeof(Sdf_TargetPathNode), "");
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

@@ -535,10 +535,6 @@ pxr_register_test(testSdfAttributeBlocking
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAttributeBlocking"
 )
 
-pxr_register_test(testSdfAttributeBlocking_Cpp
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAttributeBlocking_Cpp"
-)
-
 pxr_register_test(testSdfBatchNamespaceEdit
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfBatchNamespaceEdit"
@@ -579,10 +575,6 @@ pxr_register_test(testSdfDetachedLayerEnvVar2
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfDetachedLayer"
 )
 
-pxr_register_test(testSdfHardToReach
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfHardToReach"
-)
-
 pxr_register_test(testSdfFileFormat
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfFileFormat"
@@ -601,10 +593,6 @@ pxr_register_test(testSdfIntegerCoding
 pxr_register_test(testSdfLayer
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfLayer"
-)
-
-pxr_register_test(testSdfLayerHints
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfLayerHints"
 )
 
 pxr_register_test(testSdfLayerMuting
@@ -629,10 +617,6 @@ pxr_register_test(testSdfLegacyFileFormat_Error
 pxr_register_test(testSdfListOp
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfListOp"
-)
-
-pxr_register_test(testSdfMetaDataPlugInfo
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfMetaDataPlugInfo"
 )
 
 pxr_register_test(testSdfPathExpression
@@ -720,16 +704,6 @@ pxr_register_test(testSdfTargetFileFormat
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTargetFileFormat"
 )
-pxr_register_test(testSdfTextFile
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
-    EXPECTED_RETURN_CODE 0
-)
-pxr_register_test(testSdfTextFile_1.1
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
-    EXPECTED_RETURN_CODE 0
-    ENV
-        USD_WRITE_NEW_USDA_FILES_AS_VERSION=1.1
-)
 pxr_register_test(testSdfTimeCode
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTimeCode"
@@ -749,14 +723,6 @@ pxr_register_test(testSdfZipFileLimits
     EXPECTED_RETURN_CODE 0
     ENV 
         SDF_MAX_ZIPFILE_SIZE=195
-)
-pxr_register_test(testSdfZipFile_CPP
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile_CPP"
-    EXPECTED_RETURN_CODE 0
-)
-pxr_register_test(testSdfUsdzResolver
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdzResolver"
-    EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testSdfVariableExpression
     PYTHON
@@ -780,3 +746,46 @@ pxr_register_test(testSdfUsdcInvalidPrimChildren
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdcInvalidPrimChildren"
     EXPECTED_RETURN_CODE 0
 )
+
+# Note the following tests are disabled when building for emscripten due to
+# plugin loading failures. These tests fail because Emscripten cannot locate
+# plugInfo.json files in the virtual filesystem.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testSdfAttributeBlocking_Cpp
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAttributeBlocking_Cpp"
+    )
+
+    pxr_register_test(testSdfHardToReach
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfHardToReach"
+    )
+
+    pxr_register_test(testSdfLayerHints
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfLayerHints"
+    )
+
+    pxr_register_test(testSdfMetaDataPlugInfo
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfMetaDataPlugInfo"
+    )
+
+    pxr_register_test(testSdfTextFile
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testSdfTextFile_1.1
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
+        EXPECTED_RETURN_CODE 0
+        ENV
+            USD_WRITE_NEW_USDA_FILES_AS_VERSION=1.1
+    )
+
+    pxr_register_test(testSdfZipFile_CPP
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile_CPP"
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testSdfUsdzResolver
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdzResolver"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()

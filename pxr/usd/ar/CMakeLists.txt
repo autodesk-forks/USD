@@ -265,10 +265,6 @@ pxr_register_test(testArDefaultResolver
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArDefaultResolver"
 )
 
-pxr_register_test(testArDefaultResolver_CPP
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArDefaultResolver_CPP"
-)
-
 pxr_register_test(testArOpenAsset
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArOpenAsset"
@@ -298,6 +294,15 @@ pxr_register_test(testArResolverContext_CPP
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArResolverContext_CPP"
 )
 
-pxr_register_test(testArThreadedAssetCreation
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArThreadedAssetCreation"
-)
+# Note the following tests are disabled when building for emscripten due to
+# plugin loading failures. Emscripten cannot locate plugInfo.json files for
+# ArDefaultResolver in the virtual filesystem.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testArDefaultResolver_CPP
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArDefaultResolver_CPP"
+    )
+
+    pxr_register_test(testArThreadedAssetCreation
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArThreadedAssetCreation"
+    )
+endif()

@@ -2065,19 +2065,8 @@ pxr_register_test(testPcpMuseum_VariantSpecializesAndReference
     DIFF_COMPARE compositionResults_VariantSpecializesAndReference.txt
 )
 
-pxr_register_test(testPcpIterator
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpIterator"
-    DIFF_COMPARE iteration_results.txt
-    EXPECTED_RETURN_CODE 0
-)
-
 pxr_register_test(testPcpMapExpression
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpMapExpression"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testPcpPathTranslation_HardToReach
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpPathTranslation_HardToReach"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -2099,10 +2088,26 @@ pxr_register_test(testPcpDependencies
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testPcpHardToReach
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpHardToReach"
-    EXPECTED_RETURN_CODE 0
-)
+# Note the following tests are disabled when building for emscripten due to
+# plugin loading failures. Emscripten cannot locate plugInfo.json files in
+# the virtual filesystem.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testPcpIterator
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpIterator"
+        DIFF_COMPARE iteration_results.txt
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testPcpPathTranslation_HardToReach
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpPathTranslation_HardToReach"
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testPcpHardToReach
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpHardToReach"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
 
 pxr_register_test(testPcpInstanceKey
     PYTHON

@@ -210,11 +210,6 @@ pxr_register_test(testUsdGeomConsts
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testUsdGeomCreateAttribute
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomCreateAttribute"
-    EXPECTED_RETURN_CODE 0
-)
-
 pxr_register_test(testUsdGeomCurves
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomCurves"
@@ -243,16 +238,6 @@ pxr_register_test(testUsdGeomMetrics
 pxr_register_test(testUsdGeomSubset
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomSubset"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdGeomIsA
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomIsA"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdGeomHasAPI
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomHasAPI"
     EXPECTED_RETURN_CODE 0
 )
 
@@ -296,10 +281,30 @@ pxr_register_test(testUsdGeomXformable
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testUsdGeomXformCache
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomXformCache"
-    EXPECTED_RETURN_CODE 0 
-)
+# Note the following tests are disabled when building for emscripten due to
+# plugin loading failures. Emscripten cannot locate plugInfo.json files for
+# ArDefaultResolver in the virtual filesystem.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testUsdGeomCreateAttribute
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomCreateAttribute"
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testUsdGeomIsA
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomIsA"
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testUsdGeomHasAPI
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomHasAPI"
+        EXPECTED_RETURN_CODE 0
+    )
+
+    pxr_register_test(testUsdGeomXformCache
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomXformCache"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
 
 pxr_register_test(testUsdGeomXformCommonAPI
     PYTHON

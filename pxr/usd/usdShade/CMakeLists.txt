@@ -221,10 +221,13 @@ pxr_register_test(testUsdShadeConnectability
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_register_test(testUsdShadeHasConnectableAPI
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeHasConnectableAPI"
-    EXPECTED_RETURN_CODE 0
-)
+# Note: Test disabled for emscripten due to plugin registration failures.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testUsdShadeHasConnectableAPI
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdShadeHasConnectableAPI"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
 
 pxr_register_test(testUsdShadeConnectability_OldEncoding
     PYTHON

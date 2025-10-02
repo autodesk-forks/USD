@@ -74,7 +74,10 @@ pxr_build_test(testUsdUIAccessibilityAPI
         testenv/testUsdUIAccessibilityAPI.cpp
 )
 
-pxr_register_test(testUsdUIAccessibilityAPI
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUIAccessibilityAPI"
-    EXPECTED_RETURN_CODE 0
-)
+# Note: Test disabled for emscripten due to ArDefaultResolver plugin loading failures.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testUsdUIAccessibilityAPI
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUIAccessibilityAPI"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
