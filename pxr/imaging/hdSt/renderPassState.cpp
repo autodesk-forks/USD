@@ -335,7 +335,7 @@ HdStRenderPassState::Prepare(
             HdShaderTokens->viewport,
             HdTupleType{HdTypeFloatVec4, 1});
 
-        if (_clippingEnabled) {
+        if (clipDistanceSupport) {
             // Avoid shader permutations when using 0-4 clip planes by always
             // allocating storage for 4 clip planes.
             static constexpr size_t s_minNumClipPlanes = 4;
@@ -482,7 +482,7 @@ HdStRenderPassState::Prepare(
                 _ComputeDataWindow(
                     _framing, _viewport))));
 
-    if (_clippingEnabled) {
+    if (clipDistanceSupport) {
         sources.push_back(
         std::make_shared<HdVtBufferSource>(
             HdShaderTokens->numClipPlanes,
