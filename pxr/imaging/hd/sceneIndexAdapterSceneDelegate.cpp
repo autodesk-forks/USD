@@ -1308,12 +1308,9 @@ _ToMaterialNetworkMap(
 }
 
 VtValue
-HdSceneIndexAdapterSceneDelegate::GetMaterialResource(SdfPath const & id)
+HdSceneIndexAdapterSceneDelegate::GetMaterialResourceFromSceneIndexPrim(
+    HdSceneIndexPrim& prim, const TfTokenVector& renderContexts)
 {
-    TRACE_FUNCTION();
-    HF_MALLOC_TAG_FUNCTION();
-    HdSceneIndexPrim prim = _GetInputPrim(id);
-
     HdMaterialSchema matSchema = HdMaterialSchema::GetFromParent(
             prim.dataSource);
     if (!matSchema.IsDefined()) {
@@ -1321,14 +1318,25 @@ HdSceneIndexAdapterSceneDelegate::GetMaterialResource(SdfPath const & id)
     }
 
     // Query for a material network to match the requested render contexts
-    const TfTokenVector renderContexts =
-        GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();
-    HdMaterialNetworkSchema netSchema = matSchema.GetMaterialNetwork(renderContexts);
+    HdMaterialNetworkSchema netSchema =
+        matSchema.GetMaterialNetwork(renderContexts);
     if (!netSchema.IsDefined()) {
         return VtValue();
     }
 
     return VtValue(_ToMaterialNetworkMap(netSchema, renderContexts));
+}
+
+VtValue
+HdSceneIndexAdapterSceneDelegate::GetMaterialResource(SdfPath const & id)
+{
+    TRACE_FUNCTION();
+    HF_MALLOC_TAG_FUNCTION();
+    
+    HdSceneIndexPrim prim = _GetInputPrim(id);
+    return GetMaterialResourceFromSceneIndexPrim(
+        prim,
+        GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts());
 }
 
 static

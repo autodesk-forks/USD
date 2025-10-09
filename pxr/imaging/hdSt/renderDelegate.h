@@ -24,6 +24,9 @@ using HdStDrawItemsCachePtr = HdSt_DrawItemsCache *;
 using HdStResourceRegistrySharedPtr = 
     std::shared_ptr<class HdStResourceRegistry>;
 
+class HdSt_MaterialXSyncSceneIndex;
+TF_DECLARE_REF_PTRS(HdSt_MaterialXSyncSceneIndex);
+
 ///
 /// HdStRenderDelegate
 ///
@@ -117,8 +120,18 @@ public:
 
     HDST_API
     HdAovDescriptor
-        GetDefaultAovDescriptor(TfToken const& name) const override;
+    GetDefaultAovDescriptor(TfToken const& name) const override;
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    HDST_API
+    void
+    SetTerminalSceneIndex(
+        const HdSceneIndexBaseRefPtr &terminalSceneIndex) override;
     
+    HDST_API
+    HdSt_MaterialXSyncSceneIndex* GetMaterialXSyncSceneIndex();
+#endif
+
     // ---------------------------------------------------------------------- //
     /// \name Misc public API
     // ---------------------------------------------------------------------- //
@@ -158,6 +171,10 @@ private:
     std::unique_ptr<HdStRenderParam> _renderParam;
 
     HdStDrawItemsCacheUniquePtr _drawItemsCache;
+
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    HdSt_MaterialXSyncSceneIndexRefPtr   _materialXSyncSceneIndex;
+#endif
 };
 
 

@@ -19,6 +19,11 @@
 #include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hdSt/materialParam.h"
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+#include "pxr/imaging/hdSt/materialXSyncSceneIndex.h"
+#include "pxr/imaging/hdSt/renderDelegate.h"
+#endif
+
 #include "pxr/imaging/hd/changeTracker.h"
 #include "pxr/imaging/hd/tokens.h"
 
@@ -172,8 +177,8 @@ HdStMaterial::_ProcessTextureDescriptors(
 /* virtual */
 void
 HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
-                 HdRenderParam   *renderParam,
-                 HdDirtyBits     *dirtyBits)
+                   HdRenderParam   *renderParam,
+                   HdDirtyBits     *dirtyBits)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -191,6 +196,19 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
 
     bool markBatchesDirty = false;
 
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+    {
+        HdStRenderDelegate* stormDelegate = static_cast<HdStRenderDelegate*>(
+            sceneDelegate->GetRenderIndex().GetRenderDelegate());
+
+        if (HdSt_MaterialXSyncSceneIndex* sceneIndex =
+            stormDelegate->GetMaterialXSyncSceneIndex()) {
+
+            sceneIndex->Wait();
+        }
+    }
+#endif
+
     std::string fragmentSource;
     std::string displacementSource;
     std::string volumeSource;
@@ -201,18 +219,19 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
 
     VtValue vtMat = sceneDelegate->GetMaterialResource(GetId());
     if (vtMat.IsHolding<HdMaterialNetworkMap>()) {
+
         HdMaterialNetworkMap const& hdNetworkMap =
             vtMat.UncheckedGet<HdMaterialNetworkMap>();
         if (!hdNetworkMap.terminals.empty() && !hdNetworkMap.map.empty()) {
-            _networkProcessor.ProcessMaterialNetwork(GetId(), hdNetworkMap,
+            _hdStMaterialNetwork.ProcessMaterialNetwork(GetId(), hdNetworkMap,
                                                     resourceRegistry.get());
-            fragmentSource = _networkProcessor.GetFragmentCode();
-            volumeSource = _networkProcessor.GetVolumeCode();
-            displacementSource = _networkProcessor.GetDisplacementCode();
-            materialMetadata = _networkProcessor.GetMetadata();
-            materialTag = _networkProcessor.GetMaterialTag();
-            params = _networkProcessor.GetMaterialParams();
-                textureDescriptors = _networkProcessor.GetTextureDescriptors();
+            fragmentSource = _hdStMaterialNetwork.GetFragmentCode();
+            volumeSource = _hdStMaterialNetwork.GetVolumeCode();
+            displacementSource = _hdStMaterialNetwork.GetDisplacementCode();
+            materialMetadata = _hdStMaterialNetwork.GetMetadata();
+            materialTag = _hdStMaterialNetwork.GetMaterialTag();
+            params = _hdStMaterialNetwork.GetMaterialParams();
+                textureDescriptors = _hdStMaterialNetwork.GetTextureDescriptors();
         }
     }
 
