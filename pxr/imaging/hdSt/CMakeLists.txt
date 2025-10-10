@@ -333,6 +333,15 @@ pxr_build_test(testHdStCurvesPrimvars
     CPPFILES
         testenv/testHdStCurvesPrimvars.cpp
 )
+pxr_build_test(testHdStDepthBias
+    LIBRARIES
+        hdSt
+        hd
+        tf
+        gf
+    CPPFILES
+        testenv/testHdStDepthBias.cpp
+)
 pxr_build_test(testHdStDisplayStyle
     LIBRARIES
         hdSt
@@ -681,6 +690,10 @@ pxr_install_test_dir(
 pxr_install_test_dir(
     SRC testenv/testHdStDisplayStyle
     DEST testHdStDisplayStyle
+)
+pxr_install_test_dir(
+    SRC testenv/testHdStDepthBias
+    DEST testHdStDepthBias
 )
 pxr_install_test_dir(
     SRC testenv/testHdStDrawBatching
@@ -2562,6 +2575,18 @@ pxr_register_test(testHdStDisplayStyle_refined
     FAIL_PERCENT 1
     PERCEPTUAL
     TESTENV testHdStDisplayStyle
+    ENV
+        TF_DEBUG=HD_SAFE_MODE
+)
+pxr_register_test(testHdStDepthBias
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStDepthBias --offscreen"
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        testHdStDepthBias_disabled.png
+        testHdStDepthBias_enabled.png
+    FAIL 1
+    FAIL_PERCENT 1
+    TESTENV testHdStDepthBias
     ENV
         TF_DEBUG=HD_SAFE_MODE
 )

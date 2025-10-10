@@ -183,6 +183,13 @@ HgiVulkanGraphicsPipeline::HgiVulkanGraphicsPipeline(
     rasterState.rasterizerDiscardEnable = !ras.rasterizerEnabled;
     rasterState.depthClampEnable = ras.depthClampEnabled;
 
+    if (desc.depthState.depthBiasEnabled) {
+        rasterState.depthBiasEnable = true;
+        rasterState.depthBiasConstantFactor =
+            desc.depthState.depthBiasConstantFactor;
+        rasterState.depthBiasSlopeFactor = desc.depthState.depthBiasSlopeFactor;
+    }
+
     VkPipelineRasterizationConservativeStateCreateInfoEXT 
         conservativeRasterState = {};
     if (device->GetDeviceCapabilities().IsSet(
