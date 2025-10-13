@@ -52,7 +52,7 @@ wgpu::RenderPipeline HgiWebGPUMipmapGenerator::_getMipmapPipeline(wgpu::TextureF
     if (pipelineIt == _pipelines.end()) {
         // Shader modules is shared between all pipelines, so only create once.
         if (!_mipmapShaderModule) {
-            wgpu::ShaderModuleWGSLDescriptor wgslDesc = {};
+            wgpu::ShaderSourceWGSL wgslDesc = {};
             wgslDesc.code = R"(
             var<private> pos : array<vec2<f32>, 3> = array<vec2<f32>, 3>(
                           vec2<f32>(-1.0, -1.0), vec2<f32>(-1.0, 3.0), vec2<f32>(3.0, -1.0));

@@ -75,7 +75,6 @@ HgiWebGPUComputePipeline::HgiWebGPUComputePipeline(
 
     wgpu::ComputeState computeState;
     computeState.module = computeProgram->GetShaderModule();
-    computeState.entryPoint = computeProgram->GetShaderEntryPoint();
     computeState.constantCount = constants.size();
     computeState.constants = constants.data();
 

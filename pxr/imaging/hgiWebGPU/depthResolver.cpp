@@ -48,7 +48,7 @@ wgpu::RenderPipeline HgiWebGPUDepthResolver::_getResolverPipeline(wgpu::TextureF
     if (pipelineIt == _pipelines.end()) {
         // Shader modules is shared between all pipelines, so only create once.
         if (!_resolverShaderModule) {
-            wgpu::ShaderModuleWGSLDescriptor wgslDesc = {};
+            wgpu::ShaderSourceWGSL wgslDesc = {};
             wgslDesc.code = R"(
             var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
                 vec2(-1.0, 1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, -1.0)

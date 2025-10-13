@@ -118,7 +118,9 @@ static wgpu::Device
 GetDevice() {
     if (!instance) {
         wgpu::InstanceDescriptor instanceDescriptor{};
-        instanceDescriptor.capabilities.timedWaitAnyEnable = true;
+        static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+        instanceDescriptor.requiredFeatureCount = 1;
+        instanceDescriptor.requiredFeatures = &kTimedWaitAny;
         instance = wgpu::CreateInstance(&instanceDescriptor);
     }
 
@@ -128,7 +130,10 @@ GetDevice() {
     wgpu::DeviceDescriptor descriptor;
     std::vector<wgpu::FeatureName> requiredFeatures = {
             wgpu::FeatureName::Depth32FloatStencil8,
-            wgpu::FeatureName::Float32Filterable
+            wgpu::FeatureName::Float32Filterable,
+            wgpu::FeatureName::ClipDistances,
+            wgpu::FeatureName::PrimitiveIndex,
+            wgpu::FeatureName::TextureFormatsTier2
     };
     instance.WaitAny(instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly,
         [&adapter](wgpu::RequestAdapterStatus status, wgpu::Adapter reqAdapter,

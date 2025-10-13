@@ -35,8 +35,11 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 {
     _maxUniformBlockSize          = 64 * 1024;
     _maxShaderStorageBlockSize    = 1 * 1024 * 1024 * 1024;
-    // WebGPU does not support clip distances by default
-    _maxClipDistances             = 0;
+    if (device.HasFeature(wgpu::FeatureName::ClipDistances)) {
+        _maxClipDistances             = 8;
+    } else {
+        _maxClipDistances             = 0;
+    }
 
     #ifdef ARCH_OS_WASM_VM
     // Without this, the default value of 1 causes aligned_malloc to always return 0 (null)
@@ -48,7 +51,6 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
 
     // https://github.com/gfx-rs/wgpu/issues/158#issuecomment-490653129
     _uniformBufferOffsetAlignment = 256;
-    _SetFlag(HgiDeviceCapabilitiesBitsPrimitiveIdEmulation, true);
     _SetFlag(HgiDeviceCapabilitiesBitsCppShaderPadding, false);
     _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, false);
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
@@ -61,6 +63,7 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     _SetFlag(HgiDeviceCapabilitiesBitsTimestamps, device.HasFeature(wgpu::FeatureName::TimestampQuery));
     _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures, false); // WGSL not support bindless textures as of 06/2025
     _SetFlag(HgiDeviceCapabilitiesBitsBindlessBuffers, false);  // WGSL can use similar "storage" buffers
+    _SetFlag(HgiDeviceCapabilitiesBitsPrimitiveIdEmulation, !device.HasFeature(wgpu::FeatureName::PrimitiveIndex));
 }
 
 HgiWebGPUCapabilities::~HgiWebGPUCapabilities() = default;

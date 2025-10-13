@@ -31,7 +31,6 @@ import subprocess
 import sys
 import sysconfig
 import zipfile
-import google_depot_tools
 
 from urllib.request import urlopen  
 from shutil import which
@@ -1672,7 +1671,7 @@ THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "7187"
+DAWN_CHROMIUM_VERSION = "7465"
 
 DAWN_CMAKE_OPTIONS = [
     '-DTINT_BUILD_WGSL_WRITER=ON',
@@ -1682,6 +1681,7 @@ DAWN_CMAKE_OPTIONS = [
     '-DDAWN_BUILD_TESTS=OFF',
     '-DDAWN_BUILD_SAMPLES=OFF',
     '-DDAWN_USE_GLFW=OFF',
+    '-DDAWN_FETCH_DEPENDENCIES=ON',
 ]
 
 def PrepareDawn(context, force):
@@ -1717,13 +1717,6 @@ def PrepareDawn(context, force):
                     'third_party/khronos/EGL-Registry'
                 ]
 
-            google_depot_tools.fetch_dependecies(required_submodules)
-            # Issue when updating XCode to version 15
-            # https://github.com/abseil/abseil-cpp/issues/1241#issuecomment-2151166131
-            PatchFile("third_party/abseil-cpp/absl/copts/AbseilConfigureCopts.cmake", [
-                ('if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES [[Clang]])','if(FALSE)')
-            ])
-
             PatchFile("third_party/CMakeLists.txt",
                 [('    set(SPIRV_HEADERS_SKIP_INSTALL ON CACHE BOOL "" FORCE)\n',
                 '    set(SPIRV_HEADERS_ENABLE_INSTALL ON CACHE BOOL "" FORCE)\n'),
@@ -1750,7 +1743,8 @@ def InstallDawn(context, force, buildArgs):
         with CurrentWorkingDirectory(srcDir):
             cmakeOptions = [
                 '-DDAWN_ENABLE_INSTALL=ON',
-                '-DABSL_ENABLE_INSTALL=ON'
+                '-DABSL_ENABLE_INSTALL=ON',
+                '-DDAWN_BUILD_MONOLITHIC_LIBRARY=STATIC'
             ]
 
             cmakeOptions += DAWN_CMAKE_OPTIONS

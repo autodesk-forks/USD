@@ -28,7 +28,10 @@
 #include "pxr/imaging/hgiWebGPU/conversions.h"
 #include "pxr/imaging/hgiWebGPU/shaderCompiler.h"
 #include "pxr/imaging/hgiWebGPU/shaderGenerator.h"
+#include "pxr/imaging/hgiWebGPU/debugCodes.h"
+#include "pxr/base/tf/debug.h"
 
+#include <iostream>
 #include <sstream>
 #include <fstream>
 #include <filesystem>
@@ -74,21 +77,39 @@ std::string GlslToWgsl(
             errors);
 
     if (result) {
-        //// SPIR-V
         tint::spirv::reader::Options readerOptions{};
         readerOptions.allow_non_uniform_derivatives = true;
-        tint::Program program = tint::spirv::reader::Read(spirvData, readerOptions);
-        if (!program.IsValid()) {
-            TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + program.Diagnostics().Str() + "\n");
+        std::unordered_set<tint::wgsl::Extension> extensions = {
+            tint::wgsl::Extension::kPrimitiveIndex,
+            tint::wgsl::Extension::kClipDistances
+        };
+        //// SPIR-V
+        readerOptions.allowed_features.extensions.insert(extensions.begin(), extensions.end());
+        tint::Result<tint::core::ir::Module> irResult = tint::spirv::reader::ReadIR(spirvData, readerOptions);
+        if (irResult != tint::Success) {
+            TF_CODING_ERROR("Tint SPIR-V reader failure:\nParser: " + irResult.Failure().reason + "\n");
             return wgslCode;
         }
 
-        tint::wgsl::writer::Options options{};
-        auto tintResult = tint::wgsl::writer::Generate(program, options);
-        if (tintResult == tint::Success) {
-            wgslCode = tintResult->wgsl;
+        tint::wgsl::writer::Options writerOptions;
+        writerOptions.allow_non_uniform_derivatives = true;
+        writerOptions.allowed_features.extensions.insert(extensions.begin(), extensions.end());
+        writerOptions.allowed_features.features.emplace(tint::wgsl::LanguageFeature::kReadonlyAndReadwriteStorageTextures);
+        auto wgslResult = tint::wgsl::writer::ProgramFromIR(irResult.Get(), writerOptions);
+        if (wgslResult == tint::Success) {
+            tint::Program program = wgslResult.Move();
+            if (program.IsValid()) {
+                auto tintResult = tint::wgsl::writer::Generate(program);
+                if (tintResult == tint::Success) {
+                    wgslCode = tintResult->wgsl;
+                } else {
+                    *errors = tintResult.Failure().reason;
+                }
+            } else {
+                TF_CODING_ERROR("Tint WGSL writer failure:\nParser: " + program.Diagnostics().Str() + "\n");
+            }
         } else {
-            *errors = tintResult.Failure().reason;
+            *errors = wgslResult.Failure().reason;
         }
     }
     return wgslCode;
@@ -146,7 +167,7 @@ void HgiWebGPUShaderFunction::_CreateTexturesGroupLayoutEntries(
         textureEntry.visibility = stage;
         if (t.writable) {
             // TODO: This is the only access storage for now
-            textureEntry.storageTexture.access = wgpu::StorageTextureAccess::WriteOnly;
+            textureEntry.storageTexture.access = wgpu::StorageTextureAccess::ReadWrite;
             if (t.textureType == HgiShaderTextureTypeCubemapTexture) {
                 textureEntry.storageTexture.viewDimension = wgpu::TextureViewDimension::e2DArray;
             } else {
@@ -190,7 +211,7 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
     _CreateBuffersBindingGroupLayoutEntries(desc.buffers, desc.constantParams, stage);
     _CreateTexturesGroupLayoutEntries(desc.textures, stage);
 
-    wgpu::ShaderModuleWGSLDescriptor wgslDesc;
+    wgpu::ShaderSourceWGSL wgslDesc;
     wgpu::ShaderModuleDescriptor shaderModuleDesc;
     wgslDesc.sType = wgpu::SType::ShaderSourceWGSL;
     shaderModuleDesc.label = _descriptor.debugName.c_str();
@@ -234,6 +255,21 @@ HgiWebGPUShaderFunction::HgiWebGPUShaderFunction(
             TF_RUNTIME_ERROR("%s", e.what());
         }
     }
+    if (TfDebug::IsEnabled(HGIWEBGPU_DUMP_SHADER_SOURCEFILE)) {
+        std::string fname;
+        static size_t globalDebugID = 0;
+        std::stringstream fnameStream;
+        static size_t debugShaderID = 0;
+        fnameStream << "program" << globalDebugID++ << "_shader" << debugShaderID++ << ".wgsl";
+        fname = fnameStream.str();
+        std::fstream output(fname.c_str(), std::ios::out);
+        output << wgslCode;
+        output.close();
+
+        std::cout << "Write " << fname
+                  << " (size=" << wgslCode.size() << ")\n";
+    }
+    
     wgslDesc.code = wgslCode.c_str();
 
     if (_errors.empty()) {

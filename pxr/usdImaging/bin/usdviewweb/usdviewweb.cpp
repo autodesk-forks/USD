@@ -79,7 +79,7 @@ namespace {
     }
 
     wgpu::RenderPipeline createBlitPipeline(wgpu::Device const &device, wgpu::TextureFormat const &format) {
-        wgpu::ShaderModuleWGSLDescriptor wgslDesc = {};
+        wgpu::ShaderSourceWGSL wgslDesc = {};
         wgslDesc.code = R"(
 var<private> pos : array<vec2<f32>, 3> = array<vec2<f32>, 3>(
               vec2<f32>(-1.0, -1.0), vec2<f32>(-1.0, 3.0), vec2<f32>(3.0, -1.0));
@@ -218,7 +218,10 @@ struct VertexOutput {
                 const adapter = await navigator["gpu"]["requestAdapter"]();
                 const requestedFeatures = [
                     'depth32float-stencil8',
-                    'float32-filterable'
+                    'float32-filterable',
+                    'clip-distances',
+                    'primitive-index',
+                    'texture-formats-tier2'
                 ];
                 const requiredFeatures = [];
                 requestedFeatures.forEach((feat) => {

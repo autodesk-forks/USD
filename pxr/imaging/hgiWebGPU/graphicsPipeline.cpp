@@ -105,12 +105,10 @@ HgiWebGPUGraphicsPipeline::HgiWebGPUGraphicsPipeline(
         if( shaderStage == HgiShaderStageVertex )
         {
             shaderState.vertexState.module = shaderFn->GetShaderModule();
-            shaderState.vertexState.entryPoint = shaderFn->GetShaderEntryPoint();
         }
         else if( shaderStage == HgiShaderStageFragment )
         {
             shaderState.fragmentState.module = shaderFn->GetShaderModule();
-            shaderState.fragmentState.entryPoint = shaderFn->GetShaderEntryPoint();
         } else {
             TF_CODING_ERROR("Shader stages other than vertex and fragment are not currently supported.");
         }

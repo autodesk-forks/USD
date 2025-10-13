@@ -145,8 +145,16 @@ HgiWebGPUShaderGenerator::_WriteExtensions(std::ostream &ss)
 void
 HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
 {
-    ss << "#define gl_PrimitiveID 1\n" // TODO: gl_PrimitiveID not implemented in webgpu, faking it for the moment
-          "#define gl_PointCoord vec2(0.5)\n" // TODO: gl_PointCoord not implemented in webgpu, faking it for the moment
+
+    const HgiCapabilities *capabilities = _hgi->GetCapabilities();
+    const bool requiresPrimitiveIdEmulation =
+        capabilities->IsSet(HgiDeviceCapabilitiesBitsPrimitiveIdEmulation);
+
+    if (requiresPrimitiveIdEmulation) {
+        ss << "#define gl_PrimitiveID 1\n"; // gl_PrimitiveID not supported, faking it for the moment
+    }
+
+    ss << "#define gl_PointCoord vec2(0.5)\n" // TODO: gl_PointCoord not implemented in webgpu, faking it for the moment
           "#define centroid\n" // TODO: avoid interpolation qualifier due to limited support
           "#define REF(space,type) inout type\n"
           "#define FORWARD_DECL(func_decl) func_decl\n"
