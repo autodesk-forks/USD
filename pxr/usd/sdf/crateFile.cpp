@@ -3746,12 +3746,21 @@ CrateFile::_ReadPathsImpl(Reader reader,
     bool hasChild = false, hasSibling = false;
     do {
         auto h = reader.template Read<Header>();
+        const auto pathIndex = h.index.value;
+#ifdef PXR_PREFER_SAFETY_OVER_SPEED
+        if (pathIndex >= _paths.size()) {
+            TF_RUNTIME_ERROR("Corrupt path index in crate file (%u >= %zu)",
+                             pathIndex, _paths.size());
+            return;
+        }
+#endif // PXR_PREFER_SAFETY_OVER_SPEED
+
         if (parentPath.IsEmpty()) {
             parentPath = SdfPath::AbsoluteRootPath();
-            _paths[h.index.value] = parentPath;
+            _paths[pathIndex] = parentPath;
         } else {
             auto const &elemToken = _tokens[h.elementTokenIndex.value];
-            _paths[h.index.value] =
+            _paths[pathIndex] =
                 h.bits & _PathItemHeader::IsPrimPropertyPathBit ?
                 parentPath.AppendProperty(elemToken) :
                 parentPath.AppendElementToken(elemToken);
@@ -3782,7 +3791,7 @@ CrateFile::_ReadPathsImpl(Reader reader,
                     });
             }
             // Have a child (may have also had a sibling). Reset parent path.
-            parentPath = _paths[h.index.value];
+            parentPath = _paths[pathIndex];
         }
         // If we had only a sibling, we just continue since the parent path is
         // unchanged and the next thing in the reader stream is the sibling's
