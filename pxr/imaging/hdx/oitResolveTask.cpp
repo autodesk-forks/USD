@@ -92,7 +92,7 @@ _GetScreenSize()
     constexpr int oitScreenSizeFallback = 2048;
 
     return GfVec2i(oitScreenSizeFallback, oitScreenSizeFallback);
-}        
+}
 
 HdxOitResolveTask::HdxOitResolveTask(
     HdSceneDelegate* delegate, 
@@ -286,9 +286,13 @@ HdxOitResolveTask::_PrepareOitBuffers(
         //
 
         HdBufferSpecVector jointSpecs{
-                { HdxTokens->hdxOitIndexBuffer, HdTupleType{HdTypeInt32, 1} },
-                { HdxTokens->hdxOitDepthBuffer, HdTupleType{HdTypeFloat, 1} }
-        };
+                { HdxTokens->hdxOitIndexBuffer, HdTupleType{HdTypeInt32, 1} }};
+        if (HdxOitBufferAccessor::IsOitPackedDepthEnabled()) {
+            jointSpecs.push_back({HdxTokens->hdxOitTransmissionDepthBuffer, HdTupleType{HdTypeUInt32, 1}});
+        } else {
+            jointSpecs.push_back({HdxTokens->hdxOitDepthBuffer, HdTupleType{HdTypeFloat, 1}});
+
+        }
         _jointBar = hdStResourceRegistry->AllocateNonUniformBufferArrayRange(
                 /*role*/HdxTokens->oitJointBuffer,
                         jointSpecs,
@@ -297,14 +301,16 @@ HdxOitResolveTask::_PrepareOitBuffers(
         //
         // Data Buffer
         //        
-        HdBufferSpecVector dataSpecs{
-            { HdxTokens->hdxOitDataBuffer, HdTupleType{HdTypeFloatVec4, 1} }
+        HdBufferSpecVector dataSpecs{};
+        if (HdxOitBufferAccessor::IsOitPackedDepthEnabled()) {
+            dataSpecs.push_back({HdxTokens->hdxOitColorBuffer, HdTupleType{HdTypeUInt32, 1}});
+        } else {
+            dataSpecs.push_back({ HdxTokens->hdxOitDataBuffer, HdTupleType{HdTypeFloatVec4, 1}});
         };
         _dataBar = hdStResourceRegistry->AllocateSingleBufferArrayRange(
                                             /*role*/HdxTokens->oitData,
                                             dataSpecs,
                                             HdBufferArrayUsageHintBitsStorage);
-
         //
         // Uniforms
         //

@@ -22,11 +22,21 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_ENV_SETTING(HDX_ENABLE_OIT, true, 
                       "Enable order independent translucency");
 
+TF_DEFINE_ENV_SETTING(HDX_ENABLE_OIT_PACKED_DATA, false,
+    "Pack color, transmission and depth into smaller buffers, trading accuracy for memory.");
+
 /* static */
 bool
 HdxOitBufferAccessor::IsOitEnabled()
 {
     return TfGetEnvSetting(HDX_ENABLE_OIT);
+}
+
+/* static */
+bool
+HdxOitBufferAccessor::IsOitPackedDepthEnabled()
+{
+    return TfGetEnvSetting(HDX_ENABLE_OIT_PACKED_DATA);
 }
 
 HdxOitBufferAccessor::HdxOitBufferAccessor(HdTaskContext *ctx)

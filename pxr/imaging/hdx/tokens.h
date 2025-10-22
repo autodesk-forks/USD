@@ -19,8 +19,10 @@ PXR_NAMESPACE_OPEN_SCOPE
     (hdxWboitBufferOne)         \
     (hdxWboitBufferTwo)         \
     (hdxOitCounterBuffer)       \
+    (hdxOitColorBuffer)         \
     (hdxOitDataBuffer)          \
     (hdxOitDepthBuffer)         \
+    (hdxOitTransmissionDepthBuffer)\
     (hdxOitIndexBuffer)         \
     (hdxOitJointBuffer)         \
     (hdxSelectionBuffer)        \

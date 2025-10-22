@@ -5066,6 +5066,20 @@ pxr_register_test(testUsdImagingGLOIT
     TESTENV testUsdImagingGLOIT
 )
 
+pxr_register_test(testUsdImagingGLOITPacked
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -lighting -camlight -frameAll -camera /Root/FrontCamera -stage scene.usda -write testUsdImagingGLOITPacked.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLOITPacked.png
+    FAIL 0.005
+    FAIL_PERCENT 0.001
+    WARN 0.005
+    WARN_PERCENT 0.0005
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLOIT
+    ENV
+        HDX_ENABLE_OIT_PACKED_DATA=1
+)
+
 pxr_register_test(testUsdImagingGLWeightedBlendedOIT
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -frameAll -offscreen -lighting -camlight -stage transparentPrimitives.usda -clear 0.2 0.2 0.2 1  -write testUsdImagingGLWeightedBlendedOIT.png"
     IMAGE_DIFF_COMPARE
