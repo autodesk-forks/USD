@@ -51,13 +51,15 @@ enum class PickingState {
 struct WindowState
 {
     WindowState()
-            : mouseX(0.0), mouseY(0.0), mouseButton(-1), mouseButtonState(-1), pickingState(PickingState::Ready)
+            : mouseX(0.0), mouseY(0.0), mouseButton(-1), mouseButtonState(-1), 
+              pickingState(PickingState::Ready), needsRender(true)
     { }
     double mouseX, mouseY;
     int mouseButton;
     int mouseButtonState;
     PickingState pickingState;
     Camera *camera;
+    bool needsRender;
 };
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -66,6 +68,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     windowState->mouseButton = button;
     windowState->mouseButtonState = action;
     windowState->camera->mouseDown(button, action, mods, (int)windowState->mouseX, (int)windowState->mouseY);
+    windowState->needsRender = true;
     if (action == GLFW_PRESS && windowState->pickingState == PickingState::Ready) {
         windowState->pickingState = PickingState::Requested;
     }
@@ -80,6 +83,7 @@ void cursor_position_callback(GLFWwindow* window, double x, double y)
     {
         windowState->camera->mouseMove(static_cast<int>(xpos), static_cast<int>(ypos));
         windowState->camera->update();
+        windowState->needsRender = true;
     }
 
     windowState->mouseX = xpos;
@@ -91,6 +95,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     WindowState *windowState = static_cast<WindowState *>(glfwGetWindowUserPointer(window));
     windowState->camera->mouseWheel(xoffset, yoffset > 0 ? 1 : -1);
     windowState->camera->update();
+    windowState->needsRender = true;
 }
 
 #endif //PXR_USD_IMAGING_USD_WINDOW_STATE_H

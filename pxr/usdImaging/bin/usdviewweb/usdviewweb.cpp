@@ -465,6 +465,11 @@ struct VertexOutput {
 
             glfwSwapInterval(1);
             glfwPollEvents();
+
+            if (!wstate.needsRender && !rotate && wstate.pickingState == PickingState::Ready) {
+                return;
+            }
+
             if (wstate.pickingState == PickingState::Requested) {
                 pxr::UsdImagingGLEngine::PickParams pickParams = {
                     HdxPickTokens->resolveNearestToCenter,
@@ -586,6 +591,7 @@ struct VertexOutput {
             }
 
             device.GetQueue().Submit(1, &commands);
+            wstate.needsRender = false;
             if (numFrames > 0) frameIndex++;
 
             if (numFrames > 0 && frameIndex == numFrames) {

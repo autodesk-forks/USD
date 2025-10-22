@@ -108,7 +108,7 @@ private:
     {
         wgpu::Buffer src;
         void *dst;
-        uint32_t size;
+        uint32_t alignedSize;
         uint32_t bytesPerRow;
         uint32_t bytesPerRowAligned;
         bool isTmp = false; // to be removed when webgpu bug is fixed

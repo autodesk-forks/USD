@@ -160,12 +160,10 @@ HgiWebGPUBlitCmds::CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::
     char* dst = ((char*) copyOp.cpuDestinationBuffer) +
         copyOp.destinationByteOffset;
 
-    auto bufferSize = copyOp.destinationBufferByteSize;
-
     auto stagingData = std::make_unique<StagingData>();
     stagingData->src = stagingBuffer;
     stagingData->dst = dst;
-    stagingData->size = bufferSize;
+    stagingData->alignedSize = bytesPerRowAligned * texDesc.dimensions[1];
     stagingData->bytesPerRowAligned = bytesPerRowAligned;
     stagingData->bytesPerRow = bytesPerRow;
     stagingData->isTmp = true;
@@ -393,7 +391,7 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
         // doesn't like an emscripten_sleep within another block containing and emscripten_sleep
         for(std::unique_ptr<StagingData>& stagingData : _stagingDataItems)
         {
-            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->size, wgpu::CallbackMode::AllowSpontaneous,
+            stagingData->src.MapAsync(wgpu::MapMode::Read, 0, stagingData->alignedSize, wgpu::CallbackMode::AllowSpontaneous,
                 [](wgpu::MapAsyncStatus status, wgpu::StringView message, StagingData* rawStagingData)
             {
                 std::unique_ptr<StagingData> stagingData{rawStagingData};
@@ -406,11 +404,11 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
                 }
 
                 // copy to staging data
-                const void *memoryPtr = stagingData->src.GetConstMappedRange(0, stagingData->size);
+                const void *memoryPtr = stagingData->src.GetConstMappedRange(0, stagingData->alignedSize);
 
                 if (stagingData->bytesPerRow != stagingData->bytesPerRowAligned) 
                 {
-                    uint32_t height = stagingData->size / stagingData->bytesPerRow;
+                    uint32_t height = stagingData->alignedSize / stagingData->bytesPerRowAligned;
                     uint32_t offset = 0;
                     const char* srcPtr = static_cast<const char*>(memoryPtr);
                     char* dstPtr = static_cast<char*>(stagingData->dst);
@@ -425,7 +423,7 @@ HgiWebGPUBlitCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
                 } 
                 else
                 {
-                    memcpy(stagingData->dst, memoryPtr, stagingData->size);
+                    memcpy(stagingData->dst, memoryPtr, stagingData->alignedSize);
                 }
 
                 if (stagingData->isTmp) 
