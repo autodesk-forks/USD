@@ -22,13 +22,15 @@ class HdStRenderDelegate;
 using HdStResourceRegistrySharedPtr =
     std::shared_ptr<class HdStResourceRegistry>;
 
+TF_DECLARE_REF_PTRS(HdSt_MaterialXSyncSceneIndex);
+
 /// Launches and manages parallel generator tasks, including caching them by
 /// material hash, so that only one task is launched for each unique material.
 class HdSt_MaterialXSyncSceneIndex
     : public HdSingleInputFilteringSceneIndexBase
 {
 public:
-    HdSt_MaterialXSyncSceneIndex(
+    static HdSt_MaterialXSyncSceneIndexRefPtr New(
         const HdSceneIndexBaseRefPtr& inputSceneIndex,
         const HdStRenderDelegate& renderDelegate);
 
@@ -56,6 +58,10 @@ protected:
         const HdSceneIndexObserver::DirtiedPrimEntries &entries) override;
 
 private:
+    HdSt_MaterialXSyncSceneIndex(
+        const HdSceneIndexBaseRefPtr& inputSceneIndex,
+        const HdStRenderDelegate& renderDelegate);
+
     // Add the generator task to the cache. If this material hash hasn't been
     // added before, the task is launched on a worker thread.
     void _AddGeneratorTask(

@@ -16,6 +16,15 @@ namespace mx = MaterialX;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+HdSt_MaterialXSyncSceneIndexRefPtr
+HdSt_MaterialXSyncSceneIndex::New(
+    const HdSceneIndexBaseRefPtr& inputSceneIndex,
+    const HdStRenderDelegate& renderDelegate)
+{
+    return TfCreateRefPtr(
+        new HdSt_MaterialXSyncSceneIndex(inputSceneIndex, renderDelegate));
+}
+
 HdSt_MaterialXSyncSceneIndex::HdSt_MaterialXSyncSceneIndex(
     const HdSceneIndexBaseRefPtr&   inputSceneIndex,
     const HdStRenderDelegate&       renderDelegate)

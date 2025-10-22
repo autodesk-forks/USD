@@ -628,8 +628,8 @@ HdStRenderDelegate::SetTerminalSceneIndex(
         return;
     }
 
-    _materialXSyncSceneIndex = HdSt_MaterialXSyncSceneIndexRefPtr(
-        new HdSt_MaterialXSyncSceneIndex(terminalSceneIndex, *this));
+    _materialXSyncSceneIndex =
+        HdSt_MaterialXSyncSceneIndex::New(terminalSceneIndex, *this);
 }
 
 HdSt_MaterialXSyncSceneIndex*
