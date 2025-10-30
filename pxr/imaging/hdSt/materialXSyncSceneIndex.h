@@ -12,15 +12,20 @@
 #include "pxr/imaging/hd/filteringSceneIndex.h"
 
 #include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_hash_map.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 class HdSt_MaterialXGeneratorTask;
+struct HdSt_MaterialFilterTask;
 class SdfPath;
 class HdStRenderDelegate;
 
 using HdStResourceRegistrySharedPtr =
     std::shared_ptr<class HdStResourceRegistry>;
+
+using HdSt_MaterialFilterTaskSharedPtr =
+    std::shared_ptr<HdSt_MaterialFilterTask>;
 
 TF_DECLARE_REF_PTRS(HdSt_MaterialXSyncSceneIndex);
 
@@ -36,8 +41,11 @@ public:
 
     ~HdSt_MaterialXSyncSceneIndex() override;
 
-    /// Wait for all parallel tasks to complete
-    void Wait();
+    /// Wait for codegen tasks to complete and look up the filter task in the 
+    /// internal map by the material path. If found, remove the task from the
+    /// map and return it to the caller. If not found, return nullptr.
+    HdSt_MaterialFilterTaskSharedPtr
+    WaitAndExtractFilterTask(const SdfPath& materialPath);
 
     // HdSceneIndexBase overrides
     HdSceneIndexPrim GetPrim(const SdfPath &primPath) const override;
@@ -62,6 +70,11 @@ private:
         const HdSceneIndexBaseRefPtr& inputSceneIndex,
         const HdStRenderDelegate& renderDelegate);
 
+    /// Wait for all parallel tasks to complete
+    void _Wait();
+
+    void _AddMaterial(const SdfPath& id);
+
     // Add the generator task to the cache. If this material hash hasn't been
     // added before, the task is launched on a worker thread.
     void _AddGeneratorTask(
@@ -82,6 +95,21 @@ private:
     // launched. Used to prevent launching duplicate tasks.
     using _GeneratorTaskSet = tbb::concurrent_unordered_set<size_t>;
     _GeneratorTaskSet _generatorTaskSet;
+
+    struct _PathHashCompare {
+        static bool equal(const SdfPath &a, const SdfPath &b) {
+            return a == b;
+        }
+        static size_t hash(const SdfPath &path) {
+            return hash_value(path);
+        }
+    };
+
+    using _FilterTaskMap = tbb::concurrent_hash_map<
+        SdfPath, HdSt_MaterialFilterTaskSharedPtr, _PathHashCompare>;
+
+    // Thread-safe map of filter tasks indexed by material path
+    _FilterTaskMap _filterTaskMap;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

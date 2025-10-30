@@ -66,6 +66,10 @@ public:
 
     MaterialX::ShaderPtr Generate() const;
 
+    HdSt_MaterialFilterTaskSharedPtr GetFilterTask() {
+        return _filterTask;
+    }
+
 private:
     // To keep input data such as the material network alive for the duration
     // of the codegen process

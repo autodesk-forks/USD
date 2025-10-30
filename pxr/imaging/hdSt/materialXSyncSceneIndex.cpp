@@ -11,6 +11,9 @@
 #include "pxr/imaging/hdSt/resourceRegistry.h"
 
 #include "pxr/imaging/hd/sceneIndexAdapterSceneDelegate.h"
+#include "pxr/imaging/hd/tokens.h"
+
+#include "pxr/usd/sdf/path.h"
 
 namespace mx = MaterialX;
 
@@ -60,25 +63,7 @@ HdSt_MaterialXSyncSceneIndex::_PrimsAdded(
 
     for (const HdSceneIndexObserver::AddedPrimEntry& entry : entries) {
         if (entry.primType == HdPrimTypeTokens->material) {
-            HdSceneIndexPrim materialPrim =
-                _GetInputSceneIndex()->GetPrim(entry.primPath);
-
-            VtValue vtMat = HdSceneIndexAdapterSceneDelegate::GetMaterialResourceFromSceneIndexPrim(
-                materialPrim,
-                _renderDelegate.GetMaterialRenderContexts());
-
-            HdStResourceRegistrySharedPtr resourceRegistry =
-                std::static_pointer_cast<HdStResourceRegistry>(
-                    _renderDelegate.GetResourceRegistry());
-
-            auto generatorTask = HdSt_CreateMaterialXGeneratorTask(
-                entry.primPath,
-                vtMat,
-                *resourceRegistry->GetHgi());
-
-            if (generatorTask) {
-                _AddGeneratorTask(std::move(generatorTask), resourceRegistry);
-            }
+            _AddMaterial(entry.primPath);
         }
     }
     
@@ -91,7 +76,8 @@ HdSt_MaterialXSyncSceneIndex::_PrimsRemoved(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::RemovedPrimEntries &entries)
 {
-    // Just forward the notification - we don't need to do anything special for removed prims
+    // Just forward the notification - we don't need to do anything special for
+    // removed prims
     _SendPrimsRemoved(entries);
 }
 
@@ -100,8 +86,53 @@ HdSt_MaterialXSyncSceneIndex::_PrimsDirtied(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::DirtiedPrimEntries &entries)
 {
-    // Just forward the notification - we don't need to do anything special for dirtied prims
+    HD_TRACE_FUNCTION();
+    
+    for (const HdSceneIndexObserver::DirtiedPrimEntry& entry : entries) {
+        // If the dirtied prim is a material for which we've cached a filter
+        // task, remove the task since it's now stale. Any ongoing generator 
+        // tasks will keep their own shared pointers to the respective filter 
+        // tasks, so this is safe. If the element is not in the map, then the 
+        // lookup won't involve locking.
+        _FilterTaskMap::accessor accessor;
+        if (_filterTaskMap.find(accessor, entry.primPath)) {
+            _filterTaskMap.erase(accessor);
+        }
+    }
+    
+    // Forward the notification to observers
     _SendPrimsDirtied(entries);
+}
+
+void
+HdSt_MaterialXSyncSceneIndex::_AddMaterial(const SdfPath& id)
+{
+    HD_TRACE_FUNCTION();
+
+    HdSceneIndexPrim materialPrim =
+        _GetInputSceneIndex()->GetPrim(id);
+
+    VtValue vtMat = HdSceneIndexAdapterSceneDelegate::GetMaterialResourceFromSceneIndexPrim(
+        materialPrim,
+        _renderDelegate.GetMaterialRenderContexts());
+
+    HdStResourceRegistrySharedPtr resourceRegistry =
+        std::static_pointer_cast<HdStResourceRegistry>(
+            _renderDelegate.GetResourceRegistry());
+
+    auto generatorTask = HdSt_CreateMaterialXGeneratorTask(
+        id,
+        vtMat,
+        *resourceRegistry->GetHgi());
+
+    if (generatorTask) {
+        {
+            _FilterTaskMap::accessor accessor;
+            _filterTaskMap.insert(accessor, id);
+            accessor->second = generatorTask->GetFilterTask();
+        }
+        _AddGeneratorTask(std::move(generatorTask), resourceRegistry);
+    }
 }
 
 void
@@ -178,12 +209,33 @@ HdSt_MaterialXSyncSceneIndex::_LaunchGeneratorTask(
 }
 
 void
-HdSt_MaterialXSyncSceneIndex::Wait()
+HdSt_MaterialXSyncSceneIndex::_Wait()
 {
     HD_TRACE_FUNCTION();
 
     _dispatcher.Wait();
     _generatorTaskSet.clear();
+}
+
+HdSt_MaterialFilterTaskSharedPtr
+HdSt_MaterialXSyncSceneIndex::WaitAndExtractFilterTask(const SdfPath& materialPath)
+{
+    HD_TRACE_FUNCTION();
+
+    // Make sure that all generator tasks have completed
+    _Wait();
+
+    // Find and extract the filter task from the map using thread-safe accessor
+    _FilterTaskMap::accessor accessor;
+    if (_filterTaskMap.find(accessor, materialPath)) {
+        // Transfer ownership by copying the shared_ptr and removing from map
+        HdSt_MaterialFilterTaskSharedPtr filterTask = accessor->second;
+        _filterTaskMap.erase(accessor);  // Thread-safe erase using accessor
+        return filterTask;
+    }
+    
+    // No filter task found for this path
+    return nullptr;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

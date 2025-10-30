@@ -1311,6 +1311,8 @@ VtValue
 HdSceneIndexAdapterSceneDelegate::GetMaterialResourceFromSceneIndexPrim(
     HdSceneIndexPrim& prim, const TfTokenVector& renderContexts)
 {
+    TRACE_FUNCTION();
+
     HdMaterialSchema matSchema = HdMaterialSchema::GetFromParent(
             prim.dataSource);
     if (!matSchema.IsDefined()) {
