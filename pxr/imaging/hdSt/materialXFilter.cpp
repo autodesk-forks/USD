@@ -1101,12 +1101,12 @@ HdSt_MaterialFilterTask::AddMaterialXParams(
     // for MaterialXShaderGen
     // <anonNodeName_paramName, hdParamVtValue>
     std::map<std::string, VtValue> mxParamNameToValue;
-    for (auto const& [nodePath, hdNode]: hdNetwork->nodes) {
+    for (auto const& [nodePath, hdNode]: hdNetwork.nodes) {
         // Terminal Node parameters are not prefixed.
         std::string anonNodeNamePrefix;
         if (nodePath != terminalNodePath) {
-            const auto anonNodePathIt = hdToAnonNodePathMap.find(nodePath);
-            if (anonNodePathIt != hdToAnonNodePathMap.end()) {
+            const auto anonNodePathIt = origToAnonSdfPathMap.find(nodePath);
+            if (anonNodePathIt != origToAnonSdfPathMap.end()) {
                 anonNodeNamePrefix = anonNodePathIt->second.GetName() + "_";
             }
         }
@@ -1123,10 +1123,10 @@ HdSt_MaterialFilterTask::AddMaterialXParams(
     // Build a mapping from the anonymized node name to the original Hydra
     // SdfPath. This is to help find texture nodes associated with filename 
     // inputs found in the uniform block below.
-    std::map<std::string, SdfPath> anonToHdNodePathMap;
-    for (auto const& [hdPath, anonPath] : hdToAnonNodePathMap) {
+    std::map<std::string, SdfPath> anonToOrigSdfPathMap;
+    for (auto const& [hdPath, anonPath] : origToAnonSdfPathMap) {
         if (hdPath != terminalNodePath) {
-            anonToHdNodePathMap.emplace(anonPath.GetName(), hdPath);
+            anonToOrigSdfPathMap.emplace(anonPath.GetName(), hdPath);
         }
     }
 
@@ -1238,7 +1238,7 @@ HdSt_MaterialFilterTask::AddMaterialXParams(
             }
 
             // Get the original hdNodeName from the MaterialX node name
-            const auto hdNodePathIt = anonToOrigSdfPathMap.find(mxNodeName);
+            const auto hdNodePathIt = anonToOrigSdfPathMap.find(anonNodeName);
             if (hdNodePathIt != anonToOrigSdfPathMap.end()) {
                 _UpdateTextureNode(
                     param.name, &hdNetwork, 
@@ -1347,6 +1347,21 @@ _IsTopologicalShader(TfToken const& nodeId)
     return TfStringStartsWith(nodeId.GetString(), "ND_swizzle_");
 }
 
+static
+std::string
+_SanitizeName(std::string const& name)
+{
+    if (!SdfPath::IsValidIdentifier(name)) {
+        return "";
+    }
+    // Remove underscores from the given name
+    std::string sanitizedName = name;
+    sanitizedName.erase(
+        std::remove(sanitizedName.begin(), sanitizedName.end(), '_'),
+        sanitizedName.end());
+    return sanitizedName;
+}
+
 size_t
 HdSt_MaterialFilterTask::BuildAnonymizedMaterialNetwork(
     HdMaterialNetwork2* anonNetwork)
@@ -1384,8 +1399,8 @@ HdSt_MaterialFilterTask::BuildAnonymizedMaterialNetwork(
             // and remove any underscores this is to help with texture nodes 
             // later in _AddMaterialXParams()
             const std::string sanitizedName = _SanitizeName(path->GetName());
-            if (!anonNodePathMap->count(SdfPath(sanitizedName))) {
-                (*anonNodePathMap)[*path] = SdfPath(sanitizedName);
+            if (!origToAnonSdfPathMap.count(SdfPath(sanitizedName))) {
+                origToAnonSdfPathMap[*path] = SdfPath(sanitizedName);
                 TF_DEBUG(HDST_MTLX).Msg(
                     " - Map node named '%s' (sanitized to %s) to <%s> "
                     "(full path)\n",
@@ -1404,14 +1419,14 @@ HdSt_MaterialFilterTask::BuildAnonymizedMaterialNetwork(
             // When using anonymized networks we map the full path name to the 
             // new anonymized path. 
             const HdMaterialNode2& node = hdNetwork.nodes.find(*path)->second;
-            if (!anonNodePathMap->count(*path)) {
+            if (!origToAnonSdfPathMap.count(*path)) {
                 const std::string anonNodeName = 
                     "N" + std::to_string(nodeCounter++) 
                     + _SanitizeName(node.nodeTypeId.GetString())
                     + _SanitizeName(input.GetString());
                 const SdfPath anonPath =
                     anonBaseName.AppendChild(TfToken(anonNodeName));
-                (*anonNodePathMap)[*path] = anonPath;
+                origToAnonSdfPathMap[*path] = anonPath;
                 TF_DEBUG(HDST_MTLX).Msg(
                     " - Map node <%s> to <%s> (anonymized path)\n",
                     path->GetText(), anonPath.GetText());
@@ -1500,7 +1515,7 @@ HdSt_MaterialFilterTask::BuildAnonymizedMaterialNetwork(
             outNode.inputConnections.emplace(connPair.first, std::move(outConn));
         }
         anonNetwork->nodes.emplace(
-            origToAnonSdfPathMap[nodePair.first], std::move(outNode));
+            origToAnonSdfPathMap[inNodePath], std::move(outNode));
     }
 
     // Build the topo hash from the anonymized network
