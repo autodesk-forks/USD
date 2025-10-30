@@ -65,6 +65,11 @@ TF_REGISTRY_FUNCTION(TfDebug)
 
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX,
         "Debug messages in the MaterialX Filter.");
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_VALUES,
+        "Logging the HdSt_MaterialParams sent back to the Material Network.");
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_DISABLE_ANONYMIZE,
+        "Disable the anonymization the Hydra network before creating the "
+        "MaterialX Document.");
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_DUMP_SHADER_SOURCEFILE,
         "Write out the MaterialX generated glslfx shader to a file");
 }

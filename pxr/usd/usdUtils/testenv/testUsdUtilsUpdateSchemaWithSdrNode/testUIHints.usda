@@ -8,6 +8,7 @@ def Shader "TestUIHintsAPI" (
         token schemaKind = "singleApply"
         token schemaBase = "APISchemaBase"
         string openPages = "OpenGroup|OpenGroup:Nested"
+        string "pageShownIf|ShownIf Group" = "hidden >= 1"
     }
 )
 {
@@ -56,6 +57,13 @@ def Shader "TestUIHintsAPI" (
     int inputs:inClosedGroup = 1 (
         sdrMetadata = {
             token page = "ClosedGroup"
+        }
+    )
+
+    # Page with a shownIf expression
+    int inputs:inShownIfGroup = 1 (
+        sdrMetadata = {
+            token page = "ShownIf Group"
         }
     )
 

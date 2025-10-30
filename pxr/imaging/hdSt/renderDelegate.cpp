@@ -62,6 +62,9 @@ TF_DEFINE_ENV_SETTING(HDST_MAX_LIGHTS, 16,
 TF_DEFINE_ENV_SETTING(HDST_ENABLE_PARALLEL_MTLX_CODEGEN, false,
                       "Enable early parallelized MaterialX codegen");
 #endif
+TF_DEFINE_ENV_SETTING(HDST_DOME_LIGHT_CUBEMAP_TARGET_MEMORY_MB, 0,
+                      "Maximum memory target in MB for the cubemap computed "
+                      "from the latlong texture for the dome light.");
 
 const TfTokenVector HdStRenderDelegate::SUPPORTED_RPRIM_TYPES =
 {
@@ -216,6 +219,12 @@ HdStRenderDelegate::HdStRenderDelegate(HdRenderSettingsMap const& settingsMap)
             HdRenderSettingsTokens->domeLightCameraVisibility,
             VtValue(true) },
         HdRenderSettingDescriptor{
+            "Maximum memory target, in MB, of calculated cubemap texture for "
+            "dome light",
+            HdStRenderSettingsTokens->domeLightCubemapTargetMemory,
+            VtValue(static_cast<unsigned int>(
+                TfGetEnvSetting(HDST_DOME_LIGHT_CUBEMAP_TARGET_MEMORY_MB))) },
+        HdRenderSettingDescriptor{
             "Enable exposure compensation",
             HdRenderSettingsTokens->enableExposureCompensation,
             VtValue(true) }
@@ -248,6 +257,12 @@ HdStRenderDelegate::GetRenderStats() const
     }
 
     return ra;
+}
+
+bool
+HdStRenderDelegate::RequiresStormTasks() const
+{
+    return true;
 }
 
 HdStRenderDelegate::~HdStRenderDelegate() = default;
