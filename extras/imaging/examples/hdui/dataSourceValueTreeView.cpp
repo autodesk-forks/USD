@@ -274,8 +274,7 @@ HduiDataSourceValueTreeView::SetDataSource(
 
         header()->setSectionResizeMode(0, QHeaderView::Stretch);
         if (header()->count() > 1) {
-            header()->setSectionResizeMode(1, QHeaderView::Fixed);
-            header()->resizeSection(1,fontMetrics().averageCharWidth() * 10);
+            header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
             header()->setStretchLastSection(false);
         } else {
             header()->setStretchLastSection(true);

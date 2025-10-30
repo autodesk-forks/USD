@@ -3,6 +3,11 @@
 	Keywords: RmanUsdValidators
 	SchemaTypes: UsdRiPxrRenderTerminalsAPI
 	isSuite: False
+[usdGeomValidators:EncapsulationChecker]:
+	Doc: Validates there are no nested Gprims.
+	Keywords: UsdGeomValidators
+	SchemaTypes: UsdGeomBoundable
+	isSuite: False
 [usdGeomValidators:StageMetadataChecker]:
 	Doc: All stages must declare their 'upAxis' and 'metersPerUnit'.
 	Keywords: UsdGeomValidators

@@ -14,6 +14,7 @@
 #include <QFileDialog>
 #include <QMenu>
 #include <QTimer>
+#include <QHeaderView>
 
 #include <cstdio>
 #include <iostream>
@@ -39,6 +40,15 @@ public:
     {
         if (!locator.IsEmpty()) {
             setText(/*column = */ 0, _ComputeUIDisplayName(locator));
+
+            // add the type name in the 2nd column in case of Sampled
+            // data source
+            if (HdSampledDataSourceHandle sampledDataSource =
+                HdSampledDataSource::Cast(dataSource)) {
+                std::string typeText = sampledDataSource->GetValue(0.0f)
+                    .GetTypeName();
+            ;    setText(/* column = */ 1, typeText.c_str());
+            }
         }
 
         if (HdContainerDataSource::Cast(dataSource)
@@ -271,8 +281,12 @@ private:
 HduiDataSourceTreeWidget::HduiDataSourceTreeWidget(QWidget *parent)
 : QTreeWidget(parent)
 {
-    setHeaderLabels({"Name"});
+    setHeaderLabels({"Property", "Type"});
     setAllColumnsShowFocus(true);
+
+    header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    header()->setStretchLastSection(true);
 
     connect(this,  &QTreeWidget::itemExpanded, [](
             QTreeWidgetItem * item) {
@@ -312,14 +326,33 @@ HduiDataSourceTreeWidget::SetPrimDataSource(const SdfPath &primPath,
         HdContainerDataSourceHandle const &dataSource)
 {
     clear();
-    if (dataSource) {
-        Hdui_DataSourceTreeWidgetItem *item =
-            new Hdui_DataSourceTreeWidgetItem(
-                HdDataSourceLocator(),
-                invisibleRootItem(),
-                dataSource);
 
-        item->setText(0, primPath.GetName().c_str());
+    if (dataSource) {
+        if (HdContainerDataSourceHandle container =
+            HdContainerDataSource::Cast(dataSource)) {
+            // add all container children as roots
+            TfDenseHashSet<TfToken, TfHash> usedNames;
+            for (TfToken const& childName: container->GetNames()) {
+                if (usedNames.find(childName) != usedNames.end()) {
+                    continue;
+                }
+                usedNames.insert(childName);
+                if (HdDataSourceBaseHandle childDataSource =
+                    container->Get(childName)) {
+                    new Hdui_DataSourceTreeWidgetItem(
+                        HdDataSourceLocator().Append(childName),
+                        invisibleRootItem(),
+                        childDataSource);
+                }
+            }
+        } else  {
+            Hdui_DataSourceTreeWidgetItem *item =
+                new Hdui_DataSourceTreeWidgetItem(
+                    HdDataSourceLocator(),
+                    invisibleRootItem(),
+                    dataSource);
+            item->setText(0, primPath.GetName().c_str());
+        }
     }
 }
 

@@ -15,7 +15,8 @@
 // 14 -> 15: Fix VelocityMotionResolvingSceneIndex's handling of instance
 //           scales; fixes for correct behavior in a motion blur context.
 // 15 -> 16: Introducing HdsiDomeLightCameraVisibilitySceneIndex.
+// 16 -> 17: Introducing HdsiMaterialRenderContextFilteringSceneIndex.
 
-#define HDSI_API_VERSION 16
+#define HDSI_API_VERSION 17
 
 #endif // PXR_IMAGING_HDSI_VERSION_H

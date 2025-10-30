@@ -59,6 +59,30 @@ pxr_register_test(testExecUsdAttributeComputations
     TESTENV testExecUsdAttributeComputations
 )
 
+pxr_build_test(testExecUsdAttributeValueInput
+    LIBRARIES
+        tf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdAttributeValueInput.cpp
+)
+
+pxr_install_test_dir(
+    SRC testenv/testExecUsdAttributeValueInput
+    DEST testExecUsdAttributeValueInput
+)
+
+pxr_register_test(testExecUsdAttributeValueInput
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeValueInput"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testExecUsdAttributeValueInput
+)
+
 pxr_build_test(testExecUsdBasicCompilation
     LIBRARIES
         gf

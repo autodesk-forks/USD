@@ -113,7 +113,7 @@ public:
 
     HDST_API
     HdRenderSettingDescriptorList
-        GetRenderSettingDescriptors() const override;
+    GetRenderSettingDescriptors() const override;
 
     HDST_API
     VtDictionary GetRenderStats() const override;
@@ -131,6 +131,14 @@ public:
     HDST_API
     HdSt_MaterialXSyncSceneIndex* GetMaterialXSyncSceneIndex();
 #endif
+
+    /// Flag for the HdxTaskControllerSceneIndex.
+    ///
+    /// The HdxTaskControllerSceneIndex requires a different configuration
+    /// for Storm than any other render delegate.
+    ///
+    HDST_API
+    bool RequiresStormTasks() const override;
 
     // ---------------------------------------------------------------------- //
     /// \name Misc public API

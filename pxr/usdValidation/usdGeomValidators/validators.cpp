@@ -146,6 +146,50 @@ _SubsetParentIsImageable(const UsdPrim &usdPrim,
             usdPrim.GetPath().GetText(), parentPrim.GetPath().GetText())) };
 }
 
+static UsdValidationErrorVector
+_HasValidEncapsulation(const UsdPrim &usdPrim, 
+                       const UsdValidationTimeRange &/*timeRange*/)
+{
+    UsdValidationErrorVector errors;
+    const UsdValidationErrorSites primErrorSites
+        = { UsdValidationErrorSite(usdPrim.GetStage(), usdPrim.GetPath()) };
+    
+    const UsdPrim parentPrim = usdPrim.GetParent();
+
+    if (usdPrim.IsA<UsdGeomBoundable>()){
+        if (parentPrim) {
+            // Of course we must allow Boundables under other Boundables, so that
+            // schemas like UsdGeom.Pointinstancer can nest their prototypes.  
+            // But we disallow a PointInstancer under a Mesh just as we disallow 
+            // a Mesh under a Mesh, for the same reason: we cannot then 
+            // independently adjust visibility for the two objects, nor can we 
+            // reasonably compute the parent Mesh's extent.
+            std::function<void(const UsdPrim &)> _VerifyGprimAncestor = 
+                [&](const UsdPrim &currentAncestor) {
+                if (!currentAncestor || currentAncestor.IsPseudoRoot()) {
+                    return;
+                }
+
+                if (currentAncestor.IsA<UsdGeomGprim>()) {
+                    errors.emplace_back(
+                        UsdGeomValidationErrorNameTokens
+                            ->invalidNestedGprims,
+                        UsdValidationErrorType::Error,
+                        primErrorSites,
+                        TfStringPrintf(
+                            "Gprim <%s> has an ancestor prim that is also a "
+                            "Gprim, which is not allowed.",
+                            usdPrim.GetPath().GetText()));
+                    return;
+                }
+                _VerifyGprimAncestor(currentAncestor.GetParent());
+            };
+            _VerifyGprimAncestor(parentPrim);
+        }
+    }
+    return errors;
+}
+
 TF_REGISTRY_FUNCTION(UsdValidationRegistry)
 {
     UsdValidationRegistry &registry = UsdValidationRegistry::GetInstance();
@@ -160,6 +204,10 @@ TF_REGISTRY_FUNCTION(UsdValidationRegistry)
     registry.RegisterPluginValidator(
         UsdGeomValidatorNameTokens->subsetParentIsImageable,
         _SubsetParentIsImageable);
+
+    registry.RegisterPluginValidator(
+        UsdGeomValidatorNameTokens->encapsulationChecker,
+        _HasValidEncapsulation);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

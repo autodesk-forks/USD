@@ -1202,6 +1202,26 @@ function(pxr_toplevel_epilogue)
             )
         endif()
 
+        # When building a monolithic library (static or shared) we want all
+        # API functions to be exported. So add FOO_EXPORTS=1 for every
+        # library in PXR_OBJECT_LIBS, where FOO is the uppercase version
+        # of the library name, to every library in PXR_OBJECT_LIBS.
+        set(exports "")
+        foreach(lib ${PXR_OBJECT_LIBS})
+            string(TOUPPER ${lib} uppercaseName)
+            list(APPEND exports "${uppercaseName}_EXPORTS=1")
+        endforeach()
+
+        if (TARGET python)
+            # The boost python target uses a different export macro so
+            # add that as well.
+            list(APPEND exports "PXR_BOOST_PYTHON_SOURCE=1")
+        endif()
+
+        foreach(lib ${PXR_OBJECT_LIBS})
+            target_compile_definitions(${lib} PRIVATE ${exports})
+        endforeach()
+
         if(BUILD_SHARED_LIBS)
             target_link_libraries(usd_m
                 PUBLIC
@@ -1215,13 +1235,7 @@ function(pxr_toplevel_epilogue)
             _pxr_add_rpath(rpath "${CMAKE_INSTALL_PREFIX}/lib")
             _pxr_install_rpath(rpath usd_m)
         else()
-            # When building a static monolithic library we want all API functions to be
-            # exported. So add FOO_EXPORTS=1 for every library in PXR_OBJECT_LIBS,
-            # where FOO is the uppercase version of the library name, to every
-            # library in PXR_OBJECT_LIBS.
             foreach(lib ${PXR_OBJECT_LIBS})
-                string(TOUPPER ${lib} uppercaseName)
-                target_compile_definitions(${lib} PRIVATE "${uppercaseName}_EXPORTS=1")
                 target_link_libraries(usd_m
                     PUBLIC
                         ${lib}
