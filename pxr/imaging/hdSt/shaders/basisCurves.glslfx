@@ -1221,16 +1221,6 @@ Coeffs evaluateBasis(float u, const vec4 cv[4])
 
 void main(void)
 {
-#ifdef HD_HAS_depthReadback
-    // Sample the z-Buffer at the frag coordinate.
-    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
-                                       ivec2(gl_FragCoord.xy),
-                                       /* lod = */ 0).x;
-    // reject fragments behind opaque objects
-    if (gl_FragCoord.z >= bufferVal) {
-      discard;
-    }
-#endif
     ApplyDiskSampleMask();
 
     DiscardBasedOnTopologicalVisibility();
@@ -1253,6 +1243,15 @@ void main(void)
     vec4 patchCoord = vec4(0, 0.5, 0, 0);
 
     color = ShadingTerminal(vec4(Peye, 1), Neye, color, patchCoord);
+
+#ifdef HD_HAS_depthReadback
+    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
+                                       ivec2(gl_FragCoord.xy),
+                                       /* lod = */ 0).x;
+    if (gl_FragCoord.z >= bufferVal) {
+      discard;
+    }
+#endif
 
 #ifdef HD_MATERIAL_TAG_MASKED   
     if (ShouldDiscardByAlpha(color)) {
@@ -1284,16 +1283,6 @@ void main(void)
 FORWARD_DECL(vec3 fragmentNormal(vec3 position, vec3 normal, float v));
 void main(void)
 {
-#ifdef HD_HAS_depthReadback
-    // Sample the z-Buffer at the frag coordinate.
-    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
-                                       ivec2(gl_FragCoord.xy),
-                                       /* lod = */ 0).x;
-    // reject fragments behind opaque objects
-    if (gl_FragCoord.z >= bufferVal) {
-      discard;
-    }
-#endif
     ApplyDiskSampleMask();
 
     DiscardBasedOnTopologicalVisibility();
@@ -1311,6 +1300,15 @@ void main(void)
 
     vec4 patchCoord = vec4(0, v, 0, 0);
     color = ShadingTerminal(vec4(Peye, 1), Neye, color, patchCoord);
+
+#ifdef HD_HAS_depthReadback
+    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
+                                       ivec2(gl_FragCoord.xy),
+                                       /* lod = */ 0).x;
+    if (gl_FragCoord.z >= bufferVal) {
+      discard;
+    }
+#endif
 
 #ifdef HD_MATERIAL_TAG_MASKED   
     if (ShouldDiscardByAlpha(color)) {
