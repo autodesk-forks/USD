@@ -1477,17 +1477,6 @@ void main(void)
 {
     ApplyDiskSampleMask();
 
-#ifdef HD_HAS_depthReadback
-    // Sample the z-Buffer at the frag coordinate.
-    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
-                                       ivec2(gl_FragCoord.xy),
-                                       /* lod = */ 0).x;
-    // reject fragments behind opaque objects
-    if (gl_FragCoord.z >= bufferVal) {
-      discard;
-    }
-#endif
-
     bool isFlipped = IsFlipped();
 
     DiscardBasedOnShading(gl_FrontFacing, isFlipped);
@@ -1516,6 +1505,15 @@ void main(void)
 
     vec4 patchCoord = GetPatchCoord();
     color = ShadingTerminal(vec4(Peye, 1), Neye, color, patchCoord);
+
+#ifdef HD_HAS_depthReadback
+    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
+                                       ivec2(gl_FragCoord.xy),
+                                       /* lod = */ 0).x;
+    if (gl_FragCoord.z >= bufferVal) {
+      discard;
+    }
+#endif
 
     color = ApplyEdgeColor(color, patchCoord);
 
