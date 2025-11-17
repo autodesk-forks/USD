@@ -20,9 +20,13 @@ if (${PXR_ENABLE_MATERIALX_SUPPORT})
         MaterialXCore
         MaterialXFormat
         MaterialXGenGlsl
-        MaterialXGenMsl
         hdMtlx
     )
+    if (PXR_ENABLE_METAL_SUPPORT)
+        list(APPEND optionalLibs
+            MaterialXGenMsl
+        )
+    endif()
     list(APPEND optionalPrivateClasses
          materialXFilter
          materialXShaderGen
