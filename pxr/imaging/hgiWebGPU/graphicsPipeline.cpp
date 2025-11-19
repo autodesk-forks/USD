@@ -147,6 +147,11 @@ HgiWebGPUGraphicsPipeline::HgiWebGPUGraphicsPipeline(
         depthStencilDesc.stencilReadMask = desc.depthState.stencilFront.readMask;
         depthStencilDesc.stencilWriteMask = desc.depthState.stencilFront.readMask;
         pipelineDesc.depthStencil = &depthStencilDesc;
+
+        if (desc.depthState.depthBiasEnabled) {
+            depthStencilDesc.depthBias = desc.depthState.depthBiasConstantFactor;
+            depthStencilDesc.depthBiasSlopeScale = desc.depthState.depthBiasSlopeFactor;
+        }
     }
 
     // setup the vertex buffer layout(s)

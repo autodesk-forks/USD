@@ -1266,7 +1266,8 @@ UsdImagingGLEngine::TestIntersection(
     pickCtxParams.collection = _intersectCollection;
     pickCtxParams.outHits = &allHits;
     // Capture what we need by value to avoid dangling references in async callback
-    pickCtxParams.returnHits = [returnHits, this](pxr::HdxPickHitVector allHits){
+    pickCtxParams.callbackFn = [returnHits, this](
+        HdxPickHitVector allHits, std::optional<std::shared_ptr<HdxPickBuffers>> pickBuffers){
         IntersectionResultVector outResults;
 
         for(HdxPickHit& hit : allHits)

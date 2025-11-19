@@ -9,6 +9,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hdx/api.h"
+#include "pxr/imaging/hdx/pickBuffers.h"
 
 #include "pxr/imaging/hdSt/textureUtils.h"
 #include "pxr/imaging/hd/dataSource.h"
@@ -30,6 +31,7 @@
 
 #include <vector>
 #include <memory>
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -49,7 +51,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     (resolveNearestToCenter)         \
     (resolveUnique)                  \
     (resolveAll)                     \
-    (resolveDeep)
+    (resolveDeep)                    \
+    (resolveNone)
 
 TF_DECLARE_PUBLIC_TOKENS(HdxPickTokens, HDX_API, HDX_PICK_TOKENS);
 
@@ -223,7 +226,8 @@ struct HdxPrimOriginInfo
     HdContainerDataSourceHandle primOrigin;
 };
 
-using ReturnHitsFn = std::function<void(pxr::HdxPickHitVector&)>;
+class HdxPickBuffers;
+using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std::shared_ptr<HdxPickBuffers>> pickBuffers)>;
 
 /// Pick task context params.  This contains task params that can't come from
 /// the scene delegate (like resolution mode and pick location, that might
@@ -256,6 +260,16 @@ using ReturnHitsFn = std::function<void(pxr::HdxPickHitVector&)>;
 ///         geometry but also of all the geometry hiding behind. The 'pickTarget'
 ///         influences this operation. For e.g., the subprim indices are ignored
 ///         when the pickTarget is pickPrimsAndInstances.
+///     6. HdxPickTokens->resolveNone: Returns pick buffers for application-side
+///         hit computation.
+/// 'subRect': Optionally defines a sub-region of the rendered buffers to use by
+///     the pick result method defined by 'resolveMode'. If not specified, it is
+///     reset to the entire buffer dimensions specified by 'resolution'.
+/// 'callbackFn': Optional function callback invoked when pick buffers have
+///     all been transferred from GPU to CPU asynchronously. This is required in
+///     the case of web which must use mapAsync to read back buffers.
+/// 'pickBuffers': Optional pointer to a HdxPickBuffers instance to be populated
+///     with generated pick buffers if present.
 ///
 struct HdxPickTaskContextParams
 {
@@ -272,8 +286,15 @@ struct HdxPickTaskContextParams
         , clipPlanes()
         , depthMaskCallback(nullptr)
         , collection()
+        , occluderCollection()
         , alphaThreshold(0.0001f)
+        , occluderDepthBiasEnable(false)
+        , occluderDepthBiasConstantFactor(0.0f)
+        , occluderDepthBiasSlopeFactor(0.0f)
         , outHits(nullptr)
+        , subRect({-1,-1,-1,-1})
+        , callbackFn(nullptr)
+        , pickBuffers(nullptr)
     {}
 
     GfVec2i resolution;
@@ -286,10 +307,22 @@ struct HdxPickTaskContextParams
     std::vector<GfVec4d> clipPlanes;
     DepthMaskCallback depthMaskCallback;
     HdRprimCollection collection;
+    // Collection of prims that should be used for occlusion.
+    // By having a different collection, the api allows to use different
+    // representations for occlusion than for picking. This is useful
+    // for picking representations like lines or points.
+    HdRprimCollection occluderCollection;
     float alphaThreshold;
+    bool  occluderDepthBiasEnable;
+    float occluderDepthBiasConstantFactor;
+    float occluderDepthBiasSlopeFactor;
     HdxPickHitVector *outHits;
+    // (top, right, subRectWidth, subRectHeight)
+    GfVec4i subRect;
     /// A callback for executing the pick task asynchronously.
-    ReturnHitsFn returnHits;
+    callbackFn callbackFn;
+    /// Pick buffers with managed lifetime via shared_ptr
+    std::shared_ptr<HdxPickBuffers> pickBuffers;
 };
 
 /// \class HdxPickTask
@@ -370,15 +403,16 @@ private:
 
     void _ClearPickBuffer();
     void _ResolveDeep();
+
     pxr::HdxPickHitVector _BuildResults(
-        int const* primIds,
-        int const* instanceIds,
-        int const* elementIds,
-        int const* edgeIds,
-        int const* pointIds,
-        int const* neyes,
-        float const* depths,
-        pxr::HdxPickHitVector &outHits);
+        HdStTextureUtils::AlignedBuffer<int>& primIds,
+        HdStTextureUtils::AlignedBuffer<int>& instanceIds,
+        HdStTextureUtils::AlignedBuffer<int>& elementIds,
+        HdStTextureUtils::AlignedBuffer<int>& edgeIds,
+        HdStTextureUtils::AlignedBuffer<int>& pointIds,
+        HdStTextureUtils::AlignedBuffer<int>& neyes,
+        HdStTextureUtils::AlignedBuffer<float>& depths,
+        pxr::HdxPickHitVector& outHits);
 
     template<typename T>
     HdStTextureUtils::AlignedBuffer<T>
@@ -389,7 +423,7 @@ private:
     _ReadAovBufferAsync(TfToken const &aovName,
       std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<T>)> completed);
 
-    std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<int32_t>)> _pickOp;
+    void _checkIfAllBuffersReady();
 
     HdRenderBuffer const * _FindAovBuffer(TfToken const & aovName) const;
 
@@ -417,7 +451,9 @@ private:
 
     // pick buffer used for deep selection
     HdBufferArrayRangeSharedPtr _pickBuffer;
-    std::map<TfToken, HdStTextureUtils::AlignedBuffer<int32_t>> _gpuBuffers;
+
+    std::map<TfToken, HdStTextureUtils::AlignedBuffer<int>> _gpuIntBuffers;
+    std::map<TfToken, HdStTextureUtils::AlignedBuffer<float>> _gpuFloatBuffers;
 
     HdxPickTask() = delete;
     HdxPickTask(const HdxPickTask &) = delete;
@@ -494,6 +530,15 @@ public:
     /// value.
     HDX_API
     void ResolveUnique(HdxPickHitVector* allHits) const;
+
+    HDX_API
+    GfVec2i GetBufferSize() const;
+
+    HDX_API
+    GfVec4i GetSubRect() const;
+
+    HDX_API
+    void SetSubRect(GfVec4i subRect);
 
 private:
     bool _ResolveHit(int index, int x, int y, float z, HdxPickHit* hit) const;
