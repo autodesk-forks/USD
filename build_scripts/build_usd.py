@@ -2751,7 +2751,7 @@ class InstallContext:
         # - Imaging
         self.buildImaging = (args.build_imaging == IMAGING or
                              args.build_imaging == USD_IMAGING
-                             and not self.targetWasm)
+                            )
         self.enablePtex = self.buildImaging and args.enable_ptex
         self.enableOpenVDB = (self.buildImaging
                               and args.enable_openvdb
@@ -2794,7 +2794,7 @@ class InstallContext:
                                 if args.draco_location else None)
 
         # - MaterialX
-        self.buildMaterialX = args.build_materialx and not self.targetWasm
+        self.buildMaterialX = args.build_materialx
 
         # - TBB
         # Note: wasm build requires requires building oneTBB

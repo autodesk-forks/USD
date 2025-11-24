@@ -1572,7 +1572,7 @@ HdxTaskControllerSceneIndex::_SetRenderOutputs(
         _StormRenderTaskPath(_params.prefix, HdStMaterialTagTokens->volume);
 
     const SdfPath translucentId =
-        _StormRenderTaskPath(_prefix, HdStMaterialTagTokens->translucent);
+        _StormRenderTaskPath(_params.prefix, HdStMaterialTagTokens->translucent);
 
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
@@ -2369,7 +2369,7 @@ HdxTaskControllerSceneIndex::_UpdateAovMSAADescriptor()
 {
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
-    const SdfPath path = _AovScopePath(_prefix);
+    const SdfPath path = _AovScopePath(_params.prefix);
     for (const SdfPath &renderBufferPath :
             _retainedSceneIndex->GetChildPrimPaths(path)) {
         HdSceneIndexPrim const prim =
@@ -2402,7 +2402,7 @@ HdxTaskControllerSceneIndex::_UpdateAovMSAASampleCount()
 {
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
-    const SdfPath path = _AovScopePath(_prefix);
+    const SdfPath path = _AovScopePath(_params.prefix);
     for (const SdfPath &renderBufferPath :
             _retainedSceneIndex->GetChildPrimPaths(path)) {
         HdSceneIndexPrim const prim =
