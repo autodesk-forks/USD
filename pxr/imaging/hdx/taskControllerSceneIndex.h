@@ -54,21 +54,25 @@ public:
     using AovDescriptorCallback =
         std::function<HdAovDescriptor(const TfToken &name)>;
 
-    /// C'tor.
-    ///
     /// All prims in this scene index are under prefix.
     /// The client needs to wrap 
     /// HdRenderDelegate::GetDefaultAovDescriptor in aovDescriptorCallback
     /// (the API on HdRenderDelegate might change).
     /// gpuEnabled decides whether the present task is run for
     /// non-Storm renderers.
+    struct Parameters
+    {
+        const SdfPath prefix;
+        const AovDescriptorCallback aovDescriptorCallback;
+        bool isForStorm;
+        bool gpuEnabled;
+    };
+
+    /// C'tor.
     HDX_API
     static
     HdxTaskControllerSceneIndexRefPtr
-    New(const SdfPath &prefix,
-        const TfToken &rendererPluginName,
-        const AovDescriptorCallback &aovDescriptorCallback,
-        bool gpuEnabled = true);
+    New(const Parameters& params);
 
     HDX_API
     ~HdxTaskControllerSceneIndex() override;
@@ -270,13 +274,10 @@ public:
     void SetEnablePresentation(bool enabled);
 
 private:
-    HdxTaskControllerSceneIndex(
-        const SdfPath &prefix,
-        const TfToken &rendererPluginName,
-        const AovDescriptorCallback &aovDescriptorCallback,
-        bool gpuEnabled);
+    HdxTaskControllerSceneIndex(const Parameters& params);
 
     bool _IsForStorm() const;
+    bool _RunGpuAovTasks() const;
 
     void _CreateStormTasks();
     void _CreateGenericTasks();
@@ -294,10 +295,7 @@ private:
     void _UpdateAovMSAADescriptor();
     void _UpdateAovMSAASampleCount();
 
-    const SdfPath _prefix;
-    const bool _isForStorm;
-    const AovDescriptorCallback _aovDescriptorCallback;
-    const bool _runGpuAovTasks;
+    const Parameters _params;
 
     HdRetainedSceneIndexRefPtr const _retainedSceneIndex;
 

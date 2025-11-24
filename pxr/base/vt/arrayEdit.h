@@ -32,14 +32,12 @@ class VtArrayEditBuilder; // fwd
 
 /// \class VtArrayEdit
 ///
-/// An array edit represents either a sequence of per-element modifications to a
-/// VtArray, or simply a dense VtArray.  VtArray implicitly converts to
-/// VtArrayEdit as a dense array.
+/// An array edit represents a sequence of per-element modifications to a
+/// VtArray.
 ///
-/// The member function ComposeOver(strong, weak) applies strong's edits to weak
-/// and returns the resulting VtArrayEdit, which may be either a dense array (if
-/// one or both of strong & weak are dense) or a representation of the combined
-/// edits.
+/// The member function ComposeOver(strong, weak) applies strong's edits to
+/// `weak` and returns the resulting VtArray or VtArrayEdit, depending on
+/// whether `weak` is a VtArray or VtArrayEdit.
 ///
 /// VtArrayEdit under ComposeOver() forms an algebraic "monoid".  That is,
 /// ComposeOver() is associative, where the default-constructed VtArrayEdit
@@ -61,28 +59,9 @@ public:
     /// with an identity returns the other argument.
     VtArrayEdit() = default;
 
-    /// Copy construct or implicitly convert from VtArray, producing a dense
-    /// VtArrayEdit.
-    VtArrayEdit(Array const &a) : _denseOrLiterals(a), _isDense(true) {}
-
-    /// Move construct or implicitly convert from VtArray, producing a dense
-    /// VtArrayEdit.
-    VtArrayEdit(Array &&a) : _denseOrLiterals(std::move(a)), _isDense(true) {}
-
-    /// Copy construct.
-    VtArrayEdit(VtArrayEdit const &) = default;
-    /// Move construct.
-    VtArrayEdit(VtArrayEdit &&) = default;
-
-    /// Copy assign.
-    VtArrayEdit &operator=(VtArrayEdit const &) = default;
-    /// Move assign.
-    VtArrayEdit &operator=(VtArrayEdit &&) = default;
-
     /// Equality comparison.
     friend bool operator==(VtArrayEdit const &x, VtArrayEdit const &y) {
-        return std::tie(x._isDense, x._denseOrLiterals, x._ops) ==
-               std::tie(y._isDense, y._denseOrLiterals, y._ops);
+        return std::tie(x._literals, x._ops) == std::tie(y._literals, y._ops);
     }
     /// Inequality comparison.
     friend bool operator!=(VtArrayEdit const &x, VtArrayEdit const &y) {
@@ -93,110 +72,62 @@ public:
     /// performs no edits.  Composing the identity with another edit returns
     /// that edit unmodified.
     bool IsIdentity() const {
-        return !_isDense && _ops.IsEmpty();
+        return _ops.IsEmpty();
     }
-
-    /// Return true if this edit represents a dense array.
-    bool IsDenseArray() const {
-        return _isDense;
-    }
-
-    /// Return the dense array if this edit represents one.  See IsDenseArray().
-    /// If this edit does not represent a dense array issue an error and return
-    /// an empty array.
-    Array GetDenseArray() const & {
-        if (!IsDenseArray()) {
-            TF_CODING_ERROR("VtArrayEdit is not a dense array");
-            return {};
-        }
-        return _denseOrLiterals;
-    }
-
-    /// Return the dense array if this edit represents one.  See IsDenseArray().
-    /// If this edit does not represent a dense array issue an error and return
-    /// an empty array.
-    Array GetDenseArray() && {
-        if (!IsDenseArray()) {
-            TF_CODING_ERROR("VtArrayEdit is not a dense array");
-            return {};
-        }
-        return std::move(_denseOrLiterals);
-    }        
 
     /// Compose this edit over \p weaker and return a new result representing
     /// the function composition, where \p weaker is the "inner" function and \p
-    /// *this is the "outer" function.
-    /// 
-    /// If \p *this represents a dense array, return \p *this unmodified.  If \p
-    /// weaker represents a dense array, return an edit representing the dense
-    /// array from \p weaker with the edits in \p *this applied to it.  If
-    /// neither are dense, return an edit that represents the action of the
-    /// edits in \p weaker followed by \p *this.
+    /// *this is the "outer" function.  In other words, return an edit that
+    /// represents the action of the edits in \p weaker followed by those in \p
+    /// *this.
     VtArrayEdit ComposeOver(VtArrayEdit const &weaker) && {
-        if (IsDenseArray()) {
-            return std::move(*this);
-        }
         if (IsIdentity()) {
             return weaker;
-        }
-        if (weaker.IsDenseArray()) {
-            return _ApplyEdits(weaker._denseOrLiterals);
         }
         return _ComposeEdits(weaker);
     }
 
+    /// \overload
     VtArrayEdit ComposeOver(VtArrayEdit &&weaker) && {
-        if (IsDenseArray()) {
-            return std::move(*this);
-        }
         if (IsIdentity()) {
             return std::move(weaker);
         }
-        if (weaker.IsDenseArray()) {
-            return _ApplyEdits(std::move(weaker._denseOrLiterals));
-        }        
         return _ComposeEdits(std::move(weaker));
     }
 
-    /// Compose this edit over \p weaker and return a new result representing
-    /// the function composition, where \p weaker is the "inner" function and \p
-    /// *this is the "outer" function.
-    ///
-    /// If \p *this represents a dense array, return \p *this unmodified.  If \p
-    /// weaker represents a dense array, return an edit representing the dense
-    /// array from \p weaker with the edits in \p *this applied to it.  If
-    /// neither are dense, return an edit that represents the action of the
-    /// edits in \p weaker followed by \p *this.
+    /// \overload
     VtArrayEdit ComposeOver(VtArrayEdit const &weaker) const & {
-        if (IsDenseArray()) {
-            return *this;
-        }
         if (IsIdentity()) {
             return weaker;
-        }
-        if (weaker.IsDenseArray()) {
-            return _ApplyEdits(weaker._denseOrLiterals);
         }
         return _ComposeEdits(weaker);
     };
     
+    /// \overload
     VtArrayEdit ComposeOver(VtArrayEdit &&weaker) const & {
-        if (IsDenseArray()) {
-            return *this;
-        }
         if (IsIdentity()) {
             return std::move(weaker);
         }
-        if (weaker.IsDenseArray()) {
-            return _ApplyEdits(std::move(weaker._denseOrLiterals));
-        }        
         return _ComposeEdits(std::move(weaker));
     }
 
-    /// Insert \p self to the stream \p out.  If \p self is a dense array,
-    /// insert as VtArray would do, with comma-separated elements serialized by
-    /// VtStreamOut() surrounded by square brackets.  Otherwise insert using the
-    /// following format:
+    /// Apply the edits in \p *this to \p weaker and return the resulting array.
+    Array ComposeOver(Array const &weaker) const {
+        if (IsIdentity()) {
+            return weaker;
+        }
+        return _ApplyEdits(weaker);
+    }
+
+    /// \overload
+    Array ComposeOver(Array &&weaker) const {
+        if (IsIdentity()) {
+            return std::move(weaker);
+        }
+        return _ApplyEdits(weaker);
+    }
+
+    /// Insert \p self to the stream \p out using the following format:
     ///
     /// ```
     /// edit [<op_1>; <op_2>; ... <op_N>]
@@ -225,11 +156,10 @@ public:
     friend std::ostream &
     operator<<(std::ostream &out, const VtArrayEdit self) {
         auto streamElem = [&](int64_t index) -> std::ostream & {
-            return VtStreamOut(self._denseOrLiterals[index], out);
+            return VtStreamOut(self._literals[index], out);
         };
         return Vt_ArrayEditStreamImpl(
-            self._isDense, self._ops, self._denseOrLiterals.size(),
-            streamElem, out);
+            self._ops, self._literals.size(), streamElem, out);
     }
 
     /// Insert \p self to the stream \p out, but call \p unaryOp on each
@@ -242,11 +172,10 @@ public:
     StreamCustom(std::ostream &out, UnaryOp &&unaryOp) const {
         auto streamElem = [&](int64_t index) -> std::ostream & {
             return VtStreamOut(
-                std::forward<UnaryOp>(unaryOp)(_denseOrLiterals[index]),
+                std::forward<UnaryOp>(unaryOp)(_literals[index]),
                 out);
         };
-        return Vt_ArrayEditStreamImpl(
-            _isDense, _ops, _denseOrLiterals.size(), streamElem, out);
+        return Vt_ArrayEditStreamImpl(_ops, _literals.size(), streamElem, out);
     }
 
 private:
@@ -255,7 +184,7 @@ private:
 
     friend
     std::ostream &Vt_ArrayEditStreamImpl(
-        bool isDense, Vt_ArrayEditOps const &ops, size_t denseOrLiteralsSize,
+        Vt_ArrayEditOps const &ops, size_t literalsSize,
         TfFunctionRef<std::ostream &(int64_t index)> elemToStr,
         std::ostream &out);
     
@@ -276,14 +205,13 @@ private:
         return VtArrayEdit(*this)._ComposeEdits(weaker);
     }
     
-    Array _denseOrLiterals;
+    Array _literals;
     _Ops _ops;
-    bool _isDense = false;
 };
 
 VT_API
 std::ostream &Vt_ArrayEditStreamImpl(
-    bool isDense, Vt_ArrayEditOps const &ops, size_t denseOrLiteralsSize,
+    Vt_ArrayEditOps const &ops, size_t literalsSize,
     TfFunctionRef<std::ostream &(int64_t index)> streamElem,
     std::ostream &out);
 
@@ -298,7 +226,7 @@ struct Vt_ArrayEditHashAccess
 {
     template <class HashState, class Edit>
     static void Append(HashState &h, Edit const &edit) {
-        h.Append(edit._denseOrLiterals, edit._ops, edit._isDense);
+        h.Append(edit._literals, edit._ops);
     }
 };
 
@@ -314,11 +242,11 @@ VtArrayEdit<ELEM>::_ApplyEdits(Array &&weaker) const
 {
     TRACE_FUNCTION();
 
-    // This is non-dense, weaker is an array that we edit.
+    // weaker is an array that we edit.
     Array result = std::move(weaker);
     Array const &cresult = result;
 
-    Array const &literals = _denseOrLiterals;
+    Array const &literals = _literals;
     const auto numLiterals = literals.size();
 
     // XXX: Note that this does not handle certain sequences of inserts and
@@ -388,15 +316,15 @@ VtArrayEdit<ELEM>::_ComposeEdits(VtArrayEdit const &weaker) &&
     VtArrayEdit result = std::move(*this);
 
     // Append the stronger literals to weaker.
-    // result._denseOrLiterals =
-    //     weaker._denseOrLiterals + result._denseOrLiterals;
-    result._denseOrLiterals.insert(
-        result._denseOrLiterals.begin(),
-        weaker._denseOrLiterals.begin(), weaker._denseOrLiterals.end());
+    // result._literals =
+    //     weaker._literals + result._literals;
+    result._literals.insert(
+        result._literals.begin(),
+        weaker._literals.begin(), weaker._literals.end());
 
     // Bump the literal indexes in result._ops to account for weaker's
     // literals.
-    const auto numWeakerLiterals = weaker._denseOrLiterals.size();
+    const auto numWeakerLiterals = weaker._literals.size();
     result._ops.ModifyEach([&](_Ops::Op op, int64_t &a1, int64_t) {
         switch (op) {
         case _Ops::OpWriteLiteral: // a1: literal index -> a2: result index.
@@ -430,13 +358,13 @@ VtArrayEdit<ELEM>::_ComposeEdits(VtArrayEdit &&weaker) &&
 
     VtArrayEdit result = std::move(*this);
 
-    const auto numWeakerLiterals = weaker._denseOrLiterals.size();
+    const auto numWeakerLiterals = weaker._literals.size();
 
     // Append the stronger literals to weaker.
-    weaker._denseOrLiterals.insert(
-        weaker._denseOrLiterals.end(),
-        std::make_move_iterator(result._denseOrLiterals.begin()),
-        std::make_move_iterator(result._denseOrLiterals.end()));
+    weaker._literals.insert(
+        weaker._literals.end(),
+        std::make_move_iterator(result._literals.begin()),
+        std::make_move_iterator(result._literals.end()));
     
     // Bump the literal indexes in the stronger _ops to account for weaker's
     // literals.

@@ -9,6 +9,8 @@
 #include "pxr/usd/sdf/valueTypeName.h"
 #include "pxr/usd/sdf/valueTypePrivate.h"
 
+#include "pxr/usd/sdf/abstractData.h"
+
 #include <ostream>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -75,6 +77,28 @@ const TfType&
 SdfValueTypeName::GetType() const
 {
     return _impl->type->type;
+}
+
+bool
+SdfValueTypeName::CanRepresent(VtValue const &val) const
+{
+    if (GetType() == val.GetType()) {
+        return true;
+    }
+    return IsArray() && val.IsArrayEditValued() &&
+        TfSafeTypeCompare(GetDefaultValue()
+                          .GetElementTypeid(), val.GetElementTypeid());
+}
+
+bool
+SdfValueTypeName::CanRepresent(SdfAbstractDataConstValue const &val) const
+{
+    if (TfSafeTypeCompare(GetType().GetTypeid(), val.valueType)) {
+        return true;
+    }
+    return IsArray() && val.isArrayEdit &&
+        TfSafeTypeCompare(GetDefaultValue()
+                          .GetElementTypeid(), val.elementValueType);
 }
 
 const std::string& 

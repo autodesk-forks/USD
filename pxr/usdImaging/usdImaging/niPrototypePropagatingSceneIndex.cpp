@@ -370,7 +370,11 @@ UsdImagingNiPrototypePropagatingSceneIndex::
     _instanceAggregationSceneIndex = nullptr;
     // Note that the Hydra Scene Browser could potentially delay the
     // deletion of the merging scene index.
-    _mergingSceneIndex = nullptr;
+    {
+        TRACE_SCOPE("Deleting merging scene index");
+
+        _mergingSceneIndex = nullptr;
+    }
 
     // ... before we can garbage collect.
     _cache->GarbageCollect(_prototypeName, _prototypeRootOverlayDsHash);

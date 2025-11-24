@@ -35,6 +35,12 @@ struct HdSceneIndexPrim
 {
     TfToken primType;
     HdContainerDataSourceHandle dataSource;
+
+    /// Does this prim returned by \ref HdSceneIndex::GetPrim exist in the
+    /// scene index?
+    bool IsDefined() const { return bool(dataSource); }
+    /// Same as IsDefined.
+    operator bool() const { return IsDefined(); }
 };
 
 ///
@@ -78,22 +84,32 @@ public:
     // Scene Data API
     // ------------------------------------------------------------------------
 
-    /// Returns a pair of (prim type, datasource) for the object at
-    /// \p primPath. If no such object exists, the type will be the empty
-    /// token and the datasource will be null. This function is expected to
-    /// be threadsafe.
+    /// Returns a pair of (prim type, datasource). A prim exists at
+    /// \a primPath if and only if datasource is a non-null pointer.
+    /// In particular, we consider the prim to exist even if the prim type
+    /// or the container that datasource points to is empty.
+    ///
+    /// Note that we require \ref GetChildPrimPaths to be consistent with this
+    /// notion of prim existence. That is, unless \a primPath is the absolute
+    /// root path, the prim at \p primPath exists if and only if \p primPath is
+    /// contained in \ref GetChildPrimPaths of the parent path.
+    ///
+    /// This function is expected to be threadsafe.
     virtual HdSceneIndexPrim GetPrim(const SdfPath &primPath) const = 0;
 
     /// Returns the paths of all scene index prims located immediately below
-    /// \p primPath. This function can be used to traverse
-    /// the scene by recursing from \p SdfPath::AbsoluteRootPath(); such a
-    /// traversal is expected to give the same set of prims as the
-    /// flattening of the scene index's \p PrimsAdded and \p PrimsRemoved
-    /// messages. This function is expected to be threadsafe.
+    /// \a primPath. This function can be used to traverse
+    /// the scene by recursing from \ref SdfPath::AbsoluteRootPath.
+    /// The traveral is expected to give exactly the set of paths where
+    /// prim exists as defined in \ref GetPrim. The traversal is also expected
+    /// to give the same set of prims as the flattening of the scene index's
+    /// \p PrimsAdded and \p PrimsRemoved messages.
+    ///
+    /// This function is expected to be threadsafe.
     virtual SdfPathVector GetChildPrimPaths(const SdfPath &primPath) const = 0;
 
-    /// A convenience function: look up the object at \p primPath, and if
-    /// successful return the datasource at \p locator within that prim. This
+    /// A convenience function: look up the object at \a primPath, and if
+    /// successful return the datasource at \a locator within that prim. This
     /// is equivalent to calling \p GetPrim(primPath), and then calling
     /// \p HdContainerDataSource::Get(prim.dataSource, locator).
     HdDataSourceBaseHandle GetDataSource(

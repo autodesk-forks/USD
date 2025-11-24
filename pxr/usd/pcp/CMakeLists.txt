@@ -578,6 +578,11 @@ pxr_install_test_dir(
 )
 
 pxr_install_test_dir(
+    SRC testenv/testPcpMuseum_SpecializesAndDuplicateArcs.testenv
+    DEST testPcpMuseum_SpecializesAndDuplicateArcs
+)
+
+pxr_install_test_dir(
     SRC testenv/testPcpMuseum_SpecializesAndVariants.testenv
     DEST testPcpMuseum_SpecializesAndVariants
 )
@@ -1415,6 +1420,13 @@ pxr_register_test(testPcpMuseum_SpecializesAndAncestralArcs5
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd SpecializesAndAncestralArcs5/root.usda" 
     STDOUT_REDIRECT compositionResults_SpecializesAndAncestralArcs5.txt
     DIFF_COMPARE compositionResults_SpecializesAndAncestralArcs5.txt 
+)
+
+pxr_register_test(testPcpMuseum_SpecializesAndDuplicateArcs
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd SpecializesAndDuplicateArcs/root.usda" 
+    STDOUT_REDIRECT compositionResults_SpecializesAndDuplicateArcs.txt
+    DIFF_COMPARE compositionResults_SpecializesAndDuplicateArcs.txt
 )
 
 pxr_register_test(testPcpMuseum_SpecializesAndVariants

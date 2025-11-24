@@ -21,7 +21,6 @@ color, icon, etc.) and layout hits (node position and size)."""
             string userDocBrief = """A URI formatted link that points to 
 documentation for the node."""
         }
-        displayGroup = "Help"
         displayName = "Doc Link"
     )
     uniform token ui:nodegraph:node:expansionState (

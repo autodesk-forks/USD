@@ -5,8 +5,6 @@ if (NOT EMSCRIPTEN)
   return()
 endif()
 
-set(BINDINGS_NAME "jsBindings")
-
 set(RESOURCE_PARAMETERS "")
 
 list(APPEND RESOURCE_PARAMETERS "--preload-file ${PROJECT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json")
@@ -15,7 +13,7 @@ if(PXR_WASM_NODE)
   list(TRANSFORM RESOURCE_PARAMETERS REPLACE "-preload" "-embed")
 endif()
 
-pxr_cpp_bin(${BINDINGS_NAME}
+pxr_cpp_bin(${PXR_PACKAGE}
     LIBRARIES
         usd
         usdLux
@@ -26,21 +24,21 @@ pxr_cpp_bin(${BINDINGS_NAME}
         ${RESOURCE_PARAMETERS}
 )
 
-target_compile_options(${BINDINGS_NAME} PRIVATE "SHELL:-lembind")
-target_link_options(${BINDINGS_NAME} PRIVATE "SHELL:-sEXPORT_NAME=getUsdModule -sMODULARIZE=1  -lembind --pre-js ${CMAKE_SOURCE_DIR}/js/prejs.js")
-set_target_properties(${BINDINGS_NAME}
+target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:-lembind")
+target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:-sEXPORT_NAME=getUsdModule -sMODULARIZE=1  -lembind --pre-js ${CMAKE_SOURCE_DIR}/js/prejs.js")
+set_target_properties(${PXR_PACKAGE}
     PROPERTIES
         SUFFIX ".js"
 )
 
 set(BUILD_FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.js
-    ${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.wasm
+    ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.js
+    ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm
     ${CMAKE_SOURCE_DIR}/js/test.html
 )
 
 if(NOT PXR_WASM_NODE)
-    list(APPEND BUILD_FILES "${CMAKE_CURRENT_BINARY_DIR}/${BINDINGS_NAME}.data")
+    list(APPEND BUILD_FILES "${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data")
 endif()
 
 install(
@@ -55,21 +53,3 @@ install(
       ${BUILD_FILES}
     DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../../../js/bindings/${CMAKE_BUILD_TYPE}
 )
-#[[
-# Create ES6 module - TBD
-install(
-    CODE
-    "execute_process(
-        COMMAND
-        ${CMAKE_COMMAND}
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -P
-        ${CMAKE_CURRENT_LIST_DIR}/create_es6_module.cmake
-    )"
-)
-
-install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/usd.js 
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
-)
-]]

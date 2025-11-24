@@ -387,8 +387,8 @@ HdSt_DrawBatch::_GetDrawingProgram(HdStRenderPassStateSharedPtr const &state,
 
             // While the code should gracefully handle shader compilation
             // failures, it is also undesirable for shaders to silently fail.
-            TF_CODING_ERROR("Failed to compile shader for prim %s.",
-                            firstDrawItem->GetRprimID().GetText());
+            TF_WARN("Failed to compile shader for prim %s.",
+                    firstDrawItem->GetRprimID().GetText());
 
             // If we failed to compile the material network, replace it
             // either with the invalid material network shader OR the

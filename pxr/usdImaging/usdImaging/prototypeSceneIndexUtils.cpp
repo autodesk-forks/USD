@@ -11,22 +11,21 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-static const TfToken::Set primTypeWhitelist {
+static const TfToken::Set nonRenderablePrimTypes {
     HdPrimTypeTokens->material
 };
-    
-namespace UsdImaging_PrototypeSceneIndexUtils {
 
-void
-SetEmptyPrimType(TfToken * const primType)
+namespace UsdImaging_PrototypeSceneIndexUtils
 {
-    if (!primType) {
-        return;
+
+bool
+IsRenderablePrimType(const TfToken &primType)
+{
+    if (primType.IsEmpty()) {
+        return false;
     }
 
-    if (primTypeWhitelist.count(*primType) == 0) {
-        *primType = TfToken();
-    }
+    return nonRenderablePrimTypes.count(primType) == 0;
 }
 
 }

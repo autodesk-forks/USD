@@ -285,7 +285,10 @@ _SampleCylinder(GfMatrix4f const& xf, GfMatrix3f const& normalXform,
 GfVec3f
 _EvalLightBasic(HdEmbree_LightData const& light)
 {
-    GfVec3f Le = light.color * light.intensity * powf(2.0f, light.exposure);
+    // Our current material model is always 100% diffuse, so diffuse parameter
+    // is a straight multiplier
+    GfVec3f Le = light.color * light.intensity * light.diffuse
+        * powf(2.0f, light.exposure);
     if (light.enableColorTemperature) {
         Le = GfCompMult(Le,
             _BlackbodyTemperatureAsRgb(light.colorTemperature));

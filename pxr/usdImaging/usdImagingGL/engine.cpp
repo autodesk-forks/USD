@@ -34,6 +34,7 @@
 #include "pxr/imaging/hdsi/prefixPathPruningSceneIndex.h"
 #include "pxr/imaging/hdsi/sceneGlobalsSceneIndex.h"
 #include "pxr/imaging/hdx/pickTask.h"
+#include "pxr/imaging/hdx/stormCheck.h"
 #include "pxr/imaging/hdx/task.h"
 #include "pxr/imaging/hdx/taskController.h"
 #include "pxr/imaging/hdx/taskControllerSceneIndex.h"
@@ -1709,12 +1710,14 @@ UsdImagingGLEngine::_SetRenderDelegate(
     if (_GetUseTaskControllerSceneIndex()) {
         const SdfPath taskControllerPath =
             _ComputeControllerPath(_renderDelegate);
-        _taskControllerSceneIndex = HdxTaskControllerSceneIndex::New(
+        HdxTaskControllerSceneIndex::Parameters params {
             taskControllerPath,
-            renderDelegate.GetPluginId(),
             [renderDelegate = _renderDelegate.Get()](const TfToken &name) {
                 return renderDelegate->GetDefaultAovDescriptor(name); },
-            _gpuEnabled);
+            HdxIsStorm(_renderIndex.get()->GetRenderDelegate()),
+            _gpuEnabled
+        };
+        _taskControllerSceneIndex = HdxTaskControllerSceneIndex::New(params);
         _renderIndex->InsertSceneIndex(
             _taskControllerSceneIndex,
             taskControllerPath,

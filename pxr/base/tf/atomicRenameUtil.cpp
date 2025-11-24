@@ -34,6 +34,13 @@ PXR_NAMESPACE_OPEN_SCOPE
     static const bool requireWritePermissionDefault = true;
 #endif
 
+#ifdef ARCH_OS_WASM_VM
+    // These defines are not present in sys/stat.h when building WASM, so we
+    // will define some reasonable values for use here.
+    #define ACCESSPERMS 0666
+    #define DEFFILEMODE 0666
+#endif
+
 TF_DEFINE_ENV_SETTING(
     TF_REQUIRE_FILESYSTEM_WRITE_PERMISSION, requireWritePermissionDefault,
         "If enabled, check for both directory and file write permissions "

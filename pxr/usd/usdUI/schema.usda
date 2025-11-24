@@ -119,8 +119,6 @@ class "NodeGraphNodeAPI"(
         """
         displayName = "Doc Link"
 
-        displayGroup = "Help"
-
         customData = {
             string apiName = "docURI"
         }

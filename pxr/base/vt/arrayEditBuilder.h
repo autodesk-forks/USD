@@ -194,21 +194,19 @@ public:
     /// leaving it as if it was default constructed.
     VtArrayEdit<ELEM> FinalizeAndReset() {
         VtArrayEdit<ELEM> result;
-        result._denseOrLiterals = std::move(_literals);
+        result._literals = std::move(_literals);
         result._ops._ins = std::move(_opsBuilder._ins);
-        result._isDense = false;
         *this = {};
         return result;
     }
 
     /// Given a VtArrayEdit that may have been composed from several, attempt to
-    /// produce a smaller, optimized edit that acts identically.  If \p in
-    /// represents a dense array or is the identity, return it unmodified.
+    /// produce a smaller, optimized edit that acts identically.  If \p in is
+    /// the identity, return it unmodified.
     static VtArrayEdit<ELEM> Optimize(VtArrayEdit<ELEM> &&in);
 
     // Return data for serializing `edit`, so it can be reconstructed later by
-    // CreateFromSerializationData().  Note that VtArrayEdit::IsDense() is also
-    // required, but can be obtained by calling that public API.
+    // CreateFromSerializationData().
     //
     // This API is intended to be called only by storage/transmission
     // implementations.
@@ -217,24 +215,22 @@ public:
                          VtArray<ELEM> *valuesOut,
                          std::vector<int64_t> *indexesOut) {
         if (TF_VERIFY(valuesOut) && TF_VERIFY(indexesOut)) {
-            *valuesOut = edit._denseOrLiterals;
+            *valuesOut = edit._literals;
             *indexesOut = edit._ops._ins;
         }
     }
 
     // Construct an array edit using serialization data previously obtained from
-    // GetSerializationData() and VtArrayEdit::IsDense().
+    // GetSerializationData().
     //
     // This API is intended to be called only by storage/transmission
     // implementations.
     static VtArrayEdit<ELEM>
     CreateFromSerializationData(VtArray<ELEM> const &values,
-                                TfSpan<int64_t> indexes,
-                                bool isDense) {
+                                TfSpan<int64_t> indexes) {
         VtArrayEdit<ELEM> result;
-        result._denseOrLiterals = values;
+        result._literals = values;
         result._ops._ins = std::vector<int64_t>(indexes.begin(), indexes.end());
-        result._isDense = isDense;
         return result;
     }
     
@@ -257,19 +253,18 @@ template <class ELEM>
 VtArrayEdit<ELEM>
 VtArrayEditBuilder<ELEM>::Optimize(VtArrayEdit<ELEM> &&in)
 {
-    // Minimal cases.
-    if (in.IsDenseArray() || in.IsIdentity()) {
+    if (in.IsIdentity()) {
         return std::move(in);
     }
     
     VtArrayEditBuilder builder;
 
     // Walk all the instructions and rebuild.
-    const Array literals = std::move(in._denseOrLiterals);
+    const Array literals = std::move(in._literals);
     const auto numLiterals = literals.size();
     Ops ops = std::move(in._ops);
 
-    in._denseOrLiterals.clear();
+    in._literals.clear();
     in._ops = {};
     
     ops.ForEach([&](Ops::Op op, int64_t a1, int64_t a2) {

@@ -39,9 +39,6 @@ from shutil import which
 verbosity = 1
 EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS='-pthread'
 EMSCRIPTEN_CMAKE_CXX_FLAGS='-pthread --use-port=zlib'
-TARGET_WASM='wasm'
-TARGET_WASM64='wasm64'
-TARGET_WASM_NODE='node'
 
 # Hide symbols
 HIDDEN_SYMBOLS = ['-DCMAKE_CXX_VISIBILITY_PRESET=hidden',
@@ -90,6 +87,10 @@ def GetBuildTargetDefault():
         return apple_utils.GetBuildTargetDefault()
     else:
         return ''
+
+TARGET_WASM='wasm'
+TARGET_WASM64='wasm64'
+TARGET_WASM_NODE='node'
 
 def GetBuildTargets():
     # The wasm build has been tested only in MacOS so far
@@ -431,6 +432,7 @@ def RunCMake(context, force, extraArgs = None, installDir = None, buildDirName=N
         toolset = '-T "{toolset}"'.format(toolset=toolset)
 
     # On MacOS, enable the use of @rpath for relocatable builds.
+    # We do not need to do this when cross compiling for wasm.
     osx_rpath = None
     if MacOS() and not context.targetWasm:
         osx_rpath = "-DCMAKE_MACOSX_RPATH=ON"
@@ -1016,16 +1018,10 @@ ONETBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.12.0.
 
 def InstallOneTBB(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ONETBB_URL, context, force)):
-        SHARED_LIBS = 'OFF' if context.targetWasm else 'ON'
-        cmakeOptions = [
-            '-DTBB_TEST=OFF',
-            '-DTBB_STRICT=OFF',
-            '-DBUILD_SHARED_LIBS={shared}'.format(shared=SHARED_LIBS)
-        ]
+        cmakeOptions = ['-DTBB_TEST=OFF', '-DTBB_STRICT=OFF']
         if context.targetWasm:
-            cmakeOptions += [
-                '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + '"'
-            ]
+            cmakeOptions += ['-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_CXX_FLAGS="-pthread"']
+
         cmakeOptions += buildArgs
         RunCMake(context, force, cmakeOptions)
 
@@ -1046,7 +1042,7 @@ else:
 
 def InstallTBB(context, force, buildArgs):
     if context.targetWasm:
-        raise RuntimeError("TBB is no longed used for WebAssembly builds. Use oneTBB instead.")
+        raise RuntimeError("OneTBB is required for WebAssembly builds.")
     elif Windows():
         InstallTBB_Windows(context, force, buildArgs)
     elif MacOS():
@@ -2166,7 +2162,21 @@ def InstallUSD(context, force, buildArgs):
 
         extraArgs += buildArgs
 
+        # Wasm target builds tbb and osd static library above
         if context.targetWasm:
+            extraArgs.append('-DTBB_INCLUDE_DIRS="{}"'
+                .format(os.path.join(context.usdInstDir, 'include')))
+            extraArgs.append('-DTBB_tbb_LIBRARY_DEBUG="{}"'
+                .format(os.path.join(context.usdInstDir, 'lib/libtbb_debug.a')))
+            extraArgs.append('-DTBB_tbb_LIBRARY_RELEASE="{}"'
+                .format(os.path.join(context.usdInstDir, 'lib/libtbb.a')))
+
+            extraArgs.append('-DOPENSUBDIV_INCLUDE_DIR="{}"'
+                .format(os.path.join(context.usdInstDir, 'include')))
+            extraArgs.append('-DOPENSUBDIV_OSDCPU_LIBRARY="{}"'
+                .format(os.path.join(context.usdInstDir, 'lib/libosdCPU.a')))
+
+            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
 
             if context.buildJsBindings:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=ON')
@@ -2184,15 +2194,7 @@ def InstallUSD(context, force, buildArgs):
             # For some reason we have to manually specify path to boost
             extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
 
-            extraArgs.append('-DTBB_INCLUDE_DIRS="{}"'.format(os.path.join(context.usdInstDir, 'include')))
-            extraArgs.append('-DTBB_tbb_LIBRARY_DEBUG="{}"'.format(os.path.join(context.usdInstDir, 'lib/libtbb_debug.a')))
-            extraArgs.append('-DTBB_tbb_LIBRARY_RELEASE="{}"'.format(os.path.join(context.usdInstDir, 'lib/libtbb.a')))
-
-            extraArgs.append('-DOPENSUBDIV_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, 'include')))
-            extraArgs.append('-DOPENSUBDIV_OSDCPU_LIBRARY="{}"'.format(os.path.join(context.usdInstDir, 'lib/libosdCPU.a')))
-
             extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=ON')
-            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
             extraArgs.append('-DPXR_BUILD_PERFORMANCE=OFF')
 
             if context.targetWasmNode:
@@ -2724,12 +2726,22 @@ class InstallContext:
         embedded = MacOSTargetEmbedded(self)
 
         # Optional components
-        self.buildTests = args.build_tests and not embedded
-        self.buildPython = args.build_python and not embedded
-        self.buildExamples = args.build_examples and not embedded
-        self.buildTutorials = args.build_tutorials and not embedded
-        self.buildTools = args.build_tools and not embedded
-        self.buildUsdValidation = args.build_usd_validation and not embedded
+        self.buildTests = (args.build_tests and not embedded)
+        self.buildPython = (args.build_python and 
+                            not embedded and 
+                            not self.targetWasm)
+        self.buildExamples = (args.build_examples and 
+                              not embedded and 
+                              not self.targetWasm)
+        self.buildTutorials = (args.build_tutorials and 
+                               not embedded and 
+                               not self.targetWasm)
+        self.buildTools = (args.build_tools and 
+                           not embedded and 
+                           not self.targetWasm)
+        self.buildUsdValidation = (args.build_usd_validation and 
+                                   not embedded and 
+                                   not self.targetWasm)
 
         # - Documentation
         self.buildDocs = args.build_docs or args.build_python_docs
@@ -2738,7 +2750,8 @@ class InstallContext:
 
         # - Imaging
         self.buildImaging = (args.build_imaging == IMAGING or
-                             args.build_imaging == USD_IMAGING)
+                             args.build_imaging == USD_IMAGING
+                             and not self.targetWasm)
         self.enablePtex = self.buildImaging and args.enable_ptex
         self.enableOpenVDB = (self.buildImaging
                               and args.enable_openvdb
@@ -2748,7 +2761,8 @@ class InstallContext:
                               and not embedded)
 
         # - USD Imaging
-        self.buildUsdImaging = (args.build_imaging == USD_IMAGING)
+        self.buildUsdImaging = (args.build_imaging == USD_IMAGING and 
+                                not self.targetWasm)
 
         # - usdview
         self.buildUsdview = (self.buildUsdImaging and 
@@ -2762,10 +2776,10 @@ class InstallContext:
         self.buildEmbree = self.buildImaging and args.build_embree
         self.buildPrman = self.buildImaging and args.build_prman
         self.prmanLocation = (os.path.abspath(args.prman_location)
-                               if args.prman_location else None)                               
+                               if args.prman_location else None)
         self.buildOIIO = ((args.build_oiio or (self.buildUsdImaging
                                                and self.buildTests))
-                          and not embedded)
+                          and not embedded and not self.targetWasm)
         if MacOS():
             self.buildImageIO = args.build_imageio
         self.buildOCIO = args.build_ocio and not embedded
@@ -2780,10 +2794,11 @@ class InstallContext:
                                 if args.draco_location else None)
 
         # - MaterialX
-        self.buildMaterialX = args.build_materialx
+        self.buildMaterialX = args.build_materialx and not self.targetWasm
 
         # - TBB
-        self.buildOneTBB = args.build_onetbb
+        # Note: wasm build requires requires building oneTBB
+        self.buildOneTBB = args.build_onetbb or self.targetWasm
 
         # - Spline Tests
         self.buildMayapyTests = args.build_mayapy_tests
@@ -2910,13 +2925,14 @@ if context.buildUsdview:
 if context.buildAnimXTests:
     requiredDependencies += [ANIMX]
 
-# Linux and MacOS provide zlib. Skipping it here avoids issues where a host 
+# Wasm, Linux and MacOS provide zlib. Skipping it here avoids issues where a host 
 # application loads a different version of zlib than the one we build against.
 # Building zlib is the default when a dependency requires it, although OpenUSD
 # itself does not require it. The --no-zlib flag can be passed to the build
 # script to allow the dependency to find zlib in the build environment.
-if (Linux() or not context.buildZlib or context.targetWasm) and ZLIB in requiredDependencies:
-    requiredDependencies.remove(ZLIB)
+if ZLIB in requiredDependencies:
+    if Linux() or MacOS() or context.targetWasm or not context.buildZlib:
+        requiredDependencies = [r for r in requiredDependencies if r != ZLIB]
 
 # Error out if user is building monolithic library on windows with draco plugin
 # enabled. This currently results in missing symbols.
@@ -2937,6 +2953,32 @@ if context.enableVulkan and not 'VULKAN_SDK' in os.environ:
     PrintError("Vulkan support cannot be enabled when VULKAN_SDK environment "
                "variable is not set")
     sys.exit(1)
+
+if context.targetWasm:
+    if "--no-onetbb" in sys.argv:
+        PrintError("Wasm target requires oneTBB")
+        sys.exit(1)
+    if "--python" in sys.argv:
+        PrintError("Cannot build python components for wasm build targets")
+        sys.exit(1)
+    if "--examples" in sys.argv:
+        PrintError("Cannot build examples for wasm build targets")
+        sys.exit(1)
+    if "--tutorials" in sys.argv:
+        PrintError("Cannot build tutorials for wasm build targets")
+        sys.exit(1)
+    if "--tools" in sys.argv:
+        PrintError("Cannot build tools for wasm build targets")
+        sys.exit(1)
+    if "--materialx" in sys.argv:
+        PrintError("Cannot build materialx for wasm build targets")
+        sys.exit(1)
+    if "--usd-imaging" in sys.argv:
+        PrintError("Cannot build Usd Imaging for wasm build targets")
+        sys.exit(1)
+    if "--usdValidation" in sys.argv:
+        PrintError("Cannot build Usd Validation for wasm build targets")
+        sys.exit(1)
 
 # Error out if user explicitly enabled components which aren't
 # supported for embedded build targets.
@@ -2990,14 +3032,14 @@ for dep in requiredDependencies:
 # Verify toolchain needed to build required dependencies
 if context.targetWasm:
     if not which("emcc"):
-        PrintError(" Wasm compiler emcc not found -- please install a compiler")
+        PrintError("Wasm compiler emcc not found -- please install a compiler")
         sys.exit(1)
 else:
     if (not which("g++") and
         not which("clang") and
         not GetXcodeDeveloperDirectory() and
         not GetVisualStudioCompilerAndVersion()):
-        PrintError(" C++ compiler not found -- please install a compiler")
+        PrintError("C++ compiler not found -- please install a compiler")
         sys.exit(1)
 
 # Error out if a 64bit version of python interpreter is not being used
@@ -3032,6 +3074,19 @@ if which("cmake"):
 else:
     PrintError("CMake not found -- please install it and adjust your PATH")
     sys.exit(1)
+
+# When building emscripten on Windows, if no generator is specified we will 
+# default to Ninja due to the fact that the default Visual Studio build 
+# system does not build emscripten projects. Ninja, being cross platform, is
+# a good default as it is open source cross platform tool that is simple 
+# to setup.
+if context.targetWasm and Windows() and not context.cmakeGenerator:
+    if which("ninja"):
+        context.cmakeGenerator = 'Ninja'
+    else:
+        PrintError("Default generator ninja not found -- please install "
+                   "it or another compatible generator and adjust your PATH")
+        sys.exit(1)
 
 if context.buildDocs:
     if not which("doxygen"):
