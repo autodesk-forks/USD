@@ -958,6 +958,18 @@
     ),
 
     #--------------------------------------------------------------------------
+    # builtinMaterial
+    dict(
+        SCHEMA_NAME = "BuiltinMaterial",
+        SCHEMA_TOKEN = "builtinMaterial",
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR=True)),
+            ('builtinMaterial', T_BOOL, {}),
+        ],
+    ),
+
+    #--------------------------------------------------------------------------
     # light
     dict(
         SCHEMA_NAME = 'Light',

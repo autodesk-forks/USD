@@ -13,14 +13,13 @@ endif()
 
 pxr_plugin(hdEmbree
    LIBRARIES
-        plug
         tf
         vt
         gf
         work
-        hf
         hd
-        hdx
+        hdsi
+        hio
         ${EMBREE_LIBRARY}
 
     INCLUDE_DIRS
@@ -58,9 +57,11 @@ pxr_plugin(hdEmbree
 if (X11_FOUND OR APPLE)
 pxr_build_test(testHdEmbree
     LIBRARIES
-        hdEmbree
-        garch
         arch
+        garch
+        hdEmbree
+        hdSt
+        hdx
         hio
     CPPFILES
         testenv/testHdEmbree.cpp

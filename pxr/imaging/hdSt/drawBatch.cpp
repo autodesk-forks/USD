@@ -350,11 +350,6 @@ HdSt_DrawBatch::_GetDrawingProgram(HdStRenderPassStateSharedPtr const &state,
 
     HdSt_MaterialNetworkShaderSharedPtr materialNetworkShader =
         firstDrawItem->GetMaterialNetworkShader();
-    
-    if (!state->GetUseSceneMaterials() &&
-        !firstDrawItem->GetMaterialIsFinal() ) {
-        materialNetworkShader = _GetFallbackMaterialNetworkShader();
-    }
 
     size_t materialNetworkShaderHash =
         materialNetworkShader ? materialNetworkShader->ComputeHash() : 0;

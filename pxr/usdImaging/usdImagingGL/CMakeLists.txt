@@ -5150,11 +5150,24 @@ pxr_register_test(testUsdImagingGLMaterialsAndInstancers_materialAsNiInstance
     ENV
         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true)
 
-pxr_register_test(testUsdImagingGLUsdRenderPass
+pxr_register_test(testUsdImagingGLUsdRenderPass_prune
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/usdrecord --renderer HdStormRendererPlugin --disableCameraLight --renderPassPrimPath /Render/Passes/nospheres input.usda nospheres.exr"
     IMAGE_DIFF_COMPARE
         nospheres.exr
+    FAIL 1
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    TESTENV testUsdImagingGLUsdRenderPass
+    ENV
+       USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true)
+
+pxr_register_test(testUsdImagingGLUsdRenderPass_visibility
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/usdrecord --renderer HdStormRendererPlugin --disableCameraLight --renderPassPrimPath /Render/Passes/onlyspheres input.usda onlyspheres.exr"
+    IMAGE_DIFF_COMPARE
+        onlyspheres.exr
     FAIL 1
     FAIL_PERCENT 1
     PERCEPTUAL

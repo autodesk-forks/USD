@@ -63,7 +63,7 @@ TF_DECLARE_REF_PTRS(UsdImagingStageSceneIndex);
 TF_DECLARE_REF_PTRS(UsdImagingRootOverridesSceneIndex);
 TF_DECLARE_REF_PTRS(UsdImagingSelectionSceneIndex);
 TF_DECLARE_REF_PTRS(HdsiLegacyDisplayStyleOverrideSceneIndex);
-TF_DECLARE_REF_PTRS(HdsiPrimTypePruningSceneIndex);
+TF_DECLARE_REF_PTRS(HdsiPrimTypeAndPathPruningSceneIndex);
 TF_DECLARE_REF_PTRS(HdsiSceneGlobalsSceneIndex);
 TF_DECLARE_REF_PTRS(HdSceneIndexBase);
 TF_DECLARE_REF_PTRS(HdxTaskControllerSceneIndex);
@@ -855,8 +855,7 @@ private:
     UsdImagingSelectionSceneIndexRefPtr _selectionSceneIndex;
     UsdImagingRootOverridesSceneIndexRefPtr _rootOverridesSceneIndex;
     HdsiLegacyDisplayStyleOverrideSceneIndexRefPtr _displayStyleSceneIndex;
-    HdsiPrimTypePruningSceneIndexRefPtr _materialPruningSceneIndex;
-    HdsiPrimTypePruningSceneIndexRefPtr _lightPruningSceneIndex;
+    HdsiPrimTypeAndPathPruningSceneIndexRefPtr _lightPruningSceneIndex;
     HdSceneIndexBaseRefPtr _sceneIndex;
     
     std::unique_ptr<UsdImagingDelegate> _sceneDelegate;

@@ -28,6 +28,7 @@ pxr_library(hd
         bufferArrayRange
         bufferSource
         bufferSpec
+        builtinMaterialSchema
         cachingSceneIndex
         camera
         cameraSchema

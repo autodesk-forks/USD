@@ -11,6 +11,7 @@
 
 #include "pxr/imaging/hd/basisCurvesSchema.h"
 #include "pxr/imaging/hd/basisCurvesTopologySchema.h"
+#include "pxr/imaging/hd/builtinMaterialSchema.h"
 #include "pxr/imaging/hd/dataSource.h"
 #include "pxr/imaging/hd/dataSourceTypeDefs.h"
 #include "pxr/imaging/hd/extentSchema.h"
@@ -1068,7 +1069,6 @@ private:
     /// The cached data.
     struct _CardsData
     {
-
         _CardsData(const _SchemaValues &values, const SdfPath &primPath);
 
         TfToken cardGeometry;
@@ -1093,7 +1093,8 @@ private:
         _ComputeUVs(const _SchemaValues &values);
         static
         _NameToContainer
-        _ComputeGeomSubsets(const _SchemaValues &values,
+        _ComputeGeomSubsets(
+            const _SchemaValues &values,
             const SdfPath &primPath);
         static const
         _NameToContainer
@@ -1441,6 +1442,12 @@ _CardsDataCache::_CardsData::_ComputeGeomSubsets(
 
     _NameToContainer subsets;
 
+    static const HdDataSourceBaseHandle materialIsFinalDs =
+        HdLegacyDisplayStyleSchema::Builder()
+            .SetMaterialIsFinal(
+                HdRetainedTypedSampledDataSource<bool>::New(true))
+            .Build();
+
     // Do not generate subsets if there are no textures for any face.
     // The entire standin prim will use the renderer's fallback material, which
     // should pick up displayColor and displayOpacity.
@@ -1512,7 +1519,11 @@ _CardsDataCache::_CardsData::_ComputeGeomSubsets(
                     HdMaterialBindingsSchema::BuildRetained(
                         TfArraySize(materialBindingNames),
                         materialBindingNames,
-                        materialBindingSources)) });
+                        materialBindingSources),
+
+                    HdLegacyDisplayStyleSchema::GetSchemaToken(),
+                    materialIsFinalDs) 
+            });
         }
     }
 
@@ -1774,6 +1785,12 @@ _CardsDataCache::_CardsData::_ComputeMaterials(const _SchemaValues &values)
 
     _NameToContainer materials;
 
+    static HdDataSourceBaseHandle const builtinMaterialDs =
+    HdBuiltinMaterialSchema::Builder()
+        .SetBuiltinMaterial(
+            HdRetainedTypedSampledDataSource<bool>::New(true))
+        .Build();
+
     // do not generate any materials if there are no textures for any face
     if (values.hasTexture.count()) {
         for (auto i = 0; i < 6; ++i) {
@@ -1828,7 +1845,10 @@ _CardsDataCache::_CardsData::_ComputeMaterials(const _SchemaValues &values)
                         HdMaterialSchema::BuildRetained(
                             networkNames.size(),
                             networkNames.data(),
-                            networks.data())));
+                            networks.data()),
+                        HdBuiltinMaterialSchema::GetSchemaToken(),
+                        builtinMaterialDs
+                    ));
             }
         }
     }

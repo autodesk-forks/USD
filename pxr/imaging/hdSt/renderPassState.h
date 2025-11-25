@@ -115,13 +115,6 @@ public:
     HDST_API
     void ApplyStateFromCamera();
 
-    /// scene materials
-    HDST_API
-    void SetUseSceneMaterials(bool state);
-    bool GetUseSceneMaterials() const {
-        return _useSceneMaterials;
-    }
-
     /// returns shaders (lighting/renderpass)
     HDST_API
     HdStShaderCodeSharedPtrVector GetShaders() const;
@@ -253,7 +246,6 @@ private:
     size_t _clipPlanesBufferSize;
     float _alphaThresholdCurrent;
     bool _resolveMultiSampleAov;
-    bool _useSceneMaterials;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

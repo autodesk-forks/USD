@@ -231,7 +231,6 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
 
     // Render pass state overrides
     {
-        extendedState->SetUseSceneMaterials(true);
         // blending is relevant only for the oitResolve task.
         extendedState->SetBlendEnabled(false);
         extendedState->SetAlphaToCoverageEnabled(false);

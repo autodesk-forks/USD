@@ -13,6 +13,7 @@ pxr_library(usdviewq
         hd
 
     PUBLIC_CLASSES
+        debugCodes
         hydraObserver
         utils
         

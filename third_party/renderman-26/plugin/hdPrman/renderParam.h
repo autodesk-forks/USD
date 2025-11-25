@@ -53,6 +53,7 @@ class HdPrmanRenderDelegate;
 #if PXR_VERSION >= 2308
 class HdPrman_RenderSettings;
 #endif
+class HdPrmanStatsListener;
 class SdfAssetPath;
 
 // Compile-time limit on max time samples.
@@ -526,7 +527,7 @@ private:
 
     // Roz stats session
     stats::Session *_statsSession;
-    int _progressPercent;
+    HdPrmanStatsListener*    _statsListener;     // Listener to receive metric data from Renderer
     int _progressMode;
     uint64_t _startTime;
     uint64_t _stopTime;

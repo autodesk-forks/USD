@@ -10,6 +10,8 @@
 #include "pxr/usd/sdf/variableExpressionImpl.h"
 #include "pxr/usd/sdf/variableExpressionParser.h"
 
+#include "pxr/usd/sdf/fileIO_Common.h"
+
 #include "pxr/base/tf/stringUtils.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -21,11 +23,17 @@ SdfVariableExpression::SdfVariableExpression()
 
 SdfVariableExpression::SdfVariableExpression(
     const std::string& expr)
-    : _expressionStr(expr)
+    : SdfVariableExpression(std::string(expr))
+{
+}
+
+SdfVariableExpression::SdfVariableExpression(
+    std::string&& expr)
+    : _expressionStr(std::move(expr))
 {
     using ParserResult = Sdf_VariableExpressionParserResult;
 
-    ParserResult parseResult = Sdf_ParseVariableExpression(expr);
+    ParserResult parseResult = Sdf_ParseVariableExpression(_expressionStr);
     _expression.reset(parseResult.expression.release());
     _errors = std::move(parseResult.errors);
 }
@@ -90,6 +98,113 @@ SdfVariableExpression::_FormatUnexpectedTypeError(
     return TfStringPrintf(
         "Expression evaluated to '%s' but expected '%s'",
         got.GetTypeName().c_str(), expected.GetTypeName().c_str());
+}
+
+SdfVariableExpression::Builder::
+operator SdfVariableExpression() const
+{
+    return SdfVariableExpression('`' + _expr + '`');
+}
+
+SdfVariableExpression::FunctionBuilder::
+operator SdfVariableExpression() const
+{ 
+    return SdfVariableExpression('`' + _expr + ")`");
+}
+
+SdfVariableExpression::FunctionBuilder::
+operator SdfVariableExpression::Builder() const &
+{ 
+    return Builder(_expr + ')');
+}
+
+SdfVariableExpression::FunctionBuilder::
+operator SdfVariableExpression::Builder() &&
+{ 
+    _expr += ')';
+    return Builder(std::move(_expr));
+}
+
+SdfVariableExpression::ListBuilder::
+operator SdfVariableExpression() const
+{ 
+    return SdfVariableExpression('`' + _expr + "]`");
+}
+
+SdfVariableExpression::ListBuilder::
+operator SdfVariableExpression::Builder() const &
+{ 
+    return Builder(_expr + ']');
+}
+
+SdfVariableExpression::ListBuilder::
+operator SdfVariableExpression::Builder() &&
+{ 
+    _expr += ']';
+    return Builder(std::move(_expr));
+}
+
+void
+SdfVariableExpression::_AppendExpression(
+    std::string* expr, const SdfVariableExpression& arg, bool first)
+{
+    if (const std::string& e = arg.GetString(); IsExpression(e)) {
+        if (!first) {
+            (*expr) += ", ";
+        }
+        // Expression strings returned by SdfVariableExpression are
+        // bracketed by "`" characters, so we need to strip them off
+        // before appending them.
+        (*expr) += e.substr(1, e.size() - 2);
+    }
+}
+
+void
+SdfVariableExpression::_AppendBuilder(
+    std::string* expr, const Builder& b, bool first)
+{
+    if (!first) {
+        (*expr) += ", ";
+    }
+    (*expr) += b._expr;
+}
+
+SdfVariableExpression::Builder
+SdfVariableExpression::MakeLiteral(int64_t value)
+{
+    return Builder(TfStringify(value));
+}
+
+SdfVariableExpression::Builder
+SdfVariableExpression::MakeLiteral(bool value)
+{
+    return Builder(std::string(value ? "True" : "False"));
+}
+
+SdfVariableExpression::Builder
+SdfVariableExpression::MakeLiteral(const std::string& value)
+{
+    // Variable expression syntax does not allow triple quotes.
+    return Builder(
+        Sdf_FileIOUtility::Quote(value, /* allowTripleQuotes = */ false));
+}
+
+SdfVariableExpression::Builder
+SdfVariableExpression::MakeLiteral(const char* value)
+{
+    return MakeLiteral(std::string(value));
+}
+
+SdfVariableExpression::Builder
+SdfVariableExpression::MakeNone()
+{
+    return Builder("None");
+}
+
+SdfVariableExpression::Builder
+SdfVariableExpression::MakeVariable(const std::string& name)
+{
+    return Builder("${" + name + "}");
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

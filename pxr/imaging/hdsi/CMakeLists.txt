@@ -41,6 +41,7 @@ pxr_library(hdsi
         renderPassPruneSceneIndex
         renderSettingsFilteringSceneIndex
         sceneGlobalsSceneIndex
+        sceneMaterialPruningSceneIndex
         switchingSceneIndex
         tetMeshConversionSceneIndex
         unboundMaterialPruningSceneIndex

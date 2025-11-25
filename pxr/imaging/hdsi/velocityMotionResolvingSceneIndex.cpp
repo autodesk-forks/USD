@@ -923,18 +923,31 @@ HdsiVelocityMotionResolvingSceneIndex::_PrimsDirtied(
         HdDataSourceLocator(
             HdsiVelocityMotionResolvingSceneIndexTokens->velocityMotionMode) };
 
-    // TODO: Avoid copying entries where possible
-    HdSceneIndexObserver::DirtiedPrimEntries newEntries;
-    for (const auto& entry : entries) {
-        HdSceneIndexObserver::DirtiedPrimEntry newEntry(entry);
-        if (entry.dirtyLocators.Intersects(positionsAffectingLocators)) {
-            newEntry.dirtyLocators.insert(positionsLocators);
+    size_t i = 0;
+    for (;i < entries.size(); ++i) {
+        if (entries[i].dirtyLocators.Intersects(positionsAffectingLocators)) {
+            break;
         }
-        if (entry.dirtyLocators.Intersects(rotationsAffectingLocators)) {
-            newEntry.dirtyLocators.insert(rotationsLocators);
+        if (entries[i].dirtyLocators.Intersects(rotationsAffectingLocators)) {
+            break;
         }
-        newEntries.push_back(newEntry);
     }
+
+    if (i == entries.size()) {
+        _SendPrimsDirtied(entries);
+        return;
+    }
+
+    HdSceneIndexObserver::DirtiedPrimEntries newEntries(entries);
+    for (;i < newEntries.size(); ++i) {
+        if (newEntries[i].dirtyLocators.Intersects(positionsAffectingLocators)) {
+            newEntries[i].dirtyLocators.insert(positionsLocators);
+        }
+        if (newEntries[i].dirtyLocators.Intersects(rotationsAffectingLocators)) {
+            newEntries[i].dirtyLocators.insert(rotationsLocators);
+        }
+    }
+
     return _SendPrimsDirtied(newEntries);
 }
 

@@ -178,7 +178,13 @@ Ts_Sample(const Ts_SplineData* data,
           double tolerance,
           Ts_SampleDataInterface* sampledSpline);
 
-#undef _INSTANTIATE_SAMPLE_METHOD
+// Bake the requested set of knots into a newly allocated TsSplineData.  Proper
+// deallocation of the return value is the caller's responsibility.
+TS_API
+Ts_SplineData*
+Ts_Bake(const Ts_SplineData* const data,
+        const GfInterval& timeInterval,
+        const bool includeExtrapLoops);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

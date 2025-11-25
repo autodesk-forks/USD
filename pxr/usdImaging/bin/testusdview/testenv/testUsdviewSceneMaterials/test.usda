@@ -29,7 +29,6 @@ def Xform "World" (
 
         uniform token model:drawMode = "cards"
         uniform token model:cardGeometry = "box"
-        # uniform token model:cardGeometry = "cross"
 
         asset model:cardTextureXNeg = @./cards/XNeg.png@
         asset model:cardTextureXPos = @./cards/XPos.png@

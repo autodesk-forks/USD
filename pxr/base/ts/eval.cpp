@@ -1090,7 +1090,7 @@ void _LoopResolver::_DoExtrap(
     // the value offset in the opposite direction from the evaluation time,
     // because we first hop forward to evaluate, then apply the value offset
     // backward to obtain the value at the original time.
-    if (_data->preExtrapolation.mode == TsExtrapLoopRepeat
+    if (extrapolation.mode == TsExtrapLoopRepeat
         && _aspect != Ts_EvalDerivative)
     {
         _ComputeExtrapValueOffset();
@@ -1099,9 +1099,8 @@ void _LoopResolver::_DoExtrap(
 
     // Oscillate mode: every other extrapolating loop iteration is reflected
     // in time.
-    else if (
-        _data->preExtrapolation.mode == TsExtrapLoopOscillate
-        && iterHop % 2 != 0)
+    else if (extrapolation.mode == TsExtrapLoopOscillate
+             && iterHop % 2 != 0)
     {
         _evalTime = _firstTime + (protoSpan - (_evalTime - _firstTime));
         _location = (_location == Ts_EvalPre ? Ts_EvalPost : Ts_EvalPre);

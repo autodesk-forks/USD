@@ -166,13 +166,17 @@ TsSpline TsTest_TsEvaluator::SplineDataToSpline(
             // of float extendes to 1e+/-38 so it hasn't been an issue.
             double preHeight = dataKnot.preSlope * dataKnot.preLen;
             GfHalf preSlope = MakeHalf(dataKnot.preSlope);
-            GfHalf preWidth = MakeHalf(preHeight / preSlope);
+            double preWidth = preSlope == 0
+                              ? dataKnot.preLen
+                              : preHeight / preSlope;
             knot.SetPreTanSlope(preSlope);
             knot.SetPreTanWidth(preWidth);
 
             double postHeight = dataKnot.postSlope * dataKnot.postLen;
             GfHalf postSlope = MakeHalf(dataKnot.postSlope);
-            GfHalf postWidth = MakeHalf(postHeight / postSlope);
+            double postWidth = postSlope == 0
+                               ? dataKnot.postLen
+                               : postHeight / postSlope;
             knot.SetPostTanSlope(postSlope);
             knot.SetPostTanWidth(postWidth);
         } else {

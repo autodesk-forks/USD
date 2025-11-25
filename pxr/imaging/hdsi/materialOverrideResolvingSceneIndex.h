@@ -16,9 +16,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DECLARE_WEAK_AND_REF_PTRS(HdsiMaterialOverrideResolvingSceneIndex);
 
 /*
-HdsiMaterialOverrideResolvingSceneIndex applies material overrides if both
-overrides and interface mappings are found.
+HdsiMaterialOverrideResolvingSceneIndex applies material overrides in the form
+of edits to a material's interface or directly to parameters of its shader nodes.
 
+Overrides to a material's interface are only applied if their interface mappings 
+are found.
 The overrides for a particular 'publicUIName' are specified at path like this:
 
 materialOverride.interfaceValues.<publicUIName>.value 
@@ -36,23 +38,54 @@ the material's interface mappings which are defined at paths like this:
 material.<renderContext>.interface.parameters.<publicUIName>.mappings 
     -> [(nodePath, inputName), (nodePath, inputName), ...]
 
-Below is a diagram of the expected attributes needed for material overrides
-on a scene index prim of type 'material':
+Edits of input parameters of shaders within the material are specified at a path 
+like this:
+materialOverride.parameterValues.<shaderNodeName>.<parameterName>.value ->
+    paramEditValueDataSource
+
+The 'paramEditValueDataSource' is copied over a network node parameter's original
+'valueDataSource' at paths like this:
+
+material.<renderContext>.nodes.<nodePath>.parameters.<inputName>.value
+    -> valueDataSource
+
+If the same input parameter is overridden both by an edit to the material
+interface and by a direct parameter edit, the interface override will take 
+precedence.
+
+Below is a diagram of the expected attributes needed for material interface
+and parameter edits on a scene index prim of type 'material':
 
 MaterialPrim
 |
 +------materialOverride
 |      |
 |      +----interfaceValues
+|      |    |
+|      |    +-publicUIName
+|      |    |   |
+|      |    |   +---value -> overrideValueDataSource
+|      |    |
+|      |    +-publicUIName
+|      |    |   |
+|      |    |   +---value -> overrideValueDataSource
+|      |    |
+|      |    +-...
+|      |
+|      +----parameterValues  
 |           |
-|           +-publicUIName
+|           +-nodePath
 |           |   |
-|           |   +---value -> overrideValueDataSource
-|           |
-|           +-publicUIName
+|           |   +---inputName
+|           |   |   |
+|           |   |   +---value -> paramEditValueDataSource
 |           |   |
-|           |   +---value -> overrideValueDataSource
-|           |
+|           |   +---inputName
+|           |   |   |
+|           |   |   +---value -> paramEditValueDataSource
+|           |   |
+|           |   +---...
+|           |  
 |           +-...
 |
 +------material

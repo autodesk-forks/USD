@@ -491,7 +491,7 @@ void
 My_TestGLDrawing::toggleUseSceneMaterials()
 {
     _useSceneMaterials = !_useSceneMaterials;
-    _driver->GetRenderPassState()->SetUseSceneMaterials(_useSceneMaterials);
+    _driver->GetDelegate().SetUseSceneMaterials(_useSceneMaterials);
 }
 
 /* virtual */

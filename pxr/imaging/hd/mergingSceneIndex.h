@@ -114,6 +114,14 @@ private:
     // Rebuild _inputsPathTable from the current contents of _inputs.
     void _RebuildInputsPathTable();
 
+    // Add strict prefixes of activeInputSceneRoot's.
+    //
+    // If adding a scene inde at, e.g., /A/B/C, make
+    // AddedPrimEntries for /A and /A/B.
+    void _AddStrictPrefixesOfSceneRoots(
+        const std::vector<InputScene> &inputScenes,
+        HdSceneIndexObserver::AddedPrimEntries * addedEntries);
+
     bool _HasPrim(const SdfPath &path);
 
     class _Observer : public HdSceneIndexObserver

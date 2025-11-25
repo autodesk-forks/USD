@@ -471,11 +471,6 @@ HdxShadowTask::_UpdateDirtyParams(HdStRenderPassStateSharedPtr &renderPassState,
     renderPassState->SetOverrideColor(params.overrideColor);
     renderPassState->SetWireframeColor(params.wireframeColor);
     renderPassState->SetCullStyle(HdInvertCullStyle(params.cullStyle));
-
-    if (HdStRenderPassState* extendedState =
-            dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
-        extendedState->SetUseSceneMaterials(params.enableSceneMaterials);
-    }
 }
 
 // ---------------------------------------------------------------------------//

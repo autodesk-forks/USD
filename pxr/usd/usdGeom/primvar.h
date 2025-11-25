@@ -61,7 +61,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///     entails added cost to check for inherited values, but the benefit
 ///     is that it allows concise encoding of certain opinions that broadly
 ///     affect large amounts of geometry.  See
-///     UsdGeomImageable::FindInheritedPrimvars().
+///     UsdGeomPrimvarsAPI::FindInheritablePrimvars().
 ///
 /// \section Usd_Creating_and_Accessing_Primvars Creating and Accessing Primvars
 /// 
@@ -242,7 +242,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// primvars. For complete details on how primvars inherit, see
 /// \ref usdGeom_PrimvarInheritance .
 ///
-/// \sa UsdGeomImageable::FindInheritablePrimvars().
+/// \sa UsdGeomPrimvarsAPI::FindInheritablePrimvars().
 ///
 class UsdGeomPrimvar
 {

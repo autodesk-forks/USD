@@ -24,6 +24,11 @@ TsKnotMap::TsKnotMap(std::initializer_list<TsKnot> knots)
 
 TsKnotMap::TsKnotMap(const Ts_SplineData* const data)
 {
+    if (!data) {
+        // Empty spline data. Yield an empty knot map.
+        return;
+    }
+
     // Determine value type.
     const TfType valueType = data->GetValueType();
 
@@ -32,22 +37,93 @@ TsKnotMap::TsKnotMap(const Ts_SplineData* const data)
     _knots.reserve(numKnots);
 
     // Decide whether to do customData lookups.
-    VtDictionary knotCustom;
     const bool haveCustom = !data->customData.empty();
 
     // Populate Knot objects.
     for (size_t i = 0; i < numKnots; i++)
     {
+        VtDictionary knotCustom;
+
         if (haveCustom)
         {
-            knotCustom = TfMapLookupByValue(
-                data->customData, data->times[i], VtDictionary());
+            // If the time is not in data->customData, knotCustom will be
+            // unchanged.
+            TfMapLookup(data->customData, data->times[i], &knotCustom);
         }
 
         // This incurs a virtual method call per knot.  Could be improved, but
         // header dependencies make it not trivial.
         TsKnot knot(
             data->CloneKnotAtIndex(i),
+            valueType,
+            std::move(knotCustom));
+        _knots.emplace_back(std::move(knot));
+    }
+}
+
+TsKnotMap::TsKnotMap(const Ts_SplineData* const data,
+                     const GfInterval& interval)
+{
+    if (!data) {
+        // Empty spline data. Yield an empty knot map.
+        return;
+    }
+
+    // Determine value type.
+    const TfType valueType = data->GetValueType();
+
+    auto lowerIt = std::lower_bound(data->times.begin(),
+                                    data->times.end(),
+                                    interval.GetMin());
+    if (lowerIt == data->times.end()) {
+        // Nothing in the interval. Yield an empty knot map.
+        return;
+    }
+
+    if (lowerIt != data->times.begin() && *lowerIt != interval.GetMin()) {
+        // The min time is between two knots. Back up to include the knot
+        // that starts the segment.
+        --lowerIt;
+    }
+
+    auto upperIt = std::lower_bound(lowerIt,
+                                    data->times.end(),
+                                    interval.GetMax());
+    if (upperIt != data->times.end()) {
+        // If max time is exactly a knot time, then upperIt will refer to that
+        // knot. We need to advance it to include that knot. If max time is
+        // between two knots, then upperIt refers to the knot at the upper end
+        // of the segment. We still need to advance upperIt to include that
+        // upper knot.
+        ++upperIt;
+    }
+
+    // Reserve storage for Knot objects.
+    ptrdiff_t numKnots = std::distance(lowerIt, upperIt);
+    ptrdiff_t offset = std::distance(data->times.begin(), lowerIt);
+    _knots.reserve(numKnots);
+
+    // Decide whether to do customData lookups.
+    const bool haveCustom = !data->customData.empty();
+
+    // Populate Knot objects.
+    for (ptrdiff_t i = 0; i < numKnots; i++)
+    {
+        VtDictionary knotCustom;
+
+        ptrdiff_t index = i + offset;
+        
+        if (haveCustom)
+        {
+            // If the time is not in data->customData, knotCustom will be
+            // unchanged.
+            TfMapLookup(data->customData, data->times[index], &knotCustom);
+        }
+
+        // This incurs a virtual method call per knot. Could be improved, but
+        // header dependencies make it not trivial.
+        TsKnot knot(
+            data->CloneKnotAtIndex(index),
             valueType,
             std::move(knotCustom));
         _knots.emplace_back(std::move(knot));

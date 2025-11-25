@@ -31,6 +31,15 @@ TF_DEFINE_PUBLIC_TOKENS(HdMaterialSchemaTokens,
 
 // --(BEGIN CUSTOM CODE: Schema Methods)--
 
+TfTokenVector
+HdMaterialSchema::GetRenderContexts() const
+{
+    if (auto container = GetContainer()) {
+        return container->GetNames();
+    }
+    return {};
+}
+
 HdMaterialNetworkSchema
 HdMaterialSchema::GetMaterialNetwork()
 {
@@ -41,9 +50,9 @@ HdMaterialSchema::GetMaterialNetwork()
 }
 
 HdMaterialNetworkSchema
-HdMaterialSchema::GetMaterialNetwork(TfToken const &context)
+HdMaterialSchema::GetMaterialNetwork(TfToken const &renderContext)
 {
-    if (auto b = _GetTypedDataSource<HdContainerDataSource>(context)) {
+    if (auto b = _GetTypedDataSource<HdContainerDataSource>(renderContext)) {
         return HdMaterialNetworkSchema(b);
     }
 
@@ -55,9 +64,9 @@ HdMaterialSchema::GetMaterialNetwork(TfToken const &context)
 }
 
 HdMaterialNetworkSchema
-HdMaterialSchema::GetMaterialNetwork(TfTokenVector const &contexts)
+HdMaterialSchema::GetMaterialNetwork(TfTokenVector const &renderContexts)
 {
-    for (TfToken const &context : contexts) {
+    for (TfToken const &context : renderContexts) {
         if (auto b = _GetTypedDataSource<HdContainerDataSource>(context)) {
             return HdMaterialNetworkSchema(b);
         }
@@ -79,15 +88,18 @@ HdMaterialSchema::GetLocatorTerminal(HdDataSourceLocator const& locator)
 
 /*static*/
 TfToken
-HdMaterialSchema::GetLocatorTerminal(HdDataSourceLocator const& locator, TfToken const &context)
+HdMaterialSchema::GetLocatorTerminal(
+    HdDataSourceLocator const& locator,
+    TfToken const &renderContext)
 {
-    return GetLocatorTerminal(locator, TfTokenVector({context}));
+    return GetLocatorTerminal(locator, TfTokenVector({renderContext}));
 }
 
 /*static*/
 TfToken
 HdMaterialSchema::GetLocatorTerminal(
-        HdDataSourceLocator const& locator, TfTokenVector const& contexts)
+    HdDataSourceLocator const& locator,
+    TfTokenVector const& renderContexts)
 {
     if (locator.GetElementCount() >= 4) {
 
@@ -102,7 +114,7 @@ HdMaterialSchema::GetLocatorTerminal(
         }
 
         // Check the render specific contexts
-        for (const TfToken& context : contexts) {
+        for (const TfToken& context : renderContexts) {
             const HdDataSourceLocator terminalLocator(
                 HdMaterialSchema::GetSchemaToken(),
                 context,
@@ -112,7 +124,6 @@ HdMaterialSchema::GetLocatorTerminal(
                 return locator.GetElement(3);
             }
         }
-
     }
 
     return TfToken();

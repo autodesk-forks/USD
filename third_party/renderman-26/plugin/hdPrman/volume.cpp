@@ -174,6 +174,14 @@ _DetermineOpenVDBFieldType(HdSceneDelegate *sceneDelegate,
         if (roleHint.IsHolding<TfToken>()) {
             vectorDataRoleHint = roleHint.UncheckedGet<TfToken>();
         }
+#if PXR_VERSION <= 2302
+        if (roleHint == UsdVolTokens->none_) {
+            vectorDataRoleHint = UsdVolTokens->vector;
+#else
+        if (roleHint == UsdVolTokens->None_) {
+            vectorDataRoleHint = UsdVolTokens->Vector;
+#endif
+        }
 
 #if PXR_VERSION <= 2302
         if (vectorDataRoleHint == UsdVolTokens->color) {
@@ -199,14 +207,10 @@ _DetermineOpenVDBFieldType(HdSceneDelegate *sceneDelegate,
         } else if (vectorDataRoleHint == UsdVolTokens->Vector) {
 #endif
             return HdPrman_Volume::FieldType::VectorType;
-#if PXR_VERSION <= 2203
-        } else if (vectorDataRoleHint == UsdVolTokens->none) {
-#else
 #if PXR_VERSION <= 2302
         } else if (vectorDataRoleHint == UsdVolTokens->none_) {
 #else
         } else if (vectorDataRoleHint == UsdVolTokens->None_) {
-#endif
 #endif
             // Fall through
         } else if (!vectorDataRoleHint.IsEmpty()) {
