@@ -26,6 +26,9 @@ pxr_plugin(${PXR_PACKAGE}
     RESOURCE_FILES
         plugInfo.json
 
+    DOXYGEN_FILES
+        overview.dox
+
     DISABLE_PRECOMPILED_HEADERS
 )
 

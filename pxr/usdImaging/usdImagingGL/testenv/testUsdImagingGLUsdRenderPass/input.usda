@@ -1,6 +1,6 @@
 #usda 1.0
 (
-    '''USD scene demonstrating a render pass'''
+    "USD scene demonstrating a render pass"
     upAxis = "Z"
 )
 
@@ -188,6 +188,13 @@ def Scope "Render"
         {
             token productName = "nospheres.exr"
         }
+
+        def RenderProduct "onlyspheres" (
+            inherits = </Render/Outputs/Default>
+        )
+        {
+            token productName = "onlyspheres.exr"
+        }
     }
 
     def Scope "Settings"
@@ -204,6 +211,13 @@ def Scope "Render"
         {
             rel products = </Render/Outputs/nospheres>
         }
+
+        def RenderSettings "onlyspheres" (
+            inherits = </Render/Settings/Default>
+        )
+        {
+            rel products = </Render/Outputs/onlyspheres>
+        }
     }
 
     def Scope "Passes"
@@ -213,6 +227,14 @@ def Scope "Render"
             uniform pathExpression collection:prune:membershipExpression = "/World/Geom/*Sphere"
             uniform token passType = "render"
             rel renderSource = </Render/Settings/nospheres>
+        }
+
+        def RenderPass "onlyspheres"
+        {
+            uniform bool collection:renderVisibility:includeRoot = 0
+            uniform pathExpression collection:renderVisibility:membershipExpression = "~/World/Geom/C*"
+            uniform token passType = "render"
+            rel renderSource = </Render/Settings/onlyspheres>
         }
     }
 }

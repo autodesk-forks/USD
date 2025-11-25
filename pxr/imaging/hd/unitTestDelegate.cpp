@@ -510,6 +510,24 @@ HdUnitTestDelegate::RebindMaterial(SdfPath const &rprimId,
     tracker.MarkRprimDirty(rprimId, HdChangeTracker::DirtyMaterialId);
 }
 
+void 
+HdUnitTestDelegate::SetUseSceneMaterials(bool useSceneMaterials)
+{
+    if (!useSceneMaterials) {
+        // Update material resource to the fallback
+        for (const auto& [path, resource] : _materials) {
+            // store the scene materials
+            _sceneMaterials[path] = resource;
+            UpdateMaterialResource(path, VtValue());
+        }
+    } else {
+        // update the material resource to the scene material
+        for (const auto& [path, resource] : _sceneMaterials) {
+            UpdateMaterialResource(path, resource);
+        }
+    }
+}
+
 void
 HdUnitTestDelegate::HideRprim(SdfPath const& id) 
 {

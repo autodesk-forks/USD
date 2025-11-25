@@ -29,9 +29,10 @@
 #include "pxr/imaging/hd/systemMessages.h"
 #include "pxr/imaging/hd/utils.h"
 #include "pxr/imaging/hdsi/domeLightCameraVisibilitySceneIndex.h"
-#include "pxr/imaging/hdsi/primTypePruningSceneIndex.h"
 #include "pxr/imaging/hdsi/legacyDisplayStyleOverrideSceneIndex.h"
 #include "pxr/imaging/hdsi/prefixPathPruningSceneIndex.h"
+#include "pxr/imaging/hdsi/primTypeAndPathPruningSceneIndex.h"
+#include "pxr/imaging/hdsi/sceneMaterialPruningSceneIndex.h"
 #include "pxr/imaging/hdsi/sceneGlobalsSceneIndex.h"
 #include "pxr/imaging/hdx/pickTask.h"
 #include "pxr/imaging/hdx/stormCheck.h"
@@ -73,6 +74,7 @@ struct _AppSceneIndices {
     HdsiSceneGlobalsSceneIndexRefPtr sceneGlobalsSceneIndex;
     HdsiDomeLightCameraVisibilitySceneIndexRefPtr
                     domeLightCameraVisibilitySceneIndex;
+    HdsiSceneMaterialPruningSceneIndexRefPtr sceneMaterialPruningSceneIndex;
 };
 
 };
@@ -296,7 +298,6 @@ UsdImagingGLEngine::_DestroyHydraObjects()
                 // "Override" scene indices.
                 _rootOverridesSceneIndex = nullptr;
                 _lightPruningSceneIndex = nullptr;
-                _materialPruningSceneIndex = nullptr;
                 
                 _stageSceneIndex = nullptr;
             }
@@ -373,13 +374,21 @@ UsdImagingGLEngine::PrepareBatch(
 
     // Miscellaneous scene render configuration parameters.
     if (_GetUseSceneIndices()) {
-        if (_materialPruningSceneIndex) {
-            _materialPruningSceneIndex->SetEnabled(
-                !params.enableSceneMaterials);
+        if (_appSceneIndices) {
+            if (HdsiSceneMaterialPruningSceneIndexRefPtr const &si =
+                    _appSceneIndices->sceneMaterialPruningSceneIndex) {
+                si->SetEnabled(!params.enableSceneMaterials);
+            }
         }
         if (_lightPruningSceneIndex) {
-            _lightPruningSceneIndex->SetEnabled(
-                !params.enableSceneLights);
+            _lightPruningSceneIndex->SetPathPredicate(
+                params.enableSceneLights
+                    // Empty predicate means we prune nothing.
+                    ? HdsiPrimTypeAndPathPruningSceneIndex::PathPredicate()
+                    // Predicate matches every path.
+                    // Thus, scene index prunes every prim
+                    // matching the prim types given earlier.
+                    : [](const SdfPath &a) { return true; });
         }
         if (_displayStyleSceneIndex) {
             _displayStyleSceneIndex->SetCullStyleFallback(
@@ -1562,13 +1571,15 @@ UsdImagingGLEngine::_AppendSceneGlobalsSceneIndexCallback(
 
         sceneIndex =
             appSceneIndices->sceneGlobalsSceneIndex =
-                HdsiSceneGlobalsSceneIndex::New(
-                    sceneIndex);
+                HdsiSceneGlobalsSceneIndex::New(sceneIndex);
 
         sceneIndex =
             appSceneIndices->domeLightCameraVisibilitySceneIndex =
-                HdsiDomeLightCameraVisibilitySceneIndex::New(
-                    sceneIndex);
+                HdsiDomeLightCameraVisibilitySceneIndex::New(sceneIndex);
+
+        sceneIndex =
+            appSceneIndices->sceneMaterialPruningSceneIndex = 
+                HdsiSceneMaterialPruningSceneIndex::New(sceneIndex);
 
         return sceneIndex;
     }
@@ -1593,32 +1604,14 @@ UsdImagingGLEngine::_AppendOverridesSceneIndices(
     sceneIndex = HdsiPrefixPathPruningSceneIndex::New(
         sceneIndex, prefixPathPruningInputArgs);
 
-    static HdContainerDataSourceHandle const materialPruningInputArgs =
-        HdRetainedContainerDataSource::New(
-            HdsiPrimTypePruningSceneIndexTokens->primTypes,
-            HdRetainedTypedSampledDataSource<TfTokenVector>::New(
-                { HdPrimTypeTokens->material }),
-            HdsiPrimTypePruningSceneIndexTokens->bindingToken,
-            HdRetainedTypedSampledDataSource<TfToken>::New(
-                HdMaterialBindingsSchema::GetSchemaToken()));
-
-    // Prune scene materials prior to flattening inherited
-    // materials bindings and resolving material bindings
-    sceneIndex = _materialPruningSceneIndex =
-        HdsiPrimTypePruningSceneIndex::New(
-            sceneIndex, materialPruningInputArgs);
-
     static HdContainerDataSourceHandle const lightPruningInputArgs =
         HdRetainedContainerDataSource::New(
-            HdsiPrimTypePruningSceneIndexTokens->primTypes,
+            HdsiPrimTypeAndPathPruningSceneIndexTokens->primTypes,
             HdRetainedTypedSampledDataSource<TfTokenVector>::New(
-                HdLightPrimTypeTokens()),
-            HdsiPrimTypePruningSceneIndexTokens->doNotPruneNonPrimPaths,
-            HdRetainedTypedSampledDataSource<bool>::New(
-                false));
+                HdLightPrimTypeTokens()));
 
     sceneIndex = _lightPruningSceneIndex =
-        HdsiPrimTypePruningSceneIndex::New(
+        HdsiPrimTypeAndPathPruningSceneIndex::New(
             sceneIndex, lightPruningInputArgs);
 
     sceneIndex = _rootOverridesSceneIndex =

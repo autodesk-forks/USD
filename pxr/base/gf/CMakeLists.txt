@@ -90,6 +90,7 @@ pxr_library(gf
         ostreamHelpers
 
     PRIVATE_HEADERS
+        colorSpace_data.h
         ilmbase_eLut.h
         ilmbase_toFloat.h
         nc/nanocolor.h

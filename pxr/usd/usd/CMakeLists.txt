@@ -135,6 +135,7 @@ pxr_library(usd
     PYMODULE_FILES
         __init__.py
         usdGenSchema.py
+        usdInitSchema.py
 
     RESOURCE_FILES
         codegenTemplates/__init__.py

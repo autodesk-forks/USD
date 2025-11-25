@@ -72,7 +72,6 @@ HdStRenderPassState::HdStRenderPassState(
     , _clipPlanesBufferSize(0)
     , _alphaThresholdCurrent(0)
     , _resolveMultiSampleAov(true)
-    , _useSceneMaterials(true)
 {
     _lightingShader = _fallbackLightingShader;
 }
@@ -536,12 +535,6 @@ HdStRenderPassState::SetRenderPassShader(
             HdStBindingRequest(HdStBinding::UBO, _tokens->renderPassState,
                                _renderPassStateBar_, /*interleaved=*/true));
     }
-}
-
-void 
-HdStRenderPassState::SetUseSceneMaterials(bool state)
-{
-    _useSceneMaterials = state;
 }
 
 HdStShaderCodeSharedPtrVector

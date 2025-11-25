@@ -68,6 +68,19 @@ static object _WrapGetKnot(
     return object();
 }
 
+static TsKnotMap _WrapGetKnots(
+    const TsSpline &spline)
+{
+    return spline.GetKnots();
+}
+
+static TsKnotMap _WrapGetKnots_WithInterval(
+    const TsSpline &spline,
+    const GfInterval &interval)
+{
+    return spline.GetKnots(interval);
+}
+
 static void _WrapRemoveKnot(
     TsSpline &spline, const TsTime time)
 {
@@ -194,7 +207,8 @@ void wrapSpline()
 
         .def("SetKnots", &This::SetKnots)
         .def("SetKnot", &_WrapSetKnot)
-        .def("GetKnots", &This::GetKnots)
+        .def("GetKnots", &_WrapGetKnots)
+        .def("GetKnots", &_WrapGetKnots_WithInterval)
         .def("GetKnot", &_WrapGetKnot)
 
         .def("Breakdown", &_WrapBreakdown,
@@ -224,6 +238,11 @@ void wrapSpline()
               arg("valueScale"),
               arg("tolerance"),
               arg("withSources") = false))
+
+        .def("BakeInnerLoops", &This::BakeInnerLoops)
+        .def("GetKnotsWithInnerLoopsBaked", &This::GetKnotsWithInnerLoopsBaked)
+        .def("GetKnotsWithLoopsBaked", &This::GetKnotsWithLoopsBaked,
+             arg("interval"))
 
         .def("DoSidesDiffer", &This::DoSidesDiffer)
 

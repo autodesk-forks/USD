@@ -171,6 +171,16 @@ pxr_build_test(
 )
 
 pxr_build_test(
+    testTsSplineBaking
+    CPPFILES
+        testenv/testTsSplineBaking.cpp
+    LIBRARIES
+        gf
+        ts
+        tf
+)
+
+pxr_build_test(
     testTsSplineEval
     CPPFILES
         testenv/testTsSplineEval.cpp
@@ -288,6 +298,11 @@ pxr_register_test(
 pxr_register_test(
     testTsSplineAPI
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineAPI"
+)
+
+pxr_register_test(
+    testTsSplineBaking
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineBaking"
 )
 
 pxr_register_test(

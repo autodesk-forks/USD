@@ -8,6 +8,7 @@
 
 #include "pxr/exec/vdf/context.h"
 #include "pxr/exec/vdf/executionTypeRegistry.h"
+#include "pxr/exec/vdf/parallelExecutorEngine.h"
 #include "pxr/exec/vdf/readIterator.h"
 #include "pxr/exec/vdf/readWriteIterator.h"
 #include "pxr/exec/vdf/schedule.h"
@@ -17,10 +18,13 @@
 #include "pxr/exec/vdf/speculationNode.h"
 #include "pxr/exec/vdf/testUtils.h"
 
+#include "pxr/exec/ef/executor.h"
+
 #include "pxr/base/gf/vec3d.h"
 #include "pxr/base/tf/staticTokens.h"
 
 #include <iostream>
+#include <memory>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -286,9 +290,11 @@ BuildNestedSpeculationTestNetwork(VdfTestUtils::Network &graph)
 }
 
 static bool
-testNestedSpeculation()
+testNestedSpeculation(const bool useParallelParentExecutor)
 {
-    std::cout << std::endl << "Testing nested speculation..." << std::endl;
+    std::cout << std::endl << "Testing nested speculation with " 
+        << (useParallelParentExecutor ? "parallel" : "simple") 
+        << " parent executor" << std::endl;
     VdfTestUtils::Network graph;
 
     VdfNode *output = BuildNestedSpeculationTestNetwork(graph);
@@ -308,10 +314,18 @@ testNestedSpeculation()
     // SimplePullBasedExecutor instead, or do away with the topological
     // ordering all together.
     VdfSpeculationNode *dummy = CreateDummySpeculationNode(&graph.GetNetwork());
-    VdfSimpleExecutor parentExec;
-    parentExec.Resize(*schedule.GetNetwork());
+
+    std::unique_ptr<VdfExecutorInterface> parentExec;
+    if (useParallelParentExecutor) {
+        parentExec = std::make_unique<EfExecutor<VdfParallelExecutorEngine, 
+            VdfParallelDataManagerVector>>();
+    } else {
+        parentExec = std::make_unique<VdfSimpleExecutor>();
+    }
+
+    parentExec->Resize(*schedule.GetNetwork());
     std::unique_ptr<VdfSpeculationExecutorBase> exec(
-        VdfTestUtils::CreateSpeculationExecutor(dummy, &parentExec));
+        VdfTestUtils::CreateSpeculationExecutor(dummy, parentExec.get()));
     exec->Run(schedule);
 
     GfVec3d result1 =
@@ -355,7 +369,11 @@ main(int argc, char **argv)
         return -1;
     }
 
-    if (!testNestedSpeculation()) {
+    if (!testNestedSpeculation(/* useParallelParentExecutor */ false)) {
+        return -1;
+    }
+
+    if (!testNestedSpeculation(/* useParallelParentExecutor */ true)) {
         return -1;
     }
 

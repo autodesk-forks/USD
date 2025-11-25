@@ -16,16 +16,24 @@ def _setSceneMaterials(appController, sceneMaterialsEnabled):
     appController._ui.actionEnable_Scene_Materials.setChecked(sceneMaterialsEnabled)
     appController._toggleEnableSceneMaterials()
 
+def _getRendererAppendedImageName(appController, filename):
+    rendererName = appController._stageView.rendererDisplayName
+    if rendererName.startswith("RenderMan"):
+        rendererName = "Prman"
+    imageName = filename + "_" + rendererName + ".png"
+    print(" -", imageName)
+    return imageName
+
 # Test that enabling and disabling scene materials works properly in usdview.
 def testUsdviewInputFunction(appController):
     _modifySettings(appController)
 
     # Disable Scene Materials
     _setSceneMaterials(appController, False)
-    filename = "disabledSceneMaterials.png"
+    filename = _getRendererAppendedImageName(appController, "disabledSceneMaterials")
     appController._takeShot(filename, waitForConvergence=True)
 
     # Enable Scene Materials
     _setSceneMaterials(appController, True)
-    filename = "enabledSceneMaterials.png"
+    filename = _getRendererAppendedImageName(appController, "enabledSceneMaterials")
     appController._takeShot(filename, waitForConvergence=True)

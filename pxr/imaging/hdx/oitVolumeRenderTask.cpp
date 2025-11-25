@@ -132,7 +132,6 @@ HdxOitVolumeRenderTask::Execute(HdTaskContext* ctx)
         return;
     }
 
-    extendedState->SetUseSceneMaterials(true);
     renderPassState->SetEnableDepthTest(false);
     // Setting cull style for consistency even though it is hard-coded in
     // shaders/volume.glslfx.

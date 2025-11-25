@@ -87,7 +87,6 @@ HdxOitRenderTask::_Sync(
             }
 
             {
-                extendedState->SetUseSceneMaterials(true);
                 // blending is relevant only for the oitResolve task.
                 extendedState->SetBlendEnabled(false);
                 extendedState->SetAlphaToCoverageEnabled(false);
@@ -102,7 +101,6 @@ HdxOitRenderTask::_Sync(
             renderPassState->SetColorMasks({HdRenderPassState::ColorMaskRGBA});
 
             // Render pass state overrides
-            _translucentRenderPassState->SetUseSceneMaterials(true);
             _translucentRenderPassState->SetBlendEnabled(false);
             _translucentRenderPassState->SetAlphaToCoverageEnabled(false);
             _translucentRenderPassState->SetAlphaThreshold(renderPassState->GetAlphaThreshold());
@@ -194,7 +192,7 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
     if (!_isOitEnabled || !HdxRenderTask::_HasDrawItems()) {
         return;
     }
-    
+
     HdRenderPassStateSharedPtr renderPassState = _GetRenderPassState(ctx);
     if (!TF_VERIFY(renderPassState)) return;
     if (!TF_VERIFY(_translucentRenderPassState)) return;
@@ -231,7 +229,6 @@ HdxOitRenderTask::Execute(HdTaskContext* ctx)
 
     // Render pass state overrides
     {
-        extendedState->SetUseSceneMaterials(true);
         // blending is relevant only for the oitResolve task.
         extendedState->SetBlendEnabled(false);
         extendedState->SetAlphaToCoverageEnabled(false);

@@ -13,12 +13,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-#define HDSI_SCENE_MATERIAL_PRUNING_SCENE_INDEX_TOKENS \
-    (builtinMaterialLocator)
-
-TF_DECLARE_PUBLIC_TOKENS(HdsiSceneMaterialPruningSceneIndexTokens, HDSI_API,
-                         HDSI_SCENE_MATERIAL_PRUNING_SCENE_INDEX_TOKENS);
-
 TF_DECLARE_WEAK_AND_REF_PTRS(HdsiSceneMaterialPruningSceneIndex);
 
 namespace HdsiSceneMaterialPruningSceneIndex_Impl
@@ -54,8 +48,7 @@ class HdsiSceneMaterialPruningSceneIndex final
 public:
     HDSI_API
     static HdsiSceneMaterialPruningSceneIndexRefPtr
-    New(HdSceneIndexBaseRefPtr const &inputSceneIndex,
-        HdContainerDataSourceHandle const &inputArgs);
+    New(HdSceneIndexBaseRefPtr const &inputSceneIndex);
 
     /// Is scene index actually pruning?
     HDSI_API
@@ -87,8 +80,7 @@ protected: // HdSingleInputFilteringSceneIndexBase overrides
 private:
     HDSI_API
     HdsiSceneMaterialPruningSceneIndex(
-        HdSceneIndexBaseRefPtr const &inputSceneIndex,
-        HdContainerDataSourceHandle const &inputArgs);
+        HdSceneIndexBaseRefPtr const &inputSceneIndex);
     HDSI_API
     ~HdsiSceneMaterialPruningSceneIndex() override;
 

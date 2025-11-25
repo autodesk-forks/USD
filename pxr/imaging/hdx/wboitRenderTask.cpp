@@ -73,7 +73,6 @@ HdxWbOitRenderTask::_Sync(
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
-    
 
     if ((*dirtyBits) & HdChangeTracker::DirtyParams) {
         HdxRenderTask::_Sync(delegate, ctx, dirtyBits);
@@ -93,7 +92,6 @@ HdxWbOitRenderTask::_Sync(
             // Currently we only support non-multisampled buffers
             renderPassState->SetMultiSampleEnabled(false);
 
-            extendedState->SetUseSceneMaterials(true);
             // blending needs to be set
             extendedState->SetBlendEnabled(true);
             renderPassState->SetBlend(

@@ -148,14 +148,20 @@ public:
     
     /// @}
 
+    /// Convenience method to get the available render contexts.
+    /// This is preferable to HdMaterialSchema::GetContainer()->GetNames().
+    HD_API
+    TfTokenVector GetRenderContexts() const;
+
     HD_API
     HdMaterialNetworkSchema GetMaterialNetwork();
 
     HD_API
-    HdMaterialNetworkSchema GetMaterialNetwork(TfToken const &context);
+    HdMaterialNetworkSchema GetMaterialNetwork(TfToken const &renderContext);
 
     HD_API
-    HdMaterialNetworkSchema GetMaterialNetwork(TfTokenVector const &contexts);
+    HdMaterialNetworkSchema GetMaterialNetwork(
+        TfTokenVector const &renderContexts);
 
     // Find the terminal (surface/volume/displcement) from a given data source locator.
     HD_API
@@ -167,13 +173,13 @@ public:
     static TfToken 
     GetLocatorTerminal(
         HdDataSourceLocator const& locator, 
-        TfToken const& context);
+        TfToken const& renderContext);
 
     HD_API
     static TfToken 
     GetLocatorTerminal(
         HdDataSourceLocator const& locator, 
-        TfTokenVector const &contexts);
+        TfTokenVector const &Contexts);
 
 // --(END CUSTOM CODE: Schema Methods)--
 

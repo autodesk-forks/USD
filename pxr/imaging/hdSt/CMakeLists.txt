@@ -435,16 +435,6 @@ pxr_build_test(testHdStHWFaceCulling
     CPPFILES
         testenv/testHdStHWFaceCulling.cpp
 )
-pxr_build_test(testHdStIndirectDrawBatchCodeGen
-    LIBRARIES
-        hdSt
-        hd
-        hio
-        glf
-        tf
-    CPPFILES
-        testenv/testHdStIndirectDrawBatchCodeGen.cpp
-)
 pxr_build_test(testHdStIndirectDrawBatchCulling
     LIBRARIES
         hdSt
@@ -2759,13 +2749,6 @@ pxr_register_test(testHdStHWFaceCulling
     STDOUT_REDIRECT testHdStHWFaceCulling-Run1-stdout.txt
     DIFF_COMPARE testHdStHWFaceCulling-Run1-stdout.txt
     TESTENV testHdStHWFaceCulling
-)
-pxr_register_test(testHdStIndirectDrawBatchCodeGen
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStIndirectDrawBatchCodeGen"
-    EXPECTED_RETURN_CODE 0
-    ENV
-        HD_ENABLE_GPU_FRUSTUM_CULLING=false
-        HGI_ENABLE_VULKAN=0
 )
 pxr_register_test(testHdStIndirectDrawBatchCulling
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStIndirectDrawBatchCulling"

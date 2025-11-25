@@ -19,6 +19,7 @@
 #include "hdPrman/renderDelegate.h"
 #include "hdPrman/renderViewContext.h"
 #include "hdPrman/rixStrings.h"
+#include "hdPrman/statsListener.h"
 #include "hdPrman/tokens.h"
 #include "hdPrman/utils.h"
 #include "hdPrman/worldOffsetSceneIndexPlugin.h"
@@ -232,7 +233,6 @@ HdPrman_RenderParam::HdPrman_RenderParam(
     _ri(nullptr),
     _mgr(nullptr),
     _statsSession(nullptr),
-    _progressPercent(0),
     _progressMode(0),
     _startTime(0),
     _stopTime(0),
@@ -2019,6 +2019,15 @@ HdPrman_RenderParam::_CreateStatsSession(void)
     // Finalize addition of scene index information
     _statsSceneIndex->AddPrims({{SdfPath("/globals"), TfToken("globals"),
         editor.Finish()}});
+
+    // Create and register listener for progress metric
+    _statsListener = new HdPrmanStatsListener("HdPrman Stats Listenr",
+                                              IsInteractive());
+    if (_statsListener) {
+        _statsSession->AttachListener(_statsListener);
+    } else {
+        TF_RUNTIME_ERROR("Could not initialize Stats Listener.");
+    }
 #endif
 #endif
 }
@@ -2127,12 +2136,6 @@ HdPrman_RenderParam::_CreateRiley(const std::string &rileyVariant,
     // Register an Xcpt handler
     RixXcpt* rix_xcpt = (RixXcpt*)_rix->GetRixInterface(k_RixXcpt);
     rix_xcpt->Register(&_xcpt);
-
-    // Register progress callback
-     RixEventCallbacks* rix_event_callbacks =
-        (RixEventCallbacks*)_rix->GetRixInterface(k_RixEventCallbacks);
-     rix_event_callbacks->RegisterCallback(RixEventCallbacks::k_Progress,
-                                           _ProgressCallback, this);
 
     // Populate RixStr struct
     RixSymbolResolver* sym = (RixSymbolResolver*)_rix->GetRixInterface(
@@ -2653,11 +2656,6 @@ HdPrman_RenderParam::FatalError(const char* msg)
 void
 HdPrman_RenderParam::_DestroyRiley()
 {
-     RixEventCallbacks* rix_event_callbacks =
-        (RixEventCallbacks*)_rix->GetRixInterface(k_RixEventCallbacks);
-     rix_event_callbacks->UnregisterCallback(RixEventCallbacks::k_Progress,
-                                             _ProgressCallback, this);
-
     if (_mgr) {
         if (_riley) {
             // Riley/RIS crashes if SetOptions hasn't been called prior to
@@ -2715,7 +2713,8 @@ HdPrman_RenderParam::UpdateRenderStats(VtDictionary &stats)
     // is a callback that returns stats to hydra.  This method adds to
     // the dictionary the progress value that comes from
     // the rix progress callback.
-    stats[_tokens->percentDone.GetString()] = _progressPercent;
+    stats[_tokens->percentDone.GetString()] =
+        _statsListener->GetCurrentProgress();
     // Stop time gets set at end of _RenderThreadCallback
     // after riley->Render returns. Until that happens, log the time so far.
     stats[_tokens->totalClockTime.GetString()] = (_stopTime == 0) ?
@@ -3077,22 +3076,6 @@ HdPrman_RenderParam::_RenderThreadCallback()
     _stopTime = ArchGetTickTime();
 }
 
-void
-HdPrman_RenderParam::_ProgressCallback(RixEventCallbacks::Event,
-                                       RtConstPointer data, RtPointer clientData)
-{
-    int const* pp = static_cast<int const*>(data);
-    HdPrman_RenderParam *param = static_cast<HdPrman_RenderParam*>(clientData);
-    param->_progressPercent = *pp;
-
-    if (!param->IsInteractive()) {
-        // XXX Placeholder to simulate RenderMan's built-in writeProgress
-        // option, until iether HdPrman can pass that in, and/or it gets
-        // replaced with Roz-based client-side progress reporting
-        printf("R90000  %3i%%\n", param->_progressPercent);
-    }
-}
-
 bool
 HdPrman_RenderParam::IsValid() const
 {
@@ -3398,9 +3381,11 @@ HdPrman_RenderParam::StartRender()
     }
 
     // Clear out old stats values
-    if (_statsSession)
-    {
+    if (_statsSession) {
         _statsSession->RemoveOldMetricData();
+        if( _statsListener ) {
+            _statsListener->reset();
+        }
     }
 
     // If render restarts without recreating delegate, start timing here.

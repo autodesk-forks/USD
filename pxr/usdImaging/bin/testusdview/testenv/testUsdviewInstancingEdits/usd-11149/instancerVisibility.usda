@@ -1,0 +1,23 @@
+#usda 1.0
+
+def PointInstancer "PointInstancer"
+{
+    float3[] extent.timeSamples = {
+        1: [(-5, -5, -5), (5, 5, 5)],
+    }
+    int64[] invisibleIds = []
+    quath[] orientations = [(1, 0, 0, 0)]
+    point3f[] positions = [(0, 0, 0)]
+    int[] protoIndices = [0]
+    rel prototypes = </PointInstancer/Prototypes/Cube>
+    token visibility = "invisible"
+
+    def Scope "Prototypes"
+    {
+        def Cube "Cube"
+        {
+            float3[] extent = [(-5, -5, -5), (5, 5, 5)]
+            double size = 10
+        }
+    }
+}

@@ -212,6 +212,11 @@ private:
     TS_API
     TsKnotMap(const Ts_SplineData *data);
 
+    // Constructor for copying knot data within a time interval from SplineData
+    // into KnotMap.
+    TS_API
+    TsKnotMap(const Ts_SplineData *data, const GfInterval& interval);
+
 private:
     // Knot objects.
     KnotVec _knots;

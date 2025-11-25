@@ -231,8 +231,6 @@ HdxRenderSetupTask::SyncParamsHelper(HdRenderPassStateSharedPtr const& renderPas
 
         if (HdStRenderPassState * const hdStRenderPassState =
                     dynamic_cast<HdStRenderPassState*>(renderPassState.get())) {
-            hdStRenderPassState->SetUseSceneMaterials(
-                params.enableSceneMaterials);
             
             // Don't enable multisample for id renders.
             hdStRenderPassState->SetUseAovMultiSample(

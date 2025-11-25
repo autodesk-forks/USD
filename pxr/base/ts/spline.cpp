@@ -267,6 +267,11 @@ TsKnotMap TsSpline::GetKnots() const
     return TsKnotMap(_GetData());
 }
 
+TsKnotMap TsSpline::GetKnots(const GfInterval& timeInterval) const
+{
+    return TsKnotMap(_GetData(), timeInterval);
+}
+
 bool TsSpline::GetKnot(
     const TsTime time,
     TsKnot* const knotOut) const
@@ -309,6 +314,88 @@ void TsSpline::RemoveKnot(
     _data->RemoveKnotAtTime(time);
 
     // XXX TODO: compute affected interval
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Loop Baking
+
+bool TsSpline::BakeInnerLoops()
+{
+    if (!_data || !_data->HasInnerLoops()) {
+        // No inner loops to bake, we're done.
+        return true;
+    }
+
+    const GfInterval allTime = GfInterval::GetFullInterval();
+    const bool noExtrapLoops = false;
+
+    Ts_SplineData* bakedData = Ts_Bake(_GetData(),
+                                       allTime,
+                                       noExtrapLoops);
+
+    if (bakedData) {
+        // It worked, store the baked results back in this spline, releasing the
+        // old data.
+        _data.reset(bakedData);
+
+        return true;
+    }
+
+    return false;
+}
+
+TsKnotMap TsSpline::GetKnotsWithInnerLoopsBaked() const
+{
+    TsKnotMap result;
+
+    if (_data && _data->HasInnerLoops()) {
+        const GfInterval allTime = GfInterval::GetFullInterval();
+        const bool noExtrapLoops = false;
+
+        Ts_SplineData* bakedData = Ts_Bake(_GetData(),
+                                           allTime,
+                                           noExtrapLoops);
+
+        if (bakedData) {
+            result = TsKnotMap(bakedData);
+            delete bakedData;
+
+            return result;
+        }
+    }
+
+    result = GetKnots();
+    return result;
+}
+
+TsKnotMap TsSpline::GetKnotsWithLoopsBaked(
+    const GfInterval& timeInterval) const
+{
+    TsKnotMap result;
+
+    if (_data &&
+        !_data->times.empty() &&
+        (_data->HasInnerLoops() ||
+         _data->preExtrapolation.IsLooping() ||
+         _data->postExtrapolation.IsLooping()))
+    {
+        // We have looping somewhere.
+        const bool includeExtrapLoops = true;
+
+        Ts_SplineData* bakedData = Ts_Bake(_GetData(),
+                                           timeInterval,
+                                           includeExtrapLoops);
+
+        if (bakedData) {
+            result = TsKnotMap(bakedData);
+            delete bakedData;
+        }
+
+        return result;
+    }
+
+    result = GetKnots(timeInterval);
+    return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

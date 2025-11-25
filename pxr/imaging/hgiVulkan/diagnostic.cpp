@@ -222,7 +222,8 @@ void
 HgiVulkanBeginLabel(
     HgiVulkanDevice* device,
     HgiVulkanCommandBuffer* cb,
-    const char* label)
+    const char* label,
+    const GfVec4f& color)
 {
     if (!HgiVulkanIsDebugEnabled() || !label) {
         return;
@@ -235,6 +236,10 @@ HgiVulkanBeginLabel(
     VkCommandBuffer vkCmbuf = cb->GetVulkanCommandBuffer();
     VkDebugUtilsLabelEXT labelInfo = {VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT};
     labelInfo.pLabelName = label;
+    labelInfo.color[0] = color[0];
+    labelInfo.color[1] = color[1];
+    labelInfo.color[2] = color[2];
+    labelInfo.color[3] = color[3];
     device->vkCmdBeginDebugUtilsLabelEXT(vkCmbuf, &labelInfo);
 }
 

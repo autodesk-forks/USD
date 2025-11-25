@@ -17,6 +17,7 @@ pxr_library(js
 
     PRIVATE_HEADERS
         rapidjson/allocators.h
+        rapidjson/cursorstreamwrapper.h
         rapidjson/document.h
         rapidjson/encodedstream.h
         rapidjson/encodings.h
@@ -26,6 +27,7 @@ pxr_library(js
         rapidjson/filewritestream.h
         rapidjson/fwd.h
         rapidjson/internal/biginteger.h
+        rapidjson/internal/clzll.h
         rapidjson/internal/diyfp.h
         rapidjson/internal/dtoa.h
         rapidjson/internal/ieee754.h
@@ -50,6 +52,7 @@ pxr_library(js
         rapidjson/schema.h
         rapidjson/stream.h
         rapidjson/stringbuffer.h
+        rapidjson/uri.h
         rapidjson/writer.h
 
     DOXYGEN_FILES

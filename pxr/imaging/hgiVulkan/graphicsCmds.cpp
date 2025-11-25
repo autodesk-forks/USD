@@ -86,7 +86,8 @@ void
 HgiVulkanGraphicsCmds::PushDebugGroup(const char* label)
 {
     _CreateCommandBuffer();
-    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label);
+    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label,
+        { 0, 0.639, 0.878, 1.0 });
 }
 
 void

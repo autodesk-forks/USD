@@ -275,6 +275,9 @@ public:
     HD_API
     void RebindMaterial(SdfPath const &rprimId, SdfPath const &materialId);
 
+    HD_API
+    void SetUseSceneMaterials(bool useSceneMaterials);
+
     /// Render buffers
     HD_API
     void AddRenderBuffer(SdfPath const &id, 
@@ -548,6 +551,7 @@ private:
     std::map<SdfPath, _Instancer> _instancers;
     std::map<SdfPath, _Primvars> _primvars;
     std::map<SdfPath, VtValue> _materials;
+    std::map<SdfPath, VtValue> _sceneMaterials;
     std::map<SdfPath, _Camera> _cameras;
     std::map<SdfPath, _RenderBuffer> _renderBuffers;
     std::map<SdfPath, _Light> _lights;

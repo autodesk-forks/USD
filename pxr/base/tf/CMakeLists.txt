@@ -174,7 +174,6 @@ pxr_library(tf
         stl
         stopwatch
         stringUtils
-        templateString
         tf
         token
         type
@@ -321,7 +320,6 @@ pxr_library(tf
         wrapStatus.cpp
         wrapStopwatch.cpp
         wrapStringUtils.cpp
-        wrapTemplateString.cpp
         wrapTestPyAnnotatedBoolResult.cpp
         wrapTestPyContainerConversions.cpp
         wrapTestPyStaticTokens.cpp
@@ -479,7 +477,6 @@ pxr_build_test(testTf
         testenv/stopwatch.cpp
         testenv/stringUtils.cpp
         testenv/staticTokens.cpp
-        testenv/templateString.cpp
         testenv/token.cpp
         testenv/delegatedCountPtr.cpp
         testenv/type.cpp
@@ -503,7 +500,6 @@ pxr_test_scripts(
     testenv/testTfPyStaticTokens.py
     testenv/testTfScriptModuleLoader.py
     testenv/testTfStringUtils.py
-    testenv/testTfTemplateString.py
     testenv/testTfType.py
     testenv/testTf_PyContainerConversions.py
 )
@@ -745,13 +741,6 @@ pxr_register_test(TfStopwatch
 )
 pxr_register_test(TfStringUtils
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTf TfStringUtils"
-)
-pxr_register_test(TfTemplateString
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTf TfTemplateString"
-)
-pxr_register_test(testTfTemplateString
-    PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTfTemplateString"
 )
 pxr_register_test(TfToken
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTf TfToken"

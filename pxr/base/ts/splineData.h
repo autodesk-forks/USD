@@ -63,6 +63,14 @@ public:
     virtual void PushKnot(
         const Ts_KnotData *knotData,
         const VtDictionary &customData) = 0;
+    // // Overload of PushKnot that offsets the time by timeOffset and values by
+    // // valueOffset. This allows us to unroll knots in loops without having to
+    // // dispatch based on TfType comparisons.
+    // virtual void PushKnot(
+    //     const Ts_KnotData *knotData,
+    //     const VtDictionary &customData,
+    //     const double timeOffset,
+    //     const double valueOffset) = 0;
     virtual size_t SetKnot(
         const Ts_KnotData *knotData,
         const VtDictionary &customData) = 0;
@@ -79,6 +87,7 @@ public:
     virtual const Ts_KnotData* GetKnotPtrAtIndex(size_t index) const = 0;
     virtual Ts_TypedKnotData<double>
         GetKnotDataAsDouble(size_t index) const = 0;
+    virtual double GetKnotValueAsDouble(size_t index) const = 0;
 
     virtual void ClearKnots() = 0;
     virtual void RemoveKnotAtTime(TsTime time) = 0;
@@ -155,6 +164,11 @@ public:
     void PushKnot(
         const Ts_KnotData *knotData,
         const VtDictionary &customData) override;
+    // void PushKnot(
+    //     const Ts_KnotData *knotData,
+    //     const VtDictionary &customData,
+    //     const double timeOffset,
+    //     const double valueOffset) override;
     size_t SetKnot(
         const Ts_KnotData *knotData,
         const VtDictionary &customData) override;
@@ -171,6 +185,7 @@ public:
     const Ts_KnotData* GetKnotPtrAtIndex(size_t index) const override;
     Ts_TypedKnotData<double>
         GetKnotDataAsDouble(size_t index) const override;
+    double GetKnotValueAsDouble(size_t index) const override;
 
     void ClearKnots() override;
     void RemoveKnotAtTime(TsTime time) override;
@@ -295,6 +310,45 @@ void Ts_TypedSplineData<T>::PushKnot(
         customData[knotData->time] = customDataIn;
     }
 }
+
+// template <typename T>
+// void Ts_TypedSplineData<T>::PushKnot(
+//     const Ts_KnotData *knotData,
+//     const VtDictionary &customDataIn,
+//     const double timeOffset,
+//     const double valueOffset)
+// {
+//     Ts_TypedKnotData<T> typedKnotData(
+//         *static_cast<const Ts_TypedKnotData<T>*>(knotData));
+
+//     typedKnotData.time += timeOffset;
+//     typedKnotData.value += valueOffset;
+//     typedKnotData.preValue += valueOffset;
+
+//     // Clamp to prevent infinities in types smaller than double (especially
+//     // GfHalf).
+//     if constexpr(!std::is_same_v<T, double>) {
+//         if (typedKnotData.value > std::numeric_limits<T>::max()) {
+//             typedKnotData.value = std::numeric_limits<T>::max();
+//         } else if (typedKnotData.value < std::numeric_limits<T>::lowest()) {
+//             typedKnotData.value = std::numeric_limits<T>::lowest();
+//         }
+
+//         if (typedKnotData.preValue > std::numeric_limits<T>::max()) {
+//             typedKnotData.preValue = std::numeric_limits<T>::max();
+//         } else if (typedKnotData.preValue < std::numeric_limits<T>::lowest()) {
+//             typedKnotData.preValue = std::numeric_limits<T>::lowest();
+//         }
+//     }
+
+//     times.push_back(typedKnotData.time);
+//     knots.push_back(typedKnotData);
+
+//     if (!customDataIn.empty())
+//     {
+//         customData[knotData->time] = customDataIn;
+//     }
+// }
 
 template <typename T>
 size_t Ts_TypedSplineData<T>::SetKnot(
@@ -460,6 +514,16 @@ Ts_TypedSplineData<T>::GetKnotDataAsDouble(
     out.postTanSlope = in.postTanSlope;
 
     return out;
+}
+
+// Depending on T, this is either a verbatim copy or an increase in precision.
+template <typename T>
+double
+Ts_TypedSplineData<T>::GetKnotValueAsDouble(
+    const size_t index) const
+{
+    const Ts_TypedKnotData<T> &typedData = knots[index];
+    return typedData.value;
 }
 
 template <typename T>
