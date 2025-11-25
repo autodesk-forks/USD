@@ -579,14 +579,9 @@ VtDictionaryOver(const VtDictionary &strong, VtDictionary *weak,
 /// subdict, too, will contain values from \a weak that are not found in \a
 /// strong.
 ///
-/// If \p coerceToWeakerOpinionType is \c true then coerce a strong value to
-/// the weaker value's type, if there is a weaker value.  This is mainly
-/// intended to promote to enum types.
-///
 /// \ingroup group_vtdict_functions
 VT_API VtDictionary
-VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType = false);
+VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak);
 
 /// Updates \p strong to become \p strong composed recursively over \p weak.
 ///
@@ -600,14 +595,9 @@ VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak,
 /// recursive call to this method in which \a strong's subdictionary will have
 /// entries added if they are contained in \a weak but not in \a strong
 ///
-/// If \p coerceToWeakerOpinionType is \c true then coerce a strong value to
-/// the weaker value's type, if there is a weaker value.  This is mainly
-/// intended to promote to enum types.
-///
 /// \ingroup group_vtdict_functions
 VT_API void
-VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType = false);
+VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak);
 
 /// Updates \p weak to become \p strong composed recursively over \p weak.
 ///
@@ -624,14 +614,9 @@ VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
 /// The result is that no key/value pairs of \a will be lost in nested
 /// dictionaries. Rather, only non-dictionary values will be overwritten
 ///
-/// If \p coerceToWeakerOpinionType is \c true then coerce a strong value to
-/// the weaker value's type, if there is a weaker value.  This is mainly
-/// intended to promote to enum types.
-///
 /// \ingroup group_vtdict_functions
 VT_API void
-VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak,
-                          bool coerceToWeakerOpinionType = false);
+VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak);
 
 
 struct VtDictionaryHash {

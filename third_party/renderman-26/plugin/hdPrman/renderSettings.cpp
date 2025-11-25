@@ -54,6 +54,14 @@ TF_DEFINE_ENV_SETTING(HD_PRMAN_RENDER_SETTINGS_BUNDLE_RENDER_PRODUCTS, false,
                       "settings are rendered within the same render view.");
 
 TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+    // XXX These are currently expressed per-output in the Riley API
+    // but are anticipated to become global options in the future.
+    ((riRiPixelFilterName,          "ri:Ri:PixelFilterName"))
+    ((riRiPixelFilterWidth,         "ri:Ri:PixelFilterWidth"))
+);
+
+TF_DEFINE_PRIVATE_TOKENS(
     _renderTerminalTokens, // properties in PxrRenderTerminalsAPI
     ((riIntegrator, "ri:integrator"))
     ((riSampleFilters, "ri:sampleFilters"))
@@ -530,6 +538,8 @@ void HdPrman_RenderSettings::_Sync(
         
     HdPrman_RenderParam *param = static_cast<HdPrman_RenderParam*>(renderParam);
 
+    const VtDictionary& namespacedSettings = GetNamespacedSettings();
+
     HdSceneIndexBaseRefPtr terminalSi =
         sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
 
@@ -559,7 +569,7 @@ void HdPrman_RenderSettings::_Sync(
         // Note: We don't get fine-grained invalidation per-setting, so we
         //       recompute all settings. Since this resets the param list, we
         //       re-add the shutter interval param explicitly below.
-        _settingsOptions = _GenerateParamList(GetNamespacedSettings());
+        _settingsOptions = _GenerateParamList(namespacedSettings);
     }
 
 #if PXR_VERSION >= 2311
@@ -636,6 +646,25 @@ void HdPrman_RenderSettings::_Sync(
             *dirtyBits & HdRenderSettings::DirtyActive) {
 
             _ProcessRenderTerminals(sceneDelegate, param);
+        }
+
+        // Pixel filter parameters.
+        // If there is not an active render settings prim, the pixel
+        // filter will instead be set inside HdPrman_RenderParam;
+        // see _OverridePixelFilterFromLegacyHdRenderSettingMap().
+        if (hasActiveRsp) {
+            const HdPrman_RenderParam::PixelFilter defaultPixelFilter =
+                param->GetDefaultPixelFilter();
+            param->SetPixelFilter( {
+                VtDictionaryGet<TfToken>(
+                    namespacedSettings,
+                    _tokens->riRiPixelFilterName,
+                    VtDefault = defaultPixelFilter.name),
+                VtDictionaryGet<GfVec2f>(
+                    namespacedSettings,
+                    _tokens->riRiPixelFilterWidth,
+                    VtDefault = defaultPixelFilter.width)
+                } );
         }
 
         if (*dirtyBits & HdRenderSettings::DirtyRenderProducts) {

@@ -74,6 +74,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((minSamples, "ri:hider:minsamples"))
     ((maxSamples, "ri:hider:maxsamples"))
     ((pixelVariance, "ri:Ri:PixelVariance"))
+    ((pixelFilterName, "ri:Ri:PixelFilterName"))
+    ((pixelFilterWidth, "ri:Ri:PixelFilterWidth"))
 );
 
 TF_DEFINE_ENV_SETTING(TEST_HD_PRMAN_ENABLE_SCENE_INDEX, true,
@@ -319,6 +321,8 @@ PopulateFallbackRenderSettings(
         _SetFallbackValueIfUnauthored(_tokens->minSamples, prim, 4);
         _SetFallbackValueIfUnauthored(_tokens->maxSamples, prim, 4);
         _SetFallbackValueIfUnauthored(_tokens->pixelVariance, prim, 0.f);
+        _SetFallbackValueIfUnauthored(_tokens->pixelFilterName, prim, TfToken("box"));
+        _SetFallbackValueIfUnauthored(_tokens->pixelFilterWidth, prim, GfVec2f(1.0f, 1.0f));
     }
 
 
@@ -503,6 +507,8 @@ AddNamespacedSettings(
     (*settingsMap)[_tokens->minSamples] = 4;
     (*settingsMap)[_tokens->maxSamples] = 4;
     (*settingsMap)[_tokens->pixelVariance] = 0.f;
+    (*settingsMap)[_tokens->pixelFilterName] = TfToken("box");
+    (*settingsMap)[_tokens->pixelFilterWidth] = GfVec2f(1.0f, 1.0f);
 
     // Set namespaced settings 
     for (const auto &item : namespacedSettings) {

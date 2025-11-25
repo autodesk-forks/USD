@@ -13,6 +13,7 @@
 #include "pxr/imaging/hd/changeTracker.h"
 #include "pxr/imaging/hd/command.h"
 #include "pxr/imaging/hd/dataSource.h"
+#include "pxr/imaging/hd/rendererCreateArgs.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/tf/token.h"
 
@@ -98,18 +99,6 @@ struct HdRenderSettingDescriptor
     TfToken key;
     // The default value.
     VtValue defaultValue;
-};
-
-///
-/// HdRendererCreateArgs contains members indicating the resources available 
-/// when creating a renderer plugin.
-///
-struct HdRendererCreateArgs
-{
-    // Whether the GPU is available or not.
-    bool gpuEnabled { true };
-    // An Hgi instance to check backend support against.
-    Hgi* hgi { nullptr };
 };
 
 typedef std::vector<HdRenderSettingDescriptor> HdRenderSettingDescriptorList;

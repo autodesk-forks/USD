@@ -35,13 +35,6 @@ public:
 
     ~HdSceneIndexAdapterSceneDelegate() override;
 
-    // ------------------------------------------------------------------------
-
-    /// Returns the end of a scene index chain containing the filters
-    /// necessary for input to an instance of this scene delegate.
-    static HdSceneIndexBaseRefPtr AppendDefaultSceneFilters(
-        HdSceneIndexBaseRefPtr inputSceneIndex, SdfPath const &delegateID);
-
     // satisfying HdSceneIndexObserver ----------------------------------------
     void PrimsAdded(
         const HdSceneIndexBase &sender,

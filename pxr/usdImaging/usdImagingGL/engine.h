@@ -765,6 +765,9 @@ protected:
     void _SetRenderDelegate(HdPluginRenderDelegateUniqueHandle &&);
 
     USDIMAGINGGL_API
+    SdfPath _ComputeControllerPath(const TfToken &pluginId);
+
+    USDIMAGINGGL_API
     SdfPath _ComputeControllerPath(const HdPluginRenderDelegateUniqueHandle &);
 
     USDIMAGINGGL_API
@@ -786,6 +789,16 @@ protected:
 
     USDIMAGINGGL_API
     HdSelectionSharedPtr _GetSelection() const;
+
+    // Application scene index callback registration and
+    // engine-renderInstanceId tracking.
+    void
+    _RegisterRenderInstanceId(
+        const std::string &renderInstanceId);
+
+    // Create UsdImagingStageSceneIndex and subsequent scene indices.
+    void
+    _CreateUsdImagingSceneIndices();
 
 protected:
 
@@ -856,6 +869,8 @@ private:
     UsdImagingRootOverridesSceneIndexRefPtr _rootOverridesSceneIndex;
     HdsiLegacyDisplayStyleOverrideSceneIndexRefPtr _displayStyleSceneIndex;
     HdsiPrimTypeAndPathPruningSceneIndexRefPtr _lightPruningSceneIndex;
+    // State of the _lightPruningSceneIndex.
+    bool _lightPruningSceneIndexEnableSceneLights;
     HdSceneIndexBaseRefPtr _sceneIndex;
     
     std::unique_ptr<UsdImagingDelegate> _sceneDelegate;

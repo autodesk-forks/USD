@@ -31,6 +31,9 @@ def Shader "TestShaderPropertiesNodeUSD" (
     matrix4d[] inputs:inputMatrixArray = [
         ( (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0) ),
         ( (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0) ) ]
+    int2 inputs:inputAsInt2 = ( 1, 2 )
+    int3 inputs:inputAsInt3 = ( 1, 2, 3 )
+    int4 inputs:inputAsInt4 = ( 1, 2, 3, 4 )
     float2 inputs:inputFloat2 = ( 1.0, 2.0 )
     float3 inputs:inputFloat3 = ( 1.0, 2.0, 3.0 )
     float4 inputs:inputFloat4 = ( 1.0, 2.0, 3.0, 4.0 )

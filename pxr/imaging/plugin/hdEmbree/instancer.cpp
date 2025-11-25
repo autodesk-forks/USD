@@ -23,6 +23,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 HdEmbreeInstancer::HdEmbreeInstancer(HdSceneDelegate* delegate,
                                      SdfPath const& id)
     : HdInstancer(delegate, id)
+    , _visible(true)
 {
 }
 
@@ -39,6 +40,10 @@ HdEmbreeInstancer::Sync(HdSceneDelegate* delegate,
                         HdRenderParam* renderParam,
                         HdDirtyBits* dirtyBits)
 {
+    if (*dirtyBits & HdChangeTracker::DirtyVisibility) {
+        _visible = delegate->GetVisible(GetId());
+    }
+
     _UpdateInstancer(delegate, dirtyBits);
 
     if (HdChangeTracker::IsAnyPrimvarDirty(*dirtyBits, GetId())) {
@@ -87,6 +92,10 @@ HdEmbreeInstancer::ComputeInstanceTransforms(SdfPath const &prototypeId)
     //     * hydra:instanceTransforms(index)
     // }
     // If any transform isn't provided, it's assumed to be the identity.
+
+    if (!_visible) {
+        return {};
+    }
 
     GfMatrix4d instancerTransform =
         GetDelegate()->GetInstancerTransform(GetId());

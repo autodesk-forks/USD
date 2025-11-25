@@ -1221,7 +1221,6 @@ HdPrmanMeshLightResolvingSceneIndex::_PrimsDirtied(
         }
     }
 
-#if PXR_VERSION < 2505
     for (const auto& entry : entries) {
         if (_meshLights.count(entry.primPath)) {
             // Propogate dirtiness to the meshLight light if applicable.
@@ -1233,24 +1232,27 @@ HdPrmanMeshLightResolvingSceneIndex::_PrimsDirtied(
 #else
             || entry.dirtyLocators.Intersects(HdMaterialBindingSchema::GetDefaultLocator())) {
 #endif
-                _SendPrimsDirtied({{ entry.primPath.AppendChild(_tokens->meshLightLightName), {
-                    HdLightSchema::GetDefaultLocator(),
-                    HdMaterialSchema::GetDefaultLocator(),
-                    HdPrimvarsSchema::GetDefaultLocator(),
-                    HdVisibilitySchema::GetDefaultLocator(),
-                    HdXformSchema::GetDefaultLocator()
-                }}});
+
+                _SendPrimsDirtied({{
+                    entry.primPath.AppendChild(_tokens->meshLightLightName),
+                    HdContainerDataSourceEditor::ComputeDirtyLocators({
+                        HdLightSchema::GetDefaultLocator(),
+                        HdMaterialSchema::GetDefaultLocator(),
+                        HdPrimvarsSchema::GetDefaultLocator(),
+                        HdVisibilitySchema::GetDefaultLocator(),
+                        HdXformSchema::GetDefaultLocator()
+                    })
+                }});
             }
 
             // Propogate all dirtiness to the visible meshLight mesh.
             if (_meshLights[entry.primPath] == true /* IsVisible */) {
                 _SendPrimsDirtied({{entry.primPath.AppendChild(_tokens->meshLightMeshName),
-                    entry.dirtyLocators
+                    HdContainerDataSourceEditor::ComputeDirtyLocators(entry.dirtyLocators)
                 }});
             }
         }
     }
-#endif
 
     _SendPrimsAdded(added);
     _SendPrimsRemoved(removed);

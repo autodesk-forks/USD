@@ -15,6 +15,11 @@ def LoadPcpCache(rootLayer):
 class TestPcpPrimIndex(unittest.TestCase):
     def AssertRestrictedDepth(self, pcpCache, path, expected):
         pi, err = pcpCache.ComputePrimIndex(path)
+
+        # Uncomment to generate dot graphs for prim index
+        # being tested.
+        # pi.DumpToDotGraph('{}.dot'.format(Sdf.Path(path).name))
+
         self.assertFalse(err, "Unexpected composition errors: {}".format(
             ",".join(str(e) for e in err)))
 
@@ -239,10 +244,7 @@ class TestPcpPrimIndex(unittest.TestCase):
             [
                 (Pcp.ArcTypeRoot, "/Root/Child", 0), [
                     (Pcp.ArcTypeReference, "/Ref/Child", 0), [
-                        (Pcp.ArcTypeSpecialize, "/Specialize/Child", 1), [
-                            (Pcp.ArcTypeReference, "/ChildRef", 1), [
-                            ]
-                        ]
+                        (Pcp.ArcTypeSpecialize, "/Specialize/Child", 1), []
                     ],
                     (Pcp.ArcTypeSpecialize, "/Specialize/Child", 0), [
                         (Pcp.ArcTypeReference, "/ChildRef", 0), [
@@ -256,12 +258,7 @@ class TestPcpPrimIndex(unittest.TestCase):
             [
                 (Pcp.ArcTypeRoot, "/Root/Child/Child2", 0), [
                     (Pcp.ArcTypeReference, "/Ref/Child/Child2", 0), [
-                        (Pcp.ArcTypeSpecialize, "/Specialize/Child/Child2", 1), [
-                            (Pcp.ArcTypeReference, "/ChildRef/Child2", 1), [
-                                (Pcp.ArcTypeReference, "/ChildRef2", 1), [
-                                ]
-                            ]
-                        ]
+                        (Pcp.ArcTypeSpecialize, "/Specialize/Child/Child2", 1), []
                     ],
                     (Pcp.ArcTypeSpecialize, "/Specialize/Child/Child2", 0), [
                         (Pcp.ArcTypeReference, "/ChildRef/Child2", 0), [
@@ -386,12 +383,7 @@ class TestPcpPrimIndex(unittest.TestCase):
             [
                 (Pcp.ArcTypeRoot, "/Root/Child/Child2", 3), [
                     (Pcp.ArcTypeReference, "/Ref/Child/Child2", 3), [
-                        (Pcp.ArcTypeSpecialize, "/Specialize/Child/Child2", 1), [
-                            (Pcp.ArcTypeReference, "/ChildRef/Child2", 1), [
-                                (Pcp.ArcTypeReference, "/ChildRef2", 1), [
-                                ]
-                            ]
-                        ]
+                        (Pcp.ArcTypeSpecialize, "/Specialize/Child/Child2", 1), []
                     ],
                     (Pcp.ArcTypeSpecialize, "/Specialize/Child/Child2", 3), [
                         (Pcp.ArcTypeReference, "/ChildRef/Child2", 0), [
@@ -602,10 +594,7 @@ class TestPcpPrimIndex(unittest.TestCase):
                 (Pcp.ArcTypeRoot, rootLayer, "/Root"), [
                     # Reference from /Root -> /Ref in @root@
                     (Pcp.ArcTypeReference, refLayer, "/Ref"), [
-                        (Pcp.ArcTypeSpecialize, refLayer, "/Spec"), [
-                            (Pcp.ArcTypeReference, refLayer, "/SpecRefA"), [],
-                            (Pcp.ArcTypeReference, refLayer, "/SpecRefB"), []
-                        ]
+                        (Pcp.ArcTypeSpecialize, refLayer, "/Spec"), []
                     ],
 
                     # Implied specialize due to /Ref -> /Spec in @ref@
@@ -628,9 +617,7 @@ class TestPcpPrimIndex(unittest.TestCase):
                 (Pcp.ArcTypeRoot, rootLayer, "/Root/ChildA"), [
                     # Reference from /Root -> /Ref in @root@
                     (Pcp.ArcTypeReference, refLayer, "/Ref/ChildA"), [
-                        (Pcp.ArcTypeSpecialize, refLayer, "/Spec/ChildA"), [
-                            (Pcp.ArcTypeReference, refLayer, "/SpecRefA/ChildA"), []
-                        ]
+                        (Pcp.ArcTypeSpecialize, refLayer, "/Spec/ChildA"), []
                     ],
 
                     # Propagated specialize due to /Ref -> /Spec in @ref@
@@ -714,10 +701,7 @@ class TestPcpPrimIndex(unittest.TestCase):
                 (Pcp.ArcTypeRoot, rootLayer, "/Root/Instance"), [
                     # Reference from /Root -> /Ref in @root@
                     (Pcp.ArcTypeReference, refLayer, "/Ref/Instance"), [
-                        (Pcp.ArcTypeSpecialize, refLayer, "/Ref/Spec"), [
-                            (Pcp.ArcTypeReference, refLayer, "/SpecRefA"), [],
-                            (Pcp.ArcTypeReference, refLayer, "/SpecRefB"), []
-                        ]
+                        (Pcp.ArcTypeSpecialize, refLayer, "/Ref/Spec"), []
                     ],
 
                     # Implied specialize due to /Ref/Instance -> /Ref/Spec in @ref@
@@ -740,9 +724,7 @@ class TestPcpPrimIndex(unittest.TestCase):
                 (Pcp.ArcTypeRoot, rootLayer, "/Root/Instance/ChildA"), [
                     # Reference from /Root -> /Ref in @root@
                     (Pcp.ArcTypeReference, refLayer, "/Ref/Instance/ChildA"), [
-                        (Pcp.ArcTypeSpecialize, refLayer, "/Ref/Spec/ChildA"), [
-                            (Pcp.ArcTypeReference, refLayer, "/SpecRefA/ChildA"), []
-                        ]
+                        (Pcp.ArcTypeSpecialize, refLayer, "/Ref/Spec/ChildA"), []
                     ],
 
                     # Propagated specialize due to /Ref/Instance -> /Ref/Spec in @ref@
@@ -948,7 +930,7 @@ class TestPcpPrimIndex(unittest.TestCase):
                         ]
                     ],
 
-                    (Pcp.ArcTypeSpecialize, rootLayer, "/RefB/Spec/Child")
+                    (Pcp.ArcTypeSpecialize, rootLayer, "/RefB/Spec/Child"), []
                 ]
             ])
 

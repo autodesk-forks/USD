@@ -10,6 +10,7 @@ pxr_library(usdUtils
         usd
         usdGeom
         usdShade
+        usdUI
         TBB::tbb
 
     PUBLIC_CLASSES

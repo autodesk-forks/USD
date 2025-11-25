@@ -21,4 +21,5 @@ pxr_library(hdMtlx
 
     PUBLIC_HEADERS
         api.h
+        combinedMtlxVersion.h
 )

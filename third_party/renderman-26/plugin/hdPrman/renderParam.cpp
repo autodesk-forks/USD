@@ -144,6 +144,10 @@ TF_DEFINE_PRIVATE_TOKENS(
     (sourceType)
     (lpe)
 
+    // pixelFilterName
+    (gaussian)
+    (box)
+
     // Product/driver tokens
     (deepRaster)
     (deepexr)
@@ -251,6 +255,7 @@ HdPrman_RenderParam::HdPrman_RenderParam(
     _resolutionStr(""),
     _sampleFilterId(riley::SampleFilterId::InvalidId()),
     _displayFilterId(riley::DisplayFilterId::InvalidId()),
+    _pixelFilter(GetDefaultPixelFilter()),
     _renderDelegate(renderDelegate),
     _huskFrameStart(1),
     _huskFrameIncrement(1),
@@ -1901,6 +1906,29 @@ HdPrman_RenderParam::SetFiltersFromRenderSettings(
     }
 }
 
+HdPrman_RenderParam::PixelFilter
+HdPrman_RenderParam::GetDefaultPixelFilter()
+{
+    // WARNING: Defaults are hardcoded.
+    // Make sure they match the values in PRManOptions.args.
+    return
+#if _PRMANAPI_VERSION_MAJOR_ >= 26
+        { _tokens->gaussian, GfVec2f(2.f, 2.f) };
+#else
+        { _tokens->box, GfVec2f(1.f, 1.f) };
+#endif
+}
+
+bool
+HdPrman_RenderParam::SetPixelFilter(PixelFilter const& pixelFilter)
+{
+    if (_pixelFilter != pixelFilter) {
+        _pixelFilter = pixelFilter;
+        return true;
+    }
+    return false;
+}
+
 void
 HdPrman_RenderParam::SetIntegratorParamsFromCamera(
     HdPrmanRenderDelegate *renderDelegate,
@@ -2408,7 +2436,8 @@ _ComputeRenderViewDesc(
     const riley::CameraId cameraId,
     const riley::IntegratorId integratorId,
     const riley::SampleFilterList &sampleFilterList,
-    const riley::DisplayFilterList &displayFilterList)
+    const riley::DisplayFilterList &displayFilterList,
+    const HdPrman_RenderParam::PixelFilter &pixelFilter)
 {
     HdPrman_RenderViewDesc renderViewDesc;
 
@@ -2457,6 +2486,8 @@ _ComputeRenderViewDesc(
                     HdPrmanExperimentalRenderSpecTokens->type)));
         renderOutputDesc.sourceName = sourceName;
         renderOutputDesc.rule = RixStr.k_filter;
+        renderOutputDesc.filter = RtUString(pixelFilter.name.GetText());
+        renderOutputDesc.filterWidth = pixelFilter.width;
         renderOutputDesc.params = _ToRtParamList(
             VtDictionaryGet<VtDictionary>(
                 renderVar,
@@ -2510,7 +2541,7 @@ static RtUString
 _AddRenderOutput(RtUString aovName,
     const TfToken &dataType, HdFormat aovFormat,
     RtUString sourceName, const RtParamList &params,
-    const RtUString& filter, const GfVec2f& filterWidth,
+    const HdPrman_RenderParam::PixelFilter &pixelFilter,
     std::vector<HdPrman_RenderViewDesc::RenderOutputDesc> *renderOutputDescs,
     std::vector<size_t> *renderOutputIndices);
 
@@ -2522,7 +2553,8 @@ _ComputeRenderViewDesc(
     const riley::CameraId cameraId,
     const riley::IntegratorId integratorId,
     const riley::SampleFilterList &sampleFilterList,
-    const riley::DisplayFilterList &displayFilterList)
+    const riley::DisplayFilterList &displayFilterList,
+    const HdPrman_RenderParam::PixelFilter &pixelFilter)
 {
     HdPrman_RenderViewDesc renderViewDesc;
     renderViewDesc.cameraId = cameraId;
@@ -2534,11 +2566,6 @@ _ComputeRenderViewDesc(
     } else {
         renderViewDesc.resolution = {1024, 768};
     }
-
-    // TODO: Get filter and filterWidth from renderSettings prim
-    // See comments in _UpdatePixelFilter method
-    static const RtUString defaultPixelFilter = RixStr.k_box;
-    static const GfVec2f defaultPixelFilterWidth(1.f, 1.f);
 
     /* RenderProduct */
     int renderVarIndex = 0;
@@ -2595,7 +2622,7 @@ _ComputeRenderViewDesc(
                              sourceName,
                              _ToRtParamList(renderVar.namespacedSettings,
                                             _tokens->riDisplayChannelNamespace),
-                             defaultPixelFilter, defaultPixelFilterWidth,
+                             pixelFilter,
                              &renderViewDesc.renderOutputDescs,
                              &renderOutputIndices);
         }
@@ -2616,7 +2643,8 @@ HdPrman_RenderParam::CreateRenderViewFromRenderSpec(
             GetCameraContext().GetCameraId(),
             GetActiveIntegratorId(),
             GetSampleFilterList(),
-            GetDisplayFilterList());
+            GetDisplayFilterList(),
+            GetPixelFilter());
 
     TF_DEBUG(HDPRMAN_RENDER_PASS)
         .Msg("Create Riley RenderView from the RenderSpec.\n");
@@ -2639,7 +2667,8 @@ HdPrman_RenderParam::CreateRenderViewFromRenderSettingsProducts(
             GetCameraContext().GetCameraId(),
             GetActiveIntegratorId(),
             GetSampleFilterList(),
-            GetDisplayFilterList());
+            GetDisplayFilterList(),
+            GetPixelFilter());
 
     renderViewContext->CreateRenderView(renderViewDesc, AcquireRiley());
 
@@ -3091,8 +3120,7 @@ HdPrman_RenderParam::Begin(HdPrmanRenderDelegate *renderDelegate)
     // Force initialization of Riley scene options.
     // (see related comments in SetRileyOptions)
 #if PXR_VERSION >= 2311 // avoid deferring for now because can cause crash
-    if (!HdRenderIndex::IsSceneIndexEmulationEnabled() ||
-        !TfGetEnvSetting(HD_PRMAN_DEFER_SET_OPTIONS))
+    if (!TfGetEnvSetting(HD_PRMAN_DEFER_SET_OPTIONS))
 #endif
     {
         SetRileyOptions();
@@ -3474,39 +3502,24 @@ HdPrman_RenderParam::DeleteRenderThread()
 }
 
 bool
-HdPrman_RenderParam::_UpdatePixelFilter()
+HdPrman_RenderParam::_OverridePixelFilterFromLegacyHdRenderSettingMap()
 {
     // Currently we still use the legacy Riley API where each AOV sets it's own
     // filter and filter width. This is impossible now that we only support
     // importance sampling and all AOVs must have the same value. Until the
     // Riley API is modified to set filter and filter width as an option, we
     // need to get the render setting ourselves and set it for each AOV.
-
-    // WARNING: Defaults are hardcoded.
-    // Make sure they match the values in PRManOptions.args.
-#if _PRMANAPI_VERSION_MAJOR_ >= 26
-    static const std::string defaultPixelFilter("gaussian");
-    static const GfVec2f defaultPixelFilterWidth(2.f, 2.f);
-#else
-    static const std::string defaultPixelFilter("box");
-    static const GfVec2f defaultPixelFilterWidth(1.f, 1.f);
-#endif
-
-    const RtUString pixelFilter(
-        _renderDelegate
+    return SetPixelFilter( {
+        // Name.  XXX Note conversion from std::string to TfToken.
+        TfToken( _renderDelegate
             ->GetRenderSetting<std::string>(
-                HdPrmanRenderSettingsTokens->pixelFilter, defaultPixelFilter)
-            .c_str());
-    const GfVec2f pixelFilterWidth = _renderDelegate->GetRenderSetting<GfVec2f>(
-        HdPrmanRenderSettingsTokens->pixelFilterWidth, defaultPixelFilterWidth);
-
-    if (pixelFilter != _pixelFilter || pixelFilterWidth != _pixelFilterWidth) {
-        _pixelFilter = pixelFilter;
-        _pixelFilterWidth = pixelFilterWidth;
-        return true;
-    }
-
-    return false;
+                HdPrmanRenderSettingsTokens->pixelFilter,
+                GetDefaultPixelFilter().name.GetString())),
+        // Width
+        _renderDelegate->GetRenderSetting<GfVec2f>(
+            HdPrmanRenderSettingsTokens->pixelFilterWidth,
+            GetDefaultPixelFilter().width)
+    });
 }
 
 bool
@@ -3756,8 +3769,7 @@ _AddRenderOutput(
     HdFormat aovFormat,
     RtUString sourceName,
     const RtParamList& params,
-    const RtUString& filter,
-    const GfVec2f& filterWidth,
+    const HdPrman_RenderParam::PixelFilter &pixelFilter,
     std::vector<HdPrman_RenderViewDesc::RenderOutputDesc> * renderOutputDescs,
     std::vector<size_t> * renderOutputIndices)
 {
@@ -3838,8 +3850,8 @@ _AddRenderOutput(
         renderOutputDesc.type = rType;
         renderOutputDesc.sourceName = sourceName;
         renderOutputDesc.rule = rule;
-        renderOutputDesc.filter = filter;
-        renderOutputDesc.filterWidth = filterWidth;
+        renderOutputDesc.filter = RtUString(pixelFilter.name.GetText());
+        renderOutputDesc.filterWidth = pixelFilter.width;
         renderOutputDesc.relativePixelVariance = relativePixelVariance;
         renderOutputDesc.params = extraParams;
 
@@ -3847,7 +3859,7 @@ _AddRenderOutput(
             .Msg("Add RenderOutputDesc: \n - name: '%s'\n - type: '%d'\n"
                  " - sourceName: '%s'\n - rule: '%s'\n - filter: '%s'\n\n",
                  aovName.CStr(), int(rType), sourceName.CStr(),
-                 rule.CStr(), filter.CStr());
+                 rule.CStr(), pixelFilter.name.GetText());
 
         renderOutputDescs->push_back(std::move(renderOutputDesc));
         renderOutputIndices->push_back(renderOutputDescs->size()-1);
@@ -3862,8 +3874,8 @@ _AddRenderOutput(
         renderOutputDesc.type = riley::RenderOutputType::k_Float;
         renderOutputDesc.sourceName = RixStr.k_a;
         renderOutputDesc.rule = rule;
-        renderOutputDesc.filter = filter;
-        renderOutputDesc.filterWidth = filterWidth;
+        renderOutputDesc.filter = RtUString(pixelFilter.name.GetText());
+        renderOutputDesc.filterWidth = pixelFilter.width;
         renderOutputDesc.relativePixelVariance = relativePixelVariance;
         renderOutputDesc.params = extraParams;
 
@@ -3917,8 +3929,13 @@ HdPrman_RenderParam::CreateFramebufferAndRenderViewFromAovs(
     false;
 #endif
 
-    // Update the Pixel Filter and Pixel Filter Width
-    const bool pixelFilterChanged = _UpdatePixelFilter();
+    // If we are using the HdRenderSettings map, rather than scene-defined
+    // render settings, allow it to override the pixel filter here.
+    bool pixelFilterChanged = false;
+    if (!useRenderSettingsProductsForInteractiveRenderView) {
+        pixelFilterChanged = _OverridePixelFilterFromLegacyHdRenderSettingMap();
+    }
+
     const bool qnChanged = _UpdateQNSettings();
 
     // Early exit if the render output is unchanged
@@ -3980,8 +3997,7 @@ HdPrman_RenderParam::CreateFramebufferAndRenderViewFromAovs(
                                               aovFormat,
                                               rmanSourceName,
                                               renderOutputParams,
-                                              _pixelFilter,
-                                              _pixelFilterWidth,
+                                              GetPixelFilter(),
                                               &renderViewDesc.renderOutputDescs,
                                               &renderOutputIndices);
 
@@ -4031,7 +4047,8 @@ HdPrman_RenderParam::CreateFramebufferAndRenderViewFromAovs(
                                    renderViewDesc.cameraId,
                                    renderViewDesc.integratorId,
                                    renderViewDesc.sampleFilterList,
-                                   renderViewDesc.displayFilterList);
+                                   renderViewDesc.displayFilterList,
+                                   GetPixelFilter());
 
         // Adjust indices to account for the ones we already have.  The
         // entries in rsrvd.renderOutputIndices index into
@@ -4079,8 +4096,9 @@ HdPrman_RenderParam::CreateRenderViewFromLegacyProducts(
         return;
     }
 
-    // Update the Pixel Filter and Pixel Filter Width
-    _UpdatePixelFilter();
+    // Legacy products use the legacy HdRenderSettings map, so pull
+    // the pixel filter setting from there.
+    _OverridePixelFilterFromLegacyHdRenderSettingMap();
 
     // Currently XPU only supports having one Riley Target and View.
     // Here we loop over the Render Products (a USD concept which corresponds
@@ -4269,8 +4287,7 @@ HdPrman_RenderParam::CreateRenderViewFromLegacyProducts(
                              aovFormat,
                              rmanSourceName,
                              renderOutputParams,
-                             _pixelFilter,
-                             _pixelFilterWidth,
+                             GetPixelFilter(),
                              &renderViewDesc.renderOutputDescs,
                              &renderOutputIndices);
 
@@ -4507,12 +4524,6 @@ HdPrman_RenderParam::SetRenderSettingsIntegratorPath(
     SdfPath const &renderSettingsIntegratorPath)
 {
     if (_renderSettingsIntegratorPath != renderSettingsIntegratorPath) {
-        if (! HdRenderIndex::IsSceneIndexEmulationEnabled()) {
-            // Mark the Integrator Prim Dirty
-            sceneDelegate->GetRenderIndex().GetChangeTracker()
-                .MarkSprimDirty(renderSettingsIntegratorPath,
-                                HdChangeTracker::DirtyParams);
-        }
         _renderSettingsIntegratorPath = renderSettingsIntegratorPath;
 
         // Update the Integrator back to the default when the path is empty
@@ -4544,14 +4555,6 @@ HdPrman_RenderParam::SetSampleFilterPaths(
         // Reset the Filter Shading Nodes and update the paths
         _sampleFilterNodes.clear();
         _sampleFilterPaths = sampleFilterPaths;
-
-        if (! HdRenderIndex::IsSceneIndexEmulationEnabled()) {
-            // Mark the SampleFilter Prims Dirty
-            for (const SdfPath &path : sampleFilterPaths) {
-                sceneDelegate->GetRenderIndex().GetChangeTracker()
-                    .MarkSprimDirty(path, HdChangeTracker::DirtyParams);
-            }
-        }
     }
 
     // If there are no SampleFilters, delete the riley SampleFilter
@@ -4572,14 +4575,6 @@ HdPrman_RenderParam::SetDisplayFilterPaths(
         // Reset the Filter Shading Nodes and update the paths
         _displayFilterNodes.clear();
         _displayFilterPaths = displayFilterPaths;
-
-        if (! HdRenderIndex::IsSceneIndexEmulationEnabled()) {
-            // Mark the DisplayFilter prims Dirty
-            for (const SdfPath &path : displayFilterPaths) {
-                sceneDelegate->GetRenderIndex().GetChangeTracker()
-                    .MarkSprimDirty(path, HdChangeTracker::DirtyParams);
-            }
-        }
     }
 
     // If there are no DisplayFilters, delete the riley DisplayFilter

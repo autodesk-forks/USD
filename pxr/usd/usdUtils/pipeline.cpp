@@ -38,6 +38,12 @@ TF_DEFINE_ENV_SETTING(
     "This is primarily used for unit testing purposes as a way to ignore any "
     "site-based configuration.");
 
+TF_DEFINE_ENV_SETTING(
+    USD_POPULATE_LEGACY_ALLOWED_TOKENS,
+    true,
+    "Enable population of allowedTokens for shader parameters even when "
+    "valueLabels are also written.");
+
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,

@@ -6,7 +6,7 @@
 #
 
 from .qt import QtWidgets, QtGui, QtCore
-from pxr import Usd
+from pxr import Usd, Ts, Gf
 
 """
 SplineViewer is a widget that visualizes a spline value of a UsdAttribute.
@@ -30,6 +30,8 @@ class SplineViewer(QtWidgets.QWidget):
     SPLINE_COLOR = QtGui.QColor(0, 200, 255)
     KNOT_COLOR = QtGui.QColor(255, 255, 255)
     PLAYHEAD_COLOR = QtGui.QColor(255, 255, 0)
+    KNOT_SIZE = 5
+    TANGENT_SIZE = 3
     AXIS_TICK_LENGTH = 5
     AXIS_TICK_X_LABEL_WIDTH_OFFSET = 10
     AXIS_TICK_X_LABEL_HEIGHT_OFFSET = 15
@@ -40,6 +42,7 @@ class SplineViewer(QtWidgets.QWidget):
         super().__init__(parent)
         self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.polylinesToPlot = None
+        self.knots = None
         self.margin = 20
         self.numTicks = 5
         self.fontMetrics = QtGui.QFontMetrics(self.font())
@@ -65,14 +68,17 @@ class SplineViewer(QtWidgets.QWidget):
             return
         self.attr = attr
         self.currentFrame = frame
+
         # Set the start and end time based on the stage's time code range
         # to begin with.
-        if not (self.startTime and self.endTime):
+        if self.startTime is None:
             self.startTime = attr.GetPrim().GetStage().GetStartTimeCode()
+        if self.endTime is None:
             self.endTime = attr.GetPrim().GetStage().GetEndTimeCode()
-        # Disabled for now, until unrolling of knots to take loop backing is 
-        # implemented.
-        # self._updateKnots()
+        if self.endTime <= self.startTime:
+            self.endTime = self.startTime + self.MIN_TIME_RANGE
+
+        self._updateKnots()
         self._updateSamples()
         self._transformToDevice()
         self.update()
@@ -91,15 +97,16 @@ class SplineViewer(QtWidgets.QWidget):
         set the start and end time when dataModel's frame range changes
         explicitly.
         """
-        if self.startTime == startTime and self.endTime == endTime:
-            # If the start and end time are the same, no need to update the
-            # samples, just transform to device and update the view.
-            self._transformToDevice()
-            self.update()
-            return
-        self.startTime = startTime
-        self.endTime = endTime
-        self._updateSamples()
+        if self.startTime != startTime or self.endTime != endTime:
+            # The times are changing. Update our knots and samples.
+            self.startTime = startTime
+            self.endTime = endTime
+            if self.endTime <= self.startTime:
+                self.endTime = self.startTime + self.MIN_TIME_RANGE
+
+            self._updateKnots()
+            self._updateSamples()
+
         self._transformToDevice()
         self.update()
 
@@ -133,17 +140,39 @@ class SplineViewer(QtWidgets.QWidget):
         self.update()
 
     def _updateKnots(self):
+        self.knots = None
         if not self.attr:
             return
         spline = self.attr.GetSpline()
         if not spline or spline.IsEmpty():
             return
-        knotMap = spline.GetKnots()
-        self.knots = [(t, knotMap[t].GetValue()) for t in knotMap]
+        timeInterval = Gf.Interval(self.startTime, self.endTime)
+        self.knots = spline.GetKnotsWithLoopsBaked(timeInterval).values()
 
     def _getEstimatedMinMaxFromSpline(self, spline):
         # TODO: Use knot tangents to estimate min/max more accurately
-        values = [v.GetValue() for v in spline.GetKnots().values()]
+        values = []
+        prevCurve = False
+        for knot in self.knots:
+            t = knot.GetTime()
+
+            if self.startTime <= t:
+                pv = knot.GetPreValue()
+                values.append(pv)
+                # Only include tangents if we would draw them
+                if prevCurve:
+                    values.append(
+                        pv - knot.GetPreTanWidth() * knot.GetPreTanSlope())
+
+            if t <= self.endTime:
+                v = knot.GetValue()
+                values.append(v)
+                prevCurve = (knot.GetNextInterpolation() == Ts.InterpCurve)
+                # Only include tangents if we would draw them
+                if prevCurve and knot != self.knots[-1]:
+                    values.append(
+                        v + knot.GetPostTanWidth() * knot.GetPostTanSlope())
+
         if not values:
             return None
         minValue = min(values)
@@ -156,7 +185,6 @@ class SplineViewer(QtWidgets.QWidget):
         since these determine sampling of the spline. This is responsible to
         populate self.polylinesToPlot with the sampled polylines.
         """
-        from pxr import Gf
         if not self.attr:
             return
         spline = self.attr.GetSpline()
@@ -165,8 +193,6 @@ class SplineViewer(QtWidgets.QWidget):
         # Make sure to 
         width = self.width() - 2 * self.margin
         height = self.height() - 2 * self.margin
-        if self.endTime == self.startTime:
-            self.endTime = self.startTime + self.MIN_TIME_RANGE
         timeInterval = Gf.Interval(self.startTime, self.endTime)
         timeScale = width / (self.endTime - self.startTime)
         self.estimatedKnotMinMax = self._getEstimatedMinMaxFromSpline(spline)
@@ -183,6 +209,15 @@ class SplineViewer(QtWidgets.QWidget):
         if not samples:
             return
         self.polylinesToPlot = samples.polylines
+        self.splinePath = QtGui.QPainterPath()
+        for polyline in self.polylinesToPlot:
+            # Using polyline[1:] makes a copy of the list, so use an iterator
+            # to visit each item once without copying
+            polyIter = iter(polyline)
+            p = next(polyIter)
+            self.splinePath.moveTo(p[0], p[1])
+            for p in polyIter:
+                self.splinePath.lineTo(p[0], p[1])
 
     def _transformToDevice(self):
         """
@@ -285,29 +320,111 @@ class SplineViewer(QtWidgets.QWidget):
                 py + self.AXIS_TICK_Y_LABEL_HEIGHT_OFFSET,
                 f"{yVal:.3f}")
 
-    def _drawKnot(self, painter):
+    def _drawKnots(self, painter):
         if not self.knots:
             return
-        knotPen = QtGui.QPen(self.KNOT_COLOR, 2)
+
+        knotBrush = QtGui.QBrush(self.KNOT_COLOR)
+        knotPen = QtGui.QPen(knotBrush, 1)
+
+        # Offsets from the knot or tangent points to the corner of the
+        # rect. kHalf is used in dual valued knots to just draw 1/2 the knot.
+        kCorner = QtCore.QPointF(self.KNOT_SIZE / 2, self.KNOT_SIZE / 2)
+        kHalf = QtCore.QPointF(0.0, self.KNOT_SIZE / 2)
+        tCorner = QtCore.QPointF(self.TANGENT_SIZE / 2, self.TANGENT_SIZE / 2)
+
         painter.setPen(knotPen)
-        for t, v in self.knots:
-            point = self.xform.map(QtCore.QPointF(t, v))
-            side = 4
-            # draw square knot
-            painter.drawRect(point.x() - side, point.y() - side,
-                             side * 2, side * 2)
+        painter.setBrush(knotBrush)
+
+        # Enable clipping while drawing knots.  The set of knots may include
+        # knots (and tangents) that are outside the bounds of the graph, but the
+        # drawn knot rect and/or the knot's tangent may extend into the viewed
+        # region and we want to draw the portion that's visible.
+        try:
+            painter.save()
+
+            worldRect = QtCore.QRectF(self.minX, self.minY, self.dx, self.dy)
+            clipRect = self.xform.mapRect(worldRect)
+            painter.setClipRect(clipRect)
+
+            # Was the previous segment a curve?
+            prevCurve = False
+
+            for knot in self.knots:
+                t = knot.GetTime()
+                v = knot.GetValue()
+                valuePoint = self.xform.map(QtCore.QPointF(t, v))
+
+                dualValued = knot.IsDualValued()
+                if dualValued:
+                    pv = knot.GetPreValue()
+                    preValuePoint = self.xform.map(QtCore.QPointF(t, pv))
+                else:
+                    pv = v
+                    preValuePoint = valuePoint
+
+                preTanWidth = knot.GetPreTanWidth()
+                preTanSlope = knot.GetPreTanSlope()
+
+                postTanWidth = knot.GetPostTanWidth()
+                postTanSlope = knot.GetPostTanSlope()
+
+                # preTanPoint is relative to preValuePoint
+                preTanPoint = self.xform.map(
+                    QtCore.QPointF(t - preTanWidth,
+                                   pv - (preTanWidth * preTanSlope)))
+
+                # postTanPoint is relative to valuePoint
+                postTanPoint = self.xform.map(
+                    QtCore.QPointF(t + postTanWidth,
+                                   v + (postTanWidth * postTanSlope)))
+
+                # Draw tangents. Pre-tangents only draw if the previous segment
+                # was a cure.
+                if prevCurve:
+                    painter.drawLine(preValuePoint, preTanPoint)
+                    painter.fillRect(QtCore.QRectF(preTanPoint - tCorner,
+                                                   preTanPoint + tCorner),
+                                     knotBrush)
+
+
+                # Set prevCurve for the next loop iteration, conveniently we
+                # can also use it for the current iteration to draw the
+                # post-tangents.
+                prevCurve = (knot.GetNextInterpolation() == Ts.InterpCurve)
+
+                # Never draw tangents past the last knot.
+                if prevCurve and knot is not self.knots[-1]:
+                    painter.drawLine(valuePoint, postTanPoint)
+                    painter.fillRect(QtCore.QRectF(postTanPoint - tCorner,
+                                                   postTanPoint + tCorner),
+                                     knotBrush)
+                # draw knot
+
+                if dualValued:
+                    painter.fillRect(QtCore.QRectF(preValuePoint - kCorner,
+                                                   preValuePoint + kHalf),
+                                     knotBrush)
+                    painter.fillRect(QtCore.QRectF(valuePoint - kHalf,
+                                                   valuePoint + kCorner),
+                                     knotBrush)
+                else:
+                    painter.fillRect(QtCore.QRectF(valuePoint - kCorner,
+                                                   valuePoint + kCorner),
+                                     knotBrush)
+
+        finally:
+            painter.restore()
 
     def _drawSpline(self, painter):
-        for polyline in self.polylinesToPlot:
-            points = [(p[0], p[1]) for p in polyline]
-            transformedPoints = [
-                self.xform.map(QtCore.QPointF(x, y))
-                for x, y in points
-            ]
-            pen = QtGui.QPen(self.SPLINE_COLOR, 2)
-            painter.setPen(pen)
-            for i in range(1, len(transformedPoints)):
-                painter.drawLine(transformedPoints[i - 1], transformedPoints[i])
+        splinePen = QtGui.QPen(self.SPLINE_COLOR, 2)
+        splineBrush = QtGui.QBrush(QtCore.Qt.NoBrush)
+
+        painter.setPen(splinePen)
+        painter.setBrush(splineBrush)
+
+        # Transform and draw the entire spline path at once.
+        painter.drawPath(self.xform.map(self.splinePath))
 
     def _drawPlayheadAndCurrentValue(self, painter):
         if not self.currentFrame:
@@ -370,9 +487,7 @@ class SplineViewer(QtWidgets.QWidget):
         self._drawAxis(painter)
 
         # Draw knots
-        # Disabled for now, until unrolling of knots to take loop backs is 
-        # implemented.
-        # self._drawKnot(painter)
+        self._drawKnots(painter)
     
         # Draw spline
         self._drawSpline(painter)

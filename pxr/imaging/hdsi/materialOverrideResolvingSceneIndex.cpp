@@ -48,63 +48,6 @@ using NestedTfTokenMap =
     std::unordered_map<TfToken, TfTokenMap, TfToken::HashFunctor>;
 using NestedTfTokenMapPtr = std::shared_ptr<NestedTfTokenMap>;
 
-// Given a material interface container data source, returns a map of reversed
-// interface mappings.  If no interface mappings were found, returns an empty
-// map.
-// 
-// Interface mappings are mapped like this:
-// publicUIName -> [(nodePath, inputName),...]
-// 
-// The returned map of reversed interface mappings is mapped like this:
-// nodePath -> (inputName -> publicUIName)
-NestedTfTokenMap
-_BuildReverseInterfaceMappings(
-    const HdMaterialInterfaceSchema& interfaceSchema)
-{
-    NestedTfTokenMap reverseInterfaceMappings;
-
-    const HdMaterialInterfaceParameterContainerSchema 
-        interfaceParameters = interfaceSchema.GetParameters();
-    if (!interfaceParameters) {
-        return reverseInterfaceMappings;
-    }
-
-    for (const TfToken& publicUIName : interfaceParameters.GetNames()) {
-        // Each publicUIName maps to an interface parameter
-        const HdMaterialInterfaceParameterSchema parameterSchema =
-            interfaceParameters.Get(publicUIName);
-        if (!parameterSchema) {
-            continue;
-        }
-
-        //  Each interface parameter maps to a list of material node parameters 
-        // ie. [(nodePath, inputName), ...]
-        const HdMaterialInterfaceMappingVectorSchema mappings =
-            parameterSchema.GetMappings();
-        if (!mappings) {
-            continue;
-        }
-
-        const size_t numElems = mappings.GetNumElements();
-        for (size_t i = 0; i < numElems; i++) {
-            // Each interfaceMapping should be a (nodePath, inputName) pair 
-            HdMaterialInterfaceMappingSchema interfaceMappingSchema =
-                mappings.GetElement(i);
-            if (!interfaceMappingSchema) {
-                continue;
-            }
-
-            const TfToken nodePath = 
-                interfaceMappingSchema.GetNodePath()->GetTypedValue(0);
-            const TfToken inputName = 
-                interfaceMappingSchema.GetInputName()->GetTypedValue(0);
-
-            reverseInterfaceMappings[nodePath][inputName] = publicUIName;
-        }
-    }
-    return reverseInterfaceMappings;
-}
-
 class _ParametersContainerDataSource : public HdContainerDataSource
 {
 public:
@@ -565,9 +508,9 @@ public:
             // the material node parameter locations, which will be more 
             // efficient for look-ups when we later override the material node 
             // parameter
-            reverseInterfaceMappingsPtr =
+            reverseInterfaceMappingsPtr = 
                 std::make_shared<NestedTfTokenMap>(
-                    _BuildReverseInterfaceMappings(interfaceSchema));
+                    interfaceSchema.GetReverseInterfaceMappings());
         }
 
         return _MaterialNetworkContainerDataSource::New(

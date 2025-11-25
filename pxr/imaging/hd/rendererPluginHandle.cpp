@@ -30,11 +30,12 @@ HdRendererPluginHandle::~HdRendererPluginHandle()
 HdRendererPluginHandle &
 HdRendererPluginHandle::operator=(const HdRendererPluginHandle &other)
 {
+    // Increase reference count first to do the right thing for myHandle = myHandle.
+    if (other._plugin) {
+        HdRendererPluginRegistry::GetInstance().AddPluginReference(other._plugin);
+    }
     HdRendererPluginRegistry::GetInstance().ReleasePlugin(_plugin);
     _plugin = other._plugin;
-    if (_plugin) {
-        HdRendererPluginRegistry::GetInstance().AddPluginReference(_plugin);
-    }
     return *this;
 }
 

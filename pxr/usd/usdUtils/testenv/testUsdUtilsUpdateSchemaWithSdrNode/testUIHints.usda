@@ -1,0 +1,79 @@
+#usda 1.0
+
+# Input USD File to test UI hint population
+
+def Shader "TestUIHintsAPI" (
+    sdrMetadata = {
+        token schemaName = "TestUIHintsAPI"
+        token schemaKind = "singleApply"
+        token schemaBase = "APISchemaBase"
+    }
+)
+{
+    uniform token info:implementationSource = "sourceAsset"
+    uniform asset info:glslfx:sourceAsset = @testDummy.glslfx@
+
+    int inputs:displayName = 1 (
+        sdrMetadata = {
+            token label = "A Display Name"
+        }
+    )
+
+    int inputs:displayGroup = 1 (
+        sdrMetadata = {
+            token page = "Hints"
+        }
+    )
+
+    int inputs:help = 1 (
+        sdrMetadata = {
+            token help = "Some help."
+        }
+    )
+
+    # Specifying a null widget sets hidden=true
+    int inputs:hidden = 1 (
+        sdrMetadata = {
+            token widget = "null"
+        }
+    )
+
+    # List-valued options on a string/token-valued attribute become
+    # allowedTokens
+    token inputs:allowedTokens = "foo" (
+        sdrMetadata = {
+            token options = "foo|bar|baz"
+        }
+    )
+
+    # Dict-valued options become valueLabels
+    int inputs:valueLabels = 1 (
+        sdrMetadata = {
+            token options = "low:1|med:2|high:3"
+        }
+    )
+
+    # Dict-valued options on a string/token-valued attribute populate both
+    # allowedTokens and valueLabels (see USD_POPULATE_LEGACY_ALLOWED_TOKENS)
+    string inputs:allowedTokensAndValueLabels = "prov" (
+        sdrMetadata = {
+            token options = "Cheddar:ched|Swiss:sws|Provelone:prov"
+        }
+    )
+
+    # conditionalVisOps become shownIf expressions
+    int inputs:convertedShownIf = 1 (
+        sdrMetadata = {
+            token conditionalVisOp = "greaterThanOrEqualTo"
+            token conditionalVisPath = "hidden"
+            token conditionalVisValue = "1"
+        }
+    )
+
+    # shownIf expressions can also be provided directly
+    int inputs:shownIf = 1 (
+        sdrMetadata = {
+            token shownIf = "hidden >= 1"
+        }
+    )
+}

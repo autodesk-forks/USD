@@ -30,6 +30,16 @@
 #include "pxr/imaging/hdMtlx/hdMtlx.h"
 #endif
 
+#include "pxr/pxr.h"
+#if PXR_VERSION >= 2511
+#include "pxr/imaging/hdMtlx/combinedMtlxVersion.h"
+#else
+#include <MaterialXCore/Generated.h>
+#define MTLX_COMBINED_VERSION                                                \
+    ((MATERIALX_MAJOR_VERSION * 100 * 100) + (MATERIALX_MINOR_VERSION * 100) \
+     + MATERIALX_BUILD_VERSION)
+#endif
+
 #include <MaterialXCore/Node.h>
 #include <MaterialXCore/Document.h>
 #include <MaterialXFormat/Environ.h>
@@ -424,9 +434,7 @@ _CompileOslSource(
     // Include the filepath to the MaterialX OSL directory containing mx_funcs.h
     std::vector<std::string> oslArgs;
     oslArgs.reserve(searchPaths.size());
-#if MATERIALX_MAJOR_VERSION == 1 && \
-    MATERIALX_MINOR_VERSION == 38 && \
-    MATERIALX_BUILD_VERSION == 3
+#if MTLX_COMBINED_VERSION == 13803
     static const mx::FilePath stdlibOslPath = "stdlib/osl";
 #else 
     // MaterialX v1.38.4 restructured the OSL files and moved mx_funcs.h
@@ -438,11 +446,7 @@ _CompileOslSource(
                                             : "-I\"" + path.asString() + "\"");
     }
 
-#if MATERIALX_MAJOR_VERSION == 1 && \
-    MATERIALX_MINOR_VERSION == 38 && \
-    MATERIALX_BUILD_VERSION == 3
-    // Nothing
-#else
+#if MTLX_COMBINED_VERSION >= 13804
     // MaterialX 1.38.4 removed its copy of stdosl.h and other OSL headers
     // and requires it to be included from the OSL installation itself.
     oslArgs.push_back(std::string("-I\"") + TfGetenv("RMANTREE") + "lib/osl\"");
@@ -875,7 +879,7 @@ _NodeHasTextureCoordPrimvar(
         // for texture coordinates. 
         auto geompropvalueNodes = nodegraph->getNodes(_tokens->geompropvalue);
         for (const mx::NodePtr& mxGeomPropNode : geompropvalueNodes) {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
             if (mxGeomPropNode->getType() == mx::Type::VECTOR2->getName()) {
 #else
             if (mxGeomPropNode->getType() == mx::Type::VECTOR2.getName()) {

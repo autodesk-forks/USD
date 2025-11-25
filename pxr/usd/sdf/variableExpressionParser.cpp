@@ -14,6 +14,7 @@
 #include "pxr/base/pegtl/pegtl/contrib/trace.hpp"
 #include "pxr/base/tf/stringUtils.h"
 
+#include <array>
 #include <tuple>
 
 using namespace PXR_PEGTL_NAMESPACE;
@@ -38,6 +39,21 @@ public:
 };
 
 NodeCreator::~NodeCreator() = default;
+
+static
+std::vector<std::unique_ptr<Impl::Node>>
+_CreateNodes(
+    const std::vector<std::unique_ptr<NodeCreator>>& creators,
+    std::string* errMsg)
+{
+    std::vector<std::unique_ptr<Impl::Node>> nodes;
+    nodes.reserve(creators.size());
+    for (auto& c : creators) {
+        nodes.push_back(c->CreateNode(errMsg));
+    }
+
+    return nodes;
+}
 
 class StringNodeCreator
     : public NodeCreator
@@ -96,10 +112,16 @@ class ListNodeCreator
 public:
     std::unique_ptr<Impl::Node> CreateNode(std::string* errMsg) final
     {
-        return std::make_unique<Impl::ListNode>(std::move(elements));
+        std::vector<std::unique_ptr<Impl::Node>> elemNodes = 
+            _CreateNodes(elements, errMsg);
+        if (!errMsg->empty()) {
+            return nullptr;
+        }
+
+        return std::make_unique<Impl::ListNode>(std::move(elemNodes));
     };
 
-    std::vector<std::unique_ptr<Impl::Node>> elements;
+    std::vector<std::unique_ptr<NodeCreator>> elements;
 };
 
 // List that defines the set of functions recognized by the expression parser.
@@ -141,7 +163,7 @@ public:
     }
 
     std::string functionName;
-    std::vector<std::unique_ptr<Impl::Node>> functionArgs;
+    std::vector<std::unique_ptr<NodeCreator>> functionArgs;
 
 private:
     // Search the list of available function nodes for one whose name matches
@@ -199,7 +221,15 @@ private:
                 functionName.c_str(), NodeType::MinNumArgs);
             return nullptr;
         }
-        return std::make_unique<NodeType>(std::move(functionArgs));
+
+        std::vector<std::unique_ptr<Impl::Node>> argNodes =
+            _CreateNodes(functionArgs, errMsg);
+        if (!errMsg->empty()) {
+            return nullptr;
+        }
+        
+
+        return std::make_unique<NodeType>(std::move(argNodes));
     }
 
     // Construct an instance of NodeType if it's a function that requires a
@@ -220,7 +250,15 @@ private:
     std::unique_ptr<Impl::Node> _CreateFunctionNode(
         std::string* errMsg, std::index_sequence<I...>)
     { 
-        return std::make_unique<NodeType>(std::move(functionArgs[I])...);
+        std::array<std::unique_ptr<Impl::Node>, sizeof...(I)> argNodes = {
+            functionArgs[I]->CreateNode(errMsg)...
+        };
+
+        if (!errMsg->empty()) {
+            return nullptr;
+        }
+
+        return std::make_unique<NodeType>(std::move(argNodes[I])...);
     }
 };
 
@@ -238,6 +276,17 @@ public:
     {
         _nodeStack.push_back(std::make_unique<CreatorType>(args...));
         return static_cast<CreatorType*>(_nodeStack.back().get());
+    }
+
+    std::unique_ptr<NodeCreator> PopNodeCreator()
+    {
+        if (!TF_VERIFY(!_nodeStack.empty()) || !TF_VERIFY(_nodeStack.back())) {
+            return nullptr;
+        }
+
+        std::unique_ptr<NodeCreator> creator = std::move(_nodeStack.back());
+        _nodeStack.pop_back();
+        return creator;
     }
 
     // Return pointer to the node creator on the top of the stack if
@@ -686,20 +735,20 @@ struct Action<ListElement>
     template <typename ActionInput>
     static void apply(const ActionInput& in, ParserContext& context)
     {
-        std::string errMsg;
-        std::unique_ptr<Impl::Node> elemNode = 
-            context.CreateExpressionNode(&errMsg);
-        if (!elemNode) {
-            _ThrowParseError(in, errMsg);
+        std::unique_ptr<NodeCreator> elemCreator = context.PopNodeCreator();
+        if (!elemCreator) {
+            _ThrowParseError(in, 
+                "Internal error: could not pop node creator stack");
         }
 
         ListNodeCreator* listCreator =
             context.GetExistingNodeCreator<ListNodeCreator>();
         if (!listCreator) {
-            _ThrowParseError(in, "Unknown error");
+            _ThrowParseError(in,
+                "Internal error: list creator not at top of stack");
         }
 
-        listCreator->elements.push_back(std::move(elemNode));
+        listCreator->elements.push_back(std::move(elemCreator));
     }
 };
 
@@ -719,20 +768,20 @@ struct Action<FunctionArgument>
     template <typename ActionInput>
     static void apply(const ActionInput& in, ParserContext& context)
     {
-        std::string errMsg;
-        std::unique_ptr<Impl::Node> argNode = 
-            context.CreateExpressionNode(&errMsg);
-        if (!argNode) {
-            _ThrowParseError(in, errMsg);
+        std::unique_ptr<NodeCreator> elemCreator = context.PopNodeCreator();
+        if (!elemCreator) {
+            _ThrowParseError(in,
+                "Internal error: could not pop node creator stack");
         }
 
         FunctionNodeCreator* fnCreator =
             context.GetExistingNodeCreator<FunctionNodeCreator>();
         if (!fnCreator) {
-            _ThrowParseError(in, "Unknown error");
+            _ThrowParseError(in,
+                "Internal error: function creator not at top of stack");
         }
 
-        fnCreator->functionArgs.push_back(std::move(argNode));
+        fnCreator->functionArgs.push_back(std::move(elemCreator));
     }
 };
 

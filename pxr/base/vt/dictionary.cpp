@@ -352,17 +352,15 @@ VtDictionaryOver(const VtDictionary &strong, VtDictionary *weak,
 }
 
 VtDictionary
-VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType)
+VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak)
 {
     VtDictionary result = strong;
-    VtDictionaryOverRecursive(&result, weak, coerceToWeakerOpinionType);
+    VtDictionaryOverRecursive(&result, weak);
     return result;
 }
 
 void
-VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType)
+VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak)
 {
     if (!strong) {
         TF_CODING_ERROR("VtDictionaryOverRecursive: NULL dictionary pointer.");
@@ -392,17 +390,13 @@ VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
         } else {
             // Insert will set strong with value from weak only if 
             // strong does not already have a value for that key.
-            std::pair<VtDictionary::iterator, bool> result =strong->insert(*it);
-            if (!result.second && coerceToWeakerOpinionType) {
-                result.first->second.CastToTypeOf(it->second);
-            }
+            strong->insert(*it);
         }
     }
 }
 
 void
-VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak,
-                          bool coerceToWeakerOpinionType)
+VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak)
 {
     if (!weak) {
         TF_CODING_ERROR("VtDictionaryOverRecursive: NULL dictionary pointer.");
@@ -429,14 +423,6 @@ VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak,
             // Swap the modified dict back into place.
             i->second.Swap(weakSubDict);
 
-        } else if (coerceToWeakerOpinionType) {
-            // Else stomp over weak with strong but with type coersion.
-            VtDictionary::iterator j = weak->find(it->first);
-            if (j == weak->end()) {
-                weak->insert(*it);
-            } else {
-                j->second = VtValue::CastToTypeOf(it->second, j->second);
-            }
         } else {
             // Else stomp over weak with strong
             (*weak)[it->first] = it->second;

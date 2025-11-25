@@ -139,24 +139,6 @@ TF_DEFINE_PRIVATE_TOKENS(
 constexpr float _fallbackStartTime = 0.0f;
 constexpr float _fallbackEndTime   = 0.0f;
 
-/* static */
-HdSceneIndexBaseRefPtr
-HdSceneIndexAdapterSceneDelegate::AppendDefaultSceneFilters(
-    HdSceneIndexBaseRefPtr inputSceneIndex, SdfPath const &delegateID)
-{
-    HdSceneIndexBaseRefPtr result = inputSceneIndex;
-
-    // if no prefix, don't add HdPrefixingSceneIndex
-    if (!delegateID.IsEmpty() && delegateID != SdfPath::AbsoluteRootPath()) {
-        result = HdPrefixingSceneIndex::New(result, delegateID);
-    }
-
-    // disabling flattening as it's not yet needed for pure emulation
-    //result = HdFlatteningSceneIndex::New(result);
-
-    return result;
-}
-
 // ----------------------------------------------------------------------------
 
 HdSceneIndexAdapterSceneDelegate::HdSceneIndexAdapterSceneDelegate(

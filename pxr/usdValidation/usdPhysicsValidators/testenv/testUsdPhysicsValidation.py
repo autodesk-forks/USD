@@ -57,30 +57,6 @@ class TestUsdPhysicsValidation(unittest.TestCase):
         self.assertTrue(len(errors) == 1)        
         self.assertTrue(errors[0].GetName() == "RigidBodyOrientationScale")        
 
-    def test_rigid_body_nesting(self):        
-        validationRegistry = UsdValidation.ValidationRegistry()
-        validator = validationRegistry.GetOrLoadValidatorByName(
-            "usdPhysicsValidators:RigidBodyChecker"
-        )
-
-        self.assertTrue(validator)
-
-        stage = Usd.Stage.CreateInMemory()
-        self.assertTrue(stage)
-
-        rigidbody0 = UsdGeom.Xform.Define(stage, "/rigidBody0")
-        UsdPhysics.RigidBodyAPI.Apply(rigidbody0.GetPrim())
-
-        rigidbody1 = UsdGeom.Xform.Define(stage, "/rigidBody0/rigidBody1")
-        UsdPhysics.RigidBodyAPI.Apply(rigidbody1.GetPrim())
-
-        errors = validator.Validate(rigidbody0.GetPrim())
-        self.assertTrue(len(errors) == 0)
-
-        errors = validator.Validate(rigidbody1.GetPrim())
-        self.assertTrue(len(errors) == 1)        
-        self.assertTrue(errors[0].GetName() == "NestedRigidBody")
-
     def test_rigid_body_instancing(self):        
         validationRegistry = UsdValidation.ValidationRegistry()
         validator = validationRegistry.GetOrLoadValidatorByName(
