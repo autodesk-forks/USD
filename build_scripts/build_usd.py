@@ -2761,8 +2761,7 @@ class InstallContext:
                               and not embedded)
 
         # - USD Imaging
-        self.buildUsdImaging = (args.build_imaging == USD_IMAGING and 
-                                not self.targetWasm)
+        self.buildUsdImaging = (args.build_imaging == USD_IMAGING)
 
         # - usdview
         self.buildUsdview = (self.buildUsdImaging and 
