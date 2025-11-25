@@ -1,0 +1,71 @@
+#usda 1.0
+
+class "TestUIHintsAPI" (
+    customData = {
+        string apiSchemaType = "singleApply"
+    }
+    inherits = </APISchemaBase>
+)
+{
+    reorder properties = ["inputs:allowedTokens", "inputs:allowedTokensAndValueLabels", "inputs:convertedShownIf", "inputs:displayGroup", "inputs:displayName", "inputs:help", "inputs:hidden", "inputs:shownIf", "inputs:valueLabels"]
+    token inputs:allowedTokens = "foo" (
+        allowedTokens = ["foo", "bar", "baz"]
+    )
+    token inputs:allowedTokensAndValueLabels = "prov" (
+        allowedTokens = ["ched", "sws", "prov"]
+        uiHints = {
+            dictionary valueLabels = {
+                string Cheddar = "ched"
+                string Provelone = "prov"
+                string Swiss = "sws"
+            }
+            token[] valueLabelsOrder = ["Cheddar", "Swiss", "Provelone"]
+        }
+    )
+    int inputs:convertedShownIf = 1 (
+        uiHints = {
+            string shownIf = "inputs:hidden >= 1"
+        }
+    )
+    int inputs:displayGroup = 1 (
+        uiHints = {
+            string displayGroup = "Hints"
+        }
+    )
+    int inputs:displayName = 1 (
+        customData = {
+            string userDoc = "A Display Name"
+            string userDocBrief = "A Display Name"
+        }
+        uiHints = {
+            string displayName = "A Display Name"
+        }
+    )
+    int inputs:help = 1 (
+        customData = {
+            string userDoc = "Some help."
+            string userDocBrief = "Some help."
+        }
+    )
+    int inputs:hidden = 1 (
+        uiHints = {
+            bool hidden = 1
+        }
+    )
+    int inputs:shownIf = 1 (
+        uiHints = {
+            string shownIf = "inputs:hidden >= 1"
+        }
+    )
+    int inputs:valueLabels = 1 (
+        uiHints = {
+            dictionary valueLabels = {
+                int high = 3
+                int low = 1
+                int med = 2
+            }
+            token[] valueLabelsOrder = ["low", "med", "high"]
+        }
+    )
+}
+

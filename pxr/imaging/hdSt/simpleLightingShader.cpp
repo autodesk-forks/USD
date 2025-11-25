@@ -381,64 +381,17 @@ _MakeNamedTextureHandle(
 
 }
 
-SdfPath
-HdStSimpleLightingShader::_GetAovPath(
-    TfToken const &aovName, size_t shadowIndex) const
-{
-    std::string identifier = std::string("aov_shadowMap") +
-        std::to_string(shadowIndex) + "_" + 
-        TfMakeValidIdentifier(aovName.GetString());
-    return SdfPath(identifier);
-}
-
-void
-HdStSimpleLightingShader::_ResizeOrCreateBufferForAov(size_t shadowIndex) const
-{
-    GlfSimpleShadowArrayRefPtr const& shadows = _lightingContext->GetShadows();
-
-    GfVec3i const dimensions = GfVec3i(
-        shadows->GetShadowMapSize(shadowIndex)[0], 
-        shadows->GetShadowMapSize(shadowIndex)[1], 
-        1);
-
-    HdRenderPassAovBinding const & aovBinding = _shadowAovBindings[shadowIndex];
-    VtValue existingResource = aovBinding.renderBuffer->GetResource(false);
-    if (existingResource.IsHolding<HgiTextureHandle>()) {
-        int32_t const width = aovBinding.renderBuffer->GetWidth();
-        int32_t const height = aovBinding.renderBuffer->GetHeight();
-        if (width == dimensions[0] && height == dimensions[1]) {
-            return;
-        }
-    }
-
-    // If the resolution has changed then reallocate the
-    // renderBuffer and  texture.
-    aovBinding.renderBuffer->Allocate(dimensions,
-                                      HdFormatFloat32,
-                                      /*multiSampled*/false);
-
-    VtValue newResource = aovBinding.renderBuffer->GetResource(false);
-
-    if (!newResource.IsHolding<HgiTextureHandle>()) {
-        TF_CODING_ERROR("No texture on render buffer for AOV "
-                        "%s", aovBinding.aovName.GetText());
-    }
-}
-
 void
 HdStSimpleLightingShader::_CleanupAovBindings()
 {
-    if (_renderParam) {
-        for (auto const & aovBuffer : _shadowAovBuffers) {
-            aovBuffer->Finalize(_renderParam);
-        }
-    }
-    _shadowAovBuffers.clear();
     _shadowAovBindings.clear();
+    _shadowTextureHandle.handles.clear();
 }
 
 void
-HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderIndex)
+HdStSimpleLightingShader::AllocateTextureHandles(
+    HdRenderIndex const &renderIndex,
+    const SdfPath& graphPath)
 {
     const std::string &resolvedPath =
         _GetResolvedDomeLightEnvironmentFilePath(_lightingContext);
@@ -451,7 +404,6 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
 
     if (!useShadows) {
         _CleanupAovBindings();
-        _shadowTextureHandle.handles.clear();
     }
 
     if (resolvedPath.empty() && !useShadows) {
@@ -548,76 +500,71 @@ HdStSimpleLightingShader::AllocateTextureHandles(HdRenderIndex const &renderInde
     _namedTextureHandles = _domeLightTextureHandles;
 
     // Allocate texture handles for shadow map textures.
-    if (useShadows) {     
-        GlfSimpleShadowArrayRefPtr const& shadows = 
-            _lightingContext->GetShadows();
-        size_t const prevNumShadowPasses = _shadowAovBindings.size();
-        size_t const numShadowPasses = shadows->GetNumShadowMapPasses();
-
-        if (prevNumShadowPasses < numShadowPasses) {
-            // If increasing number of shadow maps, need to create new
-            // aov bindings and render buffers.
-            _shadowAovBindings.resize(numShadowPasses);
-
-            for (size_t i = prevNumShadowPasses; i < numShadowPasses; i++) {
-                SdfPath const aovId = _GetAovPath(HdAovTokens->depth, i);
-                _shadowAovBuffers.push_back(
-                    std::make_unique<HdStRenderBuffer>(
-                        resourceRegistry, aovId));
-                    
-                HdAovDescriptor aovDesc = HdAovDescriptor(HdFormatFloat32, 
-                                                          /*multiSampled*/false,
-                                                          VtValue(1.f));
-
-                HdRenderPassAovBinding &binding = _shadowAovBindings[i];
-                binding.aovName = HdAovTokens->depth;
-                binding.aovSettings = aovDesc.aovSettings;
-                binding.renderBufferId = aovId;
-                binding.clearValue = aovDesc.clearValue;
-                binding.renderBuffer = _shadowAovBuffers.back().get();
-            }
-        } else if (prevNumShadowPasses > numShadowPasses) {
-            // If decreasing number of shadow maps, only need to finalize 
-            // and resize.
-            if (_renderParam) {
-                for (size_t i = numShadowPasses; i < prevNumShadowPasses; i++) {
-                    _shadowAovBuffers[i]->Finalize(_renderParam);
-                }
-            }
-            _shadowAovBindings.resize(numShadowPasses);
-            _shadowAovBuffers.resize(numShadowPasses);
-        }
-        
-        for (size_t i = 0; i < numShadowPasses; i++) {
-            _ResizeOrCreateBufferForAov(i);
-        }
-
-        if (prevNumShadowPasses < numShadowPasses) {
-            // If increasing number of shadow maps, allocate texture handles
-            // for just-allocated texture objects.
-            HdSamplerParameters const shadowSamplerParameters{
-                HdWrapClamp, HdWrapClamp, HdWrapClamp,
-                HdMinFilterLinear, HdMagFilterLinear,
-                HdBorderColorOpaqueWhite, /*enableCompare*/true, 
-                HdCmpFuncLEqual, /*maxAnisotropy*/16};
-
-            for (size_t i = prevNumShadowPasses; i < numShadowPasses; i++) {
-                HdStTextureHandleSharedPtr const textureHandle =
-                    resourceRegistry->AllocateTextureHandle(
-                        _shadowAovBuffers[i]->GetTextureIdentifier(false),
-                        HdStTextureType::Uv,
-                        shadowSamplerParameters,
-                        /* memoryRequest = */ 0,
-                        shared_from_this());
-                _shadowTextureHandle.handles.push_back(textureHandle);
-            }
-        } else if (prevNumShadowPasses > numShadowPasses) {
-            _shadowTextureHandle.handles.resize(numShadowPasses);
-        }
-    }
-
     if (useShadows) {
+        _AllocateShadowTextures(resourceRegistry, graphPath);
         _namedTextureHandles.push_back(_shadowTextureHandle);
+    }
+}
+
+void
+HdStSimpleLightingShader::_AllocateShadowTextures(
+        HdStResourceRegistry* const resourceRegistry,
+        const SdfPath& graphPath)
+{
+    GlfSimpleShadowArrayRefPtr const& shadows = 
+        _lightingContext->GetShadows();
+    size_t const numShadowPasses = shadows->GetNumShadowMapPasses();
+    _shadowAovBindings.resize(numShadowPasses);
+    _shadowTextureHandle.handles.resize(numShadowPasses);
+    _shadowBuffers.resize(numShadowPasses);
+
+    for (uint32_t i = 0; i < numShadowPasses; i++) {
+        const GfVec2i dimensions = shadows->GetShadowMapSize(i); 
+        // Skip allocation if buffer already exists and is correct size
+        if (_shadowAovBindings[i].renderBuffer) {
+            const GfVec2i bindingDims{
+                static_cast<int>(
+                    _shadowAovBindings[i].renderBuffer->GetWidth()),
+                static_cast<int>(
+                    _shadowAovBindings[i].renderBuffer->GetHeight())
+            };
+            if (bindingDims == dimensions) {
+                continue;
+            }
+        }
+
+        _shadowBuffers[i] = 
+            resourceRegistry->AllocateTempRenderBuffer(
+                graphPath,
+                HdFormatFloat32,
+                dimensions,
+                /*multiSampled=*/false,
+                /*depth=*/true);
+
+        HdAovDescriptor aovDesc = HdAovDescriptor(HdFormatFloat32, 
+                                                    /*multiSampled*/false,
+                                                    /*c=*/VtValue(1.f));
+
+        HdRenderPassAovBinding &binding = _shadowAovBindings[i];
+        binding.aovName = HdAovTokens->depth;
+        binding.aovSettings = aovDesc.aovSettings;
+        binding.renderBufferId = _shadowBuffers[i]->GetBuffer()->GetId();
+        binding.clearValue = aovDesc.clearValue;
+        binding.renderBuffer = _shadowBuffers[i]->GetBuffer();
+
+        HdSamplerParameters const shadowSamplerParameters{
+            HdWrapClamp, HdWrapClamp, HdWrapClamp,
+            HdMinFilterLinear, HdMagFilterLinear,
+            HdBorderColorOpaqueWhite, /*enableCompare*/true, 
+            HdCmpFuncLEqual, /*maxAnisotropy*/16};
+
+        _shadowTextureHandle.handles[i] =
+            resourceRegistry->AllocateTextureHandle(
+                _shadowBuffers[i]->GetBuffer()->GetTextureIdentifier(false),
+                HdStTextureType::Uv,
+                shadowSamplerParameters,
+                /* memoryRequest = */ 0,
+                shared_from_this());
     }
 }
 

@@ -496,6 +496,9 @@ class TestPcpExpressionComposition(unittest.TestCase):
         pcpCache = LoadPcpCache('refs_and_payloads/root.usda')
         rootLayer = pcpCache.GetLayerStackIdentifier().rootLayer
 
+        # Load payloads.
+        pcpCache.RequestPayloads(['/Payload', '/NoExpressionPayload'], [])
+
         # Verify initial state.
         self.AssertVariables(
             pcpCache, '/Ref',

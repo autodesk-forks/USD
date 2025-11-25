@@ -1950,31 +1950,13 @@ HdxTaskControllerSceneIndex::SetRenderParams(const HdxRenderTaskParams &params)
         dirtiedPrimEntries.push_back({ taskPath, locators });
     }
 
-    // Update shadow task in case materials have been enabled/disabled
-    {
-        using Task = HdxShadowTask;
-        if (HdxShadowTaskParams * const taskParams =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
-            if (taskParams->enableSceneMaterials !=
-                                params.enableSceneMaterials) {
-                taskParams->enableSceneMaterials =
-                                params.enableSceneMaterials;
-                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
-            }
-        }
-    }
-
     // Update pick task
     {
         using Task = HdxPickTask;
         if (HdxPickTaskParams * const taskParams =
                 _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
-            if (taskParams->cullStyle != params.cullStyle ||
-                taskParams->enableSceneMaterials !=
-                                params.enableSceneMaterials) {
+            if (taskParams->cullStyle != params.cullStyle) {
                 taskParams->cullStyle = params.cullStyle;
-                taskParams->enableSceneMaterials =
-                                params.enableSceneMaterials;
                 _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
@@ -2041,13 +2023,10 @@ HdxTaskControllerSceneIndex::SetShadowParams(const HdxShadowTaskParams &params)
         return;
     }
 
-    HdxShadowTaskParams newParams = params;
-    newParams.enableSceneMaterials = taskParams->enableSceneMaterials;
-
-    if (*taskParams == newParams) {
+    if (*taskParams == params) {
         return;
     }
-    *taskParams = newParams;
+    *taskParams = params;
 
     _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }

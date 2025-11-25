@@ -13,6 +13,7 @@
 #include "pxr/imaging/hdSt/api.h"
 #include "pxr/imaging/hdSt/bufferArrayRegistry.h"
 #include "pxr/imaging/hdSt/enums.h"
+#include "pxr/imaging/hdSt/renderBufferPool.h"
 
 #include "pxr/imaging/hgi/hgi.h"
 
@@ -174,6 +175,20 @@ public:
         const HdStTextureIdentifier &textureId,
         /// Texture type, e.g., uv, ptex, ...
         HdStTextureType textureType);
+
+    /// Allocate a RenderBuffer to be used only for this Render Graph's
+    /// execution
+    ///
+    /// Useful for instances where client code wants a RenderBuffer only
+    /// temporarily and doesn't care about its contents before or after
+    /// Ex: intermediary RenderBuffers or per Render Graph shadow maps
+    HDST_API
+    HdStPooledRenderBufferUniquePtr AllocateTempRenderBuffer(
+        const SdfPath& graphPath,
+        HdFormat fmt,
+        GfVec2i dims,
+        bool multiSampled,
+        bool depth);
 
     /// Sets how much memory a single texture can consume in bytes by
     /// texture type.
@@ -710,6 +725,8 @@ private:
     HgiComputeCmdsUniquePtr _computeCmds;
 
     std::unique_ptr<HdStStagingBuffer> _stagingBuffer;
+
+    HdStRenderBufferPool _renderBufferPool;
 };
 
 

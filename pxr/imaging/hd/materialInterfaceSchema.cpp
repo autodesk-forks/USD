@@ -22,6 +22,8 @@
 #include "pxr/base/trace/trace.h"
 
 // --(BEGIN CUSTOM CODE: Includes)--
+#include "pxr/imaging/hd/materialInterfaceMappingSchema.h"
+#include "pxr/imaging/hd/materialInterfaceParameterSchema.h"
 // --(END CUSTOM CODE: Includes)--
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -30,6 +32,54 @@ TF_DEFINE_PUBLIC_TOKENS(HdMaterialInterfaceSchemaTokens,
     HD_MATERIAL_INTERFACE_SCHEMA_TOKENS);
 
 // --(BEGIN CUSTOM CODE: Schema Methods)--
+
+NestedTfTokenMap
+HdMaterialInterfaceSchema::GetReverseInterfaceMappings() const
+{
+    NestedTfTokenMap reverseInterfaceMappings;
+
+    const HdMaterialInterfaceParameterContainerSchema 
+        interfaceParameters = GetParameters();
+    if (!interfaceParameters) {
+        return reverseInterfaceMappings;
+    }
+
+    for (const TfToken& publicUIName : interfaceParameters.GetNames()) {
+        // Each publicUIName maps to an interface parameter
+        const HdMaterialInterfaceParameterSchema parameterSchema =
+            interfaceParameters.Get(publicUIName);
+        if (!parameterSchema) {
+            continue;
+        }
+
+        //  Each interface parameter maps to a list of material node parameters 
+        // ie. [(nodePath, inputName), ...]
+        const HdMaterialInterfaceMappingVectorSchema mappings =
+            parameterSchema.GetMappings();
+        if (!mappings) {
+            continue;
+        }
+
+        const size_t numElems = mappings.GetNumElements();
+        for (size_t i = 0; i < numElems; i++) {
+            // Each interfaceMapping should be a (nodePath, inputName) pair 
+            HdMaterialInterfaceMappingSchema interfaceMappingSchema =
+                mappings.GetElement(i);
+            if (!interfaceMappingSchema) {
+                continue;
+            }
+
+            const TfToken nodePath = 
+                interfaceMappingSchema.GetNodePath()->GetTypedValue(0);
+            const TfToken inputName = 
+                interfaceMappingSchema.GetInputName()->GetTypedValue(0);
+
+            reverseInterfaceMappings[nodePath][inputName] = publicUIName;
+        }
+    }
+    return reverseInterfaceMappings;
+}
+
 // --(END CUSTOM CODE: Schema Methods)--
 
 HdMaterialInterfaceParameterContainerSchema

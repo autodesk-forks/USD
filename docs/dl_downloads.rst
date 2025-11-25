@@ -17,6 +17,7 @@ Presentations
 SIGGRAPH Birds of a Feather Notes
 =================================
 
+| `SIGGRAPH 2025 USD, Hydra, and OpenSubdiv Birds of a Feather Notes <https://openusd.org/files/BOFSiggraph2025.pdf>`__ (`Recording also available <https://openusd.org/files/BOFSiggraph2025.mp4>`__)
 | `SIGGRAPH 2024 USD, Hydra, and OpenSubdiv Birds of a Feather Notes <https://openusd.org/files/BOFSiggraph2024.pdf>`__ 
 | `SIGGRAPH 2023 USD, Hydra, and OpenSubdiv Birds of a Feather Notes <https://openusd.org/files/BOFSiggraph2023.pdf>`__ 
 

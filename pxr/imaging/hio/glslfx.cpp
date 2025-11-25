@@ -25,6 +25,7 @@
 #include "pxr/base/tf/pathUtils.h"
 #include "pxr/base/tf/hash.h"
 
+#include <filesystem>
 #include <iostream>
 #include <istream>
 #include <fstream>
@@ -232,7 +233,7 @@ static unique_ptr<istream>
 _CreateStreamForFile(string const& filePath)
 {
     if (TfIsFile(filePath)) {
-        return make_unique<ifstream>(filePath);
+        return make_unique<ifstream>(std::filesystem::u8path(filePath));
     }
 
     const shared_ptr<ArAsset> asset = ArGetResolver().OpenAsset(

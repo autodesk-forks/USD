@@ -6,6 +6,7 @@
 //
 #include "pxr/usdImaging/bin/usdBakeMtlx/bakeMaterialX.h"
 
+#include "pxr/imaging/hdMtlx/combinedMtlxVersion.h"
 #include "pxr/imaging/hdMtlx/hdMtlx.h"
 #include "pxr/usdImaging/usdImaging/materialParamUtils.h"
 
@@ -20,7 +21,6 @@
 #include "pxr/usd/usdShade/shader.h"
 
 #include <MaterialXCore/Document.h>
-#include <MaterialXCore/Generated.h>
 #include <MaterialXCore/Node.h>
 #include <MaterialXFormat/Util.h>
 #include <MaterialXFormat/XmlIo.h>
@@ -128,12 +128,12 @@ void _BakeMtlxDocument(
         : mx::Image::BaseType::UINT8;
 
     // Construct a Texture Baker.
-#if MATERIALX_MAJOR_VERSION <= 1 && MATERIALX_MINOR_VERSION <= 38 && \
-    MATERIALX_BUILD_VERSION <= 6
+#if MTLX_COMBINED_VERSION <= 13904
     mx::TextureBakerPtr baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
 #else
     auto baker = mx::TextureBakerGlsl::create(
+    mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #endif
     baker->setupUnitSystem(stdLibraries);

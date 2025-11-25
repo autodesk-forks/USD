@@ -10,6 +10,7 @@
 #include "pxr/imaging/hdSt/materialXShaderGen.h"
 #include "pxr/imaging/hdSt/package.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
+#include "pxr/imaging/hdMtlx/combinedMtlxVersion.h"
 #include "pxr/imaging/hdMtlx/hdMtlx.h"
 #include "pxr/imaging/hdMtlx/tokens.h"
 #include "pxr/imaging/hgi/tokens.h"
@@ -631,7 +632,7 @@ _GetGlTFSurfaceMaterialTag(HdMaterialNode2 const& terminal)
 static const mx::TypeDesc
 _GetMxTypeDescription(std::string const& typeName)
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     using MxTypeDesc = const mx::TypeDesc*;
 #else
     using MxTypeDesc = const mx::TypeDesc;
@@ -651,14 +652,14 @@ _GetMxTypeDescription(std::string const& typeName)
 
     const auto typeDescIt = _typeLibrary.find(typeName);
     if (typeDescIt != _typeLibrary.end()) {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
       return *typeDescIt->second;
 #else
       return typeDescIt->second;
 #endif
     }
 
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     return *mx::Type::NONE;
 #else
     return mx::Type::NONE;

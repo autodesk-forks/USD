@@ -213,41 +213,6 @@ _GetRigidBodyErrors(const UsdPrim &usdPrim,
                 );
             }
         }
-
-        // nested rigid body check
-        {
-            UsdPrim bodyParent = UsdPrim();
-            if (HasDynamicBodyParent(usdPrim.GetParent(), &bodyParent))
-            {
-                bool hasResetXformStack = false;
-                UsdPrim parent = usdPrim;
-                while (parent != usdPrim.GetStage()->GetPseudoRoot() && parent != bodyParent)
-                {
-                    const UsdGeomXformable xform(parent);
-                    if (xform && xform.GetResetXformStack())
-                    {
-                        hasResetXformStack = true;
-                        break;
-                    }
-                    parent = parent.GetParent();
-                }
-                if (!hasResetXformStack)
-                {
-                    errors.emplace_back(
-                        UsdPhysicsValidationErrorNameTokens->nestedRigidBody,
-                        UsdValidationErrorType::Error,
-                        primErrorSites,
-                        TfStringPrintf(
-                            "Rigid Body (%s) is missing xformstack reset, when child of "
-                            "rigid body (%s) in hierarchy. Simulation of multiple "
-                            "RigidBodyAPI's in a hierarchy will cause unpredicted "
-                            "results. Please fix the hierarchy or use XformStack reset.",
-                            usdPrim.GetPrimPath().GetText(),
-                            bodyParent.GetPrimPath().GetText())
-                        );
-                }
-            }
-        }
     }
 
     return errors;

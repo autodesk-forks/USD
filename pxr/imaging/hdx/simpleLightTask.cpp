@@ -368,7 +368,9 @@ HdxSimpleLightTask::Sync(HdSceneDelegate* delegate,
         shadows->SetShadowMapResolutions( std::vector<GfVec2i>() );
     }
 
-    _lightingShader->AllocateTextureHandles(renderIndex);
+    const SdfPath graphPath = GetId().GetParentPath();
+
+    _lightingShader->AllocateTextureHandles(renderIndex, graphPath);
 
     *dirtyBits = HdChangeTracker::Clean;
 }

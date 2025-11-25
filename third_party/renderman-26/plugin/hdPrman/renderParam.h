@@ -207,6 +207,40 @@ public:
     void SetFiltersFromRenderSettings(
                         HdPrmanRenderDelegate *renderDelegate);
 
+    /// \name Pixel Filters
+    /// @{
+
+    /// This struct describes parameter for a RenderMan pixel filter.
+    struct PixelFilter {
+        /// Name corresponds to Ri:PixelFilter.
+        TfToken name;
+        /// Width corresponds to Ri:PixelFilterWidth.
+        GfVec2f width;
+
+        bool operator==(PixelFilter const& rhs) const {
+            return name == rhs.name && width == rhs.width;
+        }
+        bool operator!=(PixelFilter const& rhs) const {
+            return !(*this == rhs);
+        }
+    };
+
+    /// Return the default pixel filter parameters.
+    HDPRMAN_API
+    static PixelFilter GetDefaultPixelFilter();
+
+    /// Return the current pixel filter parameters.
+    HDPRMAN_API
+    PixelFilter GetPixelFilter() const { return _pixelFilter; }
+
+    /// Set the pixel filter parameters.
+    /// Returns true if the new value is different than the prior.
+    HDPRMAN_API
+    bool SetPixelFilter(PixelFilter const& pixelFilter);
+
+    /// @}
+
+
     // Get RIX vs XPU
     bool IsXpu() const { return _xpu; }
 
@@ -475,7 +509,7 @@ private:
     // Initialize internals of PRMan renderer
     int _PRManRenderBegin(const std::vector<std::string>& extraArgs);
 
-    bool _UpdatePixelFilter();
+    bool _OverridePixelFilterFromLegacyHdRenderSettingMap();
     bool _UpdateQNSettings();
 
     // Updates clear colors of AOV descriptors of framebuffer.
@@ -662,8 +696,7 @@ private:
     riley::SampleFilterId _sampleFilterId;
     riley::DisplayFilterId _displayFilterId;
 
-    RtUString _pixelFilter;
-    GfVec2f _pixelFilterWidth;
+    PixelFilter _pixelFilter;
 
     HdPrmanRenderDelegate* _renderDelegate;
 

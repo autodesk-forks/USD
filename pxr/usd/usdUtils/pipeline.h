@@ -30,6 +30,9 @@ SDF_DECLARE_HANDLES(SdfLayer);
 USDUTILS_API
 extern TfEnvSetting<bool> USD_FORCE_DEFAULT_MATERIALS_SCOPE_NAME;
 
+USDUTILS_API
+extern TfEnvSetting<bool> USD_POPULATE_LEGACY_ALLOWED_TOKENS;
+
 /// Define the shading pipeline's convention for naming a companion
 /// alpha/opacity attribute and primvarnames given the full name of a
 /// color-valued attribute

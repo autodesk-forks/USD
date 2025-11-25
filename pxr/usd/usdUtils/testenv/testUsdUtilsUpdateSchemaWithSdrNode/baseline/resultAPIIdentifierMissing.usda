@@ -19,8 +19,10 @@ class "APIIdentifierMissingAPI" (
                 intensity: Itensity of the flame thrower.
                 """
         }
-        displayGroup = "Basic"
-        displayName = "Intensity"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Intensity"
+        }
     )
     color3f outputs:resultRGB
 }

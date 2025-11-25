@@ -400,12 +400,6 @@ public:
     HD_API
     HdResourceRegistrySharedPtr GetResourceRegistry() const;
 
-    /// Returns true if scene index features are available
-    /// This is true by default but can be controlled via an
-    /// HD_ENABLE_SCENE_INDEX_EMULATION environment variable.
-    HD_API
-    static bool IsSceneIndexEmulationEnabled();
-
     /// An application or legacy scene delegate may prefer for the scene 
     /// index observer notices generated from its prim insertions, removals, or
     /// invalidations to be consolidated into vectorized batches. Calling this

@@ -66,11 +66,9 @@ struct HdxPickTaskParams
 {
     HdxPickTaskParams()
         : cullStyle(HdCullStyleNothing)
-        , enableSceneMaterials(true)
     {}
 
     HdCullStyle cullStyle;
-    bool enableSceneMaterials;
 };
 
 /// Picking hit structure. This is output by the pick task as a record of

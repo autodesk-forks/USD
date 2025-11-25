@@ -114,7 +114,7 @@ _PurposeTokenToDataSource(const TfToken &purpose)
         // Hydra's default purpose is 'geometry'.
         static HdDataSourceBaseHandle const ds =
             HdRetainedTypedSampledDataSource<TfToken>::New(
-                HdTokens->geometry);
+                HdRenderTagTokens->geometry);
         return ds;
     }
     return HdRetainedTypedSampledDataSource<TfToken>::New(purpose);
@@ -261,7 +261,7 @@ TfTokenVector _UsdToHdPurposes(const TfTokenVector &v)
     TfTokenVector result;
     for (const TfToken &usdPurpose : v) {
         if (usdPurpose == UsdGeomTokens->default_) {
-            result.push_back(HdTokens->geometry);
+            result.push_back(HdRenderTagTokens->geometry);
         } else {
             result.push_back(usdPurpose);
         }

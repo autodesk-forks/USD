@@ -101,10 +101,4 @@ if (BUILD_SHARED_LIBS)
         EXPECTED_RETURN_CODE 0
         ENV TF_FATAL_VERIFY=1
     )
-
-    pxr_register_test(testExecGeomXformable_Perf_Large
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecGeomXformable_Perf
-                 --branchingFactor 5 --treeDepth 10"
-        EXPECTED_RETURN_CODE 0
-    )
 endif()

@@ -234,6 +234,15 @@ _GetShaderPropertyTypeAndArraySize(
         _ConformIntTypeDefaultValue(typeName, defaultValue);
         return std::make_pair(SdrPropertyTypes->Int,
                               _GetArraySize(defaultValue));
+    } else if (typeName == SdfValueTypeNames->Int2 || 
+               typeName == SdfValueTypeNames->Int2Array) {
+        return std::make_pair(SdrPropertyTypes->Int, 2);
+    } else if (typeName == SdfValueTypeNames->Int3 || 
+               typeName == SdfValueTypeNames->Int3Array) {
+        return std::make_pair(SdrPropertyTypes->Int, 3);
+    } else if (typeName == SdfValueTypeNames->Int4 || 
+               typeName == SdfValueTypeNames->Int4Array) {
+        return std::make_pair(SdrPropertyTypes->Int, 4);
     } else if (typeName == SdfValueTypeNames->String ||
                typeName == SdfValueTypeNames->Token ||
                typeName == SdfValueTypeNames->Asset || 

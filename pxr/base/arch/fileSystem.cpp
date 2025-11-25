@@ -593,6 +593,10 @@ ArchMakeTmpFile(const std::string& prefix, std::string* pathname)
 #if defined (ARCH_OS_WINDOWS)
 
 namespace {
+// Replace trailing `X`s in `sTemplate` with random letters and numbers and call
+// `func` with the result.  If `func` returns true, return the random name,
+// otherwise retry up to `maxRetry` times.  If `sTemplate` has no trailing `X`s
+// or if `func` never returns true, return the empty string.
 std::string
 MakeUnique(
     const std::string& sTemplate,
@@ -600,37 +604,35 @@ MakeUnique(
     int maxRetry = 1000)
 {
     static const bool init = (srand(GetTickCount()), true);
+    (void)init;
 
-    // Copy template to a writable buffer.
-    const auto length = sTemplate.size();
-    char* cTemplate = reinterpret_cast<char*>(alloca(length + 1));
-    strcpy(cTemplate, sTemplate.c_str());
-
+    std::string attempt;
+    
+    const auto xsPos = [&]() {
+        auto pos = sTemplate.find_last_not_of("X");
+        return pos == sTemplate.npos ? pos : pos + 1; // npos or first 'X'.
+    }();
+    if (xsPos == sTemplate.npos) {
+        return attempt;
+    }
+    
     // Fill template with random characters from table.
-    const char* table = "abcdefghijklmnopqrstuvwxyz123456";
-    std::string::size_type offset = length - 6;
-    int retry = 0;
-    do {
-        unsigned int x = (static_cast<unsigned int>(rand()) << 15) + rand();
-        cTemplate[offset + 0] = table[(x >> 25) & 31];
-        cTemplate[offset + 1] = table[(x >> 20) & 31];
-        cTemplate[offset + 2] = table[(x >> 15) & 31];
-        cTemplate[offset + 3] = table[(x >> 10) & 31];
-        cTemplate[offset + 4] = table[(x >>  5) & 31];
-        cTemplate[offset + 5] = table[(x      ) & 31];
-
-        // Invoke callback and if successful return the path.  Otherwise
-        // repeat with a different random name for up to maxRetry times.
-        if (func(cTemplate)) {
-            return cTemplate;
+    const char table[] = "bcdfghjklmnpqrstvwxz0123456789";
+    attempt = sTemplate;
+    for (int retry = 0; retry != maxRetry; ++retry) {
+        for (char *p = attempt.data() + xsPos; *p; ++p) {
+            *p = table[rand() % (sizeof(table)-1)];
         }
-    } while (++retry < maxRetry);
-
-    return std::string();
+        // Invoke callback and if successful return the path.  Otherwise repeat
+        // with a different random name for up to maxRetry times.
+        if (func(attempt.c_str())) {
+            return attempt;
+        }
+    }
+    attempt.clear();
+    return attempt;
 }
-
 }
-
 #endif
 
 int
@@ -651,9 +653,7 @@ ArchMakeTmpFile(const std::string& tmpdir,
             return fd != -1;
         });
 #else
-    // Copy template to a writable buffer.
-    char* cTemplate = reinterpret_cast<char*>(alloca(sTemplate.size() + 1));
-    strcpy(cTemplate, sTemplate.c_str());
+    char* cTemplate = sTemplate.data();
 
     // Open the file.
     int fd = mkstemp(cTemplate);
@@ -692,12 +692,9 @@ ArchMakeTmpSubdir(const std::string& tmpdir,
                 ArchWindowsUtf8ToUtf16(name).c_str(), NULL) != FALSE;
         });
 #else
-    // Copy template to a writable buffer.
-    char* cTemplate = reinterpret_cast<char*>(alloca(sTemplate.size() + 1));
-    strncpy(cTemplate, sTemplate.c_str(), sTemplate.size() + 1);
-
-    // Open the tmpdir.
-    char *tmpSubdir = mkdtemp(cTemplate);
+    // Copy template to a writable buffer and open the tmpdir.
+    std::string cTemplate = sTemplate;
+    char *tmpSubdir = mkdtemp(cTemplate.data());
 
     if (tmpSubdir) {
         // mkdtemp creates the directory with 0700 permissions.  We

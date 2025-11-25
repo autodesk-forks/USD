@@ -21,7 +21,9 @@
 // 11 -> 12 : change HdxPickHit::worldSpaceHitPoint from GfVec3f to GfVec3d.
 // 12 -> 13 : Add HdxPickTask "resolveDeep" mode.
 // 13 -> 14 : Changed HdxTaskControllerSceneIndex contruction to use a struct
+// 14 -> 15 : Remove enableSceneMaterial param from HdxRenderTaskParams, 
+//            HdxShadowTaskParams, and HdxPickTaskParams.
 //
-#define HDX_API_VERSION 14
+#define HDX_API_VERSION 15
 
 #endif // PXR_IMAGING_HDX_VERSION_H

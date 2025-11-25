@@ -5,6 +5,7 @@
 // https://openusd.org/license.
 //
 #include "pxr/imaging/hdMtlx/hdMtlx.h"
+#include "pxr/imaging/hdMtlx/combinedMtlxVersion.h"
 #include "pxr/imaging/hdMtlx/debugCodes.h"
 #include "pxr/imaging/hdMtlx/tokens.h"
 #include "pxr/imaging/hd/material.h"
@@ -275,7 +276,7 @@ HdMtlxGetNodeDefName(std::string const& prevMxNodeDefName)
 {
     std::string mxNodeDefName = prevMxNodeDefName;
     // For nodeDef name changes between MaterialX v1.38 and the current version
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION >= 39
+#if MTLX_COMBINED_VERSION >= 13900
     // The normalmap nodeDef name changed in v1.39
     if (prevMxNodeDefName == "ND_normalmap") {
         mxNodeDefName = "ND_normalmap_float";
@@ -326,7 +327,7 @@ HdMtlxGetNodeDef(TfToken const& hdNodeType, mx::DocumentPtr const& mxDoc)
     const std::string nodeTypeStr = hdNodeType.GetString();
 
     // For node removals between MaterialX v1.38 and the current version
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION >= 39
+#if MTLX_COMBINED_VERSION >= 13900
     // Swizzle nodes were deleted in v1.39, return a temporary NodeDef
     std::smatch match;
     static const auto swizzleRegex = std::regex("ND_swizzle_([^_]+)_([^_]+)");

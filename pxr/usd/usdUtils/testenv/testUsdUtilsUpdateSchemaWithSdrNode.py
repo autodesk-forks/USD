@@ -85,6 +85,17 @@ class TestUsdUpdateSchemaWithSdrNode(unittest.TestCase):
         resultLayer = Sdf.Layer.CreateNew("./duplicatePropTypeMisMatch.usda")
         UsdUtils.UpdateSchemaWithSdrNode(resultLayer, sdrNode, "myRenderContext")
 
+    def test_UIHints(self):
+        # Test population of the uiHints dictionary
+        if self.ErrorHandlingTest:
+            self.skipTest("Running Error Handling Test, skipping.");
+            return
+        sdrNode = self._GetSdrNode("testUIHints.usda",
+                "/TestUIHintsAPI")
+        self.assertTrue(sdrNode)
+        resultLayer = Sdf.Layer.CreateNew("./resultUIHints.usda")
+        UsdUtils.UpdateSchemaWithSdrNode(resultLayer, sdrNode, "myRenderContext")
+
     def test_PropertyOrder(self):
         # Param order from the source shader should be maintained in the
         # output schema via the `propertyOrder` metadata field

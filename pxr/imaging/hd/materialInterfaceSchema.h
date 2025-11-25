@@ -26,11 +26,19 @@
 #include "pxr/imaging/hd/schema.h"
 
 // --(BEGIN CUSTOM CODE: Includes)--
+
+#include <unordered_map>
+
 // --(END CUSTOM CODE: Includes)--
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 // --(BEGIN CUSTOM CODE: Declares)--
+
+using TfTokenMap = std::unordered_map<TfToken, TfToken, TfToken::HashFunctor>;
+using NestedTfTokenMap = 
+    std::unordered_map<TfToken, TfTokenMap, TfToken::HashFunctor>;
+
 // --(END CUSTOM CODE: Declares)--
 
 #define HD_MATERIAL_INTERFACE_SCHEMA_TOKENS \
@@ -60,6 +68,18 @@ public:
     /// @}
 
 // --(BEGIN CUSTOM CODE: Schema Methods)--
+
+    /// Builds and returns a map of reversed interface mappings.  If no  
+    /// interface mappings were found, returns an empty map.
+    /// 
+    /// Interface mappings are mapped like this:
+    /// publicUIName -> [(nodePath, inputName),...]
+    /// 
+    /// The returned map of reversed interface mappings is mapped like this:
+    /// nodePath -> (inputName -> publicUIName)
+    HD_API 
+    NestedTfTokenMap GetReverseInterfaceMappings() const;
+
 // --(END CUSTOM CODE: Schema Methods)--
 
     /// \name Member accessor

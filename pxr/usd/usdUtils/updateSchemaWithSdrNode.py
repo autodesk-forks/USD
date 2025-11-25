@@ -6,7 +6,7 @@
 # https://openusd.org/license.
 #
 
-from pxr import Tf, Sdf, Sdr, Usd, UsdShade, Vt
+from pxr import Tf, Sdf, Sdr, Usd, UsdShade, UsdUI, UsdUtils, Vt
 from pxr.UsdUtils.constantsGroup import ConstantsGroup
 
 class SchemaDefiningKeys(ConstantsGroup):
@@ -51,8 +51,8 @@ def _IsNSPrefixConnectableAPICompliant(nsPrefix):
     return (nsPrefix == UsdShade.Tokens.inputs[:1] or \
             nsPrefix == UsdShade.Tokens.outputs[:1])
 
-def _CreateAttrSpecFromNodeAttribute(primSpec, prop, primDefForAttrPruning, 
-        schemaPropertyNSPrefixOverride, isSdrInput=True):
+def _CreateAttrSpecFromNodeAttribute(primSpec, prop, stage,
+        primDefForAttrPruning, schemaPropertyNSPrefixOverride, isSdrInput=True):
     propMetadata = prop.GetMetadata()
     # Early out if the property should be suppressed from being translated to
     # propertySpec
@@ -120,40 +120,38 @@ def _CreateAttrSpecFromNodeAttribute(primSpec, prop, primDefForAttrPruning,
     attrSpec = Sdf.AttributeSpec(primSpec, propName, attrType,
             attrVariability)
 
+    # Look up attrSpec's UsdAttribute so we can use UsdUI to populate
+    # hint values
+    attr = stage.GetAttributeAtPath(attrSpec.path)
+    if not attr:
+        Tf.RaiseCodingError(
+            "Failed to find composed attribute (%s) on " \
+            "schema (%s)" % (propName, primSpec.name))
+
+    attrHints = UsdUI.AttributeHints(attr)
+    if not attrHints:
+        Tf.RaiseCodingError(
+            "Failed to populate UI hints for attribute (%s) on " \
+            "schema (%s)" % (propName, primSpec.name))
+
     if PropertyDefiningKeys.WIDGET in prop.GetMetadata().keys():
         if (prop.GetMetadata()[PropertyDefiningKeys.WIDGET] == \
-                PropertyDefiningKeys.NULL_VALUE):
-            attrSpec.hidden = True
+          PropertyDefiningKeys.NULL_VALUE):
+            attrHints.SetHidden(True)
 
     if prop.GetHelp():
         _SetSchemaUserDocFields(attrSpec, prop.GetHelp())
     elif prop.GetLabel(): # fallback documentation can be label
         _SetSchemaUserDocFields(attrSpec, prop.GetLabel())
+
     if prop.GetPage():
-        attrSpec.displayGroup = prop.GetPage()
+        attrHints.SetDisplayGroup(prop.GetPage())
     if prop.GetLabel():
-        attrSpec.displayName = prop.GetLabel()
-    if options and attrType == Sdf.ValueTypeNames.Token:
-        # If the value for token list is empty then use the name
-        # If options list has a mix of empty and non-empty value thats an error.
-        tokenList = []
-        hasEmptyValue = len(options[0][1]) == 0
-        for option in options:
-            if len(option[1]) == 0:
-                if not hasEmptyValue:
-                    Tf.Warn("Property (%s) for schema (%s) has mix of empty " \
-                    "non-empty values for token options (%s)." \
-                    %(propName, primSpec.name, options))
-                hasEmptyValue = True
-                tokenList.append(option[0])
-            else:
-                if hasEmptyValue:
-                    Tf.Warn("Property (%s) for schema (%s) has mix of empty " \
-                    "non-empty values for token options (%s)." \
-                    %(propName, primSpec.name, options))
-                hasEmptyValue = False
-                tokenList.append(option[1])
-        attrSpec.allowedTokens = tokenList
+        attrHints.SetDisplayName(prop.GetLabel())
+    if prop.GetShownIf():
+        attrHints.SetShownIf(prop.GetShownIf())
+
+    _PopulateOptions(attrHints, attrSpec, prop, propName, attrType)
 
     attrSpec.default = prop.GetDefaultValueAsSdfType()
 
@@ -194,6 +192,76 @@ def StringToBool(val):
         return False
     else:
         raise ValueError(f"Invalid truth value: {val}")
+
+def _ParseOptionValues(values, attrSpec, sdrProp, propName):
+    result = []
+    for v in values:
+        parsedVal, err = Sdr.MetadataHelpers.ParseSdfValue(v, sdrProp)
+
+        if not err:
+            result.append(parsedVal)
+        else:
+            Tf.Warn("Failed to parse option value ('%s') for attribute (%s) " \
+                    "on schema (%s): %s" % \
+                    (v, propName, attrSpec.owner.name, err))
+            return []
+
+    return result
+
+def _PopulateOptions(attrHints, attrSpec, sdrProp, propName, attrType):
+    # Translate sdrProp's `options` field into either allowedTokens or
+    # valueLabels
+    #
+    # Neither apply to asset params, which use the options hint to indicate
+    # when a texture asset is expected.
+    options = sdrProp.GetOptions()
+    if not options or sdrProp.IsAssetIdentifier():
+        return
+
+    # `options` is a list of (name, value) tuples that represents either
+    # allowedTokens or valueLabels. If both names and values are provided,
+    # encode as valueLabels. If only one side is provided (and the attribute is
+    # token-valued), author allowedTokens.
+    #
+    # To continue generating backwards-compatible schemas on a temporary basis,
+    # if USD_POPULATE_LEGACY_ALLOWED_TOKENS is set we always populate
+    # allowedTokens even if also populating valueLabels.
+    names, vals = zip(*options)
+    namesProvided = not all(len(n) == 0 for n in names)
+    valsProvided = not all(len(v) == 0 for v in vals)
+
+    isTokenValued = attrType == Sdf.ValueTypeNames.Token
+
+    populateLabels = namesProvided and valsProvided
+    populateTokens = isTokenValued and \
+        (not populateLabels or
+         Tf.GetEnvSetting('USD_POPULATE_LEGACY_ALLOWED_TOKENS'))
+
+    if populateLabels:
+        # Write labels, using values that have been parsed to the appropriate
+        # value type for the attribute (the elements of `vals` are all strings)
+        parsedVals = _ParseOptionValues(vals, attrSpec, sdrProp, propName)
+        if parsedVals:
+            attrHints.SetValueLabels(
+                dict(zip(names, parsedVals)))
+            attrHints.SetValueLabelsOrder(names)
+        else:
+            Tf.Warn("Could not set valueLabels for attribute (%s) on " \
+                    "schema (%s)" % (propName, attrSpec.owner.name))
+
+    if populateTokens:
+        # Write allowedTokens. Usually only names are provided in this case,
+        # but prefer the values if available.
+        if valsProvided:
+            attrSpec.allowedTokens = vals
+        elif namesProvided:
+            attrSpec.allowedTokens = names
+
+    # Complain if allowed tokens were provided for a non-token-valued param
+    if not isTokenValued and not populateLabels:
+        Tf.Warn("Ignoring allowedTokens provided for non-token (%s) " \
+                "valued attribute (%s) on schema (%s): %s" \
+                % (attrType, propName, attrSpec.owner.name, options))
 
 def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
         overrideIdentifier=""):
@@ -268,18 +336,24 @@ def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
           schemaPropertyNSPrefixOverride metadata.
 
     Sdr Property Metadata to SdfPropertySpec Translations
-        - A "null" value for Widget sdrProperty metadata translates to 
-          SdfPropertySpec Hidden metadata.
-        - SdrProperty's Help metadata (Label metadata if Help metadata not 
-          provided) translates to SdfPropertySpec's userDocBrief and userDoc
+        - A "null" value for Widget SdrShaderProperty metadata translates to
+          'hidden' in the SdfPropertySpec's uiHints metadata dictionary.
+        - SdrShaderProperty's Help metadata (Label metadata if Help metadata not
+          provided) translates to the SdfPropertySpec's userDocBrief and userDoc
           custom metadata strings.  
-        - SdrProperty's Page metadata translates to SdfPropertySpec's
-          DisplayGroup metadata.
-        - SdrProperty's Label metadata translates to SdfPropertySpec's
-          DisplayName metadata.
-        - SdrProperty's Options translates to SdfPropertySpec's AllowedTokens.
-        - SdrProperty's Default value translates to SdfPropertySpec's Default
-          value.
+        - SdrShaderProperty's Page metadata translates to 'displayGroup'
+          in the SdfPropertySpec's uiHints metadata dictionary.
+        - SdrShaderProperty's Label metadata translates to 'displayName'
+          in the SdfPropertySpec's uiHints metadata dictionary.
+        - SdrShaderProperty's Options translates to either 'allowedTokens'
+          (when either labels or values are provided) or 'valueLabels' (when
+          both labels and values are provided) in the SdfPropertySpec's uiHints
+          metadata dictionary. For backwards compatibility, set
+          USD_POPULATE_LEGACY_ALLOWED_TOKENS to write allowedTokens in addition
+          to valueLabels for string- and token-valued attributes that provide
+          both labels and values.
+        - SdrShaderProperty's Default value translates to the SdfPropertySpec's
+          Default value.
         - Connectable input properties translates to InterfaceOnly
           SdfPropertySpec's CONNECTABILITY.
     """
@@ -485,6 +559,20 @@ def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
     if doc != "":
         _SetSchemaUserDocFields(primSpec, doc)
 
+    # Open schemaLayer on a stage so we can use the UsdUI hints API. We'll get
+    # missing sublayer warnings for the base schemas since we're not configured
+    # to resolve them, but these shouldn't matter since we only care about
+    # authoring to schemaLayer. Suppress the warnings with a diagnostic
+    # delegate.
+    delegate = UsdUtils.CoalescingDiagnosticDelegate()
+    stage = Usd.Stage.Open(schemaLayer)
+    del delegate
+
+    if not stage:
+        Tf.Warn("Failed to open schema layer '%s' on a stage" \
+                % schemaLayer.identifier)
+        return
+
     # gather properties from a prim definition generated by composing apiSchemas
     # provided by apiSchemasForAttrPruning metadata.
     primDefForAttrPruning = None
@@ -500,22 +588,53 @@ def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
     # order, so remember it as we go.
     propOrder = []
 
+    # `shownIf` expressions refer to shader params by their Sdr names. But as
+    # we create attribute specs for each param, we modify their namespaces (see
+    # _CreateAttrSpecFromNodeAttribute()).
+    #
+    # Track such changes so we can fix up shownIf expressions once the final
+    # names are all known.
+    attrsWithShownIf = []
+    attrRenames = {}
+
+    def _recordAttrInfo(attrName, sdrProp):
+        propOrder.append(attrName)
+        attrRenames[sdrProp.GetName()] = attrName
+
+        attr = stage.GetAttributeAtPath(
+            primSpec.path.AppendProperty(attrName))
+        attrHints = UsdUI.AttributeHints(attr)
+
+        if attrHints and attrHints.GetShownIf():
+            attrsWithShownIf.append(attr)
+
     # Create attrSpecs from input parameters
     for propName in sdrNode.GetShaderInputNames():
+        sdrProp = sdrNode.GetShaderInput(propName)
         attrName = _CreateAttrSpecFromNodeAttribute(
-                primSpec, sdrNode.GetShaderInput(propName), 
+                primSpec, sdrProp, stage,
                 primDefForAttrPruning, schemaPropertyNSPrefixOverride)
         if attrName:
-            propOrder.append(attrName)
+            _recordAttrInfo(attrName, sdrProp)
 
     # Create attrSpecs from output parameters
     # Note that we always want outputs: namespace prefix for output attributes.
     for propName in sdrNode.GetShaderOutputNames():
+        sdrProp = sdrNode.GetShaderOutput(propName)
         attrName = _CreateAttrSpecFromNodeAttribute(
-                primSpec, sdrNode.GetShaderOutput(propName), 
+                primSpec, sdrProp, stage,
                 primDefForAttrPruning, UsdShade.Tokens.outputs[:-1], False)
         if attrName:
-            propOrder.append(attrName)
+            _recordAttrInfo(attrName, sdrProp)
+
+    # Fix up shownIf expressions with final attribtue names
+    for attr in attrsWithShownIf:
+        attrHints = UsdUI.AttributeHints(attr)
+        if attrHints:
+            expr = attrHints.GetShownIf()
+            for sourceName, finalName in attrRenames.items():
+                expr = expr.replace(sourceName, finalName)
+            attrHints.SetShownIf(expr)
 
     # Forward the source param order for typed and single-apply. Multiple-apply
     # schemas cannot specify propertyOrder.

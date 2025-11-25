@@ -137,10 +137,7 @@ are returned and not restricted by the simulation owners.
 \subsection usdPhysics_rigid_body_descriptor Physics RigidBody Descriptor
 
 For each UsdGeom.Xformable prim with UsdPhysicsRigidBodyAPI, a physics rigid body
-descriptor is reported. Note that nesting rigid bodies is not allowed; 
-therefore, an error will be reported if attempted. To nest rigid bodies, it is 
-necessary to add resetXformOpStack on the rigid body. The reported descriptor 
-contains this information:
+descriptor is reported. The reported descriptor contains this information:
 
 \li List of collisions that belong to this rigid body.
 \li List of simulation owners for this rigid body, the behavior is described 

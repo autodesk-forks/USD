@@ -363,8 +363,9 @@ HdxTaskController::_CreateRenderTask(TfToken const& materialTag)
 }
 
 void
-HdxTaskController::_SetBlendStateForMaterialTag(TfToken const& materialTag,
-                                        HdxRenderTaskParams *renderParams) const
+HdxTaskController::_SetBlendStateForMaterialTag(
+    TfToken const& materialTag,
+    HdxRenderTaskParams *renderParams) const
 {
     if (!TF_VERIFY(renderParams)) {
         return;
@@ -1509,32 +1510,15 @@ HdxTaskController::SetRenderParams(HdxRenderTaskParams const& params)
         }
     }
 
-    // Update shadow task in case materials have been enabled/disabled
-    if (!_shadowTaskId.IsEmpty()) {
-        HdxShadowTaskParams oldShParams = 
-            _delegate.GetParameter<HdxShadowTaskParams>(
-                _shadowTaskId, HdTokens->params);
-
-        if (oldShParams.enableSceneMaterials != params.enableSceneMaterials) {
-            oldShParams.enableSceneMaterials = params.enableSceneMaterials;
-            _delegate.SetParameter(_shadowTaskId, 
-                HdTokens->params, oldShParams);
-            GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
-                _shadowTaskId, HdChangeTracker::DirtyParams);
-        }
-    }
-
     // Update pick task
     if (!_pickTaskId.IsEmpty()) {
         HdxPickTaskParams pickParams =
             _delegate.GetParameter<HdxPickTaskParams>(
                 _pickTaskId, HdTokens->params);
         
-        if (pickParams.cullStyle != params.cullStyle ||
-            pickParams.enableSceneMaterials != params.enableSceneMaterials) {
+        if (pickParams.cullStyle != params.cullStyle) {
 
             pickParams.cullStyle = params.cullStyle;
-            pickParams.enableSceneMaterials = params.enableSceneMaterials;
 
             _delegate.SetParameter(_pickTaskId, HdTokens->params, pickParams);
             GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
@@ -1583,11 +1567,8 @@ HdxTaskController::SetShadowParams(HdxShadowTaskParams const& params)
         _delegate.GetParameter<HdxShadowTaskParams>(
             _shadowTaskId, HdTokens->params);
 
-    HdxShadowTaskParams mergedParams = params;
-    mergedParams.enableSceneMaterials = oldParams.enableSceneMaterials;
-
-    if (mergedParams != oldParams) {
-        _delegate.SetParameter(_shadowTaskId, HdTokens->params, mergedParams);
+    if (params != oldParams) {
+        _delegate.SetParameter(_shadowTaskId, HdTokens->params, params);
         GetRenderIndex()->GetChangeTracker().MarkTaskDirty(
             _shadowTaskId, HdChangeTracker::DirtyParams);
     }

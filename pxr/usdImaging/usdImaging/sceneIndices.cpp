@@ -89,14 +89,21 @@ _AdditionalStageSceneIndexInputArgs(
     return ds;
 }
 
-// Use extentsHint (of models) for purpose geometry
+// Use extentsHint (of models) for purpose geometry, render and proxy.
+// Used by the draw mode scene index. Aligns with arguments to
+// UsdGeomBBoxCache in UsdImagingDrawModeAdapter::_ComputeExtent in
+// UsdImaging 1.0.
 static
 HdContainerDataSourceHandle
 _ExtentResolvingSceneIndexInputArgs()
 {
     HdDataSourceBaseHandle const purposeDataSources[] = {
         HdRetainedTypedSampledDataSource<TfToken>::New(
-            HdTokens->geometry) };
+            HdRenderTagTokens->geometry),
+        HdRetainedTypedSampledDataSource<TfToken>::New(
+            HdRenderTagTokens->render),
+        HdRetainedTypedSampledDataSource<TfToken>::New(
+            HdRenderTagTokens->proxy) };
 
     return
         HdRetainedContainerDataSource::New(
