@@ -7,26 +7,6 @@
 include(Version)
 include(${CMAKE_CURRENT_LIST_DIR}/pxrStaticConfig.cmake)
 
-function(_get_all_dependencies target result)
-    get_target_property(dependencies ${target} INTERFACE_LINK_LIBRARIES)
-    # Split core libraries from non-core libraries.
-    _pxr_split_libraries("${dependencies}" internalDeps externalDeps)
-    if(NOT internalDeps)
-        return()
-    endif()
-
-    foreach(dependency IN LISTS internalDeps)
-        if(NOT ${dependency} IN_LIST ${result})
-            list(APPEND ${result} ${dependency})
-            _get_final_package_name("${dependency}" dependency_internal)
-            _get_all_dependencies(${dependency_internal} ${result})
-        endif()
-    endforeach()
-
-    # Set the result variable in the parent scope
-    set(${result} "${${result}}" PARENT_SCOPE)
-endfunction()
-
 # Copy headers to the build tree.  Under pxr/ the include paths match the
 # source tree paths but elsewhere they do not. Instead we use include
 # paths like rmanArgsParser/rmanArgsParser.h.  So if /pxr/ is not in the
@@ -341,19 +321,19 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
                     ${resourceFile} ${plugInfoFile})
             endif()
             set(resourceFile "${plugInfoFile}")
-            set(EMSCRIPTEN_RESOURCE_FILE ${resourceFile})
+            set(emscriptenResourceFile ${resourceFile})
         else()
             if(IS_ABSOLUTE "${resourceFile}")
-                set(EMSCRIPTEN_RESOURCE_FILE "${resourceFile}")
+                set(emscriptenResourceFile "${resourceFile}")
             else()
-                set(EMSCRIPTEN_RESOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
+                set(emscriptenResourceFile "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
             endif()
         endif()
 
         if (EMSCRIPTEN)
-            string(REGEX REPLACE "^lib\\/" "/" LOCAL_PATH "${resourcesPath}")
+            string(REGEX REPLACE "^lib\\/" "/" emscriptenLocalPath "${resourcesPath}")
 
-            list(APPEND EMSCRIPTEN_RESOURCE_FILES "--preload-file ${EMSCRIPTEN_RESOURCE_FILE}@${LOCAL_PATH}/${dirPath}/${destFileName}")
+            list(APPEND emscriptenResourceFiles "SHELL:--preload-file ${emscriptenResourceFile}@${emscriptenLocalPath}/${dirPath}/${destFileName}")
         endif()
         install(
             FILES ${resourceFile}
@@ -363,7 +343,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
     endforeach()
 
     if (EMSCRIPTEN)
-        set_property(TARGET ${NAME} PROPERTY EMSCRIPTEN_RESOURCES ${EMSCRIPTEN_RESOURCE_FILES})
+        target_link_options(${NAME} PUBLIC ${emscriptenResourceFiles})
     endif()
 endfunction() # _install_resource_files
 
@@ -1426,7 +1406,7 @@ function(_pxr_library NAME)
 
     # Install resources for the NAME library, at appropriate paths
     _install_resource_files(
-        ${NAME}
+        ${NAME_INTERNAL}
         "${pluginInstallPrefix}"
         "${pluginToLibraryPath}"
         ${args_RESOURCE_FILES})

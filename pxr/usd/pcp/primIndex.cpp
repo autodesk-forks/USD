@@ -783,6 +783,7 @@ struct Task {
                 return std::tie(a.node, a.vsetPath, a.vsetNum) >
                     std::tie(b.node, b.vsetPath, b.vsetNum);
             case EvalImpliedClasses:
+            {
                 // When multiple implied classes tasks are queued for different
                 // nodes, ordering matters in that ancestor nodes must be 
                 // processed after their descendants. This minimally guarantees
@@ -802,7 +803,40 @@ struct Task {
                 // minimal (though still complex) case that requires this 
                 // ordering be correct and should be referred to if a detailed
                 // explanation is desired.
-                return b.node > a.node;
+                //
+                // If a.node and b.node are not ancestrally related, a and b
+                // must be evaluated in strength order to ensure that the
+                // strongest implied arcs are added in the case where there
+                // multiple class-based arcs in the prim index that would be
+                // implied to the same site under the same parent node. In that
+                // case we want the implied arc with the strongest origin,
+                // which we get by handling these tasks in strong-to-weak
+                // order. See <test> for an example where this is relevant.
+                //
+                // XXX: See various comments throughout this file about
+                // duplicate node handling and how we might clean this up
+                // in the future.
+                //
+                auto isAncestorAndDescendant = [](PcpNodeRef x, PcpNodeRef y) {
+                    for (; !y.IsRootNode(); y = y.GetParentNode()) {
+                        if (x == y) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (b.node > a.node
+                    && isAncestorAndDescendant(a.node, b.node)) {
+                    return true;
+                }
+                else if (a.node > b.node
+                    && isAncestorAndDescendant(b.node, a.node)) {
+                    return false;
+                }
+
+                return PcpCompareNodeStrength(a.node, b.node) == 1;
+            }
             default:
                 // Arbitrary order
                 return a.node > b.node;

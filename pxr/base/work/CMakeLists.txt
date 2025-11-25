@@ -172,13 +172,20 @@ if (use_tbb)
         ENV PXR_WORK_THREAD_LIMIT=3
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testWorkThreadLimitsTBB"
     )
-    pxr_register_test(testWorkThreadLimitsRawTBBMax
-        RUN_SERIAL
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testWorkThreadLimitsTBB --rawtbb"
-    )
-    pxr_register_test(testWorkThreadLimitsRawTBB2
-        RUN_SERIAL
-        ENV PXR_WORK_THREAD_LIMIT=2
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testWorkThreadLimitsTBB --rawtbb"
-    )
+
+    # Note: These tests are disabled for emscripten because we are not able to 
+    # easily forward the command line option to the test at run time.  This
+    # would likely require additional test infrastructure utilizing
+    # Module.arguments in the generated JS file. 
+    if (NOT EMSCRIPTEN)
+        pxr_register_test(testWorkThreadLimitsRawTBBMax
+            RUN_SERIAL
+            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testWorkThreadLimitsTBB --rawtbb"
+        )
+        pxr_register_test(testWorkThreadLimitsRawTBB2
+            RUN_SERIAL
+            ENV PXR_WORK_THREAD_LIMIT=2
+            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testWorkThreadLimitsTBB --rawtbb"
+        )
+    endif()
 endif()

@@ -13,12 +13,12 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-namespace UsdImaging_PrototypeSceneIndexUtils {
+namespace UsdImaging_PrototypeSceneIndexUtils
+{
 
-void
-SetEmptyPrimType(TfToken * primType);
+bool IsRenderablePrimType(const TfToken &primType);
 
-};
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

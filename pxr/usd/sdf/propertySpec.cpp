@@ -190,18 +190,11 @@ SdfPropertySpec::SetDefaultValue(const VtValue &defaultValue)
         VtValue value =
             VtValue::CastToTypeid(defaultValue, valueType.GetTypeid());
 
-        // If we failed to cast, but the value type is an array type and the
-        // defaultValue is an array edit with the correct element type, allow
-        // the authoring.
-        if (value.IsEmpty()) {
-            SdfValueTypeName typeName = GetTypeName();
-            if (typeName.IsArray() &&
-                defaultValue.IsArrayEditValued() &&
-                defaultValue.GetElementTypeid() ==
-                typeName.GetDefaultValue().GetElementTypeid()) {
-                // This is authoring an array-edit to an array-valued property.
-                value = defaultValue;
-            }
+        // If we failed to cast, but the value type accepts the defaultValue
+        // (e.g. if the defaultValue is an array edit for the corresponding
+        // array type), allow the authoring.
+        if (value.IsEmpty() && GetTypeName().CanRepresent(defaultValue)) {
+            value = defaultValue;
         }
         
         if (!value.IsEmpty()) {

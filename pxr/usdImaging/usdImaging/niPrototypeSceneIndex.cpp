@@ -24,6 +24,7 @@
 #include "pxr/base/gf/matrix4d.h"
 #include "pxr/base/tf/refPtr.h"
 #include "pxr/base/tf/staticTokens.h"
+#include "pxr/base/trace/trace.h"
 #include "pxr/base/vt/array.h"
 
 #include "pxr/pxr.h"
@@ -168,7 +169,9 @@ UsdImaging_NiPrototypeSceneIndex::GetPrim(
     }
 
     if (_IsUsdInstance(prim.dataSource)) {
-        SetEmptyPrimType(&prim.primType);
+        if (IsRenderablePrimType(prim.primType)) {
+            prim.primType = TfToken();
+        }
         return prim;
     }
 
@@ -211,7 +214,38 @@ UsdImaging_NiPrototypeSceneIndex::_PrimsAdded(
     const HdSceneIndexBase&,
     const HdSceneIndexObserver::AddedPrimEntries &entries)
 {
-    _SendPrimsAdded(entries);
+    TRACE_FUNCTION();
+    
+    if (!_IsObserved()) {
+        return;
+    }
+    
+    std::vector<size_t> indicesToErasePrimType;
+
+    {
+        TRACE_SCOPE("Scanning entries");
+        
+        for (size_t i = 0; i < entries.size(); ++i) {
+            const HdSceneIndexObserver::AddedPrimEntry &entry = entries[i];
+            if (IsRenderablePrimType(entry.primType) &&
+                _IsUsdInstance(
+                    _GetInputSceneIndex()
+                        ->GetPrim(entry.primPath)
+                        .dataSource)) {
+                indicesToErasePrimType.push_back(i);
+            }
+        }
+    }
+
+    if (indicesToErasePrimType.empty()) {
+        _SendPrimsAdded(entries);
+    } else {
+        HdSceneIndexObserver::AddedPrimEntries newEntries(entries);
+        for (const size_t index : indicesToErasePrimType) {
+            newEntries[index].primType = TfToken();
+        }
+        _SendPrimsAdded(newEntries);
+    }
 }
 
 void

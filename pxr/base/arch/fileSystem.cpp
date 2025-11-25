@@ -740,6 +740,10 @@ Arch_InitTmpDir()
     } else {
 #if defined(ARCH_OS_DARWIN)
         _TmpDir = "/tmp";
+#elif defined(ARCH_OS_WASM_VM)
+        // Note: WASM will always mount the in memory filesystem to this path.
+        // All data will be lost when the VM is shut down.
+        _TmpDir = "/";
 #else
         _TmpDir = "/var/tmp";
 #endif

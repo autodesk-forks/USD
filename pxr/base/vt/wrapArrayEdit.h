@@ -31,25 +31,7 @@ void VtWrapArrayEdit()
     
     const std::string name = GetVtArrayName<Array>() + "Edit";
 
-    // We use this derived class so that we can register a separate to_python
-    // converter for ArrayEdit that either unboxes a dense array as a Vt.Array,
-    // or goes as a 'Wrapped' instance.
-    struct Wrapped : ArrayEdit {
-        using ArrayEdit::ArrayEdit;
-        // Required since the gen'd copy ctor hides the inherited base one.
-        Wrapped(ArrayEdit const &edit) : ArrayEdit(edit) {}
-        // To-python conversion.
-        static PyObject *convert(ArrayEdit const &edit) {
-            // Unbox if dense array, otherwise return a Wrapped edit.
-            if (edit.IsDenseArray()) {
-                return incref(object(edit.GetDenseArray()).ptr());
-            }
-            return incref(object(Wrapped { edit }).ptr());
-        }
-    };
-    
-    class_<Wrapped>(name.c_str())
-        .def(init<Array const &>())
+    class_<ArrayEdit>(name.c_str())
         .def(init<ArrayEdit const &>())
         .def(self == self)
         .def(self != self)
@@ -57,33 +39,17 @@ void VtWrapArrayEdit()
              +[](ArrayEdit const &self) {
                  return TfHash{}(self);
              })
-        .def("IsIdentity", &Wrapped::IsIdentity)
+        .def("IsIdentity", &ArrayEdit::IsIdentity)
         .def("ComposeOver",
              +[](ArrayEdit const &self, ArrayEdit const &weaker) {
                  return self.ComposeOver(weaker);
              })
+        .def("ComposeOver",
+             +[](ArrayEdit const &self, Array const &weaker) {
+                 return self.ComposeOver(weaker);
+             })
         ;
-    // Register the unboxing converter for ArrayEdit.
-    to_python_converter<ArrayEdit, Wrapped>();
 
-    // VtArray can implicitly convert to Wrapped/VtArrayEdit.
-    implicitly_convertible<Array, Wrapped>();
-    implicitly_convertible<Array, ArrayEdit>();
-
-    // Wrapped lvalue from-python conversion to ArrayEdit.
-    auto lvalueFromPython = [](PyObject *pyObj) -> void * {
-        extract<Wrapped &> e(pyObj);
-        if (e.check()) {
-            // If we can get a Wrapped lvalue from pyObj, we can make an
-            // ArrayEdit lvalue by just casting to the base class type.
-            Wrapped &w = e();
-            return static_cast<void *>(static_cast<ArrayEdit *>(&w));
-        }
-        return nullptr;
-    };
-    converter::registry::insert(lvalueFromPython, type_id<ArrayEdit>());
-    
-    // Builder.
     using Builder = VtArrayEditBuilder<ElementType>;
     class_<Builder>((name + "Builder").c_str())
         .def("Write", &Builder::Write,

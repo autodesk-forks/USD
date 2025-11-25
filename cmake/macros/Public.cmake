@@ -198,17 +198,6 @@ function(pxr_cpp_bin BIN_NAME)
         ${PXR_MALLOC_LIBRARY}
     )
 
-    if (EMSCRIPTEN)
-        _get_all_dependencies(${BIN_NAME} all_dependencies)
-        set(RESOURCES_LIST "")
-        foreach(dep ${all_dependencies})
-            get_property(RESOURCES TARGET ${dep} PROPERTY EMSCRIPTEN_RESOURCES)
-            list(APPEND RESOURCES_LIST "${RESOURCES}")
-        endforeach ()
-
-        target_link_libraries(${BIN_NAME} ${RESOURCES_LIST})
-    endif()
-
     install(
         TARGETS ${BIN_NAME}
         DESTINATION ${installDir}
@@ -487,7 +476,7 @@ endmacro(pxr_static_library)
 
 macro(pxr_plugin NAME)
     if(EMSCRIPTEN)
-        # Not ideal but dynamic linking is not supported yet in the usd build toolchain
+        # Dynamic linking is not supported yet in the usd build toolchain
         message(STATUS "Building ${NAME} plugin as static library for emscripten support")
         pxr_library(${NAME} TYPE "STATIC" ${ARGN})
     else()
@@ -710,7 +699,7 @@ function(pxr_build_test TEST_NAME)
 
     # XXX -- We shouldn't have to install to run tests.
     if(EMSCRIPTEN)
-        target_compile_options(${TEST_NAME} PRIVATE "SHELL: -lembind")
+        target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1")
         install(
             FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm
@@ -718,16 +707,7 @@ function(pxr_build_test TEST_NAME)
         )
         install(CODE " \n
             file(REMOVE ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME}) \n\
-            execute_process(\
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake \
-            COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/cmake/macros/prepend_line.py \
-                ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.js ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME} \
-            ) \n\
-            file(CHMOD ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME} \
-                PERMISSIONS \
-                    OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE \
-                    OWNER_READ GROUP_READ WORLD_READ \
-                    )")
+            file(COPY_FILE ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.js ${CMAKE_INSTALL_PREFIX}/tests/${TEST_NAME})")
     else()
         install(TARGETS ${TEST_NAME}
                 RUNTIME DESTINATION "tests"
@@ -861,6 +841,14 @@ function(pxr_register_test TEST_NAME)
     # This harness is a filter which allows us to manipulate the test run, 
     # e.g. by changing the environment, changing the expected return code, etc.
     set(testWrapperCmd ${PROJECT_SOURCE_DIR}/cmake/macros/testWrapper.py --verbose)
+
+    # For Emscripten we want to explicitly run the test with node.  The tests
+    # themselves are javascript files which contain a shebang, however if we are
+    # trying to run them on windows this will result in errors when trying to
+    # spawn the test process.
+    if (EMSCRIPTEN)
+        set(testWrapperCmd ${testWrapperCmd} --test-runner node)
+    endif()
 
     if (bt_STDOUT_REDIRECT)
         set(testWrapperCmd ${testWrapperCmd} --stdout-redirect=${bt_STDOUT_REDIRECT})

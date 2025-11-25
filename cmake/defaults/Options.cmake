@@ -264,3 +264,18 @@ if (${PXR_BUILD_PYTHON_DOCUMENTATION})
         set(PXR_BUILD_PYTHON_DOCUMENTATION "OFF" CACHE BOOL "" FORCE)
     endif()
 endif()
+
+if (EMSCRIPTEN)
+    if (${PXR_BUILD_EXEC})
+        MESSAGE(STATUS "Setting PXR_BUILD_EXEC=OFF because it is not supported "
+                        "when targeting Wasm")
+        set(PXR_BUILD_EXEC "OFF")
+    endif()
+
+    if (${BUILD_SHARED_LIBS})
+        MESSAGE(STATUS 
+            "Setting BUILD_SHARED_LIBS=OFF because shared libs are not "
+            "supported when targeting wasm")
+        set(BUILD_SHARED_LIBS "OFF")
+    endif()
+endif()

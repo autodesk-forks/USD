@@ -72,7 +72,9 @@ if (EMSCRIPTEN)
     endif()
     target_link_options(${PXR_PACKAGE} PRIVATE "SHELL:${USDVIEWWEB_EXE_LINKER_FLAGS} \
         -s USE_GLFW=3 \
-        -s ALLOW_MEMORY_GROWTH \
+        -s ALLOW_MEMORY_GROWTH=1 \
+        -s STACK_SIZE=5MB \
+        -s DEFAULT_PTHREAD_STACK_SIZE=2MB \
     ")
     target_compile_options(${PXR_PACKAGE} PRIVATE "SHELL:${USDVIEWWEB_EXE_LINKER_FLAGS} -sMODULARIZE=0")
     add_compile_definitions(MODEL_NAME="${MODEL}" MODEL_EXT_NAME="${MODEL_EXT}")

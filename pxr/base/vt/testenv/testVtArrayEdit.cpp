@@ -68,25 +68,15 @@ static void testBasics()
 
     TF_AXIOM(ident.IsIdentity());
 
-    VtIntArrayEdit emptyDense = empty;
-    TF_AXIOM(!emptyDense.IsIdentity());
-    TF_AXIOM(emptyDense.IsDenseArray());
-    CHECK_EQUAL(emptyDense.GetDenseArray(), VtIntArray {});
-
     // Ident over dense array leaves it unchanged.
-    TF_AXIOM(ident.ComposeOver(empty).IsDenseArray());
-    CHECK_EQUAL(ident.ComposeOver(empty).GetDenseArray(), VtIntArray {});
+    CHECK_EQUAL(ident.ComposeOver(empty), VtIntArray {});
 
     VtIntArray one23 { 1, 2, 3 };
-    TF_AXIOM(ident.ComposeOver(one23).IsDenseArray());
-    CHECK_EQUAL(ident.ComposeOver(one23).GetDenseArray(), one23);
+    CHECK_EQUAL(ident.ComposeOver(one23), one23);
 
     // Hash
     TfHash h;
     CHECK_EQUAL(h(ident), h(VtIntArrayEdit {}));
-    CHECK_EQUAL(h(emptyDense), h(VtIntArrayEdit{ VtIntArray{} }));
-    CHECK_EQUAL(h(VtIntArrayEdit{ one23 }),
-                h(VtIntArrayEdit{ VtIntArray { 1, 2, 3 } }));
 }
 
 static void testBuilderAndComposition()
@@ -101,18 +91,14 @@ static void testBuilderAndComposition()
             .FinalizeAndReset();
 
         // Composing over dense arrays.
-        CHECK_EQUAL(zeroNine.ComposeOver(empty).GetDenseArray(),
-                    (VtIntArray {0, 9}));
-        CHECK_EQUAL(zeroNine.ComposeOver(VtIntArray { 5 }).GetDenseArray(),
-                    (VtIntArray{0,5,9}));
+        CHECK_EQUAL(zeroNine.ComposeOver(empty), (VtIntArray {0, 9}));
+        CHECK_EQUAL(zeroNine.ComposeOver(VtIntArray {5}), (VtIntArray{0,5,9}));
 
         // Compose zeroNine itself to make a 00..99 appender.
         VtIntArrayEdit zero09Nine = zeroNine.ComposeOver(zeroNine);
 
-        TF_AXIOM(!zero09Nine.IsDenseArray());
-        CHECK_EQUAL(zero09Nine.ComposeOver(empty).GetDenseArray(),
-                    (VtIntArray {0,0,9,9}));
-        CHECK_EQUAL(zero09Nine.ComposeOver(VtIntArray {3,4,5}).GetDenseArray(),
+        CHECK_EQUAL(zero09Nine.ComposeOver(empty), (VtIntArray {0,0,9,9}));
+        CHECK_EQUAL(zero09Nine.ComposeOver(VtIntArray {3,4,5}),
                     (VtIntArray{0,0,3,4,5,9,9}));
 
         // Build an edit that writes the last element to index 2, the first
@@ -125,100 +111,93 @@ static void testBuilderAndComposition()
             .FinalizeAndReset();
 
         CHECK_EQUAL(
-            mixAndTrim.ComposeOver(VtIntArray{0,0,3,4,5,9,9}).GetDenseArray(),
+            mixAndTrim.ComposeOver(VtIntArray{0,0,3,4,5,9,9}),
             (VtIntArray{0,9,4,0,9}));
 
         // Out-of-bounds operations should be ignored.
         CHECK_EQUAL(
-            mixAndTrim.ComposeOver(VtIntArray{4,5,6,7}).GetDenseArray(),
-            (VtIntArray{5,7}));
+            mixAndTrim.ComposeOver(VtIntArray{4,5,6,7}), (VtIntArray{5,7}));
 
         VtIntArrayEdit zeroNineMixAndTrim = mixAndTrim.ComposeOver(zeroNine);
         CHECK_EQUAL(
             zeroNineMixAndTrim.ComposeOver(
-                VtIntArray{1,2,3,4,5,6,7}).GetDenseArray(),
-            (VtIntArray{1,9,3,0,5,6,7}));
+                VtIntArray{1,2,3,4,5,6,7}), (VtIntArray{1,9,3,0,5,6,7}));
         CHECK_EQUAL(
-            zeroNineMixAndTrim.ComposeOver(VtIntArray{4,5}).GetDenseArray(),
-            (VtIntArray{4,9}));
+            zeroNineMixAndTrim.ComposeOver(VtIntArray{4,5}), (VtIntArray{4,9}));
 
         {
             // rvalue this.
             zeroNineMixAndTrim = mixAndTrim.ComposeOver(zeroNine);
             CHECK_EQUAL(
                 std::move(zeroNineMixAndTrim).ComposeOver(
-                    VtIntArray{1,2,3,4,5,6,7}).GetDenseArray(),
-                (VtIntArray{1,9,3,0,5,6,7}));
+                    VtIntArray{1,2,3,4,5,6,7}), (VtIntArray{1,9,3,0,5,6,7}));
             zeroNineMixAndTrim = mixAndTrim.ComposeOver(zeroNine);
             CHECK_EQUAL(
                 std::move(zeroNineMixAndTrim).ComposeOver(
-                    VtIntArray{4,5}).GetDenseArray(),
-                (VtIntArray{4,9}));
+                    VtIntArray{4,5}), (VtIntArray{4,9}));
 
             zero09Nine = zeroNine.ComposeOver(zeroNine);
-            TF_AXIOM(!zero09Nine.IsDenseArray());
             
-            CHECK_EQUAL(std::move(zero09Nine).ComposeOver(
-                            empty).GetDenseArray(), (VtIntArray {0,0,9,9}));
+            CHECK_EQUAL(std::move(zero09Nine).ComposeOver(empty),
+                        (VtIntArray {0,0,9,9}));
             zero09Nine = zeroNine.ComposeOver(zeroNine);
             CHECK_EQUAL(std::move(zero09Nine).ComposeOver(
-                            VtIntArray {3,4,5}).GetDenseArray(),
-                        (VtIntArray{0,0,3,4,5,9,9}));
+                            VtIntArray {3,4,5}), (VtIntArray{0,0,3,4,5,9,9}));
         }
 
         VtIntArrayEdit minSize10 = builder.MinSize(10).FinalizeAndReset();
         CHECK_EQUAL(
-            minSize10.ComposeOver(VtIntArray {}).GetDenseArray(),
+            minSize10.ComposeOver(VtIntArray {}),
             (VtIntArray{0,0,0,0,0,0,0,0,0,0}));
         CHECK_EQUAL(
-            minSize10.ComposeOver(VtIntArray(15, 7)).GetDenseArray(),
+            minSize10.ComposeOver(VtIntArray(15, 7)),
             (VtIntArray(15, 7)));
 
         VtIntArrayEdit minSize10Fill9 =
             builder.MinSize(10, 9).FinalizeAndReset();
         CHECK_EQUAL(
-            minSize10Fill9.ComposeOver(VtIntArray {}).GetDenseArray(),
+            minSize10Fill9.ComposeOver(VtIntArray {}),
             (VtIntArray{9,9,9,9,9,9,9,9,9,9}));
 
         VtIntArrayEdit maxSize15 = builder.MaxSize(15).FinalizeAndReset();
         CHECK_EQUAL(
-            maxSize15.ComposeOver(VtIntArray {}).GetDenseArray(),
+            maxSize15.ComposeOver(VtIntArray {}),
             (VtIntArray{}));
         CHECK_EQUAL(
-            maxSize15.ComposeOver(VtIntArray(20, 2)).GetDenseArray(),
+            maxSize15.ComposeOver(VtIntArray(20, 2)),
             (VtIntArray(15, 2)));
 
         VtIntArrayEdit size10to15 = maxSize15.ComposeOver(minSize10);
         CHECK_EQUAL(
-            size10to15.ComposeOver(VtIntArray(7, 1)).GetDenseArray(),
+            size10to15.ComposeOver(VtIntArray(7, 1)),
             (VtIntArray{1,1,1,1,1,1,1,0,0,0}));
         CHECK_EQUAL(
-            size10to15.ComposeOver(VtIntArray(20, 2)).GetDenseArray(),
+            size10to15.ComposeOver(VtIntArray(20, 2)),
             (VtIntArray(15, 2)));
         CHECK_EQUAL(
-            size10to15.ComposeOver(VtIntArray(13, 3)).GetDenseArray(),
+            size10to15.ComposeOver(VtIntArray(13, 3)),
             (VtIntArray(13, 3)));
 
         VtIntArrayEdit size7 = builder.SetSize(7).FinalizeAndReset();
         CHECK_EQUAL(
-            size7.ComposeOver(VtIntArray(7, 1)).GetDenseArray(),
+            size7.ComposeOver(VtIntArray(7, 1)),
             (VtIntArray(7, 1)));
         CHECK_EQUAL(
-            size7.ComposeOver(VtIntArray {}).GetDenseArray(),
+            size7.ComposeOver(VtIntArray {}),
             (VtIntArray(7, 0)));
         CHECK_EQUAL(
-            size7.ComposeOver(VtIntArray(27, 9)).GetDenseArray(),
+            size7.ComposeOver(VtIntArray(27, 9)),
             (VtIntArray(7, 9)));
         
         VtIntArrayEdit size7Fill3 = builder.SetSize(7, 3).FinalizeAndReset();
         CHECK_EQUAL(
-            size7Fill3.ComposeOver(VtIntArray(7, 1)).GetDenseArray(),
+            size7Fill3.ComposeOver(VtIntArray(7, 1)),
             (VtIntArray(7, 1)));
         CHECK_EQUAL(
-            size7Fill3.ComposeOver(VtIntArray {}).GetDenseArray(),
+            size7Fill3.ComposeOver(VtIntArray {}),
             (VtIntArray(7, 3)));
         CHECK_EQUAL(
-            size7Fill3.ComposeOver(VtIntArray(27, 9)).GetDenseArray(),
+            size7Fill3.ComposeOver(VtIntArray(27, 9)),
             (VtIntArray(7, 9)));
 
         // Check that the serialization data will reproduce an equivalent edit.
@@ -229,9 +208,8 @@ static void testBuilderAndComposition()
             auto check = [&](VtIntArrayEdit const &test) {
                 VtIntArrayEditBuilder::
                     GetSerializationData(test, &vals, &indexes);
-                VtIntArrayEdit reconstituted =
-                    VtIntArrayEditBuilder::CreateFromSerializationData(
-                        vals, indexes, test.IsDenseArray());
+                VtIntArrayEdit reconstituted = VtIntArrayEditBuilder::
+                    CreateFromSerializationData(vals, indexes);
                 TF_AXIOM(test == reconstituted);
             };
 
@@ -242,7 +220,6 @@ static void testBuilderAndComposition()
             check(zeroNineMixAndTrim);
 
             check({}); // identity.
-            check(VtIntArray {}); // empty dense array.
         }
     }
 }

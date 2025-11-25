@@ -381,12 +381,9 @@ HdMergingSceneIndex::GetPrim(const SdfPath &primPath) const
         return _inputs[0].sceneIndex->GetPrim(primPath);
     }
 
-    bool hasSceneRootPrefix = false;
-
     TfSmallVector<HdContainerDataSourceHandle, 8> contributingDataSources;
     for (const _InputEntry &entry: _GetInputEntriesByPath(primPath)) {
         if (primPath.HasPrefix(entry.sceneRoot)) {
-            hasSceneRootPrefix = true;
 
             const HdSceneIndexPrim prim = entry.sceneIndex->GetPrim(primPath);
 
@@ -403,19 +400,19 @@ HdMergingSceneIndex::GetPrim(const SdfPath &primPath) const
         }
     }
 
-    if (!hasSceneRootPrefix) {
-        if (_inputsPathTable.find(primPath) == _inputsPathTable.end()) {
-            return { TfToken(), nullptr };
-        } else {
-            static HdContainerDataSourceHandle const empty =
-                HdRetainedContainerDataSource::New();
-            return { TfToken(), empty };
-        }
-    }
-
     switch (contributingDataSources.size())
     {
     case 0:
+        // If path is ancestor of any scene root (including the sceen root
+        // itself), ensure the prim exists.
+        //
+        // Note that this does not rely on a input scene actually having
+        // an (existing) prim at its scene root.
+        if (_inputsPathTable.find(primPath) != _inputsPathTable.end()) {
+            static HdContainerDataSourceHandle const empty =
+                HdRetainedContainerDataSource::New();
+            result.dataSource = empty;
+        }
         break;
     case 1:
         result.dataSource = contributingDataSources[0];

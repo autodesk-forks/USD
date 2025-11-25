@@ -993,7 +993,8 @@ ARCH_PRAGMA_POP
         mutable const_pointer _p;
     };
 
-    /// Outputs a comma-separated list of the values in the array.
+    /// Outputs a comma-separated list of the values in the array surrounded by
+    /// square brackets [].  Each element is streamed by VtStreamOut().
     friend std::ostream &operator <<(std::ostream &out, const VtArray &self) {
         VtArray::_Streamer streamer(self.cdata());
         VtStreamOutArray(out, self._GetShapeData(), streamer);

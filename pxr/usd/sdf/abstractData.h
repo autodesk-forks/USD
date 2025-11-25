@@ -558,12 +558,18 @@ public:
 
     const void* value;
     const std::type_info& valueType;
+    const bool isArrayEdit;
+    const std::type_info& elementValueType; // void unless isArrayEdit
 
 protected:
     SdfAbstractDataConstValue(const void* value_, 
-                              const std::type_info& valueType_)
+                              const std::type_info& valueType_,
+                              const bool isArrayEdit_,
+                              const std::type_info& elementValueType_)
         : value(value_)
         , valueType(valueType_)
+        , isArrayEdit(isArrayEdit_)
+        , elementValueType(elementValueType_)
     { 
     }
 };
@@ -585,9 +591,19 @@ template <class T>
 class SdfAbstractDataConstTypedValue : public SdfAbstractDataConstValue
 {
 public:
+    static std::type_info const &_GetElementType() {
+        if constexpr (VtIsArrayEdit<T>::value) {
+            return typeid(typename T::ElementType);
+        }
+        else {
+            return typeid(void);
+        }
+    }
+
     SdfAbstractDataConstTypedValue(const T* value)
-        : SdfAbstractDataConstValue(value, typeid(T))
-    { }
+        : SdfAbstractDataConstValue(
+            value, typeid(T), VtIsArrayEdit<T>::value, this->_GetElementType())
+        {}
     
     virtual bool GetValue(VtValue* v) const
     {

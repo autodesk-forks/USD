@@ -133,11 +133,6 @@ pxr_library(ts
 )
 
 if (${PXR_BUILD_TESTS})
-    if (EMSCRIPTEN)
-        target_compile_definitions(ts INTERFACE TS_BUILD_TEST_FRAMEWORK)
-    else()
-        target_compile_definitions(ts PRIVATE TS_BUILD_TEST_FRAMEWORK)
-    endif()
     if (TARGET _ts)
         target_compile_definitions(_ts PRIVATE TS_BUILD_TEST_FRAMEWORK)
     endif()
@@ -232,6 +227,17 @@ pxr_install_test_dir(
     DEST testTsSplineSampling
 )
 
+# This test is disabled for emscripten due to requiring resources from
+# the virtual filesystem which is not currently implemented for emscripten
+# tests
+if (NOT EMSCRIPTEN)
+    pxr_register_test(
+        testTsSplineSampling
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineSampling"
+        DIFF_COMPARE testTsSplineSampling.txt
+    )
+endif()
+
 pxr_register_test(
     testTsDerivatives
     PYTHON
@@ -287,12 +293,6 @@ pxr_register_test(
 pxr_register_test(
     testTsSplineEval
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineEval"
-)
-
-pxr_register_test(
-    testTsSplineSampling
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testTsSplineSampling"
-    DIFF_COMPARE testTsSplineSampling.txt
 )
 
 pxr_register_test(
