@@ -128,6 +128,16 @@ else()
         set(PXR_FIND_TBB_IN_CONFIG OFF)
     endif()
 endif()
+# Backward compabatibility with FindTBB.cmake
+if(PXR_FIND_TBB_IN_CONFIG)
+    set(TBB_tbb_LIBRARY TBB::tbb)
+    if(TARGET TBB::tbbmalloc)
+        set(TBB_tbbmalloc_LIBRARY TBB::tbbmalloc)
+    endif()
+    if(TARGET TBB::tbbmalloc_proxy)
+        set(TBB_tbbmalloc_proxy_LIBRARY TBB::tbbmalloc_proxy)
+    endif()
+endif()
 
 # --math
 if(WIN32)
