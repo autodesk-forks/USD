@@ -13,6 +13,7 @@ pxr_library(usdValidation
     PUBLIC_CLASSES
         context 
         error
+        fixer
         registry
         timeRange
         validator
@@ -28,6 +29,7 @@ pxr_library(usdValidation
         module.cpp
         wrapContext.cpp
         wrapError.cpp
+        wrapFixer.cpp
         wrapRegistry.cpp
         wrapTimeRange.cpp
         wrapValidator.cpp

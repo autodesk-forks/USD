@@ -10,6 +10,7 @@
 #include "pxr/usdValidation/usdValidation/registry.h"
 #include "pxr/usdValidation/usdValidation/timeRange.h"
 #include "pxr/usdValidation/usdValidation/validator.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 
 #include "pxr/usd/usd/attribute.h"
 
@@ -26,19 +27,70 @@ TF_REGISTRY_FUNCTION(UsdValidationRegistry)
     {
         const TfToken validatorName(
             "testUsdValidationContextValidatorsPlugin:Test1");
+        const TfToken validationErrorId("Test1Error");
         const UsdValidateStageTaskFn stageTaskFn
-            = [](const UsdStagePtr &usdStage, 
+            = [validationErrorId](const UsdStagePtr &usdStage, 
                  const UsdValidationTimeRange &/*timeRange*/) {
-                  const TfToken validationErrorId("Test1Error");
                   return UsdValidationErrorVector { UsdValidationError(
                       validationErrorId, UsdValidationErrorType::Error,
                       { UsdValidationErrorSite(usdStage,
                                                SdfPath::AbsoluteRootPath()) },
-                      "A stage validator error") };
+                      "A stage validator error",
+                      VtValue("ErrorMetadata")) };
               };
 
         TfErrorMark m;
-        registry.RegisterPluginValidator(validatorName, stageTaskFn);
+        std::vector<UsdValidationFixer> fixers;
+        fixers.emplace_back(
+            TfToken("TestFixer1"), 
+            "A test fixer which caters to all errors",
+            [](const UsdValidationError &/*error*/,
+               const UsdEditTarget &/*editTarget*/,
+               const UsdTimeCode &/*timeCode*/) {
+                return true;
+            } /*fixerImplFn*/,
+            [](const UsdValidationError &error,
+               const UsdEditTarget &/*editTarget*/,
+               const UsdTimeCode &/*timeCode*/) {
+                TF_AXIOM(error.GetMetadata() == VtValue("ErrorMetadata"));
+                return true;
+            } /*fixerCanApplyFixFn*/,
+            TfTokenVector{},
+            TfToken());
+        fixers.emplace_back(
+            TfToken("TestFixer2"), 
+            "A test fixer which caters to error named Test1Error",
+            [](const UsdValidationError &/*error*/,
+               const UsdEditTarget &/*editTarget*/,
+               const UsdTimeCode &/*timeCode*/) {
+                return true;
+            } /*fixerImplFn*/,
+            [](const UsdValidationError &error,
+               const UsdEditTarget &/*editTarget*/,
+               const UsdTimeCode &/*timeCode*/) {
+                TF_AXIOM(error.GetMetadata() == VtValue("ErrorMetadata"));
+                return true;
+            } /*fixerCanApplyFixFn*/,
+            TfTokenVector{},
+            validationErrorId);
+        fixers.emplace_back(
+            TfToken("TestFixer3"), 
+            "A test fixer which caters to error named SomeOtherError",
+            [](const UsdValidationError &/*error*/,
+               const UsdEditTarget &/*editTarget*/,
+               const UsdTimeCode &/*timeCode*/) {
+                return true;
+            } /*fixerImplFn*/,
+            [](const UsdValidationError &error,
+               const UsdEditTarget &/*editTarget*/,
+               const UsdTimeCode &/*timeCode*/) {
+                TF_AXIOM(error.GetMetadata() == VtValue("ErrorMetadata"));
+                return true;
+            } /*fixerCanApplyFixFn*/,
+            TfTokenVector{},
+            TfToken("SomeOtherError"));
+
+        registry.RegisterPluginValidator(validatorName, stageTaskFn, fixers);
         TF_AXIOM(m.IsClean());
     }
     {

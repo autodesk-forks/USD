@@ -10,6 +10,12 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_ENV_SETTING(
+    USDUI_WRITE_LEGACY_UI_HINTS, true,
+    "Also write deprecated core metadata fields displayName, displayGroup, "
+    "and hidden when writing them to their new locations in the uiHints "
+    "dictionary.");
+
 TF_DEFINE_PUBLIC_TOKENS(UsdUIHintKeys, USDUI_HINT_KEYS);
 
 UsdUIObjectHints::UsdUIObjectHints() = default;
@@ -46,10 +52,20 @@ UsdUIObjectHints::SetDisplayName(const std::string& name)
         return false;
     }
 
-    return _obj.SetMetadataByDictKey(
-        UsdUIHintKeys->UIHints,
-        UsdUIHintKeys->DisplayName,
-        name);
+    if (!_obj.SetMetadataByDictKey(
+            UsdUIHintKeys->UIHints,
+            UsdUIHintKeys->DisplayName,
+            name)) {
+        return false;
+    }
+
+    if (TfGetEnvSetting(USDUI_WRITE_LEGACY_UI_HINTS)) {
+        // Use generic API to avoid deprecation warning in
+        // UsdObject::SetDisplayName()
+        _obj.SetMetadata(SdfFieldKeys->DisplayName, name);
+    }
+
+    return true;
 }
 
 bool
@@ -79,10 +95,20 @@ UsdUIObjectHints::SetHidden(bool hidden)
         return false;
     }
 
-    return _obj.SetMetadataByDictKey(
-        UsdUIHintKeys->UIHints,
-        UsdUIHintKeys->Hidden,
-        hidden);
+    if (!_obj.SetMetadataByDictKey(
+            UsdUIHintKeys->UIHints,
+            UsdUIHintKeys->Hidden,
+            hidden)) {
+        return false;
+    }
+
+    if (TfGetEnvSetting(USDUI_WRITE_LEGACY_UI_HINTS)) {
+        // Use generic API to avoid deprecation warning in
+        // UsdObject::SetHidden()
+        _obj.SetMetadata(SdfFieldKeys->Hidden, hidden);
+    }
+
+    return true;
 }
 
 /* static */

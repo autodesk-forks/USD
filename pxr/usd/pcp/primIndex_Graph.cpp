@@ -831,16 +831,12 @@ PcpPrimIndex_Graph::_ComputeEraseCulledNodeIndexMapping(
     // XXX: This has some O(N^2) behavior, as we wind up visiting the nodes
     //      in the chain of origins multiple times. We could keep track of
     //      nodes we've already visited to avoid re-processing them.
-    for (size_t i = 0; i < numNodes; ++i) {
-        if (ORIGIN(_GetNode(i)) == _Node::_invalidNodeIndex) {
-            continue;
-        }
-
+    auto processOriginChain = [&](size_t nIdx, auto&& processOriginChain) -> void {
         // Follow origin chain until we find the first non-culled node.
         // All subsequent nodes in the chain cannot be erased. This also
         // means that the parents of those nodes cannot be erased.
         bool subsequentOriginsCannotBeCulled = false;
-        for (size_t nIdx = i; ; nIdx = ORIGIN(_GetNode(nIdx))) {
+        for (;; nIdx = ORIGIN(_GetNode(nIdx))) {
             const bool nodeIsCulled = nodeCanBeErased[nIdx];
             if (!nodeIsCulled) {
                 subsequentOriginsCannotBeCulled = true;
@@ -851,6 +847,15 @@ PcpPrimIndex_Graph::_ComputeEraseCulledNodeIndexMapping(
                          nodeCanBeErased[pIdx];
                      pIdx = PARENT(_GetNode(pIdx))) {
                     nodeCanBeErased[pIdx] = false;
+
+                    // Since the node at pIdx is no longer being erased,
+                    // we need to ensure that all of its origins are also
+                    // not erased. See testPcpPrimIndex test case
+                    // test_PrimIndexCulling_SpecializesAncestralCulling2 for
+                    // an example where this matters.
+                    if (pIdx != nIdx) {
+                        processOriginChain(pIdx, processOriginChain);
+                    }
                 }
             }
 
@@ -858,6 +863,14 @@ PcpPrimIndex_Graph::_ComputeEraseCulledNodeIndexMapping(
                 break;
             }
         }
+
+    };
+
+    for (size_t i = 0; i < numNodes; ++i) {
+        if (ORIGIN(_GetNode(i)) == _Node::_invalidNodeIndex) {
+            continue;
+        }
+        processOriginChain(i, processOriginChain);
     }
 
     // Now that we've determined which nodes can and can't be erased,

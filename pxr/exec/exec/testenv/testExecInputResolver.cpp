@@ -36,8 +36,6 @@
 
 PXR_NAMESPACE_USING_DIRECTIVE;
 
-class VdfContext;
-
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 

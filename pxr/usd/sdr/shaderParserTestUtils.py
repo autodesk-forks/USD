@@ -51,6 +51,7 @@ def TestBasicProperties(node):
         "widget": "number",
         "label": "inputA label",
         "page": "inputs1",
+        "open" : "1",
         "help": "inputA help message",
         "uncategorized": "1"
     }
@@ -59,6 +60,7 @@ def TestBasicProperties(node):
         metadata["name"] = "inputA"
         metadata["default"] = "0.0"
         metadata["type"] = "float"
+        del metadata["open"]
     # --------------------------------------------------------------------------
 
 
@@ -69,6 +71,7 @@ def TestBasicProperties(node):
         "inputD": node.GetShaderInput("inputD"),
         "inputF2": node.GetShaderInput("inputF2"),
         "inputStrArray": node.GetShaderInput("inputStrArray"),
+        "inputArrayWithTuples": node.GetShaderInput("inputArrayWithTuples"),
         "resultF": node.GetShaderOutput("resultF"),
         "resultI": node.GetShaderOutput("resultI"),
     }
@@ -80,6 +83,7 @@ def TestBasicProperties(node):
     assert not properties["inputA"].IsArray()
     assert not properties["inputA"].IsDynamicArray()
     assert properties["inputA"].GetArraySize() == 0
+    assert properties["inputA"].GetTupleSize() == 0
     assert properties["inputA"].GetInfoString() == "inputA (type: 'float'); input"
     assert properties["inputA"].IsConnectable()
     assert properties["inputA"].CanConnectTo(properties["resultF"])
@@ -89,21 +93,28 @@ def TestBasicProperties(node):
     # --------------------------------------------------------------------------
     # Check some array variations
     # --------------------------------------------------------------------------
+
     assert properties["inputD"].IsDynamicArray()
     assert properties["inputD"].GetArraySize() == 1 if isOSL else -1
+    assert properties["inputD"].GetTupleSize() == 0
     assert properties["inputD"].IsArray()
     assert list(properties["inputD"].GetDefaultValue()) == [1]
 
     assert not properties["inputF2"].IsDynamicArray()
     assert properties["inputF2"].GetArraySize() == 2
+    assert properties["inputD"].GetTupleSize() == 0
     assert properties["inputF2"].IsArray()
     assert not properties["inputF2"].IsConnectable()
     assert list(properties["inputF2"].GetDefaultValue()) == [1.0, 2.0]
 
     assert properties["inputStrArray"].GetArraySize() == 4
+    assert properties["inputStrArray"].GetTupleSize() == 0
     assert list(properties["inputStrArray"].GetDefaultValue()) == \
         ["test", "string", "array", "values"]
 
+    assert properties["inputArrayWithTuples"].GetArraySize() == 8
+    assert properties["inputArrayWithTuples"].GetTupleSize() == 2
+    assert properties["inputArrayWithTuples"].IsArray()
 
 def TestShadingProperties(node):
     """
@@ -140,13 +151,14 @@ def TestShadingProperties(node):
         "outputVector": node.GetShaderOutput("outputVector"),
     }
 
+    hints = { "uncategorized": "1", "open": "1" } if isOSL else \
+            { "uncategorized": "1", }
+
     assert properties["inputA"].GetLabel() == "inputA label"
     assert properties["inputA"].GetHelp() == "inputA help message"
     assert properties["inputA"].GetPage() == "inputs1"
     assert properties["inputA"].GetWidget() == "number"
-    assert properties["inputA"].GetHints() == {
-        "uncategorized": "1"
-    }
+    assert properties["inputA"].GetHints() == hints
     assert properties["inputA"].GetOptions() == []
     assert properties["inputA"].GetVStructMemberOf() == ""
     assert properties["inputA"].GetVStructMemberName() == ""
@@ -292,7 +304,7 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
     assert node.GetResolvedDefinitionURI() == nodeDefinitionURI
     assert node.GetResolvedImplementationURI() == nodeImplementationURI
     assert node.IsValid()
-    assert len(nodeInputs) == 17
+    assert len(nodeInputs) == 18
     assert len(nodeOutputs) == numOutputs
     assert nodeInputs["inputA"] is not None
     assert nodeInputs["inputB"] is not None
@@ -306,6 +318,7 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
     assert nodeInputs["inputOptions"] is not None
     assert nodeInputs["inputPoint"] is not None
     assert nodeInputs["inputNormal"] is not None
+    assert nodeInputs["inputArrayWithTuples"] is not None
     assert nodeOutputs["resultF2"] is not None
     assert nodeOutputs["resultI"] is not None
     assert nodeOutputs["outputPoint"] is not None
@@ -317,7 +330,7 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
         "inputA", "inputB", "inputC", "inputD", "inputF2", "inputF3", "inputF4",
         "inputF5", "inputInterp", "inputOptions", "inputPoint", "inputNormal",
         "inputStruct", "inputAssetIdentifier", "primvarNamingProperty",
-        "invalidPrimvarNamingProperty", "inputStrArray"
+        "invalidPrimvarNamingProperty", "inputStrArray", "inputArrayWithTuples"
     }
     assert set(node.GetShaderOutputNames()) == outputNames
 
@@ -349,8 +362,9 @@ def TestShaderSpecificNode(node):
     pages = {"", "inputs1", "inputs2", "results"} if isOSL else \
             {"", "inputs1", "inputs2", "results", "VStructs:Nested",
                 "VStructs:Nested:More"}
+    openPages = {"inputs1", "results"} if isOSL else \
+                {"inputs1", "VStructs", "VStructs:Nested"}
     # --------------------------------------------------------------------------
-
 
     shaderInputs = {propertyName: node.GetShaderInput(propertyName)
                     for propertyName in node.GetShaderInputNames()}
@@ -358,7 +372,7 @@ def TestShaderSpecificNode(node):
     shaderOutputs = {propertyName: node.GetShaderOutput(propertyName)
                      for propertyName in node.GetShaderOutputNames()}
 
-    assert len(shaderInputs) == 17
+    assert len(shaderInputs) == 18
     assert len(shaderOutputs) == numOutputs
     assert shaderInputs["inputA"] is not None
     assert shaderInputs["inputB"] is not None
@@ -372,6 +386,7 @@ def TestShaderSpecificNode(node):
     assert shaderInputs["inputOptions"] is not None
     assert shaderInputs["inputPoint"] is not None
     assert shaderInputs["inputNormal"] is not None
+    assert shaderInputs["inputArrayWithTuples"] is not None
     assert shaderOutputs["resultF"] is not None
     assert shaderOutputs["resultF2"] is not None
     assert shaderOutputs["resultF3"] is not None
@@ -385,6 +400,7 @@ def TestShaderSpecificNode(node):
     assert node.GetHelp() == "This is the test node"
     assert node.GetDepartments() == ["testDept"]
     assert set(node.GetPages()) == pages
+    assert set(node.GetOpenPages()) == openPages
     assert set(node.GetPrimvars()) == {"primvar1", "primvar2", "primvar3"}
     assert set(node.GetAdditionalPrimvarProperties()) == {"primvarNamingProperty"}
     assert set(node.GetPropertyNamesForPage("results")) == {
@@ -398,7 +414,7 @@ def TestShaderSpecificNode(node):
         "inputB", "inputC", "inputD", "inputF2", "inputF3", "inputF4", "inputF5",
         "inputInterp", "inputOptions", "inputPoint", "inputNormal",
         "inputStruct", "inputAssetIdentifier", "primvarNamingProperty",
-        "invalidPrimvarNamingProperty", "inputStrArray"
+        "invalidPrimvarNamingProperty", "inputStrArray", "inputArrayWithTuples"
     }
     assert node.GetAllVstructNames() == vstructNames
 

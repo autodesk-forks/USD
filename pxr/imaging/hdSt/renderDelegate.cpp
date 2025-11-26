@@ -143,7 +143,7 @@ public:
         registry = result;
 
         // Also register with HdPerfLog.
-        HdPerfLog::GetInstance().AddResourceRegistry(result.get());
+        HD_PERF_ADD_RESOURCE_REGISTRY(result.get());
 
         return result;
     }
@@ -155,8 +155,8 @@ private:
 
         std::lock_guard<std::mutex> guard(_mutex);
 
-        HdPerfLog::GetInstance().RemoveResourceRegistry(registry);
-        
+        HD_PERF_REMOVE_RESOURCE_REGISTRY(registry);
+
         _map.erase(registry->GetHgi());
     }
 

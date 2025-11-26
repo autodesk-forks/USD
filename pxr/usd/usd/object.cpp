@@ -8,6 +8,7 @@
 #include "pxr/usd/usd/object.h"
 #include "pxr/usd/usd/prim.h"
 #include "pxr/usd/usd/stage.h"
+#include "pxr/usd/sdf/propertySpec.h"
 
 #include "pxr/base/tf/ostreamMethods.h"
 
@@ -276,12 +277,20 @@ UsdObject::IsHidden() const
 bool
 UsdObject::SetHidden(bool hidden) const
 {
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'hidden'");
+    }
+
     return SetMetadata(SdfFieldKeys->Hidden, hidden);
 }
 
 bool
 UsdObject::ClearHidden() const
 {
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'hidden'");
+    }
+
     return ClearMetadata(SdfFieldKeys->Hidden);
 }
 
@@ -337,12 +346,20 @@ UsdObject::GetDisplayName() const
 bool
 UsdObject::SetDisplayName(const std::string& newDisplayName) const
 {
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayName'");
+    }
+
     return SetMetadata(SdfFieldKeys->DisplayName, newDisplayName);
 }
 
 bool
 UsdObject::ClearDisplayName() const
 {
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayName'");
+    }
+
     return ClearMetadata(SdfFieldKeys->DisplayName);
 }
 

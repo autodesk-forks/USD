@@ -9,6 +9,7 @@
 #include "pxr/usd/usd/resolver.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/pcp/targetIndex.h"
+#include "pxr/usd/sdf/propertySpec.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -70,12 +71,20 @@ UsdProperty::GetDisplayGroup() const
 bool
 UsdProperty::SetDisplayGroup(const std::string& displayGroup) const
 {
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayGroup'");
+    }
+
     return SetMetadata(SdfFieldKeys->DisplayGroup, displayGroup);
 }
 
 bool
 UsdProperty::ClearDisplayGroup() const
 {
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayGroup'");
+    }
+
     return ClearMetadata(SdfFieldKeys->DisplayGroup);
 }
 

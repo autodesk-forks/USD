@@ -110,12 +110,23 @@ if(WIN32)
 endif()
 
 # --TBB
-find_package(TBB CONFIG COMPONENTS tbb)
-if(TBB_FOUND) 
-    set(PXR_FIND_TBB_IN_CONFIG ON)
+if (DEFINED PXR_FIND_TBB_IN_CONFIG)
+    if (PXR_FIND_TBB_IN_CONFIG)
+        find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+    else()
+        find_package(TBB REQUIRED COMPONENTS tbb)
+    endif()
 else()
-    find_package(TBB REQUIRED COMPONENTS tbb)
-    set(PXR_FIND_TBB_IN_CONFIG OFF)
+    # Set PXR_FIND_TBB_IN_CONFIG appropriately so that downstream
+    # pxrConfig knows how TBB was found and appropriately encodes the 
+    # dependency.
+    find_package(TBB CONFIG COMPONENTS tbb)
+    if (TBB_FOUND)
+        set(PXR_FIND_TBB_IN_CONFIG ON)
+    else()
+        find_package(TBB REQUIRED COMPONENTS tbb)
+        set(PXR_FIND_TBB_IN_CONFIG OFF)
+    endif()
 endif()
 
 # --math

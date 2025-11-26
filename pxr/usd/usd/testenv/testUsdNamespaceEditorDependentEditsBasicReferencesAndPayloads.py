@@ -112,7 +112,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         stage1 = Usd.Stage.Open(layer1, Usd.Stage.LoadAll)
         stage2 = Usd.Stage.Open(layer2, Usd.Stage.LoadAll)
 
-        # Create an editor for stage 1 with stage 2 as an addtional dependent
+        # Create an editor for stage 1 with stage 2 as an additional dependent
         # stage.
         editor = Usd.NamespaceEditor(stage1)
         editor.AddDependentStage(stage2)
@@ -1279,7 +1279,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
             "/Ref/RenamedChild" : self.PrimResyncType.RenameDestination
         })
 
-        # Verify the udpated contents of stage 2.
+        # Verify the updated contents of stage 2.
         #
         # There are prims in stage 3 that reference /Prim1/Child on layer2 so
         # which ancestrally references /Ref/Child. So the specs for /Prim1/Child
@@ -1761,6 +1761,75 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
             "/Prim5" : self.PrimResyncType.Other,
             "/Prim5_A" : self.PrimResyncType.Other,
             "/Prim6" : self.PrimResyncType.Other
+        })
+
+    def test_SiblingReferences(self):
+        '''Test that a prim that references a sibling has its reference path 
+        correctly updated when the parent path is changed.'''
+
+        layer1 = Sdf.Layer.CreateAnonymous("layer1.usda")
+        layer1ImportString = '''#usda 1.0
+            def "Model"
+            {
+                def "Ref"
+                {
+                    int modelRefAttr
+                }
+
+                def "SiblingRef" (
+                    references = </Model/Ref>
+                ) {
+                    int siblingRefAttr
+                }
+            }
+
+        '''
+        layer1.ImportFromString(layer1ImportString)
+
+        stage1 = Usd.Stage.Open(layer1, Usd.Stage.LoadAll)
+        editor = Usd.NamespaceEditor(stage1)
+
+        # Verify the initial composition fields.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer1), {
+            '/Model/SiblingRef' : {
+                'references' : (Sdf.Reference(primPath='/Model/Ref'),)
+            },
+        })
+
+        modelContents = {
+            'Ref': {
+                '.' : ['modelRefAttr']
+            },
+            'SiblingRef': {
+                '.': ['siblingRefAttr', 'modelRefAttr']
+            }
+        }
+
+        # Verify the expected contents of stage 1
+        self._VerifyStageContents(stage1, {
+            'Model': modelContents, 
+        })
+
+        # Edit: Rename /Model to /RenamedModel
+        # This is to check that references targeting sibling prims have their 
+        # paths correctly updated when a parent is renamed.
+        with self.ApplyEdits(editor, "Move /Model-> /RenamedModel"):
+            self.assertTrue(editor.MovePrimAtPath(
+                '/Model', '/RenamedModel'))
+            
+        # Verify the updated composition fields in layer1.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer1), {
+            '/RenamedModel/SiblingRef' : {
+                'references' : (Sdf.Reference(primPath='/RenamedModel/Ref'),)
+            },
+        })
+
+        self._VerifyStageContents(stage1, {
+            'RenamedModel' : modelContents
+        })
+        self._VerifyStageResyncNotices(stage1, {
+            "/Model" : self.PrimResyncType.RenameSource,
+            "/RenamedModel" : self.PrimResyncType.RenameDestination,
         })
 
     def test_LayerDefaultPrim(self):

@@ -21,8 +21,12 @@ HdTask::HdTask(SdfPath const& id)
 {
 }
 
-HdTask::~HdTask()
+HdTask::~HdTask() = default;
+
+bool
+HdTask::IsConverged() const
 {
+    return true;
 }
 
 const TfTokenVector &

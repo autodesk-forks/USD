@@ -88,6 +88,7 @@ void wrapShaderNode()
         .def("GetHelp", &This::GetHelp)
         .def("GetDepartments", &This::GetDepartments, copyRefPolicy)
         .def("GetPages", &This::GetPages, copyRefPolicy)
+        .def("GetOpenPages", &This::GetOpenPages, copyRefPolicy)
         .def("GetPrimvars", &This::GetPrimvars, copyRefPolicy)
         .def("GetAdditionalPrimvarProperties",
             &This::GetAdditionalPrimvarProperties, copyRefPolicy)

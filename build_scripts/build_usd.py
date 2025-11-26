@@ -32,7 +32,7 @@ import sys
 import sysconfig
 import zipfile
 
-from urllib.request import urlopen  
+from urllib.request import urlopen
 from shutil import which
 
 # Helpers for printing output
@@ -93,7 +93,6 @@ TARGET_WASM64='wasm64'
 TARGET_WASM_NODE='node'
 
 def GetBuildTargets():
-    # The wasm build has been tested only in MacOS so far
     if MacOS():
         return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     elif Linux():
@@ -422,7 +421,6 @@ def RunCMake(context, force, extraArgs = None, installDir = None, buildDirName=N
     if generator is not None:
         generator = '-G "{gen}"'.format(gen=generator)
 
-    # EMSCRIPTEN doesn't use VS On Windows
     # Note - don't want to add -A (architecture flag) if generator is, ie, Ninja
     if not context.targetWasm and IsVisualStudio2019OrGreater() and "Visual Studio" in generator:
         generator = generator + " -A " + GetWindowsHostArch()
@@ -492,9 +490,7 @@ def RunCMake(context, force, extraArgs = None, installDir = None, buildDirName=N
         # underlying native build tool.
         Run(('{} '.format('emmake.bat' if Windows() else 'emmake') if context.targetWasm else '') +
             "cmake --build . --config {config} --target {target} -j {numJobs}"
-            .format(config=config,
-                    target=target,
-                    numJobs=context.numJobs))
+            .format(config=config, target=target, numJobs=context.numJobs))
         return buildDir
 
 
@@ -890,7 +886,6 @@ def InstallBoost_Helper(context, force, buildArgs):
 
         Run(bootstrapCmd)
 
-
         # b2 supports at most -j64 and will error if given a higher value.
         num_procs = min(64, context.numJobs)
 
@@ -999,7 +994,6 @@ def InstallBoost(context, force, buildArgs):
     # dependency to build the next time it's run.
     try:
         InstallBoost_Helper(context, force, buildArgs)
-
     except:
         for versionHeader in [
             os.path.join(context.instDir, f) for f in BOOST_VERSION_FILES
@@ -1038,7 +1032,6 @@ elif MacOS():
 else:
     # Use point release with fix https://github.com/oneapi-src/oneTBB/pull/833
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2020.3.1.zip"
-
 
 def InstallTBB(context, force, buildArgs):
     if context.targetWasm:
@@ -1378,22 +1371,6 @@ def InstallOpenVDB(context, force, buildArgs):
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
 
-        # Patch files to support debug build
-        PatchFile('cmake/FindIlmBase.cmake',
-                  [('set(_IlmBase_Version_Suffix "-${IlmBase_VERSION_MAJOR}_${IlmBase_VERSION_MINOR}")',
-                    'if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")\n' +
-                    '  set(_IlmBase_Version_Suffix "-${IlmBase_VERSION_MAJOR}_${IlmBase_VERSION_MINOR}")\n' +
-                    'else()\n' +
-                    '  set(_IlmBase_Version_Suffix "-${IlmBase_VERSION_MAJOR}_${IlmBase_VERSION_MINOR}_d")\n' +
-                    'endif()')])
-        PatchFile('cmake/FindOpenEXR.cmake',
-                  [('set(_OpenEXR_Version_Suffix "-${OpenEXR_VERSION_MAJOR}_${OpenEXR_VERSION_MINOR}")',
-                    'if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")\n' +
-                    '  set(_OpenEXR_Version_Suffix "-${OpenEXR_VERSION_MAJOR}_${OpenEXR_VERSION_MINOR}")\n' +
-                    'else()\n' +
-                    '  set(_OpenEXR_Version_Suffix "-${OpenEXR_VERSION_MAJOR}_${OpenEXR_VERSION_MINOR}_d")\n' +
-                    'endif()')])
-
         RunCMake(context, force, extraArgs)
 
 OPENVDB = Dependency("OpenVDB", InstallOpenVDB, "include/openvdb/openvdb.h")
@@ -1402,7 +1379,6 @@ OPENVDB = Dependency("OpenVDB", InstallOpenVDB, "include/openvdb/openvdb.h")
 # OpenImageIO
 
 OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.5.16.0.zip"
-
 
 def InstallOpenImageIO(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OIIO_URL, context, force)):
@@ -1773,7 +1749,7 @@ DAWN = Dependency("Dawn", InstallDawn, "include/dawn/webgpu_cpp.h")
 
 def InstallDawnHeaders(context, force, buildArgs):
     PrepareDawn(context, force)
-    
+
     with CurrentWorkingDirectory(context.srcDir):
         srcDir = os.path.join(os.getcwd(), "dawn")
         with CurrentWorkingDirectory(srcDir):
@@ -1800,7 +1776,6 @@ def InstallDawnHeaders(context, force, buildArgs):
                 '--wasm64' if context.targetWasm64 else '',
                 os.path.normpath(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py")).replace(os.sep, '/')
             ))
-            
 
 DAWN_HEADERS = Dependency("DawnHeaders", InstallDawnHeaders, "ports/emdawnwebgpu_pkg/README.md")
 
@@ -1971,6 +1946,11 @@ def InstallUSD(context, force, buildArgs):
 
         extraArgs.append('-DPXR_PREFER_SAFETY_OVER_SPEED={}'
                          .format('ON' if context.safetyFirst else 'OFF'))
+
+        if context.buildOneTBB:
+            extraArgs.append('-DPXR_FIND_TBB_IN_CONFIG=ON')
+        else:
+            extraArgs.append('-DPXR_FIND_TBB_IN_CONFIG=OFF')
 
         if context.buildPython:
             extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=ON')
@@ -2162,21 +2142,12 @@ def InstallUSD(context, force, buildArgs):
 
         extraArgs += buildArgs
 
-        # Wasm target builds tbb and osd static library above
+        # Wasm target buils tbb and osd static library above
         if context.targetWasm:
-            extraArgs.append('-DTBB_INCLUDE_DIRS="{}"'
-                .format(os.path.join(context.usdInstDir, 'include')))
-            extraArgs.append('-DTBB_tbb_LIBRARY_DEBUG="{}"'
-                .format(os.path.join(context.usdInstDir, 'lib/libtbb_debug.a')))
-            extraArgs.append('-DTBB_tbb_LIBRARY_RELEASE="{}"'
-                .format(os.path.join(context.usdInstDir, 'lib/libtbb.a')))
-
-            extraArgs.append('-DOPENSUBDIV_INCLUDE_DIR="{}"'
-                .format(os.path.join(context.usdInstDir, 'include')))
-            extraArgs.append('-DOPENSUBDIV_OSDCPU_LIBRARY="{}"'
-                .format(os.path.join(context.usdInstDir, 'lib/libosdCPU.a')))
-
             extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
+            # Disable CMAKE_FIND_ROOT_PATH only, which is the default when cross-compiling.
+            # Our packages aren't in the emscripten sysroot so this worn't work.
+            extraArgs.append('-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=NO_CMAKE_FIND_ROOT_PATH')
 
             if context.buildJsBindings:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=ON')
@@ -2365,7 +2336,6 @@ group.add_argument("--generator", type=str,
 group.add_argument("--toolset", type=str,
                    help=("CMake toolset to use when building libraries with "
                          "cmake"))
-
 if MacOS():
     codesignDefault = True if apple_utils.IsHostArm() else False
     group.add_argument("--codesign", dest="macos_codesign",

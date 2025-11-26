@@ -22,12 +22,14 @@ shader TestNodeOSL
         string widget = "number",
         string label = "inputA label",
         string page = "inputs1",
+        int open = 1,
         string help = "inputA help message",
         int uncategorized = 1
     ]],
     int inputB = 0 [[
         string widget = "number",
-        string page = "inputs2"
+        string page = "inputs2",
+        int open = 0
     ]],
     float inputC = 2. [[
         string widget = "number",
@@ -95,21 +97,30 @@ shader TestNodeOSL
         string widget = "null",
         string page = "inputs2"
     ]],
+    int inputArrayWithTuples[8] = { 1, 1, 2, 2, 3, 3, 4, 4 } [[
+        int tupleSize = 2,
+        string widget = "null",
+        string page = "inputs2"
+    ]],
     output float resultF = .0 [[
         string widget = "null",
-        string page = "results"
+        string page = "results",
+        int open = 1
     ]],
     output float resultF2[2] = { 1.0, 2.0 } [[
         string widget = "null",
-        string page = "results"
+        string page = "results",
+        int open = 1
     ]],
     output float resultF3[3] = { 1.0, 2.0, 3.0 } [[
         string widget = "null",
-        string page = "results"
+        string page = "results",
+        int open = 1
     ]],
     output int resultI = 0 [[
         string widget = "null",
         string page = "results",
+        int open = 1,
         int uncategorized = 1
     ]],
     output point outputPoint = point(0, 0, 0),

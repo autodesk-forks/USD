@@ -51,6 +51,7 @@ pxr_library(exec
         compiledOutputCache
         compiler
         compilerTaskSync
+        compilerTaskSyncBase
         computationDefinition
         constantValueNode
         definitionRegistry

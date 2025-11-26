@@ -87,7 +87,7 @@ public:
     /// @{
 
     HD_API
-    HdContainerDataSourceHandle GetNamespacedSettings() const;
+    HdSampledDataSourceContainerSchema GetNamespacedSettings() const;
 
     HD_API
     HdBoolDataSourceHandle GetActive() const;

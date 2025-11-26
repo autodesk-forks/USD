@@ -66,11 +66,22 @@ HdPrman_Cylinder::_ConvertGeometry(
     const float radius =
         sceneDelegate->Get(id, HdCylinderSchemaTokens->radius)
             .GetWithDefault<double>(0.0);
+#if PXR_VERSION >= 2502
+    // Some newer USD cylinder prims use radiusBottom and radiusTop;
+    // since rman only takes one radius, we'll just use bottom
+    const float radiusBottom =
+        sceneDelegate->Get(id, HdCylinderSchemaTokens->radiusBottom)
+            .GetWithDefault<double>(0.0);
+#endif
     const float height =
         sceneDelegate->Get(id, HdCylinderSchemaTokens->height)
             .GetWithDefault<double>(0.0);
 
+#if PXR_VERSION >= 2502
+    primvars->SetFloat(RixStr.k_Ri_radius, radius ? radius : radiusBottom);
+#else
     primvars->SetFloat(RixStr.k_Ri_radius, radius);
+#endif
     primvars->SetFloat(RixStr.k_Ri_zmin, -0.5f * height);
     primvars->SetFloat(RixStr.k_Ri_zmax,  0.5f * height);
 

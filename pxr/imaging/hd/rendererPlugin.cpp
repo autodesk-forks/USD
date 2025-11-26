@@ -6,8 +6,10 @@
 //
 #include "pxr/imaging/hd/rendererPlugin.h"
 
+#include "pxr/imaging/hd/renderer.h"
 #include "pxr/imaging/hd/rendererPluginRegistry.h"
 #include "pxr/imaging/hd/pluginRenderDelegateUniqueHandle.h"
+#include "pxr/imaging/hd/pluginRendererUniqueHandle.h"
 
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
@@ -74,6 +76,24 @@ HdRendererPlugin::CreateDelegate(HdRenderSettingsMap const& settingsMap)
     return result;
 }
 
+HdPluginRendererUniqueHandle
+HdRendererPlugin::CreateRenderer(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const HdRendererCreateArgs &rendererCreateArgs)
+{
+    if (!IsSupported(rendererCreateArgs)) {
+        return nullptr;
+    }
+
+    HdRendererPluginRegistry::GetInstance().AddPluginReference(this);
+
+    return
+        HdPluginRendererUniqueHandle(
+            HdRendererPluginHandle(this),
+            _CreateRenderer(
+                sceneIndex, rendererCreateArgs));
+}
+
 TfToken
 HdRendererPlugin::GetPluginId() const
 {
@@ -104,6 +124,17 @@ HdRendererPlugin::IsSupported(bool gpuEnabled) const
     HdRendererCreateArgs rendererCreateArgs;
     rendererCreateArgs.gpuEnabled = gpuEnabled;
     return IsSupported(rendererCreateArgs);
+}
+
+std::unique_ptr<HdRenderer>
+HdRendererPlugin::_CreateRenderer(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const HdRendererCreateArgs &rendererCreateArgs)
+{
+    TF_CODING_ERROR(
+        "Hydra 2.0 HdRendererPlugin::_CreateRenderer not implemented.");
+
+    return nullptr;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

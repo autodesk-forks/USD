@@ -16,6 +16,7 @@
 #include "pxr/usd/usd/timeCode.h"
 #include "pxr/usdValidation/usdValidation/api.h"
 #include "pxr/usdValidation/usdValidation/timeRange.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 
 #include <functional>
 #include <string>
@@ -125,7 +126,14 @@ using UsdValidatePrimTaskFn = std::function<UsdValidationErrorVector(
 /// all validators which are registered with the UsdValidationRegistry are
 /// immortal.
 ///
+/// A UsdValidationValidator can optionally provide a list of fixers, which
+/// clients can use to fix specific errors reported by the validator. Note that
+/// these fixers must have unique names within the context of a validator. If
+/// not unique, a coding error is issued during the construction of the
+/// UsdValidationValidator instance.
+///
 /// \sa UsdValidationRegistry
+/// \sa UsdValidationFixer
 class UsdValidationValidator
 {
 public:
@@ -148,19 +156,22 @@ public:
     /// implemented by a UsdValidateLayerTaskFn.
     USDVALIDATION_API
     UsdValidationValidator(const UsdValidationValidatorMetadata &metadata,
-                           const UsdValidateLayerTaskFn &validateLayerTaskFn);
+                           const UsdValidateLayerTaskFn &validateLayerTaskFn,
+                           std::vector<UsdValidationFixer> fixers = {});
 
     /// Instantiate a UsdValidationValidator which has its validation logic
     /// implemented by a UsdValidateStageTaskFn.
     USDVALIDATION_API
     UsdValidationValidator(const UsdValidationValidatorMetadata &metadata,
-                           const UsdValidateStageTaskFn &validateStageTaskFn);
+                           const UsdValidateStageTaskFn &validateStageTaskFn,
+                           std::vector<UsdValidationFixer> fixers = {});
 
     /// Instantiate a UsdValidationValidator which has its validation logic
     /// implemented by a UsdValidatePrimTaskFn.
     USDVALIDATION_API
     UsdValidationValidator(const UsdValidationValidatorMetadata &metadata,
-                           const UsdValidatePrimTaskFn &validatePrimTaskFn);
+                           const UsdValidatePrimTaskFn &validatePrimTaskFn,
+                           std::vector<UsdValidationFixer> fixers = {});
 
     /// Return metadata associated with this Validator.
     const UsdValidationValidatorMetadata &GetMetadata() const &
@@ -173,6 +184,45 @@ public:
     {
         return std::move(_metadata);
     }
+
+    /// Return a vector of immutable fixers associated with this Validator.
+    ///
+    USDVALIDATION_API
+    const std::vector<const UsdValidationFixer *> GetFixers() const;
+
+    /// Return an immutable fixer given its \p name if it exists, else return
+    /// nullptr.
+    ///
+    USDVALIDATION_API
+    const UsdValidationFixer *GetFixerByName(const TfToken &name) const;
+
+    /// Return a vector of immutable fixers catering to a specific 
+    /// \p errorName.
+    ///
+    USDVALIDATION_API
+    const std::vector<const UsdValidationFixer *> GetFixersByErrorName(
+        const TfToken &errorName) const;
+
+    /// Return an immutable fixer given its \p name and catering to a specific
+    /// \p errorName if it exists, else return nullptr.
+    /// 
+    USDVALIDATION_API
+    const UsdValidationFixer *GetFixerByNameAndErrorName(
+        const TfToken &name, const TfToken &errorName) const;
+
+    /// Return a vector of immutable fixers catering to any of the given
+    /// \p keywords.
+    ///
+    /// Fixers can be associated with keywords, like show, department, etc.
+    /// which can be used to filter fixers based on the context in which they
+    /// are being queried.
+    ///
+    /// Note that the returned list contains fixers which have any of the 
+    /// provided \p keywords, the fixers do not have to have all of the 
+    /// keywords to be returned.
+    USDVALIDATION_API
+    const std::vector<const UsdValidationFixer *> GetFixersByKeywords(
+        const TfTokenVector &keywords) const;
 
     /// Run validation on the given \p layer by executing the contained
     /// validateTaskFn and returns UsdValidationErrorVector.
@@ -228,6 +278,8 @@ private:
                  UsdValidatePrimTaskFn>
         _validateTaskFn;
 
+    std::vector<UsdValidationFixer> _fixers;
+
     // Return UsdValidateLayerTaskFn if provided by the validator, else a
     // nullptr.
     const UsdValidateLayerTaskFn *_GetValidateLayerTask() const;
@@ -239,6 +291,10 @@ private:
     // Return UsdValidatePrimTaskFn if provided by the validator, else a
     // nullptr.
     const UsdValidatePrimTaskFn *_GetValidatePrimTask() const;
+
+    // Helper to validate that all fixers have unique names. Issues a coding
+    // error if not unique.
+    void _ValidateFixerNames() const;
 
 }; // UsdValidationValidator
 

@@ -47,11 +47,11 @@ HdRenderSettingsSchema::GetFrameLocator()
 
 // --(END CUSTOM CODE: Schema Methods)--
 
-HdContainerDataSourceHandle
+HdSampledDataSourceContainerSchema
 HdRenderSettingsSchema::GetNamespacedSettings() const
 {
-    return _GetTypedDataSource<HdContainerDataSource>(
-        HdRenderSettingsSchemaTokens->namespacedSettings);
+    return HdSampledDataSourceContainerSchema(_GetTypedDataSource<HdContainerDataSource>(
+        HdRenderSettingsSchemaTokens->namespacedSettings));
 }
 
 HdBoolDataSourceHandle

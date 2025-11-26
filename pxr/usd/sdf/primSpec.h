@@ -382,10 +382,16 @@ public:
     /// Returns whether this prim spec will be hidden in browsers.
     ///
     /// The default value for hidden is false.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     bool GetHidden() const;
 
     /// Sets whether this prim spec will be hidden in browsers.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     void SetHidden( bool value );
 

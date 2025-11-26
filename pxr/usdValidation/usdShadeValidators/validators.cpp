@@ -10,6 +10,7 @@
 #include "pxr/usd/ar/resolver.h"
 #include "pxr/usd/sdr/registry.h"
 #include "pxr/usd/sdr/shaderProperty.h"
+#include "pxr/usd/usd/editTarget.h"
 #include "pxr/usd/usd/prim.h"
 #include "pxr/usd/usd/property.h"
 #include "pxr/usd/usd/relationship.h"
@@ -23,6 +24,7 @@
 #include "pxr/usd/usdShade/tokens.h"
 #include "pxr/usdValidation/usdShadeValidators/validatorTokens.h"
 #include "pxr/usdValidation/usdValidation/error.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 #include "pxr/usdValidation/usdValidation/registry.h"
 #include "pxr/usdValidation/usdValidation/timeRange.h"
 
@@ -810,13 +812,65 @@ _NormalMapTextureValidator(const UsdPrim& usdPrim,
     return errors;
 }
 
+const std::vector<UsdValidationFixer>
+_MaterialBindingApiAppliedValidatorFixers() {
+    std::vector<UsdValidationFixer> fixers;
+
+    FixerCanApplyFn fixerCanApplyFn = 
+        [](const UsdValidationError &error, const UsdEditTarget &editTarget,
+           const UsdTimeCode &/*timeCode*/) -> bool {
+            if (!editTarget.IsValid() || !editTarget.GetLayer()) {
+                return false;
+            }
+            if (error.GetSites().size() != 1) {
+                // Must have one and only one error site to fix
+                return false;
+            }
+            const UsdValidationErrorSite &site = error.GetSites()[0];
+            if (!site.IsValid() || !site.IsPrim()) {
+                return false;
+            }
+            UsdPrim prim = site.GetPrim();
+            return UsdShadeMaterialBindingAPI::CanApply(prim);
+        };
+
+    FixerImplFn fixerImplFn = 
+        [](const UsdValidationError &error, const UsdEditTarget &editTarget,
+           const UsdTimeCode &/*timeCode*/) -> bool {
+            if (!editTarget.IsValid() || !editTarget.GetLayer()) {
+                return false;
+            }
+            if (error.GetSites().size() != 1) {
+                // Must have one and only one error site to fix
+                return false;
+            }
+            const UsdValidationErrorSite &site = error.GetSites()[0];
+            if (!site.IsValid() || !site.IsPrim()) {
+                return false;
+            }
+            UsdPrim prim = site.GetPrim();
+            UsdShadeMaterialBindingAPI::Apply(prim);
+            return true;
+        };
+
+    fixers.emplace_back(
+        TfToken("ApplyMaterialBindingAPI"),
+        "Applies the MaterialBindingAPI to the prim.",
+        fixerImplFn, fixerCanApplyFn, TfTokenVector{}, 
+        UsdShadeValidationErrorNameTokens
+            ->missingMaterialBindingAPI);
+
+    return fixers;
+}
+
 TF_REGISTRY_FUNCTION(UsdValidationRegistry)
 {
     UsdValidationRegistry &registry = UsdValidationRegistry::GetInstance();
 
     registry.RegisterPluginValidator(
         UsdShadeValidatorNameTokens->materialBindingApiAppliedValidator,
-        _MaterialBindingApiAppliedValidator);
+        _MaterialBindingApiAppliedValidator,
+        _MaterialBindingApiAppliedValidatorFixers());
 
     registry.RegisterPluginValidator(
         UsdShadeValidatorNameTokens->materialBindingRelationships,

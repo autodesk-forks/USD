@@ -69,6 +69,15 @@ TF_DECLARE_PUBLIC_TOKENS(HdPrmanRenderParamTokens,
 
 TF_DECLARE_PUBLIC_TOKENS(HdPrmanPluginTokens, HD_PRMAN_PLUGIN_TOKENS);
 
+#define HD_PRMAN_DISPLAY_NAMES \
+    ((RenderManRIS,     "RenderMan RIS"))         \
+    ((RenderManXPU,     "RenderMan XPU"))               \
+    ((RenderManXPUCPU,  "RenderMan XPU - CPU"))         \
+    ((RenderManXPUGPU,  "RenderMan XPU - GPU"))
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanDisplayNamesTokens, HD_PRMAN_DISPLAY_NAMES);
+
+
 const std::vector<std::string>& HdPrman_GetPluginDisplayNames();
 const TfTokenVector& HdPrman_GetRenderContexts();
 

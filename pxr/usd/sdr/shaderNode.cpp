@@ -80,6 +80,7 @@ SdrShaderNode::SdrShaderNode(
     _category = TokenVal(SdrNodeMetadata->Category, _metadata);
     _departments = TokenVecVal(SdrNodeMetadata->Departments, _metadata);
     _pages = _ComputePages();
+    _openPages = TokenVecVal(SdrNodeMetadata->OpenPages, _metadata);
 }
 
 void

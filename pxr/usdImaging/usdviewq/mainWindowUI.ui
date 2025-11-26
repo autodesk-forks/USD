@@ -1708,6 +1708,7 @@
     <addaction name="separator"/>
     <addaction name="showInterpreter"/>
     <addaction name="actionPreferences"/>
+    <addaction name="showUsdValidation"/>
     <addaction name="showDebugFlags"/>
     <addaction name="showHydraSceneBrowser"/>
    </widget>
@@ -2294,6 +2295,20 @@
    </property>
    <property name="shortcut">
     <string>I</string>
+   </property>
+  </action>
+  <action name="showUsdValidation">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>USD Validation</string>
+   </property>
+   <property name="toolTip">
+    <string>Show USD Validation Widget</string>
+   </property>
+   <property name="shortcut">
+    <string>V</string>
    </property>
   </action>
   <action name="showDebugFlags">

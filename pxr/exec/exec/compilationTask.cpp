@@ -15,7 +15,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 static inline void
 _RunOrInvoke(
-    const Exec_CompilerTaskSync &taskSync,
+    WorkDispatcher &dispatcher,
     Exec_CompilationTask *const task, 
     const int depth)
 {
@@ -28,7 +28,7 @@ _RunOrInvoke(
     if (ARCH_LIKELY(depth < 50)) {
         task->operator()(depth + 1);
     } else {
-        taskSync.Run(task);
+        dispatcher.Run(std::ref(*task));
     }
 }
 
@@ -66,14 +66,14 @@ Exec_CompilationTask::RemoveDependency()
     return numDependents;
 }
 
-Exec_CompilerTaskSync::ClaimResult
+Exec_CompilerTaskSyncBase::ClaimResult
 Exec_CompilationTask::TaskDependencies::ClaimSubtask(
     const Exec_OutputKey::Identity &key)
 {
-    const Exec_CompilerTaskSync::ClaimResult result =
-        Exec_CompilationState::OutputTasksAccess::_Get(&_compilationState)
-            .Claim(key, _task);
-    if (result == Exec_CompilerTaskSync::ClaimResult::Wait) {
+    const Exec_CompilerTaskSyncBase::ClaimResult result =
+        Exec_CompilationState::TaskSyncAccess::_GetOutputProvidingTaskSync(
+            &_compilationState).Claim(key, _task);
+    if (result == Exec_CompilerTaskSyncBase::ClaimResult::Wait) {
         _hasDependencies = true;
     }
     return result;
@@ -107,10 +107,8 @@ Exec_CompilationTask::operator()(const int depth) const
         return taskPhases._GetNextTask();
     }();
 
-    // Get the task sync object for running subsequent tasks.
-    const Exec_CompilerTaskSync &taskSync =
-        Exec_CompilationState::OutputTasksAccess::_Get(
-            &thisTask->_compilationState);
+    // Get the dispatcher for running subsequent tasks.
+    WorkDispatcher &dispatcher = thisTask->_compilationState.GetDispatcher();
 
     // If a pointer to a next task was returned, thisTask *did not* complete.
     // In this case there are additional phases to run, and one or more
@@ -123,7 +121,7 @@ Exec_CompilationTask::operator()(const int depth) const
         // stack. Once we reach a certain stack depth, we will Run() the task to
         // prevent running out of stack space.
         if (nextTask != thisTask) {
-            _RunOrInvoke(taskSync, nextTask, depth);
+            _RunOrInvoke(dispatcher, nextTask, depth);
         }
 
         // Let's remove the dependency we added above to prevent re-entry.
@@ -137,7 +135,7 @@ Exec_CompilationTask::operator()(const int depth) const
         // Once we reach a certain stack depth, we will Run() the task to
         // prevent running out of stack space.
         if (thisTask->RemoveDependency() == 0) {
-            _RunOrInvoke(taskSync, thisTask, depth);
+            _RunOrInvoke(dispatcher, thisTask, depth);
         }
         return;
     }
@@ -153,7 +151,7 @@ Exec_CompilationTask::operator()(const int depth) const
         // stack. Once we reach a certain stack depth, we will Run() the task to
         // prevent running out of stack space.
         if (parent->RemoveDependency() == 0) {
-            _RunOrInvoke(taskSync, parent, depth);
+            _RunOrInvoke(dispatcher, parent, depth);
         }
     }
 
@@ -170,8 +168,8 @@ Exec_CompilationTask::operator()(const int depth) const
 void
 Exec_CompilationTask::_MarkDone(const Exec_OutputKey::Identity &key)
 {
-    Exec_CompilationState::OutputTasksAccess::_Get(&_compilationState)
-        .MarkDone(key);
+    Exec_CompilationState::TaskSyncAccess::_GetOutputProvidingTaskSync(
+        &_compilationState).MarkDone(key);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -22,6 +22,13 @@ HdRendererPluginHandle::HdRendererPluginHandle(
     }
 }
 
+HdRendererPluginHandle::HdRendererPluginHandle(
+    HdRendererPluginHandle &&other)
+  : _plugin(other._plugin)
+{
+    other._plugin = nullptr;
+}
+
 HdRendererPluginHandle::~HdRendererPluginHandle()
 {
     HdRendererPluginRegistry::GetInstance().ReleasePlugin(_plugin);
@@ -36,6 +43,19 @@ HdRendererPluginHandle::operator=(const HdRendererPluginHandle &other)
     }
     HdRendererPluginRegistry::GetInstance().ReleasePlugin(_plugin);
     _plugin = other._plugin;
+    return *this;
+}
+
+HdRendererPluginHandle &
+HdRendererPluginHandle::operator=(HdRendererPluginHandle &&other)
+{
+    if (this == &other) {
+        return *this;
+    }
+
+    HdRendererPluginRegistry::GetInstance().ReleasePlugin(_plugin);
+    _plugin = other._plugin;
+    other._plugin = nullptr;
     return *this;
 }
 

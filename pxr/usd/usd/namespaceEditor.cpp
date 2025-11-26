@@ -117,7 +117,7 @@ private:
 
     void _Run(const UsdStageRefPtr &stage) {
         WorkWithScopedParallelism([this, &stage]() {
-            const auto range = stage->GetPseudoRoot().GetDescendants();
+            const auto range = stage->GetPseudoRoot().GetAllDescendants();
             WorkParallelForEach(range.begin(), range.end(),
                 [this](UsdPrim const &prim) { _VisitPrim(prim);});
             _dispatcher.Wait();
@@ -1432,6 +1432,17 @@ UsdNamespaceEditor::_ProcessedEdit::Apply()
         // For prim edits, the dependent stage edits are always computed for 
         // at least the primary stage so all necessary edits will be contained
         // in those computed edits.
+        
+        // First, we handle any composition arcs that need to be fixed up.
+        for (const auto &edit : 
+                dependentStageNamespaceEdits.compositionFieldEdits) {
+            edit.layer->SetField(edit.path, edit.fieldName, edit.newFieldValue);
+        }
+
+        // Next, we apply the actual spec move. It's important to do this after 
+        // the first step to avoid cases where a composition arc's target and 
+        // local spec have changed e.g. a prim referencing a sibling when the
+        // parent is moved or renamed.
         for (const auto &[layer, editVec] : 
                 dependentStageNamespaceEdits.layerSpecMoves) {
             for (const auto &edit : editVec) {
@@ -1439,11 +1450,8 @@ UsdNamespaceEditor::_ProcessedEdit::Apply()
             }
         }
 
-        for (const auto &edit : 
-                dependentStageNamespaceEdits.compositionFieldEdits) {
-            edit.layer->SetField(edit.path, edit.fieldName, edit.newFieldValue);
-        }
-
+        // Last, handle relocates. This step doesn't have to happen before spec 
+        // moves because relocates are stored in the layer metadata.
         for (const auto &[layer, relocates] : 
                 dependentStageNamespaceEdits.dependentRelocatesEdits) {
             layer->SetRelocates(relocates);

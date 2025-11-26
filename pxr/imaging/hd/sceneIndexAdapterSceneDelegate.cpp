@@ -1225,17 +1225,11 @@ _ToDictionary(HdSampledDataSourceContainerSchema schema)
 {
     VtDictionary dict;
     for (const TfToken& name : schema.GetNames()) {
-        if (HdSampledDataSourceHandle valueDs = schema.Get(name)) {
+        if (HdSampledDataSourceHandle const valueDs = schema.Get(name)) {
             dict[name.GetString()] = valueDs->GetValue(0);
         }
     }
     return dict;
-}
-
-VtDictionary
-_ToDictionary(HdContainerDataSourceHandle const &cds)
-{
-    return _ToDictionary(HdSampledDataSourceContainerSchema(cds));
 }
 
 static
@@ -1607,22 +1601,13 @@ _ToRenderProducts(HdRenderProductVectorSchema productsSchema)
 VtValue
 _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
 {
-    HdContainerDataSourceHandle renderSettingsDs =
-            HdContainerDataSource::Cast(prim.dataSource->Get(
-                HdRenderSettingsSchemaTokens->renderSettings));
-
-    HdRenderSettingsSchema rsSchema = HdRenderSettingsSchema(renderSettingsDs);
+    const auto rsSchema = HdRenderSettingsSchema::GetFromParent(prim.dataSource);
     if (!rsSchema.IsDefined()) {
         return VtValue();
     }
 
     if (key == HdRenderSettingsPrimTokens->namespacedSettings) {
-        VtDictionary settings;
-        if (HdContainerDataSourceHandle namespacedSettingsDs =
-                rsSchema.GetNamespacedSettings()) {
-
-            return VtValue(_ToDictionary(namespacedSettingsDs));
-        }
+        return VtValue(_ToDictionary(rsSchema.GetNamespacedSettings()));
     }
 
     if (key == HdRenderSettingsPrimTokens->active) {

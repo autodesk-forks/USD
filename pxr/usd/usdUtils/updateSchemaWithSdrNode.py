@@ -42,6 +42,11 @@ class PropertyDefiningKeys(ConstantsGroup):
     USD_SUPPRESS_PROPERTY = "usdSuppressProperty"
     USD_VARIABILITY = "usdVariability"
     WIDGET = "widget"
+    MIN = "min"
+    MAX = "max"
+    SLIDER_MIN = "slidermin"
+    SLIDER_MAX = "slidermax"
+    STRICT_LIMITS = "strictLimits"
 
 class UserDocConstants(ConstantsGroup):
     USERDOC_FULL = "userDoc"
@@ -151,6 +156,8 @@ def _CreateAttrSpecFromNodeAttribute(primSpec, prop, stage,
     if prop.GetShownIf():
         attrHints.SetShownIf(prop.GetShownIf())
 
+    _PopulateArraySizeConstraint(attr, prop)
+    _PopulateLimits(attr, prop)
     _PopulateOptions(attrHints, attrSpec, prop, propName, attrType)
 
     attrSpec.default = prop.GetDefaultValueAsSdfType()
@@ -192,6 +199,138 @@ def StringToBool(val):
         return False
     else:
         raise ValueError(f"Invalid truth value: {val}")
+
+def _PopulateArraySizeConstraint(attr, sdrProp):
+    if not sdrProp.IsArray():
+        return
+
+    # Sdr int and float arrays of size 2, 3, and 4 get turned into statically
+    # shaped GfVec "tuples" in USD (e.g., int[3] in a shader becomes int3 in
+    # USD). Since element count is built into these types, we never want to
+    # write arraySizeConstraint for them.
+    staticSizeTypes = [
+        Sdf.ValueTypeNames.Int2,
+        Sdf.ValueTypeNames.Int3,
+        Sdf.ValueTypeNames.Int4,
+        Sdf.ValueTypeNames.Float2,
+        Sdf.ValueTypeNames.Float3,
+        Sdf.ValueTypeNames.Float4,
+    ]
+    if sdrProp.GetTypeAsSdfType().GetSdfType() in staticSizeTypes:
+        return
+
+    # Determine whether a fixed arraySize is present. We want to avoid writing
+    # arraySizeConstraint=0 since that's the fallback value.
+    arraySize = sdrProp.GetArraySize()
+    hasFixedArraySize = arraySize > 0 and not sdrProp.IsDynamicArray()
+
+    tupleSize = sdrProp.GetTupleSize()
+
+    # Translate arraySize and tupleSize values into the USD encoding:
+    #   - arraySizeConstraint == 0 indicates the array is dynamic and its size
+    #     is unrestricted
+    #   - arraySizeConstraint > 0 indicates the exact, fixed size of the array
+    #   - arraySizeConstraint < 0 indicates the array is dynamic, but
+    #     `N=abs(arraySizeConstraint)` is the tuple-length
+    if tupleSize > 0:
+        attr.SetArraySizeConstraint(-tupleSize)
+
+        # arraySizeConstraint is intentionally a single value to prevent
+        # encoding inconsistent arraySize and tupleSize values. This means we
+        # can't write both values, even if they *are* consistent with each
+        # other (which would correspond to a fixed number of tuples).
+        #
+        # If both arraySize and tupleSize were specified, issue a warning, and
+        # point out if they are inconsistent with each other.
+        if hasFixedArraySize:
+            consistentStr = 'inconsistent ' \
+                if arraySize % tupleSize != 0 else ''
+            Tf.Warn("Ignoring %sarraySize (%d) specified with tupleSize (%d) "
+                    "for attribute (%s) on schema (%s)" % \
+                    (consistentStr, arraySize, tupleSize, attr.GetName(),
+                     attr.GetPrim().GetName()))
+    elif hasFixedArraySize:
+        attr.SetArraySizeConstraint(arraySize)
+
+def _ParseLimitsValue(key, attr, sdrProp):
+    # Parse and return the value at the given key in metadata, assuming the
+    # same value type as sdrProp
+    if v := sdrProp.GetMetadata().get(key):
+        parsed, err = Sdr.MetadataHelpers.ParseSdfValue(v, sdrProp)
+        if not err:
+            return parsed
+        else:
+            Tf.Warn("Failed to parse %s value ('%s') for attribute %s " \
+                    "on schema %s: %s" % \
+                    (key, v, attr.GetName(), attr.GetPrim().GetName(), err))
+    return None
+
+def _SetLimits(limits, minimum, maximum):
+    if minimum is not None:
+        limits.SetMinimum(minimum)
+    if maximum is not None:
+        limits.SetMaximum(maximum)
+
+def _PopulateLimits(attr, sdrProp):
+    # Parse raw limits values out of metadata
+    #
+    # XXX In the future, SdrShaderProperty should provide a clean API for
+    # accessing limits values that hides these parsing details and all the
+    # hard vs soft logic below
+    minimum = _ParseLimitsValue(PropertyDefiningKeys.MIN, attr, sdrProp)
+    maximum = _ParseLimitsValue(PropertyDefiningKeys.MAX, attr, sdrProp)
+    sliderMin = _ParseLimitsValue(PropertyDefiningKeys.SLIDER_MIN, attr, sdrProp)
+    sliderMax = _ParseLimitsValue(PropertyDefiningKeys.SLIDER_MAX, attr, sdrProp)
+
+    strict = None
+    if v := sdrProp.GetMetadata().get(PropertyDefiningKeys.STRICT_LIMITS):
+        try:
+            strict = StringToBool(v)
+        except:
+            Tf.Warn("Failed to parse strictLimits value ('%s') for attribute " \
+                    "%s on schema %s" % \
+                    (v, attr.GetName(), attr.GetPrim().GetName()))
+
+    # Now determine which values correspond to hard and soft limits.
+    #
+    # In general, the "regular" min and max keys become hard limits, and
+    # slidermin/slidermax become soft limits. The strictLimits key can override
+    # this behavior to make one or the other change destinations:
+    #
+    #  * strictLimits=True will cause slidermin/slidermax to become hard limits,
+    #    but only if neither min nor max are set
+    #  * strictLimits=False will cause min/max to become soft limits, regardless
+    #    of whether slidermin/slidermax are set
+    #
+    # Values can be sparsely specified, e.g., slidermin can be specified
+    # without a corresponding slidermax.
+    sliderValsSpecified = sliderMin is not None or sliderMax is not None
+    regularValsSpecified = minimum is not None or maximum is not None
+
+    if sliderValsSpecified:
+        if regularValsSpecified:
+            if strict in (None, True):
+                # No override, apply both sets of values as-is
+                _SetLimits(attr.GetSoftLimits(), sliderMin, sliderMax)
+                _SetLimits(attr.GetHardLimits(), minimum, maximum)
+            else:
+                # strictLimits explicitly false, clobber sliderMin/sliderMax
+                # with min/max as soft limits
+                _SetLimits(attr.GetSoftLimits(), minimum, maximum)
+        elif strict in (None, False):
+            # No override, sliderMin/sliderMax become soft limits
+            _SetLimits(attr.GetSoftLimits(), sliderMin, sliderMax)
+        else:
+            # strictLimits explicitly true, promote sliderMin/sliderMax into
+            # hard limits
+            _SetLimits(attr.GetHardLimits(), sliderMin, sliderMax)
+    elif regularValsSpecified:
+        if strict in (None, True):
+            # No override, min/max become hard limits
+            _SetLimits(attr.GetHardLimits(), minimum, maximum)
+        else:
+            # strictLimits explicitly false, demote min/max into soft limits
+            _SetLimits(attr.GetSoftLimits(), minimum, maximum)
 
 def _ParseOptionValues(values, attrSpec, sdrProp, propName):
     result = []
@@ -256,6 +395,13 @@ def _PopulateOptions(attrHints, attrSpec, sdrProp, propName, attrType):
             attrSpec.allowedTokens = vals
         elif namesProvided:
             attrSpec.allowedTokens = names
+
+        if populateLabels:
+            # If we also populated valueLabels, then this is a "legacy"
+            # allowedTokens write. Log a warning so users understand they'll
+            # need to update their assets and/or UI code at some point.
+            Tf.Warn("Wrote both valueLabels and allowedTokens for attribute " \
+                    "(%s) on schema (%s). " % (propName, attrSpec.owner.name))
 
     # Complain if allowed tokens were provided for a non-token-valued param
     if not isTokenValued and not populateLabels:
@@ -569,9 +715,19 @@ def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
     del delegate
 
     if not stage:
-        Tf.Warn("Failed to open schema layer '%s' on a stage" \
-                % schemaLayer.identifier)
-        return
+        Tf.RaiseCodingError(
+            "Failed to open schema layer '%s' on a stage" \
+            % schemaLayer.identifier)
+
+    # Populate open-by-default display groups
+    nodePrim = stage.GetPrimAtPath(primSpec.path)
+    if not nodePrim:
+        Tf.RaiseCodingError(
+            "Failed to find composed node prim '%s'" % primSpec.name)
+
+    hints = UsdUI.PrimHints(nodePrim)
+    for page in sdrNode.GetOpenPages():
+        hints.SetDisplayGroupExpanded(page, True)
 
     # gather properties from a prim definition generated by composing apiSchemas
     # provided by apiSchemasForAttrPruning metadata.

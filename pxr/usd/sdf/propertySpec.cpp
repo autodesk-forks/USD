@@ -28,7 +28,10 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_ABSTRACT_SPEC(SdfSchema, SdfPropertySpec, SdfSpec);
+TF_DEFINE_ENV_SETTING(
+    SDF_LEGACY_UI_HINTS_WARN_ON_WRITE, false,
+    "Issue a warning when calling 'set' API for deprecated UI-related "
+    "metadata fields (displayName, displayGroup, and hidden).");
 
 //
 // Name
@@ -99,10 +102,11 @@ SdfPropertySpec::GetOwner() const
 #define SDF_ACCESSOR_WRITE_PREDICATE(key_)   SDF_NO_PREDICATE
 
 // Metadata
-SDF_DEFINE_GET_SET(DisplayGroup,     SdfFieldKeys->DisplayGroup,     std::string)
-SDF_DEFINE_GET_SET(DisplayName,      SdfFieldKeys->DisplayName,      std::string)
+SDF_DEFINE_GET(DisplayGroup, SdfFieldKeys->DisplayGroup, std::string)
+SDF_DEFINE_GET(DisplayName,  SdfFieldKeys->DisplayName,  std::string)
+SDF_DEFINE_GET(Hidden,       SdfFieldKeys->Hidden,       bool)
+
 SDF_DEFINE_GET_SET(Documentation,    SdfFieldKeys->Documentation,    std::string)
-SDF_DEFINE_GET_SET(Hidden,           SdfFieldKeys->Hidden,           bool)
 SDF_DEFINE_GET_SET(Prefix,           SdfFieldKeys->Prefix,           std::string)
 SDF_DEFINE_GET_SET(Suffix,           SdfFieldKeys->Suffix,           std::string)
 SDF_DEFINE_GET_SET(SymmetricPeer,    SdfFieldKeys->SymmetricPeer,    std::string)
@@ -145,6 +149,36 @@ SDF_DEFINE_GET_PRIVATE(AttributeValueTypeName, SdfFieldKeys->TypeName, TfToken)
 // Metadata, Property Value API, and Spec Properties
 // (methods requiring additional logic)
 //
+
+void
+SdfPropertySpec::SetDisplayGroup(const std::string &value)
+{
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayGroup'");
+    }
+
+    SetField(SdfFieldKeys->DisplayGroup, value);
+}
+
+void
+SdfPropertySpec::SetDisplayName(const std::string &value)
+{
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayName'");
+    }
+
+    SetField(SdfFieldKeys->DisplayName, value);
+}
+
+void
+SdfPropertySpec::SetHidden(bool value)
+{
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'hidden'");
+    }
+
+    SetField(SdfFieldKeys->Hidden, value);
+}
 
 bool
 SdfPropertySpec::SetDefaultValue(const VtValue &defaultValue)

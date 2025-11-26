@@ -496,8 +496,7 @@ Sdf_PathNode::GetPathToken(Sdf_PathNode const *primPart,
     TfAutoMallocTag tag2("Sdf_PathNode::GetPathToken");
 
     _PrimToPropTokenTables::accessor primAccessor;
-    _pathTokenTable->insert(
-        primAccessor, std::make_pair(primPart, _PropToTokenTable()));
+    _pathTokenTable->insert(primAccessor, primPart);
     auto &propToTokenTable = primAccessor->second;
     // Release the primAccessor here, since the call to _CreatePathToken below
     // can cause reentry here (for embedded target paths).

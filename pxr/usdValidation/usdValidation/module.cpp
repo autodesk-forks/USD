@@ -14,6 +14,7 @@ TF_WRAP_MODULE
     TF_WRAP(UsdValidationRegistry);
     TF_WRAP(UsdValidationTimeRange);
     TF_WRAP(UsdValidationValidator);
+    TF_WRAP(UsdValidationFixer);
     TF_WRAP(UsdValidationError);
     TF_WRAP(UsdValidationContext);
 }

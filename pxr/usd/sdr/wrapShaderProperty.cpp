@@ -65,6 +65,7 @@ void wrapShaderProperty()
         .def("IsArray", &This::IsArray)
         .def("IsDynamicArray", &This::IsDynamicArray)
         .def("GetArraySize", &This::GetArraySize)
+        .def("GetTupleSize", &This::GetTupleSize)
         .def("GetInfoString", &This::GetInfoString)
         .def("GetMetadata", &This::GetMetadata,
             return_value_policy<TfPyMapToDictionary>())

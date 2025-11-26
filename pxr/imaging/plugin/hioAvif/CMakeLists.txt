@@ -225,7 +225,11 @@ pxr_build_test(testHioAvif
         testenv/testHioAvif.cpp
 )
 
-pxr_register_test(testHioAvif
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHioAvif"
-    EXPECTED_RETURN_CODE 0
-)
+# Tests relying on plugins aren't supported in static builds
+if (BUILD_SHARED_LIBS)
+    pxr_register_test(testHioAvif
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHioAvif"
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
+

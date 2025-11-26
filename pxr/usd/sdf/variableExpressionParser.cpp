@@ -8,6 +8,7 @@
 #include "pxr/usd/sdf/variableExpressionParser.h"
 
 #include "pxr/usd/sdf/debugCodes.h"
+#include "pxr/usd/sdf/variableExpressionAST.h"
 #include "pxr/usd/sdf/variableExpressionImpl.h"
 
 #include "pxr/base/pegtl/pegtl.hpp"
@@ -21,10 +22,29 @@ using namespace PXR_PEGTL_NAMESPACE;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+namespace SdfVariableExpressionASTNodes
+{
+
+// Helper for calling private constructors on the various
+// SdfVariableExpressionASTNodes::Node subclasses.
+class _NodeCreator
+{
+public:
+    template <class NodeType, class... Args>
+    static auto MakeNode(Args&&... nodeArgs)
+    {
+        return std::unique_ptr<NodeType>(
+            new NodeType(std::forward<Args>(nodeArgs)...));
+    }
+};
+
+} // end namespace SdfVariableExpressionASTNodes
+
 namespace
 {
 
 namespace Impl = Sdf_VariableExpressionImpl;
+namespace ASTNodes = SdfVariableExpressionASTNodes;
 
 // Node creators -----------------------------------------------
 // These objects are responsible for saving intermediate values as
@@ -36,6 +56,8 @@ class NodeCreator
 public:
     virtual ~NodeCreator();
     virtual std::unique_ptr<Impl::Node> CreateNode(std::string* errMsg) = 0;
+    virtual std::unique_ptr<ASTNodes::Node> CreateASTNode(
+        std::string* errMsg) = 0;
 };
 
 NodeCreator::~NodeCreator() = default;
@@ -55,6 +77,20 @@ _CreateNodes(
     return nodes;
 }
 
+static
+ASTNodes::NodeList
+_CreateASTNodeList(
+    const std::vector<std::unique_ptr<NodeCreator>>& creators,
+    std::string* errMsg)
+{
+    std::vector<std::unique_ptr<ASTNodes::Node>> nodes;
+    nodes.reserve(creators.size());
+    for (auto& c : creators) {
+        nodes.push_back(c->CreateASTNode(errMsg));
+    }
+    return ASTNodes::NodeList(std::move(nodes));
+}
+
 class StringNodeCreator
     : public NodeCreator
 {
@@ -62,6 +98,18 @@ public:
     std::unique_ptr<Impl::Node> CreateNode(std::string* errMsg) override
     {
         return std::make_unique<Impl::StringNode>(std::move(parts));
+    }
+
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg) override
+    {
+        std::string s;
+        for (const auto& part : parts) {
+            s += part.content;
+        }
+
+        return ASTNodes::_NodeCreator::MakeNode<ASTNodes::LiteralNode>(
+            std::move(s));
     }
     
     using Part = Impl::StringNode::Part;
@@ -76,6 +124,13 @@ public:
     {
         return std::make_unique<Impl::VariableNode>(std::move(var));
     }
+
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg) override
+    {
+        return ASTNodes::_NodeCreator::MakeNode<ASTNodes::VariableNode>(
+            std::move(var));
+    }
     
     std::string var;
 };
@@ -88,6 +143,12 @@ public:
     std::unique_ptr<Impl::Node> CreateNode(std::string* errMsg) override
     {
         return std::make_unique<Impl::ConstantNode<Type>>(value);
+    }
+
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg) override
+    {
+        return ASTNodes::_NodeCreator::MakeNode<ASTNodes::LiteralNode>(value);
     }
     
     Type value;
@@ -103,6 +164,12 @@ public:
     std::unique_ptr<Impl::Node> CreateNode(std::string* errMsg) override
     {
         return std::make_unique<Impl::NoneNode>();
+    }
+
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg) override
+    {
+        return ASTNodes::_NodeCreator::MakeNode<ASTNodes::LiteralNode>();
     }
 };
 
@@ -120,6 +187,18 @@ public:
 
         return std::make_unique<Impl::ListNode>(std::move(elemNodes));
     };
+
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg) override
+    {
+        ASTNodes::NodeList astNodes = _CreateASTNodeList(elements, errMsg);
+        if (!errMsg->empty()) {
+            return nullptr;
+        }
+
+        return ASTNodes::_NodeCreator::MakeNode<ASTNodes::ListNode>(
+            std::move(astNodes));
+    }
 
     std::vector<std::unique_ptr<NodeCreator>> elements;
 };
@@ -160,6 +239,18 @@ public:
         bool matchedFunctionName = false;
         return _CreateNode(
             errMsg, &matchedFunctionName, (AvailableFunctions*)(nullptr));
+    }
+
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg) final
+    {
+        ASTNodes::NodeList astNodes = _CreateASTNodeList(functionArgs, errMsg);
+        if (!errMsg->empty()) {
+            return nullptr;
+        }
+
+        return ASTNodes::_NodeCreator::MakeNode<ASTNodes::FunctionNode>(
+            std::move(functionName), std::move(astNodes));
     }
 
     std::string functionName;
@@ -269,6 +360,13 @@ private:
 class ParserContext
 {
 public:
+    ParserContext() = default;
+    ParserContext(const ParserContext&) = delete;
+    ParserContext(ParserContext&&) = default;
+
+    ParserContext& operator=(const ParserContext&) = delete;
+    ParserContext& operator=(ParserContext&&) = default;
+
     // Create and push a node creator of type CreatorType onto the stack,
     // passing in any given args to CreatorType c'tor, and return it.
     template <class CreatorType, class... Args>
@@ -329,6 +427,22 @@ public:
         _nodeStack.pop_back();
 
         return creator->CreateNode(errMsg);
+    }
+
+    // Pop the node creator from the top of the stack and use it to
+    // create an AST node.
+    std::unique_ptr<ASTNodes::Node>
+    CreateASTNode(std::string* errMsg)
+    {
+        if (!TF_VERIFY(!_nodeStack.empty()) || !TF_VERIFY(_nodeStack.back())) {
+            *errMsg = "Unknown error";
+            return nullptr;
+        }
+
+        std::unique_ptr<NodeCreator> creator = std::move(_nodeStack.back());
+        _nodeStack.pop_back();
+
+        return creator->CreateASTNode(errMsg);
     }
 
 private:
@@ -825,10 +939,16 @@ MATCH_ERROR(DoubleQuotedString::End, R"(Missing ending '"')");
 MATCH_ERROR(SingleQuotedString::Body, "Invalid string contents");
 MATCH_ERROR(SingleQuotedString::End, R"(Missing ending "'")");
 
+struct ParseResult
+{
+    std::optional<ParserContext> context;
+    std::vector<std::string> errMsg;
+};
+
 } // end anonymous namespace
 
-Sdf_VariableExpressionParserResult
-Sdf_ParseVariableExpression(const std::string& expr)
+static ParseResult
+Sdf_ParseVariableExpressionImpl(const std::string& expr)
 {
     namespace pegtl = PXR_PEGTL_NAMESPACE;
 
@@ -843,12 +963,12 @@ Sdf_ParseVariableExpression(const std::string& expr)
             pegtl::parse<Expression, Action, Errors>(in, context);
         
         if (!parseSuccess) {
-            return { nullptr, { "Unable to parse expression" } };
+            return { std::nullopt, { "Unable to parse expression" } };
         }
     }
     catch (const pegtl::parse_error& e) {
         return { 
-            nullptr, 
+            std::nullopt,
 
             // XXX: "at character" is probably incorrect if the expression
             // contains Unicode strings?
@@ -859,15 +979,45 @@ Sdf_ParseVariableExpression(const std::string& expr)
         };
      }
 
+    return { std::move(context), {} };
+}
+
+Sdf_VariableExpressionParserResult
+Sdf_ParseVariableExpression(const std::string& expr)
+{
+    ParseResult result = Sdf_ParseVariableExpressionImpl(expr);
+    if (!result.context) {
+        return { nullptr, std::move(result.errMsg) };
+    }
+
     std::string errMsg;
     std::unique_ptr<Impl::Node> exprNode = 
-        context.CreateExpressionNode(&errMsg);
+        result.context->CreateExpressionNode(&errMsg);
 
     if (!exprNode) {
         return { nullptr, { std::move(errMsg) } };
     }
 
     return { std::move(exprNode), {} };
+}
+
+Sdf_VariableExpressionASTParserResult
+Sdf_ParseVariableExpressionAST(const std::string& expr)
+{
+    ParseResult result = Sdf_ParseVariableExpressionImpl(expr);
+    if (!result.context) {
+        return { nullptr, std::move(result.errMsg) };
+    }
+
+    std::string errMsg;
+    std::unique_ptr<ASTNodes::Node> astNode = 
+        result.context->CreateASTNode(&errMsg);
+
+    if (!astNode) {
+        return { nullptr, { std::move(errMsg) } };
+    }
+
+    return { std::move(astNode), {} };
 }
 
 bool

@@ -53,6 +53,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     ((Hints, "hints"))                               \
     ((Options, "options"))                           \
     ((IsDynamicArray, "isDynamicArray"))             \
+    ((TupleSize, "tupleSize"))                       \
     ((Connectable, "connectable"))                   \
     ((Tag, "tag"))                                   \
     ((ShownIf, "shownIf"))                           \
@@ -151,6 +152,18 @@ public:
     /// array or dynamic array, this returns 0.
     SDR_API
     int GetArraySize() const { return _arraySize; }
+
+    /// Gets this property's tuple size.
+    ///
+    /// The tuple size indicates an array's "column count", or how many elements
+    /// it takes to form a logical row. For non-dynamic arrays, the array size
+    /// should be a multiple of the tuple size.
+    ///
+    /// If no tuple size is specified, returns 0.
+    ///
+    /// \sa GetArraySize()
+    SDR_API
+    int GetTupleSize() const { return _tupleSize; }
 
     /// Gets a string with basic information about this property. Helpful for
     /// things like adding this property to a log.
@@ -363,6 +376,7 @@ protected:
     VtValue _defaultValue;
     bool _isOutput;
     size_t _arraySize;
+    size_t _tupleSize;
     bool _isDynamicArray;
     bool _isConnectable;
     SdrTokenMap _metadata;

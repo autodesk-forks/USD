@@ -20,12 +20,16 @@
 #include "pxr/base/vt/value.h"
 
 #include "pxr/base/tf/declarePtrs.h"
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/token.h"
 
 #include <iosfwd>
 #include <string>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+SDF_API
+extern TfEnvSetting<bool> SDF_LEGACY_UI_HINTS_WARN_ON_WRITE;
 
 /// \class SdfPropertySpec
 ///
@@ -139,20 +143,32 @@ public:
     /// Returns the displayGroup string for this property spec.
     ///
     /// The default value for displayGroup is empty string.
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     SDF_API
     std::string GetDisplayGroup() const;
 
     /// Sets the displayGroup string for this property spec.
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     SDF_API
     void SetDisplayGroup(const std::string &value);
 
     /// Returns the displayName string for this property spec.
     ///
     /// The default value for displayName is empty string.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     std::string GetDisplayName() const;
 
     /// Sets the displayName string for this property spec.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     void SetDisplayName(const std::string &value);
 
@@ -169,10 +185,16 @@ public:
     /// Returns whether this property spec will be hidden in browsers.
     ///
     /// The default value for hidden is false.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     bool GetHidden() const;
 
     /// Sets whether this property spec will be hidden in browsers.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     void SetHidden(bool value);
 

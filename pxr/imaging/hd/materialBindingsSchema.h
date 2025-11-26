@@ -36,6 +36,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define HD_MATERIAL_BINDINGS_SCHEMA_TOKENS \
     (materialBindings) \
     ((allPurpose, "")) \
+    ((_allPurposeToken, "allPurpose")) \
 
 TF_DECLARE_PUBLIC_TOKENS(HdMaterialBindingsSchemaTokens, HD_API,
     HD_MATERIAL_BINDINGS_SCHEMA_TOKENS);

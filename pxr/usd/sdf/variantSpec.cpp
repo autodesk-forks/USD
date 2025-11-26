@@ -22,8 +22,6 @@ using std::string;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_SPEC(SdfSchema, SdfSpecTypeVariant, SdfVariantSpec, SdfSpec);
-
 SdfVariantSpecHandle
 SdfVariantSpec::New(
     const SdfVariantSetSpecHandle& owner, const std::string& name)

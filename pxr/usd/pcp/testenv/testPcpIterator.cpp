@@ -379,6 +379,47 @@ main(int argc, char** argv)
             PcpPropertyReverseIterator(propRange.first));
     }
 
+    std::cout << "Testing MoveToNextSubtree" << std::endl;
+    {
+        PcpErrorVector errors;
+        const PcpPrimIndex& primIndex = 
+            cache->ComputePrimIndex(SdfPath("/Model"), &errors);
+        PcpRaiseErrors(errors);
+
+        auto isDescendantOfNode = 
+            [](const PcpNodeRef& ancestorNode, PcpNodeRef n) {
+            for (; n; n = n.GetParentNode()) {
+                if (n == ancestorNode) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        for (PcpNodeRange range = primIndex.GetNodeRange();
+             range.first != range.second; ++range.first) {
+
+            // Manually compute the iterator pointing to the next subtree
+            // after range.first by incrementing until we find the first
+            // node that does not have range.first's node as an ancestor.
+            PcpNodeIterator expectedNextSubtreeIter = range.first;
+            for (; expectedNextSubtreeIter != range.second; 
+                 ++expectedNextSubtreeIter) {
+                if (!isDescendantOfNode(
+                        *range.first, *expectedNextSubtreeIter)) {
+                    break;
+                }
+            }
+
+            // Use MoveToNextSubtree to compute the iterator pointing
+            // to the next subtree. This should match the above.
+            PcpNodeIterator computedNextSubtreeIter = range.first;
+            computedNextSubtreeIter.MoveToNextSubtree();
+
+            TF_AXIOM(expectedNextSubtreeIter == computedNextSubtreeIter);
+        }
+    }
+
     std::cout << "Testing GetNodeIteratorAtNode" << std::endl;
     {
         PcpErrorVector errors;

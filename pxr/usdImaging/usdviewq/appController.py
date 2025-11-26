@@ -362,6 +362,7 @@ class AppController(QtCore.QObject):
             self._console = None
             self._debugFlagsWindow = None
             self._interpreter = None
+            self._usdValidationWidget = None
             self._hydraSceneBrowser = None
             self._parserData = parserData
             self._noRender = parserData.noRender
@@ -819,6 +820,7 @@ class AppController(QtCore.QObject):
             self._ui.useExtentsHint.triggered.connect(self._setUseExtentsHint)
 
             self._ui.showInterpreter.triggered.connect(self._showInterpreter)
+            self._ui.showUsdValidation.triggered.connect(self._showUsdValidation)
 
             self._ui.showDebugFlags.triggered.connect(self._showDebugFlags)
 
@@ -2102,6 +2104,8 @@ class AppController(QtCore.QObject):
             self._qtimer.stop()
             self._primViewUpdateTimer.start()
             self._updateOnFrameChange()
+        if self._usdValidationWidget:
+            self._usdValidationWidget.updateRunButtonState()
 
     def _advanceFrameForPlayback(self):
         sleep(max(0, 1. / self.framesPerSecond - (time() - self._lastFrameTime)))
@@ -2692,6 +2696,13 @@ class AppController(QtCore.QObject):
         self._interpreter.show()
         self._interpreter.activateWindow()
         self._interpreter.setFocus()
+
+    def _showUsdValidation(self):
+        if self._usdValidationWidget is None:
+            from .validationWidget import ValidationWidget
+            self._usdValidationWidget = ValidationWidget(self)
+
+        self._usdValidationWidget.show()
 
     def _showDebugFlags(self):
         if self._debugFlagsWindow is None:
