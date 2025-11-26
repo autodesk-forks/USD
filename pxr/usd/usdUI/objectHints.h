@@ -13,11 +13,15 @@
 #include "pxr/usd/usd/object.h"
 #include "pxr/usd/usdUI/api.h"
 
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/staticTokens.h"
 
 #include <string>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+USDUI_API
+extern TfEnvSetting<bool> USDUI_WRITE_LEGACY_UI_HINTS;
 
 /// \hideinitializer
 #define USDUI_HINT_KEYS                                     \

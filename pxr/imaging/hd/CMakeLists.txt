@@ -137,6 +137,7 @@ pxr_library(hd
         perfLog
         planeSchema
         pluginRenderDelegateUniqueHandle
+        pluginRendererUniqueHandle
         points
         prefixingSceneIndex
         primGather
@@ -149,6 +150,7 @@ pxr_library(hd
         renderBufferSchema
         renderCapabilitiesSchema
         renderDelegate
+        renderer
         rendererPlugin
         rendererPluginHandle
         rendererPluginRegistry

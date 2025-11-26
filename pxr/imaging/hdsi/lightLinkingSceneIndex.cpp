@@ -148,13 +148,15 @@ public:
                 return;
             }
 
+            // Mark the old expression as dirty.
+            // Do this prior to removing the collection below, because
+            // that will make the table entry referenced by oldExpr expire.
+            _dirtyState.push_back({oldExpr, collectionId});
+
             // Expression has changed.Remove table entries for the existing 
             // collection and queue invalidation.
             _RemoveCollection(
                 collectionId, _InvalidationType::DirtyTargetsAndCollection);
-
-            _dirtyState.push_back({oldExpr, collectionId});
-
         }
 
         if (IsTrivial(expr)) {

@@ -110,12 +110,33 @@ if(WIN32)
 endif()
 
 # --TBB
-find_package(TBB CONFIG COMPONENTS tbb)
-if(TBB_FOUND) 
-    set(PXR_FIND_TBB_IN_CONFIG ON)
+if (DEFINED PXR_FIND_TBB_IN_CONFIG)
+    if (PXR_FIND_TBB_IN_CONFIG)
+        find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+    else()
+        find_package(TBB REQUIRED COMPONENTS tbb)
+    endif()
 else()
-    find_package(TBB REQUIRED COMPONENTS tbb)
-    set(PXR_FIND_TBB_IN_CONFIG OFF)
+    # Set PXR_FIND_TBB_IN_CONFIG appropriately so that downstream
+    # pxrConfig knows how TBB was found and appropriately encodes the 
+    # dependency.
+    find_package(TBB CONFIG COMPONENTS tbb)
+    if (TBB_FOUND)
+        set(PXR_FIND_TBB_IN_CONFIG ON)
+    else()
+        find_package(TBB REQUIRED COMPONENTS tbb)
+        set(PXR_FIND_TBB_IN_CONFIG OFF)
+    endif()
+endif()
+# Backward compabatibility with FindTBB.cmake
+if(PXR_FIND_TBB_IN_CONFIG)
+    set(TBB_tbb_LIBRARY TBB::tbb)
+    if(TARGET TBB::tbbmalloc)
+        set(TBB_tbbmalloc_LIBRARY TBB::tbbmalloc)
+    endif()
+    if(TARGET TBB::tbbmalloc_proxy)
+        set(TBB_tbbmalloc_proxy_LIBRARY TBB::tbbmalloc_proxy)
+    endif()
 endif()
 
 # --math

@@ -510,9 +510,16 @@ class Timer(object):
        if wantToPrintTime:
            t.PrintTime()
     """
+
+    # Annotate for performance tools if we're in the Pixar environment.
+    # Silently skip this if the IttUtil module is not available.
+    try:
+        from pixar import IttUtil
+    except ImportError:
+        IttUtil = None
+
     def __init__(self, label, printTiming=False):
         self._printTiming = printTiming
-        self._ittUtilTaskEnd = lambda : None
         self._label = label
         self._isValid = False
 
@@ -522,22 +529,17 @@ class Timer(object):
         self._stopwatch.Start()
         self._isValid = True
         self.interval = 0
-        # Annotate for performance tools if we're in the Pixar environment.
-        # Silently skip this if the IttUtil module is not available.
-        try:
-            from pixar import IttUtil
-            self._ittUtilTaskEnd = IttUtil.TaskEnd
-            IttUtil.TaskBegin(self._label)
-        except ImportError:
-            pass
+        if Timer.IttUtil:
+            Timer.IttUtil.TaskBegin(self._label)
         return self
 
     def __exit__(self, excType, excVal, excTB):
         Trace.Collector().EndEvent(self._label)
         self._stopwatch.Stop()
         self.interval = self._stopwatch.seconds
-        # Annotate for performance tools if we're in the Pixar environment
-        self._ittUtilTaskEnd()
+        if Timer.IttUtil:
+            Timer.IttUtil.TaskEnd()
+
         # Only report if we are valid and exiting cleanly (i.e. no exception).
         if self._printTiming and excType is None:
             self.PrintTime()

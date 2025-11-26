@@ -85,16 +85,6 @@ public:                                                                    \
     SpecType(const SpecType& spec) : _id(spec._id) { }                     \
     explicit SpecType(const Sdf_IdentityRefPtr& id) : _id(id) { }          \
 
-#define SDF_DEFINE_BASE_SPEC(SchemaType, SpecType)                         \
-TF_REGISTRY_FUNCTION_WITH_TAG(TfType, Type)                                \
-{                                                                          \
-    TfType::Define<SpecType>();                                            \
-}                                                                          \
-TF_REGISTRY_FUNCTION_WITH_TAG(SdfSpecTypeRegistration, Registration)       \
-{                                                                          \
-    SdfSpecTypeRegistration::RegisterAbstractSpecType<                     \
-        SchemaType, SpecType>();                                           \
-}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

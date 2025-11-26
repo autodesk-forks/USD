@@ -176,7 +176,7 @@ _BuildLightFilterDependenciesDs(const SdfPathVector &filterPaths)
     static HdLocatorDataSourceHandle filtersLocDs =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdLightSchema::GetDefaultLocator().Append(HdTokens->filters));
-
+    
     static HdLocatorDataSourceHandle dependenciesLocDs =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdDependenciesSchema::GetDefaultLocator());
@@ -188,7 +188,7 @@ _BuildLightFilterDependenciesDs(const SdfPathVector &filterPaths)
             .SetDependedOnDataSourceLocator(filtersLocDs)
             .SetAffectedDataSourceLocator(dependenciesLocDs)
             .Build());
-
+    
     static HdLocatorDataSourceHandle emptyLocDs =
         HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
             HdDataSourceLocator::EmptyLocator());
@@ -228,19 +228,62 @@ _ComputeLightFilterDependencies(
     const HdContainerDataSourceHandle lightDs = ls.GetContainer();
     if (lightDs) {
         HdDataSourceBaseHandle filtersDs = lightDs->Get(HdTokens->filters);
+        SdfPathVector filterPaths;
+        
         if (HdSampledDataSourceHandle valDs =
                 HdSampledDataSource::Cast(filtersDs)) {
 
             VtValue val = valDs->GetValue(0.0f);
             if (val.IsHolding<SdfPathVector>()) {
-                return _BuildLightFilterDependenciesDs(
-                    val.UncheckedGet<SdfPathVector>());
+                filterPaths = val.UncheckedGet<SdfPathVector>();
             }
         }
+
+        return _BuildLightFilterDependenciesDs(filterPaths);
     }
 
     return nullptr;
 }
+
+class _LightPrimContainerDataSource final : public HdContainerDataSource
+{
+public:
+    HD_DECLARE_DATASOURCE(_LightPrimContainerDataSource);
+
+    _LightPrimContainerDataSource(
+        const HdContainerDataSourceHandle &primContainer)
+      : _primContainer(primContainer)
+    {
+        TF_VERIFY(primContainer);
+    }
+
+    TfTokenVector GetNames() override
+    {
+        TfTokenVector names = _primContainer->GetNames();
+        if (std::find(names.begin(), names.end(),
+                HdDependenciesSchema::GetSchemaToken()) == names.end()) {
+            names.push_back(HdDependenciesSchema::GetSchemaToken());
+        }
+        return names;
+    }
+
+    HdDataSourceBaseHandle Get(const TfToken &name) override
+    {
+        HdDataSourceBaseHandle result = _primContainer->Get(name);
+
+        if (name == HdDependenciesSchema::GetSchemaToken()) {
+            return HdOverlayContainerDataSource::OverlayedContainerDataSources(
+                _ComputeLightFilterDependencies(_primContainer),
+                HdContainerDataSource::Cast(result));
+        }
+
+        return result;
+    }
+
+private:
+    const HdContainerDataSourceHandle _primContainer;
+};
+
 
 TF_DECLARE_REF_PTRS(_SceneIndex);
 
@@ -262,7 +305,15 @@ public:
 
     HdSceneIndexPrim GetPrim(const SdfPath &primPath) const override
     {
-        const HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
+        HdSceneIndexPrim prim = _GetInputSceneIndex()->GetPrim(primPath);
+        
+        // XXX The use of HdContainerDataSourceEditor here with a lazy
+        //     container that caches the computed data source means that this
+        //     scene index needs to invalidate the prim container handle
+        //     when the computed dependencies may be different.
+        //     We should update this to use a lazy container that computes
+        //     the dependencies on each Get() call instead.
+        //
         if (prim.primType == HdPrimTypeTokens->volume) {
             return
                 { prim.primType,
@@ -275,17 +326,12 @@ public:
                       .Finish() };
         }
 
-        if (HdPrimTypeIsLight(prim.primType)) {
-            return
-                { prim.primType,
-                  HdContainerDataSourceEditor(prim.dataSource)
-                      .Overlay(
-                          HdDependenciesSchema::GetDefaultLocator(),
-                          HdLazyContainerDataSource::New(
-                              std::bind(_ComputeLightFilterDependencies,
-                                        prim.dataSource)))
-                      .Finish() };
+        if (HdPrimTypeIsLight(prim.primType) && prim.dataSource) {
+            // Override prim data source in a lazy manner.
+            prim.dataSource =
+                _LightPrimContainerDataSource::New(prim.dataSource);
         }
+
         return prim;
     }
 

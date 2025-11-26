@@ -43,9 +43,10 @@ USD Home
       :fa:`power-off` Get Started
       ^^^^^^^^^^^
       - :doc:`intro`
+      - `USD Basics in an Hour(ish) (PDF) <https://openusd.org/files/USD_Quickstart_Guide.pdf>`__      
       - :doc:`Tutorials <tut_usd_tutorials>`
       - :doc:`FAQ <usdfaq>`
-      - :doc:`Toolset <toolset>`
+      - :doc:`Toolset <toolset>`      
 
     .. grid-item-card:: 
       :class-card: m-1

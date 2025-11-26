@@ -43,6 +43,9 @@ Exec_Compiler::Compile(TfSpan<const ExecValueKey> valueKeys)
     TRACE_FUNCTION();
     TfAutoMallocTag tag("Exec", __ARCH_PRETTY_FUNCTION__);
 
+    // This begins a new round of compilation.
+    _program->InitializeCompilation();
+
     // Note that the returned vector should always have the same size as
     // valueKeys.  Any key that failed to compile should yield a null masked
     // output at the corresponding index in the result.

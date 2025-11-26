@@ -169,6 +169,32 @@ _TestUsdValidationContext()
         TF_AXIOM(errors.size() == 8);
         for (const auto &error : errors) {
             if (error.GetName() == TfToken("Test1Error")) {
+                // validator corresponding to this error has fixer too, so lets
+                // test that
+                const std::vector<const UsdValidationFixer*> fixers = 
+                    error.GetFixers();
+                TF_AXIOM(fixers.size() == 3);
+                TF_AXIOM(fixers[0]->GetName() == TfToken("TestFixer1"));
+                TF_AXIOM(fixers[1]->GetName() == TfToken("TestFixer2"));
+                TF_AXIOM(fixers[2]->GetName() == TfToken("TestFixer3"));
+                TF_AXIOM(fixers[0]->IsAssociatedWithErrorName(
+                    TfToken("Test1Error")) == true);
+                TF_AXIOM(fixers[1]->IsAssociatedWithErrorName(
+                    TfToken("Test1Error")) == true);
+                TF_AXIOM(fixers[2]->IsAssociatedWithErrorName(
+                    TfToken("Test1Error")) == false);
+                // No edit target provided
+                TF_AXIOM(fixers[0]->CanApplyFix(
+                    error, UsdEditTarget(), UsdTimeCode::Default()) == false);
+                TF_AXIOM(fixers[0]->CanApplyFix(
+                    error, stage->GetEditTarget(), UsdTimeCode::Default()) ==
+                true); 
+                TF_AXIOM(fixers[1]->CanApplyFix(
+                    error, stage->GetEditTarget(), UsdTimeCode::Default()) ==
+                true);
+                TF_AXIOM(fixers[2]->CanApplyFix(
+                    error, stage->GetEditTarget(), UsdTimeCode::Default()) ==
+                false);
                 _TestError1(error);
             } else if (error.GetName() == TfToken("Test2Error")) {
                 _TestError2(error);

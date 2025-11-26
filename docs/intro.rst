@@ -36,6 +36,11 @@ Concretely, USD is an `open source project
 <https://github.com/PixarAnimationStudios/OpenUSD>`_ released under the 
 `TOST license <https://openusd.org/license>`_.
 
+.. seealso::
+  
+  `USD Basics in an Hour(ish) <https://openusd.org/files/USD_Quickstart_Guide.pdf>`__
+  for a quick intro to USD.
+
 Why use USD?
 ============
 

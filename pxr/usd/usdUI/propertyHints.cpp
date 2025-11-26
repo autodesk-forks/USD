@@ -6,6 +6,7 @@
 //
 
 #include "pxr/usd/usdUI/propertyHints.h"
+#include "pxr/base/tf/envSetting.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -43,10 +44,20 @@ UsdUIPropertyHints::SetDisplayGroup(const std::string& group)
         return false;
     }
 
-    return _prop.SetMetadataByDictKey(
-        UsdUIHintKeys->UIHints,
-        UsdUIHintKeys->DisplayGroup,
-        group);
+    if (!_prop.SetMetadataByDictKey(
+            UsdUIHintKeys->UIHints,
+            UsdUIHintKeys->DisplayGroup,
+            group)) {
+        return false;
+    }
+
+    if (TfGetEnvSetting(USDUI_WRITE_LEGACY_UI_HINTS)) {
+        // Use generic API to avoid deprecation warning in
+        // UsdProperty::SetDisplayGroup()
+        _prop.SetMetadata(SdfFieldKeys->DisplayGroup, group);
+    }
+
+    return true;
 }
 
 std::string

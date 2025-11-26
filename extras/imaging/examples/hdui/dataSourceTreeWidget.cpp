@@ -7,6 +7,8 @@
 #include "dataSourceTreeWidget.h"
 
 #include "pxr/base/tf/denseHashSet.h"
+#include "pxr/imaging/hd/materialSchema.h"
+#include "pxr/imaging/hd/materialBindingsSchema.h"
 
 #include <QContextMenuEvent>
 #include <QFileDialog>
@@ -36,7 +38,7 @@ public:
     , _childrenBuilt(false)
     {
         if (!locator.IsEmpty()) {
-            setText(0, locator.GetLastElement().data());
+            setText(/*column = */ 0, _ComputeUIDisplayName(locator));
         }
 
         if (HdContainerDataSource::Cast(dataSource)
@@ -47,6 +49,7 @@ public:
             _childrenBuilt = true;
         }
 
+        // XXX: Can this be removed? WBN to auto expand.
         if (_IsInExpandedSet()) {
             // NOTE: defer expansion because pulling immediately triggers yet
             //       ununderstood crashes with
@@ -236,6 +239,26 @@ private:
                         this, vectorDs->GetElement(i));
             }
         }
+    }
+
+    QString _ComputeUIDisplayName(const HdDataSourceLocator &locator)
+    {
+        const TfToken &lastElement = locator.GetLastElement();
+        if (!lastElement.IsEmpty()) {
+            return lastElement.GetText();
+        }
+
+        // Schemata like HdMaterialSchema and HdMaterialBindingsSchema
+        // can have empty field names to represent special concepts. Provide
+        // better UI text for these.
+        const TfToken uiName =
+            locator.HasPrefix(HdMaterialSchema::GetDefaultLocator())
+            ? HdMaterialSchemaTokens->_universalRenderContextToken
+            : locator.HasPrefix(HdMaterialBindingsSchema::GetDefaultLocator())
+                ? HdMaterialBindingsSchemaTokens->_allPurposeToken
+                : TfToken("<empty>");
+        
+        return uiName.GetText();
     }
 };
 

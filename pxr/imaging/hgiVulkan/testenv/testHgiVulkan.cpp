@@ -596,14 +596,14 @@ TestVulkanBuffer(HgiVulkan& hgiVulkan)
     stagingBlob[9] = 789;
     stagingBlob[10] = 789;
     stagingBlob[11] = 789;
-    memcpy(cpuAddress, stagingBlob.data() + 4, 8 * sizeof(blob[0]));
+    memcpy(cpuAddress, stagingBlob.data() + 8, 8 * sizeof(blob[0]));
 
     // Schedule copy from staging area to GPU device-local buffer.
     HgiBufferCpuToGpuOp transferOp2;
     transferOp2.byteSize = 8 * sizeof(blob[0]);
     transferOp2.cpuSourceBuffer = cpuAddress;
     transferOp2.sourceByteOffset = 0;
-    transferOp2.destinationByteOffset = 4 * sizeof(blob[0]);
+    transferOp2.destinationByteOffset = 8 * sizeof(blob[0]);
     transferOp2.gpuDestinationBuffer = buffer;
 
     HgiBlitCmdsUniquePtr blitCmds4 = hgiVulkan.CreateBlitCmds();

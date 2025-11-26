@@ -4880,44 +4880,16 @@ _NodeCanBeCulled(
     return true;
 }
 
-// Cull all nodes in the subtree rooted at the given node whose site
-// is given in culledSites.
-static bool
-_CullMatchingChildrenInSubtree(
-    PcpNodeRef node,
-    const std::unordered_set<PcpLayerStackSite, TfHash>& culledSites)
-{
-    bool allChildrenCulled = true;
-    TF_FOR_ALL(child, Pcp_GetChildrenRange(node)) {
-        allChildrenCulled &=
-            _CullMatchingChildrenInSubtree(*child, culledSites);
-    }
-
-    if (allChildrenCulled && culledSites.count(node.GetSite())) {
-        node.SetCulled(true);
-    }
-
-    return node.IsCulled();
-}
-
 // Helper that recursively culls subtrees at and under the given node.
 static void
 _CullSubtreesWithNoOpinionsHelper(
     PcpNodeRef node,
     const PcpLayerStackSite& rootSite,
-    std::vector<PcpCulledDependency>* culledDeps,
-    std::unordered_set<PcpLayerStackSite, TfHash>* culledSites = nullptr)
+    std::vector<PcpCulledDependency>* culledDeps)
 {
     // Recurse and attempt to cull all children first. Order doesn't matter.
     TF_FOR_ALL(child, Pcp_GetChildrenRange(node)) {
-        // Skip culling for specializes subtrees here; these will be handled
-        // by _CullSubtreesWithNoOpinions. See comments there for more info.
-        if (PcpIsSpecializeArc(child->GetArcType())) {
-            continue;
-        }
-
-        _CullSubtreesWithNoOpinionsHelper(
-            *child, rootSite, culledDeps, culledSites);
+        _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
     }
 
     // Now, mark this node as culled if we can. These nodes will be
@@ -4930,10 +4902,6 @@ _CullSubtreesWithNoOpinionsHelper(
         // index when Finalize() is called, so they must be saved separately
         // for later use.
         Pcp_AddCulledDependency(node, culledDeps);
-
-        if (culledSites) {
-            culledSites->insert(node.GetSite());
-        }
     }
 }
 
@@ -4943,39 +4911,8 @@ _CullSubtreesWithNoOpinions(
     const PcpLayerStackSite& rootSite,
     std::vector<PcpCulledDependency>* culledDeps)
 {
-    // We propagate and maintain duplicate node structure in the graph
-    // for specializes arcs so when we cull we need to ensure we do so
-    // in both places consistently. 
-    //
-    // The origin subtree is marked inert as part of propagation, which
-    // means culling would remove it entirely which is not what we want.
-    // Instead, we cull whatever nodes we can in the propagated subtree
-    // under the root of the prim index, then cull the corresponding
-    // nodes underneath the origin subtree.
-    //
-    // We do a first pass to handle of all these propagated specializes
-    // nodes first to ensure that nodes in the origin subtrees are marked
-    // culled before other subtrees are processed. Otherwise, subtrees
-    // containing those origin subtrees won't be culled. 
-    //
-    // Note that this first pass must be done in weakest-to-strongest order
-    // to handle hierarchies of specializes arcs. See the test case
-    // test_PrimIndexCulling_SpecializesHierarchy in testPcpPrimIndex for
-    // an example.
-    TF_REVERSE_FOR_ALL(child, Pcp_GetChildrenRange(primIndex->GetRootNode())) {
-        if (Pcp_IsPropagatedSpecializesNode(*child)) {
-            std::unordered_set<PcpLayerStackSite, TfHash> culledSites;
-            _CullSubtreesWithNoOpinionsHelper(
-                *child, rootSite, culledDeps, &culledSites);
-
-            _CullMatchingChildrenInSubtree(child->GetOriginNode(), culledSites);
-        }
-    }
-
     TF_FOR_ALL(child, Pcp_GetChildrenRange(primIndex->GetRootNode())) {
-        if (!Pcp_IsPropagatedSpecializesNode(*child)) {
-            _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
-        }
+        _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
     }
 }    
 

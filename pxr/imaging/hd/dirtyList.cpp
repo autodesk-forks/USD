@@ -324,7 +324,7 @@ HdDirtyList::_UpdateDirtyIdsIfNeeded()
         // There may be new prims in the list that might have reprs they've not
         // seen before. Flag these up as needing reevaluation.
         for (const SdfPath& dirtyRprimId : _dirtyIds) {
-            _GetChangeTracker().MarkRprimDirty(
+            _GetChangeTracker()._MarkRprimDirty(
                 dirtyRprimId, HdChangeTracker::InitRepr);
         }
     }

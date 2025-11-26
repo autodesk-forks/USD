@@ -190,31 +190,36 @@ UsdValidationRegistry::_PopulateMetadataFromPlugInfo()
 
 void
 UsdValidationRegistry::RegisterPluginValidator(
-    const TfToken &validatorName, const UsdValidateLayerTaskFn &layerTaskFn)
+    const TfToken &validatorName, const UsdValidateLayerTaskFn &layerTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterPluginValidator<UsdValidateLayerTaskFn>(validatorName,
-                                                     layerTaskFn);
+    _RegisterPluginValidator<UsdValidateLayerTaskFn>(
+        validatorName, layerTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterPluginValidator(
-    const TfToken &validatorName, const UsdValidateStageTaskFn &stageTaskFn)
+    const TfToken &validatorName, const UsdValidateStageTaskFn &stageTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterPluginValidator<UsdValidateStageTaskFn>(validatorName,
-                                                     stageTaskFn);
+    _RegisterPluginValidator<UsdValidateStageTaskFn>(
+        validatorName, stageTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterPluginValidator(
-    const TfToken &validatorName, const UsdValidatePrimTaskFn &primTaskFn)
+    const TfToken &validatorName, const UsdValidatePrimTaskFn &primTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterPluginValidator<UsdValidatePrimTaskFn>(validatorName, primTaskFn);
+    _RegisterPluginValidator<UsdValidatePrimTaskFn>(
+        validatorName, primTaskFn, fixers);
 }
 
 template <typename ValidateTaskFn>
 void
-UsdValidationRegistry::_RegisterPluginValidator(const TfToken &validatorName,
-                                                const ValidateTaskFn &taskFn)
+UsdValidationRegistry::_RegisterPluginValidator(
+    const TfToken &validatorName, const ValidateTaskFn &taskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
     static_assert(std::is_same_v<ValidateTaskFn, UsdValidateLayerTaskFn>
                       || std::is_same_v<ValidateTaskFn, UsdValidateStageTaskFn>
@@ -236,38 +241,43 @@ UsdValidationRegistry::_RegisterPluginValidator(const TfToken &validatorName,
         return;
     }
 
-    _RegisterValidator(metadata, taskFn, /* addMetadata */ false);
+    _RegisterValidator(
+        metadata, taskFn, fixers, /* addMetadata */ false);
 }
 
 void
 UsdValidationRegistry::RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const UsdValidateLayerTaskFn &layerTaskFn)
+    const UsdValidateLayerTaskFn &layerTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterValidator(metadata, layerTaskFn);
+    _RegisterValidator(metadata, layerTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const UsdValidateStageTaskFn &stageTaskFn)
+    const UsdValidateStageTaskFn &stageTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterValidator(metadata, stageTaskFn);
+    _RegisterValidator(metadata, stageTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const UsdValidatePrimTaskFn &primTaskFn)
+    const UsdValidatePrimTaskFn &primTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterValidator(metadata, primTaskFn);
+    _RegisterValidator(metadata, primTaskFn, fixers);
 }
 
 template <typename ValidateTaskFn>
 void
 UsdValidationRegistry::_RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const ValidateTaskFn &taskFn, bool addMetadata)
+    const ValidateTaskFn &taskFn, std::vector<UsdValidationFixer> fixers,
+    bool addMetadata)
 {
     static_assert(std::is_same_v<ValidateTaskFn, UsdValidateLayerTaskFn>
                       || std::is_same_v<ValidateTaskFn, UsdValidateStageTaskFn>
@@ -307,7 +317,8 @@ UsdValidationRegistry::_RegisterValidator(
         }
 
         std::unique_ptr<UsdValidationValidator> validator
-            = std::make_unique<UsdValidationValidator>(metadata, taskFn);
+            = std::make_unique<UsdValidationValidator>(
+                metadata, taskFn, fixers);
         if (!_validators.emplace(metadata.name, std::move(validator)).second) {
             TF_CODING_ERROR(
                 "Validator with name '%s' already exists, failed to register "
@@ -503,7 +514,7 @@ UsdValidationRegistry::_RegisterValidatorSuite(
         }
 
         // Note in case validator metadata needs to be added and there is
-        // contention only the first validator's (which is being added)
+        // contention, only the first validator's (which is being added)
         // metadata will be added.
         if (addMetadata) {
             // Following call to _AddValidatorMetadata is protected by the lock

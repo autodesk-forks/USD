@@ -163,14 +163,14 @@ namespace
             Ts_SampleDataInterface* sampledSpline);
 
         // Sample knots in sampleInterval in reverse. Sampled knot times are
-        // converted to sample times with _ToSampleTime and values are offset by
-        // valueOffset before being stored in sampledSpline.
+        // converted to sample times with _ToSampleTime before being stored in
+        // sampledSpline. Note that oscillating loops always have a valueOffset
+        // of 0.0 so we do not need it as an argument.
         void _SampleKnotsReversed(
             const GfInterval& sampleInterval,
             const TsSplineSampleSource source,
             const double knotToSampleTimeScale,
             const TsTime knotToSampleTimeOffset,
-            const double valueOffset,
             Ts_SampleDataInterface* sampledSpline);
 
         // Sample a segment of the spline between 2 adjacent knots.
@@ -742,7 +742,6 @@ _Sampler::_ExtrapLoop(
                                  source,
                                  knotToSampleTimeScale,
                                  knotToSampleTimeOffset,
-                                 iterValueOffset,
                                  sampledSpline);
         } else {
             _SampleKnots(sampleInterval,
@@ -820,36 +819,39 @@ _Sampler::_SampleKnotsReversed(
     const TsSplineSampleSource source,
     const double knotToSampleTimeScale,
     const TsTime knotToSampleTimeOffset,
-    const double valueOffset,
     Ts_SampleDataInterface* sampledSpline)
 {
     // _SampleKnotsReversed is used only for extrapolation loops that oscillate
     // and only for the iterations that traverse backward through time. The
     // sampleInterval is guaranteed to fit within a single iteration of the
     // loop.
+    //
+    // Note that we are processing the knots in reverse order, using iterators
+    // like rbegin() and rend(). This means that "begin" or "prev" knots will
+    // contain larger time values than "end" or "next" knots. Once these time
+    // values have been passed throught _ToSampleTime(), the "begin" knot will
+    // generate a sample that is to the left of the "end" knot.
     const Ts_DoubleKnotData* prevKnot = nullptr;
     const Ts_DoubleKnotData* nextKnot = nullptr;
     const Ts_DoubleKnotData* beginKnot = nullptr;
 
-    // Shift the interval from sample to knot times and clamp any rounding
-    // errors.
-    const GfInterval knotInterval =
-        GfInterval(_ToKnotTime(sampleInterval.GetMax(),
-                               knotToSampleTimeScale,
-                               knotToSampleTimeOffset),
-                   _ToKnotTime(sampleInterval.GetMin(),
-                               knotToSampleTimeScale,
-                               knotToSampleTimeOffset)) &
-        GfInterval(_firstTime, _lastTime);
+    // We are time reversed, so sampleInterval.GetMin() will yield the largest
+    // knot time value (the starting point for sampling in reverse) when passed
+    // through _ToKnotTime.
+    TsTime knotTime = _ToKnotTime(sampleInterval.GetMin(),
+                                  knotToSampleTimeScale,
+                                  knotToSampleTimeOffset);
 
-    // We are time reversed, so knotInterval.GetMax() will yield the smallest
-    // sample time value when passed through _ToSampleTime.
+    // Knot begin time is the smallest knot time that we're going to
+    // sample. This is the ending point for our reversed sampling.
+    const TsTime knotBeginTime = _ToKnotTime(sampleInterval.GetMax(),
+                                             knotToSampleTimeScale,
+                                             knotToSampleTimeOffset);
 
-    TsTime knotTime = knotInterval.GetMax();
-    const TsTime knotBeginTime = knotInterval.GetMin();
-
-    // prevIt points to the knot at the begining of the segment containing
-    // knotTime.  beginIt points to the knot at or before knotBeginTime. Since
+    // prevIt points to the knot at the (reversed) begining of the segment
+    // containing knotTime.
+    //
+    // beginIt points to the knot at or before knotBeginTime. Since
     // knotBeginTime is clamped to never exceed _firstTime, beginIt points to
     // the beginning of the segment that should not be sampled (instead of the
     // end of the segment that should be); it is never _times->rend().
@@ -865,20 +867,44 @@ _Sampler::_SampleKnotsReversed(
 
     // Raw pointers to knotData that corresponds to the _times values that
     // the iterators were referencing.
-    prevKnot = _knots->data() + (_knots->size() - 1) - prevRindex;
+    nextKnot = _knots->data() + (_knots->size() - 1) - prevRindex;
     prevKnot = nextKnot + 1;
     beginKnot = _knots->data() + (_knots->size() - 1) - beginRindex;
 
-    for(; nextKnot > beginKnot; --prevKnot, --nextKnot) {
-        GfInterval segmentInterval(prevKnot->time, nextKnot->time);
-        segmentInterval &= knotInterval;
-        _SampleSegment(prevKnot,
-                       nextKnot,
+    // Remember we're traversing toward the beginning.
+    for(; prevKnot > beginKnot; --prevKnot, --nextKnot) {
+        // We need to update the data in the knots.
+        Ts_DoubleKnotData prevData = *prevKnot;
+        prevData.time = _ToSampleTime(prevData.time,
+                                      knotToSampleTimeScale,
+                                      knotToSampleTimeOffset);
+        prevData.value = prevData.GetPreValue();
+        prevData.postTanWidth = prevData.preTanWidth;
+        prevData.postTanSlope = -prevData.preTanSlope;
+
+        Ts_DoubleKnotData nextData = *nextKnot;
+        nextData.dualValued = false;
+        nextData.time = _ToSampleTime(nextData.time,
+                                      knotToSampleTimeScale,
+                                      knotToSampleTimeOffset);
+        nextData.preTanWidth = nextData.postTanWidth;
+        nextData.preTanSlope = -nextData.postTanSlope;
+
+        // Change the interpolation of the segment.
+        prevData.nextInterp = nextData.nextInterp;
+
+        GfInterval segmentInterval(prevData.time, nextData.time);
+        segmentInterval &= sampleInterval;
+
+        // Add the segment. We've already applied the knot time and value
+        // scaling so set them to identity.
+        _SampleSegment(&prevData,
+                       &nextData,
                        segmentInterval,
                        source,
-                       knotToSampleTimeScale,
-                       knotToSampleTimeOffset,
-                       valueOffset,
+                       1.0,  // knot to sample time scale
+                       0.0,  // knot to sample time offset
+                       0.0,  // valueOffset
                        sampledSpline);
     }
 }
@@ -912,16 +938,26 @@ _Sampler::_SampleSegment(
         return;
     }
 
-    // This segment is a single straight line.
-    TsTime t1 = prevKnot->time;
-    double v1 = prevKnot->value;
-    TsTime t2 = nextKnot->time;
+    // This segment is a single straight line (converted into sample space).
+    // Note that _SampleKnotsReversed may have already converted its knots
+    // values into sample space (and reset the transform to identity), but
+    // _SampleKnots has not. In either case, convert from the times in the
+    // knots to actual sample times before seeing if this segment needs to
+    // be clipped to the _timeInterval.
+    TsTime t1 = _ToSampleTime(prevKnot->time,
+                              knotToSampleTimeScale,
+                              knotToSampleTimeOffset);
+    double v1 = prevKnot->value + valueOffset;
+    TsTime t2 = _ToSampleTime(nextKnot->time,
+                              knotToSampleTimeScale,
+                              knotToSampleTimeOffset);
     double v2 = (prevKnot->nextInterp == TsInterpHeld
                  ? prevKnot->value            // held value
-                 : nextKnot->GetPreValue());  // linear value
+                 : nextKnot->GetPreValue())   // linear value
+                + valueOffset;
 
     // Adjust for sampling just part of the segment.
-    TsTime t = segmentInterval.GetMin();
+    TsTime t = _timeInterval.GetMin();
     if (t > t1) {
         double u = (t - t1) / (t2 - t1);
         t1 = t;
@@ -930,7 +966,7 @@ _Sampler::_SampleSegment(
             v1 = GfLerp(u, v1, v2);
         }
     }
-    t = segmentInterval.GetMax();
+    t = _timeInterval.GetMax();
     if (t < t2) {
         double u = (t - t1) / (t2 - t1);
         t2 = t;
@@ -940,12 +976,7 @@ _Sampler::_SampleSegment(
         }
     }
 
-    sampledSpline->AddSegment(
-        _ToSampleTime(t1, knotToSampleTimeScale, knotToSampleTimeOffset),
-        v1 + valueOffset,
-        _ToSampleTime(t2, knotToSampleTimeScale, knotToSampleTimeOffset),
-        v2 + valueOffset,
-        source);
+    sampledSpline->AddSegment(t1, v1, t2, v2, source);
 }
 
 void
@@ -1075,11 +1106,10 @@ _Sampler::_SampleBezier(GfVec2d cp[4],
         // _tolerance, so split the curve and recurse on the halves.
         GfVec2d leftCp[4], rightCp[4];
         _SubdivideBezier(cp, 0.5, leftCp, rightCp);
-        bool doLeft = (segmentInterval.Contains(leftCp[0][0]) ||
-                       segmentInterval.Contains(leftCp[3][0]));
-        bool doRight = (segmentInterval.Contains(rightCp[0][0]) ||
-                        segmentInterval.Contains(rightCp[3][0]));
-
+        bool doLeft = segmentInterval.Intersects(GfInterval(leftCp[0][0],
+                                                            leftCp[3][0]));
+        bool doRight = segmentInterval.Intersects(GfInterval(rightCp[0][0],
+                                                             rightCp[3][0]));
         if (knotToSampleTimeScale < 0) {
             // time scale is negative (due to oscillating loops) so sample the
             // right hand side first as it will get scaled to the left.
@@ -1165,6 +1195,8 @@ _Sampler::_UnrollInnerLoops()
     _knots = &_internalKnots;
     _times = &_internalTimes;
 
+    GfInterval unrollInterval = _timeInterval;
+
     // Inner loops are defined over a closed interval. The end of the looped
     // interval has a knot that is a copy of the knot at the start of the
     // interval. It will overrule any knot that may be in the spline data at
@@ -1194,6 +1226,17 @@ _Sampler::_UnrollInnerLoops()
             // knots that affect _timeInterval
             loopedInterval &= _timeInterval;
         }
+    } else {
+        // No inner loops, but there may be extrapolation loops.
+        if (_havePreExtrapLoops || _havePostExtrapLoops) {
+            GfInterval knotsInterval(_firstTime, _lastTime);
+            if (!knotsInterval.Contains(unrollInterval)) {
+                // unrollInterval extends outside the knotsInterval, at least
+                // partly into the extrapolation loops. Unroll all the knots to
+                // ensure we have the knots we need.
+                unrollInterval = knotsInterval;
+            }
+        }
     }
 
     // Iterators for the range that is pre-looping, looping prototype, and
@@ -1206,17 +1249,17 @@ _Sampler::_UnrollInnerLoops()
     std::vector<TsTime>::const_iterator timesBegin = _data->times.begin();
     std::vector<TsTime>::const_iterator timesEnd = _data->times.end();
 
-    preBegin = std::lower_bound(timesBegin, timesEnd, _timeInterval.GetMin());
-    if ((preBegin == timesEnd || *preBegin > _timeInterval.GetMin()) &&
+    preBegin = std::lower_bound(timesBegin, timesEnd, unrollInterval.GetMin());
+    if ((preBegin == timesEnd || *preBegin > unrollInterval.GetMin()) &&
         preBegin != timesBegin)
     {
         --preBegin;
     }
 
-    // Find the knot at or after the end of _timeInterval. This is the knot on
+    // Find the knot at or after the end of unrollInterval. This is the knot on
     // the far end of the last segment we are sampling (or is timesEnd if we're
     // sampling past the last knot).
-    postEnd = std::lower_bound(preBegin, timesEnd, _timeInterval.GetMax());
+    postEnd = std::lower_bound(preBegin, timesEnd, unrollInterval.GetMax());
     if (postEnd != timesEnd) {
         // Increment the iterator so copying [preBegin .. postEnd) will copy the
         // last knot.

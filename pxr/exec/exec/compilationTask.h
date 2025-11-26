@@ -12,7 +12,9 @@
 #include "pxr/exec/exec/api.h"
 
 #include "pxr/exec/exec/compilationState.h"
-#include "pxr/exec/exec/compilerTaskSync.h"
+#include "pxr/exec/exec/compilerTaskSyncBase.h"
+
+#include "pxr/base/work/dispatcher.h"
 
 #include <atomic>
 #include <cstdint>
@@ -110,7 +112,7 @@ public:
     /// method will automatically be re-executed once all dependencies have been
     /// fulfilled.
     /// 
-    Exec_CompilerTaskSync::ClaimResult ClaimSubtask(
+    Exec_CompilerTaskSyncBase::ClaimResult ClaimSubtask(
         const Exec_OutputKey::Identity &key);
 
 private:
@@ -157,8 +159,7 @@ Exec_CompilationTask::TaskDependencies::NewSubtask(
     // this new subtask as the one to run next. This will ensure that the last
     // sub-task is the one eventually returned by _GetNextSubtask().
     if (_nextSubtask) {
-        Exec_CompilationState::OutputTasksAccess::_Get(&state).Run(
-            _nextSubtask);
+        state.GetDispatcher().Run(std::ref(*_nextSubtask));
     }
     _nextSubtask = subTask;
 }

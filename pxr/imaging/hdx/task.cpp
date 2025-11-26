@@ -20,12 +20,6 @@ HdxTask::HdxTask(SdfPath const& id)
 HdxTask::~HdxTask() = default;
 
 bool
-HdxTask::IsConverged() const
-{
-    return true;
-}
-
-bool
 HdxTask::AreTasksConverged(HdRenderIndex * const renderIndex,
                            const SdfPathVector &taskPaths)
 {

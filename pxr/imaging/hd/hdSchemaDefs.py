@@ -648,6 +648,7 @@
         SCHEMA_TOKEN = 'material',
         EXTRA_TOKENS = [
             '(universalRenderContext, "")',
+            '(_universalRenderContextToken, "universalRenderContext")',
             '(all, "__all")',
             'terminals',
             'surface',
@@ -772,6 +773,7 @@
         SCHEMA_TOKEN = 'materialBindings',
         EXTRA_TOKENS = [
             '(allPurpose, "")',
+            '(_allPurposeToken, "allPurpose")',
         ],
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/materialBindingSchema'],
         GENERIC_MEMBER = (
@@ -1033,7 +1035,7 @@
         SCHEMA_INCLUDES = ['{{LIBRARY_PATH}}/schemaTypeDefs'],
         MEMBERS = [
             ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
-            ('namespacedSettings', T_CONTAINER, {}),
+            ('namespacedSettings', 'HdSampledDataSourceContainerSchema', {}),
             ('active', T_BOOL, {}),
             ('renderProducts', 'HdRenderProductVectorSchema', {}),
             ('includedPurposes', T_TOKENARRAY, {}),

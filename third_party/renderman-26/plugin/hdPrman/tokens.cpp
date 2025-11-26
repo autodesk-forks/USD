@@ -15,12 +15,13 @@ TF_DEFINE_PUBLIC_TOKENS(HdPrmanRileyAdditionalRoleTokens,
                         HD_PRMAN_RILEY_ADDITIONAL_ROLE_TOKENS);
 TF_DEFINE_PUBLIC_TOKENS(HdPrmanRenderParamTokens, HD_PRMAN_RENDER_PARAM_TOKENS);
 TF_DEFINE_PUBLIC_TOKENS(HdPrmanPluginTokens, HD_PRMAN_PLUGIN_TOKENS);
+TF_DEFINE_PUBLIC_TOKENS(HdPrmanDisplayNamesTokens, HD_PRMAN_DISPLAY_NAMES);
 
 TF_MAKE_STATIC_DATA(std::vector<std::string>, _pluginDisplayNameTokens) {
-    _pluginDisplayNameTokens->push_back("RenderMan RIS");
-    _pluginDisplayNameTokens->push_back("RenderMan XPU");
-    _pluginDisplayNameTokens->push_back("RenderMan XPU - CPU");
-    _pluginDisplayNameTokens->push_back("RenderMan XPU - GPU");
+    _pluginDisplayNameTokens->push_back(HdPrmanDisplayNamesTokens->RenderManRIS);
+    _pluginDisplayNameTokens->push_back(HdPrmanDisplayNamesTokens->RenderManXPU);
+    _pluginDisplayNameTokens->push_back(HdPrmanDisplayNamesTokens->RenderManXPUCPU);
+    _pluginDisplayNameTokens->push_back(HdPrmanDisplayNamesTokens->RenderManXPUGPU);
 }
 
 const std::vector<std::string>& HdPrman_GetPluginDisplayNames() {

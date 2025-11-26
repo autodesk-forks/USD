@@ -202,6 +202,15 @@ RtxHioImagePlugin::Open(TextureCtx& tCtx)
                 "failed to open '%s'\n", this, filename.c_str());
         }
         return 1;
+    } else if( image->GetNumMipLevels() <= 1 ) {
+        if(m_msgHandler) {
+            // Warn once that MIP levels need to be generated
+            m_msgHandler->Warning(
+                "RtxHioImagePlugin: "
+                "Generating mipmap levels for: %s.\n"
+                "Preconverting to prman texture format is recommended.",
+                filename.c_str());
+        }
     }
 
     // Set up Renderman texture context.

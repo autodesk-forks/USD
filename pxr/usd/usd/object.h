@@ -621,6 +621,9 @@ public:
     /// Return this object's display name (metadata).  This returns the
     /// empty string if no display name has been set.
     /// \sa SetDisplayName()
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     USD_API
     std::string GetDisplayName() const;
 
@@ -629,16 +632,25 @@ public:
     /// DisplayName is meant to be a descriptive label, not necessarily an
     /// alternate identifier; therefore there is no restriction on which
     /// characters can appear in it.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     USD_API
     bool SetDisplayName(const std::string& name) const;
 
     /// Clears this object's display name (metadata) in the current EditTarget
     /// (only).  Returns true on success.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     USD_API
     bool ClearDisplayName() const;
 
     /// Returns true if displayName was explicitly authored and GetMetadata()
     /// will return a meaningful value for displayName. 
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     USD_API
     bool HasAuthoredDisplayName() const;
 

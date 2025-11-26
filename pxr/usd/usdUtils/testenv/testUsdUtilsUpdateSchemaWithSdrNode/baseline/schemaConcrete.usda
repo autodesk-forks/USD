@@ -30,6 +30,8 @@ class TestSchemaConcrete "TestSchemaConcrete" (
               photographic measurements.
                 """
         }
+        displayGroup = "Basic"
+        displayName = "Exposure"
         uiHints = {
             string displayGroup = "Basic"
             string displayName = "Exposure"
@@ -45,6 +47,8 @@ class TestSchemaConcrete "TestSchemaConcrete" (
               intensity: Scales the contribution of this light linearly.
                 """
         }
+        displayGroup = "Basic"
+        displayName = "Intensity"
         uiHints = {
             string displayGroup = "Basic"
             string displayName = "Intensity"
@@ -66,6 +70,8 @@ class TestSchemaConcrete "TestSchemaConcrete" (
               Y component must non-negative.  Ignored if a month is given.
                 """
         }
+        displayGroup = "Basic"
+        displayName = "Direction"
         uiHints = {
             string displayGroup = "Basic"
             string displayName = "Direction"

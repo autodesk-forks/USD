@@ -10,7 +10,6 @@
 #ifndef PXR_USD_IMAGING_USD_IMAGING_GL_ENGINE_H
 #define PXR_USD_IMAGING_USD_IMAGING_GL_ENGINE_H
 
-#include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdImagingGL/api.h"
 #include "pxr/usdImaging/usdImagingGL/version.h"
@@ -704,12 +703,6 @@ protected:
     USDIMAGINGGL_API
     HdRenderIndex *_GetRenderIndex() const;
 
-    /// \deprecated.
-    /// Use _Execute(const UsdImaginGLRenderParams &, const SdfPathVector &).
-    USDIMAGINGGL_API
-    void _Execute(const UsdImagingGLRenderParams &params,
-                  const HdTaskSharedPtrVector tasks);
-
     USDIMAGINGGL_API
     void _Execute(const UsdImagingGLRenderParams &params,
                   const SdfPathVector &taskPaths);
@@ -784,17 +777,13 @@ protected:
     USDIMAGINGGL_API
     HdEngine *_GetHdEngine();
 
+    /// \deprecated The HdxTaskController is replaced by the
+    ///             HdxTaskControllerSceneIndex.
     USDIMAGINGGL_API
     HdxTaskController *_GetTaskController() const;
 
     USDIMAGINGGL_API
     HdSelectionSharedPtr _GetSelection() const;
-
-    // Application scene index callback registration and
-    // engine-renderInstanceId tracking.
-    void
-    _RegisterRenderInstanceId(
-        const std::string &renderInstanceId);
 
     // Create UsdImagingStageSceneIndex and subsequent scene indices.
     void
@@ -839,24 +828,13 @@ protected:
     bool _isPopulated;
 
 private:
-    // Registers app-managed scene indices with the scene index plugin registry.
-    // This needs to be called once *before* the render index is constructed.
-    static void _RegisterApplicationSceneIndices();
-
-    // Creates and returns the scene globals scene index. This callback is
-    // registered prior to render index construction and is invoked during
-    // render index construction via
-    // HdSceneIndexPluginRegistry::AppendSceneIndicesForRenderer(..).
-    static HdSceneIndexBaseRefPtr
-    _AppendSceneGlobalsSceneIndexCallback(
-        const std::string &renderInstanceId,
-        const HdSceneIndexBaseRefPtr &inputScene,
-        const HdContainerDataSourceHandle &inputArgs);
+    bool _HasRenderer() const;
+    HdSceneIndexBaseRefPtr _GetTerminalSceneIndex() const;
 
     HdSceneIndexBaseRefPtr
     _AppendOverridesSceneIndices(
         const HdSceneIndexBaseRefPtr &inputScene);
-    
+
     UsdImagingGLEngine_Impl::_AppSceneIndicesSharedPtr _appSceneIndices;
 
     void _DestroyHydraObjects();
@@ -872,7 +850,7 @@ private:
     // State of the _lightPruningSceneIndex.
     bool _lightPruningSceneIndexEnableSceneLights;
     HdSceneIndexBaseRefPtr _sceneIndex;
-    
+
     std::unique_ptr<UsdImagingDelegate> _sceneDelegate;
 
     std::unique_ptr<HdEngine> _engine;

@@ -31,6 +31,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     ((Help, "help"))               \
     ((Label, "label"))             \
     ((Pages, "pages"))             \
+    ((OpenPages, "openPages"))     \
     ((Primvars, "primvars"))       \
     ((ImplementationName, "__SDR__implementationName"))\
     ((Target, "__SDR__target"))    \
@@ -265,6 +266,10 @@ public:
     SDR_API
     const SdrTokenVec& GetPages() const { return _pages; };
 
+    /// Gets the pages which should be opened or expanded by default.
+    SDR_API
+    const SdrTokenVec& GetOpenPages() const { return _openPages; };
+
     /// The list of primvars this node knows it requires / uses.
     /// For example, a shader node may require the 'normals' primvar to function
     /// correctly. Additional, user specified primvars may have been authored on
@@ -377,6 +382,7 @@ protected:
     TfToken _category;
     SdrTokenVec _departments;
     SdrTokenVec _pages;
+    SdrTokenVec _openPages;
 
 private:
     // Initializes `_primvars` and `_primvarNamingProperties`

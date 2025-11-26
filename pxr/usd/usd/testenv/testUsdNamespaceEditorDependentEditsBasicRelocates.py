@@ -1648,13 +1648,6 @@ class TestUsdNamespaceEditorDependentEditsBasicRelocates(
             # apply to most of the other test cases in this test file.
             "/Prim2/Child" : self.PrimResyncType.Delete,
             "/Prim2/RenamedChild" : self.PrimResyncType.Delete,
-            # XXX: The presence of this resync notification is due to a separate
-            # bug related to implied ancestral inherits nodes having map 
-            # functions mapping ancestral paths to incorrect locations. This 
-            # bug subsequently impacts Pcp change processing causing this to
-            # come up as a resync even though there is no prim on the composed
-            # stage at this path neither before or after the edit
-            "/World/Ref/RenamedChild" : self.PrimResyncType.Delete,
         })
 
         # Edit: Rename /Class/RenamedChild to /Class/RelocatedChild
@@ -1772,13 +1765,6 @@ class TestUsdNamespaceEditorDependentEditsBasicRelocates(
             # apart in the current change processing. This same effect will 
             # apply to most of the other test cases in this test file.
             "/Prim2/RenamedChild" : self.PrimResyncType.Delete,
-            # XXX: The presence of this resync notification is due to a separate
-            # bug related to implied ancestral inherits nodes having map 
-            # functions mapping ancestral paths to incorrect locations. This 
-            # bug subsequently impacts Pcp change processing causing this to
-            # come up as a resync even though there is no prim on the composed
-            # stage at this path neither before or after the edit
-            "/World/Ref/RelocatedChild" : self.PrimResyncType.Delete,
         })
 
         # Edit: Rename /Class/RelocatedChild to /Class/RenamedChild, effectively
@@ -1888,13 +1874,6 @@ class TestUsdNamespaceEditorDependentEditsBasicRelocates(
             "/Prim2/RelocatedChild" : self.PrimResyncType.RenameSource,
             "/Prim2/RenamedChild" : self.PrimResyncType.RenameDestination,
             "/Prim3" : self.PrimResyncType.UnchangedPrimStack,
-            # XXX: The presence of this resync notification is due to a separate
-            # bug related to implied ancestral inherits nodes having map 
-            # functions mapping ancestral paths to incorrect locations. This 
-            # bug subsequently impacts Pcp change processing causing this to
-            # come up as a resync even though there is no prim on the composed
-            # stage at this path neither before or after the edit
-            "/World/Ref/RenamedChild" : self.PrimResyncType.Delete,
         })
 
     def test_PartiallyRelocatedNewPath(self):

@@ -91,6 +91,21 @@ public:
     
     ~Exec_Program();
 
+    /// Gets the current compilation version.
+    ///
+    /// This version is incremented with each new round of compilation.
+    ///
+    size_t GetCompilationVersion() const {
+        return _compilationVersion;
+    }
+
+    /// Declares that the program is about to begin a new round of compilation.
+    void InitializeCompilation() {
+        // Increments the program's compilation version. We expect the version
+        // to never wrap-around.
+        TF_VERIFY(++_compilationVersion != 0);
+    }
+
     /// Adds a new node in the VdfNetwork.
     ///
     /// Constructs a node of type \p NodeType. The first argument of the node
@@ -125,16 +140,18 @@ public:
 
     /// Gets the VdfMaskedOutput provided by \p outputKeyIdentity.
     ///
-    /// \return a pair containing the matching VdfMaskedOutput and a bool
-    /// indicating whether there exists an output for the given
+    /// \return a mapped value from the Exec_CompiledOutputCache, which contains
+    /// a VdfMaskedOutput and the compilation version at the time that output
+    /// was added to the cache; or return nullptr if there is no entry for
     /// \p outputKeyIdentity.
     ///
     /// \note
-    /// If the returned boolean is true, the returned VdfMaskedOutput may still
-    /// contain a null VdfOutput. This indicates that the given output key is
-    /// *already known* to not have a corresponding output.
+    /// The returned VdfMaskedOutput may contain a null VdfOutput. This
+    /// indicates that the given output key is *already known* to not have a
+    /// corresponding output.
     ///
-    std::tuple<const VdfMaskedOutput &, bool> GetCompiledOutput(
+    const Exec_CompiledOutputCache::MappedType *
+    GetCompiledOutput(
         const Exec_OutputKey::Identity &outputKeyIdentity) const {
         return _compiledOutputCache.Find(outputKeyIdentity);
     }
@@ -148,7 +165,8 @@ public:
     bool SetCompiledOutput(
         const Exec_OutputKey::Identity &outputKeyIdentity,
         const VdfMaskedOutput &maskedOutput) {
-        return _compiledOutputCache.Insert(outputKeyIdentity, maskedOutput);
+        return _compiledOutputCache.Insert(
+            outputKeyIdentity, maskedOutput, _compilationVersion);
     }
 
     /// Gets the leaf node compiled for the given \p valueKey.
@@ -350,6 +368,9 @@ private:
 private:
     // The compiled data flow network.
     VdfNetwork _network;
+
+    // An integer value that increases with each round of compilation.
+    size_t _compilationVersion;
 
     // Every network always has a compiled time input node.
     EfTimeInputNode *const _timeInputNode;

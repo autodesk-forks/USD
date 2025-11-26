@@ -32,6 +32,7 @@ else()
 endif()
 
 # Turn on all but informational warnings.
+# Note /W3 also includes Mismatch-tags warnings (C4099)
 set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /W3")
 
 # Warnings are errors in strict build mode.

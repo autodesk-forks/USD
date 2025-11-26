@@ -25,9 +25,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_SPEC(
-    SdfSchema, SdfSpecTypeAttribute, SdfAttributeSpec, SdfPropertySpec);
-
 SdfAttributeSpecHandle
 SdfAttributeSpec::New(
     const SdfPrimSpecHandle& owner,

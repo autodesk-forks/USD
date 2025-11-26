@@ -9,6 +9,7 @@
 
 #include "pxr/base/tf/enum.h"
 #include "pxr/usdValidation/usdValidation/validator.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -46,11 +47,13 @@ UsdValidationError::UsdValidationError()
 
 UsdValidationError::UsdValidationError(
     const TfToken &name, const UsdValidationErrorType &type,
-    const UsdValidationErrorSites &errorSites, const std::string &errorMsg)
+    const UsdValidationErrorSites &errorSites, const std::string &errorMsg,
+    const VtValue &metadata)
     : _name(name)
     , _errorType(type)
     , _errorSites(errorSites)
     , _errorMsg(errorMsg)
+    , _metadata(metadata)
 {
     _validator = nullptr;
 }
@@ -95,6 +98,51 @@ UsdValidationError::GetErrorAsString() const
                              TfEnum::GetDisplayName(_errorType).c_str(),
                              _errorMsg.c_str());
     }
+}
+
+const std::vector<const UsdValidationFixer *>
+UsdValidationError::GetFixers() const
+{
+    if (!_validator) {
+        return {};
+    }
+    return _validator->GetFixers();
+}
+
+const UsdValidationFixer*
+UsdValidationError::GetFixerByName(const TfToken &name) const
+{
+    if (!_validator) {
+        return nullptr;
+    }
+    return _validator->GetFixerByName(name);
+}
+
+const std::vector<const UsdValidationFixer*>
+UsdValidationError::GetFixersByErrorName() const
+{
+    if (!_validator) {
+        return {};
+    }
+    return _validator->GetFixersByErrorName(_name);
+}
+
+const UsdValidationFixer*
+UsdValidationError::GetFixerByNameAndErrorName(const TfToken &name) const
+{
+    if (!_validator) {
+        return nullptr;
+    }
+    return _validator->GetFixerByNameAndErrorName(name, _name);
+}
+
+const std::vector<const UsdValidationFixer*>
+UsdValidationError::GetFixersByKeywords(const TfTokenVector &keywords) const
+{
+    if (!_validator) {
+        return {};
+    }
+    return _validator->GetFixersByKeywords(keywords);
 }
 
 void

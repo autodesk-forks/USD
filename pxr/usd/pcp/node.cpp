@@ -189,7 +189,11 @@ PcpNodeRef::_RecordRestrictionDepth(_Restricted isRestricted)
     if (!contributionRestricted) {
         currDepth = 0;
     }
-    else {
+    else if (currDepth == 0) {
+        // Only change the restriction depth if we're currently not
+        // restricted. We want to keep the previous restriction depth
+        // otherwise because it reflects the location in namespace
+        // where this node was first restricted.
         size_t newDepth = GetPath().GetPathElementCount();
 
         // XXX:

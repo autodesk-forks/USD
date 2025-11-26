@@ -18,6 +18,7 @@
 #include "pxr/imaging/hd/sampleFilterSchema.h"
 #include "pxr/imaging/hd/displayFilterSchema.h"
 #include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hd/version.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -63,19 +64,18 @@ namespace
 VtArray<SdfPath>
 _GetRenderSettingsTerminalPaths(const HdSceneIndexPrim &prim)
 {
-    const HdContainerDataSourceHandle renderSettingsDs =
-        HdContainerDataSource::Cast(prim.dataSource->Get(
-            HdRenderSettingsSchemaTokens->renderSettings));
-    if (!renderSettingsDs) {
-        return VtArray<SdfPath>();
-    }
-    HdRenderSettingsSchema rsSchema = HdRenderSettingsSchema(renderSettingsDs);
+    HdRenderSettingsSchema rsSchema =
+        HdRenderSettingsSchema::GetFromParent(prim.dataSource);
     if (!rsSchema.IsDefined()) {
         return VtArray<SdfPath>();
     }
-    HdContainerDataSourceHandle namespacedSettingsDS = 
-        rsSchema.GetNamespacedSettings();
-    if (!namespacedSettingsDS) {
+#if HD_API_VERSION >= 89
+    const HdSampledDataSourceContainerSchema
+#else
+    HdContainerDataSourceHandle
+#endif
+        namespacedSettings = rsSchema.GetNamespacedSettings();
+    if (!namespacedSettings) {
         return VtArray<SdfPath>();
     }
 
@@ -91,7 +91,11 @@ _GetRenderSettingsTerminalPaths(const HdSceneIndexPrim &prim)
     VtArray<SdfPath> rsTerminalPaths;
     for (const auto& outputToken : outputTokens) {
         const HdSampledDataSourceHandle valueDs =
-            HdSampledDataSource::Cast(namespacedSettingsDS->Get(outputToken));
+#if HD_API_VERSION >= 89
+            namespacedSettings.Get(outputToken);
+#else
+            HdSampledDataSource::Cast(namespacedSettings->Get(outputToken));
+#endif
         if (!valueDs) {
             continue;
         }

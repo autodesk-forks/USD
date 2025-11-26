@@ -15,6 +15,7 @@
 #include "pxr/usd/pcp/iterator.h"
 #include "pxr/usd/pcp/layerStack.h"
 #include "pxr/usd/pcp/primIndex.h"
+#include "pxr/usd/pcp/primIndex_Graph.h"
 #include "pxr/usd/sdf/pathTable.h"
 #include "pxr/usd/sdf/primSpec.h"
 #include "pxr/base/tf/diagnostic.h"
@@ -63,6 +64,36 @@ _ShouldStoreDependency(PcpDependencyFlags depFlags)
     return depFlags & PcpDependencyTypeDirect;
 }
 
+// Determine if Pcp_Dependencies should store entries for the subtree
+// of nodes rooted at the given node. If this is true, then for all
+// nodes in the subtree one of these conditions will hold:
+// 
+// - PcpClassifyNodeDependency(n) & PcpDependencyTypeDirect
+// - PcpClassifyNodeDependency(n) == PcpDependencyTypeNone.
+//   (equivalently, PcpNodeIntroducesDependency(n) == false)
+//
+// As a space optimization, Pcp_Dependencies does not store entries
+// for arcs that are implied by nearby structure and which can
+// be easily synthesized. Specifically, it does not store arcs
+// introduced purely ancestrally, nor does it store arcs for root nodes
+// (PcpDependencyTypeRoot).
+inline static bool
+_ShouldCheckSubtreeForDependencies(const PcpNodeRef& node)
+{
+    // If this is a propagated specializes node, then we to check whether
+    // its origin is or is under a direct dependency since the origin
+    // represents where the specializes arc was actually introduced in
+    // the prim's composition structure. This is handled by
+    // PcpClassifyNodeDependency.
+    if (Pcp_IsPropagatedSpecializesNode(node)) {
+        return _ShouldStoreDependency(PcpClassifyNodeDependency(node));
+    }
+
+    return node.GetArcType() != PcpArcTypeRoot
+        && PcpNodeIntroducesDependency(node)
+        && !node.IsDueToAncestor();
+}
+
 void
 Pcp_Dependencies::Add(
     const PcpPrimIndex &primIndex,
@@ -93,28 +124,43 @@ Pcp_Dependencies::Add(
         deps.push_back(primIndexPath);
     };
 
-    int nodeIndex=0, count=0;
-    for (const PcpNodeRef &n: primIndex.GetNodeRange()) {
-        const int curNodeIndex = nodeIndex++;
-        const PcpDependencyFlags depFlags = PcpClassifyNodeDependency(n);
-        if (_ShouldStoreDependency(depFlags)) {
-            ++count;
-            {
-                tbb::spin_mutex::scoped_lock lock;
-                if (_concurrentPopulationContext) {
-                    lock.acquire(_concurrentPopulationContext->_mutex);
-                }
-                addDependency(n.GetLayerStack(), n.GetPath());
+    int count = 0;
+
+    for (PcpNodeRange allNodesRange = primIndex.GetNodeRange();
+         allNodesRange.first != allNodesRange.second; /* empty */) {
+
+        const PcpNodeRef depNode = *allNodesRange.first;
+        if (!_ShouldCheckSubtreeForDependencies(depNode)) {
+            ++allNodesRange.first;
+            continue;
+        }
+
+        // depNode introduces a direct dependency; we want to store
+        // its site and all of the sites it introduces into the graph.
+        tbb::spin_mutex::scoped_lock lock;
+        if (_concurrentPopulationContext) {
+            lock.acquire(_concurrentPopulationContext->_mutex);
+        }
+
+        for (const PcpNodeRef& n : primIndex.GetNodeSubtreeRange(depNode)) {
+            if (!PcpNodeIntroducesDependency(n)) {
+                continue;
             }
 
+            ++count;
+            addDependency(n.GetLayerStack(), n.GetPath());
+
             TF_DEBUG(PCP_DEPENDENCIES)
-                .Msg(" - Node %i (%s %s): <%s> %s\n",
-                     curNodeIndex,
-                     PcpDependencyFlagsToString(depFlags).c_str(),
+                .Msg(" - Node %zu (%s %s): <%s> %s\n",
+                     primIndex.GetGraph()->GetNodeIndexForNode(n),
+                     PcpDependencyFlagsToString(
+                         PcpClassifyNodeDependency(n)).c_str(),
                      TfEnum::GetDisplayName(n.GetArcType()).c_str(),
                      n.GetPath().GetText(),
                      TfStringify(n.GetLayerStack()->GetIdentifier()).c_str());
         }
+
+        allNodesRange.first.MoveToNextSubtree();
     }
 
     if (!culledDependencies.empty()) {
@@ -287,23 +333,33 @@ Pcp_Dependencies::Remove(const PcpPrimIndex &primIndex, PcpLifeboat *lifeboat)
 
     };
 
-    int nodeIndex=0;
-    for (const PcpNodeRef &n: primIndex.GetNodeRange()) {
-        const int curNodeIndex = nodeIndex++;
-        const PcpDependencyFlags depFlags = PcpClassifyNodeDependency(n);
-        if (!_ShouldStoreDependency(depFlags)) {
+    for (PcpNodeRange allNodesRange = primIndex.GetNodeRange();
+         allNodesRange.first != allNodesRange.second; /* empty */) {
+
+        const PcpNodeRef depNode = *allNodesRange.first;
+        if (!_ShouldCheckSubtreeForDependencies(depNode)) {
+            ++allNodesRange.first;
             continue;
         }
 
-        TF_DEBUG(PCP_DEPENDENCIES)
-            .Msg(" - Node %i (%s %s): <%s> %s\n",
-                 curNodeIndex,
-                 PcpDependencyFlagsToString(depFlags).c_str(),
-                 TfEnum::GetDisplayName(n.GetArcType()).c_str(),
-                 n.GetPath().GetText(),
-                 TfStringify(n.GetLayerStack()->GetIdentifier()).c_str());
+        for (const PcpNodeRef& n : primIndex.GetNodeSubtreeRange(depNode)) {
+            if (!PcpNodeIntroducesDependency(n)) {
+                continue;
+            }
 
-        removeDependency(n.GetLayerStack(), n.GetPath());
+            TF_DEBUG(PCP_DEPENDENCIES)
+                .Msg(" - Node %zu (%s %s): <%s> %s\n",
+                    primIndex.GetGraph()->GetNodeIndexForNode(n),
+                    PcpDependencyFlagsToString(
+                        PcpClassifyNodeDependency(n)).c_str(),
+                    TfEnum::GetDisplayName(n.GetArcType()).c_str(),
+                    n.GetPath().GetText(),
+                    TfStringify(n.GetLayerStack()->GetIdentifier()).c_str());
+
+            removeDependency(n.GetLayerStack(), n.GetPath());
+        }        
+    
+        allNodesRange.first.MoveToNextSubtree();
     }
 
     auto culledDepIt = _culledDependenciesMap.find(primIndexPath);

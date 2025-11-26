@@ -130,6 +130,21 @@ public:
         const std::string &instanceName=std::string(),
         const std::string &appName=std::string());
 
+    /// Create a render index with the given render delegate that populates
+    /// itself by observing the given scene index.
+    /// Returns null if renderDelegate is null.
+    /// The render delegate and render tasks may require access to a renderer's
+    /// device provided by the application. The objects can be
+    /// passed in as 'drivers'. Hgi is an example of a HdDriver.
+    ///   hgi = Hgi::CreatePlatformDefaultHgi()
+    ///   hgiDriver = new HdDriver<Hgi*>(HgiTokens→renderDriver, hgi)
+    ///   HdRenderIndex::New(_renderDelegate, {_hgiDriver})
+    ///
+    static HdRenderIndex *New(
+        HdRenderDelegate *renderDelegate, 
+        HdDriverVector const& drivers,
+        HdSceneIndexBaseRefPtr const &terminalSceneIndex);
+
     HD_API
     ~HdRenderIndex();
 
@@ -444,8 +459,9 @@ private:
         HdRenderDelegate *renderDelegate, 
         HdDriverVector const& drivers,
         const std::string &instanceName,
-        const std::string &appName);
-
+        const std::string &appName,
+        HdSceneIndexBaseRefPtr const &terminalSceneIndex);
+    
     // ---------------------------------------------------------------------- //
     // Private Helper methods 
     // ---------------------------------------------------------------------- //

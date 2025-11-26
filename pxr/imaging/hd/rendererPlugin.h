@@ -14,9 +14,11 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class SdfPath;
-class HdRenderIndex;
+class HdRenderer;
 class HdPluginRenderDelegateUniqueHandle;
+class HdPluginRendererUniqueHandle;
+struct HdRendererCreateArgs;
+TF_DECLARE_REF_PTRS(HdSceneIndexBase);
 
 ///
 /// This class defines a renderer plugin interface for Hydra.
@@ -29,17 +31,25 @@ class HdPluginRenderDelegateUniqueHandle;
 /// The class is used to factory objects that provide delegate support
 /// to other parts of the Hydra Ecosystem.
 ///
-class HdRendererPlugin : public HfPluginBase {
+class HdRendererPlugin : public HfPluginBase
+{
 public:
 
+    /// \name Hydra 2.0 API
+    /// @{
+
     ///
-    /// Create a render delegate through the plugin and wrap it in a
-    /// handle that keeps this plugin alive until render delegate is
-    /// destroyed. Initial settings can be passed in.
+    /// Create renderer through the plugin and wrap it in a handle that
+    /// keeps this plugin alive until the renderer is destroyed.
+    ///
+    /// The renderer is populated from the given scene index.
     ///
     HD_API
-    HdPluginRenderDelegateUniqueHandle CreateDelegate(
-        HdRenderSettingsMap const &settingsMap = {});
+    HdPluginRendererUniqueHandle CreateRenderer(
+        HdSceneIndexBaseRefPtr const &sceneIndex,
+        const HdRendererCreateArgs &rendererCreateArgs);
+
+    /// @}
 
     ///
     /// Look-up plugin id in plugin registry.
@@ -53,6 +63,32 @@ public:
     HD_API
     std::string GetDisplayName() const;
 
+    ///
+    /// Returns \c true if this renderer plugin is supported in the running 
+    /// process and \c false if not.
+    /// 
+    /// This gives the plugin a chance to perform some runtime checks to make
+    /// sure that the system meets minimum requirements.  The 
+    /// \p rendererCreateArgs parameter indicates the resources available when 
+    /// making this determination.
+    /// 
+    /// The \p reasonWhyNot param, when provided, can be filled with the reason
+    /// why the renderer plugin is not supported.
+    virtual bool IsSupported(
+        HdRendererCreateArgs const &rendererCreateArgs,
+        std::string *reasonWhyNot = nullptr) const = 0;
+
+    /// \name Hydra 1.0 API
+    /// @{
+
+    ///
+    /// Create a render delegate through the plugin and wrap it in a
+    /// handle that keeps this plugin alive until render delegate is
+    /// destroyed. Initial settings can be passed in.
+    ///
+    HD_API
+    HdPluginRenderDelegateUniqueHandle CreateDelegate(
+        HdRenderSettingsMap const &settingsMap = {});
     ///
     /// Clients should use CreateDelegate since this method
     /// will eventually become protected, use CreateRenderDelegateHandle
@@ -83,6 +119,8 @@ public:
     ///
     virtual void DeleteRenderDelegate(HdRenderDelegate *renderDelegate) = 0;
 
+    /// @}
+
     ///
     /// \deprecated Use IsSupported overload below.
     ///
@@ -97,25 +135,15 @@ public:
     HD_API
     virtual bool IsSupported(bool gpuEnabled = true) const;
 
-    ///
-    /// Returns \c true if this renderer plugin is supported in the running 
-    /// process and \c false if not.
-    /// 
-    /// This gives the plugin a chance to perform some runtime checks to make
-    /// sure that the system meets minimum requirements.  The 
-    /// \p rendererCreateArgs parameter indicates the resources available when 
-    /// making this determination.
-    /// 
-    /// The \p reasonWhyNot param, when provided, can be filled with the reason
-    /// why the renderer plugin is not supported.
-    virtual bool IsSupported(
-        HdRendererCreateArgs const &rendererCreateArgs,
-        std::string *reasonWhyNot = nullptr) const = 0;
-
 protected:
     HdRendererPlugin() = default;
     HD_API
     ~HdRendererPlugin() override;
+
+    HD_API
+    virtual std::unique_ptr<HdRenderer> _CreateRenderer(
+        HdSceneIndexBaseRefPtr const &sceneIndex,
+        const HdRendererCreateArgs &rendererCreateArgs);
 
 private:
     // This class doesn't require copy support.

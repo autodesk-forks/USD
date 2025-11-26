@@ -8,6 +8,11 @@ Downloads and Videos
     :local:
     :depth: 2
     
+Intro to USD
+============
+
+| `USD Basics in an Hour(ish) <https://openusd.org/files/USD_Quickstart_Guide.pdf>`__
+
 Presentations
 =============
 

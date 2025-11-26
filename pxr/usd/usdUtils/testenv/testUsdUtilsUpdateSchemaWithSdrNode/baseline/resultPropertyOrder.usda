@@ -21,6 +21,8 @@ class "TestPropertyOrderAPI" (
                 uniform color mapping for gamma.
                 """
         }
+        displayGroup = "Basic"
+        displayName = "Map Gamma"
         uiHints = {
             string displayGroup = "Basic"
             string displayName = "Map Gamma"
@@ -37,6 +39,8 @@ class "TestPropertyOrderAPI" (
                 intensity: Itensity of the flame thrower.
                 """
         }
+        displayGroup = "Basic"
+        displayName = "Intensity"
         uiHints = {
             string displayGroup = "Basic"
             string displayName = "Intensity"

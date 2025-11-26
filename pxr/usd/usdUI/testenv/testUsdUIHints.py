@@ -6,7 +6,7 @@
 # https://openusd.org/license.
 #
 
-from pxr import Sdf, Usd, UsdUI
+from pxr import Sdf, Tf, Usd, UsdUI
 import unittest
 
 class TestUsdUIHints(unittest.TestCase):
@@ -342,6 +342,31 @@ class TestUsdUIHints(unittest.TestCase):
             self.stage.GetAttributeAtPath('/HintsPrim.attribute'), 1)
         _validate(
             self.stage.GetAttributeAtPath('/HintsPrim.tokenArrayAttr'), [])
+
+    @unittest.skipIf(not Tf.GetEnvSetting('USDUI_WRITE_LEGACY_UI_HINTS'),
+                     "Legacy hint field writes not enabled")
+    def test_LegacyHintWrites(self):
+        prim = self.stage.DefinePrim('/test_LegacyHintWrites')
+        assert prim
+        attr = prim.CreateAttribute('attr', Sdf.ValueTypeNames.Int)
+        assert attr
+        hints = UsdUI.PropertyHints(attr)
+        assert hints
+
+        # Verify initial conditions
+        self.assertEqual(attr.GetDisplayName(), '')
+        self.assertEqual(attr.GetDisplayGroup(), '')
+        self.assertEqual(attr.IsHidden(), False)
+
+        # Set with the hints API
+        assert hints.SetDisplayName('display name')
+        assert hints.SetDisplayGroup('display group')
+        assert hints.SetHidden(True)
+
+        # Legacy core fields should also have been written
+        self.assertEqual(attr.GetDisplayName(), 'display name')
+        self.assertEqual(attr.GetDisplayGroup(), 'display group')
+        self.assertEqual(attr.IsHidden(), True)
 
 if __name__ == "__main__":
     unittest.main()

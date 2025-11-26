@@ -104,7 +104,8 @@ private:
 };
 
 Exec_Program::Exec_Program()
-    : _timeInputNode(new EfTimeInputNode(&_network))
+    : _compilationVersion(0)
+    , _timeInputNode(new EfTimeInputNode(&_network))
     , _timeDependentOutputsValid(true)
     , _editMonitor(std::make_unique<_EditMonitor>(this))
 {

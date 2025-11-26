@@ -18,7 +18,7 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
 
-#include <tuple>
+#include <cstddef>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -26,6 +26,24 @@ PXR_NAMESPACE_OPEN_SCOPE
 class Exec_CompiledOutputCache
 {
 public:
+
+    /// The information stored with each output key in the cache.
+    struct MappedType
+    {
+        MappedType(
+            const VdfMaskedOutput &output_,
+            const size_t compilationVersion_)
+            : output(output_), compilationVersion(compilationVersion_)
+        {}
+
+        /// The compiled output.
+        VdfMaskedOutput output;
+
+        /// The compilation version at the time the output was added to the
+        /// cache.
+        size_t compilationVersion;
+    };
+
     Exec_CompiledOutputCache() = default;
     
     Exec_CompiledOutputCache(const Exec_CompiledOutputCache &) = delete;
@@ -34,21 +52,24 @@ public:
 
     /// Insert a masked output corresponding to the output key.
     ///
+    /// \p compilationVersion identifies the current round of compilation. This
+    /// value must provided by the Exec_Program.
+    ///
     /// \return true if a new mapping was inserted for \p key, or false if a
     /// mapping already existed for \p key, in which case the existing mapping
     /// is not modified.
     ///
     bool Insert(
         const Exec_OutputKey::Identity &key,
-        const VdfMaskedOutput &maskedOutput);
+        const VdfMaskedOutput &maskedOutput,
+        size_t compilationVersion);
 
-    /// Find a masked output in the compiled output cache. Returns a tuple with
-    /// the masked output for the provided \p key, and a boolean denoting
-    /// whether an entry was found for the \p key. An invalid masked output 
-    /// will be returned if no entry was found.
+    /// Find a masked output in the compiled output cache.
     ///
-    std::tuple<const VdfMaskedOutput &, bool> Find(
-        const Exec_OutputKey::Identity &key) const;
+    /// Returns a pointer to the mapped value for the provided \p key, if it
+    /// exists, or nullptr if it does not exist.
+    ///
+    const MappedType *Find(const Exec_OutputKey::Identity &key) const;
 
     /// Erases all entries whose VdfMaskedOutput%s are owned by the node with
     /// id \p nodeId.
@@ -61,10 +82,10 @@ public:
 private:
     const VdfMaskedOutput _invalidMaskedOutput;
 
-    // Maps output keys to masked outputs.
+    // Maps each output key to its masked output and compilation version.
     using _OutputMap =
         tbb::concurrent_unordered_map<
-            Exec_OutputKey::Identity, VdfMaskedOutput, TfHash>;
+            Exec_OutputKey::Identity, MappedType, TfHash>;
     _OutputMap _outputMap;
 
     // Maps nodes to output keys. This map is used for "reverse" lookups into

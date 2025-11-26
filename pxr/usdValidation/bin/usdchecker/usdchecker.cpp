@@ -15,6 +15,7 @@
 #include "pxr/usd/usd/editContext.h"
 #include "pxr/usd/usd/variantSets.h"
 #include "pxr/usdValidation/usdValidation/context.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 #include "pxr/usdValidation/usdValidation/registry.h"
 #include "pxr/usdValidation/usdValidation/validatorTokens.h"
 #include "pxr/usdValidation/usdUtilsValidators/validatorTokens.h"
@@ -222,6 +223,25 @@ _ReportValidationErrors(
             case UsdValidationErrorType::Error:
                 reportFailure = true;
                 _PrintMessage(output, error.GetErrorAsString(), _ErrorColor);
+                if (!error.GetFixers().empty()) {
+                    _PrintMessage(
+                        output, 
+                        "\tPossible Fixes which can be applied:", _InfoColor);
+                    for (const UsdValidationFixer *fixer : error.GetFixers()) {
+                        if (fixer->CanApplyFix(
+                                error, UsdEditTarget(
+                                error.GetSites()[0].GetStage()->GetRootLayer()),
+                                UsdTimeCode::Default())) {
+                            _PrintMessage(
+                                output, 
+                                TfStringPrintf(
+                                    "\t- %s: %s.", 
+                                    fixer->GetName().GetText(), 
+                                    fixer->GetDescription().c_str()),
+                                _InfoColor);
+                        }
+                    }
+                }
                 break;
             case UsdValidationErrorType::Warn:
                 if (strict) {

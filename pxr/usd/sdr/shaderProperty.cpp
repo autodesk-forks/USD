@@ -22,6 +22,7 @@ TF_DEFINE_PUBLIC_TOKENS(SdrPropertyRole, SDR_PROPERTY_ROLE_TOKENS);
 TF_DEFINE_PUBLIC_TOKENS(SdrPropertyTokens, SDR_PROPERTY_TOKENS);
 
 using ShaderMetadataHelpers::GetRoleFromMetadata;
+using ShaderMetadataHelpers::IntVal;
 using ShaderMetadataHelpers::IsTruthy;
 using ShaderMetadataHelpers::StringVal;
 using ShaderMetadataHelpers::TokenVal;
@@ -675,6 +676,8 @@ SdrShaderProperty::SdrShaderProperty(
       _isOutput(isOutput),
       _arraySize(_ConvertSdrPropertyTypeAndArraySize(
                 type, arraySize, metadata).second),
+      _tupleSize(
+          IntVal(SdrPropertyMetadata->TupleSize, metadata, 0)),
       _metadata(metadata),
       _hints(hints),
       _options(options),

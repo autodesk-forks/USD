@@ -117,6 +117,9 @@ public:
     /// Return this property's display group (metadata).  This returns the
     /// empty token if no display group has been set.
     /// \sa SetDisplayGroup()
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     USD_API
     std::string GetDisplayGroup() const;
 
@@ -127,21 +130,33 @@ public:
     /// of groups by recognizing the property namespace separator in 
     /// displayGroup as denoting group-nesting.
     /// \sa SetNestedDisplayGroups()
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     USD_API
     bool SetDisplayGroup(const std::string& displayGroup) const;
 
     /// Clears this property's display group (metadata) in
     /// the current EditTarget (only).  Returns true on success.
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     USD_API
     bool ClearDisplayGroup() const;
 
     /// Returns true if displayGroup was explicitly authored and GetMetadata()
     /// will return a meaningful value for displayGroup. 
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     USD_API
     bool HasAuthoredDisplayGroup() const;
 
     /// Return this property's displayGroup as a sequence of groups to be
     /// nested, or an empty vector if displayGroup is empty or not authored.
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     USD_API
     std::vector<std::string> GetNestedDisplayGroups() const;
 
@@ -152,6 +167,9 @@ public:
     /// GetDisplayGroup(), with the namespace separator embedded in the result.
     /// If \p nestedGroups is empty, we author an empty string for displayGroup.
     /// \sa SetDisplayGroup()
+    ///
+    /// \deprecated
+    /// See UsdUIPropertyHints.
     USD_API
     bool SetNestedDisplayGroups(
         const std::vector<std::string>& nestedGroups) const;

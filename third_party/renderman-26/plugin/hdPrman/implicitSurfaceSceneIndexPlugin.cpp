@@ -54,42 +54,41 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
     static bool tessellate =
         (TfGetEnvSetting(HDPRMAN_TESSELLATE_IMPLICIT_SURFACES) == true);
 
-    HdContainerDataSourceHandle inputArgs;
-    if (tessellate) {
-        // Tessellate everything (legacy behavior).
-        inputArgs =
-            HdRetainedContainerDataSource::New(
-                HdPrimTypeTokens->sphere, toMeshSrc,
-                HdPrimTypeTokens->cube, toMeshSrc,
-                HdPrimTypeTokens->cone, toMeshSrc,
-                HdPrimTypeTokens->cylinder, toMeshSrc,
+    // XPU needs all implicit surfaces to be tessellated
+    // while we wait for implicit sphere support to be added.
+    // The env var HDPRMAN_TESSELLATE_IMPLICIT_SURFACES
+    // will also force everything to be tessellated.
+    HdContainerDataSourceHandle tessellateXPU;
+    HdContainerDataSourceHandle tessellateRIS;
+    tessellateXPU =
+        HdRetainedContainerDataSource::New(
+            HdPrimTypeTokens->sphere, toMeshSrc,
+            HdPrimTypeTokens->cube, toMeshSrc,
+            HdPrimTypeTokens->cone, toMeshSrc,
+            HdPrimTypeTokens->cylinder, toMeshSrc,
 #if PXR_VERSION >= 2411
-                HdPrimTypeTokens->capsule, toMeshSrc,
-                HdPrimTypeTokens->plane, toMeshSrc);
-#else
-                HdPrimTypeTokens->capsule, toMeshSrc);
+            HdPrimTypeTokens->plane, toMeshSrc,
 #endif
-    } else {
-        // Cone and cylinder need transforms updated, and cube and capsule
-        // and plane still need to be tessellated.
-        inputArgs =
-            HdRetainedContainerDataSource::New(
-                HdPrimTypeTokens->cone, axisToTransformSrc,
-                HdPrimTypeTokens->cylinder, axisToTransformSrc,
-                HdPrimTypeTokens->cube, toMeshSrc,
+            HdPrimTypeTokens->capsule, toMeshSrc);
+    // Cone and cylinder need transforms updated, and cube and capsule
+    // and plane still need to be tessellated.
+    tessellateRIS =
+        HdRetainedContainerDataSource::New(
+            HdPrimTypeTokens->cone, axisToTransformSrc,
+            HdPrimTypeTokens->cylinder, axisToTransformSrc,
+            HdPrimTypeTokens->cube, toMeshSrc,
 #if PXR_VERSION >= 2411
-                HdPrimTypeTokens->capsule, toMeshSrc,
-                HdPrimTypeTokens->plane, toMeshSrc);
-#else
-                HdPrimTypeTokens->capsule, toMeshSrc);
+            HdPrimTypeTokens->plane, toMeshSrc,
 #endif
-    }
+            HdPrimTypeTokens->capsule, toMeshSrc);
 
     for( auto const& pluginDisplayName : HdPrman_GetPluginDisplayNames() ) {
         HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
             pluginDisplayName,
             _tokens->sceneIndexPluginName,
-            inputArgs,
+            (tessellate ||
+             pluginDisplayName != HdPrmanDisplayNamesTokens->RenderManRIS) ?
+            tessellateXPU : tessellateRIS,
             insertionPhase,
             HdSceneIndexPluginRegistry::InsertionOrderAtStart);
     }

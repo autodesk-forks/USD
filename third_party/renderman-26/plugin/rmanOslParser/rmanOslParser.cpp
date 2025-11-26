@@ -36,10 +36,13 @@
 #include "pxr/usd/sdr/shaderProperty.h"
 #include "rmanOslParser/rmanOslParser.h"
 
+#include <map>
+#include <optional>
 #include <tuple>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+using ShaderMetadataHelpers::CreateStringFromStringVec;
 using ShaderMetadataHelpers::IsPropertyAnAssetIdentifier;
 using ShaderMetadataHelpers::IsPropertyATerminal;
 using ShaderMetadataHelpers::IsTruthy;
@@ -60,6 +63,8 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     ((arraySize, "arraySize"))
     ((pageStr, "page"))
+    ((pageOpenStr, "page_open"))
+    ((openStr, "open"))
     ((oslPageDelimiter, "."))
     ((vstructMember, "vstructmember"))
     (sdrDefinitionName)
@@ -135,6 +140,59 @@ _WriteOSLToTempFile(
 
     return tmpFilePath;
 }
+
+#if PXR_VERSION >= 2511
+static SdrStringVec
+_GetOpenPages(
+    const SdrShaderPropertyUniquePtrVec& properties)
+{
+    // Extract open pages from parameter metadata (pages are considered to be
+    // closed by default, unless marked open). Look for parameters that specify
+    // both a page and a page open status. If all such parameters agree the
+    // page is open, add that page to the result vector.
+
+    // Map page name to open status
+    std::map<std::string, bool> openStatusMap;
+
+    for (const auto& prop : properties) {
+        const SdrTokenMap& metadata = prop->GetMetadata();
+        std::optional<std::string> page;
+        std::optional<bool> openState;
+
+        for (const auto& it : metadata) {
+            // Check for page and open metadata. Openness may be indicated by
+            // either "open" or "page_open".
+            if (it.first == _tokens->pageStr) {
+                page = it.second;
+            }
+            else if (it.first == _tokens->openStr) {
+                openState = IsTruthy(_tokens->openStr, metadata);
+            }
+            else if (it.first == _tokens->pageOpenStr) {
+                openState = IsTruthy(_tokens->pageOpenStr, metadata);
+            }
+        }
+
+        if (page && openState) {
+            // And-together all "open" values for prop's page, so it's only
+            // marked open if all props that have an opinion agree
+            auto result = openStatusMap.insert({ *page, *openState });
+            if (!result.second) {
+                result.first->second &= *openState;
+            }
+        }
+    }
+
+    SdrStringVec openPages;
+    for (const auto& it : openStatusMap) {
+        if (it.second) {
+            openPages.push_back(it.first);
+        }
+    }
+
+    return openPages;
+}
+#endif
 
 #if PXR_VERSION >= 2505
 SdrShaderNodeUniquePtr
@@ -239,6 +297,23 @@ RmanOslParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
         fallbackPrefix = it->second;
     }
 
+    // Generate properties
+#if PXR_VERSION >= 2505
+    SdrShaderPropertyUniquePtrVec properties;
+#else
+    NdrPropertyUniquePtrVec properties;
+#endif
+    properties = _getNodeProperties(sq.get(), discoveryResult, fallbackPrefix);
+
+#if PXR_VERSION >= 2511
+    // Populate open pages from property metadata
+    const SdrStringVec openPages = _GetOpenPages(properties);
+    if (!openPages.empty()) {
+        metadata[SdrNodeMetadata->OpenPages] =
+            CreateStringFromStringVec(openPages);
+    }
+#endif
+
 #if PXR_VERSION >= 2505
     return SdrShaderNodeUniquePtr(
 #else
@@ -255,7 +330,7 @@ RmanOslParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
             discoveryResult.resolvedUri,    // Definitive assertion that the
                                             // implementation is the same asset
                                             // as the definition
-            _getNodeProperties(sq.get(), discoveryResult, fallbackPrefix),
+            std::move(properties),
             metadata,
             discoveryResult.sourceCode
         )
@@ -449,6 +524,8 @@ RmanOslParserPlugin::_getPropertyMetadata(const RixShaderParameter* param,
             metadata[entryName] = std::string(*metaParam->DefaultS());
         } else if (metaParam->Type() == RixShaderParameter::k_Int) {
             metadata[entryName] = std::to_string(*metaParam->DefaultI());
+        } else if (metaParam->Type() == RixShaderParameter::k_Float) {
+            metadata[entryName] = std::to_string(*metaParam->DefaultF());
         }
     }
 

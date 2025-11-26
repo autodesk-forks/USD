@@ -40,6 +40,7 @@ TF_WRAP_MODULE
     TF_WRAP( UsdFileFormat );
     TF_WRAP( ValueType );
     TF_WRAP( VariableExpression );
+    TF_WRAP( VariableExpressionAST );
     TF_WRAP( ZipFile );
 
     TF_WRAP( Spec );

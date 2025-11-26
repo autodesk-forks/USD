@@ -17,6 +17,7 @@
 #include "pxr/imaging/hd/renderSettingsSchema.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneGlobalsSchema.h"
+#include "pxr/imaging/hd/version.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -214,11 +215,19 @@ _FillRileyParamsFromSceneGlobals(
 static
 void
 _FillRileyParamsFromNamespacedSettings(
-    HdContainerDataSourceHandle const &settingsDs,
+#if HD_API_VERSION >= 89
+    const HdSampledDataSourceContainerSchema &namespacedSettings,
+#else
+    HdContainerDataSourceHandle const &namespacedSettings,
+#endif
     std::vector<TfToken> * const names,
     std::vector<HdDataSourceBaseHandle> * const dataSources)
 {
-    for (const TfToken &name : settingsDs->GetNames()) {
+#if HD_API_VERSION >= 89
+    for (const TfToken &name : namespacedSettings.GetNames()) {
+#else
+    for (const TfToken &name : namespacedSettings->GetNames()) {
+#endif
         if (name == _renderTerminalTokens->riIntegrator    ||
             name == _renderTerminalTokens->riSampleFilters ||
             name == _renderTerminalTokens->riDisplayFilters ||
@@ -240,7 +249,11 @@ _FillRileyParamsFromNamespacedSettings(
         }
 
         HdSampledDataSourceHandle const ds =
-            HdSampledDataSource::Cast(settingsDs->Get(name));
+#if HD_API_VERSION >= 89
+            namespacedSettings.Get(name);
+#else
+            HdSampledDataSource::Cast(namespacedSettings->Get(name));
+#endif
         if (!ds) {
             continue;
         }
@@ -260,10 +273,15 @@ _FillRileyParamsFromRenderSettings(
     std::vector<TfToken> * const names,
     std::vector<HdDataSourceBaseHandle> * const dataSources)
 {
-    if (HdContainerDataSourceHandle const settingsDs =
-            renderSettingsSchema.GetNamespacedSettings()) {
+#if HD_API_VERSION >= 89
+    const HdSampledDataSourceContainerSchema
+#else
+    HdContainerDataSourceHandle const
+#endif
+        namespacedSettings = renderSettingsSchema.GetNamespacedSettings();
+    if (namespacedSettings) {
         _FillRileyParamsFromNamespacedSettings(
-            settingsDs, names, dataSources);
+            namespacedSettings, names, dataSources);
     }
 }
 

@@ -7,6 +7,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usdValidation/usdValidation/error.h"
 #include "pxr/usdValidation/usdValidation/validator.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 
 #include "pxr/base/tf/pyContainerConversions.h"
 #include "pxr/base/tf/pyEnum.h"
@@ -18,6 +19,37 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 using namespace pxr_boost::python;
+
+namespace {
+
+    list
+    _GetFixers(const UsdValidationError &error) {
+        list result;
+        for (const auto *fixer : error.GetFixers()) {
+            result.append(pointer_wrapper(fixer));
+        }
+        return result;
+    }
+
+    list
+    _GetFixersByErrorName(const UsdValidationError &error) {
+        list result;
+        for (const auto *fixer : error.GetFixersByErrorName()) {
+            result.append(pointer_wrapper(fixer));
+        }
+        return result;
+    }
+
+    list
+    _GetFixersByKeywords(const UsdValidationError &error, 
+                         const TfTokenVector &keywords) {
+        list result;
+        for (const auto *fixer : error.GetFixersByKeywords(keywords)) {
+            result.append(pointer_wrapper(fixer));
+        }
+        return result;
+    }
+} // anonymous namespace
 
 void wrapUsdValidationError()
 {
@@ -68,6 +100,31 @@ void wrapUsdValidationError()
         .def("GetErrorAsString", &UsdValidationError::GetErrorAsString)
         .def("GetValidator", &UsdValidationError::GetValidator, return_value_policy<reference_existing_object>())
         .def("HasNoError", &UsdValidationError::HasNoError)
+        .def("GetMetadata", 
+             +[](const UsdValidationError &validationError) {
+                 return validationError.GetMetadata();
+             }, 
+             return_value_policy<return_by_value>())
+        .def("GetFixers", _GetFixers)
+        .def("GetFixerByName", 
+             +[](const UsdValidationError &validationError, 
+                 const TfToken &name) 
+                 -> const UsdValidationFixer* {
+                 return validationError.GetFixerByName(name);
+             },
+             return_value_policy<reference_existing_object>(),
+             (arg("name")))
+        .def("GetFixersByErrorName", _GetFixersByErrorName)
+        .def("GetFixerByNameAndErrorName",
+             +[](const UsdValidationError &validationError, 
+                 const TfToken &name)
+                 -> const UsdValidationFixer* {
+                 return validationError.GetFixerByNameAndErrorName(name);
+             },
+             return_value_policy<reference_existing_object>(),
+             (arg("name")))
+        .def("GetFixersByKeywords", _GetFixersByKeywords,
+             (arg("keywords")))
         .def(self == self)
         .def(self != self);
 }

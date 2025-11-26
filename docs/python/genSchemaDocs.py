@@ -518,11 +518,18 @@ def _GenerateSphinxTOC(fileList, outputFile, domain, domainTitle):
             file.write(workStr)
             workStr = "\n"
             file.write(workStr)
-            # Add the TOC entries in the order listed in fileList
             workStr = ".. toctree::\n"
             file.write(workStr)
-            for generatedFile in fileList:
-                workStr = "   " + os.path.basename(generatedFile) + "\n"
+            # Add the TOC entries in the order listed in fileList
+            # However, if there's an overview.md, list that first in the TOC
+            filteredFileList = []
+            for fullFile in fileList:
+                if os.path.basename(fullFile) == "overview.md":
+                    filteredFileList.insert(0, os.path.basename(fullFile))
+                else:
+                    filteredFileList.append(os.path.basename(fullFile))
+            for generatedFile in filteredFileList:
+                workStr = "   " + generatedFile + "\n"
                 file.write(workStr)
     except IOError as openException:
         Print.Err("Failed to write to " + outputFile + ": " + str(openException))

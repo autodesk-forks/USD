@@ -76,6 +76,7 @@ namespace {
     const char* departmentsStr = "departments";
     const char* shaderTypeStr = "shaderType";
     const char* typeTagStr = "typeTag";
+    const char* openStr = "open";
     const char* usdSchemaDefStr = "usdSchemaDef";
     const char* apiSchemaAutoApplyToStr = "apiSchemaAutoApplyTo";
     const char* apiSchemaCanOnlyApplyToStr = "apiSchemaCanOnlyApplyTo";
@@ -130,6 +131,7 @@ struct SdrShaderRepresentation
     SdrStringVec primvars;
     SdrStringVec departments;
     SdrStringVec pages;
+    SdrStringVec openPages;
 #if PXR_VERSION >= 2505
     SdrShaderPropertyUniquePtrVec properties;
 #else
@@ -334,6 +336,13 @@ RmanArgsParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
         metadata[SdrNodeMetadata->Pages] = 
             CreateStringFromStringVec(shaderRepresentation.pages);
     }
+
+#if PXR_VERSION >= 2511
+    if (!shaderRepresentation.openPages.empty()) {
+        metadata[SdrNodeMetadata->OpenPages] =
+            CreateStringFromStringVec(shaderRepresentation.openPages);
+    }
+#endif
 
     if (!shaderRepresentation.primvars.empty()) {
         metadata[SdrNodeMetadata->Primvars] = 
@@ -666,20 +675,29 @@ _Parse(
         }
 
         // Page
-        // <page name="...">
+        // <page name="..." open="...">
         // Pages have inputs (<param> elements) as children; pages can also
-        // have more <page> elements as children
+        // have more <page> elements as children. Pages are considered to be
+        // closed by default, unless marked open.
         // ---------------------------------------------------------------------
         else if (EQUALS(pageStr, childElement.name())) {
             const std::string pageName(childElement.attribute(nameStr).value());
+            const bool isPageOpen =
+                EQUALS(childElement.attribute(openStr).value(), "True");
 
-            if (parentPage.empty()) {
-                _Parse(shaderRep, childElement, pageName);
-            } else {
-                _Parse(shaderRep, childElement, 
-                        parentPage + 
-                        SdrPropertyTokens->PageDelimiter.GetString() + pageName);
+            const std::string pageFullName = parentPage.empty()
+                ? pageName : parentPage +
+#if PXR_VERSION >= 2308
+                   SdrPropertyTokens->PageDelimiter.GetString() + pageName;
+#else
+                   ":" + pageName;
+#endif
+
+            if (isPageOpen) {
+                shaderRep.openPages.push_back(pageFullName);
             }
+
+            _Parse(shaderRep, childElement, pageFullName);
         }
 
         // Help
