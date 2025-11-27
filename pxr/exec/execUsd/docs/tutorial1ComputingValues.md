@@ -1,5 +1,8 @@
 # OpenExec Tutorial 1: Computing Values
 
+The code used in this tutorial is available in
+`USD/extras/exec/examples/computingValues/`
+
 ## Overview
 
 The purpose of this tutorial is to demonstrate how to use OpenExec APIs to
@@ -16,7 +19,7 @@ points in world-space. The result of this computation depends on two values:
 > **Note:**  
 > The API that is presented here is the lowest-level API, designed for
 > performance-intensive clients, such as an imaging system. OpenExec will
-> eventually include convenience API, layered on top of the API shown here, for
+> eventually include convenience APIs, layered on top of the API shown here, for
 > use cases that don't require maximum performance and for use cases that adhere
 > to certain patterns that allow for more convenient API while still maintaining
 > maxiumum performance.
@@ -27,30 +30,30 @@ The first step is to create a UsdStage from a scene that contains
 UsdGeomXformable prims, such as the scene described by this usda file:
 
 ```
-    #usda 1.0
+#usda 1.0
 
-    def Xform "Root" (
-        kind = "component"
-    )
+def Xform "Root" (
+    kind = "component"
+)
+{
+    uniform token[] xformOpOrder = [ "xformOp:transform" ]
+    matrix4d xformOps:transform = (
+        (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1, 0, 0, 1) )
+
+    def Xform "A1"
     {
         uniform token[] xformOpOrder = [ "xformOp:transform" ]
         matrix4d xformOps:transform = (
-            (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1, 0, 0, 1) )
-
-        def Xform "A1"
-        {
-            uniform token[] xformOpOrder = [ "xformOp:transform" ]
-            matrix4d xformOps:transform = (
-                (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )
-        }
-
-        def Xform "A2"
-        {
-            uniform token[] xformOpOrder = [ "xformOp:transform" ]
-            matrix4d xformOps:transform = (
-                (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 3, 1) )
-        }
+            (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )
     }
+
+    def Xform "A2"
+    {
+        uniform token[] xformOpOrder = [ "xformOp:transform" ]
+        matrix4d xformOps:transform = (
+            (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 3, 1) )
+    }
+}
 ```
 
 Assuming this layer is in a file named `xformPrims.usda` we can open the layer
@@ -98,7 +101,7 @@ ExecUsdSystem::BuildRequest:
     const ExecUsdRequest request = execSystem.BuildRequest(std::move(valueKeys));
 ```
 
-A request maintains state that is required to effiently compute the particular
+A request maintains state that is required to efficiently compute the particular
 set of requested values that it represents. In particular, it holds onto a
 **schedule** that is used to accelerate evaluation, by amortizing the cost of
 creating the schedule across multiple rounds of computation using the same
@@ -136,7 +139,7 @@ To compute the set of requested values, we simply call ExecUsdSystem::Compute:
     ExecUsdCacheView cache = execSystem.Compute(request);
 ```
 
-The computed results are now ready, and can be acessed via the returned
+The computed results are now ready, and can be accessed via the returned
 ExecUsdCacheView object.
 
 ## Extract computed values
@@ -158,63 +161,67 @@ to build the request:
 Bringing this all together into a single block of example code:
 
 ```cpp
-    #include "pxr/base/gf/matrix4d.h"
-    #include "pxr/base/vt/value.h"
-    #include "pxr/exec/execGeom/tokens.h"
-    #include "pxr/exec/execUsd/request.h"
-    #include "pxr/exec/execUsd/system.h"
-    #include "pxr/exec/execUsd/valueKey.h"
-    #include "pxr/usd/sdf/path.h"
-    #include "pxr/usd/usd/stage.h"
+#include "pxr/base/gf/matrix4d.h"
+#include "pxr/base/tf/diagnosticLite.h"
+#include "pxr/base/vt/value.h"
+#include "pxr/exec/execGeom/tokens.h"
+#include "pxr/exec/execUsd/cacheView.h"
+#include "pxr/exec/execUsd/request.h"
+#include "pxr/exec/execUsd/system.h"
+#include "pxr/exec/execUsd/valueKey.h"
+#include "pxr/usd/sdf/path.h"
+#include "pxr/usd/usd/stage.h"
 
-    #include <utility>
-    #include <vector>
+#include <utility>
+#include <vector>
 
-    void Example()
-    {
-        // Open the layer that contains our scene on a UsdStage.
-        const UsdStageRefPtr stage = UsdStage::Open("xformPrims.usda");
+PXR_NAMESPACE_USING_DIRECTIVE;
 
-        // Create an ExecUsdSystem, which we will use to evaluate computations
-        // on the stage.
-        ExecUsdSystem execSystem(stage);
+void Example()
+{
+    // Open the layer that contains our scene on a UsdStage.
+    const UsdStageRefPtr stage = UsdStage::Open("xformPrims.usda");
 
-        // Create a vector of value keys that indicate which computed values we
-        // are requesting for evaluation.
-        std::vector<ExecUsdValueKey> valueKeys {
-            {stage->GetPrimAtPath(SdfPath("/Root/A1")),
-             ExecGeomXformableTokens->computeLocalToWorldTransform},
-            {stage->GetPrimAtPath(SdfPath("/Root/A2")),
-             ExecGeomXformableTokens->computeLocalToWorldTransform},
-        };
+    // Create an ExecUsdSystem, which we will use to evaluate computations on
+    // the stage.
+    ExecUsdSystem execSystem(stage);
 
-        // Build the request.
-        const ExecUsdRequest request =
-            execSystem.BuildRequest(std::move(valueKeys));
+    // Create a vector of value keys that indicate which computed values we are
+    // requesting for evaluation.
+    std::vector<ExecUsdValueKey> valueKeys {
+        {stage->GetPrimAtPath(SdfPath("/Root/A1")),
+         ExecGeomXformableTokens->computeLocalToWorldTransform},
+        {stage->GetPrimAtPath(SdfPath("/Root/A2")),
+         ExecGeomXformableTokens->computeLocalToWorldTransform},
+    };
 
-        // Prepare the request, ensuring the data flow graph is compiled and the
-        // schedule is created.
-        execSystem.PrepareRequest(request);
+    // Build the request.
+    const ExecUsdRequest request =
+        execSystem.BuildRequest(std::move(valueKeys));
 
-        // Evaluate the data flow graph according to the schedule, to yield the
-        // requested computed values.
-        ExecUsdCacheView cache = execSystem.Compute(request);
+    // Prepare the request, ensuring the data flow graph is compiled and the
+    // schedule is created.
+    execSystem.PrepareRequest(request);
 
-        // Extract the values.
-        VtValue value;
-        value = cache.Get(0);
-        const GfMatrix4d a1LocalToWorld = value.Get<GfMatrix4d>();
-        value = cache.Get(1);
-        const GfMatrix4d a2LocalToWorld = value.Get<GfMatrix4d>();
+    // Evaluate the data flow graph according to the schedule, to yield the
+    // requested computed values.
+    ExecUsdCacheView cache = execSystem.Compute(request);
 
-        // The resulting matrices are the concatenation of the transforms
-        // authored on A1 and Root and A2 and Root, respectively. Here, we
-        // extract the translations from the resulting matrices, demonstrating
-        // that we end up with the expected net translations necessary to
-        // translate points in each local space into world space.
-        TF_AXIOM(GfIsClose(
-            a1LocalToWorld.ExtractTranslation(), GfVec3d(1, 2, 0), 1e-6));
-        TF_AXIOM(GfIsClose(
-            a2LocalToWorld.ExtractTranslation(), GfVec3d(1, 0, 3), 1e-6));
-    }
+    // Extract the values.
+    VtValue value;
+    value = cache.Get(0);
+    const GfMatrix4d a1LocalToWorld = value.Get<GfMatrix4d>();
+    value = cache.Get(1);
+    const GfMatrix4d a2LocalToWorld = value.Get<GfMatrix4d>();
+
+    // The resulting matrices are the concatenation of the transforms
+    // authored on A1 and Root and A2 and Root, respectively. Here, we
+    // extract the translations from the resulting matrices, demonstrating
+    // that we end up with the expected net translations necessary to
+    // translate points in each local space into world space.
+    TF_AXIOM(GfIsClose(
+        a1LocalToWorld.ExtractTranslation(), GfVec3d(1, 2, 0), 1e-6));
+    TF_AXIOM(GfIsClose(
+        a2LocalToWorld.ExtractTranslation(), GfVec3d(1, 0, 3), 1e-6));
+}
 ```

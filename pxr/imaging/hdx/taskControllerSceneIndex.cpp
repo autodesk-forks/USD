@@ -2483,7 +2483,8 @@ SetFreeCameraClipPlanes(const std::vector<GfVec4d> &clippingPlanes)
     }
 
     HdDataSourceLocatorSet locators;
-    ds->SetClippingPlanes({clippingPlanes.begin(), clippingPlanes.end()});
+    ds->SetClippingPlanes(
+        {clippingPlanes.begin(), clippingPlanes.end()}, &locators);
 
     if (locators.IsEmpty()) {
         return;

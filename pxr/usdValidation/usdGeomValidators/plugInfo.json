@@ -3,6 +3,12 @@
         {
             "Info": {
                 "Validators": {
+                    "EncapsulationChecker": {
+                        "doc": "Validates there are no nested Gprims.", 
+                        "schemaTypes": [
+                            "UsdGeomBoundable"
+                        ]
+                    }, 
                     "StageMetadataChecker": {
                         "doc": "All stages must declare their 'upAxis' and 'metersPerUnit'."
                     }, 

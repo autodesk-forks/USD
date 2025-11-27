@@ -150,11 +150,14 @@ pxr_library(hd
         renderBufferSchema
         renderCapabilitiesSchema
         renderDelegate
+        renderDelegateAdapterRenderer
         renderer
+        rendererCreateArgsSchema
         rendererPlugin
         rendererPluginHandle
         rendererPluginRegistry
         renderIndex
+        renderIndexAdapterSceneIndex
         renderPass
         renderPassSchema
         renderPassState

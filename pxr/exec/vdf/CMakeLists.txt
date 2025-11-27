@@ -493,6 +493,7 @@ pxr_register_test(testVdfGrapher
     DIFF_COMPARE displayFull.dot
     DIFF_COMPARE displayNoLabels.dot
     DIFF_COMPARE displaySummary.dot
+    DIFF_COMPARE linear_chain.dot
     TESTENV testVdfGrapher
 )
 

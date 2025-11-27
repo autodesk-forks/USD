@@ -241,6 +241,12 @@ HdStRenderDelegate::GetRenderStats() const
     return ra;
 }
 
+bool
+HdStRenderDelegate::RequiresStormTasks() const
+{
+    return true;
+}
+
 HdStRenderDelegate::~HdStRenderDelegate() = default;
 
 void

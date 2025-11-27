@@ -298,7 +298,7 @@ HdxFreeCameraPrimDataSource::SetWindowPolicy(
     }
     static const HdDataSourceLocator locator =
         HdCameraSchema::GetDefaultLocator()
-            .Append(_tokens->windowPolicy);                    
+            .Append(_tokens->windowPolicy);
     dirtyLocators->insert(locator);
 }
 
@@ -308,10 +308,11 @@ HdxFreeCameraPrimDataSource::SetViewAndProjectionMatrix(
     const GfMatrix4d& projectionMatrix,
     HdDataSourceLocatorSet * dirtyLocators)
 {
-    SetCamera(
-        _CameraFromViewAndProjectionMatrix(
-            viewMatrix, projectionMatrix),
-        dirtyLocators);
+    GfCamera cam = _CameraFromViewAndProjectionMatrix(
+        viewMatrix, projectionMatrix);
+    cam.SetClippingPlanes(_info->camera.GetClippingPlanes());
+
+    SetCamera(cam, dirtyLocators);
 }
 
 void

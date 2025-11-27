@@ -4529,8 +4529,7 @@ void
 Pcp_RescanForSpecs(
     PcpPrimIndex *index,
     bool usd,
-    bool updateHasSpecs,
-    const PcpCacheChanges *cacheChanges = nullptr)
+    bool updateHasSpecs)
 {
     TfAutoMallocTag2 tag("Pcp", "Pcp_RescanForSpecs");
 
@@ -4541,8 +4540,7 @@ Pcp_RescanForSpecs(
             TF_FOR_ALL(nodeIt, index->GetNodeRange()) {
                 auto node = *nodeIt;
                 nodeIt->SetHasSpecs(PcpComposeSiteHasPrimSpecs(
-                    node.GetLayerStack(), node.GetPath(), 
-                    cacheChanges->layersAffectedByMutingOrRemoval));
+                    node.GetLayerStack(), node.GetPath()));
             }
         }
     } else {
@@ -4556,10 +4554,7 @@ Pcp_RescanForSpecs(
                     node.GetLayerStack()->GetLayers();
                 const SdfPath& path = node.GetPath();
                 for (size_t i = 0, n = layers.size(); i != n; ++i) {
-                    if (layers[i]->HasSpec(path) &&
-                        (!cacheChanges ||
-                          cacheChanges->layersAffectedByMutingOrRemoval
-                            .count(layers[i]) == 0)) {
+                    if (layers[i]->HasSpec(path)) {
                         nodeHasSpecs = true;
                         primSites.push_back(node.GetCompressedSdSite(i));
                     }

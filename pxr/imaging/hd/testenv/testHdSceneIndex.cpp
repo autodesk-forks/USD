@@ -929,6 +929,7 @@ bool TestDependencyForwardingSceneIndex()
     HdRetainedSceneIndex &retainedScene = *retainedScene_;
     HdDependencyForwardingSceneIndexRefPtr dependencyForwardingScene_ =
         HdDependencyForwardingSceneIndex::New(retainedScene_);
+    dependencyForwardingScene_->SetManualGarbageCollect(true);
     HdDependencyForwardingSceneIndex &dependencyForwardingScene =
         *dependencyForwardingScene_;
 
@@ -1196,6 +1197,7 @@ void TestDependencyForwardingSceneIndexEviction_InitScenes(
 
     HdDependencyForwardingSceneIndexRefPtr dependencyForwardingScene =
             HdDependencyForwardingSceneIndex::New(retainedScene);
+    dependencyForwardingScene->SetManualGarbageCollect(true);
 
 
     // pull on all prims to seed the cache
@@ -1425,6 +1427,7 @@ void TestDependencyForwardingSceneIndexForDependentDependencies_InitScenes(
 
     HdDependencyForwardingSceneIndexRefPtr dependencyForwardingScene =
             HdDependencyForwardingSceneIndex::New(retainedScene);
+    dependencyForwardingScene->SetManualGarbageCollect(true);
 
     // pull on all prims to seed the cache
     PrintSceneIndexPrim(*dependencyForwardingScene, SdfPath("/"), true);

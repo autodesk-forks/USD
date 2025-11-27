@@ -91,35 +91,32 @@ optional arguments:
 
 ==== usdview start ====
 usage: usdview [-h]
-                                                       [--renderer {Storm,Prman,Embree,GL}]
-                                                       [--select PRIMPATH]
-                                                       [--camera CAMERA]
-                                                       [--mask PRIMPATH[,PRIMPATH...]]
-                                                       [--clearsettings]
-                                                       [--config {}]
-                                                       [--defaultsettings]
-                                                       [--norender]
-                                                       [--noplugins]
-                                                       [--unloaded]
-                                                       [--bboxStandin]
-                                                       [--timing]
-                                                       [--allow-async]
-                                                       [--traceToFile TRACETOFILE]
-                                                       [--traceFormat {chrome,trace}]
-                                                       [--tracePython]
-                                                       [--memstats {none,stage,stageAndImaging}]
-                                                       [--numThreads NUMTHREADS]
-                                                       [--ff FIRSTFRAME]
-                                                       [--lf LASTFRAME]
-                                                       [--cf CURRENTFRAME]
-                                                       [--complexity {low,medium,high,veryhigh}]
-                                                       [--quitAfterStartup]
-                                                       [--sessionLayer SESSIONLAYER]
-                                                       [--mute MUTELAYERSRE]
-                                                       [--detachLayers]
-                                                       [--detachLayersInclude PATTERN[,PATTERN...]]
-                                                       [--detachLayersExclude PATTERN[,PATTERN,...]]
-                                                       usdFile
+                                               [--renderer {Storm,Embree,RenderMan RIS,RenderMan XPU,GL}]
+                                               [--select PRIMPATH]
+                                               [--camera CAMERA]
+                                               [--mask PRIMPATH[,PRIMPATH...]]
+                                               [--clearsettings] [--config {}]
+                                               [--defaultsettings]
+                                               [--norender] [--noplugins]
+                                               [--unloaded] [--bboxStandin]
+                                               [--timing] [--allow-async]
+                                               [--traceToFile TRACETOFILE]
+                                               [--traceFormat {chrome,trace}]
+                                               [--tracePython]
+                                               [--memstats {none,stage,stageAndImaging}]
+                                               [--dumpFirstImage DUMPFIRSTIMAGE]
+                                               [--numThreads NUMTHREADS]
+                                               [--ff FIRSTFRAME]
+                                               [--lf LASTFRAME]
+                                               [--cf CURRENTFRAME]
+                                               [--complexity {low,medium,high,veryhigh}]
+                                               [--quitAfterStartup]
+                                               [--sessionLayer SESSIONLAYER]
+                                               [--mute MUTELAYERSRE]
+                                               [--detachLayers]
+                                               [--detachLayersInclude PATTERN[,PATTERN...]]
+                                               [--detachLayersExclude PATTERN[,PATTERN,...]]
+                                               usdFile
 
 View a usd file
 
@@ -128,9 +125,9 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --renderer {Storm,Prman,Embree,GL}, -r {Storm,Prman,Embree,GL}
+  --renderer {Storm,Embree,RenderMan RIS,RenderMan XPU,GL}, -r {Storm,Embree,RenderMan RIS,RenderMan XPU,GL}
                         Which render backend to use (named as it appears in
-                        the menu). 'GL' and 'Storm' currently alias to the same
+                        the menu). 'GL' and 'Storm' currentlyalias to the same
                         renderer, Storm.
   --select PRIMPATH     A prim path to initially select and frame
   --camera CAMERA, -cam CAMERA
@@ -174,6 +171,8 @@ optional arguments:
                         profile USD, saving results to a tmp file, with a
                         summary to the console. Will have no effect if
                         MallocTags are not supported in the USD installation.
+  --dumpFirstImage DUMPFIRSTIMAGE
+                        Dumps the first image to file (as png)
   --numThreads NUMTHREADS
                         Number of threads used for processing(0 is max,
                         negative numbers imply max - N)
@@ -218,12 +217,13 @@ Detached Layers:
 usage: usdrecord [-h] [--mask PRIMPATH[,PRIMPATH...]]
                  [--purposes PURPOSE[,PURPOSE...]]
                  [--sessionLayer SESSIONLAYER] [--disableGpu]
-                 [--disableDrawMode] [--disableCameraLight] [--camera CAMERA]
+                 [--disableDrawMode] [--disableCameraLight]
+                 [--resolverContext {root,inherit}] [--camera CAMERA]
                  [--defaultTime | --frames FRAMESPEC[,FRAMESPEC...]]
                  [--complexity {low,medium,high,veryhigh}]
                  [--colorCorrectionMode {disabled,sRGB,openColorIO}]
-                 [--renderer {Storm,Prman,Embree,GL}] [--imageWidth IMAGEWIDTH]
-                 [--enableDomeLightVisibility]
+                 [--renderer {Storm,Embree,RenderMan RIS,RenderMan XPU,GL}]
+                 [--imageWidth IMAGEWIDTH] [--enableDomeLightVisibility]
                  [--renderPassPrimPath RPPRIMPATH]
                  [--renderSettingsPrimPath RSPRIMPATH]
                  [--traceToFile TRACETOFILE] [--traceFormat {chrome,trace}]
@@ -269,6 +269,11 @@ optional arguments:
                         Everything will render as if applyDrawMode = false.
   --disableCameraLight  Indicates if the default camera lights should not be
                         used for rendering.
+  --resolverContext {root,inherit}
+                        Indicates which resolver context to use. Choosing
+                        "root" will create a resolver based on the rootLayer.
+                        Choosing "inherit" will inherit the incoming resolver
+                        from the environment.
   --camera CAMERA, -cam CAMERA
                         Which camera to use - may be given as either just the
                         camera's prim name (i.e. just the last element in the
@@ -296,35 +301,28 @@ optional arguments:
                         level of refinement to use (default=low)
   --colorCorrectionMode {disabled,sRGB,openColorIO}, -color {disabled,sRGB,openColorIO}
                         the color correction mode to use (default=sRGB)
-  --renderer {Storm,Prman,Embree,GL}, -r {Storm,Prman,Embree,GL}
+  --renderer {Storm,Embree,RenderMan RIS,RenderMan XPU,GL}, -r {Storm,Embree,RenderMan RIS,RenderMan XPU,GL}
                         Hydra renderer plugin to use when generating images.
                         "GL" and "Storm" currently alias to the same renderer,
                         Storm.
   --imageWidth IMAGEWIDTH, -w IMAGEWIDTH
                         Width of the output image. The height will be computed
                         from this value and the camera's aspect ratio
-                        (default=960)
+                        (default=960). Note that this only affects the
+                        command-line output image; it does not affect any
+                        render products in scene description.
   --enableDomeLightVisibility
                         Show the dome light background in the rendered output.
                         If this option is not included and there is a dome
                         light in the stage, the IBL from it will be used for
                         lighting but not drawn into the background.
   --renderPassPrimPath RPPRIMPATH, -rp RPPRIMPATH
-                        Specify the Render Pass Prim to use to render the
-                        given usdFile. Note that if a renderSettingsPrimPath
-                        has been specified in the stage metadata, using this
-                        argument will override that opinion. Furthermore any
-                        properties authored on the RenderSettings will
-                        override other arguments (imageWidth, camera,
-                        outputImagePath)
+                        Specify the RenderPass prim to use. This overrides any
+                        renderSettingsPrimPath specified in stage metadata.
   --renderSettingsPrimPath RSPRIMPATH, -rs RSPRIMPATH
-                        Specify the Render Settings Prim to use to render the
-                        given usdFile. Note that if a renderSettingsPrimPath
-                        has been specified in the stage metadata, using this
-                        argument will override that opinion. Furthermore any
-                        properties authored on the RenderSettings will
-                        override other arguments (imageWidth, camera,
-                        outputImagePath)
+                        Specify the RenderSettings prim to use. This overrides
+                        any renderSettingsPrimPath specified in stage
+                        metadata.
   --traceToFile TRACETOFILE
                         Start tracing at application startup and write
                         --traceFormat specified format output to the specified
@@ -454,8 +452,8 @@ Utility for checking the compliance of a given USD stage or a USDZ package.
 Only the first sample of any relevant time-sampled attribute is checked, 
 currently.  General USD checks are always performed, and more restrictive checks 
 targeted at distributable consumer content are also applied when the "--arkit" 
-option is specified. In order to use the new validation framework provide the 
-'--useNewValidationFramework' option.
+option is specified. In order to use the old compliance checker (deprecated) 
+provide the '--useOldComplianceCheckerInterface' option.
 
 Usage: usdchecker [OPTIONS] [inputFile]
 
@@ -464,58 +462,48 @@ Positionals:
 
 Options:
   -h,--help                   Print this help message and exit
-  -s,--skipVariants           If specified, only the prims that are present in 
-                              the default (i.e. selected) variants are checked. 
-                              When this option is not specified, prims in all 
-                              possible combinations of variant selections are 
+  -s,--skipVariants           If specified, only the prims that are present in the default (i.e.
+                              selected) variants are checked. When this option is not specified,
+                              prims in all possible combinations of variant selections are
                               checked.
-  -p,--rootPackageOnly        Check only the specified package. Nested packages, 
-                              dependencies and their contents are not validated.
-  -o,--out FILE               The file to which all the failed checks are 
-                              output. If unspecified, the failed checks are 
-                              output to stdout; if "stderr", terminal coloring 
-                              will be suppressed.
-  --noAssetChecks             If specified, do NOT perform extra checks to help 
-                              ensure the stage or package can be easily and 
-                              safely referenced into aggregate stages.
-  --arkit                     Check if the given USD stage is compatible with 
-                              RealityKit's implementation of USDZ as of 2023. 
-                              These assets operate under greater constraints 
-                              that usdz files for more general in-house uses, 
-                              and this option attempts to ensure that these 
-                              constraints are met.
-  -d,--dumpRules              Dump the enumerated set of rules being checked for 
-                              the given set of options.
+  -p,--rootPackageOnly        Check only the specified package. Nested packages, dependencies and
+                              their contents are not validated.
+  -o,--out FILE               The file to which all the failed checks are output. If unspecified,
+                              the failed checks are output to stdout; if "stderr", terminal
+                              coloring will be suppressed.
+  --noAssetChecks             If specified, do NOT perform extra checks to help ensure the stage
+                              or package can be easily and safely referenced into aggregate stages.
+  --arkit                     Check if the given USD stage is compatible with RealityKit's
+                              implementation of USDZ as of 2023. These assets operate under
+                              greater constraints that usdz files for more general in-house uses,
+                              and this option attempts to ensure that these constraints are met.
+  -d,--dumpRules              Dump the enumerated set of rules
+                              being checked for the given set of options.
   -v,--verbose                Enable verbose output mode.
-  -t,--strict                 Return failure code even if only warnings are 
-                              issued, for stricter compliance.
-  --useNewValidationFramework Enable the new validation framework.
-  --variantSets TEXT ...      List of variantSets to validate. All variants for 
-                              the given variantSets are validated. This can also 
-                              be used with --variants to validate the given 
-                              variants in combination with variants from the 
-                              explicitly specified variantSets. This option is 
+  -t,--strict                 Return failure code even if only warnings are issued, for stricter
+                              compliance.
+  --useOldComplianceCheckerInterface
+                              Use the old and now deprecated Compliance Checker interface.
+  --variantSets TEXT ...      List of variantSets to validate. All variants for the given
+                              variantSets are validated. This can also be used with --variants to
+                              validate the given variants in combination with variants from the
+                              explicitly specified variantSets. This option is only valid when
+                              using the new validation framework.
+  --variants TEXT ...         List of ',' separated variantSet:variant pairs to validate. Each set
+                              of variants in the list are validated separately. Example:
+                              --variants foo:bar,baz:qux will validate foo:bar and baz:qux
+                              together but --variants foo:bar --variants baz:qux will validate
+                              foo:bar and baz:qux separately. This can also be used with
+                              --variantSets to validate the given variants in combination with
+                              varuants from the explicitly specified variantSets. This option is
                               only valid when using the new validation framework.
-  --variants TEXT ...         List of ',' separated variantSet:variant pairs to 
-                              validate. Each set of variants in the list are 
-                              validated separately. 
-                              Example: --variants foo:bar,baz:qux will validate 
-                              foo:bar and baz:qux together but 
-                              --variants foo:bar --variants baz:qux will 
-                              validate foo:bar and baz:qux separately. This can 
-                              also be used with --variantSets to validate the 
-                              given variants in combination with variants from 
-                              the explicitly specified variantSets. This option 
-                              is only valid when using the new validation 
-                              framework.
   --disableVariantValidationLimit
-                              Disable the limit set to restrict the number of 
-                              variants validation calls. This is useful when the 
-                              number of variants is large and we want to 
-                              validate all possible combinations of variants. 
-                              Default is to limit the number of validation calls 
-                              to 1000. This option is only valid when using the 
-                              new validation framework.
+                              Disable the limit set to restrict the number of variants validation
+                              calls. This is useful when the number of variants is large and we
+                              want to validate all possible combinations of variants. Default is
+                              to limit the number of validation calls to 1000. This option is only
+                              valid when using the new validation framework.
+
 
 ==== usdchecker end ====
 
@@ -543,8 +531,7 @@ optional arguments:
 
 ==== usdstitch start ====
 usage: usdstitch [-h] [-o OUT]
-                                                         usdFiles
-                                                         [usdFiles ...]
+                                                 usdFiles [usdFiles ...]
 
 Stitch multiple usd file(s) together into one. Opinion strength is determined
 by the order in which the file is given, with the first file getting the
@@ -682,7 +669,7 @@ Options:
                               and 'outputFormat' arguments. Default: outline
   --outputFormat TEXT         Supply this as the 'format' entry of SdfFileFormatArguments for
                               'layer' output to a file.  Requires both 'layer' output and a
-                              specified output file.                              
+                              specified output file.
   --sortBy path|field         Group 'outline' output by either path or field.  Ignored for other
                               output types. Default: path
   --noValues                  Do not report field values.
@@ -764,9 +751,9 @@ optional arguments:
                         innermost.
   -t TEMPLATEPATH, --templates TEMPLATEPATH
                         Directory containing schema class templates. [Default:
-                        first directory that exists from this list:
-                        <usd install dir>/bin/codegenTemplat
-                        es:<usd install dir>/lib/usd/usd/resources/codegenTemplates]
+                        first directory that exists from this list: 
+                        <usd install dir>/bin/codegenTemplates:<usd install dir>
+                        /lib/usd/usd/resources/codegenTemplates]
   -hts HEADERTERMINATORSTRING, --headerTerminatorString HEADERTERMINATORSTRING
                         The string used to terminate generated C++ header
                         files, after the custom code section. [Default:
@@ -887,18 +874,24 @@ usage: usdgenschemafromsdr [-h] [--noreadme] [-v]
           schemaPropertyNSPrefixOverride metadata.
 
     Sdr Property Metadata to SdfPropertySpec Translations
-        - A "null" value for Widget sdrProperty metadata translates to 
-          SdfPropertySpec Hidden metadata.
-        - SdrProperty's Help metadata (Label metadata if Help metadata not 
-          provided) translates to SdfPropertySpec's userDocBrief and userDoc
+        - A "null" value for Widget SdrShaderProperty metadata translates to
+          'hidden' in the SdfPropertySpec's uiHints metadata dictionary.
+        - SdrShaderProperty's Help metadata (Label metadata if Help metadata not
+          provided) translates to the SdfPropertySpec's userDocBrief and userDoc
           custom metadata strings.  
-        - SdrProperty's Page metadata translates to SdfPropertySpec's
-          DisplayGroup metadata.
-        - SdrProperty's Label metadata translates to SdfPropertySpec's
-          DisplayName metadata.
-        - SdrProperty's Options translates to SdfPropertySpec's AllowedTokens.
-        - SdrProperty's Default value translates to SdfPropertySpec's Default
-          value.
+        - SdrShaderProperty's Page metadata translates to 'displayGroup'
+          in the SdfPropertySpec's uiHints metadata dictionary.
+        - SdrShaderProperty's Label metadata translates to 'displayName'
+          in the SdfPropertySpec's uiHints metadata dictionary.
+        - SdrShaderProperty's Options translates to either 'allowedTokens'
+          (when either labels or values are provided) or 'valueLabels' (when
+          both labels and values are provided) in the SdfPropertySpec's uiHints
+          metadata dictionary. For backwards compatibility, set
+          USD_POPULATE_LEGACY_ALLOWED_TOKENS to write allowedTokens in addition
+          to valueLabels for string- and token-valued attributes that provide
+          both labels and values.
+        - SdrShaderProperty's Default value translates to the SdfPropertySpec's
+          Default value.
         - Connectable input properties translates to InterfaceOnly
           SdfPropertySpec's CONNECTABILITY.
     
@@ -986,8 +979,8 @@ optional arguments:
                         OpenUSD build system.
   -t TEMPLATEPATH, --templates TEMPLATEPATH
                         Directory containing schema class templates. [Default:
-                        first directory that exists from this list:
-                        <usd install dir>/bin/codegenTemplat
-                        es:<usd install dir>/lib/usd/usd/resources/codegenTemplates]
+                        first directory that exists from this list: 
+                        <usd install dir>/bin/codegenTemplates:<usd install dir>
+                        /lib/usd/usd/resources/codegenTemplates]
 
 ==== usdInitSchema end ====

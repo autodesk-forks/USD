@@ -65,6 +65,7 @@ public:
         }
 
         _queryOnExpansion = false;
+        const HdSceneIndexBaseRefPtr &sceneIndex = treeWidget->_inputSceneIndex;
 
         int count = childCount();
         if (count) {
@@ -91,6 +92,12 @@ public:
 
             treeWidget->_AddPrimItem(childPath, childItem);
             childItem->setText(1, prim.primType.data());
+
+            // if current item has no children, we can hide the expand indicator
+            if (!sceneIndex->GetChildPrimPaths(childPath).size()) {
+                childItem->setChildIndicatorPolicy(
+                    QTreeWidgetItem::DontShowIndicator);
+            }
         }
 
         if (!childCount()) {
@@ -137,11 +144,11 @@ private:
 HduiSceneIndexTreeWidget::HduiSceneIndexTreeWidget(QWidget *parent)
 : QTreeWidget(parent)
 {
-    setHeaderLabels({"Name", "Type"});
+    setHeaderLabels({"Prim", "Type"});
     setAllColumnsShowFocus(true);
 
     header()->setSectionResizeMode(0, QHeaderView::Stretch);
-    header()->setSectionResizeMode(1, QHeaderView::Fixed);
+    header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     header()->resizeSection(1,fontMetrics().averageCharWidth() * 10);
     header()->setStretchLastSection(false);
 
@@ -301,12 +308,14 @@ HduiSceneIndexTreeWidget::SetSceneIndex(HdSceneIndexBaseRefPtr inputSceneIndex)
 void
 HduiSceneIndexTreeWidget::Requery(bool lazy)
 {
-    //_primItems.clear();
-    //clear();
-
-    _primItems[SdfPath::AbsoluteRootPath()] = new Hdui_SceneIndexPrimTreeWidgetItem(
+    Hdui_SceneIndexPrimTreeWidgetItem *item  =
+        new Hdui_SceneIndexPrimTreeWidgetItem(
             invisibleRootItem(), SdfPath::AbsoluteRootPath(), true);
+    _primItems[SdfPath::AbsoluteRootPath()] = item;
 
+    // expand the root by default
+    item->setExpanded(true);
+    item->WasExpanded(this);
 }
 
 

@@ -29,6 +29,7 @@ TestUsdGeomValidators()
         UsdGeomValidatorNameTokens->subsetFamilies,
         UsdGeomValidatorNameTokens->subsetParentIsImageable,
         UsdGeomValidatorNameTokens->stageMetadataChecker,
+        UsdGeomValidatorNameTokens->encapsulationChecker,
     };
 
     const UsdValidationRegistry &registry
@@ -42,7 +43,7 @@ TestUsdGeomValidators()
     UsdValidationValidatorMetadataVector metadata
         = registry.GetValidatorMetadataForPlugin(
             _tokens->usdGeomValidatorsPlugin);
-    TF_AXIOM(metadata.size() == 3);
+    TF_AXIOM(metadata.size() == 4);
     for (const UsdValidationValidatorMetadata &m: metadata) {
         validatorMetadataNameSet.insert(m.name);
     }
@@ -162,6 +163,21 @@ def Xform "SubsetsTest" (
                 int[] indices = [0]
             }
         }
+    }
+}
+)usda";
+
+static const std::string nestedLayerContents =
+    R"usda(#usda 1.0
+(
+    defaultPrim = "NestedGprimTest"
+    upAxis = "Z"
+)
+def Mesh "NestedGprimTest"
+{
+    def Sphere "NestedPrim"
+    {
+    
     }
 }
 )usda";
@@ -364,10 +380,52 @@ TestUsdStageMetadata()
     TF_AXIOM(errors.empty());
 }
 
+void
+TestUsdGeomEncapsulationChecker()
+{
+    UsdValidationRegistry &registry = UsdValidationRegistry::GetInstance();
+    const UsdValidationValidator *validator = registry.GetOrLoadValidatorByName(
+        UsdGeomValidatorNameTokens->encapsulationChecker);
+    TF_AXIOM(validator);
+
+    SdfLayerRefPtr layer = SdfLayer::CreateAnonymous(".usda");
+    layer->ImportFromString(nestedLayerContents);
+    UsdStageRefPtr usdStage = UsdStage::Open(layer);
+    TF_AXIOM(usdStage);
+
+    const TfToken expectedErrorIdentifier = TfToken(
+        "usdGeomValidators:EncapsulationChecker.InvalidNestedGprims");
+
+    {
+        const UsdPrim usdPrim = usdStage->GetPrimAtPath(
+            SdfPath("/NestedGprimTest/NestedPrim"));
+
+        const UsdValidationErrorVector errors = validator->Validate(usdPrim);
+
+        TF_AXIOM(errors.size() == 1u);
+        const UsdValidationError &error = errors[0u];
+        TF_AXIOM(error.GetIdentifier() == expectedErrorIdentifier);
+        TF_AXIOM(error.GetType() == UsdValidationErrorType::Error);
+        TF_AXIOM(error.GetSites().size() == 1u);
+        const UsdValidationErrorSite &errorSite = error.GetSites()[0u];
+        TF_AXIOM(errorSite.IsValid());
+        TF_AXIOM(errorSite.IsPrim());
+        TF_AXIOM(errorSite.GetPrim().GetPath() == usdPrim.GetPath());
+        const std::string expectedErrorMsg
+            = "Gprim "
+              "</NestedGprimTest/NestedPrim> has an ancestor prim that is also "
+              "a Gprim, which is not allowed.";
+ 
+        TF_AXIOM(error.GetMessage() == expectedErrorMsg);
+    }
+}
+
+
 int
 main()
 {
     TestUsdGeomValidators();
+    TestUsdGeomEncapsulationChecker();
     TestUsdGeomSubsetFamilies();
     TestUsdGeomSubsetParentIsImageable();
     TestUsdStageMetadata();
