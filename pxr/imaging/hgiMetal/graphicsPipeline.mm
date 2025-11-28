@@ -439,10 +439,16 @@ HgiMetalGraphicsPipeline::BindPipeline(id<MTLRenderCommandEncoder> renderEncoder
     //
     HgiDepthStencilState const & dsState = _descriptor.depthState;
     if (_descriptor.depthState.depthBiasEnabled) {
-        [renderEncoder
-            setDepthBias: dsState.depthBiasConstantFactor
-              slopeScale: dsState.depthBiasSlopeFactor
-                   clamp: 0.0f];
+        // https://developer.apple.com/documentation/metal/mtlrendercommandencoder/setdepthbias(_:slopescale:clamp:)
+        // Do not apply depth bias for line primitives as Metal doesn't support at the moment; otherwise, 
+        // it may lead to unexpected rendering issues.
+        if (_descriptor.primitiveType != HgiPrimitiveTypeLineList &&
+            _descriptor.primitiveType != HgiPrimitiveTypeLineStrip) {
+            [renderEncoder
+              setDepthBias: dsState.depthBiasConstantFactor
+                slopeScale: dsState.depthBiasSlopeFactor
+                     clamp: 0.0f];
+        }
     }
 
     if (_descriptor.depthState.stencilTestEnabled) {
