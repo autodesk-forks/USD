@@ -844,22 +844,7 @@ HdxPickTask::_BuildResults(
             _contextParams.resolution,
             _contextParams.subRect);
 
-        if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveNearestToCenter) {
-            result.ResolveNearestToCenter(&outHits);
-        } else if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveNearestToCamera) {
-            result.ResolveNearestToCamera(&outHits);
-        } else if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveUnique) {
-            result.ResolveUnique(&outHits);
-        } else if (_contextParams.resolveMode ==
-            HdxPickTokens->resolveAll) {
-            result.ResolveAll(&outHits);
-        } else {
-            TF_CODING_ERROR("Unrecognized resolve mode '%s'",
-                _contextParams.resolveMode.GetText());
-        }
+        result.GetPickResults(_contextParams.resolveMode, &outHits);
     }
 
     // Optionally return the pick buffers for application-side picking
@@ -1732,6 +1717,31 @@ HdxPickResult::SetSubRect(GfVec4i subRect)
     TRACE_FUNCTION();
     _subRect = subRect;
 }
+
+void
+HdxPickResult::GetPickResults(TfToken resolveMode, HdxPickHitVector* outHits) const
+{
+    TRACE_FUNCTION();
+
+    if (!outHits) {
+        TF_CODING_ERROR("outHits parameter cannot be null");
+        return;
+    }
+
+    if (resolveMode == HdxPickTokens->resolveNearestToCenter) {
+        ResolveNearestToCenter(outHits);
+    } else if (resolveMode == HdxPickTokens->resolveNearestToCamera) {
+        ResolveNearestToCamera(outHits);
+    } else if (resolveMode == HdxPickTokens->resolveUnique) {
+        ResolveUnique(outHits);
+    } else if (resolveMode == HdxPickTokens->resolveAll) {
+        ResolveAll(outHits);
+    } else {
+        TF_CODING_ERROR("Unrecognized resolve mode '%s'",
+            resolveMode.GetText());
+    }
+}
+
 
 // -------------------------------------------------------------------------- //
 // HdxPickHit

@@ -262,6 +262,13 @@ using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std:
 ///         when the pickTarget is pickPrimsAndInstances.
 ///     6. HdxPickTokens->resolveNone: Returns pick buffers for application-side
 ///         hit computation.
+/// `occluderDepthBiasEnable`: Enables depth bias during the occlusion pass.
+/// `occluderDepthBiasConstantFactor`: The constant factor used for depth bias.
+/// `occluderDepthBiasSlopeFactor`: The slope factor for depth bias.
+/// 'occluderCollection': Optionally Collection of prims that should be used for occlusion.
+///     By having a different collection, the api allows to use different
+///     representations for occlusion than for picking. This is useful
+///     for picking representations like lines or points.
 /// 'subRect': Optionally defines a sub-region of the rendered buffers to use by
 ///     the pick result method defined by 'resolveMode'. If not specified, it is
 ///     reset to the entire buffer dimensions specified by 'resolution'.
@@ -307,10 +314,6 @@ struct HdxPickTaskContextParams
     std::vector<GfVec4d> clipPlanes;
     DepthMaskCallback depthMaskCallback;
     HdRprimCollection collection;
-    // Collection of prims that should be used for occlusion.
-    // By having a different collection, the api allows to use different
-    // representations for occlusion than for picking. This is useful
-    // for picking representations like lines or points.
     HdRprimCollection occluderCollection;
     float alphaThreshold;
     bool  occluderDepthBiasEnable;
@@ -319,7 +322,6 @@ struct HdxPickTaskContextParams
     HdxPickHitVector *outHits;
     // (top, right, subRectWidth, subRectHeight)
     GfVec4i subRect;
-    /// A callback for executing the pick task asynchronously.
     callbackFn callbackFn;
     /// Pick buffers with managed lifetime via shared_ptr
     std::shared_ptr<HdxPickBuffers> pickBuffers;
@@ -539,6 +541,10 @@ public:
 
     HDX_API
     void SetSubRect(GfVec4i subRect);
+
+    /// Resolve pick results based on the specified resolve mode.
+    HDX_API
+    void GetPickResults(TfToken resolveMode, HdxPickHitVector* outHits) const;
 
 private:
     bool _ResolveHit(int index, int x, int y, float z, HdxPickHit* hit) const;
