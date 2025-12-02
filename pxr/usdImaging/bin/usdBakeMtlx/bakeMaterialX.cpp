@@ -128,11 +128,10 @@ void _BakeMtlxDocument(
         : mx::Image::BaseType::UINT8;
 
     // Construct a Texture Baker.
-#if MTLX_COMBINED_VERSION <= 13904
-    mx::TextureBakerPtr baker = mx::TextureBaker::create(
+#if MTLX_COMBINED_VERSION < 13904
+    auto baker = mx::TextureBaker::create(
         textureWidth, textureHeight, baseType);
 #else
-    auto baker = mx::TextureBakerGlsl::create(
     mx::TextureBakerPtr baker = mx::TextureBakerGlsl::create(
         textureWidth, textureHeight, baseType);
 #endif
