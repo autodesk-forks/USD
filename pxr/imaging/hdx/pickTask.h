@@ -320,7 +320,7 @@ struct HdxPickTaskContextParams
     float occluderDepthBiasConstantFactor;
     float occluderDepthBiasSlopeFactor;
     HdxPickHitVector *outHits;
-    // (top, right, subRectWidth, subRectHeight)
+    // (top left x, top left y, subRectWidth, subRectHeight)
     GfVec4i subRect;
     callbackFn callbackFn;
     /// Pick buffers with managed lifetime via shared_ptr
