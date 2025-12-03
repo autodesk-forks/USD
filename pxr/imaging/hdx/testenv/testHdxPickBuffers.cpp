@@ -15,6 +15,7 @@
 #include "pxr/imaging/hdx/tokens.h"
 #include "pxr/imaging/hdx/unitTestDelegate.h"
 
+#include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hio/image.h"
 
 #include "pxr/base/tf/errorMark.h"
@@ -110,11 +111,28 @@ Hdx_TestDriver::PickWithBuffers(int width, int height,
     return pickBuffers;
 }
 
+// Helper function to generate unique RGB color from integer ID (hash-based)
+// https://gist.github.com/badboy/6267743
+std::tuple<unsigned char, unsigned char, unsigned char> IdToColor(int id) {
+    unsigned int hash = static_cast<unsigned int>(id);
+    hash = (hash ^ 61) ^ (hash >> 16);
+    hash = hash + (hash << 3);
+    hash = hash ^ (hash >> 4);
+    hash = hash * 0x27d4eb2d;
+    hash = hash ^ (hash >> 15);
+
+    unsigned char r = static_cast<unsigned char>((hash & 0xFF0000) >> 16);
+    unsigned char g = static_cast<unsigned char>((hash & 0x00FF00) >> 8);
+    unsigned char b = static_cast<unsigned char>(hash & 0x0000FF);
+
+    return std::make_tuple(r, g, b);
+};
+
 // --------------------------------------------------------------------------
 // Utility function to write integer buffers as images
 // Encodes 32-bit integers by packing bytes into RGBA channels
 static bool
-_WriteIntBufferToImage(int const* buffer, GfVec2i const& size,
+_WriteIntToColorBufferToImage(int const* buffer, GfVec2i const& size,
                        std::string const& filename)
 {
     if (!buffer) {
@@ -126,11 +144,14 @@ _WriteIntBufferToImage(int const* buffer, GfVec2i const& size,
     std::vector<uint8_t> byteData(size[0] * size[1] * 4);
     
     for (int i = 0; i < size[0] * size[1]; ++i) {
-        uint32_t val = static_cast<uint32_t>(buffer[i]);
-        byteData[i * 4 + 0] = (val >>  0) & 0xFF; // R = byte 0
-        byteData[i * 4 + 1] = (val >>  8) & 0xFF; // G = byte 1
-        byteData[i * 4 + 2] = (val >> 16) & 0xFF; // B = byte 2
-        byteData[i * 4 + 3] = (val >> 24) & 0xFF; // A = byte 3
+        auto [r, g, b] = buffer[i] >= 0
+            ? IdToColor(buffer[i])
+            : std::tuple<unsigned char, unsigned char, unsigned char>(0, 0, 0);
+
+        byteData[i * 4 + 0] = r;
+        byteData[i * 4 + 1] = g;
+        byteData[i * 4 + 2] = b;
+        byteData[i * 4 + 3] = 255; // A = 255
     }
 
     HioImage::StorageSpec storage;
@@ -139,6 +160,51 @@ _WriteIntBufferToImage(int const* buffer, GfVec2i const& size,
     storage.format = HioFormatUNorm8Vec4;
     storage.flipped = true;
     storage.data = byteData.data();
+
+    HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
+    if (!image) {
+        TF_RUNTIME_ERROR("Failed to open image for writing %s",
+            filename.c_str());
+        return false;
+    }
+
+    if (!image->Write(storage)) {
+        TF_RUNTIME_ERROR("Failed to write image to %s", filename.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+// Utility function to write packed 2-10-10-10 normal buffers as RGB images
+// The neye buffer stores normals packed using HdVec4f_2_10_10_10_REV format
+static bool
+_WritePackedNormalBufferToImage(int const* buffer, GfVec2i const& size,
+                                std::string const& filename)
+{
+    if (!buffer) {
+        TF_CODING_ERROR("Null buffer provided to _WritePackedNormalBufferToImage");
+        return false;
+    }
+
+    std::vector<float> floatData(size[0] * size[1] * 4);
+    
+    for (int i = 0; i < size[0] * size[1]; ++i) {
+        // Decompress 2-10-10-10 packed normals back to 4 channels
+        GfVec3f neye = HdVec4f_2_10_10_10_REV(buffer[i]).GetAsVec<GfVec3f>();
+
+        floatData[i * 4 + 0] = neye[0];
+        floatData[i * 4 + 1] = neye[1];
+        floatData[i * 4 + 2] = neye[2];
+        floatData[i * 4 + 3] = 1.0f;
+    }
+
+    HioImage::StorageSpec storage;
+    storage.width = size[0];
+    storage.height = size[1];
+    storage.format = HioFormatFloat32Vec4;
+    storage.flipped = true;
+    storage.data = floatData.data();
 
     HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
     if (!image) {
@@ -165,14 +231,13 @@ _WriteFloatBufferToImage(float const* buffer, GfVec2i const& size,
         return false;
     }
 
-    // Convert float buffer to RGBA
     std::vector<float> floatData(size[0] * size[1] * 4);
     
     for (int i = 0; i < size[0] * size[1]; ++i) {
         float val = buffer[i];
-        floatData[i * 4 + 0] = val; // R
-        floatData[i * 4 + 1] = val; // G
-        floatData[i * 4 + 2] = val; // B
+        floatData[i * 4 + 0] = val;
+        floatData[i * 4 + 1] = val;
+        floatData[i * 4 + 2] = val;
         floatData[i * 4 + 3] = 1.0f; // A
     }
 
@@ -262,32 +327,32 @@ _WritePickBuffersForRepr(std::shared_ptr<HdxPickBuffers> const& pickBuffers,
 
     if (int const* primIds = pickBuffers->GetPrimIds()) {
         std::string filename = "buffer_primIds_" + reprSuffix + ".png";
-        _WriteIntBufferToImage(primIds, bufferSize, filename);
+        _WriteIntToColorBufferToImage(primIds, bufferSize, filename);
     }
 
     if (int const* instanceIds = pickBuffers->GetInstanceIds()) {
         std::string filename = "buffer_instanceIds_" + reprSuffix + ".png";
-        _WriteIntBufferToImage(instanceIds, bufferSize, filename);
+        _WriteIntToColorBufferToImage(instanceIds, bufferSize, filename);
     }
 
     if (int const* elementIds = pickBuffers->GetFaceIds()) {
         std::string filename = "buffer_elementIds_" + reprSuffix + ".png";
-        _WriteIntBufferToImage(elementIds, bufferSize, filename);
+        _WriteIntToColorBufferToImage(elementIds, bufferSize, filename);
     }
 
     if (int const* edgeIds = pickBuffers->GetEdgeIds()) {
         std::string filename = "buffer_edgeIds_" + reprSuffix + ".png";
-        _WriteIntBufferToImage(edgeIds, bufferSize, filename);
+        _WriteIntToColorBufferToImage(edgeIds, bufferSize, filename);
     }
 
     if (int const* pointIds = pickBuffers->GetPointIds()) {
         std::string filename = "buffer_pointIds_" + reprSuffix + ".png";
-        _WriteIntBufferToImage(pointIds, bufferSize, filename);
+        _WriteIntToColorBufferToImage(pointIds, bufferSize, filename);
     }
 
     if (int const* neyes = pickBuffers->GetNormals()) {
         std::string filename = "buffer_neyes_" + reprSuffix + ".png";
-        _WriteIntBufferToImage(neyes, bufferSize, filename);
+        _WritePackedNormalBufferToImage(neyes, bufferSize, filename);
     }
 
     if (float const* depths = pickBuffers->GetDepths()) {
