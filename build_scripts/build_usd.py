@@ -2207,8 +2207,6 @@ def InstallUSD(context, force, buildArgs):
             extraArgs.append('-DCMAKE_CXX_FLAGS="{} {}"'.format(compileFlags, webGPUPortArg))
             extraArgs.append('-DCMAKE_C_FLAGS="{}"'.format(compileFlags))
             extraArgs.append('-DCMAKE_EXE_LINKER_FLAGS="{}"'.format(linkFlags))
-            # For some reason we have to manually specify path to boost
-            extraArgs.append('-DBoost_INCLUDE_DIR="{}"'.format(os.path.join(context.usdInstDir, "include")))
 
             extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=ON')
             extraArgs.append('-DPXR_BUILD_PERFORMANCE=OFF')
