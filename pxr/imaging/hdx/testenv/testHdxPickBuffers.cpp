@@ -129,18 +129,40 @@ std::tuple<unsigned char, unsigned char, unsigned char> IdToColor(int id) {
 };
 
 // --------------------------------------------------------------------------
-// Utility function to write integer buffers as images
-// Encodes 32-bit integers by packing bytes into RGBA channels
-static bool
-_WriteIntToColorBufferToImage(int const* buffer, GfVec2i const& size,
-                       std::string const& filename)
+// Common helper to write image data to file
+static void
+_WriteImageToFile(void* data, GfVec2i const& size,
+                  HioFormat format, std::string const& filename)
 {
-    if (!buffer) {
-        TF_CODING_ERROR("Null buffer provided to _WriteIntBufferToImage");
-        return false;
+    HioImage::StorageSpec storage;
+    storage.width = size[0];
+    storage.height = size[1];
+    storage.format = format;
+    storage.flipped = true;
+    storage.data = data;
+
+    HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
+    if (!image) {
+        TF_RUNTIME_ERROR("Failed to open image for writing %s",
+            filename.c_str());
+        return;
     }
 
-    // Pack 32-bit integers into RGBA bytes (8 bits per channel)
+    if (!image->Write(storage)) {
+        TF_RUNTIME_ERROR("Failed to write image to %s", filename.c_str());
+    }
+}
+
+// Utility function to write integer buffers as images
+// Encodes 32-bit integers by generating a hash and extracting the RGB channels
+static void
+_WriteIntToColorBufferToImage(int const* buffer, GfVec2i const& size,
+                              std::string const& filename)
+{
+    if (!buffer) {
+        TF_CODING_ERROR("Null buffer provided");
+    }
+
     std::vector<uint8_t> byteData(size[0] * size[1] * 4);
     
     for (int i = 0; i < size[0] * size[1]; ++i) {
@@ -151,40 +173,19 @@ _WriteIntToColorBufferToImage(int const* buffer, GfVec2i const& size,
         byteData[i * 4 + 0] = r;
         byteData[i * 4 + 1] = g;
         byteData[i * 4 + 2] = b;
-        byteData[i * 4 + 3] = 255; // A = 255
+        byteData[i * 4 + 3] = 255;
     }
 
-    HioImage::StorageSpec storage;
-    storage.width = size[0];
-    storage.height = size[1];
-    storage.format = HioFormatUNorm8Vec4;
-    storage.flipped = true;
-    storage.data = byteData.data();
-
-    HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
-    if (!image) {
-        TF_RUNTIME_ERROR("Failed to open image for writing %s",
-            filename.c_str());
-        return false;
-    }
-
-    if (!image->Write(storage)) {
-        TF_RUNTIME_ERROR("Failed to write image to %s", filename.c_str());
-        return false;
-    }
-
-    return true;
+    _WriteImageToFile(byteData.data(), size, HioFormatUNorm8Vec4, filename);
 }
 
 // Utility function to write packed 2-10-10-10 normal buffers as RGB images
-// The neye buffer stores normals packed using HdVec4f_2_10_10_10_REV format
-static bool
+static void
 _WritePackedNormalBufferToImage(int const* buffer, GfVec2i const& size,
                                 std::string const& filename)
 {
     if (!buffer) {
-        TF_CODING_ERROR("Null buffer provided to _WritePackedNormalBufferToImage");
-        return false;
+        TF_CODING_ERROR("Null buffer provided");
     }
 
     std::vector<float> floatData(size[0] * size[1] * 4);
@@ -199,36 +200,16 @@ _WritePackedNormalBufferToImage(int const* buffer, GfVec2i const& size,
         floatData[i * 4 + 3] = 1.0f;
     }
 
-    HioImage::StorageSpec storage;
-    storage.width = size[0];
-    storage.height = size[1];
-    storage.format = HioFormatFloat32Vec4;
-    storage.flipped = true;
-    storage.data = floatData.data();
-
-    HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
-    if (!image) {
-        TF_RUNTIME_ERROR("Failed to open image for writing %s",
-            filename.c_str());
-        return false;
-    }
-
-    if (!image->Write(storage)) {
-        TF_RUNTIME_ERROR("Failed to write image to %s", filename.c_str());
-        return false;
-    }
-
-    return true;
+    _WriteImageToFile(floatData.data(), size, HioFormatFloat32Vec4, filename);
 }
 
 // Utility function to write float buffers (like depth) as grayscale images
-static bool
+static void
 _WriteFloatBufferToImage(float const* buffer, GfVec2i const& size, 
                          std::string const& filename)
 {
     if (!buffer) {
         TF_CODING_ERROR("Null buffer provided to _WriteFloatBufferToImage");
-        return false;
     }
 
     std::vector<float> floatData(size[0] * size[1] * 4);
@@ -238,29 +219,10 @@ _WriteFloatBufferToImage(float const* buffer, GfVec2i const& size,
         floatData[i * 4 + 0] = val;
         floatData[i * 4 + 1] = val;
         floatData[i * 4 + 2] = val;
-        floatData[i * 4 + 3] = 1.0f; // A
+        floatData[i * 4 + 3] = 1.0f;
     }
 
-    HioImage::StorageSpec storage;
-    storage.width = size[0];
-    storage.height = size[1];
-    storage.format = HioFormatFloat32Vec4;
-    storage.flipped = true;
-    storage.data = floatData.data();
-
-    HioImageSharedPtr const image = HioImage::OpenForWriting(filename);
-    if (!image) {
-        TF_RUNTIME_ERROR("Failed to open image for writing %s",
-            filename.c_str());
-        return false;
-    }
-
-    if (!image->Write(storage)) {
-        TF_RUNTIME_ERROR("Failed to write image to %s", filename.c_str());
-        return false;
-    }
-
-    return true;
+    _WriteImageToFile(floatData.data(), size, HioFormatFloat32Vec4, filename);
 }
 
 // --------------------------------------------------------------------------
