@@ -905,6 +905,7 @@ function(_pxr_target_link_libraries NAME)
                 list(APPEND final ${lib})
             elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
                 list(APPEND final -Wl,-force_load ${lib})
+                add_dependencies(${NAME} ${lib})
             else()
                 # Unknown platform.
                 list(APPEND final ${lib})
