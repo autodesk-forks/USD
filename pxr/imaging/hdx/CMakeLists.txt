@@ -55,6 +55,7 @@ pxr_library(hdx
         wboitRenderTask
         wboitResolveTask
         package
+        pickBuffers
         pickTask
         pickFromRenderBufferTask
         presentTask
@@ -139,6 +140,21 @@ pxr_build_test(testHdxLightAndShadow
         tf
     CPPFILES
         testenv/testHdxLightAndShadow.cpp
+)
+pxr_build_test(testHdxPickBuffers
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        sdf
+        glf
+        garch
+        arch
+        tf
+        hio
+    CPPFILES
+        unitTestUtils.cpp
+        testenv/testHdxPickBuffers.cpp
 )
 endif()
 
@@ -281,6 +297,10 @@ pxr_install_test_dir(
     SRC testenv/testHdxUnpickablesAsOccluders
     DEST testHdxUnpickablesAsOccluders
 )
+pxr_install_test_dir(
+    SRC testenv/testHdxPickBuffers
+    DEST testHdxPickBuffers
+)
 
 #
 # Register tests
@@ -390,6 +410,42 @@ pxr_register_test(testHdxUnpickablesAsOccluders
     FAIL 1
     FAIL_PERCENT 1
     PERCEPTUAL
+)
+pxr_register_test(testHdxPickBuffers
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPickBuffers --offscreen"
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        # Smooth representation (5 buffers)
+        buffer_primIds_smooth.png
+        buffer_instanceIds_smooth.png
+        buffer_elementIds_smooth.png
+        buffer_neyes_smooth.png
+        buffer_depths_smooth.png
+        # Flat representation (5 buffers)
+        buffer_primIds_flat.png
+        buffer_instanceIds_flat.png
+        buffer_elementIds_flat.png
+        buffer_neyes_flat.png
+        buffer_depths_flat.png
+        # Point representation (4 buffers)
+        buffer_primIds_point.png
+        buffer_instanceIds_point.png        
+        buffer_pointIds_point.png        
+        buffer_depths_point.png
+        # Point Occluded representation (4 buffers)
+        buffer_primIds_points_occluded.png
+        buffer_instanceIds_points_occluded.png
+        buffer_pointIds_points_occluded.png
+        buffer_depths_points_occluded.png
+        # Line representation 6 buffers)
+        buffer_primIds_line.png
+        buffer_instanceIds_line.png
+        buffer_elementIds_line.png
+        buffer_edgeIds_line.png
+        buffer_pointIds_line.png
+        buffer_depths_line.png
+    FAIL 0
+    FAIL_PERCENT 0.1
 )
 
 # Certain tests use plugins that require shared libraries.

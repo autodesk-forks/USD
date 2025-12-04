@@ -7,6 +7,7 @@
 #include "pxr/imaging/garch/glApi.h"
 
 #include "pxr/imaging/hdx/pickTask.h"
+#include "pxr/imaging/hdx/pickBuffers.h"
 
 #include "pxr/imaging/hdx/debugCodes.h"
 #include "pxr/imaging/hdx/package.h"
@@ -39,6 +40,9 @@
 #include "pxr/base/tf/hash.h"
 
 #include <iostream>
+#include <map>
+#include <limits>
+#include <algorithm>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -112,7 +116,6 @@ HdxPickTask::HdxPickTask(HdSceneDelegate* delegate, SdfPath const& id)
     , _renderTags()
     , _useOverlayPass(false)
     , _index(nullptr)
-    , _pickOp(nullptr)
     , _hgi(nullptr)
     , _pickableDepthIndex(0)
     , _depthToken(HdAovTokens->depthStencil)
@@ -180,6 +183,11 @@ HdxPickTask::_InitIfNeeded()
         _occluderRenderPassState->SetColorMaskUseDefault(false);
         _occluderRenderPassState->SetColorMasks(
             {HdRenderPassState::ColorMaskNone});
+        _occluderRenderPassState->SetDepthBiasUseDefault(!_contextParams.occluderDepthBiasEnable);
+        _occluderRenderPassState->SetDepthBiasEnabled(_contextParams.occluderDepthBiasEnable);
+        _occluderRenderPassState->SetDepthBias(
+            _contextParams.occluderDepthBiasConstantFactor,
+            _contextParams.occluderDepthBiasSlopeFactor);
     }
 }
 
@@ -397,7 +405,8 @@ bool
 HdxPickTask::_UseOcclusionPass() const
 {
     return _contextParams.doUnpickablesOcclude &&
-           !_contextParams.collection.GetExcludePaths().empty();
+        !(_contextParams.occluderCollection.GetRootPaths().empty() &&
+        _contextParams.collection.GetExcludePaths().empty());
 }
 
 bool
@@ -459,6 +468,27 @@ void HdxPickTask::_ReadAovBufferAsync(TfToken const &aovName,
         }
     }
     completed(aovName, HdStTextureUtils::AlignedBuffer<T>());
+}
+
+void HdxPickTask::_checkIfAllBuffersReady()
+{
+    if ((_gpuIntBuffers.size() + _gpuFloatBuffers.size()) == _aovOutputs.size()) {
+        pxr::HdxPickHitVector outHits;
+        _BuildResults(
+            _gpuIntBuffers[HdAovTokens->primId],
+            _gpuIntBuffers[HdAovTokens->instanceId], 
+            _gpuIntBuffers[HdAovTokens->elementId],
+            _gpuIntBuffers[HdAovTokens->edgeId],
+            _gpuIntBuffers[HdAovTokens->pointId],
+            _gpuIntBuffers[HdAovTokens->Neye],
+            _gpuFloatBuffers[_depthToken],
+            outHits);
+
+        _contextParams.callbackFn(outHits, _contextParams.pickBuffers);
+
+        _gpuIntBuffers.clear();
+        _gpuFloatBuffers.clear();
+    }
 }
 
 HdRenderBuffer const *
@@ -615,9 +645,13 @@ HdxPickTask::Sync(HdSceneDelegate* delegate,
     // by renderTag and not materialTag.
     if (_UseOcclusionPass()) {
         // Pass (i) from above
-        HdRprimCollection occluderCol =
-            _contextParams.collection.CreateInverseCollection();
-        _occluderRenderPass->SetRprimCollection(occluderCol);
+        if (!_contextParams.occluderCollection.GetRootPaths().empty()) {
+            _occluderRenderPass->SetRprimCollection(_contextParams.occluderCollection);
+        } else {
+            HdRprimCollection occluderCol =
+                _contextParams.collection.CreateInverseCollection();
+            _occluderRenderPass->SetRprimCollection(occluderCol);
+        }
     }
 
     // Pass (ii) from above
@@ -690,6 +724,31 @@ HdxPickTask::Prepare(HdTaskContext* ctx,
                 _tokens->PickBufferBinding);
         }
     }
+
+    if (_UseOcclusionPass()) {
+        // Prepare pick buffer binding
+        HdStRenderPassState* extendedStateOccluder =
+            dynamic_cast<HdStRenderPassState*>(_occluderRenderPassState.get());
+
+        HdStRenderPassShaderSharedPtr renderPassShaderOccluder =
+        extendedStateOccluder ? extendedStateOccluder->GetRenderPassShader() : nullptr;
+
+        if (renderPassShaderOccluder) {
+            if (_pickBuffer) {
+                renderPassShaderOccluder->AddBufferBinding(
+                    HdStBindingRequest(
+                        HdStBinding::SSBO,
+                        _tokens->PickBufferBinding,
+                        _pickBuffer,
+                        /*interleaved*/ false,
+                        /*writable*/ true));
+            }
+            else {
+                renderPassShaderOccluder->RemoveBufferBinding(
+                    _tokens->PickBufferBinding);
+            }
+        }
+    }
 }
 
 void
@@ -759,17 +818,15 @@ HdxPickTask::_ClearPickBuffer()
 
 pxr::HdxPickHitVector
 HdxPickTask::_BuildResults(
-    int const* primIds,
-    int const* instanceIds,
-    int const* elementIds,
-    int const* edgeIds,
-    int const* pointIds,
-    int const* neyes,
-    float const* depths,
-    pxr::HdxPickHitVector &outHits)
+    HdStTextureUtils::AlignedBuffer<int>& primIds,
+    HdStTextureUtils::AlignedBuffer<int>& instanceIds,
+    HdStTextureUtils::AlignedBuffer<int>& elementIds,
+    HdStTextureUtils::AlignedBuffer<int>& edgeIds,
+    HdStTextureUtils::AlignedBuffer<int>& pointIds,
+    HdStTextureUtils::AlignedBuffer<int>& neyes,
+    HdStTextureUtils::AlignedBuffer<float>& depths,
+    pxr::HdxPickHitVector& outHits)
 {
-    GfVec2i dimensions = _contextParams.resolution;
-    GfVec4i viewport(0, 0, dimensions[0], dimensions[1]);
     // For un-projection, get the depth range at time of drawing.
     GfVec2f depthRange(0, 1);
     if (_hgi->GetCapabilities()->IsSet(
@@ -778,28 +835,29 @@ HdxPickTask::_BuildResults(
         depthRange = _pickableRenderPassState->GetDepthRange();
     }
 
-    HdxPickResult result(primIds, instanceIds, elementIds, edgeIds, pointIds, neyes, depths,
-                         _index, _contextParams.pickTarget, _contextParams.viewMatrix,
-                         _contextParams.projectionMatrix, depthRange, dimensions, viewport);
+    if (_contextParams.resolveMode != HdxPickTokens->resolveNone) {
+        HdxPickResult result(
+            primIds.get(), instanceIds.get(), elementIds.get(),
+            edgeIds.get(), pointIds.get(), neyes.get(), depths.get(),
+            _index, _contextParams.pickTarget, _contextParams.viewMatrix,
+            _contextParams.projectionMatrix, depthRange,
+            _contextParams.resolution,
+            _contextParams.subRect);
 
-    if (_contextParams.resolveMode ==
-        HdxPickTokens->resolveNearestToCenter) {
-        result.ResolveNearestToCenter(&outHits);
-    } else if (_contextParams.resolveMode ==
-               HdxPickTokens->resolveNearestToCamera) {
-        result.ResolveNearestToCamera(&outHits);
-    } else if (_contextParams.resolveMode ==
-               HdxPickTokens->resolveUnique) {
-        result.ResolveUnique(&outHits);
-    } else if (_contextParams.resolveMode ==
-               HdxPickTokens->resolveAll) {
-        result.ResolveAll(&outHits);
-    } else {
-        TF_CODING_ERROR("Unrecognized interesection mode '%s'",
-                        _contextParams.resolveMode.GetText());
+        result.GetPickResults(_contextParams.resolveMode, &outHits);
     }
+
+    // Optionally return the pick buffers for application-side picking
+    if (_contextParams.pickBuffers) {
+        _contextParams.pickBuffers->Initialize(
+            primIds, instanceIds, elementIds, edgeIds, pointIds, neyes, depths,
+            _index, _contextParams.viewMatrix, _contextParams.projectionMatrix,
+            depthRange, _contextParams.resolution);
+    }
+
     return outHits;
 }
+
 void
 HdxPickTask::Execute(HdTaskContext* ctx)
 {
@@ -811,6 +869,39 @@ HdxPickTask::Execute(HdTaskContext* ctx)
 
     // This is important for Hgi garbage collection to run.
     _hgi->StartFrame();
+
+    GfVec2i dimensions = _contextParams.resolution;
+    GfVec4i subRect(0, 0, dimensions[0], dimensions[1]);
+    
+    auto isSubRectValid = [&](const GfVec4i& sRect, const GfVec4i& vRect) -> bool {
+        const int sRectRight = sRect[0] + sRect[2];
+        const int sRectTop = sRect[1] + sRect[3];
+
+        // vRect starts at (0,0), so vRect[0] + vRect[2] = vRect[2]
+        // Check: 0 <= sRect[0] < vRect[2] && sRectRight <= vRect[2]
+        //        0 <= sRect[1] < vRect[3] && sRectTop <= vRect[3]
+        return (sRect[0] < vRect[2]) && (sRectRight <= vRect[2]) &&
+            (sRect[1] < vRect[3]) && (sRectTop <= vRect[3]);
+    };
+
+    // If subRect is unspecified (default), or invalid, then replace it with
+    // the full buffer resolution. This value will be used to initialize the
+    // HdxPickResult instance later.
+    bool isDefault = (_contextParams.subRect == GfVec4i(-1, -1, -1, -1));
+
+    if (isDefault ||
+        !isSubRectValid(_contextParams.subRect, subRect)) {
+
+        if (!isDefault) {
+            TF_WARN("Specified Search Rect [%d, %d, %d %d]  not inside viewport [%d, %d, %d %d]",
+                _contextParams.subRect[0], _contextParams.subRect[1],
+                _contextParams.subRect[2], _contextParams.subRect[3],
+                subRect[0], subRect[1], subRect[2], subRect[3]);
+        }
+
+        // Reset the search rect to the full buffer resolution
+        _contextParams.subRect = subRect;
+    }
 
     // Are we using stencil conditioning?
     bool needStencilConditioning =
@@ -865,47 +956,29 @@ HdxPickTask::Execute(HdTaskContext* ctx)
         return;
     }
 
-    if (_contextParams.returnHits)
-    {
-        if (!_pickOp) {
-            _pickOp = ([this](TfToken const &aovName, HdStTextureUtils::AlignedBuffer<int32_t> data) {
-                _gpuBuffers[aovName] = std::move(data);
+    if (_contextParams.callbackFn) {
+        if (_gpuIntBuffers.empty() && _gpuFloatBuffers.empty()) {
+            auto intCallback = [this](TfToken const& aovName, HdStTextureUtils::AlignedBuffer<int> data) {
+                _gpuIntBuffers[aovName] = std::move(data);
+                _checkIfAllBuffersReady();
+            };
+            
+            auto floatCallback = [this](TfToken const& aovName, HdStTextureUtils::AlignedBuffer<float> data) {
+                _gpuFloatBuffers[aovName] = std::move(data);
+                _checkIfAllBuffersReady();
+            };
 
-                if (_gpuBuffers.size() == _aovOutputs.size()) {
-                    int *primIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->primId].get());
-                    int *instanceIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->instanceId].get());
-                    int *elementIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->elementId].get());
-                    int *edgeIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->edgeId].get());
-                    int *pointIds = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->pointId].get());
-                    int *neyes = reinterpret_cast<int *>(_gpuBuffers[HdAovTokens->Neye].get());
-                    float *depths = reinterpret_cast<float *>(_gpuBuffers[_depthToken].get());
-
-                    pxr::HdxPickHitVector outHits;
-                    _BuildResults(primIds, instanceIds, elementIds,
-                                  edgeIds, pointIds, neyes, depths, outHits);
-
-                    // Call the deferred callback
-                    _contextParams.returnHits(outHits);
-
-                    _gpuBuffers.clear();
-                    _pickOp = nullptr;
-                }
-            });
-
-            _ReadAovBufferAsync(HdAovTokens->primId, _pickOp);
-            _ReadAovBufferAsync(HdAovTokens->instanceId, _pickOp);
-            _ReadAovBufferAsync(HdAovTokens->elementId, _pickOp);
-            _ReadAovBufferAsync(HdAovTokens->edgeId, _pickOp);
-            _ReadAovBufferAsync(HdAovTokens->pointId, _pickOp);
-            _ReadAovBufferAsync(HdAovTokens->Neye, _pickOp);
-            _ReadAovBufferAsync(_depthToken, _pickOp);
+            _ReadAovBufferAsync<int>(HdAovTokens->primId, intCallback);
+            _ReadAovBufferAsync<int>(HdAovTokens->instanceId, intCallback);
+            _ReadAovBufferAsync<int>(HdAovTokens->elementId, intCallback);
+            _ReadAovBufferAsync<int>(HdAovTokens->edgeId, intCallback);
+            _ReadAovBufferAsync<int>(HdAovTokens->pointId, intCallback);
+            _ReadAovBufferAsync<int>(HdAovTokens->Neye, intCallback);
+            _ReadAovBufferAsync<float>(_depthToken, floatCallback);
         } else {
             TF_CODING_ERROR("Pick task is already in progress");
         }
-    }
-    else
-    {
-        // Capture the result buffers and cast to the appropriate types.
+    } else {
         HdStTextureUtils::AlignedBuffer<int> primIds =
             _ReadAovBuffer<int>(HdAovTokens->primId);
         HdStTextureUtils::AlignedBuffer<int> instanceIds =
@@ -921,8 +994,8 @@ HdxPickTask::Execute(HdTaskContext* ctx)
         HdStTextureUtils::AlignedBuffer<float> depths =
             _ReadAovBuffer<float>(_depthToken);
 
-        _BuildResults(primIds.get(), instanceIds.get(), elementIds.get(),
-          edgeIds.get(), pointIds.get(), neyes.get(), depths.get(), *_contextParams.outHits);
+        _BuildResults(primIds, instanceIds, elementIds,
+            edgeIds, pointIds, neyes, depths, *_contextParams.outHits);
     }
 
     // This is important for Hgi garbage collection to run.
@@ -1044,7 +1117,6 @@ HdxPickResult::HdxPickResult(
     _subRect[1] = std::max(0, _subRect[1]);
     _subRect[2] = std::min(_bufferSize[0]-_subRect[0], _subRect[2]);
     _subRect[3] = std::min(_bufferSize[1]-_subRect[1], _subRect[3]);
-
     _eyeToWorld = viewMatrix.GetInverse();
     _ndcToWorld = (viewMatrix * projectionMatrix).GetInverse();
 }
@@ -1624,6 +1696,52 @@ HdxPickResult::ResolveUnique(HdxPickHitVector* allHits) const
         }
     }
 }
+
+GfVec2i
+HdxPickResult::GetBufferSize() const
+{
+    TRACE_FUNCTION();
+    return _bufferSize;
+}
+
+GfVec4i
+HdxPickResult::GetSubRect() const
+{
+    TRACE_FUNCTION();
+    return _subRect;
+}
+
+void
+HdxPickResult::SetSubRect(GfVec4i subRect)
+{
+    TRACE_FUNCTION();
+    _subRect = subRect;
+}
+
+void
+HdxPickResult::GetPickResults(TfToken resolveMode, HdxPickHitVector* outHits) const
+{
+    TRACE_FUNCTION();
+
+    if (!outHits) {
+        TF_CODING_ERROR("outHits parameter cannot be null");
+        return;
+    }
+
+    if (resolveMode == HdxPickTokens->resolveNearestToCenter) {
+        ResolveNearestToCenter(outHits);
+    } else if (resolveMode == HdxPickTokens->resolveNearestToCamera) {
+        ResolveNearestToCamera(outHits);
+    } else if (resolveMode == HdxPickTokens->resolveUnique) {
+        ResolveUnique(outHits);
+    } else if (resolveMode == HdxPickTokens->resolveAll) {
+        ResolveAll(outHits);
+    } else {
+        TF_CODING_ERROR("Unrecognized resolve mode '%s'",
+            resolveMode.GetText());
+    }
+}
+
 
 // -------------------------------------------------------------------------- //
 // HdxPickHit
