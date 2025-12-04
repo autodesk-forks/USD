@@ -1400,7 +1400,6 @@ HdStMaterialXHelpers::MxGetTypeString(
         return mx::Type::NONE->getName();
     }
 #elif MTLX_COMBINED_VERSION <= 13902
-    MATERIALX_BUILD_VERSION <=2
      const mx::TypeDesc mxType = mx::TypeDesc::get(typeName);
 #else
     const mx::TypeDesc mxType = mxContext.getTypeDesc(typeName);
