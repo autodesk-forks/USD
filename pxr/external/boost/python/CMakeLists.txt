@@ -366,10 +366,10 @@ function(boost_python_cpp_target TARGET_NAME)
         set(destination "tests")
     endif()
 
-    # If the monolithic shared library target exists the build will
+    # If the monolithic library target exists the build will
     # fold our library into that target, so link against that instead.
-    if (TARGET usd_ms)
-        target_link_libraries(${TARGET_NAME} usd_ms)
+    if (TARGET usd_m)
+        target_link_libraries(${TARGET_NAME} usd_m)
     else()
         target_link_libraries(${TARGET_NAME} python)
     endif()

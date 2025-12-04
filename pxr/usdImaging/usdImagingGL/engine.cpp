@@ -223,6 +223,7 @@ _GetUseSceneIndices()
     // - HdRenderIndex has scene index emulation enabled (otherwise,
     //     AddInputScene won't work).
     static bool result =
+        HdRenderIndex::IsSceneIndexEmulationEnabled() &&
         TfGetEnvSetting(USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX);
 
     return result;
@@ -232,6 +233,7 @@ bool
 _GetUseTaskControllerSceneIndex()
 {
     static bool result =
+        HdRenderIndex::IsSceneIndexEmulationEnabled() &&
         TfGetEnvSetting(USDIMAGINGGL_ENGINE_ENABLE_TASK_SCENE_INDEX);
 
     return result;
@@ -383,61 +385,62 @@ void
 UsdImagingGLEngine::_DestroyHydraObjects()
 {
     TRACE_FUNCTION();
-    
+
     // Destroy objects in opposite order of construction.
 
     {
-        TRACE_SCOPE("Engine and task controller");
+        TRACE_SCOPE("Destroying engine and task controller");
+
         _engine = nullptr;
         _taskController = nullptr;
-        _taskControllerSceneIndex = TfNullPtr;
     }
-    if (_GetUseSceneIndices()) {
-        if (_renderIndex && _sceneIndex) {
-            TRACE_SCOPE("Remove terminal UsdImaging scene index");
-            // Remove the terminal scene index of the UsdImaging scene
-            // index graph from the render index's merging scene index.
-            // This should result in removed/added notices that are
-            // processed by downstream scene index plugins.
-            _renderIndex->RemoveSceneIndex(_sceneIndex);
-        }
 
-        {
-            TRACE_SCOPE("Destroy UsdImaging scene indices");
-    
-            // The destruction order below is the reverse of the creation 
-            // order.
-            _sceneIndex = nullptr;
-            _displayStyleSceneIndex = nullptr;
-            _selectionSceneIndex = nullptr;
-                
-            // "Override" scene indices.
-            _rootOverridesSceneIndex = nullptr;
-            _lightPruningSceneIndex = nullptr;
-                
-            _stageSceneIndex = nullptr;
-        }
-    } else {
+    {
         TRACE_SCOPE("Destroy UsdImaging delegate");
+
         _sceneDelegate = nullptr;
     }
 
-    // Drop the reference to application scene indices so they are destroyed
-    // during render index destruction.
-    {
-        _appSceneIndices = nullptr;
-    }
+    // We are not removing _usdImagingFinalSceneIndex from _renderIndex here.
+    //
+    // This is not necessary since we destory _renderIndex and
+    // ~HdRenderIndex calls ~HdSceneIndexAdapterSceneDelegate which
+    // calls HdRenderIndex::_RemoveSubtree.
 
     {
-        // This should trigger the destruction of registered scene index
-        // plugins that were added to the scene index graph.
-        TRACE_SCOPE("Destroy scene index plugins and render index.");
+        TRACE_SCOPE("Destroy plugin scene indices and render index.");
+
         _renderIndex = nullptr;
     }
 
     {
         TRACE_SCOPE("Destroy render delegate");
+
         _renderDelegate = nullptr;
+    }
+
+    {
+        TRACE_SCOPE("Destroy application scene indices");
+
+        _appSceneIndices = nullptr;
+    }
+
+    {
+        TRACE_SCOPE("Destroy UsdImaging scene indices");
+
+        _usdImagingFinalSceneIndex = nullptr;
+        _displayStyleSceneIndex = nullptr;
+        _selectionSceneIndex = nullptr;
+        _postInstancingNoticeBatchingSceneIndex = nullptr;
+        _rootOverridesSceneIndex = nullptr;
+        _lightPruningSceneIndex = nullptr;
+        _stageSceneIndex = nullptr;
+    }
+
+    {
+        TRACE_SCOPE("Task controller scene index");
+
+        _taskControllerSceneIndex = TfNullPtr;
     }
 }
 
@@ -1410,54 +1413,65 @@ UsdImagingGLEngine::DecodeIntersection(
 
 bool
 UsdImagingGLEngine::DecodeIntersection(
-    int primIdx,
-    int instanceIdx,
-    SdfPath *outHitPrimPath,
-    SdfPath *outHitInstancerPath,
-    int *outHitInstanceIndex,
-    HdInstancerContext *outInstancerContext)
+    const int primIdx,
+    const int instanceIdx,
+    SdfPath * const outHitPrimPath,
+    SdfPath * const outHitInstancerPath,
+    int * const outHitInstanceIndex,
+    HdInstancerContext *const outInstancerContext)
 {
     if (ARCH_UNLIKELY(!_HasRenderer())) {
         return false;
     }
 
-    SdfPath primPath = _renderIndex->GetRprimPathFromPrimId(primIdx);
-    if (primPath.IsEmpty()) {
+    const SdfPath sceneIndexPath = _renderIndex->GetRprimPathFromPrimId(primIdx);
+    if (sceneIndexPath.IsEmpty()) {
         return false;
     }
 
-    SdfPath delegateId, instancerId;
-    _renderIndex->GetSceneDelegateAndInstancerIds(
-        primPath, &delegateId, &instancerId);
-
     if (_sceneDelegate) {
-        primPath = _sceneDelegate->GetScenePrimPath(
-            primPath, instanceIdx, outInstancerContext);
-        instancerId = _sceneDelegate->ConvertIndexPathToCachePath(instancerId)
-            .GetAbsoluteRootOrPrimPath();
+        SdfPath delegateId, instancerId;
+        _renderIndex->GetSceneDelegateAndInstancerIds(
+            sceneIndexPath, &delegateId, &instancerId);
+
+        if (outHitPrimPath) {
+            *outHitPrimPath =
+                _sceneDelegate->GetScenePrimPath(
+                    sceneIndexPath, instanceIdx, outInstancerContext);
+        }
+        if (outHitInstancerPath) {
+            *outHitInstancerPath =
+                _sceneDelegate
+                    ->ConvertIndexPathToCachePath(instancerId)
+                    .GetAbsoluteRootOrPrimPath();
+        }
+
     } else {
         HdxPickHit hit;
-        hit.delegateId = delegateId;
-        hit.objectId = primPath;
-        hit.instancerId = instancerId;
+        hit.objectId = sceneIndexPath;
         hit.instanceIndex = instanceIdx;
 
-        const HdxPrimOriginInfo info = HdxPrimOriginInfo::FromPickHit(
-            _renderIndex.get(), hit);
-        primPath = info.GetFullPath();
-        instancerId = instancerId.ReplacePrefix(_sceneDelegateId,
-            SdfPath::AbsoluteRootPath());
+        const HdxPrimOriginInfo info =
+            HdxPrimOriginInfo::FromPickHit(
+                _GetTerminalSceneIndex(), hit);
+        if (outHitPrimPath) {
+            *outHitPrimPath = info.GetFullPath();
+        }
+        
         if (outInstancerContext) {
             *outInstancerContext = info.ComputeInstancerContext();
         }
+        if (outHitInstancerPath) {
+            const HdInstancerContext &ctx =
+                outInstancerContext
+                    ? *outInstancerContext
+                    : info.ComputeInstancerContext();
+            if (!ctx.empty()) {
+                *outHitInstancerPath = ctx.back().first;
+            }
+        }
     }
 
-    if (outHitPrimPath) {
-        *outHitPrimPath = primPath;
-    }
-    if (outHitInstancerPath) {
-        *outHitInstancerPath = instancerId;
-    }
     if (outHitInstanceIndex) {
         *outHitInstanceIndex = instanceIdx;
     }
@@ -1708,7 +1722,7 @@ UsdImagingGLEngine::_CreateUsdImagingSceneIndices()
     sceneIndex = _displayStyleSceneIndex =
         HdsiLegacyDisplayStyleOverrideSceneIndex::New(sceneIndex);
 
-    _sceneIndex = sceneIndex;
+    _usdImagingFinalSceneIndex = sceneIndex;
 }
 
 void
@@ -1746,7 +1760,8 @@ UsdImagingGLEngine::_SetRenderDelegate(
 
     if (_GetUseSceneIndices()) {
         _CreateUsdImagingSceneIndices();
-        _renderIndex->InsertSceneIndex(_sceneIndex, _sceneDelegateId);
+        _renderIndex->InsertSceneIndex(
+            _usdImagingFinalSceneIndex, _sceneDelegateId);
     } else {
         _sceneDelegate = std::make_unique<UsdImagingDelegate>(
                 _renderIndex.get(), _sceneDelegateId);
@@ -1768,7 +1783,7 @@ UsdImagingGLEngine::_SetRenderDelegate(
             taskControllerPath,
             [renderDelegate = _renderDelegate.Get()](const TfToken &name) {
                 return renderDelegate->GetDefaultAovDescriptor(name); },
-            HdxIsStorm(_renderIndex.get()->GetRenderDelegate()),
+            _renderIndex.get()->GetRenderDelegate()->RequiresStormTasks(),
             _gpuEnabled
         };
         _taskControllerSceneIndex = HdxTaskControllerSceneIndex::New(params);

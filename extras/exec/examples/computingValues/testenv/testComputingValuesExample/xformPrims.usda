@@ -1,0 +1,24 @@
+#usda 1.0
+
+def Xform "Root" (
+    kind = "component"
+)
+{
+    uniform token[] xformOpOrder = [ "xformOp:transform" ]
+    matrix4d xformOps:transform = (
+        (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1, 0, 0, 1) )
+
+    def Xform "A1"
+    {
+        uniform token[] xformOpOrder = [ "xformOp:transform" ]
+        matrix4d xformOps:transform = (
+            (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )
+    }
+
+    def Xform "A2"
+    {
+        uniform token[] xformOpOrder = [ "xformOp:transform" ]
+        matrix4d xformOps:transform = (
+            (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 3, 1) )
+    }
+}

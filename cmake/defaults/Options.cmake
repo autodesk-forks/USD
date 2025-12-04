@@ -166,7 +166,7 @@ option(PXR_BUILD_MONOLITHIC "Build a monolithic library." OFF)
 set(PXR_MONOLITHIC_IMPORT ""
     CACHE
     STRING
-    "Path to cmake file that imports a usd_ms target"
+    "Path to cmake file that imports a usd_m target"
 )
 
 set(PXR_EXTRA_PLUGINS ""

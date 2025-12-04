@@ -33,16 +33,17 @@ if (EMSCRIPTEN)
     # XXX: We manually set the libraries instead of using the LIBRARIES argument pxr_cpp_bin due to
     # problems with the tbb library.
     target_link_libraries(${PXR_PACKAGE}
+        PUBLIC
             ${RESOURCE_PARAMETERS}
             ${TBB_tbb_LIBRARY}
     )
     set(BUILD_FILES
-            ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.js
-            ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm
-            ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data
-            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wasm-server.py
-            ${CMAKE_CURRENT_SOURCE_DIR}/usdviewweb.html
-        )
+        ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.js
+        ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.wasm
+        ${CMAKE_CURRENT_BINARY_DIR}/${PXR_PACKAGE}.data
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wasm-server.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/usdviewweb.html
+    )
 
     set(MODEL "Knife")
     set(MODEL_EXT "usda")

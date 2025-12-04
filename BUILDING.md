@@ -544,7 +544,7 @@ There are four ways to link USD controlled by the following options:
 | ---------------------- | --------- | ----------------------------------------- |
 | BUILD_SHARED_LIBS      | `ON`      | Build shared or static libraries          |
 | PXR_BUILD_MONOLITHIC   | `OFF`     | Build single or several libraries         |
-| PXR_MONOLITHIC_IMPORT  |           | CMake file defining usd_ms import library |
+| PXR_MONOLITHIC_IMPORT  |           | CMake file defining usd_m import library  |
 
 ##### Shared Libraries
 
@@ -582,24 +582,40 @@ cmake -DBUILD_SHARED_LIBS=OFF ...
 ##### Internal Monolithic Library
 
 This mode builds the core libraries (i.e. everything under `pxr/`) into a
-single archive library, 'usd_m', and from that it builds a single shared
-library, 'usd_ms'.  It builds plugins outside of `pxr/` and Python modules
-as usual except they link against 'usd_ms' instead of the individual
-libraries of the default mode.  Plugins inside of `pxr/` are compiled into
-'usd_m' and 'usd_ms'.  plugInfo.json files under `pxr/` refer to 'usd_ms'.
+single library, `usd_m`. The monolithic library will be static or shared based
+on the value of `BUILD_SHARED_LIBS`. It builds plugins outside of `pxr/`
+and Python modules as usual except they link against 'usd_m' instead of the
+individual libraries of the default mode.  Plugins inside of `pxr/` are compiled
+into 'usd_m'.  plugInfo.json files under `pxr/` refer to 'usd_m'.
 
 This mode is useful to reduce the number of installed files and simplify
 linking against USD.
 
 | Option Name            | Value        |
 | ---------------------- | ----------   |
-| BUILD_SHARED_LIBS      | _Don't care_ |
+| BUILD_SHARED_LIBS      | `ON` / `OFF` |
 | PXR_BUILD_MONOLITHIC   | `ON`         |
 | PXR_MONOLITHIC_IMPORT  |              |
 
 ```bash
-cmake -DPXR_BUILD_MONOLITHIC=ON ...
+# Configuring to build a monolithic shared USD library
+cmake -DPXR_BUILD_MONOLITHIC=ON -DBUILD_SHARED_LIBS=ON ...
+
+# Configuring to build a monolithic static USD library
+cmake -DPXR_BUILD_MONOLITHIC=ON -DBUILD_SHARED_LIBS=OFF ...
 ```
+
+> [!NOTE]
+> For historical consistency, the output filename of the USD shared monolithic
+> library is `usd_ms` while the static monolithic library is named `usd_m`. In
+> both cases the CMake target is `usd_m`.
+
+> [!WARNING]
+> Due to the need to link to the static monolithic library with the
+> `WHOLE_ARCHIVE` option (see [Linking Whole Archives](#linking-whole-archives)),
+> consumers should be aware that resulting executables and shared libraries will
+> be quite large as they are effectively bringing in every object file from USD.
+
 
 ##### External Monolithic Library
 
@@ -618,7 +634,7 @@ significantly more complicated and are described below.
 To build in this mode:
 
 1. Choose a path where the import file will be.  You'll be creating a cmake
-file with `add_library(usd_ms SHARED IMPORTED)` and one or more `set_property`
+file with `add_library(usd_m SHARED IMPORTED)` and one or more `set_property`
 calls.  The file doesn't need to exist.  If it does exist it should be empty
 or valid cmake code.
 1. Configure the build in the usual way but with `PXR_BUILD_MONOLITHIC=ON`
@@ -634,22 +650,22 @@ for more details.
 1. Edit the import file to describe your library.  Your cmake build may
 be able to generate the file directly via `export()`.  The USD build
 will include this file and having done so must be able to link against
-your library by adding 'usd_ms' as a target link library.  The file
+your library by adding 'usd_m' as a target link library.  The file
 should look something like this:
     ```cmake
-    add_library(usd_ms SHARED IMPORTED)
-    set_property(TARGET usd_ms PROPERTY IMPORTED_LOCATION ...)
+    add_library(usd_m SHARED IMPORTED)
+    set_property(TARGET usd_m PROPERTY IMPORTED_LOCATION ...)
     # The following is necessary on Windows.
-    #set_property(TARGET usd_ms PROPERTY IMPORTED_IMPLIB ...)
-    set_property(TARGET usd_ms PROPERTY INTERFACE_COMPILE_DEFINITIONS ...)
-    set_property(TARGET usd_ms PROPERTY INTERFACE_INCLUDE_DIRECTORIES ...)
-    set_property(TARGET usd_ms PROPERTY INTERFACE_LINK_LIBRARIES ...)
+    #set_property(TARGET usd_m PROPERTY IMPORTED_IMPLIB ...)
+    set_property(TARGET usd_m PROPERTY INTERFACE_COMPILE_DEFINITIONS ...)
+    set_property(TARGET usd_m PROPERTY INTERFACE_INCLUDE_DIRECTORIES ...)
+    set_property(TARGET usd_m PROPERTY INTERFACE_LINK_LIBRARIES ...)
     ```
 1. Complete the USD build by building the usual way, either with the
 default target or the 'install' target.
 
 Two notes:
-1. Your library does **not** need to be named usd_ms. That's simply the
+1. Your library does **not** need to be named usd_m. That's simply the
 name given to it by the import file. The IMPORTED_LOCATION  has the real
 name and path to your library.
 1. USD currently only supports installations where your library is in
@@ -668,25 +684,13 @@ link would not include them. The side effects will not occur and USD
 will not work.
 
 To include everything you need to tell the linker to include the whole
-archive.  That's platform dependent and you'll want code something like
-this:
+archive.  The exact link flags to achieve this are platform-dependent
+but CMake 3.24 and above support the following platform-agnostic generator
+expression:
 
 ```cmake
-if(MSVC)
-    target_link_libraries(mylib -WHOLEARCHIVE:$<TARGET_FILE:usd_m> usd_m)
-elseif(CMAKE_COMPILER_IS_GNUCXX)
-    target_link_libraries(mylib -Wl,--whole-archive usd_m -Wl,--no-whole-archive)
-elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    target_link_libraries(mylib -Wl,-force_load usd_m)
-endif()
+target_link_libraries(mylib "$<LINK_LIBRARY:WHOLE_ARCHIVE,usd_m>")
 ```
-
-On Windows cmake cannot recognize 'usd_m' as a library when appended to
- -WHOLEARCHIVE: because it's not a word to itself so we use TARGET_FILE
-to get the path to the library. We also link 'usd_m' separately so cmake
-will add usd_m's interface link libraries, etc. This second instance
-doesn't increase the resulting file size because all symbols will be
-found in the first (-WHOLEARCHIVE) instance.
 
 ###### Avoiding linking statically to Python
 

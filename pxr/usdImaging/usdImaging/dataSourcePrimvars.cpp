@@ -16,8 +16,15 @@
 #include "pxr/imaging/hd/retainedDataSource.h"
 
 #include "pxr/base/tf/denseHashMap.h"
+#include "pxr/base/tf/staticTokens.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+    ((xformOpTranslatePivot, "xformOp:translate:pivot"))
+);
+
 
 static inline bool
 _IsIndexed(const UsdAttributeQuery& indicesQuery)
@@ -101,6 +108,12 @@ UsdImagingDataSourcePrimvars::GetNames()
         }
     }
 
+    // If an xformOp:translate:pivot exists, import it as a special-case
+    // implicit "pivot" primvar.
+    if (_usdPrim.GetProperty(_tokens->xformOpTranslatePivot)) {
+        result.push_back(_tokens->xformOpTranslatePivot);
+    }
+
     return result;
 }
 
@@ -129,9 +142,15 @@ UsdImagingDataSourcePrimvars::Get(const TfToken & name)
         return nullptr;
     }
 
-    const TfToken prefixedName = _GetPrefixedName(name);
+    // xformOpTranslatePivot is a special case attriubute that is
+    // promoted into the Hydra primvars data source. All other
+    // primvars must be in the primvars: namespace.
+    const TfToken propName =
+        name == _tokens->xformOpTranslatePivot
+        ? name
+        : _GetPrefixedName(name);
 
-    if (UsdAttribute attr = _usdPrim.GetAttribute(prefixedName)) {
+    if (UsdAttribute attr = _usdPrim.GetAttribute(propName)) {
         UsdGeomPrimvar usdPrimvar(attr);
 
         UsdAttributeQuery valueQuery(attr);
@@ -152,7 +171,7 @@ UsdImagingDataSourcePrimvars::Get(const TfToken & name)
                 
     }
 
-    if (UsdRelationship rel = _usdPrim.GetRelationship(prefixedName)) {
+    if (UsdRelationship rel = _usdPrim.GetRelationship(propName)) {
         return HdPrimvarSchema::Builder()
             .SetPrimvarValue(UsdImagingDataSourceRelationship::New(
                 rel, _stageGlobals))

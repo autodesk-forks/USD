@@ -2,9 +2,9 @@
 
 .. include:: tut_setup_version_badge.rst
 
-==========================================================
-Transformations, Time-sampled Animation, and Layer Offsets
-==========================================================
+=============================================
+Transformations, Animation, and Layer Offsets
+=============================================
 
 This tutorial builds an example scene of a spinning top toy that illustrates the
 following topics:
@@ -55,22 +55,24 @@ Let's make the top spin. In a typical production pipeline, rigging & animation
 would be set up in a dedicated package and the results exported to USD. Here,
 we will create the USD files by hand to illustrate the underlying concepts.
 
-USD represents animation as time-sampled attribute values.  To establish the
-time range over which values are animated, the root layer can specify a start
-and end time in its layer metadata. We will use USD's cinema default of 24
-frames per second, and design the spinning motion to repeat after 192 frames, or
-8 seconds. Setting this range up in :filename:`Step1.usda`:
+Adding animation requires authoring values that change over time. USD
+represents time value using unitless :ref:`timeCodes <usdglossary-timecode>` and 
+a :ref:`scaling of timeCodes <usdglossary-timecodes-scaled>` to real-world 
+seconds. To establish the time range over which values are animated, the root
+layer can specify start and end timeCodes and a timeCode scaling in its 
+layer metadata. For this tutorial we will use USD's cinema default of 24 frames 
+per second and specify a range of 8 seconds in :filename:`Step1.usda`:
 
 .. code-block:: python
    :caption: Step 1
 
    # This is an example script from the USD tutorial,
-   # "Transformations, Time-sampled Animation, and Layer Offsets".
+   # "Transformations, Animation, and Layer Offsets".
    #
    # When run, it will generate a series of usda files in the current
    # directory that illustrate each of the steps in the tutorial.
    #
-   from pxr import Usd, UsdGeom, Gf, Sdf
+   from pxr import Usd, UsdGeom, Gf, Sdf, Ts
    
    def MakeInitialStage(path):
        stage = Usd.Stage.CreateNew(path)
@@ -202,16 +204,118 @@ transformation operations; see the :cpp:`UsdGeomXformable` schema for details.
 Even though there is only a single transform at the moment, to make it take
 effect we must express the desired order as the :usda:`xformOpOrder` attribute.
 
-USD applies a `linear interpolation filter
+For time-samples, USD applies a `linear interpolation filter
 <api/class_usd_attribute.html#Usd_AttributeInterpolation>`_
-to reconstruct the attribute value from the time samples. Rotations are
+to reconstruct the attribute value from the time-samples. Rotations are
 expressed in degrees, so this provides 4 revolutions over the course of the
 192-frame animation.
 
-In :program:`usdview`, you can use the Play button in the lower right or the 
+In :program:`usdview`, you can use the **Play** button in the lower right or the 
 scrubber at the bottom of the window to play back the animation.
 
 .. image:: http://openusd.org/images/tut_xforms_step3_usdview.png
+
+Switching From Time-samples to Splines
+**************************************
+
+In the previous step we used :ref:`time-samples <usdglossary-timesample>` to set 
+the animated value(s) for the spin. Time-samples are easy to author, and support
+linear interpolation, which makes time-samples a good choice for representing
+animated values that change at a fairly constant rate (e.g. an object moving
+at a constant velocity).
+
+However, for more complex animations, time-samples may become harder to work
+with. If we wanted the top to spin slower initially and then speed up, we'd need 
+to add many more time-samples to properly represent this.
+
+Additionally, time-samples can't be "looped", meaning we can't easily represent
+animations that repeat without duplicating time-samples. In the previous step we 
+set the top to do a full rotation 4 times by setting the rotation value to 1440 
+degrees. If we wanted a distinct set of 4 rotations, we'd have to set additional 
+time-samples for 360, 720, and 1080 degrees. 
+
+.. note::
+
+    USD does provide a way to effectively loop time-samples through  
+    :ref:`value clips <usdglossary-valueclips>`, however value clips are more
+    complex to author.
+
+To support more complex, potentially looping animations, USD supports 
+:ref:`splines <usdglossary-spline>`. Splines allow for more complex value
+interpolation across a curve with knots and adjustable tangents, as well as 
+specifying splines or sections of a spline that loop.
+
+Let's replace the time-samples for the spin with a spline that loops a 360
+degree revolution 4 times.
+
+.. code-block:: python
+   :caption: Step 3A
+
+   def AddSpinSpline(top):
+       spin = top.AddRotateZOp(opSuffix='spin')
+       spinAttr = spin.GetAttr()
+       typeName = str(spinAttr.GetTypeName())
+       spline = Ts.Spline(typeName)
+       spline.SetKnot(Ts.Knot(
+            typeName = typeName,
+            time = 0,
+            value = 0,
+            nextInterp = Ts.InterpLinear,
+            ))
+       lp = Ts.LoopParams()
+       lp.protoStart = 0
+       lp.protoEnd = 48
+       lp.numPostLoops = 3
+       lp.valueOffset = 360
+       spline.SetInnerLoopParams(lp)
+       spinAttr.SetSpline(spline)
+   def Step3A():
+       stage = MakeInitialStage('Step3A.usda')
+       stage.SetMetadata('comment', 'Step 3A: Using splines instead of timeSamples')
+       top = AddReferenceToGeometry(stage, '/Top')
+       AddSpinSpline(top)
+       stage.Save()
+
+.. code-block:: usda
+   :caption: Step3A.usda
+
+    #usda 1.0
+    (
+        "Step 3A: Using splines instead of timeSamples"
+        endTimeCode = 192
+        startTimeCode = 0
+        upAxis = "Z"
+    )
+
+    def Xform "Top" (
+        prepend references = @./top.geom.usd@
+    )
+    {
+        float xformOp:rotateZ:spin.spline = {
+            loop: (0, 48, 0, 3, 360),
+            0: 0; pre (0, 0); post linear,
+        }
+        uniform token[] xformOpOrder = ["xformOp:rotateZ:spin"]
+    }
+
+.. note::
+
+    In this example we use a loop count of 3 (with a loop value offset of 360) 
+    to match the 4 full rotations we produced using timeSamples. However USD 
+    also supports spline extrapolation that can be used to extend or repeat a 
+    curve to infinity (bounded in a playback tool by the start and end timeCodes 
+    specified in the root layer). We'll revisit this in a later step 
+    (:ref:`tutxforms-extrapolation`).
+
+Open :filename:`Step3A.usda` in :program:`usdview`. You can again use the 
+**Play** button to preview the animation. You can also view the spin value as a
+spline by selecting "Top" in the scene tree view, and then selecting the
+"xformOp:rotateZ:spin" attribute in the property browser. The **Value** tab in
+the Metadata/Value view should display the spline. You can also right-click
+on the attribute and select "View Spline" to see the spline in a separate 
+window.
+
+.. image:: http://openusd.org/images/tut_xforms_step3a_usdview.png
 
 Chaining Multiple Transformations with :usda:`xformOpOrder`
 ***********************************************************
@@ -231,7 +335,7 @@ rotation to represent this. Notice that we add the tilt **before** the spin:
        stage.SetMetadata('comment', 'Step 4: Adding tilt')
        top = AddReferenceToGeometry(stage, '/Top')
        AddTilt(top)
-       AddSpin(top)
+       AddSpinSpline(top)
        stage.Save()
 
 .. code-block:: usda
@@ -250,9 +354,9 @@ rotation to represent this. Notice that we add the tilt **before** the spin:
    )
    {
        float xformOp:rotateX:tilt = 12
-       float xformOp:rotateZ:spin.timeSamples = {
-           1: 0,
-           192: 1440,
+       float xformOp:rotateZ:spin.spline = {
+           loop: (0, 48, 0, 3, 360),
+           0: 0; pre (0, 0); post linear,
        }
        uniform token[] xformOpOrder = ["xformOp:rotateX:tilt", "xformOp:rotateZ:spin"]
    }
@@ -271,7 +375,7 @@ in the :usda:`xformOpOrder`:
        stage = MakeInitialStage('Step4A.usda')
        stage.SetMetadata('comment', 'Step 4A: Adding spin, then tilt')
        top = AddReferenceToGeometry(stage, '/Top')
-       AddSpin(top)
+       AddSpinSpline(top)
        AddTilt(top)
        stage.Save()
 
@@ -315,9 +419,22 @@ the top to move slightly on the surface. Restoring the original
 
    def AddPrecession(top):
        precess = top.AddRotateZOp(opSuffix='precess')
-       precess.Set(time=1, value=0)
-       precess.Set(time=192, value=360)
-
+       precessAttr = precess.GetAttr()
+       typeName = str(precessAttr.GetTypeName())
+       spline = Ts.Spline(typeName)
+       spline.SetKnot(Ts.Knot(
+           typeName = typeName,
+           time = 0,
+           value = 0,
+           nextInterp = Ts.InterpLinear,
+           ))
+       spline.SetKnot(Ts.Knot(
+           typeName = typeName,
+           time = 192,
+           value = 360,
+           nextInterp = Ts.InterpLinear,
+           ))
+       precessAttr.SetSpline(spline)
    def Step5():
        stage = MakeInitialStage('Step5.usda')
        stage.SetMetadata('comment', 'Step 5: Adding precession and offset')
@@ -325,7 +442,7 @@ the top to move slightly on the surface. Restoring the original
        AddPrecession(top)
        AddOffset(top)
        AddTilt(top)
-       AddSpin(top)
+       AddSpinSpline(top)
        stage.Save()
 
 .. code-block:: usda
@@ -344,27 +461,27 @@ the top to move slightly on the surface. Restoring the original
    )
    {
        float xformOp:rotateX:tilt = 12
-       float xformOp:rotateZ:precess.timeSamples = {
-           1: 0,
-           192: 360,
+       float xformOp:rotateZ:precess.spline = {
+           0: 0; pre (0, 0); post linear,
+           192: 360; post linear,
        }
-       float xformOp:rotateZ:spin.timeSamples = {
-           1: 0,
-           192: 1440,
+       float xformOp:rotateZ:spin.spline = {
+           loop: (0, 48, 0, 3, 360),
+           0: 0; pre (0, 0); post linear,
        }
        double3 xformOp:translate:offset = (0, 0.1, 0)
        uniform token[] xformOpOrder = ["xformOp:rotateZ:precess", "xformOp:translate:offset", "xformOp:rotateX:tilt", "xformOp:rotateZ:spin"]
-   }
+   }   
 
 Here is the result:
 
 .. image:: http://openusd.org/images/tut_xforms_spin_precession.gif
 
-To summarize: we used time-samples to animate the motion, and careful ordering
+To summarize: we used splines to animate the motion, and careful ordering
 of the transformations to express a spinning motion with precession and
-translation in a relatively simple way. USD uses linear interpolation to
-reconstruct the intermediate values of the operations and then computes the
-combined transformation.
+translation in a relatively simple way. USD uses interpolation to reconstruct 
+the intermediate values of the operations and then computes the combined 
+transformation.
 
 Re-timing animation with Layer Offsets
 **************************************
@@ -472,19 +589,23 @@ samples and layer offsets work:
        ..
 
     * The middle top, with the offset of +96, does not begin rotating until 96
-      frames after the left top (which has no offset). The reason is that USD
-      does not extrapolate time-samples. Outside the time range covered by
-      samples, the nearest sample value is held. In this case, it takes 96
-      frames until we hit the first sample and rotation begins.
+      frames after the left top (which has no offset). The reason is that we
+      did not specify any spline extrapolation, so outside the time range 
+      covered by the spline knots, the nearest sample value is held. In this 
+      case, it takes 96 frames until we hit the first knot and rotation begins.
 
        ..
 
     * The right top spins quickly (4x the rate) and then stops. The 0.25 scale
       on its reference has "shrunk down" its timeline, so it quickly plays
       through. After the first 48 frames (== 192 frames * 0.25), there are no
-      further time samples, so again the values are held and rotation stops.
+      further knots and no post-extrapolation is specified, so again the values 
+      are held and rotation stops. If you examine the 
+      :mono:`xformOp:rotateZ:spin` attribute spline for :sdfpath:`/Right/Top`
+      in :program:`usdview`, after 48 frames the spline maintains a "held" 
+      constant value equal to the last knot value.
 
-       ..
+      .. image:: http://openusd.org/images/tut_xforms_step6_usdview.png
 
     * To lay out the tops in a row, we used a parent :usda:`Xform` prim on each,
       and set the translate there. If we had referenced the :usda:`Top` in
@@ -503,9 +624,134 @@ samples and layer offsets work:
       not be required.
 
 To summarize, layer offsets are intended to support simple cases of retiming
-animation. For more elaborate scenarios, such as looping animations, USD
-supports the more powerful (and correspondingly more complex) concept of
+animation. For more elaborate scenarios, USD supports the more powerful (and 
+correspondingly more complex) concept of 
 :ref:`Value Clips <glossary:Value Clips>`.
+
+.. _tutxforms-extrapolation:
+
+Extending Splines with Extrapolation
+************************************
+
+In the previous step we noted that the tops stop spinning once they reach
+the final knot. Splines support extrapolation, as mentioned earlier, so we
+can use this to have the tops spin continuously.
+
+We make a small change to the way we set the spline for the 
+:mono:`xformOp:rotateZ:spin` attribute by setting the
+post-extrapolation for the spline to :mono:`Ts.ExtrapLoopRepeat`. This 
+extrapolation mode will repeat the entire spline forever, and automatically
+compute an offset between loops using the difference between the first and
+last knots.
+
+.. code-block:: python
+    :caption: Step 7 AddSpinSplineWithExtrapolation()
+
+    def AddSpinSplineWithExtrapolation(top):
+        spin = top.AddRotateZOp(opSuffix='spin')
+        spinAttr = spin.GetAttr()
+        typeName = str(spinAttr.GetTypeName())
+        spline = Ts.Spline(typeName)
+        spline.SetKnot(Ts.Knot(
+            typeName = typeName,
+            time = 0,
+            value = 0,
+            nextInterp = Ts.InterpLinear,
+            ))
+        spline.SetKnot(Ts.Knot(
+            typeName = typeName,
+            time = 48,
+            value = 360,
+            nextInterp = Ts.InterpCurve,
+            ))
+        spline.SetPostExtrapolation(Ts.Extrapolation(Ts.ExtrapLoopRepeat))
+        spinAttr.SetSpline(spline)
+
+We make a similar change to the way we set up precession, to ensure this 
+animation also repeats.
+
+.. code-block:: python
+    :caption: Step 7 AddPrecessionWithExtrapolation()
+
+    def AddPrecessionWithExtrapolation(top):
+        precess = top.AddRotateZOp(opSuffix='precess')
+        precessAttr = precess.GetAttr()
+        typeName = str(precessAttr.GetTypeName())
+        spline = Ts.Spline(typeName)
+        spline.SetKnot(Ts.Knot(
+            typeName = typeName,
+            time = 0,
+            value = 0,
+            nextInterp = Ts.InterpLinear,
+            ))
+        spline.SetKnot(Ts.Knot(
+            typeName = typeName,
+            time = 192,
+            value = 360,
+            nextInterp = Ts.InterpLinear,
+            ))
+        spline.SetPostExtrapolation(Ts.Extrapolation(Ts.ExtrapLoopRepeat))    
+        precessAttr.SetSpline(spline)  
+
+We then create the animated layer with these new spline configurations, and
+repeat the code from the previous step that references the animated layer 3 
+times with different layer offsets. 
+
+.. code-block:: python
+    :caption: Step 7
+
+    def Step7():
+        # Create animated layer that uses spline extrapolation
+        stage = MakeInitialStage('Step7ref.usda')
+        stage.SetMetadata('comment', 'Step 7 (ref): Adding spline extrapolation')
+        top = AddReferenceToGeometry(stage, '/Top')
+        AddPrecessionWithExtrapolation(top)
+        AddOffset(top)
+        AddTilt(top)
+        AddSpinSplineWithExtrapolation(top)
+        stage.Save()
+
+        # Use animated layer configured to use spline extrapolation 
+        anim_layer_path = './Step7ref.usda'
+
+        stage = MakeInitialStage('Step7.usda')
+        stage.SetMetadata('comment', 'Step 7: Spline extrapolation')
+
+        left = UsdGeom.Xform.Define(stage, '/Left')
+        left_top = UsdGeom.Xform.Define(stage, '/Left/Top')
+        left_top.GetPrim().GetReferences().AddReference(
+            assetPath = anim_layer_path,
+            primPath = '/Top')
+
+        middle = UsdGeom.Xform.Define(stage, '/Middle')
+        middle.AddTranslateOp().Set(value=(2, 0, 0))
+        middle_top = UsdGeom.Xform.Define(stage, '/Middle/Top')
+        middle_top.GetPrim().GetReferences().AddReference(
+            assetPath = anim_layer_path,
+            primPath = '/Top',
+            layerOffset = Sdf.LayerOffset(offset=96))
+
+        right = UsdGeom.Xform.Define(stage, '/Right')
+        right.AddTranslateOp().Set(value=(4, 0, 0))
+        right_top = UsdGeom.Xform.Define(stage, '/Right/Top')
+        right_top.GetPrim().GetReferences().AddReference(
+            assetPath = anim_layer_path,
+            primPath = '/Top',
+            layerOffset = Sdf.LayerOffset(scale=0.25))
+
+        stage.Save()
+
+If you open :filename:`Step7.usda` in :program:`usdview` and play back the 
+animation, the tops will all continue spinning until the end timeCode for the 
+stage. You can compare this with the animation in :filename:`Step6.usda` to
+see where the extrapolation takes place. For example, if you examine the 
+:mono:`xformOp:rotateZ:spin` attribute spline for :sdfpath:`/Right/Top`, you'll 
+notice in :filename:`Step7.usda` that the spline now repeats continuously after
+timeCode 48, whereas in :filename:`Step6.usda` the spline does not repeat.
+
+.. image:: http://openusd.org/images/tut_xforms_step7_usdview.png
+
+See :usdcpp:`TsSpline` for more details on the different extrapolation modes.
 
 We conclude this tutorial with a path-traced render of the above scene, which
 illustrates how the varying rates of rotation yield corresponding degrees of
