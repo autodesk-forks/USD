@@ -329,10 +329,8 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
                 set(emscriptenResourceFile "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
             endif()
         endif()
-
         if (EMSCRIPTEN)
             string(REGEX REPLACE "^lib\\/" "/" emscriptenLocalPath "${resourcesPath}")
-
             list(APPEND emscriptenResourceFiles "SHELL:--preload-file ${emscriptenResourceFile}@${emscriptenLocalPath}/${dirPath}/${destFileName}")
         endif()
         install(
@@ -342,7 +340,7 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
         )
     endforeach()
 
-    if (EMSCRIPTEN)
+    if (EMSCRIPTEN AND PXR_ENABLE_PRELOAD_FILES)
         target_link_options(${NAME} PUBLIC ${emscriptenResourceFiles})
     endif()
 endfunction() # _install_resource_files

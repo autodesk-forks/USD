@@ -82,11 +82,6 @@ def MacOS():
 if MacOS():
     import apple_utils
 
-# WASM specific defines and helpers
-TARGET_WASM='wasm'
-TARGET_WASM64='wasm64'
-TARGET_WASM_NODE='node'
-
 # determines flags based on 32 / 64 bit wasm build target
 def GetWasmCompilerFlags(buildTarget):
     compileFlags = '-pthread --use-port=zlib'
@@ -1802,6 +1797,7 @@ def InstallDawnHeaders(context, force, buildArgs):
                 '-DCMAKE_CXX_FLAGS="' + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
                 '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' "',
+                '-DCMAKE_NO_SYSTEM_FROM_IMPORTED=TRUE'
             ]
             cmakeOptions += buildArgs
             buildDir = RunCMake(context, force, cmakeOptions, target="emdawnwebgpu_pkg")
@@ -1877,7 +1873,8 @@ def InstallTint(context, force, buildArgs):
                     + EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
                 '-DCMAKE_C_FLAGS="'+ EMSCRIPTEN_CMAKE_CXX_FLAGS + ' "',
                 '-DCMAKE_EXE_LINKER_FLAGS="' + EMSCRIPTEN_CMAKE_EXE_LINKER_FLAGS + ' "',
-                '-DBUILD_SHARED_LIBS=OFF'
+                '-DBUILD_SHARED_LIBS=OFF',
+                '-DCMAKE_NO_SYSTEM_FROM_IMPORTED=TRUE'
             ]
             cmakeOptions += buildArgs
             cmakeOptions += DAWN_CMAKE_OPTIONS
@@ -2195,6 +2192,11 @@ def InstallUSD(context, force, buildArgs):
             else:
                 extraArgs.append('-DPXR_ENABLE_JS_BINDINGS_SUPPORT=OFF')
 
+            if context.preloadFiles:
+                extraArgs.append('-DPXR_ENABLE_PRELOAD_FILES=ON')
+            else:
+                extraArgs.append('-DPXR_ENABLE_PRELOAD_FILES=OFF')
+
             if context.buildImaging:
                 webGPUPortArg = "--use-port={}".format(os.path.join(context.instDir, "ports", "emdawnwebgpu_pkg", "emdawnwebgpu.port.py"))
             else:
@@ -2394,6 +2396,12 @@ subgroup.add_argument("--js-bindings", dest="buildJsBindings", action="store_tru
                     default=True, help="Build with JavaScript bindings")
 subgroup.add_argument("--no-js-bindings", dest="buildJsBindings", action="store_false",
                     help="Do not build with JavaScript bindings")
+
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--auto-preload", dest="preloadFiles", action="store_true",
+                    default=True, help="Build with file preload flags for Emscripten")
+subgroup.add_argument("--no-auto-preload", dest="preloadFiles", action="store_false",
+                    help="Do not build with file preload flags for Emscripten")
 
 if Linux():
     group.add_argument("--use-cxx11-abi", type=int, choices=[0, 1],
@@ -2729,6 +2737,7 @@ class InstallContext:
         # WebGPU is the default graphics API for wasm
         self.buildWebGPU = args.buildWebGPU or self.targetWasm
         self.buildJsBindings = args.buildJsBindings
+        self.preloadFiles = args.preloadFiles
         self.useCXX11ABI = \
             (args.use_cxx11_abi if hasattr(args, "use_cxx11_abi") else None)
         self.safetyFirst = args.safety_first
@@ -2811,7 +2820,6 @@ class InstallContext:
         self.buildMaterialX = args.build_materialx
 
         # - TBB
-        # Note: wasm build requires requires building oneTBB
         self.buildOneTBB = args.build_onetbb or self.targetWasm
 
         # - Spline Tests
@@ -3207,6 +3215,8 @@ summaryMsg += """\
     Examples                    {buildExamples}
     Tutorials                   {buildTutorials}
     WebGPU                      {buildWebGPU}
+      JS Bindings               {buildJsBindings}
+      Preload Files             {preloadFiles}
     Tools                       {buildTools}
     Alembic Plugin              {buildAlembic}
     Draco Plugin                {buildDraco}
@@ -3292,6 +3302,7 @@ summaryMsg = summaryMsg.format(
     buildDraco=("On" if context.buildDraco else "Off"),
     buildMaterialX=("On" if context.buildMaterialX else "Off"),
     buildJsBindings=("On" if context.buildJsBindings else "Off"),
+    preloadFiles=("On" if context.preloadFiles else "Off"),
     buildMayapyTests=("On" if context.buildMayapyTests else "Off"),
     buildAnimXTests=("On" if context.buildAnimXTests else "Off"),
     buildWebGPU=("On" if context.buildWebGPU else "Off"),
