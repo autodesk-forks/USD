@@ -355,13 +355,26 @@ My_TestGLDrawing::OffscreenTest()
         }
     }
 
-    _driver->SetSceneColReprSelector(HdReprSelector(HdReprTokens->points));
-    std::shared_ptr<HdxPickBuffers> pickBuffers = _driver->PickWithBuffers(
-        GetWidth(), GetHeight(), GetFrustum(), GetViewMatrix(), true);
-    if (pickBuffers) {
-        _WritePickBuffersForRepr(pickBuffers, "points_occluded");
-    } else {
-        TF_CODING_ERROR("Null pick buffers provided");
+    {
+        _driver->SetSceneColReprSelector(HdReprSelector(HdReprTokens->points));
+        std::shared_ptr<HdxPickBuffers> pickBuffers = _driver->PickWithBuffers(
+            GetWidth(), GetHeight(), GetFrustum(), GetViewMatrix(), true);
+        if (pickBuffers) {
+            _WritePickBuffersForRepr(pickBuffers, "points_occluded");
+        } else {
+            TF_CODING_ERROR("Null pick buffers provided");
+        }
+    }
+
+    {
+        _driver->SetSceneColReprSelector(HdReprSelector(HdReprTokens->wire));
+        std::shared_ptr<HdxPickBuffers> pickBuffers = _driver->PickWithBuffers(
+            GetWidth(), GetHeight(), GetFrustum(), GetViewMatrix(), true);
+        if (pickBuffers) {
+            _WritePickBuffersForRepr(pickBuffers, "line_occluded");
+        } else {
+            TF_CODING_ERROR("Null pick buffers provided");
+        }
     }
 }
 

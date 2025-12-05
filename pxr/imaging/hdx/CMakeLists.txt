@@ -444,6 +444,11 @@ pxr_register_test(testHdxPickBuffers
         buffer_edgeIds_line.png
         buffer_pointIds_line.png
         buffer_depths_line.png
+        # Line Occluded representation
+        buffer_primIds_line_occluded.png
+        buffer_instanceIds_line_occluded.png
+        buffer_edgeIds_line_occluded.png
+        buffer_depths_line_occluded.png
     FAIL 0
     FAIL_PERCENT 0.1
 )
