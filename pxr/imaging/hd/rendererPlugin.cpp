@@ -48,7 +48,14 @@ HdRendererPlugin::~HdRendererPlugin() = default;
 HdPluginRenderDelegateUniqueHandle
 HdRendererPlugin::CreateDelegate(HdRenderSettingsMap const& settingsMap)
 {
-    if (!IsSupported()) {
+    HdRendererCreateArgs rendererCreateArgs;
+    if (const auto iter = settingsMap.find(TfToken("rendererCreateArgs"));
+        iter != settingsMap.end()) {
+        rendererCreateArgs =
+            iter->second.GetWithDefault<HdRendererCreateArgs>();
+    }
+
+    if (!IsSupported(rendererCreateArgs)) {
         return nullptr;
     }
 
