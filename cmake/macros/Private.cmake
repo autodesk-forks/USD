@@ -321,21 +321,29 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
                     ${resourceFile} ${plugInfoFile})
             endif()
             set(resourceFile "${plugInfoFile}")
-            set(emscriptenResourceFile ${resourceFile})
+            set(resourceFileAbsolute ${resourceFile})
         else()
             if(IS_ABSOLUTE "${resourceFile}")
-                set(emscriptenResourceFile "${resourceFile}")
+                set(resourceFileAbsolute "${resourceFile}")
             else()
-                set(emscriptenResourceFile "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
+                set(resourceFileAbsolute "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
             endif()
         endif()
+
+        set(installResourcePath)
+        cmake_path(APPEND installResourcePath ${resourcesPath} ${dirPath})
+
         if (EMSCRIPTEN)
-            string(REGEX REPLACE "^lib\\/" "/" emscriptenLocalPath "${resourcesPath}")
-            list(APPEND emscriptenResourceFiles "SHELL:--preload-file ${emscriptenResourceFile}@${emscriptenLocalPath}/${dirPath}/${destFileName}")
+            string(REGEX REPLACE "^lib\\/" "/" wasmRuntimePath "${resourcesPath}")
+            cmake_path(APPEND wasmRuntimePath "${resourceDestFile}")
+
+            list(APPEND emscriptenResourceFiles "$<BUILD_INTERFACE:SHELL:--preload-file ${resourceFileAbsolute}@${wasmRuntimePath}>")
+            list(APPEND emscriptenResourceFiles "$<INSTALL_INTERFACE:SHELL:--preload-file $<INSTALL_PREFIX>/${installResourcePath}/${destFileName}@${wasmRuntimePath}>")
         endif()
+
         install(
             FILES ${resourceFile}
-            DESTINATION ${resourcesPath}/${dirPath}
+            DESTINATION ${installResourcePath}
             RENAME ${destFileName}
         )
     endforeach()
