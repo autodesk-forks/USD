@@ -17,6 +17,7 @@
 #include "pxr/base/tf/wrapTokenJs.h"
 
 #include <emscripten/bind.h>
+#include <emscripten/version.h>
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
 
 #include "pxr/base/tf/pyLock.h"
@@ -439,7 +440,13 @@ class VtValue
         static emscripten::val GetJSVal(Array const &obj) {
             emscripten::val arrayVal = emscripten::val::array();
             for(size_t i = 0; i < obj.size(); ++i) {
-                arrayVal.set(i, emscripten::val(obj[i]));
+                arrayVal.set(i, emscripten::val(obj[i]
+// https://github.com/emscripten-core/emscripten/blob/main/ChangeLog.md#4016---100725
+#if __EMSCRIPTEN_major__ > 4 || (__EMSCRIPTEN_major__ == 4 && \
+    (__EMSCRIPTEN_minor__ > 0 || __EMSCRIPTEN_tiny__ >= 16))
+                    , emscripten::allow_raw_pointers()
+#endif
+                ));
             }
             return arrayVal;
         }
@@ -523,7 +530,13 @@ class VtValue
             if (IsArrayValued(obj)) {
                 return _ArrayHelper<ProxiedType>::GetJSVal(p);
             } else {
-                return emscripten::val(p);
+               return emscripten::val(p
+// https://github.com/emscripten-core/emscripten/blob/main/ChangeLog.md#4016---100725
+#if __EMSCRIPTEN_major__ > 4 || (__EMSCRIPTEN_major__ == 4 && \
+    (__EMSCRIPTEN_minor__ > 0 || __EMSCRIPTEN_tiny__ >= 16))
+                    , emscripten::allow_raw_pointers()
+#endif
+                );
             }
         }
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
