@@ -5,7 +5,7 @@
 #include "pxr/usd/sdf/propertySpec.h"
 #include "pxr/usd/sdf/attributeSpec.h"
 #include "pxr/usd/sdf/relationshipSpec.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 #include "pxr/usd/sdf/fileFormat.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
 

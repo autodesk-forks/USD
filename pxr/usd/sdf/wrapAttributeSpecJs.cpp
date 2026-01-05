@@ -2,7 +2,7 @@
 #include "pxr/usd/sdf/attributeSpec.h"
 #include "pxr/usd/sdf/primSpec.h"
 #include "pxr/usd/sdf/declareHandles.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 #include "pxr/base/tf/wrapTokenJs.h"
 
 #include <emscripten/bind.h>

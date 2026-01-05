@@ -25,7 +25,7 @@
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
 #include "pxr/base/tf/wrapTokenJs.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 #include <functional>
 
 #include <iostream>

@@ -1,7 +1,7 @@
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/propertySpec.h"
 #include "pxr/usd/sdf/declareHandles.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 #include "pxr/base/tf/wrapTokenJs.h"
 
 #include <emscripten/bind.h>

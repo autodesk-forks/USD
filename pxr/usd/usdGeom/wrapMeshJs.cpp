@@ -1,7 +1,14 @@
-#include "pxr/usd/usdGeom/mesh.h"
+//
+// Copyright 2026 Pixar
+//
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
+//
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
 #include "pxr/usd/sdf/emscriptenSdfToVtValue.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/usd/usd/emscriptenUsdToVtValue.h"
+#include "pxr/usd/usdGeom/mesh.h"
 
 #include <emscripten/bind.h>
 using namespace emscripten;

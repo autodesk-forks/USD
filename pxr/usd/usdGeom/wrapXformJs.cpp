@@ -1,6 +1,6 @@
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 
 #include <emscripten/bind.h>
 using namespace emscripten;

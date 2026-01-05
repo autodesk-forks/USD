@@ -83,7 +83,7 @@ pxr_library(usd
         valueUtils
 
     JS_PUBLIC_HEADERS
-        emscriptenPtrRegistrationHelper.h
+        emscriptenUsdToVtValue.h
 
     PUBLIC_HEADERS
         api.h

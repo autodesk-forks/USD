@@ -1,6 +1,6 @@
 #include "pxr/usd/usdLux/distantLight.h"
 #include "pxr/usd/sdf/wrapPathJs.h"
-#include "pxr/usd/usd/emscriptenPtrRegistrationHelper.h"
+#include "pxr/base/tf/emscriptenPtrRegistrationHelper.h"
 
 #include <emscripten/bind.h>
 using namespace emscripten;
@@ -13,4 +13,3 @@ EMSCRIPTEN_BINDINGS(UsdLuxDistantLight)
     .class_function("Define", &pxr::UsdLuxDistantLight::Define)
     ;
 }
-

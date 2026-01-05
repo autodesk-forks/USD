@@ -243,6 +243,7 @@ pxr_library(tf
         type_Impl.h
     
     JS_PUBLIC_HEADERS
+        emscriptenPtrRegistrationHelper.h
         emscriptenTypeRegistration.h
         wrapTokenJs.h
 
