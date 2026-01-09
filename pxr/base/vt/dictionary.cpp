@@ -35,7 +35,7 @@ _OverBackground(VtDictionary const &strong, VtBackgroundType const &)
 {
     VtDictionary result;
     for (auto const &[key, val]: strong) {
-        if (auto compVal = VtValueTryComposeOver(val, VtBackground)) {
+        if (auto compVal = VtValueTryComposeOver(VtValueRef(val), VtValueRef(VtBackground))) {
             result[key] = *compVal;
         }
         else {

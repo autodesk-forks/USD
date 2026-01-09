@@ -371,7 +371,7 @@ public:
     /// Implicitly convert or construct a VtValueRef referring to \p obj.  The
     /// passed \p obj must outlive this VtValueRef instance.
     template <class T>
-    VtValueRef(T &&obj, std::enable_if_t<
+    explicit VtValueRef(T &&obj, std::enable_if_t<
                !std::is_same_v<std::decay_t<T>, VtValueRef> &&
                !std::is_same_v<std::decay_t<T>, VtValue>> * = 0) {
         using TypeInfo = _TypeInfoFor<T>;

@@ -2003,7 +2003,7 @@ static void testVtValueRef()
         // *, will properly convert to VtValues holding std::strings.
         std::string fromLiteral = [](VtValueRef literal) {
             return VtValue { literal }.Get<std::string>();
-        }("hello literal");
+        }(VtValueRef("hello literal"));
         TF_AXIOM(fromLiteral == "hello literal");
     }
 
@@ -2129,7 +2129,7 @@ testVtValueComposeOver()
             }
         };
 
-        VtValue comp = VtValueComposeOver(strong, weak);
+        VtValue comp = VtValueComposeOver(VtValueRef(strong), VtValueRef(weak));
         TF_AXIOM(comp.IsHolding<VtDictionary>());
 
         const VtDictionary expectedComp = {
@@ -2145,7 +2145,7 @@ testVtValueComposeOver()
         };
         TF_AXIOM(comp == expectedComp);
 
-        VtValue compBG = VtValueComposeOver(strong, VtBackground);
+        VtValue compBG = VtValueComposeOver(VtValueRef(strong), VtValueRef(VtBackground));
         TF_AXIOM(compBG.IsHolding<VtDictionary>());
         const VtDictionary expectedCompBG = {
             { "zn", VtValue { VtIntArray { 0,9 } } },
@@ -2186,8 +2186,8 @@ testVtValueTransform()
     XFormTestSwitch on = SwitchOn;
     XFormTestToggle toggle;
 
-    VtValueRef offRef = off;
-    VtValueRef onRef = on;
+    VtValueRef offRef(off);
+    VtValueRef onRef(on);
 
     using SwitchArray = VtArray<XFormTestSwitch>;
     using SwitchArrayEdit = VtArrayEdit<XFormTestSwitch>;
@@ -2231,7 +2231,7 @@ testVtValueTransform()
 
     // Check that VtArray can transform.
     {
-        VtValue xf = VtValueTryTransform(swa, toggle);
+        VtValue xf = VtValueTryTransform(VtValueRef(swa), toggle);
         TF_AXIOM(!xf.IsEmpty());
         TF_AXIOM(xf.IsHolding<SwitchArray>());
         TF_AXIOM((xf.Get<SwitchArray>() == SwitchArray { on, off, on, off }));
@@ -2240,7 +2240,7 @@ testVtValueTransform()
     // Check that a VtDictionary holding both scalar, array, and arrayEdit
     // elements can transform.
     {
-        VtValue oxfd = VtValueTryTransform(dict, toggle);
+        VtValue oxfd = VtValueTryTransform(VtValueRef(dict), toggle);
         TF_AXIOM(oxfd.IsHolding<VtDictionary>());
         VtDictionary xfd = oxfd.Remove<VtDictionary>();
 
@@ -2259,7 +2259,7 @@ testVtValueTransform()
     // Check that a VtDictionary holding both scalar, array, and arrayEdit
     // elements can transform recursively.
     {
-        VtValue oxfd = VtValueTryTransform(recursiveDict, toggle);
+        VtValue oxfd = VtValueTryTransform(VtValueRef(recursiveDict), toggle);
         TF_AXIOM(oxfd.IsHolding<VtDictionary>());
         VtDictionary xfd = oxfd.Remove<VtDictionary>();
 

@@ -1554,14 +1554,14 @@ template <class T>
 VtValueRef
 VtValue::_TypedProxyHelper<T>::GetValueRef(T const &obj)
 {
-    return VtGetProxiedObject(obj);
+    return VtValueRef(VtGetProxiedObject(obj));
 }
 
 template <class T>
 VtValueRef
 VtValue::_ErasedProxyHelper<T>::GetValueRef(T const &obj)
 {
-    return *VtGetErasedProxiedVtValue(obj);
+    return VtValueRef(*VtGetErasedProxiedVtValue(obj));
 }
 
 template <class T, class C, class D>
@@ -1574,7 +1574,7 @@ VtValue::_TypeInfoImpl<T, C, D>
         // called by a non-const member function, so it is safe to cast away
         // constness here.
         if (rvalue) {
-            return std::move(GetMutableObj(const_cast<_Storage &>(storage)));
+            return VtValueRef(std::move(GetMutableObj(const_cast<_Storage &>(storage))));
         }
     }
     return ProxyHelper::GetValueRef(GetObj(storage));
