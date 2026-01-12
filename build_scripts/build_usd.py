@@ -1521,6 +1521,12 @@ def InstallOpenSubdiv(context, force, buildArgs):
         # Use Metal for macOS and all Apple embedded systems.
         if MacOS() and not context.buildWebGPU:
             extraArgs.append('-DNO_OPENGL=ON')
+            if not MacOSTargetEmbedded(context):
+                # We still make GLSL available on macOS for any Hgi
+                # implementation that might need it. Implementations that layer
+                # on top of Metal, like WebGPU, MoltenVK or KosmicKrisp might
+                # not consume MSL directly.
+                extraArgs.append('-DOSD_PATCH_SHADER_SOURCE_GLSL=ON')
 
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
@@ -1675,7 +1681,7 @@ THREE = Dependency("ThreeJs", InstallThreeJs, "src/three.js")
 ############################################################
 # DAWN and 3rd parties
 DAWN_REPO = "https://dawn.googlesource.com/dawn"
-DAWN_CHROMIUM_VERSION = "7465"
+DAWN_CHROMIUM_VERSION = "7499"
 
 DAWN_CMAKE_OPTIONS = [
     '-DTINT_BUILD_WGSL_WRITER=ON',

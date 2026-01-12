@@ -23,22 +23,22 @@
 //
 #include "pxr/base/arch/defines.h"
 
-#include "pxr/imaging/hgiWebGPU/hgi.h"
-#include "pxr/imaging/hgiWebGPU/buffer.h"
 #include "pxr/imaging/hgiWebGPU/blitCmds.h"
+#include "pxr/imaging/hgiWebGPU/buffer.h"
+#include "pxr/imaging/hgiWebGPU/capabilities.h"
 #include "pxr/imaging/hgiWebGPU/computeCmds.h"
 #include "pxr/imaging/hgiWebGPU/computePipeline.h"
-#include "pxr/imaging/hgiWebGPU/capabilities.h"
 #include "pxr/imaging/hgiWebGPU/conversions.h"
+#include "pxr/imaging/hgiWebGPU/debugCodes.h"
 #include "pxr/imaging/hgiWebGPU/graphicsCmds.h"
-#include "pxr/imaging/hgiWebGPU/recordGraphicsCmds.h"
 #include "pxr/imaging/hgiWebGPU/graphicsPipeline.h"
+#include "pxr/imaging/hgiWebGPU/hgi.h"
+#include "pxr/imaging/hgiWebGPU/recordGraphicsCmds.h"
 #include "pxr/imaging/hgiWebGPU/resourceBindings.h"
 #include "pxr/imaging/hgiWebGPU/sampler.h"
 #include "pxr/imaging/hgiWebGPU/shaderFunction.h"
 #include "pxr/imaging/hgiWebGPU/shaderProgram.h"
 #include "pxr/imaging/hgiWebGPU/texture.h"
-#include "pxr/imaging/hgiWebGPU/debugCodes.h"
 
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/trace/trace.h"
@@ -47,7 +47,6 @@
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
 
-#include <algorithm>
 #include <sstream>
 
 #if defined(ARCH_OS_WASM_VM)
@@ -60,33 +59,35 @@
 #else
 #define DAWN_ENABLE_BACKEND_VULKAN
 #endif
-#include <webgpu/webgpu_cpp.h>
 #include <dawn/native/DawnNative.h>
+#include <webgpu/webgpu_cpp.h>
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_REGISTRY_FUNCTION(TfType)
 {
-    TfType t = TfType::Define<HgiWebGPU, TfType::Bases<Hgi> >();
+    TfType t = TfType::Define<HgiWebGPU, TfType::Bases<Hgi>>();
     t.SetFactory<HgiFactory<HgiWebGPU>>();
 }
 
 
-TF_DEFINE_ENV_SETTING(HGIWEBGPU_ENABLE_RENDER_BUNDLES, true,
-"Enable indirect command buffers");
+TF_DEFINE_ENV_SETTING(
+    HGIWEBGPU_ENABLE_RENDER_BUNDLES, true, "Enable indirect command buffers");
 
-// GetDevice code based on https://github.com/kainino0x/webgpu-cross-platform-demo/blob/main/main.cpp
+// GetDevice code based on
+// https://github.com/kainino0x/webgpu-cross-platform-demo/blob/main/main.cpp
 #if defined(ARCH_OS_WASM_VM)
 static wgpu::Device
-GetDevice() {
+GetDevice()
+{
     WGPUDevice deviceImp = emscripten_webgpu_get_device();
     return wgpu::Device::Acquire(deviceImp);
 }
 #else
 static void
-PrintUncapturedError(const wgpu::Device& device, wgpu::ErrorType type,
-    wgpu::StringView message)
+PrintUncapturedError(
+    const wgpu::Device& device, wgpu::ErrorType type, wgpu::StringView message)
 {
     std::stringstream fullMessage;
     fullMessage << "WebGPU";
@@ -108,17 +109,19 @@ PrintUncapturedError(const wgpu::Device& device, wgpu::ErrorType type,
         TF_CODING_ERROR("Unhandled WebGPU error type");
         break;
     }
-    fullMessage <<  " error: " << (std::string_view)message;
+    fullMessage << " error: " << (std::string_view) message;
     TF_RUNTIME_ERROR(fullMessage.str());
 }
 
 static wgpu::Instance instance;
 
 static wgpu::Device
-GetDevice() {
+GetDevice()
+{
     if (!instance) {
         wgpu::InstanceDescriptor instanceDescriptor{};
-        static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+        static constexpr auto kTimedWaitAny =
+            wgpu::InstanceFeatureName::TimedWaitAny;
         instanceDescriptor.requiredFeatureCount = 1;
         instanceDescriptor.requiredFeatures = &kTimedWaitAny;
         instance = wgpu::CreateInstance(&instanceDescriptor);
@@ -126,44 +129,45 @@ GetDevice() {
 
     wgpu::RequestAdapterOptions options = {};
     wgpu::Adapter adapter;
-
-    wgpu::DeviceDescriptor descriptor;
-    std::vector<wgpu::FeatureName> requiredFeatures = {
-            wgpu::FeatureName::Depth32FloatStencil8,
-            wgpu::FeatureName::Float32Filterable,
-            wgpu::FeatureName::ClipDistances,
-            wgpu::FeatureName::PrimitiveIndex,
-            wgpu::FeatureName::TextureFormatsTier2
-    };
-    instance.WaitAny(instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly,
-        [&adapter](wgpu::RequestAdapterStatus status, wgpu::Adapter reqAdapter,
-        wgpu::StringView message) {
-            if (status != wgpu::RequestAdapterStatus::Success) {
-                TF_RUNTIME_ERROR("Failed to get an adapter: %s", message.data);
-                return;
-            }
-            adapter = std::move(reqAdapter);
-        }), UINT64_MAX);
+    instance.WaitAny(
+        instance.RequestAdapter(&options, wgpu::CallbackMode::WaitAnyOnly,
+            [&adapter](wgpu::RequestAdapterStatus status,
+                wgpu::Adapter reqAdapter, wgpu::StringView message) {
+                if (status != wgpu::RequestAdapterStatus::Success) {
+                    TF_RUNTIME_ERROR(
+                        "Failed to get an adapter: %s", message.data);
+                    return;
+                }
+                adapter = std::move(reqAdapter);
+            }),
+        UINT64_MAX);
     if (adapter == nullptr) {
         TF_RUNTIME_ERROR("RequestAdapter failed!");
     }
 
+    std::vector<wgpu::FeatureName> requiredFeatures = {
+        wgpu::FeatureName::Depth32FloatStencil8,
+        wgpu::FeatureName::Float32Filterable,
+        wgpu::FeatureName::ClipDistances,
+        wgpu::FeatureName::TextureFormatsTier2};
+    if (adapter.HasFeature(wgpu::FeatureName::PrimitiveIndex)) {
+        requiredFeatures.push_back(wgpu::FeatureName::PrimitiveIndex);
+    }
     if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_TIMESTAMPS)) {
         requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
     }
 
-    // toggles are handled by chrome itself, so we only enable it for the desktop version where we have direct
-    // control
+    // toggles are handled by chrome itself, so we only enable it for the
+    // desktop version where we have direct control
     wgpu::DawnTogglesDescriptor deviceTogglesDesc;
     // Toggle for debugging shader
-    std::vector<const char *> enabledToggles = {};
+    std::vector<const char*> enabledToggles = {};
     if (TfDebug::IsEnabled(HGIWEBGPU_DEBUG_SHADER_CODE)) {
         enabledToggles.push_back("dump_shaders");
         enabledToggles.push_back("disable_symbol_renaming");
     }
     deviceTogglesDesc.enabledToggles = enabledToggles.data();
     deviceTogglesDesc.enabledToggleCount = enabledToggles.size();
-    descriptor.nextInChain = &deviceTogglesDesc;
 
     wgpu::Limits supportedLimits = {};
     adapter.GetLimits(&supportedLimits);
@@ -175,23 +179,23 @@ GetDevice() {
     if (supportedLimits.maxStorageBuffersPerShaderStage <
         minStorageBuffersPerShaderStage) {
         TF_WARN("WebGPU limits: expected at least %u storage buffers per"
-            " shader stage, but only %u buffers are supported."
-            " Stability might be affected.",
+                " shader stage, but only %u buffers are supported."
+                " Stability might be affected.",
             minStorageBuffersPerShaderStage,
             supportedLimits.maxStorageBuffersPerShaderStage);
     }
     if (supportedLimits.maxColorAttachmentBytesPerSample <
         minColorAttachmentBytesPerSample) {
         TF_WARN("WebGPU limits: expected at least %u color attachment"
-            " bytes per sample, but only %u bytes is supported."
-            " Stability might be affected.",
+                " bytes per sample, but only %u bytes is supported."
+                " Stability might be affected.",
             minColorAttachmentBytesPerSample,
             supportedLimits.maxColorAttachmentBytesPerSample);
     }
     if (supportedLimits.maxBufferSize < minBufferSize) {
         TF_WARN("WebGPU limits: expected a max buffer size of at least"
-            " 0x%llx bytes, but only 0x%llx bytes is supported."
-            " Stability might be affected.",
+                " 0x%llx bytes, but only 0x%llx bytes is supported."
+                " Stability might be affected.",
             minBufferSize, supportedLimits.maxBufferSize);
     }
 
@@ -202,21 +206,23 @@ GetDevice() {
     limits.maxColorAttachmentBytesPerSample =
         supportedLimits.maxColorAttachmentBytesPerSample;
     limits.maxBufferSize = supportedLimits.maxBufferSize;
-    descriptor.requiredLimits = &limits;
 
+    wgpu::DeviceDescriptor descriptor;
+    descriptor.requiredLimits = &limits;
     descriptor.requiredFeatures = requiredFeatures.data();
     descriptor.requiredFeatureCount = requiredFeatures.size();
+    descriptor.nextInChain = &deviceTogglesDesc;
     descriptor.SetUncapturedErrorCallback(&PrintUncapturedError);
 
     return adapter.CreateDevice(&descriptor);
 }
-#endif  // defined(ARCH_OS_WASM_VM)
+#endif // defined(ARCH_OS_WASM_VM)
 
 HgiWebGPU::HgiWebGPU()
-: _device(GetDevice())
-,_depthResolver(_device)
-,_mipmapGenerator(_device)
-, _workToFlush(false)
+    : _device(GetDevice())
+    , _depthResolver(_device)
+    , _mipmapGenerator(_device)
+    , _workToFlush(false)
 
 {
     // get the default command queue
@@ -225,10 +231,7 @@ HgiWebGPU::HgiWebGPU()
     _capabilities.reset(new HgiWebGPUCapabilities(_device));
 }
 
-HgiWebGPU::~HgiWebGPU()
-{
-    _PerformGarbageCollection();
-}
+HgiWebGPU::~HgiWebGPU() { _PerformGarbageCollection(); }
 
 void
 HgiWebGPU::GarbageCollect()
@@ -248,8 +251,7 @@ HgiWebGPU::GetPrimaryDevice() const
 }
 
 HgiGraphicsCmdsUniquePtr
-HgiWebGPU::CreateGraphicsCmds(
-    HgiGraphicsCmdsDesc const& desc)
+HgiWebGPU::CreateGraphicsCmds(HgiGraphicsCmdsDesc const& desc)
 {
     HgiWebGPUGraphicsCmds* gfxCmds(new HgiWebGPUGraphicsCmds(this, desc));
     return HgiGraphicsCmdsUniquePtr(gfxCmds);
@@ -270,7 +272,7 @@ HgiWebGPU::CreateBlitCmds()
 }
 
 HgiTextureHandle
-HgiWebGPU::CreateTexture(HgiTextureDesc const & desc)
+HgiWebGPU::CreateTexture(HgiTextureDesc const& desc)
 {
     return HgiTextureHandle(new HgiWebGPUTexture(this, desc), GetUniqueId());
 }
@@ -282,7 +284,7 @@ HgiWebGPU::DestroyTexture(HgiTextureHandle* texHandle)
 }
 
 HgiTextureViewHandle
-HgiWebGPU::CreateTextureView(HgiTextureViewDesc const & desc)
+HgiWebGPU::CreateTextureView(HgiTextureViewDesc const& desc)
 {
     if (!desc.sourceTexture) {
         TF_CODING_ERROR("Source texture is null");
@@ -296,12 +298,12 @@ HgiWebGPU::CreateTextureView(HgiTextureViewDesc const & desc)
 }
 
 void
-HgiWebGPU::DestroyTextureView(HgiTextureViewHandle *viewHandle) {
+HgiWebGPU::DestroyTextureView(HgiTextureViewHandle* viewHandle)
+{
     HgiTextureHandle texHandle = (*viewHandle)->GetViewTexture();
     if (_workToFlush) {
-        _garbageCollectionHandlers.emplace_back([texHandle] {
-            delete texHandle.Get();
-        });
+        _garbageCollectionHandlers.emplace_back(
+            [texHandle] { delete texHandle.Get(); });
     } else {
         _TrashObject(&texHandle);
     }
@@ -311,7 +313,7 @@ HgiWebGPU::DestroyTextureView(HgiTextureViewHandle *viewHandle) {
 }
 
 HgiSamplerHandle
-HgiWebGPU::CreateSampler(HgiSamplerDesc const & desc)
+HgiWebGPU::CreateSampler(HgiSamplerDesc const& desc)
 {
     return HgiSamplerHandle(new HgiWebGPUSampler(this, desc), GetUniqueId());
 }
@@ -323,7 +325,7 @@ HgiWebGPU::DestroySampler(HgiSamplerHandle* smpHandle)
 }
 
 HgiBufferHandle
-HgiWebGPU::CreateBuffer(HgiBufferDesc const & desc)
+HgiWebGPU::CreateBuffer(HgiBufferDesc const& desc)
 {
     return HgiBufferHandle(new HgiWebGPUBuffer(this, desc), GetUniqueId());
 }
@@ -401,7 +403,8 @@ HgiWebGPU::DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle)
 }
 
 TfToken const&
-HgiWebGPU::GetAPIName() const {
+HgiWebGPU::GetAPIName() const
+{
     return HgiTokens->WebGPU;
 }
 
@@ -417,10 +420,13 @@ HgiWebGPU::GetIndirectCommandEncoder() const
     return nullptr;
 }
 
-HgiGraphicsCmdsUniquePtr HgiWebGPU::MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc) {
+HgiGraphicsCmdsUniquePtr
+HgiWebGPU::MakeCmdsRecorder(HgiGraphicsCmdsDesc const& desc)
+{
 
     if (TfGetEnvSetting(HGIWEBGPU_ENABLE_RENDER_BUNDLES)) {
-        HgiWebGPURecordGraphicsCmds* recordGraphicsCmds(new HgiWebGPURecordGraphicsCmds(this, desc));
+        HgiWebGPURecordGraphicsCmds* recordGraphicsCmds(
+            new HgiWebGPURecordGraphicsCmds(this, desc));
         return HgiGraphicsCmdsUniquePtr(recordGraphicsCmds);
     } else {
         return nullptr;
@@ -447,7 +453,7 @@ HgiWebGPU::GetQueue() const
 }
 
 void
-HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const &commandBuffer)
+HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const& commandBuffer)
 {
     if (commandBuffer) {
         _commandBuffers.push_back(commandBuffer);
@@ -457,37 +463,37 @@ HgiWebGPU::EnqueueCommandBuffer(wgpu::CommandBuffer const &commandBuffer)
 void
 HgiWebGPU::QueryValue()
 {
-    if (_inflightQuery->resultBuffer.GetMapState() == wgpu::BufferMapState::Unmapped) {
+    if (_inflightQuery->resultBuffer.GetMapState() ==
+        wgpu::BufferMapState::Unmapped) {
         std::shared_ptr<uint64_t> idPtr = std::make_shared<uint64_t>(0);
-        auto future = _inflightQuery->resultBuffer.MapAsync(
-                wgpu::MapMode::Read,
-                0,
-                _inflightQuery->resultBuffer.GetSize(),
-                wgpu::CallbackMode::AllowProcessEvents,
-                [this,idPtr](wgpu::MapAsyncStatus status, char const * message) {
-                    uint64_t id = *idPtr;
-                    if (status != wgpu::MapAsyncStatus::Success) {
-                        TF_WARN("Failed to call MapAsync for query ");
-                        _pendingQueries.erase(id);
-                        return;
-                    }
+        auto future = _inflightQuery->resultBuffer.MapAsync(wgpu::MapMode::Read,
+            0, _inflightQuery->resultBuffer.GetSize(),
+            wgpu::CallbackMode::AllowProcessEvents,
+            [this, idPtr](wgpu::MapAsyncStatus status, char const* message) {
+                uint64_t id = *idPtr;
+                if (status != wgpu::MapAsyncStatus::Success) {
+                    TF_WARN("Failed to call MapAsync for query ");
+                    _pendingQueries.erase(id);
+                    return;
+                }
 
 
-                    if (_pendingQueries.count(id) > 0) {
-                        std::vector<uint64_t> times(2);
-                        memcpy(times.data(),
-                               _pendingQueries[id].resultBuffer.GetConstMappedRange(),
-                               _pendingQueries[id].resultBuffer.GetSize());
-                        uint64_t nanoseconds = (times[1] - times[0]);
-                        float milliseconds = (float) nanoseconds * 1e-6;
-                        TF_STATUS(_pendingQueries[id].label + " took: " + std::to_string(milliseconds) + "ms");
-                        _pendingQueries[id].resultBuffer.Unmap();
-                        _availableQueries.push_back(_pendingQueries[id]);
-                        _pendingQueries.erase(id);
-                    } else {
-                        TF_RUNTIME_ERROR("Failed to find pending query");
-                    }
-                });
+                if (_pendingQueries.count(id) > 0) {
+                    std::vector<uint64_t> times(2);
+                    memcpy(times.data(),
+                        _pendingQueries[id].resultBuffer.GetConstMappedRange(),
+                        _pendingQueries[id].resultBuffer.GetSize());
+                    uint64_t nanoseconds = (times[1] - times[0]);
+                    float milliseconds = (float) nanoseconds * 1e-6;
+                    TF_STATUS(_pendingQueries[id].label +
+                        " took: " + std::to_string(milliseconds) + "ms");
+                    _pendingQueries[id].resultBuffer.Unmap();
+                    _availableQueries.push_back(_pendingQueries[id]);
+                    _pendingQueries.erase(id);
+                } else {
+                    TF_RUNTIME_ERROR("Failed to find pending query");
+                }
+            });
         _pendingQueries[future.id] = std::move(*_inflightQuery);
         _pendingQueries[future.id].id = idPtr;
         *idPtr = future.id;
@@ -495,87 +501,93 @@ HgiWebGPU::QueryValue()
     }
 }
 
-    QueryFrame HgiWebGPU::_CreateQueryObjects() {
-        QueryFrame queryFrame{};
-        const int capacity = 2; // Max number of timestamps we can store
+QueryFrame
+HgiWebGPU::_CreateQueryObjects()
+{
+    QueryFrame queryFrame{};
+    const int capacity = 2; // Max number of timestamps we can store
 
-        wgpu::QuerySetDescriptor querySetDescriptor;
-        querySetDescriptor.count = capacity;
-        querySetDescriptor.type = wgpu::QueryType::Timestamp;
-        queryFrame.querySet = _device.CreateQuerySet(&querySetDescriptor);
+    wgpu::QuerySetDescriptor querySetDescriptor;
+    querySetDescriptor.count = capacity;
+    querySetDescriptor.type = wgpu::QueryType::Timestamp;
+    queryFrame.querySet = _device.CreateQuerySet(&querySetDescriptor);
 
-        {
-            wgpu::BufferDescriptor bufferDescriptor;
-            bufferDescriptor.size = capacity * sizeof(uint64_t);
-            bufferDescriptor.label = ("queryResolve" + std::to_string(queryFrameCounter)).c_str();
-            bufferDescriptor.usage =
-                    wgpu::BufferUsage::QueryResolve | wgpu::BufferUsage::CopySrc;
-            queryFrame.resolveBuffer =
-                    _device.CreateBuffer(&bufferDescriptor);
-        }
-
-        {
-            wgpu::BufferDescriptor bufferDescriptor;
-            bufferDescriptor.size = capacity * sizeof(uint64_t);
-            bufferDescriptor.label = ("queryResult" + std::to_string(queryFrameCounter++)).c_str();
-            bufferDescriptor.usage =
-                    wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
-            queryFrame.resultBuffer =
-                    _device.CreateBuffer(&bufferDescriptor);
-        }
-        return queryFrame;
+    {
+        wgpu::BufferDescriptor bufferDescriptor;
+        bufferDescriptor.size = capacity * sizeof(uint64_t);
+        bufferDescriptor.label =
+            ("queryResolve" + std::to_string(queryFrameCounter)).c_str();
+        bufferDescriptor.usage =
+            wgpu::BufferUsage::QueryResolve | wgpu::BufferUsage::CopySrc;
+        queryFrame.resolveBuffer = _device.CreateBuffer(&bufferDescriptor);
     }
 
-    void HgiWebGPU::ResolveQuery(wgpu::CommandEncoder &commandEncoder, const std::string &label) {
+    {
+        wgpu::BufferDescriptor bufferDescriptor;
+        bufferDescriptor.size = capacity * sizeof(uint64_t);
+        bufferDescriptor.label =
+            ("queryResult" + std::to_string(queryFrameCounter++)).c_str();
+        bufferDescriptor.usage =
+            wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
+        queryFrame.resultBuffer = _device.CreateBuffer(&bufferDescriptor);
+    }
+    return queryFrame;
+}
 
-        commandEncoder.ResolveQuerySet(
-                _inflightQuery->querySet,
-                0,
-                _inflightQuery->querySet.GetCount(),
-                _inflightQuery->resolveBuffer,
-                0);
+void
+HgiWebGPU::ResolveQuery(
+    wgpu::CommandEncoder& commandEncoder, const std::string& label)
+{
 
-        if (_inflightQuery->resultBuffer.GetMapState() == wgpu::BufferMapState::Unmapped) {
-            commandEncoder.CopyBufferToBuffer(_inflightQuery->resolveBuffer,
-                                              0,
-                                              _inflightQuery->resultBuffer,
-                                              0,
-                                              _inflightQuery->resolveBuffer.GetSize());
+    commandEncoder.ResolveQuerySet(_inflightQuery->querySet, 0,
+        _inflightQuery->querySet.GetCount(), _inflightQuery->resolveBuffer, 0);
+
+    if (_inflightQuery->resultBuffer.GetMapState() ==
+        wgpu::BufferMapState::Unmapped) {
+        commandEncoder.CopyBufferToBuffer(_inflightQuery->resolveBuffer, 0,
+            _inflightQuery->resultBuffer, 0,
+            _inflightQuery->resolveBuffer.GetSize());
+    }
+    _inflightQuery->label = label;
+}
+
+
+void
+HgiWebGPU::_ProcessNextInflightQuery()
+{
+    // There could be an empty graphics cmds that request a query but never
+    // submits work to the queue. In these cases, we want to reuse the current
+    // _inflightQuery
+    if (!_inflightQuery) {
+        if (!_availableQueries.empty()) {
+            _inflightQuery = std::make_shared<QueryFrame>(
+                std::move(_availableQueries.back()));
+            _availableQueries.pop_back();
+        } else {
+            _inflightQuery =
+                std::make_shared<QueryFrame>(_CreateQueryObjects());
         }
-        _inflightQuery->label = label;
     }
+}
 
+wgpu::PassTimestampWrites
+HgiWebGPU::GetRenderTimestampWrites()
+{
+    _ProcessNextInflightQuery();
 
-    void HgiWebGPU::_ProcessNextInflightQuery() {
-        // There could be an empty graphics cmds that request a query but never submits work to the queue.
-        // In these cases, we want to reuse the current _inflightQuery
-        if (!_inflightQuery) {
-            if (!_availableQueries.empty()) {
-                _inflightQuery = std::make_shared<QueryFrame>(std::move(_availableQueries.back()));
-                _availableQueries.pop_back();
-            } else {
-                _inflightQuery = std::make_shared<QueryFrame>(_CreateQueryObjects());
-            }
-        }
-    }
+    wgpu::PassTimestampWrites timestampWrites;
+    timestampWrites.querySet = _inflightQuery->querySet;
+    timestampWrites.beginningOfPassWriteIndex = 0;
+    timestampWrites.endOfPassWriteIndex = 1;
 
-    wgpu::PassTimestampWrites HgiWebGPU::GetRenderTimestampWrites() {
-        _ProcessNextInflightQuery();
-
-        wgpu::PassTimestampWrites timestampWrites;
-        timestampWrites.querySet = _inflightQuery->querySet;
-        timestampWrites.beginningOfPassWriteIndex = 0;
-        timestampWrites.endOfPassWriteIndex = 1;
-
-        return timestampWrites;
-    }
+    return timestampWrites;
+}
 #endif
 
 void
 HgiWebGPU::QueueSubmit()
 {
-    if(!_commandBuffers.empty())
-    {
+    if (!_commandBuffers.empty()) {
         _commandQueue.Submit(_commandBuffers.size(), _commandBuffers.data());
         _commandBuffers.clear();
     }
@@ -588,7 +600,8 @@ HgiWebGPU::GetAPIVersion() const
 }
 
 void
-HgiWebGPU::_PerformGarbageCollection() {
+HgiWebGPU::_PerformGarbageCollection()
+{
     for (auto const& fn : _garbageCollectionHandlers)
         fn();
 
@@ -610,13 +623,19 @@ HgiWebGPU::_SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait)
     return _workToFlush;
 }
 
-wgpu::Texture HgiWebGPU::GenerateMipmap(const wgpu::Texture& texture, const HgiTextureDesc& textureDescriptor) {
+wgpu::Texture
+HgiWebGPU::GenerateMipmap(
+    const wgpu::Texture& texture, const HgiTextureDesc& textureDescriptor)
+{
     return _mipmapGenerator.generateMipmap(texture, textureDescriptor);
 }
 
-void HgiWebGPU::ResolveDepth(wgpu::CommandEncoder const &commandEncoder, HgiWebGPUTexture &sourceTexture,
-                  HgiWebGPUTexture &destinationTexture) {
-        _depthResolver.resolveDepth(commandEncoder, sourceTexture, destinationTexture);
+void
+HgiWebGPU::ResolveDepth(wgpu::CommandEncoder const& commandEncoder,
+    HgiWebGPUTexture& sourceTexture, HgiWebGPUTexture& destinationTexture)
+{
+    _depthResolver.resolveDepth(
+        commandEncoder, sourceTexture, destinationTexture);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

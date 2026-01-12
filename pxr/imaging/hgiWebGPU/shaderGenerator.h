@@ -31,7 +31,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class Hgi;
+class HgiWebGPU;
 
 /// \class HgiWebGPUShaderGenerator
 ///
@@ -42,7 +42,7 @@ class HgiWebGPUShaderGenerator final: public HgiShaderGenerator
 public:
     HGIWEBGPU_API
     explicit HgiWebGPUShaderGenerator(
-        Hgi const *hgi,
+        HgiWebGPU const *hgi,
         const HgiShaderFunctionDesc &descriptor);
 
     //This is not commonly consumed by the end user, but is available.
@@ -84,7 +84,7 @@ private:
         const std::string &qualifier);
 
     HgiBaseGLShaderSectionUniquePtrVector _shaderSections;
-    Hgi const *_hgi;
+    HgiWebGPU const *_hgi;
     std::vector<std::string> _shaderLayoutAttributes;
     uint32_t _inLocationIndex;
     uint32_t _outLocationIndex;

@@ -60,16 +60,17 @@ using HgiBits = uint32_t;
 ///   Indirect command buffers are supported</li>
 /// <li>HgiDeviceCapabilitiesBitsRoundPoints:
 ///   Points can be natively rasterized as disks</li>
+/// <li>HgiDeviceCapabilitiesBitsSingleSlotResourceArrays:
+///   </li>
 /// <li>HgiDeviceCapabilitiesBitsGeometricStage:
 ///   Support for geometric shader stage</li>
-/// <li>HgiDeviceCapabilitiesBitsTriangulatedQuads:
-///   Rendering support for triangulated quads</li>
 /// <li>HgiDeviceCapabilitiesBitsPushConstants:
 ///   Support for push constants</li>
 /// <li>HgiDeviceCapabilitiesBitsTimestamps:
 ///   Supports GPU timestamps</li>
 /// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
-///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
+///   Supports enforcing early fragment test
+//    (https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
 ///   regardless of the body of the shader</li>
 /// </ul>
 ///
@@ -96,10 +97,9 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsRoundPoints              = 1 << 18,
     HgiDeviceCapabilitiesBitsSingleSlotResourceArrays = 1 << 19,
     HgiDeviceCapabilitiesBitsGeometricStage           = 1 << 20,
-    HgiDeviceCapabilitiesBitsTriangulatedQuads        = 1 << 21,
-    HgiDeviceCapabilitiesBitsPushConstants            = 1 << 22,
-    HgiDeviceCapabilitiesBitsTimestamps               = 1 << 23,
-    HgiDeviceCapabilitiesForceEarlyFragmentTest       = 1 << 24,
+    HgiDeviceCapabilitiesBitsPushConstants            = 1 << 21,
+    HgiDeviceCapabilitiesBitsTimestamps               = 1 << 22,
+    HgiDeviceCapabilitiesForceEarlyFragmentTest       = 1 << 23,
 };
 
 using HgiDeviceCapabilities = HgiBits;

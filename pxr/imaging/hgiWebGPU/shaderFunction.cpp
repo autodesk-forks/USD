@@ -40,6 +40,8 @@
 #define TINT_BUILD_SPV_READER 1
 #define TINT_BUILD_WGSL_WRITER 1
 #include <tint/tint.h>
+// This include shouldn't be necessary, but it's missing in tint.h
+#include <src/tint/lang/core/ir/module.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 

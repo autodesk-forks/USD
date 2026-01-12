@@ -37,20 +37,22 @@
 #include <sstream>
 #include <map>
 
-#if defined(PXR_METAL_SUPPORT_ENABLED)
-    #include <opensubdiv/osd/mtlPatchShaderSource.h>
-#elif defined(PXR_GL_SUPPORT_ENABLED)
-    #define PXR_OSD_WITH_GL_SUPPORT_ENABLED
-#endif // PXR_METAL_SUPPORT_ENABLED
-
-#if defined(ARCH_OS_ANDROID) || defined(ARCH_OS_WASM_VM)
+#if defined(ARCH_OS_WASM_VM)
 #define PXR_DISABLE_OSD
 #endif
 
 #if !defined(PXR_DISABLE_OSD)
-#if defined(PXR_OSD_WITH_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED)
+
+#include <opensubdiv/version.h>
+
+#if defined(PXR_METAL_SUPPORT_ENABLED)
+#include <opensubdiv/osd/mtlPatchShaderSource.h>
+#endif
+
+#if !defined(ARCH_OS_DARWIN) || OPENSUBDIV_VERSION_NUMBER >= 30601
 #include <opensubdiv/osd/glslPatchShaderSource.h>
 #endif
+
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -1849,22 +1851,32 @@ _GetOSDCommonShaderSource(TfToken const &apiName)
     // forward declarations needed by the OpenSubdiv shaders.
     std::stringstream ss;
 
+#if !defined(PXR_DISABLE_OSD)
+
 #if OPENSUBDIV_VERSION_NUMBER >= 30600
+
     if (apiName == HgiTokens->Metal) {
 #if defined(PXR_METAL_SUPPORT_ENABLED)
         ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchDrawingShaderSource();
+#else
+        TF_FATAL_ERROR("Metal support is not enabled");
 #endif
     } else {
+#if !defined(ARCH_OS_DARWIN) || OPENSUBDIV_VERSION_NUMBER >= 30601
         ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
               "FORWARD_DECL(float GetTessLevel());\n"
               "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
               "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
               "float OsdTessLevel() { return GetTessLevel(); }\n"
               "\n";
-#if defined(PXR_OSD_WITH_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED)
+
         ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchDrawingShaderSource();
+#else
+        TF_FATAL_ERROR("GLSL is not available on non-Apple platforms. "
+            "Use OSD >= 3.6.1 with OSD_PATCH_SHADER_SOURCE_GLSL=ON.");
 #endif
     }
+
 #else // OPENSUBDIV_VERSION_NUMBER
     // Additional declarations are needed for older OpenSubdiv versions.
 
@@ -1888,55 +1900,59 @@ _GetOSDCommonShaderSource(TfToken const &apiName)
            << "\n";
 
         ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetCommonShaderSource();
-#endif // PXR_METAL_SUPPORT_ENABLED
-    } else if (HgiTokens->Vulkan == apiName ||
-               HgiTokens->OpenGL == apiName ||
-               HgiTokens->WebGPU == apiName) {
-#if !defined(PXR_DISABLE_OSD)
-#if defined(PXR_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED)
-    ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
-       << "FORWARD_DECL(float GetTessLevel());\n"
-       << "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
-       << "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
-       << "int OsdPrimitiveIdBase() { return 0; }\n"
-       << "float OsdTessLevel() { return GetTessLevel(); }\n"
-       << "\n";
-
-    ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetCommonShaderSource();
+#else
+        TF_FATAL_ERROR("Metal support is not enabled");
 #endif
-#endif // PXR_GL_SUPPORT_ENABLED || PXR_WEBGPU_SUPPORT_ENABLED
     } else {
-        TF_CODING_ERROR("Unsupported OSD API: %s", apiName.GetText());
+#if !defined(ARCH_OS_DARWIN)
+        ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
+           << "FORWARD_DECL(float GetTessLevel());\n"
+           << "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
+           << "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
+           << "int OsdPrimitiveIdBase() { return 0; }\n"
+           << "float OsdTessLevel() { return GetTessLevel(); }\n"
+           << "\n";
+
+        ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetCommonShaderSource();
+#else
+        TF_FATAL_ERROR("GLSL is not available on non-Apple platforms. "
+            "Use OSD >= 3.6.1 with OSD_PATCH_SHADER_SOURCE_GLSL=ON.");
+#endif
     }
 #endif // OPENSUBDIV_VERSION_NUMBER
+
+#endif
 
     return ss.str();
 }
 
 static
 std::string
-_GetOSDPatchBasisShaderSource(const TfToken &apiName)
+_GetOSDPatchBasisShaderSource(TfToken const &apiName)
 {
     std::stringstream ss;
+
+#if !defined(PXR_DISABLE_OSD)
+
     if (apiName == HgiTokens->Metal) {
 #if defined(PXR_METAL_SUPPORT_ENABLED)
         ss << "#define OSD_PATCH_BASIS_METAL\n";
         ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchBasisShaderSource();
+#else
+        TF_FATAL_ERROR("Metal support is not enabled");
 #endif
-    } else if (HgiTokens->Vulkan == apiName ||
-               HgiTokens->OpenGL == apiName ||
-               HgiTokens->WebGPU == apiName ) {
-#if !defined(PXR_DISABLE_OSD)
-
-#if (defined(PXR_OSD_WITH_GL_SUPPORT_ENABLED) || defined(PXR_WEBGPU_SUPPORT_ENABLED))
+    } else {
+#if !defined(ARCH_OS_DARWIN) || OPENSUBDIV_VERSION_NUMBER >= 30601
         ss << "#define OSD_PATCH_BASIS_GLSL\n";
         ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchBasisShaderSource();
+#else
+        TF_FATAL_ERROR("GLSL is not available on non-Apple platforms. "
+            "Use OSD >= 3.6.1 with OSD_PATCH_SHADER_SOURCE_GLSL=ON.");
+#endif
+    }
+
 #endif
 
-#endif // !defined(PXR_DISABLE_OSD)
-    } else {
-        TF_CODING_ERROR("Unsupported OSD API: %s", apiName.GetText());
-    }
     return ss.str();
 }
 
@@ -1966,6 +1982,8 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
         capabilities->IsSet(HgiDeviceCapabilitiesBitsBuiltinBarycentrics);
     const bool metalTessellationEnabled =
         capabilities->IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
+    const bool geometricStageEnabled =
+        capabilities->IsSet(HgiDeviceCapabilitiesBitsGeometricStage);
     const bool requiresBasePrimitiveOffset =
         capabilities->IsSet(HgiDeviceCapabilitiesBitsBasePrimitiveOffset);
     const bool requiresPrimitiveIdEmulation =
@@ -2003,7 +2021,7 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
     _hasTES = (!tessEvalShader.empty());
     _hasPTCS = (!postTessControlShader.empty()) && metalTessellationEnabled;
     _hasPTVS = (!postTessVertexShader.empty()) && metalTessellationEnabled;
-    _hasGS  = (!geometryShader.empty()) && !metalTessellationEnabled;
+    _hasGS  = (!geometryShader.empty()) && geometricStageEnabled;
     _hasFS  = (!fragmentShader.empty());
     _hasCS  = (!computeShader.empty());
 
@@ -2324,9 +2342,57 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
                       "  return hd_barycentricCoord;\n"
                       "}\n";
         } else {
-            _genFS << "vec3 GetBarycentricCoord() {\n"
+            // We can reconstruct the barycentric coordinates for a fragment
+            // given the three original non-interpolated point, and the
+            // interpolated result. This can be done in local coordinate space
+            // as long as the interpolated point is also in the local space,
+            // which is already the case for the value of HdGet_points().
+            // Barycentric interpolation can be written as:
+            //     mat3(p0, p1, p2) * stp = pI
+            // where p0, p1, p2 are the triangle positions, stp is the
+            // barycentric coordinate triplet, and pI is the interpolated
+            // position. Solving for stp is a bit more complicated than just
+            // inverting the matrix and multiplying by pI, since the matrix can
+            // be non-invertible even when stp solutions should exist (any colum
+            // or row is all 0's). That's because p = 1 - s - t, and we actually
+            // need to reduce the matrix to 2x2 and solve for st only. Expanding
+            // the equation and doing the substitution algebra for p, we find
+            // that we instead need to solve for:
+            //    mat2(v0 - v2, v1 - v2) * st = vI - v2
+            // where v0, v1, v2, vI are any 2-component subvectors of p0, p1,
+            // p2, and pI. There are three possible matrices, with at least one
+            // always being invertible. If the triangle lies in an x, y or z
+            // plane, then the two matrices using the component for that plane
+            // are non-invertible. If all three matrices are non-invertible then
+            // the triangle is degenerate, and we don't care about that case.
+            _genFS << "#if defined(HD_HAS_indices) && defined(HD_HAS_triPoints) && defined(HD_HAS_points)\n"
+                      "FORWARD_DECL(int HdGet_indices(int localIndex));\n"
+                      "FORWARD_DECL(vec3 HdGet_triPoints(int localIndex));\n"
+                      "FORWARD_DECL(vec3 HdGet_points());\n"
+                      "vec3 GetBarycentricCoord() {\n"
+                      "  int vertexOffset = GetDrawingCoord().vertexCoord;\n"
+                      "  vec3 p0 = HdGet_triPoints(vertexOffset + HdGet_indices(0));\n"
+                      "  vec3 p1 = HdGet_triPoints(vertexOffset + HdGet_indices(1));\n"
+                      "  vec3 p2 = HdGet_triPoints(vertexOffset + HdGet_indices(2));\n"
+                      "  vec3 pI = HdGet_points();\n"
+                      "  mat2 m = mat2(p0.yz - p2.yz, p1.yz - p2.yz);\n"
+                      "  vec2 d = pI.yz - p2.yz;\n"
+                      "  if (abs(determinant(m)) < 1e-6) {\n"
+                      "    m = mat2(p0.xz - p2.xz, p1.xz - p2.xz);\n"
+                      "    d = pI.xz - p2.xz;\n"
+                      "  }\n"
+                      "  if (abs(determinant(m)) < 1e-6) {\n"
+                      "    m = mat2(p0.xy - p2.xy, p1.xy - p2.xy);\n"
+                      "    d = pI.xy - p2.xy;\n"
+                      "  }\n"
+                      "  vec2 st = inverse(m) * d;\n"
+                      "  return vec3(st, 1 - st.x - st.y);\n"
+                      "}\n"
+                      "#else\n"
+                      "vec3 GetBarycentricCoord() {\n"
                       "  return vec3(0);\n"
-                      "}\n";
+                      "}\n"
+                      "#endif\n";
         }
     }
 
@@ -6004,14 +6070,20 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
       } inPrimvars;
     */
 
-    HdSt_ResourceBinder::MetaData::BindingDeclaration const &
-            indexBufferBinding = _metaData->indexBufferBinding;
-    if (!indexBufferBinding.name.IsEmpty()) {
+    if (const auto& indexBufferBinding = _metaData->indexBufferBinding;
+        !indexBufferBinding.name.IsEmpty()) {
+        _genDefines << "#define HD_HAS_"
+                    << indexBufferBinding.name << " 1\n";
+
         _EmitDeclaration(&_resPTCS,
                          indexBufferBinding.name,
                          indexBufferBinding.dataType,
                          indexBufferBinding.binding);
         _EmitDeclaration(&_resPTVS,
+                         indexBufferBinding.name,
+                         indexBufferBinding.dataType,
+                         indexBufferBinding.binding);
+        _EmitDeclaration(&_resFS,
                          indexBufferBinding.name,
                          indexBufferBinding.dataType,
                          indexBufferBinding.binding);
@@ -6024,6 +6096,34 @@ HdSt_CodeGen::_GenerateVertexAndFaceVaryingPrimvar()
                             indexBufferBinding.name,
                             indexBufferBinding.dataType,
             "patch_id * VERTEX_CONTROL_POINTS_PER_PATCH + localIndex");
+        if (HdSt_GeometricShader::IsPrimTypeTriQuads(
+            _geometricShader->GetPrimitiveType())) {
+            _EmitBufferAccessor(accessorsFS,
+                                indexBufferBinding.name,
+                                indexBufferBinding.dataType,
+                "(GetPrimitiveIndex() * 2 + GetTriQuadID()) * 3 + localIndex");
+        } else {
+            _EmitBufferAccessor(accessorsFS,
+                                indexBufferBinding.name,
+                                indexBufferBinding.dataType,
+                "GetPrimitiveIndex() * 3 + localIndex");
+        }
+    }
+
+    if (const auto& pointsBufferBinding = _metaData->pointsBufferBinding;
+        !pointsBufferBinding.name.IsEmpty()) {
+        _genDefines << "#define HD_HAS_"
+                    << pointsBufferBinding.name << " 1\n";
+
+        _EmitDeclaration(&_resFS,
+                         pointsBufferBinding.name,
+                         pointsBufferBinding.dataType,
+                         pointsBufferBinding.binding);
+
+        _EmitBufferAccessor(accessorsFS,
+                            pointsBufferBinding.name,
+                            pointsBufferBinding.dataType,
+                            "localIndex");
     }
 
     TF_FOR_ALL (it, _metaData->varyingData) {
@@ -7067,4 +7167,3 @@ HdSt_CodeGen::_GetFallbackScalarSwizzleString(TfToken const &returnType,
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

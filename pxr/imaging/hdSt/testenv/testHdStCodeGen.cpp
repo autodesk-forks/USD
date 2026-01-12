@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
                 /* hasBuiltinBarycentics */ false,
                 /* hasMetalTessellation */ false,
                 /* hasGeometricStage */ true,
-                /* hasCustomDisplacement */ false,
+                /* hasCustomDisplacement */ false, 
                 faceVarying, topologicalVisibility,
                 blendWireframeColor,
                 /* hasMirroredTransform */ false,

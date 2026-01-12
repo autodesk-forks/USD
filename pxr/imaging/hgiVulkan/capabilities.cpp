@@ -27,6 +27,8 @@ TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_UMA, true,
                       "Use Vulkan with UMA (if device supports)");
 TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_REBAR, false,
                       "Use Vulkan with ReBAR (if device supports)");
+TF_DEFINE_ENV_SETTING(HGIVULKAN_ENABLE_GEOMETRY_SHADER, true,
+                      "Use Vulkan geometry shader stage  (if device supports)");
 
 static void _DumpDeviceDeviceMemoryProperties(
     const VkPhysicalDeviceMemoryProperties& vkMemoryProperties)
@@ -305,6 +307,15 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         builtinBarycentricsEnabled = false;
     }
 
+    supportsHostImageCopy = hostImageCopyExtAvailable 
+        && vkHostImageCopyFeatures.hostImageCopy
+        && (vkHostImageCopyProperties.identicalMemoryTypeRequirements
+            || unifiedMemory);
+
+    const bool geometryShader =
+        TfGetEnvSetting(HGIVULKAN_ENABLE_GEOMETRY_SHADER) &&
+        vkDeviceFeatures2.features.geometryShader;
+
     _SetFlag(HgiDeviceCapabilitiesBitsUnifiedMemory, unifiedMemory);
     _SetFlag(HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne, false);
     _SetFlag(HgiDeviceCapabilitiesBitsStencilReadback, true);
@@ -318,8 +329,7 @@ HgiVulkanCapabilities::HgiVulkanCapabilities(HgiVulkanDevice* device)
         shaderDrawParametersEnabled);
      _SetFlag(HgiDeviceCapabilitiesBitsMultiDrawIndirect,
         multiDrawIndirectEnabled);
-    _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, true);
-    _SetFlag(HgiDeviceCapabilitiesBitsTriangulatedQuads, false);
+    _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, geometryShader);
     _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, true);
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, true);
 }

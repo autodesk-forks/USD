@@ -653,13 +653,14 @@ HdStMesh::_PopulateTopology(HdSceneDelegate *sceneDelegate,
             resourceRegistry->GetHgi()->GetCapabilities()->
                 IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
 
-        bool const triangulatedQuadsEnabled =
-                resourceRegistry->GetHgi()->GetCapabilities()->
-                        IsSet(HgiDeviceCapabilitiesBitsTriangulatedQuads);
+        bool const hasGeometricStage =
+            resourceRegistry->GetHgi()->GetCapabilities()->
+                IsSet(HgiDeviceCapabilitiesBitsGeometricStage);
 
         HdSt_MeshTopologySharedPtr topology =
             HdSt_MeshTopology::New(meshTopology, refineLevel, refineMode,
-                (hasBuiltinBarycentrics || hasMetalTessellation || triangulatedQuadsEnabled)
+                (hasBuiltinBarycentrics || hasMetalTessellation ||
+                !hasGeometricStage)
                     ? HdSt_MeshTopology::QuadsTriangulated
                     : HdSt_MeshTopology::QuadsUntriangulated);
         
@@ -3309,4 +3310,3 @@ HdStMesh::GetInitialDirtyBitsMask() const
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

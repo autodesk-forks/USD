@@ -31,7 +31,6 @@
 #include "pxr/imaging/hgi/tokens.h"
 
 #include <unordered_map>
-#include <sstream>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -63,7 +62,7 @@ HgiWebGPUShaderGenerator::CreateShaderSection(T && ...t)
 }
 
 HgiWebGPUShaderGenerator::HgiWebGPUShaderGenerator(
-    Hgi const *hgi,
+    HgiWebGPU const *hgi,
     const HgiShaderFunctionDesc &descriptor)
   : HgiShaderGenerator(descriptor)
   , _hgi(hgi)
@@ -146,12 +145,9 @@ void
 HgiWebGPUShaderGenerator::_WriteMacros(std::ostream &ss)
 {
 
-    const HgiCapabilities *capabilities = _hgi->GetCapabilities();
-    const bool requiresPrimitiveIdEmulation =
-        capabilities->IsSet(HgiDeviceCapabilitiesBitsPrimitiveIdEmulation);
-
-    if (requiresPrimitiveIdEmulation) {
-        ss << "#define gl_PrimitiveID 1\n"; // gl_PrimitiveID not supported, faking it for the moment
+    if (!_hgi->GetPrimaryDevice().HasFeature(wgpu::FeatureName::PrimitiveIndex)) {
+        // This is a excessively difficult thing to emulate.
+        ss << "#define gl_PrimitiveID 0\n";
     }
 
     ss << "#define gl_PointCoord vec2(0.5)\n" // TODO: gl_PointCoord not implemented in webgpu, faking it for the moment
