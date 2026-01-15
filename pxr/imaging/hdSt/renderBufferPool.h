@@ -104,10 +104,9 @@ private:
         {
             size_t operator()(_PooledRenderBufferDesc const& desc) const
             {
-                return ((desc.multiSampled | (desc.depth << 2)
-                    | (desc.fmt << 3))
-                    ^ (desc.dims[0] & 0xFFFF))
-                    | ((size_t)(desc.dims[1] & 0xFFFF) << 32);
+                return TfHash::Combine(
+                    desc.multiSampled | (desc.depth << 2) | (desc.fmt << 3),
+                    (desc.dims[0] & 0xFFFF) | (desc.dims[1] << 16));
             }
         };
     };
