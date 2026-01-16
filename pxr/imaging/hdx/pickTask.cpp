@@ -404,9 +404,10 @@ HdxPickTask::_ConditionStencilWithGLCallback(
 bool
 HdxPickTask::_UseOcclusionPass() const
 {
-    return _contextParams.doUnpickablesOcclude &&
-        !(_contextParams.occluderCollection.GetRootPaths().empty() &&
-        _contextParams.collection.GetExcludePaths().empty());
+    return _contextParams.doUnpickablesOcclude && (
+        !_contextParams.occluderCollection.GetName().IsEmpty() ||
+        !_contextParams.collection.GetExcludePaths().empty()
+    );
 }
 
 bool
@@ -645,7 +646,7 @@ HdxPickTask::Sync(HdSceneDelegate* delegate,
     // by renderTag and not materialTag.
     if (_UseOcclusionPass()) {
         // Pass (i) from above
-        if (!_contextParams.occluderCollection.GetRootPaths().empty()) {
+        if (!_contextParams.occluderCollection.GetName().IsEmpty()) {
             _occluderRenderPass->SetRprimCollection(_contextParams.occluderCollection);
         } else {
             HdRprimCollection occluderCol =

@@ -246,9 +246,9 @@ using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std:
 ///     'outHits'.
 ///     The available options are:
 ///     1. HdxPickTokens->resolveNearestToCamera : Returns the hit whose
-///         position is nearest to the camera 
+///         position is nearest to the camera
 ///     2. HdxPickTokens->resolveNearestToCenter : Returns the hit whose
-///         position is nearest to center of the pick location/region. 
+///         position is nearest to center of the pick location/region.
 ///     3. HdxPickTokens->resolveUnique : Returns the unique hits, by hashing
 ///         the relevant member fields of HdxPickHit. The 'pickTarget'
 ///         influences this operation. For e.g., the subprim indices are ignored
@@ -256,19 +256,21 @@ using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std:
 ///     4. HdxPickTokens->resolveAll: Returns all the hits for the pick location
 ///         or region. The number of hits returned depends on the resolution
 ///         used and may have duplicates.
-///     5. HdxPickTokens->resolveDeep: Returns the unique hits not only of visible 
-///         geometry but also of all the geometry hiding behind. The 'pickTarget'
-///         influences this operation. For e.g., the subprim indices are ignored
-///         when the pickTarget is pickPrimsAndInstances.
+///     5. HdxPickTokens->resolveDeep: Returns the unique hits not only of
+///     visible
+///         geometry but also of all the geometry hiding behind. The
+///         'pickTarget' influences this operation. For e.g., the subprim
+///         indices are ignored when the pickTarget is pickPrimsAndInstances.
 ///     6. HdxPickTokens->resolveNone: Returns pick buffers for application-side
 ///         hit computation.
 /// `occluderDepthBiasEnable`: Enables depth bias during the occlusion pass.
 /// `occluderDepthBiasConstantFactor`: The constant factor used for depth bias.
 /// `occluderDepthBiasSlopeFactor`: The slope factor for depth bias.
-/// 'occluderCollection': Optionally Collection of prims that should be used for occlusion.
-///     By having a different collection, the api allows to use different
-///     representations for occlusion than for picking. This is useful
-///     for picking representations like lines or points.
+/// 'occluderCollection': Optional collection of prims that should be used for
+//      occlusion. By having a different collection, the api allows to use
+//      different representations for occlusion than for picking. This is useful
+///     for picking representations like lines or points. Ignored if name is
+///     empty.
 /// 'subRect': Optionally defines a sub-region of the rendered buffers to use by
 ///     the pick result method defined by 'resolveMode'. If not specified, it is
 ///     reset to the entire buffer dimensions specified by 'resolution'.
