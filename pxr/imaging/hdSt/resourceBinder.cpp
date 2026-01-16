@@ -347,7 +347,8 @@ HdSt_ResourceBinder::ResolveBindings(
                     /*name=*/shaderName,
                     /*type=*/glType,
                     /*binding=*/binding,
-                    /*isWritable=*/false);
+                    /*isWritable=*/false,
+                    /*stageVisibility=*/HgiShaderStageFragment);
                 metaDataOut->pointsBufferBinding = bindingDecl;
             }
         }
@@ -409,7 +410,10 @@ HdSt_ResourceBinder::ResolveBindings(
                         /*name=*/name,
                         /*type=*/glType,
                         /*binding=*/binding,
-                        /*isWritable=*/false);
+                        /*isWritable=*/false,
+                        /*stageVisibility=*/HgiShaderStageTessellationControl |
+                            HgiShaderStageTessellationEval |
+                            HgiShaderStageFragment);
                     metaDataOut->indexBufferBinding = bindingDecl;
                 }
             } else {
