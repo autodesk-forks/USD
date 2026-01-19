@@ -471,25 +471,27 @@ void HdxPickTask::_ReadAovBufferAsync(TfToken const &aovName,
     completed(aovName, HdStTextureUtils::AlignedBuffer<T>());
 }
 
-void HdxPickTask::_checkIfAllBuffersReady()
+void HdxPickTask::_InvokeCallbackIfBuffersReady()
 {
-    if ((_gpuIntBuffers.size() + _gpuFloatBuffers.size()) == _aovOutputs.size()) {
-        pxr::HdxPickHitVector outHits;
-        _BuildResults(
-            _gpuIntBuffers[HdAovTokens->primId],
-            _gpuIntBuffers[HdAovTokens->instanceId], 
-            _gpuIntBuffers[HdAovTokens->elementId],
-            _gpuIntBuffers[HdAovTokens->edgeId],
-            _gpuIntBuffers[HdAovTokens->pointId],
-            _gpuIntBuffers[HdAovTokens->Neye],
-            _gpuFloatBuffers[_depthToken],
-            outHits);
-
-        _contextParams.callbackFn(outHits, _contextParams.pickBuffers);
-
-        _gpuIntBuffers.clear();
-        _gpuFloatBuffers.clear();
+    if (_gpuIntBuffers.size() + _gpuFloatBuffers.size() != _aovOutputs.size()) {
+        return;
     }
+
+    pxr::HdxPickHitVector outHits;
+    _BuildResults(
+        _gpuIntBuffers[HdAovTokens->primId],
+        _gpuIntBuffers[HdAovTokens->instanceId], 
+        _gpuIntBuffers[HdAovTokens->elementId],
+        _gpuIntBuffers[HdAovTokens->edgeId],
+        _gpuIntBuffers[HdAovTokens->pointId],
+        _gpuIntBuffers[HdAovTokens->Neye],
+        _gpuFloatBuffers[_depthToken],
+        outHits);
+
+    _contextParams.pickCallback(outHits, _contextParams.pickBuffers);
+
+    _gpuIntBuffers.clear();
+    _gpuFloatBuffers.clear();
 }
 
 HdRenderBuffer const *
@@ -957,17 +959,20 @@ HdxPickTask::Execute(HdTaskContext* ctx)
         return;
     }
 
-    if (_contextParams.callbackFn) {
+    if (_contextParams.pickCallback) {
         if (_gpuIntBuffers.empty() && _gpuFloatBuffers.empty()) {
-            auto intCallback = [this](TfToken const& aovName, HdStTextureUtils::AlignedBuffer<int> data) {
+            auto intCallback = [this](TfToken const& aovName,
+                                   HdStTextureUtils::AlignedBuffer<int> data) {
                 _gpuIntBuffers[aovName] = std::move(data);
-                _checkIfAllBuffersReady();
+                _InvokeCallbackIfBuffersReady();
             };
-            
-            auto floatCallback = [this](TfToken const& aovName, HdStTextureUtils::AlignedBuffer<float> data) {
-                _gpuFloatBuffers[aovName] = std::move(data);
-                _checkIfAllBuffersReady();
-            };
+
+            auto floatCallback =
+                [this](TfToken const& aovName,
+                    HdStTextureUtils::AlignedBuffer<float> data) {
+                    _gpuFloatBuffers[aovName] = std::move(data);
+                    _InvokeCallbackIfBuffersReady();
+                };
 
             _ReadAovBufferAsync<int>(HdAovTokens->primId, intCallback);
             _ReadAovBufferAsync<int>(HdAovTokens->instanceId, intCallback);

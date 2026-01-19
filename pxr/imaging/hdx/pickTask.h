@@ -227,7 +227,6 @@ struct HdxPrimOriginInfo
 };
 
 class HdxPickBuffers;
-using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std::shared_ptr<HdxPickBuffers>> pickBuffers)>;
 
 /// Pick task context params.  This contains task params that can't come from
 /// the scene delegate (like resolution mode and pick location, that might
@@ -274,7 +273,7 @@ using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std:
 /// 'subRect': Optionally defines a sub-region of the rendered buffers to use by
 ///     the pick result method defined by 'resolveMode'. If not specified, it is
 ///     reset to the entire buffer dimensions specified by 'resolution'.
-/// 'callbackFn': Optional function callback invoked when pick buffers have
+/// 'pickCallback': Optional function callback invoked when pick buffers have
 ///     all been transferred from GPU to CPU asynchronously. This is required in
 ///     the case of web which must use mapAsync to read back buffers.
 /// 'pickBuffers': Optional pointer to a HdxPickBuffers instance to be populated
@@ -283,6 +282,8 @@ using callbackFn = std::function<void(pxr::HdxPickHitVector&, std::optional<std:
 struct HdxPickTaskContextParams
 {
     using DepthMaskCallback = std::function<void(void)>;
+    using PickCallback = std::function<void(pxr::HdxPickHitVector&,
+        std::shared_ptr<HdxPickBuffers> pickBuffers)>;
 
     HdxPickTaskContextParams()
         : resolution(128, 128)
@@ -302,7 +303,7 @@ struct HdxPickTaskContextParams
         , occluderDepthBiasSlopeFactor(0.0f)
         , outHits(nullptr)
         , subRect({-1,-1,-1,-1})
-        , callbackFn(nullptr)
+        , pickCallback(nullptr)
         , pickBuffers(nullptr)
     {}
 
@@ -324,7 +325,7 @@ struct HdxPickTaskContextParams
     HdxPickHitVector *outHits;
     // (top left x, top left y, subRectWidth, subRectHeight)
     GfVec4i subRect;
-    callbackFn callbackFn;
+    PickCallback pickCallback;
     /// Pick buffers with managed lifetime via shared_ptr
     std::shared_ptr<HdxPickBuffers> pickBuffers;
 };
@@ -427,7 +428,7 @@ private:
     _ReadAovBufferAsync(TfToken const &aovName,
       std::function<void(TfToken const &, HdStTextureUtils::AlignedBuffer<T>)> completed);
 
-    void _checkIfAllBuffersReady();
+    void _InvokeCallbackIfBuffersReady();
 
     HdRenderBuffer const * _FindAovBuffer(TfToken const & aovName) const;
 

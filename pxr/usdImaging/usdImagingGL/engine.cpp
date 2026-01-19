@@ -1268,37 +1268,41 @@ UsdImagingGLEngine::TestIntersection(
     pickCtxParams.clipPlanes = params.clipPlanes;
     pickCtxParams.collection = _intersectCollection;
     pickCtxParams.outHits = &allHits;
-    // Capture what we need by value to avoid dangling references in async callback
-    pickCtxParams.callbackFn = [returnHits, this](
-        HdxPickHitVector allHits, std::optional<std::shared_ptr<HdxPickBuffers>> pickBuffers){
-        IntersectionResultVector outResults;
+    // Capture what we need by value to avoid dangling references in async
+    // callback
+    pickCtxParams.pickCallback =
+        [returnHits, this](HdxPickHitVector allHits,
+            std::shared_ptr<HdxPickBuffers> pickBuffers) {
+            IntersectionResultVector outResults;
 
-        for(HdxPickHit& hit : allHits)
-        {
-            IntersectionResult res;
+            for (HdxPickHit& hit : allHits) {
+                IntersectionResult res;
 
-            if (_sceneDelegate) {
-                res.hitPrimPath = _sceneDelegate->GetScenePrimPath(
-                        hit.objectId, hit.instanceIndex, &(res.instancerContext));
-                res.hitInstancerPath = _sceneDelegate->ConvertIndexPathToCachePath(
-                        hit.instancerId).GetAbsoluteRootOrPrimPath();
-            } else {
-                const HdxPrimOriginInfo info = HdxPrimOriginInfo::FromPickHit(
-                        _renderIndex.get(), hit);
-                res.hitPrimPath = info.GetFullPath();
-                res.hitInstancerPath = hit.instancerId.ReplacePrefix(
+                if (_sceneDelegate) {
+                    res.hitPrimPath =
+                        _sceneDelegate->GetScenePrimPath(hit.objectId,
+                            hit.instanceIndex, &(res.instancerContext));
+                    res.hitInstancerPath =
+                        _sceneDelegate
+                            ->ConvertIndexPathToCachePath(hit.instancerId)
+                            .GetAbsoluteRootOrPrimPath();
+                } else {
+                    const HdxPrimOriginInfo info =
+                        HdxPrimOriginInfo::FromPickHit(_renderIndex.get(), hit);
+                    res.hitPrimPath = info.GetFullPath();
+                    res.hitInstancerPath = hit.instancerId.ReplacePrefix(
                         _sceneDelegateId, SdfPath::AbsoluteRootPath());
-                res.instancerContext = info.ComputeInstancerContext();
+                    res.instancerContext = info.ComputeInstancerContext();
+                }
+
+                res.hitPoint = hit.worldSpaceHitPoint;
+                res.hitNormal = hit.worldSpaceHitNormal;
+                res.hitInstanceIndex = hit.instanceIndex;
+
+                outResults.push_back(res);
             }
-
-            res.hitPoint = hit.worldSpaceHitPoint;
-            res.hitNormal = hit.worldSpaceHitNormal;
-            res.hitInstanceIndex = hit.instanceIndex;
-
-            outResults.push_back(res);
-        }
-        returnHits(std::move(outResults));
-    };
+            returnHits(std::move(outResults));
+        };
     const VtValue vtPickCtxParams(pickCtxParams);
 
     _engine->SetTaskContextData(HdxPickTokens->pickParams, vtPickCtxParams);
