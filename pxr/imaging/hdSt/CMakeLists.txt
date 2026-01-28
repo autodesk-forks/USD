@@ -2487,7 +2487,19 @@ endif()
 if(PXR_ENABLE_VULKAN_SUPPORT)
     register_codegen_tests(_Vulkan "HGI_ENABLE_VULKAN=1;")
 endif()
-
+pxr_register_test(testHdStClipPlanesClear
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStTransition --offscreen --outputFilePrefix testHdStClipPlanesClear --repr hull -c clipPlane=0:1:0:0,draw,clearClipPlanes,draw"
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        testHdStClipPlanesClear_0.png
+        testHdStClipPlanesClear_1.png
+    FAIL 1
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    TESTENV testHdStClipPlanes
+    ENV
+        TF_DEBUG=HD_SAFE_MODE
+)
 pxr_register_test(testHdStCurveDrawing_lv0_refined
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStCurveDrawing --offscreen --repr refined --refineLevel 0 --write testHdStCurveDrawing_lv0_refined.png"
     EXPECTED_RETURN_CODE 0
