@@ -95,7 +95,7 @@ protected:
     public:
         virtual bool Run(HdSt_TestDriver* driver) {
             std::cerr << "Clear clip planes\n";
-            driver->SetCameraClipPlanes(std::vector<GfVec4d>());
+            driver->SetCameraClipPlanes({});
             return false;
         }
     };
