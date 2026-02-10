@@ -594,6 +594,15 @@ HgiVulkanDevice::GetPipelineCache() const
 void
 HgiVulkanDevice::WaitForIdle()
 {
+    // Flush any deferred command buffers so they are actually submitted to the
+    // GPU queue before we wait. Without this, vkDeviceWaitIdle would return
+    // immediately since the deferred work was never submitted.
+    // We use WaitUntilCompleted so that completed handlers (e.g. staging buffer
+    // cleanup) run as part of the wait rather than being deferred.
+    _commandQueue->Flush(HgiSubmitWaitTypeWaitUntilCompleted);
+
+    // Wait for any remaining GPU work that may have been submitted outside of
+    // the deferred queue (e.g. earlier flushes).
     HGIVULKAN_VERIFY_VK_RESULT(
         vkDeviceWaitIdle(_vkDevice)
     );

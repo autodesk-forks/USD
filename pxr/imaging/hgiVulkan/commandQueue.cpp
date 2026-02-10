@@ -250,6 +250,23 @@ HgiVulkanCommandQueue::Flush(
     HgiSubmitWaitType wait,
     VkSemaphore signalSemaphore)
 {
+    // Finalize and include any pending resource command buffer in this flush.
+    // The resource command buffer accumulates internal work (staging copies,
+    // layout transitions) from Create* calls and is normally submitted via
+    // SubmitToQueue. If no SubmitToQueue follows the last Create*, it must
+    // still be submitted here so its inflight bit can eventually be released,
+    // allowing garbage collection to free dependent objects.
+    if (_resourceCommandBuffer) {
+        _resourceCommandBuffer->EndCommandBuffer();
+        _resourceCommandBuffer->SetCompletedTimelineValue(_timelineNextVal);
+        _queuedBuffers.push_back(_resourceCommandBuffer);
+        _resourceCommandBuffer = nullptr;
+    }
+
+    if (_queuedBuffers.empty() && !signalSemaphore) {
+        return;
+    }
+
     std::vector<VkCommandBuffer> commandBuffers;
     commandBuffers.reserve(_queuedBuffers.size());
     for (auto& buffer : _queuedBuffers) {

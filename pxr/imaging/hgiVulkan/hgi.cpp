@@ -51,13 +51,16 @@ HgiVulkan::HgiVulkan()
 HgiVulkan::~HgiVulkan()
 {
     if (HgiVulkanCommandQueue* queue = _device->GetCommandQueue()) {
-        // Wait for command buffers to complete, then reset command buffers for
-        // each device's queue.
+        // Flush all pending commands (including any pending resource command
+        // buffer from Create* calls) and wait for GPU completion.
+        _device->WaitForIdle();
+
+        // Now that all commands have been submitted and completed, reset
+        // command buffers to release their inflight bits.
         queue->ResetConsumedCommandBuffers(
             HgiSubmitWaitTypeWaitUntilCompleted);
 
-        // Wait for all devices and perform final garbage collection.
-        _device->WaitForIdle();
+        // Perform final garbage collection with all inflight bits cleared.
         _garbageCollector->PerformGarbageCollection(_device);
     }
 
