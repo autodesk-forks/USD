@@ -91,6 +91,15 @@ protected:
         GfVec4d _clipPlane;
     };
 
+    class ClearClipPlanesCmd : public Cmd {
+    public:
+        virtual bool Run(HdSt_TestDriver* driver) {
+            std::cerr << "Clear clip planes\n";
+            driver->SetCameraClipPlanes({});
+            return false;
+        }
+    };
+
     class AnimateCmd : public Cmd {
     public:
         AnimateCmd(const std::string &name) : _id(name) {}
@@ -248,6 +257,10 @@ My_TestGLDrawing::ParseArgs(int argc, char *argv[])
                     _commands.push_back(
                         std::shared_ptr<AddClipPlaneCmd>(
                             new AddClipPlaneCmd(GfVec4d(GfVec4f(cp)))));
+                } else if (cmd == "clearClipPlanes") {
+                    _commands.push_back(
+                        std::shared_ptr<ClearClipPlanesCmd>(
+                            new ClearClipPlanesCmd()));
                 } else if (cmd == "animate") {
                     _commands.push_back(
                         std::shared_ptr<AnimateCmd>(
