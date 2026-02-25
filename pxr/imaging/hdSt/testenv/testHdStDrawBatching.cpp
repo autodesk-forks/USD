@@ -220,7 +220,8 @@ _RegisterDrawItem(
         /*pointsShadingEnabled=*/ false,
         /* forceOpaqueEdges */ true,
         /* surfaceEdgeIds */ true,
-        /* nativeRoundPoints */ true);
+        /* nativeRoundPoints */ true,
+        /* triangleLineFill */ true);
 
     // need to register to get batching works
     HdSt_GeometricShaderSharedPtr const geomShader = 

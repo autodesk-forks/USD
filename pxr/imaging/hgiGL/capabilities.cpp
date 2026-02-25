@@ -201,6 +201,8 @@ HgiGLCapabilities::_LoadCapabilities()
         nativeRoundPointsEnabled);
     _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage,
         true);
+    _SetFlag(HgiDeviceCapabilitiesBitsTriangleLineFill,
+        true);
 
     if (TfDebug::IsEnabled(HGI_DEBUG_DEVICE_CAPABILITIES)) {
         std::cout

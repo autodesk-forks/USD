@@ -12,6 +12,7 @@
 #include "pxr/imaging/hdSt/bufferResource.h"
 #include "pxr/imaging/hdSt/shaderCode.h"
 #include "pxr/imaging/hdSt/drawItem.h"
+#include "pxr/imaging/hdSt/geometricShader.h"
 #include "pxr/imaging/hdSt/materialNetworkShader.h"
 #include "pxr/imaging/hdSt/materialParam.h"
 #include "pxr/imaging/hdSt/textureBinder.h"
@@ -191,9 +192,11 @@ HdSt_ResourceBinder::ResolveBindings(
         capabilities->IsSet(HgiDeviceCapabilitiesBitsBindlessTextures);
     const bool isMetal =
         capabilities->IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
-    const bool barycentricFromPoints =
-        !capabilities->IsSet(HgiDeviceCapabilitiesBitsBuiltinBarycentrics) &&
-        !capabilities->IsSet(HgiDeviceCapabilitiesBitsGeometricStage);
+    const bool indicesAndPointsBindings =
+        (!capabilities->IsSet(HgiDeviceCapabilitiesBitsBuiltinBarycentrics) &&
+        !capabilities->IsSet(HgiDeviceCapabilitiesBitsGeometricStage)) ||
+            (drawItem->GetGeometricShader() &&
+                drawItem->GetGeometricShader()->GetUseWireframeLinesFallback());
 
     HdStBinding::Type arrayBufferBindingType = HdStBinding::SSBO;
     if (bindlessBuffersEnabled) {
@@ -331,12 +334,13 @@ HdSt_ResourceBinder::ResolveBindings(
                 MetaData::Primvar(/*name=*/glName,
                                   /*type=*/glType);
 
-            if (barycentricFromPoints && name == HdTokens->points &&
-                drawItem->GetFaceVaryingPrimvarRange()) {
+            if (indicesAndPointsBindings && name == HdTokens->points && 
+                (vertexBar->GetUsageHint() & HdBufferArrayUsageHintBitsStorage)
+            ) {
                 HdStBinding const binding =
                     locator.GetBinding(HdStBinding::SSBO, name);
                 _bindingMap.emplace(name, binding);
-                static const TfToken shaderName{"triPoints", TfToken::Immortal};
+                static const TfToken shaderName{"vertPoints", TfToken::Immortal};
                 MetaData::BindingDeclaration const bindingDecl(
                     /*name=*/shaderName,
                     /*type=*/glType,
@@ -387,7 +391,8 @@ HdSt_ResourceBinder::ResolveBindings(
                 _bindingMap.emplace(name, HdStBinding(HdStBinding::INDEX_ATTR, 0));
 
                 if ((isMetal && drawItem->GetVaryingPrimvarRange()) ||
-                    (barycentricFromPoints && drawItem->GetFaceVaryingPrimvarRange())) {
+                    (indicesAndPointsBindings && (topologyBar->GetUsageHint() &
+                        HdBufferArrayUsageHintBitsStorage))) {
                     // Bind index buffer as an SSBO so that we can
                     // access varying data by index.
                     HdStBinding const binding =

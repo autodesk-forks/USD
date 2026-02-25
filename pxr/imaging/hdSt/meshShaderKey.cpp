@@ -31,9 +31,15 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((normalsDoubleSidedFS,        "MeshNormal.Fragment.DoubleSided"))
     ((normalsSingleSidedFS,        "MeshNormal.Fragment.SingleSided"))
 
+    ((normalsWireframeFacing,      "MeshNormal.WireframeLineFallback.FacingNormal"))
+    ((normalsWireframeScreenSpace, "MeshNormal.WireframeLineFallback.ScreenSpace"))
+
     ((faceCullNoneFS,              "MeshFaceCull.Fragment.None"))
     ((faceCullFrontFacingFS,       "MeshFaceCull.Fragment.FrontFacing"))
     ((faceCullBackFacingFS,        "MeshFaceCull.Fragment.BackFacing"))
+
+    ((faceCullWireframeSingleSided, "MeshFaceCull.Fragment.WireframeLineFallback.SingleSided"))
+    ((faceCullWireframeDoubleSided, "MeshFaceCull.Fragment.WireframeLineFallback.DoubleSided"))
 
     // wireframe mixins
     ((edgeNoneFS,                  "MeshWire.Fragment.NoEdge"))
@@ -77,6 +83,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((edgeIdQuadSurfFS,            "EdgeId.Fragment.QuadSurface"))
     ((edgeIdQuadLineFS,            "EdgeId.Fragment.QuadLines"))
     ((edgeIdQuadParamFS,           "EdgeId.Fragment.QuadParam"))
+    ((edgeIdWireframeLineFallback, "EdgeId.Fragment.WireframeLineFallback"))
 
     // point id mixins (for point picking & selection)
     ((pointIdNoneVS,               "PointId.Vertex.None"))
@@ -170,7 +177,8 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     bool pointsShadingEnabled,
     bool forceOpaqueEdges,
     bool surfaceEdgeIds,
-    bool nativeRoundPoints)
+    bool nativeRoundPoints,
+    bool triangleLineFill)
     : primType(primitiveType)
     , cullStyle(cullStyle)
     , hasMirroredTransform(hasMirroredTransform)
@@ -179,23 +187,15 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     , polygonMode(HdPolygonModeFill)
     , lineWidth(lineWidth)
     , fvarPatchType(fvarPatchType)
+    , useWireframeLinesFallback(false)
     , glslfx(_tokens->baseGLSLFX)
 {
-    if (geomStyle == HdMeshGeomStyleEdgeOnly ||
-        geomStyle == HdMeshGeomStyleHullEdgeOnly) {
-        polygonMode = HdPolygonModeLine;
-    }
-
-    // XXX: Unfortunately instanced meshes can't use h/w culling. This is due to
-    // the possibility that they have instanceTransform/instanceScale primvars.
-    useHardwareFaceCulling = !hasInstancer;
-
-    bool isPrimTypePoints = HdSt_GeometricShader::IsPrimTypePoints(primType);
-    bool isPrimTypeTris   = HdSt_GeometricShader::IsPrimTypeTriangles(primType);
-    bool isPrimTypeQuads  = HdSt_GeometricShader::IsPrimTypeQuads(primType);
-    bool isPrimTypeTriQuads =
+    const bool isPrimTypePoints = HdSt_GeometricShader::IsPrimTypePoints(primType);
+    const bool isPrimTypeTris   = HdSt_GeometricShader::IsPrimTypeTriangles(primType);
+    const bool isPrimTypeQuads  = HdSt_GeometricShader::IsPrimTypeQuads(primType);
+    const bool isPrimTypeTriQuads =
         HdSt_GeometricShader::IsPrimTypeTriQuads(primType);
-    bool isPrimTypeRefinedMesh =
+    const bool isPrimTypeRefinedMesh =
         HdSt_GeometricShader::IsPrimTypeRefinedMesh(primType);
     const bool isPrimTypePatches =
         HdSt_GeometricShader::IsPrimTypePatches(primType);
@@ -207,7 +207,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             HdSt_GeometricShader::PrimitiveType::PRIM_MESH_BOXSPLINETRIANGLE;
 
     const bool renderWireframe = geomStyle == HdMeshGeomStyleEdgeOnly ||
-                                 geomStyle == HdMeshGeomStyleHullEdgeOnly;    
+                                 geomStyle == HdMeshGeomStyleHullEdgeOnly;
 
     const bool renderEdges = geomStyle == HdMeshGeomStyleEdgeOnSurf ||
                              geomStyle == HdMeshGeomStyleHullEdgeOnSurf;
@@ -216,6 +216,26 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     const bool renderSurfaceEdgeIds = surfaceEdgeIds &&
                                       (geomStyle == HdMeshGeomStyleSurf ||
                                        geomStyle == HdMeshGeomStyleHull);
+
+    if (renderWireframe) {
+        if (triangleLineFill) {
+            polygonMode = HdPolygonModeLine;
+        } else if (!isPrimTypePatches) {
+            // Patches are evaluate by the tessellation shaders, there's no way
+            // to convert them to lines without re-implementing tessellation in
+            // a compute shader.
+            useWireframeLinesFallback = true;
+            if (normalsSource ==
+                HdSt_MeshShaderKey::NormalSourceFlatGeometric) {
+                // No GS, we'll use a screen space approximation instead
+                normalsSource = HdSt_MeshShaderKey::NormalSourceFlatScreenSpace;
+            }
+        }
+    }
+
+    // XXX: Unfortunately instanced meshes can't use h/w culling. This is due to
+    // the possibility that they have instanceTransform/instanceScale primvars.
+    useHardwareFaceCulling = !hasInstancer && !useWireframeLinesFallback;
 
     /* Normals configurations:
      * Smooth normals:
@@ -285,7 +305,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             !hasBuiltinBarycentrics;
 
     // Determine if using actually using Metal PTVS.
-    useMetalTessellation =
+    useMetalTessellation = !useWireframeLinesFallback &&
         hasMetalTessellation && !isPrimTypePoints && usePTVSTechniques;
 
     // PTVS shaders can provide barycentric coords w/o GS.
@@ -418,6 +438,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     bool const canSkipGS =
             !hasGeometricStage ||
             ptvsStageEnabled ||
+            useWireframeLinesFallback ||
             // Whether we can skip executing the displacement shading terminal
             (!hasCustomDisplacement
             && (normalsSource != NormalSourceLimit)
@@ -451,7 +472,9 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
 
     FS[fsIndex++] =
         (normalsSource == NormalSourceFlatScreenSpace)
-            ? _tokens->normalsScreenSpaceFS
+            ? (useWireframeLinesFallback
+                ? _tokens->normalsWireframeScreenSpace
+                : _tokens->normalsScreenSpaceFS)
             : (!gsStageEnabled && normalsSource == NormalSourceFlat)
                 ? _tokens->normalsFlat
                 : ((!gsStageEnabled && gsSceneNormals)
@@ -474,7 +497,11 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             ? _tokens->faceCullFrontFacingFS
             : faceCullBackFacing
                 ? _tokens->faceCullBackFacingFS
-                : _tokens->faceCullNoneFS; // DontCare, Nothing, HW
+                    : useWireframeLinesFallback
+                        ? doubleSided
+                            ? _tokens->faceCullWireframeDoubleSided
+                            : _tokens->faceCullWireframeSingleSided
+                        : _tokens->faceCullNoneFS; // DontCare, Nothing, HW
 
     // Wire (edge) related mixins
     if (renderWireframe || renderEdges) {
@@ -486,7 +513,9 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             FS[fsIndex++] = _tokens->edgeCoordBarycentricCoordFS;
         }
 
-        if (isPrimTypeRefinedMesh) {
+        if (useWireframeLinesFallback) {
+            FS[fsIndex++] = _tokens->edgeMaskNoneFS;
+        } else if (isPrimTypeRefinedMesh) {
             if (isPrimTypeQuads || isPrimTypeTriQuads) {
                 FS[fsIndex++] = _tokens->edgeMaskRefinedQuadFS;
             } else {
@@ -496,7 +525,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             FS[fsIndex++] = _tokens->edgeMaskTriangleFS;
         } else if (isPrimTypeTriQuads) {
             FS[fsIndex++] = _tokens->edgeMaskTriQuadFS;
-        } else {
+        } else if (isPrimTypeQuads) {
             FS[fsIndex++] = _tokens->edgeMaskQuadFS;
         }
 
@@ -578,7 +607,9 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     // Note: When rendering a mesh as points, we handle this in code gen.
     if (renderWireframe || renderEdges || renderSurfaceEdgeIds) {
         FS[fsIndex++] = _tokens->edgeIdCommonFS;
-        if (isPrimTypeTris || isPrimTypePatchesBoxSplineTriangle) {
+        if (useWireframeLinesFallback) {
+            FS[fsIndex++] = _tokens->edgeIdWireframeLineFallback;
+        } else if (isPrimTypeTris || isPrimTypePatchesBoxSplineTriangle) {
             if (polygonMode == HdPolygonModeLine) {
                 FS[fsIndex++] = _tokens->edgeIdTriangleLineFS;
             } else {
@@ -636,6 +667,10 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
         FS[fsIndex++] = _tokens->mainPatchCoordNoGSFS;
     } else {
         FS[fsIndex++] = _tokens->mainPatchCoordFS;
+    }
+
+    if (useWireframeLinesFallback) {
+        FS[fsIndex++] = _tokens->normalsWireframeFacing;
     }
 
     FS[fsIndex++] = _tokens->mainFS;
