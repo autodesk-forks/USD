@@ -15,7 +15,7 @@
 #include <functional>
 #include <limits>
 
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 
     #include <sys/types.h>
     #include <sys/stat.h>
@@ -168,14 +168,19 @@ ArchGetExecutablePath()
                     return true;
                 }
             });
-
+#elif defined(ARCH_OS_WASM_VM)
+    // We use a placeholder name here so that methods which query this
+    // value receive a string that looks like a valid executable path.
+    // There is no inherent way to access an actual path from the wasm vm.
+    return "/wasm";
 #endif
 }
 
 int
 ArchGetPageSize()
 {
-#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_DARWIN)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     return sysconf(_SC_PAGE_SIZE);
 #elif defined(ARCH_OS_WINDOWS)
     SYSTEM_INFO info;

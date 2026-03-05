@@ -17,9 +17,13 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-/// Array concept. By default, types are not arrays.
+/// A trait to detect instantiations of VtArray, specialized in array.h.
 template <typename T>
 struct VtIsArray : public std::false_type {};
+
+/// A trait to detect instantiations of VtArrayEdit, specialized in arrayEdit.h
+template <typename T>
+struct VtIsArrayEdit : public std::false_type {};
 
 // We attempt to use local storage if a given type will fit and if it has a
 // cheap copy operation.  By default we only treat types with trivial
@@ -126,6 +130,26 @@ template <class T>
 struct VtIsValueProxy :
     std::integral_constant<
     bool, VtIsTypedValueProxy<T>::value || VtIsErasedValueProxy<T>::value> {};
+
+/// A trait indicating whether VtValue compose-over functionality can be
+/// registered for a type.
+template <class T>
+struct VtValueTypeCanCompose : std::false_type {};
+
+/// A helper for specializing the above trait.
+#define VT_VALUE_TYPE_CAN_COMPOSE(T)                              \
+    template <> struct VtValueTypeCanCompose<TF_PP_EAT_PARENS(T)> \
+        : std::true_type {};
+
+/// A trait indicating whether VtValue transform functionality can be registered
+/// for a type.
+template <class T>
+struct VtValueTypeCanTransform : std::false_type {};
+
+/// A helper for specializing the above trait.
+#define VT_VALUE_TYPE_CAN_TRANSFORM(T)                              \
+    template <> struct VtValueTypeCanTransform<TF_PP_EAT_PARENS(T)> \
+        : std::true_type {};
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

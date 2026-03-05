@@ -5,7 +5,9 @@
 // https://openusd.org/license.
 //
 #include "pxr/imaging/hd/retainedSceneIndex.h"
+
 #include "pxr/base/trace/trace.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -20,6 +22,10 @@ HdRetainedSceneIndex::AddPrims(const AddedPrimEntries &entries)
     observerEntries.reserve(entries.size());
 
     for (const AddedPrimEntry &entry : entries) {
+        if (!entry.dataSource) {
+            TF_CODING_ERROR("Expected non-trivial data when adding prim");
+        }
+
         observerEntries.emplace_back(entry.primPath, entry.primType);
         _entries[entry.primPath] = {entry.primType, entry.dataSource};
     }
@@ -69,15 +75,21 @@ HdRetainedSceneIndex::DirtyPrims(
 }
 
 HdSceneIndexPrim
-HdRetainedSceneIndex::GetPrim(const SdfPath & primPath) const {
+HdRetainedSceneIndex::GetPrim(const SdfPath & primPath) const
+{
     const auto it = _entries.find(primPath);
 
-    if (it != _entries.end()) {
-        return it->second.prim;
+    if (it == _entries.end()) {
+        return {TfToken(), nullptr};
     }
 
-    return {TfToken(), nullptr};
+    if (!it->second.prim.dataSource) {
+        static HdContainerDataSourceHandle const empty =
+            HdRetainedContainerDataSource::New();
+        return {it->second.prim.primType, empty};
+    }
 
+    return it->second.prim;
 }
 
 SdfPathVector

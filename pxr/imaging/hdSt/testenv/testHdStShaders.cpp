@@ -181,25 +181,25 @@ My_TestGLDrawing::InitTest()
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     SdrShaderNodeConstPtr sdrSurfaceFallbackNode = 
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceFallbackSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     SdrShaderNodeConstPtr sdrSurfaceDisplacementNode = 
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceDisplacementSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     SdrShaderNodeConstPtr sdrSurfaceImageToWorldNode = 
         shaderReg.GetShaderNodeFromSourceCode(
             shaderSurfaceImageToWorldSource, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     TfToken const& terminalType = HdMaterialTerminalTokens->surface;
 
@@ -450,7 +450,7 @@ My_TestGLDrawing::updateMaterial()
         shaderReg.GetShaderNodeFromSourceCode(
             shader1Source, 
             HioGlslfxTokens->glslfx,
-            NdrTokenMap()); // metadata
+            SdrTokenMap()); // metadata
 
     TfToken const& terminalType = HdMaterialTerminalTokens->surface;
 
@@ -491,7 +491,7 @@ void
 My_TestGLDrawing::toggleUseSceneMaterials()
 {
     _useSceneMaterials = !_useSceneMaterials;
-    _driver->GetRenderPassState()->SetUseSceneMaterials(_useSceneMaterials);
+    _driver->GetDelegate().SetUseSceneMaterials(_useSceneMaterials);
 }
 
 /* virtual */

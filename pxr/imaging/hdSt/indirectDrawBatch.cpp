@@ -1247,6 +1247,7 @@ HdSt_IndirectDrawBatch::_ExecuteDrawIndirect(
             0, drawCount,
             stride);
     }
+    GLF_POST_PENDING_GL_ERRORS();
 }
 
 void
@@ -1341,6 +1342,7 @@ HdSt_IndirectDrawBatch::_ExecuteDrawImmediate(
                 cmd->baseInstance);
         }
     }
+    GLF_POST_PENDING_GL_ERRORS();
 }
 
 ////////////////////////////////////////////////////////////
@@ -1372,6 +1374,7 @@ _GetCullPipeline(
         pipeDesc.primitiveType = HgiPrimitiveTypePointList;
         pipeDesc.shaderProgram = shaderProgram->GetProgram();
         pipeDesc.rasterizationState.rasterizerEnabled = false;
+        pipeDesc.debugName = "FrustumCulling Pipeline";
 
         Hgi* hgi = resourceRegistry->GetHgi();
         HgiGraphicsPipelineHandle pso = hgi->CreateGraphicsPipeline(pipeDesc);

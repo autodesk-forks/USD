@@ -9,13 +9,85 @@
 #include "pxr/imaging/hd/invalidatableContainerDataSource.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/base/trace/trace.h"
+#include "pxr/base/work/loops.h"
 #include "pxr/base/work/utils.h"
+
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 namespace HdFlatteningSceneIndex_Impl
 {
 
+/// A cache for HdContainerDataSourceHandle that has suitable semantics
+/// for flattened data sources which are stateful and can be invalidated
+/// rather than dropped.
+///
+/// In particular, the scene index should return the same instance of the
+/// flattened data source when queried for the same prim and locator multiple
+/// times. If we were to return different instances for different queries, we would need
+/// to invalidate all of those instances since a client can potentially hold on
+/// to any of them.
+///    
+class _ContainerDataSourceCache
+{
+public:
+    _ContainerDataSourceCache() { };
+    
+    _ContainerDataSourceCache(HdContainerDataSourceHandle const &ds)
+     : _ds(_ToNonNull(ds))
+    {
+    }
+
+    /// Returns cached result or nullopt if not cached.
+    std::optional<HdContainerDataSourceHandle> Get()
+    {
+        if (auto const ds = HdDataSourceBase::AtomicLoad(_ds)) {
+            return HdContainerDataSource::Cast(ds);
+        } else {
+            return {};
+        }
+    }
+
+    /// If called concurrently, only one call will set the cache and the data
+    /// source passed to all other calls will be ignored. All calls to Cache
+    /// return the same result (if Invalidate was not called inbetween).
+    ///
+    HdContainerDataSourceHandle Cache(HdContainerDataSourceHandle const &ds)
+    {
+        HdDataSourceBaseHandle const newDs = _ToNonNull(ds);
+        
+        HdDataSourceBaseAtomicHandle existingDs;
+        if (HdDataSourceBase::AtomicCompareExchange(_ds, existingDs, newDs)) {
+            return HdContainerDataSource::Cast(newDs);
+        } else {
+            return HdContainerDataSource::Cast(existingDs);
+        }
+    }
+
+    void Invalidate()
+    {
+        HdDataSourceBase::AtomicStore(_ds, nullptr);
+    }
+    
+private:
+    /// Turn null ptr to non-container data source handle to distinguish
+    /// between the case where we have not cached the container data source yet
+    /// and the case where we have cached it but it is null.
+    static
+    HdDataSourceBaseHandle _ToNonNull(
+        HdContainerDataSourceHandle const &ds)
+    {
+        if (ds) {
+            return ds;
+        } else {
+            return HdRetainedTypedSampledDataSource<bool>::New(false);
+        }
+    }
+    
+    HdDataSourceBaseAtomicHandle _ds;    
+};
+    
 /// wraps the input scene's prim-level data sources in order to deliver
 /// overriden value
 class _PrimLevelWrappingDataSource : public HdContainerDataSource
@@ -47,26 +119,32 @@ public:
     // invalidated.
     bool PrimDirtied(
         const _DataSourceLocatorSetVector &relativeDirtyLocators);
-    
+
+    void PrimContainerDirtied();
+
 private:
     _PrimLevelWrappingDataSource(
         const HdFlatteningSceneIndex &flatteningSceneIndex,
         const SdfPath &primPath,
-        const HdContainerDataSourceHandle &inputDataSource)
+        const HdSceneIndexPrim &inputPrim)
       : _flatteningSceneIndex(flatteningSceneIndex)
       , _primPath(primPath)
-      , _inputDataSource(inputDataSource)
+      , _primType(inputPrim.primType)
+      , _primSourceCache(inputPrim.dataSource)
       , _computedDataSources(
           _flatteningSceneIndex.GetFlattenedDataSourceNames().size())
     {
     }
-    
+
+    HdContainerDataSourceHandle _GetPrimSource();
+
     const HdFlatteningSceneIndex &_flatteningSceneIndex;
     const SdfPath _primPath;
-    HdContainerDataSourceHandle const _inputDataSource;
+    const TfToken _primType;
+    _ContainerDataSourceCache _primSourceCache;
 
     // Parallel to HdFlatteningSceneIndex::GetFlattenedDataSourceNames()
-    TfSmallVector<HdDataSourceBaseAtomicHandle, _smallVectorSize>
+    TfSmallVector<_ContainerDataSourceCache, _smallVectorSize>
                                 _computedDataSources;
 };
     
@@ -83,9 +161,8 @@ _PrimLevelWrappingDataSource::PrimDirtied(
             continue;
         }
 
-        HdDataSourceBaseAtomicHandle &dsAtomicHandle = _computedDataSources[i];
-        HdDataSourceBaseHandle const ds =
-            HdDataSourceBase::AtomicLoad(dsAtomicHandle);
+        _ContainerDataSourceCache &dsCache = _computedDataSources[i];
+        const std::optional<HdContainerDataSourceHandle> ds = dsCache.Get();
         if (!ds) {
             continue;
         }
@@ -93,20 +170,26 @@ _PrimLevelWrappingDataSource::PrimDirtied(
                 HdDataSourceLocator::EmptyLocator())) {
             if (HdInvalidatableContainerDataSourceHandle const
                     invalidatableDs =
-                        HdInvalidatableContainerDataSource::Cast(ds)) {
+                        HdInvalidatableContainerDataSource::Cast(*ds)) {
                 anyDirtied |=
                     invalidatableDs->Invalidate(relativeDirtyLocators[i]);
                 continue;
             }
         }
 
-        HdDataSourceBase::AtomicStore(dsAtomicHandle, nullptr);
+        dsCache.Invalidate();
         anyDirtied = true;
     }
 
     return anyDirtied;
 }
 
+void
+_PrimLevelWrappingDataSource::PrimContainerDirtied()
+{
+    _primSourceCache.Invalidate();
+}
+   
 void
 _Insert(const TfTokenVector &vec,
         TfTokenVector * const result)
@@ -144,11 +227,15 @@ _Insert(const TfTokenVector &vec,
 TfTokenVector
 _PrimLevelWrappingDataSource::GetNames()
 {
-    if (!_inputDataSource) {
+    TRACE_FUNCTION();
+    
+    HdContainerDataSourceHandle const primSource = _GetPrimSource();
+
+    if (!primSource) {
         return _flatteningSceneIndex.GetFlattenedDataSourceNames();
     }
 
-    TfTokenVector result = _inputDataSource->GetNames();
+    TfTokenVector result = primSource->GetNames();
     _Insert(_flatteningSceneIndex.GetFlattenedDataSourceNames(), &result);
     return result;
 };        
@@ -157,6 +244,10 @@ HdDataSourceBaseHandle
 _PrimLevelWrappingDataSource::Get(
         const TfToken &name)
 {
+    // Tracing disabled by default due to the high call count
+    // and small runtime (< 1 microsecond).
+    //TRACE_FUNCTION();
+
     const TfTokenVector &dataSourceNames =
         _flatteningSceneIndex.GetFlattenedDataSourceNames();
     const HdFlattenedDataSourceProviderSharedPtrVector &providers =
@@ -167,45 +258,41 @@ _PrimLevelWrappingDataSource::Get(
             continue;
         }
 
-        HdDataSourceBaseAtomicHandle &dsAtomicHandle =
-            _computedDataSources[i];
-        if (HdDataSourceBaseHandle const computedDs =
-                HdDataSourceBase::AtomicLoad(dsAtomicHandle)) {
-            return HdContainerDataSource::Cast(computedDs);
+        _ContainerDataSourceCache &dsCache = _computedDataSources[i];
+        if (const std::optional<HdContainerDataSourceHandle> ds =
+                                        dsCache.Get()) {
+            return *ds;
         }
+
         const HdFlattenedDataSourceProvider::Context ctx(
             _flatteningSceneIndex,
             _primPath,
             name,
-            _inputDataSource);
-        HdDataSourceBaseHandle flattenedDs = 
-            providers[i]->GetFlattenedDataSource(ctx);
-        if (!flattenedDs) {
-            // A nullptr means cache miss. To distinguish a cache miss from
-            // the flattened data source being null, we store a bool
-            // data source.
-            flattenedDs = HdRetainedTypedSampledDataSource<bool>::New(false);
-        }
-
-        HdDataSourceBaseAtomicHandle existingDs;
-        // Make sure that we only set the flattened data source only once.
-        // Flattened data source can cache state and need to be invalidated.
-        //
-        // It would be bad if we return different flattened data sources
-        // on different calls and only invalidate the last one that was
-        // returned.
-        if (HdDataSourceBase::AtomicCompareExchange(
-                dsAtomicHandle, existingDs, flattenedDs)) {
-            return HdContainerDataSource::Cast(flattenedDs);
-        } else {
-            return HdContainerDataSource::Cast(existingDs);
-        }
+            HdSceneIndexPrim{_primType, _GetPrimSource()});
+        return dsCache.Cache(providers[i]->GetFlattenedDataSource(ctx));
     }
 
-    if (_inputDataSource) {
-        return _inputDataSource->Get(name);
+    if (HdContainerDataSourceHandle const primSource = _GetPrimSource()) {
+        return primSource->Get(name);
     }
     return nullptr;
+}
+
+HdContainerDataSourceHandle
+_PrimLevelWrappingDataSource::_GetPrimSource()
+{
+    // Tracing disabled by default due to the high call count
+    // and small runtime (< 1 microsecond).
+    //TRACE_FUNCTION();
+
+    if (std::optional<HdContainerDataSourceHandle> const primSource =
+            _primSourceCache.Get()) {
+        return *primSource;
+    }
+
+    const HdSceneIndexPrim prim =
+        _flatteningSceneIndex._GetInputSceneIndex()->GetPrim(_primPath);
+    return _primSourceCache.Cache(prim.dataSource);
 }
 
 }
@@ -247,6 +334,8 @@ HdFlatteningSceneIndex::~HdFlatteningSceneIndex() = default;
 HdSceneIndexPrim
 HdFlatteningSceneIndex::GetPrim(const SdfPath &primPath) const
 {
+    TRACE_FUNCTION();
+    
     // Check the hierarchy cache
     const _PrimTable::const_iterator i = _prims.find(primPath);
     // SdfPathTable will default-construct entries for ancestors
@@ -279,7 +368,7 @@ HdFlatteningSceneIndex::GetPrim(const SdfPath &primPath) const
     // Wrap the input datasource even when null, to support dirtying
     // down non-contiguous hierarchy
     prim.dataSource = _PrimLevelWrappingDataSource::New(
-        *this, primPath, prim.dataSource);
+        *this, primPath, prim);
 
     // Store in the recent prims cache
     if (!_recentPrims.insert(std::make_pair(primPath, prim))) {
@@ -309,28 +398,40 @@ HdFlatteningSceneIndex::_PrimsAdded(
 
     _ConsolidateRecentPrims();
 
+    _AdditionalDirtiedVector dirtyEntries;
     // Check the hierarchy for cached prims to dirty
-    HdSceneIndexObserver::DirtiedPrimEntries dirtyEntries;
-    for (const HdSceneIndexObserver::AddedPrimEntry &entry : entries) {
-        _DirtyHierarchy(
-            entry.primPath,
-            _relativeDataSourceLocators,
-            _dataSourceLocatorSet,
-            &dirtyEntries);
+    {
+        TRACE_SCOPE("Dirty hierarchy");
+
+        WorkParallelForN(entries.size(),
+        [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            const HdSceneIndexObserver::AddedPrimEntry &entry = entries[i];
+            _DirtyHierarchy(
+                entry.primPath,
+                _relativeDataSourceLocators,
+                _dataSourceLocatorSet,
+                &dirtyEntries);
+        }});
     }
 
     // Clear out any cached dataSources for prims that have been re-added.
     // They will get updated dataSources in the next call to GetPrim().
-    for (const HdSceneIndexObserver::AddedPrimEntry &entry : entries) {
-        const _PrimTable::iterator i = _prims.find(entry.primPath);
-        if (i != _prims.end()) {
-            WorkSwapDestroyAsync(i->second.dataSource);
+    {
+        TRACE_SCOPE("Async destroy prim table entries");
+        for (const HdSceneIndexObserver::AddedPrimEntry &entry : entries) {
+            const _PrimTable::iterator i = _prims.find(entry.primPath);
+            if (i != _prims.end()) {
+                WorkSwapDestroyAsync(i->second.dataSource);
+            }
         }
     }
 
     _SendPrimsAdded(entries);
     if (!dirtyEntries.empty()) {
-        _SendPrimsDirtied(dirtyEntries);
+        HdSceneIndexObserver::DirtiedPrimEntries flattened(
+            dirtyEntries.begin(), dirtyEntries.end());
+        _SendPrimsDirtied(flattened);
     }
 }
 
@@ -365,7 +466,7 @@ HdFlatteningSceneIndex::_PrimsRemoved(
 void
 HdFlatteningSceneIndex::_PrimDirtied(
     const HdSceneIndexObserver::DirtiedPrimEntry &entry,
-    HdSceneIndexObserver::DirtiedPrimEntries * const dirtyEntries)
+    _AdditionalDirtiedVector *additionalDirty) const
 {
     // Used to invalidate the data sources stored in the
     // _PrimLevelWrappingDataSource.
@@ -417,19 +518,21 @@ HdFlatteningSceneIndex::_PrimDirtied(
     }
 
     if (!dirtyLocators.IsEmpty()) {
-        _DirtyHierarchy(
-            entry.primPath, relativeDirtyLocators, dirtyLocators, dirtyEntries);
+        _DirtyHierarchy(entry.primPath, relativeDirtyLocators,
+            dirtyLocators, additionalDirty);
     }
 
-    // Empty locator indicates that we need to pull the input data source
-    // again - which we achieve by destroying the data source wrapping the
-    // input data source.
-    // Note that we destroy it after calling _DirtyHierarchy to not prevent
-    // _DirtyHierarchy propagating the invalidation to the descendants.
-    if (entry.dirtyLocators.Contains(HdDataSourceLocator::EmptyLocator())) {
-        const _PrimTable::iterator it = _prims.find(entry.primPath);
+    // Mark _PrimLevelWrappingDataSource to refetch input data source again
+    // if the dirtyLocators indicate so.
+    static const HdDataSourceLocator primLevelContainer(
+        HdDataSourceLocatorSentinelTokens->container);
+    if (entry.dirtyLocators.Contains(primLevelContainer)) {
+        const _PrimTable::const_iterator it = _prims.find(entry.primPath);
         if (it != _prims.end() && it->second.dataSource) {
-            WorkSwapDestroyAsync(it->second.dataSource);
+            if (auto const ds = _PrimLevelWrappingDataSource::Cast(
+                    it->second.dataSource)) {
+                ds->PrimContainerDirtied();
+            }
         }
     }
 }
@@ -443,20 +546,34 @@ HdFlatteningSceneIndex::_PrimsDirtied(
 
     _ConsolidateRecentPrims();
 
-    HdSceneIndexObserver::DirtiedPrimEntries dirtyEntries;
-    for (const HdSceneIndexObserver::DirtiedPrimEntry &entry : entries) {
-        _PrimDirtied(entry, &dirtyEntries);
+    _AdditionalDirtiedVector dirtyEntries;
+    {
+        TRACE_SCOPE("Dirty hierarchy");
+
+        WorkParallelForN(entries.size(),
+        [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            const HdSceneIndexObserver::DirtiedPrimEntry &entry = entries[i];
+            _PrimDirtied(entry, &dirtyEntries);
+        }});
     }
 
-    _SendPrimsDirtied(entries);
-    if (!dirtyEntries.empty()) {
-        _SendPrimsDirtied(dirtyEntries);
+    if (dirtyEntries.empty()) {
+        _SendPrimsDirtied(entries);
+    } else {
+        HdSceneIndexObserver::DirtiedPrimEntries flattened(
+            entries.begin(), entries.end());
+        flattened.insert(flattened.end(), dirtyEntries.begin(),
+            dirtyEntries.end());
+        _SendPrimsDirtied(flattened);
     }
 }
 
 void
 HdFlatteningSceneIndex::_ConsolidateRecentPrims()
 {
+    TRACE_FUNCTION();
+
     for (auto &entry: _recentPrims) {
         std::swap(_prims[entry.first], entry.second);
     }
@@ -468,14 +585,14 @@ HdFlatteningSceneIndex::_DirtyHierarchy(
     const SdfPath &primPath,
     const _DataSourceLocatorSetVector &relativeDirtyLocators,
     const HdDataSourceLocatorSet &dirtyLocators,
-    HdSceneIndexObserver::DirtiedPrimEntries * const dirtyEntries)
+    _AdditionalDirtiedVector *dirtyEntries) const
 {
     // XXX: here and elsewhere, if a parent xform is dirtied and the child has
     // resetXformStack, we could skip dirtying the child...
 
     auto startEndIt = _prims.FindSubtreeRange(primPath);
     for (auto it = startEndIt.first; it != startEndIt.second; ) {
-        HdSceneIndexPrim &prim = it->second;
+        const HdSceneIndexPrim &prim = it->second;
 
         if (_PrimLevelWrappingDataSourceHandle dataSource =
                 _PrimLevelWrappingDataSource::Cast(prim.dataSource)) {

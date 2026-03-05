@@ -20,8 +20,20 @@ HdxTask::HdxTask(SdfPath const& id)
 HdxTask::~HdxTask() = default;
 
 bool
-HdxTask::IsConverged() const
+HdxTask::AreTasksConverged(HdRenderIndex * const renderIndex,
+                           const SdfPathVector &taskPaths)
 {
+    // This needs to reach into the render index to work.
+    //
+    for (const SdfPath &taskPath : taskPaths) {
+        if (auto const progressiveTask =
+                std::dynamic_pointer_cast<HdxTask>(
+                    renderIndex->GetTask(taskPath))) {
+            if (!progressiveTask->IsConverged()) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 

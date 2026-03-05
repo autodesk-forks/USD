@@ -585,7 +585,10 @@ SDF_API_TEMPLATE_CLASS(TfSingleton<SdfSchema>);
 #define SDF_FIELD_KEYS                                       \
     ((Active, "active"))                                     \
     ((AllowedTokens, "allowedTokens"))                       \
+    ((ArraySizeConstraint, "arraySizeConstraint"))           \
     ((AssetInfo, "assetInfo"))                               \
+    ((Clips, "clips"))                                       \
+    ((ClipSets, "clipSets"))                                 \
     ((ColorConfiguration, "colorConfiguration"))             \
     ((ColorManagementSystem, "colorManagementSystem"))       \
     ((ColorSpace, "colorSpace"))                             \
@@ -611,6 +614,7 @@ SDF_API_TEMPLATE_CLASS(TfSingleton<SdfSchema>);
     ((Instanceable, "instanceable"))                         \
     ((Kind, "kind"))                                         \
     ((LayerRelocates, "layerRelocates"))                     \
+    ((Limits, "limits"))                                     \
     ((PrimOrder, "primOrder"))                               \
     ((NoLoadHint, "noLoadHint"))                             \
     ((Owner, "owner"))                                       \

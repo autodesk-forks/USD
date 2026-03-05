@@ -212,7 +212,7 @@ UsdImagingPointInstancerAdapter::_Populate(UsdPrim const& prim,
     instrData.visible = true;
     instrData.variableVisibility = true;
     instrData.parentInstancerCachePath = parentInstancerCachePath;
-    instrData.visibleTime = std::numeric_limits<double>::infinity();
+    instrData.visibleTime = std::numeric_limits<double>::max();
     instrData.initialized = true;
 
     TF_DEBUG(USDIMAGING_INSTANCER)
@@ -2326,7 +2326,7 @@ UsdImagingPointInstancerAdapter::GetInstanceIndices(
                 if (pathIndex >= indices.size()) {
                     return VtValue();
                 }
-                return VtValue(indices[pathIndex]);
+                return VtValue(indices.AsConst()[pathIndex]);
             }
         }
 

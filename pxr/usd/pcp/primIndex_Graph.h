@@ -57,6 +57,10 @@ public:
     void SetHasPayloads(bool hasPayloads);
     bool HasPayloads() const;
 
+    /// Get/set whether new nodes were introduced in the prim index.
+    void SetHasNewNodes(bool hasNewNodes);
+    bool HasNewNodes() const;
+
     /// Get/set whether this prim index is instanceable.
     void SetIsInstanceable(bool isInstanceable);
     bool IsInstanceable() const;
@@ -219,6 +223,7 @@ private:
     friend class PcpNodeRef_PrivateChildrenConstReverseIterator;
     friend class PcpNodeRef_PrivateSubtreeConstIterator;
     template <class T> friend class Pcp_TraversalCache;
+    friend bool Pcp_IsPropagatedSpecializesNode(const PcpNodeRef& node);
 
     // NOTE: These accessors assume the consumer will be changing the node
     //       and may cause shared node data to be copied locally.
@@ -238,6 +243,10 @@ private:
     const _Node& _GetNode(const PcpNodeRef& node) const
     {
         return _GetNode(node._GetNodeIndex());
+    }
+
+    inline PcpArcType GetArcType(size_t nodeIdx) const {
+        return _GetNode(nodeIdx).smallInts.arcType;
     }
 
 private:
@@ -270,6 +279,7 @@ private:
             , arcType(PcpArcTypeRoot)
             , permission(SdfPermissionPublic)
             , hasSymmetry(false)
+            , hasValueClips(false)
             , inert(false)
             , permissionDenied(false)
         */
@@ -347,6 +357,11 @@ private:
             // or at any of its namespace ancestors contain symmetry 
             // information.
             bool hasSymmetry:1;
+            // Whether this node may contribute value clips information
+            // during composition. This implies that prims at this node's
+            // site or at any of its namespace ancestors contain value clips
+            // information.
+            bool hasValueClips:1;
             // Whether this node is inert. This is set to true in cases
             // where a node is needed to represent a structural dependency
             // but no opinions are allowed to be added.
@@ -382,7 +397,10 @@ private:
             , restrictionDepth(0)
             , hasSpecs(false)
             , culled(false)
-            , isDueToAncestor(false) {}
+            , isDueToAncestor(false)
+            , hasTransitiveDirectArc(false)
+            , hasTransitiveAncestralArc(false)
+            {}
 
         // The site path for a particular node.
         SdfPath sitePath;
@@ -404,6 +422,13 @@ private:
         // Whether this node is copied from the namespace ancestor prim
         // index (true) or introduced here due to a direct arc (false)
         bool isDueToAncestor:1;
+
+        // Whether this node was transitively introduced by a direct arc.
+        bool hasTransitiveDirectArc:1;
+
+        // Whether this node was transitively introduced by an ancestral
+        // arc.
+        bool hasTransitiveAncestralArc:1;
     };
     
     // Elements in this vector correspond to nodes in the shared node
@@ -413,6 +438,10 @@ private:
 
     // Whether or not this graph reached any specs with authored payloads.
     bool _hasPayloads:1;
+
+    // Whether or not this graph had new nodes added at its current level
+    // of namespace.
+    bool _hasNewNodes:1;
 
     // Whether or not this graph is considered 'instanceable'.
     bool _instanceable:1;

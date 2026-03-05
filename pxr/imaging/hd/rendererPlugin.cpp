@@ -6,8 +6,13 @@
 //
 #include "pxr/imaging/hd/rendererPlugin.h"
 
+#include "pxr/imaging/hd/driver.h"
+#include "pxr/imaging/hd/renderDelegateAdapterRenderer.h"
+#include "pxr/imaging/hd/renderer.h"
+#include "pxr/imaging/hd/rendererCreateArgsSchema.h"
 #include "pxr/imaging/hd/rendererPluginRegistry.h"
 #include "pxr/imaging/hd/pluginRenderDelegateUniqueHandle.h"
+#include "pxr/imaging/hd/pluginRendererUniqueHandle.h"
 
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
@@ -43,7 +48,15 @@ HdRendererPlugin::~HdRendererPlugin() = default;
 HdPluginRenderDelegateUniqueHandle
 HdRendererPlugin::CreateDelegate(HdRenderSettingsMap const& settingsMap)
 {
-    if (!IsSupported()) {
+    HdRendererCreateArgs rendererCreateArgs;
+    if (const auto iter =
+            settingsMap.find(HdRenderSettingsTokens->rendererCreateArgs);
+        iter != settingsMap.end()) {
+        rendererCreateArgs =
+            iter->second.GetWithDefault<HdRendererCreateArgs>();
+    }
+
+    if (!IsSupported(rendererCreateArgs)) {
         return nullptr;
     }
 
@@ -74,6 +87,24 @@ HdRendererPlugin::CreateDelegate(HdRenderSettingsMap const& settingsMap)
     return result;
 }
 
+HdPluginRendererUniqueHandle
+HdRendererPlugin::CreateRenderer(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    HdContainerDataSourceHandle const &rendererCreateArgs)
+{
+    if (!IsSupported(rendererCreateArgs)) {
+        return nullptr;
+    }
+
+    HdRendererPluginRegistry::GetInstance().AddPluginReference(this);
+
+    return
+        HdPluginRendererUniqueHandle(
+            HdRendererPluginHandle(this),
+            _CreateRenderer(
+                sceneIndex, rendererCreateArgs));
+}
+
 TfToken
 HdRendererPlugin::GetPluginId() const
 {
@@ -98,5 +129,87 @@ HdRendererPlugin::GetDisplayName() const
     return desc.displayName;
 }
 
-PXR_NAMESPACE_CLOSE_SCOPE
+bool
+HdRendererPlugin::IsSupported(bool gpuEnabled) const
+{
+    HdRendererCreateArgs rendererCreateArgs;
+    rendererCreateArgs.gpuEnabled = gpuEnabled;
+    return IsSupported(rendererCreateArgs);
+}
 
+static
+HdRendererCreateArgs
+_ToRendererCreateArgs(
+    const HdRendererCreateArgsSchema &schema)
+{
+    HdRendererCreateArgs rendererCreateArgs;
+
+    if (HdBoolDataSourceHandle const ds = schema.GetGpuEnabled()) {
+        rendererCreateArgs.gpuEnabled = ds->GetTypedValue(0.0f);
+    }
+
+    if (auto const ds =
+            HdTypedSampledDataSource<Hgi*>::Cast(
+                schema
+                    .GetDrivers()
+                    .Get(HdRendererCreateArgsSchemaTokens->hgi))) {
+        rendererCreateArgs.hgi = ds->GetTypedValue(0.0f);
+    }
+
+    return rendererCreateArgs;
+}
+
+bool
+HdRendererPlugin::IsSupported(
+    HdContainerDataSourceHandle const &rendererCreateArgs,
+    std::string * const reasonWhyNot) const
+{
+    return IsSupported(
+        _ToRendererCreateArgs(HdRendererCreateArgsSchema(rendererCreateArgs)),
+        reasonWhyNot);
+}
+
+HdContainerDataSourceHandle
+HdRendererPlugin::GetSceneIndexInputArgs() const
+{
+    return {};
+}
+
+std::unique_ptr<HdRenderer>
+HdRendererPlugin::_CreateRenderer(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    HdContainerDataSourceHandle const &rendererCreateArgs)
+{
+    return _CreateRendererFromRenderDelegate(sceneIndex, rendererCreateArgs);
+}
+
+static
+HdRenderSettingsMap
+_ToRenderSettings(
+    const HdRendererCreateArgsSchema &schema)
+{
+    HdRenderSettingsMap result;
+    result[HdRenderSettingsTokens->rendererCreateArgs] =
+        _ToRendererCreateArgs(schema);
+    return result;
+}
+
+std::unique_ptr<HdRenderer>
+HdRendererPlugin::_CreateRendererFromRenderDelegate(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    HdContainerDataSourceHandle const &rendererCreateArgs)
+{
+    HdPluginRenderDelegateUniqueHandle renderDelegate =
+        CreateDelegate(
+            _ToRenderSettings(
+                HdRendererCreateArgsSchema(rendererCreateArgs)));
+    if (!renderDelegate) {
+        return nullptr;
+    }
+
+    return
+        std::make_unique<HdRenderDelegateAdapterRenderer>(
+            std::move(renderDelegate), sceneIndex, rendererCreateArgs);
+}
+
+PXR_NAMESPACE_CLOSE_SCOPE

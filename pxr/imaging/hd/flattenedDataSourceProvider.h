@@ -11,6 +11,7 @@
 
 #include "pxr/imaging/hd/dataSource.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
+#include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/usd/sdf/path.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -19,7 +20,7 @@ class HdSceneIndexBase;
 using HdFlattenedDataSourceProviderSharedPtr =
     std::shared_ptr<class HdFlattenedDataSourceProvider>;
 
-/// \class HdFlattenedDataSourceProvider.
+/// \class HdFlattenedDataSourceProvider
 ///
 /// Given to HdFlatteningSceneIndex to determine how to compute the
 /// flattened data source which is in the prim container data
@@ -35,11 +36,11 @@ public:
             const HdSceneIndexBase &flatteningSceneIndex,
             const SdfPath &primPath,
             const TfToken &name,
-            const HdContainerDataSourceHandle &inputPrimDataSource)
+            const HdSceneIndexPrim &inputPrim)
           : _flatteningSceneIndex(flatteningSceneIndex)
           , _primPath(primPath)
           , _name(name)
-          , _inputPrimDataSource(inputPrimDataSource)
+          , _inputPrim(inputPrim)
         {
         }
 
@@ -51,12 +52,17 @@ public:
         // container data source of the parent prim.
         HD_API
         HdContainerDataSourceHandle GetFlattenedDataSourceFromParentPrim() const;
+        // Returns the type of the prim from the input scene index.
+        HD_API
+        const TfToken &GetInputPrimType() const {
+            return _inputPrim.primType;
+        }
 
     private:
         const HdSceneIndexBase &_flatteningSceneIndex;
         const SdfPath &_primPath;
         const TfToken &_name;
-        const HdContainerDataSourceHandle &_inputPrimDataSource;
+        const HdSceneIndexPrim _inputPrim;
     };
 
     HD_API

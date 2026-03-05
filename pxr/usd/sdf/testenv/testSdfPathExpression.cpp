@@ -12,6 +12,7 @@
 #include "pxr/usd/sdf/pathExpressionEval.h"
 #include "pxr/usd/sdf/pathPattern.h"
 #include "pxr/usd/sdf/predicateLibrary.h"
+#include "pxr/base/vt/valueComposeOver.h"
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -30,6 +31,11 @@ GetBasicPredicateLib() {
         })
         .Define("isPropertyPath", [](SdfPath const &p) {
             return p.IsPropertyPath();
+        })
+        .Define("capital", [](SdfPath const &p) {
+            std::string const &name = p.GetName();
+            auto isCap = [](char l) { return 'A' <= l && l <= 'Z'; };
+            return !name.empty() && isCap(name[0]);
         })
         ;
     return theLib;
@@ -52,6 +58,17 @@ struct MatchEval {
 static void
 TestBasics()
 {
+    {
+        auto eval = MatchEval { SdfPathExpression("/foo//") };
+        TF_AXIOM(eval.Match(SdfPath("/foo")));
+    }    
+
+    {
+        auto eval = MatchEval { 
+            SdfPathExpression("/foo//{isPrimPath}") };
+        TF_AXIOM(eval.Match(SdfPath("/foo")));
+    }    
+
     {
         // Allow leading & trailing whitespace.
         TF_AXIOM(SdfPathExpression("  /foo//bar").GetText() == "/foo//bar");
@@ -138,7 +155,9 @@ TestBasics()
         auto eval = MatchEval { 
             SdfPathExpression("/foo*//bar//{isPrimPath}") };
         
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar")));
         TF_AXIOM(eval.Match(SdfPath("/foo/bar/a")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/x/bar")));
         TF_AXIOM(eval.Match(SdfPath("/foo/x/bar/b")));
         TF_AXIOM(eval.Match(SdfPath("/foo/x/y/z/bar/c")));
         TF_AXIOM(eval.Match(SdfPath("/foo/x/y/z/bar/baz")));
@@ -147,7 +166,9 @@ TestBasics()
         TF_AXIOM(!eval.Match(SdfPath("/foo/x/y/z/bar/baz/qux.attr")));
         TF_AXIOM(!eval.Match(SdfPath("/foo/x/y/z/bar/baz/qux.ns:attr")));
 
+        TF_AXIOM(eval.Match(SdfPath("/fooXYZ/bar")));
         TF_AXIOM(eval.Match(SdfPath("/fooXYZ/bar/a")));
+        TF_AXIOM(eval.Match(SdfPath("/fooABC/x/bar")));
         TF_AXIOM(eval.Match(SdfPath("/fooABC/x/bar/a/b/c")));
         TF_AXIOM(eval.Match(SdfPath("/foo123/x/y/z/bar/x")));
         TF_AXIOM(eval.Match(SdfPath("/fooASDF/x/y/z/bar/baz")));
@@ -235,6 +256,40 @@ TestBasics()
         TF_AXIOM(nothing.ComposeOver(a) == nothing);
         TF_AXIOM(nothing.ComposeOver(b) == nothing);
         TF_AXIOM(nothing.ComposeOver(c) == nothing);
+
+        // Test VtValueComposeOver with PathExpressions.
+        {
+            TF_AXIOM(VtValueCanComposeOver(b, a));
+            TF_AXIOM(VtValueCanComposeOver(c, b));
+            
+            VtValue composedVal =
+                VtValueComposeOver(c, VtValueComposeOver(b, a));
+
+            TF_AXIOM(composedVal.IsHolding<SdfPathExpression>());
+
+            SdfPathExpression composed = composedVal.Get<SdfPathExpression>();
+
+            TF_AXIOM(!composed.ContainsExpressionReferences());
+            TF_AXIOM(!composed.ContainsWeakerExpressionReference());
+            TF_AXIOM(composed.IsComplete());
+            TF_AXIOM(composed == SdfPathExpression { "/a /b /c" });
+
+            // Composing over the VtBackground should resolve out `%_`.
+            {
+                VtValue composedBCVal = VtValueComposeOver(
+                    VtValueComposeOver(c, b), VtBackground);
+                
+                TF_AXIOM(composedBCVal.IsHolding<SdfPathExpression>());
+
+                SdfPathExpression composed =
+                    composedBCVal.Get<SdfPathExpression>();
+                
+                TF_AXIOM(!composed.ContainsExpressionReferences());
+                TF_AXIOM(!composed.ContainsWeakerExpressionReference());
+                TF_AXIOM(composed.IsComplete());
+                TF_AXIOM(composed == SdfPathExpression { "/b /c" });
+            }
+        }
     }
 
     {
@@ -330,14 +385,7 @@ static void
 TestSearch()
 {
     // Super simple predicate library for paths for testing.
-    auto predLib = SdfPredicateLibrary<SdfPath const &>()
-        .Define("isPrimPath", [](SdfPath const &p) {
-            return p.IsPrimPath();
-        })
-        .Define("isPropertyPath", [](SdfPath const &p) {
-            return p.IsPropertyPath();
-        })
-        ;
+    auto predLib = GetBasicPredicateLib();
 
     // Paths must follow a depth-first traversal order.
     SdfPathVector paths;
@@ -384,22 +432,69 @@ TestSearch()
             SdfPathExpression(exprStr), predLib);
         auto search = eval.MakeIncrementalSearcher(PathIdentity {});
 
-        std::vector<std::string> searchMatches;
-        for (SdfPath const &p: paths) {
-            if (search.Next(p)) {
-                searchMatches.push_back(p.GetAsString());
+        auto getSearchMatches = [&](bool skipConstantSubtrees) {
+            std::vector<std::string> searchMatches;
+            SdfPath constantMatchPrefix;
+            SdfPath constantNoMatchPrefix;
+            for (SdfPath const &p: paths) {
+                if (!constantMatchPrefix.IsEmpty() &&
+                    p.HasPrefix(constantMatchPrefix)) {
+                    searchMatches.push_back(p.GetAsString());
+                    if (!skipConstantSubtrees) {
+                        auto result = search.Next(p);
+                        TF_AXIOM(result && result.IsConstant());
+                    }
+                }
+                else if (!constantNoMatchPrefix.IsEmpty() &&
+                    p.HasPrefix(constantNoMatchPrefix)) {
+                    if (!skipConstantSubtrees) {
+                        auto result = search.Next(p);
+                        TF_AXIOM(!result && result.IsConstant());
+                    }
+                }
+                else {
+                    auto result = search.Next(p);
+                    if (result) {
+                        searchMatches.push_back(p.GetAsString());
+                        if (result.IsConstant()) {
+                            constantMatchPrefix = p;
+                        }
+                    }
+                    else {
+                        if (result.IsConstant()) {
+                            constantNoMatchPrefix = p;
+                        }
+                    }
+                }
             }
-        }
-        if (searchMatches != expected) {
-            TF_FATAL_ERROR("Incremental search for '%s' yielded unexpected "
-                           "results.\n"
+            return searchMatches;
+        };
+
+        auto searchMatchesNoSkip = getSearchMatches(false);
+        auto searchMatchesSkip = getSearchMatches(true);
+        
+        if (searchMatchesNoSkip != expected) {
+            TF_FATAL_ERROR("No-skip incremental search for '%s' yielded "
+                           "unexpected results.\n"
                            "Expected:\n"
                            "  %s\n"
                            "Actual:\n"
                            "  %s\n",
                            exprStr.c_str(),
                            TfStringJoin(expected, "\n  ").c_str(),
-                           TfStringJoin(searchMatches, "\n  ").c_str());
+                           TfStringJoin(searchMatchesNoSkip, "\n  ").c_str());
+        }
+
+        if (searchMatchesSkip != expected) {
+            TF_FATAL_ERROR("Skip incremental search for '%s' yielded "
+                           "unexpected results.\n"
+                           "Expected:\n"
+                           "  %s\n"
+                           "Actual:\n"
+                           "  %s\n",
+                           exprStr.c_str(),
+                           TfStringJoin(expected, "\n  ").c_str(),
+                           TfStringJoin(searchMatchesSkip, "\n  ").c_str());
         }
 
         std::vector<std::string> matchMatches;
@@ -408,7 +503,7 @@ TestSearch()
                 matchMatches.push_back(p.GetAsString());
             }
         }
-        if (matchMatches != searchMatches) {
+        if (matchMatches != searchMatchesNoSkip) {
             TF_FATAL_ERROR("Incremental search for '%s' inconsistent with "
                            "individual Match()es.\n"
                            "Search Results:\n"
@@ -416,7 +511,7 @@ TestSearch()
                            "Match Results:\n"
                            "  %s\n",
                            exprStr.c_str(),
-                           TfStringJoin(searchMatches, "\n  ").c_str(),
+                           TfStringJoin(searchMatchesNoSkip, "\n  ").c_str(),
                            TfStringJoin(matchMatches, "\n  ").c_str());
         }
     };
@@ -426,7 +521,7 @@ TestSearch()
         std::vector<std::string> const &expected) {
         return testSearchWithPaths(paths, exprStr, expected);
     };
-
+    
     testSearch("/World",
                { "/World" });
 
@@ -500,6 +595,16 @@ TestSearch()
                { "/World/anim/chars/Mike",
                  "/World/anim/sets/Bedroom/Furniture" });
 
+    // Prims named 'geom' that aren't descendant to a 'Sully'
+    testSearch("//geom - //Sully//",
+               { "/World/anim/chars/Mike/geom",
+                 "/Foo/geom" });
+
+    // Prims named 'geom' under a 'chars' or under a 'Foo'
+    testSearch("//chars//geom //Foo//geom",
+               { "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Sully/geom",
+                 "/Foo/geom" });
     
     testSearch("//",
                { "/",
@@ -578,6 +683,23 @@ TestSearch()
                  "/Foo/geom/foo/bar/foo/bar",
                  "/Foo/geom/foo/bar/foo/bar/foo",
                  "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearch("/World//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair" });
 
     testSearch("//*{isPrimPath}",
                { "/World",
@@ -680,6 +802,62 @@ TestSearch()
                  "/Foo/geom/foo/bar/foo/bar",
                  "/Foo/geom/foo/bar/foo/bar/foo",
                  "/Foo/geom/foo/bar/foo/bar/foo/bar" });
+
+    testSearchWithPaths(pathsNoRoot, "//{isPrimPath}//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair",
+                 "/Foo",
+                 "/Foo/geom",
+                 "/Foo/geom/foo",
+                 "/Foo/geom/foo/bar",
+                 "/Foo/geom/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar",
+                 "/Foo/geom/foo/bar/foo/bar/foo",
+                 "/Foo/geom/foo/bar/foo/bar/foo/bar"
+               });
+
+    testSearchWithPaths(pathsNoRoot, "/World//{isPrimPath}//{isPrimPath}",
+               { "/World",
+                 "/World/anim",
+                 "/World/anim/chars",
+                 "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair" });
+
+    testSearchWithPaths(pathsNoRoot, "/World/anim//{capital}//{isPrimPath}",
+               { "/World/anim/chars/Mike",
+                 "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Mike/geom/body_sbdv",
+                 "/World/anim/chars/Sully",
+                 "/World/anim/chars/Sully/geom",
+                 "/World/anim/chars/Sully/geom/body_sbdv",
+                 "/World/anim/sets/Bedroom",
+                 "/World/anim/sets/Bedroom/Furniture",
+                 "/World/anim/sets/Bedroom/Furniture/Bed",
+                 "/World/anim/sets/Bedroom/Furniture/Desk",
+                 "/World/anim/sets/Bedroom/Furniture/Chair" });
 
     testSearchWithPaths(pathsNoRoot, "//*{isPrimPath}",
                { "/World",

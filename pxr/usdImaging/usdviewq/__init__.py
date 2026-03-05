@@ -17,7 +17,7 @@ from .common import Timer
 from .appController import AppController
 from .settings import ConfigManager
 
-from pxr import UsdAppUtils
+from pxr import Sdf, UsdUtils, UsdAppUtils
 
 
 class InvalidUsdviewOption(Exception):
@@ -25,6 +25,16 @@ class InvalidUsdviewOption(Exception):
     Launcher.ValidateOptions or any methods which override it.
     """
     pass
+
+
+def _AbsoluteFilePath(argStr):
+    """This should be used for args that are meant to absolute file paths (as
+    opposed to ones that may get resolved.  This is especially useful if you
+    have an app that uses this launcher but also changes the dir.
+    """
+    if argStr is None:
+        return None
+    return os.path.abspath(argStr)
 
 
 class Launcher(object):
@@ -67,6 +77,10 @@ class Launcher(object):
                 traceCollector.enabled = True
 
             app, appController = self.LaunchPreamble(arg_parse_result)
+
+            if arg_parse_result.dumpFirstImage:
+                appController.SaveViewerImageToFile(arg_parse_result.dumpFirstImage)
+
             self.LaunchProcess(arg_parse_result, app, appController)
 
         if traceCollector:
@@ -97,8 +111,9 @@ class Launcher(object):
         register positional arguments on the ArgParser
         '''
         parser.add_argument('usdFile', action='store',
+                            nargs='?',
                             type=str,
-                            help='The file to view')
+                            help='The file to view (Optional)')
 
     def RegisterOptions(self, parser):
         '''
@@ -108,7 +123,8 @@ class Launcher(object):
 
         UsdAppUtils.rendererArgs.AddCmdlineArgs(parser,
                 altHelpText=("Which render backend to use (named as it "
-                            "appears in the menu)."))
+                            "appears in the menu). 'GL' and 'Storm' currently"
+                            "alias to the same renderer, Storm."))
         
         parser.add_argument('--select', action='store', default='/',
                             dest='primPath', type=str,
@@ -177,7 +193,7 @@ class Launcher(object):
                             help='Enable asynchronous hydra scene processing')
 
         parser.add_argument('--traceToFile', action='store',
-                            type=str,
+                            type=_AbsoluteFilePath,
                             dest='traceToFile',
                             default=None,
                             help='Start tracing at application startup and '
@@ -203,6 +219,12 @@ class Launcher(object):
                             dest='mallocTagStats', type=str,
                             choices=['none', 'stage', 'stageAndImaging'],
                             help='Use the Pxr MallocTags memory accounting system to profile USD, saving results to a tmp file, with a summary to the console.  Will have no effect if MallocTags are not supported in the USD installation.')
+
+        parser.add_argument('--dumpFirstImage', action='store',
+                            type=_AbsoluteFilePath,
+                            dest='dumpFirstImage',
+                            default=None,
+                            help='Dumps the first image to file (as png)')
 
         parser.add_argument('--numThreads', action='store',
                             type=int, default=0,
@@ -304,6 +326,13 @@ class Launcher(object):
 
         # Verify that the camera path is either an absolute path, or is just
         # the name of a camera.
+        if not arg_parse_result.camera:
+            from pxr import Sdf
+            primaryCameraName = UsdUtils.GetPrimaryCameraName()
+            if primaryCameraName:
+                arg_parse_result.camera = Sdf.Path(primaryCameraName)
+            else:
+                arg_parse_result.camera = Sdf.Path.emptyPath
         if arg_parse_result.camera:
             camPath = arg_parse_result.camera
             if camPath.isEmpty:
@@ -344,10 +373,15 @@ class Launcher(object):
         context is provided.  For usdview, configuring an asset context by
         default is reasonable, and allows clients that embed usdview to 
         achieve different behavior when needed.
+        
+        If usdFile path is not provided, it returns default context.
         """
         from pxr import Ar
         
         r = Ar.GetResolver()
+        
+        if not usdFile:
+            return r.CreateDefaultContext()
 
         # ConfigureResolverForAsset no longer exists under Ar 2.0; this
         # is here for backwards compatibility with Ar 1.0.

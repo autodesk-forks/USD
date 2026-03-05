@@ -33,7 +33,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 HdStPoints::HdStPoints(SdfPath const& id)
   : HdPoints(id)
-  , _displayOpacity(false)
+  , _displayOpacityFromInstancer(false)
+  , _displayOpacityFromPrimvars(false)
+  , _displayInOverlay(false)
 {
     /*NOTHING*/
 }
@@ -61,15 +63,19 @@ HdStPoints::Sync(HdSceneDelegate *delegate,
         HdStSetMaterialId(delegate, renderParam, this);
         updateMaterialTags = true;
     }
-    if (*dirtyBits & HdChangeTracker::NewRepr) {
+    if (*dirtyBits & (HdChangeTracker::DirtyDisplayStyle|
+                      HdChangeTracker::NewRepr)) {
         updateMaterialTags = true;
     }
 
-    bool displayOpacity = _displayOpacity;
+    bool displayOpacity =
+        (_displayOpacityFromInstancer || _displayOpacityFromPrimvars);
     _UpdateRepr(delegate, renderParam, reprToken, dirtyBits);
 
     if (updateMaterialTags || 
-        (GetMaterialId().IsEmpty() && displayOpacity != _displayOpacity)) {
+        (GetMaterialId().IsEmpty() &&
+         (displayOpacity !=
+          (_displayOpacityFromInstancer || _displayOpacityFromPrimvars)))) {
         _UpdateMaterialTagsForAllReprs(delegate, renderParam);
     }
 
@@ -124,47 +130,62 @@ HdStPoints::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
     drawItem->SetMaterialNetworkShader(
         HdStGetMaterialNetworkShader(this, sceneDelegate));
 
+    if (*dirtyBits & HdChangeTracker::DirtyDisplayStyle) {
+        HdDisplayStyle ds = GetDisplayStyle(sceneDelegate);
+        _displayInOverlay = ds.displayInOverlay;
+    }
+
     // Reset value of _displayOpacity
-    if (HdChangeTracker::IsAnyPrimvarDirty(*dirtyBits, id)) {
-        _displayOpacity = false;
+    if (*dirtyBits & HdChangeTracker::DirtyPrimvar) {
+        _displayOpacityFromPrimvars = false;
     }
 
     /* INSTANCE PRIMVARS */
     _UpdateInstancer(sceneDelegate, dirtyBits);
+    {
+        // The data members are part of a bitfield, so we can't pass pointers
+        // to them directly. HdStUpdateInstancerData doesn't write to output
+        // params if DirtyInstancer is not set, so we initialize the locals
+        // to current member values to preserve existing state in that case.
+        bool displayOpacityFromInstancer = _displayOpacityFromInstancer;
         HdStUpdateInstancerData(sceneDelegate->GetRenderIndex(),
                                 renderParam,
                                 this,
                                 drawItem,
                                 &_sharedData,
-                                *dirtyBits);
-
-    _displayOpacity = _displayOpacity ||
-            HdStIsInstancePrimvarExistentAndValid(
-            sceneDelegate->GetRenderIndex(), this, HdTokens->displayOpacity);
+                                *dirtyBits,
+                                &displayOpacityFromInstancer);
+        _displayOpacityFromInstancer = displayOpacityFromInstancer;
+    }
 
     /* CONSTANT PRIMVARS, TRANSFORM, EXTENT AND PRIMID */
     if (HdStShouldPopulateConstantPrimvars(dirtyBits, id)) {
-        HdPrimvarDescriptorVector constantPrimvars =
-            HdStGetPrimvarDescriptors(this, drawItem, sceneDelegate,
-                                    HdInterpolationConstant);
 
+        bool hasDisplayOpacity = false;
         HdStPopulateConstantPrimvars(this,
                                      &_sharedData,
                                      sceneDelegate,
                                      renderParam,
                                      drawItem,
                                      dirtyBits,
-                                     constantPrimvars);
-        
-        _displayOpacity = _displayOpacity ||
-            HdStIsPrimvarExistentAndValid(this, sceneDelegate, 
-            constantPrimvars, HdTokens->displayOpacity);
+                                     nullptr, HdMeshGeomStyleInvalid, 0, 0,
+                                     nullptr, // hasMirroredTransform
+                                     &hasDisplayOpacity);
+
+        if (hasDisplayOpacity) {
+            _displayOpacityFromPrimvars = true;
+        }
     }
 
-    HdSt_PointsShaderKey shaderKey;
     HdStResourceRegistrySharedPtr resourceRegistry =
         std::static_pointer_cast<HdStResourceRegistry>(
             sceneDelegate->GetRenderIndex().GetResourceRegistry());
+
+    bool const nativeRoundPoints =
+        resourceRegistry->GetHgi()->GetCapabilities()->
+            IsSet(HgiDeviceCapabilitiesBitsRoundPoints);
+
+    HdSt_PointsShaderKey shaderKey{nativeRoundPoints};
     drawItem->SetGeometricShader(
         HdSt_GeometricShader::Create(shaderKey, resourceRegistry));
 
@@ -269,15 +290,16 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
         }
 
         VtValue value = GetPrimvar(sceneDelegate, primvar.name);
+        if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
+            continue;
+        }
 
-        if (!value.IsEmpty()) {
-            HdBufferSourceSharedPtr source =
-                std::make_shared<HdVtBufferSource>(primvar.name, value);
-            sources.push_back(source);
+        HdBufferSourceSharedPtr source =
+            std::make_shared<HdVtBufferSource>(primvar.name, value);
+        sources.push_back(source);
 
-            if (primvar.name == HdTokens->displayOpacity) {
-                _displayOpacity = true;
-            }
+        if (primvar.name == HdTokens->displayOpacity) {
+            _displayOpacityFromPrimvars = true;
         }
     }
 
@@ -289,7 +311,11 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     }
 
     // XXX: This should be based off the DirtyPrimvarDesc bit.
-    bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
+    bool hasDirtyPrimvarDesc =
+        (*dirtyBits & HdChangeTracker::DirtyPrimvar) ||
+        (*dirtyBits & HdChangeTracker::DirtyNormals) ||
+        (*dirtyBits & HdChangeTracker::DirtyWidths);
+
     HdBufferSpecVector removedSpecs;
     if (hasDirtyPrimvarDesc) {
         TfTokenVector internallyGeneratedPrimvars; // none
@@ -301,11 +327,15 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
     HdBufferSpec::GetBufferSpecs(reserveOnlySources, &bufferSpecs);
     HdStGetBufferSpecsFromCompuations(computations, &bufferSpecs);
-
+    
+    HdBufferArrayUsageHint usageHint =
+        HdBufferArrayUsageHintBitsVertex;
+    if (!computations.empty()) {
+        usageHint |= HdBufferArrayUsageHintBitsStorage;
+    }
     HdBufferArrayRangeSharedPtr range =
         resourceRegistry->UpdateNonUniformBufferArrayRange(
-            HdTokens->primvar, bar, bufferSpecs, removedSpecs,
-            HdBufferArrayUsageHintBitsVertex);
+            HdTokens->primvar, bar, bufferSpecs, removedSpecs, usageHint);
 
     HdStUpdateDrawItemBAR(
         range,
@@ -364,7 +394,9 @@ HdStPoints::_UpdateMaterialTagsForAllReprs(HdSceneDelegate *sceneDelegate,
             HdStDrawItem *drawItem = static_cast<HdStDrawItem*>(
                 _smoothHullRepr->GetDrawItem(drawItemIndex++));
             HdStSetMaterialTag(sceneDelegate, renderParam, drawItem, 
-                this->GetMaterialId(), _displayOpacity, 
+                this->GetMaterialId(),
+                _displayOpacityFromPrimvars || _displayOpacityFromInstancer, 
+                _displayInOverlay,
                 /*occludedSelectionShowsThrough = */false);
         }
     }
@@ -379,6 +411,7 @@ HdStPoints::GetInitialDirtyBitsMask() const
         | HdChangeTracker::DirtyPoints
         | HdChangeTracker::DirtyPrimID
         | HdChangeTracker::DirtyPrimvar
+        | HdChangeTracker::DirtyDisplayStyle
         | HdChangeTracker::DirtyRepr
         | HdChangeTracker::DirtyMaterialId
         | HdChangeTracker::DirtyTransform

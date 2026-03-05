@@ -74,9 +74,25 @@ UsdImagingDataSourceGprim::UsdImagingDataSourceGprim(
 {
 }
 
+TfTokenVector
+UsdImagingDataSourceGprim::GetNames()
+{
+    TfTokenVector names = UsdImagingDataSourcePrim::GetNames();
+    // Add primvars if needed, to accommmodate custom primvar mappings.
+    if (std::find(names.begin(), names.end(),
+                  HdPrimvarsSchema::GetSchemaToken()) == names.end()) {
+        names.push_back( HdPrimvarsSchema::GetSchemaToken() );
+    }
+    return names;
+}
+
 HdDataSourceBaseHandle
 UsdImagingDataSourceGprim::Get(const TfToken &name)
 {
+    if (!_GetUsdPrim()) {
+        return nullptr;
+    }
+
     HdDataSourceBaseHandle const result = UsdImagingDataSourcePrim::Get(name);
     if (name == HdPrimvarsSchema::GetSchemaToken()) {
         const UsdImagingDataSourceCustomPrimvars::Mappings &mappings = 

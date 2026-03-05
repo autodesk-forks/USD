@@ -7,14 +7,18 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/attributeSpec.h"
 #include "pxr/usd/sdf/changeManager.h"
+#include "pxr/usd/sdf/fileIO_Common.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/notice.h"
 #include "pxr/usd/sdf/path.h"
+#include "pxr/usd/sdf/pathExpression.h"
 #include "pxr/usd/sdf/payload.h"
 #include "pxr/usd/sdf/primSpec.h"
 #include "pxr/usd/sdf/reference.h"
 #include "pxr/usd/sdf/relationshipSpec.h"
 #include "pxr/usd/sdf/schema.h"
+#include "pxr/usd/sdf/textParserUtils.h"
+#include "pxr/base/vt/valueComposeOver.h"
 
 #include <map>
 #include <sstream>
@@ -26,7 +30,7 @@ static std::pair<SdfLayerRefPtr, SdfLayerRefPtr>
 _CreateLayerDiffTestLayers() {
     SdfLayerRefPtr actualLayer = SdfLayer::CreateAnonymous();
     actualLayer->ImportFromString(    
-        R"(#sdf 1.4.32
+        R"(#usda 1.0
             over "a"{}
             def "b"{}
             over "c"{
@@ -43,7 +47,7 @@ _CreateLayerDiffTestLayers() {
 
     SdfLayerRefPtr diffLayer = SdfLayer::CreateAnonymous();
     diffLayer->ImportFromString(
-        R"(#sdf 1.4.32
+        R"(#usda 1.0
             def "z"{}
             def "b"{}
             over "c"{
@@ -81,11 +85,11 @@ _TestSdfLayerCreateDiffChangeListWithoutValues()
     expectedCl.DidRemovePrim(SdfPath("/a"), true);
     expectedCl.DidAddPrim(SdfPath("/n"), false);
     expectedCl.DidChangeInfo(SdfPath("/n"), SdfFieldKeys->Specifier, 
-        std::move(VtValue()), VtValue(SdfSpecifierDef));
+        VtValue(SdfSpecifierOver), VtValue(SdfSpecifierDef));
     expectedCl.DidAddProperty(SdfPath("/n.propN"), false);
     expectedCl.DidAddPrim(SdfPath("/z"), false);
     expectedCl.DidChangeInfo(SdfPath("/z"), SdfFieldKeys->Specifier, 
-        std::move(VtValue()), VtValue(SdfSpecifierDef));
+        VtValue(SdfSpecifierOver), VtValue(SdfSpecifierDef));
     expectedCl.DidRemoveProperty(SdfPath("/c.propC"), false);
     expectedCl.DidAddProperty(SdfPath("/c.propC"), false);
 
@@ -118,26 +122,26 @@ _TestSdfLayerCreateDiffChangeListWithValues()
     expectedCl.DidRemovePrim(SdfPath("/a"), true);
     expectedCl.DidAddPrim(SdfPath("/n"), false);
     expectedCl.DidChangeInfo(SdfPath("/n"), SdfFieldKeys->Specifier, 
-        std::move(VtValue()), VtValue(SdfSpecifierDef));
+        VtValue(SdfSpecifierOver), VtValue(SdfSpecifierDef));
     expectedCl.DidChangeInfo(SdfPath("/r.propR"), SdfFieldKeys->Default, 
-        std::move(VtValue(1)), VtValue());
+        VtValue(1), VtValue());
     expectedCl.DidAddProperty(SdfPath("/n.propN"), true);
     expectedCl.DidChangeInfo(SdfPath("/n.propN"), 
-        SdfFieldKeys->TypeName, std::move(VtValue()), VtValue("int"));
+        SdfFieldKeys->TypeName, VtValue(), VtValue("int"));
     expectedCl.DidChangeInfo(SdfPath("/n.propN"), SdfFieldKeys->Default, 
-        std::move(VtValue()), VtValue(1));
+        VtValue(), VtValue(1));
     expectedCl.DidChangeInfo(SdfPath("/n.propN"), SdfFieldKeys->Custom, 
-        std::move(VtValue()), VtValue(0));
+        VtValue(), VtValue(0));
     expectedCl.DidChangeInfo(SdfPath("/n.propN"), 
-        SdfFieldKeys->Variability, std::move(VtValue()), 
+        SdfFieldKeys->Variability, VtValue(), 
         VtValue(SdfVariabilityVarying));
     expectedCl.DidChangeInfo(SdfPath("/p.propP"), SdfFieldKeys->Default, 
-        std::move(VtValue(1)), VtValue());
+        VtValue(1), VtValue());
     expectedCl.DidAddPrim(SdfPath("/z"), false);
     expectedCl.DidChangeInfo(SdfPath("/z"), SdfFieldKeys->Specifier, 
-        std::move(VtValue()), VtValue(SdfSpecifierDef));
+        VtValue(SdfSpecifierOver), VtValue(SdfSpecifierDef));
     expectedCl.DidChangeInfo(SdfPath("/c.propC"), SdfFieldKeys->Default, 
-        std::move(VtValue(1)), VtValue(2));
+        VtValue(1), VtValue(2));
 
     // Copy the layer so we can verify it does not change during the operation
     SdfLayerRefPtr expectedLayer = SdfLayer::CreateAnonymous();
@@ -162,7 +166,7 @@ _CreateTimeSampleLayerDiffTestLayers()
 {
     SdfLayerRefPtr layerA = SdfLayer::CreateAnonymous();
     layerA->ImportFromString(    
-        R"(#sdf 1.4.32
+        R"(#usda 1.0
             def Sphere "PixarBall"
             {
                 double radius = 100
@@ -176,7 +180,7 @@ _CreateTimeSampleLayerDiffTestLayers()
 
     SdfLayerRefPtr layerB = SdfLayer::CreateAnonymous();
     layerB->ImportFromString(    
-        R"(#sdf 1.4.32
+        R"(#usda 1.0
             def Sphere "PixarBall"
             {
                 double radius = 100
@@ -215,7 +219,7 @@ _testSdfLayerCreateDiffTimeSamplesWithValues()
     SdfTimeSampleMap samplesA = {{1, VtValue(100)}, {24, VtValue(500)}};
     SdfTimeSampleMap samplesB = {{1, VtValue(50)}, {48, VtValue(1000)}};
     expectedCl.DidChangeInfo(SdfPath("/PixarBall.radius"), 
-        SdfFieldKeys->TimeSamples, std::move(VtValue(samplesA)), 
+        SdfFieldKeys->TimeSamples, VtValue(samplesA), 
         VtValue(samplesB));
     expectedCl.DidChangeAttributeTimeSamples(SdfPath("/PixarBall.radius"));
 
@@ -273,6 +277,40 @@ _TestSdfChangeManagerExtractLocalChanges()
     }
 
     TF_AXIOM(listener.invocations == 1);
+}
+
+static void
+_TestSdfLayerCreateDiffDiffWithOver()
+{
+    SdfLayerRefPtr layer = SdfLayer::CreateAnonymous();
+    SdfPrimSpecHandle p = SdfCreatePrimInLayer(layer, SdfPath("/p"));
+
+    SdfLayerRefPtr empty = SdfLayer::CreateAnonymous();
+
+    // Test that when creating a diff that results in the addition of an
+    // inert prim there should be no info field entries for change of
+    // specifier
+    {
+        SdfChangeList expectedCl;
+        expectedCl.DidAddPrim(SdfPath("/p"), true);
+        SdfChangeList actualCl = empty->CreateDiff(layer);
+        _CompareChangeLists(expectedCl, actualCl);
+    }
+
+    p->SetField(SdfFieldKeys->Specifier, SdfSpecifierDef);
+
+    // Explicit test that when creating a diff that results in the addition of
+    // a non-inert prim with typename there should be an info field entries for
+    // specifier
+    {
+        SdfChangeList expectedCl;
+        expectedCl.DidAddPrim(SdfPath("/p"), false);
+        expectedCl.DidChangeInfo(SdfPath("/p"), SdfFieldKeys->Specifier, 
+            VtValue(SdfSpecifierOver), VtValue(SdfSpecifierDef));
+        SdfChangeList actualCl = empty->CreateDiff(layer);
+        _CompareChangeLists(expectedCl, actualCl);
+    }
+
 }
 
 static void
@@ -368,7 +406,7 @@ _TestSdfLayerTransferContentsEmptyLayer()
     // Tests that setting data on non empty layers properly cleans up all
     // specs in that layer without the use of SdfLayer::_IsInertSubtree
     const char* layerStr = 
-    R"(#sdf 1.4.32
+    R"(#usda 1.0
     def "Root"{
         def "Node1" (
             prepend variantSets = "testVariants"
@@ -726,22 +764,22 @@ _TestSdfSchemaPathValidation()
     TF_AXIOM(!schema.IsValidSpecializesPath(SdfPath("/A{x=y}")));
     TF_AXIOM(!schema.IsValidSpecializesPath(SdfPath("/A{x=y}B")));
 
-    TF_AXIOM(schema.IsValidPayload(SdfPayload("a.sdf", SdfPath())));
-    TF_AXIOM(schema.IsValidPayload(SdfPayload("a.sdf", SdfPath("/A"))));
+    TF_AXIOM(schema.IsValidPayload(SdfPayload("a.usda", SdfPath())));
+    TF_AXIOM(schema.IsValidPayload(SdfPayload("a.usda", SdfPath("/A"))));
     TF_AXIOM(schema.IsValidPayload(SdfPayload("", SdfPath("/A"))));
-    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.sdf", SdfPath("/A.a"))));
-    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.sdf", SdfPath("A"))));
-    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.sdf", SdfPath("/A{x=y}"))));
-    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.sdf", SdfPath("/A{x=y}B"))));
+    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.usda", SdfPath("/A.a"))));
+    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.usda", SdfPath("A"))));
+    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.usda", SdfPath("/A{x=y}"))));
+    TF_AXIOM(!schema.IsValidPayload(SdfPayload("a.usda", SdfPath("/A{x=y}B"))));
 
-    TF_AXIOM(schema.IsValidReference(SdfReference("a.sdf", SdfPath())));
-    TF_AXIOM(schema.IsValidReference(SdfReference("a.sdf", SdfPath("/A"))));
+    TF_AXIOM(schema.IsValidReference(SdfReference("a.usda", SdfPath())));
+    TF_AXIOM(schema.IsValidReference(SdfReference("a.usda", SdfPath("/A"))));
     TF_AXIOM(schema.IsValidReference(SdfReference("", SdfPath("/A"))));
-    TF_AXIOM(!schema.IsValidReference(SdfReference("a.sdf", SdfPath("/A.a"))));
-    TF_AXIOM(!schema.IsValidReference(SdfReference("a.sdf", SdfPath("A"))));
-    TF_AXIOM(!schema.IsValidReference(SdfReference("a.sdf",
+    TF_AXIOM(!schema.IsValidReference(SdfReference("a.usda", SdfPath("/A.a"))));
+    TF_AXIOM(!schema.IsValidReference(SdfReference("a.usda", SdfPath("A"))));
+    TF_AXIOM(!schema.IsValidReference(SdfReference("a.usda",
                                                    SdfPath("/A{x=y}"))));
-    TF_AXIOM(!schema.IsValidReference(SdfReference("a.sdf", 
+    TF_AXIOM(!schema.IsValidReference(SdfReference("a.usda", 
                                                    SdfPath("/A{x=y}B"))));
 
     TF_AXIOM(schema.IsValidRelocatesSourcePath(SdfPath("A")));
@@ -867,6 +905,169 @@ _TestSdfAbstractDataValue()
     TF_AXIOM(a.isValueBlock);
 }
 
+static void
+_TestSdfQuoteUtilities()
+{
+    TF_AXIOM(Sdf_QuoteString("\n") == "\"\"\"\n\"\"\"");
+    TF_AXIOM(Sdf_QuoteString("foo") == "\"foo\"");
+    TF_AXIOM(Sdf_QuoteString("foo\t") == "\"foo\\t\"");
+    TF_AXIOM(Sdf_QuoteString("\"doubled\"") == "'\"doubled\"'");
+    TF_AXIOM(Sdf_QuoteAssetPath("/path/foo") == "@/path/foo@");
+    TF_AXIOM(Sdf_QuoteAssetPath("atted@path") == "@@@atted@path@@@");
+    TF_AXIOM(Sdf_QuoteAssetPath("a@@@p") == "@@@a\\@@@p@@@");
+}
+
+static void
+_TestSdfFileIOQuote()
+{
+    auto Quote = [](std::string const &str, bool allowTriple=true) {
+        return Sdf_FileIOUtility::Quote(str, allowTriple);
+    };
+    
+    TF_AXIOM(Quote("hello world") == "\"hello world\"");
+    TF_AXIOM(Quote("hello\nworld") == "\"\"\"hello\nworld\"\"\"");
+    TF_AXIOM(Quote("hello\nworld",
+                   /*allowTriple=*/false) == "\"hello\\nworld\"");
+
+    TF_AXIOM(Quote("hello \"world\"") == "'hello \"world\"'");
+    TF_AXIOM(Quote("hello\n\"world\"") == "'''hello\n\"world\"'''");
+    TF_AXIOM(Quote("hello\n\"world\"",
+                   /*allowTriple=*/false) == "'hello\\n\"world\"'");
+}
+
+static void
+_TestSdfListOpVtValueComposeOver()
+{
+    using IntVec = std::vector<int>;
+    
+    SdfIntListOp exp123;
+    exp123.SetExplicitItems({ 1, 2, 3 });
+
+    SdfIntListOp append9;
+    append9.SetAppendedItems({ 9 });
+
+    SdfIntListOp prepend0;
+    prepend0.SetPrependedItems({ 0 });
+
+    SdfIntListOp delete2;
+    delete2.SetDeletedItems({ 2 });
+
+    VtValue composedVal = VtValueComposeOver(
+        delete2, VtValueComposeOver(prepend0, append9));
+
+    TF_AXIOM(composedVal.IsHolding<SdfIntListOp>());
+
+    // Should contain the incremental edits.
+    TF_AXIOM(!composedVal.Get<SdfIntListOp>().IsExplicit());
+
+    // Composing over the background should apply the edits to an empty list.
+    {
+        VtValue overBG = VtValueComposeOver(composedVal, VtBackground);
+        SdfIntListOp overBGop = overBG.Get<SdfIntListOp>();
+        TF_AXIOM(overBGop.IsExplicit());
+        TF_AXIOM((overBGop.GetExplicitItems() == IntVec { 0, 9 }));
+    }    
+
+    // Composing over an explicit list produces an explicit result.
+    {
+        VtValue overExp = VtValueComposeOver(composedVal, exp123);
+        TF_AXIOM(overExp.IsHolding<SdfIntListOp>());
+        SdfIntListOp overExpOp = overExp.Get<SdfIntListOp>();
+        TF_AXIOM(overExpOp.IsExplicit());
+        TF_AXIOM((overExpOp.GetExplicitItems() == IntVec { 0, 1, 3, 9 }));
+    }
+
+    // Composing a deprecated 'added' over another listop just returns the
+    // 'added' since 'added' is not composible.
+    {
+        SdfIntListOp added7;
+        added7.SetAddedItems({ 7 });
+        VtValue added7Over123 = VtValueComposeOver(added7, exp123);
+        TF_AXIOM(added7Over123.IsHolding<SdfIntListOp>());
+        TF_AXIOM(added7Over123
+                 .Get<SdfIntListOp>().GetAddedItems() == IntVec { 7 });
+    }
+}
+
+static void
+_TestSdfComposeTimeSampleMaps()
+{
+    // This didactic test uses SdfPathExpression values in SdfTimeSampleMaps
+    // because they are composing types that are easy to write and reason about.
+    // We don't expect real world use-cases to use them as time-varying values.
+    {
+        // One composing sample over a non-composing sample at the same time.
+        SdfTimeSampleMap strong {{2, VtValue(SdfPathExpression("a %_"))}};
+        SdfTimeSampleMap weak {{2, VtValue(SdfPathExpression("X"))}};
+
+        SdfTimeSampleMap composed = SdfComposeTimeSampleMaps(strong, weak);
+        TF_AXIOM(composed.size() == 1);
+        TF_AXIOM(composed.find(2) != composed.end());
+        TF_AXIOM(composed[2] == SdfPathExpression("a X"));
+    }
+    {
+        // Earlier composing sample over a non-composing sample.
+        SdfTimeSampleMap strong {{1, VtValue(SdfPathExpression("a %_"))}};
+        SdfTimeSampleMap weak {{2, VtValue(SdfPathExpression("X"))}};
+
+        SdfTimeSampleMap composed = SdfComposeTimeSampleMaps(strong, weak);
+        TF_AXIOM(composed.size() == 2);
+        TF_AXIOM(composed.count(1) && composed.count(2));
+        TF_AXIOM(composed[1] == SdfPathExpression("a X"));
+        TF_AXIOM(composed[2] == SdfPathExpression("a X"));
+    }
+    {
+        // One composing sample over two non-composing samples.
+        SdfTimeSampleMap strong {{2, VtValue(SdfPathExpression("a %_"))}};
+        SdfTimeSampleMap weak {
+            {1, VtValue(SdfPathExpression("X"))},
+            {3, VtValue(SdfPathExpression("Y"))}
+        };
+
+        SdfTimeSampleMap composed = SdfComposeTimeSampleMaps(strong, weak);
+        TF_AXIOM(composed.size() == 3);
+        TF_AXIOM(composed.count(1) && composed.count(2) && composed.count(3));
+        TF_AXIOM(composed[1] == SdfPathExpression("a X"));
+        TF_AXIOM(composed[2] == SdfPathExpression("a X"));
+        TF_AXIOM(composed[3] == SdfPathExpression("a Y"));
+    }
+    {
+        // Two composing samples over one non-composing sample.
+        SdfTimeSampleMap strong {
+            {1, VtValue(SdfPathExpression("a %_"))},
+            {3, VtValue(SdfPathExpression("b %_"))}
+        };
+        SdfTimeSampleMap weak {
+            {2, VtValue(SdfPathExpression("X"))}
+        };
+
+        SdfTimeSampleMap composed = SdfComposeTimeSampleMaps(strong, weak);
+        TF_AXIOM(composed.size() == 3);
+        TF_AXIOM(composed.count(1) && composed.count(2) && composed.count(3));
+        TF_AXIOM(composed[1] == SdfPathExpression("a X"));
+        TF_AXIOM(composed[2] == SdfPathExpression("a X"));
+        TF_AXIOM(composed[3] == SdfPathExpression("b X"));
+    }
+    {
+        // Non-composing followed by a composing sample over a composing sample.
+        SdfTimeSampleMap strong {
+            {1, VtValue(SdfPathExpression("X"))},
+            {3, VtValue(SdfPathExpression("a %_"))}
+        };
+        SdfTimeSampleMap weak {
+            {2, VtValue(SdfPathExpression("b %_"))},
+            {3, VtValue(SdfPathExpression("c %_"))}
+        };
+
+        SdfTimeSampleMap composed = SdfComposeTimeSampleMaps(strong, weak);
+        TF_AXIOM(composed.size() == 3);
+        TF_AXIOM(composed.count(1) && composed.count(2) && composed.count(3));
+        TF_AXIOM(composed[1] == SdfPathExpression("X"));
+        TF_AXIOM(composed[2] == SdfPathExpression("X"));
+        TF_AXIOM(composed[3] == SdfPathExpression("a (c %_)"));
+    }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -875,6 +1076,7 @@ main(int argc, char **argv)
     _TestSdfLayerCreateDiffChangeListWithValues();
     _testSdfLayerCreateDiffTimeSamplesWithValues();
     _testSdfLayerCreateDiffTimeSamplesWithoutValues();
+    _TestSdfLayerCreateDiffDiffWithOver();
     _TestSdfLayerDictKeyOps();
     _TestSdfLayerTimeSampleValueType();
     _TestSdfLayerTransferContents();
@@ -885,6 +1087,11 @@ main(int argc, char **argv)
     _TestSdfSchemaPathValidation();
     _TestSdfMapEditorProxyOperators();
     _TestSdfAbstractDataValue();
+    _TestSdfQuoteUtilities();
+    _TestSdfFileIOQuote();
+    _TestSdfListOpVtValueComposeOver();
+    _TestSdfComposeTimeSampleMaps();
 
+    printf("SUCCESS\n");
     return 0;
 }

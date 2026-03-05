@@ -174,7 +174,7 @@ Adding trace instrumentation macros has the following overhead:
     The dynamic versions of the macros TRACE_FUNCTION_DYNAMIC(), TRACE_SCOPE_DYNAMIC() have a much higher overhead than the static versions. The reason for this is that for the static versions, the names of the scopes are compiled as constexpr data, but the dynamic versions construct strings at runtime. This overhead of dynamic macros is true whether tracing is enabled or not. Because of this, the static versions should be preferred whenever possible.
     </li>
 </ul>
-It is possible to disable TRACE macros from generating code by defining TRACE_DISABLE in the preprocessor.
+It is possible to disable TRACE macros from generating code by defining TRACE_ENABLE to 0 in the preprocessor.  TRACE macros are enabled by default.
 
 The TraceCollector class and TRACE macros are thread-safe.
 

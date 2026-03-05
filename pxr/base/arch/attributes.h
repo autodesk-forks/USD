@@ -16,6 +16,8 @@
 #include "pxr/pxr.h"
 #include "pxr/base/arch/export.h"
 
+#include <memory>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 #if defined(doxygen)
@@ -117,13 +119,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///
 /// \p _name is the name of the function and must be unique across all
 /// invocations of ARCH_CONSTRUCTOR in the same translation unit.
-/// The remaining arguments should be types for the signature of the
-/// function.  The types are only to make the name unique (when mangled);
-/// the function will be called with no arguments so the arguments must
-/// not be used.  If you don't need any arguments you must use void.
 ///
 /// \hideinitializer
-#   define ARCH_CONSTRUCTOR(_name, _priority, ...)
+#   define ARCH_CONSTRUCTOR(_name, _priority)
 
 /// Macro to begin the definition of a function that should be executed by
 /// the dynamic loader when the dynamic object (library or program) is
@@ -136,13 +134,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///
 /// \p _name is the name of the function and must be unique across all
 /// invocations of ARCH_CONSTRUCTOR in the same translation unit.
-/// The remaining arguments should be types for the signature of the
-/// function.  The types are only to make the name unique (when mangled);
-/// the function will be called with no arguments so the arguments must
-/// not be used.  If you don't need any arguments you must use void.
 ///
 /// \hideinitializer
-#   define ARCH_DESTRUCTOR(_name, _priority, ...)
+#   define ARCH_DESTRUCTOR(_name, _priority)
 
 /// Macro to begin the definition of a class that is using private inheritance
 /// to take advantage of the empty base optimization. Some compilers require
@@ -151,6 +145,29 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// In C++20, usage of private inheritance may be able to be retired with the
 /// [[no_unique_address]] tag.
 #   define ARCH_EMPTY_BASES
+
+/// Macro used to indicate that a function should not be instrumented
+/// with address santizers.
+///
+/// In general, this attribute should be used sparingly. Its purpose
+/// is mostly for tests that when built with address sanitizer will trigger
+/// a false-positive, meaning the test is checking something that address
+/// sanitizer is trying to catch.
+///
+/// Its important to understand that this attribute will only disable
+/// address sanitizer instrumentation for the function it's applied to.
+/// Any sanitized functions called from the target function
+/// will still be instrumented.
+///
+/// This attribute is used as follows:
+/// \code
+///    ARCH_NO_SANITIZE_ADDRESS_FUNCTION void Func() {
+///        ...
+///    }
+/// \endcode
+///
+/// \hideinitializer
+#   define ARCH_NO_SANITIZE_ADDRESS_FUNCTION
 
 #elif defined(ARCH_COMPILER_GCC) || defined(ARCH_COMPILER_CLANG)
 
@@ -165,6 +182,16 @@ PXR_NAMESPACE_OPEN_SCOPE
 #   define ARCH_USED_FUNCTION __attribute__((used))
 #   define ARCH_EMPTY_BASES
 
+#if defined(ARCH_SANITIZE_ADDRESS)
+#   define ARCH_NO_SANITIZE_ADDRESS_FUNCTION \
+        __attribute__((no_sanitize_address))
+#else
+#   define ARCH_NO_SANITIZE_ADDRESS_FUNCTION
+#endif
+
+// Function attributes for other sanitizers (thread, undefined behavior, etc.)
+// intentionally omitted until support is added
+
 #elif defined(ARCH_COMPILER_MSVC)
 
 #   define ARCH_PRINTF_FUNCTION(_fmt, _firstArg)
@@ -176,6 +203,16 @@ PXR_NAMESPACE_OPEN_SCOPE
 #   define ARCH_USED_FUNCTION
 #   define ARCH_EMPTY_BASES __declspec(empty_bases)
 
+#if defined(ARCH_SANITIZE_ADDRESS)
+#   define ARCH_NO_SANITIZE_ADDRESS_FUNCTION \
+        __declspec(no_sanitize_address)
+#else
+#   define ARCH_NO_SANITIZE_ADDRESS_FUNCTION
+#endif
+
+// Function attributes for other sanitizers (thread, undefined behavior, etc.)
+// intentionally omitted until support is added
+
 #else
 
 // Leave macros undefined so we'll fail to build on a new system/compiler
@@ -183,7 +220,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #endif
 
-// Helper to do on-demand static initialziation.  We need to insert per-library
+// Helper to do on-demand static initialization.  We need to insert per-library
 // static initializers if the ARCH_CONSTRUCTOR macros are used, etc, but we
 // don't want that to happen otherwise.  This mechanism makes that possible.  It
 // works by creating a class template (Arch_PerLibInit) that has hidden
@@ -228,37 +265,37 @@ struct Arch_ConstructorEntry {
 };
 
 // Emit a Arch_ConstructorEntry in the __Data,pxrctor section.
-#   define ARCH_CONSTRUCTOR(_name, _priority, ...)                             \
-    static void _name(__VA_ARGS__);                                            \
+#   define ARCH_CONSTRUCTOR(_name, _priority)                                  \
+    static void _name();                                                       \
     static const Arch_ConstructorEntry _ARCH_CAT_NOEXPAND(arch_ctor_, _name)   \
         __attribute__((used, section("__DATA,pxrctor"))) = {                   \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
         static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
-    static void _name(__VA_ARGS__)
+    static void _name()
     
 // Emit a Arch_ConstructorEntry in the __Data,pxrdtor section.
-#   define ARCH_DESTRUCTOR(_name, _priority, ...)                              \
-    static void _name(__VA_ARGS__);                                            \
+#   define ARCH_DESTRUCTOR(_name, _priority)                                   \
+    static void _name();                                                       \
     static const Arch_ConstructorEntry _ARCH_CAT_NOEXPAND(arch_dtor_, _name)   \
         __attribute__((used, section("__DATA,pxrdtor"))) = {                   \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
         static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
-    static void _name(__VA_ARGS__)
+    static void _name()
 
 #elif defined(ARCH_COMPILER_GCC) || defined(ARCH_COMPILER_CLANG)
 
 // The used attribute is required to prevent these apparently unused functions
 // from being removed by the linker.
-#   define ARCH_CONSTRUCTOR(_name, _priority, ...) \
+#   define ARCH_CONSTRUCTOR(_name, _priority) \
         __attribute__((used, section(".pxrctor"), constructor((_priority) + 100))) \
-        static void _name(__VA_ARGS__)
-#   define ARCH_DESTRUCTOR(_name, _priority, ...) \
+        static void _name()
+#   define ARCH_DESTRUCTOR(_name, _priority) \
         __attribute__((used, section(".pxrdtor"), destructor((_priority) + 100))) \
-        static void _name(__VA_ARGS__)
+        static void _name()
 
 #elif defined(ARCH_OS_WINDOWS)
     
@@ -285,38 +322,46 @@ struct Arch_ConstructorInit {
     ARCH_API ~Arch_ConstructorInit();
 };
 
-// Emit a Arch_ConstructorEntry in the .pxrctor section.  The namespace and
-// extern are to convince the compiler and linker to leave the object in the
-// final library/executable instead of stripping it out.  In clang/gcc we use
+// Emit an Arch_ConstructorEntry in the .pxrctor section.  The
+// arch_{c,d}tor_unused assignment is a workaround to ensure arch_{c,d}tor
+// isn't removed when /Zc:inline is enabled. In clang/gcc we use
 // __attribute__((used)) to do that.
-#   define ARCH_CONSTRUCTOR(_name, _priority, ...)                             \
-    static void _name(__VA_ARGS__);                                            \
+#   define ARCH_CONSTRUCTOR(_name, _priority)                                  \
+    static void _name();                                                       \
     namespace {                                                                \
     __declspec(allocate(".pxrctor"))                                           \
-    extern const Arch_ConstructorEntry                                         \
+    static const Arch_ConstructorEntry                                         \
     _ARCH_CAT_NOEXPAND(arch_ctor_, _name) = {                                  \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
         static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
+    void _ARCH_CAT_NOEXPAND(arch_ctor_unused, _name)() {                       \
+        static const auto unused =                                             \
+             std::addressof(_ARCH_CAT_NOEXPAND(arch_ctor_, _name));            \
+    }                                                                          \
     }                                                                          \
     _ARCH_ENSURE_PER_LIB_INIT(Arch_ConstructorInit, _archCtorInit);            \
-    static void _name(__VA_ARGS__)
+    static void _name()
 
     // Emit a Arch_ConstructorEntry in the .pxrdtor section.
-#   define ARCH_DESTRUCTOR(_name, _priority, ...)                              \
-    static void _name(__VA_ARGS__);                                            \
+#   define ARCH_DESTRUCTOR(_name, _priority)                                   \
+    static void _name();                                                       \
     namespace {                                                                \
     __declspec(allocate(".pxrdtor"))                                           \
-    extern const Arch_ConstructorEntry                                         \
+    static const Arch_ConstructorEntry                                         \
     _ARCH_CAT_NOEXPAND(arch_dtor_, _name) = {                                  \
         reinterpret_cast<Arch_ConstructorEntry::Type>(&_name),                 \
         static_cast<unsigned>(PXR_VERSION),                                    \
         _priority                                                              \
     };                                                                         \
+    void _ARCH_CAT_NOEXPAND(arch_dtor_unused, _name)() {                       \
+        static const auto unused =                                             \
+             std::addressof(_ARCH_CAT_NOEXPAND(arch_dtor_, _name));            \
+    }                                                                          \
     }                                                                          \
     _ARCH_ENSURE_PER_LIB_INIT(Arch_ConstructorInit, _archCtorInit);            \
-    static void _name(__VA_ARGS__)
+    static void _name()
 
 #else
 

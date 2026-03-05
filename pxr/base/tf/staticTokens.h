@@ -22,26 +22,31 @@
 /// In header file:
 ///
 /// \code
-///    #define MF_TOKENS \.     <--- please ignore '.'
-///        (transform)   \.
-///        (moves)       \.
+///    #define MYLIB_TOKENS \.     <--- please ignore '.'
+///        (token1)         \.
+///        (token2)         \.
 ///
 ///        // Syntax when string name differs from symbol.
 ///        ((foo, "bar"))
 ///
-///    TF_DECLARE_PUBLIC_TOKENS(MfTokens, MF_TOKENS);
+///    // Use this form if the symbols for the static tokens must be exported,
+///    // passing in the associated import/export macro (e.g. MY_LIB_API) as 
+///    // the second argument.
+///    TF_DECLARE_PUBLIC_TOKENS(MyLibTokens, MYLIB_API, MYLIB_TOKENS);
+///    // Use this form otherwise.
+///    // TF_DECLARE_PUBLIC_TOKENS(MyLibTokens, MYLIB_TOKENS);
 /// \endcode
 ///
 /// In cpp file:
 ///
 /// \code
-///     TF_DEFINE_PUBLIC_TOKENS(MfTokens, MF_TOKENS);
+///     TF_DEFINE_PUBLIC_TOKENS(MyLibTokens, MYLIB_TOKENS);
 /// \endcode
 ///
 /// Access the token by using the key as though it were a pointer, like this:
 ///
 /// \code
-///    MfTokens->transform;
+///    MyLibTokens->token1;
 /// \endcode
 ///
 /// An additional member, allTokens, is a std::vector<TfToken> populated
@@ -53,6 +58,7 @@
 /// PRIVATE, you only need to use the DEFINE macro.
 
 #include "pxr/pxr.h"
+#include "pxr/base/arch/defines.h"
 #include "pxr/base/tf/preprocessorUtilsLite.h"
 #include "pxr/base/tf/staticData.h"
 #include "pxr/base/tf/token.h"
@@ -78,7 +84,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// Macro to define public tokens. This declares a list of tokens that can be
 /// used globally.  Use in conjunction with TF_DEFINE_PUBLIC_TOKENS.
 /// \hideinitializer
+// This macro expansion is disabled for Intellisense to avoid severe
+// slowdowns when using MSVC's non-conforming preprocessor.
+#if defined(ARCH_PREPROCESSOR_MSVC_TRADITIONAL) && defined(__INTELLISENSE__)
+#define TF_DECLARE_PUBLIC_TOKENS(...)
+#else
 #define TF_DECLARE_PUBLIC_TOKENS(...) _TF_DECLARE_PUBLIC_TOKENS_EXPAND( _TF_DECLARE_PUBLIC_TOKENS_EVAL(_TF_DECLARE_PUBLIC_TOKENS_EXPAND( TF_PP_VARIADIC_SIZE(__VA_ARGS__) ))(__VA_ARGS__) )
+#endif
 
 /// Macro to define public tokens.  Use in conjunction with
 /// TF_DECLARE_PUBLIC_TOKENS.

@@ -103,6 +103,15 @@ class TestUsdFlatten(unittest.TestCase):
                 if len(ts_c):
                     print("]")
 
+                # Compare splines if the value source is spline, otherwise
+                # verify the flattened one doesn't have a spline.
+                if (attrc.GetResolveInfo().GetSource() ==
+                    Usd.ResolveInfoSourceSpline):
+                    self.assertEqual(attrc.GetSpline(), attr.GetSpline())
+                    print(" "*12, 'spline =', attr.GetSpline())
+                else:
+                    self.assertFalse(attr.HasSpline())
+
                 # Compare defaults.
                 self.assertEqual(attrc.Get(), attr.Get())
                 print(" "*12 + 'default =', attr.Get())
@@ -150,11 +159,11 @@ class TestUsdFlatten(unittest.TestCase):
         #    is not authored at all.
 
         # verify that flattening a valid clip range works
-        assert _CompareFlattened("clips/root.usd", 
+        assert _CompareFlattened("clips/root.usda", 
                                  "/World/fx/Particles_Splash/points",
                                  range(101, 105))
 
-        assert _CompareFlattened("hole_clips/root.usd", 
+        assert _CompareFlattened("hole_clips/root.usda", 
                                 "/World/fx/Particles_Splash/points",
                                 range(101, 105))
 

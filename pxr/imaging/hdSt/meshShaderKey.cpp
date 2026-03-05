@@ -122,6 +122,9 @@ TF_DEFINE_PRIVATE_TOKENS(
     // instancing related mixins
     ((instancing,                  "Instancing.Transform"))
 
+    // skinning
+    ((skinning,                    "Vertex.SkinPoints"))
+
     // terminals
     ((customDisplacementGS,        "Geometry.CustomDisplacement"))
     ((noCustomDisplacementGS,      "Geometry.NoCustomDisplacement"))
@@ -136,6 +139,12 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((pointShadedFS,               "Fragment.PointShaded"))
     ((scalarOverrideFS,            "Fragment.ScalarOverride"))
     ((noScalarOverrideFS,          "Fragment.NoScalarOverride"))
+
+    // rounded points
+    ((pointSizeBiasVS,             "PointDisk.Vertex.PointSizeBias"))
+    ((noPointSizeBiasVS,           "PointDisk.Vertex.None"))
+    ((diskSampleMaskFS,            "PointDisk.Fragment.SampleMask"))
+    ((noDiskSampleMaskFS,          "PointDisk.Fragment.None"))
 );
 
 HdSt_MeshShaderKey::HdSt_MeshShaderKey(
@@ -159,7 +168,8 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     bool enableScalarOverride,
     bool pointsShadingEnabled,
     bool forceOpaqueEdges,
-    bool surfaceEdgeIds)
+    bool surfaceEdgeIds,
+    bool nativeRoundPoints)
     : primType(primitiveType)
     , cullStyle(cullStyle)
     , hasMirroredTransform(hasMirroredTransform)
@@ -222,7 +232,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
      * Flat normals:
      *   [VS] .Pass, [PTVS] .Flat, [GS] .Flat, .Pass, [FS] .Pass
      *   (ptvs optional)
-    * Screen Space Flat normals:
+     * Screen Space Flat normals:
      *   [VS] .Pass, [PTVS] .Pass, [GS] .Pass, [FS] .ScreenSpace
      *   (geometry shader, ptvs optional)
      * Geometric Flat normals:
@@ -243,6 +253,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     // vertex shader
     uint8_t vsIndex = 0;
     VS[vsIndex++] = _tokens->instancing;
+    VS[vsIndex++] = _tokens->skinning;
 
     VS[vsIndex++] = (normalsSource == NormalSourceSmooth) ?
         _tokens->normalsSmooth :
@@ -255,8 +266,11 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
         VS[vsIndex++] = _tokens->pointIdVS;
         VS[vsIndex++] = _tokens->selDecodeUtils;
         VS[vsIndex++] = _tokens->selPointSelVS;
+        VS[vsIndex++] = nativeRoundPoints ? _tokens->noPointSizeBiasVS :
+            _tokens->pointSizeBiasVS;
     } else {
         VS[vsIndex++] =  _tokens->pointIdNoneVS;
+        VS[vsIndex++] =  _tokens->noPointSizeBiasVS;
     }
     VS[vsIndex++] = _tokens->mainVS;
     VS[vsIndex] = TfToken();
@@ -313,8 +327,11 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             PTVS[ptvsIndex++] = _tokens->pointIdVS;
             PTVS[ptvsIndex++] = _tokens->selDecodeUtils;
             PTVS[ptvsIndex++] = _tokens->selPointSelVS;
+            PTVS[ptvsIndex++] = nativeRoundPoints ? _tokens->noPointSizeBiasVS :
+                _tokens->pointSizeBiasVS;
         } else {
             PTVS[ptvsIndex++] =  _tokens->pointIdNoneVS;
+            PTVS[ptvsIndex++] =  _tokens->noPointSizeBiasVS;
         }
 
         if (hasCustomDisplacement) {
@@ -579,10 +596,17 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     }
 
     // PointId mixin for point picking and selection
-    FS[fsIndex++] = isPrimTypePoints? _tokens->pointIdFS :
-                                      _tokens->pointIdFallbackFS;
+    if (isPrimTypePoints) {
+        FS[fsIndex++] = _tokens->pointIdFS;
+        FS[fsIndex++] = nativeRoundPoints ? _tokens->noDiskSampleMaskFS :
+            _tokens->diskSampleMaskFS;
+    } else {
+        FS[fsIndex++] = _tokens->pointIdFallbackFS;
+        FS[fsIndex++] = _tokens->noDiskSampleMaskFS;
+    }
+
     FS[fsIndex++] = hasTopologicalVisibility? _tokens->topVisFS :
-                                              _tokens->topVisFallbackFS;
+                        _tokens->topVisFallbackFS;
 
     // Triangles
     if (isPrimTypeTris && ptvsStageEnabled) {

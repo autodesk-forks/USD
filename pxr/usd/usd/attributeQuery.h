@@ -22,6 +22,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+class TsSpline;
 
 /// \class UsdAttributeQuery
 ///
@@ -158,6 +159,13 @@ public:
     USD_API
     bool GetTimeSamples(std::vector<double>* times) const;
 
+    /// Returns a copy of the TsSpline associated with the resolved value.
+    ///
+    /// If the resolve value source is not a Spline, an empty Spline is 
+    /// returned.
+    USD_API
+    TsSpline GetSpline() const;
+
     /// Populates a vector with authored sample times in \p interval.
     /// Returns false only on an error.
     ///
@@ -217,12 +225,21 @@ public:
                                   bool* hasTimeSamples) const;
 
     /// Return true if the attribute associated with this query has an 
-    /// authored default value, authored time samples or a fallback value 
-    /// provided by a registered schema.
+    /// authored default value, authored time samples, authored spline or a 
+    /// fallback value provided by a registered schema.
     ///
     /// \sa UsdAttribute::HasValue
     USD_API
     bool HasValue() const;
+
+    /// Return true if the attribute associated with this query has an
+    /// a spline value as the strongest opinion.
+    ///
+    /// \sa UsdAttribute::HasSpline
+    /// \sa UsdAttributeQuery::GetSpline
+    /// \sa UsdAttributeQuery::ValueMightBeTimeVarying
+    USD_API
+    bool HasSpline() const;
 
     /// \deprecated This method is deprecated because it returns `true` even when
     /// an attribute is blocked.  Please use HasAuthoredValue() instead. If 
@@ -249,6 +266,22 @@ public:
     /// \sa UsdAttribute::HasFallbackValue
     USD_API
     bool HasFallbackValue() const;
+
+    /// If this attribute is a builtin attribute with a fallback value provided
+    /// by a schema, fetch that value and return true. Otherwise return false.
+    ///
+    /// \sa UsdAttribute::GetFallbackValue
+    template <typename T>
+    bool GetFallbackValue(T* value) const {
+        return _attr.GetFallbackValue<T>(value);
+    }
+
+    /// \overload
+    /// Type-erased accessor for getting the fallback value.
+    ///
+    /// \sa UsdAttribute::GetFallbackValue
+    USD_API
+    bool GetFallbackValue(VtValue* value) const;
 
     /// Return true if it is possible, but not certain, that this attribute's
     /// value changes over time, false otherwise. 

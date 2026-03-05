@@ -252,6 +252,20 @@ public:
     PCP_API
     bool IsDueToAncestor() const;
 
+    // Get/set whether this node or any of its ancestor nodes represents a
+    // direct dependency.
+    PCP_API
+    void SetHasTransitiveDirectDependency(bool hasDep);
+    PCP_API
+    bool HasTransitiveDirectDependency() const;
+
+    // Get/set whether this node or any of its ancestor nodes represents an
+    // ancestral dependency.
+    PCP_API
+    void SetHasTransitiveAncestralDependency(bool hasDep);
+    PCP_API
+    bool HasTransitiveAncestralDependency() const;
+
     /// Get/set whether this node provides any symmetry opinions, either
     /// directly or from a namespace ancestor.
     PCP_API
@@ -320,6 +334,13 @@ public:
     PCP_API
     bool HasSpecs() const;
 
+    /// Returns true if this node's site or a namespace ancestor
+    /// has authored value clips.
+    PCP_API
+    void SetHasValueClips(bool hasValueClips);
+    PCP_API
+    bool HasValueClips() const;
+
     /// @}
 
     // Returns a compressed Sd site.  For internal use only.
@@ -340,6 +361,7 @@ private:
     friend class PcpNodeRef_PrivateChildrenConstReverseIterator;
     friend class PcpNodeRef_PrivateSubtreeConstIterator;
     template <class T> friend class Pcp_TraversalCache;
+    friend bool Pcp_IsPropagatedSpecializesNode(const PcpNodeRef& node);
 
     // Private constructor for internal use.
     PcpNodeRef(PcpPrimIndex_Graph* graph, size_t idx)

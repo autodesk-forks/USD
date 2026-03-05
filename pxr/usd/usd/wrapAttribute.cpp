@@ -6,6 +6,7 @@
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/attribute.h"
+#include "pxr/usd/usd/attributeLimits.h"
 #include "pxr/usd/usd/wrapUtils.h"
 
 #include "pxr/usd/usd/pyConversions.h"
@@ -78,6 +79,14 @@ _Get(const UsdAttribute &self, UsdTimeCode time) {
     return UsdVtValueToPython(val);
 }
 
+static TfPyObjWrapper
+_GetFallbackValue(const UsdAttribute &self)
+{
+    VtValue val;
+    self.GetFallbackValue(&val);
+    return UsdVtValueToPython(val);
+}
+
 static bool
 _Set(const UsdAttribute &self, object val, const UsdTimeCode &time) {
     return self.Set(UsdPythonToSdfType(val, self.GetTypeName()), time);
@@ -121,6 +130,28 @@ void wrapUsdAttribute()
         .def("HasColorSpace", &UsdAttribute::HasColorSpace)
         .def("ClearColorSpace", &UsdAttribute::ClearColorSpace)
 
+        .def("GetLimits",
+             (VtDictionary (UsdAttribute::*)() const)
+               &UsdAttribute::GetLimits)
+        .def("SetLimits", &UsdAttribute::SetLimits)
+        .def("HasAuthoredLimits", &UsdAttribute::HasAuthoredLimits)
+        .def("ClearLimits", &UsdAttribute::ClearLimits)
+
+        .def("GetLimits",
+             (UsdAttributeLimits (UsdAttribute::*)(const TfToken&) const)
+               &UsdAttribute::GetLimits)
+        .def("GetSoftLimits", &UsdAttribute::GetSoftLimits)
+        .def("GetHardLimits", &UsdAttribute::GetHardLimits)
+
+        .def("GetArraySizeConstraint",
+             &UsdAttribute::GetArraySizeConstraint)
+        .def("SetArraySizeConstraint",
+             &UsdAttribute::SetArraySizeConstraint)
+        .def("HasAuthoredArraySizeConstraint",
+             &UsdAttribute::HasAuthoredArraySizeConstraint)
+        .def("ClearArraySizeConstraint",
+             &UsdAttribute::ClearArraySizeConstraint)
+
         .def("GetTimeSamples", _GetTimeSamples,
              return_value_policy<TfPySequenceToList>())
 
@@ -149,6 +180,7 @@ void wrapUsdAttribute()
         .def("HasAuthoredValueOpinion", &UsdAttribute::HasAuthoredValueOpinion)
         .def("HasAuthoredValue", &UsdAttribute::HasAuthoredValue)
         .def("HasFallbackValue", &UsdAttribute::HasFallbackValue)
+        .def("GetFallbackValue", _GetFallbackValue)
 
         .def("ValueMightBeTimeVarying", &UsdAttribute::ValueMightBeTimeVarying)
 
@@ -172,6 +204,7 @@ void wrapUsdAttribute()
         .def("ClearDefault", &UsdAttribute::ClearDefault)
 
         .def("Block", &UsdAttribute::Block)
+        .def("BlockAnimation", &UsdAttribute::BlockAnimation)
 
         .def("AddConnection", &UsdAttribute::AddConnection,
              (arg("source"),

@@ -112,15 +112,9 @@ HgiMetalGraphicsCmds::HgiMetalGraphicsCmds(
             hasClear = true;
         }
         
-        if (@available(macos 100.100, ios 8.0, *)) {
-            metalColorAttachment.loadAction = MTLLoadActionLoad;
-        }
-        else {
-            metalColorAttachment.loadAction =
+        metalColorAttachment.loadAction =
                 HgiMetalConversions::GetAttachmentLoadOp(
                     hgiColorAttachment.loadOp);
-        }
-
         metalColorAttachment.storeAction =
             HgiMetalConversions::GetAttachmentStoreOp(
                 hgiColorAttachment.storeOp);
@@ -769,7 +763,9 @@ HgiMetalGraphicsCmds::DrawIndexedIndirect(
 }
 
 void
-HgiMetalGraphicsCmds::PushDebugGroup(const char* label)
+HgiMetalGraphicsCmds::PushDebugGroup(
+        const char* label,
+        const GfVec4f& color)
 {
     if (!HgiMetalDebugEnabled()) {
         return;
@@ -797,6 +793,23 @@ HgiMetalGraphicsCmds::PopDebugGroup()
     if (_debugLabel) {
         [_debugLabel release];
         _debugLabel = nil;
+    }
+}
+
+void
+HgiMetalGraphicsCmds::InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color)
+{
+    if (!HgiMetalDebugEnabled()) {
+        return;
+    }
+
+    if (_parallelEncoder) {
+        HGIMETAL_DEBUG_INSERT_DEBUG_MARKER(_parallelEncoder, label)
+    }
+    else if (!_encoders.empty()) {
+        HGIMETAL_DEBUG_INSERT_DEBUG_MARKER(GetEncoder(), label)
     }
 }
 

@@ -21,6 +21,7 @@
 #include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hd/mergingSceneIndex.h"
 #include "pxr/imaging/hd/legacyPrimSceneIndex.h"
+#include "pxr/imaging/hd/legacyTaskFactory.h"
 #include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
 
 #include "pxr/imaging/hf/perfLog.h"
@@ -129,6 +130,32 @@ public:
         const std::string &instanceName=std::string(),
         const std::string &appName=std::string());
 
+    /// Create a render index with the given render delegate that populates
+    /// itself by observing the given scene index.
+    /// Returns null if renderDelegate is null.
+    /// The render delegate and render tasks may require access to a renderer's
+    /// device provided by the application. The objects can be
+    /// passed in as 'drivers'. Hgi is an example of a HdDriver.
+    ///   hgi = Hgi::CreatePlatformDefaultHgi()
+    ///   hgiDriver = new HdDriver<Hgi*>(HgiTokens→renderDriver, hgi)
+    ///   HdRenderIndex::New(_renderDelegate, {_hgiDriver})
+    ///
+    static HdRenderIndex *New(
+        HdRenderDelegate *renderDelegate, 
+        HdDriverVector const& drivers,
+        HdSceneIndexBaseRefPtr const &terminalSceneIndex);
+
+    /// Create a render index for "front-end" emulation. That is,
+    /// the render index can be populated from an HdSceneDelegate and
+    /// populates the returned emulation scene index.
+    ///
+    /// The HdRenderDelegate is not populated. It is just used by the
+    /// HdSceneDelegate for queries such as
+    /// HdRenderDelegate::GetMaterialBindingPurpose().
+    ///
+    static HdRenderIndex *
+    New(HdRenderDelegate *renderDelegate);
+
     HD_API
     ~HdRenderIndex();
 
@@ -219,6 +246,10 @@ public:
 
     /// Query function to return the id's of the scene delegate and instancer
     /// associated with the Rprim at the given path.
+    ///
+    /// \deprecated. Query terminal scene index for prim and extract instancer
+    /// from HdInstancedBySchema instead.
+    ///
     HD_API
     bool GetSceneDelegateAndInstancerIds(SdfPath const &id,
                                          SdfPath* sceneDelegateId,
@@ -269,14 +300,29 @@ public:
     /// \name Task Support
     // ---------------------------------------------------------------------- //
 
+    /// \deprecated
+    ///
+    /// In Hydra 2.0, tasks are managed by a scene index such as the
+    /// HdxTaskControllerSceneIndex (reimplementing HdxTaskController).
+    ///
     /// Inserts a new task into the render index with an identifier of \p id.
     template <typename T>
     void InsertTask(HdSceneDelegate* delegate, SdfPath const& id);
 
+    /// \deprecated
+    ///
+    /// In Hydra 2.0, tasks are managed by a scene index such as the
+    /// HdxTaskControllerSceneIndex (reimplementing HdxTaskController).
+    ///
     /// Removes the given task from the RenderIndex.
     HD_API
     void RemoveTask(SdfPath const& id);
 
+    /// \deprecated
+    ///
+    /// In Hydra 2.0, tasks are managed by a scene index such as the
+    /// HdxTaskControllerSceneIndex (reimplementing HdxTaskController).
+    ///
     /// Returns true if a task exists in the index with the given \p id.
     bool HasTask(SdfPath const& id) {
         return _taskMap.find(id) != _taskMap.end();
@@ -365,6 +411,9 @@ public:
     HD_API
     HdSceneIndexBaseRefPtr GetTerminalSceneIndex() const;
 
+    HD_API
+    HdSceneIndexBaseRefPtr GetEmulationSceneIndex() const;
+    
     // ---------------------------------------------------------------------- //
     /// \name Render Delegate
     // ---------------------------------------------------------------------- //
@@ -434,7 +483,9 @@ private:
         HdRenderDelegate *renderDelegate, 
         HdDriverVector const& drivers,
         const std::string &instanceName,
-        const std::string &appName);
+        const std::string &appName,
+        HdSceneIndexBaseRefPtr const &terminalSceneIndex = nullptr,
+        bool createFrontEndEmulationOnly = false);
 
     // ---------------------------------------------------------------------- //
     // Private Helper methods 
@@ -450,13 +501,13 @@ private:
     using HdTaskCreateFnc =
             std::function<HdTaskSharedPtr(HdSceneDelegate*, SdfPath const&)>;
 
-    // Inserts the task into the index and updates tracking state.
-    // _TrackDelegateTask is called by the inlined InsertTask<T>, so it needs
-    // to be marked HD_API.
+    // Implements InsertTask<T>.
+    // Inserts task going through emulation if enabled.
     HD_API
-    void _TrackDelegateTask(HdSceneDelegate* delegate, 
-                            SdfPath const& taskId,
-                            HdTaskCreateFnc taskCreateFnc);
+    void _InsertSceneDelegateTask(
+        HdSceneDelegate* delegate, 
+        SdfPath const& taskId,
+        HdLegacyTaskFactorySharedPtr factory);
 
     template <typename T>
     static inline const TfToken & _GetTypeId();
@@ -509,6 +560,7 @@ private:
                                       HdSceneDelegate* sceneDelegate);
     void _RemoveTaskSubtree(const SdfPath &root,
                             HdSceneDelegate* sceneDelegate);
+    void _RemoveTask(SdfPath const &id);
     void _Clear();
 
     // ---------------------------------------------------------------------- //
@@ -561,6 +613,7 @@ private:
     HdRenderDelegate *_renderDelegate;
     HdDriverVector _drivers;
 
+    HdSceneIndexBaseRefPtr _finalEmulationSceneIndex;
 
     std::string _instanceName;
 
@@ -608,12 +661,8 @@ template <typename T>
 void
 HdRenderIndex::InsertTask(HdSceneDelegate* delegate, SdfPath const& id)
 {
-    auto createTask = [](HdSceneDelegate* _delegate, SdfPath const& _id) -> HdTaskSharedPtr
-    {
-        return std::make_shared<T>(_delegate, _id);
-    };
-
-    _TrackDelegateTask(delegate, id, createTask);
+    _InsertSceneDelegateTask(
+        delegate, id, HdMakeLegacyTaskFactory<T>());
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

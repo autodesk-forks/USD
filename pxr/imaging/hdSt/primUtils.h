@@ -105,8 +105,9 @@ void HdStSetMaterialTag(HdSceneDelegate *delegate,
                         HdRenderParam *renderParam,
                         HdDrawItem *drawItem,
                         SdfPath const & materialId,
-                        bool hasDisplayOpacityPrimvar,
-                        bool occludedSelectionShowsThrough);
+                        const bool hasDisplayOpacityPrimvar,
+                        const bool displayInOverlay,
+                        const bool occludedSelectionShowsThrough);
 // Resolves the material network shader for the given prim (using a fallback
 // material as necessary).
 HDST_API
@@ -200,6 +201,12 @@ bool HdStIsPrimvarExistentAndValid(
     HdPrimvarDescriptorVector const& primvars,
     TfToken const& primvarName);
 
+HDST_API
+bool HdStIsPrimvarValidForDrawItem(
+    const HdStDrawItem *drawItem,
+    TfToken const &primvarName,
+    VtValue const &primvarValue);
+
 // -----------------------------------------------------------------------------
 // Constant primvar processing utilities
 // -----------------------------------------------------------------------------
@@ -221,8 +228,13 @@ void HdStPopulateConstantPrimvars(
     HdRenderParam *renderParam,
     HdStDrawItem *drawItem,
     HdDirtyBits *dirtyBits,
-    HdPrimvarDescriptorVector const& constantPrimvars,
-    bool *hasMirroredTransform = nullptr);
+    HdReprSharedPtr const &repr,
+    HdMeshGeomStyle descGeomStyle,
+    int geomSubsetDescIndex,
+    size_t numGeomSubsets,
+    bool *hasMirroredTransform = nullptr,
+    bool *hasDisplayOpacity = nullptr,
+    bool *hasNormals = nullptr);
 
 // -----------------------------------------------------------------------------
 // Instancer processing utilities
@@ -236,7 +248,9 @@ void HdStUpdateInstancerData(
     HdRprim *prim,
     HdStDrawItem *drawItem,
     HdRprimSharedData *sharedData,
-    HdDirtyBits rprimDirtyBits);
+    HdDirtyBits rprimDirtyBits,
+    bool *hasDisplayOpacity = nullptr,
+    bool *hasNormals = nullptr);
 
 // Returns true if primvar with primvarName exists among instance primvar
 // descriptors.

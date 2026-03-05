@@ -17,7 +17,9 @@ pxr_library(hdMtlx
     PUBLIC_CLASSES
         hdMtlx
         debugCodes
+        tokens
 
     PUBLIC_HEADERS
         api.h
+        combinedMtlxVersion.h
 )

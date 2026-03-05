@@ -31,12 +31,11 @@
 #include "pxr/usd/sdf/notice.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/types.h"
+#include "pxr/usd/sdf/valueTypeName.h"
 #include "pxr/usd/pcp/cache.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/base/work/dispatcher.h"
 
-#include <tbb/concurrent_vector.h>
-#include <tbb/concurrent_unordered_set.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_rw_mutex.h>
 
@@ -57,7 +56,7 @@ class Usd_AssetPathContext;
 class Usd_ClipCache;
 class Usd_InstanceCache;
 class Usd_InstanceChanges;
-class Usd_InterpolatorBase;
+class Usd_Interpolator;
 class Usd_Resolver;
 class UsdResolveInfo;
 class UsdResolveTarget;
@@ -704,7 +703,9 @@ public:
     ///
     /// The stage's named root prims are namespace children of this prim,
     /// which exists to make the namespace hierarchy a tree instead of a
-    /// forest.  This simplifies algorithms that want to traverse all prims.
+    /// forest.  This simplifies algorithms that want to traverse all prims.  
+    /// Note that the \ref Usd_stageMetadata "stage metadata" is accesible 
+    /// through the pseudo root.
     ///
     /// A UsdStage always has a pseudo-root prim, unless there was an error
     /// opening or creating the stage, in which case this method returns
@@ -1240,11 +1241,8 @@ public:
     /// Generates a coding error if \p key is not allowed as layer metadata.
     ///
     /// \sa \ref Usd_OM_Metadata
-    template<typename T>
-    bool SetMetadata(const TfToken &key, const T &value) const;
-    /// \overload
     USD_API
-    bool SetMetadata(const TfToken &key, const VtValue &value) const;
+    bool SetMetadata(const TfToken &key, VtValueRef value) const;
 
     /// Clear the value of stage metadatum \p key, if the stage's
     /// current UsdEditTarget is the root or session layer.
@@ -1317,13 +1315,9 @@ public:
     /// Generates a coding error if \p key is not allowed as layer metadata.
     ///
     /// \sa \ref Usd_Dictionary_Type
-    template<typename T>
-    bool SetMetadataByDictKey(const TfToken& key, const TfToken &keyPath, 
-                              const T& value) const;
-    /// \overload
     USD_API
     bool SetMetadataByDictKey(
-        const TfToken& key, const TfToken &keyPath, const VtValue& value) const;
+        const TfToken& key, const TfToken &keyPath, VtValueRef value) const;
 
     /// Clear any authored value identified by \p key and \p keyPath
     /// at the current EditTarget.
@@ -1633,6 +1627,7 @@ private:
     UsdPrimDefinition::Property
     _GetSchemaProperty(const UsdProperty &prop) const;
 
+    USD_API
     UsdPrimDefinition::Attribute
     _GetSchemaAttribute(const UsdAttribute &attr) const;
 
@@ -1694,80 +1689,24 @@ private:
     // Value & Metadata Authoring
     // --------------------------------------------------------------------- //
 
-    // Trait that allows us to call the correct versions of _SetValue and 
-    // _SetMetadata for types whose values need to be mapped when written to
-    // different edit targets.
-    template <class T>
-    struct _IsEditTargetMappable {
-        static const bool value =
-            std::is_same<T, SdfTimeCode>::value ||
-            std::is_same<T, VtArray<SdfTimeCode>>::value ||
-            std::is_same<T, SdfPathExpression>::value ||
-            std::is_same<T, VtArray<SdfPathExpression>>::value ||
-            std::is_same<T, SdfTimeSampleMap>::value ||
-            std::is_same<T, TsSpline>::value ||
-            std::is_same<T, VtDictionary>::value;
-    };
-
-    // Set value for types that don't need to be mapped for edit targets.
-    template <class T>
-    typename std::enable_if<!_IsEditTargetMappable<T>::value, bool>::type
-    _SetValue(
-        UsdTimeCode time, const UsdAttribute &attr, const T &newValue);
-
-    // Set value for types that do need to be mapped for edit targets.
-    template <class T>
-    typename std::enable_if<_IsEditTargetMappable<T>::value, bool>::type
-    _SetValue(
-        UsdTimeCode time, const UsdAttribute &attr, const T &newValue);
-
-    // Set value for dynamically typed VtValue. Will map the value across edit
-    // targets if the held value type supports it.
+    // Set value for dynamically typed VtValueRef. Will map the value across
+    // edit targets if the held value type supports it.
     bool _SetValue(
-        UsdTimeCode time, const UsdAttribute &attr, const VtValue &newValue);
+        UsdTimeCode time, const UsdAttribute &attr, VtValueRef newValue);
 
-    template <class T>
-    bool _SetEditTargetMappedValue(
-        UsdTimeCode time, const UsdAttribute &attr, const T &newValue);
-
-    TfType _GetAttributeValueType(
-        const UsdAttribute &attr) const;
-
-    template <class T>
-    bool _SetValueImpl(
-        UsdTimeCode time, const UsdAttribute &attr, const T& value);
+    TfToken _GetAttributeValueTypeNameToken(const UsdAttribute &attr) const;
+    SdfValueTypeName _GetAttributeValueTypeName(const UsdAttribute &attr) const;
+    TfType _GetAttributeValueType(const UsdAttribute &attr) const;
 
     bool _ClearValue(UsdTimeCode time, const UsdAttribute &attr);
 
-    // Set metadata for types that don't need to be mapped across edit targets.
-    template <class T>
-    typename std::enable_if<!_IsEditTargetMappable<T>::value, bool>::type
-    _SetMetadata(const UsdObject &object, const TfToken& key,
-                 const TfToken &keyPath, const T& value);
-
-    // Set metadata for types that do need to be mapped for edit targets.
-    template <class T>
-    typename std::enable_if<_IsEditTargetMappable<T>::value, bool>::type
-    _SetMetadata(const UsdObject &object, const TfToken& key,
-                 const TfToken &keyPath, const T& value);
-
-    // Set metadata for dynamically typed VtValue. Will map the value across 
-    // edit targets if the held value type supports it.
+    // Set metadata for dynamically typed VtValueRef. Will map the value across 
+    // edit targets if the value type supports it.
     USD_API
     bool _SetMetadata(const UsdObject &object,
                       const TfToken& key,
                       const TfToken &keyPath,
-                      const VtValue& value);
-
-    template <class T>
-    bool _SetEditTargetMappedMetadata(
-        const UsdObject &obj, const TfToken& fieldName,
-        const TfToken &keyPath, const T &newValue);
-
-    template <class T>
-    bool _SetMetadataImpl(
-        const UsdObject &obj, const TfToken& fieldName,
-        const TfToken &keyPath, const T &value);
+                      VtValueRef value);
 
     bool _ClearMetadata(const UsdObject &obj, const TfToken& fieldName,
                         const TfToken &keyPath=TfToken());
@@ -1880,14 +1819,18 @@ private:
 
     // Pushes changes through PCP to determine invalidation based on 
     // composition metadata.
-    void _ProcessChangeLists(const SdfLayerChangeListVec &);
+    // Note: This method will not perform any processing or notification
+    // Refer to _ProcessPendingChanges()
+    void _ComputePendingChanges(const SdfLayerChangeListVec &);
 
     // Update stage contents in response to changes to the asset resolver.
     void _HandleResolverDidChange(const ArNotice::ResolverChanged &);
 
     // Process stage change information stored in _pendingChanges.
     // _pendingChanges will be set to nullptr by the end of the function.
-    void _ProcessPendingChanges();
+    // This function will return true if UsdNotice::ObjectsChanged and 
+    // UsdNotice::StageContentsChanged notices were sent during execution.
+    bool _ProcessPendingChanges();
 
     // Remove scene description for the prim at \p fullPath in the current edit
     // target.
@@ -1968,18 +1911,6 @@ private:
                                       VtValue *value,
                                       bool anchorAssetPathsOnly = false) const;
 
-    void _MakeResolvedTimeCodes(UsdTimeCode time, const UsdAttribute &attr,
-                                SdfTimeCode *timeCodes,
-                                size_t numTimeCodes) const;
-
-    void _MakeResolvedPathExpressions(
-        UsdTimeCode time, const UsdAttribute &attr,
-        SdfPathExpression *pathExprs,
-        size_t numPathExprs) const;
-
-    void _MakeResolvedAttributeValue(UsdTimeCode time, const UsdAttribute &attr,
-                                     VtValue *value) const;
-
     // --------------------------------------------------------------------- //
     // Metadata Resolution
     // --------------------------------------------------------------------- //
@@ -2004,52 +1935,36 @@ public:
     };
 
 private:
-    // Get metadata for types that do not have type specific value resolution.
-    template <class T>
-    typename std::enable_if<!_HasTypeSpecificResolution<T>::value, bool>::type
-    _GetMetadata(const UsdObject &obj,
-                 const TfToken& fieldName,
-                 const TfToken &keyPath,
-                 bool useFallbacks,
-                 T* result) const;
-
-    // Get metadata for types that do have type specific value resolution.
-    template <class T>
-    typename std::enable_if<_HasTypeSpecificResolution<T>::value, bool>::type
-    _GetMetadata(const UsdObject &obj,
-                 const TfToken& fieldName,
-                 const TfToken &keyPath,
-                 bool useFallbacks,
-                 T* result) const;
-
     // Get metadata as a dynamically typed VtValue. Will perform type specific
     // value resolution if the returned held type requires it.
+    USD_API
     bool _GetMetadata(const UsdObject &obj,
                       const TfToken& fieldName,
                       const TfToken &keyPath,
                       bool useFallbacks,
                       VtValue* result) const;
 
-    // Gets a metadata value using only strongest value resolution. It is 
-    // assumed that result is holding a value that does not require type 
-    // specific value resolution.
     USD_API
-    bool _GetStrongestResolvedMetadata(const UsdObject &obj,
-                                       const TfToken& fieldName,
-                                       const TfToken &keyPath,
-                                       bool useFallbacks,
-                                       SdfAbstractDataValue* result) const;
+    bool _GetMetadata(const UsdObject &obj,
+                      const TfToken& fieldName,
+                      const TfToken &keyPath,
+                      bool useFallbacks,
+                      SdfAbstractDataValue *result,
+                      bool strongestOnly) const;
 
-    // Gets a metadata value with the type specific value resolution for the 
-    // type applied. This is only implemented for types that 
-    // _HasTypeSpecificResolution.
     template <class T>
-    USD_API
-    bool _GetTypeSpecificResolvedMetadata(const UsdObject &obj,
-                                          const TfToken& fieldName,
-                                          const TfToken &keyPath,
-                                          bool useFallbacks,
-                                          T* result) const;
+    bool _GetMetadata(const UsdObject &obj,
+                      const TfToken& fieldName,
+                      const TfToken &keyPath,
+                      bool useFallbacks,
+                      T* result) const {
+        SdfAbstractDataTypedValue<T> out(result);
+        const bool strongestOnly =
+            !VtValueTypeCanCompose<std::decay_t<T>>::value &&
+            !VtValueTypeCanTransform<std::decay_t<T>>::value;
+        return _GetMetadata(obj, fieldName, keyPath, useFallbacks, &out,
+                            strongestOnly);
+    }
 
     template <class Composer>
     void _GetAttrTypeImpl(const UsdAttribute &attr,
@@ -2105,28 +2020,17 @@ private:
     // Default & TimeSample Resolution
     // --------------------------------------------------------------------- //
 
-    void _GetResolveInfo(const UsdAttribute &attr, 
-                         UsdResolveInfo *resolveInfo,
-                         const UsdTimeCode *time = nullptr) const;
-
-    void _GetResolveInfoWithResolveTarget(
-        const UsdAttribute &attr, 
-        const UsdResolveTarget &resolveTarget,
-        UsdResolveInfo *resolveInfo,
-        const UsdTimeCode *time = nullptr) const;
-
-    template <class T> struct _ExtraResolveInfo;
+    struct _ExtraResolveInfo;
 
     // Gets the value resolve info for the given attribute. If time is provided,
     // the resolve info is evaluated for that specific time (which may be 
     // default). Otherwise, if time is null, the resolve info is evaluated for
     // "any numeric time" and will not populate values in extraInfo that 
     // require a specific time to be evaluated.
-    template <class T>
     void _GetResolveInfo(const UsdAttribute &attr, 
                          UsdResolveInfo *resolveInfo,
                          const UsdTimeCode *time = nullptr,
-                         _ExtraResolveInfo<T> *extraInfo = nullptr) const;
+                         _ExtraResolveInfo *extraInfo = nullptr) const;
 
     // Gets the value resolve info for the given attribute using the given 
     // resolve target. If time is provided, the resolve info is evaluated for 
@@ -2134,28 +2038,34 @@ private:
     // the resolve info is evaluated for "any numeric time" and will not 
     // populate values in extraInfo that require a specific time to be 
     // evaluated.
-    template <class T>
     void _GetResolveInfoWithResolveTarget(
         const UsdAttribute &attr, 
         const UsdResolveTarget &resolveTarget,
         UsdResolveInfo *resolveInfo,
         const UsdTimeCode *time = nullptr,
-        _ExtraResolveInfo<T> *extraInfo = nullptr) const;
+        _ExtraResolveInfo *extraInfo = nullptr) const;
 
     // Shared implementation function for _GetResolveInfo and 
     // _GetResolveInfoWithResolveTarget. The only difference between how these
     // two functions behave is in how they create the Usd_Resolver used for 
     // iterating over nodes and layers, thus they provide this implementation
     // with the needed MakeUsdResolverFn to create the Usd_Resolver.
-    template <class T, class MakeUsdResolverFn>
+    template <class MakeUsdResolverFn>
     void _GetResolveInfoImpl(const UsdAttribute &attr, 
                          UsdResolveInfo *resolveInfo,
                          const UsdTimeCode *time,
-                         _ExtraResolveInfo<T> *extraInfo,
+                         _ExtraResolveInfo *extraInfo,
                          const MakeUsdResolverFn &makeUsdResolveFn) const;
 
-    template <class T> struct _ResolveInfoResolver;
+    struct _BracketingSamplesResolver;
     struct _PropertyStackResolver;
+    struct _ResolveInfoResolver;
+    struct _SamplesInIntervalResolver;
+    struct _TimeSampleMapResolver;
+
+    bool _GetTimeSampleMap(const UsdAttribute &attr,
+                           SdfTimeSampleMap *out,
+                           bool forFlattening=false) const;
 
     template <class Resolver, class MakeUsdResolverFn>
     void _GetResolvedValueAtDefaultImpl(
@@ -2167,42 +2077,53 @@ private:
     void _GetResolvedValueAtTimeImpl(
         const UsdProperty &prop,
         Resolver *resolver,
-        const double *time,
+        const UsdTimeCode *time,
         const MakeUsdResolverFn &makeUsdResolverFn) const;
 
     bool _GetValue(UsdTimeCode time, const UsdAttribute &attr, 
                    VtValue* result) const;
 
-    template <class T>
+    USD_API
     bool _GetValue(UsdTimeCode time, const UsdAttribute &attr,
-                   T* result) const;
+                   SdfAbstractDataValue* result) const;
 
     template <class T>
     bool _GetValueImpl(UsdTimeCode time, const UsdAttribute &attr, 
-                       Usd_InterpolatorBase* interpolator,
+                       Usd_Interpolator const &interpolator,
                        T* value) const;
 
     USD_API
-    bool _GetValueFromResolveInfo(const UsdResolveInfo &info,
-                                  UsdTimeCode time, const UsdAttribute &attr,
-                                  VtValue* result) const;
+    bool _GetValueFromResolveInfo(
+        const UsdResolveInfo &info,
+        UsdTimeCode time, const UsdAttribute &attr,
+        VtValue* result,
+        const UsdResolveTarget *resolveTarget = nullptr) const;
 
-    template <class T>
     USD_API
-    bool _GetValueFromResolveInfo(const UsdResolveInfo &info,
-                                  UsdTimeCode time, const UsdAttribute &attr,
-                                  T* result) const;
+    bool _GetValueFromResolveInfo(
+        const UsdResolveInfo &info,
+        UsdTimeCode time, const UsdAttribute &attr,
+        SdfAbstractDataValue* result,
+        const UsdResolveTarget *resolveTarget = nullptr) const;
 
+    // If `resolveTarget` is not null, then `infoIn` must have been obtained
+    // with it (see _GetResolveInfoWithResolveTarget).
+    //
+    // If `extraInfo` is not null, then `infoIn` must be a complete resolve info
+    // obtained for the specific `time`.
     template <class T>
-    bool _GetValueFromResolveInfoImpl(const UsdResolveInfo &info,
-                                      UsdTimeCode time, const UsdAttribute &attr,
-                                      Usd_InterpolatorBase* interpolator,
-                                      T* value) const;
+    bool _GetValueFromResolveInfoImpl(
+        UsdTimeCode time, const UsdAttribute &attr,
+        Usd_Interpolator const &interpolator,
+        const UsdResolveInfo &infoIn, const UsdResolveTarget *resolveTarget,
+        const _ExtraResolveInfo *extraInfo, T *result) const;
 
-    template <class T>
-    bool _GetDefaultValueFromResolveInfoImpl(const UsdResolveInfo &info,
-                                             const UsdAttribute &attr,
-                                             T* value) const;
+    bool _GetCompletedResolveInfo(const UsdAttribute &attr,
+                                  UsdTimeCode time,
+                                  const UsdResolveTarget *resolveTarget,
+                                  const UsdResolveInfo &infoIn,
+                                  UsdResolveInfo *infoOut,
+                                  _ExtraResolveInfo *extraInfoOut) const;
 
     Usd_AssetPathContext
     _GetAssetPathContext(UsdTimeCode time, const UsdAttribute &attr) const;
@@ -2217,43 +2138,35 @@ private:
     /// open/finite endpoints, however, this restriction may be lifted 
     /// in the future.
     /// Returns false on an error.
-    bool _GetTimeSamplesInInterval(const UsdAttribute &attr,
-                                   const GfInterval& interval,
-                                   std::vector<double>* times) const;
+    bool _GetTimeSamplesInInterval(
+        const UsdAttribute &attr,
+        const GfInterval& interval,
+        std::vector<double>* times,
+        const UsdResolveInfo *resolveInfo=nullptr,
+        const UsdResolveTarget *resolveTarget=nullptr) const;
 
-    bool _GetTimeSamplesInIntervalFromResolveInfo(
-                                   const UsdResolveInfo &info,
-                                   const UsdAttribute &attr,
-                                   const GfInterval& interval,
-                                   std::vector<double>* times) const;
-
-    size_t _GetNumTimeSamples(const UsdAttribute &attr) const;
-
-    size_t _GetNumTimeSamplesFromResolveInfo(const UsdResolveInfo &info,
-                                           const UsdAttribute &attr) const;
+    size_t _GetNumTimeSamples(
+        const UsdAttribute &attr,
+        const UsdResolveInfo *resolveInfo=nullptr,
+        const UsdResolveTarget *resolveTarget=nullptr) const;
 
     /// Gets the bracketing times around a desiredTime. Only false on error
     /// or if no value exists (default or timeSamples). See
     /// UsdAttribute::GetBracketingTimeSamples for details.
-    bool _GetBracketingTimeSamples(const UsdAttribute &attr,
-                                   double desiredTime,
-                                   bool authoredOnly,
-                                   double* lower,
-                                   double* upper,
-                                   bool* hasSamples) const;
-
-    bool _GetBracketingTimeSamplesFromResolveInfo(const UsdResolveInfo &info,
-                                                  const UsdAttribute &attr,
-                                                  double desiredTime,
-                                                  bool authoredOnly,
-                                                  double* lower,
-                                                  double* upper,
-                                                  bool* hasSamples) const;
+    bool _GetBracketingTimeSamples(
+        const UsdAttribute &attr,
+        double desiredTime,
+        double* lower,
+        double* upper,
+        bool* hasSamples,
+        const UsdResolveInfo *resolveInfo=nullptr,
+        const UsdResolveTarget *resolveTarget=nullptr) const;
 
     bool _ValueMightBeTimeVarying(const UsdAttribute &attr) const;
 
-    bool _ValueMightBeTimeVaryingFromResolveInfo(const UsdResolveInfo &info,
-                                                 const UsdAttribute &attr) const;
+    bool _ValueMightBeTimeVaryingFromResolveInfo(
+        const UsdResolveInfo &info,
+        const UsdAttribute &attr) const;
 
     void _RegisterPerLayerNotices();
     void _RegisterResolverChangeNotice();
@@ -2262,6 +2175,37 @@ private:
     inline char const *_GetMallocTagId() const;
 
 private:
+    class _PendingChanges;
+
+    // Change block for use by the UsdNamespaceEditor to allow it to indicate
+    // to its dependent stages what the expected namespace edits are when the
+    // stages handles notices from the changes the namespace editor performs.
+    // The stage uses this provide additional information about prim resyncs
+    // related to namespace edits in the ObjectsChanged notice it sends.
+    class _NamespaceEditsChangeBlock {
+    public:
+        // Info about an expected namespace edit change from UsdNamespaceEditor.
+        // This includes the original pre-edit prim stack of the prim at the old
+        // path which is used to determine if the prim at the new path has the
+        // same composed contents after the edits as the prim had originally at
+        // the old path before the edits.
+        struct ExpectedNamespaceEditChange {
+            SdfPath oldPath;
+            SdfPath newPath;
+            SdfPrimSpecHandleVector oldPrimStack;
+        };
+        using ExpectedNamespaceEditChangeVector = 
+            std::vector<ExpectedNamespaceEditChange>;
+
+        _NamespaceEditsChangeBlock(const UsdStagePtr &stage,
+            ExpectedNamespaceEditChangeVector &&expectedChanges);
+        _NamespaceEditsChangeBlock(_NamespaceEditsChangeBlock &&);
+        ~_NamespaceEditsChangeBlock();
+
+    private:
+        UsdStagePtr _stage;
+        std::unique_ptr<_PendingChanges> _localPendingChanges;
+    };
 
     // The 'pseudo root' prim.
     Usd_PrimDataPtr _pseudoRoot;
@@ -2309,7 +2253,6 @@ private:
     TfNotice::Key _resolverChangeKey;
 
     // Data for pending change processing.
-    class _PendingChanges;
     _PendingChanges* _pendingChanges;
 
     std::optional<WorkDispatcher> _dispatcher;
@@ -2355,18 +2298,6 @@ private:
         friend struct Usd_ListEditImpl;
 };
 
-// UsdObject's typed metadata query relies on this specialization being
-// externally visible and exporting the primary template does not
-// automatically export this specialization.
-template <>
-USD_API
-bool
-UsdStage::_GetTypeSpecificResolvedMetadata(const UsdObject &obj,
-                                           const TfToken& fieldName,
-                                           const TfToken &keyPath,
-                                           bool useFallbacks,
-                                           SdfTimeSampleMap* result) const;
-
 template<typename T>
 bool
 UsdStage::GetMetadata(const TfToken& key, T* value) const
@@ -2387,14 +2318,6 @@ UsdStage::GetMetadata(const TfToken& key, T* value) const
                         result.GetTypeName().c_str());
         return false;
     }
-}
-
-template<typename T>
-bool 
-UsdStage::SetMetadata(const TfToken& key, const T& value) const
-{
-    VtValue in(value);
-    return SetMetadata(key, in);
 }
 
 template<typename T>
@@ -2419,71 +2342,6 @@ UsdStage::GetMetadataByDictKey(const TfToken& key, const TfToken &keyPath,
                         result.GetTypeName().c_str());
         return false;
     }
-}
-
-template<typename T>
-bool 
-UsdStage::SetMetadataByDictKey(const TfToken& key, const TfToken &keyPath, 
-                               const T& value) const
-{
-    VtValue in(value);
-    return SetMetadataByDictKey(key, keyPath, in);
-}
-
-// Get metadata for types that do not have type specific value resolution.
-template <class T>
-typename std::enable_if<
-    !UsdStage::_HasTypeSpecificResolution<T>::value, bool>::type
-UsdStage::_GetMetadata(const UsdObject &obj,
-                       const TfToken& fieldName,
-                       const TfToken &keyPath,
-                       bool useFallbacks,
-                       T* result) const
-{
-    // Since these types don't have type specific value resolution, we can just 
-    // get the strongest metadata value and be done.
-    SdfAbstractDataTypedValue<T> out(result);
-    return _GetStrongestResolvedMetadata(
-        obj, fieldName, keyPath, useFallbacks, &out);
-}
-
-// Get metadata for types that do have type specific value resolution.
-template <class T>
-typename std::enable_if<
-    UsdStage::_HasTypeSpecificResolution<T>::value, bool>::type
-UsdStage::_GetMetadata(const UsdObject &obj,
-                       const TfToken& fieldName,
-                       const TfToken &keyPath,
-                       bool useFallbacks,
-                       T* result) const
-{
-    // Call the templated type specifice resolved metadata implementation that 
-    // will only be implemented for types that support it.
-    return _GetTypeSpecificResolvedMetadata(
-        obj, fieldName, keyPath, useFallbacks, result);
-}
-
-
-// Set metadata for types that don't need to be mapped across edit targets.
-template <class T>
-typename std::enable_if<!UsdStage::_IsEditTargetMappable<T>::value, bool>::type
-UsdStage::_SetMetadata(const UsdObject &object, const TfToken& key,
-                       const TfToken &keyPath, const T& value)
-{
-    // Since we know that we don't need to map the value for edit targets, 
-    // we can just type erase the value and set the metadata as is.
-    SdfAbstractDataConstTypedValue<T> in(&value);
-    return _SetMetadataImpl<SdfAbstractDataConstValue>(
-        object, key, keyPath, in);
-}
-
-// Set metadata for types that do need to be mapped for edit targets.
-template <class T>
-typename std::enable_if<UsdStage::_IsEditTargetMappable<T>::value, bool>::type
-UsdStage::_SetMetadata(const UsdObject &object, const TfToken& key,
-                       const TfToken &keyPath, const T& value)
-{
-    return _SetEditTargetMappedMetadata(object, key, keyPath, value);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

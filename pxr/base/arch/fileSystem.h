@@ -17,6 +17,7 @@
 #include "pxr/base/arch/inttypes.h"
 #include <memory>
 #include <cstdio>
+#include <cstdint>
 #include <string>
 #include <set>
 
@@ -24,7 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
 #include <unistd.h>
 #include <sys/statfs.h>
 #include <glob.h>
@@ -34,8 +35,6 @@
 #include <glob.h>
 #elif defined(ARCH_OS_WINDOWS)
 #include <io.h>
-#include <windows.h>
-#include <stringapiset.h>
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -135,6 +134,7 @@ ArchOpenFile(char const* fileName, char const* mode);
 #endif
 
 #if defined(ARCH_OS_WINDOWS)
+    ARCH_API int ArchWindowsFileAccess(const char* path, uint32_t dwAccessMask);
     ARCH_API int ArchFileAccess(const char* path, int mode);
 #else
 #   define ArchFileAccess(path, mode)   access(path, mode)
@@ -412,36 +412,10 @@ void ArchFileAdvise(FILE *file, int64_t offset, size_t count,
 #if defined(ARCH_OS_WINDOWS)
 
 /// Converts UTF-16 windows string to regular std::string - Windows-only
-inline std::string ArchWindowsUtf16ToUtf8(const std::wstring &wstr)
-{
-    if (wstr.empty()) return std::string();
-    // first call is only to get required size for string
-    int size = WideCharToMultiByte(
-        CP_UTF8, 0, wstr.data(), (int)wstr.size(), NULL, 0, NULL, NULL);
-    if (size == 0) return std::string();
-    std::string str(size, 0);
-    if (WideCharToMultiByte(CP_UTF8, 0, wstr.data(), (int)wstr.size(),
-                            &str[0], size, NULL, NULL) == 0) {
-        return std::string();
-    }
-    return str;
-}
+ARCH_API std::string ArchWindowsUtf16ToUtf8(const std::wstring &wstr);
 
 /// Converts regular std::string to UTF-16 windows string - Windows-only
-inline std::wstring ArchWindowsUtf8ToUtf16(const std::string &str)
-{
-    if (str.empty()) return std::wstring();
-    // first call is only to get required size for wstring
-    int size = MultiByteToWideChar(
-        CP_UTF8, 0, str.data(), (int)str.size(), NULL, 0);
-    if (size == 0) return std::wstring();
-    std::wstring wstr(size, 0);
-    if(MultiByteToWideChar(
-           CP_UTF8, 0, str.data(), (int)str.size(), &wstr[0], size) == 0) {
-        return std::wstring();
-    }
-    return wstr;
-}
+ARCH_API std::wstring ArchWindowsUtf8ToUtf16(const std::string &str);
 
 #endif
 

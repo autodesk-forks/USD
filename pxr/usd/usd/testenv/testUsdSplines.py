@@ -22,6 +22,7 @@ class TestUsdSplines(unittest.TestCase):
             typeName = typeName,
             time = 1,
             value = 8,
+            preValue = 6,
             nextInterp = Ts.InterpCurve,
             postTanWidth = 1.3,
             postTanSlope = 0.125))
@@ -29,6 +30,7 @@ class TestUsdSplines(unittest.TestCase):
             typeName = typeName,
             time = 6,
             value = 20,
+            preValue = 10,
             nextInterp = Ts.InterpCurve,
             preTanWidth = 1.3,
             preTanSlope = -0.2,
@@ -38,8 +40,7 @@ class TestUsdSplines(unittest.TestCase):
 
     def _DoSerializationTest(
             self, case, spline,
-            attrType = Sdf.ValueTypeNames.Double,
-            isEmpty = False):
+            attrType = Sdf.ValueTypeNames.Double):
         """
         Write a spline to a file, copy the file, read the copy, and verify the
         original and round-tripped spline are identical.
@@ -53,8 +54,10 @@ class TestUsdSplines(unittest.TestCase):
             prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
             attr = prim.CreateAttribute("myAttr", attrType)
             self.assertFalse(attr.HasSpline())
+            self.assertFalse(attr.ValueMightBeTimeVarying())
             attr.SetSpline(spline)
             self.assertTrue(attr.HasSpline())
+            self.assertTrue(attr.ValueMightBeTimeVarying())
             print(f"Original spline, {case}, {format}:")
             print(spline)
 
@@ -63,22 +66,44 @@ class TestUsdSplines(unittest.TestCase):
             stage2 = Usd.Stage.Open(filename2)
 
             attr2 = stage2.GetAttributeAtPath("/MyPrim.myAttr")
+            self.assertTrue(attr2.HasSpline())
 
-            if isEmpty:
-                self.assertFalse(attr2.HasSpline())
-            else:
-                self.assertTrue(attr2.HasSpline())
-                spline2 = attr2.GetSpline()
-                print(f"Round-tripped spline, {case}, {format}:")
-                print(spline2)
-
-                self.assertEqual(spline, spline2)
+            spline2 = attr2.GetSpline()
+            print(f"Round-tripped spline, {case}, {format}:")
+            print(spline2)
+            self.assertEqual(spline, spline2)
 
     def test_Serialization_Empty(self):
         """
         Test serialization of empty splines.
         """
-        self._DoSerializationTest("Empty", Ts.Spline(), isEmpty = True)
+        spline = Ts.Spline()
+        self._DoSerializationTest("Empty", spline)
+
+        spline = Ts.Spline()
+        spline.SetCurveType(Ts.CurveTypeHermite)
+        self._DoSerializationTest("Empty_Hermite", spline)
+
+        extrap = Ts.Extrapolation(Ts.ExtrapLinear)
+        extrap.slope = 2.0
+
+        spline = Ts.Spline()
+        spline.SetPreExtrapolation(extrap)
+        self._DoSerializationTest("Empty_PreExtrap", spline)
+
+        spline = Ts.Spline()
+        spline.SetPostExtrapolation(extrap)
+        self._DoSerializationTest("Empty_PostExtrap", spline)
+
+        lp = Ts.LoopParams()
+        lp.protoStart = 1
+        lp.protoEnd = 2
+        lp.numPreLoops = 3
+        lp.numPostLoops = 4
+
+        spline = Ts.Spline()
+        spline.SetInnerLoopParams(lp)
+        self._DoSerializationTest("Empty_LoopParams", spline)
 
     def test_Serialization_Museum(self):
         """
@@ -231,7 +256,11 @@ class TestUsdSplines(unittest.TestCase):
 
         prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
         attr = prim.CreateAttribute("myAttr", attrType)
+        self.assertFalse(attr.HasSpline())
+        self.assertFalse(attr.ValueMightBeTimeVarying())
         attr.SetSpline(spline)
+        self.assertTrue(attr.HasSpline())
+        self.assertTrue(attr.ValueMightBeTimeVarying())
 
         sdfAttr = deepLayer.GetAttributeAtPath("/MyPrim.myAttr")
         sdfSpline = sdfAttr.GetInfo("spline")
@@ -240,8 +269,24 @@ class TestUsdSplines(unittest.TestCase):
 
         attr2 = stage.GetAttributeAtPath("/MyPrim.myAttr")
         spline2 = attr2.GetSpline()
+        print (f"Explicit spline eval, {case}:")
+        print (spline2.Eval(1.0))
+        print (f"Attribute Get spline eval, {case}:")
+        print (attr2.Get(1.0))
+        self.assertEqual(spline2.Eval(1.0), attr2.Get(1.0))
+        print (f"Explicit spline preeval, {case}:")
+        print (spline2.EvalPreValue(1.0))
+        print (f"Attribute Get spline preeval, {case}:")
+        print (attr2.Get(Usd.TimeCode.PreTime(1.0)))
+        self.assertEqual(spline2.EvalPreValue(1.0), 
+                         attr2.Get(Usd.TimeCode.PreTime(1.0)))
         print(f"Retrieved spline, {case}:")
         print(spline2)
+        self.assertEqual(spline2.Eval(1.0), attr2.Get(1.0))
+        attrQuery = Usd.AttributeQuery(attr2)
+        self.assertTrue(attrQuery)
+        self.assertEqual(attrQuery.GetSpline(), spline2)
+        self.assertEqual(attrQuery.Get(1.0), attr2.Get(1.0))
 
         spline3 = attr2.GetMetadata("spline")
         print("Retrieved spline, generic, {case}:")
@@ -269,15 +314,6 @@ class TestUsdSplines(unittest.TestCase):
             attrType = Sdf.ValueTypeNames.TimeCode, timeValued = True,
             scale = 2.0)
 
-    def test_LayerOffsets_Reversed(self):
-        """
-        Test writing and reading splines across time-reversing layer offsets.
-        """
-        self._DoLayerOffsetTest(
-            "test_LayerOffsets_Reversed",
-            attrType = Sdf.ValueTypeNames.Double, timeValued = False,
-            scale = -2.0)
-
     def test_InvalidType(self):
         """
         Verify that a spline cannot be assigned to an attribute of an
@@ -289,6 +325,8 @@ class TestUsdSplines(unittest.TestCase):
         spline = self._GetTestSpline()
 
         gotException = False
+        self.assertFalse(attr.HasSpline())
+        self.assertFalse(attr.ValueMightBeTimeVarying())
         try:
             attr.SetSpline(spline)
         except Tf.ErrorException as e:
@@ -297,9 +335,60 @@ class TestUsdSplines(unittest.TestCase):
             print(e)
         except:
             pass
-
         self.assertTrue(gotException)
+        self.assertFalse(attr.HasSpline())
+        self.assertFalse(attr.ValueMightBeTimeVarying())
 
+    def test_Clobbered(self):
+        """
+        Verify that splines that are clobbered by time samples aren't
+        visible on the attribute.
+        """
+        stage = Usd.Stage.CreateInMemory()
+        prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
+        attr = prim.CreateAttribute("myAttr", Sdf.ValueTypeNames.Double)
+        spline = self._GetTestSpline(Sdf.ValueTypeNames.Double)
+        attr.SetSpline(spline)
+        self.assertTrue(attr.HasSpline())
+        self.assertEqual(attr.GetSpline(), spline)
+        attr.Set(100.0, 1)
+
+        self.assertFalse(attr.HasSpline())
+        self.assertTrue(attr.GetSpline().IsEmpty())
+        attr.SetSpline(spline)
+        self.assertFalse(attr.HasSpline())
+        self.assertTrue(attr.GetSpline().IsEmpty())
+        self.assertEqual(attr.Get(1), 100.0)
+
+    def test_WeakerSplineOpinion(self):
+        """
+        Verify that splines that are a weaker opinion than a non-spline
+        are not visible on the attribute.
+        """
+        stage = Usd.Stage.CreateInMemory()
+        rootLayer = stage.GetRootLayer()
+        subLayer = Sdf.Layer.CreateAnonymous()
+        rootLayer.subLayerPaths = [subLayer.identifier]
+
+        # Set spline in the subLayer
+        stage.SetEditTarget(stage.GetEditTargetForLocalLayer(subLayer))
+        spline = self._GetTestSpline(Sdf.ValueTypeNames.Double)
+        prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
+        attr = prim.CreateAttribute("myAttr", Sdf.ValueTypeNames.Double)
+        attr.SetSpline(spline)
+        self.assertTrue(attr.HasSpline())
+        self.assertEqual(attr.GetSpline(), spline)
+        
+        # Set stronger time samples in the rootLayer
+        stage.SetEditTarget(stage.GetEditTargetForLocalLayer(rootLayer))
+        prim = stage.DefinePrim(Sdf.Path("/MyPrim"))
+        attr = prim.CreateAttribute("myAttr", Sdf.ValueTypeNames.Double)
+        self.assertTrue(attr.HasSpline())
+        self.assertEqual(attr.GetSpline(), spline)
+        attr.Set(100.0, 1)
+        self.assertFalse(attr.HasSpline())
+        self.assertTrue(attr.GetSpline().IsEmpty())
+        self.assertEqual(attr.Get(1), 100.0)
 
 if __name__ == "__main__":
 

@@ -1,0 +1,95 @@
+#usda 1.0
+(
+    """
+    This museum case demonstrates basic instancing behavior in Pcp.
+    Prims tagged as instances are only allowed to override property
+    values at the instance root; overrides on descendent prims are
+    ignored.
+    """
+)
+
+class "_class_Prop"
+{
+    double a = 3.5
+
+    def "From_class_in_root"
+    {
+    }
+
+    over "geom"
+    {
+        double x = 3.5
+    }
+}
+
+def "Set_1" (
+    references = @./set.usda@</Set>
+)
+{
+    over "InstancedProp"
+    {
+        double a = 3.0
+
+        def "From_root"
+        {
+        }
+
+        over "geom"
+        {
+            double x = 3.0
+        }
+    }
+
+    over "UninstancedProp"
+    {
+        double a = 3.0
+
+        def "From_root"
+        {
+        }
+
+        over "geom"
+        {
+            double x = 3.0
+        }
+    }
+}
+
+def "NotAnInstance" (
+    # Even though this prim is tagged with instance metdata, it does not
+    # introduce a composition arc containing instance-able data. So,
+    # it will not be considered a 'real' instance and will not be subject
+    # to the same restrictions on local name children overrides.
+    instanceable = True
+)
+{
+    def "Child"
+    {
+    }
+}
+
+def "SubrootReferences" (
+    # The "Instanced" prim references /Set_1/InstancedProp/geom, which
+    # is a child prim beneath an instance. We expect that the local
+    # opinions that are ignored when composing that prim are also
+    # ignored when composing "Instanced". Otherwise, users may be
+    # confused as to why a reference arc isn't bringing across the
+    # exact same set of opinions into the referencing prim.
+    #
+    # This means the set of opinions on Instanced.x will match those
+    # on /Set_1/InstancedProp/geom.x, and those for Uninstanced.x will
+    # match those on /Set_1/UninstancedProp/geom.x.
+)
+{
+    def "Instanced" (
+        references = </Set_1/InstancedProp/geom>
+    )
+    {
+    }
+
+    def "Uninstanced" (
+        references = </Set_1/UninstancedProp/geom>
+    )
+    {
+    }
+}

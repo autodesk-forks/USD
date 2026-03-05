@@ -5,6 +5,9 @@
 // https://openusd.org/license.
 //
 #include "pxr/imaging/hd/dataSource.h"
+#include "pxr/imaging/hd/timeSampleArray.h"
+
+#include "pxr/base/trace/trace.h"
 
 #include <iostream>
 
@@ -72,31 +75,41 @@ HdGetMergedContributingSampleTimesForInterval(
     const HdSampledDataSource::Time endTime,
     std::vector<HdSampledDataSource::Time> * const outSampleTimes)
 {
+    TRACE_FUNCTION();
+
     bool result = false;
+
+    std::vector<HdSampledDataSource::Time> sampleTimes;
+
     for (size_t i = 0; i < count; i++) {
         if (!inputDataSources[i]) {
             continue;
         }
         std::vector<HdSampledDataSource::Time> times;
         if (!inputDataSources[i]->GetContributingSampleTimesForInterval(
-                startTime, endTime, &times)) {
-            continue;
-        }
-        if (times.empty()) {
+                startTime, endTime, outSampleTimes ? &times : nullptr)) {
             continue;
         }
         result = true;
         if (!outSampleTimes) {
             continue;
         }
-        if (outSampleTimes->empty()) {
-            *outSampleTimes = std::move(times);
+        if (sampleTimes.empty()) {
+            sampleTimes = std::move(times);
         } else {
-            *outSampleTimes = _Union(*outSampleTimes, times);
+            sampleTimes = _Union(sampleTimes, times);
         }
     }
 
-    return result;
+    if (!result) {
+        return false;
+    }
+
+    return
+        HdGetContributingSampleTimesForInterval(
+            sampleTimes.size(), sampleTimes.data(),
+            startTime, endTime,
+            outSampleTimes);
 }
 
 void

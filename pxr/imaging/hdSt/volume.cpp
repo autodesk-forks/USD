@@ -392,7 +392,7 @@ _ComputeMaterialNetworkShader(
         params.push_back(param);
 
         namedTextureHandles.push_back(
-            { textureName, textureType, nullptr, desc->fieldId.GetHash() });
+            { textureName, textureType, {}, desc->fieldId.GetHash() });
     }
 
     result->SetNamedTextureHandles(namedTextureHandles);
@@ -512,16 +512,14 @@ HdStVolume::_UpdateDrawItem(HdSceneDelegate *sceneDelegate,
 
     if (HdStShouldPopulateConstantPrimvars(dirtyBits, GetId())) {
         /* CONSTANT PRIMVARS, TRANSFORM AND EXTENT */
-        const HdPrimvarDescriptorVector constantPrimvars =
-            HdStGetPrimvarDescriptors(this, drawItem, sceneDelegate,
-                                      HdInterpolationConstant);
+
         HdStPopulateConstantPrimvars(this,
                                      &_sharedData,
                                      sceneDelegate,
                                      renderParam,
                                      drawItem,
                                      dirtyBits,
-                                     constantPrimvars);
+                                     nullptr, HdMeshGeomStyleInvalid, 0, 0);
     }
 
     bool updatedTextureHandles = false;

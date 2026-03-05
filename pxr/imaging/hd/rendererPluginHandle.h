@@ -37,10 +37,16 @@ public:
     HdRendererPluginHandle(const HdRendererPluginHandle &);
 
     HD_API
+    HdRendererPluginHandle(HdRendererPluginHandle &&);
+
+    HD_API
     ~HdRendererPluginHandle();
 
     HD_API
     HdRendererPluginHandle &operator=(const HdRendererPluginHandle &);
+
+    HD_API
+    HdRendererPluginHandle &operator=(HdRendererPluginHandle &&);
 
     HD_API
     HdRendererPluginHandle &operator=(const std::nullptr_t &);

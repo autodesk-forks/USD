@@ -5,12 +5,11 @@
 // https://openusd.org/license.
 //
 #include "pxr/pxr.h"
+#include "pxr/usd/sdf/usdaFileFormat.h"
 #include "pxr/usd/usd/clipSet.h"
-
 #include "pxr/usd/usd/clipsAPI.h"
 #include "pxr/usd/usd/clipSetDefinition.h"
 #include "pxr/usd/usd/debugCodes.h"
-#include "pxr/usd/usd/usdaFileFormat.h"
 #include "pxr/usd/usd/valueUtils.h"
 
 #include "pxr/usd/pcp/layerStack.h"
@@ -84,7 +83,7 @@ Usd_GenerateClipManifest(
     }
 
     SdfLayerRefPtr manifestLayer = SdfLayer::CreateAnonymous(TfStringPrintf(
-        "%s.%s", tag.c_str(), UsdUsdaFileFormatTokens->Id.GetText()));
+        "%s.%s", tag.c_str(), SdfUsdaFileFormatTokens->Id.GetText()));
  
     SdfChangeBlock changeBlock;
    
@@ -414,6 +413,9 @@ Usd_ClipSet::Usd_ClipSet(
         valueClips.push_back(clip);
     }
 
+    // Have the clipTimes saved on the ClipSet as well.
+    _times = times;
+
     if (clipDef.interpolateMissingClipValues) {
         interpolateMissingClipValues = *clipDef.interpolateMissingClipValues;
     }
@@ -476,7 +478,7 @@ Usd_ClipSet::_ClipContributesValue(
     }
 
     // Use the clip if a default value specified in the manifest.
-    if (Usd_HasDefault<int>(manifestClip, path, nullptr) 
+    if (Usd_HasDefault<VtValue>(manifestClip, path, nullptr) 
             != Usd_DefaultValueResult::None) {
         return true;
     }
@@ -573,6 +575,61 @@ Usd_ClipSet::GetBracketingTimeSamplesForPath(
     return true;
 }
 
+bool
+Usd_ClipSet::GetPreviousTimeSampleForPath(
+    const SdfPath& path, double time, double* tPrevious) const
+{
+    const std::set<double> allTimeSamples = ListTimeSamplesForPath(path);
+    if (allTimeSamples.empty()) {
+        return false;
+    }
+
+    // Can't get a previous time sample if the given time is less than
+    // or equal to the first time sample.
+    if (time <= *allTimeSamples.begin()) {
+        return false;
+    }
+
+    // Last time is the previous time if the query time is greater than
+    // the last time sample.
+    if (time > *allTimeSamples.rbegin()) {
+        *tPrevious = *allTimeSamples.rbegin();
+        return true;
+    }
+
+    // The previous time sample is the one before the lower_bound with the 
+    // given time.
+    auto it = allTimeSamples.lower_bound(time);
+
+    // We can never be at the beginning of the set since we've already
+    // checked that the given time is greater than the first time sample.
+    TF_VERIFY(it != allTimeSamples.begin());
+
+    *tPrevious = *--it;
+    return true;
+}
+
+bool
+Usd_ClipSet::_HasJumpDiscontinuityAtTime(double time) const
+{
+    if (_times->empty()) {
+        return false;
+    }
+    
+    const auto it = std::lower_bound(
+        _times->begin(), _times->end(), time, 
+        Usd_Clip::Usd_SortByExternalTime());
+
+    // - time is within the range of the clip times, and
+    // - time is same as the external time of the found clip time, and
+    // - Since jump discontinuities are represented on the previous mapping
+    // entry, we need to check if the previous entry is a jump
+    // discontinuity (making sure we are not at the beginning of the time
+    // mappings).
+    return (it != _times->end() && (it->externalTime == time) && 
+            it != _times->begin() && (it-1)->isJumpDiscontinuity);
+}
+
 std::set<double>
 Usd_ClipSet::ListTimeSamplesForPath(const SdfPath& path) const
 {
@@ -648,6 +705,24 @@ Usd_ClipSet::GetTimeSamplesInInterval(
     }
 
     return timeSamples;
+}
+
+const std::type_info &
+Usd_ClipSet::QueryTimeSampleTypeid(const SdfPath &path, UsdTimeCode time) const
+{
+    const Usd_ClipRefPtr& clip = 
+        GetActiveClip(time, false /*timeHasJumpDiscontinuity*/);
+
+    // First query the clip for time sample typeid at the specified time.
+    const std::type_info &type = clip->QueryTimeSampleTypeid(path, time);
+    if (type != typeid(void)) {
+        return type;
+    }
+
+    // If no value exists in the clip, get the default value from the manifest.
+    const std::type_info *typePtr = &typeid(void);
+    Usd_HasDefault<VtValue>(manifestClip, path, nullptr, &typePtr);
+    return *typePtr;
 }
 
 size_t

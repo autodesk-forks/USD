@@ -2560,5 +2560,132 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
             stage.GetAttributeAtPath("/Root/Moved_C.c_attr").GetConnections(),
             ["/Root/Moved_B.b_attr"])
 
+    def test_NonDefaultPrims(self):
+        # The goal of this test is to verify that relationships and attribute 
+        # connections located on prims that are abstract, undefined, unloaded, 
+        # or inactive are correctly updated when the targets are changed.
+
+        def _EditAndVerifyNonDefaultPrims(layer, stage):
+            editor = Usd.NamespaceEditor(stage)
+
+            # Reparent and rename /Root/PrimA -> /Foo
+            self.assertTrue(editor.MovePrimAtPath("/Root/PrimA", "/Foo"))
+            self.assertTrue(editor.CanApplyEdits())
+            self.assertTrue(editor.ApplyEdits())
+            
+            self._VerifyLayerContents(layer, {
+                "/Foo" : {
+                    ".otherAttr" : Sdf.PathListOp.Create(
+                        prependedItems = ["/Foo.targetAttr"]),
+                },
+                "/Root" : {
+                    "/PrimB" : {
+                        ".otherRel" : Sdf.PathListOp.Create(
+                            appendedItems = [
+                                "/Foo"
+                            ])
+                    }
+                }
+            })
+        
+        undefinedLayer = Sdf.Layer.CreateAnonymous()
+        undefinedLayer.ImportFromString('''#usda 1.0
+        over "Root"
+        {
+            over "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            over "PrimB"
+            {
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+        _EditAndVerifyNonDefaultPrims(undefinedLayer, Usd.Stage.Open(undefinedLayer))
+
+        abstractLayer = Sdf.Layer.CreateAnonymous()
+        abstractLayer.ImportFromString('''#usda 1.0
+        class "Root"
+        {
+            class "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            class "PrimB"
+            { 
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+        _EditAndVerifyNonDefaultPrims(abstractLayer, Usd.Stage.Open(abstractLayer))
+
+        inactiveLayer = Sdf.Layer.CreateAnonymous()
+        inactiveLayer.ImportFromString('''#usda 1.0
+        def "Root"
+        {
+            def "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            def "PrimB"
+            { 
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+
+        inactiveStage = Usd.Stage.Open(inactiveLayer)
+        inactiveStage.GetPrimAtPath("/Root/PrimA").SetActive(False)
+        inactiveStage.GetPrimAtPath("/Root/PrimB").SetActive(False)
+
+        _EditAndVerifyNonDefaultPrims(inactiveLayer, inactiveStage)
+
+        # A prim with an unloaded payload (/Root/PrimB) has a connection
+        # for which the target has changed path (/Root/PrimA -> /Foo). Verify
+        # that the target path is updated correctly.
+        payloadLayer = Sdf.Layer.CreateAnonymous()
+        payloadLayer.ImportFromString('''#usda 1.0
+        def "Payload"
+        {
+        }
+        ''')
+
+        unloadedLayer = Sdf.Layer.CreateAnonymous("abstract.usda")
+        unloadedLayer.ImportFromString('''#usda 1.0
+        def "Root" 
+        {
+            def "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            def "PrimB" (
+                payload = @''' + payloadLayer.identifier + '''@</Payload>
+            )
+            { 
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+
+        unloadedStage = Usd.Stage.Open(unloadedLayer)
+        bPrim = unloadedStage.GetPrimAtPath("/Root/PrimB")
+        self.assertTrue(bPrim.HasPayload())
+        bPrim.Unload()
+
+        _EditAndVerifyNonDefaultPrims(unloadedLayer, unloadedStage)
+
 if __name__ == '__main__':
     unittest.main()

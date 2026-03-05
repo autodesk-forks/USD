@@ -81,6 +81,7 @@ My_TestGLDrawing::InitTest()
         IsEnabledUnloadedAsBounds() ? UsdStage::LoadNone : UsdStage::LoadAll);
 
     UsdImagingGLEngine::Parameters parameters;
+    parameters.rendererPluginId = _GetRenderer();
     parameters.rootPath = _stage->GetPseudoRoot().GetPath();
     parameters.displayUnloadedPrimsWithBounds = IsEnabledUnloadedAsBounds();
 
@@ -268,7 +269,6 @@ My_TestGLDrawing::DrawTest(bool offscreen)
         params.frame = time;
 
         // Make sure we render to convergence.
-        TfErrorMark mark;
         int convergenceIterations = 0;
 
         {
@@ -291,10 +291,6 @@ My_TestGLDrawing::DrawTest(bool offscreen)
 
             renderTime.Stop();            
         }
-
-        // Note that we do not confirm that mark.IsClear() here, since
-        // in some tests we do expect to encounter broken materials
-        // that will fail to compile, ex: testUsdImagingGLInvalidMaterial
 
         std::cout << "Iterations to convergence: " << convergenceIterations << std::endl;
         std::cout << "itemsDrawn " << perfLog.GetCounter(HdTokens->itemsDrawn) << std::endl;
@@ -363,15 +359,30 @@ My_TestGLDrawing::MouseMove(int x, int y, int modKeys)
     _mousePos[1] = y;
 }
 
-void
+int
 BasicTest(int argc, char *argv[])
 {
+    TfErrorMark mark;
+
     My_TestGLDrawing driver;
     driver.RunTest(argc, argv);
+
+    if (mark.IsClean()) {
+        std::cout << "OK" << std::endl;
+        return EXIT_SUCCESS;
+    } else {
+        size_t numErrors = 0;
+        mark.GetBegin(&numErrors);
+        if (static_cast<int>(numErrors) <= driver.GetNumErrorsAllowed()) {
+            std::cout << "OK" << std::endl;
+            return EXIT_SUCCESS;
+        }
+        std::cout << "FAILED" << std::endl;
+        return EXIT_FAILURE;
+    }
 }
 
 int main(int argc, char *argv[])
 {
-    BasicTest(argc, argv);
-    std::cout << "OK" << std::endl;
+    return BasicTest(argc, argv);
 }

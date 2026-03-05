@@ -1,0 +1,204 @@
+#usda 1.0
+
+class "TestUIHintsAPI" (
+    customData = {
+        string apiSchemaType = "singleApply"
+    }
+    inherits = </APISchemaBase>
+    uiHints = {
+        dictionary displayGroupsExpanded = {
+            bool OpenGroup = 1
+            bool "OpenGroup:Nested" = 1
+        }
+    }
+)
+{
+    reorder properties = ["inputs:allowedTokens", "inputs:allowedTokensAndValueLabels", "inputs:arrayDynamic", "inputs:arraySizeAndTuples", "inputs:arraySizeTuplesMismatch", "inputs:arrayStatic", "inputs:arrayTuples", "inputs:convertedShownIf", "inputs:displayGroup", "inputs:displayName", "inputs:floatArrayTupleConversion2", "inputs:floatArrayTupleConversion3", "inputs:floatArrayTupleConversion4", "inputs:hardAndSoftLimits", "inputs:hardClobberSoftLimits", "inputs:hardDemoteToSoftLimits", "inputs:hardLimitsBasic", "inputs:help", "inputs:hidden", "inputs:inClosedGroup", "inputs:inOpenGroup", "inputs:inOpenNestedGroup", "inputs:inShownIfGroup", "inputs:intArrayTupleConversion2", "inputs:intArrayTupleConversion3", "inputs:intArrayTupleConversion4", "inputs:shownIf", "inputs:shownIfParamNameSubStrings", "inputs:softCantClobberHardLimits", "inputs:softLimitsBasic", "inputs:softPromoteToHardLimits", "inputs:some_param", "inputs:some_param_also", "inputs:sparseSpecificationLimits", "inputs:valueLabels"]
+    token inputs:allowedTokens = "foo" (
+        allowedTokens = ["foo", "bar", "baz"]
+    )
+    token inputs:allowedTokensAndValueLabels = "prov" (
+        allowedTokens = ["ched", "sws", "prov"]
+        uiHints = {
+            dictionary valueLabels = {
+                string Cheddar = "ched"
+                string Provelone = "prov"
+                string Swiss = "sws"
+            }
+            token[] valueLabelsOrder = ["Cheddar", "Swiss", "Provelone"]
+        }
+    )
+    int[] inputs:arrayDynamic = [1, 2, 3]
+    int[] inputs:arraySizeAndTuples = [1, 2, 3, 4, 5, 6, 7, 8, 9] (
+        arraySizeConstraint = -3
+    )
+    int[] inputs:arraySizeTuplesMismatch = [1, 2, 3, 4, 5, 6, 7, 8, 9] (
+        arraySizeConstraint = -5
+    )
+    int[] inputs:arrayStatic = [1, 2, 3, 4, 5] (
+        arraySizeConstraint = 5
+    )
+    int[] inputs:arrayTuples = [1, 2, 3, 4, 5, 6] (
+        arraySizeConstraint = -3
+    )
+    int inputs:convertedShownIf = 1 (
+        uiHints = {
+            string shownIf = "inputs:hidden >= 1"
+        }
+    )
+    int inputs:displayGroup = 1 (
+        displayGroup = "A Display Group"
+        uiHints = {
+            string displayGroup = "A Display Group"
+        }
+    )
+    int inputs:displayName = 1 (
+        customData = {
+            string userDoc = "A Display Name"
+            string userDocBrief = "A Display Name"
+        }
+        displayName = "A Display Name"
+        uiHints = {
+            string displayName = "A Display Name"
+        }
+    )
+    float2 inputs:floatArrayTupleConversion2 = (1.1, 2.2)
+    float3 inputs:floatArrayTupleConversion3 = (1.1, 2.2, 3.3)
+    float4 inputs:floatArrayTupleConversion4 = (1.1, 2.2, 3.3, 4.4)
+    int inputs:hardAndSoftLimits = 1 (
+        limits = {
+            dictionary hard = {
+                int maximum = 10
+                int minimum = 0
+            }
+            dictionary soft = {
+                int maximum = 5
+                int minimum = 1
+            }
+        }
+    )
+    int inputs:hardClobberSoftLimits = 1 (
+        limits = {
+            dictionary soft = {
+                int maximum = 10
+                int minimum = 0
+            }
+        }
+    )
+    int inputs:hardDemoteToSoftLimits = 1 (
+        limits = {
+            dictionary soft = {
+                int maximum = 10
+                int minimum = 0
+            }
+        }
+    )
+    int inputs:hardLimitsBasic = 1 (
+        limits = {
+            dictionary hard = {
+                int maximum = 10
+                int minimum = 0
+            }
+        }
+    )
+    int inputs:help = 1 (
+        customData = {
+            string userDoc = "Some help."
+            string userDocBrief = "Some help."
+        }
+    )
+    int inputs:hidden = 1 (
+        hidden = true
+        uiHints = {
+            bool hidden = 1
+        }
+    )
+    int inputs:inClosedGroup = 1 (
+        displayGroup = "ClosedGroup"
+        uiHints = {
+            string displayGroup = "ClosedGroup"
+        }
+    )
+    int inputs:inOpenGroup = 1 (
+        displayGroup = "OpenGroup"
+        uiHints = {
+            string displayGroup = "OpenGroup"
+        }
+    )
+    int inputs:inOpenNestedGroup = 1 (
+        displayGroup = "OpenGroup:Nested"
+        uiHints = {
+            string displayGroup = "OpenGroup:Nested"
+        }
+    )
+    int inputs:inShownIfGroup = 1 (
+        displayGroup = "ShownIf Group"
+        uiHints = {
+            string displayGroup = "ShownIf Group"
+        }
+    )
+    int2 inputs:intArrayTupleConversion2 = (1, 2)
+    int3 inputs:intArrayTupleConversion3 = (1, 2, 3)
+    int4 inputs:intArrayTupleConversion4 = (1, 2, 3, 4)
+    int inputs:shownIf = 1 (
+        uiHints = {
+            string shownIf = "inputs:hidden >= 1"
+        }
+    )
+    int inputs:shownIfParamNameSubStrings = 1 (
+        uiHints = {
+            string shownIf = "inputs:some_param >= inputs:some_param_also"
+        }
+    )
+    int inputs:softCantClobberHardLimits = 1 (
+        limits = {
+            dictionary hard = {
+                int maximum = 10
+                int minimum = 0
+            }
+            dictionary soft = {
+                int maximum = 5
+                int minimum = 1
+            }
+        }
+    )
+    int inputs:softLimitsBasic = 1 (
+        limits = {
+            dictionary soft = {
+                int maximum = 10
+                int minimum = 0
+            }
+        }
+    )
+    int inputs:softPromoteToHardLimits = 1 (
+        limits = {
+            dictionary hard = {
+                int maximum = 5
+                int minimum = 1
+            }
+        }
+    )
+    int inputs:some_param = 1
+    int inputs:some_param_also = 1
+    int inputs:sparseSpecificationLimits = 1 (
+        limits = {
+            dictionary hard = {
+                int minimum = 0
+            }
+            dictionary soft = {
+                int maximum = 5
+            }
+        }
+    )
+    int inputs:valueLabels = 1 (
+        uiHints = {
+            dictionary valueLabels = {
+                int high = 3
+                int low = 1
+                int med = 2
+            }
+            token[] valueLabelsOrder = ["low", "med", "high"]
+        }
+    )
+}
+

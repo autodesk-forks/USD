@@ -79,14 +79,7 @@ public:
         HgiComputeCmdsDesc const& desc) override;
 
     HGIGL_API
-    HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) override;
-
-    HGIGL_API
     void DestroyTexture(HgiTextureHandle* texHandle) override;
-
-    HGIGL_API
-    HgiTextureViewHandle CreateTextureView(
-        HgiTextureViewDesc const& desc) override;
 
     HGIGL_API
     void DestroyTextureView(HgiTextureViewHandle* viewHandle) override;
@@ -96,9 +89,6 @@ public:
 
     HGIGL_API
     void DestroySampler(HgiSamplerHandle* smpHandle) override;
-
-    HGIGL_API
-    HgiBufferHandle CreateBuffer(HgiBufferDesc const & desc) override;
 
     HGIGL_API
     void DestroyBuffer(HgiBufferHandle* bufHandle) override;
@@ -118,10 +108,6 @@ public:
     HGIGL_API
     void DestroyShaderProgram(
         HgiShaderProgramHandle* shaderProgramHandle) override;
-
-    HGIGL_API
-    HgiResourceBindingsHandle CreateResourceBindings(
-        HgiResourceBindingsDesc const& desc) override;
 
     HGIGL_API
     void DestroyResourceBindings(HgiResourceBindingsHandle* resHandle) override;
@@ -156,6 +142,9 @@ public:
     HGIGL_API
     void EndFrame() override;
 
+    HGIGL_API
+    void GarbageCollect() override;
+
     /// ------------------------------------------------------------------------
     // HgiGL specific API
     /// ------------------------------------------------------------------------
@@ -185,6 +174,20 @@ public:
     // -------------------------------------------------------------------------
 
 protected:
+    HGIGL_API
+    HgiTextureHandle _CreateTexture(HgiTextureDesc const & desc) override;
+
+    HGIGL_API
+    HgiTextureViewHandle _CreateTextureView(
+        HgiTextureViewDesc const& desc) override;
+
+    HGIGL_API
+    HgiBufferHandle _CreateBuffer(HgiBufferDesc const & desc) override;
+
+    HGIGL_API
+    HgiResourceBindingsHandle _CreateResourceBindings(
+        HgiResourceBindingsDesc const& desc) override;
+
     HGIGL_API
     bool _SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait) override;
 

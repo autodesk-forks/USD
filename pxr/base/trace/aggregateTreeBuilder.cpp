@@ -45,50 +45,79 @@ Trace_AggregateTreeBuilder::_ProcessCounters(const TraceCollection& collection)
 void
 Trace_AggregateTreeBuilder::_CreateAggregateNodes()
 {
-    using TreeIt = std::pair<TraceEventNodeRefPtr, size_t>;
-    std::stack<TreeIt> treeStack;
-    std::stack<TraceAggregateNodePtr> aggStack;
+    // A stack of these structures tracks our place in processing the EventNode
+    // tree while we build the AggregateNode tree.
+    //
+    // Each entry contains a reference to the EventNode and its remaining
+    // children we have yet to process.  We process children first to last,
+    // updating `children` to be `children.subspan(1)` at each step.  Once the
+    // children span is empty we pop the entry from the stack.
+    //
+    // We also track the corresponding aggregate tree node so we can append new
+    // nodes to it.  This is how we build up the Aggregate tree as we process
+    // the EventNodes.
+    struct StackEntry {
+        StackEntry(TraceEventNodeRefPtr const &node,
+                   TfSpan<const TraceEventNodeRefPtr> children,
+                   TraceAggregateNodeRefPtr &&aggNode)
+            : node(node), children(children), aggNode(std::move(aggNode)) {}
 
-    // Prime the aggregate stack with the root node.
-    aggStack.push(_aggregateTree->GetRoot());
-
-    // Prime the stack with the children of the root. These are the node that
-    // represent threads.
-    for (TraceEventNodeRefPtrVector::const_reverse_iterator it =
-            _tree->GetRoot()->GetChildrenRef().rbegin(); 
-            it != _tree->GetRoot()->GetChildrenRef().rend(); ++it) {
-        treeStack.push(std::make_pair(*it, 0));
-    }
+        // Disallow rvalue node args since we store by-reference to avoid a
+        // refcount hit.
+        StackEntry(TraceEventNodeRefPtr &&node,
+                   TfSpan<const TraceEventNodeRefPtr> children,
+                   TraceAggregateNodeRefPtr &&aggNode) = delete;
+        
+        const TraceEventNodeRefPtr &node;
+        TfSpan<const TraceEventNodeRefPtr> children;
+        TraceAggregateNodeRefPtr aggNode;
+    };
     
-    // A valid id needed for node creation.
-    TraceAggregateNode::Id id = TraceAggregateNode::Id(TraceThreadId());
+    std::stack<StackEntry, std::vector<StackEntry>> treeStack;
 
-    while (!treeStack.empty()) {
-        TreeIt it = treeStack.top();
-        treeStack.pop();
-
-        // The first time a node is visited, add it to the aggregate tree.
-        if (it.second == 0) {
-            const TraceEvent::TimeStamp duration =
-                it.first->GetEndTime() - it.first->GetBeginTime();
-
-            if (duration > 0 && aggStack.size() > 1) {
-                _aggregateTree->_eventTimes[it.first->GetKey()] += duration;
-            }
-
-            TraceAggregateNodePtr newNode = aggStack.top()->Append(
-                id, it.first->GetKey(), duration);
-            aggStack.push(newNode);
+    {
+        // Prime the stack with the root's direct children.  These are typically
+        // the nodes that represent threads.
+        const TraceAggregateNodePtr aggRoot = _aggregateTree->GetRoot();
+        const TfSpan<const TraceEventNodeRefPtr>
+            firstNodes = _tree->GetRoot()->GetChildrenRef();
+        for (auto i = firstNodes.rbegin(); i != firstNodes.rend(); ++i) {
+            const TraceEventNodeRefPtr &node = *i;
+            treeStack.emplace(
+                node, node->GetChildrenRef(),
+                aggRoot->Append(node->GetKey(), node->GetTimeDuration()));
         }
-        // When there are no more children to visit, pop the aggregate tree
-        // stack.
-        if (it.second >= it.first->GetChildrenRef().size()) {
-            aggStack.pop();
-        } else {
-            // Visit the current child and then the next child.
-            treeStack.push(std::make_pair(it.first, it.second+1));
-            treeStack.push(
-                std::make_pair(it.first->GetChildrenRef()[it.second], 0));
+    }
+        
+    while (!treeStack.empty()) {
+        StackEntry *entry = &treeStack.top();
+
+        // If this node has no children left, pop and continue.
+        if (entry->children.empty()) {
+            treeStack.pop();
+            continue;
+        }
+
+        // Take the next child from the front of the span.
+        const TraceEventNodeRefPtr &curNode = entry->children.front();
+        entry->children = entry->children.subspan(1);
+
+        const TraceEvent::TimeStamp duration = curNode->GetTimeDuration();
+        if (duration > 0) {
+            _aggregateTree->_eventTimes[curNode->GetKey()] += duration;
+        }
+
+        // If the child has children, push it on the stack.
+        const TfSpan<const TraceEventNodeRefPtr>
+            children = curNode->GetChildrenRef();
+        if (!children.empty()) {
+            treeStack.emplace(
+                curNode, children,
+                entry->aggNode->Append(curNode->GetKey(), duration));
+        }
+        else {
+            // Otherwise, just blindly append or update the aggregate node.
+            entry->aggNode->AppendBlind(curNode->GetKey(), duration);
         }
     }
 }
@@ -184,15 +213,15 @@ TraceAggregateNodePtr
         const TraceThreadId& threadId, const TraceEvent::TimeStamp ts) const
 {
     // Find the root node of the thread.
-    const TraceEventNodeRefPtrVector& threadNodeList =
-        _tree->GetRoot()->GetChildrenRef();
+    const TfSpan<const TraceEventNodeRefPtr>
+        threadNodes = _tree->GetRoot()->GetChildrenRef();
     TfToken threadKey(threadId.ToString());
-    TraceEventNodeRefPtrVector::const_iterator it =
-        std::find_if(threadNodeList.begin(), threadNodeList.end(), 
+    auto it =
+        std::find_if(threadNodes.begin(), threadNodes.end(), 
         [&threadKey](const TraceEventNodeRefPtr& node) {
             return node->GetKey() == threadKey;
         });
-    if (it == threadNodeList.end()) {
+    if (it == threadNodes.end()) {
         return nullptr;
     }
 
@@ -203,7 +232,7 @@ TraceAggregateNodePtr
     while (true) {
         path.push_back(node->GetKey());
         // Find the first child which contains this timestamp
-        TraceEventNodeRefPtrVector::const_iterator childIt = 
+        auto childIt = 
             std::lower_bound(
                 node->GetChildrenRef().begin(),
                 node->GetChildrenRef().end(), ts, 

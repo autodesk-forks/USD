@@ -7,6 +7,7 @@
 #include "pxr/imaging/hdSt/materialXShaderGen.h"
 #include "pxr/imaging/hdSt/materialXFilter.h"
 #include "pxr/imaging/hdSt/materialXLobePruner.h"
+#include "pxr/imaging/hdMtlx/combinedMtlxVersion.h"
 #include "pxr/base/tf/stringUtils.h"
 
 #include <MaterialXCore/Value.h>
@@ -47,7 +48,7 @@ R"(
 
 static const std::string MxHdLightString = 
 R"(#if NUM_LIGHTS > 0
-    for (int i = 0; i < NUM_LIGHTS; ++i) {
+    for (int i = 0; i < GetLightCount(); ++i) {
         LightSource light = GetLightSource(i);
 
         // Save the indirect light transformation
@@ -114,6 +115,15 @@ R"(#if NUM_LIGHTS > 0
 #endif
 )";
 
+static const std::string MxHdLatLongLookupCubemapGlsl = 
+R"(
+vec3 mx_latlong_map_lookup(vec3 dir, mat4 transform, float lod, samplerCube envSampler)
+{
+    vec3 envDir = normalize((transform * vec4(dir,0.0)).xyz);
+    return textureLod(envSampler, envDir, lod).rgb;
+}
+)";
+
 static bool 
 _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
 {
@@ -133,10 +143,23 @@ _IsHardcodedPublicUniform(const mx::TypeDesc& varType)
     return false;
 }
 
+static std::string
+_GetSamplerName(std::string const& textureName)
+{
+    // Make sure we don't have double '_' in the HdGet call.
+    std::string samplerName = textureName;
+    if (TfStringStartsWith(samplerName, "_")) {
+        samplerName.erase(0,1);
+    }
+    return samplerName;
+}
+
 
 template<typename Base>
 void
-HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
+HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(
+    mx::GenContext& mxContext,
+    mx::ShaderStage& mxStage) const
 {
     // Glslfx version and configuration
     emitLine("-- glslfx version 0.1", mxStage, false);
@@ -165,7 +188,7 @@ HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
         for (mx::StringMap::const_reference primvarPair : _mxHdPrimvarMap) {
             const std::string type =
                 HdStMaterialXHelpers::MxGetTypeString(
-                    Base::_syntax, primvarPair.second);
+                    Base::_syntax, mxContext, primvarPair.second);
             if (type.empty() ) {
                 TF_WARN("MaterialX geomprop '%s' has unknown type '%s'",
                         primvarPair.first.c_str(), primvarPair.second.c_str());
@@ -181,12 +204,12 @@ HdStMaterialXShaderGen<Base>::_EmitGlslfxHeader(mx::ShaderStage& mxStage) const
         Base::emitString(R"(    }, )""\n", mxStage);
     }
     // insert texture information if needed
-    if (!_mxHdTextureMap.empty()) {
+    if (!_mxHdTextureNames.empty()) {
         Base::emitString(R"(    "textures": {)" "\n", mxStage);
         std::string line = ""; unsigned int i = 0;
-        for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-            line += "        \"" + texturePair.second + "\": {\n        }";
-            line += (i < _mxHdTextureMap.size() - 1) ? ",\n" : "\n";
+        for (std::string const& textureName : _mxHdTextureNames) {
+            line += "        \"" + textureName + "\": {\n        }";
+            line += (i < _mxHdTextureNames.size() - 1) ? ",\n" : "\n";
             i++;
         }
         Base::emitString(line, mxStage);
@@ -252,15 +275,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
             // closure/shader nodes and need to be emitted first.
             Base::emitFunctionCalls(mxGraph, mxContext, mxStage,
                 mx::ShaderNode::Classification::TEXTURE);
-
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION == 38 && \
-    MATERIALX_BUILD_VERSION <= 4
-            // Emit function calls for all surface shader nodes.
-            // These will internally emit their closure function calls.
-            Base::emitFunctionCalls(mxGraph, mxContext, mxStage, 
-                mx::ShaderNode::Classification::SHADER | 
-                mx::ShaderNode::Classification::SURFACE);
-#else
             // Emit function calls for "root" closure/shader nodes.
             // These will internally emit function calls for any dependent 
             // closure nodes upstream.
@@ -278,7 +292,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
                     }
                 }
             }
-#endif
         }
         else {
             // No surface shader graph so just generate all
@@ -292,7 +305,7 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
         if (outputConnection) {
 
             std::string finalOutput = outputConnection->getVariable();
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
             // channels feature removed in MaterialX 1.39
             const std::string& channels = outputSocket->getChannels();
             if (!channels.empty()) {
@@ -301,7 +314,6 @@ HdStMaterialXShaderGen<Base>::_EmitMxSurfaceShader(
                     channels, outputSocket->getType());
             }
 #endif
-
             if (mxGraph.hasClassification(
                     mx::ShaderNode::Classification::SURFACE)) {
                 if (mxContext.getOptions().hwTransparency) {
@@ -429,8 +441,13 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
         const mx::TypeDesc variableType =
             HdStMaterialXHelpers::GetMxTypeDesc(variable);
         if (!_IsHardcodedPublicUniform(variableType)) {
+            // Make sure we don't have double '_' in the HdGet call.
+            std::string variableName = variable->getVariable();
+            if (TfStringStartsWith(variableName, "_")) {
+                variableName.erase(0,1);
+            }
             emitLine(variable->getVariable() + " = HdGet_" +
-                variable->getVariable() + "()", mxStage);
+                variableName + "()", mxStage);
         }
     }
     Base::emitLineBreak(mxStage);
@@ -453,26 +470,27 @@ HdStMaterialXShaderGen<Base>::_EmitMxInitFunction(
     Base::emitLineBreak(mxStage);
 
     // Initialize MaterialX Texture samplers with HdGetSampler equivalents
-    if (_bindlessTexturesEnabled && !_mxHdTextureMap.empty()) {
+    if (_bindlessTexturesEnabled && !_mxHdTextureNames.empty()) {
         Base::emitComment("Initialize Material Textures", mxStage);
-        for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-            if (texturePair.first == "domeLightFallback") {
+        for (std::string const& textureName : _mxHdTextureNames) {
+            if (textureName == "domeLightFallback") {
                 continue;
             }
-            emitLine(texturePair.first + " = "
-                    "HdGetSampler_" + texturePair.second + "()", mxStage);
+            emitLine(TfStringPrintf("%s = HdGetSampler_%s()",
+                    textureName.c_str(), _GetSamplerName(textureName).c_str()),
+                mxStage);
         }
         Base::emitLineBreak(mxStage);
     }
 
-    // Gather Direct light data from Hydra and apply the Hydra transformation 
+    // Gather Direct light data from Hydra and assign the Hydra transformation 
     // matrix to the environment map matrix (u_envMatrix) to account for the
     // domeLight's transform. 
-    // Note: MaterialX initializes u_envMatrix as a 180 rotation about the 
-    // Y-axis (Y-up)
+    // Note: We are ignoring default MaterialX initialization of u_envMatrix as
+    // a 180 rotation about the Y-axis (Y-up).
     emitLine("mat4 hdTransformationMatrix = mat4(1.0)", mxStage);
     Base::emitString(MxHdLightString, mxStage);
-    emitLine("u_envMatrix = u_envMatrix * hdTransformationMatrix", mxStage);
+    emitLine("u_envMatrix = hdTransformationMatrix", mxStage);
 
     Base::emitScopeEnd(mxStage);
     Base::emitLineBreak(mxStage);
@@ -673,9 +691,8 @@ HdStMaterialXShaderGen<Base>::emitLine(
     // 'occlusion' represents shadow occlusion. We don't use MaterialX's
     // shadow implementation (hwShadowMap is false). Instead, use our own 
     // per-light occlusion value calculated in mxInit() and stored in lightData.
-    // Note: Metal uses float3, Glsl uses vec3, in the line we're looking for.
-    if (_emittingSurfaceNode && (str == "vec3 L = lightShader.direction" ||
-                                 str == "float3 L = lightShader.direction" )) {
+    if (_emittingSurfaceNode &&
+        TfStringEndsWith(str, "L = lightShader.direction")) {
         emitLine(
             "occlusion = u_lightData[activeLightIndex].shadowOcclusion", stage);
     }
@@ -825,19 +842,6 @@ HdStMaterialXShaderGen<Base>::_EmitDataStructsAndFunctionDefinitions(
             mxContext, mxStage);
     }
 
-    // Prior to MaterialX 1.38.5 the token substitutions need to
-    // include the full path to the .glsl files, so we prepend that
-    // here.
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION == 38
-    #if MATERIALX_BUILD_VERSION < 4
-        (*tokenSubstitutions)[mx::ShaderGenerator::T_FILE_TRANSFORM_UV].insert(
-            0, "stdlib/" + Base::TARGET + "/lib/");
-    #elif MATERIALX_BUILD_VERSION == 4
-        (*tokenSubstitutions)[mx::ShaderGenerator::T_FILE_TRANSFORM_UV].insert(
-            0, "libraries/stdlib/" + Base::TARGET + "/lib/");
-    #endif
-#endif
-
     // Add light sampling functions
     Base::emitLightFunctionDefinitions(mxGraph, mxContext, mxStage);
 
@@ -880,8 +884,12 @@ namespace {
 template<>
 HdStMaterialXShaderGen<mx::GlslShaderGenerator>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
+#if MTLX_COMBINED_VERSION <= 13902
     : mx::GlslShaderGenerator(),
-      _mxHdTextureMap(mxHdInfo.textureMap),
+#else
+    : mx::GlslShaderGenerator(mx::TypeSystem::create()),
+#endif
+      _mxHdTextureNames(mxHdInfo.textureNames),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
       _materialTag(mxHdInfo.materialTag),
@@ -944,7 +952,7 @@ HdStMaterialXShaderGenGlsl::_EmitGlslfxShader(
     addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
         "shadowOcclusion", mxStage);
 
-    _EmitGlslfxHeader(mxStage);
+    _EmitGlslfxHeader(mxContext, mxStage);
     _EmitMxFunctions(mxGraph, mxContext, mxStage);
     _EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
 }
@@ -967,6 +975,10 @@ HdStMaterialXShaderGenGlsl::_EmitMxFunctions(
     _EmitConstantsUniformsAndTypeDefs(
         mxContext, mxStage, _syntax->getConstantQualifier());
 
+    // Emit an overload of mx_latlong_map_lookup that is able to query the
+    // cubemaps generated for the dome light.
+    emitString(MxHdLatLongLookupCubemapGlsl, mxStage);
+
     // If bindlessTextures are not enabled, the above for loop skips
     // initializing textures. Initialize them here by defining mappings
     // to the appropriate HdGetSampler function.
@@ -987,16 +999,14 @@ HdStMaterialXShaderGenGlsl::_EmitMxFunctions(
         emitLineBreak(mxStage);
 
         // Define mappings for the MaterialX Textures
-        if (!_mxHdTextureMap.empty()) {
+        if (!_mxHdTextureNames.empty()) {
             emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
+            for (std::string const& textureName : _mxHdTextureNames) {
+                if (textureName == "domeLightFallback") {
                     continue;
                 }
-                emitLine(TfStringPrintf(
-                    "#define %s HdGetSampler_%s()",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str()),
+                emitLine(TfStringPrintf("#define %s HdGetSampler_%s()",
+                    textureName.c_str(), _GetSamplerName(textureName).c_str()),
                     mxStage, false);
             }
             emitLineBreak(mxStage);
@@ -1041,8 +1051,12 @@ namespace {
 template<>
 HdStMaterialXShaderGen<mx::VkShaderGenerator>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
+#if MTLX_COMBINED_VERSION <= 13902
     : mx::VkShaderGenerator(),
-      _mxHdTextureMap(mxHdInfo.textureMap),
+#else
+    : mx::VkShaderGenerator(mx::TypeSystem::create()),
+#endif
+      _mxHdTextureNames(mxHdInfo.textureNames),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
       _materialTag(mxHdInfo.materialTag),
@@ -1105,7 +1119,7 @@ HdStMaterialXShaderGenVkGlsl::_EmitGlslfxShader(
     addStageUniform(mx::HW::LIGHT_DATA, mx::Type::FLOAT,
         "shadowOcclusion", mxStage);
 
-    _EmitGlslfxHeader(mxStage);
+    _EmitGlslfxHeader(mxContext, mxStage);
     _EmitMxFunctions(mxGraph, mxContext, mxStage);
     _EmitMxSurfaceShader(mxGraph, mxContext, mxStage);
 }
@@ -1127,6 +1141,10 @@ HdStMaterialXShaderGenVkGlsl::_EmitMxFunctions(
     _EmitConstantsUniformsAndTypeDefs(
         mxContext, mxStage, _syntax->getConstantQualifier());
 
+    // Emit an overload of mx_latlong_map_lookup that is able to query the
+    // cubemaps generated for the dome light.
+    emitString(MxHdLatLongLookupCubemapGlsl, mxStage);
+
     // If bindlessTextures are not enabled, the above for loop skips
     // initializing textures. Initialize them here by defining mappings
     // to the appropriate HdGetSampler function.
@@ -1147,16 +1165,14 @@ HdStMaterialXShaderGenVkGlsl::_EmitMxFunctions(
         emitLineBreak(mxStage);
 
         // Define mappings for the MaterialX Textures
-        if (!_mxHdTextureMap.empty()) {
+        if (!_mxHdTextureNames.empty()) {
             emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
+            for (std::string const& textureName : _mxHdTextureNames) {
+                if (textureName == "domeLightFallback") {
                     continue;
                 }
-                emitLine(TfStringPrintf(
-                    "#define %s HdGetSampler_%s()",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str()),
+                emitLine(TfStringPrintf("#define %s HdGetSampler_%s()",
+                        textureName.c_str(), _GetSamplerName(textureName).c_str()),
                     mxStage, false);
             }
             emitLineBreak(mxStage);
@@ -1170,6 +1186,47 @@ HdStMaterialXShaderGenVkGlsl::_EmitMxFunctions(
 // ----------------------------------------------------------------------------
 //                          HdSt MaterialX ShaderGen Metal
 // ----------------------------------------------------------------------------
+
+static const std::string MxHdLatLongLookupCubemapMsl = R"(
+#if !defined(HDST_MTLX_METAL_TEXURE_CUBE)
+struct MetalTextureCube
+{
+    texturecube<float> tex;
+    sampler s;
+
+    // needed for Storm
+    int get_width() { return tex.get_width(); }
+    int get_height() { return tex.get_height(); }
+    int get_num_mip_levels() { return tex.get_num_mip_levels(); }
+};
+
+float4 texture(MetalTextureCube mtlTex, float3 dir)
+{
+    return mtlTex.tex.sample(mtlTex.s, dir);
+}
+
+float4 textureLod(MetalTextureCube mtlTex, float3 dir, float lod)
+{
+    return mtlTex.tex.sample(mtlTex.s, dir, level(lod));
+}
+
+float4 textureGrad(MetalTextureCube mtlTex, float3 dir, float3 dx, float3 dy)
+{
+    return mtlTex.tex.sample(mtlTex.s, dir, gradientcube(dx, dy));
+}
+
+int2 textureSize(MetalTextureCube mtlTex, int mipLevel)
+{
+    return int2(mtlTex.tex.get_width(), mtlTex.tex.get_height());
+}
+#endif
+
+vec3 mx_latlong_map_lookup(vec3 dir, mat4 transform, float lod, MetalTextureCube envSampler)
+{
+    vec3 envDir = normalize((transform * vec4(dir,0.0)).xyz);
+    return textureLod(envSampler, envDir, lod).rgb;
+}
+)";
 
 namespace {
     // Create a customized version of the class mx::SurfaceNodeMsl
@@ -1201,8 +1258,12 @@ namespace {
 template<>
 HdStMaterialXShaderGen<mx::MslShaderGenerator>::HdStMaterialXShaderGen(
     HdSt_MxShaderGenInfo const& mxHdInfo)
+#if MTLX_COMBINED_VERSION <= 13902
     : mx::MslShaderGenerator(),
-      _mxHdTextureMap(mxHdInfo.textureMap),
+#else
+    : mx::MslShaderGenerator(mx::TypeSystem::create()),
+#endif
+      _mxHdTextureNames(mxHdInfo.textureNames),
       _mxHdPrimvarMap(mxHdInfo.primvarMap),
       _mxHdPrimvarDefaultValueMap(mxHdInfo.primvarDefaultValueMap),
       _materialTag(mxHdInfo.materialTag),
@@ -1318,7 +1379,7 @@ HdStMaterialXShaderGenMsl::_EmitGlslfxMetalHeader(
     mx::GenContext& mxContext,
     mx::ShaderStage& mxStage) const
 {
-    _EmitGlslfxHeader(mxStage);
+    _EmitGlslfxHeader(mxContext, mxStage);
     emitLineBreak(mxStage);
     emitLineBreak(mxStage);
     emitLine("//Metal Shading Language version " + getVersion(), mxStage, false);
@@ -1335,13 +1396,17 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
     mx::ShaderStage& mxStage) const
 {
     mx::ShaderGenerator::emitLibraryInclude(
-        "pbrlib/" + mx::GlslShaderGenerator::TARGET
-        + "/lib/mx_microfacet.glsl", mxContext, mxStage);
-    mx::ShaderGenerator::emitLibraryInclude(
         "stdlib/" + mx::MslShaderGenerator::TARGET
         + "/lib/mx_math.metal", mxContext, mxStage);
+    mx::ShaderGenerator::emitLibraryInclude(
+        "pbrlib/" + mx::GlslShaderGenerator::TARGET
+        + "/lib/mx_microfacet.glsl", mxContext, mxStage);
     _EmitConstantsUniformsAndTypeDefs(
         mxContext, mxStage,_syntax->getConstantQualifier());
+
+    // Emit an overload of mx_latlong_map_lookup that is able to query the
+    // cubemaps generated for the dome light.
+    emitString(MxHdLatLongLookupCubemapMsl, mxStage);
 
     // If bindlessTextures are not enabled, the above for loop skips
     // initializing textures. Initialize them here by defining mappings
@@ -1351,10 +1416,10 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
         // Define mappings for the DomeLight Textures
         emitLine("#ifdef HD_HAS_domeLightIrradiance", mxStage, false);
         emitLine("#define u_envRadiance "
-                "MetalTexture{HdGetSampler_domeLightPrefilter(), "
+                "MetalTextureCube{HdGetSampler_domeLightPrefilter(), "
                 "samplerBind_domeLightPrefilter} ", mxStage, false);
         emitLine("#define u_envIrradiance "
-                "MetalTexture{HdGetSampler_domeLightIrradiance(), "
+                "MetalTextureCube{HdGetSampler_domeLightIrradiance(), "
                 "samplerBind_domeLightIrradiance} ", mxStage, false);
         emitLine("#else", mxStage, false);
         emitLine("#define u_envRadiance "
@@ -1367,17 +1432,17 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
         emitLineBreak(mxStage);
 
         // Define mappings for the MaterialX Textures
-        if (!_mxHdTextureMap.empty()) {
+        if (!_mxHdTextureNames.empty()) {
             emitComment("Define MaterialX to Hydra Sampler mappings", mxStage);
-            for (mx::StringMap::const_reference texturePair : _mxHdTextureMap) {
-                if (texturePair.first == "domeLightFallback") {
+            for (std::string const &textureName : _mxHdTextureNames) {
+                if (textureName == "domeLightFallback") {
                     continue;
                 }
                 emitLine(TfStringPrintf(
                     "#define %s MetalTexture{HdGetSampler_%s(), samplerBind_%s}",
-                        texturePair.first.c_str(),
-                        texturePair.second.c_str(),
-                        texturePair.second.c_str()),
+                        textureName.c_str(),
+                        _GetSamplerName(textureName).c_str(),
+                        textureName.c_str()),
                     mxStage, false);
             }
             emitLineBreak(mxStage);
@@ -1393,7 +1458,7 @@ HdStMaterialXShaderGenMsl::_EmitMxFunctions(
 bool 
 HdStMaterialXHelpers::MxTypeIsNone(mx::TypeDesc typeDesc)
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     return typeDesc == *mx::Type::NONE;
 #else
     return typeDesc == mx::Type::NONE;
@@ -1403,7 +1468,7 @@ HdStMaterialXHelpers::MxTypeIsNone(mx::TypeDesc typeDesc)
 bool 
 HdStMaterialXHelpers::MxTypeIsSurfaceShader(mx::TypeDesc typeDesc)
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     return typeDesc == *mx::Type::SURFACESHADER;
 #else
     return typeDesc == mx::Type::SURFACESHADER;
@@ -1413,7 +1478,7 @@ HdStMaterialXHelpers::MxTypeIsSurfaceShader(mx::TypeDesc typeDesc)
 bool 
 HdStMaterialXHelpers::MxTypeDescIsFilename(const mx::TypeDesc typeDesc)
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     return typeDesc == *mx::Type::FILENAME;
 #else
     return typeDesc == mx::Type::FILENAME;
@@ -1423,7 +1488,7 @@ HdStMaterialXHelpers::MxTypeDescIsFilename(const mx::TypeDesc typeDesc)
 const mx::TypeDesc 
 HdStMaterialXHelpers::GetMxTypeDesc(const mx::ShaderPort* port)
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     return port->getType() ? *(port->getType()) : *mx::Type::NONE;
 #else
     return port->getType();
@@ -1432,15 +1497,19 @@ HdStMaterialXHelpers::GetMxTypeDesc(const mx::ShaderPort* port)
 
 const std::string 
 HdStMaterialXHelpers::MxGetTypeString(
-    mx::SyntaxPtr mxSyntax, const std::string& typeName)
+    mx::SyntaxPtr mxSyntax,
+    const mx::GenContext& mxContext,
+    const std::string& typeName)
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     const mx::TypeDesc* mxType = mx::TypeDesc::get(typeName);
     if (!mxType) {
         return mx::Type::NONE->getName();
     }
+#elif MTLX_COMBINED_VERSION <= 13902
+     const mx::TypeDesc mxType = mx::TypeDesc::get(typeName);
 #else
-    const mx::TypeDesc mxType = mx::TypeDesc::get(typeName);
+    const mx::TypeDesc mxType = mxContext.getTypeDesc(typeName);
 #endif
     return mxSyntax->getTypeName(mxType);
 }
@@ -1448,7 +1517,7 @@ HdStMaterialXHelpers::MxGetTypeString(
 const std::string& 
 HdStMaterialXHelpers::GetVector2Name()
 {
-#if MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION <= 38
+#if MTLX_COMBINED_VERSION < 13900
     return mx::Type::VECTOR2->getName();
 #else
     return mx::Type::VECTOR2.getName();

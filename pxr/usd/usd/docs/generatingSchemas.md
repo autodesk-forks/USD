@@ -264,6 +264,35 @@ from one of its built-in API schemas by declaring the property itself. This
 should be done carefully to avoid breaking conformance with the built-in schema
 itself (like changing the property's type) and is typically used for changing
 the default value for the property.
+
+Schemas can also indicate that the interfaces for any built-in API schemas 
+should automatically be "reflected" (made available) in the schema's API 
+interface. This will be done by the ```usdGenSchema``` 
+\ref Usd_SchemaCodeGeneration "codegen process" when the schema lists the 
+built-in schemas to be reflected in the \em reflectedAPISchemas field in the 
+schema definition's customData. For example, if "Schema1API" wanted to make the 
+properties from built-in "Schema2API" automatically available in the Schema1API 
+interface, the schema definition would look something like the following.
+
+\code
+# Example of a single-apply "Schema1API" API schema that has "Schema2API"
+# (not shown in this example) as a built-in schema, and has the interface of
+# Schema2API automatically reflected in the Schema1API interface via codegen
+class "Schema1API" (
+    inherits = </APISchemaBase>
+    customData = {        
+        token[] reflectedAPISchemas = ["Schema2API"]        
+    }
+    prepend apiSchemas = ["Schema2API"]
+)
+{
+    # ...Schema1API properties, etc. defined here...
+}
+\endcode
+
+Note that you can only reflect single-apply API schemas, not multiple-apply
+schemas.
+
 \sa \ref Usd_APISchemaStrengthOrdering
 
 ### Auto applied API schemas {#Usd_AutoAppliedAPISchemas}
@@ -531,20 +560,38 @@ files are edited by the script:
     Processed form of schema definitions that will be consumed at runtime by 
     USD core.
 
-\parblock
-\note usdGenSchema will update existing files in the current directory 
-if it detects any differences with the code it generates. Make sure these 
-files are editable before running usdGenSchema
-\endparblock
+  - <b>generatedSchema.classes.txt</b>:
+    List of generated schema files to be included in the module's CMakeLists.txt
+    build file.
 
-\parblock
-\note usdGenSchema does not update the CMakeLists.txt and module.cpp files, 
-even if they are editable.  If you have added a new class(es), you must 
-add them to these files yourself.  
-\endparblock
+  - <b>generatedSchema.modules.h</b>:
+    List of generated schema classes to be included in the module's module.cpp
+    file.
 
 Various command-line options are available for customizing the code generation 
 process. Run ```usdGenSchema --help``` for more details.
+
+### Creating and Maintaining a New Schema Module {#Usd_SchemaCreatingMaintainingNewModule}
+
+If you are creating a new schema module, use `usdInitSchema` to create 
+CMakeLists.txt, module.cpp, and other necessary files. Once these files have 
+been generated for you, they will be kept up to date as you add new schema 
+classes, except for any tests added for your schema domain, which must be 
+manually added to CMakeLists.txt.
+
+If you did not use `usdInitSchema` to create your schema module's 
+CMakeLists.txt, you will need to update CMakeLists.txt (and module.cpp) manually 
+when you add new schema classes.
+
+Use `usdGenSchema` whenever you make schema changes to your schema module.
+`usdGenSchema` will update existing files in the current directory 
+if it detects any differences with the code it generates. Make sure these 
+files are editable before running `usdGenSchema`.
+
+See the Toolset documentation page sections on 
+<a href="https://openusd.org/release/toolset.html#usdgenschema">usdGenSchema</a> and 
+<a href="https://openusd.org/release/toolset.html#usdinitschema">usdInitSchema</a>
+for more details.
 
 ## Namespaced Properties in Code Generation {#Usd_NameSpacedPropertiesInCodeGen}
 
@@ -770,6 +817,15 @@ Here's a short description of each datum in the per-class customData dictionary:
     the \ref Usd_OM_FallbackPrimTypes "fallback prim types" metadata that USD 
     versions which lack this schema will use to choose a suitable alternative 
     schema type.
+
+  - \b reflectedAPISchemas - An optional token array value that lists the 
+    built-in API schemas that should be "reflected" (automatically made 
+    available) in the schema's interface. The array should only include schemas 
+    that have also been specified as built-ins via \em apiSchemas. Only 
+    single-apply API schemas can be included. This array is used by the 
+    ```usdGenSchema```  \ref Usd_SchemaCodeGeneration "codegen process" to 
+    generate the reflected schema interface (property APIs, etc.) in the 
+    generated code.
 
 ## Customizing Per-Property  {#Usd_CustomizingPerProperty}
 

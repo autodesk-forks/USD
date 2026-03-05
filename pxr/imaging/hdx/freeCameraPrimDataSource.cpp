@@ -53,27 +53,27 @@ public:
         }
         if (name == HdCameraSchemaTokens->horizontalAperture) {
             return HdRetainedTypedSampledDataSource<float>::New(
-                _Camera().GetHorizontalAperture() /
+                _Camera().GetHorizontalAperture() *
                 GfCamera::APERTURE_UNIT);
         }
         if (name == HdCameraSchemaTokens->verticalAperture) {
             return HdRetainedTypedSampledDataSource<float>::New(
-                _Camera().GetVerticalAperture() /
+                _Camera().GetVerticalAperture() *
                 GfCamera::APERTURE_UNIT);
         }
         if (name == HdCameraSchemaTokens->horizontalApertureOffset) {
             return HdRetainedTypedSampledDataSource<float>::New(
-                _Camera().GetHorizontalApertureOffset() /
+                _Camera().GetHorizontalApertureOffset() *
                 GfCamera::APERTURE_UNIT);
         }
         if (name == HdCameraSchemaTokens->verticalApertureOffset) {
             return HdRetainedTypedSampledDataSource<float>::New(
-                _Camera().GetVerticalApertureOffset() /
+                _Camera().GetVerticalApertureOffset() *
                 GfCamera::APERTURE_UNIT);
         }
         if (name == HdCameraSchemaTokens->focalLength) {
             return HdRetainedTypedSampledDataSource<float>::New(
-                _Camera().GetFocalLength() /
+                _Camera().GetFocalLength() *
                 GfCamera::FOCAL_LENGTH_UNIT);
         }
         if (name == HdCameraSchemaTokens->clippingRange) {
@@ -298,7 +298,7 @@ HdxFreeCameraPrimDataSource::SetWindowPolicy(
     }
     static const HdDataSourceLocator locator =
         HdCameraSchema::GetDefaultLocator()
-            .Append(_tokens->windowPolicy);                    
+            .Append(_tokens->windowPolicy);
     dirtyLocators->insert(locator);
 }
 
@@ -308,10 +308,29 @@ HdxFreeCameraPrimDataSource::SetViewAndProjectionMatrix(
     const GfMatrix4d& projectionMatrix,
     HdDataSourceLocatorSet * dirtyLocators)
 {
-    SetCamera(
-        _CameraFromViewAndProjectionMatrix(
-            viewMatrix, projectionMatrix),
-        dirtyLocators);
+    GfCamera cam = _CameraFromViewAndProjectionMatrix(
+        viewMatrix, projectionMatrix);
+    cam.SetClippingPlanes(_info->camera.GetClippingPlanes());
+
+    SetCamera(cam, dirtyLocators);
+}
+
+void
+HdxFreeCameraPrimDataSource::SetClippingPlanes(
+    const std::vector<GfVec4f> &clippingPlanes,
+    HdDataSourceLocatorSet * dirtyLocators)
+{
+    if (_info->camera.GetClippingPlanes() == clippingPlanes) {
+        return;
+    }
+    _info->camera.SetClippingPlanes(clippingPlanes);
+    if (!dirtyLocators) {
+        return;
+    }
+    static const HdDataSourceLocator locator =
+        HdCameraSchema::GetDefaultLocator()
+            .Append(HdCameraSchemaTokens->clippingPlanes);
+    dirtyLocators->insert(locator);
 }
 
 HdDataSourceBaseHandle

@@ -25,6 +25,7 @@
 #include "pxr/imaging/hgi/shaderProgram.h"
 #include "pxr/imaging/hgi/texture.h"
 #include "pxr/imaging/hgi/types.h"
+#include "pxr/imaging/hgi/version.h"
 
 #include <atomic>
 #include <memory>
@@ -189,7 +190,7 @@ public:
     /// Create a texture in rendering backend.
     /// Thread safety: Creation must happen on main thread. See notes above.
     HGI_API
-    virtual HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) = 0;
+    HgiTextureHandle CreateTexture(HgiTextureDesc const & desc);
 
     /// Destroy a texture in rendering backend.
     /// Thread safety: Destruction must happen on main thread. See notes above.
@@ -202,8 +203,8 @@ public:
     /// is not destroyed while the texture view is in use.
     /// Thread safety: Creation must happen on main thread. See notes above.
     HGI_API
-    virtual HgiTextureViewHandle CreateTextureView(
-        HgiTextureViewDesc const & desc) = 0;
+    HgiTextureViewHandle CreateTextureView(
+        HgiTextureViewDesc const & desc);
 
     /// Destroy a texture view in rendering backend.
     /// This will destroy the view's texture, but not the sourceTexture that
@@ -225,7 +226,7 @@ public:
     /// Create a buffer in rendering backend.
     /// Thread safety: Creation must happen on main thread. See notes above.
     HGI_API
-    virtual HgiBufferHandle CreateBuffer(HgiBufferDesc const & desc) = 0;
+    HgiBufferHandle CreateBuffer(HgiBufferDesc const & desc);
 
     /// Destroy a buffer in rendering backend.
     /// Thread safety: Destruction must happen on main thread. See notes above.
@@ -261,8 +262,8 @@ public:
     /// Create a new resource binding object.
     /// Thread safety: Creation must happen on main thread. See notes above.
     HGI_API
-    virtual HgiResourceBindingsHandle CreateResourceBindings(
-        HgiResourceBindingsDesc const& desc) = 0;
+    HgiResourceBindingsHandle CreateResourceBindings(
+        HgiResourceBindingsDesc const& desc);
 
     /// Destroy a resource binding object.
     /// Thread safety: Destruction must happen on main thread. See notes above.
@@ -324,6 +325,14 @@ public:
     HGI_API
     virtual void EndFrame() = 0;
 
+    /// Perform any necessary garbage collection, if applicable. This can be
+    /// used to flush pending deletes immediately after unloading assets, for
+    /// example. Note that as some clients may not call this, Hgi
+    /// implementations should find other opportunities to garbage collect as
+    /// well (e.g. EndFrame).
+    HGI_API
+    virtual void GarbageCollect() = 0;
+
 protected:
     // Returns a unique id for handle creation.
     // Thread safety: Thread-safe atomic increment.
@@ -336,6 +345,20 @@ protected:
     HGI_API
     virtual bool _SubmitCmds(
         HgiCmds* cmds, HgiSubmitWaitType wait);
+
+    HGI_API
+    virtual HgiTextureHandle _CreateTexture(HgiTextureDesc const & desc) = 0;
+
+    HGI_API
+    virtual HgiTextureViewHandle _CreateTextureView(
+        HgiTextureViewDesc const & desc) = 0;
+
+    HGI_API
+    virtual HgiBufferHandle _CreateBuffer(HgiBufferDesc const & desc) = 0;
+
+    HGI_API
+    virtual HgiResourceBindingsHandle _CreateResourceBindings(
+        HgiResourceBindingsDesc const& desc) = 0;
 
 private:
     Hgi & operator=(const Hgi&) = delete;

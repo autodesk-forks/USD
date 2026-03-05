@@ -45,6 +45,22 @@ class UsdviewApi(object):
         return self.__appController._dataModel.selection.getFocusPrim()
 
     @property
+    def validationErrors(self):
+        """The current list of validation errors."""
+        if self.__appController._usdValidationWidget:
+            return self.__appController._usdValidationWidget.validationErrors
+        else:
+            return []
+
+    @property
+    def selectedValidationErrors(self):
+        """The currently selected validation errors."""
+        if self.__appController._usdValidationWidget:
+            return self.__appController._usdValidationWidget.resultWidget.currentSelectedErrors
+        else:
+            return []
+
+    @property
     def selectedPoint(self):
         """The currently selected world space point."""
 

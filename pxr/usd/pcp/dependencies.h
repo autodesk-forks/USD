@@ -136,7 +136,42 @@ public:
                 }
             }
         }
-        if (includeAncestral) {
+
+        if (!includeAncestral) {
+            return;
+        }
+
+        if (siteLayerStack->IsUsd()) {
+            // If the site is a prim selection path, the parent path does not
+            // represent an ancestral dependency as variant selection paths are
+            // not namespace children when it comes to prim indexes.
+            if (sitePath.IsPrimVariantSelectionPath()) {
+                return;
+            }
+            for (SdfPath ancestorSitePath = sitePath.GetParentPath();
+                !ancestorSitePath.IsEmpty();
+                ancestorSitePath = ancestorSitePath.GetParentPath())
+            {
+                _SiteDepMap::const_iterator j =
+                    siteDepMap.find(ancestorSitePath);
+                if (j != siteDepMap.end()) {
+                    for(const SdfPath &ancestorPrimIndexPath: j->second) {
+                        fn(ancestorPrimIndexPath, ancestorSitePath);
+                    }
+                }
+
+                // We stop walking up the namespace if we hit a variant 
+                // selection as its not a namespace child of its parent.
+                if (ancestorSitePath.IsPrimVariantSelectionPath()) {
+                    break;
+                }
+            }
+        } else {
+            // XXX: For non-USD mode we unfortunately have to continue to use
+            // the old buggy behavior of ancestors of variant selection paths 
+            // being treated as ancestral dependencies do due downstream code 
+            // that still depends on this behavior. Hopefully this can be 
+            // removed to conform with USD in the future.
             for (SdfPath ancestorSitePath = sitePath.GetParentPath();
                  !ancestorSitePath.IsEmpty();
                  ancestorSitePath = ancestorSitePath.GetParentPath())
@@ -407,12 +442,12 @@ Pcp_ForEachDependentNode( const SdfPath &sitePath,
             );
 }
 
-/// Record a PcpCulledDependency for \p node in \p culledDeps if that
-/// node would be recorded by Pcp_Dependencies if it remained in the
-/// prim index.
+/// Record a PcpCulledDependency for each node in \p primIndex in
+/// \p culledDeps if that node would be recorded by Pcp_Dependencies 
+/// if it remained in the prim index after finalization.
 void
-Pcp_AddCulledDependency(
-    const PcpNodeRef& node,
+Pcp_AddCulledDependencies(
+    const PcpPrimIndex& primIndex,
     PcpCulledDependencyVector* culledDeps);
 
 PXR_NAMESPACE_CLOSE_SCOPE

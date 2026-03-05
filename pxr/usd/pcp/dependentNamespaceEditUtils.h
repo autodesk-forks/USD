@@ -50,16 +50,17 @@ public:
     /// List of all composition fields edits to perform.
     std::vector<CompositionFieldEdit> compositionFieldEdits;
 
-    /// Description of spec move edit which consistents of the old (source)
-    /// path and the new (destination) path.
-    struct SpecMoveEditDescription {
+    /// Description of move edit which consists of the old (source) path and the
+    /// new (destination) path.
+    struct MoveEditDescription {
         SdfPath oldPath;
         SdfPath newPath;
     };
+    using MoveEditDescriptionVector = std::vector<MoveEditDescription>;
 
     /// Map of layer to the spec moves edits to perform on the layer.
     using LayerSpecMoveEdits = std::unordered_map<
-        SdfLayerHandle, std::vector<SpecMoveEditDescription>, TfHash>;
+        SdfLayerHandle, MoveEditDescriptionVector, TfHash>;
     LayerSpecMoveEdits layerSpecMoves;
 
     /// Map of layer to relocates value to set in the layer metadata relocates
@@ -75,9 +76,17 @@ public:
     /// Warnings encountered during the processing of the dependent namespace 
     /// edits.
     std::vector<std::string> warnings;
+
+    /// Lists of composed prim paths in each affected cache whose prim indexes
+    /// will need to be recomputed after the changes in this object are applied.
+    /// This information can be useful during change processing and notification
+    /// to help report the intended effects of all the layer spec edits that are
+    /// performed during a namespace edit.
+    std::unordered_map<const PcpCache *, MoveEditDescriptionVector> 
+        dependentCachePathChanges;
 };
 
-/// Given a prim spec move edit from \p oldPrimPath to \p newPrimPath and the 
+/// Given a prim or property spec move edit from \p oldPath to \p newPath and the 
 /// \p affectedLayers on which this spec move will be performed, this function
 /// finds all prim indexes already cached in each PcpCache in \p dependentCaches
 /// that would be affected by these edits and computes a full set of edits that
@@ -92,8 +101,8 @@ public:
 PCP_API
 PcpDependentNamespaceEdits
 PcpGatherDependentNamespaceEdits(
-    const SdfPath &oldPrimPath,
-    const SdfPath &newPrimPath,
+    const SdfPath &oldPath,
+    const SdfPath &newPath,
     const SdfLayerHandleVector &affectedLayers,
     const PcpLayerStackRefPtr &addRelocatesToLayerStack,
     const SdfLayerHandle &addRelocatesToLayerStackEditLayer,

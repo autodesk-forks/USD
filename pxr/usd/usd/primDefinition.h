@@ -33,7 +33,8 @@ class UsdPrimDefinition
 public:
     ~UsdPrimDefinition() = default;
 
-    /// Return the list of names of builtin properties for this prim definition.
+    /// Return the list of names of builtin properties for this prim definition,
+    /// ordered by this prim definition's propertyOrder.
     const TfTokenVector &GetPropertyNames() const { return _properties; }
 
     /// Return the list of names of the API schemas that have been applied to
@@ -490,6 +491,14 @@ private:
             const TfToken& fieldName, const TfToken& keyPath, T* value) const {
             return layer->HasFieldDictKey(path, fieldName, keyPath, value);
         }
+
+        VtValue GetField(const TfToken& fieldName) const {
+            return layer->GetField(path, fieldName);
+        }
+
+        explicit operator bool() const noexcept {
+            return layer;
+        }
     };
 
     /// It is preferable to use the _HasField and _HasFieldDictKey methods to 
@@ -523,14 +532,16 @@ private:
     UsdPrimDefinition() = default;
     UsdPrimDefinition(const UsdPrimDefinition &) = default;
 
+    void _ApplyPropertyOrder();
+
     USD_API
-    void _IntializeForTypedSchema(
+    void _InitializeForTypedSchema(
         const SdfLayerHandle &schematicsLayer,
         const SdfPath &schematicsPrimPath, 
         const VtTokenArray &propertiesToIgnore);
 
     USD_API
-    void _IntializeForAPISchema(
+    void _InitializeForAPISchema(
         const TfToken &apiSchemaName,
         const SdfLayerHandle &schematicsLayer,
         const SdfPath &schematicsPrimPath, 
@@ -563,11 +574,11 @@ private:
         const TfToken &propName,
         const _LayerAndPath &layerAndPath);
 
-    SdfPropertySpecHandle _FindOrCreatePropertySpecForComposition(
+    SdfSpecHandle _FindOrCreateSpecForComposition(
         const TfToken &propName,
         const _LayerAndPath &srcLayerAndPath);
 
-    SdfPropertySpecHandle _CreateComposedPropertyIfNeeded(
+    SdfSpecHandle _CreateComposedPrimOrPropertyIfNeeded(
         const TfToken &propName,
         const _LayerAndPath &strongProp, 
         const _LayerAndPath &weakProp);

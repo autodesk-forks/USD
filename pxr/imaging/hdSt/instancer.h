@@ -71,6 +71,22 @@ public:
     HDST_API
     VtIntArray GetInstanceIndices(SdfPath const &prototypeId);
 
+    /// Returns whether "displayOpacity" is defined as an instance primvar.
+    HDST_API
+    bool HasDisplayOpacity() const;
+
+    /// Returns whether "normals" is defined as an instance primvar.
+    HDST_API
+    bool HasNormals() const;
+
+    /// Returns the instancer (prim) transform.
+    HDST_API
+    const GfMatrix4d& GetTransform() const;
+
+    /// Returns the instancer (prim) transform inverse.
+    HDST_API
+    const GfMatrix4d& GetTransformInverse() const;
+
 protected:
     HDST_API
     void _GetInstanceIndices(SdfPath const &prototypeId,
@@ -90,6 +106,14 @@ private:
     // (Note: instance indices are computed per prototype and the rprim owns
     // the bar).
     HdBufferArrayRangeSharedPtr _instancePrimvarRange;
+
+    GfMatrix4d _transform;
+    GfMatrix4d _transformInverse;
+
+    // Visibility
+    bool _visible : 1;
+    bool _hasDisplayOpacity : 1;
+    bool _hasNormals : 1;
 };
 
 

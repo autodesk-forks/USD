@@ -56,16 +56,32 @@ public:
     /// -------------------------------------------------------
     /// Execution API
 
-    /// Obtain the set of tasks managed by the task controller,
+    /// Obtain paths to the tasks managed by the task controller,
     /// for image generation. The tasks returned will be different
     /// based on current renderer state.
     HDX_API
-    HdTaskSharedPtrVector const GetRenderingTasks() const;
+    SdfPathVector GetRenderingTaskPaths() const;
 
-    /// Obtain the set of tasks managed by the task controller,
+    /// Obtain paths to tasks managed by the task controller,
     /// for picking.
     HDX_API
-    HdTaskSharedPtrVector const GetPickingTasks() const;
+    SdfPathVector GetPickingTaskPaths() const;
+
+    /// \deprecated Use GetRenderingTaskPaths
+    ///
+    /// Deprecated in preparation of changing to an
+    /// HdxTaskControllerSceneIndex.
+    ///
+    HDX_API
+    HdTaskSharedPtrVector GetRenderingTasks() const;
+
+    /// \deprecated Use GetPickingTaskPaths
+    ///
+    /// Deprecated in preparation of changing to an
+    /// HdxTaskControllerSceneIndex.
+    ///
+    HDX_API
+    HdTaskSharedPtrVector GetPickingTasks() const;
 
     /// -------------------------------------------------------
     /// Rendering API
@@ -136,8 +152,8 @@ public:
 
     /// -------------------------------------------------------
     /// Camera and Framing API
-    
-    /// Set the size of the render buffers baking the AOVs.
+
+    /// Set the size of the render buffers backing the AOVs.
     /// GUI applications should set this to the size of the window.
     ///
     HDX_API
@@ -177,6 +193,10 @@ public:
     /// (Note: Scene cameras use clipping planes authored on the camera prim)
     HDX_API
     void SetFreeCameraClipPlanes(std::vector<GfVec4d> const& clipPlanes);
+
+    /// Get the free camera's Hydra prim path
+    HDX_API
+    SdfPath GetFreeCameraPath();
 
     /// -------------------------------------------------------
     /// Selection API
@@ -220,6 +240,15 @@ public:
     /// Progressive Image Generation
 
     /// Return whether the image has converged.
+    ///
+    /// \deprecated
+    ///
+    /// Instead, checks whether HdxTask::IsConverged for a
+    /// task in the render index for each path in GetRenderingTaskPaths().
+    ///
+    /// Deprecated in preparation of changing to an
+    /// HdxTaskControllerSceneIndex.
+    ///
     HDX_API
     bool IsConverged() const;
 
@@ -305,16 +334,16 @@ private:
     // Helper function to get the built-in Camera light type SimpleLight for
     // Storm, and DistantLight otherwise
     TfToken _GetCameraLightType();
-    
-    // Helper functions to set the parameters of a light, get a particular light 
-    // in the scene, replace and remove Sprims from the scene 
+
+    // Helper functions to set the parameters of a light, get a particular light
+    // in the scene, replace and remove Sprims from the scene
     VtValue _GetDomeLightTexture(GlfSimpleLight const& light);
     void _SetParameters(SdfPath const& pathName, GlfSimpleLight const& light);
-    void _SetMaterialNetwork(SdfPath const& pathName, 
+    void _SetMaterialNetwork(SdfPath const& pathName,
                              GlfSimpleLight const& light);
     GlfSimpleLight _GetLightAtId(size_t const& pathIdx);
     void _RemoveLightSprim(size_t const& pathIdx);
-    void _ReplaceLightSprim(size_t const& pathIdx, GlfSimpleLight const& light, 
+    void _ReplaceLightSprim(size_t const& pathIdx, GlfSimpleLight const& light,
                         SdfPath const& pathName);
 
     // A private scene delegate member variable backs the tasks and the free cam
@@ -357,7 +386,7 @@ private:
         // HdSceneDelegate interface
         VtValue Get(SdfPath const& id, TfToken const& key) override;
         GfMatrix4d GetTransform(SdfPath const& id) override;
-        VtValue GetLightParamValue(SdfPath const& id, 
+        VtValue GetLightParamValue(SdfPath const& id,
                                    TfToken const& paramName) override;
         VtValue GetMaterialResource(SdfPath const& id) override;
         bool IsEnabled(TfToken const& option) const override;
@@ -391,7 +420,7 @@ private:
 
     // Current active camera
     SdfPath _activeCameraId;
-    
+
     // Built-in lights
     SdfPathVector _lightIds;
 

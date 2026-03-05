@@ -17,6 +17,17 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 ////////////////////////////////////////////////////////////
 
+PcpNodeIterator&
+PcpNodeIterator::MoveToNextSubtree()
+{
+    const std::pair<size_t, size_t> subtreeRange =
+        _graph->GetNodeIndexesForSubtreeRange(dereference());
+    _nodeIdx = subtreeRange.second;
+    return *this;
+}
+
+////////////////////////////////////////////////////////////
+
 PcpPrimIterator::PcpPrimIterator() = default;
 
 PcpPrimIterator::PcpPrimIterator(

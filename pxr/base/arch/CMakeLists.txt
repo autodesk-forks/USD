@@ -4,15 +4,24 @@ set(CMAKE_INCLUDE_CURRENT_DIR OFF)
 set(PXR_PREFIX pxr/base)
 set(PXR_PACKAGE arch)
 
-set(PLATFORM_LIBS ${M_LIB})
+if(NOT EMSCRIPTEN)
+    set(ARCH_PLATFORM_LIBS ${M_LIB})
+    set(ARCH_PLATFORM_HEADERS "")
+    set(ARCH_PLATFORM_CPPFILES "")
+endif()
+
 if(WIN32)
-    set(PLATFORM_LIBS Ws2_32.lib Dbghelp.lib ${PLATFORM_LIBS})
+    set(ARCH_PLATFORM_LIBS Ws2_32.lib Dbghelp.lib ${ARCH_PLATFORM_LIBS})
+elseif (APPLE)
+    set(ARCH_PLATFORM_HEADERS darwin.h)
+    set(ARCH_PLATFORM_CPPFILES darwin.mm)
+    set(ARCH_PLATFORM_LIBS "-framework Foundation" ${ARCH_PLATFORM_LIBS})
 endif()
 
 pxr_library(arch
     LIBRARIES
         ${CMAKE_DL_LIBS}
-        ${PLATFORM_LIBS}
+        ${ARCH_PLATFORM_LIBS}
 
     PUBLIC_CLASSES
         align
@@ -51,10 +60,12 @@ pxr_library(arch
     PRIVATE_HEADERS
         testArchAbi.h
         testArchUtil.h
+        ${ARCH_PLATFORM_HEADERS}
 
     CPPFILES
         assumptions.cpp
         initConfig.cpp
+        ${ARCH_PLATFORM_CPPFILES}
 
     DOXYGEN_FILES
         overview.dox
@@ -164,12 +175,12 @@ pxr_build_test(testArchVsnprintf
 # executable, where it also looks for the pdb, doesn't work)
 
 if (PXR_BUILD_TESTS AND WIN32)
-    # This effectively creates a test-env dir (similar to pxr_install_test_dir),
-    # and adds a single file, testArchStackTrace.pdb, to it.  The test-env dir
-    # ensures that the .pdb is copied into the temporary test dir, which is
-    # the PWD when the tests are run.  The PWD (and some subdirs) is the only
-    # place that .pdbs will be searched for, other than the baked-in absolute
-    # path in the windows binary
+    # This effectively creates a test-env dir and adds a single file,
+    # testArchStackTrace.pdb, to it.  The test-env dir ensures that the .pdb
+    # is copied into the temporary test dir, which is the PWD when the tests
+    # are run.  The PWD (and some subdirs) is the only place that .pdbs will
+    # be searched for, other than the baked-in absolute path in the windows
+    # binary
     install(
         FILES $<TARGET_PDB_FILE:testArchStackTrace>
         DESTINATION tests/ctest/testArchStackTrace
@@ -177,9 +188,27 @@ if (PXR_BUILD_TESTS AND WIN32)
     )
 endif()
 
-
-pxr_register_test(testArchAbi
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchAbi"
+# Note the following tests are disabled when building for emscripten for
+# dependence on dynamic library specific functionality and process forking.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testArchAbi
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchAbi"
+    )
+    pxr_register_test(testArchError
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchError"
+    )
+    pxr_register_test(testArchStackTrace
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchStackTrace"
+    )
+    pxr_register_test(testArchSymbols
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchSymbols"
+    )
+endif()
+pxr_register_test(testArchSystemInfo
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchSystemInfo"
+)
+pxr_register_test(testArchFileSystem
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchFileSystem"
 )
 pxr_register_test(testArchAttributes
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchAttributes"
@@ -187,26 +216,11 @@ pxr_register_test(testArchAttributes
 pxr_register_test(testArchDemangle
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchDemangle"
 )
-pxr_register_test(testArchError
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchError"
-)
 pxr_register_test(testArchErrno
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchErrno"
 )
-pxr_register_test(testArchFileSystem
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchFileSystem"
-)
 pxr_register_test(testArchFunction
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchFunction"
-)
-pxr_register_test(testArchStackTrace
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchStackTrace"
-)
-pxr_register_test(testArchSymbols
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchSymbols"
-)
-pxr_register_test(testArchSystemInfo
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchSystemInfo"
 )
 pxr_register_test(testArchTiming
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testArchTiming"

@@ -362,7 +362,8 @@ class AppController(QtCore.QObject):
             self._console = None
             self._debugFlagsWindow = None
             self._interpreter = None
-            self._hydraSceneBrowser = None
+            self._usdValidationWidget = None
+            self._hydraSceneDebugger = None
             self._parserData = parserData
             self._noRender = parserData.noRender
             self._noPlugins = parserData.noPlugins
@@ -402,7 +403,7 @@ class AppController(QtCore.QObject):
             self._ui = Ui_MainWindow()
             self._ui.setupUi(self._mainWindow)
 
-            self._mainWindow.setWindowTitle(parserData.usdFile)
+            self._mainWindow.setWindowTitle(parserData.usdFile or "New Stage")
             self._statusBar = QtWidgets.QStatusBar(self._mainWindow)
             self._mainWindow.setStatusBar(self._statusBar)
 
@@ -509,7 +510,7 @@ class AppController(QtCore.QObject):
             self._dataModel.signalPrimsChanged.connect(
                 self._onPrimsChanged)
 
-            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.BusyCursor)
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BusyCursor)
 
             self._qtimer = QtCore.QTimer(self)
             # Timeout interval in ms. We set it to 0 so it runs as fast as
@@ -575,15 +576,15 @@ class AppController(QtCore.QObject):
             self._ui.propertyView.header().setStretchLastSection(True)
 
             self._ui.propertyView.setSelectionBehavior(
-                QtWidgets.QAbstractItemView.SelectRows)
+                QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
             self._ui.primView.setSelectionBehavior(
-                QtWidgets.QAbstractItemView.SelectRows)
+                QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
             # This allows ctrl and shift clicking for multi-selecting
             self._ui.propertyView.setSelectionMode(
-                QtWidgets.QAbstractItemView.ExtendedSelection)
+                QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
 
             self._ui.propertyView.setHorizontalScrollMode(
-                QtWidgets.QAbstractItemView.ScrollPerPixel)
+                QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
 
             self._ui.frameSlider.setTracking(
                     self._dataModel.viewSettings.redrawOnScrub)
@@ -693,72 +694,72 @@ class AppController(QtCore.QObject):
             # inspector headers. This is so we can have a context menu on the
             # headers that allows you to select which columns are visible.
             self._ui.propertyView.header()\
-                    .setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                    .setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
             self._ui.primView.header()\
-                    .setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                    .setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
 
             # Set custom context menu for attribute browser
             self._ui.propertyView\
-                    .setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                    .setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
 
             # Set custom context menu for layer stack browser
             self._ui.layerStackView\
-                    .setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                    .setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
 
             # Set custom context menu for composition tree browser
             self._ui.compositionTreeWidget\
-                    .setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                    .setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
 
             # Set up the resize policy for the layer stack view columns.
             lvh = self._ui.layerStackView.horizontalHeader()
-            lvh.setDefaultAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            lvh.setDefaultAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
             lvh.setSectionResizeMode(LayerStackViewColumnIndex.LAYER, 
-                                     QtWidgets.QHeaderView.ResizeToContents)
+                                     QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
             lvh.setSectionResizeMode(LayerStackViewColumnIndex.OFFSET, 
-                                     QtWidgets.QHeaderView.ResizeToContents)
+                                     QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
             lvh.setSectionResizeMode(LayerStackViewColumnIndex.PATH, 
-                                     QtWidgets.QHeaderView.Stretch)
+                                     QtWidgets.QHeaderView.ResizeMode.Stretch)
             lvh.setSectionResizeMode(LayerStackViewColumnIndex.VALUE, 
-                                     QtWidgets.QHeaderView.ResizeToContents)
+                                     QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
 
             # Arc path is the most likely to need stretch.
             twh = self._ui.compositionTreeWidget.header()
-            twh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
-            twh.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-            twh.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
-            twh.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+            twh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+            twh.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+            twh.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.Stretch)
+            twh.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
 
             # Set the prim view header to have a fixed size type and vis columns
             nvh = self._ui.primView.header()
             nvh.setSectionResizeMode(PrimViewColumnIndex.NAME,
-                QtWidgets.QHeaderView.Stretch)
+                QtWidgets.QHeaderView.ResizeMode.Stretch)
             nvh.setSectionResizeMode(PrimViewColumnIndex.TYPE,
-                QtWidgets.QHeaderView.ResizeToContents)
+                QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
             nvh.setSectionResizeMode(PrimViewColumnIndex.VIS,
-                QtWidgets.QHeaderView.ResizeToContents)
+                QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
             nvh.setSectionResizeMode(PrimViewColumnIndex.GUIDES,
-                QtWidgets.QHeaderView.ResizeToContents)
+                QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
             nvh.resizeSection(PrimViewColumnIndex.DRAWMODE, 116)
             nvh.setSectionResizeMode(PrimViewColumnIndex.DRAWMODE,
-                QtWidgets.QHeaderView.Fixed)
+                QtWidgets.QHeaderView.ResizeMode.Fixed)
 
             pvh = self._ui.propertyView.header()
-            pvh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
-            pvh.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-            pvh.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+            pvh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+            pvh.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+            pvh.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
             # XXX:
             # To avoid QTBUG-12850 (https://bugreports.qt.io/browse/QTBUG-12850),
             # we force the horizontal scrollbar to always be visible for all
             # QTableWidget widgets in use.
             self._ui.primView.setHorizontalScrollBarPolicy(
-                QtCore.Qt.ScrollBarAlwaysOn)
+                QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
             self._ui.propertyView.setHorizontalScrollBarPolicy(
-                QtCore.Qt.ScrollBarAlwaysOn)
+                QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
             self._ui.metadataView.setHorizontalScrollBarPolicy(
-                QtCore.Qt.ScrollBarAlwaysOn)
+                QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
             self._ui.layerStackView.setHorizontalScrollBarPolicy(
-                QtCore.Qt.ScrollBarAlwaysOn)
+                QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
 
             self._ui.attributeValueEditor.setAppController(self)
             self._ui.primView.InitControllers(self)
@@ -819,11 +820,12 @@ class AppController(QtCore.QObject):
             self._ui.useExtentsHint.triggered.connect(self._setUseExtentsHint)
 
             self._ui.showInterpreter.triggered.connect(self._showInterpreter)
+            self._ui.showUsdValidation.triggered.connect(self._showUsdValidation)
 
             self._ui.showDebugFlags.triggered.connect(self._showDebugFlags)
 
-            self._ui.showHydraSceneBrowser.triggered.connect(
-                self._showHydraSceneBrowser)
+            self._ui.showHydraSceneDebugger.triggered.connect(
+                self._showHydraSceneDebugger)
 
             self._ui.redrawOnScrub.toggled.connect(self._redrawOptionToggled)
 
@@ -1201,8 +1203,16 @@ class AppController(QtCore.QObject):
             # layers populated after loading
             _MuteMatchingLayers()
             
-    def _openStage(self, usdFilePath, sessionFilePath,
-                   populationMaskPaths, muteLayersRe):
+    def _openEmptyStage(self):
+        stage = Usd.Stage.CreateInMemory()
+
+        if not stage:
+            sys.stderr.write('Error: Unable to create empty stage\n')
+
+        return stage
+            
+    def _openStageForFile(self, usdFilePath, sessionFilePath,
+                          populationMaskPaths, muteLayersRe):
 
         def _GetFormattedError(reasons=None):
             err = ("Error: Unable to open stage '{0}'\n".format(usdFilePath))
@@ -1210,12 +1220,11 @@ class AppController(QtCore.QObject):
                 err += "\n".join(reasons) + "\n"
             return err
 
-        if not Ar.GetResolver().Resolve(usdFilePath):
-            sys.stderr.write(_GetFormattedError(["File not found"]))
-            sys.exit(1)
-
-        if self._mallocTags != 'none':
-            Tf.MallocTag.Initialize()
+        # Pull on the asset resolver here so that the "open stage" time does
+        # not include its initialization time for consistency with previous
+        # behavior. Otherwise, it would be instantiated when binding the
+        # resolver context prior to opening the root layer.
+        resolver = Ar.GetResolver()
 
         with self._makeTimer('open stage "%s"' % usdFilePath):
             loadSet = Usd.Stage.LoadNone if (self._unloaded or muteLayersRe) \
@@ -1223,13 +1232,20 @@ class AppController(QtCore.QObject):
             popMask = (None if populationMaskPaths is None else
                        Usd.StagePopulationMask())
 
-            # Open as a layer first to make sure its a valid file format
-            try:
-                layer = Sdf.Layer.FindOrOpen(usdFilePath)
-            except Tf.ErrorException as e:
-                sys.stderr.write(_GetFormattedError(
-                    [err.commentary.strip() for err in e.args]))
-                sys.exit(1)
+            ctx = self._resolverContextFn(usdFilePath)
+            with Ar.ResolverContextBinder(ctx):
+                # Open as a layer first to make sure its a valid file format
+                try:
+                    layer = Sdf.Layer.FindOrOpen(usdFilePath)
+                except Tf.ErrorException as e:
+                    sys.stderr.write(_GetFormattedError(
+                        [err.commentary.strip() for err in e.args]))
+                    sys.exit(1)
+
+                if not layer:
+                    if not Ar.GetResolver().Resolve(usdFilePath):
+                        sys.stderr.write(_GetFormattedError(["File not found"]))
+                        sys.exit(1)
 
             if sessionFilePath:
                 try:
@@ -1250,12 +1266,12 @@ class AppController(QtCore.QObject):
                     popMask.Add(p)
                 stage = Usd.Stage.OpenMasked(layer,
                                              sessionLayer,
-                                             self._resolverContextFn(usdFilePath),
+                                             ctx,
                                              popMask, loadSet)
             else:
                 stage = Usd.Stage.Open(layer,
                                        sessionLayer,
-                                       self._resolverContextFn(usdFilePath), 
+                                       ctx, 
                                        loadSet)
 
             self._applyStageOpenLayerMutes(stage, muteLayersRe)
@@ -1264,6 +1280,21 @@ class AppController(QtCore.QObject):
             sys.stderr.write(_GetFormattedError())
         else:
             stage.SetEditTarget(stage.GetSessionLayer())
+
+        return stage
+
+    def _openStage(self, usdFilePath, sessionFilePath,
+                   populationMaskPaths, muteLayersRe):
+
+        if self._mallocTags != 'none':
+            Tf._mallocTags.Initialize()
+
+        if not usdFilePath:
+            stage = self._openEmptyStage()
+        
+        else:
+            stage = self._openStageForFile(usdFilePath, sessionFilePath,
+                                           populationMaskPaths, muteLayersRe)
 
         if self._mallocTags == 'stage':
             DumpMallocTags(stage, "stage-loading")
@@ -1285,7 +1316,7 @@ class AppController(QtCore.QObject):
         self._qtShutdownTimer.__exit__(None, None, None)
 
     def _setPlayShortcut(self):
-        self._ui.playButton.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Space))
+        self._ui.playButton.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Space))
 
     # Non-topology dependent UI changes
     def _reloadFixedUI(self, resetStageDataOnly=False):
@@ -1329,6 +1360,9 @@ class AppController(QtCore.QObject):
         elif self._dataModel.stage.HasAuthoredTimeCodeRange():
             self.realStartTimeCode = stageStartTimeCode
             self.realEndTimeCode = stageEndTimeCode
+
+        self._dataModel.frameRangeBegin = self.realStartTimeCode
+        self._dataModel.frameRangeEnd = self.realEndTimeCode
 
         self._ui.stageBegin.setText(str(stageStartTimeCode))
         self._ui.stageEnd.setText(str(stageEndTimeCode))
@@ -1511,7 +1545,7 @@ class AppController(QtCore.QObject):
 
         aov, ok = QtWidgets.QInputDialog.getText(self._mainWindow, "Other AOVs",
             "Enter the aov name. Visualize primvars with \"primvars:name\".",
-            QtWidgets.QLineEdit.Normal, initial)
+            QtWidgets.QLineEdit.EchoMode.Normal, initial)
         if (ok and len(aov) > 0):
             self._rendererAovChanged(str(aov))
             self._ui.aovOtherAction.setText("Other (%r)..." % str(aov))
@@ -1569,8 +1603,8 @@ class AppController(QtCore.QObject):
         formLayout = QtWidgets.QFormLayout()
         groupBox.setLayout(formLayout)
         layout.addWidget(groupBox)
-        formLayout.setLabelAlignment(QtCore.Qt.AlignLeft)
-        formLayout.setFormAlignment(QtCore.Qt.AlignRight)
+        formLayout.setLabelAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+        formLayout.setFormAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
 
         settings = self._stageView.GetRendererSettingsList()
         for setting in settings:
@@ -1610,17 +1644,17 @@ class AppController(QtCore.QObject):
 
         # Add buttons
         buttonBox = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok |
-            QtWidgets.QDialogButtonBox.Cancel |
-            QtWidgets.QDialogButtonBox.RestoreDefaults |
-            QtWidgets.QDialogButtonBox.Apply)
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel |
+            QtWidgets.QDialogButtonBox.StandardButton.RestoreDefaults |
+            QtWidgets.QDialogButtonBox.StandardButton.Apply)
         layout.addWidget(buttonBox)
         buttonBox.rejected.connect(self._ui.settingsMoreDialog.reject)
         buttonBox.accepted.connect(self._ui.settingsMoreDialog.accept)
         self._ui.settingsMoreDialog.accepted.connect(self._applyMoreRendererSettings)
-        defaultButton = buttonBox.button(QtWidgets.QDialogButtonBox.RestoreDefaults)
+        defaultButton = buttonBox.button(QtWidgets.QDialogButtonBox.StandardButton.RestoreDefaults)
         defaultButton.clicked.connect(self._resetMoreRendererSettings)
-        applyButton = buttonBox.button(QtWidgets.QDialogButtonBox.Apply)
+        applyButton = buttonBox.button(QtWidgets.QDialogButtonBox.StandardButton.Apply)
         applyButton.clicked.connect(self._applyMoreRendererSettings)
 
         self._ui.settingsMoreDialog.setLayout(layout)
@@ -1753,7 +1787,7 @@ class AppController(QtCore.QObject):
 
         def addLabelSeparator(text, parent):
             label = QtWidgets.QLabel(text)
-            label.setAlignment(QtCore.Qt.AlignCenter)
+            label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             labelAction = QtWidgets.QWidgetAction(parent)
             labelAction.setDefaultWidget(label)
             parent.addAction(labelAction)
@@ -1853,7 +1887,7 @@ class AppController(QtCore.QObject):
         self._lastPrimSearched = self._dataModel.selection.getFocusPrim()
 
         if self._stageView:
-            self._stageView.setFocus(QtCore.Qt.TabFocusReason)
+            self._stageView.setFocus(QtCore.Qt.FocusReason.TabFocusReason)
             self._stageView.rolloverPicking = self._dataModel.viewSettings.rolloverPrimInfo
 
     def _scheduleResizePrimView(self):
@@ -2090,6 +2124,8 @@ class AppController(QtCore.QObject):
             self._qtimer.stop()
             self._primViewUpdateTimer.start()
             self._updateOnFrameChange()
+        if self._usdValidationWidget:
+            self._usdValidationWidget.updateRunButtonState()
 
     def _advanceFrameForPlayback(self):
         sleep(max(0, 1. / self.framesPerSecond - (time() - self._lastFrameTime)))
@@ -2143,6 +2179,7 @@ class AppController(QtCore.QObject):
         value = float(self._ui.rangeBegin.text())
         if value != self.realStartTimeCode:
             self.realStartTimeCode = value
+            self._dataModel.frameRangeBegin = value
             self._UpdateTimeSamples(resetStageDataOnly=False)
 
     def _stepSizeChanged(self):
@@ -2156,6 +2193,7 @@ class AppController(QtCore.QObject):
         value = float(self._ui.rangeEnd.text())
         if value != self.realEndTimeCode:
             self.realEndTimeCode = value
+            self._dataModel.frameRangeEnd = value
             self._UpdateTimeSamples(resetStageDataOnly=False)
 
     def _frameStringChanged(self):
@@ -2395,9 +2433,9 @@ class AppController(QtCore.QObject):
             self._attrSearchString = self._normalize_unicode(self._ui.attrViewLineEdit.text())
             
             search1 = deque(self._ui.propertyView.model().match(self._ui.propertyView.model().index(0, 1),
-                PropertyViewDataRoles.NORMALIZED_NAME, self._attrSearchString, -1, QtCore.Qt.MatchContains))
+                PropertyViewDataRoles.NORMALIZED_NAME, self._attrSearchString, -1, QtCore.Qt.MatchFlag.MatchContains))
             search2 = deque(self._ui.propertyView.model().match(self._ui.propertyView.model().index(0, 1),
-                PropertyViewDataRoles.NORMALIZED_NAME, self._attrSearchString, -1, QtCore.Qt.MatchRegExp))
+                PropertyViewDataRoles.NORMALIZED_NAME, self._attrSearchString, -1, QtCore.Qt.MatchFlag.MatchRegularExpression))
 
             combinedItems = set(search1 + search2)
             self._attrSearchResults = deque(
@@ -2679,6 +2717,13 @@ class AppController(QtCore.QObject):
         self._interpreter.activateWindow()
         self._interpreter.setFocus()
 
+    def _showUsdValidation(self):
+        if self._usdValidationWidget is None:
+            from .validationWidget import ValidationWidget
+            self._usdValidationWidget = ValidationWidget(self)
+
+        self._usdValidationWidget.show()
+
     def _showDebugFlags(self):
         if self._debugFlagsWindow is None:
             from .debugFlagsWidget import DebugFlagsWidget
@@ -2686,12 +2731,12 @@ class AppController(QtCore.QObject):
 
         self._debugFlagsWindow.show()
 
-    def _showHydraSceneBrowser(self):
-        if self._hydraSceneBrowser is None:
-            from .hydraSceneBrowser import HydraSceneBrowser
-            self._hydraSceneBrowser = HydraSceneBrowser()
+    def _showHydraSceneDebugger(self):
+        if self._hydraSceneDebugger is None:
+            from .hydraSceneDebugger import HydraSceneDebugger
+            self._hydraSceneDebugger = HydraSceneDebugger()
 
-        self._hydraSceneBrowser.show()
+        self._hydraSceneDebugger.show()
 
     # Screen capture functionality ===========================================
 
@@ -2701,7 +2746,7 @@ class AppController(QtCore.QObject):
         # works, this will not pick up the GL Widget(_stageView)'s
         # contents, and we'll need to compose it separately.
         windowShot = QtGui.QImage(self._mainWindow.size(),
-                                  QtGui.QImage.Format_ARGB32_Premultiplied)
+                                  QtGui.QImage.Format.Format_ARGB32_Premultiplied)
         painter = QtGui.QPainter(windowShot)
         self._mainWindow.render(painter, QtCore.QPoint())
 
@@ -2717,8 +2762,18 @@ class AppController(QtCore.QObject):
     def GrabViewportShot(self, cropToAspectRatio=False):
         '''Returns a QImage of the current stage view in usdview.'''
         if self._stageView:
-            return self._stageView.grabFrameBuffer(
+            shot = self._stageView.grabFrameBuffer(
                 cropToAspectRatio=cropToAspectRatio)
+            # The framebuffer might be a pixel larger in either dimension
+            # because its size was rounded up when applying the device
+            # pixel ratio, so crop the extra down to the original physical size.
+            width, height = self._stageView.GetPhysicalWindowSize()
+            width = min(width, shot.width())
+            height = min(height, shot.height())
+            if shot.width() == width and shot.height() == height:
+                return shot
+            else:
+                return shot.copy(0, 0, width, height)
         else:
             return None
 
@@ -2760,6 +2815,12 @@ class AppController(QtCore.QObject):
 
         # Start timer to measure Qt shutdown time
         self._startQtShutdownTimer()
+        
+    
+    def _getRecommendedFilenamePrefix(self):
+        return (self._parserData.usdFile.rsplit('.', 1)[0]
+                if self._parserData.usdFile
+                else 'new_file')
 
     def _openFile(self):
         extensions = Sdf.FileFormat.FindAllFileFormatExtensions()
@@ -2801,17 +2862,20 @@ class AppController(QtCore.QObject):
         return saveName
 
     def _saveOverridesAs(self):
-        recommendedFilename = self._parserData.usdFile.rsplit('.', 1)[0]
-        recommendedFilename += '_overrides.usd'
+        recommendedFilename = self._getRecommendedFilenamePrefix()
+        if self._parserData.usdFile:
+            recommendedFilename += "_overrides.usd"
+        else:
+            recommendedFilename += ".usd"
 
         saveName = self._getSaveFileName(
             'Save Overrides As', recommendedFilename)
         if len(saveName) == 0:
             return
-        elif (os.path.isfile(saveName) and
+        elif (os.path.isfile(saveName) and self._parserData.usdFile and
             os.path.samefile(saveName, self._parserData.usdFile)):
             msg = QtWidgets.QMessageBox()
-            msg.setIcon(QtWidgets.QMessageBox.Critical)
+            msg.setIcon(QtWidgets.QMessageBox.Icon.Critical)
             msg.setWindowTitle("Error")
             msg.setText("Error")
             msg.setInformativeText("Cannot save overrides to current file")
@@ -2822,13 +2886,13 @@ class AppController(QtCore.QObject):
             return
 
         with BusyContext():
-            # In the future, we may allow usdview to be brought up with no file,
-            # in which case it would create an in-memory root layer, to which
-            # all edits will be targeted.  In order to future proof
-            # this, first fetch the root layer, and if it is anonymous, just
-            # export it to the given filename. If it isn't anonmyous (i.e., it
-            # is a regular usd file on disk), export the session layer and add
-            # the stage root file as a sublayer.
+            # usdview can be brought up with no file, in which case it
+            # creates an in-memory root layer, to which all edits are 
+            # targeted. This first fetches the root layer, and if it is 
+            # anonymous, just exports it to the given filename. If it 
+            # isn't anonymous (i.e., it is a regular usd file on disk), 
+            # exports the session layer and add the stage root file 
+            # as a sublayer.
             rootLayer = self._dataModel.stage.GetRootLayer()
             if not rootLayer.anonymous:
                 self._dataModel.stage.GetSessionLayer().Export(
@@ -2854,7 +2918,7 @@ class AppController(QtCore.QObject):
                     saveName, 'Created by UsdView')
 
     def _saveFlattenedAs(self):
-        recommendedFilename = self._parserData.usdFile.rsplit('.', 1)[0]
+        recommendedFilename = self._getRecommendedFilenamePrefix()
         recommendedFilename += '_flattened.usd'
 
         saveName = self._getSaveFileName(
@@ -2870,7 +2934,7 @@ class AppController(QtCore.QObject):
 
     def _saveViewerImage(self):
         recommendedFilename = "{}_{}{:04d}.png".format(
-            self._parserData.usdFile.rsplit('.', 1)[0],
+            self._getRecommendedFilenamePrefix(),
             "" if not self.getActiveCamera()
                 else self.getActiveCamera().GetName() + "_",
             int(self._dataModel.currentFrame.GetValue()))
@@ -2890,6 +2954,9 @@ class AppController(QtCore.QObject):
         if ext not in ('.jpg', '.png'):
             saveName += '.png'
 
+        self.SaveViewerImageToFile(saveName)
+
+    def SaveViewerImageToFile(self, saveName):
         with BusyContext():
             self.GrabViewportShot().save(saveName)
 
@@ -2910,7 +2977,7 @@ class AppController(QtCore.QObject):
             self._ui.actionStop.setChecked(self._stopped)
 
     def _reopenStage(self):
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.BusyCursor)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BusyCursor)
 
         # Pause the stage view while we update
         if self._stageView:
@@ -2950,7 +3017,7 @@ class AppController(QtCore.QObject):
         self.statusMessage('Stage Reopened')
 
     def _reloadStage(self):
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.BusyCursor)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BusyCursor)
 
         try:
             self._dataModel.stage.Reload()
@@ -3076,8 +3143,8 @@ class AppController(QtCore.QObject):
         scrollArea = QtWidgets.QScrollArea()
         scrollArea.setWidgetResizable(True)
         scrollArea.setWidget(self._ui.cameraList)  
-        scrollArea.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        scrollArea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)  
+        scrollArea.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scrollArea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)  
         layout.addWidget(scrollArea)
 
         # Add search bar
@@ -3928,7 +3995,7 @@ class AppController(QtCore.QObject):
     def _updatePropertyViewInternal(self):
         frame = self._dataModel.currentFrame
         treeWidget = self._ui.propertyView
-        treeWidget.setTextElideMode(QtCore.Qt.ElideMiddle)
+        treeWidget.setTextElideMode(QtCore.Qt.TextElideMode.ElideMiddle)
         scrollPosition = treeWidget.verticalScrollBar().value()
 
         # get a dictionary of prim attribs/members and store it in self._propertiesDict
@@ -4053,7 +4120,7 @@ class AppController(QtCore.QObject):
         """ Sets the contents of the attribute value viewer """
         cursorOverride = not self._qtimer.isActive()
         if cursorOverride:
-            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.BusyCursor)
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BusyCursor)
         try:
             self._updatePropertyViewInternal()
         except Exception as err:
@@ -4738,7 +4805,7 @@ class AppController(QtCore.QObject):
 
         # This is expensive enough that we should give the user feedback
         # that something is happening...
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.BusyCursor)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BusyCursor)
         try:
             thisDict = {HUDEntries.CV: 0, HUDEntries.VERT: 0, HUDEntries.FACE: 0}
 
@@ -4948,11 +5015,11 @@ class AppController(QtCore.QObject):
 
         # Ignoring middle button until we have something
         # meaningfully different for it to do
-        if button in [QtCore.Qt.LeftButton, QtCore.Qt.RightButton]:
+        if button in [QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.MouseButton.RightButton]:
             # Expected context-menu behavior is that even with no
             # modifiers, if we are activating on something already selected,
             # do not change the selection
-            doContext = (button == QtCore.Qt.RightButton and path
+            doContext = (button == QtCore.Qt.MouseButton.RightButton and path
                          and path != Sdf.Path.emptyPath)
             doSelection = True
             if doContext:
@@ -4965,8 +5032,8 @@ class AppController(QtCore.QObject):
             if doSelection:
                 self._dataModel.selection.setPoint(point)
 
-                shiftPressed = modifiers & QtCore.Qt.ShiftModifier
-                ctrlPressed = modifiers & QtCore.Qt.ControlModifier
+                shiftPressed = modifiers & QtCore.Qt.KeyboardModifier.ShiftModifier
+                ctrlPressed = modifiers & QtCore.Qt.KeyboardModifier.ControlModifier
 
                 if path != Sdf.Path.emptyPath:
                     prim = self._dataModel.stage.GetPrimAtPath(path)
@@ -5044,10 +5111,10 @@ class AppController(QtCore.QObject):
                 # context menu steals mouse release event from the StageView.
                 # We need to give it one so it can track its interaction
                 # mode properly
-                mrEvent = QtGui.QMouseEvent(QtCore.QEvent.MouseButtonRelease,
+                mrEvent = QtGui.QMouseEvent(QtCore.QEvent.Type.MouseButtonRelease,
                                             QtGui.QCursor.pos(),
-                                            QtCore.Qt.RightButton,
-                                            QtCore.Qt.MouseButtons(QtCore.Qt.RightButton),
+                                            QtCore.Qt.MouseButton.RightButton,
+                                            QtCore.Qt.MouseButtons(QtCore.Qt.MouseButton.RightButton),
                                             QtCore.Qt.KeyboardModifiers())
                 QtWidgets.QApplication.sendEvent(self._stageView, mrEvent)
 
@@ -5228,10 +5295,10 @@ class AppController(QtCore.QObject):
         # Since we want navigation keys to be hover-context-sensitive, we
         # cannot use the native mechanism.
         key = kpEvent.key()
-        if key == QtCore.Qt.Key_Right:
+        if key == QtCore.Qt.Key.Key_Right:
             self._advanceFrame()
             return True
-        elif key == QtCore.Qt.Key_Left:
+        elif key == QtCore.Qt.Key.Key_Left:
             self._retreatFrame()
             return True
         elif key == KeyboardShortcuts.FramingKey:
@@ -5443,3 +5510,41 @@ class AppController(QtCore.QObject):
             return
         if self._stageView.PollForAsynchronousUpdates():
             self._usdviewApi.UpdateViewport()
+
+    def getActiveRenderSettingsPrim(self):
+        """Returns the active render settings prim, if any. Called when
+           populating the context menu on a render settings prim."""
+        if self._stageView:
+            activeRspPath = self._stageView.GetActiveRenderSettingsPrimPath()
+
+            if activeRspPath != Sdf.Path.emptyPath:
+                return self._dataModel.stage.GetPrimAtPath(activeRspPath)
+
+        return None
+
+    def getActiveRenderPassPrim(self):
+        """Returns the active render pass prim, if any. Called when populating
+           the context menu on a render pass prim."""
+        if self._stageView:
+            activeRpPath = self._stageView.GetActiveRenderPassPrimPath()
+
+            if activeRpPath != Sdf.Path.emptyPath:
+                return self._dataModel.stage.GetPrimAtPath(activeRpPath)
+
+        return None
+
+    def setActiveRenderSettingsPrim(self, prim):
+        if not prim or not prim.IsValid():
+            return
+        
+        if self._stageView:
+            self._stageView.SetActiveRenderSettingsPrim(prim)
+            self._stageView.updateView()
+    
+    def setActiveRenderPassPrim(self, prim):
+        if not prim or not prim.IsValid():
+            return
+        
+        if self._stageView:
+            self._stageView.SetActiveRenderPassPrim(prim)
+            self._stageView.updateView()

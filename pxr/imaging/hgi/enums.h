@@ -58,28 +58,32 @@ using HgiBits = uint32_t;
 ///   The device requires workaround for primitive id</li>
 /// <li>HgiDeviceCapabilitiesBitsIndirectCommandBuffers:
 ///   Indirect command buffers are supported</li>
+/// <li>HgiDeviceCapabilitiesBitsRoundPoints:
+///   Points can be natively rasterized as disks</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
 {
-    HgiDeviceCapabilitiesBitsPresentation            = 1 << 0,
-    HgiDeviceCapabilitiesBitsBindlessBuffers         = 1 << 1,
-    HgiDeviceCapabilitiesBitsConcurrentDispatch      = 1 << 2,
-    HgiDeviceCapabilitiesBitsUnifiedMemory           = 1 << 3,
-    HgiDeviceCapabilitiesBitsBuiltinBarycentrics     = 1 << 4,
-    HgiDeviceCapabilitiesBitsShaderDrawParameters    = 1 << 5,
-    HgiDeviceCapabilitiesBitsMultiDrawIndirect       = 1 << 6,
-    HgiDeviceCapabilitiesBitsBindlessTextures        = 1 << 7,
-    HgiDeviceCapabilitiesBitsShaderDoublePrecision   = 1 << 8,
-    HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne = 1 << 9,
-    HgiDeviceCapabilitiesBitsCppShaderPadding        = 1 << 10,
-    HgiDeviceCapabilitiesBitsConservativeRaster      = 1 << 11,
-    HgiDeviceCapabilitiesBitsStencilReadback         = 1 << 12,
-    HgiDeviceCapabilitiesBitsCustomDepthRange        = 1 << 13,
-    HgiDeviceCapabilitiesBitsMetalTessellation       = 1 << 14,
-    HgiDeviceCapabilitiesBitsBasePrimitiveOffset     = 1 << 15,
-    HgiDeviceCapabilitiesBitsPrimitiveIdEmulation    = 1 << 16,
-    HgiDeviceCapabilitiesBitsIndirectCommandBuffers  = 1 << 17,
+    HgiDeviceCapabilitiesBitsPresentation             = 1 << 0,
+    HgiDeviceCapabilitiesBitsBindlessBuffers          = 1 << 1,
+    HgiDeviceCapabilitiesBitsConcurrentDispatch       = 1 << 2,
+    HgiDeviceCapabilitiesBitsUnifiedMemory            = 1 << 3,
+    HgiDeviceCapabilitiesBitsBuiltinBarycentrics      = 1 << 4,
+    HgiDeviceCapabilitiesBitsShaderDrawParameters     = 1 << 5,
+    HgiDeviceCapabilitiesBitsMultiDrawIndirect        = 1 << 6,
+    HgiDeviceCapabilitiesBitsBindlessTextures         = 1 << 7,
+    HgiDeviceCapabilitiesBitsShaderDoublePrecision    = 1 << 8,
+    HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne  = 1 << 9,
+    HgiDeviceCapabilitiesBitsCppShaderPadding         = 1 << 10,
+    HgiDeviceCapabilitiesBitsConservativeRaster       = 1 << 11,
+    HgiDeviceCapabilitiesBitsStencilReadback          = 1 << 12,
+    HgiDeviceCapabilitiesBitsCustomDepthRange         = 1 << 13,
+    HgiDeviceCapabilitiesBitsMetalTessellation        = 1 << 14,
+    HgiDeviceCapabilitiesBitsBasePrimitiveOffset      = 1 << 15,
+    HgiDeviceCapabilitiesBitsPrimitiveIdEmulation     = 1 << 16,
+    HgiDeviceCapabilitiesBitsIndirectCommandBuffers   = 1 << 17,
+    HgiDeviceCapabilitiesBitsRoundPoints              = 1 << 18,
+    HgiDeviceCapabilitiesBitsSingleSlotResourceArrays = 1 << 19,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -95,6 +99,8 @@ using HgiDeviceCapabilities = HgiBits;
 ///   A two-dimensional texture.</li>
 /// <li>HgiTextureType3D:
 ///   A three-dimensional texture.</li>
+/// <li>HgiTextureTypeCubemap:
+///   A cubemap texture.</li>
 /// <li>HgiTextureType1DArray:
 ///   An array of one-dimensional textures.</li>
 /// <li>HgiTextureType2DArray:
@@ -106,6 +112,7 @@ enum HgiTextureType
     HgiTextureType1D = 0,
     HgiTextureType2D,
     HgiTextureType3D,
+    HgiTextureTypeCubemap,
     HgiTextureType1DArray,
     HgiTextureType2DArray,
 
@@ -293,6 +300,8 @@ enum HgiAttachmentStoreOp
 ///   Vertex attributes.</li>
 /// <li>HgiBufferUsageStorage:
 ///   Shader storage buffer / Argument buffer.</li>
+/// <li>HgiBufferUsageUpload:
+///   Buffer will be used to upload data.</li>
 ///
 /// <li>HgiBufferUsageCustomBitsBegin:
 ///   This bit (and any bit after) can be used to attached custom, backend
@@ -306,8 +315,9 @@ enum HgiBufferUsageBits : HgiBits
     HgiBufferUsageVertex   = 1 << 2,
     HgiBufferUsageStorage  = 1 << 3,
     HgiBufferUsageIndirect = 1 << 4,
+    HgiBufferUsageUpload   = 1 << 5,
 
-    HgiBufferUsageCustomBitsBegin = 1 << 5,
+    HgiBufferUsageCustomBitsBegin = 1 << 6,
 };
 using HgiBufferUsage = HgiBits;
 
@@ -786,13 +796,16 @@ enum HgiStorageType
 ///   Indicates a shadow texture.</li>
 /// <li>HgiShaderTextureTypeArrayTexture:
 ///   Indicates an array texture.</li>
+/// <li>HgiShaderTextureTypeCubemapTexture:
+///   Indicates a cubemap texture.</li>
 /// </ul>
 ///
 enum HgiShaderTextureType
 {
     HgiShaderTextureTypeTexture = 0,
     HgiShaderTextureTypeShadowTexture,
-    HgiShaderTextureTypeArrayTexture
+    HgiShaderTextureTypeArrayTexture,
+    HgiShaderTextureTypeCubemapTexture
 };
 
 /// \enum HgiComputeDispatch

@@ -279,7 +279,7 @@ main(int argc, char** argv)
         std::cerr << argv[0] << " root_layer prim_path" << std::endl;
         std::cerr << "\tPrints results of iteration over prim_path in scene "
                   << "with given root_layer" << std::endl;
-        std::cerr << "\tex: " << argv[0] << " root.sdf /Model" << std::endl;
+        std::cerr << "\tex: " << argv[0] << " root.usda /Model" << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -300,7 +300,7 @@ main(int argc, char** argv)
     }
 
     // Otherwise, run the normal test suite.
-    std::unique_ptr<PcpCache> cache = _CreateCacheForRootLayer("root.sdf");
+    std::unique_ptr<PcpCache> cache = _CreateCacheForRootLayer("root.usda");
     TF_AXIOM(cache);
 
     SdfPathSet includePayload;
@@ -377,6 +377,47 @@ main(int argc, char** argv)
         _TestRandomAccessOperations(
             PcpPropertyReverseIterator(propRange.second),
             PcpPropertyReverseIterator(propRange.first));
+    }
+
+    std::cout << "Testing MoveToNextSubtree" << std::endl;
+    {
+        PcpErrorVector errors;
+        const PcpPrimIndex& primIndex = 
+            cache->ComputePrimIndex(SdfPath("/Model"), &errors);
+        PcpRaiseErrors(errors);
+
+        auto isDescendantOfNode = 
+            [](const PcpNodeRef& ancestorNode, PcpNodeRef n) {
+            for (; n; n = n.GetParentNode()) {
+                if (n == ancestorNode) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        for (PcpNodeRange range = primIndex.GetNodeRange();
+             range.first != range.second; ++range.first) {
+
+            // Manually compute the iterator pointing to the next subtree
+            // after range.first by incrementing until we find the first
+            // node that does not have range.first's node as an ancestor.
+            PcpNodeIterator expectedNextSubtreeIter = range.first;
+            for (; expectedNextSubtreeIter != range.second; 
+                 ++expectedNextSubtreeIter) {
+                if (!isDescendantOfNode(
+                        *range.first, *expectedNextSubtreeIter)) {
+                    break;
+                }
+            }
+
+            // Use MoveToNextSubtree to compute the iterator pointing
+            // to the next subtree. This should match the above.
+            PcpNodeIterator computedNextSubtreeIter = range.first;
+            computedNextSubtreeIter.MoveToNextSubtree();
+
+            TF_AXIOM(expectedNextSubtreeIter == computedNextSubtreeIter);
+        }
     }
 
     std::cout << "Testing GetNodeIteratorAtNode" << std::endl;

@@ -182,6 +182,11 @@ HgiVulkanGraphicsPipeline::HgiVulkanGraphicsPipeline(
     rasterState.frontFace = HgiVulkanConversions::GetWinding(ras.winding);
     rasterState.rasterizerDiscardEnable = !ras.rasterizerEnabled;
     rasterState.depthClampEnable = ras.depthClampEnabled;
+    rasterState.depthBiasEnable = desc.depthState.depthBiasEnabled;
+    rasterState.depthBiasConstantFactor =
+        desc.depthState.depthBiasConstantFactor;
+    rasterState.depthBiasClamp = 0; // 0 or NaN disable bias clamp
+    rasterState.depthBiasSlopeFactor = desc.depthState.depthBiasSlopeFactor;
 
     VkPipelineRasterizationConservativeStateCreateInfoEXT 
         conservativeRasterState = {};
@@ -194,6 +199,30 @@ HgiVulkanGraphicsPipeline::HgiVulkanGraphicsPipeline(
             VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
 
         rasterState.pNext = &conservativeRasterState;
+    }
+
+    const bool multisampleEnabled =
+        desc.multiSampleState.sampleCount > HgiSampleCount1;
+
+    // Use Bresenham alogirthm for line rendering when not using MSAA to match
+    // OpenGL.
+    const bool bresenhamLineRendering = ((
+        rasterState.polygonMode == VK_POLYGON_MODE_LINE ||
+        inputAssembly.topology == VK_PRIMITIVE_TOPOLOGY_LINE_LIST ||
+        inputAssembly.topology == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP ||
+        inputAssembly.topology ==
+            VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY) &&
+            !multisampleEnabled
+    );
+
+    VkPipelineRasterizationLineStateCreateInfoKHR lineState {
+        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_KHR };
+    if (device->GetDeviceCapabilities().vkLineRasterizationFeatures.bresenhamLines
+        && bresenhamLineRendering) {
+        lineState.lineRasterizationMode =
+            VK_LINE_RASTERIZATION_MODE_BRESENHAM_KHR;
+        lineState.pNext = rasterState.pNext;
+        rasterState.pNext = &lineState;
     }
 
     pipeCreateInfo.pRasterizationState = &rasterState;
@@ -210,9 +239,13 @@ HgiVulkanGraphicsPipeline::HgiVulkanGraphicsPipeline(
         HgiVulkanConversions::GetSampleCount(ms.sampleCount);
     multisampleState.sampleShadingEnable = VK_FALSE;
     multisampleState.minSampleShading = 0.5f;
-    multisampleState.alphaToCoverageEnable = ms.alphaToCoverageEnable;
+    // Disable alpha-to-coverage and alpha-to-one when sample count is 1. This 
+    // is to match the GL behavior.
+    multisampleState.alphaToCoverageEnable = ms.alphaToCoverageEnable &&
+        multisampleEnabled;
     multisampleState.alphaToOneEnable = ms.alphaToOneEnable &&
-        _device->GetDeviceCapabilities().vkDeviceFeatures.alphaToOne;
+        _device->GetDeviceCapabilities().vkDeviceFeatures2.features.alphaToOne
+        && multisampleEnabled;
     pipeCreateInfo.pMultisampleState = &multisampleState;
 
     //

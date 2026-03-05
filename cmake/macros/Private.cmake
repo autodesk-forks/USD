@@ -320,14 +320,40 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
                     ${resourceFile} ${plugInfoFile})
             endif()
             set(resourceFile "${plugInfoFile}")
+            set(emscriptenResourceFile ${resourceFile})
+        else()
+            set(emscriptenResourceFile "${CMAKE_CURRENT_SOURCE_DIR}/${resourceFile}")
         endif()
 
+        set(installDestination ${resourcesPath})
+        if(NOT "${dirPath}" STREQUAL "")
+            set(installDestination ${installDestination}/${dirPath})
+        endif()
+
+        if (EMSCRIPTEN)
+            string(REGEX REPLACE "^lib\\/" "/" emscriptenLocalPath "${resourcesPath}")
+
+            set(resourceDestDir "${emscriptenLocalPath}")
+            if(NOT "${dirPath}" STREQUAL "")
+                set(resourceDestDir "${resourceDestDir}/${dirPath}")
+            endif()
+
+            # Resources that are required for this library will be embedded in
+            # the final Wasm output. For building internal binaries, we can use
+            # the files from their location in the source tree. In order for
+            # the build to be reloatable, we want to reference the installed
+            # files in the pxrTargets.cmake file.
+            target_link_options(${NAME} PUBLIC              
+                "$<BUILD_INTERFACE:SHELL:--embed-file ${emscriptenResourceFile}@${resourceDestDir}/${destFileName}>"
+                "$<INSTALL_INTERFACE:SHELL:--embed-file $<INSTALL_PREFIX>/${installDestination}/${destFileName}@${resourceDestDir}/${destFileName}>")
+        endif()
         install(
             FILES ${resourceFile}
-            DESTINATION ${resourcesPath}/${dirPath}
+            DESTINATION ${installDestination}
             RENAME ${destFileName}
         )
     endforeach()
+
 endfunction() # _install_resource_files
 
 function(_install_pyside_ui_files LIBRARY_NAME)
@@ -723,6 +749,34 @@ function(_pxr_install_rpath rpathRef NAME)
     )
 endfunction()
 
+# Sets up an install rule to copy assets from the source tree into the
+# ctest folder in the install location. These files are copied at runtime into
+# a temporary directory by the test runner before each test is run.
+function(_pxr_install_test_dir)
+    if (NOT PXR_BUILD_TESTS)
+        return()
+    endif()
+
+    # If the package for this test does not have a target it must not be
+    # getting built, in which case we can skip building associated tests.
+    if (NOT TARGET ${PXR_PACKAGE})
+        return()
+    endif()
+
+    cmake_parse_arguments(bt
+        "" 
+        "SRC;DEST"
+        ""
+        ${ARGN}
+    )
+
+    # XXX -- We shouldn't have to install to run tests.
+    install(
+        DIRECTORY ${bt_SRC}/
+        DESTINATION tests/ctest/${bt_DEST}
+    )
+endfunction() # _pxr_install_test_dir
+
 # Split the library (target) names in libs into internal-to-the-monolithic-
 # library and external-of-it lists.
 function(_pxr_split_libraries libs internal_result external_result)
@@ -782,19 +836,12 @@ endfunction()
 # This function is equivalent to target_link_libraries except it does
 # a few extra things:
 #
-#   1) We can't call target_link_libraries() on a target that's an OBJECT
-#      library but we do need the transitive definitions and include
-#      directories so we manually add them.  We also manually set the
-#      INTERFACE_LINK_LIBRARIES so we can use it for targets that want to
-#      "link" the OBJECT library.  And we manually add a dependency.
-#      This would all be a lot easier if cmake treated OBJECT libraries
-#      like a STATIC or SHARED library in target_link_libraries().
+#    - If the target is not an OBJECT library and this is a monolithic
+#      build and we're linking to core libraries, then link against the
+#      monolithic library instead. The monolithic library will pass
+#      through link flags and include dirs from the core libraries.
 #
-#   2) If the target is not an OBJECT library and this is a monolithic
-#      build and we're linking to core libraries then link against the
-#      monolithic library instead.
-#
-#   3) If the target is not an OBJECT library and this is not a monolithic
+#    - If the target is not an OBJECT library and this is not a monolithic
 #      build and we're not building shared libraries and we're linking
 #      with core libraries then we must link the static libraries using
 #      whole-archive functionality.  Without this any object file in a
@@ -803,165 +850,94 @@ endfunction()
 #      side effects then those constructors and side effects will not
 #      run.  We depend on these constructs (e.g. TF_REGISTRY_FUNCTION).
 #
-#   4) We link against PXR_MALLOC_LIBRARY and PXR_THREAD_LIBS because we
+#    - We link against PXR_MALLOC_LIBRARY and PXR_THREAD_LIBS because we
 #      always want those.
 #
 function(_pxr_target_link_libraries NAME)
     # Split core libraries from non-core libraries.
     _pxr_split_libraries("${ARGN}" internal external)
-
     get_property(type TARGET ${NAME} PROPERTY TYPE)
+
     if("${type}" STREQUAL "OBJECT_LIBRARY")
-        # Collect the definitions and include directories.
-        set(finalDefs "")
-        set(finalIncs "")
-        set(finalSystemIncs "")
-        _pxr_transitive_internal_libraries("${internal}" internal)
-
-        set(all_libraries "")
-        list(APPEND all_libraries ${internal})
-        list(APPEND all_libraries ${external})
-
-        foreach(lib ${all_libraries})
-            if (NOT TARGET ${lib})
-                continue()
-            endif()
-
-            get_property(defs TARGET ${lib} PROPERTY INTERFACE_COMPILE_DEFINITIONS)
-            foreach(def ${defs})
-                if(NOT def IN_LIST finalDefs)
-                    list(APPEND finalDefs "${def}")
-                endif()
-            endforeach()
-            get_property(incs TARGET ${lib} PROPERTY INTERFACE_INCLUDE_DIRECTORIES)
-            foreach(inc ${incs})
-                if(NOT inc IN_LIST finalIncs)
-                    list(APPEND finalIncs "${inc}")
-                endif()
-            endforeach()
-            get_property(incs TARGET ${lib} PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES)
-            foreach(inc ${incs})
-                if(NOT inc IN_LIST finalSystemIncs)
-                    list(APPEND finalSystemIncs "${inc}")
-                endif()
-            endforeach()
-        endforeach()
-
-        # Collect libraries.  We must convert debug/optimized/general
-        # link-type keywords to generator expressions in order to add
-        # them to the INTERFACE_LINK_LIBRARIES.
-        set(finalLibs "")
-        set(keyword "")
-        foreach(lib ${external})
-            if("${lib}" STREQUAL "debug" OR "${lib}" STREQUAL "optimized")
-                set(keyword ${lib})
-            elseif("${lib}" STREQUAL "general")
-                set(keyword "")
-            elseif(lib)
-                if("${keyword}" STREQUAL "debug")
-                    set(keyword "")
-                    set(entry "$<$<CONFIG:DEBUG>:${lib}>")
-                elseif("${keyword}" STREQUAL "optimized")
-                    set(keyword "")
-                    set(entry "$<$<NOT:$<CONFIG:DEBUG>>:${lib}>")
-                else()
-                    set(entry "${lib}")
-                endif()
-                if(entry AND NOT entry IN_LIST finalLibs)
-                    list(APPEND finalLibs "${entry}")
-                endif()
-            endif()
-        endforeach()
-
-        # Record the definitions, include directories and "linked" libraries.
-        target_compile_definitions(${NAME} PUBLIC ${finalDefs})
-        target_include_directories(${NAME} PUBLIC ${finalIncs})
-        target_include_directories(${NAME} SYSTEM PUBLIC ${finalSystemIncs})
-        set_property(TARGET ${NAME} PROPERTY
-            INTERFACE_LINK_LIBRARIES
-                ${finalLibs}
-                ${PXR_MALLOC_LIBRARY}
-                ${PXR_THREAD_LIBS}
-        )
-
-        # Depend on core libraries we use.
+        # OBJECT libraries can be linked to normally
+        # as of CMake 3.12.
+    elseif(PXR_BUILD_MONOLITHIC)
+        # If we use any internal libraries then link against the
+        # monolithic library instead.
         if(internal)
-            add_dependencies(${NAME} ${internal})
-        endif()
-    else()
-        # If we use any internal libraries then just link against the
-        # monolithic library.
-        if(PXR_BUILD_MONOLITHIC)
-            if(internal)
-                if(TARGET usd_ms)
-                    set(internal usd_ms)
-                else()
-                    set(internal usd_m)
-                endif()
+            if(BUILD_SHARED_LIBS)
+                set(internal usd_m)
+            else()
+                # If linking against the static monolithic library
+                # we must use WHOLE_ARCHIVE for reasons described below.
+                set(internal "$<LINK_LIBRARY:WHOLE_ARCHIVE,usd_m>")
             endif()
-        elseif(NOT BUILD_SHARED_LIBS)
-            # Indicate that all symbols should be pulled in from internal
-            # static libraries.  This ensures we don't drop unused symbols
-            # with dynamic initialization side effects.  The exceptions are
-            # any libraries explicitly static;  not only does that explicitly
-            # say we don't have to worry about the dynamic initialization, but
-            # also would maybe cause multiple symbol definitions if we tried
-            # to get all symbols.
-            #
-            # On gcc use: --whole_archive LIB --no-whole-archive.
-            # On clang use: -force_load LIB
-            # On Windows use: /WHOLEARCHIVE:LIB
-            #
-            # A final complication is that we must also process transitive
-            # link libraries since any transitively linked internal libraries
-            # need the same treatment.
-            _pxr_transitive_internal_libraries("${internal}" internal)
-            set(final "")
-            foreach(lib ${internal})
-                if(lib IN_LIST PXR_STATIC_LIBS)
-                    # The library is explicitly static.
-                    list(APPEND final ${lib})
-                elseif(MSVC)
-                    # The syntax here is -WHOLEARCHIVE[:lib] but CMake will
-                    # treat that as a link flag and not "see" the library.
-                    # As a result it won't replace a target with the path
-                    # to the built target and it won't add a dependency.
-                    #
-                    # We can't simply link against the full path to the
-                    # library because we CMake will not add a dependency
-                    # and won't use interface link libraries and flags
-                    # from the targets.  Rather than trying to add those
-                    # things manually we instead link against the target
-                    # and link against the full path to the built target
-                    # with WHOLEARCHIVE.
-                    #
-                    # This ends up with the library on the link line twice.
-                    # That's okay, though, because the linker will read
-                    # the WHOLEARCHIVE one first and will use none of the
-                    # (duplicate) symbols from the second since they're
-                    # all provided by the first.  The order doesn't really
-                    # matter; we pull in the whole archive first.
-                    #
-                    list(APPEND final -WHOLEARCHIVE:$<TARGET_FILE:${lib}>)
-                    list(APPEND final ${lib})
-                elseif(CMAKE_COMPILER_IS_GNUCXX)
-                    list(APPEND final -Wl,--whole-archive ${lib} -Wl,--no-whole-archive)
-                elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-                    list(APPEND final -Wl,-force_load ${lib})
-                else()
-                    # Unknown platform.
-                    list(APPEND final ${lib})
-                endif()
-            endforeach()
-            set(internal ${final})
         endif()
-        target_link_libraries(${NAME}
+    elseif(NOT BUILD_SHARED_LIBS)
+        # Indicate that all symbols should be pulled in from internal
+        # static libraries.  This ensures we don't drop unused symbols
+        # with dynamic initialization side effects.  The exceptions are
+        # any libraries explicitly static;  not only does that explicitly
+        # say we don't have to worry about the dynamic initialization, but
+        # also would maybe cause multiple symbol definitions if we tried
+        # to get all symbols.
+        #
+        # On gcc use: --whole_archive LIB --no-whole-archive.
+        # On clang use: -force_load LIB
+        # On Windows use: /WHOLEARCHIVE:LIB
+        #
+        # A final complication is that we must also process transitive
+        # link libraries since any transitively linked internal libraries
+        # need the same treatment.
+        _pxr_transitive_internal_libraries("${internal}" internal)
+        set(final "")
+        foreach(lib ${internal})
+            if(lib IN_LIST PXR_STATIC_LIBS)
+                # The library is explicitly static.
+                list(APPEND final ${lib})
+            elseif(MSVC)
+                # The syntax here is -WHOLEARCHIVE[:lib] but CMake will
+                # treat that as a link flag and not "see" the library.
+                # As a result it won't replace a target with the path
+                # to the built target and it won't add a dependency.
+                #
+                # We can't simply link against the full path to the
+                # library because we CMake will not add a dependency
+                # and won't use interface link libraries and flags
+                # from the targets.  Rather than trying to add those
+                # things manually we instead link against the target
+                # and link against the full path to the built target
+                # with WHOLEARCHIVE.
+                #
+                # This ends up with the library on the link line twice.
+                # That's okay, though, because the linker will read
+                # the WHOLEARCHIVE one first and will use none of the
+                # (duplicate) symbols from the second since they're
+                # all provided by the first.  The order doesn't really
+                # matter; we pull in the whole archive first.
+                #
+                list(APPEND final -WHOLEARCHIVE:$<TARGET_FILE:${lib}>)
+                list(APPEND final ${lib})
+            elseif(CMAKE_COMPILER_IS_GNUCXX OR EMSCRIPTEN)
+                list(APPEND final -Wl,--whole-archive ${lib} -Wl,--no-whole-archive)
+                add_dependencies(${NAME} ${lib})
+            elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+                list(APPEND final -Wl,-force_load ${lib})
+                add_dependencies(${NAME} ${lib})
+            else()
+                # Unknown platform.
+                list(APPEND final ${lib})
+            endif()
+        endforeach()
+        set(internal ${final})
+    endif()
+    target_link_libraries(${NAME}
+        PUBLIC
             ${internal}
             ${external}
             ${PXR_MALLOC_LIBRARY}
             ${PXR_THREAD_LIBS}
-        )
-    endif()
+    )
 endfunction()
 
 # Add a python module for the target named NAME.  It implicitly links
@@ -1474,7 +1450,14 @@ function(_pxr_library NAME)
     endif()
 
     if(isObject)
-        # Nothing
+        # Despite not producing any install outputs, we still want to include
+        # object libraries in the export set so that their properties (such as
+        # include directories) get passed through correctly and they can be linked
+        # to publically by our monolithic library.
+        install(
+            TARGETS ${NAME}
+            EXPORT pxrTargets
+        )
     else()
         # Do not include plugins libs in externally linkable targets
         if(isPlugin)

@@ -31,8 +31,17 @@ TF_DEFINE_PUBLIC_TOKENS(HdMaterialSchemaTokens,
 
 // --(BEGIN CUSTOM CODE: Schema Methods)--
 
+TfTokenVector
+HdMaterialSchema::GetRenderContexts() const
+{
+    if (auto container = GetContainer()) {
+        return container->GetNames();
+    }
+    return {};
+}
+
 HdMaterialNetworkSchema
-HdMaterialSchema::GetMaterialNetwork()
+HdMaterialSchema::GetMaterialNetwork() const
 {
     return 
         HdMaterialNetworkSchema(
@@ -41,23 +50,18 @@ HdMaterialSchema::GetMaterialNetwork()
 }
 
 HdMaterialNetworkSchema
-HdMaterialSchema::GetMaterialNetwork(TfToken const &context)
+HdMaterialSchema::GetMaterialNetwork(TfToken const &renderContext) const
 {
-    if (auto b = _GetTypedDataSource<HdContainerDataSource>(context)) {
-        return HdMaterialNetworkSchema(b);
-    }
-
-    // If we can't find the context-specific binding, return the fallback.
-    return
+    return 
         HdMaterialNetworkSchema(
-            _GetTypedDataSource<HdContainerDataSource>(
-                HdMaterialSchemaTokens->universalRenderContext));
+            _GetTypedDataSource<HdContainerDataSource>(renderContext));
 }
 
 HdMaterialNetworkSchema
-HdMaterialSchema::GetMaterialNetwork(TfTokenVector const &contexts)
+HdMaterialSchema::GetMaterialNetwork(
+    TfTokenVector const &renderContexts) const
 {
-    for (TfToken const &context : contexts) {
+    for (TfToken const &context : renderContexts) {
         if (auto b = _GetTypedDataSource<HdContainerDataSource>(context)) {
             return HdMaterialNetworkSchema(b);
         }
@@ -68,6 +72,56 @@ HdMaterialSchema::GetMaterialNetwork(TfTokenVector const &contexts)
         HdMaterialNetworkSchema(
             _GetTypedDataSource<HdContainerDataSource>(
                 HdMaterialSchemaTokens->universalRenderContext));
+}
+
+/*static*/
+TfToken
+HdMaterialSchema::GetLocatorTerminal(HdDataSourceLocator const& locator)
+{
+    return GetLocatorTerminal(locator, TfTokenVector());
+}
+
+/*static*/
+TfToken
+HdMaterialSchema::GetLocatorTerminal(
+    HdDataSourceLocator const& locator,
+    TfToken const &renderContext)
+{
+    return GetLocatorTerminal(locator, TfTokenVector({renderContext}));
+}
+
+/*static*/
+TfToken
+HdMaterialSchema::GetLocatorTerminal(
+    HdDataSourceLocator const& locator,
+    TfTokenVector const& renderContexts)
+{
+    if (locator.GetElementCount() >= 4) {
+
+        // Always check the universal render context
+        static const HdDataSourceLocator universalTerminalLocator(
+            HdMaterialSchema::GetSchemaToken(),
+            HdMaterialSchemaTokens->universalRenderContext,
+            HdMaterialSchemaTokens->terminals
+        );
+        if (locator.Intersects(universalTerminalLocator)) {
+            return locator.GetElement(3);
+        }
+
+        // Check the render specific contexts
+        for (const TfToken& context : renderContexts) {
+            const HdDataSourceLocator terminalLocator(
+                HdMaterialSchema::GetSchemaToken(),
+                context,
+                HdMaterialSchemaTokens->terminals
+            );
+            if (locator.Intersects(terminalLocator)) {
+                return locator.GetElement(3);
+            }
+        }
+    }
+
+    return TfToken();
 }
 
 // --(END CUSTOM CODE: Schema Methods)--

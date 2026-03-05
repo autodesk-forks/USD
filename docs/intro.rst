@@ -36,6 +36,11 @@ Concretely, USD is an `open source project
 <https://github.com/PixarAnimationStudios/OpenUSD>`_ released under the 
 `TOST license <https://openusd.org/license>`_.
 
+.. seealso::
+  
+  `USD Basics in an Hour(ish) <https://openusd.org/files/USD_Quickstart_Guide.pdf>`__
+  for a quick intro to USD.
+
 Why use USD?
 ============
 
@@ -229,10 +234,12 @@ respect to weaker layers:
       are enumerated in dictionary order
 
     * **Override the value of any attribute** (an override value blocks all
-      weaker timeSamples)
+      weaker timeSamples/splines)
 
     * :ref:`Block the value<glossary:Attribute Block>` of an
-      attribute, so that it will appear to have no authored value
+      attribute, so that it will appear to have no authored value (or no
+      authored animated value, if using an 
+      :ref:`animation block <usdglossary-animationblock>`)
 
     * **Add, remove, and reorder targets on a relationship or attribute
       connection**
@@ -242,9 +249,9 @@ expand the types and scale of datasets encodable in USD. The two most
 prominent are :ref:`native prim Instancing<glossary:Instancing>` for very
 compactly encoding (and processing) large numbers of instances/copies of a
 referenced asset or prim, applicable when the copies do not need to be deeply
-edited; and :ref:`glossary:Value Clips`, which allow timeSamples for a set of
-prims to be distributed across many files, and (re-)sequenced and retimed
-non-destructively.
+edited; and :ref:`glossary:Value Clips`, which allow timeSamples for 
+a set of prims to be distributed across many files, and (re-)sequenced and 
+retimed non-destructively.
 
 USD/Hydra can image:
 ********************
@@ -324,7 +331,10 @@ following plugin-points:
       your pipeline or package, with which you will be able to interact in your
       application-level plugins just as if they were native USD schemas. For
       typed schemas that are conceptually imageable, you can also teach Hydra
-      how to image them.
+      how to image them. You can additionally use 
+      :ref:`OpenExec <intro_to_openexec>` to register computations for schemas 
+      for better performance characteristics in addition to data invalidation 
+      and caching management.
 
 What can't USD do?
 ==================
@@ -347,16 +357,19 @@ operations run over a collection of assets is worth paying for the ease of asset
 construction and aggregation, and readable text asset representations that we
 get from namespace-paths as identifiers.
 
-Not an execution or rigging system
-**********************************
+Not a rigging system
+********************
 
 USD provides a lightweight, optimized scenegraph to facilitate authoring and
-efficient extraction of composed scene description. However, it provides no
-other behaviors than composition of a namespace hierarchy and property
-:ref:`glossary:Value Resolution`, and in the tradeoff space between "low-memory
-footprint, higher-latency data access" and "high-memory footprint, low-latency
-access to data", USD's scenegraph leans more towards the former, whereas a
-high-performance execution engine requires the latter.
+efficient extraction of composed scene description. However, USD's scenegraph
+leans towards a "low-memory footprint, higher-latency data access" tradeoff, 
+whereas a high-performance rigging system requires more of a "high-memory
+footprint, low-latency access to data" tradeoff.
+
+The :ref:`OpenExec <intro_to_openexec>` computation engine does provide a 
+general purpose computation framework that could be used to develop a rigging
+system, but OpenExec by itself is not a rigging system. See
+:ref:`openexec_is_not` for more details.
 
 Further, the more rigging behaviors and execution semantics we would add to USD,
 the more difficult it would become to interchange the data successfully between

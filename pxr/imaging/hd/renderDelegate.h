@@ -13,6 +13,7 @@
 #include "pxr/imaging/hd/changeTracker.h"
 #include "pxr/imaging/hd/command.h"
 #include "pxr/imaging/hd/dataSource.h"
+#include "pxr/imaging/hd/rendererCreateArgs.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/tf/token.h"
 
@@ -29,6 +30,7 @@ class HdRenderIndex;
 class HdRenderPass;
 class HdInstancer;
 class HdDriver;
+class Hgi;
 
 TF_DECLARE_REF_PTRS(HdSceneIndexBase);
 
@@ -48,6 +50,34 @@ public:
     HdRenderParam() {}
     HD_API
     virtual ~HdRenderParam();
+
+    /// Set a custom value in the render param's implementation. 
+    /// The \p key identifies the value, while \p value holds the data to set. 
+    /// Return true if the value was successfully set, false if the operation is
+    /// not supported for the specified key or value.
+    /// Since this method can be called by client code, it must be thread-safe.
+    HD_API
+    virtual bool SetArbitraryValue(const TfToken& key, const VtValue& value);
+
+    /// Retrieve a custom value identified by \p key from the render param's
+    /// implementation. The value could have been set via SetArbitraryValue() or
+    /// provided internally by the render param. 
+    /// Return an empty VtValue if no value is associated with the key. 
+    /// This can either be used to retrieve arbitrary values by the 
+    /// render delegate or by Hydra client code.
+    /// Since this method can be called by client code, it must be thread-safe.
+    HD_API
+    virtual VtValue GetArbitraryValue(const TfToken& key) const;
+
+    /// Check whether a valid custom value exists for the specified \p key 
+    /// in the render param's implementation. Returns true if the value 
+    /// exists, false otherwise.
+    /// Since this method can be called by client code, it must be thread-safe.
+    HD_API
+    virtual bool HasArbitraryValue(const TfToken& key) const;
+
+    HD_API
+    virtual bool IsValid() const;
 
 private:
     // Hydra will not attempt to copy the class.
@@ -509,6 +539,13 @@ public:
     /// specified prim type.
     HD_API
     virtual bool IsParallelSyncEnabled(const TfToken &primType) const;
+
+    /// API to aid Hydra 2.0 renderer transition.
+    /// Provides a way to detect if the application task graph
+    /// should include tasks that are specific to Storm.
+    /// The base implementation returns false.
+    HD_API
+    virtual bool RequiresStormTasks() const;
 
 protected:
     /// This class must be derived from.

@@ -7,15 +7,6 @@ if (NOT ${PXR_BUILD_GPU_SUPPORT})
     return()
 endif()
 
-set(optionalPublicClasses "")
-
-if (OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK)
-    add_definitions(-DOPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK)
-endif()
-if (OPENSUBDIV_HAS_GLSL_COMPUTE)
-    add_definitions(-DOPENSUBDIV_HAS_GLSL_COMPUTE)
-endif()
-
 pxr_plugin(hdStorm
     LIBRARIES
         plug
@@ -26,10 +17,8 @@ pxr_plugin(hdStorm
         hd
         hdSt
         ${OPENSUBDIV_LIBRARIES}
-        ${TBB_tbb_LIBRARY}
 
     INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
         ${OPENSUBDIV_INCLUDE_DIR}
 
     PUBLIC_CLASSES

@@ -238,8 +238,13 @@ public:
 
     /// Returns parameter object containing all inputs for the prim index
     /// computation used by this cache. 
+    ///
+    /// Note that this inputs object holds raw pointers to internal objects 
+    /// within this cache as well as a raw pointer to the cache itself. In other
+    /// words, even if a copy is made of this inputs structure, it still may
+    /// only be used within the lifetime of this cache.
     PCP_API
-    PcpPrimIndexInputs GetPrimIndexInputs();
+    const PcpPrimIndexInputs &GetPrimIndexInputs() const;
 
     /// @}
 
@@ -302,23 +307,7 @@ public:
                                       const ChildrenPredicate &childrenPred,
                                       const PayloadPredicate &payloadPred) {
         ComputePrimIndexesInParallel(SdfPathVector(1, path), allErrors,
-                                     childrenPred, payloadPred,
-                                     "Pcp", "ComputePrimIndexesInParallel");
-    }
-
-    /// \overload
-    /// XXX Do not add new callers of this method.  It is needed as a workaround
-    /// for bug #132031, which we hope to tackle soon (as of 6/2016)
-    template <class ChildrenPredicate, class PayloadPredicate>
-    void ComputePrimIndexesInParallel(const SdfPath &path,
-                                      PcpErrorVector *allErrors,
-                                      const ChildrenPredicate &childrenPred,
-                                      const PayloadPredicate &payloadPred,
-                                      const char *mallocTag1,
-                                      const char *mallocTag2) {
-        ComputePrimIndexesInParallel(SdfPathVector(1, path), allErrors,
-                                     childrenPred, payloadPred,
-                                     mallocTag1, mallocTag2);
+                                     childrenPred, payloadPred);
     }
 
     /// Vectorized form of ComputePrimIndexesInParallel().  Equivalent to
@@ -330,24 +319,7 @@ public:
                                       const PayloadPredicate &payloadPred) {
         _UntypedIndexingChildrenPredicate cp(&childrenPred);
         _UntypedIndexingPayloadPredicate pp(&payloadPred);
-        _ComputePrimIndexesInParallel(paths, allErrors, cp, pp,
-                                      "Pcp", "ComputePrimIndexesInParallel");
-    }
-
-    /// \overload
-    /// XXX Do not add new callers of this method.  It is needed as a workaround
-    /// for bug #132031, which we hope to tackle soon (as of 6/2016)
-    template <class ChildrenPredicate, class PayloadPredicate>
-    void ComputePrimIndexesInParallel(const SdfPathVector &paths,
-                                      PcpErrorVector *allErrors,
-                                      const ChildrenPredicate &childrenPred,
-                                      const PayloadPredicate &payloadPred,
-                                      const char *mallocTag1,
-                                      const char *mallocTag2) {
-        _UntypedIndexingChildrenPredicate cp(&childrenPred);
-        _UntypedIndexingPayloadPredicate pp(&payloadPred);
-        _ComputePrimIndexesInParallel(paths, allErrors, cp, pp,
-                                      mallocTag1, mallocTag2);
+        _ComputePrimIndexesInParallel(paths, allErrors, cp, pp);
     }
 
     /// Returns a pointer to the cached computed prim index for the given
@@ -716,9 +688,7 @@ private:
         const SdfPathVector &paths,
         PcpErrorVector *allErrors,
         _UntypedIndexingChildrenPredicate childrenPred,
-        _UntypedIndexingPayloadPredicate payloadPred,
-        const char *mallocTag1,
-        const char *mallocTag2);
+        _UntypedIndexingPayloadPredicate payloadPred);
 
     void _RemovePrimCache(const SdfPath& primPath, PcpLifeboat* lifeboat);
     void _RemovePrimAndPropertyCaches(const SdfPath& root,
@@ -771,6 +741,10 @@ private:
     // value describing the necessary cache invalidation.
     PayloadSet _includedPayloads;
     PcpVariantFallbackMap _variantFallbackMap;
+
+    // The default prim index inputs used when computing a prim index within
+    // this cache.
+    PcpPrimIndexInputs _primIndexInputs;
 
     // Cached computation types.
     typedef Pcp_LayerStackRegistryRefPtr _LayerStackCache;

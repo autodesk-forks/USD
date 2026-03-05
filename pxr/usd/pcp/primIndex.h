@@ -281,8 +281,7 @@ private:
     friend struct Pcp_PrimIndexer;
     friend void Pcp_RescanForSpecs(
                     PcpPrimIndex*, bool usd,
-                    bool updateHasSpecs,
-                    const PcpCacheChanges *cacheChanges);
+                    bool updateHasSpecs);
 
     // The node graph representing the compositional structure of this prim.
     PcpPrimIndex_GraphRefPtr _graph;
@@ -396,6 +395,12 @@ public:
     PcpPrimIndexInputs &IncludePayloadPredicate(
         std::function<bool (const SdfPath &)> predicate)
     { includePayloadPredicate = predicate; return *this; }
+
+    /// Predicate for determining whether the prim index for an ancestor of
+    /// the index being computed is instanceable.
+    PcpPrimIndexInputs &AncestorIsInstanceablePredicate(
+        std::function<bool (const SdfPath &)> predicate)
+    { ancestorIsInstanceablePredicate = predicate; return *this; }
     
     /// Whether subtrees that contribute no opinions should be culled
     /// from the index.
@@ -419,6 +424,7 @@ public:
     const PayloadSet* includedPayloads;
     tbb::spin_rw_mutex *includedPayloadsMutex;
     std::function<bool (const SdfPath &)> includePayloadPredicate;
+    std::function<bool (const SdfPath &)> ancestorIsInstanceablePredicate;
     const PcpPrimIndex *parentIndex;
     std::string fileFormatTarget;
     bool cull;
@@ -436,10 +442,14 @@ PcpComputePrimIndex(
     PcpPrimIndexOutputs* outputs,
     ArResolver* pathResolver = NULL);
 
-/// Returns true if the 'new' default standin behavior is enabled.
+/// Computes the list of prim specs that contribute opinions for the given
+/// \p primIndex in order from strongest to weakest. This should only be used
+/// when it is needed to be known what all the specs are that contribute to the
+/// prim index and it makes sense to potentially cache the result. This should
+/// never be used for value resolution as it is ineffecient for that purpose.
 PCP_API
-bool
-PcpIsNewDefaultStandinBehaviorEnabled();
+SdfPrimSpecHandleVector
+PcpComputePrimStackForPrimIndex(const PcpPrimIndex &primIndex);
 
 // Returns true if \p index should be recomputed due to changes to
 // any computed asset paths that were used to find or open layers

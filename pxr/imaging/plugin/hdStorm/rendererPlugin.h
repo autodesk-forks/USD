@@ -12,20 +12,25 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class HdStormRendererPlugin final : public HdRendererPlugin {
+class HdStormRendererPlugin final : public HdRendererPlugin
+{
 public:
     HdStormRendererPlugin()          = default;
     virtual ~HdStormRendererPlugin() = default;
 
-    virtual HdRenderDelegate *CreateRenderDelegate() override;
-    virtual HdRenderDelegate *CreateRenderDelegate(
+    HdRenderDelegate *CreateRenderDelegate() override;
+    HdRenderDelegate *CreateRenderDelegate(
         HdRenderSettingsMap const& settingsMap) override;
 
-    virtual void DeleteRenderDelegate(HdRenderDelegate *renderDelegate) 
+    void DeleteRenderDelegate(HdRenderDelegate *renderDelegate) 
         override;
 
-    virtual bool IsSupported(bool gpuEnabled = true) const override;
+    bool IsSupported(
+        HdRendererCreateArgs const &rendererCreateArgs,
+        std::string *reasonWhyNot = nullptr) const override;
 
+    HdContainerDataSourceHandle GetSceneIndexInputArgs() const override;
+    
 private:
     HdStormRendererPlugin(const HdStormRendererPlugin &)             = delete;
     HdStormRendererPlugin &operator =(const HdStormRendererPlugin &) = delete;

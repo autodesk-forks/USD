@@ -17,10 +17,15 @@ pxr_plugin(${PXR_PACKAGE}
 
     INCLUDE_DIRS
         ${DRACO_INCLUDES}
-
+    
+    PRIVATE_HEADERS
+        exportAttribute.h
+        flag.h
+        importAttribute.h
+    
     CPPFILES
         attributeDescriptor.cpp
-	attributeFactory.cpp
+        attributeFactory.cpp
         exportTranslator.cpp
         fileFormat.cpp
         importTranslator.cpp

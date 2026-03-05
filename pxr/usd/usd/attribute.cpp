@@ -6,6 +6,7 @@
 //
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/attribute.h"
+#include "pxr/usd/usd/attributeLimits.h"
 #include "pxr/usd/usd/attributeQuery.h"
 #include "pxr/usd/usd/common.h"
 #include "pxr/usd/usd/instanceCache.h"
@@ -30,7 +31,6 @@
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
 
 // ------------------------------------------------------------------------- //
 // UsdAttribute 
@@ -75,6 +75,13 @@ UsdAttribute::Block() const
     Set(VtValue(SdfValueBlock()), UsdTimeCode::Default()); 
 }
 
+void
+UsdAttribute::BlockAnimation() const
+{
+    Clear();
+    Set(VtValue(SdfAnimationBlock()), UsdTimeCode::Default());
+}
+
 bool
 UsdAttribute::GetTimeSamples(std::vector<double>* times) const 
 {
@@ -95,8 +102,7 @@ UsdAttribute::GetBracketingTimeSamples(double desiredTime,
                                        bool* hasTimeSamples) const
 {
     return _GetStage()->_GetBracketingTimeSamples(
-        *this, desiredTime, /*requireAuthored*/ false,
-        lower, upper, hasTimeSamples);
+        *this, desiredTime, lower, upper, hasTimeSamples);
 }
 
 bool
@@ -183,9 +189,15 @@ UsdAttribute::HasValue() const
 bool
 UsdAttribute::HasFallbackValue() const
 {
+    return GetFallbackValue(nullptr);
+}
+
+bool
+UsdAttribute::GetFallbackValue(VtValue* value) const
+{
     UsdPrimDefinition::Attribute attrDef =
         _GetStage()->_GetSchemaAttribute(*this);
-    return attrDef && attrDef.GetFallbackValue<VtValue>(nullptr);
+    return attrDef && attrDef.GetFallbackValue<VtValue>(value);
 }
 
 bool 
@@ -198,7 +210,8 @@ template <typename T>
 bool 
 UsdAttribute::_Get(T* value, UsdTimeCode time) const 
 {
-    return _GetStage()->_GetValue(time, *this, value);
+    SdfAbstractDataTypedValue<T> av(value);
+    return _GetStage()->_GetValue(time, *this, &av);
 }
 
 bool 
@@ -238,36 +251,92 @@ UsdAttribute::Set(const char* value, UsdTimeCode time) const {
 
 bool 
 UsdAttribute::Set(const VtValue& value, UsdTimeCode time) const 
-{ 
+{
+    if (value.IsHolding<SdfAnimationBlock>() && 
+        time != UsdTimeCode::Default()) {
+        TF_CODING_ERROR("Cannot set SdfAnimationBlock on <%s> at time %g. "
+                        "Animation blocks can only be set at the default time.",
+                        GetPath().GetText(), time.GetValue());
+        return false;
+    }
     return _GetStage()->_SetValue(time, *this, value);
 }
 
 bool
 UsdAttribute::HasSpline() const
 {
-    return _GetStage()->_HasMetadata(
-        *this,                 // find a field in our attribute spec
-        SdfFieldKeys->Spline,  // find the Spline field
-        TfToken(),             // not a dict field, so no dict key
-        false);                // want authored opinions only
+    UsdResolveInfo resolveInfo = GetResolveInfo();
+    return resolveInfo.GetSource() == UsdResolveInfoSourceSpline;
 }
 
 TsSpline
 UsdAttribute::GetSpline() const
 {
-    TsSpline spline;
-    _GetStage()->_GetMetadata(
-        *this,                 // read a field in our attribute spec
-        SdfFieldKeys->Spline,  // read the Spline field
-        TfToken(),             // not a dict field, so no dict key
-        false,                 // want authored opinions only
-        &spline);              // read into this variable
-    return spline;
+    UsdResolveInfo resolveInfo = GetResolveInfo();
+    if (resolveInfo.GetSource() == UsdResolveInfoSourceSpline) {
+        // Don't return resolveInfo._spline directly because we need
+        // to compute layer offsets
+        TsSpline spline;
+        _GetStage()->_GetMetadata(
+            *this,                 // read a field in our attribute spec
+            SdfFieldKeys->Spline,  // read the Spline field
+            TfToken(),             // not a dict field, so no dict key
+            false,                 // want authored opinions only
+            &spline);              // read into this variable
+        return spline;
+    } else {
+        return TsSpline();
+    }
 }
 
 bool
 UsdAttribute::SetSpline(const TsSpline &spline)
 {
+    static const TfType doubleType = TfType::Find<double>();
+    static const TfType timecodeType = TfType::Find<SdfTimeCode>();
+
+    // Find the attribute's value type.
+    const TfType attrType = _GetStage()->_GetAttributeValueType(*this);
+    if (!attrType) {
+        TF_CODING_ERROR("Spline on attr <%s> not compatible: attribute has no "
+                        "value type", GetPath().GetText());
+        return false;
+    }
+    const bool attrIsTimeValued = (attrType == timecodeType);
+
+    // Verify splines are supported for this value type.
+    if (!TsSpline::IsSupportedValueType(attrType)
+        && attrType != timecodeType) {
+        TF_CODING_ERROR("Can't set spline on <%s>: splines are only "
+                        "supported on scalar floating-point attributes",
+                        GetPath().GetText());
+        return false;
+    }
+
+    // Verify a spline of the correct value type has been provided.
+    const TfType expectedSplineValueType =
+        (attrIsTimeValued ? doubleType : attrType);
+    if (spline.GetValueType() != expectedSplineValueType) {
+        TF_CODING_ERROR("Can't set spline of type '%s' on <%s>, "
+                        "which requires splines of type '%s'",
+                        spline.GetValueType().GetTypeName().c_str(),
+                        GetPath().GetText(),
+                        expectedSplineValueType.GetTypeName().c_str());
+        return false;
+    }
+
+    // Verify we don't have a mismatch in time-valued-ness.
+    if (attrIsTimeValued && !spline.IsTimeValued()) {
+        TF_CODING_ERROR("Can't set non-time-valued spline on <%s>, "
+                        "which is time-valued", GetPath().GetText());
+        return false;
+    }
+    if (!attrIsTimeValued && spline.IsTimeValued()) {
+        TF_CODING_ERROR("Can't non-time-valued spline on <%s>, "
+                        "which is not time-valued", GetPath().GetText());
+        return false;
+    }
+    
     return _GetStage()->_SetMetadata(
         *this,                 // write a field in our attribute spec
         SdfFieldKeys->Spline,  // write the Spline field
@@ -279,7 +348,8 @@ bool
 UsdAttribute::Clear() const
 {
     return ClearDefault() 
-       && ClearMetadata(SdfFieldKeys->TimeSamples);
+       && ClearMetadata(SdfFieldKeys->TimeSamples)
+       && ClearMetadata(SdfFieldKeys->Spline);
 }
 
 bool
@@ -318,6 +388,106 @@ bool
 UsdAttribute::ClearColorSpace() const
 {
     return ClearMetadata(SdfFieldKeys->ColorSpace);
+}
+
+VtDictionary
+UsdAttribute::GetLimits() const
+{
+    VtDictionary limits;
+    if (GetMetadata(SdfFieldKeys->Limits, &limits)) {
+        return limits;
+    }
+    return {};
+}
+
+bool
+UsdAttribute::SetLimits(const VtDictionary& limits) const
+{
+    VtDictionary conformedLimits;
+    bool isValid = true;
+
+    // Verify `limits` contains only valid sub-dicts
+    for (const auto& it : limits) {
+        const std::string& key = it.first;
+        const VtValue& value = it.second;
+
+        if (!value.IsHolding<VtDictionary>()) {
+            TF_CODING_ERROR(
+                "Cannot set limits dictionary for <%s> (must contain only "
+                "sub-dictionary entries)",
+                GetPath().GetText());
+            return false;
+        }
+
+        const VtDictionary& subDict = value.UncheckedGet<VtDictionary>();
+        UsdAttributeLimits::ValidationResult result;
+
+        if (GetLimits(TfToken(key)).Validate(subDict, &result)) {
+            conformedLimits[key] = result.GetConformedSubDict();
+        }
+        else {
+            TF_CODING_ERROR(result.GetErrorString());
+            isValid = false;
+        }
+    }
+
+    return isValid && SetMetadata(SdfFieldKeys->Limits, conformedLimits);
+}
+
+bool
+UsdAttribute::HasAuthoredLimits() const
+{
+    return HasAuthoredMetadata(SdfFieldKeys->Limits);
+}
+
+bool
+UsdAttribute::ClearLimits() const
+{
+    return ClearMetadata(SdfFieldKeys->Limits);
+}
+
+UsdAttributeLimits
+UsdAttribute::GetSoftLimits() const
+{
+    return UsdAttributeLimits(*this, UsdLimitsKeys->Soft);
+}
+
+UsdAttributeLimits
+UsdAttribute::GetHardLimits() const
+{
+    return UsdAttributeLimits(*this, UsdLimitsKeys->Hard);
+}
+
+UsdAttributeLimits
+UsdAttribute::GetLimits(const TfToken& key) const
+{
+    return UsdAttributeLimits(*this, key);
+}
+
+int64_t
+UsdAttribute::GetArraySizeConstraint() const
+{
+    int64_t constraint = 0;
+    GetMetadata(SdfFieldKeys->ArraySizeConstraint, &constraint);
+    return constraint;
+}
+
+bool
+UsdAttribute::SetArraySizeConstraint(int64_t constraint) const
+{
+    return SetMetadata(SdfFieldKeys->ArraySizeConstraint, constraint);
+}
+
+bool
+UsdAttribute::HasAuthoredArraySizeConstraint() const
+{
+    return HasMetadata(SdfFieldKeys->ArraySizeConstraint);
+}
+
+bool 
+UsdAttribute::ClearArraySizeConstraint() const
+{
+    return ClearMetadata(SdfFieldKeys->ArraySizeConstraint);
 }
 
 SdfAttributeSpecHandle
@@ -373,15 +543,19 @@ ARCH_PRAGMA_INSTANTIATION_AFTER_SPECIALIZATION
     template USD_API bool UsdAttribute::_Set(                           \
         const SDF_VALUE_CPP_TYPE(elem)&, UsdTimeCode) const;            \
     template USD_API bool UsdAttribute::_Set(                           \
-        const SDF_VALUE_CPP_ARRAY_TYPE(elem)&, UsdTimeCode) const;
+        const SDF_VALUE_CPP_ARRAY_TYPE(elem)&, UsdTimeCode) const;      \
+    template USD_API bool UsdAttribute::_Set(                           \
+        const SDF_VALUE_CPP_ARRAY_EDIT_TYPE(elem)&, UsdTimeCode) const;
 
 TF_PP_SEQ_FOR_EACH(_INSTANTIATE_GET, ~, SDF_VALUE_TYPES)
 #undef _INSTANTIATE_GET
 
-// In addition to the Sdf value types, _Set can also be called with an 
-// SdfValueBlock.
+// In addition to the Sdf value types, _Set can also be called with 
+// SdfValueBlock or SdfAnimationBlock.
 template USD_API bool UsdAttribute::_Set(
     const SdfValueBlock &, UsdTimeCode) const;
+template USD_API bool UsdAttribute::_Set(
+    const SdfAnimationBlock &, UsdTimeCode) const;
 
 ARCH_PRAGMA_POP
 

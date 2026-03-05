@@ -8,6 +8,7 @@
 
 from pxr.Usdviewq.qt import QtWidgets
 from pxr.Usdviewq.common import SelectionHighlightModes
+from pxr import UsdGeom
 
 def _waitForRefresh():
     import time
@@ -27,7 +28,7 @@ def _modifySettings(appController):
 # non-instancable-by-Hydra prims (i.e., no rprims).
 #
 def _testInstancingEdits6146(appController):
-    from pxr import Sdf, Usd
+    from pxr import Sdf
 
     testALayer = Sdf.Layer.FindOrOpen("usd-6146/testA.usda")
     appController._dataModel.stage.GetRootLayer().TransferContent(testALayer)
@@ -39,7 +40,55 @@ def _testInstancingEdits6146(appController):
 
     # If we get this far without crashing, we're good for now.
 
+#
+# Test a case where we deactivate the parent prim of a native instance.
+#   
+def _testDeactivatingInstanceParent11237(appController):
+    from pxr import Sdf
+
+    testLayer = Sdf.Layer.FindOrOpen("usd-11237/instanceWithParent.usda")
+    appController._dataModel.stage.GetRootLayer().TransferContent(testLayer)
+    appController._takeShot("instanceWithParent.png")
+
+    instance = appController._dataModel.stage.GetPrimAtPath("/World/Parent")
+    instance.SetActive(False)
+    appController._takeShot("instanceWithParentDeactivated.png")
+
+#
+# Tests whether visibility authored on a PointInstancer is respected.
+#
+def _testInstancerVisibilityEdits(appController):
+    from pxr import Sdf
+
+    testLayer = Sdf.Layer.FindOrOpen("usd-11149/instancerVisibility.usda")
+    appController._dataModel.stage.GetRootLayer().TransferContent(testLayer)
+    appController._takeShot("instancerInvisible.png")
+
+    vis = appController._dataModel.stage.GetPropertyAtPath("/PointInstancer.visibility")
+    vis.Set(UsdGeom.Tokens.inherited)
+    appController._takeShot("instancerVisible.png")
+
+#
+# Tests where we force a resync by changing subLayerPaths in a shot that has
+# native instances.
+#
+def _testCompleteResyncWithNativeInstances(appController):
+    from pxr import Sdf
+
+    appController._dataModel.stage.GetRootLayer().Clear()
+
+    appController._dataModel.stage.GetRootLayer().subLayerPaths = ["usd-11280/skel_1.usda"]
+    appController._dataModel._viewSettingsDataModel.cameraPath = Sdf.Path('/main_cam')
+    appController._takeShot("completeResyncWithNativeInstances1.png")
+
+    appController._dataModel.stage.GetRootLayer().subLayerPaths = ["usd-11280/skel_2.usda"]
+    appController._dataModel._viewSettingsDataModel.cameraPath = Sdf.Path('/main_cam')
+    appController._takeShot("completeResyncWithNativeInstances2.png")
 
 def testUsdviewInputFunction(appController):
     _modifySettings(appController)
     _testInstancingEdits6146(appController)
+    _testDeactivatingInstanceParent11237(appController)
+    _testInstancerVisibilityEdits(appController)
+    # Last since it changes the camera.
+    _testCompleteResyncWithNativeInstances(appController)

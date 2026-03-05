@@ -30,6 +30,21 @@ TF_DEFINE_PUBLIC_TOKENS(HdMaterialOverrideSchemaTokens,
     HD_MATERIAL_OVERRIDE_SCHEMA_TOKENS);
 
 // --(BEGIN CUSTOM CODE: Schema Methods)--
+
+HdMaterialNodeParameterSchema
+HdMaterialOverrideSchema::GetParameterOverride(
+    const TfToken& shaderNodeName, 
+    const TfToken& parameterName) const
+{
+    const auto paramOverrideDs = HdContainerDataSource::Get(
+        _container, 
+        {HdMaterialOverrideSchemaTokens->parameterValues,
+        shaderNodeName, parameterName});
+
+    return HdMaterialNodeParameterSchema(
+        HdContainerDataSource::Cast(paramOverrideDs));
+}
+
 // --(END CUSTOM CODE: Schema Methods)--
 
 HdMaterialNodeParameterContainerSchema
@@ -39,20 +54,33 @@ HdMaterialOverrideSchema::GetInterfaceValues() const
         HdMaterialOverrideSchemaTokens->interfaceValues));
 }
 
+HdNodeToInputToMaterialNodeParameterSchema
+HdMaterialOverrideSchema::GetParameterValues() const
+{
+    return HdNodeToInputToMaterialNodeParameterSchema(_GetTypedDataSource<HdContainerDataSource>(
+        HdMaterialOverrideSchemaTokens->parameterValues));
+}
+
 /*static*/
 HdContainerDataSourceHandle
 HdMaterialOverrideSchema::BuildRetained(
-        const HdContainerDataSourceHandle &interfaceValues
+        const HdContainerDataSourceHandle &interfaceValues,
+        const HdContainerDataSourceHandle &parameterValues
 )
 {
-    TfToken _names[1];
-    HdDataSourceBaseHandle _values[1];
+    TfToken _names[2];
+    HdDataSourceBaseHandle _values[2];
 
     size_t _count = 0;
 
     if (interfaceValues) {
         _names[_count] = HdMaterialOverrideSchemaTokens->interfaceValues;
         _values[_count++] = interfaceValues;
+    }
+
+    if (parameterValues) {
+        _names[_count] = HdMaterialOverrideSchemaTokens->parameterValues;
+        _values[_count++] = parameterValues;
     }
     return HdRetainedContainerDataSource::New(_count, _names, _values);
 }
@@ -65,11 +93,20 @@ HdMaterialOverrideSchema::Builder::SetInterfaceValues(
     return *this;
 }
 
+HdMaterialOverrideSchema::Builder &
+HdMaterialOverrideSchema::Builder::SetParameterValues(
+    const HdContainerDataSourceHandle &parameterValues)
+{
+    _parameterValues = parameterValues;
+    return *this;
+}
+
 HdContainerDataSourceHandle
 HdMaterialOverrideSchema::Builder::Build()
 {
     return HdMaterialOverrideSchema::BuildRetained(
-        _interfaceValues
+        _interfaceValues,
+        _parameterValues
     );
 }
 

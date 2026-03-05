@@ -54,14 +54,12 @@ public:
         HgiComputeCmdsDesc const& desc) override;
 
     HGIVULKAN_API
-    HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) override;
+    HgiTextureHandle CreateTextureForInterop(
+        HgiTextureDesc const & desc,
+        bool optimalTiling);
 
     HGIVULKAN_API
     void DestroyTexture(HgiTextureHandle* texHandle) override;
-
-    HGIVULKAN_API
-    HgiTextureViewHandle CreateTextureView(
-        HgiTextureViewDesc const& desc) override;
 
     HGIVULKAN_API
     void DestroyTextureView(HgiTextureViewHandle* viewHandle) override;
@@ -71,9 +69,6 @@ public:
 
     HGIVULKAN_API
     void DestroySampler(HgiSamplerHandle* smpHandle) override;
-
-    HGIVULKAN_API
-    HgiBufferHandle CreateBuffer(HgiBufferDesc const & desc) override;
 
     HGIVULKAN_API
     void DestroyBuffer(HgiBufferHandle* bufHandle) override;
@@ -93,10 +88,6 @@ public:
     HGIVULKAN_API
     void DestroyShaderProgram(
         HgiShaderProgramHandle* shaderProgramHandle) override;
-
-    HGIVULKAN_API
-    HgiResourceBindingsHandle CreateResourceBindings(
-        HgiResourceBindingsDesc const& desc) override;
 
     HGIVULKAN_API
     void DestroyResourceBindings(HgiResourceBindingsHandle* resHandle) override;
@@ -130,6 +121,9 @@ public:
 
     HGIVULKAN_API
     void EndFrame() override;
+
+    HGIVULKAN_API
+    void GarbageCollect() override;
 
     //
     // HgiVulkan specific
@@ -168,6 +162,20 @@ public:
     }
 
 protected:
+    HGIVULKAN_API
+    HgiTextureHandle _CreateTexture(HgiTextureDesc const & desc) override;
+
+    HGIVULKAN_API
+    HgiTextureViewHandle _CreateTextureView(
+        HgiTextureViewDesc const& desc) override;
+
+    HGIVULKAN_API
+    HgiBufferHandle _CreateBuffer(HgiBufferDesc const & desc) override;
+
+    HGIVULKAN_API
+    HgiResourceBindingsHandle _CreateResourceBindings(
+        HgiResourceBindingsDesc const& desc) override;
+
     HGIVULKAN_API
     bool _SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait) override;
 

@@ -3,8 +3,8 @@
 #import $TOOLS/hdSt/shaders/points.glslfx
 -- configuration
 {"techniques": {"default": {
-"vertexShader" : { "source" : ["Instancing.Transform", "Point.Vertex", "PointId.Vertex.PointParam", "Selection.DecodeUtils", "Selection.Vertex.PointSel"] }
-, "fragmentShader" : { "source" : ["Fragment.CommonTerminals", "Fragment.Surface", "Fragment.NoScalarOverride", "Point.Fragment", "PointId.Fragment.PointParam"] }
+"vertexShader" : { "source" : ["Instancing.Transform", "PointDisk.Vertex.PointSizeBias", "Point.Vertex", "PointId.Vertex.PointParam", "Selection.DecodeUtils", "Selection.Vertex.PointSel"] }
+, "fragmentShader" : { "source" : ["Fragment.CommonTerminals", "Fragment.Surface", "Fragment.NoScalarOverride", "PointDisk.Fragment.SampleMask", "Point.Fragment", "PointId.Fragment.PointParam"] }
 }}}
 -------------------------------------------------------
 =======================================================
@@ -27,6 +27,7 @@ int HgiGetBaseInstance() {
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -42,7 +43,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -303,6 +304,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -603,6 +611,41 @@ bool IsFlipped()
 }
 
 
+float ApplyPointSizeBias(float pointSize)
+{
+    if (pointSize <= 0) {
+        return 0;
+    }
+
+#ifdef HD_HAS_multisampleCount
+    const uint multisampleCount = HdGet_multisampleCount();
+#else
+    const uint multisampleCount = 1;
+#endif
+    if (multisampleCount == 1) {
+        return pointSize;
+    }
+
+    // Slightly enlarge the points as the input size reaches 1.
+    // This improves MSAA and prevents tiny point from disappearing
+    // when MSAA is disabled. Similar behaviour is observed when
+    // using native round points on Nvidia GPUs.
+    if (pointSize < 16.0) {
+        pointSize += (16.0 - pointSize) * 0.0825;
+    }
+
+    // We must enlarge the point ever so slightly to make
+    // sure that the rounding sample mask doesn't conflict
+    // with the input edge sample mask. We want our input
+    // sample mask to always be all 1s. This is compensated
+    // in the fragment shader.
+    pointSize += 0.5;
+
+    return pointSize;
+}
+
+
+
 // Fwd declare methods defined in pointId.glslfx, that are used below.
 FORWARD_DECL(int GetPointId());
 FORWARD_DECL(void ProcessPointId(int));
@@ -683,6 +726,7 @@ void main(void)
     ApplyClipPlanes(outData.Peye);
 
     float screenSpaceWidth = ComputeRasterPointSize(transform, outData.Peye.z);
+    screenSpaceWidth = ApplyPointSizeBias(screenSpaceWidth);
     gl_PointSize = clamp(screenSpaceWidth,
                          HD_GL_POINT_SIZE_MIN, HD_GL_POINT_SIZE_MAX);
 
@@ -1099,6 +1143,7 @@ bool IsPointSelected(int pointId)
 #define ATOMIC_COMP_SWAP(a, expected, desired) atomicCompSwap(a, expected, desired)
 #define atomic_int int
 #define atomic_uint uint
+#define hd_SampleMask gl_SampleMask[0]
 
 #define HGI_HAS_DOUBLE_TYPE 1
 
@@ -1114,7 +1159,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -1228,6 +1273,7 @@ flat layout(location = 4) in int vsPointId;
 flat layout(location = 0) in ivec4 vs_interstageDrawingCoord0;
 flat layout(location = 1) in ivec4 vs_interstageDrawingCoord1;
 flat layout(location = 2) in ivec4 vs_interstageDrawingCoord2;
+uint hd_SampleMaskIn = gl_SampleMaskIn[0];
 layout(location = 3) in VertexData {
   vec4 Peye;
 } inData;
@@ -1387,6 +1433,13 @@ vec3 GetPositionInWorldSpace(vec3 windowRelativeCoord)
 float GetLightingBlendAmount() {
 #if defined(HD_HAS_lightingBlendAmount)
     return HdGet_lightingBlendAmount();
+#else
+    return 1;
+#endif
+}
+float GetLinearExposure() {
+#if defined(HD_HAS_linearExposure)
+    return HdGet_linearExposure();
 #else
     return 1;
 #endif
@@ -1678,6 +1731,9 @@ vec4 ShadingTerminal(vec4 Peye, vec3 Neye, vec4 color, vec4 patchCoord)
                                          shadingColor);
 #endif
 
+        // Modify the shaded color by camera exposure.
+        shadingColor.rgb *= GetLinearExposure();
+
         reprColor.rgb = reprStyle.useSurfaceShaderColor ?
                         shadingColor.rgb :
                         reprColor.rgb;
@@ -1741,8 +1797,47 @@ ScalarOverride GetScalarOverride()
 }
 
 
+void ApplyDiskSampleMask()
+{
+#ifdef HD_HAS_multisampleCount
+    const uint multisampleCount = HdGet_multisampleCount();
+#else
+    const uint multisampleCount = 1;
+#endif
+    if (multisampleCount == 1) {
+        hd_SampleMask = int(hd_SampleMaskIn);
+        return;
+    }
+
+    // By using the sample mask directly, don't depend on the
+    // alpha-to-coverage or multisampling state.
+
+    // We can ignore dFdy(gl_PointCoord.y) because on a
+    // square it's the same as dFdx(gl_PointCoord.x).
+    const float pointSize = 1.0 / dFdx(gl_PointCoord.x);
+    const float pointSdf = length(gl_PointCoord - 0.5) - 0.5;
+    // +0.25 to compensate for enlargement in the vertex shader.
+    const float pointSdfPx = pointSdf * pointSize + 0.25;
+    if (pointSdfPx < -1) {
+        // Inside disk edge
+        hd_SampleMask = int(hd_SampleMaskIn);
+    } else if (pointSdfPx > 0) {
+        // Outside disk
+        hd_SampleMask = 0;
+    } else {
+        // On the disk edge
+        const float edgeSdf = clamp(-pointSdfPx, 0.0, 1.0);
+        const int sampleCount = int(round(multisampleCount * edgeSdf));
+        hd_SampleMask =  (1 << sampleCount) - 1;
+    }
+}
+
+
+
 void main(void)
 {
+    ApplyDiskSampleMask();
+
     vec3 Peye = inData.Peye.xyz / inData.Peye.w;
     // camera facing.
     vec3 Neye = vec3(0, 0, 1);

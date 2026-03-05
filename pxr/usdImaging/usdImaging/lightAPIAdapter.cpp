@@ -57,7 +57,7 @@ public:
         if (name == HdTokens->materialSyncMode) {
             if (UsdAttribute attr = _lightApi.GetMaterialSyncModeAttr()) {
                 TfToken v;
-                if (attr.Get(&v)) {
+                if (_syncModeQuery.Get(&v, _stageGlobals.GetTime())) {
                     return HdRetainedTypedSampledDataSource<TfToken>::New(v);
                 }
             }
@@ -99,17 +99,47 @@ private:
     }
 
     _LightDataSource(
-        const UsdLuxLightAPI &lightApi,
+        const UsdPrim& prim,
         const UsdImagingDataSourceStageGlobals &stageGlobals)
-    : _lightApi(lightApi)
-    , _stageGlobals(stageGlobals)
-    {}
+      : _lightApi(prim)
+      , _syncModeQuery(_lightApi.GetMaterialSyncModeAttr())
+      , _stageGlobals(stageGlobals)
+    {
+        if (_syncModeQuery.ValueMightBeTimeVarying()) {
+            _stageGlobals.FlagAsTimeVarying(
+                prim.GetPath(),
+                HdLightSchema::GetDefaultLocator()
+                    .Append(HdTokens->materialSyncMode));
+        }
+    }
 
     UsdLuxLightAPI _lightApi;
+    UsdAttributeQuery _syncModeQuery;
     const UsdImagingDataSourceStageGlobals &_stageGlobals;
 };
 
 } // namespace anonymous
+
+TfToken
+UsdImagingLightAPIAdapter::GetImagingSubprimType(
+    UsdPrim const& prim,
+    TfToken const& subprim,
+    TfToken const& appliedInstanceName)
+{
+    // UsdLuxLightAPI is not a multi-apply schema.
+    if (!appliedInstanceName.IsEmpty()) {
+        return TfToken();
+    }
+    // Override the prim type only for the primary hydra prim.
+    // This adapter does not define any additional subprims.
+    if (!subprim.IsEmpty()) {
+        return TfToken();
+    }
+
+    // Note that this opinion weakly composes with opinions from other
+    // adapters servicing this prim.
+    return HdLightSchemaTokens->light;
+}
 
 HdContainerDataSourceHandle
 UsdImagingLightAPIAdapter::GetImagingSubprimData(
@@ -124,13 +154,13 @@ UsdImagingLightAPIAdapter::GetImagingSubprimData(
 
     if (subprim.IsEmpty()) {
         return HdRetainedContainerDataSource::New(
-            HdPrimTypeTokens->material,
+            HdMaterialSchema::GetSchemaToken(),
             UsdImagingDataSourceMaterial::New(
                 prim,
                 stageGlobals,
                 HdMaterialTerminalTokens->light),
             HdLightSchemaTokens->light,
-            _LightDataSource::New(UsdLuxLightAPI(prim), stageGlobals));
+            _LightDataSource::New(prim, stageGlobals));
     }
 
     return nullptr;

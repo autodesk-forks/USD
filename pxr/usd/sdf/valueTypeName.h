@@ -20,6 +20,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 class TfEnum;
 class TfType;
 class VtValue;
+class SdfAbstractDataConstValue;
 class Sdf_ValueTypeImpl;
 
 /// \struct SdfTupleDimensions
@@ -82,6 +83,18 @@ public:
     /// Returns the \c TfType of the type.
     SDF_API
     const TfType& GetType() const;
+
+    /// Return true if `value` holds an object whose type is compatible with
+    /// this scene description type in a strict sense.  Specifically, return
+    /// true if `value` holds an object of this type, or if this IsArray() and
+    /// `value` holds a VtArrayEdit whose element type matches this type's
+    /// element type.
+    SDF_API
+    bool CanRepresent(const VtValue &value) const;
+
+    /// \overload
+    SDF_API
+    bool CanRepresent(const SdfAbstractDataConstValue &value) const;
 
     /// Returns the C++ type name for this type.  This may not be the same
     /// as the type name returned by GetType().GetTypeName(), since that

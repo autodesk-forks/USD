@@ -107,9 +107,15 @@ public:
 
     /// Add a cube
     HD_API
-    void AddCube(SdfPath const &id, GfMatrix4f const &transform, bool guide=false,
-                 SdfPath const &instancerId=SdfPath(),
+    void AddCube(SdfPath const &id, GfMatrix4f const &transform,
+                 bool guide=false, SdfPath const &instancerId=SdfPath(),
                  TfToken const &scheme=PxOsdOpenSubdivTokens->catmullClark);
+
+    HD_API
+    void AddCube(SdfPath const &id, GfMatrix4f const &transform, 
+                 bool guide, SdfPath const &instancerId, TfToken const &scheme,
+                 VtValue const &color, HdInterpolation colorInterpolation,
+                 VtValue const &opacity, HdInterpolation opacityInterpolation);
 
     /// Add a grid with division x*y
     HD_API
@@ -268,6 +274,9 @@ public:
     /// Example to update a material binding on the fly
     HD_API
     void RebindMaterial(SdfPath const &rprimId, SdfPath const &materialId);
+
+    HD_API
+    void SetUseSceneMaterials(bool useSceneMaterials);
 
     /// Render buffers
     HD_API
@@ -542,6 +551,7 @@ private:
     std::map<SdfPath, _Instancer> _instancers;
     std::map<SdfPath, _Primvars> _primvars;
     std::map<SdfPath, VtValue> _materials;
+    std::map<SdfPath, VtValue> _sceneMaterials;
     std::map<SdfPath, _Camera> _cameras;
     std::map<SdfPath, _RenderBuffer> _renderBuffers;
     std::map<SdfPath, _Light> _lights;

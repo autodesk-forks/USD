@@ -5,12 +5,12 @@
 # https://openusd.org/license.
 #
 # This is an example script from the USD tutorial,
-# "Transformations, Time-sampled Animation, and Layer Offsets".
+# "Transformations, Animation, and Layer Offsets".
 #
 # When run, it will generate a series of usda files in the current
 # directory that illustrate each of the steps in the tutorial.
 #
-from pxr import Usd, UsdGeom, Gf, Sdf
+from pxr import Usd, UsdGeom, Gf, Sdf, Ts
 
 def MakeInitialStage(path):
     stage = Usd.Stage.CreateNew(path)
@@ -44,6 +44,32 @@ def Step3():
     AddSpin(top)
     stage.Save()
 
+def AddSpinSpline(top):
+    spin = top.AddRotateZOp(opSuffix='spin')
+    spinAttr = spin.GetAttr()
+    typeName = str(spinAttr.GetTypeName())
+    spline = Ts.Spline(typeName)
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 0,
+        value = 0,
+        nextInterp = Ts.InterpLinear,
+        ))
+    lp = Ts.LoopParams()
+    lp.protoStart = 0
+    lp.protoEnd = 48
+    lp.numPostLoops = 3
+    lp.valueOffset = 360
+    spline.SetInnerLoopParams(lp)
+    spinAttr.SetSpline(spline)
+def Step3A():
+    stage = MakeInitialStage('Step3A.usda')
+    stage.SetMetadata('comment', 'Step 3A: Using splines instead of time-samples')
+    top = AddReferenceToGeometry(stage, '/Top')
+    AddSpinSpline(top)
+    stage.Save()
+
+
 def AddTilt(top):
     tilt = top.AddRotateXOp(opSuffix='tilt')
     tilt.Set(value=12)
@@ -52,14 +78,14 @@ def Step4():
     stage.SetMetadata('comment', 'Step 4: Adding tilt')
     top = AddReferenceToGeometry(stage, '/Top')
     AddTilt(top)
-    AddSpin(top)
+    AddSpinSpline(top)
     stage.Save()
 
 def Step4A():
     stage = MakeInitialStage('Step4A.usda')
     stage.SetMetadata('comment', 'Step 4A: Adding spin and tilt')
     top = AddReferenceToGeometry(stage, '/Top')
-    AddSpin(top)
+    AddSpinSpline(top)
     AddTilt(top)
     stage.Save()
 
@@ -67,8 +93,22 @@ def AddOffset(top):
     top.AddTranslateOp(opSuffix='offset').Set(value=(0, 0.1, 0))
 def AddPrecession(top):
     precess = top.AddRotateZOp(opSuffix='precess')
-    precess.Set(time=0, value=0)
-    precess.Set(time=192, value=360)
+    precessAttr = precess.GetAttr()
+    typeName = str(precessAttr.GetTypeName())
+    spline = Ts.Spline(typeName)
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 0,
+        value = 0,
+        nextInterp = Ts.InterpLinear,
+        ))
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 192,
+        value = 360,
+        nextInterp = Ts.InterpLinear,
+        ))
+    precessAttr.SetSpline(spline)
 def Step5():
     stage = MakeInitialStage('Step5.usda')
     stage.SetMetadata('comment', 'Step 5: Adding precession and offset')
@@ -76,7 +116,7 @@ def Step5():
     AddPrecession(top)
     AddOffset(top)
     AddTilt(top)
-    AddSpin(top)
+    AddSpinSpline(top)
     stage.Save()
 
 def Step6():
@@ -110,11 +150,92 @@ def Step6():
 
     stage.Save()
 
+def AddSpinSplineWithExtrapolation(top):
+    spin = top.AddRotateZOp(opSuffix='spin')
+    spinAttr = spin.GetAttr()
+    typeName = str(spinAttr.GetTypeName())
+    spline = Ts.Spline(typeName)
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 0,
+        value = 0,
+        nextInterp = Ts.InterpLinear,
+        ))
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 48,
+        value = 360,
+        nextInterp = Ts.InterpCurve,
+        ))
+    spline.SetPostExtrapolation(Ts.Extrapolation(Ts.ExtrapLoopRepeat))
+    spinAttr.SetSpline(spline)
+def AddPrecessionWithExtrapolation(top):
+    precess = top.AddRotateZOp(opSuffix='precess')
+    precessAttr = precess.GetAttr()
+    typeName = str(precessAttr.GetTypeName())
+    spline = Ts.Spline(typeName)
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 0,
+        value = 0,
+        nextInterp = Ts.InterpLinear,
+        ))
+    spline.SetKnot(Ts.Knot(
+        typeName = typeName,
+        time = 192,
+        value = 360,
+        nextInterp = Ts.InterpLinear,
+        ))
+    spline.SetPostExtrapolation(Ts.Extrapolation(Ts.ExtrapLoopRepeat))    
+    precessAttr.SetSpline(spline)  
+def Step7():
+    # Create animated layer that uses spline extrapolation
+    stage = MakeInitialStage('Step7ref.usda')
+    stage.SetMetadata('comment', 'Step 7 (ref): Adding spline extrapolation')
+    top = AddReferenceToGeometry(stage, '/Top')
+    AddPrecessionWithExtrapolation(top)
+    AddOffset(top)
+    AddTilt(top)
+    AddSpinSplineWithExtrapolation(top)
+    stage.Save()
+
+    # Use animated layer configured to use spline extrapolation 
+    anim_layer_path = './Step7ref.usda'
+
+    stage = MakeInitialStage('Step7.usda')
+    stage.SetMetadata('comment', 'Step 7: Spline extrapolation')
+
+    left = UsdGeom.Xform.Define(stage, '/Left')
+    left_top = UsdGeom.Xform.Define(stage, '/Left/Top')
+    left_top.GetPrim().GetReferences().AddReference(
+        assetPath = anim_layer_path,
+        primPath = '/Top')
+
+    middle = UsdGeom.Xform.Define(stage, '/Middle')
+    middle.AddTranslateOp().Set(value=(2, 0, 0))
+    middle_top = UsdGeom.Xform.Define(stage, '/Middle/Top')
+    middle_top.GetPrim().GetReferences().AddReference(
+        assetPath = anim_layer_path,
+        primPath = '/Top',
+        layerOffset = Sdf.LayerOffset(offset=96))
+
+    right = UsdGeom.Xform.Define(stage, '/Right')
+    right.AddTranslateOp().Set(value=(4, 0, 0))
+    right_top = UsdGeom.Xform.Define(stage, '/Right/Top')
+    right_top.GetPrim().GetReferences().AddReference(
+        assetPath = anim_layer_path,
+        primPath = '/Top',
+        layerOffset = Sdf.LayerOffset(scale=0.25))
+
+    stage.Save()
+
 if __name__ == '__main__':
     Step1()
     Step2()
     Step3()
+    Step3A()
     Step4()
     Step4A()
     Step5()
     Step6()
+    Step7()

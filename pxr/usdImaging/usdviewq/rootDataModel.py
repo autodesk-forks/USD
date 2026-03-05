@@ -5,6 +5,7 @@
 # https://openusd.org/license.
 #
 
+from numbers import Real
 from pxr import Usd, UsdGeom, UsdShade, UsdSemantics
 from .qt import QtCore
 from .common import IncludedPurposes, Timer
@@ -69,6 +70,8 @@ class RootDataModel(QtCore.QObject):
                 self._stage = value
 
             if self._stage:
+                self._frameRangeBegin = self._stage.GetStartTimeCode()
+                self._frameRangeEnd = self._stage.GetEndTimeCode()
                 from pxr import Tf
                 self._pcListener = \
                     Tf.Notice.Register(Usd.Notice.ObjectsChanged,
@@ -98,6 +101,47 @@ class RootDataModel(QtCore.QObject):
 
         self._emitPrimsChanged(primChange, propertyChange)
 
+    frameRangeChanged = QtCore.Signal(float, float)
+    currentFrameChanged = QtCore.Signal(Usd.TimeCode)
+
+    @property
+    def frameRangeBegin(self):
+        """Get the start of the current frame range"""
+        return self._frameRangeBegin
+
+    @frameRangeBegin.setter
+    def frameRangeBegin(self, value):
+        """Set the start of the current frame range"""
+        if value is None:
+            value = 0.0
+        if isinstance(value, bool) or not isinstance(value, Real):
+            raise ValueError(f"Expected real number, got: {value!r}")
+        value = float(value)
+
+        if value != self._frameRangeBegin:
+            self._frameRangeBegin = value
+            self.frameRangeChanged.emit(
+                self._frameRangeBegin, self._frameRangeEnd)
+
+    @property
+    def frameRangeEnd(self):
+        """Get the end of the current frame range"""
+        return self._frameRangeEnd
+
+    @frameRangeEnd.setter
+    def frameRangeEnd(self, value):
+        """Set the end of the current frame range"""
+        if value is None:
+            value = 0.0
+        if isinstance(value, bool) or not isinstance(value, Real):
+            raise ValueError(f"Expected real number, got: {value!r}")
+        value = float(value)
+
+        if value != self._frameRangeEnd:
+            self._frameRangeEnd = value
+            self.frameRangeChanged.emit(
+                self._frameRangeBegin, self._frameRangeEnd)
+
     @property
     def currentFrame(self):
         """Get a Usd.TimeCode object which represents the current frame being
@@ -111,8 +155,9 @@ class RootDataModel(QtCore.QObject):
 
         if not isinstance(value, Usd.TimeCode):
             raise ValueError("Expected Usd.TimeCode, got: {}".format(value))
-
-        self._currentFrame = value
+        if value != self._currentFrame:
+            self.currentFrameChanged.emit(value)
+            self._currentFrame = value
         self._bboxCache.SetTime(self._currentFrame)
         self._xformCache.SetTime(self._currentFrame)
 

@@ -125,14 +125,14 @@ _TextureUsageTable[][2] =
 };
 static_assert(HgiTextureUsageCustomBitsBegin == 1 << 5, "");
 
-static const uint32_t
-_FormatFeatureTable[][2] =
+static const uint64_t
+_FormatFeature2Table[][2] =
 {
-    {HgiTextureUsageBitsColorTarget,   VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT},
-    {HgiTextureUsageBitsDepthTarget,   VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT},
-    {HgiTextureUsageBitsStencilTarget, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT},
-    {HgiTextureUsageBitsShaderRead,    VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT},
-    {HgiTextureUsageBitsShaderWrite,   VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT},
+    {HgiTextureUsageBitsColorTarget,   VK_FORMAT_FEATURE_2_COLOR_ATTACHMENT_BIT},
+    {HgiTextureUsageBitsDepthTarget,   VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT},
+    {HgiTextureUsageBitsStencilTarget, VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT},
+    {HgiTextureUsageBitsShaderRead,    VK_FORMAT_FEATURE_2_SAMPLED_IMAGE_BIT},
+    {HgiTextureUsageBitsShaderWrite,   VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT},
 };
 static_assert(HgiTextureUsageCustomBitsBegin == 1 << 5, "");
 
@@ -144,9 +144,9 @@ _BufferUsageTable[][2] =
     {HgiBufferUsageVertex,   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
     {HgiBufferUsageStorage,  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
     {HgiBufferUsageIndirect, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT},
-
+    {HgiBufferUsageUpload,   VK_BUFFER_USAGE_TRANSFER_SRC_BIT},
 };
-static_assert(HgiBufferUsageCustomBitsBegin == 1 << 5, "");
+static_assert(HgiBufferUsageCustomBitsBegin == 1 << 6, "");
 
 static const uint32_t
 _CullModeTable[HgiCullModeCount][2] =
@@ -246,10 +246,11 @@ _textureTypeTable[HgiTextureTypeCount][2] =
     {HgiTextureType1D,      VK_IMAGE_TYPE_1D},
     {HgiTextureType2D,      VK_IMAGE_TYPE_2D},
     {HgiTextureType3D,      VK_IMAGE_TYPE_3D},
+    {HgiTextureTypeCubemap, VK_IMAGE_TYPE_2D},
     {HgiTextureType1DArray, VK_IMAGE_TYPE_1D},
     {HgiTextureType2DArray, VK_IMAGE_TYPE_2D}
 };
-static_assert(HgiTextureTypeCount==5, "");
+static_assert(HgiTextureTypeCount==6, "");
 
 static const uint32_t
 _textureViewTypeTable[HgiTextureTypeCount][2] =
@@ -257,10 +258,11 @@ _textureViewTypeTable[HgiTextureTypeCount][2] =
     {HgiTextureType1D,      VK_IMAGE_VIEW_TYPE_1D},
     {HgiTextureType2D,      VK_IMAGE_VIEW_TYPE_2D},
     {HgiTextureType3D,      VK_IMAGE_VIEW_TYPE_3D},
+    {HgiTextureTypeCubemap, VK_IMAGE_VIEW_TYPE_CUBE},
     {HgiTextureType1DArray, VK_IMAGE_VIEW_TYPE_1D_ARRAY},
     {HgiTextureType2DArray, VK_IMAGE_VIEW_TYPE_2D_ARRAY}
 };
-static_assert(HgiTextureTypeCount==5, "");
+static_assert(HgiTextureTypeCount==6, "");
 
 static const uint32_t
 _samplerAddressModeTable[HgiSamplerAddressModeCount][2] =
@@ -375,8 +377,12 @@ HgiVulkanConversions::GetFormat(HgiFormat inFormat, bool depthFormat)
 
     // Special case for float32 depth format not properly handled by
     // _FormatTable
-    if (depthFormat && inFormat == HgiFormatFloat32) {
-        vkFormat = VK_FORMAT_D32_SFLOAT;
+    if (depthFormat) {
+        if (inFormat == HgiFormatFloat32) {
+            vkFormat = VK_FORMAT_D32_SFLOAT;
+        } else if (inFormat == HgiFormatFloat32UInt8) {
+            vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        }
     }
 
     return vkFormat;
@@ -429,16 +435,22 @@ HgiVulkanConversions::GetTextureUsage(HgiTextureUsage tu)
     }
 
     if (vkFlags==0) {
-        TF_CODING_ERROR("Missing texture usage table entry");
+        TF_CODING_ERROR("Missing texture usage table entry: %u", tu);
+        vkFlags = 
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT |
+            VK_IMAGE_USAGE_STORAGE_BIT;
     }
+    vkFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+        | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     return vkFlags;
 }
 
-VkFormatFeatureFlags
-HgiVulkanConversions::GetFormatFeature(HgiTextureUsage tu)
+VkFormatFeatureFlags2
+HgiVulkanConversions::GetFormatFeature2(HgiTextureUsage tu)
 {
-    VkFormatFeatureFlags vkFlags = 0;
-    for (const auto& f : _FormatFeatureTable) {
+    VkFormatFeatureFlags2 vkFlags = 0;
+    for (const auto& f : _FormatFeature2Table) {
         if (tu & f[0]) vkFlags |= f[1];
     }
 

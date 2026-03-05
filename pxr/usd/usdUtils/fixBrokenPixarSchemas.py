@@ -176,3 +176,89 @@ class FixBrokenPixarSchemas(object):
             self._layerUpdated = True
             usdStage.SetMetadata(UsdGeom.Tokens.upAxis, 
                 UsdGeom.GetFallbackUpAxis())
+
+
+    def FixupRenderSettingsTerminalsAPI(self):
+        """
+        Makes sure that RenderSettings terminals targeting display filters,
+        integrators, and sample filters are relationships instead of output
+        connections. Marks the layer as updated if fixes are applied.
+        """
+        replaceAttrs = ["outputs:ri:displayFilters",
+                        "outputs:ri:sampleFilters",
+                        "outputs:ri:integrator"]
+
+        def _RenderSettingsTerminalAPIUsesRelationships(path):
+            if not path.IsPrimPath():
+                return
+        
+            from pxr import Usd, Sdf
+            primSpec = self._usdLayer.GetPrimAtPath(path)
+            if primSpec.typeName != "RenderSettings":
+                return
+
+            registry = Usd.SchemaRegistry()
+            primDef = registry.FindConcretePrimDefinition(primSpec.typeName)
+            if "PxrRenderTerminalsAPI" not in primDef.GetAppliedAPISchemas():
+                return
+
+            for attr in primSpec.attributes:
+                attrName = attr.name
+                if attrName in replaceAttrs:
+                    conns = attr.connectionPathList.GetAppliedItems()
+                    if conns:
+                        self._layerUpdated = True
+                        relName = attrName.replace("outputs:", "")
+                        relPath = primSpec.path.AppendProperty(relName)
+                        rel = Sdf.CreateRelationshipInLayer(self._usdLayer,
+                            relPath, Sdf.VariabilityUniform, attr.custom)
+                        rel.targetPathList.ClearEditsAndMakeExplicit()
+                        primPaths = [p.GetPrimPath() for p in conns]
+                        rel.targetPathList.explicitItems = primPaths
+                        primSpec.RemoveProperty(attr)
+
+        self._usdLayer.Traverse("/", _RenderSettingsTerminalAPIUsesRelationships)
+
+
+    def FixupCameraProjectionAPI(self):
+        """
+        Makes sure that PxrCameraProjectionAPI supplies a relationship for
+        the ri:projection to be used with a projection plugin target, instead of
+        an output connection. Marks the layer as updated if fixes are applied.
+        """
+        replaceAttr = "outputs:ri:projection"
+
+        def _CameraProjectionAPIUsesRelationship(path):
+            if not path.IsPrimPath():
+                return
+
+            from pxr import Usd, Sdf
+            primSpec = self._usdLayer.GetPrimAtPath(path)
+            # Since PxrCameraProjectionAPI is only applied to Camera prims,
+            # early out if not a Camera prim.
+            if primSpec.typeName != "Camera":
+                return
+
+            registry = Usd.SchemaRegistry()
+            primDef = registry.FindConcretePrimDefinition(primSpec.typeName)
+            if "PxrCameraProjectionAPI" not in primDef.GetAppliedAPISchemas():
+                return
+
+            if replaceAttr not in [attr.name for attr in primSpec.attributes]:
+                return
+
+            attr = primSpec.GetAttribute(replaceAttr)
+            conns = attr.connectionPathList.GetAppliedItems()
+            if not conns:
+                return
+
+            self._layerUpdated = True
+            relName = replaceAttr.replace("outputs:", "")
+            relPath = primSpec.path.AppendProperty(relName)
+            rel = Sdf.CreateRelationshipInLayer(self._usdLayer,
+                relPath, Sdf.VariabilityUniform, attr.custom)
+            rel.targetPathList.ClearEditsAndMakeExplicit()
+            primPaths = [p.GetPrimPath() for p in conns]
+            rel.targetPathList.explicitItems = primPaths
+            primSpec.RemoveProperty(attr)
+

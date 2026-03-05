@@ -656,8 +656,8 @@ class ShaderPropertyTypeConformanceChecker(BaseRuleChecker):
                                                    assetLevelChecks)
 
     def _FillSdrNameToTypeMap(self, shadeNode, mapping):
-        for inputName in shadeNode.GetInputNames():
-            prop = shadeNode.GetInput(inputName)
+        for inputName in shadeNode.GetShaderInputNames():
+            prop = shadeNode.GetShaderInput(inputName)
             propName = prop.GetName()
             mapping[propName] = prop.GetTypeAsSdfType().GetSdfType()
 
@@ -1141,7 +1141,7 @@ class ComplianceChecker(object):
         # XXX: Should we open the package on a stage to ensure that it is valid 
         # and entirely self-contained.
 
-        from pxr import Usd
+        from pxr import Sdf
         pkgExt = Ar.GetResolver().GetExtension(packagePath)
         if pkgExt != "usdz":
             self._AddError("Package at path %s has an invalid extension." 
@@ -1163,7 +1163,7 @@ class ComplianceChecker(object):
             self._AddError("Failed to resolve package path '%s'." % packagePath)
             return
 
-        zipFile = Usd.ZipFile.Open(resolvedPath)
+        zipFile = Sdf.ZipFile.Open(resolvedPath)
         if not zipFile:
             self._AddError("Could not open package at path '%s'." % 
                            resolvedPath)

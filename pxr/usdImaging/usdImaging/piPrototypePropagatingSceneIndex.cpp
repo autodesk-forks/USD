@@ -404,8 +404,13 @@ _InstancerObserver::_InstancerHash(const SdfPath &instancer) const
     // re-rooted path of this prototype contains the instancer hash, so we
     // actually compute a chain of hashes if we have nested point instancers.
     //
-
-    const size_t h = TfHash::Combine(instancer, _propagatedPrototype);
+    // We use a hash of the path string representation, rather than the
+    // SdfPath instance, in order to provide a stable result run-to-run.
+    // Note that SdfPath's hash method uses the memory address of the
+    // heap allocated path node, which will vary.
+    const size_t h = TfHash::Combine(
+        instancer.GetString(),
+        _propagatedPrototype.GetString());
     
     return TfToken(TfStringPrintf("ForInstancer%zx", h));
 }
@@ -566,6 +571,10 @@ _InstancerObserver::PrimsDirtied(const HdSceneIndexBase &sender,
 {
     TRACE_FUNCTION();
 
+    if (_subinstancerObservers.empty()) {
+        return;
+    }
+
     static const HdDataSourceLocator locator =
         HdInstancerTopologySchema::GetDefaultLocator().Append(
             HdInstancerTopologySchemaTokens->prototypes);
@@ -588,6 +597,10 @@ _InstancerObserver::PrimsRemoved(const HdSceneIndexBase &sender,
                                  const RemovedPrimEntries &entries)
 {
     TRACE_FUNCTION();
+
+    if (_subinstancerObservers.empty()) {
+        return;
+    }
 
     HdSceneIndexObserver::RemovedPrimEntries removedInstancers;
 

@@ -7,37 +7,18 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/vt/array.h"
+#include "pxr/base/vt/arrayEdit.h"
+#include "pxr/base/vt/arrayEditBuilder.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/vt/value.h"
+#include "pxr/base/vt/valueComposeOver.h"
+#include "pxr/base/vt/valueRef.h"
+#include "pxr/base/vt/valueTransform.h"
 #include "pxr/base/vt/streamOut.h"
+#include "pxr/base/vt/traits.h"
 #include "pxr/base/vt/types.h"
+#include "pxr/base/vt/typeHeaders.h"
 #include "pxr/base/vt/visitValue.h"
-
-#include "pxr/base/gf/matrix2f.h"
-#include "pxr/base/gf/matrix2d.h"
-#include "pxr/base/gf/matrix3f.h"
-#include "pxr/base/gf/matrix3d.h"
-#include "pxr/base/gf/matrix4f.h"
-#include "pxr/base/gf/matrix4d.h"
-
-#include "pxr/base/gf/vec2i.h"
-#include "pxr/base/gf/vec2f.h"
-#include "pxr/base/gf/vec2d.h"
-#include "pxr/base/gf/vec3i.h"
-#include "pxr/base/gf/vec3f.h"
-#include "pxr/base/gf/vec3d.h"
-#include "pxr/base/gf/vec4i.h"
-#include "pxr/base/gf/vec4f.h"
-#include "pxr/base/gf/vec4d.h"
-
-#include "pxr/base/gf/dualQuath.h"
-#include "pxr/base/gf/dualQuatf.h"
-#include "pxr/base/gf/dualQuatd.h"
-
-#include "pxr/base/gf/quaternion.h"
-#include "pxr/base/gf/quath.h"
-#include "pxr/base/gf/quatf.h"
-#include "pxr/base/gf/quatd.h"
 
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/errorMark.h"
@@ -50,7 +31,9 @@
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/fileUtils.h"
 #include "pxr/base/tf/span.h"
+#include "pxr/base/tf/stl.h"
 
+#include "pxr/base/arch/attributes.h"
 #include "pxr/base/arch/defines.h"
 #include "pxr/base/arch/fileSystem.h"
 #include "pxr/base/arch/pragmas.h"
@@ -77,6 +60,17 @@ static void die(const std::string &msg) {
 }
 
 static void testArray() {
+
+    // Test traits.
+    static_assert(VtIsArray<VtIntArray>::value);
+    static_assert(!VtIsArray<VtIntArrayEdit>::value);
+    static_assert(!VtIsArray<int>::value);
+    static_assert(!VtIsArray<std::vector<int>>::value);
+
+    static_assert(!VtIsArrayEdit<VtIntArray>::value);
+    static_assert(VtIsArrayEdit<VtIntArrayEdit>::value);
+    static_assert(!VtIsArrayEdit<int>::value);
+    static_assert(!VtIsArrayEdit<std::vector<int>>::value);
 
     VtDoubleArray da(60);
 
@@ -363,6 +357,59 @@ static void testArray() {
         }
     }
     {
+        // Test VtArray insert.
+        VtIntArray ia;
+        TF_AXIOM(*ia.insert(ia.cbegin(), 9) == 9);
+        TF_AXIOM(ia.size() == 1);
+
+        TF_AXIOM(*ia.insert(ia.cend(), -9) == -9);
+        TF_AXIOM(ia.size() == 2);
+        TF_AXIOM(ia == VtIntArray({ 9, -9 }));
+
+        TF_AXIOM(*ia.insert(ia.cbegin()+1, 3) == 3);
+        TF_AXIOM(ia.size() == 3);
+        TF_AXIOM(ia == VtIntArray({ 9, 3, -9 }));
+
+        {
+            VtIntArray ia2 { ia };
+            // Elements from the array.
+            TF_AXIOM(*ia2.insert(ia2.cbegin(), ia2.AsConst()[1]) == 3);
+            TF_AXIOM(ia2.size() == 4);
+            TF_AXIOM(ia2 == VtIntArray({ 3, 9, 3, -9 }));
+        
+            TF_AXIOM(*ia2.insert(ia2.cend(), ia2.AsConst()[1]) == 9);
+            TF_AXIOM(ia2.size() == 5);
+            TF_AXIOM(ia2 == VtIntArray({ 3, 9, 3, -9, 9 }));
+        }
+
+        // 4 7s at index 2.
+        TF_AXIOM(*ia.insert(ia.cbegin()+2, 4, 7) == 7);
+        TF_AXIOM(ia.size() == 7);
+        TF_AXIOM(ia == VtIntArray({ 9, 3, 7, 7, 7, 7, -9 }));
+
+        // Initializer list.
+        TF_AXIOM(*ia.insert(ia.cbegin()+3, {1, 2, 3, 4}) == 1);
+        TF_AXIOM(ia.size() == 11);
+        TF_AXIOM(ia == VtIntArray({ 9, 3, 7, 1, 2, 3, 4, 7, 7, 7, -9 }));
+
+        // Range.
+        VtIntArray ia2 = ia;
+        TF_AXIOM(*ia2.insert(ia2.cbegin()+4, ia.cbegin()+1, ia.cend()-1) == 3);
+        TF_AXIOM(ia2 == VtIntArray({ 9, 3, 7, 1, 3, 7, 1, 2, 3, 4, 7, 7,
+                                     7, 2, 3, 4, 7, 7, 7, -9 }));
+
+        // Fill function
+        ia = VtIntArray { 9, 9, 9, 9 };
+        ia.insert(ia.cbegin() + 2, 3, [](int *b, int *e) {
+            int x = 4;
+            while (b != e) {
+                new (b++) int { x++ };
+            }
+        });
+        TF_AXIOM(ia.size() == 7);
+        TF_AXIOM(ia == VtIntArray({ 9, 9, 4, 5, 6, 9, 9 }));
+    }
+    {
         // Test VtArray erasing from the middle
         VtIntArray array({1, 2, 3, 4, 5, 6});
         VtIntArray::iterator it = array.erase(
@@ -503,26 +550,62 @@ static void testArray() {
         TF_AXIOM(aloha == "aloha");
     }
     {
-        // Test that attempts to create overly large arrays throw
-        // std::bad_alloc.
-        VtIntArray ia;
-        try {
-            ia.resize(ia.max_size());
-            TF_FATAL_ERROR("Did not throw std::bad_alloc");
-        }
-        catch (std::bad_alloc const &) {
-            // pass
-        }
+        // Test that checks that MakeUnique creates a unique copy of the data 
+        // if necessary.
+        VtIntArray v1 = {0,1,2,3,4,5};
+        VtIntArray v2 (v1);
 
-        try {
-            da.resize(da.max_size());
-            TF_FATAL_ERROR("Did not throw std::bad_alloc");
-        }
-        catch (std::bad_alloc const &) {
-            // pass
+        // this call should create a copy since v1 and v2 share the same data
+        TF_AXIOM(v1.IsIdentical(v2));
+        TF_AXIOM (v2.MakeUnique());
+        TF_AXIOM(!v1.IsIdentical(v2));
+        // v2's data should be unique by this point so calling MakeUnique should
+        // not make any copies.
+        TF_AXIOM (!v2.MakeUnique());
+        
+        TF_AXIOM(v2.size() == v1.size());
+        for (int i = 0; i < (int)v1.size(); ++i) {
+            TF_AXIOM(v1[i] == i);
+            TF_AXIOM(v2[i] == i);
         }
     }
 }
+
+// When compiling with address sanitizer, disable `testArrayBadAlloc`.
+// With an address sanitized build the following test won't throw the
+// expected std::bad_alloc, so only run the test for non-sanitized builds.
+// Note that annotating the test function with ARCH_NO_SANITIZE_ADDRESS
+// won't work since the assertion occurs within VtArray and not the test.
+//
+// When compiling for wasm, disable `testArrayBadAlloc`. The way the resize
+// is handled does not trigger a std::bad_alloc exception but instead
+// triggers a native exception from the host that bubbles up to the JS
+// runtime environment.
+#if !defined(ARCH_SANITIZE_ADDRESS) && !defined(ARCH_OS_WASM_VM)
+static void testArrayBadAlloc()
+{
+    // Test that attempts to create overly large arrays throw
+    // std::bad_alloc
+
+    VtIntArray ia;
+    try {
+        ia.resize(ia.max_size());
+        TF_FATAL_ERROR("Did not throw std::bad_alloc");
+    }
+    catch (std::bad_alloc const &) {
+        // pass
+    }
+
+    VtDoubleArray da;
+    try {
+        da.resize(da.max_size());
+        TF_FATAL_ERROR("Did not throw std::bad_alloc");
+    }
+    catch (std::bad_alloc const &) {
+        // pass
+    }
+}
+#endif
 
 static void testRecursiveDictionaries()
 {
@@ -763,6 +846,8 @@ static void testDictionaryOverRecursive() {
     if ( VtDictionaryOver(dictionaryA, dictionaryB) != aOverBResult ) {
         die("VtDictionaryOver - two ref version");
     }
+    static_assert(VtValueTypeCanCompose<VtDictionary>::value);
+    TF_AXIOM(VtValueRef { dictionaryA }.CanComposeOver());
     if ( VtDictionaryOverRecursive(dictionaryA, dictionaryB) 
         != aOverBResultRecursive ) {
         die("VtDictionaryOverRecursive - two ref version recursive");
@@ -889,6 +974,20 @@ testDictionaryIterators()
                 "have equal values.");
         }
     }
+
+
+    // Check a dictionaries erase method allows iterator incrementing
+    {
+        VtDictionary a = {key1, key2, key3};
+        for (auto it = a.begin(); it != a.end();) {
+            it = a.erase(it);
+        }
+
+        if (!a.empty()) {
+            die("VtDictionary::erase iterator did not remove all items");
+        }
+    }
+
 }
 
 static void
@@ -1373,8 +1472,19 @@ static void testValue() {
         v = b;
         TF_AXIOM(v.Get<VtVec2iArray>().size() == 3);
         TF_AXIOM(v.IsArrayValued());
+        TF_AXIOM(!v.IsArrayEditValued());
         TF_AXIOM(v.GetElementTypeid() == typeid(GfVec2i));
         TF_AXIOM(vclone.Get<VtVec2iArray>().size() == 2);
+    }
+
+    // Element type of VtValue holding VtArrayEdit.
+    {
+        VtDoubleArrayEdit dae;
+        VtValue v { dae };
+        TF_AXIOM(v.IsHolding<VtDoubleArrayEdit>());
+        TF_AXIOM(!v.IsArrayValued());
+        TF_AXIOM(v.IsArrayEditValued());
+        TF_AXIOM(v.GetElementTypeid() == typeid(double));
     }
 
     // Precision-casting of VtArrays
@@ -1600,6 +1710,7 @@ testTypedVtValueProxy()
     TF_AXIOM(varrayProxy.IsHolding<_TypedProxy<VtFloatArray>>());
     
     TF_AXIOM(varrayProxy.IsArrayValued());
+    TF_AXIOM(!varrayProxy.IsArrayEditValued());
     TF_AXIOM(varrayProxy.GetArraySize() == 7);
     TF_AXIOM(varrayProxy.GetElementTypeid() == typeid(float));
     TF_AXIOM(varrayProxy.Get<VtFloatArray>() == fa);
@@ -1709,6 +1820,11 @@ struct Stringify
         return TfStringPrintf("array: sz=%zu", arr.size());
     }
     
+    template <class T>
+    std::string operator()(VtArrayEdit<T> const &arrayEdit) const {
+        return "array edit";
+    }
+
     std::string operator()(VtValue const &unknown) const {
         return "unknown type";
     }
@@ -1730,9 +1846,81 @@ struct GetArraySize
         return array.size();
     }
 
+    template <class T>
+    size_t operator()(VtArrayEdit<T> const &arrayEdit) const {
+        return 0xED17;
+    }
+
     size_t operator()(VtValue const &val) const {
         return ~0;
     }
+};
+
+template <class T, class U>
+struct IsSameOrArrayOfVisitor
+{
+    static std::string Visit() {
+        return std::is_same_v<T, U> ? "same" : "different";
+    }
+};
+
+template <class T, class U>
+struct IsSameOrArrayOfVisitor<VtArray<T>, U>
+{
+    static std::string Visit() {
+        return std::is_same_v<T, U> ? "same" : "different";
+    }
+};
+
+template <class U>
+struct IsSameOrArrayOfVisitor<VtValue, U>
+{
+    static std::string Visit() {
+        return "unknown";
+    }
+};
+
+// The following: MakeNew, WrapperBase, SingleWrapper, and ArrayWrapper demo how
+// to use VtVisitValueType that takes a template-template argument to invoke
+// things like factory Type<T>::New() functions where T is the held-type of a
+// VtValue.
+
+template <class T, template <class ...> class Template>
+struct MakeNew {
+    template <class ...Args>
+    static auto Visit(Args&&...args) {
+        return Template<T>::New(std::forward<Args>(args)...);
+    }
+};
+
+class WrapperBase {
+public:
+    virtual ~WrapperBase() = default;
+};
+
+template <class T>
+class SingleWrapper : public WrapperBase
+{
+public:
+    T obj;
+    static std::unique_ptr<WrapperBase> New() {
+        return std::make_unique<SingleWrapper>();
+    }
+    virtual ~SingleWrapper() = default;
+};
+
+template <class T>
+class ArrayWrapper : public WrapperBase
+{
+public:
+    std::unique_ptr<T []> array;
+    static std::unique_ptr<WrapperBase> New(size_t sz) {
+        return std::unique_ptr<ArrayWrapper>(new ArrayWrapper(sz));
+    }
+    virtual ~ArrayWrapper() = default;
+private:
+    explicit ArrayWrapper(size_t sz)
+        : array(std::make_unique<T []>(sz)) {}
 };
 
 static void
@@ -1745,6 +1933,8 @@ testVisitValue()
     VtValue sv(std::string("hello"));
     VtValue av(VtArray<float>(123));
     VtValue ov(std::vector<float>(123));
+    VtValue evf(VtArrayEdit<float> {});
+    VtValue evi(VtArrayEdit<int> {});
 
     TF_AXIOM(VtVisitValue(iv, Stringify()) == "int: 123");
     TF_AXIOM(VtVisitValue(dv, Stringify()) == "double: 1.23");
@@ -1753,6 +1943,8 @@ testVisitValue()
     TF_AXIOM(VtVisitValue(sv, Stringify()) == "string: 'hello'");
     TF_AXIOM(VtVisitValue(av, Stringify()) == "array: sz=123");
     TF_AXIOM(VtVisitValue(ov, Stringify()) == "unknown type");
+    TF_AXIOM(VtVisitValue(evf, Stringify()) == "array edit");
+    TF_AXIOM(VtVisitValue(evi, Stringify()) == "array edit");
     
     TF_AXIOM(VtVisitValue(iv, RoundOrMinusOne()) == 123);
     TF_AXIOM(VtVisitValue(dv, RoundOrMinusOne()) == 1);
@@ -1761,12 +1953,67 @@ testVisitValue()
     TF_AXIOM(VtVisitValue(sv, RoundOrMinusOne()) == -1);
     TF_AXIOM(VtVisitValue(av, RoundOrMinusOne()) == -1);
     TF_AXIOM(VtVisitValue(ov, RoundOrMinusOne()) == -1);
+    TF_AXIOM(VtVisitValue(evf, RoundOrMinusOne()) == -1);
+    TF_AXIOM(VtVisitValue(evi, RoundOrMinusOne()) == -1);
     
     TF_AXIOM(VtVisitValue(av, GetArraySize()) == 123);
     TF_AXIOM(VtVisitValue(iv, GetArraySize()) == size_t(~0));
     TF_AXIOM(VtVisitValue(
                  VtValue(VtArray<GfVec3d>(234)), GetArraySize()) == 234);
+    TF_AXIOM(VtVisitValue(evf, GetArraySize()) == 0xED17);
+    TF_AXIOM(VtVisitValue(evi, GetArraySize()) == 0xED17);
 
+    // Test that passing extra arguments and TfOverloads works.
+    auto multiply = TfOverloads {
+        [](int val, int scl=2) { return val * scl; },
+        [](double val, int scl=2) { return static_cast<int>(rint(val * scl)); },
+        [](VtValue const &val, int scl=2) { return -1; }
+    };
+
+    TF_AXIOM(VtVisitValue(iv, multiply) == 246);
+    TF_AXIOM(VtVisitValue(dv, multiply) == 2);
+    TF_AXIOM(VtVisitValue(fv, multiply) == 5);
+    TF_AXIOM(VtVisitValue(sv, multiply) == -1.0);
+
+    TF_AXIOM(VtVisitValue(iv, multiply, 3) == 369);
+    TF_AXIOM(VtVisitValue(dv, multiply, 3) == 4);
+    TF_AXIOM(VtVisitValue(fv, multiply, 3) == 7);
+    TF_AXIOM(VtVisitValue(sv, multiply, 3) == -1.0);
+
+    // VtVisitValueType with just type arguments.
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, int>(iv) == "same"));
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, int>(fv) == "different"));
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, float>(fv) == "same"));
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, std::string>(sv) == "same"));
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, float>(av) == "same"));
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, VtArray<float>>(av) == "different"));
+    TF_AXIOM((VtVisitValueType<
+              IsSameOrArrayOfVisitor, std::vector<float>>(ov) == "unknown"));
+
+    {
+        // VtVisitValueType with a template-template argument.
+        std::unique_ptr<WrapperBase> iwrap =
+            VtVisitValueType<MakeNew, SingleWrapper>(iv);
+        TF_AXIOM(dynamic_cast<SingleWrapper<int> *>(iwrap.get()));
+
+        std::unique_ptr<WrapperBase> iawrap =
+            VtVisitValueType<MakeNew, ArrayWrapper>(iv, 123);
+        TF_AXIOM(dynamic_cast<ArrayWrapper<int> *>(iawrap.get()));
+
+        std::unique_ptr<WrapperBase> swrap =
+            VtVisitValueType<MakeNew, SingleWrapper>(sv);
+        TF_AXIOM(dynamic_cast<SingleWrapper<std::string> *>(swrap.get()));
+        
+        std::unique_ptr<WrapperBase> sawrap =
+            VtVisitValueType<MakeNew, ArrayWrapper>(sv, 123);
+        TF_AXIOM(dynamic_cast<ArrayWrapper<std::string> *>(sawrap.get()));
+    }
 }
 
 template <typename T>
@@ -1819,9 +2066,392 @@ static void testVtCheapToCopy() {
     static_assert(!VtValueTypeHasCheapCopy<VtArray<TfToken>>::value, "");
 }
 
+static void testVtValueRef()
+{
+    VtValueRef ref;
+    TF_AXIOM(ref.IsEmpty());
+
+    {
+        int i = 123;
+        ref = VtValueRef(i);
+        TF_AXIOM(!ref.IsEmpty() && ref.IsHolding<int>());
+        TF_AXIOM(ref.Get<int>() == 123);
+    }
+
+    {
+        float f = 2.34;
+        ref = VtValueRef(f);
+        TF_AXIOM(!ref.IsEmpty() && ref.IsHolding<float>());
+        TF_AXIOM(ref.Get<float>() == 2.34f);
+    }
+
+    {
+        std::string s = "hello world";
+        ref = VtValueRef(s);
+        TF_AXIOM(ref.IsHolding<std::string>());
+        TF_AXIOM(ref.Get<std::string>() == "hello world");
+    }
+
+    {
+        // Test that string literals, which pass thru VtValueRef as const char
+        // *, will properly convert to VtValues holding std::strings.
+        std::string fromLiteral = [](VtValueRef literal) {
+            return VtValue { literal }.Get<std::string>();
+        }("hello literal");
+        TF_AXIOM(fromLiteral == "hello literal");
+    }
+
+    {
+        // There are some exotic cases where we put function pointers into
+        // VtValues -- check that VtValueRef can handle this.
+        auto fnPtr = +[](int x) { return x + x; };
+
+        VtValueRef fRef { fnPtr };
+
+        TF_AXIOM(!fRef.IsEmpty());
+        TF_AXIOM(fRef.IsHolding<int (*)(int)>());
+        TF_AXIOM(fRef.Get<int (*)(int)>()(123) == 246);
+    }
+
+    {
+        VtIntArray ia = {1, 2, 3, 4};
+        ref = VtValueRef(ia);
+        TF_AXIOM(ref.IsHolding<VtIntArray>());
+        TF_AXIOM(ref.IsArrayValued());
+        TF_AXIOM(ref.GetArraySize() == 4);
+        TF_AXIOM(ref.GetElementTypeid() == typeid(int));
+    }
+
+    {
+        VtValue intVal { 321 };
+        
+        ref = intVal.Ref();
+        TF_AXIOM(!ref.IsEmpty() && ref.IsHolding<int>());
+        TF_AXIOM(ref.Get<int>() == 321);
+
+        VtValue fromRef = ref;
+        TF_AXIOM(!fromRef.IsEmpty() && fromRef.IsHolding<int>());
+        TF_AXIOM(fromRef.Get<int>() == 321);
+
+        VtValue explicitRef(ref);
+        TF_AXIOM(!explicitRef.IsEmpty() && explicitRef.IsHolding<int>());
+        TF_AXIOM(explicitRef.Get<int>() == 321);
+    }
+
+    {
+        int counter = 0;
+
+        VtMutableValueRef ref { counter };
+
+        TF_AXIOM(ref.IsHolding<int>());
+        TF_AXIOM(ref.Get<int>() == 0);
+
+        ref = 1;
+        
+        TF_AXIOM(ref.Get<int>() == 1);
+        TF_AXIOM(counter == 1);
+
+        ref.UncheckedAssign(2);
+
+        TF_AXIOM(ref.Get<int>() == 2);
+        TF_AXIOM(counter == 2);
+
+        TF_AXIOM(ref.Mutate<int>([](int &c) { c *= 10; }));
+        TF_AXIOM(ref.Get<int>() == 20);
+        TF_AXIOM(counter == 20);
+
+        int tmp = 999;
+        ref.Swap(tmp);
+        TF_AXIOM(tmp == 20);
+        TF_AXIOM(counter == 999);
+        TF_AXIOM(ref.Get<int>() == 999);
+    }
+}
+
+static void
+testVtValueComposeOver()
+{
+    VtValue val { 123 };
+    TF_AXIOM(!val.CanComposeOver());
+    TF_AXIOM(!VtValueRef { 123 }.CanComposeOver());
+
+    VtIntArrayEdit iae;
+    VtValue iaev { iae };
+    TF_AXIOM(iaev.CanComposeOver());
+    TF_AXIOM(VtValueRef { iae }.CanComposeOver());
+
+    VtIntArrayEditBuilder builder;
+    VtIntArrayEdit zeroNine = builder
+        .Prepend(0)
+        .Append(9)
+        .FinalizeAndReset();
+
+    VtValue zeroNineVal { zeroNine };
+    VtValue emptyArrayVal { VtIntArray {} };
+
+    VtValue znVal = VtValueComposeOver(zeroNineVal, emptyArrayVal);
+    TF_AXIOM(znVal.IsHolding<VtIntArray>());
+    TF_AXIOM((znVal.Get<VtIntArray>() == VtIntArray {0,9}));
+
+    znVal = VtValueComposeOver(zeroNineVal, znVal);
+    TF_AXIOM(znVal.IsHolding<VtIntArray>());
+    TF_AXIOM((znVal.Get<VtIntArray>() == VtIntArray {0,0,9,9}));
+
+    {
+        // Check dictionaries with composing types.
+        const VtDictionary strong = {
+            { "zn", zeroNineVal },
+            { "ea", emptyArrayVal },
+            { "sub", VtValue {
+                    VtDictionary {
+                        { "zn", zeroNineVal },
+                        { "ea", emptyArrayVal }
+                    }
+                }
+            }
+        };
+                    
+        const VtDictionary weak = {
+            { "zn", VtValue { VtIntArray { 7,7,7 } } },
+            { "ea", VtValue { VtIntArray { 8,8,8 } } },
+            { "sub", VtValue {
+                    VtDictionary {
+                        { "zn", VtValue { VtIntArray { 7,7,7 } } },
+                        { "ea", VtValue { VtIntArray { 8,8,8 } } }
+                    }
+                }
+            }
+        };
+
+        VtValue comp = VtValueComposeOver(strong, weak);
+        TF_AXIOM(comp.IsHolding<VtDictionary>());
+
+        const VtDictionary expectedComp = {
+            { "zn", VtValue { VtIntArray { 0,7,7,7,9 } } },
+            { "ea", emptyArrayVal },
+            { "sub", VtValue {
+                    VtDictionary {
+                        { "zn", VtValue { VtIntArray { 0,7,7,7,9 } } },
+                        { "ea", emptyArrayVal }
+                    }
+                }
+            }
+        };
+        TF_AXIOM(comp == expectedComp);
+
+        VtValue compBG = VtValueComposeOver(strong, VtBackground);
+        TF_AXIOM(compBG.IsHolding<VtDictionary>());
+        const VtDictionary expectedCompBG = {
+            { "zn", VtValue { VtIntArray { 0,9 } } },
+            { "ea", emptyArrayVal },
+            { "sub", VtValue {
+                    VtDictionary {
+                        { "zn", VtValue { VtIntArray { 0,9 } } },
+                        { "ea", emptyArrayVal }
+                    }
+                }
+            }
+        };
+        TF_AXIOM(compBG == expectedCompBG);
+    }
+}
+
+enum XFormTestSwitch
+{
+    SwitchOff,
+    SwitchOn
+};
+
+struct XFormTestToggle {};
+
+PXR_NAMESPACE_OPEN_SCOPE
+VT_VALUE_TYPE_CAN_TRANSFORM(XFormTestSwitch);
+PXR_NAMESPACE_CLOSE_SCOPE
+
+static void
+testVtValueTransform()
+{
+    VtRegisterTransform(
+        +[](XFormTestSwitch const &sw, XFormTestToggle const &) {
+            return sw == SwitchOff ? SwitchOn : SwitchOff;
+        });
+    
+    XFormTestSwitch off = SwitchOff;
+    XFormTestSwitch on = SwitchOn;
+    XFormTestToggle toggle;
+
+    VtValueRef offRef = off;
+    VtValueRef onRef = on;
+
+    using SwitchArray = VtArray<XFormTestSwitch>;
+    using SwitchArrayEdit = VtArrayEdit<XFormTestSwitch>;
+
+    SwitchArray swa { off, on, off, on };
+
+    SwitchArrayEdit swae = VtArrayEditBuilder<XFormTestSwitch>()
+        .Append(off)
+        .Append(on)
+        .Append(off)
+        .Append(on)
+        .FinalizeAndReset();
+
+    VtDictionary dict {
+        { "off", VtValue { off } },
+        { "on", VtValue { on } },
+        { "swa", VtValue { swa } },
+        { "swae", VtValue { swae } },
+        { "untransformed", VtValue { "string" } }
+    };
+
+    VtDictionary recursiveDict = dict;
+    recursiveDict["subdict"] = dict;
+
+    {
+        TF_AXIOM(offRef.CanTransform());
+        TF_AXIOM(VtValueCanTransform(offRef, toggle));
+        TF_AXIOM(onRef.CanTransform());
+        TF_AXIOM(VtValueCanTransform(onRef, toggle));
+        
+        VtValue offXf = VtValueTryTransform(offRef, toggle);
+        TF_AXIOM(!offXf.IsEmpty());
+        TF_AXIOM(offXf.IsHolding<XFormTestSwitch>());
+        TF_AXIOM(offXf.Get<XFormTestSwitch>() == on);
+        
+        VtValue onXf = VtValueTryTransform(onRef, toggle);
+        TF_AXIOM(!onXf.IsEmpty());
+        TF_AXIOM(onXf.IsHolding<XFormTestSwitch>());
+        TF_AXIOM(onXf.Get<XFormTestSwitch>() == off);
+    }
+
+    // Check that VtArray can transform.
+    {
+        VtValue xf = VtValueTryTransform(swa, toggle);
+        TF_AXIOM(!xf.IsEmpty());
+        TF_AXIOM(xf.IsHolding<SwitchArray>());
+        TF_AXIOM((xf.Get<SwitchArray>() == SwitchArray { on, off, on, off }));
+    }
+
+    // Check that a VtDictionary holding both scalar, array, and arrayEdit
+    // elements can transform.
+    {
+        VtValue oxfd = VtValueTryTransform(dict, toggle);
+        TF_AXIOM(oxfd.IsHolding<VtDictionary>());
+        VtDictionary xfd = oxfd.Remove<VtDictionary>();
+
+        TF_AXIOM(xfd["off"].Get<XFormTestSwitch>() == on);
+        TF_AXIOM(xfd["on"].Get<XFormTestSwitch>() == off);
+        TF_AXIOM((xfd["swa"].Get<SwitchArray>() ==
+                  SwitchArray { on, off, on, off }));
+
+        SwitchArrayEdit ae = VtArrayEditBuilder<XFormTestSwitch>()
+            .Append(on).Append(off).Append(on).Append(off).FinalizeAndReset();
+        
+        TF_AXIOM(xfd["swae"].Get<SwitchArrayEdit>() == ae);
+        TF_AXIOM(xfd["untransformed"].Get<std::string>() == "string");
+    }
+
+    // Check that a VtDictionary holding both scalar, array, and arrayEdit
+    // elements can transform recursively.
+    {
+        VtValue oxfd = VtValueTryTransform(recursiveDict, toggle);
+        TF_AXIOM(oxfd.IsHolding<VtDictionary>());
+        VtDictionary xfd = oxfd.Remove<VtDictionary>();
+
+        auto check = [&](VtDictionary d) {
+            TF_AXIOM(xfd["off"].Get<XFormTestSwitch>() == on);
+            TF_AXIOM(xfd["on"].Get<XFormTestSwitch>() == off);
+            TF_AXIOM((xfd["swa"].Get<SwitchArray>() ==
+                      SwitchArray { on, off, on, off }));
+
+            SwitchArrayEdit ae = VtArrayEditBuilder<XFormTestSwitch>()
+                .Append(on).Append(off).Append(on).Append(off)
+                .FinalizeAndReset();
+
+            TF_AXIOM(xfd["swae"].Get<SwitchArrayEdit>() == ae);
+            TF_AXIOM(xfd["untransformed"].Get<std::string>() == "string");
+        };
+
+        check(xfd);
+        check(xfd["subdict"].Get<VtDictionary>());
+    }
+}
+
+PXR_NAMESPACE_OPEN_SCOPE
+struct Vt_ValueTestAccess
+{
+public:
+    static const void *GetHeldObjectPtrForDebugger(const VtValue &value) {
+        return value._GetHeldObjectPtrForDebugger();
+    }
+
+    template <class T>
+    static const T *GetHeldObjectPtrForDebugger(const VtValue &value) {
+        TF_AXIOM(value.IsHolding<T>());
+        return static_cast<const T *>(
+            value._GetHeldObjectPtrForDebugger());
+    }
+};
+PXR_NAMESPACE_CLOSE_SCOPE
+
+static void
+testGetHeldObjectPtrForDebugger()
+{
+    {
+        const VtValue v;
+        const void *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger(v);
+        TF_AXIOM(heldPtr == nullptr);
+    }
+    {
+        const VtValue v(42);
+        const int *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger<int>(v);
+        TF_AXIOM(*heldPtr == 42);
+    }
+    {
+        const std::string s = "This is a string";
+        const VtValue v(s);
+        const std::string *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger<std::string>(v);
+        TF_AXIOM(*heldPtr == s);
+    }
+    {
+        const VtValue v(_TypedProxy<double>(2.0));
+        const double *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger<double>(v);
+        TF_AXIOM(*heldPtr == 2.0);
+    }
+    {
+        const VtValue v(_ErasedDoubleProxy(4.0));
+        const double *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger<double>(v);
+        TF_AXIOM(*heldPtr == 4.0);
+    }
+    {
+        VtDictionary dict;
+        dict["one"] = 1;
+        dict["two"] = 2;
+        const VtValue v(dict);
+        const VtDictionary *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger<VtDictionary>(v);
+        TF_AXIOM(*heldPtr == dict);
+    }
+    {
+        const VtArray<int> arr{1, 2, 3, 4, 5};
+        const VtValue v(arr);
+        const VtArray<int> *const heldPtr =
+            Vt_ValueTestAccess::GetHeldObjectPtrForDebugger<VtArray<int>>(v);
+        TF_AXIOM(*heldPtr == arr);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     testArray();
+
+#if !defined(ARCH_SANITIZE_ADDRESS) && !defined(ARCH_OS_WASM_VM)
+    testArrayBadAlloc();
+#endif
 
     testDictionary();
     testDictionaryKeyPathAPI();
@@ -1839,6 +2469,11 @@ int main(int argc, char *argv[])
     testVisitValue();
     testKnownValueTypeIndex();
     testVtCheapToCopy();
+    testVtValueRef();
+    testVtValueComposeOver();
+    testVtValueTransform();
+
+    testGetHeldObjectPtrForDebugger();
 
     printf("Test SUCCEEDED\n");
 

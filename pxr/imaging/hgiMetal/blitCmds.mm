@@ -62,7 +62,9 @@ HgiMetalBlitCmds::_CreateEncoder()
 }
 
 void
-HgiMetalBlitCmds::PushDebugGroup(const char* label)
+HgiMetalBlitCmds::PushDebugGroup(
+        const char* label,
+        const GfVec4f& color)
 {
     if (!HgiMetalDebugEnabled()) {
         return;
@@ -81,6 +83,20 @@ HgiMetalBlitCmds::PopDebugGroup()
 {
     if (_blitEncoder) {
         HGIMETAL_DEBUG_POP_GROUP(_blitEncoder)
+    }
+}
+
+void
+HgiMetalBlitCmds::InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color)
+{
+    if (!HgiMetalDebugEnabled()) {
+        return;
+    }
+
+    if (_blitEncoder) {
+        HGIMETAL_DEBUG_INSERT_DEBUG_MARKER(_blitEncoder, label)
     }
 }
 
@@ -458,6 +474,7 @@ _HgiTextureCanBeFiltered(HgiTextureDesc const &descriptor)
 
         case HgiTextureType2D:
         case HgiTextureType2DArray:
+        case HgiTextureTypeCubemap:
             return (dims[0] > 1 || dims[1] > 1);
 
         case HgiTextureType3D:

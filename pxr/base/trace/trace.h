@@ -19,7 +19,11 @@
 
 #include <atomic>
 
-#if !defined(TRACE_DISABLE)
+#if !defined(TRACE_ENABLE)
+    #define TRACE_ENABLE 1
+#endif
+
+#if TRACE_ENABLE
 
 /// Records a timestamp when constructed and a timespan event when destructed,
 /// using the name of the function or method as the key.
@@ -166,7 +170,7 @@ PXR_NS::TraceAuto TF_PP_CAT(TraceAuto_, instance)(str)
 #define _TRACE_MARKER_DYNAMIC_INSTANCE(instance, name) \
     TraceCollector::GetInstance().MarkerEvent(name);
 
-#else // TRACE_DISABLE
+#else // TRACE_ENABLE
 
 #define TRACE_FUNCTION()
 #define TRACE_FUNCTION_DYNAMIC(name)
@@ -175,8 +179,10 @@ PXR_NS::TraceAuto TF_PP_CAT(TraceAuto_, instance)(str)
 #define TRACE_FUNCTION_SCOPE(name)
 #define TRACE_MARKER(name)
 #define TRACE_MARKER_DYNAMIC(name)
+#define TRACE_COUNTER_DELTA(name, delta)
+#define TRACE_COUNTER_VALUE(name, value)
 
-#endif // TRACE_DISABLE
+#endif // TRACE_ENABLE
 
 PXR_NAMESPACE_OPEN_SCOPE
 

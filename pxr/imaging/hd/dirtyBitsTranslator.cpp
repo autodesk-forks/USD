@@ -80,6 +80,23 @@ using _BToSMap = std::unordered_map<TfToken,
 
 static TfStaticData<_SToBMap> Hd_SPrimSToBFncs;
 static TfStaticData<_BToSMap> Hd_SPrimBToSFncs;
+static TfStaticData<_SToBMap> Hd_RPrimSToBFncs;
+static TfStaticData<_BToSMap> Hd_RPrimBToSFncs;
+
+static
+const HdDataSourceLocator &
+_GetCustomBitsLocator()
+{
+    static const HdDataSourceLocator locator(TfToken("__customBits"));
+    return locator;
+}
+
+static
+HdDataSourceLocator
+_GetCustomBitLocator(const size_t i)
+{
+    return _GetCustomBitsLocator().Append(TfToken(TfStringPrintf("%zu", i)));
+}
 
 /*static*/
 void
@@ -217,6 +234,24 @@ HdDirtyBitsTranslator::RprimDirtyBitsToLocatorSet(TfToken const& primType,
 
     if (bits & HdChangeTracker::DirtyTransform) {
         set->append(HdXformSchema::GetDefaultLocator());
+    }
+
+    if (bits & HdChangeTracker::CustomBitsMask) {
+        for (size_t i = 0, bit = HdChangeTracker::CustomBitsBegin;
+             bit <= HdChangeTracker::CustomBitsEnd;
+             bit <<= 1, i++) {
+            if (bits & bit) {
+                set->append(_GetCustomBitLocator(i));
+            }
+        }
+    }
+
+    if (!Hd_RPrimBToSFncs->empty()) {
+        const auto fncIt = Hd_RPrimBToSFncs->find(primType);
+        if (fncIt != Hd_RPrimBToSFncs->end()) {
+            // call custom handler registered for this type
+            fncIt->second(bits, set);
+        }
     }
 }
 
@@ -393,6 +428,9 @@ HdDirtyBitsTranslator::InstancerDirtyBitsToLocatorSet(TfToken const& primType,
     if (bits & HdChangeTracker::DirtyPrimvar) {
         set->append(HdPrimvarsSchema::GetDefaultLocator());
     }
+    if (bits & HdChangeTracker::DirtyVisibility) {
+        set->append(HdVisibilitySchema::GetDefaultLocator());
+    }
     if (bits & HdChangeTracker::DirtyTransform) {
         set->append(HdXformSchema::GetDefaultLocator());
     }
@@ -431,29 +469,49 @@ HdDirtyBitsTranslator::BprimDirtyBitsToLocatorSet(TfToken const& primType,
         if (bits & HdRenderSettings::DirtyFrameNumber) {
             set->append(HdRenderSettingsSchema::GetFrameLocator());
         }
-        if (bits & HdRenderSettings::DirtyNamespacedSettings) {
-            set->append(HdRenderSettingsSchema::GetNamespacedSettingsLocator());
-        }
-        if (bits & HdRenderSettings::DirtyRenderProducts) {
-            set->append(HdRenderSettingsSchema::GetRenderProductsLocator());
-        }
         if (bits & HdRenderSettings::DirtyIncludedPurposes) {
             set->append(HdRenderSettingsSchema::GetIncludedPurposesLocator());
         }
         if (bits & HdRenderSettings::DirtyMaterialBindingPurposes) {
             set->append(HdRenderSettingsSchema::GetMaterialBindingPurposesLocator());
         }
+        if (bits & HdRenderSettings::DirtyNamespacedSettings) {
+            set->append(HdRenderSettingsSchema::GetNamespacedSettingsLocator());
+        }
+        if (bits & HdRenderSettings::DirtyRenderProducts) {
+            set->append(HdRenderSettingsSchema::GetRenderProductsLocator());
+        }
         if (bits & HdRenderSettings::DirtyRenderingColorSpace) {
             set->append(HdRenderSettingsSchema::GetRenderingColorSpaceLocator());
         }
         if (bits & HdRenderSettings::DirtyShutterInterval) {
-            set->append(HdRenderSettingsSchema::GetShutterIntervalLocator());
+            set->append(HdRenderSettingsSchema::GetUnionedSamplingIntervalLocator());
         }
     } else if (HdLegacyPrimTypeIsVolumeField(primType)) {
         if (bits & HdField::DirtyParams) {
             set->append(HdVolumeFieldSchema::GetDefaultLocator());
         }
         // XXX: DirtyTransform seems unused...
+    }
+}
+
+/* static */
+void
+HdDirtyBitsTranslator::TaskDirtyBitsToLocatorSet(
+    const HdDirtyBits bits, HdDataSourceLocatorSet *set)
+{
+    if (ARCH_UNLIKELY(set == nullptr)) {
+        return;
+    }
+
+    if (bits & HdChangeTracker::DirtyCollection) {
+        set->append(HdLegacyTaskSchema::GetCollectionLocator());
+    }
+    if (bits & HdChangeTracker::DirtyParams) {
+        set->append(HdLegacyTaskSchema::GetParametersLocator());
+    }
+    if (bits & HdChangeTracker::DirtyRenderTags) {
+        set->append(HdLegacyTaskSchema::GetRenderTagsLocator());
     }
 }
 
@@ -467,6 +525,12 @@ _FindLocator(HdDataSourceLocator const& locator,
 {
     if (*it == end) {
         return false;
+    }
+
+    // Check for a universal locator set.  If we find it we never want
+    // to advance regardless of advanceToNext.
+    if ((*it)->IsEmpty()) {
+        return true;
     }
 
     // The range between *it and end can be divided into:
@@ -529,6 +593,28 @@ HdDirtyBitsTranslator::RprimLocatorSetToDirtyBits(
     // or parent (such as "" or "basisCurvesTopology/curveType") is present,
     // mark DirtyToplogy.  it points to the next element after
     // "basisCurvesTopology", setting us up to check for displayStyle.
+
+
+    // Locator (*): __customBits
+    if (_FindLocator(_GetCustomBitsLocator(), end, &it, false)) {
+        if (_GetCustomBitsLocator() == *it) {
+            bits |= HdChangeTracker::CustomBitsMask;
+        } else {
+            for (size_t i = 0, bit = HdChangeTracker::CustomBitsBegin;
+                 bit <= HdChangeTracker::CustomBitsEnd;
+                 bit <<= 1, i++) {
+                // Locator (*): __customBits > 0
+                //
+                // Locator (*): __customBits > 6
+                //
+                // where 0 <= i < 7, so lexicographic order of tokens is correct.
+                if (_FindLocator(_GetCustomBitLocator(i), end, &it)) {
+                    bits |= bit;
+                }
+            }
+        }
+    }
+
     if (primType == HdPrimTypeTokens->basisCurves) {
 
         // Locator (*): basisCurves > topology
@@ -591,7 +677,7 @@ HdDirtyBitsTranslator::RprimLocatorSetToDirtyBits(
 
     {
         using Schema = HdLegacyDisplayStyleSchema;
-    
+
         if (_FindLocator(Schema::GetDefaultLocator(), end, &it, false)) {
             if (Schema::GetDefaultLocator().HasPrefix(*it)) {
                 bits |= HdChangeTracker::DirtyDisplayStyle |
@@ -602,9 +688,14 @@ HdDirtyBitsTranslator::RprimLocatorSetToDirtyBits(
                         Schema::GetCullStyleLocator(),
                         end, &it)) {
                     bits |= HdChangeTracker::DirtyCullStyle;
-                }                    
+                }
                 if (_FindLocator(
                         Schema::GetDisplacementEnabledLocator(),
+                        end, &it)) {
+                    bits |= HdChangeTracker::DirtyDisplayStyle;
+                }
+                if (_FindLocator(
+                        Schema::GetDisplayInOverlayLocator(),
                         end, &it)) {
                     bits |= HdChangeTracker::DirtyDisplayStyle;
                 }
@@ -643,7 +734,7 @@ HdDirtyBitsTranslator::RprimLocatorSetToDirtyBits(
                         end, &it)) {
                     bits |= HdChangeTracker::DirtyDisplayStyle;
                 }
-            }                
+            }
         }
     }
 
@@ -767,13 +858,23 @@ HdDirtyBitsTranslator::RprimLocatorSetToDirtyBits(
         bits |= HdChangeTracker::DirtyTransform;
     }
 
+    if (!Hd_RPrimSToBFncs->empty())
+    {
+        const auto fncIt = Hd_RPrimSToBFncs->find(primType);
+        if (fncIt != Hd_RPrimSToBFncs->end()) {
+            // call custom handler registered for this type
+            fncIt->second(set, &bits);
+        }
+    }
     return bits;
 }
 
 /*static*/
 HdDirtyBits
 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
-    TfToken const& primType, HdDataSourceLocatorSet const& set)
+    TfToken const& primType,
+    HdDataSourceLocatorSet const& set,
+    const TfTokenVector& renderContexts)
 {
     HdDataSourceLocatorSet::const_iterator it = set.begin();
 
@@ -788,13 +889,48 @@ HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
     // we only end up making one trip through the set. If you add to this
     // function, make sure you sort the addition by locator name, or
     // _FindLocator won't work.
-    // Also note, this should match SprimDirtyBitsToLocatorSet
+    // Also note, this should match SprimDirtyBitsToLocatorSet.
+    // Additionally, since Sprim's define their own dirty bit enum, we need to
+    // explicitly translate the empty locator to the appropriate value below.
 
     if (primType == HdPrimTypeTokens->material) {
+        if (*it == HdDataSourceLocator::EmptyLocator()) {
+            return HdMaterial::AllDirty;
+        }
+
         if (_FindLocator(HdMaterialSchema::GetDefaultLocator(), end, &it)) {
-            bits |= HdMaterial::AllDirty;
+            bits |= HdMaterial::DirtyParams | HdMaterial::DirtyResource;
+            for (const auto& locator : set) {
+                static const HdDataSourceLocator materialLocator(
+                    HdMaterialSchema::GetDefaultLocator());
+                if (locator == materialLocator) {
+                    bits |= HdMaterial::AllDirty;
+                } else {
+                    TfToken terminal = HdMaterialSchema::GetLocatorTerminal(
+                        locator, renderContexts);
+                    if (terminal == HdMaterialSchemaTokens->surface) {
+                        bits |= HdMaterial::DirtySurface;
+                    }
+                    else if (terminal == HdMaterialSchemaTokens->displacement) {
+                        bits |= HdMaterial::DirtyDisplacement;
+                    }
+                    else if (terminal == HdMaterialSchemaTokens->volume) {
+                        bits |= HdMaterial::DirtyVolume;
+                    } else {
+                        // There is no specific terminal mentioned,
+                        // so consider the entire material dirty.
+                        // This can happen, for example, when a
+                        // material/{renderContext} locator is invalidated.
+                        bits |= HdMaterial::AllDirty;
+                    }
+                }
+            }
         }
     } else if (primType == HdPrimTypeTokens->coordSys) {
+        if (*it == HdDataSourceLocator::EmptyLocator()) {
+            return HdCoordSys::AllDirty;
+        }
+
         static const HdDataSourceLocator nameLocator =
             HdCoordSysSchema::GetDefaultLocator()
             .Append(HdCoordSysSchemaTokens->name);
@@ -805,6 +941,10 @@ HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
             bits |= HdCoordSys::DirtyTransform;
         }
     } else if (primType == HdPrimTypeTokens->camera) {
+        if (*it == HdDataSourceLocator::EmptyLocator()) {
+            return HdCamera::AllDirty;
+        }
+
         if (_FindLocator(HdCameraSchema::GetDefaultLocator(), end, &it)) {
             bits |=
                 HdCamera::DirtyWindowPolicy |
@@ -817,6 +957,10 @@ HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
     } else if (HdPrimTypeIsLight(primType)
         // Lights and light filters are handled similarly in emulation.
         || primType == HdPrimTypeTokens->lightFilter) {
+
+        if (*it == HdDataSourceLocator::EmptyLocator()) {
+            return HdLight::AllDirty;
+        }
 
         if (_FindLocator(HdInstancedBySchema::GetDefaultLocator(), end, &it)) {
             bits |= HdLight::DirtyInstancer;
@@ -840,12 +984,22 @@ HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
             bits |= HdLight::DirtyTransform;
         }
     } else if (primType == HdPrimTypeTokens->drawTarget) {
+        // The clause below also handles the case where the locator is
+        // the empty locator.
         const static HdDataSourceLocator locator(
                 HdPrimTypeTokens->drawTarget);
         if (_FindLocator(locator, end, &it)) {
-            bits |= HdChangeTracker::AllDirty;
+            // XXX: We cannot use HdChangeTracker::AllDirty here. That value
+            // leaves the twos bit off (0xfffffffd). HdStDrawTarget uses that
+            // bit to signal a dirty camera binding. We use AllSceneDirtyBits
+            // instead because it covers all bits HdStDrawTarget cares about.
+            // We cannot include HdSt here, and there is no Hd equivalent for
+            // HdStDrawTarget::DirtyBits.
+            bits |= HdChangeTracker::AllSceneDirtyBits;
         }
     } else if (primType == HdPrimTypeTokens->extComputation) {
+        // The clause below also handles the case where the locator is
+        // the empty locator.
         if (_FindLocator(HdExtComputationSchema::GetDefaultLocator(),
                     end, &it, false)) {
             if (HdExtComputationSchema::GetDefaultLocator().HasPrefix(*it)) {
@@ -904,6 +1058,8 @@ HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
             bits |= HdChangeTracker::DirtyVisibility;
         }
     } else if (primType == HdPrimTypeTokens->imageShader) {
+        // The clause below also handles the case where the locator is
+        // the empty locator.
         if (_FindLocator(HdImageShaderSchema::GetDefaultLocator(),
                 end, &it, false)) {
             if (HdImageShaderSchema::GetDefaultLocator().HasPrefix(*it)) {
@@ -993,6 +1149,9 @@ HdDirtyBitsTranslator::InstancerLocatorSetToDirtyBits(
     if (_FindLocator(HdPrimvarsSchema::GetDefaultLocator(), end, &it)) {
         bits |= HdChangeTracker::DirtyPrimvar;
     }
+    if (_FindLocator(HdVisibilitySchema::GetDefaultLocator(), end, &it)) {
+        bits |= HdChangeTracker::DirtyVisibility;
+    }
     if (_FindLocator(HdXformSchema::GetDefaultLocator(), end, &it)) {
         bits |= HdChangeTracker::DirtyTransform;
     }
@@ -1070,14 +1229,6 @@ HdDirtyBitsTranslator::BprimLocatorSetToDirtyBits(
                 end, &it)) {
             bits |= HdRenderSettings::DirtyFrameNumber;
         }
-        if (_FindLocator(HdRenderSettingsSchema::GetNamespacedSettingsLocator(),
-                end, &it)) {
-            bits |= HdRenderSettings::DirtyNamespacedSettings;
-        }
-        if (_FindLocator(HdRenderSettingsSchema::GetRenderProductsLocator(),
-                end, &it)) {
-            bits |= HdRenderSettings::DirtyRenderProducts;
-        }
         if (_FindLocator(HdRenderSettingsSchema::GetIncludedPurposesLocator(),
                 end, &it)) {
             bits |= HdRenderSettings::DirtyIncludedPurposes;
@@ -1087,13 +1238,23 @@ HdDirtyBitsTranslator::BprimLocatorSetToDirtyBits(
                 end, &it)) {
             bits |= HdRenderSettings::DirtyMaterialBindingPurposes;
         }
+        if (_FindLocator(HdRenderSettingsSchema::GetNamespacedSettingsLocator(),
+                end, &it)) {
+            bits |= HdRenderSettings::DirtyNamespacedSettings;
+        }
+        // In lexicographic ordering of camel case strings, uppercase comes
+        // before lowercase, so renderProducts < renderingColorSpace
+        if (_FindLocator(HdRenderSettingsSchema::GetRenderProductsLocator(),
+                end, &it)) {
+            bits |= HdRenderSettings::DirtyRenderProducts;
+        }
         if (_FindLocator(
                 HdRenderSettingsSchema::GetRenderingColorSpaceLocator(),
                 end, &it)) {
             bits |= HdRenderSettings::DirtyRenderingColorSpace;
         }
         if (_FindLocator(
-                HdRenderSettingsSchema::GetShutterIntervalLocator(),
+                HdRenderSettingsSchema::GetUnionedSamplingIntervalLocator(),
                 end, &it)) {
             bits |= HdRenderSettings::DirtyShutterInterval;
         }
@@ -1115,6 +1276,16 @@ HdDirtyBitsTranslator::RegisterTranslatorsForCustomSprimType(
 {
     Hd_SPrimSToBFncs->insert({primType, sToBFnc});
     Hd_SPrimBToSFncs->insert({primType, bToSFnc});
+}
+
+void
+HdDirtyBitsTranslator::RegisterTranslatorsForCustomRprimType(
+    TfToken const& primType,
+    LocatorSetToDirtyBitsFnc sToBFnc,
+    DirtyBitsToLocatorSetFnc bToSFnc)
+{
+    Hd_RPrimSToBFncs->insert({primType, sToBFnc});
+    Hd_RPrimBToSFncs->insert({primType, bToSFnc});
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

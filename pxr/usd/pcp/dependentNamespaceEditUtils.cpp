@@ -13,6 +13,7 @@
 #include "pxr/usd/pcp/layerStack.h"
 #include "pxr/usd/pcp/mapExpression.h"
 #include "pxr/usd/pcp/node_Iterator.h"
+#include "pxr/usd/pcp/utils.h"
 #include "pxr/base/trace/trace.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -206,13 +207,12 @@ struct _NodeIntroductionInfo {
 // Scratch structure for processing prim move edits.
 struct _SpecMovesScratch {
     // List of prim spec move edit paths.
-    std::vector<PcpDependentNamespaceEdits::SpecMoveEditDescription> specMoves;
+    PcpDependentNamespaceEdits::MoveEditDescriptionVector specMoves;
 
-    // List of paths whose specs can optionally be deleted if no other edit 
-    // wants to move the spec to another path. These may be present because of
-    // implied classes and are processed during finalization of the dependent
-    // edits.
-    std::vector<SdfPath> optionalSpecDeletes;
+    // List of spec move edits that were added for implied class dependencies.
+    // Edits to implied classes have additional implication that need to be 
+    // tracked and accounted for when finalizing edtis.
+    PcpDependentNamespaceEdits::MoveEditDescriptionVector impliedClassSpecMoves;
 };
 using _LayerSpecMovesScratch =
     std::unordered_map<SdfLayerHandle, _SpecMovesScratch, TfHash>;
@@ -223,10 +223,12 @@ class _PrimIndexDependentNodeEditProcessor
 {
 public:
     _PrimIndexDependentNodeEditProcessor(
+        const PcpCache *cache,
         const PcpPrimIndex *primIndex,
         PcpDependentNamespaceEdits *edits,
         _LayerSpecMovesScratch *layerSpecMovesScratch)
-        : _primIndex(primIndex)
+        : _cache(cache)
+        , _primIndex(primIndex)
         , _edits(edits)
         , _layerSpecMovesScratch(layerSpecMovesScratch) 
         {}
@@ -296,8 +298,10 @@ private:
     bool _HasConflictingChildSpecsInUneditedNodes(
         const PcpNodeRef &siteEditNode,
         const TfToken &childName,
+        const bool isProperty, 
         PcpNodeRef *firstConflictingNode);
 
+    const PcpCache *_cache;
     const PcpPrimIndex *_primIndex;
     PcpDependentNamespaceEdits *_edits;
     _LayerSpecMovesScratch *_layerSpecMovesScratch;
@@ -515,6 +519,12 @@ _PrimIndexDependentNodeEditProcessor::_ProcessDependentNodePathAtIntroductionCha
     // updating the introducing composition arc is all that is needed to 
     // composed the same specs from the new location...
     if (!newPath.IsEmpty()) {
+        // Log that the prim index path has been changed to itself in the cache.
+        // This indicates that we have a significant change to the prim index 
+        // that doesn't move it and should leave it effectively unchanged when
+        // its prim index is built again.
+        _edits->dependentCachePathChanges[_cache].push_back(
+            {_primIndex->GetPath(), _primIndex->GetPath()});
         return;
     }
 
@@ -606,50 +616,6 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
         return;
     }
 
-    // Spec deletion may be optional when the deletion is due to an implied 
-    // class dependency. Here's an example:
-    // layer1
-    //   /Class (will be directly inherited)
-    //      /Child
-    //
-    //   /Instance1 (inherits = /Class)
-    //
-    // layer2
-    //   /Class (will be an implied inherit from across /Prim1's reference)
-    //      /Child
-    //
-    //   /Prim1 (references = @layer1@</Instance1>)
-    // 
-    // If we were to start with an edit in layer1 to move /Class/Child to 
-    // /MovedChild, that means we move the original spec outside of the scope of 
-    // /Instance1's inherit to /Class. When we then process the implied class
-    // dependency of /Class/Child in layer2, we *could* process it as a move 
-    // of /Class/Child to /MovedChild as well, but we instead process it as
-    // a delete as there are no prim indexes that would compose the specs from
-    // layer2's /MovedChild.
-    // 
-    // However, if in layer1 we also had
-    //   /Instance2 (inherits = /Class/Child)
-    // and in layer2 we also had
-    //   /Prim2 (references = @layer1@</Instance2>)
-    // 
-    // Now, a move of /Class/Child to /MovedChild in layer1 would process 
-    // additional edits to the ones already stated above. First, the inherits
-    // path in /Instance2 would be updated to point at /MovedChild instead of 
-    // /Class/Child. Second, we'd also process an implied class dependendency in
-    // layer2 to move /Class/Child to /MovedChild so that /Prim2 still composes
-    // those implied class specs.
-    // 
-    // But since these are additional dependencies, we have both an edit 
-    // requesting to delete /Class/Child in layer2 and an edit requesting to 
-    // move it to /MovedChild. But as was indicated, the deletion of 
-    // /Class/Child wasn't strictly necessary so another edit wanting to move it
-    // to /MovedChild is acceptable and preferred. Thus, we mark any deletes 
-    // that come from implied class tasks as optional so that they can be 
-    // overridden if another edit should take precedence.
-    const bool isOptionalDelete = 
-        nodeTask.isImpliedClassTask && nodeTask.newPath.IsEmpty();
-
     // The old path may be an ancestor path of the node's path. If so the spec
     // we're moving for this node is the node path itself.
     const SdfPath &oldSpecPath = 
@@ -676,7 +642,7 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
     }
 
     // Map the old spec path to the new spec location.
-    const SdfPath newSpecPath = isOptionalDelete ?
+    const SdfPath newSpecPath = nodeTask.newPath.IsEmpty() ?
         SdfPath::EmptyPath() :
         oldSpecPath.ReplacePrefix(nodeTask.oldPath, nodeTask.newPath);
 
@@ -687,9 +653,7 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
     for (SdfLayerHandle &layer : layersToEdit) {
         // Print debug before adding as we're moving the layer.
         _PRINT_DEBUG(
-            "Added spec edit from <%s> to <%s> %s on layer @%s@",
-            oldSpecPath.GetText(), newSpecPath.GetText(), 
-            (isOptionalDelete ? "(edit is optional)" : ""),
+            "Adding spec edit for for layer @%s@",
             layer->GetIdentifier().c_str()
         );
 
@@ -697,11 +661,73 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
         // deletes when we finalize the edits.
         _SpecMovesScratch &specMovesScratch = 
             (*_layerSpecMovesScratch)[std::move(layer)];
-        if (isOptionalDelete) {
-            specMovesScratch.optionalSpecDeletes.push_back(oldSpecPath);
-        } else {
-            specMovesScratch.specMoves.push_back({oldSpecPath, newSpecPath});
+
+        // For implied class spec moves, we need to keep track of these to
+        // determine further dependencies on the moved spec like, for example, 
+        // the root dependency on this spec which won't show as a dependency for
+        // the class that the implied node was implied from.
+        if (nodeTask.isImpliedClassTask) {
+            _PRINT_DEBUG(
+                "  ...logged implied class spec edit from <%s> to <%s>",
+                oldSpecPath.GetText(), newSpecPath.GetText());
+            specMovesScratch.impliedClassSpecMoves.push_back(
+                {oldSpecPath, newSpecPath});
+
+            // Do not add the edit yet if it's a delete for an implied class 
+            // dependency as the delete may be optional.Here's an example:
+            // layer1
+            //   /Class (will be directly inherited)
+            //      /Child
+            //
+            //   /Instance1 (inherits = /Class)
+            //
+            // layer2
+            //   /Class (will be an implied inherit from across /Prim1's reference)
+            //      /Child
+            //
+            //   /Prim1 (references = @layer1@</Instance1>)
+            // 
+            // If we were to start with an edit in layer1 to move /Class/Child 
+            // to /MovedChild, that means we move the original spec outside of
+            // the scope of /Instance1's inherit to /Class. When we then process
+            // the implied class dependency of /Class/Child in layer2, we 
+            // *could* process it as a move of /Class/Child to /MovedChild as 
+            // well, but we instead process it as a delete as there are no prim
+            // indexes that would compose the specs from layer2's /MovedChild.
+            // 
+            // However, if in layer1 we also had
+            //   /Instance2 (inherits = /Class/Child)
+            // and in layer2 we also had
+            //   /Prim2 (references = @layer1@</Instance2>)
+            // 
+            // Now, a move of /Class/Child to /MovedChild in layer1 would
+            // process additional edits to the ones already stated above. First,
+            // the inherits path in /Instance2 would be updated to point at
+            // /MovedChild instead of /Class/Child. Second, we'd also process an
+            // implied class dependendency in layer2 to move /Class/Child to
+            // /MovedChild so that /Prim2 still composes those implied class
+            // specs.
+            // 
+            // But since these are additional dependencies, we have both an edit 
+            // requesting to delete /Class/Child in layer2 and an edit
+            // requesting to move it to /MovedChild. But as was indicated, the
+            // deletion of /Class/Child wasn't strictly necessary so another
+            // edit wanting to move it to /MovedChild is acceptable and
+            // preferred. Thus, we mark any deletes that come from implied class
+            // tasks as optional so that they can be overridden if another edit
+            // should take precedence.
+            if (newSpecPath.IsEmpty()) {
+                _PRINT_DEBUG(
+                    "  ...skipping optional implied class delete of <%s> for "
+                    "now",
+                    oldSpecPath.GetText());
+                continue;
+            }
         }
+        _PRINT_DEBUG(
+            "  ...added spec edit from <%s> to <%s>",
+            oldSpecPath.GetText(), newSpecPath.GetText());
+        specMovesScratch.specMoves.push_back({oldSpecPath, newSpecPath});
     }
 
     // Also check every layer in the stack to see if it has its defaultPrim
@@ -716,20 +742,11 @@ _PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits(
                     {layer, SdfPath::AbsoluteRootPath(), 
                      SdfFieldKeys->DefaultPrim, VtValue()});
             } else {
-                // Get the new defaultPrim path and set it. We set the field
-                // differently depending on whether the path is a root prim
-                // or not. For root prims we use the root relative path, which
-                // is just the prim name, because this allows the layer to be 
-                // backwards compatible with earlier versions of USD which 
-                // expected this field to only be the name token of a root prim.
-                // For non-root prims, we use the absolute path as it's more
-                // clear than a root relative path (which would be just the path 
-                // without the initial forward slash).
+                // Get the new defaultPrim path and set it.
                 const SdfPath newDefaultPrimPath = 
                     defaultPrimPath.ReplacePrefix(oldSpecPath, newSpecPath);
-                TfToken newDefaultPrim = newDefaultPrimPath.IsRootPrimPath() ?
-                    newDefaultPrimPath.GetNameToken() :
-                    newDefaultPrimPath.GetAsToken();
+                TfToken newDefaultPrim = 
+                    SdfLayer::ConvertDefaultPrimPathToToken(newDefaultPrimPath);
                 _edits->compositionFieldEdits.push_back(
                     {layer, SdfPath::AbsoluteRootPath(), 
                     SdfFieldKeys->DefaultPrim, VtValue::Take(newDefaultPrim)});
@@ -745,6 +762,8 @@ _PrimIndexDependentNodeEditProcessor::_HasUneditedUpstreamSpecConflicts(
     const PcpNodeRef &siteEditNode,
     const SdfPath &siteEditPath)
 {
+    TRACE_FUNCTION();
+
     PcpNodeRef firstConflictingNode;
 
     // In the specific case where a delete operation causes us to have to remove
@@ -768,7 +787,8 @@ _PrimIndexDependentNodeEditProcessor::_HasUneditedUpstreamSpecConflicts(
         // Specifically look for conflicts in the subtree for the namespace 
         // child of the node's path.
         if (!_HasConflictingChildSpecsInUneditedNodes(
-            siteEditNode, siteEditPath.GetNameToken(), &firstConflictingNode)) {
+                siteEditNode, siteEditPath.GetNameToken(), 
+                siteEditPath.IsPrimPropertyPath(), &firstConflictingNode)) {
             return false;
         }
     // Otherwise, we just need to look for conflicts with the node path.
@@ -797,6 +817,8 @@ _PrimIndexDependentNodeEditProcessor::_HasConflictingSpecsInUneditedNodes(
     const PcpNodeRef &siteEditNode,
     PcpNodeRef *firstConflictingNode)
 {
+    TRACE_FUNCTION();
+
     // We only propagate edits up to stronger nodes when handling downstream
     // dependent edits; we do not push edits back down into weaker nodes. Thus,
     // we're looking for any specs in the descendant nodes of the node we're 
@@ -845,8 +867,11 @@ bool
 _PrimIndexDependentNodeEditProcessor::_HasConflictingChildSpecsInUneditedNodes(
     const PcpNodeRef &siteEditNode,
     const TfToken &childName,
+    const bool isProperty,
     PcpNodeRef *firstConflictingNode)
 {
+    TRACE_FUNCTION();
+
     if (!TF_VERIFY(!childName.IsEmpty())) {
         return false;
     }
@@ -882,14 +907,15 @@ _PrimIndexDependentNodeEditProcessor::_HasConflictingChildSpecsInUneditedNodes(
             const PcpLayerStackRefPtr &layerStack = 
                 subtreeNode.GetLayerStack();
             
-            // Map the child path into the subtree node.
-            const SdfPath subtreeNodeChildPath = 
+            // Map the property or child path into the subtree node.
+            const SdfPath subtreeNodeChildPath = isProperty ? 
+                subtreeNode.GetPath().AppendProperty(childName) :
                 subtreeNode.GetPath().AppendChild(childName);
 
             // If the node has specs we then have to compose whether the node
             // has specs for the child path and if it does, then we we found an
             // unedited spec conflict.
-            if (subtreeNode.HasSpecs() && PcpComposeSiteHasPrimSpecs(
+            if (subtreeNode.HasSpecs() && PcpComposeSiteHasSpecs(
                     layerStack, subtreeNodeChildPath)) {
                 *firstConflictingNode = subtreeNode;
                 return true;
@@ -1013,6 +1039,8 @@ _PrimIndexDependentNodeEditProcessor::_ProcessNextNodeTask()
         return false;
     }
 
+    TRACE_FUNCTION();
+
     // Pop the last task off the node tasks. This will be the task for the
     // weakest node we added a task for which is important for determining 
     // edited vs unedited nodes when looking for subtree spec conflicts.
@@ -1034,8 +1062,15 @@ _PrimIndexDependentNodeEditProcessor::_ProcessNextNodeTask()
     _AddSpecMoveEdits(nodeTask);
 
     // If we hit the root node, there are no additional downstream dependencies
-    // on this node to check for.
+    // on this node to check for, but we have reached the path in the cache
+    // that we expect to have moved entirely from oldPath to newPath. Log this
+    // change for the namespace editors.
     if (node.GetArcType() == PcpArcTypeRoot) {
+        // Ignore deletes; we only need to track cache paths that are moved.
+        if (!newPath.IsEmpty()) {           
+            _edits->dependentCachePathChanges[_cache].push_back(
+                {oldPath, newPath});
+        }
         return true;
     }
 
@@ -1151,27 +1186,6 @@ _GetImpliedClassTreeSourceParent(const PcpNodeRef originNode) {
             break;
         }
 
-        // XXX: In the case where an inherit arc nested directly under a 
-        // specializes arc, we have a known issue where we can't reliably 
-        // determine the class structure due to bidirectional propagation of
-        // specializes nodes that can leave inherits nodes without origin nodes
-        // to help us jump between propagated and unpropagated sections of the
-        // tree. Since it would complex to fully determine implied class 
-        // relationships in this situation and we plan to change how we process
-        // speciliazes in prim indexes in the near future, we're just going to
-        // give up on this case with a warning for now.
-        if (originNode.GetArcType() == PcpArcTypeInherit &&
-            sourceParent.GetArcType() == PcpArcTypeSpecialize &&
-                _GetUnpropagatedSpecializesNode(sourceParent) != sourceParent) {
-            TF_WARN("Unable to fix specs for implied inherits for an inherit "
-                "node %s nested under the specializes node %s. This is a known "
-                "bug that we cannot correct find the implied inherit node to "
-                "fix in this scenario.",
-                TfStringify(originNode.GetSite()).c_str(),
-                TfStringify(sourceParent.GetSite()).c_str());
-            return PcpNodeRef();
-        }
-
         // A class based parent arc may still be the source parent if it is a
         // more ancestral arc than this class origin node. Class nodes that
         // are all introduced at the same namespace depth are implied as whole
@@ -1180,6 +1194,12 @@ _GetImpliedClassTreeSourceParent(const PcpNodeRef originNode) {
         if (originNode.GetDepthBelowIntroduction() < 
                sourceParent.GetDepthBelowIntroduction()) {
             break;
+        }
+
+        // If this is a propagated specializes node, we need to jump to
+        // the origin node to continue traversal to the next parent node.
+        if (Pcp_IsPropagatedSpecializesNode(sourceParent)) {
+            sourceParent = sourceParent.GetOriginNode();
         }
     }
 
@@ -1237,6 +1257,8 @@ static _ImpliedNodeAndTransferFunction
 _GetNextImpliedSpecializes(
     const PcpNodeRef &propagatedSpecializesOriginNode)
 {
+    TRACE_FUNCTION();
+
     const PcpNodeRef &unpropagatedSpecializesOriginNode = 
         _GetUnpropagatedSpecializesNode(propagatedSpecializesOriginNode);
 
@@ -1316,6 +1338,8 @@ _FindClassNodeWithOriginInSubtree(
 static _ImpliedNodeAndTransferFunction
 _GetNextImpliedInherit(const PcpNodeRef &originNode)
 {
+    TRACE_FUNCTION();
+
     if (!TF_VERIFY(originNode.GetArcType() == PcpArcTypeInherit)) {
         return {};
     }
@@ -1391,6 +1415,8 @@ _GetNextImpliedInherit(const PcpNodeRef &originNode)
 void _PrimIndexDependentNodeEditProcessor::_ProcessNextImpliedClass(
     const _NodeTask &nodeTask)
 {
+    TRACE_FUNCTION();
+
     const PcpNodeRef &node = nodeTask.node;
     const SdfPath &oldPath = nodeTask.oldPath;
     const SdfPath &newPath = nodeTask.newPath;
@@ -1482,6 +1508,16 @@ void _PrimIndexDependentNodeEditProcessor::_ProcessNextImpliedClass(
         /*isImpliedClassTask*/ true});
 }
 
+// Compare function for sorting spec move edit descriptions by old path
+// first and then by new path.
+static bool _MoveEditDescLessThan (
+    const PcpDependentNamespaceEdits::MoveEditDescription &lhs, 
+    const PcpDependentNamespaceEdits::MoveEditDescription &rhs) 
+{
+    return std::tie(lhs.oldPath, lhs.newPath) < 
+            std::tie(rhs.oldPath, rhs.newPath);
+}
+
 // Finalizes the spec move edits into a single list of edits that can all be
 // performed in order with no errors.
 static void 
@@ -1490,27 +1526,17 @@ _FinalizeSpecMoveEdits(PcpDependentNamespaceEdits *edits,
 {
     TRACE_FUNCTION();
 
-    // Compare function for sorting spec move edit descriptions by old path
-    // first and then by new path.
-    auto specMoveDescLessThan = [](
-        const PcpDependentNamespaceEdits::SpecMoveEditDescription &lhs, 
-        const PcpDependentNamespaceEdits::SpecMoveEditDescription &rhs) 
-    {
-        return std::tie(lhs.oldPath, lhs.newPath) < 
-                std::tie(rhs.oldPath, rhs.newPath);
-    };
-
     // For each layer, we're going to want to perform each prim spec move in
     // order, so we need to make sure we don't have any redundant edits as the
     // edit will fail if a prior edit would cause the prim spec to no longer
     // exist. 
     for (auto &[layer, specMovesScratch] : layerSpecMovesScratch) {
         auto &specMoves = specMovesScratch.specMoves;
-        auto &optionalSpecDeletes = specMovesScratch.optionalSpecDeletes;
+        auto &impliedClassSpecMoves = specMovesScratch.impliedClassSpecMoves;
 
         if (specMoves.size() > 1) {
             // Sort the spec edits, by oldPath and then new path.
-            std::sort(specMoves.begin(), specMoves.end(), specMoveDescLessThan);
+            std::sort(specMoves.begin(), specMoves.end(), _MoveEditDescLessThan);
 
             // Remove any duplicate edits which will be adjacent because of 
             // sorting.
@@ -1541,18 +1567,22 @@ _FinalizeSpecMoveEdits(PcpDependentNamespaceEdits *edits,
             }
         }
 
-        // We may have marked some specs for this layer as optional delete. 
-        // For each, we look for an existing edit for the same path in the
+        // We may have skipped some implied class specs for this layer as 
+        // optional deletes. For each implied class edit that was meant to be 
+        // a delete, we look for an existing edit for the same path in the
         // current spec moves. If we don't find one, then we add the delete
         // edit, otherwise we just ignore the delete.
-        for (const auto &deleteSpecPath : optionalSpecDeletes) {
-            PcpDependentNamespaceEdits::SpecMoveEditDescription specDelete{
-                deleteSpecPath, SdfPath()};
+        for (const auto &impliedClassSpecMove : impliedClassSpecMoves) {
+            if (!impliedClassSpecMove.newPath.IsEmpty()) {
+                continue;
+            }
+            PcpDependentNamespaceEdits::MoveEditDescription specDelete{
+                impliedClassSpecMove.oldPath, SdfPath()};
             auto insertIt = std::lower_bound(
                 specMoves.begin(), specMoves.end(), specDelete, 
-                specMoveDescLessThan);
+                _MoveEditDescLessThan);
             if (insertIt == specMoves.end() || 
-                    insertIt->oldPath != deleteSpecPath) {
+                    insertIt->oldPath != specDelete.oldPath) {
                 // Insert to maintain sort order 
                 specMoves.insert(insertIt, std::move(specDelete));
             }
@@ -1591,12 +1621,45 @@ _FinalizeSpecMoveEdits(PcpDependentNamespaceEdits *edits,
     }  
 }
 
+// Finalizes the dependent cache path changes by removing duplicates.
+static void _FinalizeDependentCachePathChanges(PcpDependentNamespaceEdits *edits,
+    const std::vector<const PcpCache *> &dependentCaches) 
+{
+    // Compare function for checking equality between  move edit descriptions by 
+    // checking if both old path and new path are equal.
+    auto moveEditDescEqualTo = [](
+        const PcpDependentNamespaceEdits::MoveEditDescription &lhs, 
+        const PcpDependentNamespaceEdits::MoveEditDescription &rhs) 
+    {
+        return std::tie(lhs.oldPath, lhs.newPath) == 
+                std::tie(rhs.oldPath, rhs.newPath);
+    };
+
+    // Remove any duplicate edits which will be adjacent because of 
+    // sorting. If two edits are moving the same path, they are either
+    // redundant or an error. If an error, the actual spec move will
+    // report it but leave both edits in, so we leave both in here as well.
+    for (const auto &depCache : dependentCaches) {
+        auto &dependentCachePathChanges = 
+            edits->dependentCachePathChanges[depCache];
+        if (dependentCachePathChanges.size() <= 1) {
+            return;
+        }
+
+        std::sort(dependentCachePathChanges.begin(), 
+            dependentCachePathChanges.end(), _MoveEditDescLessThan);
+        auto last = std::unique(dependentCachePathChanges.begin(), 
+            dependentCachePathChanges.end(), moveEditDescEqualTo);
+        dependentCachePathChanges.erase(last, dependentCachePathChanges.end());
+    }
+}
+
 }; // End anonymous namespace
 
 PcpDependentNamespaceEdits
 PcpGatherDependentNamespaceEdits(
-    const SdfPath &oldPrimPath,
-    const SdfPath &newPrimPath,
+    const SdfPath &oldPath,
+    const SdfPath &newPath,
     const SdfLayerHandleVector &affectedLayers,
     const PcpLayerStackRefPtr &affectedRelocatesLayerStack,
     const SdfLayerHandle &addRelocatesToLayerStackEditLayer,
@@ -1646,7 +1709,7 @@ PcpGatherDependentNamespaceEdits(
         PcpLayerRelocatesEditBuilder builder(
             affectedRelocatesLayerStack, addRelocatesToLayerStackEditLayer);
         std::string error;
-        if (!builder.Relocate(oldPrimPath, newPrimPath, &error)) {
+        if (!builder.Relocate(oldPath, newPath, &error)) {
             TF_CODING_ERROR("Cannot get relocates edits because: %s", 
                 error.c_str());                       
         }
@@ -1693,18 +1756,24 @@ PcpGatherDependentNamespaceEdits(
             const SdfLayerHandle &layer = entry.first;
             const bool hasRelocatesEdits = entry.second;
 
-            // Find all prim indexes which depend on the old prim path in this
-            // layer. We recurse on site because moving or deleting a prim spec
-            // moves also moves all descendant specs and we need to fix up 
+            
+            // Find all prim index or property paths which depend on the old 
+            // path in this layer. Note that oldPath can be a prim or property
+            // path, and FindSiteDependencies will return prim paths or property 
+            // paths, respectively.
+            // We recurse on site because moving or deleting a prim spec
+            // also moves all descendant specs and we need to fix up 
             // direct dependencies on those paths as well. We do not recurse
             // on the found prim indexes since the edits affecting the directly
             // dependent prim index automatically affect namespace descendant
             // prim indexes. We also filter on existing computed prim indexes
             // as we will not be force computing prim indexes that have not
-            // been computed yet to process edit dependencies.
+            // been computed yet to process edit dependencies. If oldPath is a 
+            // property, this filters on whether its parent prim's index has
+            // been computed.
             PcpDependencyVector deps =
                 cache->FindSiteDependencies(
-                    layer, oldPrimPath,
+                    layer, oldPath,
                     PcpDependencyTypeAnyNonVirtual,
                     /* recurseOnSite */ true,
                     /* recurseOnIndex */ false,
@@ -1714,7 +1783,7 @@ PcpGatherDependentNamespaceEdits(
                 "Found %lu dependencies for spec edit at site @%s@<%s>.", 
                 deps.size(),
                 layer->GetIdentifier().c_str(),
-                oldPrimPath.GetText());
+                oldPath.GetText());
 
             using _DependencySet =
                 std::unordered_set<std::pair<SdfPath, SdfPath>, TfHash>; 
@@ -1734,14 +1803,15 @@ PcpGatherDependentNamespaceEdits(
                 }
 
                 _PRINT_DEBUG_SCOPE(
-                    "Processing dependency for prim index <%s> which depends "
-                    "on site path <%s>", 
+                    "Processing dependency on prim index <%s> from site path <%s>", 
                     dep.indexPath.GetText(), dep.sitePath.GetText());
 
                 // We filtered on existing prim indexes so the dependent prim
-                // index must be in the cache.
+                // index must be in the cache. dep.indexPath can be a property
+                // path, so we extract a prim path from it first.
+                const SdfPath& primIndexPath = dep.indexPath.GetPrimPath();
                 const PcpPrimIndex *primIndex = 
-                    cache->FindPrimIndex(dep.indexPath);
+                    cache->FindPrimIndex(primIndexPath);
                 if (!TF_VERIFY(primIndex)) {
                     continue;
                 }
@@ -1753,7 +1823,7 @@ PcpGatherDependentNamespaceEdits(
                 // necessary in addition to the dependent nodes we found 
                 // here.              
                 _PrimIndexDependentNodeEditProcessor dependentNodeProcessor(
-                    primIndex, &edits, &layerSpecMovesScratch);
+                    cache, primIndex, &edits, &layerSpecMovesScratch);
                 Pcp_ForEachDependentNode(
                     dep.sitePath, layer, dep.indexPath, *cache,
                     [&](const SdfPath &depIndexPath, const PcpNodeRef &node) {
@@ -1763,7 +1833,7 @@ PcpGatherDependentNamespaceEdits(
                         // XXX: This is the part that is a little oversimplified
                         // as was mentioned earlier in this function.
                         dependentNodeProcessor.AddProcessEditsAtNodeTask(
-                            node, oldPrimPath, newPrimPath, 
+                            node, oldPath, newPath, 
                             /*willBeRelocated = */ hasRelocatesEdits);
                     });
                 dependentNodeProcessor.ProcessTasks();               
@@ -1771,10 +1841,56 @@ PcpGatherDependentNamespaceEdits(
         }
     }
 
+    // Edits to implied classes introduce new dependencies that would not have
+    // been caught by the dependencies on the initial site edits. This is 
+    // because of any dependencies on an site used for an implied class will not
+    // necessarily depend on the class arcs that the implied arcs originate 
+    // from. The most common example is the prim index for an global implied
+    // class site in the root prim stack. That site's prim index will depend on 
+    // the implied class site but will have no dependency on its origin. Thus
+    // we go through our implied class edits and at log the prim index for using
+    // the implied class site as changed for any caches that include that site 
+    // in its root layer stack.
+    //
+    // XXX: We are potentially missing some additional downstream dependencies
+    // here, like in the following case:
+    //
+    //      layer1            layer2
+    // /Baz      /Bar --ref--> /Foo
+    //   |        |             |
+    //   | inh    | implied     | inherit
+    //   |        |             |
+    //   |        v             v
+    //   +----> /Class        /Class
+    //
+    // Renaming /Class in layer2 will cause us to rename /Class in layer1 
+    // because /Bar has as dependency on layer2's /Class. But we don't fix up
+    // /Baz's reference to the renamed layer1's /Class because /Baz was not 
+    // found as a dependency of the initial edit to layer2's /Class. To fix this
+    // we'd need to look at the implied class spec changes and search for 
+    // additional dependencies on these to try to fix those up as well. But this
+    // is non-trivial to tack on to the already processed dependent edits so 
+    // this is being left as not working for now. I expect that this is an 
+    // uncommon case to have directly authored dependencies on implied class 
+    // specs anyway.
+    for (const auto &depCache : dependentCaches) {
+        auto &dependentCachePathChanges = 
+            edits.dependentCachePathChanges[depCache];
+        for (const auto &[layer, specMovesScratch]: layerSpecMovesScratch) {
+            if (!depCache->GetLayerStack()->HasLayer(layer)) {
+                continue;
+            }
+            for (const auto &specEdit: specMovesScratch.impliedClassSpecMoves) {
+                dependentCachePathChanges.push_back(specEdit);
+            }
+        }
+    };
+
     // Processing these dependencies may result in redundant edits especially
     // when multiple dependent caches are involved. The finalize step ensures
     // we return a fully executable set of edits with no redundancies and/or
     // inconsistencies.
+    _FinalizeDependentCachePathChanges(&edits, dependentCaches);
     _FinalizeSpecMoveEdits(&edits, std::move(layerSpecMovesScratch));
     return edits;
 }
@@ -1786,6 +1902,8 @@ PcpGatherLayersToEditForSpecMove(
     const SdfPath &newSpecPath,
     std::vector<std::string> *errors)
 {
+    TRACE_FUNCTION();
+
     SdfLayerHandleVector layersToEdit;
 
     // Get all the layers in the layer stack where the edits will be performed.

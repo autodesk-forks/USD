@@ -29,6 +29,7 @@
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
+#include "pxr/imaging/hgiVulkan/debugCodes.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -116,11 +117,22 @@ HgiVulkan::CreateComputeCmds(
 
 /* Multi threaded */
 HgiTextureHandle
-HgiVulkan::CreateTexture(HgiTextureDesc const & desc)
+HgiVulkan::_CreateTexture(HgiTextureDesc const & desc)
 {
     return HgiTextureHandle(
-        new HgiVulkanTexture(this, GetPrimaryDevice(), desc),
-        GetUniqueId());
+        new HgiVulkanTexture(this, desc,
+            /*optimalTiling=*/ true, /*interop=*/false), GetUniqueId());
+}
+
+/* Multi threaded */
+HgiTextureHandle
+HgiVulkan::CreateTextureForInterop(
+    HgiTextureDesc const & desc,
+    bool optimalTiling)
+{
+    return HgiTextureHandle(
+        new HgiVulkanTexture(this, desc,
+            optimalTiling, /*interop=*/true), GetUniqueId());
 }
 
 /* Multi threaded */
@@ -132,14 +144,10 @@ HgiVulkan::DestroyTexture(HgiTextureHandle* texHandle)
 
 /* Multi threaded */
 HgiTextureViewHandle
-HgiVulkan::CreateTextureView(HgiTextureViewDesc const & desc)
+HgiVulkan::_CreateTextureView(HgiTextureViewDesc const & desc)
 {
-    if (!desc.sourceTexture) {
-        TF_CODING_ERROR("Source texture is null");
-    }
-
     HgiTextureHandle src = HgiTextureHandle(
-        new HgiVulkanTexture(this, GetPrimaryDevice(),desc), GetUniqueId());
+        new HgiVulkanTexture(this, desc), GetUniqueId());
     HgiTextureView* view = new HgiTextureView(desc);
     view->SetViewTexture(src);
     return HgiTextureViewHandle(view, GetUniqueId());
@@ -174,10 +182,10 @@ HgiVulkan::DestroySampler(HgiSamplerHandle* smpHandle)
 
 /* Multi threaded */
 HgiBufferHandle
-HgiVulkan::CreateBuffer(HgiBufferDesc const & desc)
+HgiVulkan::_CreateBuffer(HgiBufferDesc const & desc)
 {
     return HgiBufferHandle(
-        new HgiVulkanBuffer(this, GetPrimaryDevice(), desc),
+        new HgiVulkanBuffer(this, desc),
         GetUniqueId());
 }
 
@@ -222,7 +230,7 @@ HgiVulkan::DestroyShaderProgram(HgiShaderProgramHandle* shaderPrgHandle)
 
 /* Multi threaded */
 HgiResourceBindingsHandle
-HgiVulkan::CreateResourceBindings(HgiResourceBindingsDesc const& desc)
+HgiVulkan::_CreateResourceBindings(HgiResourceBindingsDesc const& desc)
 {
     return HgiResourceBindingsHandle(
         new HgiVulkanResourceBindings(GetPrimaryDevice(), desc),
@@ -307,6 +315,19 @@ HgiVulkan::EndFrame()
     }
 }
 
+void
+HgiVulkan::GarbageCollect()
+{
+    if (ARCH_UNLIKELY(_threadId != std::this_thread::get_id())) {
+        TF_CODING_ERROR("Secondary thread violation");
+        return;
+    }
+    HgiVulkanDevice* device = GetPrimaryDevice();
+
+    // Perform garbage collection for each device.
+    _garbageCollector->PerformGarbageCollection(device);
+}
+
 /* Multi threaded */
 HgiVulkanInstance*
 HgiVulkan::GetVulkanInstance() const
@@ -379,6 +400,11 @@ HgiVulkan::_EndFrameSync()
 
     // Perform garbage collection for each device.
     _garbageCollector->PerformGarbageCollection(device);
+
+    if (TfDebug::IsEnabled(HGIVULKAN_DUMP_VMA_STATS)) {
+        TfDebug::Disable(HGIVULKAN_DUMP_VMA_STATS);
+        device->DumpMemoryStats();
+    }
 }
 
 

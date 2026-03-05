@@ -30,7 +30,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// cartesian product of the transform arrays at each nesting level, to
 /// create a flattened transform array.
 ///
-class HdEmbreeInstancer : public HdInstancer {
+class HdEmbreeInstancer : public HdInstancer
+{
 public:
     /// Constructor.
     ///   \param delegate The scene delegate backing this instancer's data.
@@ -69,6 +70,8 @@ private:
     TfHashMap<TfToken,
               HdVtBufferSource*,
               TfToken::HashFunctor> _primvarMap;
+
+    bool _visible;
 };
 
 

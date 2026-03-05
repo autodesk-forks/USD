@@ -1,0 +1,147 @@
+{
+    "Plugins": [
+        {
+            "Info": {
+                "Types": {
+                    "HdPrman_WorldOffsetSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman World Offset Scene Index"
+                    },
+                    "HdPrman_MotionBlurSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Motion Blur Scene Index"
+                    },
+                    "HdPrman_VelocityMotionResolvingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Velocity Motion Resolving Scene Index"
+                    },
+                    "HdPrman_MatFiltSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Material Filtering Scene Indices"
+                    },
+                    "HdPrman_ImplicitSurfaceSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Implicit Surfaces"
+                    },
+                    "HdPrman_DependencySceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Dependency Scene Index"
+                    },
+                    "HdPrman_DependencyForwardingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Dependency Forwarding Scene Index"
+                    },
+                    "HdPrman_RenderTerminalOutputInvalidatingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Render Terminal Output Invalidating Scene Index"
+                    },
+                    "HdPrman_MaterialPrimvarTransferSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Material Primvar Transfer Scene Index"
+                    },
+                    "HdPrman_PinnedCurveExpandingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Pinned Curve Expanding Scene Index"
+                    },
+                    "HdPrman_ExtComputationPrimvarPruningSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman ExtComputation Primvar Pruning Scene Index"
+                    },
+                    "HdPrman_RenderPassPruneSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Scene Index to resolve render pass prune rules."
+                    },
+                    "HdPrman_RenderPassVisibilityAndMatteSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Scene Index to resolve render pass visibility and matte rules."
+                    },
+                    "HdPrman_RenderSettingsFilteringSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Render Settings Filtering Scene Index"
+                    },
+                    "HdPrman_CoordSysPrimSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Coord Sys Prim Scene Index"
+                    },
+                    "HdPrman_UpdateObjectSettingsSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Update Object Settings Prim Scene Index"
+                    },
+                    "HdPrman_TetMeshConversionSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Scene Index to convert tet meshes into standard triangle based meshes."
+                    },
+                    "HdPrman_Renderer2SceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Adds scene indices that are part of the HdPrman 2.0 implementation/pathway."
+                    },
+                    "HdPrman_LightLinkingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Scene index that implements light linking."
+                    },
+                    "HdPrman_PreviewSurfacePrimvarsSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Scene index that adds primvars needed for UsdPreviewSurface"
+                    },
+                    "HdPrman_MeshLightResolvingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Resolve Mesh Lights Scene Index"
+                    },
+                    "HdPrman_PortalLightResolvingSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer": ["RenderMan RIS", "RenderMan XPU", "RenderMan XPU - CPU", "RenderMan XPU - GPU"],
+                        "priority": 0,
+                        "displayName": "Prman Resolve Portal Lights Scene Index"
+                    }
+                }
+            },
+            "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@",
+            "Name": "hdPrman",
+            "ResourcePath": "@PLUG_INFO_RESOURCE_PATH@",
+            "Root": "@PLUG_INFO_ROOT@",
+            "Type": "library"
+        }
+    ]
+}

@@ -487,6 +487,15 @@ float UsdPhysicsRigidBodyAPI::ComputeMassProperties(GfVec3f* _diagonalInertia,
         for (auto it = range.begin(); it != range.end(); ++it)
         {
             UsdPrim collisionPrim = *it;
+            if (collisionPrim && collisionPrim != usdPrim && 
+                collisionPrim.HasAPI<UsdPhysicsRigidBodyAPI>())
+            {
+                it.PruneChildren(); // Skip the subtree rooted at this prim, 
+                                    // the colliders belong to a different rigid 
+                                    // body
+                continue;
+            }
+
             if (collisionPrim && collisionPrim.HasAPI<UsdPhysicsCollisionAPI>())
             {
                 collisionPrims.push_back(std::move(collisionPrim));

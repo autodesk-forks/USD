@@ -55,11 +55,26 @@ TF_REGISTRY_FUNCTION(TfDebug)
         "Use env var 'HDST_DEBUG_SHADER_PROGRAM_FOR_PRIM' to limit logging to "
         "a subset of prims.");
 
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_LOG_TEXTURE_FALLBACKS,
+        "Log the fallback value used whenever a texture isn't present.");
+
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_LOG_SKIPPED_PRIMVAR,
+        "Output a message whenever a primvar reaches hydra but is skipped");
+
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MATERIAL_ADDED,
         "Report when a material is added");
-
     TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MATERIAL_REMOVED,
         "Report when a material is removed");
+
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX,
+        "Debug messages in the MaterialX Filter.");
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_VALUES,
+        "Logging the HdSt_MaterialParams sent back to the Material Network.");
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_DISABLE_ANONYMIZE,
+        "Disable the anonymization the Hydra network before creating the "
+        "MaterialX Document.");
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HDST_MTLX_DUMP_SHADER_SOURCEFILE,
+        "Write out the MaterialX generated glslfx shader to a file");
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

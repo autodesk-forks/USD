@@ -150,7 +150,7 @@ T* _BuildStructInstance(
 }
 
 bool
-_GetBuiltinKeyword(HgiShaderFunctionParamDesc const &param,
+_GetBuiltinInputKeyword(HgiShaderFunctionParamDesc const &param,
                    std::string *keyword = nullptr)
 {
     //possible metal attributes on shader inputs.
@@ -167,7 +167,9 @@ _GetBuiltinKeyword(HgiShaderFunctionParamDesc const &param,
        {HgiShaderKeywordTokens->hdFrontFacing, "front_facing"},
        {HgiShaderKeywordTokens->hdPosition, "position"},
        {HgiShaderKeywordTokens->hdBaryCoordNoPersp, "barycentric_coord"},
-       {HgiShaderKeywordTokens->hdFragCoord, "position"}
+       {HgiShaderKeywordTokens->hdFragCoord, "position"},
+       {HgiShaderKeywordTokens->hdPointCoord, "point_coord"},
+       {HgiShaderKeywordTokens->hdSampleMaskIn, "sample_mask"},
     };
 
     //check if has a role
@@ -180,7 +182,31 @@ _GetBuiltinKeyword(HgiShaderFunctionParamDesc const &param,
             return true;
         }
     }
-    
+
+    return false;
+}
+
+bool
+_GetBuiltinOutputKeyword(HgiShaderFunctionParamDesc const &param,
+                   std::string *keyword = nullptr)
+{
+    // possible metal attributes on shader output.
+    // Map from descriptor to Metal
+    const static std::unordered_map<std::string, std::string> roleIndexM {
+       {HgiShaderKeywordTokens->hdSampleMask, "sample_mask"},
+    };
+
+    //check if has a role
+    if(!param.role.empty()) {
+        auto it = roleIndexM.find(param.role);
+        if (it != roleIndexM.end()) {
+            if (keyword) {
+                *keyword = it->second;
+            }
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -487,7 +513,10 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
               "}\n"
 
               "template <typename T>\n"
-              "T mod(T y, T x) { return fmod(y, x); }\n\n"
+              "T mod(T x, T y) { return fmod(x, y); }\n"
+              "template <>\n"
+              "int mod(int x, int y) { return x % y; }\n\n"
+
               "template <typename T>\n"
               "T atan(T y, T x) { return atan2(y, x); }\n\n"
               "template <typename T>\n"
@@ -559,6 +588,15 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
               "template <typename T, typename Tv>\n"
               "void imageStore(T texture, int2 coords, Tv color) {\n"
               "    return texture.write(color, uint2(coords.x, coords.y));\n"
+              "}\n\n"
+
+              "template <typename T, typename Tv>\n"
+              "void imageStore(T texture, short2 coords, short face, Tv color) {\n"
+              "    return texture.write(color, ushort2(coords.x, coords.y), ushort(face));\n"
+              "}\n"
+              "template <typename T, typename Tv>\n"
+              "void imageStore(T texture, int2 coords, int face, Tv color) {\n"
+              "    return texture.write(color, uint2(coords.x, coords.y), uint(face));\n"
               "}\n\n"
 
               "constexpr sampler texelSampler(address::clamp_to_edge,\n"
@@ -685,7 +723,7 @@ ShaderStageData::AccumulateParams(
         };
 
         for(const HgiShaderFunctionParamDesc &p : params) {
-            if (_GetBuiltinKeyword(p)) continue;
+            if (_GetBuiltinInputKeyword(p)) continue;
             //For metal, the role is the actual attribute so far
             std::string indexAsStr;
             //check if has a role
@@ -701,11 +739,13 @@ ShaderStageData::AccumulateParams(
 
             HgiShaderSectionAttributeVector attributes = {};
             if (!p.role.empty()) {
-                attributes.push_back(HgiShaderSectionAttribute{p.role, indexAsStr});
+                std::string role = p.role;
+                _GetBuiltinOutputKeyword(p, &role);
+                attributes.push_back(HgiShaderSectionAttribute{std::move(role), indexAsStr});
             }
             else if (p.interstageSlot != -1) {
                 std::string role = "user(slot" + std::to_string(p.interstageSlot) + ")";
-                attributes.push_back(HgiShaderSectionAttribute{role, indexAsStr});
+                attributes.push_back(HgiShaderSectionAttribute{std::move(role), indexAsStr});
             }
 
             attributes.push_back(HgiShaderSectionAttribute{
@@ -725,7 +765,7 @@ ShaderStageData::AccumulateParams(
         int nextLocation = 0;
         for (size_t i = 0; i < params.size(); i++) {
             const HgiShaderFunctionParamDesc &p = params[i];
-            if (_GetBuiltinKeyword(p)) continue;
+            if (_GetBuiltinInputKeyword(p)) continue;
 
             const int location =
                 (p.location != -1) ? p.location : nextLocation;
@@ -886,9 +926,8 @@ ShaderStageData::AccumulateTextureBindings(
                 samplerSection,
                 textures[i].dimensions,
                 textures[i].format,
-                textures[i].textureType == HgiShaderTextureTypeArrayTexture,
+                textures[i].textureType,
                 textures[i].arraySize,
-                textures[i].textureType == HgiShaderTextureTypeShadowTexture,
                 textures[i].writable,
                 std::string());
 
@@ -1209,29 +1248,24 @@ HgiMetalShaderStageEntryPoint::_Init(
         generator);
 }
 
-//Instantiate special keyword shader sections based on the given descriptor
+// Instantiate special keyword shader input sections based on the given
+// descriptor
 void HgiMetalShaderGenerator::_BuildKeywordInputShaderSections(
     const HgiShaderFunctionDesc &descriptor)
 {
-    //possible metal attributes on shader inputs.
-    // Map from descriptor to Metal
-    std::unordered_map<std::string, std::string> roleIndexM {
-       {HgiShaderKeywordTokens->hdGlobalInvocationID, "thread_position_in_grid"}
-    };
-
     const std::vector<HgiShaderFunctionParamDesc> &inputs =
         descriptor.stageInputs;
     for (size_t i = 0; i < inputs.size(); ++i) {
         const HgiShaderFunctionParamDesc &p(inputs[i]);
 
         std::string msl_attrib;
-        if(_GetBuiltinKeyword(p, &msl_attrib)) {
+        if(_GetBuiltinInputKeyword(p, &msl_attrib)) {
             const std::string &keywordName = p.nameInShader;
 
             const HgiShaderSectionAttributeVector attributes = {
                 HgiShaderSectionAttribute{msl_attrib, "" }};
 
-            //Shader section vector on the generator
+            // Shader section vector on the generator
             // owns all sections, point to it in the vector
             CreateShaderSection<HgiMetalKeywordInputShaderSection>(
                 keywordName,
@@ -1296,7 +1330,7 @@ HgiMetalShaderGenerator::_BuildShaderStageEntryPoints(
     const ShaderStageData stageData(descriptor, this);
 
     std::stringstream functionAttributesSS = std::stringstream();
-    
+
     switch (descriptor.shaderStage) {
         case HgiShaderStageVertex: {
             return std::make_unique
@@ -1401,11 +1435,12 @@ HgiMetalShaderGenerator::HgiMetalShaderGenerator(
         << "\n";
     }
 
-    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
-        macroSection << "#define discard discard_fragment(); "
-                        "discarded_fragment = true;\n";
-    } else {
-        macroSection << "#define discard discard_fragment();\n";
+    if (_GetShaderStage() == HgiShaderStageFragment) {
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            macroSection << "#define discard set_flag_and_discard_fragment()\n";
+        } else {
+            macroSection << "#define discard discard_fragment()\n";
+        }
     }
     
     CreateShaderSection<HgiMetalMacroShaderSection>(
@@ -1456,6 +1491,14 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
         section->VisitScopeMemberDeclarations(ss);
     }
     ss << "\n// //////// Scope Function Definitions ////////\n";
+    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+        if (this->_GetShaderStage() == HgiShaderStageFragment) {
+            ss << "void set_flag_and_discard_fragment() {\n"
+                  "    discarded_fragment = true;\n"
+                  "    discard_fragment();\n"
+                  "}\n";
+        }
+    }
     for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
         section->VisitScopeFunctionDefinitions(ss);
     }

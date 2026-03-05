@@ -14,12 +14,11 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 TraceAggregateNodeRefPtr
-TraceAggregateNode::Append(Id id, const TfToken &key,
+TraceAggregateNode::Append(const TfToken &key,
                            TimeStamp ts, int c, int xc)
 {
-    TraceAggregateNodeRefPtr n = GetChild(key);
-    if (n) {
-        n->_id = id;
+    TraceAggregateNodeRefPtr nRef = GetChild(key);
+    if (TraceAggregateNode *n = get_pointer(nRef)) {
         n->_ts += ts;
         n->_count += c;
         n->_recursiveCount += c;
@@ -28,8 +27,8 @@ TraceAggregateNode::Append(Id id, const TfToken &key,
         n->_recursiveExclusiveTs += ts;
     }
     else {
-        n = TraceAggregateNode::New(id,key,ts,c,xc);
-        _children.push_back(n);
+        nRef = TraceAggregateNode::New(key,ts,c,xc);
+        _children.push_back(nRef);
         _childrenByKey[key] = _children.size() - 1;
     }
 
@@ -38,14 +37,36 @@ TraceAggregateNode::Append(Id id, const TfToken &key,
     _recursiveExclusiveTs = 
         (_recursiveExclusiveTs >= ts) ? _recursiveExclusiveTs - ts : 0;
 
-    return n;
+    return nRef;
+}
+
+void
+TraceAggregateNode::AppendBlind(const TfToken &key,
+                                TimeStamp ts, int c, int xc)
+{
+    if (TraceAggregateNode *n = _GetChildRaw(key)) {
+        n->_ts += ts;
+        n->_count += c;
+        n->_recursiveCount += c;
+        n->_exclusiveCount += xc;
+        n->_exclusiveTs += ts;
+        n->_recursiveExclusiveTs += ts;
+    }
+    else {
+        _children.push_back(TraceAggregateNode::New(key,ts,c,xc));
+        _childrenByKey[key] = _children.size() - 1;
+    }
+
+    // Update our exclusive time to discount our new child's time.
+    _exclusiveTs = (_exclusiveTs >= ts) ? _exclusiveTs - ts : 0;
+    _recursiveExclusiveTs = 
+        (_recursiveExclusiveTs >= ts) ? _recursiveExclusiveTs - ts : 0;
 }
 
 void 
 TraceAggregateNode::Append(TraceAggregateNodeRefPtr child) {
     TraceAggregateNodeRefPtr n = GetChild(child->GetKey());
     if (n) {
-        n->_id = child->_id;
         n->_ts += child->_ts;
         n->_count += child->_count;
         n->_recursiveCount += child->_count;
@@ -109,13 +130,17 @@ TraceAggregateNode::GetExclusiveCounterValue(int index) const
 TraceAggregateNodeRefPtr
 TraceAggregateNode::GetChild(const TfToken &key)
 {
+    return TraceAggregateNodeRefPtr { _GetChildRaw(key) };
+}
+
+TraceAggregateNode *
+TraceAggregateNode::_GetChildRaw(const TfToken &key)
+{
     _ChildDictionary::const_iterator i = _childrenByKey.find(key);
     if (i != _childrenByKey.end()) {
-        return _children[i->second];
+        return get_pointer(_children[i->second]);
     }
-    else {
-        return TraceAggregateNodeRefPtr(0);
-    }
+    return nullptr;
 }
 
 void
@@ -332,7 +357,7 @@ TraceAggregateNode::_MergeRecursive(const TraceAggregateNodeRefPtr &node)
         if (!n)
         {
             // Create an empty node to merge with.
-            n = TraceAggregateNode::New( child->GetId(), child->GetKey(), 
+            n = TraceAggregateNode::New(child->GetKey(), 
                                 child->GetInclusiveTime(), 
                                 0, child->GetExclusiveCount() );
 

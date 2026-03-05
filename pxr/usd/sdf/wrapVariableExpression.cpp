@@ -14,7 +14,9 @@
 
 #include "pxr/external/boost/python/class.hpp"
 #include "pxr/external/boost/python/list.hpp"
+#include "pxr/external/boost/python/raw_function.hpp"
 #include "pxr/external/boost/python/scope.hpp"
+#include "pxr/external/boost/python/stl_iterator.hpp"
 #include "pxr/external/boost/python/tuple.hpp"
 
 #include <string>
@@ -23,6 +25,20 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 using namespace pxr_boost::python;
+
+template <class T>
+static bool
+_IsHolding(const object& obj)
+{
+    // extract<bool> will allow conversions from int to bool, so we need
+    // directly check whether the argument is a bool using Python API.
+    if constexpr (std::is_same_v<T, bool>) {
+        return PyBool_Check(obj.ptr());
+    }
+    else {
+        return extract<T>(obj).check();
+    }
+}
 
 void
 wrapVariableExpression()
@@ -53,6 +69,113 @@ wrapVariableExpression()
 
         .def("IsValidVariableType", &This::IsValidVariableType)
         .staticmethod("IsValidVariableType")
+
+        .def("MakeFunction", raw_function(
+            +[](tuple posArgs, dict kwArgs) -> SdfVariableExpression {
+                if (len(kwArgs) != 0) {
+                    TfPyThrowTypeError("unexpected keyword arguments");
+                    return SdfVariableExpression(); // unreachable
+                }
+
+                const std::string fnName = extract<std::string>(posArgs[0]);
+                const object fnArgs = posArgs.slice(1, _);
+
+                auto builder = This::MakeFunction(fnName);
+                for (stl_input_iterator<SdfVariableExpression> i(fnArgs), e;
+                     i != e; ++i) {
+                    builder.AddArgument(*i);
+                }
+
+                return builder;
+            }))
+        .staticmethod("MakeFunction")
+
+        .def("MakeList", raw_function(
+            +[](tuple posArgs, dict kwArgs) -> SdfVariableExpression {
+                if (len(kwArgs) != 0) {
+                    TfPyThrowTypeError("unexpected keyword arguments");
+                    return SdfVariableExpression(); // unreachable
+                }
+
+                auto builder = This::MakeList();
+                for (stl_input_iterator<SdfVariableExpression> i(posArgs), e;
+                     i != e; ++i) {
+                    builder.AddElement(*i);
+                }
+                return builder;
+            }))
+        .staticmethod("MakeList")
+
+        .def("MakeListOfLiterals", raw_function(
+            +[](tuple posArgs, dict kwArgs) -> SdfVariableExpression {
+                if (len(kwArgs) != 0) {
+                    TfPyThrowTypeError("unexpected keyword arguments");
+                    return SdfVariableExpression(); // unreachable
+                }
+
+                const size_t numArgs = len(posArgs);
+                if (numArgs == 1) {
+                    // Check if the argument was a list containing any of
+                    // the supported literal types.
+                    const extract<list> listExtract(posArgs[0]);
+                    if (listExtract.check()) {
+                        const list elems = listExtract();
+                        if (len(elems) == 0) {
+                            return SdfVariableExpression::MakeList();
+                        }
+                        else if (_IsHolding<bool>(elems[0])) {
+                            return SdfVariableExpression::MakeListOfLiterals(
+                                extract<std::vector<bool>>(elems)());
+                        }
+                        else if (_IsHolding<int64_t>(elems[0])) {
+                            return SdfVariableExpression::MakeListOfLiterals(
+                                extract<std::vector<int64_t>>(elems)());
+                        }
+                        else if (_IsHolding<std::string>(elems[0])) {
+                            return SdfVariableExpression::MakeListOfLiterals(
+                                extract<std::vector<std::string>>(elems)());
+                        }
+                    };
+                }
+
+                TfPyThrowTypeError(
+                    "argument must be an empty list or contain only "
+                    "bool, int, or str");
+                return SdfVariableExpression();
+            }))
+        .staticmethod("MakeListOfLiterals")
+
+        .def("MakeLiteral",
+            +[](object o) -> SdfVariableExpression {
+                if (_IsHolding<bool>(o)) {
+                    return SdfVariableExpression::MakeLiteral(
+                        extract<bool>(o)());
+                }
+                else if (_IsHolding<int64_t>(o)) {
+                    return SdfVariableExpression::MakeLiteral(
+                        extract<int64_t>(o)());
+                }
+                else if (_IsHolding<std::string>(o)) {
+                    return SdfVariableExpression::MakeLiteral(
+                        extract<std::string>(o)());
+                }
+
+                TfPyThrowTypeError("argument must be bool, int, or str");
+                return SdfVariableExpression(); // unreachable
+            })
+        .staticmethod("MakeLiteral")
+
+        .def("MakeNone",
+            +[]() -> SdfVariableExpression {
+                return SdfVariableExpression::MakeNone();
+            })
+        .staticmethod("MakeNone")
+
+        .def("MakeVariable",
+            +[](const std::string& name) -> SdfVariableExpression {
+                return SdfVariableExpression::MakeVariable(name);
+            })
+        .staticmethod("MakeVariable")
         ;
 
     class_<This::Result>("Result", no_init)

@@ -19,7 +19,6 @@ pxr_plugin(sdrOsl
         tf
         vt
         ar
-        ndr
         sdr
         ${OSL_QUERY_LIBRARY}
         ${OIIO_LIBRARIES}
@@ -36,13 +35,6 @@ pxr_plugin(sdrOsl
     PRIVATE_HEADERS
         api.h
 
-    PYMODULE_CPPFILES
-        module.cpp
-        wrapOslParser.cpp
-
-    PYMODULE_FILES
-        __init__.py
-
     RESOURCE_FILES
         plugInfo.json
 )
@@ -51,13 +43,9 @@ pxr_test_scripts(
     testenv/testOslParser.py
 )
 
-pxr_install_test_dir(
-    SRC testenv/testOslParser.testenv
-    DEST testOslParser
-)
-
 pxr_register_test(testOslParser
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testOslParser"
+    TESTENV testenv/testOslParser.testenv
     EXPECTED_RETURN_CODE 0
 )

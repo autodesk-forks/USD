@@ -50,6 +50,17 @@ def _TestPrimIndex(primIndex, expected):
                 "No entry in expected corresponding to node {}"
                 .format(node.site)) from e
 
+        if len(expected[1]) % 2 != 0:
+            raise RuntimeError(
+                "Invalid children list. Each element in the list "
+                "must be a tuple of node data followed by another list")
+
+        numExpectedChildren = len(expected[1]) // 2
+        if len(node.children) != numExpectedChildren:
+            raise RuntimeError(
+                "Expected {} children but have {} for node {}"
+                .format(numExpectedChildren, len(node.children), node.site))
+
         for idx, n in enumerate(node.children):
             try:
                 expectedSubtree = expected[1][(idx*2):(idx*2)+2]

@@ -33,17 +33,11 @@ public:
     HDX_API
     ~HdxTask() override;
 
-    /// This function returns true when a (progressive) task considers its
-    /// execution results converged. Usually this means that a progressive
-    /// render delegate is finished rendering into the HdRenderBuffers used by
-    /// this task.
-    /// Returns true by default which is a good default for rasterizers.
-    ///
-    /// Applications with data-driven task lists can determine their convergence
-    /// state by determining which tasks are HdxTasks and then querying
-    /// specifically those tasks for IsConverged.
+    /// Are all tasks at taskPaths in the render index converged?
+    static
     HDX_API
-    virtual bool IsConverged() const;
+    bool AreTasksConverged(HdRenderIndex * const renderIndex,
+                           const SdfPathVector &taskPaths);
 
     /// We override HdTask::Sync, but make it 'final' to make sure derived
     /// classes can't override it and instead override _Sync.

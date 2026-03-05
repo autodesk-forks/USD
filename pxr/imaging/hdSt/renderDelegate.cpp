@@ -33,6 +33,7 @@
 #include "pxr/imaging/hd/extComputation.h"
 #include "pxr/imaging/hd/imageShader.h"
 #include "pxr/imaging/hd/perfLog.h"
+#include "pxr/imaging/hd/renderDelegateInfo.h"
 #include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/imaging/hgi/hgi.h"
@@ -53,6 +54,10 @@ TF_DEFINE_ENV_SETTING(HD_ENABLE_GPU_TINY_PRIM_CULLING, false,
 
 TF_DEFINE_ENV_SETTING(HDST_MAX_LIGHTS, 16,
                       "Maximum number of lights to render with");
+
+TF_DEFINE_ENV_SETTING(HDST_DOME_LIGHT_CUBEMAP_TARGET_MEMORY_MB, 0,
+                      "Maximum memory target in MB for the cubemap computed "
+                      "from the latlong texture for the dome light.");
 
 const TfTokenVector HdStRenderDelegate::SUPPORTED_RPRIM_TYPES =
 {
@@ -95,14 +100,15 @@ namespace {
 // An entry is kept alive until the last shared_ptr to a resource
 // registry is dropped.
 //
-class _HgiToResourceRegistryMap final
+class _HgiToResourceRegistryMap final :
+    public std::enable_shared_from_this<_HgiToResourceRegistryMap>
 {
 public:
     // Map is a singleton.
     static _HgiToResourceRegistryMap &GetInstance()
     {
-        static _HgiToResourceRegistryMap instance;
-        return instance;
+        static auto instance = std::make_shared<_HgiToResourceRegistryMap>();
+        return *instance;
     }
 
     // Look-up resource registry by Hgi instance, create resource
@@ -112,45 +118,54 @@ public:
         std::lock_guard<std::mutex> guard(_mutex);
 
         // Previous entry exists, use it.
-        auto it = _map.find(hgi);
-        if (it != _map.end()) {
-            HdStResourceRegistryWeakPtr const &registry = it->second;
-            return HdStResourceRegistrySharedPtr(registry);
+        HdStResourceRegistryWeakPtr &registry = _map[hgi];
+        if (HdStResourceRegistrySharedPtr const result = registry.lock()) {
+            return result;
         }
 
         // Create resource registry, custom deleter to remove corresponding
         // entry from map.
-        HdStResourceRegistrySharedPtr const result(
+        HdStResourceRegistrySharedPtr result{
             new HdStResourceRegistry(hgi),
-            [this](HdStResourceRegistry *registry) {
-                this->_Destroy(registry); });
+            [maybeSelf = weak_from_this()](
+                HdStResourceRegistry * const registry) {
+                // If a resource registry has a static lifetime object as its
+                // root owner, then we can encounter a static lifetime ordering
+                // issue, since this registry map also has a static lifetime.
+                // It's possible that due to the unspecified ordering of static
+                // destruction, this map is destroyed before a registry, in
+                // which case calling _Unregister() would be undefined
+                // behaviour. To prevent this we use a weak ownership, and skip
+                // the call when the map is dead because it no longer matters.
+                if (const auto self = maybeSelf.lock()) {
+                    self->_Unregister(registry);
+                }
+                delete registry;
+            }
+        };
 
         // Insert into map.
-        _map.insert({hgi, result});
+        registry = result;
 
         // Also register with HdPerfLog.
-        //
-        HdPerfLog::GetInstance().AddResourceRegistry(result.get());
+        HD_PERF_ADD_RESOURCE_REGISTRY(result.get());
 
         return result;
     }
 
 private:
-    void _Destroy(HdStResourceRegistry * const registry)
+    void _Unregister(HdStResourceRegistry * const registry)
     {
         TRACE_FUNCTION();
 
         std::lock_guard<std::mutex> guard(_mutex);
 
-        HdPerfLog::GetInstance().RemoveResourceRegistry(registry);
-        
+        HD_PERF_REMOVE_RESOURCE_REGISTRY(registry);
+
         _map.erase(registry->GetHgi());
-        delete registry;
     }
 
     using _Map = std::unordered_map<Hgi*, HdStResourceRegistryWeakPtr>;
-
-    _HgiToResourceRegistryMap() = default;
 
     std::mutex _mutex;
     _Map _map;
@@ -192,6 +207,20 @@ HdStRenderDelegate::HdStRenderDelegate(HdRenderSettingsMap const& settingsMap)
             "Maximum number of lights",
             HdStRenderSettingsTokens->maxLights,
             VtValue(int(TfGetEnvSetting(HDST_MAX_LIGHTS))) },
+        HdRenderSettingDescriptor{
+            "Dome light camera visibility",
+            HdRenderSettingsTokens->domeLightCameraVisibility,
+            VtValue(true) },
+        HdRenderSettingDescriptor{
+            "Maximum memory target, in MB, of calculated cubemap texture for "
+            "dome light",
+            HdStRenderSettingsTokens->domeLightCubemapTargetMemory,
+            VtValue(static_cast<unsigned int>(
+                TfGetEnvSetting(HDST_DOME_LIGHT_CUBEMAP_TARGET_MEMORY_MB))) },
+        HdRenderSettingDescriptor{
+            "Enable exposure compensation",
+            HdRenderSettingsTokens->enableExposureCompensation,
+            VtValue(true) }
     };
 
     _PopulateDefaultSettings(_settingDescriptors);
@@ -221,6 +250,12 @@ HdStRenderDelegate::GetRenderStats() const
     }
 
     return ra;
+}
+
+bool
+HdStRenderDelegate::RequiresStormTasks() const
+{
+    return true;
 }
 
 HdStRenderDelegate::~HdStRenderDelegate() = default;
@@ -312,13 +347,13 @@ HdStRenderDelegate::GetDefaultAovDescriptor(TfToken const& name) const
     if (name == HdAovTokens->color) {
         return HdAovDescriptor(
                 HdFormatFloat16Vec4, colorDepthMSAA, VtValue(GfVec4f(0)));
+    } else if (HdAovHasDepthStencilSemantic(name)) {
+        return HdAovDescriptor(
+            HdFormatFloat32UInt8, colorDepthMSAA,
+            VtValue(HdDepthStencilType(1.0f, 0)));
     } else if (HdAovHasDepthSemantic(name)) {
         return HdAovDescriptor(
                 HdFormatFloat32, colorDepthMSAA, VtValue(1.0f));
-    } else if (HdAovHasDepthStencilSemantic(name)) {
-        return HdAovDescriptor(
-                HdFormatFloat32UInt8, colorDepthMSAA,
-                VtValue(HdDepthStencilType(1.0f, 0)));
     } else if (_AovHasIdSemantic(name)) {
         return HdAovDescriptor(
                 HdFormatInt32, colorDepthMSAA, VtValue(-1));
@@ -529,35 +564,34 @@ HdStRenderDelegate::CommitResources(HdChangeTracker *tracker)
 }
 
 bool
-HdStRenderDelegate::IsSupported()
+HdStRenderDelegate::IsSupported(
+    HdRendererCreateArgs const& rendererCreateArgs)
 {
+    if (rendererCreateArgs.hgi) {
+        return rendererCreateArgs.hgi->IsBackendSupported();
+    }
+
+    // If invalid Hgi instance is provided, check support for platform default
+    // Hgi.
     return Hgi::IsSupported();
 }
 
 TfTokenVector
 HdStRenderDelegate::GetShaderSourceTypes() const
 {
-#ifdef PXR_MATERIALX_SUPPORT_ENABLED
-    return {HioGlslfxTokens->glslfx, _tokens->mtlx};
-#else
-    return {HioGlslfxTokens->glslfx};
-#endif
+    return GetRenderDelegateInfo().shaderSourceTypes;
 }
 
 TfTokenVector
 HdStRenderDelegate::GetMaterialRenderContexts() const
 {
-#ifdef PXR_MATERIALX_SUPPORT_ENABLED
-    return {HioGlslfxTokens->glslfx, _tokens->mtlx};
-#else
-    return {HioGlslfxTokens->glslfx};
-#endif
+    return GetRenderDelegateInfo().materialRenderContexts;
 }
 
 bool
 HdStRenderDelegate::IsPrimvarFilteringNeeded() const
 {
-    return true;
+    return GetRenderDelegateInfo().isPrimvarFilteringNeeded;
 }
 
 HdStDrawItemsCachePtr
@@ -583,6 +617,34 @@ HdStRenderDelegate::_ApplyTextureSettings()
 
     _resourceRegistry->SetMemoryRequestForTextureType(
         HdStTextureType::Field, 1048576 * memInMb);
+}
+
+static
+HdRenderDelegateInfo
+_RenderDelegateInfo()
+{
+    HdRenderDelegateInfo info;
+
+    info.materialBindingPurpose = HdTokens->preview;
+    info.materialRenderContexts = {
+        HioGlslfxTokens->glslfx
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+        , _tokens->mtlx
+#endif
+    };
+
+    info.isPrimvarFilteringNeeded = true;
+    info.shaderSourceTypes = info.materialRenderContexts;
+    info.isCoordSysSupported = false;
+
+    return info;
+}
+
+const HdRenderDelegateInfo &
+HdStRenderDelegate::GetRenderDelegateInfo()
+{
+    static const HdRenderDelegateInfo info = _RenderDelegateInfo();
+    return info;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

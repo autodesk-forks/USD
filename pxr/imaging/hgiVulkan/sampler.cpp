@@ -12,6 +12,7 @@
 #include "pxr/imaging/hgiVulkan/sampler.h"
 #include "pxr/imaging/hgiVulkan/diagnostic.h"
 
+#include <algorithm>
 #include <float.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -45,16 +46,20 @@ HgiVulkanSampler::HgiVulkanSampler(
     sampler.mipLodBias = 0.0f;
     sampler.mipmapMode = HgiVulkanConversions::GetMipFilter(desc.mipFilter);
     sampler.minLod = 0.0f;
-    sampler.maxLod = FLT_MAX;
+    sampler.maxLod = desc.mipFilter == HgiMipFilterNotMipmapped
+        ? 0.25 : VK_LOD_CLAMP_NONE;
+    // 0.25 if not mipmapped, to emulate OpenGL
+    // See https://registry.khronos.org/vulkan/specs/latest/man/html/VkSamplerCreateInfo.html#_description
 
     if ((desc.minFilter != HgiSamplerFilterNearest ||
          desc.mipFilter == HgiMipFilterLinear) &&
          desc.magFilter != HgiSamplerFilterNearest) {
         HgiVulkanCapabilities const& caps = device->GetDeviceCapabilities();
-        sampler.anisotropyEnable = caps.vkDeviceFeatures.samplerAnisotropy;
+        sampler.anisotropyEnable =
+            caps.vkDeviceFeatures2.features.samplerAnisotropy;
         sampler.maxAnisotropy = sampler.anisotropyEnable ?
             std::min<float>({
-                caps.vkDeviceProperties.limits.maxSamplerAnisotropy,
+                caps.vkDeviceProperties2.properties.limits.maxSamplerAnisotropy,
                 static_cast<float>(desc.maxAnisotropy),
                 static_cast<float>(TfGetEnvSetting(HGI_MAX_ANISOTROPY))}) : 1.0f;
     }
@@ -66,6 +71,12 @@ HgiVulkanSampler::HgiVulkanSampler(
             HgiVulkanAllocator(),
             &_vkSampler)
     );
+
+    if (_descriptor.debugName.empty()) {
+        _descriptor.debugName = "UNNAMED";
+    }
+    HgiVulkanSetDebugName(device, (uint64_t)_vkSampler,
+        VK_OBJECT_TYPE_SAMPLER, _descriptor.debugName.c_str());
 }
 
 HgiVulkanSampler::~HgiVulkanSampler()

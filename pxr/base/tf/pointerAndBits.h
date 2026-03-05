@@ -74,11 +74,11 @@ public:
                       "T's alignment does not support any bits");
     }
 
-    constexpr uintptr_t GetMaxValue() const {
+    static constexpr uintptr_t GetMaxValue() {
         return _GetAlign() - 1;
     }
 
-    constexpr uintptr_t GetNumBitsValues() const {
+    static constexpr uintptr_t GetNumBitsValues() {
         return _GetAlign();
     }
 

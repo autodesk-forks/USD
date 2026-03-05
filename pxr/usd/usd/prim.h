@@ -283,20 +283,28 @@ public:
     /// false otherwise. \sa SdfIsDefiningSpecifier.
     bool IsDefined() const { return _Prim()->IsDefined(); }
 
-    /// Return true if this prim has a specifier of type SdfSpecifierDef
-    /// or SdfSpecifierClass. \sa SdfIsDefiningSpecifier
+    /// Return true if this prim has the specifier SdfSpecifierClass.
+    bool HasClassSpecifier() const {
+        return _Prim()->HasClassSpecifier();
+    }
+    
+    /// Return true if this prim has the specifier SdfSpecifierDef or
+    /// SdfSpecifierClass. \sa SdfIsDefiningSpecifier
     bool HasDefiningSpecifier() const { 
         return _Prim()->HasDefiningSpecifier(); 
     }
 
     /// Return a vector containing the names of API schemas which have
-    /// been applied to this prim. This includes both the authored API schemas
-    /// applied using the Apply() method on the particular schema class as 
-    /// well as any built-in API schemas that are automatically included 
-    /// through the prim type's prim definition.
+    /// been applied to this prim.
+    ///
+    /// The returned vector includes both the authored API schemas applied using
+    /// the Apply() method on the particular schema class as well as any
+    /// built-in API schemas that are automatically included through the prim
+    /// type's prim definition.
+    ///
     /// To get only the authored API schemas use GetPrimTypeInfo instead.
     USD_API
-    TfTokenVector GetAppliedSchemas() const;
+    const TfTokenVector &GetAppliedSchemas() const;
 
     /// Alias for the "predicate" function parameter passed into the various
     /// Get{Authored}{PropertyNames,Properties} methods.
@@ -451,6 +459,14 @@ public:
         SetMetadata(SdfFieldKeys->PropertyOrder, order);
     }
 
+    /// Change the order of items in 'names' so that all the things in 'order' 
+    /// that are also in 'names' are at the beginning in the order that they 
+    /// appear in 'order', followed by any remaining items in 'names' in their 
+    /// existing order.
+    USD_API
+    static void
+    ApplyPropertyOrder(const TfTokenVector &order, TfTokenVector *names);
+
     /// Remove the opinion for propertyOrder metadata on this prim at the current
     /// EditTarget.
     void ClearPropertyOrder() const {
@@ -464,7 +480,10 @@ public:
     /// Because this method can only remove opinions about the property from
     /// the current EditTarget, you may generally find it more useful to use
     /// UsdAttribute::Block(), which will ensure that all values from the 
-    /// EditTarget and weaker layers for the property will be ignored.
+    /// EditTarget and weaker layers for the property will be ignored, or 
+    /// UsdAttribute::BlockAnimation(), which will ensure that all timeSamples
+    /// or spline values from the EditTarget and weaker layers for the property
+    /// will be ignored.
     USD_API
     bool RemoveProperty(const TfToken &propName);
 
@@ -1524,8 +1543,8 @@ public:
     /// \name Parent & Stage
     // --------------------------------------------------------------------- //
 
-    /// Return this prim's parent prim.  Return an invalid UsdPrim if this is a
-    /// root prim.
+    /// Return this prim's parent prim.  Return a pseudoroot UsdPrim if this is
+    /// a root prim.  Return an invalid UsdPrim if this is a pseudoroot prim.
     UsdPrim GetParent() const {
         Usd_PrimDataConstPtr prim = get_pointer(_Prim());
         SdfPath proxyPrimPath = _ProxyPrimPath();

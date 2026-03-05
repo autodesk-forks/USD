@@ -596,14 +596,14 @@ TestVulkanBuffer(HgiVulkan& hgiVulkan)
     stagingBlob[9] = 789;
     stagingBlob[10] = 789;
     stagingBlob[11] = 789;
-    memcpy(cpuAddress, stagingBlob.data() + 4, 8 * sizeof(blob[0]));
+    memcpy(cpuAddress, stagingBlob.data() + 8, 8 * sizeof(blob[0]));
 
     // Schedule copy from staging area to GPU device-local buffer.
     HgiBufferCpuToGpuOp transferOp2;
     transferOp2.byteSize = 8 * sizeof(blob[0]);
     transferOp2.cpuSourceBuffer = cpuAddress;
     transferOp2.sourceByteOffset = 0;
-    transferOp2.destinationByteOffset = 4 * sizeof(blob[0]);
+    transferOp2.destinationByteOffset = 8 * sizeof(blob[0]);
     transferOp2.gpuDestinationBuffer = buffer;
 
     HgiBlitCmdsUniquePtr blitCmds4 = hgiVulkan.CreateBlitCmds();
@@ -660,11 +660,12 @@ TestVulkanTexture(HgiVulkan& hgiVulkan)
     desc.type = HgiTextureType2D;
     desc.usage = HgiTextureUsageBitsColorTarget | HgiTextureUsageBitsShaderRead;
 
-    size_t numTexels = 
+    const size_t numTexels = 
         desc.dimensions[0] * desc.dimensions[1] * desc.dimensions[2];
+    const size_t numComponents = 4; // i.e. Float32Vec4
     desc.pixelsByteSize = HgiGetDataSizeOfFormat(desc.format) * numTexels;
 
-    std::vector<float> pixels(numTexels, 0.123f);
+    const std::vector<float> pixels(numTexels * numComponents, 0.123f);
     desc.initialData = pixels.data();
 
     HgiTextureHandle texture = hgiVulkan.CreateTexture(desc);
@@ -686,7 +687,7 @@ TestVulkanTexture(HgiVulkan& hgiVulkan)
     }
 
     // Read back the initial pixels by using the TextureView
-    std::vector<float> readBack(numTexels, 0);
+    std::vector<float> readBack(numTexels * numComponents, 0);
     HgiTextureGpuToCpuOp readBackOp;
     readBackOp.cpuDestinationBuffer = &readBack[0];
     readBackOp.destinationBufferByteSize= readBack.size() * sizeof(readBack[0]);
@@ -706,7 +707,7 @@ TestVulkanTexture(HgiVulkan& hgiVulkan)
 
     // Upload some new pixels to the texture using the TextureView followed
     // by reading back the results.
-    std::vector<float> upload(numTexels, 0.456f);
+    std::vector<float> upload(numTexels * numComponents, 0.456f);
     HgiTextureCpuToGpuOp uploadOp;
     uploadOp.bufferByteSize = upload.size() * sizeof(upload[0]);
     uploadOp.cpuSourceBuffer = upload.data();
@@ -900,6 +901,7 @@ TestVulkanGraphicsCmds(HgiVulkan& hgiVulkan)
     HgiBufferDesc verticesDesc;
     verticesDesc.debugName = "Position Fullscreen";
     verticesDesc.byteSize = position.size() * sizeof(float);
+    verticesDesc.vertexStride = sizeof(float) * 3;
     verticesDesc.initialData = position.data();
     verticesDesc.usage = HgiBufferUsageVertex;
     HgiBufferHandle vbo = hgiVulkan.CreateBuffer(verticesDesc);
@@ -1038,32 +1040,39 @@ TestVulkanComputeCmds(HgiVulkan& hgiVulkan)
     HgiShaderFunctionDesc csDesc;
     csDesc.shaderStage = HgiShaderStageCompute;
     csDesc.shaderCode = 
-        "#extension GL_EXT_nonuniform_qualifier : require \n"
-        "#extension GL_EXT_scalar_block_layout : require \n"
-        ""
-        "layout(push_constant) uniform PushConstantBuffer { \n"
-        "    layout(offset = 0) int index; \n"
-        "} pushConstants; \n"
-        ""
-        "layout (scalar, set=0, binding=0) uniform ParamsIn { \n"
-        "    float offset; \n"
-        "} paramsIn; \n"
-        ""
-        "layout (scalar, set=0, binding=1) buffer StorageBufferIn { \n"
-        "    vec4 value[]; \n"
-        "} storageBufferIn; \n"
-        ""
-        "layout (scalar, set=0, binding=2) buffer StorageBufferOut { \n"
-        "    vec4 value[]; \n"
-        "} storageBufferOut; \n"
-        ""
-        "layout (rgba32f, set=0, binding=3) uniform image2D ImageIn; \n"
-        ""
         "void main() { \n"
-        "    vec4 v = storageBufferIn.value[pushConstants.index]; \n"
-        "    v *= paramsIn.offset; \n"
-        "    storageBufferOut.value[pushConstants.index] = v; \n"
+        "    vec4 v = valueIn[index]; \n"
+        "    v *= offset; \n"
+        "    valueOut[index] = v; \n"
         "} \n";
+
+    // Declare resources used by the program
+    HgiShaderFunctionAddConstantParam(
+        &csDesc,
+        /*name=*/"index",
+        /*type=*/"int");
+    HgiShaderFunctionAddBuffer(
+        &csDesc,
+        /*name=*/"offset",
+        /*type=*/"float",
+        /*bindingIndex=*/0,
+        /*binding=*/HgiBindingTypeUniformValue);
+    HgiShaderFunctionAddBuffer(
+        &csDesc,
+        /*name=*/"valueIn",
+        /*type=*/"vec4",
+        /*bindingIndex=*/1,
+        /*binding=*/HgiBindingTypePointer);
+    HgiShaderFunctionAddWritableBuffer(
+        &csDesc,
+        /*name=*/"valueOut",
+        /*type=*/"vec4",
+        /*bindingIndex=*/2);
+    HgiShaderFunctionAddWritableTexture(
+        &csDesc,
+        /*name=*/"ImageIn",
+        /*bindIndex=*/0,
+        /*dimensions=*/2);
 
     csDesc.debugName = "debug cs shader";
     HgiShaderFunctionHandle cs = hgiVulkan.CreateShaderFunction(csDesc);

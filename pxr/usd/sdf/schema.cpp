@@ -698,10 +698,14 @@ SdfSchemaBase::_RegisterStandardFields()
     // Regular Fields
     _DoRegisterField(SdfFieldKeys->Active, true);
     _DoRegisterField(SdfFieldKeys->AllowedTokens, VtTokenArray());
+    _DoRegisterField(SdfFieldKeys->ArraySizeConstraint,
+                     static_cast<int64_t>(0));
     _DoRegisterField(SdfFieldKeys->AssetInfo, VtDictionary())
         .MapKeyValidator(&_ValidateIdentifier)
         .MapValueValidator(&_ValidateIsSceneDescriptionValue);
     _DoRegisterField(SdfFieldKeys->TimeSamples, SdfTimeSampleMap());
+    _DoRegisterField(SdfFieldKeys->Clips, VtDictionary());
+    _DoRegisterField(SdfFieldKeys->ClipSets, SdfStringListOp());
     _DoRegisterField(SdfFieldKeys->ColorConfiguration, SdfAssetPath());
     _DoRegisterField(SdfFieldKeys->ColorManagementSystem, TfToken());
     _DoRegisterField(SdfFieldKeys->ColorSpace, TfToken());
@@ -742,6 +746,7 @@ SdfSchemaBase::_RegisterStandardFields()
     _DoRegisterField(SdfFieldKeys->InheritPaths, SdfPathListOp())
         .ListValueValidator(&_ValidateInheritPath);
     _DoRegisterField(SdfFieldKeys->Kind, TfToken());
+    _DoRegisterField(SdfFieldKeys->Limits, VtDictionary());
     _DoRegisterField(SdfFieldKeys->Owner, "");
     _DoRegisterField(SdfFieldKeys->PrimOrder, std::vector<TfToken>())
         .ListValueValidator(&_ValidateIdentifierToken);
@@ -876,6 +881,10 @@ SdfSchemaBase::_RegisterStandardFields()
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->AssetInfo,
                        SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->Clips,
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->ClipSets,
+                       SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->CustomData,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->DisplayGroupOrder,
@@ -960,7 +969,11 @@ SdfSchemaBase::_RegisterStandardFields()
 
         .MetadataField(SdfFieldKeys->AllowedTokens,
                        SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->ArraySizeConstraint,
+                       SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->ColorSpace, 
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->Limits,
                        SdfMetadataDisplayGroupTokens->core)
         ;
 

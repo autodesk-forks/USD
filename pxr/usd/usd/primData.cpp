@@ -28,8 +28,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 // Static assertion on PrimData size.  We want to be warned when its size
 // changes.
+#ifdef ARCH_BITS_32
+static_assert(sizeof(Usd_PrimData) == 48,
+              "Expected sizeof(Usd_PrimData) == 48");
+#else
 static_assert(sizeof(Usd_PrimData) == 64,
               "Expected sizeof(Usd_PrimData) == 64");
+#endif
 
 // Usd_PrimData need to be always initialized with a valid type info pointer
 static const UsdPrimTypeInfo *_GetEmptyPrimTypeInfo() 
@@ -114,6 +119,7 @@ Usd_PrimData::_ComposeAndCacheFlags(Usd_PrimDataConstPtr parent,
         _flags[Usd_PrimComponentFlag] = false;
         _flags[Usd_PrimDefinedFlag] = true;
         _flags[Usd_PrimHasDefiningSpecifierFlag] = true;
+        _flags[Usd_PrimHasClassSpecifierFlag] = false;
         _flags[Usd_PrimPrototypeFlag] = isPrototypePrim;
         _flags[Usd_PrimPseudoRootFlag] = !parent;
     } 
@@ -154,9 +160,14 @@ Usd_PrimData::_ComposeAndCacheFlags(Usd_PrimDataConstPtr parent,
         // Get specifier.
         const SdfSpecifier specifier = GetSpecifier();
 
+        const bool hasClassSpecifier = specifier == SdfSpecifierClass;
+
+        // Cache whether or not this prim has an authored abstract specifier.
+        _flags[Usd_PrimHasClassSpecifierFlag] = hasClassSpecifier;
+
         // This prim is abstract if its parent is or if it's a class.
         _flags[Usd_PrimAbstractFlag] =
-            parent->IsAbstract() || specifier == SdfSpecifierClass;
+            hasClassSpecifier || parent->IsAbstract();
 
         // Cache whether or not this prim has an authored defining specifier.
         const bool isDefiningSpec = SdfIsDefiningSpecifier(specifier);
@@ -261,7 +272,7 @@ Usd_DescribePrimData(const Usd_PrimData *p, SdfPath const &proxyPrimPath)
 void
 Usd_ThrowExpiredPrimAccessError(const Usd_PrimData *p)
 {
-    TF_THROW(UsdExpiredPrimAccessError,
+    PXR_TF_THROW(UsdExpiredPrimAccessError,
              TfStringPrintf(
                  "Used %s", Usd_DescribePrimData(p, SdfPath()).c_str()));
 }

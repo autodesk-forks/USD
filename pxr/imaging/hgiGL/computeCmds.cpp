@@ -13,6 +13,7 @@
 #include "pxr/imaging/hgiGL/diagnostic.h"
 #include "pxr/imaging/hgiGL/ops.h"
 #include "pxr/imaging/hgiGL/graphicsPipeline.h"
+#include "pxr/imaging/hgiGL/scopedStateHolder.h"
 #include "pxr/imaging/hgiGL/resourceBindings.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -102,7 +103,9 @@ HgiGLComputeCmds::Dispatch(int dimX, int dimY)
 }
 
 void
-HgiGLComputeCmds::PushDebugGroup(const char* label)
+HgiGLComputeCmds::PushDebugGroup(
+        const char* label,
+        const GfVec4f& color)
 {
     if (HgiGLDebugEnabled()) {
         _pushStack++;
@@ -116,6 +119,16 @@ HgiGLComputeCmds::PopDebugGroup()
     if (HgiGLDebugEnabled()) {
         _pushStack--;
         _ops.push_back( HgiGLOps::PopDebugGroup() );
+    }
+}
+
+void
+HgiGLComputeCmds::InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color)
+{
+    if (HgiGLDebugEnabled()) {
+        _ops.push_back( HgiGLOps::InsertDebugMarker(label) );
     }
 }
 
@@ -139,6 +152,11 @@ HgiGLComputeCmds::_Submit(Hgi* hgi, HgiSubmitWaitType wait)
     }
 
     TF_VERIFY(_pushStack==0, "Push and PopDebugGroup do not even out");
+
+    // Capture OpenGL state before executing the 'ops' and restore it when this
+    // function ends. We do this defensively because parts of our pipeline may
+    // not set and restore all relevant gl state.
+    HgiGL_ScopedStateHolder openglStateGuard;
 
     HgiGL* hgiGL = static_cast<HgiGL*>(hgi);
     HgiGLDevice* device = hgiGL->GetPrimaryDevice();

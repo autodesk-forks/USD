@@ -59,6 +59,41 @@ namespace
         return result;
     }
 
+    list
+    _GetFixers(const UsdValidationValidator &validator)
+    {
+        list result;
+        for (const auto *fixer : validator.GetFixers())
+        {
+            result.append(pointer_wrapper(fixer));
+        }
+        return result;
+    }
+
+    list
+    _GetFixersByErrorName(const UsdValidationValidator &validator, 
+                         const TfToken &errorName)
+    {
+        list result;
+        for (const auto *fixer : validator.GetFixersByErrorName(errorName))
+        {
+            result.append(pointer_wrapper(fixer));
+        }
+        return result;
+    }
+
+    list
+    _GetFixersByKeywords(const UsdValidationValidator &validator, 
+                        const TfTokenVector &keywords)
+    {
+        list result;
+        for (const auto *fixer : validator.GetFixersByKeywords(keywords))
+        {
+            result.append(pointer_wrapper(fixer));
+        }
+        return result;
+    }
+
 } // anonymous namespace
 
 void wrapUsdValidationValidator()
@@ -126,6 +161,29 @@ void wrapUsdValidationValidator()
              return_value_policy<TfPySequenceToList>(),
              (arg("prim"), 
               arg("timeRange") = UsdValidationTimeRange()))
+        .def("GetFixers", _GetFixers)
+        .def("GetFixerByName", 
+             +[](const UsdValidationValidator &validator, 
+                 const TfToken &name) 
+                -> const UsdValidationFixer* {
+                return validator.GetFixerByName(name);
+             },
+             return_value_policy<reference_existing_object>(),
+             (arg("name")))
+        .def("GetFixersByErrorName", _GetFixersByErrorName,
+             (arg("errorName")))
+        .def("GetFixerByNameAndErrorName",
+             +[](const UsdValidationValidator &validator, 
+                 const TfToken &name, 
+                 const TfToken &errorName) 
+                -> const UsdValidationFixer* {
+                return validator.GetFixerByNameAndErrorName(
+                    name, errorName);
+             },
+             return_value_policy<reference_existing_object>(),
+             (arg("name"), arg("errorName")))
+        .def("GetFixersByKeywords", _GetFixersByKeywords,
+             (arg("keywords")))
         .def("__eq__", 
              +[](const UsdValidationValidator *left, 
                  const UsdValidationValidator *right) {

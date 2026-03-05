@@ -42,7 +42,7 @@ class TestPcpInstanceKey(unittest.TestCase):
     def test_Basic(self):
         """Test instance key functionality on simple
         asset structure including references and inherits"""
-        cache = self._LoadPcpCache('basic.sdf')
+        cache = self._LoadPcpCache('basic.usda')
 
         prop1Key = self._GetInstanceKey(cache, '/Set_1/Prop_1')
         prop2Key = self._GetInstanceKey(cache, '/Set_1/Prop_2')
@@ -60,7 +60,7 @@ class TestPcpInstanceKey(unittest.TestCase):
         self.assertEqual(notAnInstanceKey, Pcp.InstanceKey())
 
     def test_Hashing(self):
-        cache = self._LoadPcpCache("basic.sdf")
+        cache = self._LoadPcpCache("basic.usda")
 
         self.assertEqual(
             hash(self._GetInstanceKey(cache, "/Set_1")),
@@ -70,7 +70,7 @@ class TestPcpInstanceKey(unittest.TestCase):
     def test_Variants(self):
         """Test instance key functionality on asset
         structure involving references and variants."""
-        cache = self._LoadPcpCache('variants.sdf')
+        cache = self._LoadPcpCache('variants.usda')
 
         key1 = self._GetInstanceKey(cache, '/Model_1')
         key2 = self._GetInstanceKey(cache, '/Model_2')
@@ -100,7 +100,7 @@ class TestPcpInstanceKey(unittest.TestCase):
     def test_ImpliedArcsWithNoSpecs(self):
         """Test instance key functionality with implied inherits and
         specializes."""
-        cache = self._LoadPcpCache('implied_arcs/root.sdf')
+        cache = self._LoadPcpCache('implied_arcs/root.usda')
 
         # Both Model prims should share the same instance key even though
         # they are referenced from two different assets. This is because
@@ -117,7 +117,7 @@ class TestPcpInstanceKey(unittest.TestCase):
         "ancestral" but must be considered as they are brought in through 
         the subtree that is composed for direct subroot arc."""
 
-        cache = self._LoadPcpCache('subroot_arcs.sdf')
+        cache = self._LoadPcpCache('subroot_arcs.usda')
 
         # For each instance it's useful to know the basic prim index graph
         # ---> = direct reference
@@ -171,6 +171,43 @@ class TestPcpInstanceKey(unittest.TestCase):
         # only, so it is ignored for determining instanceable.
         self.assertEqual(notAnInstanceKey, Pcp.InstanceKey())
 
+    def test_InternalReferencesAndImpliedArcs(self):
+        """Test instance keys with implied arcs across internal references."""
+        cache = self._LoadPcpCache('internal_ref.usda')
+
+        # /Parent/Child and /ParentRef/Child should have the same instance
+        # key since they have the same direct composition arcs, even
+        # though /ParentRef/Child comes in via an ancestral reference.
+        # 
+        # One wrinkle for /ParentRef/Child is that the inherit arc to
+        # /Class authored on /Parent/Child will be implied across the
+        # ancestral reference arc from /ParentRef to /Parent. The implied
+        # inherit node will be marked as inert because it duplicates the
+        # original inherit node, i.e., it has the same layer stack and
+        # path. That implied inherit node _should not_ contribute to
+        # the instance key because it's inert.
+        
+        # Verify expected composition structure for /ParentRef/Child.
+        expected = [
+            (Pcp.ArcTypeRoot, "/ParentRef/Child"), [
+                (Pcp.ArcTypeInherit, "/Class", True), [],
+                (Pcp.ArcTypeReference, "/Parent/Child"), [
+                    (Pcp.ArcTypeInherit, "/Class"), []
+                ]
+            ]
+        ]
+
+        pi, err = cache.ComputePrimIndex('/ParentRef/Child')
+        for node, entry in Pcp._TestPrimIndex(pi, expected):
+            arc, path, inert = (*entry, False) if len(entry) == 2 else entry
+            self.assertEqual(node.arcType, arc)
+            self.assertEqual(node.path, path)
+            self.assertEqual(node.isInert, inert)
+
+        # Verify instance keys match.
+        key1 = self._GetInstanceKey(cache, '/Parent/Child')
+        key2 = self._GetInstanceKey(cache, '/ParentRef/Child')
+        self.assertEqual(key1, key2)
 
 if __name__ == "__main__":
     unittest.main()

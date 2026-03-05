@@ -34,10 +34,12 @@ T_ASSETPATH = "HdAssetPathDataSource"
 T_VEC2I = "HdVec2iDataSource"
 T_VEC2F = "HdVec2fDataSource"
 T_VEC2D = "HdVec2dDataSource"
+T_VEC2IARRAY = "HdVec2iArrayDataSource"
 T_VEC2FARRAY = "HdVec2fArrayDataSource"
 T_VEC2DARRAY = "HdVec2dArrayDataSource"
 T_VEC3I = "HdVec3iDataSource"
 T_VEC3IARRAY = "HdVec3iArrayDataSource"
+T_VEC3HARRAY = "HdVec3hArrayDataSource"
 T_VEC3F = "HdVec3fDataSource"
 T_VEC3D = "HdVec3dDataSource"
 T_VEC3FARRAY = "HdVec3fArrayDataSource"
@@ -47,8 +49,13 @@ T_VEC4IARRAY = "HdVec4iArrayDataSource"
 T_VEC4F = "HdVec4fDataSource"
 T_VEC4D = "HdVec4dDataSource"
 T_VEC4DARRAY = "HdVec4dArrayDataSource"
+T_QUATFARRAY = "HdQuatfArrayDataSource"
+T_MATRIX4 = "HdMatrix4fDataSource"
+T_MATRIX4FARRAY = "HdMatrix4fArrayDataSource"
 T_MATRIX = "HdMatrixDataSource"
 T_MATRIXARRAY = "HdMatrixArrayDataSource"
+T_BBOX3D = "HdBBox3dDataSource"
+T_BBOX3DARRAY = "HdBBox3dArrayDataSource"
 T_LOCATOR = "HdLocatorDataSource"
 T_FORMAT = "HdFormatDataSource"
 T_SAMPLED = "HdSampledDataSource"
@@ -56,6 +63,7 @@ T_TUPLE = "HdTupleTypeDataSource"
 T_SIZET = "HdSizetDataSource"
 T_BASE = "HdDataSourceBase"
 T_STRING = "HdStringDataSource"
+T_STRINGARRAY = "HdStringArrayDataSource"
 T_VECTOR = "HdVectorDataSource"
 T_RESOLVERCONTEXT = "HdResolverContextDataSource"
 
@@ -100,8 +108,8 @@ def ToComment(text, indent = 0):
     for paragraph in re.split(r'\n\s*\n', text, re.DOTALL):
         for line in textwrap.wrap(' '.join(paragraph.split()),
                                   width = 75 - indent):
-            result += indent * ' ' + '// ' + line + '\n'
-        result += indent * ' ' + '//' + '\n'
+            result += indent * ' ' + '/// ' + line + '\n'
+        result += indent * ' ' + '///' + '\n'
 
     return result
 

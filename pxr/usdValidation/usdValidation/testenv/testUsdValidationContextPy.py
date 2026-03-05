@@ -133,7 +133,6 @@ class TestUsdValidationContextPy(unittest.TestCase):
             error.GetSites()[0].GetPrim().GetName(),
             "somePrim")
 
-
     def test_UsdValidationContext(self):
         # Create a ValidationContext with a suite
         suite = UsdValidation.ValidationRegistry().GetOrLoadValidatorSuiteByName(
@@ -154,6 +153,33 @@ class TestUsdValidationContextPy(unittest.TestCase):
         self.assertEqual(len(errors), 8)
         for error in errors:
             if error.GetName() == "Test1Error":
+                # validator corresponding to this error has fixer too, so lets
+                # test that
+                fixers = error.GetFixers()
+                self.assertEqual(len(fixers), 3)
+                self.assertEqual(fixers[0].name, "TestFixer1")
+                self.assertEqual(fixers[1].name, "TestFixer2")
+                self.assertEqual(fixers[2].name, "TestFixer3")
+                self.assertTrue(fixers[0].IsAssociatedWithErrorName(
+                    "Test1Error"))
+                self.assertTrue(fixers[1].IsAssociatedWithErrorName(
+                    "Test1Error"))
+                self.assertFalse(fixers[2].IsAssociatedWithErrorName(
+                    "Test1Error"))
+                # No editTarget provided
+                self.assertFalse(
+                    fixers[0].CanApplyFix(
+                        error, Usd.EditTarget(), Usd.TimeCode.Default()))
+                editTarget = stage.GetEditTarget()
+                self.assertTrue(
+                    fixers[0].CanApplyFix(
+                        error, editTarget, Usd.TimeCode.Default()))
+                self.assertTrue(
+                    fixers[1].CanApplyFix(
+                        error, editTarget, Usd.TimeCode.Default()))
+                self.assertFalse(
+                    fixers[2].CanApplyFix(
+                        error, editTarget, Usd.TimeCode.Default()))
                 self._TestError1(error)
             elif error.GetName() == "Test2Error":
                 self._TestError2(error)

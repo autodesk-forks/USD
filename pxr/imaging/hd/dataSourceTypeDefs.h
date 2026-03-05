@@ -62,6 +62,8 @@ using HdPathArrayDataSourceHandle = HdPathArrayDataSource::Handle;
 
 using HdStringDataSource = HdTypedSampledDataSource<std::string>;
 using HdStringDataSourceHandle = HdStringDataSource::Handle;
+using HdStringArrayDataSource = HdTypedSampledDataSource<VtArray<std::string>>;
+using HdStringArrayDataSourceHandle = HdStringArrayDataSource::Handle;
 
 using HdAssetPathDataSource = HdTypedSampledDataSource<SdfAssetPath>;
 using HdAssetPathDataSourceHandle = HdAssetPathDataSource::Handle;
@@ -72,6 +74,8 @@ using HdPathExpressionDataSourceHandle = HdPathExpressionDataSource::Handle;
 // Linear algebra
 using HdVec2iDataSource = HdTypedSampledDataSource<GfVec2i>;
 using HdVec2iDataSourceHandle = HdVec2iDataSource::Handle;
+using HdVec2iArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec2i>>;
+using HdVec2iArrayDataSourceHandle = HdVec2iArrayDataSource::Handle;
 using HdVec2fDataSource = HdTypedSampledDataSource<GfVec2f>;
 using HdVec2fDataSourceHandle = HdVec2fDataSource::Handle;
 using HdVec2dDataSource = HdTypedSampledDataSource<GfVec2d>;
@@ -85,6 +89,8 @@ using HdVec3iDataSource = HdTypedSampledDataSource<GfVec3i>;
 using HdVec3iDataSourceHandle = HdVec3iDataSource::Handle;
 using HdVec3iArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec3i>>;
 using HdVec3iArrayDataSourceHandle = HdVec3iArrayDataSource::Handle;
+using HdVec3hArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec3h>>;
+using HdVec3hArrayDataSourceHandle = HdVec3hArrayDataSource::Handle;
 using HdVec3fDataSource = HdTypedSampledDataSource<GfVec3f>;
 using HdVec3fDataSourceHandle = HdVec3fDataSource::Handle;
 using HdVec3fArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec3f>>;
@@ -100,13 +106,31 @@ using HdVec4iArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec4i>>;
 using HdVec4iArrayDataSourceHandle = HdVec4iArrayDataSource::Handle;
 using HdVec4fDataSource = HdTypedSampledDataSource<GfVec4f>;
 using HdVec4fDataSourceHandle = HdVec4fDataSource::Handle;
+using HdVec4fArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec4f>>;
+using HdVec4fArrayDataSourceHandle = HdVec4fArrayDataSource::Handle;
 using HdVec4dArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec4d>>;
 using HdVec4dArrayDataSourceHandle = HdVec4dArrayDataSource::Handle;
 
+using HdQuatfArrayDataSource = HdTypedSampledDataSource<VtArray<GfQuatf>>;
+using HdQuatfArrayDataSourceHandle = HdQuatfArrayDataSource::Handle;
+
+using HdMatrix3fDataSource = HdTypedSampledDataSource<GfMatrix3f>;
+using HdMatrix3fDataSourceHandle = HdMatrix3fDataSource::Handle;
+using HdMatrix3fArrayDataSource = HdTypedSampledDataSource<VtArray<GfMatrix3f>>;
+using HdMatrix3fArrayDataSourceHandle = HdMatrix3fArrayDataSource::Handle;
+using HdMatrix4fDataSource = HdTypedSampledDataSource<GfMatrix4f>;
+using HdMatrix4fDataSourceHandle = HdMatrix4fDataSource::Handle;
+using HdMatrix4fArrayDataSource = HdTypedSampledDataSource<VtArray<GfMatrix4f>>;
+using HdMatrix4fArrayDataSourceHandle = HdMatrix4fArrayDataSource::Handle;
 using HdMatrixDataSource = HdTypedSampledDataSource<GfMatrix4d>;
 using HdMatrixDataSourceHandle = HdMatrixDataSource::Handle;
 using HdMatrixArrayDataSource = HdTypedSampledDataSource<VtArray<GfMatrix4d>>;
 using HdMatrixArrayDataSourceHandle = HdMatrixArrayDataSource::Handle;
+
+using HdBBox3dDataSource = HdTypedSampledDataSource<GfBBox3d>;
+using HdBBox3dDataSourceHandle = HdBBox3dDataSource::Handle;
+using HdBBox3dArrayDataSource = HdTypedSampledDataSource<VtArray<GfBBox3d>>;
+using HdBBox3dArrayDataSourceHandle = HdBBox3dArrayDataSource::Handle;
 
 // Locator
 using HdLocatorDataSource = HdTypedSampledDataSource<HdDataSourceLocator>;

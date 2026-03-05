@@ -14,7 +14,6 @@ expanded/generalized to accommodate other types in the future.
 
 from __future__ import print_function
 
-from pxr import Ndr
 from pxr import Sdr
 from pxr.Sdf import ValueTypeNames as SdfTypes
 from pxr import Tf
@@ -52,6 +51,7 @@ def TestBasicProperties(node):
         "widget": "number",
         "label": "inputA label",
         "page": "inputs1",
+        "open" : "1",
         "help": "inputA help message",
         "uncategorized": "1"
     }
@@ -60,18 +60,20 @@ def TestBasicProperties(node):
         metadata["name"] = "inputA"
         metadata["default"] = "0.0"
         metadata["type"] = "float"
+        del metadata["open"]
     # --------------------------------------------------------------------------
 
 
     properties = {
-        "inputA": node.GetInput("inputA"),
-        "inputB": node.GetInput("inputB"),
-        "inputC": node.GetInput("inputC"),
-        "inputD": node.GetInput("inputD"),
-        "inputF2": node.GetInput("inputF2"),
-        "inputStrArray": node.GetInput("inputStrArray"),
-        "resultF": node.GetOutput("resultF"),
-        "resultI": node.GetOutput("resultI"),
+        "inputA": node.GetShaderInput("inputA"),
+        "inputB": node.GetShaderInput("inputB"),
+        "inputC": node.GetShaderInput("inputC"),
+        "inputD": node.GetShaderInput("inputD"),
+        "inputF2": node.GetShaderInput("inputF2"),
+        "inputStrArray": node.GetShaderInput("inputStrArray"),
+        "inputArrayWithTuples": node.GetShaderInput("inputArrayWithTuples"),
+        "resultF": node.GetShaderOutput("resultF"),
+        "resultI": node.GetShaderOutput("resultI"),
     }
 
     assert properties["inputA"].GetName() == "inputA"
@@ -81,6 +83,7 @@ def TestBasicProperties(node):
     assert not properties["inputA"].IsArray()
     assert not properties["inputA"].IsDynamicArray()
     assert properties["inputA"].GetArraySize() == 0
+    assert properties["inputA"].GetTupleSize() == 0
     assert properties["inputA"].GetInfoString() == "inputA (type: 'float'); input"
     assert properties["inputA"].IsConnectable()
     assert properties["inputA"].CanConnectTo(properties["resultF"])
@@ -90,21 +93,28 @@ def TestBasicProperties(node):
     # --------------------------------------------------------------------------
     # Check some array variations
     # --------------------------------------------------------------------------
+
     assert properties["inputD"].IsDynamicArray()
     assert properties["inputD"].GetArraySize() == 1 if isOSL else -1
+    assert properties["inputD"].GetTupleSize() == 0
     assert properties["inputD"].IsArray()
     assert list(properties["inputD"].GetDefaultValue()) == [1]
 
     assert not properties["inputF2"].IsDynamicArray()
     assert properties["inputF2"].GetArraySize() == 2
+    assert properties["inputD"].GetTupleSize() == 0
     assert properties["inputF2"].IsArray()
     assert not properties["inputF2"].IsConnectable()
     assert list(properties["inputF2"].GetDefaultValue()) == [1.0, 2.0]
 
     assert properties["inputStrArray"].GetArraySize() == 4
+    assert properties["inputStrArray"].GetTupleSize() == 0
     assert list(properties["inputStrArray"].GetDefaultValue()) == \
         ["test", "string", "array", "values"]
 
+    assert properties["inputArrayWithTuples"].GetArraySize() == 8
+    assert properties["inputArrayWithTuples"].GetTupleSize() == 2
+    assert properties["inputArrayWithTuples"].IsArray()
 
 def TestShadingProperties(node):
     """
@@ -141,13 +151,14 @@ def TestShadingProperties(node):
         "outputVector": node.GetShaderOutput("outputVector"),
     }
 
+    hints = { "uncategorized": "1", "open": "1" } if isOSL else \
+            { "uncategorized": "1", }
+
     assert properties["inputA"].GetLabel() == "inputA label"
     assert properties["inputA"].GetHelp() == "inputA help message"
     assert properties["inputA"].GetPage() == "inputs1"
     assert properties["inputA"].GetWidget() == "number"
-    assert properties["inputA"].GetHints() == {
-        "uncategorized": "1"
-    }
+    assert properties["inputA"].GetHints() == hints
     assert properties["inputA"].GetOptions() == []
     assert properties["inputA"].GetVStructMemberOf() == ""
     assert properties["inputA"].GetVStructMemberName() == ""
@@ -205,7 +216,7 @@ def TestShadingProperties(node):
     for prop, expected in expected_mappings.items():
         indicator = properties[prop].GetTypeAsSdfType()
         assert indicator.GetSdfType() == expected[0]
-        assert indicator.GetNdrType() == expected[1]
+        assert indicator.GetSdrType() == expected[1]
 
     # --------------------------------------------------------------------------
     # Ensure asset identifiers are detected correctly
@@ -214,7 +225,7 @@ def TestShadingProperties(node):
     assert not properties["inputOptions"].IsAssetIdentifier()
     indicator = properties["inputAssetIdentifier"].GetTypeAsSdfType()
     assert indicator.GetSdfType() == SdfTypes.Asset
-    assert indicator.GetNdrType() == Sdr.PropertyTypes.String
+    assert indicator.GetSdrType() == Sdr.PropertyTypes.String
 
     # Nested pages and VStructs are only possible in args files
     if not isOSL:
@@ -281,10 +292,10 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
     # --------------------------------------------------------------------------
 
     nodeInputs = {propertyName: node.GetShaderInput(propertyName)
-                  for propertyName in node.GetInputNames()}
+                  for propertyName in node.GetShaderInputNames()}
 
     nodeOutputs = {propertyName: node.GetShaderOutput(propertyName)
-                   for propertyName in node.GetOutputNames()}
+                   for propertyName in node.GetShaderOutputNames()}
 
     assert node.GetName() == nodeName
     assert node.GetContext() == nodeContext
@@ -293,7 +304,7 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
     assert node.GetResolvedDefinitionURI() == nodeDefinitionURI
     assert node.GetResolvedImplementationURI() == nodeImplementationURI
     assert node.IsValid()
-    assert len(nodeInputs) == 17
+    assert len(nodeInputs) == 18
     assert len(nodeOutputs) == numOutputs
     assert nodeInputs["inputA"] is not None
     assert nodeInputs["inputB"] is not None
@@ -307,22 +318,23 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
     assert nodeInputs["inputOptions"] is not None
     assert nodeInputs["inputPoint"] is not None
     assert nodeInputs["inputNormal"] is not None
+    assert nodeInputs["inputArrayWithTuples"] is not None
     assert nodeOutputs["resultF2"] is not None
     assert nodeOutputs["resultI"] is not None
     assert nodeOutputs["outputPoint"] is not None
     assert nodeOutputs["outputNormal"] is not None
     assert nodeOutputs["outputColor"] is not None
     assert nodeOutputs["outputVector"] is not None
-    print(set(node.GetInputNames()))
-    assert set(node.GetInputNames()) == {
+    print(set(node.GetShaderInputNames()))
+    assert set(node.GetShaderInputNames()) == {
         "inputA", "inputB", "inputC", "inputD", "inputF2", "inputF3", "inputF4",
         "inputF5", "inputInterp", "inputOptions", "inputPoint", "inputNormal",
         "inputStruct", "inputAssetIdentifier", "primvarNamingProperty",
-        "invalidPrimvarNamingProperty", "inputStrArray"
+        "invalidPrimvarNamingProperty", "inputStrArray", "inputArrayWithTuples"
     }
-    assert set(node.GetOutputNames()) == outputNames
+    assert set(node.GetShaderOutputNames()) == outputNames
 
-    # There may be additional metadata passed in via the NdrNodeDiscoveryResult.
+    # There may be additional metadata passed in via the SdrShaderNodeDiscoveryResult.
     # So, ensure that the bits we expect to see are there instead of doing 
     # an equality check.
     nodeMetadata = node.GetMetadata()
@@ -350,16 +362,17 @@ def TestShaderSpecificNode(node):
     pages = {"", "inputs1", "inputs2", "results"} if isOSL else \
             {"", "inputs1", "inputs2", "results", "VStructs:Nested",
                 "VStructs:Nested:More"}
+    openPages = {"inputs1", "results"} if isOSL else \
+                {"inputs1", "VStructs", "VStructs:Nested"}
     # --------------------------------------------------------------------------
 
-
     shaderInputs = {propertyName: node.GetShaderInput(propertyName)
-                    for propertyName in node.GetInputNames()}
+                    for propertyName in node.GetShaderInputNames()}
 
     shaderOutputs = {propertyName: node.GetShaderOutput(propertyName)
-                     for propertyName in node.GetOutputNames()}
+                     for propertyName in node.GetShaderOutputNames()}
 
-    assert len(shaderInputs) == 17
+    assert len(shaderInputs) == 18
     assert len(shaderOutputs) == numOutputs
     assert shaderInputs["inputA"] is not None
     assert shaderInputs["inputB"] is not None
@@ -373,6 +386,7 @@ def TestShaderSpecificNode(node):
     assert shaderInputs["inputOptions"] is not None
     assert shaderInputs["inputPoint"] is not None
     assert shaderInputs["inputNormal"] is not None
+    assert shaderInputs["inputArrayWithTuples"] is not None
     assert shaderOutputs["resultF"] is not None
     assert shaderOutputs["resultF2"] is not None
     assert shaderOutputs["resultF3"] is not None
@@ -386,6 +400,7 @@ def TestShaderSpecificNode(node):
     assert node.GetHelp() == "This is the test node"
     assert node.GetDepartments() == ["testDept"]
     assert set(node.GetPages()) == pages
+    assert set(node.GetOpenPages()) == openPages
     assert set(node.GetPrimvars()) == {"primvar1", "primvar2", "primvar3"}
     assert set(node.GetAdditionalPrimvarProperties()) == {"primvarNamingProperty"}
     assert set(node.GetPropertyNamesForPage("results")) == {
@@ -399,7 +414,7 @@ def TestShaderSpecificNode(node):
         "inputB", "inputC", "inputD", "inputF2", "inputF3", "inputF4", "inputF5",
         "inputInterp", "inputOptions", "inputPoint", "inputNormal",
         "inputStruct", "inputAssetIdentifier", "primvarNamingProperty",
-        "invalidPrimvarNamingProperty", "inputStrArray"
+        "invalidPrimvarNamingProperty", "inputStrArray", "inputArrayWithTuples"
     }
     assert node.GetAllVstructNames() == vstructNames
 
@@ -442,10 +457,10 @@ def TestShaderPropertiesNode(node):
         assert node.GetSourceType() == "glslfx"
 
     nodeInputs = {propertyName: node.GetShaderInput(propertyName)
-                  for propertyName in node.GetInputNames()}
+                  for propertyName in node.GetShaderInputNames()}
 
     nodeOutputs = {propertyName: node.GetShaderOutput(propertyName)
-                  for propertyName in node.GetOutputNames()}
+                  for propertyName in node.GetShaderOutputNames()}
 
     # For each property, we test that:
     # * The property has the expected SdrPropertyType
@@ -455,42 +470,42 @@ def TestShaderPropertiesNode(node):
     property = nodeInputs["inputInt"]
     assert property.GetType() == Sdr.PropertyTypes.Int
     assert GetType(property) == Tf.Type.FindByName("int")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputString"]
     assert property.GetType() == Sdr.PropertyTypes.String
     assert GetType(property) == Tf.Type.FindByName("string")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputFloat"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("float")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputColor"]
     assert property.GetType() == Sdr.PropertyTypes.Color
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputPoint"]
     assert property.GetType() == Sdr.PropertyTypes.Point
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputNormal"]
     assert property.GetType() == Sdr.PropertyTypes.Normal
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputVector"]
     assert property.GetType() == Sdr.PropertyTypes.Vector
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputMatrix"]
     assert property.GetType() == Sdr.PropertyTypes.Matrix
     assert GetType(property) == Tf.Type.FindByName("GfMatrix4d")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     if node.GetName() != "TestShaderPropertiesNodeUSD":
         # XXX Note that 'struct' and 'vstruct' types are currently unsupported
@@ -500,107 +515,107 @@ def TestShaderPropertiesNode(node):
         property = nodeInputs["inputStruct"]
         assert property.GetType() == Sdr.PropertyTypes.Struct
         assert GetType(property) == Tf.Type.FindByName("TfToken")
-        assert Ndr._ValidateProperty(node, property)
+        assert Sdr._ValidateProperty(node, property)
 
         property = nodeInputs["inputVstruct"]
         assert property.GetType() == Sdr.PropertyTypes.Vstruct
         assert GetType(property) == Tf.Type.FindByName("TfToken")
-        assert Ndr._ValidateProperty(node, property)
+        assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputIntArray"]
     assert property.GetType() == Sdr.PropertyTypes.Int
     assert GetType(property) == Tf.Type.FindByName("VtArray<int>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputStringArray"]
     assert property.GetType() == Sdr.PropertyTypes.String
     assert GetType(property) == Tf.Type.FindByName("VtArray<string>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputFloatArray"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("VtArray<float>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputColorArray"]
     assert property.GetType() == Sdr.PropertyTypes.Color
     assert GetType(property) ==  Tf.Type.FindByName("VtArray<GfVec3f>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputPointArray"]
     assert property.GetType() == Sdr.PropertyTypes.Point
     assert GetType(property) == Tf.Type.FindByName("VtArray<GfVec3f>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputNormalArray"]
     assert property.GetType() == Sdr.PropertyTypes.Normal
     assert GetType(property) == Tf.Type.FindByName("VtArray<GfVec3f>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputVectorArray"]
     assert property.GetType() == Sdr.PropertyTypes.Vector
     assert GetType(property) == Tf.Type.FindByName("VtArray<GfVec3f>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputMatrixArray"]
     assert property.GetType() == Sdr.PropertyTypes.Matrix
     assert GetType(property) == Tf.Type.FindByName("VtArray<GfMatrix4d>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputFloat2"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec2f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputFloat3"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputFloat4"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec4f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputAsset"]
     assert property.GetType() == Sdr.PropertyTypes.String
     assert GetType(property) == Tf.Type.FindByName("SdfAssetPath")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputAssetArray"]
     assert property.GetType() == Sdr.PropertyTypes.String
     assert GetType(property) == Tf.Type.FindByName("VtArray<SdfAssetPath>")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputColorRoleNone"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputPointRoleNone"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputNormalRoleNone"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeInputs["inputVectorRoleNone"]
     assert property.GetType() == Sdr.PropertyTypes.Float
     assert GetType(property) == Tf.Type.FindByName("GfVec3f")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     property = nodeOutputs["outputSurface"]
     assert property.GetType() == Sdr.PropertyTypes.Terminal
     assert GetType(property) == Tf.Type.FindByName("TfToken")
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     # Specific test of implementationName feature, we can skip type-tests
     property = nodeInputs["normal"]
     assert property.GetImplementationName() == "aliasedNormalInput"
-    assert Ndr._ValidateProperty(node, property)
+    assert Sdr._ValidateProperty(node, property)
 
     if node.GetName() != "TestShaderPropertiesNodeOSL" and \
         node.GetName() != "TestShaderPropertiesNodeARGS" :
@@ -609,17 +624,17 @@ def TestShaderPropertiesNode(node):
         property = nodeInputs["inputColor4"]
         assert property.GetType() == Sdr.PropertyTypes.Color4
         assert GetType(property) == Tf.Type.FindByName("GfVec4f")
-        assert Ndr._ValidateProperty(node, property)
+        assert Sdr._ValidateProperty(node, property)
 
         # oslc v1.11.14 does not allow arrays of structs as parameter.
         property = nodeInputs["inputColor4Array"]
         assert property.GetType() == Sdr.PropertyTypes.Color4
         assert GetType(property) ==  Tf.Type.FindByName("VtArray<GfVec4f>")
-        assert Ndr._ValidateProperty(node, property)
+        assert Sdr._ValidateProperty(node, property)
 
         property = nodeInputs["inputColor4RoleNone"]
         assert property.GetType() == Sdr.PropertyTypes.Float
         assert GetType(property) == Tf.Type.FindByName("GfVec4f")
-        assert Ndr._ValidateProperty(node, property)
+        assert Sdr._ValidateProperty(node, property)
 
 

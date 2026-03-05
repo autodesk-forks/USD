@@ -24,6 +24,7 @@ pxr_library(hgiVulkan
         computeCmds
         computePipeline
         conversions
+        descriptorSetLayouts
         device
         diagnostic
         garbageCollector
@@ -47,7 +48,7 @@ pxr_library(hgiVulkan
         vulkan.h
 
     PRIVATE_CLASSES
-        spirv_reflect
+        debugCodes
 
     RESOURCE_FILES
         plugInfo.json
@@ -77,12 +78,9 @@ pxr_build_test(testHgiVulkan
     CPPFILES
         testenv/testHgiVulkan.cpp
 )
-pxr_install_test_dir(
-    SRC testenv/testHgiVulkan
-    DEST testHgiVulkan
-)
 pxr_register_test(testHgiVulkan
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHgiVulkan"
+    TESTENV testenv/testHgiVulkan
     IMAGE_DIFF_COMPARE
         graphicsCmdsClear.png
         srgba.png
@@ -101,12 +99,9 @@ pxr_register_test(testHgiVulkan
 # testHgiCommand, which is not linked in the static hgiVulkan library. 
 if (BUILD_SHARED_LIBS)
 
-pxr_install_test_dir(
-    SRC testenv/testHgiVulkanCommand
-    DEST testHgiVulkanCommand
-)
 pxr_register_test(testHgiVulkanCommand
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHgiCommand --write testHgiVulkanCommand_triangle.png"
+    TESTENV testenv/testHgiVulkanCommand
     IMAGE_DIFF_COMPARE
         testHgiVulkanCommand_triangle.png
     FAIL 1

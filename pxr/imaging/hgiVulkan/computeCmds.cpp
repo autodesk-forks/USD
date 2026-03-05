@@ -36,10 +36,12 @@ HgiVulkanComputeCmds::~HgiVulkanComputeCmds()
 }
 
 void
-HgiVulkanComputeCmds::PushDebugGroup(const char* label)
+HgiVulkanComputeCmds::PushDebugGroup(
+        const char* label,
+        const GfVec4f& color)
 {
     _CreateCommandBuffer();
-    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label);
+    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label, color);
 }
 
 void
@@ -47,6 +49,16 @@ HgiVulkanComputeCmds::PopDebugGroup()
 {
     _CreateCommandBuffer();
     HgiVulkanEndLabel(_hgi->GetPrimaryDevice(), _commandBuffer);
+}
+
+void
+HgiVulkanComputeCmds::InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color)
+{
+    _CreateCommandBuffer();
+    HgiVulkanInsertDebugMarker(_hgi->GetPrimaryDevice(), _commandBuffer, label,
+        color);
 }
 
 void
@@ -113,17 +125,15 @@ HgiVulkanComputeCmds::Dispatch(int dimX, int dimY)
 
     const int threadsPerGroupX = _localWorkGroupSize[0];
     const int threadsPerGroupY = _localWorkGroupSize[1];
-    int numWorkGroupsX = (dimX + (threadsPerGroupX - 1)) / threadsPerGroupX;
-    int numWorkGroupsY = (dimY + (threadsPerGroupY - 1)) / threadsPerGroupY;
+    uint32_t numWorkGroupsX = (dimX + (threadsPerGroupX - 1)) / threadsPerGroupX;
+    uint32_t numWorkGroupsY = (dimY + (threadsPerGroupY - 1)) / threadsPerGroupY;
+
 
     // Determine device's num compute work group limits
-    const VkPhysicalDeviceLimits limits = 
-        _hgi->GetCapabilities()->vkDeviceProperties.limits;
-    const GfVec3i maxNumWorkGroups = GfVec3i(
-        limits.maxComputeWorkGroupCount[0],
-        limits.maxComputeWorkGroupCount[1],
-        limits.maxComputeWorkGroupCount[2]);
+    const VkPhysicalDeviceLimits &limits =
+        _hgi->GetCapabilities()->vkDeviceProperties2.properties.limits;
 
+    const uint32_t (&maxNumWorkGroups)[3] = limits.maxComputeWorkGroupCount;
     if (numWorkGroupsX > maxNumWorkGroups[0]) {
         TF_WARN("Max number of work group available from device is %i, larger "
                 "than %i", maxNumWorkGroups[0], numWorkGroupsX);
@@ -137,8 +147,8 @@ HgiVulkanComputeCmds::Dispatch(int dimX, int dimY)
 
     vkCmdDispatch(
         _commandBuffer->GetVulkanCommandBuffer(),
-        (uint32_t) numWorkGroupsX,
-        (uint32_t) numWorkGroupsY,
+        numWorkGroupsX,
+        numWorkGroupsY,
         1);
 }
 

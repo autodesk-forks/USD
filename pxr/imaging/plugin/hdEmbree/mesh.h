@@ -15,8 +15,8 @@
 
 #include "pxr/imaging/plugin/hdEmbree/meshSamplers.h"
 
-#include <embree3/rtcore.h>
-#include <embree3/rtcore_ray.h>
+#include <embree4/rtcore.h>
+#include <embree4/rtcore_ray.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -98,6 +98,11 @@ public:
     ///   \param renderParam An HdEmbreeRenderParam object containing top-level
     ///                      embree state.
     virtual void Finalize(HdRenderParam *renderParam) override;
+
+    bool EmbreeMeshIsDoubleSided() const
+    {
+        return _doubleSided;
+    }
 
 protected:
     // Initialize the given representation of this Rprim.

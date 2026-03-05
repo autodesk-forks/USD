@@ -41,6 +41,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(ARCH_OS_DARWIN)
+#include "pxr/base/arch/darwin.h"
+#endif
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 using std::pair;
@@ -143,7 +147,8 @@ int ArchRmDir(const char* path)
 bool
 ArchStatIsWritable(const ArchStatType *st)
 {
-#if defined(ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN)
+#if defined(ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     if (st) {
         return (st->st_mode & S_IWOTH) || 
             ((getegid() == st->st_gid) && (st->st_mode & S_IWGRP)) ||
@@ -180,7 +185,7 @@ ArchGetModificationTime(const char* pathname, double* time)
 double
 ArchGetModificationTime(const ArchStatType& st)
 {
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     return st.st_mtim.tv_sec + 1e-9*st.st_mtim.tv_nsec;
 #elif defined(ARCH_OS_DARWIN)
     return st.st_mtimespec.tv_sec + 1e-9*st.st_mtimespec.tv_nsec;
@@ -432,7 +437,7 @@ ArchGetStatMode(const char *pathname, int *mode)
 double
 ArchGetAccessTime(const struct stat& st)
 {
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     return st.st_atim.tv_sec + 1e-9*st.st_atim.tv_nsec;
 #elif defined(ARCH_OS_DARWIN)
     return st.st_atimespec.tv_sec + 1e-9*st.st_atimespec.tv_nsec;
@@ -447,7 +452,7 @@ ArchGetAccessTime(const struct stat& st)
 double
 ArchGetStatusChangeTime(const struct stat& st)
 {
-#if defined(ARCH_OS_LINUX)
+#if defined(ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     return st.st_ctim.tv_sec + 1e-9*st.st_ctim.tv_nsec;
 #elif defined(ARCH_OS_DARWIN)
     return st.st_ctimespec.tv_sec + 1e-9*st.st_ctimespec.tv_nsec;
@@ -477,7 +482,8 @@ ArchGetFileLength(FILE *file)
 {
     if (!file)
         return -1;
-#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN)
+#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     struct stat buf;
     return fstat(fileno(file), &buf) < 0 ? -1 :
         static_cast<int64_t>(buf.st_size);
@@ -491,7 +497,8 @@ ArchGetFileLength(FILE *file)
 int64_t
 ArchGetFileLength(const char* fileName)
 {
-#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN)
+#if defined (ARCH_OS_LINUX) || defined (ARCH_OS_DARWIN) || \
+    defined(ARCH_OS_WASM_VM)
     struct stat buf;
     return stat(fileName, &buf) < 0 ? -1 : static_cast<int64_t>(buf.st_size);
 #elif defined (ARCH_OS_WINDOWS)
@@ -515,7 +522,7 @@ ArchGetFileLength(const char* fileName)
 string
 ArchGetFileName(FILE *file)
 {
-#if defined (ARCH_OS_LINUX)
+#if defined (ARCH_OS_LINUX) || defined(ARCH_OS_WASM_VM)
     string result;
     char buf[PATH_MAX];
     ssize_t r = readlink(
@@ -546,21 +553,13 @@ ArchGetFileName(FILE *file)
     }
 
     if (dwSize != 0) {
-        size_t outSize = WideCharToMultiByte(
-            CP_UTF8, 0, filePath.data(),
-            dwSize,
-            NULL, 0, NULL, NULL);
-        result.resize(outSize);
-        WideCharToMultiByte(
-            CP_UTF8, 0, filePath.data(),
-            -1,
-            &result.front(), outSize, NULL, NULL);
-
         // Strip path prefix if necessary.
         // See https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
         // for format of DOS device paths.
-        auto canonicalPath = std::filesystem::canonical(result);
-        result = canonicalPath.string();
+        
+        auto canonicalPath = std::filesystem::canonical(
+            std::filesystem::path(filePath.begin(), filePath.begin() + dwSize));
+        result = ArchWindowsUtf16ToUtf8(canonicalPath.wstring());
     }
     return result;                                        
 #else
@@ -598,6 +597,10 @@ ArchMakeTmpFile(const std::string& prefix, std::string* pathname)
 #if defined (ARCH_OS_WINDOWS)
 
 namespace {
+// Replace trailing `X`s in `sTemplate` with random letters and numbers and call
+// `func` with the result.  If `func` returns true, return the random name,
+// otherwise retry up to `maxRetry` times.  If `sTemplate` has no trailing `X`s
+// or if `func` never returns true, return the empty string.
 std::string
 MakeUnique(
     const std::string& sTemplate,
@@ -605,37 +608,35 @@ MakeUnique(
     int maxRetry = 1000)
 {
     static const bool init = (srand(GetTickCount()), true);
+    (void)init;
 
-    // Copy template to a writable buffer.
-    const auto length = sTemplate.size();
-    char* cTemplate = reinterpret_cast<char*>(alloca(length + 1));
-    strcpy(cTemplate, sTemplate.c_str());
-
+    std::string attempt;
+    
+    const auto xsPos = [&]() {
+        auto pos = sTemplate.find_last_not_of("X");
+        return pos == sTemplate.npos ? pos : pos + 1; // npos or first 'X'.
+    }();
+    if (xsPos == sTemplate.npos) {
+        return attempt;
+    }
+    
     // Fill template with random characters from table.
-    const char* table = "abcdefghijklmnopqrstuvwxyz123456";
-    std::string::size_type offset = length - 6;
-    int retry = 0;
-    do {
-        unsigned int x = (static_cast<unsigned int>(rand()) << 15) + rand();
-        cTemplate[offset + 0] = table[(x >> 25) & 31];
-        cTemplate[offset + 1] = table[(x >> 20) & 31];
-        cTemplate[offset + 2] = table[(x >> 15) & 31];
-        cTemplate[offset + 3] = table[(x >> 10) & 31];
-        cTemplate[offset + 4] = table[(x >>  5) & 31];
-        cTemplate[offset + 5] = table[(x      ) & 31];
-
-        // Invoke callback and if successful return the path.  Otherwise
-        // repeat with a different random name for up to maxRetry times.
-        if (func(cTemplate)) {
-            return cTemplate;
+    const char table[] = "bcdfghjklmnpqrstvwxz0123456789";
+    attempt = sTemplate;
+    for (int retry = 0; retry != maxRetry; ++retry) {
+        for (char *p = attempt.data() + xsPos; *p; ++p) {
+            *p = table[rand() % (sizeof(table)-1)];
         }
-    } while (++retry < maxRetry);
-
-    return std::string();
+        // Invoke callback and if successful return the path.  Otherwise repeat
+        // with a different random name for up to maxRetry times.
+        if (func(attempt.c_str())) {
+            return attempt;
+        }
+    }
+    attempt.clear();
+    return attempt;
 }
-
 }
-
 #endif
 
 int
@@ -656,9 +657,7 @@ ArchMakeTmpFile(const std::string& tmpdir,
             return fd != -1;
         });
 #else
-    // Copy template to a writable buffer.
-    char* cTemplate = reinterpret_cast<char*>(alloca(sTemplate.size() + 1));
-    strcpy(cTemplate, sTemplate.c_str());
+    char* cTemplate = sTemplate.data();
 
     // Open the file.
     int fd = mkstemp(cTemplate);
@@ -697,12 +696,9 @@ ArchMakeTmpSubdir(const std::string& tmpdir,
                 ArchWindowsUtf8ToUtf16(name).c_str(), NULL) != FALSE;
         });
 #else
-    // Copy template to a writable buffer.
-    char* cTemplate = reinterpret_cast<char*>(alloca(sTemplate.size() + 1));
-    strncpy(cTemplate, sTemplate.c_str(), sTemplate.size() + 1);
-
-    // Open the tmpdir.
-    char *tmpSubdir = mkdtemp(cTemplate);
+    // Copy template to a writable buffer and open the tmpdir.
+    std::string cTemplate = sTemplate;
+    char *tmpSubdir = mkdtemp(cTemplate.data());
 
     if (tmpSubdir) {
         // mkdtemp creates the directory with 0700 permissions.  We
@@ -735,6 +731,9 @@ Arch_InitTmpDir()
     // Strip the trailing slash
     tmpPath[sizeOfPath-1] = 0;
     _TmpDir = _strdup(ArchWindowsUtf16ToUtf8(tmpPath).c_str());
+#elif defined(ARCH_OS_DARWIN)
+    // On Apple platforms, we use the system APIs to get the designated temp directory
+    _TmpDir = strdup(Arch_DarwinGetTemporaryDirectory());
 #else
     const std::string tmpdir = ArchGetEnv("TMPDIR");
     if (!tmpdir.empty()) {
@@ -743,7 +742,9 @@ Arch_InitTmpDir()
         // set, the following call will leak a string.
         _TmpDir = strdup(tmpdir.c_str());
     } else {
-#if defined(ARCH_OS_DARWIN)
+#if defined(ARCH_OS_WASM_VM)
+        // Note: WASM will always create /tmp as part of its in memory
+        // filesystem. All data will be lost when the VM is shut down.
         _TmpDir = "/tmp";
 #else
         _TmpDir = "/var/tmp";
@@ -955,13 +956,15 @@ ArchPRead(FILE *file, void *buffer, size_t count, int64_t offset)
 #else // assume POSIX
     // Read and check if all got read (most common case).
     int fd = fileno(file);
-    // Convert to signed so we can compare the result of pread with count
-    // without the compiler complaining.  This conversion is implementation
-    // defined if count is larger than what's representable by int64_t, and
-    // POSIX pread also specifies that this case is implementation defined.  We
-    // follow suit.
+    // POSIX pread() has implementation-defined behavior when count exceeds
+    // INT_MAX. To ensure portability across platforms (particularly macOS),
+    // we cap read operations at this limit. Linux already does this
+    // internally.
+    constexpr int64_t maxChunkSize = INT_MAX;
+
     int64_t signedCount = static_cast<int64_t>(count);
-    int64_t nread = pread(fd, buffer, signedCount, offset);
+    int64_t chunkSize = std::min(signedCount, maxChunkSize);
+    int64_t nread = pread(fd, buffer, chunkSize, offset);
     if (ARCH_LIKELY(nread == signedCount || nread == 0))
         return nread;
 
@@ -972,10 +975,11 @@ ArchPRead(FILE *file, void *buffer, size_t count, int64_t offset)
         if (nread > 0) {
             total += nread;
             signedCount -= nread;
+            chunkSize = std::min(signedCount, maxChunkSize);
             offset += nread;
             buffer = static_cast<char *>(buffer) + nread;
         }
-        nread = pread(fd, buffer, signedCount, offset);
+        nread = pread(fd, buffer, chunkSize, offset);
         if (ARCH_LIKELY(nread == signedCount || nread == 0))
             return total + nread;
     }
@@ -1014,13 +1018,15 @@ ArchPWrite(FILE *file, void const *bytes, size_t count, int64_t offset)
 
     // Write and check if all got written (most common case).
     int fd = fileno(file);
-    // Convert to signed so we can compare the result of pwrite with count
-    // without the compiler complaining.  This conversion is implementation
-    // defined if count is larger than what's representable by int64_t, and
-    // POSIX pwrite also specifies that this case is implementation defined.  We
-    // follow suit.
+    // POSIX pwrite() has implementation-defined behavior when count exceeds
+    // INT_MAX. To ensure portability across platforms (particularly macOS),
+    // we cap write operations at this limit. Linux already does this
+    // internally.
+    constexpr int64_t maxChunkSize = INT_MAX;
+    
     int64_t signedCount = static_cast<int64_t>(count);
-    int64_t nwritten = pwrite(fd, bytes, signedCount, offset);
+    int64_t chunkSize = std::min(signedCount, maxChunkSize);
+    int64_t nwritten = pwrite(fd, bytes, chunkSize, offset);
     if (ARCH_LIKELY(nwritten == signedCount))
         return nwritten;
 
@@ -1030,9 +1036,10 @@ ArchPWrite(FILE *file, void const *bytes, size_t count, int64_t offset)
         // Update bookkeeping and retry.
         total += nwritten;
         signedCount -= nwritten;
+        chunkSize = std::min(signedCount, maxChunkSize);
         offset += nwritten;
         bytes = static_cast<char const *>(bytes) + nwritten;
-        nwritten = pwrite(fd, bytes, signedCount, offset);
+        nwritten = pwrite(fd, bytes, chunkSize, offset);
         if (ARCH_LIKELY(nwritten == signedCount))
             return total + nwritten;
     }
@@ -1094,14 +1101,12 @@ static int Arch_FileAccessError()
     }
 }
 
-int ArchFileAccess(const char* path, int mode)
+int ArchWindowsFileAccess(const char* path, uint32_t dwAccessMask)
 {
-    // Simple existence check is handled specially.
+    // We take the arg as uint32_t to avoid including Windows.h in our .h.
+    DWORD accessMask = dwAccessMask;
+    
     std::wstring wpath{ ArchWindowsUtf8ToUtf16(path) };
-    if (mode == F_OK) {
-        return (GetFileAttributesW(wpath.c_str()) != INVALID_FILE_ATTRIBUTES)
-                ? 0 : Arch_FileAccessError();
-    }
 
     const SECURITY_INFORMATION securityInfo = OWNER_SECURITY_INFORMATION |
                                               GROUP_SECURITY_INFORMATION |
@@ -1152,7 +1157,6 @@ int ArchFileAccess(const char* path, int mode)
         mapping.GenericExecute = FILE_GENERIC_EXECUTE;
         mapping.GenericAll = FILE_ALL_ACCESS;
 
-        DWORD accessMask = ArchModeToAccess(mode);
         MapGenericMask(&accessMask, &mapping);
 
         if (AccessCheck(security,
@@ -1176,6 +1180,17 @@ int ArchFileAccess(const char* path, int mode)
     CloseHandle(token);
 
     return result ? 0 : -1;
+}
+
+int ArchFileAccess(const char* path, int mode)
+{
+    // Simple existence check is handled specially.
+    if (mode == F_OK) {
+        std::wstring wpath{ ArchWindowsUtf8ToUtf16(path) };
+        return (GetFileAttributesW(wpath.c_str()) != INVALID_FILE_ATTRIBUTES)
+                ? 0 : Arch_FileAccessError();
+    }
+    return ArchWindowsFileAccess(path, ArchModeToAccess(mode));
 }
 
 // https://msdn.microsoft.com/en-us/library/windows/hardware/ff552012.aspx
@@ -1224,8 +1239,11 @@ std::string ArchReadLink(const char* path)
                                unsigned char[MAX_REPARSE_DATA_SIZE]);
     REPARSE_DATA_BUFFER* reparse = (REPARSE_DATA_BUFFER*)buffer.get();
 
+    // The windows API documentation for DeviceIoControl states the if the
+    // lpOverlapped parameter is NULL, lpBytesReturned cannot be NULL.
+    DWORD unusedBytesReturned = 0;
     if (!DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, NULL, 0, reparse,
-                         MAX_REPARSE_DATA_SIZE, NULL, NULL)) {
+                         MAX_REPARSE_DATA_SIZE, &unusedBytesReturned, NULL)) {
         CloseHandle(handle);
         return std::string();
     }
@@ -1376,5 +1394,40 @@ void ArchFileAdvise(
     }
 #endif
 }
+
+
+#if defined(ARCH_OS_WINDOWS)
+
+std::string ArchWindowsUtf16ToUtf8(const std::wstring &wstr)
+{
+    if (wstr.empty()) return std::string();
+    // first call is only to get required size for string
+    int size = WideCharToMultiByte(
+        CP_UTF8, 0, wstr.data(), (int)wstr.size(), NULL, 0, NULL, NULL);
+    if (size == 0) return std::string();
+    std::string str(size, 0);
+    if (WideCharToMultiByte(CP_UTF8, 0, wstr.data(), (int)wstr.size(),
+                            &str[0], size, NULL, NULL) == 0) {
+        return std::string();
+    }
+    return str;
+}
+
+std::wstring ArchWindowsUtf8ToUtf16(const std::string &str)
+{
+    if (str.empty()) return std::wstring();
+    // first call is only to get required size for wstring
+    int size = MultiByteToWideChar(
+        CP_UTF8, 0, str.data(), (int)str.size(), NULL, 0);
+    if (size == 0) return std::wstring();
+    std::wstring wstr(size, 0);
+    if(MultiByteToWideChar(
+           CP_UTF8, 0, str.data(), (int)str.size(), &wstr[0], size) == 0) {
+        return std::wstring();
+    }
+    return wstr;
+}
+
+#endif
 
 PXR_NAMESPACE_CLOSE_SCOPE

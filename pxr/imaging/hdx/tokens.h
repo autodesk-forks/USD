@@ -14,14 +14,13 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-
 #define HDX_TOKENS              \
     (hdxOitCounterBuffer)       \
     (hdxOitDataBuffer)          \
     (hdxOitDepthBuffer)         \
     (hdxOitIndexBuffer)         \
     (hdxSelectionBuffer)        \
-    (imagerVersion)             \
+    (imagerVersion) /* \deprecated */ \
     (lightingContext)           \
     (lightingShader)            \
     (occludedSelectionOpacity)  \
@@ -40,7 +39,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (oitRequestFlag)            \
     (oitClearedFlag)            \
     (renderPassState)           \
-    (renderIndexVersion)        \
+    (renderIndexVersion) /* \deprecated */ \
     (selection)                 \
     (selectionState)            \
     (selectionOffsets)          \
@@ -86,8 +85,7 @@ TF_DECLARE_PUBLIC_TOKENS(HdxPrimitiveTokens, HDX_API, HDX_PRIMITIVE_TOKENS);
     (inCameraGuide)             \
     (streamline)                \
     (interactiveOnlyGeom)       \
-    (path)                      \
-    (widget)
+    (path)
 
 TF_DECLARE_PUBLIC_TOKENS(HdxRenderTagTokens, HDX_API, HDX_RENDERTAG_TOKENS);
 
@@ -131,6 +129,7 @@ TF_DECLARE_PUBLIC_TOKENS(HdxAovTokens, HDX_API,
     (lightingContext)              \
     (useLighting)                  \
     (useColorMaterialDiffuse)      \
+    (lightCount)                   \
     (lightSource)                  \
     (position)                     \
     (ambient)                      \

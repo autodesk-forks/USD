@@ -23,6 +23,11 @@ HdStInstancer::HdStInstancer(HdSceneDelegate* delegate,
                              SdfPath const &id)
     : HdInstancer(delegate, id)
     , _instancePrimvarNumElements(0)
+    , _transform(1.0)
+    , _transformInverse(1.0)
+    , _visible(true)
+    , _hasDisplayOpacity(false)
+    , _hasNormals(false)
 {
 }
 
@@ -36,10 +41,43 @@ HdStInstancer::Sync(HdSceneDelegate *sceneDelegate,
 
     SdfPath const& instancerId = GetId();
 
+    if (*dirtyBits & HdChangeTracker::DirtyVisibility) {
+        _visible = sceneDelegate->GetVisible(instancerId);
+    }
+
+    if (*dirtyBits & HdChangeTracker::DirtyTransform) {
+        _transform = sceneDelegate->GetInstancerTransform(instancerId);
+        _transformInverse = _transform.GetInverse();
+    }
+
     _UpdateInstancer(sceneDelegate, dirtyBits);
     if (HdChangeTracker::IsAnyPrimvarDirty(*dirtyBits, instancerId)) {
         _SyncPrimvars(sceneDelegate, dirtyBits);
     }
+}
+
+bool
+HdStInstancer::HasDisplayOpacity() const
+{
+    return _hasDisplayOpacity;
+}
+
+bool
+HdStInstancer::HasNormals() const
+{
+    return _hasNormals;
+}
+
+const GfMatrix4d&
+HdStInstancer::GetTransform() const
+{
+    return _transform;
+}
+
+const GfMatrix4d&
+HdStInstancer::GetTransformInverse() const
+{
+    return _transformInverse;
 }
 
 void
@@ -61,6 +99,9 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
     // Reset _instancePrimvarNumElements, in case the number of instances
     // is varying.
     _instancePrimvarNumElements= 0;
+
+    _hasDisplayOpacity = false;
+    _hasNormals = false;
 
     for (HdPrimvarDescriptor const& primvar: primvars) {
         VtValue value = sceneDelegate->Get(instancerId, primvar.name);
@@ -126,6 +167,11 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
             }
 
             sources.push_back(source);
+
+            _hasDisplayOpacity = _hasDisplayOpacity ||
+                (primvar.name == HdTokens->displayOpacity);
+            _hasNormals = _hasNormals ||
+                (primvar.name == HdTokens->normals);
         }
     }
 
@@ -161,26 +207,36 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
 }
 
 void
-HdStInstancer::_GetInstanceIndices(SdfPath const &prototypeId,
-                            std::vector<VtIntArray> *instanceIndicesArray)
+HdStInstancer::_GetInstanceIndices(
+    const SdfPath &prototypeId,
+    std::vector<VtIntArray> * const instanceIndicesArray)
 {
     SdfPath const &instancerId = GetId();
-    VtIntArray instanceIndices
-        = GetDelegate()->GetInstanceIndices(instancerId, prototypeId);
 
-    // quick sanity check
-    // instance indices should not exceed the size of instance primvars.
-    for (auto it = instanceIndices.cbegin();
-         it != instanceIndices.cend(); ++it) {
-        if (*it >= (int)_instancePrimvarNumElements) {
-            TF_WARN("Instance index exceeds the element count of instance "
-                    "primvars (%d >= %zu) for <%s>",
-                    *it, _instancePrimvarNumElements, instancerId.GetText());
-            instanceIndices.clear();
-            // insert 0-th index as placeholder (0th should always exist, since
-            // we don't populate instance primvars with numElements == 0).
-            instanceIndices.push_back(0);
-            break;
+    VtIntArray instanceIndices;
+
+    if (_visible) {
+        instanceIndices =
+            GetDelegate()->GetInstanceIndices(instancerId, prototypeId);
+
+        // quick sanity check
+        // instance indices should not exceed the size of instance primvars.
+        for (auto it = instanceIndices.cbegin();
+             it != instanceIndices.cend(); ++it) {
+            if (*it >= (int)_instancePrimvarNumElements) {
+                TF_WARN("Instance index exceeds the element count of instance "
+                        "primvars (%d >= %zu) for <%s>",
+                        *it, _instancePrimvarNumElements,
+                        instancerId.GetText());
+                instanceIndices.clear();
+                if (_instancePrimvarNumElements > 0) {
+                    // insert 0-th index as placeholder (0th should always
+                    // exist, since we don't populate instance primvars with
+                    // numElements == 0).
+                    instanceIndices.push_back(0);
+                }
+                break;
+            }
         }
     }
 

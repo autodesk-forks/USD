@@ -10,8 +10,9 @@
 //
 // OS
 //
-
-#if defined(__linux__)
+#if defined(__EMSCRIPTEN__)
+#define ARCH_OS_WASM_VM
+#elif defined(__linux__)
 #define ARCH_OS_LINUX
 #elif defined(__APPLE__)
 #include "TargetConditionals.h"
@@ -35,7 +36,8 @@
 #if defined(i386) || defined(__i386__) || defined(__x86_64__) || \
     defined(_M_IX86) || defined(_M_X64)
 #define ARCH_CPU_INTEL
-#elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM)
+#elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || \
+    defined(_M_ARM64)
 #define ARCH_CPU_ARM
 #endif
 
@@ -43,8 +45,11 @@
 // Bits
 //
 
-#if defined(__x86_64__) || defined(__aarch64__) || defined(_M_X64)
+#if defined(__x86_64__) || defined(__aarch64__) || defined(_M_X64) || \
+    defined(_M_ARM64) || defined(__wasm64__)
 #define ARCH_BITS_64
+#elif defined(__wasm32__)
+#define ARCH_BITS_32
 #else
 #error "Unsupported architecture.  x86_64 or ARM64 required."
 #endif
@@ -79,12 +84,6 @@
 #define ARCH_HAS_GNU_STL_EXTENSIONS
 #endif
 
-// The current version of Apple clang does not support the thread_local
-// keyword.
-#if !(defined(ARCH_OS_DARWIN) && defined(ARCH_COMPILER_CLANG))
-#define ARCH_HAS_THREAD_LOCAL
-#endif
-
 // The MAP_POPULATE flag for mmap calls only exists on Linux platforms.
 #if defined(ARCH_OS_LINUX)
 #define ARCH_HAS_MMAP_MAP_POPULATE
@@ -100,6 +99,63 @@
     #if !defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL
     #define ARCH_PREPROCESSOR_MSVC_TRADITIONAL
     #endif
+#endif
+
+//
+// Sanitizers
+//
+
+// For most compilers sanitizers are enabled with something similar to
+// -fsanitize={address,thread,undefined}.
+// But detecting if the compiler is currently trying to make a sanitized build
+// can vary depending on the compiler (or between versions of the compiler).
+// The following checks will determine if the compiler is making a sanitized
+// build and set a definition if so.
+//
+// These definitions can be used to conditionally compile code where
+// instrumentation from the sanitizer needs augmentation; for instance
+// building a test for bad memory allocations when using address
+// sanitizers. Such a test would produce a false-positive from
+// address sanitizer at run-time resulting in a failed test.
+//
+// The definitions will only be defined if the compiler is actually
+// building with a specific sanitizer. The absence of a definition
+// means the compiler is not building with that sanitizer.
+#if defined(ARCH_COMPILER_CLANG)
+    #if defined(__has_feature)
+        #if __has_feature(address_sanitizer)
+            #define ARCH_SANITIZE_ADDRESS
+        #endif
+
+        // Definitions for other sanitizers intentionally
+        // omitted here
+
+    #endif
+#elif defined(ARCH_COMPILER_GCC)
+    #if defined(__has_feature)
+        #if __has_feature(address_sanitizer)
+            #define ARCH_SANITIZE_ADDRESS
+        #endif
+
+        // Definitions for other sanitizers intentionally
+        // omitted here
+
+    #else
+        #if defined(__SANITIZE_ADDRESS__)
+            #define ARCH_SANITIZE_ADDRESS
+        #endif
+
+        // Definitions for other sanitizers intentionally
+        // omitted here
+
+    #endif
+#elif defined(ARCH_COMPILER_MSVC)
+    #if defined(__SANITIZE_ADDRESS__)
+        #define ARCH_SANITIZE_ADDRESS
+    #endif
+
+    // Definitions for other sanitizers intentionally
+    // omitted here
 #endif
 
 #endif // PXR_BASE_ARCH_DEFINES_H 

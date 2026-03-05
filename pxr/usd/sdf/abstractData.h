@@ -336,7 +336,8 @@ public:
 
     SDF_API
     virtual bool
-    GetBracketingTimeSamples(double time, double* tLower, double* tUpper) const = 0;
+    GetBracketingTimeSamples(double time, double* tLower, 
+                             double* tUpper) const = 0;
 
     SDF_API
     virtual size_t
@@ -348,6 +349,23 @@ public:
                                     double time,
                                     double* tLower, double* tUpper) const = 0;
 
+    /// Returns the previous time sample authored just before the querying \p 
+    /// time.
+    ///
+    /// If there is no time sample authored just before \p time, this function
+    /// returns false. Otherwise, it returns true and sets \p tPrevious to the
+    /// time of the previous sample.
+    ///
+    /// \note The base class implementation provides an inefficient 
+    /// implementation by searching for bracketing time samples twice, if 
+    /// \p time happens to land on an authored time sample. Its recommended to 
+    /// override this method with a more efficient implementation catering to 
+    /// the specific data representation.
+    SDF_API
+    virtual bool
+    GetPreviousTimeSampleForPath(const SdfPath& path, double time, 
+                                 double* tPrevious) const;
+
     SDF_API
     virtual bool
     QueryTimeSample(const SdfPath& path, double time,
@@ -356,6 +374,17 @@ public:
     virtual bool
     QueryTimeSample(const SdfPath& path, double time,
                     SdfAbstractDataValue *optionalValue) const = 0;
+
+    /// If there is a time sample authored at \p time, return its value's
+    /// typeid(), otherwise return typeid(void).
+    ///
+    /// \note The base class provides an implementation in terms of
+    /// QueryTimeSample(path, time, VtValue *), returning VtValue::GetTypeid().
+    /// Consider overriding this member function if not fetching the VtValue
+    /// would be more performant.
+    SDF_API
+    virtual const std::type_info &
+    QueryTimeSampleTypeid(const SdfPath &path, double time) const;
 
     SDF_API
     virtual void
@@ -409,9 +438,13 @@ public:
         }
         
         isValueBlock = false;
+        isAnimationBlock = false;
         typeMismatch = false;
         if constexpr (std::is_same_v<Type, SdfValueBlock>) {
             isValueBlock = true;
+            return true;
+        } else if constexpr (std::is_same_v<Type, SdfAnimationBlock>) {
+            isAnimationBlock = true;
             return true;
         }
         if (TfSafeTypeCompare(typeid(Type), valueType)) {
@@ -425,6 +458,7 @@ public:
     void* value;
     const std::type_info& valueType;
     bool isValueBlock;
+    bool isAnimationBlock;
     bool typeMismatch;
 
 protected:
@@ -432,6 +466,7 @@ protected:
         : value(value_)
         , valueType(valueType_)
         , isValueBlock(false)
+        , isAnimationBlock(false)
         , typeMismatch(false)
     { }
 
@@ -474,16 +509,24 @@ private:
     bool _StoreVtValueImpl(Value &&v) {
         typeMismatch = false;
         isValueBlock = false;
+        isAnimationBlock = false;
         if (ARCH_LIKELY(std::forward<Value>(v).template IsHolding<T>())) {
             *static_cast<T*>(value) = _Get(std::forward<Value>(v));
-            if (std::is_same_v<T, SdfValueBlock>) {
+            if constexpr (std::is_same_v<T, SdfValueBlock>) {
                 isValueBlock = true;
+            } else if constexpr (std::is_same_v<T, SdfAnimationBlock>) {
+                isAnimationBlock = true;
             }
             return true;
         }
         
         if (std::forward<Value>(v).template IsHolding<SdfValueBlock>()) {
             isValueBlock = true;
+            return true;
+        } 
+        else if (std::forward<Value>(v).template IsHolding<SdfAnimationBlock>()) 
+        {
+            isAnimationBlock = true;
             return true;
         }
 
@@ -526,12 +569,18 @@ public:
 
     const void* value;
     const std::type_info& valueType;
+    const bool isArrayEdit;
+    const std::type_info& elementValueType; // void unless isArrayEdit
 
 protected:
     SdfAbstractDataConstValue(const void* value_, 
-                              const std::type_info& valueType_)
+                              const std::type_info& valueType_,
+                              const bool isArrayEdit_,
+                              const std::type_info& elementValueType_)
         : value(value_)
         , valueType(valueType_)
+        , isArrayEdit(isArrayEdit_)
+        , elementValueType(elementValueType_)
     { 
     }
 };
@@ -553,9 +602,19 @@ template <class T>
 class SdfAbstractDataConstTypedValue : public SdfAbstractDataConstValue
 {
 public:
+    static std::type_info const &_GetElementType() {
+        if constexpr (VtIsArrayEdit<T>::value) {
+            return typeid(typename T::ElementType);
+        }
+        else {
+            return typeid(void);
+        }
+    }
+
     SdfAbstractDataConstTypedValue(const T* value)
-        : SdfAbstractDataConstValue(value, typeid(T))
-    { }
+        : SdfAbstractDataConstValue(
+            value, typeid(T), VtIsArrayEdit<T>::value, this->_GetElementType())
+        {}
     
     virtual bool GetValue(VtValue* v) const
     {

@@ -56,6 +56,14 @@ public:
         return Pcp_CompressedSdSite(_nodeIdx, layerIndex);
     }
 
+    // If the current node has a direct sibling, move this iterator to
+    // that node. Otherwise, move this iterator to the next sibling of
+    // the nearest ancestor node with siblings. If no such node exists,
+    // (i.e., the current node is the weakest node in the index), this
+    // iterator will become the end of the range of all nodes in the
+    // prim index.
+    PCP_API PcpNodeIterator& MoveToNextSubtree();
+
     reference operator*() const { return dereference(); }
     pointer operator->() const { return pointer(dereference()); }
     reference operator[](const difference_type index) const {

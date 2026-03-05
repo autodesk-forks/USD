@@ -638,8 +638,8 @@ UsdGeomXformable::_GetOrderedXformOps(bool *resetsXformStack,
     result.reserve(opOrderVec.size());
 
     UsdPrim thisPrim = GetPrim();
-    for (VtTokenArray::iterator it = opOrderVec.begin() ; 
-         it != opOrderVec.end(); ++it) {
+    for (VtTokenArray::const_iterator it = opOrderVec.cbegin() ; 
+         it != opOrderVec.cend(); ++it) {
 
         const TfToken &opName = *it;
 
@@ -712,14 +712,35 @@ UsdGeomXformable::XformQuery::GetLocalTransformation(
 }
 
 bool
+UsdGeomXformable::XformQuery::TransformMightHaveEffect() const
+{
+    // Resetting the stack has an effect.
+    if (_resetsXformStack) {
+        return true;
+    }
+    // Empty op list has no effect.
+    if (_xformOps.empty()) {
+        return false;
+    }
+    // An op followed by its inverse has no effect.  For example:
+    // ["xformOp:translate:pivot", "!invert!:xformOp:translate:pivot"]
+    if (_xformOps.size() == 2
+        && (_xformOps[0].GetOpType() == _xformOps[1].GetOpType())
+        && (_xformOps[0].IsInverseOp() != _xformOps[1].IsInverseOp())
+        && (_xformOps[0].GetName() == _xformOps[1].GetName())) {
+        return false;
+    }
+    return true;
+}
+
+bool
 UsdGeomXformable::XformQuery::HasNonEmptyXformOpOrder() const
 {
     return !_xformOps.empty();
 }
 
-static
-bool 
-_TransformMightBeTimeVarying(vector<UsdGeomXformOp> const &xformOps)
+static inline bool 
+_OpsMightBeTimeVarying(vector<UsdGeomXformOp> const &xformOps)
 {
     // If any of the xform ops may vary, then the cumulative transform may vary.
     TF_FOR_ALL(it, xformOps) {
@@ -733,7 +754,7 @@ _TransformMightBeTimeVarying(vector<UsdGeomXformOp> const &xformOps)
 bool
 UsdGeomXformable::XformQuery::TransformMightBeTimeVarying() const
 {
-    return _TransformMightBeTimeVarying(_xformOps);
+    return TransformMightHaveEffect() && _OpsMightBeTimeVarying(_xformOps);
 }
 
 bool
@@ -746,9 +767,8 @@ UsdGeomXformable::TransformMightBeTimeVarying() const
     if (opOrderVec.size() == 0) {
         return false;
     }
-
-    for (VtTokenArray::reverse_iterator it = opOrderVec.rbegin() ; 
-         it != opOrderVec.rend(); ++it) {
+    for (VtTokenArray::const_reverse_iterator it = opOrderVec.crbegin() ; 
+         it != opOrderVec.crend(); ++it) {
 
         const TfToken &opName = *it;
 
@@ -778,7 +798,7 @@ UsdGeomXformable::TransformMightBeTimeVarying(
     const vector<UsdGeomXformOp> &ops) const
 {
     if (!ops.empty())
-        return _TransformMightBeTimeVarying(ops);
+        return _OpsMightBeTimeVarying(ops);
 
     // Assume unvarying if neither orderedXformOps nor transform attribute is 
     // authored.
@@ -931,15 +951,14 @@ UsdGeomXformable::GetLocalTransformation(
     if (opOrderVec.size() == 0) {
         return true;
     }
-    
-    for (VtTokenArray::reverse_iterator it = opOrderVec.rbegin() ; 
-         it != opOrderVec.rend(); ++it) {
+    for (VtTokenArray::const_reverse_iterator it = opOrderVec.crbegin() ; 
+         it != opOrderVec.crend(); ++it) {
             
         const TfToken &opName = *it;
 
         // Skip the current xformOp and the next one if they're inverses of 
         // each other.
-        if ((it+1) != opOrderVec.rend()) {
+        if ((it+1) != opOrderVec.crend()) {
             const TfToken &nextOpName = *(it+1);
             if (_AreInverseXformOps(opName, nextOpName)) {
                 ++it;

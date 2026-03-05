@@ -5,7 +5,13 @@
 # https://openusd.org/license.
 #
 import setuptools
-import argparse, glob, os, platform, re, shutil, sys
+import argparse
+import glob
+import os
+import platform
+import re
+import shutil
+import sys
 
 # This setup.py script expects to be run from an inst directory in a typical
 # USD build run from build_usd.py.
@@ -45,7 +51,20 @@ shutil.copytree(os.path.join(USD_BUILD_OUTPUT, 'lib'), os.path.join(BUILD_DIR, '
 # distribution. This breaks the relative paths in the pluginfos, but we'll need
 # to update them later anyway after running "auditwheel repair", which will
 # move the libraries to a new directory
-shutil.move(os.path.join(BUILD_DIR, 'lib/usd'), os.path.join(BUILD_DIR, 'lib/python/pxr/pluginfo'))
+plugInfoDir = os.path.join(BUILD_DIR, 'lib/python/pxr/pluginfo')
+
+shutil.move(os.path.join(BUILD_DIR, 'lib/usd'), plugInfoDir)
+
+# Move the pluginfos for plugins that are distributed with the package
+# to the same directory as above.
+#
+# XXX:
+# Currently all plugins are built into the monolithic shared library, so
+# we just need to move the pluginfos over. If we ever ship plugins that
+# are kept separate, we'll need to copy those over too.
+for p in glob.glob(os.path.join(USD_BUILD_OUTPUT, 'plugin/usd/*')):
+    if os.path.isdir(p):
+        shutil.move(p, plugInfoDir)
 
 if windows():
     # On windows we also need dlls from the bin directory
@@ -88,12 +107,12 @@ with open("README.md", "r") as fh:
 # Get the library version number from the installed pxr.h header.
 with open(os.path.join(USD_BUILD_OUTPUT, "include/pxr/pxr.h"), "r") as fh:
     for line in fh:
-        m = re.match("#define PXR_MINOR_VERSION (\d+)", line)
+        m = re.match(r"#define PXR_MINOR_VERSION (\d+)", line)
         if m:
             minorVersion = m.groups(1)[0]
             continue
 
-        m = re.match("#define PXR_PATCH_VERSION (\d+)", line)
+        m = re.match(r"#define PXR_PATCH_VERSION (\d+)", line)
         if m:
             patchVersion = m.groups(1)[0]
             continue
@@ -112,6 +131,7 @@ setuptools.setup(
     description="Pixar's Universal Scene Description",
     long_description=long_description,
     long_description_content_type="text/markdown",
+    license="LicenseRef-TOST-1.0",
     url="https://openusd.org",
     project_urls={
         "Documentation": "https://openusd.org",
@@ -123,16 +143,16 @@ setuptools.setup(
     package_dir={"": os.path.join(BUILD_DIR, 'lib/python')},
     package_data={
         "": ["*.so", "*.dll", "*.pyd"],
-        "pxr": ["pluginfo/*", "pluginfo/*/*", "pluginfo/*/*/*"],
+        "pxr": ["pluginfo/*", "pluginfo/*/*", "pluginfo/*/*/*",
+                "pluginfo/*/*/shaders/*"],
     },
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: Other/Proprietary License",
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: Microsoft :: Windows :: Windows 10",
         "Environment :: Console",
         "Topic :: Multimedia :: Graphics",
     ],
-    python_requires='>=3.6, <3.13',
+    python_requires='>=3.8, <3.14',
 )

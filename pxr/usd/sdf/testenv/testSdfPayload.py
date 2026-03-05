@@ -16,7 +16,7 @@ class TestSdfPayload(unittest.TestCase):
 
         # Generate a bunch of unique payloads
         args = [
-            ['assetPath', ['', '//test/layer.sdf']],
+            ['assetPath', ['', '//test/layer.usda']],
             ['primPath', ['', '/rootPrim', '/rootPrim/child']],
             ['layerOffset', [Sdf.LayerOffset(),  Sdf.LayerOffset(48, -2)]]
         ]
@@ -81,6 +81,15 @@ class TestSdfPayload(unittest.TestCase):
             hash(payload),
             hash(Sdf.Payload(payload))
         )
+
+    def test_attributes_cant_be_set(self):
+        payload = Sdf.Payload()
+        with self.assertRaises(AttributeError):
+            payload.assetPath = "/path/to/asset"
+        with self.assertRaises(AttributeError):
+            payload.primPath = Sdf.Path("/path/to/prim")
+        with self.assertRaises(AttributeError):
+            payload.layerOffset = Sdf.LayerOffset(offset = 10.0, scale = 1.5)
 
 
 

@@ -19,7 +19,6 @@
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/CoordSys)
-	[primvars]
 </CoordSys/modelSpace> type = 
 	[__usdPrimInfo]
 		[isLoaded]
@@ -31,7 +30,6 @@
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/CoordSys/modelSpace)
-	[primvars]
 </CoordSys/worldSpace> type = 
 	[__usdPrimInfo]
 		[isLoaded]
@@ -40,10 +38,20 @@
 			def
 		[typeName]
 			Xform
+	[geomXformVectors]
+		[pivot]
+			(0, 0, 0)
+		[rotation]
+			(0, 0, 0)
+		[rotationOrder]
+			RotationOrderXYZ
+		[scale]
+			(1, 1, 1)
+		[translation]
+			(4, 5, 6)
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/CoordSys/worldSpace)
-	[primvars]
 	[xform]
 		[matrix]
 			( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (4, 5, 6, 1) )
@@ -60,7 +68,6 @@
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/Geom)
-	[primvars]
 </Geom/Subdiv> type = mesh
 	[__usdPrimInfo]
 		[apiSchemas]
@@ -76,12 +83,6 @@
 			/CoordSys/modelSpace
 		[worldSpace]
 			/CoordSys/worldSpace
-	[directMaterialBindings]
-		[preview]
-			[bindingStrength]
-				weakerThanDescendants
-			[materialPath]
-				/Materials/MyMaterial
 	[extent]
 		[max]
 			(2, 2, 2)
@@ -134,8 +135,6 @@
 				vertex
 			[primvarValue]
 				[(0, 1), (0.4, 1), (0, 0), (0.4, 0)]
-			[role]
-				
 		[points]
 			[interpolation]
 				vertex
@@ -143,6 +142,36 @@
 				[(-2, -2, -2), (2, -2, -2), (-2, -2, 2), (2, -2, 2)]
 			[role]
 				point
+	[usdMaterialBindings]
+		[preview]
+			[0]
+				[directMaterialBinding]
+					[bindingStrength]
+						weakerThanDescendants
+					[materialPath]
+						/Materials/MyMaterial
+</Geom/XformWithPivot> type = 
+	[__usdPrimInfo]
+		[isLoaded]
+			1
+		[specifier]
+			def
+		[typeName]
+			Xform
+	[geomXformVectors]
+		[pivot]
+			(123, 456, 789)
+		[rotation]
+			(0, 0, 0)
+		[rotationOrder]
+			RotationOrderXYZ
+		[scale]
+			(1, 1, 1)
+		[translation]
+			(0, 0, 0)
+	[primOrigin]
+		[scenePath]
+			HdPrimOriginSchema::OriginPath(/Geom/XformWithPivot)
 </Materials> type = 
 	[__usdPrimInfo]
 		[isLoaded]
@@ -154,7 +183,6 @@
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/Materials)
-	[primvars]
 </Materials/MyMaterial> type = material
 	[__usdPrimInfo]
 		[isLoaded]
@@ -166,7 +194,10 @@
 	[material]
 		[]
 			[config]
-			[interfaceMappings]
+			[interface]
+				[parameterOrder]
+					[]
+				[parameters]
 			[nodes]
 				[MyPrimvar]
 					[inputConnections]
@@ -174,8 +205,75 @@
 						HwPrimvar_1
 					[parameters]
 						[varname]
+							[typeName]
+								token
+							[value]
+								map1_uv
+				[MySurface]
+					[inputConnections]
+						[diffuseColor]
+							[0]
+								[upstreamNodeOutputName]
+									color
+								[upstreamNodePath]
+									MyTexture
+					[nodeIdentifier]
+						
+					[nodeTypeInfo]
+						[glslfx:sourceAsset]
+							@shader1.glslfx@
+						[implementationSource]
+							sourceAsset
+						[sdrMetadata]
+							{}
+					[parameters]
+				[MyTexture]
+					[inputConnections]
+						[uv]
+							[0]
+								[upstreamNodeOutputName]
+									result
+								[upstreamNodePath]
+									MyPrimvar
+					[nodeIdentifier]
+						HwUvTexture_1
+					[parameters]
+						[file]
 							[colorSpace]
 								
+							[typeName]
+								asset
+							[value]
+								@texture1.jpg@
+			[terminals]
+				[surface]
+					[upstreamNodeOutputName]
+						surface
+					[upstreamNodePath]
+						MySurface
+		[__all]
+			[config]
+			[interface]
+				[parameterOrder]
+					[]
+				[parameters]
+			[nodes]
+				[DisconnectedNode]
+					[inputConnections]
+					[nodeIdentifier]
+						AbsFloat_1
+					[parameters]
+						[input]
+							[typeName]
+								float
+							[value]
+								1.2
+				[MyPrimvar]
+					[inputConnections]
+					[nodeIdentifier]
+						HwPrimvar_1
+					[parameters]
+						[varname]
 							[typeName]
 								token
 							[value]
@@ -225,4 +323,3 @@
 	[primOrigin]
 		[scenePath]
 			HdPrimOriginSchema::OriginPath(/Materials/MyMaterial)
-	[primvars]

@@ -24,7 +24,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DECLARE_WEAK_PTRS(PcpLayerStack);
 
-class Usd_InterpolatorBase;
+class Usd_Interpolator;
+class UsdTimeCode;
 
 /// Returns true if the given scene description metadata \p fieldName is
 /// associated with value clip functionality.
@@ -149,8 +150,13 @@ public:
 
     template <class T>
     bool QueryTimeSample(
-        const SdfPath& path, ExternalTime time, 
-        Usd_InterpolatorBase* interpolator, T* value) const;
+        const SdfPath& path, UsdTimeCode time, 
+        Usd_Interpolator const &interpolator, T* value) const;
+
+    /// If there is a time sample for \p path at \p time, return its value's
+    /// typeid(), otherwise return typeid(void).
+    const std::type_info &QueryTimeSampleTypeid(
+        const SdfPath &path, UsdTimeCode time) const;
 
     /// Return true if this clip has authored time samples for the attribute
     /// corresponding to the given \p path. Clips may add time sample times
@@ -223,7 +229,7 @@ private:
 
     // Helpers to translate between internal and external time domains.
     InternalTime _TranslateTimeToInternal(
-        ExternalTime extTime) const;
+        UsdTimeCode extTime) const;
     ExternalTime _TranslateTimeToExternal(
         InternalTime clipTime, size_t i1, size_t i2) const;
 

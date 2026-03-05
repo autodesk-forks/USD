@@ -7,6 +7,7 @@
 
 #include "pxr/imaging/hdSt/textureObject.h"
 
+#include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/assetUvTextureCpuData.h"
 #include "pxr/imaging/hdSt/fieldTextureCpuData.h"
 #include "pxr/imaging/hdSt/ptexTextureObject.h"
@@ -27,6 +28,58 @@
 #include "pxr/usd/ar/resolver.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+///////////////////////////////////////////////////////////////////////////////
+// Generic Helpers
+
+// Read from textureId to create a fallback value for fallback texture creation
+[[nodiscard]] std::pair<HgiFormat, VtValue> GetDefaultForFallbackTexture(
+    const HdStTextureIdentifier& textureId)
+{
+    std::stringstream fallbackStringStream;
+    fallbackStringStream << "Loading "
+        << textureId.GetFilePath().GetText()
+        << " failed!";
+
+    VtValue fallback = textureId.GetFallback();
+    HgiFormat fallbackFormat;
+    if (fallback.CanCast<GfVec4f>()) {
+        fallback = fallback.Get<GfVec4f>();
+        fallbackFormat = HgiFormatFloat32Vec4;
+    } else if (fallback.CanCast<GfVec3f>()) {
+        // 3 component formats have low support, expand to 4 component.
+        const GfVec3f fallbackRGB = fallback.Get<GfVec3f>();
+        fallback = GfVec4f(
+            fallbackRGB[0], fallbackRGB[1], fallbackRGB[2], 1.0);
+        fallbackFormat = HgiFormatFloat32Vec4;
+        fallbackStringStream
+        << " Padding default to vec4 for compatibility!";
+    } else if (fallback.CanCast<GfVec2f>()) {
+        fallback = fallback.Get<GfVec2f>();
+        fallbackFormat = HgiFormatFloat32Vec2;
+    } else if (fallback.CanCast<float>()) {
+        fallback = fallback.Get<float>();
+        fallbackFormat = HgiFormatFloat32;
+    } else {
+        if (fallback.IsEmpty()) {
+            fallbackStringStream
+                << " No fallback value available, using default!";
+        } else {
+            fallbackStringStream
+                << " Fallback value invalid: "
+                << fallback << ", using default!";
+        }
+        fallback = GfVec4f(0.0, 0.0, 0.0, 1.0);
+        fallbackFormat = HgiFormatFloat32Vec4;
+    }
+    fallbackStringStream << " Using fallback value: " << fallback;
+    if (!textureId.ShouldDefaultToFallback()) {
+        TF_WARN("%s", fallbackStringStream.str().c_str());
+    } else {
+        TF_DEBUG_MSG(HDST_LOG_TEXTURE_FALLBACKS, fallbackStringStream.str());
+    }
+    return { fallbackFormat, fallback };
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // HdStTextureObject
@@ -247,13 +300,29 @@ HdStUvTextureObject::HdStUvTextureObject(
   : HdStTextureObject(textureId, textureObjectRegistry)
   , _wrapParameters{HdWrapNoOpinion, HdWrapNoOpinion}
 {
+    const HdStSubtextureIdentifier * const subId =
+        textureId.GetSubtextureIdentifier();
+    if (dynamic_cast<const HdStDynamicCubemapSubtextureIdentifier *>(subId)) {
+        _textureType = HdStTextureType::Cubemap;
+    } else {
+        _textureType = HdStTextureType::Uv;
+    }
 }
 
 
 HdStTextureType
 HdStUvTextureObject::GetTextureType() const
 {
-    return HdStTextureType::Uv;
+    return _textureType;
+}
+
+size_t
+HdStUvTextureObject::GetCommittedSize() const
+{
+    if (!_cpuData) {
+        return 0;
+    }
+    return _cpuData->GetTextureDesc().pixelsByteSize;
 }
 
 HdStUvTextureObject::~HdStUvTextureObject()
@@ -358,6 +427,10 @@ HdStAssetUvTextureObject::_Load()
 {
     TRACE_FUNCTION();
 
+    if (GetTextureIdentifier().ShouldDefaultToFallback()) {
+        return;
+    }
+
     std::unique_ptr<HdStAssetUvTextureCpuData> cpuData =
         std::make_unique<HdStAssetUvTextureCpuData>(
             GetTextureIdentifier().GetFilePath(),
@@ -392,18 +465,21 @@ HdStAssetUvTextureObject::_Commit()
     }
 
     if (!_valid) {
-        // Create 1x1x1 black fallback texture.
+        const auto [fallbackFormat, fallbackValue] =
+            GetDefaultForFallbackTexture(GetTextureIdentifier());
+        // Create 1x1 fallback texture.
         HgiTextureDesc textureDesc;
-        textureDesc.debugName = "AssetUvTextureFallback";
+        textureDesc.debugName = GetTextureIdentifier().GetFilePath().GetString()
+            + "_FALLBACK";
         textureDesc.usage = HgiTextureUsageBitsShaderRead;
         textureDesc.type = HgiTextureType2D;
         textureDesc.dimensions = GfVec3i(1, 1, 1);
-        textureDesc.format = HgiFormatUNorm8Vec4;
+        textureDesc.format = fallbackFormat;
         textureDesc.mipLevels = 1;
         textureDesc.layerCount = 1;
-        const unsigned char data[4] = {0, 0, 0, 255};
-        textureDesc.initialData = &data[0];
-        textureDesc.pixelsByteSize = 4 * sizeof(unsigned char);
+        textureDesc.initialData = HdGetValueData(fallbackValue);
+        textureDesc.pixelsByteSize = HgiGetDataSize(
+            fallbackFormat, textureDesc.dimensions);
         _CreateTexture(textureDesc);
     }
 
@@ -513,6 +589,10 @@ HdStFieldTextureObject::_Load()
 {
     TRACE_FUNCTION();
 
+    if (GetTextureIdentifier().ShouldDefaultToFallback()) {
+        return;
+    }
+
     HioFieldTextureDataSharedPtr const texData = _ComputeFieldTexData(
         GetTextureIdentifier(),
         GetTargetMemory());
@@ -561,18 +641,21 @@ HdStFieldTextureObject::_Commit()
         _gpuTexture = hgi->CreateTexture(_cpuData->GetTextureDesc());
         _valid = true;
     } else {
+        const auto [fallbackFormat, fallbackValue] =
+            GetDefaultForFallbackTexture(GetTextureIdentifier());
         // Create 1x1x1 black fallback texture.
         HgiTextureDesc textureDesc;
-        textureDesc.debugName = "FieldTextureFallback";
+        textureDesc.debugName = GetTextureIdentifier().GetFilePath().GetString()
+            + "_FALLBACK";
         textureDesc.usage = HgiTextureUsageBitsShaderRead;
-        textureDesc.format = HgiFormatUNorm8Vec4;
+        textureDesc.format = fallbackFormat;
         textureDesc.type = HgiTextureType3D;
         textureDesc.dimensions = GfVec3i(1, 1, 1);
         textureDesc.layerCount = 1;
         textureDesc.mipLevels = 1;
-        textureDesc.pixelsByteSize = 4 * sizeof(unsigned char);
-        const unsigned char data[4] = {0, 0, 0, 255};
-        textureDesc.initialData = &data[0];
+        textureDesc.initialData = HdGetValueData(fallbackValue);
+        textureDesc.pixelsByteSize = HgiGetDataSize(
+            fallbackFormat, textureDesc.dimensions);
         _gpuTexture = hgi->CreateTexture(textureDesc);
     }
 
@@ -592,6 +675,15 @@ HdStTextureType
 HdStFieldTextureObject::GetTextureType() const
 {
     return HdStTextureType::Field;
+}
+
+size_t
+HdStFieldTextureObject::GetCommittedSize() const
+{
+    if (!_cpuData) {
+        return 0;
+    }
+    return _cpuData->GetTextureDesc().pixelsByteSize;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

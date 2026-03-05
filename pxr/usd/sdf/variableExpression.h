@@ -69,6 +69,10 @@ public:
     SDF_API
     explicit SdfVariableExpression(const std::string& expr);
 
+    /// \overload
+    SDF_API
+    explicit SdfVariableExpression(std::string&& expr);
+
     /// Construct an object representing an invalid expression.
     SDF_API
     SdfVariableExpression();
@@ -116,6 +120,9 @@ public:
     /// expression.
     SDF_API
     const std::vector<std::string>& GetErrors() const;
+
+    /// \name Evaluation
+    /// @{
 
     /// \class EmptyList
     /// A result value representing an empty list.
@@ -206,10 +213,179 @@ public:
         return r;
     }
 
+    /// @}
+
+    /// \name Building Expressions
+    /// Utilities for programatically building a variable expression.
+    /// These functions can be chained together to create complex
+    /// expressions. For example:
+    /// 
+    /// \code
+    /// const SdfVariableExpression containsExpr =
+    ///    SdfVariableExpression::MakeFunction(
+    ///        "contains",
+    ///        SdfVariableExpression::MakeList(
+    ///            SdfVariableExpression::MakeLiteral("foo"),
+    ///            SdfVariableExpression::MakeLiteral("bar")),
+    ///        SdfVariableExpression::MakeVariable("VAR"));
+    /// \endcode
+    ///
+    /// This yields the expression `contains(["foo", "bar"], ${VAR})`.
+    ///
+    /// Note that these functions may yield invalid expressions that
+    /// cannot be evaluated. For example, calling MakeFunction with
+    /// an unrecognized function name will produce an SdfVariableExpression
+    /// whose bool operator returns false. However, calling GetString on
+    /// the returned SdfVariableExpression will still return the
+    /// expression string for inspection.
+    ///
+    /// @{
+
+    /// \class Builder
+    /// Helper class for storing intermediate results when building
+    /// a variable expression.
+    class Builder
+    {
+    public:
+        SDF_API operator SdfVariableExpression() const;
+
+    private:
+        friend class SdfVariableExpression;
+        Builder(std::string&& expr) : _expr(std::move(expr)) { }
+        std::string _expr;
+    };
+
+    /// \class FunctionBuilder
+    /// Helper class for storing intermediate results when building
+    /// a function variable expression.
+    class FunctionBuilder
+    {
+    public:
+        /// Add an expression as an argument to the function call.
+        /// \see MakeFunction
+        template <class Argument>
+        FunctionBuilder& AddArgument(Argument&& arg);
+
+        SDF_API operator SdfVariableExpression() const;
+        SDF_API operator Builder() const &;
+        SDF_API operator Builder() &&;
+
+    private:
+        friend class SdfVariableExpression;
+        FunctionBuilder(const std::string& name) : _expr(name + '(') { }
+        std::string _expr;
+    };
+
+    /// \class ListBuilder
+    /// Helper class for storing intermediate results when building
+    /// a list variable expression.
+    class ListBuilder
+    {
+    public:
+        /// Add an expression as an element to the list.
+        /// \see MakeList
+        template <class Element>
+        ListBuilder& AddElement(Element&& elem);
+
+        /// Add values in \p values as literal expressions to the list.
+        /// \see MakeList
+        template <class T>
+        ListBuilder& AddLiteralValues(const std::vector<T>& values);
+
+        SDF_API operator SdfVariableExpression() const;
+        SDF_API operator Builder() const &;
+        SDF_API operator Builder() &&;
+
+    private:
+        friend class SdfVariableExpression;
+        ListBuilder() : _expr("[") { }
+
+        std::string _expr;
+    };
+
+    /// Create a function expression that calls the function named \p fnName
+    /// with \p fnArgs as arguments, i.e. `fnName(fnArgs1, fnArgs2, ...)`.
+    ///
+    /// \p fnArgs must be other SdfVariableExpression objects or the result
+    /// of other expression builder functions.
+    template <class... Arguments>
+    static FunctionBuilder
+    MakeFunction(const std::string& fnName, Arguments&&... fnArgs)
+    {
+        FunctionBuilder b(fnName);
+        (b.AddArgument(std::forward<Arguments>(fnArgs)), ...);
+        return b;
+    }
+
+    /// Create a list expression with \p listElems as elements, i.e.
+    /// `[listElems1, listElems2, ...]`.
+    ///
+    /// \p elems must be other SdfVariableExpression objects or the result
+    /// of other expression builder functions.
+    template <class... Elements>
+    static ListBuilder
+    MakeList(Elements&&... elems)
+    {
+        ListBuilder b;
+        (b.AddElement(std::forward<Elements>(elems)), ...);
+        return b;
+    }
+
+    /// Create a list expression with the values in \p values as literal
+    /// elements.
+    ///
+    /// \p values must hold types that can be represented by literal
+    /// expressions, i.e. a type for which MakeLiteral is defined.
+    template <class T>
+    static ListBuilder
+    MakeListOfLiterals(const std::vector<T>& values)
+    {
+        return ListBuilder().AddLiteralValues(values);
+    }
+
+    /// Create a literal expression for \p value.
+    SDF_API static Builder MakeLiteral(int64_t value);
+    SDF_API static Builder MakeLiteral(bool value);
+    SDF_API static Builder MakeLiteral(const std::string& value);
+    SDF_API static Builder MakeLiteral(const char* value);
+
+    /// Create a "None" literal expression.
+    SDF_API static Builder MakeNone();
+
+    /// Create a variable reference expression for the variable named
+    /// \p name, i.e. `${name}`.
+    SDF_API static Builder MakeVariable(const std::string& name);
+
+    /// @}
+
 private:
     SDF_API
     static std::string
     _FormatUnexpectedTypeError(const VtValue& got, const VtValue& expected);
+
+    SDF_API
+    static void
+    _AppendExpression(
+        std::string* expr, const SdfVariableExpression& arg, bool first);
+    
+    SDF_API
+    static void
+    _AppendBuilder(std::string* expr, const Builder& b, bool first);
+
+    template <class Argument>
+    static void
+    _Append(std::string* expr, Argument&& arg, bool first)
+    {
+        // Avoid implicitly converting arg to an SdfVariableExpression
+        // since that would incur unnecessary parsing costs.
+        if constexpr (std::is_same_v<
+            std::decay_t<Argument>, SdfVariableExpression>) {
+            _AppendExpression(expr, std::forward<Argument>(arg), first);
+        }
+        else {
+            _AppendBuilder(expr, std::forward<Argument>(arg), first);
+        }
+    }
 
     std::vector<std::string> _errors;
     std::shared_ptr<Sdf_VariableExpressionImpl::Node> _expression;
@@ -230,6 +406,37 @@ operator!=(
     const SdfVariableExpression::EmptyList&)
 {
     return false;
+}
+
+template <class Argument>
+inline SdfVariableExpression::FunctionBuilder&
+SdfVariableExpression::FunctionBuilder::AddArgument(Argument&& arg)
+{
+    SdfVariableExpression::_Append(
+        &_expr, std::forward<Argument>(arg), 
+        /* first = */ *_expr.rbegin() == '(');
+    return *this;
+}
+
+template <class Element>
+inline SdfVariableExpression::ListBuilder&
+SdfVariableExpression::ListBuilder::AddElement(Element&& arg)
+{
+    SdfVariableExpression::_Append(
+        &_expr, std::forward<Element>(arg), 
+        /* first = */ *_expr.rbegin() == '[');
+    return *this;
+}
+
+template <class T>
+inline SdfVariableExpression::ListBuilder&
+SdfVariableExpression::ListBuilder::AddLiteralValues(
+    const std::vector<T>& values)
+{            
+    for (const T& v : values) {
+        AddElement(SdfVariableExpression::MakeLiteral(v));
+    }
+    return *this;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

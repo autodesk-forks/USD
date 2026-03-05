@@ -45,15 +45,22 @@ void TfDelegatedCountDecrement(Sdf_PathNode const *) noexcept;
 struct Sdf_PathPrimTag;
 struct Sdf_PathPropTag;
 
-// These are validated below.
-static constexpr size_t Sdf_SizeofPrimPathNode = sizeof(void *) * 3;
-static constexpr size_t Sdf_SizeofPropPathNode = sizeof(void *) * 3;
+
+// The sizes below represent the largest sizes of the prim and property
+// Sdf_PathNode subclasses.
+#ifdef ARCH_BITS_32
+static constexpr size_t Sdf_MaxSizeofPrimPathNode = 16;
+static constexpr size_t Sdf_MaxSizeofPropPathNode = 20;
+#else
+static constexpr size_t Sdf_MaxSizeofPrimPathNode = 24;
+static constexpr size_t Sdf_MaxSizeofPropPathNode = 24;
+#endif
 
 using Sdf_PathPrimPartPool = Sdf_Pool<
-    Sdf_PathPrimTag, Sdf_SizeofPrimPathNode, /*regionBits=*/8>;
+    Sdf_PathPrimTag, Sdf_MaxSizeofPrimPathNode, /*regionBits=*/8>;
 
 using Sdf_PathPropPartPool = Sdf_Pool<
-    Sdf_PathPropTag, Sdf_SizeofPropPathNode, /*regionBits=*/8>;
+    Sdf_PathPropTag, Sdf_MaxSizeofPropPathNode, /*regionBits=*/8>;
 
 using Sdf_PathPrimHandle = Sdf_PathPrimPartPool::Handle;
 using Sdf_PathPropHandle = Sdf_PathPropPartPool::Handle;
@@ -505,9 +512,11 @@ public:
 
     /// Return a range for iterating over the ancestors of this path.
     ///
-    /// The range provides iteration over the prefixes of a path, ordered
-    /// from longest to shortest (the opposite of the order of the prefixes
-    /// returned by GetPrefixes).
+    /// The range provides iteration over the path and all of its prefixes, 
+    /// ordered from longest to shortest (the opposite of the order of the 
+    /// prefixes returned by GetPrefixes(). For example, given a path like 
+    /// `/a/b.prop`, the range would contain `/a/b.prop`, `/a/b` and `/a`, in 
+    /// that order.
     SDF_API SdfPathAncestorsRange GetAncestorsRange() const;
 
     /// Returns the name of the prim, property or relational
@@ -1021,6 +1030,7 @@ private:
     friend class Sdf_PathNode;
     friend class Sdfext_PathAccess;
     friend class SdfPathAncestorsRange;
+    friend class Sdf_PathInitAccess;
 
     SdfPath _ReplacePrimPrefix(SdfPath const &oldPrefix,
                                SdfPath const &newPrefix) const;
@@ -1067,7 +1077,7 @@ private:
 /// For example, given a path like `/a/b.prop`, the range represents paths
 /// `/a/b.prop`, `/a/b` and `/a`, in that order.
 /// A range accepts relative paths as well: For path `a/b.prop`, the range
-/// represents paths 'a/b.prop`, `a/b` and `a`.
+/// represents paths `a/b.prop`, `a/b` and `a`.
 /// If a path contains parent path elements, (`..`), those elements are treated
 /// as elements of the range. For instance, given path `../a/b`, the range
 /// represents paths `../a/b`, `../a` and `..`.
@@ -1419,12 +1429,5 @@ PXR_NAMESPACE_CLOSE_SCOPE
 // so we can inline the ref-counting operations, which must manipulate
 // its internal _refCount member.
 #include "pxr/usd/sdf/pathNode.h"
-
-PXR_NAMESPACE_OPEN_SCOPE
-
-static_assert(Sdf_SizeofPrimPathNode == sizeof(Sdf_PrimPathNode), "");
-static_assert(Sdf_SizeofPropPathNode == sizeof(Sdf_PrimPropertyPathNode), "");
-
-PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif // PXR_USD_SDF_PATH_H

@@ -15,18 +15,13 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/scopeDescription.h"
 
-// copyUtils.h pulls in boost/any.hpp via tf/diagnostic, and this winds up
-// generating an erroneous maybe-uninitialized warning on certain gcc & boost
-// versions, so we disable that diagnostic around this include.
-ARCH_PRAGMA_PUSH
-ARCH_PRAGMA_MAYBE_UNINITIALIZED
 #include "pxr/usd/sdf/copyUtils.h"
-ARCH_PRAGMA_POP
 #include "pxr/usd/sdf/fileFormat.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/primSpec.h"
 #include "pxr/usd/sdf/types.h"
-#include "pxr/usd/sdf/textFileFormat.h"
+#include "pxr/usd/sdf/usdFileFormat.h"
+#include "pxr/usd/sdf/usdaFileFormat.h"
 
 #include <cstdio>
 #include <cstdarg>
@@ -52,16 +47,16 @@ using std::unordered_set;
 // A file format for the human readable "pseudoLayer" output.  We use this so
 // that the terse human-readable output we produce is not a valid layer nor may
 // be mistaken for one.
-class SdfFilterPseudoFileFormat : public SdfTextFileFormat
+class SdfFilterPseudoFileFormat : public SdfUsdaFileFormat
 {
 private:
     SDF_FILE_FORMAT_FACTORY_ACCESS;
 
 public:
     SdfFilterPseudoFileFormat(string description="<< human readable >>")
-        : SdfTextFileFormat(TfToken("pseudosdf"),
+        : SdfUsdaFileFormat(TfToken("pseudousda"),
                             TfToken(description),
-                            SdfTextFileFormatTokens->Target) {}
+                            SdfUsdFileFormatTokens->Target) {}
 private:
 
     virtual ~SdfFilterPseudoFileFormat() {}
@@ -69,7 +64,7 @@ private:
 
 TF_REGISTRY_FUNCTION(TfType)
 {
-    SDF_DEFINE_FILE_FORMAT(SdfFilterPseudoFileFormat, SdfTextFileFormat);
+    SDF_DEFINE_FILE_FORMAT(SdfFilterPseudoFileFormat, SdfUsdaFileFormat);
 }
 
 namespace {
@@ -628,7 +623,7 @@ void Process(SdfLayerHandle layer, ReportParams const &p)
                 new SdfFilterPseudoFileFormat(
                     TfStringPrintf("from @%s@",
                                    layer->GetIdentifier().c_str())));
-            outputLayer = SdfLayer::CreateAnonymous(".pseudosdf", fmt);
+            outputLayer = SdfLayer::CreateAnonymous(".pseudousda", fmt);
         } else {
             SdfLayer::FileFormatArguments formatArgs;
             if (!p.outputFormat.empty()) {
@@ -732,12 +727,18 @@ main(int argc, char const *argv[])
         "--outputType", outputType,
         "Specify output format; 'summary' reports overall statistics,\n"
         "'outline' is a flat text report of paths and fields,\n"
-        "'pseudoLayer' is similar to the sdf file format but with truncated\n"
+        "'pseudoLayer' is similar to the usda file format but with truncated\n"
         "array values and timeSamples for human readability, and 'layer' is\n"
-        "true layer output, with the format controlled by the 'outputFile'\n"
+        "true layer output, with the format controlled by the 'out'\n"
         "and 'outputFormat' arguments. Default: outline")
         ->transform(CLI::CheckedTransformer(outputTypeMap, CLI::ignore_case))
         ->option_text("validity|summary|outline|pseudoLayer|layer");
+
+    app.add_option(
+        "--outputFormat", outputFormat,
+        "Supply this as the 'format' entry of SdfFileFormatArguments for\n"
+        "'layer' output to a file.  Requires both 'layer' output and a\n"
+        "specified output file.");
 
     const std::map<std::string, SortKey> sortKeyMap{
         {"path", SortByPath}, {"field", SortByField}

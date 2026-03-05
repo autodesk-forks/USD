@@ -13,6 +13,7 @@ pxr_library(usdviewq
         hd
 
     PUBLIC_CLASSES
+        debugCodes
         hydraObserver
         utils
         
@@ -49,7 +50,7 @@ pxr_library(usdviewq
         preferences.py
         primViewItem.py
         common.py
-        hydraSceneBrowser.py
+        hydraSceneDebugger.py
         legendUtil.py
         primLegend.py
         primTreeWidget.py
@@ -60,11 +61,13 @@ pxr_library(usdviewq
         qt.py
         rootDataModel.py
         selectionDataModel.py
+        splineViewer.py
         viewSettingsDataModel.py
         freeCamera.py
         debugFlagsWidget.py
         configController.py
         usdviewstyle.qss
+        validationWidget.py
 
     PYSIDE_UI_FILES
         mainWindowUI.ui
@@ -98,11 +101,6 @@ pxr_test_scripts(
     testenv/testUsdviewqViewSettingsDataModel.py
 )
 
-pxr_install_test_dir(
-    SRC testenv/testUsdviewqRootDataModel
-    DEST testUsdviewqRootDataModel
-)
-
 pxr_register_test(testUsdviewqSettings
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdviewqSettings"
@@ -112,6 +110,7 @@ pxr_register_test(testUsdviewqSettings
 pxr_register_test(testUsdviewqRootDataModel
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdviewqRootDataModel"
+    TESTENV testenv/testUsdviewqRootDataModel
     EXPECTED_RETURN_CODE 0
 )
 

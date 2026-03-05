@@ -12,6 +12,7 @@ pxr_library(usdImaging
         geomUtil
         hd
         hdar
+        hdsi
         hio
         pxOsd
         sdf
@@ -20,20 +21,16 @@ pxr_library(usdImaging
         usdLux
         usdRender
         usdShade
+        usdSkel
         usdVol
         ar
-        ${TBB_tbb_LIBRARY}
-
-    INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
+        TBB::tbb
 
     PUBLIC_CLASSES
         adapterRegistry
         collectionCache
         collectionMaterialBindingSchema
-        collectionMaterialBindingsSchema
         directMaterialBindingSchema
-        directMaterialBindingsSchema
         dataSourceAttribute
         dataSourceAttributeColorSpace
         dataSourceAttributeTypeName
@@ -63,11 +60,14 @@ pxr_library(usdImaging
         extentResolvingSceneIndex
         extentsHintSchema
         geomModelSchema
+        geomXformVectorsSchema
         geomSubsetAdapter
         indexProxy
+        legacyRenderSettingsSceneIndex
         materialParamUtils
         modelSchema
         primvarUtils
+        prototypeSceneIndexUtils
         resolvedAttributeCache
         instancerContext
         stageSceneIndex
@@ -91,7 +91,7 @@ pxr_library(usdImaging
         fieldAdapter
         flattenedDataSourceProviders
         flattenedGeomModelDataSourceProvider
-        flattenedDirectMaterialBindingsDataSourceProvider
+        flattenedMaterialBindingsDataSourceProvider
         geometryLightAdapter
         geomModelAPIAdapter
         gprimAdapter
@@ -104,6 +104,8 @@ pxr_library(usdImaging
         lightFilterAdapter
         materialAdapter
         materialBindingAPIAdapter
+        materialBindingSchema
+        materialBindingsSchema
         materialBindingsResolvingSceneIndex
         meshAdapter
         niPrototypePropagatingSceneIndex
@@ -124,6 +126,7 @@ pxr_library(usdImaging
         usdRenderProductSchema
         usdRenderSettingsSchema
         usdRenderVarSchema
+        usdSceneIndexInputArgsSchema
         rectLightAdapter
         renderPassAdapter
         renderProductAdapter
@@ -131,7 +134,10 @@ pxr_library(usdImaging
         renderSettingsFlatteningSceneIndex
         renderVarAdapter
         representedByAncestorPrimAdapter
+        rerootingContainerDataSource
         rerootingSceneIndex
+        sceneIndexPlugin
+        sceneIndexPrimAdapter
         sceneIndices
         sphereAdapter
         sphereLightAdapter
@@ -141,7 +147,9 @@ pxr_library(usdImaging
 
     PRIVATE_CLASSES
         adapterManager
+        dataSourceRelocatingSceneIndex
         drawModeStandin
+        instanceProxyPathTranslationSceneIndex
         niInstanceAggregationSceneIndex
         niPrototypePruningSceneIndex
         niPrototypeSceneIndex
@@ -214,7 +222,6 @@ pxr_build_test(testUsdImagingMaterialBinding
         usdShade
         usd
         hd
-        glf
         garch
         tf
         gf
@@ -275,31 +282,12 @@ pxr_build_test(testUsdImagingStageSceneIndexContents
     CPPFILES
         testenv/testUsdImagingStageSceneIndexContents.cpp
 )
-
-# Install (copy test assets and baselines)
-pxr_install_test_dir(
-    SRC testenv/testUsdImagingDelegate
-    DEST testUsdImagingDelegate
-)
-pxr_install_test_dir(
-    SRC testenv/testUsdImagingDelegateChanges
-    DEST testUsdImagingDelegateChanges
-)
-pxr_install_test_dir(
-    SRC testenv/testUsdImagingMaterialBinding
-    DEST testUsdImagingMaterialBinding
-)
-pxr_install_test_dir(
-    SRC testenv/testUsdImagingNestedInstancingCategories
-    DEST testUsdImagingNestedInstancingCategories
-)
-pxr_install_test_dir(
-    SRC testenv/testUsdImagingStageSceneIndex
-    DEST testUsdImagingStageSceneIndex
-)
-pxr_install_test_dir(
-    SRC testenv/testUsdImagingStageSceneIndexContents
-    DEST testUsdImagingStageSceneIndexContents
+pxr_build_test(testUsdImagingColorSpace
+    LIBRARIES
+        usdImaging
+        hd
+    CPPFILES
+        testenv/testUsdImagingColorSpace.cpp
 )
 
 # Register tests to be run
@@ -309,24 +297,34 @@ pxr_register_test(testUsdImagingDataSourceAttribute
 )
 pxr_register_test(testUsdImagingDelegate
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingDelegate"
+    TESTENV testenv/testUsdImagingDelegate
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testUsdImagingDelegateChanges
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingDelegateChanges"
+    TESTENV testenv/testUsdImagingDelegateChanges
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testUsdImagingExcluded
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingExcluded"
     EXPECTED_RETURN_CODE 0
 )
-pxr_register_test(testUsdImagingMaterialBinding
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingMaterialBinding"
-    EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
-)
+# Tests that rely on plugins aren't currently supported in static builds.
+if (BUILD_SHARED_LIBS)
+    pxr_register_test(testUsdImagingMaterialBinding
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingMaterialBinding"
+        TESTENV testenv/testUsdImagingMaterialBinding
+        EXPECTED_RETURN_CODE 0
+    )
+    pxr_register_test(testUsdImagingColorSpace
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingColorSpace"
+        TESTENV testenv/testUsdImagingColorSpace
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
 pxr_register_test(testUsdImagingNestedInstancingCategories
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingNestedInstancingCategories"
+    TESTENV testenv/testUsdImagingNestedInstancingCategories
     EXPECTED_RETURN_CODE 0
     ENV
         USD_ASSIGN_PROTOTYPES_DETERMINISTICALLY=1
@@ -345,11 +343,65 @@ pxr_register_test(testUsdImagingRootPrim
 )
 pxr_register_test(testUsdImagingStageSceneIndex
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingStageSceneIndex"
+    TESTENV testenv/testUsdImagingStageSceneIndex
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testUsdImagingStageSceneIndexContents
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingStageSceneIndexContents basic.usda basic.txt"
+    TESTENV testenv/testUsdImagingStageSceneIndexContents
     EXPECTED_RETURN_CODE 0
     DIFF_COMPARE 
         basic.txt
 )
+
+# This test requires MaterialX support and is not currently supported on static 
+# builds as it uses a plugin mechanism which is not supported for static build 
+# configurations. 
+if (BUILD_SHARED_LIBS AND ${PXR_ENABLE_MATERIALX_SUPPORT})
+
+pxr_build_test(testUsdImagingHdMtlx
+    LIBRARIES
+        tf
+        hd
+        hdMtlx
+        usdImaging
+    CPPFILES
+        testenv/testUsdImagingHdMtlx.cpp
+)
+pxr_register_test(testUsdImagingHdMtlx_withMtlxVersion
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename withMtlxVersion.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        withMtlxVersion.mtlx
+    TESTENV testenv/testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_withoutMtlxVersion
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename withoutMtlxVersion.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        withoutMtlxVersion.mtlx
+    TESTENV testenv/testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_atan2Node
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename atan2Node.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        atan2Node.mtlx
+    TESTENV testenv/testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_switchNode
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename switchNode.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        switchNode.mtlx
+    TESTENV testenv/testUsdImagingHdMtlx
+)
+pxr_register_test(testUsdImagingHdMtlx_swizzleNode
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingHdMtlx --filename swizzleNode.usda"
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        swizzleNode.mtlx
+    TESTENV testenv/testUsdImagingHdMtlx
+)
+
+endif() # BUILD_SHARED_LIBS AND PXR_ENABLE_MATERIALX_SUPPORT
