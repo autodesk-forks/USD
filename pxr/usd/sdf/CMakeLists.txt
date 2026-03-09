@@ -477,61 +477,6 @@ pxr_build_test(testSdfUsdcInvalidPrimChildren
         testenv/testSdfUsdcInvalidPrimChildren.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testSdfBatchNamespaceEdit.testenv
-    DEST testSdfBatchNamespaceEdit/testSdfBatchNamespaceEdit.testenv
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfCustomLayerData.testenv
-    DEST testSdfCustomLayerData/testSdfCustomLayerData.testenv
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfLayerHints.testenv
-    DEST testSdfLayerHints/testSdfLayerHints.testenv
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfLayerMuting.testenv
-    DEST testSdfLayerMuting/testSdfLayerMuting.testenv
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfMetaDataPlugInfo.testenv
-    DEST testSdfMetaDataPlugInfo/testSdfMetaDataPlugInfo.testenv
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfParsing.testenv
-    DEST testSdfParsing/testSdfParsing.testenv
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfTargetFileFormat.testenv
-    DEST testSdfTargetFileFormat
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfZipFile.testenv
-    DEST testSdfZipFile
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfZipFile.testenv
-    DEST testSdfZipFile_CPP
-)
-
-pxr_install_test_dir(
-    SRC testenv/testSdfUsdzResolver
-    DEST testSdfUsdzResolver
-)
-    
-pxr_install_test_dir(
-    SRC testenv/testSdfUsdcInvalidPrimChildren.testenv
-    DEST testSdfUsdcInvalidPrimChildren
-)
-
 pxr_register_test(testSdfAbstractData_Cpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAbstractData_Cpp"
 )
@@ -558,6 +503,8 @@ pxr_register_test(testSdfAttributeBlocking_Cpp
 pxr_register_test(testSdfBatchNamespaceEdit
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfBatchNamespaceEdit"
+    TESTENV testenv/testSdfBatchNamespaceEdit.testenv
+    TESTENV_DEST testSdfBatchNamespaceEdit/testSdfBatchNamespaceEdit.testenv
 )
 
 pxr_register_test(testSdfBooleanExpression
@@ -572,6 +519,8 @@ pxr_register_test(testSdfCopyUtils
 pxr_register_test(testSdfCustomLayerData
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfCustomLayerData"
+    TESTENV testenv/testSdfCustomLayerData.testenv
+    TESTENV_DEST testSdfCustomLayerData/testSdfCustomLayerData.testenv
 )
 
 pxr_register_test(testSdfDetachedLayer
@@ -621,11 +570,15 @@ pxr_register_test(testSdfLayer
 
 pxr_register_test(testSdfLayerHints
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfLayerHints"
+    TESTENV testenv/testSdfLayerHints.testenv
+    TESTENV_DEST testSdfLayerHints/testSdfLayerHints.testenv
 )
 
 pxr_register_test(testSdfLayerMuting
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfLayerMuting"
+    TESTENV testenv/testSdfLayerMuting.testenv
+    TESTENV_DEST testSdfLayerMuting/testSdfLayerMuting.testenv
 )
 
 pxr_register_test(testSdfLegacyFileFormat
@@ -649,6 +602,8 @@ pxr_register_test(testSdfListOp
 
 pxr_register_test(testSdfMetaDataPlugInfo
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfMetaDataPlugInfo"
+    TESTENV testenv/testSdfMetaDataPlugInfo.testenv
+    TESTENV_DEST testSdfMetaDataPlugInfo/testSdfMetaDataPlugInfo.testenv
 )
 
 pxr_register_test(testSdfPathExpression
@@ -668,6 +623,8 @@ pxr_register_test(testSdfPathExpressionArray
 pxr_register_test(testSdfParsing
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfParsing"
+    TESTENV testenv/testSdfParsing.testenv
+    TESTENV_DEST testSdfParsing/testSdfParsing.testenv
 )
 
 pxr_register_test(testSdfPath
@@ -735,6 +692,7 @@ pxr_register_test(testSdfSplineVersioning
 pxr_register_test(testSdfTargetFileFormat
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTargetFileFormat"
+    TESTENV testenv/testSdfTargetFileFormat.testenv
 )
 pxr_register_test(testSdfTextFile
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
@@ -757,6 +715,7 @@ pxr_register_test(testSdfTypes
 pxr_register_test(testSdfZipFile
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile"
+    TESTENV testenv/testSdfZipFile.testenv
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testSdfZipFileLimits
@@ -768,10 +727,12 @@ pxr_register_test(testSdfZipFileLimits
 )
 pxr_register_test(testSdfZipFile_CPP
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile_CPP"
+    TESTENV testenv/testSdfZipFile.testenv
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testSdfUsdzResolver
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdzResolver"
+    TESTENV testenv/testSdfUsdzResolver
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testSdfVariableExpression
@@ -794,5 +755,6 @@ pxr_register_test(testSdfVariants
 )
 pxr_register_test(testSdfUsdcInvalidPrimChildren
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdcInvalidPrimChildren"
+    TESTENV testenv/testSdfUsdcInvalidPrimChildren.testenv
     EXPECTED_RETURN_CODE 0
 )

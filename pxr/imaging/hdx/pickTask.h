@@ -80,6 +80,8 @@ struct HdxPickHit
 {
     /// delegateID of HdSceneDelegate that provided the picked prim.
     /// Irrelevant for scene indices.
+    ///
+    /// \deprecated
     SdfPath delegateId;
     /// Path computed from scenePath's in primOrigin data source of
     /// picked prim and instancers if provided by scene index.
@@ -87,6 +89,9 @@ struct HdxPickHit
     SdfPath objectId;
     /// Only supported for scene delegates, see HdxPrimOriginInfo for
     /// scene indices.
+    ///
+    /// \deprecated Query terminal scene index for prim and extract instancer
+    /// from HdInstancedBySchema instead.
     SdfPath instancerId;
     int instanceIndex;
     int elementIndex;

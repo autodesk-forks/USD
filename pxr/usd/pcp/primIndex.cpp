@@ -1953,7 +1953,11 @@ _AddArc(
         newNodeError->rootSite = indexer->rootSite;
         indexer->RecordError(newNodeError);
     }
-    if (!newNode) {
+
+    if (newNode) {
+        indexer->outputs->primIndex.GetGraph()->SetHasNewNodes(true);
+    }
+    else {
         TF_VERIFY(newNodeError, "Failed to create a node, but did not "
                   "specify the error.");
         return PcpNodeRef();
@@ -4891,12 +4895,6 @@ _CullSubtreesWithNoOpinionsHelper(
     // removed from the prim index at the end of prim indexing.
     if (_NodeCanBeCulled(node, rootSite)) {
         node.SetCulled(true);
-
-        // Record any culled nodes from this subtree that introduced
-        // ancestral dependencies. These nodes may be removed from the prim
-        // index when Finalize() is called, so they must be saved separately
-        // for later use.
-        Pcp_AddCulledDependency(node, culledDeps);
     }
 }
 
@@ -4909,6 +4907,12 @@ _CullSubtreesWithNoOpinions(
     TF_FOR_ALL(child, Pcp_GetChildrenRange(primIndex->GetRootNode())) {
         _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
     }
+
+    // Record any culled nodes from this subtree that introduced
+    // ancestral dependencies. These nodes may be removed from the prim
+    // index when Finalize() is called, so they must be saved separately
+    // for later use.
+    Pcp_AddCulledDependencies(*primIndex, culledDeps);
 }    
 
 // Helper that sets any nodes that cannot have overrides on name children
@@ -5018,6 +5022,10 @@ _BuildInitialPrimIndexFromAncestor(
     // answer.
     graph->SetHasPayloads(false);
     outputs->payloadState = PcpPrimIndexOutputs::NoPayload;
+
+    // Reset the 'has new nodes' flag on this prim index since we haven't
+    // yet added any nodes at this level of namespace.
+    graph->SetHasNewNodes(false);
 
     PcpNodeRef rootNode = outputs->primIndex.GetRootNode();
     _ConvertNodeForChild(rootNode, inputs);

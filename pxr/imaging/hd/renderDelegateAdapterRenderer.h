@@ -37,6 +37,8 @@ public:
     HD_API
     ~HdRenderDelegateAdapterRenderer() override;
 
+    HdLegacyRenderControlInterface * GetLegacyRenderControl() override;
+    
 private:
     // Keep HdDriver's alive while HdRenderIndex/HdRenderDelegate has raw
     // pointers to HdDriver.
@@ -44,6 +46,9 @@ private:
     HdPluginRenderDelegateUniqueHandle const _renderDelegate;
     std::unique_ptr<HdRenderIndex> const _renderIndex;
     std::unique_ptr<HdEngine> const _engine;
+
+    class _LegacyRenderControl;
+    std::unique_ptr<_LegacyRenderControl> const _legacyRenderControl;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

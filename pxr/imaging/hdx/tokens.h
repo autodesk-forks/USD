@@ -14,7 +14,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-
 #define HDX_TOKENS              \
     (hdxWboitBufferOne)         \
     (hdxWboitBufferTwo)         \
@@ -26,7 +25,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (hdxOitIndexBuffer)         \
     (hdxOitJointBuffer)         \
     (hdxSelectionBuffer)        \
-    (imagerVersion)             \
+    (imagerVersion) /* \deprecated */ \
     (lightingContext)           \
     (lightingShader)            \
     (occludedSelectionOpacity)  \
@@ -43,7 +42,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (oitRequestFlag)            \
     (oitClearedFlag)            \
     (renderPassState)           \
-    (renderIndexVersion)        \
+    (renderIndexVersion) /* \deprecated */ \
     (selection)                 \
     (selectionState)            \
     (selectionOffsets)          \

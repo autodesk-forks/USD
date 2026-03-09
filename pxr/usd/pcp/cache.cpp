@@ -1642,6 +1642,8 @@ PcpCache::_ComputePrimIndexesInParallel(
 {
     TF_PY_ALLOW_THREADS_IN_SCOPE();
 
+    TRACE_FUNCTION();
+
     ArResolverScopedCache parentCache;
     TfAutoMallocTag2 tag(mallocTag1, mallocTag2);
 

@@ -65,12 +65,17 @@ HgiWebGPUBlitCmds::_CreateEncoder()
 }
 
 void
-HgiWebGPUBlitCmds::PushDebugGroup(const char* label)
+HgiWebGPUBlitCmds::PushDebugGroup(const char* label, const GfVec4f& color)
 {
 }
 
 void
 HgiWebGPUBlitCmds::PopDebugGroup()
+{
+}
+
+void
+HgiWebGPUBlitCmds::InsertDebugMarker(const char* label, const GfVec4f& color)
 {
 }
 

@@ -42,7 +42,8 @@ public:
     void InsertMemoryBarrier(HgiMemoryBarrier barrier) override {}
 
     HGIWEBGPU_API
-    void PushDebugGroup(const char* label) override {
+    void PushDebugGroup(const char* label,
+        const GfVec4f& color = s_graphicsDebugColor) override {
         if (_passEncoder) {
             HgiWebGPUBeginLabel(_passEncoder, label);
         } else {
@@ -59,6 +60,12 @@ public:
             HgiWebGPUEndLabel(_commandEncoder);
         }
         _debugGroupLabels.pop_back();
+    }
+
+    HGIWEBGPU_API
+    void InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color = s_markerDebugColor) override {
     }
 
     HGIWEBGPU_API

@@ -55,7 +55,6 @@ _VkImageLayoutToHgiTextureUsage(VkImageLayout usage)
 
 HgiVulkanTexture::HgiVulkanTexture(
     HgiVulkan* hgi,
-    HgiVulkanDevice* device,
     HgiTextureDesc const & desc,
     bool optimalTiling,
     bool interop)
@@ -64,12 +63,13 @@ HgiVulkanTexture::HgiVulkanTexture(
     , _vkImageView(nullptr)
     , _vkImageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
     , _vmaImageAllocation(nullptr)
-    , _device(device)
+    , _hgi(hgi)
     , _inflightBits(0)
     , _stagingBuffer(nullptr)
     , _cpuStagingAddress(nullptr)
     , _isTextureView(false)
 {
+    HgiVulkanDevice* device = hgi->GetPrimaryDevice();
     GfVec3i const& dimensions = desc.dimensions;
     bool const isDepthBuffer = desc.usage & HgiTextureUsageBitsDepthTarget;
     bool const isStencilBuffer = desc.usage & HgiTextureUsageBitsStencilTarget;
@@ -232,11 +232,13 @@ HgiVulkanTexture::HgiVulkanTexture(
     //
     if (desc.initialData && desc.pixelsByteSize > 0) {
         HgiBufferDesc stageDesc;
+        stageDesc.usage = HgiBufferUsageUpload;
         stageDesc.byteSize = 
             std::min(GetByteSizeOfResource(), desc.pixelsByteSize);
         stageDesc.initialData = desc.initialData;
+        stageDesc.debugName = "Staging Buffer for " + _descriptor.debugName;
         std::unique_ptr<HgiVulkanBuffer> stagingBuffer =
-            HgiVulkanBuffer::CreateStagingBuffer(_device, stageDesc);
+            HgiVulkanBuffer::CreateStagingBuffer(_hgi, stageDesc);
 
         // Schedule transfer from staging buffer to device-local texture
         HgiVulkanCommandQueue* queue = device->GetCommandQueue();
@@ -281,19 +283,19 @@ HgiVulkanTexture::HgiVulkanTexture(
 
 HgiVulkanTexture::HgiVulkanTexture(
     HgiVulkan* hgi,
-    HgiVulkanDevice* device,
     HgiTextureViewDesc const & desc)
     : HgiTexture(desc.sourceTexture->GetDescriptor())
     , _vkImage(nullptr)
     , _vkImageView(nullptr)
     , _vkImageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
     , _vmaImageAllocation(nullptr)
-    , _device(device)
+    , _hgi(hgi)
     , _inflightBits(0)
     , _stagingBuffer(nullptr)
     , _cpuStagingAddress(nullptr)
     , _isTextureView(true)
 {
+    HgiVulkanDevice* device = hgi->GetPrimaryDevice();
     // Update the texture descriptor to reflect the view desc
     _descriptor.debugName = desc.debugName;
     _descriptor.format = desc.format;
@@ -352,9 +354,10 @@ HgiVulkanTexture::HgiVulkanTexture(
 
 HgiVulkanTexture::~HgiVulkanTexture()
 {
+    HgiVulkanDevice* device = _hgi->GetPrimaryDevice();
     if (_cpuStagingAddress && _stagingBuffer) {
         vmaUnmapMemory(
-            _device->GetVulkanMemoryAllocator(),
+            device->GetVulkanMemoryAllocator(),
             _stagingBuffer->GetVulkanMemoryAllocation());
         _cpuStagingAddress = nullptr;
     }
@@ -363,7 +366,7 @@ HgiVulkanTexture::~HgiVulkanTexture()
 
     if (_vkImageView) {
         vkDestroyImageView(
-            _device->GetVulkanDevice(),
+            device->GetVulkanDevice(),
             _vkImageView,
             HgiVulkanAllocator());
     }
@@ -372,7 +375,7 @@ HgiVulkanTexture::~HgiVulkanTexture()
     // In that case we do not own the image.
     if (!_isTextureView && _vkImage) {
         vmaDestroyImage(
-            _device->GetVulkanMemoryAllocator(),
+            device->GetVulkanMemoryAllocator(),
             _vkImage,
             _vmaImageAllocation);
     }
@@ -394,17 +397,18 @@ void*
 HgiVulkanTexture::GetCPUStagingAddress()
 {
     if (!_stagingBuffer) {
-
         HgiBufferDesc desc;
+        desc.usage = HgiBufferUsageUpload;
         desc.byteSize = GetByteSizeOfResource();
         desc.initialData = nullptr;
-        _stagingBuffer = HgiVulkanBuffer::CreateStagingBuffer(_device, desc);
+        desc.debugName = "Staging Buffer for " + _descriptor.debugName;
+        _stagingBuffer = HgiVulkanBuffer::CreateStagingBuffer(_hgi, desc);
     }
 
     if (!_cpuStagingAddress) {
         HGIVULKAN_VERIFY_VK_RESULT(
             vmaMapMemory(
-                _device->GetVulkanMemoryAllocator(), 
+                _hgi->GetPrimaryDevice()->GetVulkanMemoryAllocator(), 
                 _stagingBuffer->GetVulkanMemoryAllocation(), 
                 &_cpuStagingAddress)
         );
@@ -451,7 +455,7 @@ HgiVulkanTexture::GetAllocationInfo() const
 {
     VmaAllocationInfo2 info;
     vmaGetAllocationInfo2(
-        _device->GetVulkanMemoryAllocator(),
+        _hgi->GetPrimaryDevice()->GetVulkanMemoryAllocator(),
         _vmaImageAllocation,
         &info);
     return info;
@@ -460,7 +464,7 @@ HgiVulkanTexture::GetAllocationInfo() const
 HgiVulkanDevice*
 HgiVulkanTexture::GetDevice() const
 {
-    return _device;
+    return _hgi->GetPrimaryDevice();
 }
 
 uint64_t &
@@ -559,7 +563,7 @@ HgiVulkanTexture::SubmitLayoutChange(HgiTextureUsage newLayout)
         return _VkImageLayoutToHgiTextureUsage(oldVkLayout);
     }
 
-    HgiVulkanCommandQueue* queue = _device->GetCommandQueue();
+    HgiVulkanCommandQueue* queue = _hgi->GetPrimaryDevice()->GetCommandQueue();
     HgiVulkanCommandBuffer* cb = queue->AcquireResourceCommandBuffer();
 
     // The following cases are based on few initial assumptions to provide

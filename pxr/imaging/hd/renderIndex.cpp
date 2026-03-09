@@ -2099,6 +2099,28 @@ HdRenderIndex::GetSceneDelegateForRprim(SdfPath const &id) const
     }
 }
 
+static
+HdSceneDelegate *
+_GetSceneDelegateFromSceneIndex(
+    HdSceneIndexBaseRefPtr const &sceneIndex, const SdfPath &id)
+{
+    if (!sceneIndex) {
+        return nullptr;
+    }
+    const HdSceneIndexPrim prim = sceneIndex->GetPrim(id);
+    if (!prim.dataSource) {
+        return nullptr;
+    }
+    auto ds =
+        HdTypedSampledDataSource<HdSceneDelegate*>::Cast(
+            prim.dataSource->Get(
+                HdSceneIndexEmulationTokens->sceneDelegate));
+    if (!ds) {
+        return nullptr;
+    }
+    return ds->GetTypedValue(0.0f);
+}
+
 bool
 HdRenderIndex::GetSceneDelegateAndInstancerIds(SdfPath const &id,
                                                SdfPath* delegateId,
@@ -2107,45 +2129,38 @@ HdRenderIndex::GetSceneDelegateAndInstancerIds(SdfPath const &id,
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
-    if (!_emulationSceneIndex) {
+    const _RprimMap::const_iterator it = _rprimMap.find(id);
+    if (it == _rprimMap.end()) {
         return false;
     }
 
-    _RprimMap::const_iterator it = _rprimMap.find(id);
-    if (it != _rprimMap.end()) {
-        const _RprimInfo &rprimInfo = it->second;
+    const _RprimInfo &rprimInfo = it->second;
 
-        if (_IsEnabledSceneIndexEmulation()) {
-            // Applications expect this to return the original scene delegate
-            // responsible for inserting the prim at the specified id.
-            // Emulation must provide the same value -- even if it could
-            // potentially expose the scene without downstream scene index
-            // notifications -- or some application assumptions will fail.
-            // No known render delegates make use of this call.
-            HdSceneIndexPrim prim = _emulationSceneIndex->GetPrim(id);
-            if (prim.dataSource) {
-                if (auto ds = HdTypedSampledDataSource<HdSceneDelegate*>::Cast(
-                        prim.dataSource->Get(
-                            HdSceneIndexEmulationTokens->sceneDelegate))) {
-                    HdSceneDelegate *delegate = ds->GetTypedValue(0.0f);
-                    if (delegate) {
-                        *delegateId = delegate->GetDelegateID();
-                    }
-                }
-            } else {
-                // fallback value is the back-end emulation delegate
-                *delegateId = _siSd->GetDelegateID();
-            }
-        } else {
+    if (delegateId) {
+        // Applications expect this to return the original scene delegate
+        // responsible for inserting the prim at the specified id.
+        // Emulation must provide the same value -- even if it could
+        // potentially expose the scene without downstream scene index
+        // notifications -- or some application assumptions will fail.
+        // No known render delegates make use of this call.
+        if (const HdSceneDelegate * const delegate =
+                _GetSceneDelegateFromSceneIndex(_emulationSceneIndex, id)) {
+            *delegateId = delegate->GetDelegateID();
+        } else if (_siSd) {
+            // fallback value is the back-end emulation delegate
+            *delegateId = _siSd->GetDelegateID();
+        } else if (rprimInfo.sceneDelegate) {
             *delegateId  = rprimInfo.sceneDelegate->GetDelegateID();
         }
-
-        *instancerId = rprimInfo.rprim->GetInstancerId();
-
-        return true;
     }
 
-    return false;
+    if (instancerId) {
+        if (rprimInfo.rprim) {
+            *instancerId = rprimInfo.rprim->GetInstancerId();
+        }
+    }
+
+    return true;
 }
 
 void

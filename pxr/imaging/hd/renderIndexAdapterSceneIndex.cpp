@@ -8,6 +8,7 @@
 #include "pxr/imaging/hd/renderIndexAdapterSceneIndex.h"
 
 #include "pxr/imaging/hd/renderDelegate.h"
+#include "pxr/imaging/hd/renderDelegateInfo.h"
 #include "pxr/imaging/hd/renderIndex.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -28,11 +29,22 @@ TfTokenVector _Concat(const TfTokenVector &a, const TfTokenVector &b)
     return result;
 }
 
+TfTokenVector _Remove(const TfTokenVector &vec, const TfToken &t)
+{
+    TfTokenVector result;
+    for (const TfToken &token : vec) {
+        if (token != t) {
+            result.push_back(token);
+        }
+    }
+    return result;
+}
+
 class _NullRenderDelegateForAdapter : public HdRenderDelegate
 {
 public:
     _NullRenderDelegateForAdapter(
-        const HdRenderIndexAdapterSceneIndex::RenderDelegateInfo &info)
+        const HdRenderDelegateInfo &info)
      : _info(info)
     {
     }
@@ -61,7 +73,14 @@ public:
         return HdRprimTypeTokens->allTokens;
     }
     const TfTokenVector &GetSupportedSprimTypes() const override {
-        return HdSprimTypeTokens->allTokens;
+        if (_info.isCoordSysSupported) {
+            return HdSprimTypeTokens->allTokens;
+        } else {
+            static TfTokenVector result = _Remove(
+                HdSprimTypeTokens->allTokens,
+                HdSprimTypeTokens->coordSys);
+            return result;
+        }
     }
     const TfTokenVector &GetSupportedBprimTypes() const override {
         static TfTokenVector result = _Concat(
@@ -101,13 +120,13 @@ public:
     void CommitResources(HdChangeTracker*) override {}
 
 private:
-    const HdRenderIndexAdapterSceneIndex::RenderDelegateInfo _info;
+    const HdRenderDelegateInfo _info;
 };
 
 }
 
 HdRenderIndexAdapterSceneIndex::HdRenderIndexAdapterSceneIndex(
-    const RenderDelegateInfo &info)
+    const HdRenderDelegateInfo &info)
  : _renderDelegate(std::make_unique<_NullRenderDelegateForAdapter>(info))
  , _renderIndex(HdRenderIndex::New(_renderDelegate.get()))
  , _observer(this)

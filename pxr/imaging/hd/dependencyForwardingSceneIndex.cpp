@@ -8,6 +8,7 @@
 #include "pxr/imaging/hd/dependenciesSchema.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/work/loops.h"
+#include "pxr/base/work/utils.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -68,23 +69,14 @@ HdDependencyForwardingSceneIndex::_PrimsAdded(
         _AffectedPrimToDependsOnPathsEntryMap::iterator ait =
             _affectedPrimToDependsOnPathsMap.find(entry.primPath);
         if (ait != _affectedPrimToDependsOnPathsMap.end()) {
-            static const HdDataSourceLocator &depsLoc =
-                HdDependenciesSchema::GetDefaultLocator();
-            _VisitedNode visitedNode = { entry.primPath, depsLoc };
-            visited.insert(visitedNode);
             _ClearDependencies(entry.primPath);
         }
 
-        // Clear out the depended on map, sending out additional dirty notices
-        // if necessary.
+        // Send out relevant invalidations.
         _DependedOnPrimsAffectedPrimsMap::iterator dit =
             _dependedOnPrimToDependentsMap.find(entry.primPath);
         if (dit != _dependedOnPrimToDependentsMap.end()) {
-            _potentiallyDeletedDependedOnPaths.insert(entry.primPath);
-
             for (auto &affectedPair : (*dit).second) {
-                affectedPair.second.flaggedForDeletion = true;
-                _potentiallyDeletedAffectedPaths.insert(affectedPair.first);
                 const SdfPath &affectedPrimPath = affectedPair.first;
 
                 // Filter out self-dependencies.
@@ -129,111 +121,142 @@ HdDependencyForwardingSceneIndex::_PrimsAdded(
 }
 
 void
+HdDependencyForwardingSceneIndex::_ResetDependencies()
+{
+    // deleting these maps can be surprisingly expensive!
+    TRACE_FUNCTION();
+
+    if (!_manualGarbageCollect) {
+        WorkSwapDestroyAsync(_dependedOnPrimToDependentsMap);
+        WorkSwapDestroyAsync(_affectedPrimToDependsOnPathsMap);
+        _potentiallyDeletedDependedOnPaths.clear();
+        _potentiallyDeletedAffectedPaths.clear();
+    } else {
+        for (auto &pair : _dependedOnPrimToDependentsMap) {
+            _potentiallyDeletedDependedOnPaths.insert(pair.first);
+            for (auto &locPair : pair.second) {
+                locPair.second.flaggedForDeletion = true;
+            }
+        }
+        for (auto &pair : _affectedPrimToDependsOnPathsMap) {
+            _potentiallyDeletedAffectedPaths.insert(pair.first);
+            pair.second.flaggedForDeletion = true;
+        }
+    }
+}
+
+void
 HdDependencyForwardingSceneIndex::_PrimsRemoved(
     const HdSceneIndexBase &sender,
     const HdSceneIndexObserver::RemovedPrimEntries &entries)
 {
     TRACE_FUNCTION();
 
-    // Fastpath for root delete.
-    // Note we only special case Remove { "/" }, since searching the whole
-    // entry vector for root would add a bunch of processing time.
+    // Reset deps and early out if the entry vector starts with "/".
+    // (Note: we don't search the whole vector for "/", since that's additional
+    // work for our current call patterns; and we have another early out below.
+    // ... we could search in the future if warranted though.)
     if (entries.size() > 0 && entries[0].primPath.IsAbsoluteRootPath()) {
-        if (!_manualGarbageCollect) {
-            _dependedOnPrimToDependentsMap.clear();
-            _affectedPrimToDependsOnPathsMap.clear();
-            _potentiallyDeletedDependedOnPaths.clear();
-            _potentiallyDeletedAffectedPaths.clear();
-        } else {
-            for (auto &pair : _dependedOnPrimToDependentsMap) {
-                _potentiallyDeletedDependedOnPaths.insert(pair.first);
-                for (auto &locPair : pair.second) {
-                    locPair.second.flaggedForDeletion = true;
-                }
-            }
-            for (auto &pair : _affectedPrimToDependsOnPathsMap) {
-                _potentiallyDeletedAffectedPaths.insert(pair.first);
-                pair.second.flaggedForDeletion = true;
-            }
-        }
+        _ResetDependencies();
         _SendPrimsRemoved(entries);
         return;
     }
 
-    // Normal path
     _VisitedNodeSet visited;
     _AdditionalDirtiedVector additionalDirtied;
     _PathSet rebuildDependencies;
 
-    WorkParallelForN(entries.size(),
-    [&](size_t begin, size_t end) {
-    for (size_t i = begin; i < end; ++i) {
-        const HdSceneIndexObserver::RemovedPrimEntry &entry = entries[i];
-
-        // entry.primPath is recursive so we need to iterate both maps looking
-        // for entries to invalidate.
-
-        // Iterate _affectedPrimToDependsOnPathsMap looking for:
-        // - Affected prims that are descendants of primPath.
-        // Clear their dependency info out.
-        WorkParallelForTBBRange(_affectedPrimToDependsOnPathsMap.range(),
-        [&](const _AffectedPrimToDependsOnPathsEntryMap::range_type& range) {
-        for (auto it = range.begin(); it != range.end(); ++it) {
-            _AffectedPrimToDependsOnPathsEntryMap::value_type& pair = *it;
+    // Because of the recursive nature of remove notices, we need to iterate the
+    // whole dependency map, which is (hopefully) bigger than the notice vector,
+    // so we iterate the map as the outer loop.
+    //
+    // Iterate _affectedPrimToDependsOnPathsMap looking for:
+    // - Affected prims that are descendants of primPath.
+    // Clear their dependency info out.
+    WorkParallelForTBBRange(_affectedPrimToDependsOnPathsMap.range(),
+    [&](const _AffectedPrimToDependsOnPathsEntryMap::range_type& range) {
+    for (auto it = range.begin(); it != range.end(); ++it) {
+        _AffectedPrimToDependsOnPathsEntryMap::value_type& pair = *it;
+        for (const HdSceneIndexObserver::RemovedPrimEntry &entry : entries) {
+            // Note: if this loop becomes a bottleneck, we could sort
+            // entries by path and do a binary search to slightly bend the
+            // O(n) time, but on current scenes it doesn't seem worth it.
             if (pair.first.HasPrefix(entry.primPath)) {
-                static const HdDataSourceLocator &depsLoc =
-                    HdDependenciesSchema::GetDefaultLocator();
-                _VisitedNode visitedNode = { pair.first, depsLoc };
-                visited.insert(visitedNode);
-                _ClearDependencies(pair.first);
+                pair.second.flaggedForDeletion = true;
+                _potentiallyDeletedAffectedPaths.insert(pair.first);
+                break;
             }
-        }});
+        }
+    }});
 
-        // Iterate _dependedOnPrimToDependentsMap looking for:
-        // - Depended on prims that are descendants of primPath.
-        // Clear their dependency info out.
-        // Additionally:
-        // - Affected prims that are *not* descendants of primPath.
-        // Send out relevant dirty notices.
-        WorkParallelForTBBRange(_dependedOnPrimToDependentsMap.range(),
-        [&](const _DependedOnPrimsAffectedPrimsMap::range_type& range) {
+    // If we deleted every affected prim, there's no point looping over
+    // dependedOn prims; we can reset deps and stop here.
+    if (_potentiallyDeletedAffectedPaths.size() ==
+            _affectedPrimToDependsOnPathsMap.size()) {
+        _ResetDependencies();
+        _SendPrimsRemoved(entries);
+        return;
+    }
+
+    // Iterate _dependedOnPrimToDependentsMap looking for:
+    // - Depended on prims with affected entries that are descendants of
+    //   primPath.
+    // Clear their dependency info out.
+    // - Depended on prims that are descendants of primPath with affected
+    //   entries that are *not* descendants of primPath.
+    // Send out relevant dirty notices.
+    WorkParallelForTBBRange(_dependedOnPrimToDependentsMap.range(),
+    [&](const _DependedOnPrimsAffectedPrimsMap::range_type& range) {
+    for (auto it = range.begin(); it != range.end(); ++it) {
+        _DependedOnPrimsAffectedPrimsMap::value_type& depPair = *it;
+        WorkParallelForTBBRange(depPair.second.range(),
+        [&](const _AffectedPrimsDependencyMap::range_type& range) {
         for (auto it = range.begin(); it != range.end(); ++it) {
-            _DependedOnPrimsAffectedPrimsMap::value_type& depPair = *it;
-            if (!depPair.first.HasPrefix(entry.primPath)) {
+            _AffectedPrimsDependencyMap::value_type& affPair = *it;
+
+            for (const HdSceneIndexObserver::RemovedPrimEntry &entry :
+                    entries) {
+                // Note: if this loop becomes a bottleneck, we could sort
+                // entries by path and do a binary search to slightly bend the
+                // O(n) time, but on current scenes it doesn't seem worth it.
+
+                // If the affected prim was deleted, mark the
+                // dependedOnPrim->affectedPrim entry for deletion.
+                if (affPair.first.HasPrefix(entry.primPath)) {
+                    affPair.second.flaggedForDeletion = true;
+                    _potentiallyDeletedDependedOnPaths.insert(depPair.first);
+                    break;
+                }
+            }
+
+            if (affPair.second.flaggedForDeletion) {
                 continue;
             }
 
-            // Mark the dependedOnPrim for deletion.
-            _potentiallyDeletedDependedOnPaths.insert(depPair.first);
+            // Otherwise, if the affected prim remains but the depended on
+            // prim was deleted, send dirty notices.
+            for (const HdSceneIndexObserver::RemovedPrimEntry &entry :
+                    entries) {
+                // Note: if this loop becomes a bottleneck, we could sort
+                // entries by path and do a binary search to slightly bend the
+                // O(n) time, but on current scenes it doesn't seem worth it.
+                if (depPair.first.HasPrefix(entry.primPath)) {
+                    HdDataSourceLocatorSet affectedLocators;
+                    for (const auto &keyEntryPair :
+                            affPair.second.locatorsEntryMap) {
+                        const _LocatorsEntry &entry = keyEntryPair.second;
+                        affectedLocators.insert(
+                            entry.affectedDataSourceLocator);
+                    }
 
-            WorkParallelForTBBRange(depPair.second.range(),
-            [&](const _AffectedPrimsDependencyMap::range_type& range) {
-            for (auto it = range.begin(); it != range.end(); ++it) {
-                _AffectedPrimsDependencyMap::value_type& affPair = *it;
-                // Mark the dependedOnPrim->affectedPrim entry for deletion.
-                affPair.second.flaggedForDeletion = true;
-                _potentiallyDeletedAffectedPaths.insert(affPair.first);
-
-                // Don't send invalidations to the deleted subtree.
-                if (affPair.first.HasPrefix(entry.primPath)) {
-                    continue;
+                    if (!affectedLocators.IsEmpty()) {
+                        additionalDirtied.emplace_back(affPair.first,
+                            affectedLocators);
+                        _PrimDirtied(affPair.first, affectedLocators,
+                            &visited, &additionalDirtied, &rebuildDependencies);
+                    }
                 }
-
-                // send invalidations
-                HdDataSourceLocatorSet affectedLocators;
-                for (const auto &keyEntryPair :
-                        affPair.second.locatorsEntryMap) {
-                    const _LocatorsEntry &entry = keyEntryPair.second;
-                    affectedLocators.insert(entry.affectedDataSourceLocator);
-                }
-
-                if (!affectedLocators.IsEmpty()) {
-                    additionalDirtied.emplace_back(affPair.first,
-                        affectedLocators);
-                    _PrimDirtied(affPair.first, affectedLocators,
-                        &visited, &additionalDirtied, &rebuildDependencies);
-                }
-            }});
+            }
         }});
     }});
 
@@ -518,8 +541,6 @@ HdDependencyForwardingSceneIndex::RemoveDeletedEntries(
     SdfPathVector *removedAffectedPrimPaths,
     SdfPathVector *removedDependedOnPrimPaths)
 {
-    SdfPathVector entriesToRemove;
-
     for (const SdfPath &dependedOnPrimPath :
             _potentiallyDeletedDependedOnPaths) {
 
@@ -530,88 +551,44 @@ HdDependencyForwardingSceneIndex::RemoveDeletedEntries(
             continue;
         }
 
-        _AffectedPrimsDependencyMap &_affectedPrimsMap =
+        _AffectedPrimsDependencyMap &affectedPrimsMap =
             (*dependedOnPrimIt).second;
-
-        entriesToRemove.clear();
-
-        std::function<void(_AffectedPrimsDependencyMap::value_type&)>
-            processAffectedPrim =
-            [&](_AffectedPrimsDependencyMap::value_type& affectedPrimPair) {
-            const SdfPath &affectedPrimPath = affectedPrimPair.first;
-            _AffectedPrimDependencyEntry &affectedPrimDependencyEntry =
-                    affectedPrimPair.second;
-
-            if (!affectedPrimDependencyEntry.flaggedForDeletion) {
-                return;
-            }
-
-            entriesToRemove.push_back(affectedPrimPath);
-
-            // now remove dependedOn prim from affected prim entry
-            // if that removal leaves it empty, then remove the whole thing
-
-            _AffectedPrimToDependsOnPathsEntryMap::iterator affectedPrimIt = 
-                _affectedPrimToDependsOnPathsMap.find(affectedPrimPath);
-
-            if (affectedPrimIt == _affectedPrimToDependsOnPathsMap.end()) {
-                return;
-            }
-
-            _AffectedPrimToDependsOnPathsEntry &affectedPrimEntry =
-                    (*affectedPrimIt).second;
-
-            if (affectedPrimEntry.dependsOnPaths.find(dependedOnPrimPath)
-                    == affectedPrimEntry.dependsOnPaths.end()) {
-                return;
-            }
-
-            if (affectedPrimEntry.dependsOnPaths.size() == 1) {
-                // If I'm the only thing in there, remove the whole entry
-                _affectedPrimToDependsOnPathsMap.unsafe_erase(
-                        affectedPrimPath);
-
-                if (removedAffectedPrimPaths) {
-                    removedAffectedPrimPaths->push_back(affectedPrimPath);
-                }
-
-            
-            } else {
-                affectedPrimEntry.dependsOnPaths.unsafe_erase(
-                        dependedOnPrimPath);
-            }
-        };
 
         // Note: some prims have pretty wild fan-out, so we iterate over
         // whichever set of potentially affected prims is smaller...
-        if (_affectedPrimsMap.size() < _potentiallyDeletedAffectedPaths.size()) {
-            for (auto &affectedPrimPair : _affectedPrimsMap) {
-                processAffectedPrim(affectedPrimPair);
+        if (affectedPrimsMap.size() <=
+                _potentiallyDeletedAffectedPaths.size()) {
+            for (auto it = affectedPrimsMap.begin();
+                 it != affectedPrimsMap.end(); ) {
+                auto &affectedPrimPair = *it;
+                if (affectedPrimPair.second.flaggedForDeletion) {
+                    it = affectedPrimsMap.unsafe_erase(it);
+                } else {
+                    ++it;
+                }
             }
         } else {
             for (auto &path : _potentiallyDeletedAffectedPaths) {
-                auto it = _affectedPrimsMap.find(path);
-                if (it != _affectedPrimsMap.end()) {
-                    processAffectedPrim(*it);
+                auto it = affectedPrimsMap.find(path);
+                if (it != affectedPrimsMap.end()) {
+                    auto &affectedPrimPair = *it;
+                    if (affectedPrimPair.second.flaggedForDeletion) {
+                        affectedPrimsMap.unsafe_erase(it);
+                    }
                 }
             }
         }
 
-        if (entriesToRemove.size() == _affectedPrimsMap.size()) {
-            // removing everything?, just erase the dependedOn prim entry
-            _dependedOnPrimToDependentsMap.unsafe_erase(dependedOnPrimPath);
-
+        // If we've erased all of the affected entries, we need to erase
+        // the dependedOn entry as well.
+        if (affectedPrimsMap.empty()) {
             if (removedDependedOnPrimPaths) {
                 removedDependedOnPrimPaths->push_back(dependedOnPrimPath);
             }
 
-        } else {
-            for (const SdfPath &affectedPrimPath : entriesToRemove) {
-                _affectedPrimsMap.unsafe_erase(affectedPrimPath);
-            }
+            _dependedOnPrimToDependentsMap.unsafe_erase(dependedOnPrimIt);
         }
     }
-
 
     for (const SdfPath &affectedPrimPath :
             _potentiallyDeletedAffectedPaths) {
