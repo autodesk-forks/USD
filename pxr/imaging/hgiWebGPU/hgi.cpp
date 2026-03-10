@@ -206,6 +206,7 @@ GetDevice()
     limits.maxColorAttachmentBytesPerSample =
         supportedLimits.maxColorAttachmentBytesPerSample;
     limits.maxBufferSize = supportedLimits.maxBufferSize;
+    limits.maxStorageBufferBindingSize = supportedLimits.maxStorageBufferBindingSize;
 
     wgpu::DeviceDescriptor descriptor;
     descriptor.requiredLimits = &limits;
