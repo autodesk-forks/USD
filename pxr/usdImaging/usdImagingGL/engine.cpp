@@ -1307,9 +1307,9 @@ UsdImagingGLEngine::TestIntersection(
         const UsdImagingGLRenderParams& params,
         IntersectionResultsFn returnHits)
 {
-
-    if (ARCH_UNLIKELY(!_renderDelegate)) {
+    if (ARCH_UNLIKELY(!_HasRenderer())) {
         returnHits({});
+        return;
     }
 
     PrepareBatch(root, params);
@@ -1349,15 +1349,19 @@ UsdImagingGLEngine::TestIntersection(
                             hit.instanceIndex, &(res.instancerContext));
                     res.hitInstancerPath =
                         _sceneDelegate
-                            ->ConvertIndexPathToCachePath(hit.instancerId)
+                            ->ConvertIndexPathToCachePath(
+                                _GetInstancerForPrim(hit.objectId))
                             .GetAbsoluteRootOrPrimPath();
                 } else {
                     const HdxPrimOriginInfo info =
-                        HdxPrimOriginInfo::FromPickHit(_renderIndex.get(), hit);
+                        HdxPrimOriginInfo::FromPickHit(
+                            _GetTerminalSceneIndex(), hit);
                     res.hitPrimPath = info.GetFullPath();
-                    res.hitInstancerPath = hit.instancerId.ReplacePrefix(
-                        _sceneDelegateId, SdfPath::AbsoluteRootPath());
                     res.instancerContext = info.ComputeInstancerContext();
+                    if (!res.instancerContext.empty()) {
+                        res.hitInstancerPath =
+                            res.instancerContext.back().first;
+                    }
                 }
 
                 res.hitPoint = hit.worldSpaceHitPoint;
@@ -1370,7 +1374,16 @@ UsdImagingGLEngine::TestIntersection(
         };
     const VtValue vtPickCtxParams(pickCtxParams);
 
-    _engine->SetTaskContextData(HdxPickTokens->pickParams, vtPickCtxParams);
+    if (_renderer) {
+        if (HdLegacyRenderControlInterface * const renderControl =
+                _renderer->GetLegacyRenderControl()) {
+            renderControl->SetTaskContextData(
+                HdxPickTokens->pickParams, vtPickCtxParams);
+        }
+    } else if (_engine) {
+        _engine->SetTaskContextData(
+                HdxPickTokens->pickParams, vtPickCtxParams);
+    }
     if (_taskControllerSceneIndex) {
         _Execute(params, _taskControllerSceneIndex->GetPickingTaskPaths());
     }
