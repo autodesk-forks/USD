@@ -44,10 +44,16 @@ public:
     ~HgiWebGPUBlitCmds() override;
 
     HGIWEBGPU_API
-    void PushDebugGroup(const char* label) override;
+    void PushDebugGroup(const char* label,
+        const GfVec4f& color = s_blitDebugColor) override;
 
     HGIWEBGPU_API
     void PopDebugGroup() override;
+
+    HGIWEBGPU_API
+    void InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color = s_markerDebugColor) override;
 
     HGIWEBGPU_API
     void CopyTextureGpuToCpu(HgiTextureGpuToCpuOp const& copyOp, std::function<void(void*)> callback = nullptr) override;

@@ -15,6 +15,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class HdRenderDelegate;
 class HdRenderIndex;
+struct HdRenderDelegateInfo;
 TF_DECLARE_REF_PTRS(HdRenderIndexAdapterSceneIndex);
 
 /// \class HdRenderIndexAdapterSceneIndex
@@ -26,17 +27,8 @@ TF_DECLARE_REF_PTRS(HdRenderIndexAdapterSceneIndex);
 class HdRenderIndexAdapterSceneIndex : public HdSceneIndexBase
 {
 public:
-    struct RenderDelegateInfo
-    {
-        TfToken materialBindingPurpose;
-        TfTokenVector materialRenderContexts;
-        TfTokenVector renderSettingsNamespaces;
-        bool isPrimvarFilteringNeeded;
-        TfTokenVector shaderSourceTypes;
-    };
-
     static HdRenderIndexAdapterSceneIndexRefPtr New(
-        const RenderDelegateInfo &info)
+        const HdRenderDelegateInfo &info)
     {
         return TfCreateRefPtr(new HdRenderIndexAdapterSceneIndex(info));
     }
@@ -54,7 +46,7 @@ public:
 
 private:
     HD_API
-    HdRenderIndexAdapterSceneIndex(const RenderDelegateInfo &info);
+    HdRenderIndexAdapterSceneIndex(const HdRenderDelegateInfo &info);
 
     std::unique_ptr<HdRenderDelegate> const _renderDelegate;
     std::unique_ptr<HdRenderIndex> const _renderIndex;

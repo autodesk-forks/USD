@@ -8,6 +8,8 @@
 
 #include "pxr/imaging/hd/driver.h"
 #include "pxr/imaging/hd/engine.h"
+#include "pxr/imaging/hd/legacyRenderControlInterface.h"
+#include "pxr/imaging/hd/renderBuffer.h"
 #include "pxr/imaging/hd/rendererCreateArgsSchema.h"
 #include "pxr/imaging/hd/renderIndex.h"
 
@@ -38,7 +40,7 @@ _ComputeDrivers(HdContainerDataSourceHandle const &rendererCreateArgs)
             drivers.push_back({ _tokens->renderDriver, ds->GetValue(0.0f)});
         }
     }
-    
+
     return drivers;
 }
 
@@ -51,6 +53,136 @@ _ComputeDrivers(HdContainerDataSourceHandle const &rendererCreateArgs)
 /// Creating a std::vector<HdDriver*> here.
 /// HdRenderDelegateAdapterRenderer::_drivers owns the HdDriver struct's.
 ///
+class HdRenderDelegateAdapterRenderer::_LegacyRenderControl
+    : public HdLegacyRenderControlInterface
+{
+public:
+    _LegacyRenderControl(
+        HdRenderDelegate * const renderDelegate,
+        HdRenderIndex * const renderIndex,
+        HdEngine * const engine)
+      : _renderDelegate(renderDelegate)
+      , _renderIndex(renderIndex)
+      , _engine(engine)
+    {
+    }
+
+    void Execute(const SdfPathVector &taskPaths) override {
+        _engine->Execute(_renderIndex, taskPaths);
+    }
+
+    bool AreTasksConverged(const SdfPathVector &taskPaths) const override {
+        return _engine->AreTasksConverged(_renderIndex, taskPaths);
+    }
+
+    bool GetTaskContextData(const TfToken &name, VtValue *data) const override {
+        return _engine->GetTaskContextData(name, data);
+    }
+
+    void SetTaskContextData(const TfToken &name, const VtValue &data) override {
+        return _engine->SetTaskContextData(name, data);
+    }
+
+    HdAovDescriptor
+    GetDefaultAovDescriptor(const TfToken &name) const override {
+        return _renderDelegate->GetDefaultAovDescriptor(name);
+    }
+
+    HdRenderBuffer * GetRenderBuffer(const SdfPath &path) const override
+    {
+        return
+            dynamic_cast<HdRenderBuffer*>(
+                _renderIndex->GetBprim(HdPrimTypeTokens->renderBuffer, path));
+    }
+
+    HdRenderSettingDescriptorList GetRenderSettingDescriptors() const override {
+        return _renderDelegate->GetRenderSettingDescriptors();
+    }
+
+    VtValue GetRenderSetting(const TfToken &name) const override {
+        return _renderDelegate->GetRenderSetting(name);
+    }
+
+    void SetRenderSetting(const TfToken &name, VtValue const &value) override {
+        _renderDelegate->SetRenderSetting(name, value);
+    }
+
+    HdCommandDescriptors GetCommandDescriptors() override {
+        return _renderDelegate->GetCommandDescriptors();
+    }
+
+    bool InvokeCommand(
+        TfToken const &name, const HdCommandArgs &args) override {
+        return _renderDelegate->InvokeCommand(name, args);
+    }
+
+    bool IsPauseSupported() const override {
+        return _renderDelegate->IsPauseSupported();
+    }
+
+    bool Pause() override {
+        return _renderDelegate->Pause();
+    }
+
+    bool Resume() override {
+        return _renderDelegate->Resume();
+    }
+
+    bool IsStopSupported() const override {
+        return _renderDelegate->IsStopSupported();
+    }
+
+    bool Stop(bool blocking = true) override {
+        return _renderDelegate->Stop(blocking);
+    }
+
+    bool Restart() override {
+        return _renderDelegate->Restart();
+    }
+
+    TfToken GetMaterialBindingPurpose() const override {
+        return _renderDelegate->GetMaterialBindingPurpose();
+    }
+
+    TfTokenVector GetMaterialRenderContexts() const override {
+        return _renderDelegate->GetMaterialRenderContexts();
+    }
+
+    TfTokenVector GetRenderSettingsNamespaces() const override {
+        return _renderDelegate->GetRenderSettingsNamespaces();
+    }
+
+    bool IsPrimvarFilteringNeeded() const override {
+        return _renderDelegate->IsPrimvarFilteringNeeded();
+    }
+
+    TfTokenVector GetShaderSourceTypes() const override {
+        return _renderDelegate->GetShaderSourceTypes();
+    }
+
+    bool IsCoordSysSupported() const override {
+        return _renderIndex->IsSprimTypeSupported(
+            HdPrimTypeTokens->coordSys);
+    }
+
+    bool RequiresStormTasks() const override {
+        return _renderDelegate->RequiresStormTasks();
+    }
+
+    VtDictionary GetRenderStats() override {
+        return _renderDelegate->GetRenderStats();
+    }
+
+    SdfPath GetRprimPathFromPrimId(const int primIdx) override {
+        return _renderIndex->GetRprimPathFromPrimId(primIdx);
+    }
+
+private:
+    HdRenderDelegate * const _renderDelegate;
+    HdRenderIndex * const _renderIndex;
+    HdEngine * const _engine;
+};
+
 static
 HdDriverVector
 _ToPointers(const std::vector<HdDriver> &drivers)
@@ -75,9 +207,20 @@ HdRenderDelegateAdapterRenderer::HdRenderDelegateAdapterRenderer(
          _ToPointers(_drivers),
          terminalSceneIndex))
  , _engine(std::make_unique<HdEngine>())
+ , _legacyRenderControl(
+     std::make_unique<_LegacyRenderControl>(
+         _renderDelegate.Get(),
+         _renderIndex.get(),
+         _engine.get()))
 {
 }
 
 HdRenderDelegateAdapterRenderer::~HdRenderDelegateAdapterRenderer() = default;
+
+HdLegacyRenderControlInterface *
+HdRenderDelegateAdapterRenderer::GetLegacyRenderControl()
+{
+    return _legacyRenderControl.get();
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -126,7 +126,6 @@ protected:
     HGIVULKAN_API
     HgiVulkanTexture(
         HgiVulkan* hgi,
-        HgiVulkanDevice* device,
         HgiTextureDesc const & desc,
         bool optimalTiling,
         bool interop);
@@ -135,7 +134,6 @@ protected:
     HGIVULKAN_API
     HgiVulkanTexture(
         HgiVulkan* hgi,
-        HgiVulkanDevice* device,
         HgiTextureViewDesc const & desc);
 
 private:
@@ -147,7 +145,7 @@ private:
     VkImageView _vkImageView;
     VkImageLayout _vkImageLayout;
     VmaAllocation _vmaImageAllocation;
-    HgiVulkanDevice* _device;
+    HgiVulkan* _hgi;
     uint64_t _inflightBits;
     std::unique_ptr<HgiVulkanBuffer> _stagingBuffer;
     void* _cpuStagingAddress;

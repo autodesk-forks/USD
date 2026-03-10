@@ -47,10 +47,16 @@ public:
     ~HgiWebGPUComputeCmds() override;
 
     HGIWEBGPU_API
-    void PushDebugGroup(const char* label) override;
+    void PushDebugGroup(const char* label,
+        const GfVec4f& color = s_computeDebugColor) override;
 
     HGIWEBGPU_API
     void PopDebugGroup() override;
+
+    HGIWEBGPU_API
+    void InsertDebugMarker(
+        const char* label,
+        const GfVec4f& color = s_markerDebugColor) override;
 
     HGIWEBGPU_API
     void BindPipeline(HgiComputePipelineHandle pipeline) override;

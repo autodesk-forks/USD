@@ -18,11 +18,14 @@
 #include "pxr/base/tf/denseHashMap.h"
 #include "pxr/base/tf/staticTokens.h"
 
+#include "pxr/usd/usdGeom/xformable.h"
+#include "pxr/usd/usdGeom/xformCommonAPI.h"
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
-    ((xformOpTranslatePivot, "xformOp:translate:pivot"))
+    ((xformOpComputedPivot, "xformOp:computedPivot"))
 );
 
 
@@ -108,10 +111,12 @@ UsdImagingDataSourcePrimvars::GetNames()
         }
     }
 
-    // If an xformOp:translate:pivot exists, import it as a special-case
-    // implicit "pivot" primvar.
-    if (_usdPrim.GetProperty(_tokens->xformOpTranslatePivot)) {
-        result.push_back(_tokens->xformOpTranslatePivot);
+    // Add the special-case implicit "pivot" primvar.
+    if (const auto xformable = UsdGeomXformable(_usdPrim)) {
+        const UsdGeomXformable::XformQuery xformQuery(xformable);
+        if (xformQuery.HasNonEmptyXformOpOrder()) {
+            result.push_back(_tokens->xformOpComputedPivot);
+        }
     }
 
     return result;
@@ -142,13 +147,27 @@ UsdImagingDataSourcePrimvars::Get(const TfToken & name)
         return nullptr;
     }
 
-    // xformOpTranslatePivot is a special case attriubute that is
-    // promoted into the Hydra primvars data source. All other
+    // xformOpComputedPivot is a special case attribute that is
+    // added into the Hydra primvars data source. All other
     // primvars must be in the primvars: namespace.
-    const TfToken propName =
-        name == _tokens->xformOpTranslatePivot
-        ? name
-        : _GetPrefixedName(name);
+    if (name == _tokens->xformOpComputedPivot) {
+        GfVec3d translation;
+        GfVec3f rotation, scale, pivot{0};
+        UsdGeomXformCommonAPI::RotationOrder rotOrder;
+        UsdGeomXformCommonAPI(_usdPrim).GetXformVectorsByAccumulation(
+            &translation, &rotation, &scale, &pivot, &rotOrder,
+            _stageGlobals.GetTime());
+        
+        return HdPrimvarSchema::Builder()
+            .SetPrimvarValue(
+                HdRetainedTypedSampledDataSource<GfVec3f>::New(pivot))
+            .SetInterpolation(HdPrimvarSchema::BuildInterpolationDataSource(
+                HdPrimvarSchemaTokens->constant))
+            .SetRole(HdPrimvarSchema::BuildRoleDataSource(TfToken()))
+            .Build();
+    }
+    
+    const TfToken propName = _GetPrefixedName(name);
 
     if (UsdAttribute attr = _usdPrim.GetAttribute(propName)) {
         UsdGeomPrimvar usdPrimvar(attr);

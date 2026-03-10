@@ -144,9 +144,9 @@ _BufferUsageTable[][2] =
     {HgiBufferUsageVertex,   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
     {HgiBufferUsageStorage,  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
     {HgiBufferUsageIndirect, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT},
-
+    {HgiBufferUsageUpload,   VK_BUFFER_USAGE_TRANSFER_SRC_BIT},
 };
-static_assert(HgiBufferUsageCustomBitsBegin == 1 << 5, "");
+static_assert(HgiBufferUsageCustomBitsBegin == 1 << 6, "");
 
 static const uint32_t
 _CullModeTable[HgiCullModeCount][2] =

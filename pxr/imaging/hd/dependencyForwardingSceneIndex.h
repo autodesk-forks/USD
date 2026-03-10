@@ -216,6 +216,7 @@ private:
 
     void _ClearDependencies(const SdfPath &primPath);
     void _UpdateDependencies(const SdfPath &primPath) const;
+    void _ResetDependencies();
 
     // -----------------------------------------------------------------------
 

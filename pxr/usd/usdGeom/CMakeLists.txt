@@ -119,79 +119,17 @@ pxr_build_test(testUsdGeomHasAPI
         testenv/testUsdGeomHasAPI.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomBasisCurves
-    DEST testUsdGeomBasisCurves
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomBBoxCache
-    DEST testUsdGeomBBoxCache
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomCamera
-    DEST testUsdGeomCamera
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomConsts
-    DEST testUsdGeomConsts
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomPointInstancer
-    DEST testUsdGeomPointInstancer
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomSubset
-    DEST testUsdGeomSubset)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomBBoxCache
-    DEST testUsdGeomBBoxCache
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomExtentFromPlugins
-    DEST testUsdGeomExtentFromPlugins
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomExtentTransform
-    DEST testUsdGeomExtentTransform
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomComputeAtTime
-    DEST testUsdGeomComputeAtTime
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomImageable
-    DEST testUsdGeomImageable
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomMesh
-    DEST testUsdGeomMesh
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGeomTetMesh
-    DEST testUsdGeomTetMesh
-)
-
 pxr_register_test(testUsdGeomBasisCurves
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomBasisCurves"
+    TESTENV testenv/testUsdGeomBasisCurves
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdGeomBBoxCache
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomBBoxCache"
+    TESTENV testenv/testUsdGeomBBoxCache
     EXPECTED_RETURN_CODE 0
     ENV 
         TF_DEBUG=USDGEOM_BBOX
@@ -201,6 +139,7 @@ pxr_register_test(testUsdGeomBBoxCache
 pxr_register_test(testUsdGeomCamera
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomCamera"
+    TESTENV testenv/testUsdGeomCamera
     EXPECTED_RETURN_CODE 0
 )
 
@@ -213,6 +152,7 @@ pxr_register_test(testUsdGeomConstraintTarget
 pxr_register_test(testUsdGeomConsts
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomConsts"
+    TESTENV testenv/testUsdGeomConsts
     EXPECTED_RETURN_CODE 0
 )
 
@@ -230,12 +170,14 @@ pxr_register_test(testUsdGeomCurves
 pxr_register_test(testUsdGeomMesh
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomMesh"
+    TESTENV testenv/testUsdGeomMesh
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdGeomTetMesh
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomTetMesh"
+    TESTENV testenv/testUsdGeomTetMesh
     DIFF_COMPARE tetMeshRH.usda
     DIFF_COMPARE tetMeshLH.usda
 )
@@ -249,6 +191,7 @@ pxr_register_test(testUsdGeomMetrics
 pxr_register_test(testUsdGeomSubset
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomSubset"
+    TESTENV testenv/testUsdGeomSubset
     EXPECTED_RETURN_CODE 0
 )
 
@@ -281,6 +224,7 @@ pxr_register_test(testUsdGeomPrimvar
 pxr_register_test(testUsdGeomPointInstancer
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomPointInstancer"
+    TESTENV testenv/testUsdGeomPointInstancer
     EXPECTED_RETURN_CODE 0
 )
 
@@ -316,24 +260,28 @@ pxr_register_test(testUsdGeomXformCommonAPI
 pxr_register_test(testUsdGeomExtentFromPlugins
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomExtentFromPlugins"
+    TESTENV testenv/testUsdGeomExtentFromPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdGeomExtentTransform
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomExtentTransform"
+    TESTENV testenv/testUsdGeomExtentTransform
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdGeomComputeAtTime
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomComputeAtTime"
+    TESTENV testenv/testUsdGeomComputeAtTime
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdGeomImageable
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeomImageable"
+    TESTENV testenv/testUsdGeomImageable
     EXPECTED_RETURN_CODE 0
 )
 

@@ -1626,9 +1626,20 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
                 source = std::make_shared<HdVtBufferSource>(HdTokens->points,
                     value, 1, doublesSupported);
             }
-            _pointsDataType = source->GetTupleType().type;
 
-            if ((int)source->GetNumElements() < numPoints) {
+            if (source == nullptr) {
+                // If points isn't valid, it pretty much invalidates the
+                // whole prim. Drop the bar, to invalidate the prim and stop
+                // further processing.
+                HF_VALIDATION_WARN(id, 
+                    "Vertex primvar points is not valid. Skipping "
+                    " prim due to insufficent data.");
+
+                _sharedData.barContainer.Set(
+                    drawItem->GetDrawingCoord()->GetVertexPrimvarIndex(),
+                    HdBufferArrayRangeSharedPtr());
+                return;
+            } else if ((int)source->GetNumElements() < numPoints) {
                 // If points is too short, it pretty much invalidates the
                 // whole prim. Drop the bar, to invalidate the prim and stop
                 // further processing.
@@ -1654,6 +1665,7 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
                 std::static_pointer_cast<HdVtBufferSource>(source)
                     ->Truncate(numPoints);
             }
+            _pointsDataType = source->GetTupleType().type;
 
             _RefineOrQuadrangulateVertexAndVaryingPrimvar(
                 source, _topology, id,  doRefine, doQuadrangulate,

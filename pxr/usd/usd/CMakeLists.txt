@@ -502,286 +502,17 @@ pxr_build_test(testUsdSplinesCpp
         testenv/testUsdSplinesCpp.cpp
 )
 
-
-pxr_install_test_dir(
-    SRC testenv/testUsdAppliedAPISchemas
-    DEST testUsdAppliedAPISchemas
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdAppliedAPISchemas
-    DEST testUsdAppliedAPISchemas_AutoApplyDisabled
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdStageThreading
-    DEST testUsdStageThreading
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdCratePayloadConversionFromVersion07.testenv
-    DEST testUsdCratePayloadConversionFromVersion07
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdCrateRelocates.testenv
-    DEST testUsdCrateRelocates
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdExternalAssetDependencies.testenv
-    DEST testUsdExternalAssetDependencies
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFallbackPrimTypes
-    DEST testUsdFallbackPrimTypes
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFlatten
-    DEST testUsdFlatten
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFlatten2
-    DEST testUsdFlatten2
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFlatten2
-    DEST testUsdFlatten3
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFlatten2
-    DEST testUsdFlatten4
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFlattenLayerStack
-    DEST testUsdFlattenLayerStack
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFlattenProperties
-    DEST testUsdFlattenProperties
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFileFormats
-    DEST testUsdFileFormats
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFileFormats
-    DEST testUsdFileFormats_asset
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdFileFormats
-    DEST testUsdFileFormats_pread
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdVariantEditing.testenv
-    DEST testUsdEditVariantEditing
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdInstancing
-    DEST testUsdInstancing
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdInstanceProxy
-    DEST testUsdInstanceProxy
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdMetadata
-    DEST testUsdMetadata
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdReadOutOfBounds
-    DEST testUsdReadOutOfBounds
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdResolverChanged
-    DEST testUsdResolverChanged
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdResolveTarget.testenv
-    DEST testUsdResolveTarget
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdResolveTarget.testenv
-    DEST testUsdResolveTargetPy
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdNotices.testenv
-    DEST testUsdNotices
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdNamespaceEditor
-    DEST testUsdNamespaceEditor
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdNamespaceEditorProperties
-    DEST testUsdNamespaceEditorProperties
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdNamespaceEditorTargetPathFixup
-    DEST testUsdNamespaceEditorTargetPathFixup
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdObjectsChangedNoticesSublayerOps
-    DEST testUsdObjectsChangedNoticesSublayerOps
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdPrims.testenv
-    DEST testUsdPrims
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdPrimCompositionQuery.testenv
-    DEST testUsdPrimCompositionQuery
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdPrimGetDescendants.testenv
-    DEST testUsdPrimGetDescendants
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdInstancingCpp.testenv
-    DEST testUsdInstancingCpp
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdVariantEditing.testenv
-    DEST testUsdVariantEditing
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdVariantFallbacks.testenv
-    DEST testUsdVariantFallbacks
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdGenSchema
-    DEST testUsdGenSchema
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdSchemaRegistry
-    DEST testUsdSchemaRegistry
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdSchemaRegistry
-    DEST testUsdSchemaRegistryCpp
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdSchemaVersioning
-    DEST testUsdSchemaVersioning
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdTimeValueAuthoring
-    DEST testUsdTimeValueAuthoring
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdTimeValueAuthoring
-    DEST testUsdTimeValueAuthoringCpp
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdBug119633.testenv
-    DEST testUsdBug119633
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdBug141491.testenv
-    DEST testUsdBug141491
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdLoadUnloadDeepNestedInstancing.testenv
-    DEST testUsdLoadUnloadDeepNestedInstancing
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdStageNoPython.testenv
-    DEST testUsdStageNoPython
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdPrimRange
-    DEST testUsdPrimRange
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdValueClips
-    DEST testUsdValueClips
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdVariants
-    DEST testUsdVariants
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdCollectionAPI
-    DEST testUsdCollectionAPI
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdUsdzFileFormat
-    DEST testUsdUsdzFileFormat
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdUsdzFileFormat
-    DEST testUsdUsdzFileFormat_asset
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdUsdzFileFormat
-    DEST testUsdUsdzFileFormat_pread
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdUsdzBugGHSA01.testenv
-    DEST testUsdUsdzBugGHSA01
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdUsdcBugGHSA02.testenv
-    DEST testUsdUsdcBugGHSA02
-)
-
 pxr_register_test(testUsdAppliedAPISchemas
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdAppliedAPISchemas"
+    TESTENV testenv/testUsdAppliedAPISchemas
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdAppliedAPISchemas_AutoApplyDisabled
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdAppliedAPISchemas"
+    TESTENV testenv/testUsdAppliedAPISchemas
     EXPECTED_RETURN_CODE 0
     ENV
         USD_DISABLE_AUTO_APPLY_API_SCHEMAS=1
@@ -826,24 +557,28 @@ pxr_register_test(testUsdErrors
 pxr_register_test(testUsdValueClips
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdValueClips"
+    TESTENV testenv/testUsdValueClips
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdVariantEditing
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdVariantEditing"
+    TESTENV testenv/testUsdVariantEditing.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdVariantFallbacks
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdVariantFallbacks"
+    TESTENV testenv/testUsdVariantFallbacks.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdVariants
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdVariants"
+    TESTENV testenv/testUsdVariants
     EXPECTED_RETURN_CODE 0
 )
 
@@ -866,12 +601,14 @@ pxr_register_test(testUsdBugs
 pxr_register_test(testUsdBug119633
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdBug119633"
+    TESTENV testenv/testUsdBug119633.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdBug141491
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdBug141491"
+    TESTENV testenv/testUsdBug141491.testenv
     EXPECTED_RETURN_CODE 0
 )
 
@@ -884,6 +621,7 @@ pxr_register_test(testUsdChangeProcessing
 pxr_register_test(testUsdCollectionAPI
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdCollectionAPI"
+    TESTENV testenv/testUsdCollectionAPI
     EXPECTED_RETURN_CODE 0
 )
 
@@ -907,12 +645,14 @@ pxr_register_test(testUsdCreateAttributeCpp
 pxr_register_test(testUsdExternalAssetDependencies
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdExternalAssetDependencies"
+    TESTENV testenv/testUsdExternalAssetDependencies.testenv
     EXPECTED_RETURN_CODE 0  
 )
 
 pxr_register_test(testUsdFallbackPrimTypes
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFallbackPrimTypes"
+    TESTENV testenv/testUsdFallbackPrimTypes
     EXPECTED_RETURN_CODE 0
 )
 
@@ -924,6 +664,7 @@ pxr_register_test(testUsdHardToReach
 pxr_register_test(testUsdInstancing
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdInstancing"
+    TESTENV testenv/testUsdInstancing
     ENV
         USD_ASSIGN_PROTOTYPES_DETERMINISTICALLY=1
 )
@@ -931,6 +672,7 @@ pxr_register_test(testUsdInstancing
 pxr_register_test(testUsdInstanceProxy
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdInstanceProxy"
+    TESTENV testenv/testUsdInstanceProxy
     EXPECTED_RETURN_CODE 0
 )
 
@@ -943,6 +685,7 @@ pxr_register_test(testUsdDataFormats
 pxr_register_test(testUsdLoadUnloadDeepNestedInstancing
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdLoadUnloadDeepNestedInstancing"
+    TESTENV testenv/testUsdLoadUnloadDeepNestedInstancing.testenv
     EXPECTED_RETURN_CODE 0
 )
 
@@ -966,16 +709,19 @@ pxr_register_test(testUsdTemplatedIO
 pxr_register_test(testUsdPrimCompositionQuery
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPrimCompositionQuery"
+    TESTENV testenv/testUsdPrimCompositionQuery.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdPrimGetDescendants
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPrimGetDescendants"
+    TESTENV testenv/testUsdPrimGetDescendants.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdInstancingCpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdInstancingCpp"
+    TESTENV testenv/testUsdInstancingCpp.testenv
     EXPECTED_RETURN_CODE 0
     ENV
         USD_ASSIGN_PROTOTYPES_DETERMINISTICALLY=1
@@ -984,18 +730,21 @@ pxr_register_test(testUsdInstancingCpp
 pxr_register_test(testUsdPrims
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPrims"
+    TESTENV testenv/testUsdPrims.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdFileFormats
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFileFormats"
+    TESTENV testenv/testUsdFileFormats
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdFileFormats_asset
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFileFormats"
+    TESTENV testenv/testUsdFileFormats
     ENV
         USDC_USE_ASSET=1
     EXPECTED_RETURN_CODE 0
@@ -1004,6 +753,7 @@ pxr_register_test(testUsdFileFormats_asset
 pxr_register_test(testUsdFileFormats_pread
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFileFormats"
+    TESTENV testenv/testUsdFileFormats
     ENV
         USDC_USE_PREAD=1
     EXPECTED_RETURN_CODE 0
@@ -1021,12 +771,14 @@ pxr_register_test(testUsdMetadataCpp
 if (BUILD_SHARED_LIBS)
     pxr_register_test(testUsdResolverChanged
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolverChanged"
+        TESTENV testenv/testUsdResolverChanged
         EXPECTED_RETURN_CODE 0
     )
 endif()
 
 pxr_register_test(testUsdStageNoPython
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdStageNoPython"
+    TESTENV testenv/testUsdStageNoPython.testenv
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testUsdStageNotification
@@ -1035,6 +787,7 @@ pxr_register_test(testUsdStageNotification
 )
 pxr_register_test(testUsdStageThreading
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdStageThreading"
+    TESTENV testenv/testUsdStageThreading
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testUsdThreadedAuthoring
@@ -1085,6 +838,7 @@ pxr_register_test(testUsdTimeOffsets
 pxr_register_test(testUsdPrimRange
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPrimRange"
+    TESTENV testenv/testUsdPrimRange
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1115,12 +869,14 @@ pxr_register_test(testUsdPathExpressionAttrs
 pxr_register_test(testUsdCratePayloadConversionFromVersion07
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdCratePayloadConversionFromVersion07"
+    TESTENV testenv/testUsdCratePayloadConversionFromVersion07.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdCrateRelocates
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdCrateRelocates"
+    TESTENV testenv/testUsdCrateRelocates.testenv
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1144,12 +900,14 @@ pxr_register_test(testUsdModel
 
 pxr_register_test(testUsdResolveTarget
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolveTarget"
+    TESTENV testenv/testUsdResolveTarget.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdResolveTargetPy
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdResolveTargetPy"
+    TESTENV testenv/testUsdResolveTarget.testenv
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1168,18 +926,21 @@ pxr_register_test(testUsdSplines
 pxr_register_test(testUsdMetadata
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdMetadata"
+    TESTENV testenv/testUsdMetadata
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdFlatten
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFlatten"
+    TESTENV testenv/testUsdFlatten
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdFlatten2
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFlatten2 BasicInstancingAndVariants/root.usda"
+    TESTENV testenv/testUsdFlatten2
     STDOUT_REDIRECT flat_BasicInstancingAndVariants.usda
     DIFF_COMPARE flat_BasicInstancingAndVariants.usda
     EXPECTED_RETURN_CODE 0
@@ -1190,6 +951,7 @@ pxr_register_test(testUsdFlatten2
 pxr_register_test(testUsdFlatten3
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFlatten2 BasicInstancing/root.usda"
+    TESTENV testenv/testUsdFlatten2
     STDOUT_REDIRECT flat_BasicInstancing.usda
     DIFF_COMPARE flat_BasicInstancing.usda
     EXPECTED_RETURN_CODE 0
@@ -1200,6 +962,7 @@ pxr_register_test(testUsdFlatten3
 pxr_register_test(testUsdFlatten4
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFlatten2 BasicInstancingAndNestedInstances/root.usda"
+    TESTENV testenv/testUsdFlatten2
     STDOUT_REDIRECT flat_BasicInstancingAndNestedInstances.usda
     DIFF_COMPARE flat_BasicInstancingAndNestedInstances.usda
     EXPECTED_RETURN_CODE 0
@@ -1210,12 +973,14 @@ pxr_register_test(testUsdFlatten4
 pxr_register_test(testUsdFlattenLayerStack
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdFlattenLayerStack"
+    TESTENV testenv/testUsdFlattenLayerStack
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdNotices
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdNotices"
+    TESTENV testenv/testUsdNotices.testenv
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1228,12 +993,14 @@ pxr_register_test(testUsdObjectsChangedNotices
 pxr_register_test(testUsdObjectsChangedNoticesSublayerOps
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdObjectsChangedNoticesSublayerOps"
+    TESTENV testenv/testUsdObjectsChangedNoticesSublayerOps
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdNamespaceEditor
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdNamespaceEditor"
+    TESTENV testenv/testUsdNamespaceEditor
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1276,18 +1043,21 @@ pxr_register_test(testUsdNamespaceEditorDependentEditsSiblingNodeSpecConflicts
 pxr_register_test(testUsdNamespaceEditorProperties
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdNamespaceEditorProperties"
+    TESTENV testenv/testUsdNamespaceEditorProperties
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdNamespaceEditorTargetPathFixup
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdNamespaceEditorTargetPathFixup"
+    TESTENV testenv/testUsdNamespaceEditorTargetPathFixup
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdReadOutOfBounds
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdReadOutOfBounds"
+    TESTENV testenv/testUsdReadOutOfBounds
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1311,11 +1081,13 @@ pxr_register_test(testUsdSchemaBasePy
 pxr_register_test(testUsdSchemaRegistry
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaRegistry"
+    TESTENV testenv/testUsdSchemaRegistry
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdSchemaRegistryCpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaRegistryCpp"
+    TESTENV testenv/testUsdSchemaRegistry
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1328,17 +1100,20 @@ pxr_register_test(testUsdSchemaRegistryThreadedInit
 pxr_register_test(testUsdSchemaVersioning
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdSchemaVersioning"
+    TESTENV testenv/testUsdSchemaVersioning
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdTimeValueAuthoring
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdTimeValueAuthoring"
+    TESTENV testenv/testUsdTimeValueAuthoring
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdTimeValueAuthoringCpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdTimeValueAuthoringCpp"
+    TESTENV testenv/testUsdTimeValueAuthoring
     EXPECTED_RETURN_CODE 0
 )
 
@@ -1350,12 +1125,14 @@ pxr_register_test(testUsdSplinesCpp
 pxr_register_test(testUsdUsdzFileFormat
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzFileFormat"
+    TESTENV testenv/testUsdUsdzFileFormat
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdUsdzFileFormat_asset
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzFileFormat"
+    TESTENV testenv/testUsdUsdzFileFormat
     ENV
         USDC_USE_ASSET=1
     EXPECTED_RETURN_CODE 0
@@ -1364,6 +1141,7 @@ pxr_register_test(testUsdUsdzFileFormat_asset
 pxr_register_test(testUsdUsdzFileFormat_pread
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzFileFormat"
+    TESTENV testenv/testUsdUsdzFileFormat
     ENV
         USDC_USE_PREAD=1
     EXPECTED_RETURN_CODE 0
@@ -1377,11 +1155,13 @@ pxr_register_test(testUsdOpaqueAttributes
 
 pxr_register_test(testUsdUsdzBugGHSA01
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdzBugGHSA01"
+    TESTENV testenv/testUsdUsdzBugGHSA01.testenv
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdUsdcBugGHSA02
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdUsdcBugGHSA02"
+    TESTENV testenv/testUsdUsdcBugGHSA02.testenv
     EXPECTED_RETURN_CODE 0
 )
   

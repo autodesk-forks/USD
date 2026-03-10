@@ -216,7 +216,8 @@ struct {
     {HgiBufferUsageIndex32, wgpu::BufferUsage::Index},
     {HgiBufferUsageVertex,  wgpu::BufferUsage::Vertex},
     {HgiBufferUsageStorage, wgpu::BufferUsage::Storage},
-    {HgiBufferUsageIndirect, wgpu::BufferUsage::Indirect}
+    {HgiBufferUsageIndirect, wgpu::BufferUsage::Indirect},
+    {HgiBufferUsageUpload, wgpu::BufferUsage::CopySrc}
 };
 
 struct {

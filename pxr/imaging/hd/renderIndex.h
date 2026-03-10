@@ -246,6 +246,10 @@ public:
 
     /// Query function to return the id's of the scene delegate and instancer
     /// associated with the Rprim at the given path.
+    ///
+    /// \deprecated. Query terminal scene index for prim and extract instancer
+    /// from HdInstancedBySchema instead.
+    ///
     HD_API
     bool GetSceneDelegateAndInstancerIds(SdfPath const &id,
                                          SdfPath* sceneDelegateId,

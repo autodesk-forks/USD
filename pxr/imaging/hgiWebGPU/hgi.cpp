@@ -199,16 +199,8 @@ GetDevice()
             minBufferSize, supportedLimits.maxBufferSize);
     }
 
-    // If the requirements are not met, dawn will throw a warning
-    wgpu::Limits limits = {};
-    limits.maxStorageBuffersPerShaderStage =
-        supportedLimits.maxStorageBuffersPerShaderStage;
-    limits.maxColorAttachmentBytesPerSample =
-        supportedLimits.maxColorAttachmentBytesPerSample;
-    limits.maxBufferSize = supportedLimits.maxBufferSize;
-
     wgpu::DeviceDescriptor descriptor;
-    descriptor.requiredLimits = &limits;
+    descriptor.requiredLimits = &supportedLimits;
     descriptor.requiredFeatures = requiredFeatures.data();
     descriptor.requiredFeatureCount = requiredFeatures.size();
     descriptor.nextInChain = &deviceTogglesDesc;

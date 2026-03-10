@@ -54,7 +54,7 @@ HgiWebGPUComputeCmds::~HgiWebGPUComputeCmds()
 }
 
 void
-HgiWebGPUComputeCmds::PushDebugGroup(const char* label)
+HgiWebGPUComputeCmds::PushDebugGroup(const char* label, const GfVec4f& color)
 {
     if (_computePassEncoder) {
         HgiWebGPUBeginLabel(_computePassEncoder, label);
@@ -71,6 +71,11 @@ HgiWebGPUComputeCmds::PopDebugGroup()
     } else {
         HgiWebGPUEndLabel(_commandEncoder);
     }
+}
+
+void
+HgiWebGPUComputeCmds::InsertDebugMarker(const char* label, const GfVec4f& color)
+{
 }
 
 void

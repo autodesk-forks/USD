@@ -497,10 +497,18 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
             }
         }
 
-        if (entry.dirtyLocators.Intersects(
-                HdPrimvarsSchema::GetDefaultLocator())) {
-            std::atomic_store(&(it->second.primvarDescriptors),
-                std::shared_ptr<_PrimCacheEntry::PrimvarDescriptorsArray>());
+        for (HdDataSourceLocator const& loc : entry.dirtyLocators) {
+            if (loc.GetFirstElement() == HdPrimvarsSchemaTokens->primvars &&
+                loc.GetLastElement() != HdPrimvarSchemaTokens->primvarValue &&
+                loc.GetLastElement() !=
+                    HdPrimvarSchemaTokens->indexedPrimvarValue &&
+                loc.GetLastElement() != HdPrimvarSchemaTokens->indices) {
+                // If we've invalidated a primvar/primvars, and it's *not* just
+                // a value update, clear the cached primvar descriptors.
+                std::atomic_store(&(it->second.primvarDescriptors),
+                    std::shared_ptr<_PrimCacheEntry::PrimvarDescriptorsArray>());
+                break;
+            }
         }
 
         if (entry.dirtyLocators.Intersects(
