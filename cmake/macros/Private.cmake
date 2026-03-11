@@ -337,8 +337,16 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
             string(REGEX REPLACE "^lib\\/" "/" wasmRuntimePath "${resourcesPath}")
             cmake_path(APPEND wasmRuntimePath "${resourceDestFile}")
 
-            list(APPEND emscriptenResourceFiles "$<BUILD_INTERFACE:SHELL:--preload-file ${resourceFileAbsolute}@${wasmRuntimePath}>")
-            list(APPEND emscriptenResourceFiles "$<INSTALL_INTERFACE:SHELL:--preload-file $<INSTALL_PREFIX>/${installResourcePath}/${destFileName}@${wasmRuntimePath}>")
+            get_filename_component(resourceDestDir "${wasmRuntimePath}" PATH)
+
+            # Resources that are required for this library will be embedded in
+            # the final Wasm output. For building internal binaries, we can use
+            # the files from their location in the source tree. In order for
+            # the build to be reloatable, we want to reference the installed
+            # files in the pxrTargets.cmake file.
+            target_link_options(${NAME} PUBLIC
+                "$<BUILD_INTERFACE:SHELL:--embed-file ${resourceFileAbsolute}@${resourceDestDir}/${destFileName}>"
+                "$<INSTALL_INTERFACE:SHELL:--embed-file $<INSTALL_PREFIX>/${installDestination}/${destFileName}@${resourceDestDir}/${destFileName}>")
         endif()
 
         install(
@@ -349,7 +357,15 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
     endforeach()
 
     if (EMSCRIPTEN AND PXR_ENABLE_PRELOAD_FILES)
-        target_link_options(${NAME} PUBLIC ${emscriptenResourceFiles})
+        # INTERFACE targets can only have INTERFACE properties set,
+        # not PUBLIC or PRIVATE.
+        get_target_property(_lib_type ${NAME} TYPE)
+        if(_lib_type STREQUAL "INTERFACE_LIBRARY")
+            set(_link_options_visibility INTERFACE)
+        else()
+            set(_link_options_visibility PUBLIC)
+        endif()
+        target_link_options(${NAME} ${_link_options_visibility} ${emscriptenResourceFiles})
     endif()
 endfunction() # _install_resource_files
 

@@ -154,9 +154,8 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     const VkImageLayout oldLayout = srcTexture->GetImageLayout();
     const auto [srcAccess, srcStage] =
         _GetOldAccessAndPipelineStageFlags(oldLayout);
-    HgiVulkanTexture::TransitionImageBarrier(
+    srcTexture->LayoutBarrier(
         _commandBuffer,
-        srcTexture,
         oldLayout,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // transition tex to this layout
         srcAccess,
@@ -183,9 +182,8 @@ HgiVulkanBlitCmds::CopyTextureGpuToCpu(
     // Transition image back to what it was.
     VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
         srcTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
+    srcTexture->LayoutBarrier(
         _commandBuffer,
-        srcTexture,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         oldLayout,                           // transition tex to this layout
         HgiVulkanTexture::NO_PENDING_WRITES, // no pending writes
@@ -354,9 +352,8 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
     const VkImageLayout oldLayoutSrc = srcTexture->GetImageLayout();
     const auto [srcAccessSrc, srcStageSrc] =
         _GetOldAccessAndPipelineStageFlags(oldLayoutSrc);
-    HgiVulkanTexture::TransitionImageBarrier(
+    srcTexture->LayoutBarrier(
         _commandBuffer,
-        srcTexture,
         oldLayoutSrc,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         srcAccessSrc,
@@ -368,9 +365,8 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
     const VkImageLayout oldLayoutDst = dstTexture->GetImageLayout();
     const auto [srcAccessDst, srcStageDst] =
         _GetOldAccessAndPipelineStageFlags(oldLayoutDst);
-    HgiVulkanTexture::TransitionImageBarrier(
+    dstTexture->LayoutBarrier(
         _commandBuffer,
-        dstTexture,
         oldLayoutDst,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         srcAccessDst,
@@ -390,9 +386,8 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
     // Transition src image back to what it was.
     const VkAccessFlags accessSrc = HgiVulkanTexture::GetDefaultAccessFlags(
         srcTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
+    srcTexture->LayoutBarrier(
         _commandBuffer,
-        srcTexture,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         oldLayoutSrc,
         HgiVulkanTexture::NO_PENDING_WRITES,
@@ -403,9 +398,8 @@ void HgiVulkanBlitCmds::BlitTexture(HgiTextureHandle src, HgiTextureHandle dst)
     // Transition dst image back to what it was.
     const VkAccessFlags accessDst = HgiVulkanTexture::GetDefaultAccessFlags(
         dstTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
+    dstTexture->LayoutBarrier(
         _commandBuffer,
-        dstTexture,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         oldLayoutDst,
         VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -562,9 +556,8 @@ HgiVulkanBlitCmds::CopyTextureToBuffer(HgiTextureToBufferOp const& copyOp)
     VkImageLayout oldLayout = srcTexture->GetImageLayout();
     const auto [srcAccess, srcStage] =
         _GetOldAccessAndPipelineStageFlags(oldLayout);
-    HgiVulkanTexture::TransitionImageBarrier(
+    srcTexture->LayoutBarrier(
         _commandBuffer,
-        srcTexture,
         /*oldLayout*/oldLayout,
         /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         /*producerAccess*/srcAccess,
@@ -609,9 +602,8 @@ HgiVulkanBlitCmds::CopyTextureToBuffer(HgiTextureToBufferOp const& copyOp)
     // Transition image layout back to original layout.
     const VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
         srcTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
+    srcTexture->LayoutBarrier(
         _commandBuffer,
-        srcTexture,
         /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         /*newLayout*/oldLayout,
         /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -651,9 +643,8 @@ HgiVulkanBlitCmds::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
     VkImageLayout oldLayout = dstTexture->GetImageLayout();
     const auto [srcAccess, srcStage] =
         _GetOldAccessAndPipelineStageFlags(oldLayout);
-    HgiVulkanTexture::TransitionImageBarrier(
+    dstTexture->LayoutBarrier(
         _commandBuffer,
-        dstTexture,
         /*oldLayout*/oldLayout,
         /*newLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         /*producerAccess*/srcAccess,
@@ -697,9 +688,8 @@ HgiVulkanBlitCmds::CopyBufferToTexture(HgiBufferToTextureOp const& copyOp)
     // Transition image layout back to original layout.
     const VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
         dstTexture->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
+    dstTexture->LayoutBarrier(
         _commandBuffer,
-        dstTexture,
         /*oldLayout*/VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         /*newLayout*/oldLayout,
         /*producerAccess*/VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -743,9 +733,8 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
     const VkImageLayout oldLayout = vkTex->GetImageLayout();
     const auto [srcAccess, srcStage] =
         _GetOldAccessAndPipelineStageFlags(oldLayout);
-    HgiVulkanTexture::TransitionImageBarrier(
+    vkTex->LayoutBarrier(
         _commandBuffer,
-        vkTex,
         oldLayout,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         srcAccess,
@@ -775,9 +764,8 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
         imageBlit.dstOffsets[1].z = 1;
 
         // Transition current mip level to image blit destination
-        HgiVulkanTexture::TransitionImageBarrier(
+        vkTex->LayoutBarrier(
             _commandBuffer,
-            vkTex,
             oldLayout,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             srcAccess,
@@ -798,9 +786,8 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
             VK_FILTER_LINEAR);
 
         // Prepare current mip level as image blit source for next level
-        HgiVulkanTexture::TransitionImageBarrier(
+        vkTex->LayoutBarrier(
             _commandBuffer,
-            vkTex,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -813,9 +800,8 @@ HgiVulkanBlitCmds::GenerateMipMaps(HgiTextureHandle const& texture)
     // Return all mips from TRANSFER_SRC to their original layout
     const VkAccessFlags access = HgiVulkanTexture::GetDefaultAccessFlags(
         vkTex->GetDescriptor().usage);
-    HgiVulkanTexture::TransitionImageBarrier(
+    vkTex->LayoutBarrier(
         _commandBuffer,
-        vkTex,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         oldLayout,
         VK_ACCESS_TRANSFER_READ_BIT,

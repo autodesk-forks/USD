@@ -29,6 +29,10 @@ enum Dir {Fwd, Rev};
 // Get a convenient infinite value.
 constexpr double inf = std::numeric_limits<double>::infinity();
 
+// Constants for constructing GfInterval objects
+constexpr bool OPEN = false;
+constexpr bool CLOSED = true;
+
 // Global test state
 static bool verbose = false;
 static std::string testSplineName;
@@ -154,7 +158,7 @@ std::vector<Ts_Segment> GenSegments(const TestCase& testCase,
 
             const double t1 = -(interval.GetMin() - shift1[0]) + timeShift2;
             const double t0 = -(interval.GetMax() - shift1[0]) + timeShift2;
-            GfInterval iterInterval = GfInterval(t0, t1, true, false);
+            GfInterval iterInterval = GfInterval(t0, t1, CLOSED, OPEN);
 
             for (auto segIt = testCase.segments.rbegin();
                  segIt != testCase.segments.rend();
@@ -173,7 +177,7 @@ std::vector<Ts_Segment> GenSegments(const TestCase& testCase,
                 // If this segment is in the iteration interval, include it in
                 // the result.
                 if (iterInterval.Intersects(
-                        GfInterval(seg.p0[0], seg.p1[0], true, false)))
+                        GfInterval(seg.p0[0], seg.p1[0], CLOSED, OPEN)))
                 {
                     result.push_back(-(seg - timeShift2) + shift1);
                 }
@@ -198,7 +202,7 @@ std::vector<Ts_Segment> GenSegments(const TestCase& testCase,
                 // If this segment is in the iteration interval, include it in
                 // the result.
                 if (iterInterval.Intersects(
-                        GfInterval(seg.p0[0], seg.p1[0], true, false)))
+                        GfInterval(seg.p0[0], seg.p1[0], CLOSED, OPEN)))
                 {
                     result.push_back(seg + shift1);
                 }
@@ -320,13 +324,13 @@ void InitTestCases()
     testSplineNames.insert(simpleInnerLoop.name);
 
     // ================ simpleSpline ================
-    // Living up to its name, all the knots have integral values.
+    // Living up to its name, all the knots have simple, easy to hand compute values.
     simpleSpline.name = "SimpleSpline";
     simpleSpline.spline.SetKnots(
         {  //  t      v     pre-tan     post-tan       interp
             K(0.0,  0.0,  0.0,   0.0,  0.0,   0.0,  TsInterpHeld),
             K(1.0,  1.0,  0.0,   0.0,  0.0,   0.0,  TsInterpLinear),
-            K(2.0,  3.0,  0.0,   0.0,  0.0,   0.0,  TsInterpLinear),
+            K(2.0,  2.5,  0.0,   0.0,  0.0,   0.0,  TsInterpLinear),
             K(3.0,  2.0,  0.0,   0.0,  0.0,   0.0,  TsInterpLinear),
             K(4.0,  4.0,  0.0,   0.0,  0.0,   0.0,  TsInterpHeld)
         });
@@ -345,11 +349,11 @@ void InitTestCases()
              Ts_SegmentInterp::Held},
             {{1.0, 1.0},
              {1.0, 1.0},
-             {2.0, 3.0},
-             {2.0, 3.0},
+             {2.0, 2.5},
+             {2.0, 2.5},
              Ts_SegmentInterp::Linear},
-            {{2.0, 3.0},
-             {2.0, 3.0},
+            {{2.0, 2.5},
+             {2.0, 2.5},
              {3.0, 2.0},
              {3.0, 2.0},
              Ts_SegmentInterp::Linear},
@@ -383,51 +387,51 @@ void InitTestCases()
              Ts_SegmentInterp::PreExtrap},  //
             {{-3.0, -3.0},                  /////////////////
              {-3.0, -3.0},                  //
-             {-2.0, -1.0},                  //  1: iter -2
-             {-2.0, -1.0},                  //
+             {-2.0, -1.5},                  //  1: iter -2
+             {-2.0, -1.5},                  //
              Ts_SegmentInterp::Linear},     //
-            {{-2.0, -1.0},                  //
-             {-2.0, -1.0},                  //  2:
+            {{-2.0, -1.5},                  //
+             {-2.0, -1.5},                  //  2:
              {-1.0, -1.0},                  //
              {-1.0, -1.0},                  //
              Ts_SegmentInterp::Linear},     //
             {{-1.0, -1.0},                  ////////////////
              {-1.0, -1.0},                  //
-             {0.0, 1.0},                    //  3: iter -1
-             {0.0, 1.0},                    //
+             {0.0, 0.5},                    //  3: iter -1
+             {0.0, 0.5},                    //
              Ts_SegmentInterp::Linear},     //
-            {{0.0, 1.0},                    //
-             {0.0, 1.0},                    //  4:
+            {{0.0, 0.5},                    //
+             {0.0, 0.5},                    //  4:
              {1.0, 1.0},                    //
              {1.0, 1.0},                    //
              Ts_SegmentInterp::Linear},     //
             {{1.0, 1.0},                    ////////////////
              {1.0, 1.0},                    //
-             {2.0, 3.0},                    //  5: prototype
-             {2.0, 3.0},                    //
+             {2.0, 2.5},                    //  5: prototype
+             {2.0, 2.5},                    //
              Ts_SegmentInterp::Linear},     //
-            {{2.0, 3.0},                    //
-             {2.0, 3.0},                    //  6:
+            {{2.0, 2.5},                    //
+             {2.0, 2.5},                    //  6:
              {3.0, 3.0},                    //
              {3.0, 3.0},                    //
              Ts_SegmentInterp::Linear},     //
             {{3.0, 3.0},                    ////////////////
              {3.0, 3.0},                    //
-             {4.0, 5.0},                    //  7: iter 1
-             {4.0, 5.0},                    //
+             {4.0, 4.5},                    //  7: iter 1
+             {4.0, 4.5},                    //
              Ts_SegmentInterp::Linear},     //
-            {{4.0, 5.0},                    //
-             {4.0, 5.0},                    //  8:
+            {{4.0, 4.5},                    //
+             {4.0, 4.5},                    //  8:
              {5.0, 5.0},                    //
              {5.0, 5.0},                    //
              Ts_SegmentInterp::Linear},     //
             {{5.0, 5.0},                    ////////////////
              {5.0, 5.0},                    //
-             {6.0, 7.0},                    //  9: iter 2
-             {6.0, 7.0},                    //
+             {6.0, 6.5},                    //  9: iter 2
+             {6.0, 6.5},                    //
              Ts_SegmentInterp::Linear},     //
-            {{6.0, 7.0},                    //
-             {6.0, 7.0},                    // 10:
+            {{6.0, 6.5},                    //
+             {6.0, 6.5},                    // 10:
              {7.0, 7.0},                    //
              {7.0, 7.0},                    //
              Ts_SegmentInterp::Linear},     //
@@ -466,8 +470,8 @@ void InitTestCases()
     // Clone longLoop but add linear extrapolation
     extrapLinear = longLoop;
     extrapLinear.name = "ExtrapLinear";
-    extrapLinear.segments.front().p0[1] = 2.0;  // pre-extrap slope
-    extrapLinear.segments.back().p1[1] = 0.0;  // post-extrap slope
+    extrapLinear.segments.front().p0[1] = 1.5;  // pre-extrap slope
+    extrapLinear.segments.back().p1[1] = 0.5;  // post-extrap slope
 
     extrapLinear.spline.SetPreExtrapolation(TsExtrapLinear);
     extrapLinear.spline.SetPostExtrapolation(TsExtrapLinear);
@@ -645,7 +649,7 @@ bool ProtoTest(const TestCase& testCase,
                Dir dir)
 {
     const GfInterval iterInterval(minTime, maxTime,
-                                  true, false);
+                                  CLOSED, OPEN);
 
     // The domain is the inner loop prototype.
     const TsLoopParams lp = testCase.spline.GetInnerLoopParams();
@@ -663,7 +667,7 @@ bool LoopTest(const TestCase& testCase,
               Dir dir)
 {
     const GfInterval iterInterval(minTime, maxTime,
-                                  true, false);
+                                  CLOSED, OPEN);
 
     // The domain is limited to the inner looped interval.
     const TsLoopParams lp = testCase.spline.GetInnerLoopParams();
@@ -671,7 +675,7 @@ bool LoopTest(const TestCase& testCase,
 
     // GetLoopedInterval() returns a closed interval, but we
     // need it to be open.
-    domainInterval.SetMax(domainInterval.GetMax(), false);
+    domainInterval.SetMax(domainInterval.GetMax(), OPEN);
 
     return DoOneTest<Ts_SegmentLoopIterator>(
         testCase, iterInterval, domainInterval, dir);
@@ -685,7 +689,7 @@ bool KnotTest(const TestCase& testCase,
               Dir dir)
 {
     const GfInterval iterInterval(minTime, maxTime,
-                                  true, false);
+                                  CLOSED, OPEN);
 
     // The domain is the region defined by knots. I.e., without any
     // extrapolation. Looping may generate knots before and/or after the
@@ -695,11 +699,11 @@ bool KnotTest(const TestCase& testCase,
     // intervals, but we need them to be open.
     const TsLoopParams lp = testCase.spline.GetInnerLoopParams();
     GfInterval domainInterval = lp.GetLoopedInterval();
-    domainInterval.SetMax(domainInterval.GetMax(), false);
+    domainInterval.SetMax(domainInterval.GetMax(), OPEN);
 
     TsKnotMap knots = testCase.spline.GetKnots();
     GfInterval knotInterval = knots.GetTimeSpan();
-    knotInterval.SetMax(knotInterval.GetMax(), false);
+    knotInterval.SetMax(knotInterval.GetMax(), OPEN);
 
     // Union the intervals to expand them as needed.
     domainInterval |= knotInterval;
@@ -716,7 +720,7 @@ bool FullTest(const TestCase& testCase,
               Dir dir)
 {
     const GfInterval iterInterval(minTime, maxTime,
-                                  true, false);
+                                  CLOSED, OPEN);
 
     // The domain for a full test is all time.
     GfInterval domainInterval(-inf, inf);
