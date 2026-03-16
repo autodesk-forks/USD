@@ -396,6 +396,12 @@ _EmitOpenVDBVolume(HdSceneDelegate *sceneDelegate,
         // Ownership of this new vector is given to RixStorage, which
         // will take care of clean-up when rendering is complete.
         RixContext* context = RixGetContext();
+
+        // XXX:
+        // Disable deprecation warnings for RixStorage to enable 
+        // strict builds on Windows.
+ARCH_PRAGMA_PUSH
+ARCH_PRAGMA_DEPRECATED
         RixStorage* storage =
             static_cast<RixStorage*>(context->GetRixInterface(k_RixGlobalData));
         if (!storage) {
@@ -425,6 +431,7 @@ _EmitOpenVDBVolume(HdSceneDelegate *sceneDelegate,
         // Copy key into the vdbSource string, prepended with a "key:" tag.
         vdbSource = "key:" + key;
     }
+ARCH_PRAGMA_POP
 #endif
 
     primvars->SetString(RixStr.k_Ri_type, blobbydsoImplOpenVDB);

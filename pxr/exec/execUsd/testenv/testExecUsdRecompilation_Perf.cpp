@@ -150,6 +150,8 @@ public:
         , _treeDepth(treeDepth)
     {}
 
+    virtual ~Test() = default;
+
     // Runs the test. Each stage of the test can be customized by overriding
     // the protected virtual methods.
     void Run() {

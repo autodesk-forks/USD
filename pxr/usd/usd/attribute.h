@@ -475,6 +475,22 @@ public:
     USD_API
     bool Get(VtValue* value, UsdTimeCode time = UsdTimeCode::Default()) const;
 
+    /// If this attribute is a builtin attribute with a fallback value provided
+    /// by a schema, fetch that value and return true. Otherwise return false.
+    template <typename T>
+    bool GetFallbackValue(T* value) const {
+        static_assert(!std::is_const<T>::value);
+        static_assert(SdfValueTypeTraits<T>::IsValueType);
+        UsdPrimDefinition::Attribute attrDef =
+            _GetStage()->_GetSchemaAttribute(*this);
+        return attrDef && attrDef.GetFallbackValue<T>(value);
+    }
+
+    /// \overload 
+    /// Type-erased accessor for getting the fallback value.
+    USD_API
+    bool GetFallbackValue(VtValue* value) const;
+
     /// Perform value resolution to determine the source of the resolved
     /// value of this attribute at the requested UsdTimeCode \p time.
     USD_API

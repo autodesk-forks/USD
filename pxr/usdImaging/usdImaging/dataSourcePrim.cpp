@@ -83,7 +83,9 @@ UsdImagingDataSourceVisibility::Get(const TfToken &name)
         TfToken vis;
         _visibilityQuery.Get(&vis, _stageGlobals.GetTime());
         if (vis == UsdGeomTokens->invisible) {
-            return HdRetainedTypedSampledDataSource<bool>::New(false);
+            static HdDataSourceBaseHandle const boolFalseDs =
+                HdRetainedTypedSampledDataSource<bool>::New(false);
+            return boolFalseDs;
         }
     }
 
@@ -113,11 +115,27 @@ UsdImagingDataSourcePurpose::GetNames()
 static HdDataSourceBaseHandle
 _PurposeTokenToDataSource(const TfToken &purpose)
 {
+    // Provide static const data sources for common values.
     if (purpose == UsdGeomTokens->default_) {
         // Hydra's default purpose is 'geometry'.
         static HdDataSourceBaseHandle const ds =
             HdRetainedTypedSampledDataSource<TfToken>::New(
                 HdRenderTagTokens->geometry);
+        return ds;
+    }
+    if (purpose == UsdGeomTokens->render) {
+        static HdDataSourceBaseHandle const ds =
+            HdRetainedTypedSampledDataSource<TfToken>::New(purpose);
+        return ds;
+    }
+    if (purpose == UsdGeomTokens->proxy) {
+        static HdDataSourceBaseHandle const ds =
+            HdRetainedTypedSampledDataSource<TfToken>::New(purpose);
+        return ds;
+    }
+    if (purpose == UsdGeomTokens->guide) {
+        static HdDataSourceBaseHandle const ds =
+            HdRetainedTypedSampledDataSource<TfToken>::New(purpose);
         return ds;
     }
     return HdRetainedTypedSampledDataSource<TfToken>::New(purpose);

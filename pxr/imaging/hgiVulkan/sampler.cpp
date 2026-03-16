@@ -70,6 +70,12 @@ HgiVulkanSampler::HgiVulkanSampler(
             HgiVulkanAllocator(),
             &_vkSampler)
     );
+
+    if (_descriptor.debugName.empty()) {
+        _descriptor.debugName = "UNNAMED";
+    }
+    HgiVulkanSetDebugName(device, (uint64_t)_vkSampler,
+        VK_OBJECT_TYPE_SAMPLER, _descriptor.debugName.c_str());
 }
 
 HgiVulkanSampler::~HgiVulkanSampler()

@@ -34,7 +34,9 @@ UsdSkelImagingExtComputationCpuCallback(const TfToken &skinningMethod);
 /// Data source for skinning GPU computation.
 USDSKELIMAGING_API
 HdStringDataSourceHandle
-UsdSkelImagingExtComputationGlslKernel(const TfToken &skinningMethod);
+UsdSkelImagingExtComputationGlslKernel(
+    const TfToken &skinningMethod,
+    const TfToken &computationType);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

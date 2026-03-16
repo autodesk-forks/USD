@@ -642,6 +642,28 @@ public:
         return QueryTimeSample(path, time, &vtVal) && value->StoreValue(vtVal);
     }
 
+    inline const std::type_info &
+    QueryTimeSampleTypeid(const SdfPath& path, double time) const {
+        if (VtValue const *fieldValue =
+            _GetFieldValue(path, SdfDataTokens->TimeSamples)) {
+            if (fieldValue->IsHolding<TimeSamples>()) {
+                auto const &ts = fieldValue->UncheckedGet<TimeSamples>();
+                auto const &times = ts.times.Get();
+                auto iter = lower_bound(times.begin(), times.end(), time);
+                if (iter == times.end() || *iter != time) {
+                    return typeid(void);
+                }
+                auto index = iter - times.begin();
+                VtValue val = _crateFile->GetTimeSampleValue(ts, index);
+                if (val.IsHolding<ValueRep>()) {
+                    return _crateFile->GetTypeid(val.UncheckedGet<ValueRep>());
+                }
+                return val.GetTypeid();
+            }
+        }
+        return typeid(void);
+    }
+
     inline void
     SetTimeSample(const SdfPath& path, double time,
                   const VtValue & value) {
@@ -1439,6 +1461,12 @@ Sdf_CrateData::QueryTimeSample(const SdfPath& path,
                                double time, SdfAbstractDataValue* value) const
 {
     return _impl->QueryTimeSample(path, time, value);
+}
+
+const std::type_info &
+Sdf_CrateData::QueryTimeSampleTypeid(const SdfPath &path, double time) const
+{
+    return _impl->QueryTimeSampleTypeid(path, time);
 }
 
 void

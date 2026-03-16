@@ -94,11 +94,58 @@ public:
         return _resolvedSkeletonSchema;
     }
 
+    USDSKELIMAGING_API
+    HdMatrix4fArrayDataSourceHandle GetSkinningTransforms();
+
+    /// Only valid if GetSkinningMethod() == UsdSkelTokens->dualQuaternion
+    USDSKELIMAGING_API
+    HdMatrix3fArrayDataSourceHandle GetSkinningScaleTransforms();
+
+    /// Only valid if GetSkinningMethod() == UsdSkelTokens->dualQuaternion
+    USDSKELIMAGING_API
+    HdVec4fArrayDataSourceHandle GetSkinningDualQuats();
+
+    USDSKELIMAGING_API
+    HdFloatArrayDataSourceHandle GetBlendShapeWeights();
+
     /// Transfrom to go from common space (as defined by
     /// UsdSkelImagingDataSourceXformResolver) to the local space of this
     /// prim.
     USDSKELIMAGING_API
     HdMatrixDataSourceHandle GetCommonSpaceToPrimLocal() const;
+
+    USDSKELIMAGING_API
+    HdSampledDataSourceHandle GetPoints();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetGeomBindTransform();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetHasConstantInfluences();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetNumInfluencesPerComponent();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetInfluences();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetBlendShapeOffsets();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetBlendShapeOffsetRanges();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetNumBlendShapeOffsetRanges();
+
+    USDSKELIMAGING_API
+    HdSampledDataSourceHandle GetNormals();
+
+    USDSKELIMAGING_API
+    HdSampledDataSourceHandle GetFaceVertexIndices();
+
+    USDSKELIMAGING_API
+    HdDataSourceBaseHandle GetHasFaceVaryingNormals();
 
     /// Blend shape data computed from primvars, skel bindings and skeleton.
     USDSKELIMAGING_API
@@ -115,25 +162,7 @@ public:
 
     /// Should the points for this primvar be given by an ext computation
     /// or from the primvars schema.
-    bool HasExtComputations() const {
-        return
-            // Points are only posed if we bind a Skeleton prim (and the
-            // UsdSkelImagingSkeletonResolvingSceneIndex has populated the
-            // resolved skeleton schema).
-            _resolvedSkeletonSchema &&
-            // Do not use ext computation if this prim was the Skeleton itself.
-            // For the Skeleton prim itself, the
-            // UsdSkelImagingSkeletonResolvingSceneIndex has populated the
-            // points primvar already (with the points for the mesh guide)
-            // and changed the prim type to mesh.
-            _primPath != _skeletonPath &&
-            // We only skin prims if they are under a SkelRoot.
-            //
-            // Note that when we bake the points of a skinned prim, we also
-            // change the SkelRoot to a different prim type (such as Scope
-            // or Xform) so that the baked points are not skinned again.
-            _hasSkelRoot;
-    }
+    bool HasExtComputations() const;
 
     /// Data source locators (on this prim) that this prim depends on.
     ///
@@ -177,19 +206,22 @@ private:
     _ProcessDirtyLocators(
         const HdDataSourceLocatorSet &dirtyLocators,
         HdDataSourceLocatorSet * dirtyLocatorsForAggregatorComputation,
-        HdDataSourceLocatorSet * dirtyLocatorsForComputation);
+        HdDataSourceLocatorSet * dirtyLocatorsForComputation,
+        TfTokenVector * dirtyPrimvars);
 
     bool
     _ProcessDirtySkeletonLocators(
         const HdDataSourceLocatorSet &dirtyLocators,
         HdDataSourceLocatorSet * dirtyLocatorsForAggregatorComputation,
-        HdDataSourceLocatorSet * dirtyLocatorsForComputation);
+        HdDataSourceLocatorSet * dirtyLocatorsForComputation,
+        TfTokenVector * dirtyPrimvars);
 
     bool
     _ProcessDirtySkelBlendShapeLocators(
         const HdDataSourceLocatorSet &dirtyLocators,
         HdDataSourceLocatorSet * dirtyLocatorsForAggregatorComputation,
-        HdDataSourceLocatorSet * dirtyLocatorsForComputation);
+        HdDataSourceLocatorSet * dirtyLocatorsForComputation,
+        TfTokenVector * dirtyPrimvars);
 
     bool
     _ProcessDirtyInstancerLocators(

@@ -766,10 +766,13 @@ protected:
 
     USDIMAGINGGL_API
     void _SetRenderDelegateAndRestoreState(
-        HdPluginRenderDelegateUniqueHandle &&);
+        HdPluginRenderDelegateUniqueHandle &&,
+        HdContainerDataSourceHandle const &sceneIndexInputArgs);
 
     USDIMAGINGGL_API
-    void _SetRenderDelegate(HdPluginRenderDelegateUniqueHandle &&);
+    void _SetRenderDelegate(
+        HdPluginRenderDelegateUniqueHandle &&,
+        HdContainerDataSourceHandle const &sceneIndexInputArgs);
 
     USDIMAGINGGL_API
     SdfPath _ComputeControllerPath(const TfToken &pluginId);
@@ -801,7 +804,7 @@ protected:
 
     // Create UsdImagingStageSceneIndex and subsequent scene indices.
     void
-    _CreateUsdImagingSceneIndices();
+    _CreateUsdImagingSceneIndices(HdContainerDataSourceHandle const &inputArgs);
 
 protected:
 
@@ -856,7 +859,9 @@ private:
 
     UsdImagingGLEngine_Impl::_AppSceneIndicesSharedPtr _appSceneIndices;
 
-    bool _CreateSceneIndicesAndRenderer(HdRendererPluginHandle const &plugin);
+    bool _CreateSceneIndicesAndRenderer(
+        HdRendererPluginHandle const &plugin,
+        HdContainerDataSourceHandle const &sceneIndexInputArgs);
 
     void _DestroyHydraObjects();
 

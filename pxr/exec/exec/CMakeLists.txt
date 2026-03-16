@@ -32,6 +32,7 @@ pxr_library(exec
         systemChangeProcessor
         systemDiagnostics
         typeRegistry
+        validationError
         valueKey
 
     PRIVATE_HEADERS
@@ -59,6 +60,7 @@ pxr_library(exec
         inputRecompilationTask
         inputResolver
         inputResolvingCompilationTask
+        interruptState
         leafCompilationTask
         metadataInputNode
         nodeRecompilationInfo
