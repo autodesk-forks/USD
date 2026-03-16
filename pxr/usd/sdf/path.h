@@ -46,8 +46,14 @@ struct Sdf_PathPrimTag;
 struct Sdf_PathPropTag;
 
 // These are validated below.
-static constexpr size_t Sdf_SizeofPrimPathNode = sizeof(TfToken) + 2 * sizeof(unsigned int) + sizeof(void*);
-static constexpr size_t Sdf_SizeofPropPathNode = sizeof(TfToken) + 2 * sizeof(unsigned int) + sizeof(void*);
+
+#ifdef ARCH_BITS_32
+static constexpr size_t Sdf_SizeofPrimPathNode = 20;
+static constexpr size_t Sdf_SizeofPropPathNode = 20;
+#else
+static constexpr size_t Sdf_SizeofPrimPathNode = 24;
+static constexpr size_t Sdf_SizeofPropPathNode = 24;
+#endif
 
 using Sdf_PathPrimPartPool = Sdf_Pool<
     Sdf_PathPrimTag, Sdf_SizeofPrimPathNode, /*regionBits=*/8>;
@@ -505,9 +511,11 @@ public:
 
     /// Return a range for iterating over the ancestors of this path.
     ///
-    /// The range provides iteration over the prefixes of a path, ordered
-    /// from longest to shortest (the opposite of the order of the prefixes
-    /// returned by GetPrefixes).
+    /// The range provides iteration over the path and all of its prefixes, 
+    /// ordered from longest to shortest (the opposite of the order of the 
+    /// prefixes returned by GetPrefixes(). For example, given a path like 
+    /// `/a/b.prop`, the range would contain `/a/b.prop`, `/a/b` and `/a`, in 
+    /// that order.
     SDF_API SdfPathAncestorsRange GetAncestorsRange() const;
 
     /// Returns the name of the prim, property or relational
@@ -1068,7 +1076,7 @@ private:
 /// For example, given a path like `/a/b.prop`, the range represents paths
 /// `/a/b.prop`, `/a/b` and `/a`, in that order.
 /// A range accepts relative paths as well: For path `a/b.prop`, the range
-/// represents paths 'a/b.prop`, `a/b` and `a`.
+/// represents paths `a/b.prop`, `a/b` and `a`.
 /// If a path contains parent path elements, (`..`), those elements are treated
 /// as elements of the range. For instance, given path `../a/b`, the range
 /// represents paths `../a/b`, `../a` and `..`.

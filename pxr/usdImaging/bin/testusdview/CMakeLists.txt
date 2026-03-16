@@ -488,8 +488,6 @@ pxr_register_test(testUsdviewSceneLights
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
 
 pxr_register_test(testUsdviewSceneLights_Delegate
@@ -526,8 +524,6 @@ pxr_register_test(testUsdviewSceneMaterials
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
 
 pxr_register_test(testUsdviewLightVisibility
@@ -922,8 +918,6 @@ pxr_register_test(testUsdviewExpressionVariableEdits
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
 
 pxr_register_test(testUsdviewInstancingEdits
@@ -960,8 +954,6 @@ pxr_register_test(testUsdviewInstancingEdits_SceneIndex
     FAIL_PERCENT 0.1
     WARN 0.02
     WARN_PERCENT 0.2
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true
 )
 
 if (EMBREE_FOUND AND ${PXR_BUILD_EMBREE_PLUGIN})
@@ -977,8 +969,6 @@ if (EMBREE_FOUND AND ${PXR_BUILD_EMBREE_PLUGIN})
         FAIL_PERCENT 0.1
         WARN 0.02
         WARN_PERCENT 0.2
-        ENV
-            USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=true
     )
 endif()
 

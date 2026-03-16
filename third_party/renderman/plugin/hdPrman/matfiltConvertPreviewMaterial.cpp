@@ -253,7 +253,13 @@ _ProcessPreviewSurfaceNode(
         if (_GetParameter(
                 netInterface, nodeName, _tokens->opacityMode, &vtOpMode)) {
 
-            if (vtOpMode.Get<TfToken>() == _tokens->transparent) {
+            TfToken opModeToken;
+            if (vtOpMode.IsHolding<std::string>()) {
+                opModeToken = TfToken(vtOpMode.Get<std::string>());
+            } else if (vtOpMode.IsHolding<TfToken>()) {
+                opModeToken = vtOpMode.Get<TfToken>();
+            }
+            if (opModeToken == _tokens->transparent) {
                 netInterface->SetNodeInputConnection(
                     pxrSurfaceNodeName, _tokens->refractionGain,
                     {{nodeName, _tokens->refractionGainOut}});
@@ -387,19 +393,13 @@ _ProcessUVTextureNode(
                 wrapSVal.GetWithDefault(_tokens->useMetadata);  
 
             // Check for source colorspace.
-            VtValue sourceColorSpaceVal = netInterface->GetNodeParameterValue(
-                nodeName, _tokens->sourceColorSpace);
-            // XXX: This is a workaround for Presto. If there's no
-            // colorspace token, check if there's a colorspace
-            // string.
+            // Color Space info will be on the file param data 
+            const HdMaterialNetworkInterface::NodeParamData fileParamData =
+                netInterface->GetNodeParameterData(nodeName, _tokens->file);
             TfToken sourceColorSpace = 
-                sourceColorSpaceVal.GetWithDefault(TfToken());
-            if (sourceColorSpace.IsEmpty()) {
-                const std::string sourceColorSpaceStr = 
-                    sourceColorSpaceVal.GetWithDefault(
-                        _tokens->colorSpaceAuto.GetString());
-                sourceColorSpace = TfToken(sourceColorSpaceStr);
-            }
+                !fileParamData.colorSpace.IsEmpty() 
+                    ? fileParamData.colorSpace
+                    : _tokens->colorSpaceAuto;
             path =
                 TfStringPrintf("rtxplugin:%s?filename=%s"
                                 "&wrapS=%s&wrapT=%s&"

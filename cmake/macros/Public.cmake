@@ -700,6 +700,16 @@ function(pxr_build_test TEST_NAME)
     # XXX -- We shouldn't have to install to run tests.
     if(EMSCRIPTEN)
         target_compile_options(${TEST_NAME} PRIVATE "SHELL:-s MAIN_MODULE=1")
+
+        # Note: Using NODEFS allows us to mount the temp test directory set 
+        # up by the test runner into the virtual filesystem.  This allows us
+        # to access test assets as well as persist any files created during
+        # test execution.  This is setup as a pre-run step by test.pre.js.
+        target_link_options(${TEST_NAME} PRIVATE 
+            "SHELL:-lnodefs.js"
+            "SHELL:-sFORCE_FILESYSTEM=1"
+            "SHELL:--pre-js '${PROJECT_SOURCE_DIR}/cmake/macros/test.pre.js'"
+        )
         install(
             FILES
             ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.wasm
@@ -991,6 +1001,15 @@ function(pxr_register_test TEST_NAME)
     # TF_FATAL_VERIFY where desired.
     set(testWrapperCmd ${testWrapperCmd} --env-var=TF_FATAL_VERIFY=1)
 
+    # Allow env vars to be set via a global variable to make it easier
+    # to affect a set of tests (e.g., all tests in a library). Set
+    # this first to allow tests to override these env vars.
+    if (PXR_TEST_ENV_VARS)
+        foreach(env ${PXR_TEST_ENV_VARS})
+            set(testWrapperCmd ${testWrapperCmd} --env-var=${env})
+        endforeach()
+    endif()
+
     if (bt_ENV)
         foreach(env ${bt_ENV})
             set(testWrapperCmd ${testWrapperCmd} --env-var=${env})
@@ -1093,6 +1112,25 @@ function(pxr_setup_plugins)
         DESTINATION plugin/usd
         RENAME "plugInfo.json"
     )
+
+    # For emscripten builds, we need to ensure that the top level plugInfo.json
+    # file is included in the resulting application bundle.  When installing,
+    # we are sure to reference the installed location of this file.
+    if (EMSCRIPTEN)
+        foreach(lib ${PXR_CORE_LIBS})
+            # INTERFACE targets can only have INTERFACE properties set,
+            # not PUBLIC or PRIVATE.
+            get_target_property(_lib_type ${lib} TYPE)
+            if(_lib_type STREQUAL "INTERFACE_LIBRARY")
+                set(_link_options_visibility INTERFACE)
+            else()
+                set(_link_options_visibility PUBLIC)
+            endif()
+            target_link_options(${lib} ${_link_options_visibility}
+                "$<BUILD_INTERFACE:SHELL:--embed-file ${CMAKE_CURRENT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json>"
+                "$<INSTALL_INTERFACE:SHELL:--embed-file $<INSTALL_PREFIX>/lib/usd/plugInfo.json@/usd/plugInfo.json>")
+        endforeach()
+    endif()
 endfunction() # pxr_setup_plugins
 
 function(pxr_add_extra_plugins PLUGIN_AREAS)

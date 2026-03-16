@@ -58,6 +58,7 @@ pxr_library(usdImaging
         extentResolvingSceneIndex
         extentsHintSchema
         geomModelSchema
+        geomXformVectorsSchema
         geomSubsetAdapter
         indexProxy
         materialParamUtils
@@ -276,6 +277,13 @@ pxr_build_test(testUsdImagingStageSceneIndexContents
     CPPFILES
         testenv/testUsdImagingStageSceneIndexContents.cpp
 )
+pxr_build_test(testUsdImagingColorSpace
+    LIBRARIES
+        usdImaging
+        hd
+    CPPFILES
+        testenv/testUsdImagingColorSpace.cpp
+)
 
 # Register tests to be run
 pxr_register_test(testUsdImagingDataSourceAttribute
@@ -302,8 +310,11 @@ if (BUILD_SHARED_LIBS)
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingMaterialBinding"
         TESTENV testenv/testUsdImagingMaterialBinding
         EXPECTED_RETURN_CODE 0
-        ENV
-            USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
+    )
+    pxr_register_test(testUsdImagingColorSpace
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingColorSpace"
+        TESTENV testenv/testUsdImagingColorSpace
+        EXPECTED_RETURN_CODE 0
     )
 endif()
 pxr_register_test(testUsdImagingNestedInstancingCategories

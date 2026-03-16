@@ -63,6 +63,7 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     const bool isUMA = hgi->GetCapabilities()->
         IsSet(HgiDeviceCapabilitiesBitsUnifiedMemory);
     if (isUMA) {
+        ai.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         ai.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;

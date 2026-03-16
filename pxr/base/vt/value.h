@@ -40,6 +40,7 @@
 #include "pxr/base/vt/streamOut.h"
 #include "pxr/base/vt/traits.h"
 #include "pxr/base/vt/types.h"
+#include "pxr/base/vt/valueCommon.h"
 
 #include <iosfwd>
 #include <typeinfo>
@@ -47,76 +48,13 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-/// Make a default value.
-/// VtValue uses this to create values to be returned from failed calls to \a
-/// Get. Clients may specialize this for their own types.
-template <class T>
-struct Vt_DefaultValueFactory;
-
-// This is a helper class used by Vt_DefaultValueFactory to return a value with
-// its type erased and only known at runtime via a std::type_info.
-struct Vt_DefaultValueHolder
-{
-    // Creates a value-initialized object and stores the type_info for the
-    // static type.
-    template <typename T>
-    static Vt_DefaultValueHolder Create() {
-        return Vt_DefaultValueHolder(TfAnyUniquePtr::New<T>(), typeid(T));
-    }
-
-    // Creates a copy of the object and stores the type_info for the static
-    // type.
-    template <typename T>
-    static Vt_DefaultValueHolder Create(T const &val) {
-        return Vt_DefaultValueHolder(TfAnyUniquePtr::New(val), typeid(T));
-    }
-
-    // Return the runtime type of the held object.
-    std::type_info const &GetType() const {
-        return *_type;
-    }
-
-    // Return a pointer to the held object.  This may be safely cast to the
-    // static type corresponding to the type_info returned by GetType.
-    void const *GetPointer() const {
-        return _ptr.Get();
-    }
-
-private:
-    Vt_DefaultValueHolder(TfAnyUniquePtr &&ptr, std::type_info const &type)
-        : _ptr(std::move(ptr)), _type(&type) {}
-
-    TfAnyUniquePtr _ptr;
-    std::type_info const *_type;
-};
-
 class VtValue;
+class VtValueRef;
 
 // Overload VtStreamOut for vector<VtValue>.  Produces output like [value1,
 // value2, ... valueN].
-VT_API std::ostream &VtStreamOut(std::vector<VtValue> const &val, std::ostream &);
-
-#define VT_VALUE_SET_STORED_TYPE(SRC, DST)                      \
-    template <> struct Vt_ValueStoredType<SRC> { typedef DST Type; }
-
-template <class T> struct Vt_ValueStoredType { typedef T Type; };
-VT_VALUE_SET_STORED_TYPE(char const *, std::string);
-VT_VALUE_SET_STORED_TYPE(char *, std::string);
-
-template <size_t N>
-struct Vt_ValueStoredType<char [N]> {
-    using Type = std::string;
-};
-
-#ifdef PXR_PYTHON_SUPPORT_ENABLED
-VT_VALUE_SET_STORED_TYPE(pxr_boost::python::object, TfPyObjWrapper);
-#endif // PXR_PYTHON_SUPPORT_ENABLED
-
-#undef VT_VALUE_SET_STORED_TYPE
-
-// A metafunction that gives the type VtValue should store for a given type T.
-template <class T>
-using Vt_ValueGetStored = Vt_ValueStoredType<std::decay_t<T>>;
+VT_API std::ostream &
+VtStreamOut(std::vector<VtValue> const &val, std::ostream &);
 
 /// Provides a container which may hold any type, and provides introspection
 /// and iteration over array types.  See \a VtIsArray for more info.
@@ -227,6 +165,7 @@ class VtValue
 #ifdef PXR_JS_BINDINGS_SUPPORT_ENABLED
         using _GetJsValFunc = emscripten::val (*)(_Storage const &);
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+        using _GetValueRefFunc = VtValueRef (*)(_Storage const &, bool);
         using _StreamOutFunc =
             std::ostream & (*)(_Storage const &, std::ostream &);
         using _GetTypeidFunc = std::type_info const & (*)(_Storage const &);
@@ -249,6 +188,8 @@ class VtValue
                             bool isArray,
                             bool isHashable,
                             bool isProxy,
+                            bool canComposeOver,
+                            bool canTransform,
                             _CopyInitFunc copyInit,
                             _DestroyFunc destroy,
                             _MoveFunc move,
@@ -261,6 +202,7 @@ class VtValue
 #ifdef PXR_JS_BINDINGS_SUPPORT_ENABLED
                             _GetJsValFunc getJsVal,
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+                            _GetValueRefFunc getValueRef,
                             _StreamOutFunc streamOut,
                             _GetTypeidFunc getTypeid,
                             _IsArrayValuedFunc isArrayValued,
@@ -278,6 +220,8 @@ class VtValue
             , isProxy(isProxy)
             , isArray(isArray)
             , isHashable(isHashable)
+            , canComposeOver(canComposeOver)
+            , canTransform(canTransform)
             // Function table
             , _copyInit(copyInit)
             , _destroy(destroy)
@@ -291,6 +235,7 @@ class VtValue
 #ifdef PXR_JS_BINDINGS_SUPPORT_ENABLED
             , _getJsVal(getJsVal)
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+            , _getValueRef(getValueRef)
             , _streamOut(streamOut)
             , _getTypeid(getTypeid)
             , _isArrayValued(isArrayValued)
@@ -337,6 +282,8 @@ class VtValue
             return _getJsVal(storage);
         }
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+        inline VtValueRef GetValueRef(_Storage const &storage,
+                                      bool rvalue) const;
         std::ostream &StreamOut(_Storage const &storage,
                                 std::ostream &out) const {
             return _streamOut(storage, out);
@@ -379,6 +326,8 @@ class VtValue
         bool isProxy;
         bool isArray;
         bool isHashable;
+        bool canComposeOver;
+        bool canTransform;
 
     private:
         _CopyInitFunc _copyInit;
@@ -394,6 +343,7 @@ class VtValue
 #ifdef PXR_JS_BINDINGS_SUPPORT_ENABLED
         _GetJsValFunc _getJsVal;
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+        _GetValueRefFunc _getValueRef;
         _StreamOutFunc _streamOut;
         _GetTypeidFunc _getTypeid;
         _IsArrayValuedFunc _isArrayValued;
@@ -540,6 +490,7 @@ class VtValue
             }
         }
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+        static VtValueRef GetValueRef(T const &obj);
         static std::ostream &StreamOut(T const &obj, std::ostream &out) {
             return VtStreamOut(VtGetProxiedObject(obj), out);
         }
@@ -607,6 +558,7 @@ class VtValue
         }
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
 
+        static VtValueRef GetValueRef(ErasedProxy const &obj);
         static std::ostream &
         StreamOut(ErasedProxy const &obj, std::ostream &out) {
             return VtStreamOut(obj, out);
@@ -665,6 +617,8 @@ class VtValue
                         VtIsArray<T>::value,
                         VtIsHashable<T>(),
                         IsProxy,
+                        VtValueTypeCanCompose<T>::value,
+                        VtValueTypeCanTransform<T>::value,
                         &This::_CopyInit,
                         &This::_Destroy,
                         &This::_Move,
@@ -677,6 +631,7 @@ class VtValue
 #ifdef PXR_JS_BINDINGS_SUPPORT_ENABLED
                         &This::_GetJsVal,
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+                        &This::_GetValueRef,
                         &This::_StreamOut,
 
                         &This::_GetTypeid,
@@ -764,6 +719,7 @@ class VtValue
             return ProxyHelper::GetJsVal(GetObj(storage));
         }
 #endif // PXR_JS_BINDINGS_SUPPORT_ENABLED
+        static VtValueRef _GetValueRef(_Storage const &storage, bool rvalue);
 
         static std::ostream &_StreamOut(
             _Storage const &storage, std::ostream &out) {
@@ -856,7 +812,7 @@ class VtValue
     template <class T>
     struct _RemoteTypeInfo : _TypeInfoImpl<
         T,                                   // type
-        TfDelegatedCountPtr<_Counted<T>>, // container
+        TfDelegatedCountPtr<_Counted<T>>,    // container
         _RemoteTypeInfo<T>                   // CRTP
         >
     {
@@ -954,12 +910,16 @@ public:
     /// Construct a VtValue holding a copy of \p obj.
     /// 
     /// If T is a char pointer or array, produce a VtValue holding a
-    /// std::string. If T is pxr_boost::python::object, produce a VtValue holding
-    /// a TfPyObjWrapper.
+    /// std::string. If T is pxr_boost::python::object, produce a VtValue
+    /// holding a TfPyObjWrapper.
     template <class T>
     explicit VtValue(T const &obj) {
         _Init<T>::Init(this, obj);
     }
+
+    /// Construct with VtValueRef.
+    VT_API
+    explicit VtValue(VtValueRef ref);
 
     /// Create a new VtValue, taking its contents from \p obj.
     /// 
@@ -1004,22 +964,13 @@ public:
         return *this;
     }
 
+    /// Assignment from VtValueRef
+    VT_API
+    VtValue &operator=(VtValueRef ref);
+
     /// Assignment operator from any type.
     template <class T>
-    VtValue &
-    operator=(T const &obj) {
-        if constexpr (_TypeInfoFor<T>::IsLocal &&
-                      _TypeInfoFor<T>::HasTrivialCopy) {
-            _Clear();
-            _Init<T>::Init(this, obj);
-            return *this;
-        }
-        else {
-            _HoldAside tmp(this);
-            _Init<T>::Init(this, obj);
-            return *this;
-        }
-    }
+    VtValue &operator=(T const &obj);
 
     /// Swap this with \a rhs.
     VtValue &Swap(VtValue &rhs) noexcept {
@@ -1350,6 +1301,22 @@ public:
     /// Returns true iff this value is empty.
     bool IsEmpty() const { return _info.GetLiteral() == 0; }
 
+    /// Return a VtValueRef that refers to the current object held by this
+    /// VtValue.  The returned VtValueRef is invalidated and must not be used
+    /// after this VtValue is modified or destroyed.
+    VT_API VtValueRef Ref() const &;
+
+    /// Return a VtValueRef that refers to the current object held by this
+    /// rvalue VtValue.  The returned VtValueRef is invalidated and must not be
+    /// used after this VtValue is modified or destroyed.
+    VT_API VtValueRef Ref() &&;
+
+    /// Implicitly convert to VtValueRef.
+    VT_API operator VtValueRef() const &;
+
+    /// Implicitly convert to an rvalue VtValueRef.
+    VT_API operator VtValueRef() &&;
+
     /// Return true if the held object provides a hash implementation.
     VT_API bool CanHash() const;
 
@@ -1359,6 +1326,20 @@ public:
     friend inline size_t hash_value(VtValue const &val) {
         return val.GetHash();
     }
+
+    /// Return true if this value holds a type that has been declared at compile
+    /// time to support composing over other types.  This is a fast check that
+    /// can be used to avoid calling `VtValueComposeOver(strong, weak)` if
+    /// `strong` does not support composing over.  Empty VtValue always can
+    /// compose over.
+    VT_API bool CanComposeOver() const;
+
+    /// Return true if this value holds a type that has been declared to support
+    /// value transforms at compile time.  This is a fast check that can be used
+    /// to avoid calling the relatively slower `VtValueTryTransform(obj, xform)`
+    /// if `obj` does not support transforms at all.  Empty VtValue does not
+    /// support transforms.
+    VT_API bool CanTransform() const;
 
     /// Tests for equality.
     template <typename T>
@@ -1564,40 +1545,6 @@ struct Vt_ValueShapeDataAccess {
     }
 };
 
-/// Make a default value.  VtValue uses this to create values to be returned
-/// from failed calls to \a Get.  Clients may specialize this for their own
-/// types.
-template <class T>
-struct Vt_DefaultValueFactory {
-    static Vt_DefaultValueHolder Invoke();
-};
-
-template <class T>
-inline Vt_DefaultValueHolder
-Vt_DefaultValueFactory<T>::Invoke() {
-    return Vt_DefaultValueHolder::Create<T>();
-}
-
-// For performance reasons, the default constructors for vectors,
-// matrices, and quaternions do *not* initialize the data of the
-// object.  This greatly improves the performance of creating large
-// arrays of objects.  However, for consistency and to avoid
-// errors complaining about uninitialized values, we use VtZero
-// to construct zeroed out vectors, matrices, and quaternions by
-// explicitly instantiating the factory for these types. 
-//
-#define _VT_DECLARE_ZERO_VALUE_FACTORY(unused, elem)                    \
-template <>                                                             \
-VT_API Vt_DefaultValueHolder Vt_DefaultValueFactory<VT_TYPE(elem)>::Invoke();
-
-TF_PP_SEQ_FOR_EACH(_VT_DECLARE_ZERO_VALUE_FACTORY, ~,
-                   VT_VEC_VALUE_TYPES
-                   VT_MATRIX_VALUE_TYPES
-                   VT_QUATERNION_VALUE_TYPES
-                   VT_DUALQUATERNION_VALUE_TYPES)
-
-#undef _VT_DECLARE_ZERO_VALUE_FACTORY
-
 //
 // The Get()/IsHolding routines needs to be special-cased to handle getting a
 // VtValue *as* a VtValue.
@@ -1640,9 +1587,78 @@ VtValue::IsHolding<void>() const {
     return false;
 }
 
-
-
 #endif // !doxygen
+
+PXR_NAMESPACE_CLOSE_SCOPE
+
+// This unusual arrangement of closing the namespace, including valueRef.h, then
+// reopening the namespace exists because value.h and valueRef.h are
+// interdependent.  A similar symmetric construct exists in valueRef.h.  If
+// value.h is included first, then valueRef.h will be included here.  Otherwise
+// if valueRef.h is included first then it will have included value.h.  Either
+// way all the necessary declarations from both types are present prior to the
+// appearance of the following defintions.
+
+#include "pxr/base/vt/valueRef.h"
+
+PXR_NAMESPACE_OPEN_SCOPE
+
+template <class T>
+VtValue &
+VtValue::operator=(T const &obj)
+{
+    if constexpr (_TypeInfoFor<T>::IsLocal &&
+                  _TypeInfoFor<T>::HasTrivialCopy) {
+        _Clear();
+        _Init<T>::Init(this, obj);
+        return *this;
+    }
+    else {
+        _HoldAside tmp(this);
+        _Init<T>::Init(this, obj);
+        return *this;
+    }
+}
+
+template <>
+VtValue &
+VtValue::operator=<VtValueRef>(VtValueRef const &obj) = delete;
+
+VtValueRef
+VtValue::_TypeInfo::GetValueRef(_Storage const &storage, bool rvalue) const
+{
+    return _getValueRef(storage, rvalue);
+}
+
+template <class T>
+VtValueRef
+VtValue::_TypedProxyHelper<T>::GetValueRef(T const &obj)
+{
+    return VtGetProxiedObject(obj);
+}
+
+template <class T>
+VtValueRef
+VtValue::_ErasedProxyHelper<T>::GetValueRef(T const &obj)
+{
+    return *VtGetErasedProxiedVtValue(obj);
+}
+
+template <class T, class C, class D>
+VtValueRef
+VtValue::_TypeInfoImpl<T, C, D>
+::_GetValueRef(_Storage const &storage, bool rvalue)
+{
+    if constexpr (!IsProxy) {
+        // If `rvalue` is true, then this value is not a proxy, and we've been
+        // called by a non-const member function, so it is safe to cast away
+        // constness here.
+        if (rvalue) {
+            return std::move(GetMutableObj(const_cast<_Storage &>(storage)));
+        }
+    }
+    return ProxyHelper::GetValueRef(GetObj(storage));
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

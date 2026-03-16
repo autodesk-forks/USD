@@ -16,6 +16,10 @@ namespace {
 
 constexpr double inf = std::numeric_limits<double>::infinity();
 
+// Constants for constructing GfInterval objects
+constexpr bool OPEN = false;
+constexpr bool CLOSED = true;
+
 // Utility to convert a TsInterpMode value into a Ts_SegmentInterp. Because the
 // TsInterpMode just includes a generic "curve" interpolation, we also need the
 // spline's curve type to know if this segment is a bezier or hermite curve.
@@ -49,7 +53,7 @@ Ts_SegmentInterp _ConvertInterpMode(TsInterpMode interpMode,
 GfInterval _GetOpenLoopedInterval(const TsLoopParams& lp)
 {
     GfInterval result = lp.GetLoopedInterval();
-    result.SetMax(result.GetMax(), false);
+    result.SetMax(result.GetMax(), OPEN);
     return result;
 }
 
@@ -479,7 +483,7 @@ Ts_SegmentKnotIterator::Ts_SegmentKnotIterator(
         return;
     }
 
-    _interval &= GfInterval(firstTime, lastTime, true, false);
+    _interval &= GfInterval(firstTime, lastTime, CLOSED, OPEN);
     if (_interval.IsEmpty()) {
         _atEnd = true;
         return;
@@ -787,6 +791,8 @@ Ts_SegmentIterator::Ts_SegmentIterator(
         if (loopedInterval.GetMax() >= _lastKnotTime) {
             // The end of the knots is looped.
             _lastKnotTime = loopedInterval.GetMax();
+            _lastKnotPreValue = _data->GetKnotPreValueAsDouble(firstProtoIndex);
+            _lastKnotPreValue += lp.valueOffset * (lp.numPostLoops + 1);
             _lastKnotValue = _data->GetKnotValueAsDouble(firstProtoIndex);
             _lastKnotValue += lp.valueOffset * (lp.numPostLoops + 1);
         }
@@ -993,7 +999,7 @@ Ts_SegmentIterator::_UpdateKnotIterator()
         _valueShift = 0.0;  // Oscillating loops never have a value offset
         const double t1 = -(_interval.GetMin() - _shift1) + _shift2;
         const double t0 = -(_interval.GetMax() - _shift1) + _shift2;
-        knotIterInterval = GfInterval(t0, t1, true, false);
+        knotIterInterval = GfInterval(t0, t1, CLOSED, OPEN);
     } else {
         // For the non-reversed case, we can just subtract timeDelta.
         _shift1 = timeDelta;
