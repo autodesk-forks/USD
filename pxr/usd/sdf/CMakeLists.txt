@@ -724,6 +724,7 @@ pxr_register_test(testSdfZipFileLimits
     EXPECTED_RETURN_CODE 0
     ENV 
         SDF_MAX_ZIPFILE_SIZE=195
+        SDF_MAX_ZIPFILE_ENTRY_SIZE=64
 )
 pxr_register_test(testSdfZipFile_CPP
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfZipFile_CPP"

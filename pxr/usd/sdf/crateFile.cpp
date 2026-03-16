@@ -3761,6 +3761,16 @@ CrateFile::_ReadPathsImpl(Reader reader,
             parentPath = SdfPath::AbsoluteRootPath();
             _paths[h.index.value] = parentPath;
         } else {
+            // Bounds-check token index values in safety-over-speed mode.
+            if constexpr (SafetyOverSpeed) {
+                if (h.elementTokenIndex.value >= _tokens.size()) {
+                    TF_RUNTIME_ERROR("Corrupt element token index in crate "
+                        "file (%u > %zu)",
+                        h.elementTokenIndex.value, _tokens.size());
+                    return;
+                }
+            } // SafetyOverSpeed
+
             auto const &elemToken = _tokens[h.elementTokenIndex.value];
             _paths[h.index.value] =
                 h.bits & _PathItemHeader::IsPrimPropertyPathBit ?
@@ -4227,7 +4237,13 @@ CrateFile::GetTypeid(ValueRep rep) const
 #define xx(ENUMNAME, _unused, T, SUPPORTSARRAY)                                \
         case TypeEnum::ENUMNAME:                                               \
             if constexpr (SUPPORTSARRAY) {                                     \
-                return rep.IsArray() ? typeid(VtArray<T>) : typeid(T);         \
+                if (rep.IsArray()) {                                           \
+                    return typeid(VtArray<T>);                                 \
+                }                                                              \
+                if (rep.IsArrayEdit()) {                                       \
+                    return typeid(VtArrayEdit<T>);                             \
+                }                                                              \
+                return typeid(T);                                              \
             }                                                                  \
             else {                                                             \
                 return typeid(T);                                              \

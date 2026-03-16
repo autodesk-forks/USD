@@ -122,6 +122,9 @@ TF_DEFINE_PRIVATE_TOKENS(
     // instancing related mixins
     ((instancing,                  "Instancing.Transform"))
 
+    // skinning
+    ((skinning,                    "Vertex.SkinPoints"))
+
     // terminals
     ((customDisplacementGS,        "Geometry.CustomDisplacement"))
     ((noCustomDisplacementGS,      "Geometry.NoCustomDisplacement"))
@@ -230,7 +233,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
      * Flat normals:
      *   [VS] .Pass, [PTVS] .Flat, [GS] .Flat, .Pass, [FS] .Pass
      *   (ptvs optional)
-    * Screen Space Flat normals:
+     * Screen Space Flat normals:
      *   [VS] .Pass, [PTVS] .Pass, [GS] .Pass, [FS] .ScreenSpace
      *   (geometry shader, ptvs optional)
      * Geometric Flat normals:
@@ -251,6 +254,7 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
     // vertex shader
     uint8_t vsIndex = 0;
     VS[vsIndex++] = _tokens->instancing;
+    VS[vsIndex++] = _tokens->skinning;
 
     VS[vsIndex++] = (normalsSource == NormalSourceSmooth) ?
         _tokens->normalsSmooth :

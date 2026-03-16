@@ -87,6 +87,7 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
             HdPrmanPluginTokens->motionBlur,
             nullptr, /* inputArgs */
             insertionPhase,
+            // XXX this needs to run before HdPrman_MaterialPrimvarTransferSceneIndexPlugin
             HdSceneIndexPluginRegistry::InsertionOrderAtStart);
     }
 }

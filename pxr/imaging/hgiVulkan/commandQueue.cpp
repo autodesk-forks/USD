@@ -260,7 +260,7 @@ HgiVulkanCommandQueue::Flush(
         { _timelineSemaphore, signalSemaphore };
     const uint64_t semaphoreSignalValues[2] =
         { _timelineNextVal, 0 };
-    const uint semaphoreSignalCount = signalSemaphore ? 2 : 1;
+    const uint32_t semaphoreSignalCount = signalSemaphore ? 2 : 1;
 
     VkTimelineSemaphoreSubmitInfo timelineInfo;
     timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;

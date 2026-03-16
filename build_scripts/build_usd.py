@@ -2391,6 +2391,9 @@ if MacOS():
                        default=codesignDefault, action="store_true",
                        help=("Enable code signing for macOS builds "
                              "(defaults to enabled on Apple Silicon)"))
+    group.add_argument("--codesign-id", dest="macos_codesign_id", type=str,
+                       help=("A specific code-sign ID to use. If not provided, "
+                             "the build will try and find one or use '-'"))
 
 group.add_argument("--webgpu", dest="buildWebGPU", action="store_true",
                     help="Build WebGPU Hgi")
@@ -2726,9 +2729,10 @@ class InstallContext:
         if MacOS():
             apple_utils.SetTarget(self, self.buildTarget)
 
-            self.macOSCodesign = \
-                (args.macos_codesign if hasattr(args, "macos_codesign")
-                 else False)
+            self.macOSCodesign = False
+            if args.macos_codesign:
+                self.macOSCodesign = (args.macos_codesign_id or 
+                                      apple_utils.GetCodeSignID())
             if apple_utils.IsHostArm() and args.ignore_homebrew:
                 self.ignorePaths.append("/opt/homebrew")
         else:
@@ -2759,8 +2763,7 @@ class InstallContext:
                             not embedded and 
                             not self.targetWasm)
         self.buildExamples = (args.build_examples and 
-                              not embedded and 
-                              not self.targetWasm)
+                              not embedded)
         self.buildTutorials = (args.build_tutorials and 
                                not embedded and 
                                not self.targetWasm)
@@ -2986,9 +2989,6 @@ if context.targetWasm:
         sys.exit(1)
     if "--python" in sys.argv:
         PrintError("Cannot build python components for wasm build targets")
-        sys.exit(1)
-    if "--examples" in sys.argv:
-        PrintError("Cannot build examples for wasm build targets")
         sys.exit(1)
     if "--tutorials" in sys.argv:
         PrintError("Cannot build tutorials for wasm build targets")
@@ -3373,7 +3373,9 @@ if Windows():
 
 if MacOS():
     if context.macOSCodesign:
-        apple_utils.Codesign(context.usdInstDir, verbosity > 1)
+        apple_utils.Codesign(context.usdInstDir,
+                             identifier=context.macOSCodesign,
+                             verbose_output=verbosity > 1)
 
 additionalInstructions = any([context.buildPython, context.buildTools, context.buildPrman])
 if additionalInstructions:

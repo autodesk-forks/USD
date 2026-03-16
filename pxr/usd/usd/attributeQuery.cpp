@@ -296,6 +296,12 @@ UsdAttributeQuery::HasFallbackValue() const
     return _attr.HasFallbackValue();
 }
 
+bool
+UsdAttributeQuery::GetFallbackValue(VtValue* value) const
+{
+    return _attr.GetFallbackValue(value);
+}
+
 bool 
 UsdAttributeQuery::ValueMightBeTimeVarying() const
 {
