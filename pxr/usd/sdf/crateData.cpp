@@ -811,10 +811,6 @@ private:
             dispatcher.Run(
                 [this, fsBegin, fsEnd, &fields, &fieldValuePairs]()  {
                     try{
-                        // XXX Won't need first two tags when bug #132031 is
-                        // addressed
-                        TfAutoMallocTag tag(
-                            "Sdf", "Sdf_CrateDataImpl::Open", "field data");
                         auto &pairs = fieldValuePairs.GetMutable();
                         pairs.resize(fsEnd-fsBegin);
                         for (size_t i = 0; i < size_t(std::distance(fsBegin,fsEnd)); ++i) {

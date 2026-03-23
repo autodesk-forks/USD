@@ -152,14 +152,6 @@ const DefaultsMap& _GetDefaultsMap() {
     };
     return _defaults;
 }
-
-bool _HasSetItemExclusion(const TfToken& key, const VtValue& value) {
-    if (key == SdrNodeMetadata->Role && value == VtValue(TfToken(""))) {
-        return true;
-    }
-    return false;
-}
-
 } // anonymous namespace
 
 SdrShaderNodeMetadata::SdrShaderNodeMetadata(const SdrTokenMap& legacyMetadata)
@@ -181,16 +173,16 @@ SdrShaderNodeMetadata::SdrShaderNodeMetadata(const SdrTokenMap& legacyMetadata)
 }
 
 SdrShaderNodeMetadata::SdrShaderNodeMetadata(const VtDictionary& items) {
-    // Run SetItem on each metadata item because some items may have
-    // exclusions from _HasSetItemExclusion.
+    // Run SetItem on each metadata item to process valid casts for named
+    // metadata items.
     for (const auto& kv : items) {
         SetItem(TfToken(kv.first), kv.second);
     }
 }
 
 SdrShaderNodeMetadata::SdrShaderNodeMetadata(VtDictionary&& items) {
-    // Run SetItem on each metadata item because some items may have
-    // exclusions from _HasSetItemExclusion.
+    // Run SetItem on each metadata item to process valid casts for named
+    // metadata items.
     for (const auto& kv : items) {
         SetItem(TfToken(kv.first), kv.second);
     }
@@ -208,7 +200,7 @@ SdrShaderNodeMetadata::SetItem(
     const VtValue& value)
 {
     if (value.IsEmpty()) {
-        TF_CODING_ERROR("SetItem: Cannot set empty VtValue.");
+        ClearItem(key);
         return;
     }
 
@@ -222,15 +214,10 @@ SdrShaderNodeMetadata::SetItem(
             TF_CODING_ERROR("SetItem: Unable to convert given value"
                             "to the registered type for key %s, "
                             "item not set", key.GetText());
+            return;
         } else {
             _items[key] = cast;
         }
-    }
-
-    // Clear the value if the assigned value is an value that
-    // is meant to indicate non-existence.
-    if (_HasSetItemExclusion(key, _items[key])) {
-        ClearItem(key);
     }
 }
 

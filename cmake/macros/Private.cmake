@@ -330,8 +330,10 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
             endif()
         endif()
 
-        set(installResourcePath)
-        cmake_path(APPEND installResourcePath ${resourcesPath} ${dirPath})
+        set(installDestination ${resourcesPath})
+        if(NOT "${dirPath}" STREQUAL "")
+            set(installDestination ${installDestination}/${dirPath})
+        endif()
 
         if (EMSCRIPTEN)
             string(REGEX REPLACE "^lib\\/" "/" wasmRuntimePath "${resourcesPath}")
@@ -344,14 +346,14 @@ function(_install_resource_files NAME pluginInstallPrefix pluginToLibraryPath)
             # the files from their location in the source tree. In order for
             # the build to be reloatable, we want to reference the installed
             # files in the pxrTargets.cmake file.
-            target_link_options(${NAME} PUBLIC
+            target_link_options(${NAME} PUBLIC              
                 "$<BUILD_INTERFACE:SHELL:--embed-file ${resourceFileAbsolute}@${resourceDestDir}/${destFileName}>"
                 "$<INSTALL_INTERFACE:SHELL:--embed-file $<INSTALL_PREFIX>/${installDestination}/${destFileName}@${resourceDestDir}/${destFileName}>")
         endif()
 
         install(
             FILES ${resourceFile}
-            DESTINATION ${installResourcePath}
+            DESTINATION ${installDestination}
             RENAME ${destFileName}
         )
     endforeach()

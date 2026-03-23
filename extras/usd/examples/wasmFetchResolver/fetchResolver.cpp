@@ -30,7 +30,27 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 AR_DEFINE_RESOLVER(FetchResolver, ArResolver);
 
-static std::string _CreateAnchoredIdentifier(
+using EmscriptenFetchPtr = 
+    std::unique_ptr<emscripten_fetch_t, decltype(&emscripten_fetch_close)>;
+
+EmscriptenFetchPtr 
+_FetchRequest(
+    const std::string& verb, 
+    const std::string& url)
+{
+    emscripten_fetch_attr_t attr;
+    emscripten_fetch_attr_init(&attr);
+    strcpy(attr.requestMethod, verb.c_str());
+
+    attr.attributes = 
+        EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_SYNCHRONOUS;
+
+    return EmscriptenFetchPtr(
+        emscripten_fetch(&attr, url.c_str()), emscripten_fetch_close);
+}
+
+static std::string 
+_CreateAnchoredIdentifier(
     const std::string& assetPath,
     const ArResolvedPath& anchorAssetPath)
 {
@@ -43,34 +63,31 @@ static std::string _CreateAnchoredIdentifier(
 
 }
 
-std::string FetchResolver::_CreateIdentifier(
+std::string 
+FetchResolver::_CreateIdentifier(
     const std::string& assetPath,
     const ArResolvedPath& anchorAssetPath) const
 {
     return _CreateAnchoredIdentifier(assetPath, anchorAssetPath);
 }
 
-std::string FetchResolver::_CreateIdentifierForNewAsset(
+std::string 
+FetchResolver::_CreateIdentifierForNewAsset(
     const std::string& assetPath,
     const ArResolvedPath& anchorAssetPath) const
 {
     return _CreateAnchoredIdentifier(assetPath, anchorAssetPath);
 }
 
-static bool _FetchFile(
+static bool 
+_FetchFile(
     const std::string& resolvedPath)
 {
     const char* url = resolvedPath.c_str();
-    emscripten_fetch_attr_t attr;
-    emscripten_fetch_attr_init(&attr);
-    strcpy(attr.requestMethod, "GET");
-
-    attr.attributes = 
-        EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_SYNCHRONOUS;
-    emscripten_fetch_t* fetch = emscripten_fetch(&attr, url);
+    EmscriptenFetchPtr fetch = _FetchRequest("GET", url);
 
     if (!fetch || fetch->status != 200) {
-        emscripten_fetch_close(fetch); // no-op if fetch is nullptr
+        //emscripten_fetch_close(fetch); // no-op if fetch is nullptr
         return false;
     }
 
@@ -91,14 +108,46 @@ static bool _FetchFile(
         }
     }
 
-    emscripten_fetch_close(fetch);
+    //emscripten_fetch_close(fetch);
     return successful;
 }
 
-ArResolvedPath FetchResolver::_Resolve(
+ArResolvedPath 
+FetchResolver::_Resolve(
     const std::string& assetPath) const
 {
+
     const std::string normPath = TfNormPath(assetPath);
+
+    // Check if the supplied absolute path exists as is in the virtual
+    // filesystem. This allows us to resolve paths to bundled assets, such as
+    // schema definitions.
+    if (!TfIsRelativePath(normPath)) {
+        return TfPathExists(normPath) ? 
+            ArResolvedPath(normPath) : 
+            ArResolvedPath();
+    }
+
+    // Attempt to resolve a relative path by requesting if it exists
+    // on the server.
+    const char* url = normPath.c_str();
+    EmscriptenFetchPtr fetch = _FetchRequest("HEAD", url);
+
+    return fetch->status == 200 ? ArResolvedPath(normPath) : ArResolvedPath();
+}
+
+ArResolvedPath 
+FetchResolver::_ResolveForNewAsset(
+    const std::string& assetPath) const
+{
+    return ArResolvedPath();
+}
+
+std::shared_ptr<ArAsset> 
+FetchResolver::_OpenAsset(
+    const ArResolvedPath& resolvedPath) const
+{
+    const std::string normPath = TfNormPath(resolvedPath.GetPathString());
 
     bool isDownloading;
     {
@@ -113,7 +162,7 @@ ArResolvedPath FetchResolver::_Resolve(
             // If the file has already been fetched then we can return now
             // XXX: Track and check previously tried, but failed downloads
             if (TfPathExists(normPath)) {
-                return ArResolvedPath(normPath);
+                return ArFilesystemAsset::Open(resolvedPath);
             }
 
             // File does not exist so we will want to fetch it.
@@ -130,7 +179,7 @@ ArResolvedPath FetchResolver::_Resolve(
         });
 
         return TfPathExists(normPath) ? 
-            ArResolvedPath(normPath) : ArResolvedPath();
+            ArFilesystemAsset::Open(resolvedPath) : nullptr;
     } else {
         // Fetch the file from the server. When complete, notify any other
         // waiting threads.
@@ -144,24 +193,8 @@ ArResolvedPath FetchResolver::_Resolve(
         }
 
         _condition.notify_all();
-        return result ? ArResolvedPath(normPath) : ArResolvedPath();
+        return result ? ArFilesystemAsset::Open(resolvedPath) : nullptr;
     }
-}
-
-ArResolvedPath FetchResolver::_ResolveForNewAsset(
-    const std::string& assetPath) const
-{
-    return ArResolvedPath();
-}
-
-std::shared_ptr<ArAsset> FetchResolver::_OpenAsset(
-    const ArResolvedPath& resolvedPath) const
-{
-    if (!TfPathExists(resolvedPath.GetPathString())) {
-        return nullptr;
-    }
-
-    return ArFilesystemAsset::Open(resolvedPath);
 }
 
 std::shared_ptr<ArWritableAsset>
@@ -171,5 +204,3 @@ FetchResolver::_OpenAssetForWrite(
 {
     return nullptr;
 }
-
-

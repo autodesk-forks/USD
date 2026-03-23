@@ -11,6 +11,7 @@
 #include "pxr/usdImaging/usdSkelImaging/blendShapeSchema.h"
 #include "pxr/usdImaging/usdSkelImaging/dataSourcePrimvar.h"
 #include "pxr/usdImaging/usdSkelImaging/dataSourceUtils.h"
+#include "pxr/usdImaging/usdSkelImaging/extComputations.h"
 #include "pxr/usdImaging/usdSkelImaging/jointInfluencesData.h"
 #include "pxr/usdImaging/usdSkelImaging/skeletonSchema.h"
 #include "pxr/usdImaging/usdSkelImaging/tokens.h"
@@ -29,6 +30,8 @@
 #include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hd/skinningSettings.h"
 #include "pxr/imaging/hd/tokens.h"
+
+#include "pxr/imaging/pxOsd/tokens.h"
 
 #include "pxr/base/gf/dualQuatf.h"
 #include "pxr/base/gf/matrix3f.h"
@@ -102,7 +105,7 @@ private:
 
 } // namespace
 
-UsdSkelImagingDataSourceResolvedPointsBasedPrim::Handle
+UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle
 UsdSkelImagingDataSourceResolvedPointsBasedPrim::New(
     HdSceneIndexBaseRefPtr const &sceneIndex,
     SdfPath primPath,
@@ -115,13 +118,13 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::New(
     const UsdSkelImagingBindingSchema bindingSchema =
         UsdSkelImagingBindingSchema::GetFromParent(primSource);
 
-    HdBoolDataSourceHandle const hasSkelRootDs =
+    const HdBoolDataSourceHandle hasSkelRootDs =
         bindingSchema.GetHasSkelRoot();
 
     const bool hasSkelRoot =
         hasSkelRootDs && hasSkelRootDs->GetTypedValue(0.0f);
 
-    HdPathDataSourceHandle const skeletonPathDataSource =
+    const HdPathDataSourceHandle skeletonPathDataSource =
         bindingSchema.GetSkeleton();
     if (!skeletonPathDataSource) {
         return nullptr;
@@ -197,6 +200,7 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim(
  , _primSource(std::move(primSource))
  , _hasSkelRoot(hasSkelRoot)
  , _primvars(HdPrimvarsSchema::GetFromParent(_primSource))
+ , _mesh(HdMeshSchema::GetFromParent(_primSource))
  , _skinningMethod(_GetSkinningMethod(_primvars, primPath))
  , _blendShapeTargetPaths(std::move(blendShapeTargetPaths))
  , _skeletonPath(std::move(skeletonPath))
@@ -217,21 +221,13 @@ namespace
 HdContainerDataSourceHandle
 _ExtComputationPrimvars(
     const SdfPath &primPath,
+    const bool haveNormalsComputations,
     const HdPrimvarsSchema &primvars)
 {
-    static const TfToken names[] = {
-        HdPrimvarsSchemaTokens->points,
-        HdPrimvarsSchemaTokens->normals
+    TfTokenVector names = {
+        HdPrimvarsSchemaTokens->points
     };
-
-    HdTokenDataSourceHandle normalsInterpolationDs =
-        primvars.GetPrimvar(HdPrimvarsSchemaTokens->normals).GetInterpolation();
-    const TfToken normalsInterpolation =
-        normalsInterpolationDs
-            ? normalsInterpolationDs->GetTypedValue(0.0f)
-            : HdPrimvarSchemaTokens->vertex;
-
-    HdDataSourceBaseHandle const values[] = {
+    std::vector<HdDataSourceBaseHandle> values = {
         HdExtComputationPrimvarSchema::Builder()
             .SetInterpolation(
                 HdExtComputationPrimvarSchema::BuildInterpolationDataSource(
@@ -251,33 +247,44 @@ _ExtComputationPrimvars(
             .SetValueType(
                 HdRetainedTypedSampledDataSource<HdTupleType>::New(
                     HdTupleType{HdTypeFloatVec3, 1}))
-        .Build(),
-
-        HdExtComputationPrimvarSchema::Builder()
-            .SetInterpolation(
-                HdExtComputationPrimvarSchema::BuildInterpolationDataSource(
-                    normalsInterpolation))
-            .SetRole(
-                HdExtComputationPrimvarSchema::BuildRoleDataSource(
-                    HdPrimvarSchemaTokens->normal))
-            .SetSourceComputation(
-                HdRetainedTypedSampledDataSource<SdfPath>::New(
-                    primPath.AppendChild(
-                        UsdSkelImagingExtComputationNameTokens
-                            ->normalsComputation)))
-            .SetSourceComputationOutputName(
-                HdRetainedTypedSampledDataSource<TfToken>::New(
-                    UsdSkelImagingExtComputationOutputNameTokens
-                        ->skinnedNormals))
-            .SetValueType(
-                HdRetainedTypedSampledDataSource<HdTupleType>::New(
-                    HdTupleType{HdTypeFloatVec3, 1}))
         .Build()
     };
 
-    static_assert(std::size(names) == std::size(values));
+    if (haveNormalsComputations) {
+        const HdTokenDataSourceHandle normalsInterpolationDs =
+            primvars.GetPrimvar(HdPrimvarsSchemaTokens->normals)
+                .GetInterpolation();
+        const TfToken normalsInterpolation =
+            normalsInterpolationDs
+                ? normalsInterpolationDs->GetTypedValue(0.0f)
+                : HdPrimvarSchemaTokens->vertex;
+
+        names.push_back(HdPrimvarsSchemaTokens->normals);
+        values.push_back(
+            HdExtComputationPrimvarSchema::Builder()
+                .SetInterpolation(
+                    HdExtComputationPrimvarSchema::BuildInterpolationDataSource(
+                        normalsInterpolation))
+                .SetRole(
+                    HdExtComputationPrimvarSchema::BuildRoleDataSource(
+                        HdPrimvarSchemaTokens->normal))
+                .SetSourceComputation(
+                    HdRetainedTypedSampledDataSource<SdfPath>::New(
+                        primPath.AppendChild(
+                            UsdSkelImagingExtComputationNameTokens
+                                ->normalsComputation)))
+                .SetSourceComputationOutputName(
+                    HdRetainedTypedSampledDataSource<TfToken>::New(
+                        UsdSkelImagingExtComputationOutputNameTokens
+                            ->skinnedNormals))
+                .SetValueType(
+                    HdRetainedTypedSampledDataSource<HdTupleType>::New(
+                        HdTupleType{HdTypeFloatVec3, 1}))
+            .Build());
+    }
+
     return HdExtComputationPrimvarsSchema::BuildRetained(
-        std::size(names), names, values);
+        names.size(), names.data(), values.data());
 }
 
 HdContainerDataSourceHandle
@@ -386,31 +393,43 @@ public:
         }
         if (name == HdSkinningInputTokens->numJoints) {
             return UsdSkelImaging_DataSourcePrimvar::New(
-                _ToDataSource<int>(_GetNumJoints()));
+                _ToDataSource(_GetNumJoints()));
         }
         if (name == HdSkinningInputTokens->numBlendShapeWeights) {
-            return UsdSkelImaging_DataSourcePrimvar::New(_ToDataSource<int>(
-                _resolvedPrimSource->GetBlendShapeData()->numSubShapes));
+            return UsdSkelImaging_DataSourcePrimvar::New(
+                _ToDataSource(_GetNumBlendShapeWeights()));
         }
         return _resolvedPrimSource->Get(name);
     }
 
 private:
     _SkinningPrimvarsDataSource(
-        UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle const& 
+        UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle
             resolvedPrimSource,
-        HdContainerDataSourceHandle const& skeletonPrimSource)
-
+        HdContainerDataSourceHandle skeletonPrimSource,
+        bool useInstanceOffset)
      : _resolvedPrimSource(std::move(resolvedPrimSource)),
-       _skeletonPrimSource(std::move(skeletonPrimSource))
+       _skeletonPrimSource(std::move(skeletonPrimSource)),
+       _useInstanceOffset(useInstanceOffset)
     {
     }
 
-
     int _GetNumJoints() const {
+        if (!_useInstanceOffset) {
+            // A hack to zero out the instanceOffset in skinning vertex
+            // shader if we only have one instance or when there's no 
+            // instance animation source override.
+            return 0;
+        }
         const UsdSkelImagingSkeletonSchema& schema =
             UsdSkelImagingSkeletonSchema::GetFromParent(_skeletonPrimSource);
-        return schema? schema.GetJoints()->GetValue(0.0f).GetArraySize(): 0;
+        return schema? static_cast<int>(
+            schema.GetJoints()->GetValue(0.0f).GetArraySize()) : 0;
+    }
+
+    int _GetNumBlendShapeWeights() const {
+        return _useInstanceOffset ? static_cast<int>(
+            _resolvedPrimSource->GetBlendShapeData()->numSubShapes) : 0;
     }
 
     const UsdSkelImagingResolvedSkeletonSchema &_GetResolvedSkeletonSchema() {
@@ -423,9 +442,10 @@ private:
     }
 
 
-    UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle const 
+    const UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle
         _resolvedPrimSource;
-    HdContainerDataSourceHandle const _skeletonPrimSource;
+    const HdContainerDataSourceHandle _skeletonPrimSource;
+    const bool _useInstanceOffset;
 };
 
 void
@@ -451,8 +471,14 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::Get(const TfToken &name)
         // skeleton guide primvars are handled in 
         // UsdSkelImagingDataSourceResolvedSkeletonPrim
         if (_primPath != _skeletonPath && _skeletonPrimSource) {
+            // if we only have a single animation source then we don't need to
+            // instance offset the index into skinning primvars.
+            const VtArray<GfVec2i>& blendShapeRanges = 
+                UsdSkelImagingGetTypedValue(
+                    _resolvedSkeletonSchema.GetBlendShapeRanges(), 0.0f);
+            const bool useInstanceOffset = blendShapeRanges.size() > 1;
             return _SkinningPrimvarsDataSource::New(
-                shared_from_this(), _skeletonPrimSource);
+                shared_from_this(), _skeletonPrimSource, useInstanceOffset);
         }
     }
 
@@ -463,16 +489,21 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::Get(const TfToken &name)
     }
 
     if (name == HdExtComputationPrimvarsSchema::GetSchemaToken()) {
-        return HdOverlayContainerDataSource::OverlayedContainerDataSources(
-            _ExtComputationPrimvars(_primPath, _primvars),
-            HdContainerDataSource::Cast(inputSrc));
+        return
+            HdOverlayContainerDataSource::OverlayedContainerDataSources(
+                _ExtComputationPrimvars(
+                    _primPath,
+                    HasNormalsExtComputations(),
+                    _primvars),
+                HdContainerDataSource::Cast(inputSrc));
     }
 
     if (name == HdPrimvarsSchema::GetSchemaToken()) {
         // Block points primvar.
-        // The normals are also blocked so they are recomputed after skinning,
-        // since normals currently aren't deformed by the computation.
-        static HdContainerDataSourceHandle ds = _BlockPointsAndNormalsPrimvars();
+        // The normals are also blocked since they are either deformed by the
+        // computation or recomputed after skinning,
+        static HdContainerDataSourceHandle ds =
+            _BlockPointsAndNormalsPrimvars();
         return ds;
     }
 
@@ -547,8 +578,8 @@ private:
     {
     }
 
-    std::shared_ptr<UsdSkelImagingJointInfluencesData> const _jointInfluencesData;
-    HdMatrix4fArrayDataSourceHandle const _skelSkinningXforms;
+    const std::shared_ptr<UsdSkelImagingJointInfluencesData> _jointInfluencesData;
+    const HdMatrix4fArrayDataSourceHandle _skelSkinningXforms;
 };
 
 // Data source for locator extComputations:inputValues:blendShapeWeights on
@@ -642,10 +673,10 @@ private:
     {
     }
 
-    std::shared_ptr<UsdSkelImagingBlendShapeData> const _blendShapeData;
-    HdTokenArrayDataSourceHandle const _blendShapes;
-    HdFloatArrayDataSourceHandle const _blendShapeWeights;
-    HdVec2iArrayDataSourceHandle const _blendShapeRanges;
+    const std::shared_ptr<UsdSkelImagingBlendShapeData> _blendShapeData;
+    const HdTokenArrayDataSourceHandle _blendShapes;
+    const HdFloatArrayDataSourceHandle _blendShapeWeights;
+    const HdVec2iArrayDataSourceHandle _blendShapeRanges;
 };
 
 // Extract the Scale & Shear parts of 4x4 matrix by removing the
@@ -983,12 +1014,12 @@ HdDataSourceBaseHandle
 UsdSkelImagingDataSourceResolvedPointsBasedPrim::GetNumBlendShapeOffsetRanges()
 {
     TRACE_FUNCTION();
-    return _ToDataSource<int>(
-        GetBlendShapeData()->blendShapeOffsetRanges.size());
+    return _ToDataSource(static_cast<int>(
+        GetBlendShapeData()->blendShapeOffsetRanges.size()));
 }
 
 HdSampledDataSourceHandle 
-UsdSkelImagingDataSourceResolvedPointsBasedPrim::GetNormals()
+UsdSkelImagingDataSourceResolvedPointsBasedPrim::GetNormals() const
 {
     TRACE_FUNCTION();
     return GetPrimvars().GetPrimvar(
@@ -1050,26 +1081,58 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::GetJointInfluencesData()
 bool 
 UsdSkelImagingDataSourceResolvedPointsBasedPrim::HasExtComputations() const 
 {
-        return
-            // If we're not using vertex shader skinning.
-            !HdSkinningSettings::IsSkinningDeferred() &&
-            // Points are only posed if we bind a Skeleton prim (and the
-            // UsdSkelImagingSkeletonResolvingSceneIndex has populated the
-            // resolved skeleton schema).
-            _resolvedSkeletonSchema &&
-            // Do not use ext computation if this prim was the Skeleton itself.
-            // For the Skeleton prim itself, the
-            // UsdSkelImagingSkeletonResolvingSceneIndex has populated the
-            // points primvar already (with the points for the mesh guide)
-            // and changed the prim type to mesh.
-            _primPath != _skeletonPath &&
-            // We only skin prims if they are under a SkelRoot.
-            //
-            // Note that when we bake the points of a skinned prim, we also
-            // change the SkelRoot to a different prim type (such as Scope
-            // or Xform) so that the baked points are not skinned again.
-            _hasSkelRoot;
+    return
+        // If we're not using vertex shader skinning.
+        !HdSkinningSettings::IsSkinningDeferred() &&
+        // Points are only posed if we bind a Skeleton prim (and the
+        // UsdSkelImagingSkeletonResolvingSceneIndex has populated the
+        // resolved skeleton schema).
+        _resolvedSkeletonSchema &&
+        // Do not use ext computation if this prim was the Skeleton itself.
+        // For the Skeleton prim itself, the
+        // UsdSkelImagingSkeletonResolvingSceneIndex has populated the
+        // points primvar already (with the points for the mesh guide)
+        // and changed the prim type to mesh.
+        _primPath != _skeletonPath &&
+        // We only skin prims if they are under a SkelRoot.
+        //
+        // Note that when we bake the points of a skinned prim, we also
+        // change the SkelRoot to a different prim type (such as Scope
+        // or Xform) so that the baked points are not skinned again.
+        _hasSkelRoot;
+}
+
+bool
+UsdSkelImagingDataSourceResolvedPointsBasedPrim::HasNormalsExtComputations() const
+{
+    static const bool normalComputationsEnabled =
+        TfGetEnvSetting(USDSKELIMAGING_ENABLE_NORMAL_COMPUTATIONS);
+
+    if (normalComputationsEnabled) {
+        // If there are ext computations ...
+        if (HasExtComputations()) {
+            // And the subdivision scheme is "none" ...
+            const HdTokenDataSourceHandle subdivisionSchemeDs =
+                _mesh.GetSubdivisionScheme();
+            const TfToken subdivisionScheme =
+                subdivisionSchemeDs
+                    ? subdivisionSchemeDs->GetTypedValue(0.0f)
+                    : PxOsdOpenSubdivTokens->none;
+            if (subdivisionScheme == PxOsdOpenSubdivTokens->none) {
+                // And there are authored normals ...
+                const VtVec3fArray normals =
+                    UsdSkelImagingGetTypedValue(
+                        HdVec3fArrayDataSource::Cast(
+                            GetNormals()));
+
+                // Then we should have ext computations for normals.
+                return !normals.empty();
+            }
+        }
     }
+
+    return false;
+}
 
 const HdDataSourceLocatorSet &
 UsdSkelImagingDataSourceResolvedPointsBasedPrim::
@@ -1202,25 +1265,27 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::_ProcessDirtyLocators(
         }
     }
 
-    static const HdDataSourceLocator normalsPrimvarLocator =
-        HdPrimvarsSchema::GetDefaultLocator()
-            .Append(HdPrimvarsSchemaTokens->normals);
-    if (dirtyLocators.Intersects(normalsPrimvarLocator)) {
-        if (dirtyLocatorsForAggregatorComputation) {
-            static const HdDataSourceLocator aggregatorInputLocator =
-                HdExtComputationSchema::GetInputValuesLocator()
-                    .Append(
-                        UsdSkelImagingExtAggregatorComputationInputNameTokens
-                            ->restNormals);
-            dirtyLocatorsForAggregatorComputation->insert(
-                aggregatorInputLocator);
-        }
+    if (HasNormalsExtComputations()) {
+        static const HdDataSourceLocator normalsPrimvarLocator =
+            HdPrimvarsSchema::GetDefaultLocator()
+                .Append(HdPrimvarsSchemaTokens->normals);
+        if (dirtyLocators.Intersects(normalsPrimvarLocator)) {
+            if (dirtyLocatorsForAggregatorComputation) {
+                static const HdDataSourceLocator aggregatorInputLocator =
+                    HdExtComputationSchema::GetInputValuesLocator()
+                        .Append(
+                            UsdSkelImagingExtAggregatorComputationInputNameTokens
+                                ->restNormals);
+                dirtyLocatorsForAggregatorComputation->insert(
+                    aggregatorInputLocator);
+            }
 
-        if (dirtyLocatorsForComputation) {
-            static const HdDataSourceLocatorSet inputLocators{
-                HdExtComputationSchema::GetDispatchCountLocator(),
-                HdExtComputationSchema::GetElementCountLocator()};
-            dirtyLocatorsForComputation->insert(inputLocators);
+            if (dirtyLocatorsForComputation) {
+                static const HdDataSourceLocatorSet inputLocators{
+                    HdExtComputationSchema::GetDispatchCountLocator(),
+                    HdExtComputationSchema::GetElementCountLocator()};
+                dirtyLocatorsForComputation->insert(inputLocators);
+            }
         }
     }
 
@@ -1490,7 +1555,8 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::ProcessDirtyLocators(
     }
 
     if (entries) {
-        bool sendPointsAndNormalsPrimvarValueDirty = false;
+        const bool hasNormalsComputations = HasNormalsExtComputations();
+        bool sendPrimvarsValueDirty = false;
 
         if (!dirtyLocatorsForAggregatorComputation.IsEmpty()) {
             entries->push_back({
@@ -1498,36 +1564,46 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::ProcessDirtyLocators(
                     UsdSkelImagingExtComputationNameTokens
                         ->pointsAggregatorComputation),
                 dirtyLocatorsForAggregatorComputation});
-            entries->push_back({
-                _primPath.AppendChild(
-                    UsdSkelImagingExtComputationNameTokens
-                        ->normalsAggregatorComputation),
-                dirtyLocatorsForAggregatorComputation});
-            sendPointsAndNormalsPrimvarValueDirty = true;
+
+            if (hasNormalsComputations) {
+                entries->push_back({
+                    _primPath.AppendChild(
+                        UsdSkelImagingExtComputationNameTokens
+                            ->normalsAggregatorComputation),
+                    dirtyLocatorsForAggregatorComputation});
+            }
+            sendPrimvarsValueDirty = true;
         }
         if (!dirtyLocatorsForComputation.IsEmpty()) {
             entries->push_back({
                 _primPath.AppendChild(
                     UsdSkelImagingExtComputationNameTokens->pointsComputation),
                 dirtyLocatorsForComputation});
-            entries->push_back({
-                _primPath.AppendChild(
-                    UsdSkelImagingExtComputationNameTokens->normalsComputation),
-                dirtyLocatorsForComputation});
-            sendPointsAndNormalsPrimvarValueDirty = true;
+
+            if (hasNormalsComputations) {
+                entries->push_back({
+                    _primPath.AppendChild(
+                        UsdSkelImagingExtComputationNameTokens
+                            ->normalsComputation),
+                    dirtyLocatorsForComputation});
+            }
+            sendPrimvarsValueDirty = true;
         }
 
-        if (sendPointsAndNormalsPrimvarValueDirty) {
+        if (sendPrimvarsValueDirty) {
             static const HdDataSourceLocator pointsLocator =
                 HdPrimvarsSchema::GetDefaultLocator()
                     .Append(HdPrimvarsSchemaTokens->points)
                     .Append(HdPrimvarSchemaTokens->primvarValue);
-            static const HdDataSourceLocator normalsLocator =
-                HdPrimvarsSchema::GetDefaultLocator()
-                    .Append(HdPrimvarsSchemaTokens->normals)
-                    .Append(HdPrimvarSchemaTokens->primvarValue);
             entries->push_back({ _primPath, pointsLocator});
-            entries->push_back({ _primPath, normalsLocator});
+
+            if (hasNormalsComputations) {
+                static const HdDataSourceLocator normalsLocator =
+                    HdPrimvarsSchema::GetDefaultLocator()
+                        .Append(HdPrimvarsSchemaTokens->normals)
+                        .Append(HdPrimvarSchemaTokens->primvarValue);
+                entries->push_back({ _primPath, normalsLocator});
+            }
         }
 
         if (!dirtyPrimvars.empty()) {

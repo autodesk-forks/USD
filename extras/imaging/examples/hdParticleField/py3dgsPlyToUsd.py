@@ -301,8 +301,8 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
         ))
 
         # Convert to VtVec3fArray
-        positions_vt = Vt.Vec3hArray([Gf.Vec3h(Gf.Vec3f(float(p[0]), float(p[1]), float(p[2]))) for p in positions])
-        gs_prim.CreatePositionshAttr(positions_vt)
+        positions_vt = Vt.Vec3fArray([Gf.Vec3f(float(p[0]), float(p[1]), float(p[2])) for p in positions])
+        gs_prim.CreatePositionsAttr(positions_vt)
 
         # Calculate extents
         min_x = min(vertex_data['x'])
@@ -348,8 +348,8 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
         ]
 
         # Convert to VtVec3fArray
-        scales_vt = Vt.Vec3hArray([Gf.Vec3h(Gf.Vec3f(float(s[0]), float(s[1]), float(s[2]))) for s in scales])
-        gs_prim.CreateScaleshAttr(scales_vt)
+        scales_vt = Vt.Vec3fArray([Gf.Vec3f(float(s[0]), float(s[1]), float(s[2])) for s in scales])
+        gs_prim.CreateScalesAttr(scales_vt)
         print(f"  Set scales for {vertex_count} vertices")
     elif generateScales:
         from scipy.spatial import KDTree
@@ -360,8 +360,8 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
         # For scale, take the average distance to nearby particles, and halve
         # that since we're using it to scale a radius
         scales = (distances[:, 0] + distances[:, 1] + distances[:, 2]) / (3.0 * 2.0)
-        scales_vt = Vt.Vec3hArray([Gf.Vec3h(Gf.Vec3f(float(s), float(s), float(s))) for s in scales])
-        gs_prim.CreateScaleshAttr(scales_vt)
+        scales_vt = Vt.Vec3fArray([Gf.Vec3f(float(s), float(s), float(s)) for s in scales])
+        gs_prim.CreateScalesAttr(scales_vt)
         print(f"  Set scales for {vertex_count} vertices, generated from local neighborhood spacing")
     else:
         print("  Warning: PLY file missing scale_0, scale_1, scale_2 data. Consider re-running with --generateScales")
@@ -382,12 +382,12 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
         # Convert to VtQuatfArray and normalize
         orientations_list = []
         for q in orientations:
-            quat = Gf.Quath(Gf.Quatf(float(q[3]), float(q[0]), float(q[1]), float(q[2])))  # real, imag_x, imag_y, imag_z
+            quat = Gf.Quatf(float(q[3]), float(q[0]), float(q[1]), float(q[2]))  # real, imag_x, imag_y, imag_z
             quat.Normalize()
             orientations_list.append(quat)
 
-        orientations_vt = Vt.QuathArray(orientations_list)
-        gs_prim.CreateOrientationshAttr(orientations_vt)
+        orientations_vt = Vt.QuatfArray(orientations_list)
+        gs_prim.CreateOrientationsAttr(orientations_vt)
         print(f"  Set orientations for {vertex_count} vertices")
     else:
         print("  Warning: PLY file missing rot_0, rot_1, rot_2, rot_3 data")
@@ -399,8 +399,8 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
         opacities = [1.0 / (1.0 + math.exp(-v)) for v in vertex_data['opacity']]
 
         # Convert to VtFloatArray
-        opacities_vt = Vt.HalfArray(Vt.FloatArray(opacities))
-        gs_prim.CreateOpacitieshAttr(opacities_vt)
+        opacities_vt = Vt.FloatArray(opacities)
+        gs_prim.CreateOpacitiesAttr(opacities_vt)
         print(f"  Set opacities for {vertex_count} vertices")
     else:
         print("  Warning: PLY file missing opacity data")
@@ -477,10 +477,10 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
                 sh_data.extend(vertex_sh)
 
             # Convert to VtVec3fArray
-            sh_vt = Vt.Vec3hArray([Gf.Vec3h(Gf.Vec3f(float(v[0]), float(v[1]), float(v[2]))) for v in sh_data])
+            sh_vt = Vt.Vec3fArray([Gf.Vec3f(float(v[0]), float(v[1]), float(v[2])) for v in sh_data])
 
             # Create SH attribute
-            sh_attr = gs_prim.CreateRadianceSphericalHarmonicsCoefficientshAttr(sh_vt)
+            sh_attr = gs_prim.CreateRadianceSphericalHarmonicsCoefficientsAttr(sh_vt)
 
             # Set element size and interpolation
             sh_primvar = UsdGeom.Primvar(sh_attr)
@@ -492,8 +492,8 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
             # Only DC coefficients, degree 0
             gs_prim.CreateRadianceSphericalHarmonicsDegreeAttr(0)
 
-            sh_vt = Vt.Vec3hArray([Gf.Vec3h(Gf.Vec3f(float(v[0]), float(v[1]), float(v[2]))) for v in f_dc])
-            sh_attr = gs_prim.CreateRadianceSphericalHarmonicsCoefficientshAttr(sh_vt)
+            sh_vt = Vt.Vec3fArray([Gf.Vec3f(float(v[0]), float(v[1]), float(v[2])) for v in f_dc])
+            sh_attr = gs_prim.CreateRadianceSphericalHarmonicsCoefficientsAttr(sh_vt)
 
             sh_primvar = UsdGeom.Primvar(sh_attr)
             sh_primvar.SetElementSize(1)
@@ -509,10 +509,10 @@ def convertPlyUSD(input_file, output_file, prim_name=None, generateSh=False, gen
             ))
             rgb = Vt.Vec3fArray([Gf.Vec3f(float(v[0]), float(v[1]), float(v[2])) for v in f_rgb])
             SH_C0 = 0.28209479177387814
-            sh_dc = Vt.Vec3hArray([Gf.Vec3h(((v / 255.0) - Gf.Vec3f(0.5)) / SH_C0) for v in rgb])
+            sh_dc = Vt.Vec3fArray([(((v / 255.0) - Gf.Vec3f(0.5)) / SH_C0) for v in rgb])
 
             gs_prim.CreateRadianceSphericalHarmonicsDegreeAttr(0)
-            sh_attr = gs_prim.CreateRadianceSphericalHarmonicsCoefficientshAttr(sh_dc)
+            sh_attr = gs_prim.CreateRadianceSphericalHarmonicsCoefficientsAttr(sh_dc)
 
             sh_primvar = UsdGeom.Primvar(sh_attr)
             sh_primvar.SetElementSize(1)

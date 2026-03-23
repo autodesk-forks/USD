@@ -497,13 +497,17 @@ public:
     UsdResolveInfo
     GetResolveInfo(UsdTimeCode time) const;
 
-    /// Perform value resolution to determine the source of the resolved
-    /// value of this attribute at any non-default time. 
+    /// Perform value resolution to determine the proximal source of the
+    /// resolved value of this attribute at any non-default time.
     ///
-    /// Often (i.e. unless the attribute is affected by 
-    /// \ref Usd_Page_ValueClips "Value Clips") the source of the resolved value
+    /// Often (i.e. unless the attribute is affected by \ref Usd_Page_ValueClips
+    /// "Value Clips" or the authored values are composing value types like
+    /// VtArrayEdits or SdfPathExpressions) the source of the resolved value
     /// does not vary over time. See UsdAttributeQuery as an example that takes
-    /// advantage of this quality of value resolution.
+    /// advantage of this quality of value resolution.  Call the
+    /// GetResolveInfo() overload that takes a `time` to get a more complete
+    /// picture, and see UsdResolveInfo::GetSource() for more information.
+    /// 
     USD_API
     UsdResolveInfo
     GetResolveInfo() const;

@@ -18,6 +18,7 @@
 #include "pxr/exec/exec/typeRegistry.h"
 #include "pxr/exec/exec/valueExtractor.h"
 #include "pxr/exec/exec/valueKey.h"
+#include "pxr/exec/exec/valueOverride.h"
 
 #include "pxr/base/arch/functionLite.h"
 #include "pxr/base/tf/bits.h"
@@ -504,6 +505,21 @@ Exec_RequestImpl::_Compute()
     // Return an exec cache view for the computed values.
     return Exec_CacheView(
         _system->_runtime->GetDataManager(), _leafOutputs, _extractors);
+}
+
+Exec_CacheView
+Exec_RequestImpl::_ComputeWithOverrides(
+    ExecValueOverrideVector &&valueOverrides)
+{
+    if (!TF_VERIFY(_system) || !_schedule) {
+        return Exec_CacheView();
+    }
+
+    std::unique_ptr<VdfExecutorInterface> executor =
+        _system->_ComputeWithOverrides(
+            *_schedule, *_computeRequest, std::move(valueOverrides));
+    
+    return Exec_CacheView(std::move(executor), _leafOutputs, _extractors);
 }
 
 bool

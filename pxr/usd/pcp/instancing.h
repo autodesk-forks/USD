@@ -19,6 +19,13 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+/// Helper function to determine whether the given prim index should
+/// be considered for instancing. If this returns false, then
+/// Pcp_PrimIndexIsInstanceable will return false for the same prim index.
+bool
+Pcp_InstancingIsEnabled(
+    const PcpPrimIndex& primIndex);
+
 /// Helper function to determine whether the given prim index is
 /// instanceable. An instanceable prim index must have instanceable
 /// nodes and must have been tagged so that the composed value of

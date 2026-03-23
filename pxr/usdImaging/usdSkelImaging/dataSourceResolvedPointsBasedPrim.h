@@ -13,6 +13,7 @@
 #include "pxr/usdImaging/usdSkelImaging/resolvedSkeletonSchema.h"
 #include "pxr/usdImaging/usdSkelImaging/xformResolver.h"
 
+#include "pxr/imaging/hd/meshSchema.h"
 #include "pxr/imaging/hd/primvarsSchema.h"
 #include "pxr/imaging/hd/sceneIndexObserver.h"
 
@@ -29,7 +30,8 @@ TF_DECLARE_REF_PTRS(HdSceneIndexBase);
 /// A prim data source providing resolved data for a points based prim (mesh,
 /// basisCurves, points) deformed by a skeleton.
 /// As a data source, it populates the HdExtComputationPrimvarsSchema for points
-/// and removes points from the HdPrimvarsSchema.
+/// and possibly for normals and removes points and normals from the
+/// HdPrimvarsSchema.
 ///
 /// Used by the UsdSkelImagingPointsResolvingSceneIndex in conjunction with the
 /// UsdSkelImagingDataSourceResolvedExtComputationPrim.
@@ -139,7 +141,7 @@ public:
     HdDataSourceBaseHandle GetNumBlendShapeOffsetRanges();
 
     USDSKELIMAGING_API
-    HdSampledDataSourceHandle GetNormals();
+    HdSampledDataSourceHandle GetNormals() const;
 
     USDSKELIMAGING_API
     HdSampledDataSourceHandle GetFaceVertexIndices();
@@ -163,6 +165,9 @@ public:
     /// Should the points for this primvar be given by an ext computation
     /// or from the primvars schema.
     bool HasExtComputations() const;
+
+    /// Should the normals for this primvar be given by an ext computation.
+    bool HasNormalsExtComputations() const;
 
     /// Data source locators (on this prim) that this prim depends on.
     ///
@@ -238,6 +243,7 @@ private:
     const bool _hasSkelRoot;
     // From prim at _primPath in input scene _sceneIndex.
     HdPrimvarsSchema const _primvars;
+    HdMeshSchema const _mesh;
     const TfToken _skinningMethod;
     VtArray<SdfPath> _blendShapeTargetPaths;
     const SdfPath _skeletonPath;

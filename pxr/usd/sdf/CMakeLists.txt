@@ -101,6 +101,7 @@ pxr_library(sdf
     PUBLIC_HEADERS
         api.h
         accessorHelpers.h
+        composeTimeSampleSeries.h
         layerHints.h
         pathPatternParser.h
         predicateExpressionParser.h
@@ -698,7 +699,7 @@ pxr_register_test(testSdfTextFile
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
     EXPECTED_RETURN_CODE 0
 )
-pxr_register_test(testSdfTextFile_1.1
+pxr_register_test(testSdfTextFile_1_1
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
     EXPECTED_RETURN_CODE 0
     ENV

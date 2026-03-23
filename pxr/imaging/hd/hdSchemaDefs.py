@@ -1038,11 +1038,14 @@
             ('ALL_MEMBERS', '', dict(ADD_LOCATOR = True)),
             ('namespacedSettings', 'HdSampledDataSourceContainerSchema', {}),
             ('active', T_BOOL, {}),
+            ('camera', T_PATH, {}),
+            ('disableMotionBlur', T_BOOL, {}),
+            ('disableDepthOfField', T_BOOL, {}),
             ('renderProducts', 'HdRenderProductVectorSchema', {}),
             ('includedPurposes', T_TOKENARRAY, {}),
             ('materialBindingPurposes', T_TOKENARRAY, {}),
             ('renderingColorSpace', T_TOKEN, {}),
-            ('shutterInterval', T_VEC2D,
+            ('unionedSamplingInterval', T_VEC2D,
              dict(DOC = '''
                 Frame-relative time interval representing the sampling window for 
                 data relevant to motion blur. Renderers can use this interval when

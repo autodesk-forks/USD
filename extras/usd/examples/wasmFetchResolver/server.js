@@ -45,6 +45,14 @@ app.use((req, res, next) => {
     next();
 });
 
+app.get('/stages', (req, res) => {
+    const stagesPath = path.join(__dirname, 'stages.json');
+    if (fs.existsSync(stagesPath)) {
+        res.sendFile(stagesPath);
+    } else {
+        res.sendStatus(404);
+    }
+});
 
 app.use(express.static(directoryPath));
 

@@ -22,14 +22,14 @@ After dependencies have been installed, start the server:
 ```sh
 npm run server
 ```
-After the server has started open a browser and navigate to
-`http://localhost:8080/wasmFetchResolver.html`. In the text box you will see
-some debug output indicating the files the resolver has fetched.
+After the server has started, open a browser and navigate to
+`http://localhost:8080/wasmFetchResolver.html`. The stage dropdown menu is
+pre-populated with a sample model.  Click one of the three buttons below to view
+the output.
 
 ### Testing Additional Assets
 
-In order to test with different assets, copy them into the `public/stages`
-within the example directory.  Additionally you will need to change the url
-path in the example's `main.cpp` file to point to the root layer of the
-asset to load. Rebuild the example and reload `wasmFetchResolver.html` from
-the server.
+In order to test with different assets, copy them into the `public` directory
+within the example's root directory.  Next, modify the `stages.js` to include
+an entry for your new model. You can then either reload the page or click the
+refresh button to view the updated list of models from the dropdown menu.

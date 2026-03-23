@@ -21,6 +21,7 @@ pxr_library(exec
         request.h
         types.h
         valueExtractorFunction.h
+        valueOverride.h
 
     PUBLIC_CLASSES
         builtinComputations

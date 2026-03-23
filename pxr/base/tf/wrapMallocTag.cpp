@@ -179,11 +179,17 @@ void wrapMallocTag()
     typedef TfMallocTag This;
     
     scope mallocTag = class_<This>("MallocTag", no_init)
+        .def("Initialize", _Initialize)
         .def("Initialize", _Initialize2)
-        .def("Initialize", _Initialize).staticmethod("Initialize")
-        .def("IsInitialized", This::IsInitialized).staticmethod("IsInitialized")
-        .def("GetTotalBytes", This::GetTotalBytes).staticmethod("GetTotalBytes")
-        .def("GetMaxTotalBytes", This::GetMaxTotalBytes).staticmethod("GetMaxTotalBytes")
+            // Note: Both Initialize overloads are made static by this single
+            // registration.
+            .staticmethod("Initialize")
+        .def("IsInitialized", This::IsInitialized)
+            .staticmethod("IsInitialized")
+        .def("GetTotalBytes", This::GetTotalBytes)
+            .staticmethod("GetTotalBytes")
+        .def("GetMaxTotalBytes", This::GetMaxTotalBytes)
+            .staticmethod("GetMaxTotalBytes")
         .def("GetCallTree", _GetCallTree, (arg("skipRepeated")=true))
             .staticmethod("GetCallTree")
 
@@ -199,7 +205,7 @@ void wrapMallocTag()
         ;
 
     {
-    scope callTree = class_<This::CallTree>("CallTree", no_init)
+    scope callTree = class_<This::CallTree>("CallTree")
         .def("GetPrettyPrintString", _GetPrettyPrintString)
         .def("GetCallSites", _GetCallSites,
              return_value_policy<TfPySequenceToList>())

@@ -843,7 +843,11 @@ std::vector<TfType> _GetFullyExpandedSchemaTypeVector(
     const TfTokenVector &appliedSchemas)
 {
     std::vector<TfType> schemaTypes;
-    typedSchema.GetAllAncestorTypes(&schemaTypes);
+
+    // The typed schema may be unknown if the prim was declared without a type.
+    if (!typedSchema.IsUnknown()) {
+        typedSchema.GetAllAncestorTypes(&schemaTypes);
+    }
 
     schemaTypes.reserve(schemaTypes.size() + appliedSchemas.size());
     for (const TfToken &schema : appliedSchemas) {
