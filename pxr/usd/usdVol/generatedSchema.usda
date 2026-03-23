@@ -82,7 +82,7 @@ volumetric data fields, used to represent a volume effect such as smoke or fire.
 
 class "VolumeFieldBase" (
     customData = {
-        string userDocBrief = "Base class for volume field primitives."
+        string userDocBrief = "The base schema class for volume field primitives."
     }
 )
 {
@@ -120,7 +120,8 @@ class "VolumeFieldBase" (
 
 class "FieldBase" (
     customData = {
-        string userDocBrief = "The base schema class for volume field primitives."
+        string userDocBrief = """This schema is deprecated and VolumeFieldBase 
+should be used instead."""
     }
 )
 {
@@ -158,26 +159,27 @@ class "FieldBase" (
 
 class "VolumeFieldAsset" (
     customData = {
-        string userDocBrief = "The base schema class for volume field primitives."
+        string userDocBrief = """The base schema class for volume field 
+primitives defined by an external file."""
     }
 )
 {
     token fieldDataType (
         customData = {
-            string userDocBrief = """Token which is used to indicate the data type of an
-                 individual field."""
+            string userDocBrief = """Token used to indicate the data type of an
+individual field"""
         }
     )
     int fieldIndex (
         customData = {
-            string userDocBrief = """A file can contain multiple fields with the same
-                 name."""
+            string userDocBrief = """Optional attribute that stores an index used 
+to disambiguate between fields with the same name."""
         }
     )
     token fieldName (
         customData = {
-            string userDocBrief = """Name of an individual field within the file specified by
-                 the filePath attribute."""
+            string userDocBrief = """Name of an individual field within the file 
+specified by the filePath attribute."""
         }
     )
     asset filePath (
@@ -203,8 +205,8 @@ class "VolumeFieldAsset" (
     token vectorDataRoleHint = "None" (
         allowedTokens = ["None", "Point", "Normal", "Vector", "Color"]
         customData = {
-            string userDocBrief = """Optional token which is used to indicate the role of a vector
-                 valued field."""
+            string userDocBrief = """Optional token used to indicate the role of 
+a vector valued field."""
         }
     )
     token visibility = "inherited" (
@@ -226,8 +228,8 @@ class "VolumeFieldAsset" (
 
 class "FieldAsset" (
     customData = {
-        string userDocBrief = """The base schema class for volume field 
-primitives defined by an external file."""
+        string userDocBrief = """This schema is deprecated and VolumeFieldAsset 
+should be used instead."""
     }
 )
 {
@@ -446,9 +448,8 @@ a vector valued field."""
 
 class ParticleField "ParticleField" (
     customData = {
-        string userDocBrief = """A ParticleField prim is used as a base to describe different types
-            of concrete ParticleField implementations, such as, but not limited
-            to, 3D Gaussian Splats."""
+        string userDocBrief = """The base schema to describe different types
+of concrete ParticleField implementations, such as 3D Gaussian Splats."""
     }
 )
 {
@@ -524,8 +525,7 @@ class ParticleField "ParticleField" (
 
 class "ParticleFieldPositionBaseAPI" (
     customData = {
-        string userDocBrief = """Defines a base-class type applied schema that all applied schema
-            that provide the ParticleField position data will automatically apply."""
+        string userDocBrief = "A base schema for ParticleField position data."
     }
 )
 {
@@ -534,87 +534,90 @@ class "ParticleFieldPositionBaseAPI" (
 class "ParticleFieldPositionAttributeAPI" (
     apiSchemas = ["ParticleFieldPositionBaseAPI"]
     customData = {
-        string userDocBrief = """A ParticleField related applied schema that provides a position
-             attribute to define the locations of the particles."""
+        string userDocBrief = """A ParticleField related applied schema that 
+provides attributes to define the positions of particles."""
     }
 )
 {
     point3f[] positions (
         customData = {
-            string userDocBrief = "Defines the position for each particle in local space."
+            string userDocBrief = """Defines the position for each particle in
+local space."""
         }
     )
     point3h[] positionsh (
         customData = {
-            string userDocBrief = "Defines the position for each particle in local space."
+            string userDocBrief = """Defines the position for each particle in
+local space."""
         }
     )
 }
 
 class "ParticleFieldOrientationAttributeAPI" (
     customData = {
-        string userDocBrief = """A ParticleField related applied schema that provides an
-             orientations attribute to define the orientation of the particles."""
+        string userDocBrief = """A ParticleField related applied schema that 
+provides attributes to define the orientation of particles."""
     }
 )
 {
     quatf[] orientations (
         customData = {
-            string userDocBrief = "Quaternion orientation for each particle."
+            string userDocBrief = """Defines the quaternion orientation for each 
+particle."""
         }
     )
     quath[] orientationsh (
         customData = {
-            string userDocBrief = "Quaternion orientation for each particle."
+            string userDocBrief = """Defines the quaternion orientation for each 
+particle."""
         }
     )
 }
 
 class "ParticleFieldScaleAttributeAPI" (
     customData = {
-        string userDocBrief = """A ParticleField related applied schema that provides a
-             scales attribute to define the linear scale factor applied to the
-             particles."""
+        string userDocBrief = """A ParticleField related applied schema that 
+provides attributes to define the linear scale factor applied to particles."""
     }
 )
 {
     float3[] scales (
         customData = {
-            string userDocBrief = """Affine linear scale factor applied to the kernel that is
-                instantiated at each particle."""
+            string userDocBrief = """Affine linear scale factor applied to the 
+kernel that is instantiated at each particle."""
         }
     )
     half3[] scalesh (
         customData = {
-            string userDocBrief = """Affine linear scale factor applied to the kernel that is
-                instantiated at each particle."""
+            string userDocBrief = """Affine linear scale factor applied to the 
+kernel that is instantiated at each particle."""
         }
     )
 }
 
 class "ParticleFieldOpacityAttributeAPI" (
     customData = {
-        string userDocBrief = """A ParticleField related applied schema that provides an
-             opacities attribute to define the opacity of the particles."""
+        string userDocBrief = """A ParticleField related applied schema that 
+provides attributes to define the opacity of the particles."""
     }
 )
 {
     float[] opacities (
         customData = {
-            string userDocBrief = "Opacity for each particle."
+            string userDocBrief = "Defines the opacity for each particle."
         }
     )
     half[] opacitiesh (
         customData = {
-            string userDocBrief = "Opacity for each particle."
+            string userDocBrief = "Defines the opacity for each particle."
         }
     )
 }
 
 class "ParticleFieldKernelBaseAPI" (
     customData = {
-        string userDocBrief = """Defines a base-class type applied schema that all applied schema
-            that provide a ParticleField kernel will automatically apply."""
+        string userDocBrief = """A base schema for ParticleField kernel spatial
+basis function data."""
     }
 )
 {
@@ -623,7 +626,8 @@ class "ParticleFieldKernelBaseAPI" (
 class "ParticleFieldKernelGaussianEllipsoidAPI" (
     apiSchemas = ["ParticleFieldKernelBaseAPI"]
     customData = {
-        string userDocBrief = "Defines the gaussian ellipsoid kernel for a given ParticleField."
+        string userDocBrief = """Defines the Gaussian ellipsoid kernel for a 
+ParticleField."""
     }
 )
 {
@@ -632,7 +636,8 @@ class "ParticleFieldKernelGaussianEllipsoidAPI" (
 class "ParticleFieldKernelGaussianSurfletAPI" (
     apiSchemas = ["ParticleFieldKernelBaseAPI"]
     customData = {
-        string userDocBrief = "Defines the gaussian surflet kernel for a given ParticleField."
+        string userDocBrief = """Defines the Gaussian surflet kernel for a 
+ParticleField."""
     }
 )
 {
@@ -641,7 +646,8 @@ class "ParticleFieldKernelGaussianSurfletAPI" (
 class "ParticleFieldKernelConstantSurfletAPI" (
     apiSchemas = ["ParticleFieldKernelBaseAPI"]
     customData = {
-        string userDocBrief = "Defines the constant surflet kernel for a given ParticleField."
+        string userDocBrief = """Defines the constant surflet kernel for a 
+ParticleField."""
     }
 )
 {
@@ -649,9 +655,8 @@ class "ParticleFieldKernelConstantSurfletAPI" (
 
 class "ParticleFieldRadianceBaseAPI" (
     customData = {
-        string userDocBrief = """Defines a base-class type applied schema that all applied schema
-            that provides a ParticleField radiance definition will automatically
-            apply."""
+        string userDocBrief = """A base schema for ParticleField radiance 
+definition data."""
     }
 )
 {
@@ -660,24 +665,27 @@ class "ParticleFieldRadianceBaseAPI" (
 class "ParticleFieldSphericalHarmonicsAttributeAPI" (
     apiSchemas = ["ParticleFieldRadianceBaseAPI"]
     customData = {
-        string userDocBrief = """A ParticleField related applied schema that provides spherical
-            harmonics attributes to define the radiance of the particles."""
+        string userDocBrief = """Defines the spherical harmonics attributes for 
+a ParticleField."""
     }
 )
 {
     float3[] radiance:sphericalHarmonicsCoefficients (
         customData = {
-            string userDocBrief = "Flattened array of SH coefficients."
+            string userDocBrief = """An array of spherical harmonics 
+coefficients."""
         }
     )
     half3[] radiance:sphericalHarmonicsCoefficientsh (
         customData = {
-            string userDocBrief = "Flattened array of SH coefficients."
+            string userDocBrief = """An array of spherical harmonics 
+coefficients."""
         }
     )
     uniform int radiance:sphericalHarmonicsDegree = 3 (
         customData = {
-            string userDocBrief = "The highest degree of the spherical harmonics."
+            string userDocBrief = """The highest degree of the spherical 
+harmonics."""
         }
     )
 }
@@ -685,8 +693,8 @@ class "ParticleFieldSphericalHarmonicsAttributeAPI" (
 class ParticleField3DGaussianSplat "ParticleField3DGaussianSplat" (
     apiSchemas = ["ParticleFieldPositionAttributeAPI", "ParticleFieldOrientationAttributeAPI", "ParticleFieldScaleAttributeAPI", "ParticleFieldOpacityAttributeAPI", "ParticleFieldKernelGaussianEllipsoidAPI", "ParticleFieldSphericalHarmonicsAttributeAPI"]
     customData = {
-        string userDocBrief = """This is a concrete ParticleField representing the original 3D
-            Gaussian Splats technique (https://arxiv.org/abs/2308.04079)."""
+        string userDocBrief = """A ParticleField that represents a 3D 
+Gaussian splat."""
     }
 )
 {
@@ -731,8 +739,8 @@ class ParticleField3DGaussianSplat "ParticleField3DGaussianSplat" (
     uniform token projectionModeHint = "perspective" (
         allowedTokens = ["perspective", "tangential"]
         customData = {
-            string userDocBrief = """A hint for the renderer on how to project the gaussian to
-                achieve a perspective correct view."""
+            string userDocBrief = """A renderer hint on how to project 
+the Gaussian to achieve a perspective correct view."""
         }
     )
     rel proxyPrim (
@@ -753,8 +761,8 @@ class ParticleField3DGaussianSplat "ParticleField3DGaussianSplat" (
     uniform token sortingModeHint = "zDepth" (
         allowedTokens = ["zDepth", "cameraDistance"]
         customData = {
-            string userDocBrief = """A hint for the renderer on how to sort the gaussians while
-        drawing."""
+            string userDocBrief = """A renderer hint on how to sort 
+the Gaussian while drawing."""
         }
     )
     token visibility = "inherited" (

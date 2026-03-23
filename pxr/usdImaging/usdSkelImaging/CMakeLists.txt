@@ -98,5 +98,6 @@ if (BUILD_SHARED_LIBS)
         TESTENV testenv/testUsdSkelImagingComputations
         ENV
             TF_FATAL_VERIFY=0
+            USDSKELIMAGING_ENABLE_NORMAL_COMPUTATIONS=1
     )
 endif()

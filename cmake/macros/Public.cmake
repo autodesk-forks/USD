@@ -1118,17 +1118,17 @@ function(pxr_setup_plugins)
     # we are sure to reference the installed location of this file.
     if (EMSCRIPTEN)
         foreach(lib ${PXR_CORE_LIBS})
-            # INTERFACE targets can only have INTERFACE properties set,
-            # not PUBLIC or PRIVATE.
-            get_target_property(_lib_type ${lib} TYPE)
-            if(_lib_type STREQUAL "INTERFACE_LIBRARY")
-                set(_link_options_visibility INTERFACE)
-            else()
-                set(_link_options_visibility PUBLIC)
-            endif()
-            target_link_options(${lib} ${_link_options_visibility}
-                "$<BUILD_INTERFACE:SHELL:--embed-file ${CMAKE_CURRENT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json>"
-                "$<INSTALL_INTERFACE:SHELL:--embed-file $<INSTALL_PREFIX>/lib/usd/plugInfo.json@/usd/plugInfo.json>")
+          # INTERFACE targets can only have INTERFACE properties set,
+          # not PUBLIC or PRIVATE.
+          get_target_property(_lib_type ${lib} TYPE)
+          if(_lib_type STREQUAL "INTERFACE_LIBRARY")
+            set(_link_options_visibility INTERFACE)
+          else()
+            set(_link_options_visibility PUBLIC)
+          endif()
+          target_link_options(${lib} ${_link_options_visibility}
+              "$<BUILD_INTERFACE:SHELL:--embed-file ${CMAKE_CURRENT_BINARY_DIR}/plugins_plugInfo.json@/usd/plugInfo.json>"
+              "$<INSTALL_INTERFACE:SHELL:--embed-file $<INSTALL_PREFIX>/lib/usd/plugInfo.json@/usd/plugInfo.json>")
         endforeach()
     endif()
 endfunction() # pxr_setup_plugins

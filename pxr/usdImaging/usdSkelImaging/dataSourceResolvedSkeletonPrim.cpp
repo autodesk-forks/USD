@@ -115,8 +115,8 @@ private:
         const VtArray<SdfPath>& animationSources)
       : _data(std::move(data))
       , _restTransformsDataSource(std::move(restTransformsDataSource))
-      , _animationSchemas(std::move(animationSchemas))
-      , _animationSources(std::move(animationSources))
+      , _animationSchemas(animationSchemas)
+      , _animationSources(animationSources)
       , _valueAtZero(_Compute(0.0f))
     {
     }
@@ -133,8 +133,8 @@ private:
             _animationSources, shutterOffset);
     }
 
-    std::shared_ptr<UsdSkelImagingSkelData> const _data;
-    HdMatrix4fArrayDataSourceHandle const _restTransformsDataSource;
+    const std::shared_ptr<UsdSkelImagingSkelData> _data;
+    const HdMatrix4fArrayDataSourceHandle _restTransformsDataSource;
     const VtArray<UsdSkelImagingAnimationSchema> _animationSchemas;
     const VtArray<SdfPath> _animationSources;
 
@@ -194,8 +194,8 @@ public:
 private:
     _BlendShapesDataSource(
         const VtArray<UsdSkelImagingAnimationSchema>& animationSchemas,
-        const HdVec2iArrayDataSourceHandle& blendShapeRanges)
-      : _animSchemas(std::move(animationSchemas))
+        HdVec2iArrayDataSourceHandle blendShapeRanges)
+      : _animSchemas(animationSchemas)
       , _blendShapeRanges(std::move(blendShapeRanges))
       , _valueAtZero(_Compute(0.0f))
     {
@@ -303,8 +303,8 @@ public:
 private:
     _BlendShapeWeightsDataSource(
         const VtArray<UsdSkelImagingAnimationSchema>& animationSchemas,
-        const HdVec2iArrayDataSourceHandle& blendShapeRanges)
-      : _animSchemas(std::move(animationSchemas))
+        HdVec2iArrayDataSourceHandle blendShapeRanges)
+      : _animSchemas(animationSchemas)
       , _blendShapeRanges(std::move(blendShapeRanges))
       , _valueAtZero(_Compute(0.0f))
     {
@@ -414,7 +414,7 @@ public:
 private:
     _BlendShapeRangesDataSource(
         const VtArray<UsdSkelImagingAnimationSchema>& animationSchemas)
-      : _animSchemas(std::move(animationSchemas))
+      : _animSchemas(animationSchemas)
       , _valueAtZero(_Compute(0.0f))
     {
     }
@@ -724,7 +724,7 @@ public:
                 _ToDataSource(false));
         }
         if (name == HdSkinningInputTokens->numInfluencesPerComponent) {
-            return UsdSkelImaging_DataSourcePrimvar::New(_ToDataSource<int>(1));
+            return UsdSkelImaging_DataSourcePrimvar::New(_ToDataSource(1));
         }
         if (name == HdSkinningInputTokens->influences) {
             const auto data = _data;
@@ -745,11 +745,15 @@ public:
 
         if (name == HdSkinningInputTokens->numSkinningMethod) {
             // default LBS = 0
-            return UsdSkelImaging_DataSourcePrimvar::New(_ToDataSource<int>(0));
+            return UsdSkelImaging_DataSourcePrimvar::New(_ToDataSource(0));
         }
         if (name == HdSkinningInputTokens->numJoints) {
             return UsdSkelImaging_DataSourcePrimvar::New(
-                _ToDataSource(int(_data->numJoints)));
+                // Zero out the instanceOffset in skinning vertex shader if we 
+                // only have one instance or when there's no instance animation 
+                // source override.
+                _ToDataSource(_useInstanceOffset ? 
+                    static_cast<int>(_data->numJoints) : 0));
         }
         return nullptr;
     }
@@ -757,14 +761,17 @@ public:
 private:
     _SkelGuideSkinningPrimvarsDataSource(
         std::shared_ptr<UsdSkelImagingSkelGuideData> data,
-        HdMatrix4fArrayDataSourceHandle const& skinningTransforms)
+        HdMatrix4fArrayDataSourceHandle skinningTransforms, 
+        bool useInstanceOffset)
      : _data(std::move(data))
      , _skinningTransforms(std::move(skinningTransforms))
+     , _useInstanceOffset(useInstanceOffset)
     {
     }
 
-    std::shared_ptr<UsdSkelImagingSkelGuideData> const _data;
-    HdMatrix4fArrayDataSourceHandle const _skinningTransforms;
+    const std::shared_ptr<UsdSkelImagingSkelGuideData> _data;
+    const HdMatrix4fArrayDataSourceHandle _skinningTransforms;
+    const bool _useInstanceOffset;
 };
 
 }
@@ -821,9 +828,9 @@ private:
 
 UsdSkelImagingDataSourceResolvedSkeletonPrim::
 UsdSkelImagingDataSourceResolvedSkeletonPrim(
-    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const HdSceneIndexBaseRefPtr &sceneIndex,
     const SdfPath &primPath,
-    HdContainerDataSourceHandle const &primSource)
+    const HdContainerDataSourceHandle &primSource)
  : _primPath(primPath)
  , _primSource(primSource)
  , _animationSource(
@@ -845,10 +852,9 @@ UsdSkelImagingDataSourceResolvedSkeletonPrim(
  // Should verify if the instancer we get from _xformResolver that instances
  // this skeleton and the instancer with prototypes bound to this skeleton are
  // the same thing. Is it possible that they could be different?
- , _instanceAnimationSources(std::move(
-    _xformResolver.GetInstanceAnimationSource()))
- , _instanceAnimationSchemas(std::move(
-    _GetInstanceAnimationSchemas(_instanceAnimationSources, sceneIndex)))
+ , _instanceAnimationSources(_xformResolver.GetInstanceAnimationSource())
+ , _instanceAnimationSchemas(
+    _GetInstanceAnimationSchemas(_instanceAnimationSources, sceneIndex))
 {
 }
 
@@ -889,8 +895,11 @@ UsdSkelImagingDataSourceResolvedSkeletonPrim::Get(const TfToken &name)
     }
     if (name == HdPrimvarsSchema::GetSchemaToken()) {
         if (HdSkinningSettings::IsSkinningDeferred()) {
+            // if we only have a single animation source then we don't need to
+            // instance offset the index into skinning primvars.
+            const bool useInstanceOffset = GetAnimationSource().size() > 1;
             return _SkelGuideSkinningPrimvarsDataSource::New(
-                GetSkelGuideData(), GetSkinningTransforms());
+                GetSkelGuideData(), GetSkinningTransforms(), useInstanceOffset);
         }
         return HdRetainedContainerDataSource::New(
             HdPrimvarsSchemaTokens->points,
@@ -907,24 +916,20 @@ bool
 UsdSkelImagingDataSourceResolvedSkeletonPrim::
 _ShouldResolveInstanceAnimation() const
 {
-    // animationSource bound on the skeleton wins so only use 
-    // instanceAnimationSource when there's no bound animationSource.
-    return HdSkinningSettings::IsSkinningDeferred() && !_animationSchema;
+    const VtArray<SdfPath>& instancerPaths = GetInstancerPaths();
+    return HdSkinningSettings::IsSkinningDeferred() && 
+        !instancerPaths.empty() && !_instanceAnimationSources.empty();
 }
 
-const VtArray<SdfPath>
-UsdSkelImagingDataSourceResolvedSkeletonPrim::
-GetResolvedAnimationSources() const
-{
+VtArray<SdfPath>
+UsdSkelImagingDataSourceResolvedSkeletonPrim::GetAnimationSource() const {
     return _ShouldResolveInstanceAnimation() ?
         _instanceAnimationSources : 
         VtArray<SdfPath>({ _animationSource });
 }
 
-const VtArray<UsdSkelImagingAnimationSchema>
-UsdSkelImagingDataSourceResolvedSkeletonPrim::
-GetResolvedAnimationSchemas() const
-{
+VtArray<UsdSkelImagingAnimationSchema>
+UsdSkelImagingDataSourceResolvedSkeletonPrim::GetAnimationSchema() const {
     return _ShouldResolveInstanceAnimation() ?
         _instanceAnimationSchemas :
         VtArray<UsdSkelImagingAnimationSchema>({ _animationSchema });
@@ -943,7 +948,7 @@ UsdSkelImagingDataSourceResolvedSkeletonPrim::GetSkinningTransforms()
     TRACE_FUNCTION();
     return _SkinningTransformsDataSource::New(
         _skelDataCache.Get(), _restTransformsDataSource, 
-        GetResolvedAnimationSchemas(), GetResolvedAnimationSources());
+        GetAnimationSchema(), GetAnimationSource());
 }
 
 HdTokenArrayDataSourceHandle 
@@ -951,7 +956,7 @@ UsdSkelImagingDataSourceResolvedSkeletonPrim::GetBlendShapes() const
 {
     TRACE_FUNCTION();
     return _BlendShapesDataSource::New(
-        GetResolvedAnimationSchemas(), GetBlendShapeRanges());
+        GetAnimationSchema(), GetBlendShapeRanges());
 }
 
 HdFloatArrayDataSourceHandle 
@@ -959,14 +964,14 @@ UsdSkelImagingDataSourceResolvedSkeletonPrim::GetBlendShapeWeights() const
 {
     TRACE_FUNCTION();
     return _BlendShapeWeightsDataSource::New(
-        GetResolvedAnimationSchemas(), GetBlendShapeRanges());
+        GetAnimationSchema(), GetBlendShapeRanges());
 }
 
 HdVec2iArrayDataSourceHandle
 UsdSkelImagingDataSourceResolvedSkeletonPrim::GetBlendShapeRanges() const
 {
     TRACE_FUNCTION();
-    return _BlendShapeRangesDataSource::New(GetResolvedAnimationSchemas());
+    return _BlendShapeRangesDataSource::New(GetAnimationSchema());
 }
 
 const HdDataSourceLocatorSet &

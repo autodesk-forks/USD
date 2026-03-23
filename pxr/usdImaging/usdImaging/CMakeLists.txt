@@ -62,6 +62,7 @@ pxr_library(usdImaging
         geomXformVectorsSchema
         geomSubsetAdapter
         indexProxy
+        legacyRenderSettingsSceneIndex
         materialParamUtils
         modelSchema
         primvarUtils

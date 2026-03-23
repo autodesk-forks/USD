@@ -34,8 +34,9 @@ protected:
         const std::string& assetPath,
         const ArResolvedPath& anchorAssetPath) const final;
 
-    // Attempts to resolve the path by fetching the corresponding file from
-    // the server.
+    // Checks the local filesystem for the existence of the supplied path if 
+    // it is absolute. Otherwise attempts to resolve the path from the server
+    // by issuing a HTTP HEAD request and examining the response.
     ArResolvedPath _Resolve(
         const std::string& assetPath) const final;
 
@@ -44,10 +45,13 @@ protected:
     ArResolvedPath _ResolveForNewAsset(
         const std::string& assetPath) const final;
 
+    // Opens the path from the local filesystem if it exists, otherwise attemps to
+    // download the asset from the server.  If the download is successful, it is
+    // stored in the virtual filesystem.
     std::shared_ptr<ArAsset> _OpenAsset(
         const ArResolvedPath& resolvedPath) const final;
 
-    // Currently this resolver is read only. This method will always
+    // At the moment, this resolver is read only. This method will always
     // return nullptr.
     std::shared_ptr<ArWritableAsset>
     _OpenAssetForWrite(

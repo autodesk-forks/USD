@@ -660,11 +660,11 @@ _DetectLoaders()
     return detectedLoaders;
 }
 
-const TfToken&
+TfToken
 _ResolveLoaderFromVariant(const std::string& variant)
 {
     static const std::string fallbackVariant("ris");
-    const std::unordered_map<std::string, TfToken> loaders = _DetectLoaders();
+    static const auto loaders = _DetectLoaders();
 
     // NB: variant should already be lowercase
     auto it = loaders.find(variant);
@@ -712,7 +712,7 @@ HydraSetupAndRender(
     // In order to pick up the plugin scene indices, we need to instantiate
     // the HdPrmanRenderDelegate through the renderer plugin registry.
 
-    const TfToken& loader = _ResolveLoaderFromVariant(variant);
+    const TfToken loader = _ResolveLoaderFromVariant(variant);
 
     HdPluginRenderDelegateUniqueHandle const renderDelegate =
         HdRendererPluginRegistry::GetInstance().CreateRenderDelegate(

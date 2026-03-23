@@ -13,6 +13,7 @@ pxr_library(execUsd
         
     PUBLIC_HEADERS
         api.h
+        valueOverride.h
 
     PUBLIC_CLASSES
         cacheView
@@ -127,6 +128,26 @@ pxr_build_test(testExecUsdConnectionTargetedObjects
 pxr_register_test(testExecUsdConnectionTargetedObjects
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConnectionTargetedObjects"
     TESTENV testenv/testExecUsdConnectionTargetedObjects
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdComputeWithOverrides
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdComputeWithOverrides.cpp
+)
+
+pxr_register_test(testExecUsdComputeWithOverrides
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdComputeWithOverrides"
+    TESTENV testenv/testExecUsdComputeWithOverrides
     EXPECTED_RETURN_CODE 0
 )
 

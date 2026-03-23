@@ -58,7 +58,10 @@ pxr_library(sdr
         plugInfo.json
 
     DOXYGEN_FILES
-        overview.dox
+        docs/front.md
+        docs/registry.md
+        docs/shaderNode.md
+        docs/shaderProperty.md
 )
 
 pxr_test_scripts(

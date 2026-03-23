@@ -8,6 +8,7 @@
 #include "pxr/usdImaging/usdImagingGL/engine.h"
 
 #include "pxr/usdImaging/usdImaging/delegate.h"
+#include "pxr/usdImaging/usdImaging/legacyRenderSettingsSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/selectionSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/stageSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/rootOverridesSceneIndex.h"
@@ -458,7 +459,7 @@ UsdImagingGLEngine::_DestroyHydraObjects()
         TRACE_SCOPE("Destroy renderer");
         _renderer = nullptr;
     }
-    
+
     {
         TRACE_SCOPE("Destroy plugin scene indices and render index.");
 
@@ -487,6 +488,7 @@ UsdImagingGLEngine::_DestroyHydraObjects()
         _displayStyleSceneIndex = nullptr;
         _selectionSceneIndex = nullptr;
         _postInstancingNoticeBatchingSceneIndex = nullptr;
+        _legacyRenderSettingsSceneIndex = nullptr;
         _rootOverridesSceneIndex = nullptr;
         _lightPruningSceneIndex = nullptr;
         _stageSceneIndex = nullptr;
@@ -705,7 +707,7 @@ UsdImagingGLEngine::_UpdateDomeLightCameraVisibility()
             HdRenderSettingsTokens->domeLightCameraVisibility);
         domeLightCamVisSetting = v.GetWithDefault<bool>(true);
     } else if (_renderDelegate) {
-        domeLightCamVisSetting =    
+        domeLightCamVisSetting =
             _renderDelegate->
             GetRenderSetting<bool>(
                 HdRenderSettingsTokens->domeLightCameraVisibility,
@@ -713,7 +715,7 @@ UsdImagingGLEngine::_UpdateDomeLightCameraVisibility()
     } else {
         return;
     }
-        
+
     if (_domeLightCameraVisibility != domeLightCamVisSetting) {
         // Camera visibility state changed, so we need to mark any dome lights
         // as dirty to ensure they have the proper state on all backends.
@@ -884,18 +886,18 @@ UsdImagingGLEngine::IsConverged() const
     } else if (_renderIndex) {
         if (_taskControllerSceneIndex) {
             return _engine->AreTasksConverged(
-                _renderIndex.get(), 
+                _renderIndex.get(),
                 _taskControllerSceneIndex->GetRenderingTaskPaths());
         } else if (_taskController) {
             return _engine->AreTasksConverged(
-                _renderIndex.get(), 
+                _renderIndex.get(),
                 _taskController->GetRenderingTaskPaths());
         } else {
             TF_CODING_ERROR("No task controller or task controller scene index.");
             return true;
         }
     }
-         
+
     return true;
 }
 
@@ -1090,13 +1092,27 @@ UsdImagingGLEngine::SetCameraState(const GfMatrix4d& viewMatrix,
 
     TF_PY_ALLOW_THREADS_IN_SCOPE();
 
+    SdfPath freeCameraPath;
+
     if (_taskControllerSceneIndex) {
         _taskControllerSceneIndex->SetFreeCameraMatrices(viewMatrix, projectionMatrix);
+        freeCameraPath = _taskControllerSceneIndex->GetFreeCameraPath();
+
     } else if (_taskController) {
         _taskController->SetFreeCameraMatrices(viewMatrix, projectionMatrix);
+        freeCameraPath = _taskController->GetFreeCameraPath();
     } else {
         TF_CODING_ERROR("No task controller or task controller scene index.");
     }
+    if (UseUsdImagingSceneIndex()) {
+        if (_appSceneIndices) {
+            if (auto& sgsi = _appSceneIndices->sceneGlobalsSceneIndex) {
+                sgsi->SetPrimaryCameraPrimPath(freeCameraPath);
+            }
+        }
+    }
+    // XXX: Do not set camera for sampling on legacy delegate; this camera does
+    // not actually exist in the usdImaging scene delegate!
 }
 
 void
@@ -1602,7 +1618,7 @@ UsdImagingGLEngine::DecodeIntersection(
         if (outHitPrimPath) {
             *outHitPrimPath = info.GetFullPath();
         }
-        
+
         if (outInstancerContext) {
             *outInstancerContext = info.ComputeInstancerContext();
         }
@@ -1751,7 +1767,7 @@ UsdImagingGLEngine::SetRendererPlugin(TfToken const &id)
                         HdRetainedTypedSampledDataSource<bool>::New(
                             _displayUnloadedPrimsWithBounds))
                     .Build()));
-    
+
     if (_GetSceneIndexObserverRenderer()) {
         if (_renderer && _renderer.GetPluginId() == resolvedId) {
             return true;
@@ -1799,7 +1815,7 @@ UsdImagingGLEngine::_CreateSceneIndicesAndRenderer(
 
     {
         TRACE_SCOPE("Post-merging scene indices");
-        
+
         // Setup scene indices following HdMergingSceneIndex.
 
         const std::string rendererDisplayName = plugin->GetDisplayName();
@@ -1851,7 +1867,7 @@ UsdImagingGLEngine::_CreateSceneIndicesAndRenderer(
 
     if (UseUsdImagingSceneIndex()) {
         TRACE_SCOPE("UsdImaging scene indices");
-        
+
         // Setup Usd imaging scene indices.
 
         _CreateUsdImagingSceneIndices(sceneIndexInputArgs);
@@ -1894,7 +1910,7 @@ UsdImagingGLEngine::_CreateSceneIndicesAndRenderer(
 
     {
         TRACE_SCOPE("Task controller scene index");
-        
+
         // Setup task controller scene index.
 
         bool requiresStormTasks = false;
@@ -2009,6 +2025,9 @@ UsdImagingGLEngine::_AppendOverridesSceneIndices(
 
     sceneIndex = _rootOverridesSceneIndex =
         UsdImagingRootOverridesSceneIndex::New(sceneIndex);
+
+    sceneIndex = _legacyRenderSettingsSceneIndex =
+        UsdImagingLegacyRenderSettingsSceneIndex::New(sceneIndex);
 
     return sceneIndex;
 }
@@ -2280,7 +2299,7 @@ UsdImagingGLRendererSettingsList
 UsdImagingGLEngine::GetRendererSettingsList() const
 {
     HdRenderSettingDescriptorList descriptors;
-    
+
     if (_renderer) {
         if (HdLegacyRenderControlInterface * const renderControl =
                 _renderer->GetLegacyRenderControl()) {
@@ -2340,6 +2359,9 @@ UsdImagingGLEngine::GetRendererSetting(TfToken const& id) const
 void
 UsdImagingGLEngine::SetRendererSetting(TfToken const& id, VtValue const& value)
 {
+    if (_legacyRenderSettingsSceneIndex) {
+        _legacyRenderSettingsSceneIndex->SetRenderSetting(id, value);
+    }
     if (_renderer) {
         TF_PY_ALLOW_THREADS_IN_SCOPE();
         if (HdLegacyRenderControlInterface * const renderControl =

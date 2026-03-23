@@ -37,22 +37,40 @@
 #include <sstream>
 #include <map>
 
-#if defined(ARCH_OS_WASM_VM)
-#define PXR_DISABLE_OSD
-#endif
-
-#if !defined(PXR_DISABLE_OSD)
-
-#include <opensubdiv/version.h>
-
+// This platform specific check can be removed once open source builds
+// are using OpenSubdiv's CMake config, but this maintains existing
+// behavior for older build configurations.
 #if defined(PXR_METAL_SUPPORT_ENABLED)
+#if !defined(OPENSUBDIV_HAS_PATCH_SHADER_SOURCE_MSL)
+#define OPENSUBDIV_HAS_PATCH_SHADER_SOURCE_MSL
+#endif
+#else
+#if !defined(OPENSUBDIV_HAS_PATCH_SHADER_SOURCE_GLSL)
+#define OPENSUBDIV_HAS_PATCH_SHADER_SOURCE_GLSL
+#endif
+#endif
+
+// MSL Patch Shader Source for Metal
+#if defined(OPENSUBDIV_HAS_PATCH_SHADER_SOURCE_MSL) || \
+    defined(OPENSUBDIV_HAS_METAL)
+
+#define HDST_CODEGEN_HAS_MSL
 #include <opensubdiv/osd/mtlPatchShaderSource.h>
+
 #endif
 
-#if !defined(ARCH_OS_DARWIN) || OPENSUBDIV_VERSION_NUMBER >= 30601
+// GLSL Patch Shader Source for Vulkan, OpenGL, WebGPU, etc.
+#if defined(OPENSUBDIV_HAS_PATCH_SHADER_SOURCE_GLSL) || \
+    defined(OPENSUBDIV_HAS_OPENGL)
+
+#define HDST_CODEGEN_HAS_GLSL
 #include <opensubdiv/osd/glslPatchShaderSource.h>
+
 #endif
 
+// Currently, the implementation requires either MSL or GLSL.
+#if !(defined(HDST_CODEGEN_HAS_MSL) || defined(HDST_CODEGEN_HAS_GLSL))
+#error "Unknown OpenSubdiv shader source configuration"
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -175,6 +193,23 @@ StageVisibilityToShaderToken static const shaderStageTable[] =
     {HgiShaderStagePostTessellationControl, HdShaderTokens->postTessControlShader},
     {HgiShaderStagePostTessellationVertex, HdShaderTokens->postTessVertexShader},
 };
+namespace {
+
+#if defined(HDST_CODEGEN_HAS_MSL)
+bool
+_IsHgiMetal(Hgi const *hgi)
+{
+    return HgiTokens->Metal == hgi->GetAPIName();
+}
+#endif
+
+bool
+_IsHgiOpenGL(Hgi const *hgi)
+{
+    return HgiTokens->OpenGL == hgi->GetAPIName();
+}
+
+}
 
 /* static */
 bool
@@ -183,11 +218,9 @@ HdSt_CodeGen::IsEnabledHgiResourceGeneration(Hgi const *hgi)
     static bool const isEnabled =
         TfGetEnvSetting(HDST_ENABLE_HGI_RESOURCE_GENERATION);
 
-    TfToken const& hgiName = hgi->GetAPIName();
-
     // Check if is env var is true, otherwise return true if NOT using HgiGL,
     // as Hgi resource generation is required for Metal and Vulkan.
-    return isEnabled || hgiName != HgiTokens->OpenGL;
+    return isEnabled || !_IsHgiOpenGL(hgi);
 }
 
 HdSt_CodeGen::HdSt_CodeGen(
@@ -1842,53 +1875,24 @@ HdSt_CodeGen::_PlumbInterstageElements()
     }
 }
 
+#if defined(HDST_CODEGEN_HAS_MSL)
 static
 std::string
-_GetOSDCommonShaderSource(TfToken const &apiName)
+_GetOSDCommonShaderSourceMSL()
 {
-    // Prepare OpenSubdiv common shader source for use in the shader
-    // code declarations section and define some accessor methods and
-    // forward declarations needed by the OpenSubdiv shaders.
     std::stringstream ss;
 
-#if !defined(PXR_DISABLE_OSD)
-
 #if OPENSUBDIV_VERSION_NUMBER >= 30600
-
-    if (apiName == HgiTokens->Metal) {
-#if defined(PXR_METAL_SUPPORT_ENABLED)
-        ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchDrawingShaderSource();
+    ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchDrawingShaderSource();
 #else
-        TF_FATAL_ERROR("Metal support is not enabled");
-#endif
-    } else {
-#if !defined(ARCH_OS_DARWIN) || OPENSUBDIV_VERSION_NUMBER >= 30601
-        ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
-              "FORWARD_DECL(float GetTessLevel());\n"
-              "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
-              "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
-              "float OsdTessLevel() { return GetTessLevel(); }\n"
-              "\n";
-
-        ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchDrawingShaderSource();
-#else
-        TF_FATAL_ERROR("GLSL is not available on non-Apple platforms. "
-            "Use OSD >= 3.6.1 with OSD_PATCH_SHADER_SOURCE_GLSL=ON.");
-#endif
-    }
-
-#else // OPENSUBDIV_VERSION_NUMBER
     // Additional declarations are needed for older OpenSubdiv versions.
-
-    if (apiName == HgiTokens->Metal) {
-#if defined(PXR_METAL_SUPPORT_ENABLED)
-        ss << "#define CONTROL_INDICES_BUFFER_INDEX 0\n"
-           << "#define OSD_PATCHPARAM_BUFFER_INDEX 0\n"
-           << "#define OSD_PERPATCHVERTEX_BUFFER_INDEX 0\n"
-           << "#define OSD_PERPATCHTESSFACTORS_BUFFER_INDEX 0\n"
-           << "#define OSD_KERNELLIMIT_BUFFER_INDEX 0\n"
-           << "#define OSD_PATCHPARAM_BUFFER_INDEX 0\n"
-           << "#define VERTEX_BUFFER_INDEX 0\n"
+    ss << "#define CONTROL_INDICES_BUFFER_INDEX 0\n"
+       << "#define OSD_PATCHPARAM_BUFFER_INDEX 0\n"
+       << "#define OSD_PERPATCHVERTEX_BUFFER_INDEX 0\n"
+       << "#define OSD_PERPATCHTESSFACTORS_BUFFER_INDEX 0\n"
+       << "#define OSD_KERNELLIMIT_BUFFER_INDEX 0\n"
+       << "#define OSD_PATCHPARAM_BUFFER_INDEX 0\n"
+       << "#define VERTEX_BUFFER_INDEX 0\n"
 
            // The ifdef for this in OSD is AFTER the first usage.
            << "#define OSD_MAX_VALENCE 4\n"
@@ -1899,61 +1903,71 @@ _GetOSDCommonShaderSource(TfToken const &apiName)
            << "};\n"
            << "\n";
 
-        ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetCommonShaderSource();
+    ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetCommonShaderSource();
+#endif
+    return ss.str();
+}
+#endif
+
+#if defined(HDST_CODEGEN_HAS_GLSL)
+static
+std::string
+_GetOSDCommonShaderSourceGLSL()
+{
+    std::stringstream ss;
+
+#if OPENSUBDIV_VERSION_NUMBER >= 30600
+    ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
+          "FORWARD_DECL(float GetTessLevel());\n"
+          "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
+          "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
+          "float OsdTessLevel() { return GetTessLevel(); }\n"
+          "\n";
+
+    ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchDrawingShaderSource();
 #else
         TF_FATAL_ERROR("Metal support is not enabled");
 #endif
-    } else {
-#if !defined(ARCH_OS_DARWIN)
-        ss << "FORWARD_DECL(MAT4 GetProjectionMatrix());\n"
-           << "FORWARD_DECL(float GetTessLevel());\n"
-           << "mat4 OsdModelViewMatrix() { return mat4(1); }\n"
-           << "mat4 OsdProjectionMatrix() { return mat4(GetProjectionMatrix()); }\n"
-           << "int OsdPrimitiveIdBase() { return 0; }\n"
-           << "float OsdTessLevel() { return GetTessLevel(); }\n"
-           << "\n";
-
-        ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetCommonShaderSource();
-#else
-        TF_FATAL_ERROR("GLSL is not available on non-Apple platforms. "
-            "Use OSD >= 3.6.1 with OSD_PATCH_SHADER_SOURCE_GLSL=ON.");
-#endif
-    }
-#endif // OPENSUBDIV_VERSION_NUMBER
-
-#endif
-
     return ss.str();
+}
+#endif
+
+static
+std::string
+_GetOSDCommonShaderSource(Hgi const *hgi)
+{
+    // Prepare OpenSubdiv common shader source for use in the shader
+    // code declarations section and define some accessor methods and
+    // forward declarations needed by the OpenSubdiv shaders.
+
+#if defined(HDST_CODEGEN_HAS_MSL)
+    if (_IsHgiMetal(hgi)) {
+        return _GetOSDCommonShaderSourceMSL();
+    }
+#endif
+#if defined(HDST_CODEGEN_HAS_GLSL)
+    return _GetOSDCommonShaderSourceGLSL();
+#endif
 }
 
 static
 std::string
-_GetOSDPatchBasisShaderSource(TfToken const &apiName)
+_GetOSDPatchBasisShaderSource(Hgi const *hgi)
 {
     std::stringstream ss;
 
-#if !defined(PXR_DISABLE_OSD)
-
-    if (apiName == HgiTokens->Metal) {
-#if defined(PXR_METAL_SUPPORT_ENABLED)
+#if defined(HDST_CODEGEN_HAS_MSL)
+    if (_IsHgiMetal(hgi)) {
         ss << "#define OSD_PATCH_BASIS_METAL\n";
         ss << OpenSubdiv::Osd::MTLPatchShaderSource::GetPatchBasisShaderSource();
-#else
-        TF_FATAL_ERROR("Metal support is not enabled");
-#endif
-    } else {
-#if !defined(ARCH_OS_DARWIN) || OPENSUBDIV_VERSION_NUMBER >= 30601
-        ss << "#define OSD_PATCH_BASIS_GLSL\n";
-        ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchBasisShaderSource();
-#else
-        TF_FATAL_ERROR("GLSL is not available on non-Apple platforms. "
-            "Use OSD >= 3.6.1 with OSD_PATCH_SHADER_SOURCE_GLSL=ON.");
-#endif
+        return ss.str();
     }
-
 #endif
-
+#if defined(HDST_CODEGEN_HAS_GLSL)
+    ss << "#define OSD_PATCH_BASIS_GLSL\n";
+    ss << OpenSubdiv::Osd::GLSLPatchShaderSource::GetPatchBasisShaderSource();
     return ss.str();
+#endif
 }
 
 HdStGLSLProgramSharedPtr
@@ -2299,10 +2313,10 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
     if (_geometricShader->IsPrimTypeMesh() &&
         _geometricShader->IsPrimTypePatches()) {
         if (_hasPTCS) {
-            _genPTCS << _GetOSDPatchBasisShaderSource(apiName);
+            _genPTCS << _GetOSDPatchBasisShaderSource(registry->GetHgi());
         }
         if (_hasPTVS) {
-            _genPTVS << _GetOSDPatchBasisShaderSource(apiName);
+            _genPTVS << _GetOSDPatchBasisShaderSource(registry->GetHgi());
         }
     }
 
@@ -2312,9 +2326,9 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
         _geometricShader->GetFvarPatchType() == 
         HdSt_GeometricShader::FvarPatchType::PATCH_BOXSPLINETRIANGLE) {
         if (_hasGS) {
-            _genGS << _GetOSDPatchBasisShaderSource(apiName);
+            _genGS << _GetOSDPatchBasisShaderSource(registry->GetHgi());
         } else {
-            _genFS << _GetOSDPatchBasisShaderSource(apiName);
+            _genFS << _GetOSDPatchBasisShaderSource(registry->GetHgi());
         }
     }
 
@@ -2608,7 +2622,7 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
     // method of patch coord interpolation.
     if (_geometricShader->IsPrimTypeRefinedMesh()) {
         // Include OpenSubdiv shader source and use full patch interpolation.
-        _osd << _GetOSDCommonShaderSource(apiName);
+        _osd << _GetOSDCommonShaderSource(registry->GetHgi());
         _osd <<
             "vec4 InterpolatePatchCoord(vec2 uv, ivec3 patchParam)\n"
             "{\n"

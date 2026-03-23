@@ -111,9 +111,12 @@ public:
     /// If the key-value item already exists, it will be overwritten by the
     /// provided arguments.
     ///
-    /// Issues a TF_CODING_ERROR if the value is empty or if the key is in
-    /// "named metadata" and the value's contained type does not match the type
-    /// registered by the named metadata item.
+    /// Clears the item if given an empty VtValue.
+    ///
+    /// Issues a TF_CODING_ERROR if the key is in "named metadata" and
+    /// the value's contained type does not match the type
+    /// registered by the named metadata item. In this case, no action
+    /// is taken to set the item.
     SDR_API
     void SetItem(const TfToken& key, const VtValue& value);
 
@@ -186,22 +189,11 @@ public:
     ///
     /// Role is used to annotate the role that the shader node plays inside
     /// a shader network.
-    ///
-    /// An empty Token value for Role indicates non-existence of Role metadata;
-    /// this is a disallowed state for Role.
-    /// \sa SetRole
-    ///
-    /// The "empty Token value" non-existence criterion is in addition to the
-    /// usual metadata non-existence criteria.
     /// {@
     SDR_API
     bool HasRole() const;
     SDR_API
     TfToken GetRole() const;
-
-    /// Sets the given Role value.
-    ///
-    /// If given an empty string, clears the Role item.
     SDR_API
     void SetRole(const TfToken& v);
     SDR_API

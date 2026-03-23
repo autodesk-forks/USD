@@ -1328,6 +1328,7 @@ namespace {
 
         void Sync(size_t begin, size_t end)
         {
+            TRACE_FUNCTION_SCOPE("RPrimSync Worker");
             for (size_t i = begin; i < end; ++i)
             {
                 HdRprim &rprim = *_r.rprims[i];

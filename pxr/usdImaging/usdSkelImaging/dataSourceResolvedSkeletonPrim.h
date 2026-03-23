@@ -45,14 +45,13 @@ public:
     HdDataSourceBaseHandle Get(const TfToken &name) override;
 
     /// skelAnimation targeted by the skeleton. Used to track dependency
-    /// of this prim on the skelAnimation.
-    const SdfPath &GetAnimationSource() const {
-        return _animationSource;
-    }
+    /// of this prim on the skelAnimation. 
+    /// When skinning is deferred, return the animationSource overrides on the 
+    /// instancer instead if it exists.
+    VtArray<SdfPath> GetAnimationSource() const;
 
-    const VtArray<SdfPath> &GetInstanceAnimationSources() const {
-        return _instanceAnimationSources;
-    }
+    /// Schema(s) from skelAnimation at GetAnimationSource().
+    VtArray<UsdSkelImagingAnimationSchema> GetAnimationSchema() const;
 
     /// Paths to instancers instancing this prim - not including ones
     /// outside the skel root.
@@ -62,28 +61,6 @@ public:
     const VtArray<SdfPath> &GetInstancerPaths() const {
         return _xformResolver.GetInstancerPaths();
     }
-
-    /// Schema from skelAnimation at GetAnimationSource().
-    const UsdSkelImagingAnimationSchema &GetAnimationSchema() const {
-        return _animationSchema;
-    }
-
-    const VtArray<UsdSkelImagingAnimationSchema> 
-        &GetInstanceAnimationSchemas() const {
-        return _instanceAnimationSchemas;
-    }
-
-    /// Get the resolved animationSchema(s)/animationSource(s) bound to this 
-    /// skeleton. If UsdImagingIsUsdSkelGLInstancingEnabled() is false, 
-    /// always return GetAnimationSchema()/GetAnimationSource(), otherwise 
-    /// return GetInstanceAnimationSchemas()/GetInstanceAnimationSources() 
-    /// when there's no bound animationSource.
-    // TODO:
-    // Maybe consider removing or making the direct access APIs (
-    // GetAnimationXXX()/GetInstanceAnimationXXX()) private?
-    const VtArray<SdfPath> GetResolvedAnimationSources() const;
-    const VtArray<UsdSkelImagingAnimationSchema>
-        GetResolvedAnimationSchemas() const;
 
     /// Transfrom to go from local space of skeleton prim to common
     /// space (as defined by UsdSkelImagingDataSourceXformResolver).

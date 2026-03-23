@@ -669,6 +669,7 @@ main(int argc, char **argv)
     }
 
     _ConfigureTestPlugin();
+    WorkSetConcurrencyLimit(numThreads);
     std::cout << "Running with " << numThreads << " threads.\n";
     {
         _PerformanceTracker performanceTracker(outputAsSpy, outputAsTrace);

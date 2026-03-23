@@ -82,6 +82,14 @@ _IsEnabledCPUComputations()
     return enabled;
 }
 
+static bool
+_IsEnabledNormalsComputations()
+{
+    static const bool enabled =
+        TfGetEnvSetting(USDSKELIMAGING_ENABLE_NORMAL_COMPUTATIONS);
+    return enabled;
+}
+
 UsdSkelImagingSkeletonAdapter::~UsdSkelImagingSkeletonAdapter() = default;
 
 bool
@@ -166,8 +174,14 @@ UsdSkelImagingSkeletonAdapter::Populate(
                     query, skelRootPath, this);
             _skinnedPrimDataCache[skinnedPrimPath] = primData;
 
-            for (_ComputationType computationType :
-                    {_ComputationType::Points, _ComputationType::Normals}) {
+            std::vector<_ComputationType> computationTypes = {
+                _ComputationType::Points
+            };
+            if (_IsEnabledNormalsComputations()) {
+                computationTypes.push_back(_ComputationType::Normals);
+            }
+
+            for (_ComputationType computationType : computationTypes) {
                 // 1. A skinning computation that computes the skinned points or
                 //    skinned normals.
                 const SdfPath compPath =
@@ -509,11 +523,13 @@ UsdSkelImagingSkeletonAdapter::MarkDirty(const UsdPrim& prim,
                     cachePath,
                     _ComputationType::Points),
                 HdExtComputation::DirtySceneInput);
-            index->MarkSprimDirty(
-                _GetSkinningComputationPath(
-                    cachePath,
-                    _ComputationType::Normals),
-                HdExtComputation::DirtySceneInput);
+            if (_IsEnabledNormalsComputations()) {
+                index->MarkSprimDirty(
+                    _GetSkinningComputationPath(
+                        cachePath,
+                        _ComputationType::Normals),
+                    HdExtComputation::DirtySceneInput);
+            }
         }
 
         // The aggregator computation pulls on primvars authored on the skinned
@@ -524,11 +540,13 @@ UsdSkelImagingSkeletonAdapter::MarkDirty(const UsdPrim& prim,
                     cachePath,
                     _ComputationType::Points),
                 HdExtComputation::DirtySceneInput);
-            index->MarkSprimDirty(
-                _GetSkinningInputAggregatorComputationPath(
-                    cachePath,
-                    _ComputationType::Normals),
-                HdExtComputation::DirtySceneInput);
+            if (_IsEnabledNormalsComputations()) {
+                index->MarkSprimDirty(
+                    _GetSkinningInputAggregatorComputationPath(
+                        cachePath,
+                        _ComputationType::Normals),
+                    HdExtComputation::DirtySceneInput);
+            }
         }
     
     } else if (_IsSkinningPointsComputationPath(cachePath) ||
@@ -1370,7 +1388,8 @@ UsdSkelImagingSkeletonAdapter::GetExtComputationPrimvars(
                     HdInterpolationVertex,
                     pointsComputationId));
 
-            if (primData && 
+            if (_IsEnabledNormalsComputations() &&
+                primData && 
                 primData->normalsInterpolation == UsdGeomTokens->vertex) {
                 compPrimvars.push_back(
                     _GetExtComputationPrimvarDescriptor(
@@ -1379,7 +1398,8 @@ UsdSkelImagingSkeletonAdapter::GetExtComputationPrimvars(
                         normalsComputationId));
             }
         } else if (interpolation == HdInterpolationVarying) {
-            if (primData &&
+            if (_IsEnabledNormalsComputations() &&
+                primData &&
                 primData->normalsInterpolation == UsdGeomTokens->varying) {
                 compPrimvars.push_back(
                     _GetExtComputationPrimvarDescriptor(
@@ -1388,7 +1408,8 @@ UsdSkelImagingSkeletonAdapter::GetExtComputationPrimvars(
                         normalsComputationId));
             }
         } else if (interpolation == HdInterpolationFaceVarying) {
-            if (primData &&
+            if (_IsEnabledNormalsComputations() &&
+                primData &&
                 primData->normalsInterpolation == UsdGeomTokens->faceVarying) {
                 compPrimvars.push_back(
                     _GetExtComputationPrimvarDescriptor(
@@ -2579,15 +2600,17 @@ UsdSkelImagingSkeletonAdapter::_RemoveSkinnedPrimAndComputations(
             _ComputationType::Points);
     index->RemoveSprim(HdPrimTypeTokens->extComputation, aggrCompPath);
 
-    compPath =
-        _GetSkinningComputationPath(cachePath, _ComputationType::Normals);
-    index->RemoveSprim(HdPrimTypeTokens->extComputation, compPath);
+    if (_IsEnabledNormalsComputations()) {
+        compPath =
+            _GetSkinningComputationPath(cachePath, _ComputationType::Normals);
+        index->RemoveSprim(HdPrimTypeTokens->extComputation, compPath);
 
-    aggrCompPath =
-        _GetSkinningInputAggregatorComputationPath(
-            cachePath,
-            _ComputationType::Normals);
-    index->RemoveSprim(HdPrimTypeTokens->extComputation, aggrCompPath);
+        aggrCompPath =
+            _GetSkinningInputAggregatorComputationPath(
+                cachePath,
+                _ComputationType::Normals);
+        index->RemoveSprim(HdPrimTypeTokens->extComputation, aggrCompPath);
+    }
 
     // Clear cache entry.
     _skinnedPrimDataCache.erase(cachePath);
@@ -2641,8 +2664,10 @@ bool
 UsdSkelImagingSkeletonAdapter::_IsSkinningNormalsComputationPath(
     const SdfPath& cachePath) const
 {
-    return cachePath.GetName() ==
-        UsdSkelImagingExtComputationNameTokens->normalsComputation;
+    return
+        _IsEnabledNormalsComputations() &&
+        cachePath.GetName() ==
+            UsdSkelImagingExtComputationNameTokens->normalsComputation;
 }
 
 
@@ -2676,8 +2701,11 @@ bool
 UsdSkelImagingSkeletonAdapter::_IsSkinningNormalsInputAggregatorComputationPath(
     const SdfPath& cachePath) const
 {
-    return cachePath.GetName() ==
-        UsdSkelImagingExtComputationNameTokens->normalsAggregatorComputation;
+    return
+        _IsEnabledNormalsComputations() &&
+        cachePath.GetName() ==
+            UsdSkelImagingExtComputationNameTokens
+                ->normalsAggregatorComputation;
 }
 
 
@@ -2873,7 +2901,9 @@ UsdSkelImagingSkeletonAdapter::_TrackSkinnedPrimVariability(
 
     if (_IsAffectedByTimeVaryingSkelAnim(cachePath)) {
         (*timeVaryingBits) |= HdChangeTracker::DirtyPoints;
-        (*timeVaryingBits) |= HdChangeTracker::DirtyNormals;
+        if (_IsEnabledNormalsComputations()) {
+            (*timeVaryingBits) |= HdChangeTracker::DirtyNormals;
+        }
         HD_PERF_COUNTER_INCR(UsdImagingTokens->usdVaryingPrimvar);
     }
 }
