@@ -60,6 +60,18 @@ EsfObjectInterface::GetPrim(EsfJournal *const journal) const
     return _GetPrim();
 }
 
+SdfPathVector
+EsfObjectInterface::GetIncomingConnections(EsfJournal *const journal) const
+{
+    if (journal) {
+        journal->Add(
+            _GetPath(),
+            EsfEditReason::ResyncedObject |
+            EsfEditReason::ChangedIncomingConnections);
+    }
+    return _GetIncomingConnections();
+}
+
 EsfSchemaConfigKey
 EsfObjectInterface::GetSchemaConfigKey(EsfJournal *const journal) const
 {

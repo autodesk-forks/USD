@@ -51,7 +51,6 @@ struct Args {
     bool disableVariantValidationLimit = false;
     bool rootPackageOnly = false;
     bool noAssetChecks = false;
-    bool arkit = false;
     bool dumpRules = false;
     bool verbose = false;
     bool strict = false;
@@ -91,12 +90,6 @@ _Configure(CLI::App* app, Args& args) {
         "--noAssetChecks", args.noAssetChecks, 
         "If specified, do NOT perform extra checks to help ensure the stage\n"
         "or package can be easily and safely referenced into aggregate stages.");
-    app->add_flag(
-        "--arkit", args.arkit, 
-        "Check if the given USD stage is compatible with RealityKit's\n"
-        "implementation of USDZ as of 2023. These assets operate under\n"
-        "greater constraints that usdz files for more general in-house uses,\n"
-        "and this option attempts to ensure that these constraints are met.");
     app->add_flag(
         "-d, --dumpRules", args.dumpRules, "Dump the enumerated set of rules\n"
         "being checked for the given set of options.");
@@ -147,11 +140,6 @@ _ValidateArgs(const Args& args) {
         std::cerr<<"Error: Either an inputFile or the --dumpRules option "
             "must be specified.\n";
         return false;
-    }
-
-    // Warn if deprecated --arkit flag is used
-    if (args.arkit) {
-        std::cerr<<"Warning: --arkit is deprecated.\n";
     }
 
     return true;
@@ -681,7 +669,6 @@ main(int argc, char const *argv[]) {
 
     Args args;
     _Configure(&app, args);
-    deprecate_option(&app, "--arkit");
 
     CLI11_PARSE(app, argc, argv);
     return _UsdChecker(args);

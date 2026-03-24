@@ -151,10 +151,22 @@ pxr_build_test(testHdxPickBuffers
         garch
         arch
         tf
-        hio
     CPPFILES
         unitTestUtils.cpp
         testenv/testHdxPickBuffers.cpp
+)
+pxr_build_test(testHdxNoResourceBindings
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        sdf
+        glf
+        garch
+        arch
+        tf
+    CPPFILES
+        testenv/testHdxNoResourceBindings.cpp
 )
 endif()
 
@@ -427,6 +439,15 @@ pxr_register_test(testHdxPickBuffers
     FAIL_PERCENT 0.1
 )
 
+pxr_register_test(testHdxNoResourceBindings
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxNoResourceBindings"
+    TESTENV testenv/testHdxNoResourceBindings
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        color.png
+    FAIL 0.01
+    FAIL_PERCENT 0.01
+)
 # Certain tests use plugins that require shared libraries.
 if (TARGET shared_libs)
 

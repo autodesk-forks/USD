@@ -3518,12 +3518,7 @@ static PcpMapExpression
 _GetImpliedClass( const PcpMapExpression & transfer,
                   const PcpMapExpression & classArc )
 {
-    if (transfer.IsConstantIdentity()) {
-        return classArc;
-    }
-
-    return transfer.Compose( classArc.Compose( transfer.Inverse() ))
-        .AddRootIdentity();
+    return PcpMapExpression::ImpliedClass(transfer, classArc);
 }
 
 // Check the given node for class-based children, and add corresponding
