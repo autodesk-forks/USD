@@ -85,6 +85,15 @@ HdsiDebuggingSceneIndexPlugin::_AppendSceneIndex(
     const HdSceneIndexBaseRefPtr& inputScene,
     const HdContainerDataSourceHandle& inputArgs)
 {
+    // Guard here as well for hybrid/JSON-based scene index plugin ordering
+    // because the guarded registration above won't matter.
+    // If a plugInfo entry exists (which it does), the plugin will be
+    // considered for both loading and ordering.
+    //
+    if (!_InsertionPhase()) {
+        return inputScene;
+    }
+
     return HdsiDebuggingSceneIndex::New(inputScene, inputArgs);
 }
 

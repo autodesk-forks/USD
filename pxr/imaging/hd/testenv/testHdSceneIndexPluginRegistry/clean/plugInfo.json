@@ -1,0 +1,35 @@
+{
+    "Plugins": [
+        {
+            # Using type "resource" instead of "library" to avoid dynamic 
+            # library loading in the test environment.
+            # testHdSceneIndexPluginRegistry.cpp defines all of the plugins
+            # below.
+            "Type": "resource",
+            "Name": "cleanPlugins",
+            
+            "Info": {
+                "Types": {
+                    "TestHdSip_TidyUp" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "",
+                        "loadWithApps" : "",
+
+                        # New fields to express scene index plugin ordering
+                        # via JSON.
+                        "tags" : ["cleanupTag"],
+                        "ordering" : {
+                            # Don't need to specify transitive dependencies
+                            # like "prepTag" and "makeTag".
+                            "after" : "enjoyTag"
+                        },
+
+                        # Unused but mandatory fields (see HfPluginRegistry).
+                        "priority": 0,
+                        "displayName": "Tidy Up Scene Index Plugin"
+                    }
+                }
+            }
+        }
+    ]
+}

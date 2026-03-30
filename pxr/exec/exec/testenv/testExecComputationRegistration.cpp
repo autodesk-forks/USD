@@ -55,6 +55,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (constantValue)
     (convertibleReturnTypeComputation)
     (computeConstants)
+    (computeExpressionConsumer)
     (derivedSchemaComputation)
     (dispatchedAttributeComputation)
     (dispatchedPrimComputation)
@@ -190,6 +191,16 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
     // name.
     self.PrimComputation(ExecBuiltinComputations->computeTime);
 
+    // Attempt to register a prim computation that explicitly consumes
+    // computeExpression as an input, which is not allowed. This is a private
+    // computation name, but a nefarious user could try to reproduce the token.
+    const TfToken computeExpression("__computeExpression");
+    self.PrimComputation(_tokens->computeExpressionConsumer)
+        .Callback<double>(+[](const VdfContext &ctx) { return 0.0; })
+        .Inputs(
+            Attribute(_tokens->attr)
+                .Computation<double>(computeExpression));
+
     //
     // Test different kinds of computation inputs.
     //
@@ -215,8 +226,16 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
             // Take input from a computation provided by any objects targeted
             // by attribute connections on an attribute on the prim.
             Attribute(_tokens->attributeName)
-                .ConnectionTargetedObjects<int>(
-                    _tokens->attributeComputation),
+                .Connections<int>(_tokens->attributeComputation),
+            
+            // Take input from a computation provided by any attributes with
+            // connections that target an attribute on the prim.
+            Attribute(_tokens->attributeName)
+                .IncomingConnections<int>(_tokens->otherComputation),
+            
+            // Take input from a computation provided by any attributes with
+            // connections that target the prim.
+            IncomingConnections<int>(_tokens->otherComputation),
 
             // Take input from the value of an attribute, marking it as a
             // required input.
@@ -260,7 +279,11 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(
 
             // Take input from the objects targeted by this attribute's
             // connections.
-            ConnectionTargetedObjects<double>(_tokens->otherComputation),
+            Connections<double>(_tokens->otherComputation),
+
+            // Take input from attributes that have connections that target this
+            // attribute.
+            IncomingConnections<double>(_tokens->otherComputation),
 
             // Take input from a computation on the attribute's owning prim.
             Prim().Computation<double>(_tokens->primComputation),
@@ -625,12 +648,15 @@ TestRegistrationErrors()
     // The errors that are emitted because of conflicting plugins aren't stable
     // because order can vary, so they are not included among the expected error
     // messages here.
-    EXPECTED_ERRORS(expected, 7, {
+    EXPECTED_ERRORS(expected, 8, {
         "Attempt to register computation 'unknownSchemaTypeComputation' using "
-        "an unknown type.",
+        "an unknown schema type.",
 
         "Attempt to register computation '__computeTime' with a name that uses "
         "the prefix '__', which is reserved for builtin computations.",
+
+        "The builtin computation '__computeExpression' cannot be consumed by "
+        "inputs to user-defined computations.",
 
         "Attempt to register computation 'nonComputationalSchemaComputation' "
         "for schema TestExecNonComputationalSchema, which was declared as "
@@ -901,7 +927,7 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             primCompDef->GetInputKeys(*prim, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 10);
+        ASSERT_EQ(inputKeys->Get().size(), 12);
 
         _PrintInputKeys(inputKeys->Get());
 
@@ -951,6 +977,32 @@ TestTypedSchemaComputationRegistration()
             ASSERT_EQ(key.providerResolution.dynamicTraversal,
                       ExecProviderResolution::DynamicTraversal::
                           ConnectionTargetedObjects);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->otherComputation);
+            ASSERT_EQ(key.computationName, _tokens->otherComputation);
+            ASSERT_EQ(key.resultType, TfType::Find<int>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath(".attributeName"));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::
+                          IncomingConnectionOwningAttributes);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->otherComputation);
+            ASSERT_EQ(key.computationName, _tokens->otherComputation);
+            ASSERT_EQ(key.resultType, TfType::Find<int>());
+            ASSERT_EQ(key.providerResolution.localTraversal,
+                      SdfPath("."));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::
+                          IncomingConnectionOwningAttributes);
             ASSERT_EQ(key.optional, true);
         }
 
@@ -1044,7 +1096,7 @@ TestTypedSchemaComputationRegistration()
 
         const auto inputKeys =
             attrCompDef->GetInputKeys(*attribute, nullJournal);
-        ASSERT_EQ(inputKeys->Get().size(), 10);
+        ASSERT_EQ(inputKeys->Get().size(), 11);
 
         _PrintInputKeys(inputKeys->Get());
 
@@ -1082,6 +1134,18 @@ TestTypedSchemaComputationRegistration()
             ASSERT_EQ(key.providerResolution.dynamicTraversal,
                       ExecProviderResolution::DynamicTraversal::
                           ConnectionTargetedObjects);
+            ASSERT_EQ(key.optional, true);
+        }
+
+        {
+            const Exec_InputKey &key = inputKeys->Get()[index++];
+            ASSERT_EQ(key.inputName, _tokens->otherComputation);
+            ASSERT_EQ(key.computationName, _tokens->otherComputation);
+            ASSERT_EQ(key.resultType, TfType::Find<double>());
+            ASSERT_EQ(key.providerResolution.localTraversal, SdfPath("."));
+            ASSERT_EQ(key.providerResolution.dynamicTraversal,
+                      ExecProviderResolution::DynamicTraversal::
+                          IncomingConnectionOwningAttributes);
             ASSERT_EQ(key.optional, true);
         }
 
@@ -1337,7 +1401,7 @@ TestAppliedSchemaComputationRegistration()
             TF_AXIOM(primCompDef);
             const auto inputKeys =
                 primCompDef->GetInputKeys(*prim, nullJournal);
-            ASSERT_EQ(inputKeys->Get().size(), 10);
+            ASSERT_EQ(inputKeys->Get().size(), 12);
         }
     }
 

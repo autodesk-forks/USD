@@ -105,7 +105,11 @@ TARGET_WASM_NODE='node'
 
 def GetBuildTargets():
     if MacOS():
-        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
+        print("GetBuildTargets: MacOS")
+        appleTargets = [str.casefold(x) for x in apple_utils.GetBuildTargets()]
+        appleTargets.extend([TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE])
+        print("appleTargets: ", appleTargets)
+        return appleTargets
     elif Linux():
         return [TARGET_WASM, TARGET_WASM64, TARGET_WASM_NODE]
     elif Windows():
@@ -1087,24 +1091,47 @@ def InstallTBB_MacOS(context, force, buildArgs):
                  ("ifeq ($(arch),$(filter $(arch),armv7 armv7s arm64))",
                   "ifeq ($(arch),$(filter $(arch),armv7 armv7s {0}))"
                         .format(apple_utils.GetTargetArmArch()))])
-        target_config_patches, clang_config_patches = \
-                apple_utils.GetTBBPatches(context)
-        if target_config_patches:
+
+        if (MacOSTargetEmbedded(context) and 
+            context.buildTarget != apple_utils.TARGET_IOS):
+            target_patches, clang_patches = apple_utils.GetTBBPatches(context)
+            # Create config from iOS config
+            shutil.copy(
+                src="build/ios.macos.inc",
+                dst=f"build/{context.buildTarget.lower()}.macos.inc")
+
+            PatchFile(
+                f"build/{context.buildTarget.lower()}.macos.inc",
+                target_patches)
+
+            # iOS clang just reuses the macOS one,
+            # so it's easier to copy it directly.
+            shutil.copy(src="build/macos.clang.inc",
+                        dst=f"build/{context.buildTarget.lower()}.clang.inc")
+
+            PatchFile(
+                f"build/{context.buildTarget.lower()}.clang.inc",
+                clang_patches)
+
+        primaryArch, secondaryArch = apple_utils.GetTargetArchPair(context)
+        target_patches, clang_patches = apple_utils.GetTBBPatches(context)
+
+        if target_patches:
             # Create config from iOS config
             shutil.copy(src="build/ios.macos.inc",
                         dst=f"build/{context.buildTarget.lower()}.macos.inc")
 
             PatchFile(f"build/{context.buildTarget.lower()}.macos.inc", 
-                      target_config_patches)
+                      target_patches)
 
-        if clang_config_patches:
+        if clang_patches:
             # iOS clang just reuses the macOS one,
             # so it's easier to copy it directly.
             shutil.copy(src="build/macos.clang.inc",
                         dst=f"build/{context.buildTarget.lower()}.clang.inc")
 
             PatchFile(f"build/{context.buildTarget.lower()}.clang.inc", 
-                        clang_config_patches)
+                        clang_patches)
 
         (primaryArch, secondaryArch) = apple_utils.GetTargetArchPair(context)
 
@@ -2733,7 +2760,7 @@ class InstallContext:
         self.targetWasmNode = (args.build_target == TARGET_WASM_NODE)
         self.buildTarget = args.build_target
         if MacOS():
-            apple_utils.SetTarget(self, self.buildTarget)
+            apple_utils.SetTarget(self)
 
             self.macOSCodesign = False
             if args.macos_codesign:
@@ -2742,7 +2769,10 @@ class InstallContext:
             if apple_utils.IsHostArm() and args.ignore_homebrew:
                 self.ignorePaths.append("/opt/homebrew")
         else:
-            self.buildTarget = ""
+            # Keep Emscripten target (wasm/wasm64/node) for cross builds;
+            # native host target is implicit on non-macOS.
+            if not self.targetWasm:
+                self.buildTarget = ""
 
         # Emscripten only supports MinGW on Windows
         if self.targetWasm and Windows():

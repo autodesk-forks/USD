@@ -6,6 +6,7 @@
 //
 #include "pxr/exec/exec/computationBuilders.h"
 
+#include "pxr/exec/exec/builtinComputationRegistry.h"
 #include "pxr/exec/exec/definitionRegistry.h"
 #include "pxr/exec/exec/inputKey.h"
 #include "pxr/exec/exec/privateBuiltinComputations.h"
@@ -136,6 +137,22 @@ void
 Exec_ComputationBuilderValueSpecifierBase::_GetInputKey(
     Exec_InputKey *const inputKey) const
 {
+    // Some built-in computations are not allowed to be consumed by user-
+    // defined computations.
+    if (Exec_BuiltinComputationRegistry::IsReservedName(
+        _data->inputKey.computationName)) {
+        const auto *traits = Exec_BuiltinComputationRegistry::GetInstance()
+            .GetTraits(_data->inputKey.computationName);
+        if (!traits || !traits->isInputConsumable) {
+            TF_CODING_ERROR(
+                "The builtin computation '%s' cannot be consumed by inputs to "
+                "user-defined computations.",
+                _data->inputKey.computationName.GetText());
+
+            _data->inputKey.computationName = TfToken();
+        }
+    }
+
     *inputKey = _data->inputKey;
 }
 
@@ -339,6 +356,41 @@ Exec_AttributeComputationBuilder::~Exec_AttributeComputationBuilder()
 {
     _Data &data = _GetData();
 
+    // TODO: If the expression has a registered inverse, we can use this
+    // function to validate that the expression only uses inputs "approved" for
+    // invertible expressions.
+
+    Exec_DefinitionRegistry::RegistrationAccess::
+        _GetInstanceForRegistration().RegisterAttributeComputation(
+            data.attributeName,
+            data.schemaType,
+            data.computationName,
+            data.resultType,
+            std::move(data.callback),
+            std::move(data.inputKeys),
+            _GetDispatchesOntoSchemas());
+}
+
+//
+// Exec_AttributeExpressionBuilder
+//
+
+Exec_AttributeExpressionBuilder::Exec_AttributeExpressionBuilder(
+    const TfToken &attributeName,
+    const TfType schemaType)
+    : Exec_ComputationBuilderCRTPBase<Exec_AttributeExpressionBuilder>(
+        attributeName,
+        schemaType,
+        Exec_PrivateBuiltinComputations->computeExpression,
+        /* dispatched */ false,
+        /* dispatchesOntoSchemas */ {})
+{
+}
+
+Exec_AttributeExpressionBuilder::~Exec_AttributeExpressionBuilder()
+{
+    _Data &data = _GetData();
+
     Exec_DefinitionRegistry::RegistrationAccess::
         _GetInstanceForRegistration().RegisterAttributeComputation(
             data.attributeName,
@@ -381,6 +433,12 @@ Exec_ComputationBuilder::AttributeComputation(
 {
     return Exec_AttributeComputationBuilder(
         attributeName, _schemaType, computationName);
+}
+
+Exec_AttributeExpressionBuilder
+Exec_ComputationBuilder::AttributeExpression(const TfToken &attributeName)
+{
+    return Exec_AttributeExpressionBuilder(attributeName, _schemaType);
 }
 
 Exec_PrimComputationBuilder 

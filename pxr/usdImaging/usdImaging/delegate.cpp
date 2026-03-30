@@ -288,10 +288,11 @@ UsdImagingDelegate::_GetDisplayPredicate() const
 Usd_PrimFlagsConjunction
 UsdImagingDelegate::_GetDisplayPredicateForPrototypes() const
 {
-    return _displayUnloadedPrimsWithBounds ?
-        UsdPrimIsActive && UsdPrimHasDefiningSpecifier && !UsdPrimIsAbstract :
-        UsdPrimIsActive && UsdPrimHasDefiningSpecifier && !UsdPrimIsAbstract
-            && UsdPrimIsLoaded;
+    auto predicate = UsdPrimIsActive &&
+        UsdPrimHasDefiningSpecifier && !UsdPrimHasClassSpecifier;
+    return _displayUnloadedPrimsWithBounds
+        ? predicate
+        : predicate && UsdPrimIsLoaded;
 }
 
 // -------------------------------------------------------------------------- //
@@ -3072,6 +3073,24 @@ UsdImagingDelegate::GetVolumeFieldDescriptors(SdfPath const &volumeId)
     }
 
     return HdVolumeFieldDescriptorVector();
+}
+
+VtValue 
+UsdImagingDelegate::GetVolumeParamValue(SdfPath const &id, 
+                                        TfToken const &paramName)
+{
+    if (!TF_VERIFY(id != SdfPath())) {
+        return VtValue();
+    }
+
+    SdfPath cachePath = ConvertIndexPathToCachePath(id);
+    _HdPrimInfo* primInfo = _GetHdPrimInfo(cachePath);
+    if (!TF_VERIFY(primInfo)) {
+        return VtValue();
+    }
+
+    return primInfo->adapter->GetVolumeParamValue(primInfo->usdPrim,
+        cachePath, paramName, _time);
 }
 
 TfTokenVector

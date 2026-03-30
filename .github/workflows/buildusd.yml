@@ -1,5 +1,8 @@
 name: BuildUSD
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -15,12 +18,12 @@ on:
 jobs:
   Validation:
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     outputs:
       validation-failed: ${{ steps.changed-workflows.outputs.any_changed }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
         with:
           ref: ${{ github.ref }}
       - name: Check workflows directory
@@ -35,27 +38,29 @@ jobs:
       - Validation
     if: ${{ (github.event_name == 'pull_request' && needs.Validation.outputs.validation-failed != 'true') || github.event_name == 'push' }}
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write # Grant write permissions in order to upload artifacts
     env:
-      PYTHON_VERSION: "3.9"
+      PYTHON_VERSION: "3.9.25"
     timeout-minutes: 120
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
         with:
           ref: ${{ github.ref }}
       - name: Restore cached artifacts
         id: cache-usd-build-dependency
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDinst
           key: ${{ runner.os }}-BuildUSD-py${{ env.PYTHON_VERSION }}-${{ hashFiles('build_scripts/**/*') }}
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           check-latest: false
-      - name: Install dependencies
+      - name: Install Build Dependencies
         run: |
           sudo apt-get -qq update
           sudo apt-get install -y python3-setuptools libglew-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev
@@ -63,47 +68,131 @@ jobs:
           pip install PySide2 PyOpenGL
       - name: Build USD
         run: |
-          # Not using '--tests' to avoid building extra dependencies that are unneeded for headless tests
-          python3 build_scripts/build_usd.py --no-materialx --build USDgen/build --src USDgen/src USDinst --build-args USD,"-DPXR_HEADLESS_TEST_MODE=ON -DPXR_BUILD_TESTS=ON" -v
-      - name: Save build artifacts to cache
+          # All tests are run for a push to fully validate the repository; tests requiring a GPU are executed in the
+          # GPUTests job. For other events like pull requests, we currently only run headless tests to minimize
+          # the use of the large GPU runner.
+          #
+          # Note in the latter case, we do not use the --tests argument to avoid building extra dependencies
+          # that aren't needed for headless tests.
+          if [ "$GITHUB_EVENT_NAME" == "push" ]; then
+            python3 build_scripts/build_usd.py --tests --no-materialx --build USDgen/build --src USDgen/src USDinst --build-args USD,"-DPXR_HEADLESS_TEST_MODE=OFF" -v
+          else
+            python3 build_scripts/build_usd.py --no-materialx --build USDgen/build --src USDgen/src USDinst --build-args USD,"-DPXR_HEADLESS_TEST_MODE=ON -DPXR_BUILD_TESTS=ON" -v
+          fi
+      - name: Save Build Artifacts to Cache
         if: steps.cache-usd-build-dependency.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
-          path: |
-            USDinst
+          path: USDinst
           key: ${{ steps.cache-usd-build-dependency.outputs.cache-primary-key }}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
           name: usd-linux
-          path: USDinst
-      - name: Test USD
+          path: ${{ github.workspace }}
+          include-hidden-files: true
+      - name: Run USD Headless Tests
         working-directory: ./USDgen/build/OpenUSD
         run: |
-          ctest --output-on-failure -j4 -C Release --exclude-regex "testExecGeomXformable_Perf_Large"
+          ctest --output-on-failure -j4 -C Release \
+                --exclude-regex "^(testUsdview|testUsdRecord|testUsdAppUtilsFrameRecorder|testUsdImaging|testHgiGL|testHdx|testHdSt|testExecGeomXformable_Perf_Large|testWorkThreadLimitsDefault)"
+
+  GPUTests:
+    needs:
+      - Linux
+    if: ${{ github.event_name == 'push' }}
+    runs-on: enterprise-linux-x64-t4gpu-4core-16vram-28ram-176ssd
+    permissions:
+      contents: write # Grant write permissions in order to upload artifacts
+    env:
+      # Ensure python is installed in the same location across different runners
+      AGENT_TOOLSDIRECTORY: /opt/hostedtoolcache
+      PYTHON_VERSION: "3.9.25"
+    timeout-minutes: 30
+    steps:
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          check-latest: false
+      - name: Install Test Dependencies
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get install -y python3-setuptools libglew-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev
+          sudo apt-get install -y cmake wget xvfb libfontconfig libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libopenjp2-7 libjbig0 libxcb-xinerama0
+
+          # VirtualGL specifically asks for libegl1-mesa although it has largely been phased out in modern ubuntu versions
+          # Install an archive version of libegl1-mesa to satisfy the VirtualGL dependency
+          sudo wget http://archive.ubuntu.com/ubuntu/pool/universe/m/mesa/libegl1-mesa_23.0.4-0ubuntu1~22.04.1_amd64.deb
+          sudo apt install ./libegl1-mesa_23.0.4-0ubuntu1~22.04.1_amd64.deb
+          sudo apt-get install -y libxtst6 libxv1
+          # VirtualGL doesn't exist in the default repositories. Instead download the .deb package directly from sourceforge
+          sudo wget https://sourceforge.net/projects/virtualgl/files/3.1/virtualgl_3.1_amd64.deb
+          sudo dpkg -i virtualgl_3.1_amd64.deb
+
+          pip install --upgrade pip
+          pip install PySide2 PyOpenGL cmake
+      - name: Download USD Build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4.3.0
+        with:
+          name: usd-linux
+      - name: Restore Executable Permissions
+        run: |
+          # workaround for https://github.com/actions/upload-artifact/issues/38
+          find ${{ github.workspace }}/USDinst/tests -type f -print0 | xargs -0 chmod a+x
+          find ${{ github.workspace }}/USDinst/bin -type f -print0 | xargs -0 chmod a+x
+          find ${{ github.workspace }}/USDgen/build -type f -path "*/bin/*" -exec chmod a+x {} +
+      - name: Run USD GPU Tests
+        working-directory: ./USDgen/build/OpenUSD
+        run: |
+          # Known test failures in tests_to_ignore.txt tracked by internal ticket: USD-11921
+          sudo xvfb-run --server-args="-screen 0 2560x1600x24 +extension GLX +render" \
+          sudo vglrun +v -d egl \
+          ctest --output-on-failure -j4 -V -C Release \
+                --tests-regex "^(testUsdview|testUsdRecord|testUsdAppUtilsFrameRecorder|testUsdImaging|testHgiGL|testHdx|testHdSt)" \
+                --exclude-regex "^($(paste -sd "|" ${{ github.workspace }}/.github/workflows/tests_to_ignore.txt))$"
+      - name: Prepare Test Artifacts
+        if: always()
+        working-directory: ./USDgen/build/OpenUSD
+        run: |
+          if sudo [ -d "Testing/Failed-Diffs" ]; then
+            mkdir FailedTestOutput
+            sudo cp -r Testing/Failed-Diffs FailedTestOutput
+            sudo cp Testing/Temporary/LastTest.log FailedTestOutput
+            sudo chown -R runner:runner FailedTestOutput
+          fi
+      - name: Upload Test artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        with:
+          name: FailedTestOutput
+          path: ./USDgen/build/OpenUSD/FailedTestOutput
+          if-no-files-found: ignore
 
   macOS:
     needs:
       - Validation
     if: ${{ (github.event_name == 'pull_request' && needs.Validation.outputs.validation-failed != 'true') || github.event_name == 'push' }}
     runs-on: macos-15
+    permissions:
+      contents: write # Grant write permissions in order to upload artifacts
     env:
       PYTHON_VERSION: "3.11"
     timeout-minutes: 120
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
         with:
           ref: ${{ github.ref }}
       - name: Restore cached artifacts
         id: cache-usd-build-dependency
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDinst
           key: ${{ runner.os }}-BuildUSD-py${{ env.PYTHON_VERSION }}-${{ hashFiles('build_scripts/**/*') }}
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           check-latest: false
@@ -123,13 +212,13 @@ jobs:
           python3 build_scripts/build_usd.py --no-materialx --generator Xcode --build USDgen/build --src USDgen/src USDinst --build-args USD,"-DPXR_HEADLESS_TEST_MODE=ON -DPXR_BUILD_TESTS=ON" -v
       - name: Save build artifacts to cache
         if: steps.cache-usd-build-dependency.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDinst
           key: ${{ steps.cache-usd-build-dependency.outputs.cache-primary-key }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
           name: usd-macOS
           path: USDinst
@@ -144,23 +233,25 @@ jobs:
       - Validation
     if: ${{ (github.event_name == 'pull_request' && needs.Validation.outputs.validation-failed != 'true') || github.event_name == 'push' }}
     runs-on: windows-2022
+    permissions:
+      contents: write # Grant write permissions in order to upload artifacts
     env:
       PYTHON_VERSION: "3.9"
     timeout-minutes: 120
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
         with:
           ref: ${{ github.ref }}
       - name: Restore cached artifacts
         id: cache-usd-build-dependency
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDinst
           key: ${{ runner.os }}-BuildUSD-py${{ env.PYTHON_VERSION }}-${{ hashFiles('build_scripts/**/*') }}
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           check-latest: false
@@ -175,13 +266,13 @@ jobs:
         shell: cmd
       - name: Save build artifacts to cache
         if: steps.cache-usd-build-dependency.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDinst
           key: ${{ steps.cache-usd-build-dependency.outputs.cache-primary-key }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
           name: usd-win64
           path: USDinst
@@ -203,9 +294,11 @@ jobs:
         target: [Wasm, Wasm64]
       fail-fast: false
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write # Grant write permissions in order to upload artifacts
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
         with:
           ref: ${{ github.ref }}
       - name: Install Emscripten SDK
@@ -216,7 +309,7 @@ jobs:
           ./emsdk activate latest
       - name: Restore cached artifacts
         id: cache-usd-build-dependency
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDgen/build
@@ -229,13 +322,13 @@ jobs:
             --build-args USD,"-DPXR_HEADLESS_TEST_MODE=ON -DPXR_BUILD_TESTS=ON"
       - name: Save build artifacts to cache
         if: steps.cache-usd-build-dependency.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
         with:
           path: |
             USDgen/build
           key: ${{ steps.cache-usd-build-dependency.outputs.cache-primary-key }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
           name: usd-${{ matrix.target }}
           path: USDinst

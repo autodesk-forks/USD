@@ -78,6 +78,43 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         cls.PropertyOversTypedPrimDerivedPrimType = \
             Tf.Type(Usd.SchemaBase).FindDerivedByName("TestPropertyOversTypedPrimDerived")
 
+    def test_SimpleAbstractSchemaPrimDefinition(self):
+        """
+        Tests the prim definition for a simple abstract schema that also has a
+        built-in API schema
+        """
+        primDef = Usd.SchemaRegistry().FindAbstractPrimDefinition(
+            "TestAbstractTypedWithAPIApplied")
+        self.assertTrue(primDef)
+        self.assertEqual(primDef.GetLocallyDefinedPropertyNames(),
+                         ['abstractAttr'])
+        self.assertEqual(primDef.GetPropertyNames(), 
+                         ['single:relationship', 'single:token_attr',
+                          'single:bool_attr', 'abstractAttr', 
+                          'single:no_fallback'])
+        self.assertEqual(primDef.GetAppliedAPISchemas(), ["TestSingleApplyAPI"])
+        abstractIntAttr = primDef.GetAttributeDefinition("abstractAttr")
+        self.assertEqual(abstractIntAttr.GetTypeName(), Sdf.ValueTypeNames.Int)
+        self.assertEqual(abstractIntAttr.GetFallbackValue(), 1)
+
+    @unittest.skipIf(Tf.GetEnvSetting('USD_DISABLE_AUTO_APPLY_API_SCHEMAS'),
+                    "Auto apply API schemas are disabled")
+    def test_SimpleAbstractSchemaPrimDefinitionWithAutoApplySchema(self):
+        # TestSingleApplyAPI is auto applied to
+        # TestTypedSchemaForAutoApplyAbstractBase
+        primDef = Usd.SchemaRegistry().FindAbstractPrimDefinition(
+            "TestTypedSchemaForAutoApplyAbstractBase")
+        self.assertTrue(primDef)
+        self.assertEqual(primDef.GetLocallyDefinedPropertyNames(),
+                         ['testAttr', 'testRel'])
+        self.assertEqual(primDef.GetPropertyNames(),
+                         ['single:relationship', 'single:token_attr', 
+                          'single:bool_attr', 'compose:relationship', 
+                          'compose:token_attr', 'compose:bool_attr', 
+                          'single:no_fallback', 'testAttr', 'testRel'])
+        self.assertEqual(primDef.GetAppliedAPISchemas(), ["TestSingleApplyAPI",
+                         "TestComposeMetadataAPI"])
+
     def test_SimpleTypedSchemaPrimDefinition(self):
         """
         Tests the prim definition for a simple typed schema that has no
@@ -115,6 +152,9 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertTrue(singleApplyAPIDef)
         self.assertEqual(singleApplyAPIDef.GetAppliedAPISchemas(), 
                          ["TestSingleApplyAPI"])
+        self.assertEqual(singleApplyAPIDef.GetLocallyDefinedPropertyNames(), [
+            "single:relationship", "single:token_attr", "single:bool_attr",
+            "single:no_fallback"])
         self.assertEqual(singleApplyAPIDef.GetPropertyNames(), [
             "single:relationship", "single:token_attr", "single:bool_attr",
             "single:no_fallback"])
@@ -129,6 +169,10 @@ class TestUsdAppliedAPISchemas(unittest.TestCase):
         self.assertTrue(multiApplyAPIDef)
         self.assertEqual(multiApplyAPIDef.GetAppliedAPISchemas(), 
             ["TestMultiApplyAPI:__INSTANCE_NAME__"])
+        self.assertEqual(multiApplyAPIDef.GetLocallyDefinedPropertyNames(), [
+            "multi:__INSTANCE_NAME__:bool_attr", 
+            "multi:__INSTANCE_NAME__:relationship",
+            "multi:__INSTANCE_NAME__:token_attr"])
         self.assertEqual(multiApplyAPIDef.GetPropertyNames(), [
             "multi:__INSTANCE_NAME__:bool_attr", 
             "multi:__INSTANCE_NAME__:relationship",

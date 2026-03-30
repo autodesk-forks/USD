@@ -13,8 +13,9 @@
 #include "pxr/exec/vdf/poolChainIndexer.h"
 
 #include "pxr/base/tf/bits.h"
-
+#include "pxr/base/tf/debug.h"
 #include "pxr/base/tf/hash.h"
+
 #include "pxr/base/trace/trace.h"
 
 #include <iostream>
@@ -218,9 +219,11 @@ class VdfSparseOutputTraverser::_TraversalHelper
     // Pointer to current cache line, if caching is active.
     _Cache *_currentCache;
 
+#if _DEBUG_CACHED_TRAVERSAL
     // The cache size before doing the cached traversal (only used for
     // debugging).
     int _originalCacheSize;
+#endif
 
     // One bit for each node in the network indicating whether or not the
     // node callback has been invoked for that node yet (to avoid redundant
@@ -512,7 +515,9 @@ VdfSparseOutputTraverser::_TraversalHelper::_TraversalHelper(
 :   _outputCallback(outputCallback),
     _nodeCallback(nodeCallback),
     _currentCache(nullptr),
+#if _DEBUG_CACHED_TRAVERSAL
     _originalCacheSize(0),
+#endif
     _nodeCallbackInvocations(
         _GetNodeCallbackInvocationsSize(outputs, nodeCallback))
 {

@@ -49,8 +49,8 @@ class SdfAssetPath;
 /// `float` version if available.
 /// 
 /// The length of this attribute is expected to match the length of
-/// the provided position data times the per-particle elementSize
-/// derived from the SH degree (specifically elementSize =
+/// the provided position data times the per-particle element size
+/// derived from the SH degree (specifically element size =
 /// (degree+1)*(degree+1)). If it is too long it will be truncated
 /// to the number of particles define by the position data. If it is
 /// too short it will be ignored.

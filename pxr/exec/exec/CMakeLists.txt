@@ -45,6 +45,7 @@ pxr_library(exec
     PRIVATE_CLASSES
         attributeInputNode
         builtinAttributeComputations
+        builtinComputationRegistry
         builtinObjectComputations
         builtinStageComputations
         callbackNode
@@ -72,7 +73,6 @@ pxr_library(exec
         pluginData
         privateBuiltinComputations
         program
-        registrationBarrier
         requestTracker
         runtime
         taskCycleDetector

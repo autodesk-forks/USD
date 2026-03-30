@@ -27,7 +27,28 @@ class TestUsdSchemaRegistry(unittest.TestCase):
             assert 'Registration failed for schema type ' \
                    'TestUsdSchemaRegistryNoIdentifierAndNoAlias.' in str(e)
             assert len(str(e).strip().split('\n')) == 1
-    
+
+    def test_AbstractPrimMetadata(self):
+        primDef = Usd.SchemaRegistry().FindAbstractPrimDefinition(
+            "AbstractTest")
+        self.assertTrue(primDef)
+        self.assertEqual(set(primDef.ListMetadataFields()), 
+            set(["hidden"]))
+        self.assertIsNone(primDef.GetMetadata("typeName"))
+        self.assertEqual(primDef.GetMetadata("hidden"), True)
+        print (primDef.GetDocumentation())
+        self.assertEqual(primDef.GetDocumentation(),
+                         "Testing documentation metadata (Abstract).")
+
+        attrDef = primDef.GetAttributeDefinition("testAttr")
+        self.assertTrue(attrDef)
+        self.assertEqual(attrDef.GetTypeName(), Sdf.ValueTypeNames.String)
+        self.assertEqual(attrDef.GetFallbackValue(), "foo")
+        self.assertEqual(attrDef.GetMetadata("allowedTokens"),
+                         Vt.TokenArray(["bar", "baz"]))
+        self.assertEqual(attrDef.GetMetadata("hidden"), True)
+        self.assertEqual(attrDef.GetMetadata("testCustomMetadata"), "garply")
+
     def test_PrimMetadata(self):
         primDef = Usd.SchemaRegistry().FindConcretePrimDefinition(
             "MetadataTest")
@@ -428,7 +449,8 @@ class TestUsdSchemaRegistry(unittest.TestCase):
              'collection:__INSTANCE_NAME__:expansionRule', 
              'collection:__INSTANCE_NAME__:includeRoot', 
              'collection:__INSTANCE_NAME__:includes',
-             'collection:__INSTANCE_NAME__:membershipExpression'])
+             'collection:__INSTANCE_NAME__:membershipExpression',
+             'collection:__INSTANCE_NAME__:mode'])
         
         # Prim def has relationship/property spec for 'excludes'
         self.assertTrue(primDef.GetPropertyDefinition(
@@ -705,7 +727,17 @@ class TestUsdSchemaRegistry(unittest.TestCase):
                 "variability" : Sdf.VariabilityUniform,
                 "customData" : 
                 {"userDocBrief" : apiPrimDef.GetPropertyDocumentation(
-                    "collection:__INSTANCE_NAME__:membershipExpression")}                
+                    "collection:__INSTANCE_NAME__:membershipExpression")},
+            },
+            "collection:__INSTANCE_NAME__:mode" : {
+                "custom" : False,
+                "default" : "automatic",
+                "typeName" : Sdf.ValueTypeNames.Token,
+                "allowedTokens" : ["automatic", "relationship", "expression"],
+                "variability" : Sdf.VariabilityUniform,
+                "customData" : 
+                {"userDocBrief" : apiPrimDef.GetPropertyDocumentation(
+                    "collection:__INSTANCE_NAME__:mode")},
             }
         }
 

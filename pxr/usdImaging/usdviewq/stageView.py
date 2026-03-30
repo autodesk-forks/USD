@@ -22,7 +22,7 @@ from .qt import QtCore, QtGui, QtWidgets, QtOpenGL, QGLWidget, QGLFormat
 from pxr import Tf
 from pxr import Gf
 from pxr import Glf
-from pxr import Sdf, Usd, UsdGeom
+from pxr import Sdf, Usd, UsdGeom, UsdRender
 from pxr import UsdImagingGL
 from pxr import CameraUtil
 
@@ -476,7 +476,7 @@ class HUD():
             pixelRatio = QtWidgets.QApplication.instance().devicePixelRatio()
             imageW = w * pixelRatio
             imageH = h * pixelRatio
-            self.qimage = QtGui.QImage(imageW, imageH, QtGui.QImage.Format_ARGB32)
+            self.qimage = QtGui.QImage(imageW, imageH, QtGui.QImage.Format.Format_ARGB32)
             self.qimage.fill(QtGui.QColor(0, 0, 0, 0))
             self.painter = QtGui.QPainter()
 
@@ -2096,15 +2096,15 @@ class StageView(QGLWidget):
         # Allow for either meta or alt key, since meta maps to Windows and Apple
         # keys on various hardware/os combos, and some windowing systems consume
         # one or the other by default, but hopefully not both.
-        if (event.modifiers() & (QtCore.Qt.AltModifier | QtCore.Qt.MetaModifier)):
-            if event.button() == QtCore.Qt.LeftButton:
+        if (event.modifiers() & (QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.KeyboardModifier.MetaModifier)):
+            if event.button() == QtCore.Qt.MouseButton.LeftButton:
                 self.switchToFreeCamera()
-                ctrlModifier = event.modifiers() & QtCore.Qt.ControlModifier
+                ctrlModifier = event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier
                 self._cameraMode = "truck" if ctrlModifier else "tumble"
-            if event.button() == QtCore.Qt.MiddleButton:
+            if event.button() == QtCore.Qt.MouseButton.MiddleButton:
                 self.switchToFreeCamera()
                 self._cameraMode = "truck"
-            if event.button() == QtCore.Qt.RightButton:
+            if event.button() == QtCore.Qt.MouseButton.RightButton:
                 self.switchToFreeCamera()
                 self._cameraMode = "zoom"
         else:
@@ -2442,3 +2442,11 @@ class StageView(QGLWidget):
 
     def SetActiveRenderPassPrim(self, prim):
         self._getRenderer().SetActiveRenderPassPrimPath(prim.GetPath())
+        # Also activate associated render settings, if specified
+        rpPrim = UsdRender.Pass(prim)
+        renderSources = rpPrim.GetRenderSourceRel().GetForwardedTargets()
+        if len(renderSources) > 0:
+            rsPath = renderSources[0]
+        else:
+            rsPath = Sdf.Path()
+        self._getRenderer().SetActiveRenderSettingsPrimPath(rsPath)
