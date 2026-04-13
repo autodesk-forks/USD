@@ -1516,6 +1516,17 @@ void main(void)
     vec4 patchCoord = GetPatchCoord();
     color = ShadingTerminal(vec4(Peye, 1), Neye, color, patchCoord);
 
+#if defined(HD_HAS_depthReadback) && defined(HD_EARLY_FRAGMENT_TESTS)
+    // This section needs to come after ShadingTerminal to avoid possible non-uniform paths
+    // when sampling textures required for shading
+    const float bufferVal = texelFetch(HdGetSampler_depthReadback(),
+                                       ivec2(gl_FragCoord.xy),
+                                       /* lod = */ 0).x;
+    if (gl_FragCoord.z >= bufferVal) {
+      discard;
+    }
+#endif
+
     color = ApplyEdgeColor(color, patchCoord);
 
 #ifdef HD_MATERIAL_TAG_MASKED   

@@ -2828,6 +2828,10 @@ HdSt_CodeGen::_CompileWithGeneratedGLSLResources(
         resourceGen._GenerateGLSLTextureResources(resDecl,
             HdShaderTokens->fragmentShader, _resTextures, _GetMetaData());
 
+        if (desc.fragmentDescriptor.earlyFragmentTests) {
+            _genDefines << "#define HD_EARLY_FRAGMENT_TESTS 1\n";
+        }
+
         std::string const source =
             _genDefines.str() + _genDecl.str() + resDecl.str() + _osd.str() +
             _genAccessors.str() + _genFS.str();
@@ -3241,6 +3245,10 @@ HdSt_CodeGen::_CompileWithGeneratedHgiResources(
             HdShaderTokens->fragmentShader, _resMaterial, _GetMetaData());
         resourceGen._GenerateHgiTextureResources(&fsDesc,
             HdShaderTokens->fragmentShader, _resTextures, _GetMetaData());
+
+        if (fsDesc.fragmentDescriptor.earlyFragmentTests) {
+            _genDefines << "#define HD_EARLY_FRAGMENT_TESTS 1\n";
+        }
 
         std::string const declarations =
             _genDefines.str() + _genDecl.str() + _osd.str();
