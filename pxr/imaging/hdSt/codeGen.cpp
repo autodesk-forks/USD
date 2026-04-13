@@ -1065,7 +1065,7 @@ _ResourceGenerator::_GenerateHgiTextureResources(
     using TextureType = HioGlslfxResourceLayout::TextureType;
 
     for (auto const & texture : textureElements) {
-        HgiShaderTextureType const textureType = _textureTypeMap[texture.textureType];
+        HgiShaderTextureType const hgiTextureType = _textureTypeMap[texture.textureType];
         HdFormat const hdTextureFormat =
             HdStHioConversions::GetHdFormat(texture.format);
         if (texture.arraySize > 0) {
@@ -1076,7 +1076,7 @@ _ResourceGenerator::_GenerateHgiTextureResources(
                 texture.bindingIndex,
                 texture.dim,
                 HdStHgiConversions::GetHgiFormat(hdTextureFormat),
-                textureType);
+                hgiTextureType);
         } else {
             HgiShaderFunctionAddTexture(
                 funcDesc,
@@ -1084,7 +1084,7 @@ _ResourceGenerator::_GenerateHgiTextureResources(
                 texture.bindingIndex,
                 texture.dim,
                 HdStHgiConversions::GetHgiFormat(hdTextureFormat),
-                textureType);
+                hgiTextureType);
         }
     }
 }
@@ -2012,7 +2012,6 @@ HdSt_CodeGen::Compile(HdStResourceRegistry*const registry)
         capabilities->IsSet(HgiDeviceCapabilitiesBitsShaderDoublePrecision);
     const bool minusOneToOneDepth =
         capabilities->IsSet(HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne);
-    TfToken const apiName = registry->GetHgi()->GetAPIName();
 
     bool const useHgiResourceGeneration =
         IsEnabledHgiResourceGeneration(registry->GetHgi());
@@ -6523,9 +6522,7 @@ HdSt_CodeGen::_GenerateShaderParameters(bool bindlessTextureEnabled)
 
             _AddTextureElement(&_resTextures,
                                it->second.name, 2,
-                               binding.GetTextureUnit(),
-                               HioFormatFloat32Vec4,
-                               TextureType::TEXTURE);
+                               binding.GetTextureUnit());
 
             _EmitTextureAccessors(
                 accessors, it->second, swizzle, fallbackSwizzle,

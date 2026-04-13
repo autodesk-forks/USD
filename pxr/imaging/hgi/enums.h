@@ -811,6 +811,10 @@ enum HgiShaderTextureType
     HgiShaderTextureTypeArrayTexture,
     HgiShaderTextureTypeCubemapTexture
 };
+
+/// \enum HgiComputeDispatch
+///
+/// Specifies the dispatch method for compute encoders.
 ///
 /// <ul>
 /// <li>HgiComputeDispatchSerial:

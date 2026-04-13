@@ -294,8 +294,7 @@ My_TestGLDrawing::DrawTest()
         drawingCoordBufferBinding,
         false,
         customBindings,
-        registry->GetHgi()->GetCapabilities(),
-        registry->GetHgi()->GetAPIName());
+        registry->GetHgi()->GetCapabilities());
 
     // Initialize codegen.
     HdSt_CodeGen codeGen(geometricShader, shaders,

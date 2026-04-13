@@ -122,9 +122,6 @@ public:
     HDST_API
     size_t GetShaderHash() const;
 
-    HDST_API
-    size_t GetRenderPassStateBarVersion() const;
-
     /// Camera setter API
     ///
     /// Set matrices, viewport and clipping planes explicitly that are used

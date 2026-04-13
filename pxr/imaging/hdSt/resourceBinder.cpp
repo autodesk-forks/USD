@@ -179,8 +179,7 @@ HdSt_ResourceBinder::ResolveBindings(
     HdSt_ResourceBinder::MetaData::DrawingCoordBufferBinding const &dcBinding,
     bool instanceDraw,
     HdStBindingRequestVector const &customBindings,
-    HgiCapabilities const *capabilities,
-    TfToken const &apiName)
+    HgiCapabilities const *capabilities)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -192,7 +191,7 @@ HdSt_ResourceBinder::ResolveBindings(
     const bool bindlessTexturesEnabled = 
         capabilities->IsSet(HgiDeviceCapabilitiesBitsBindlessTextures);
     const bool isMetal =
-            apiName == HgiTokens->Metal;
+        capabilities->IsSet(HgiDeviceCapabilitiesBitsMetalTessellation);
 
     HdStBinding::Type arrayBufferBindingType = HdStBinding::SSBO;
     if (bindlessBuffersEnabled) {
