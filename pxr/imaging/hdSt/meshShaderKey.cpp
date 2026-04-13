@@ -227,10 +227,18 @@ HdSt_MeshShaderKey::HdSt_MeshShaderKey(
             useWireframeLinesFallback = true;
             if (normalsSource ==
                 HdSt_MeshShaderKey::NormalSourceFlatGeometric) {
-                // No GS, we'll use a screen space approximation instead
+                // No GS is used for the wireframe lines fallback (to make it
+                // more compatible), so we'll use a screen space approximation
+                // instead
                 normalsSource = HdSt_MeshShaderKey::NormalSourceFlatScreenSpace;
             }
         }
+    }
+
+    if (!hasGeometricStage && normalsSource ==
+        HdSt_MeshShaderKey::NormalSourceFlatGeometric) {
+        // use a screen space approximation instead
+        normalsSource = HdSt_MeshShaderKey::NormalSourceFlatScreenSpace;
     }
 
     // XXX: Unfortunately instanced meshes can't use h/w culling. This is due to
