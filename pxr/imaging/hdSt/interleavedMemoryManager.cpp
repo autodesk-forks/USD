@@ -100,9 +100,9 @@ HdStInterleavedUBOMemoryManager::CreateBufferArray(
     HdBufferSpecVector const &bufferSpecs,
     HdBufferArrayUsageHint usageHint)
 {
-    const int uniformBufferOffsetAlignment = _resourceRegistry->GetHgi()->
+    const size_t uniformBufferOffsetAlignment = _resourceRegistry->GetHgi()->
         GetCapabilities()->GetUniformBufferOffsetAlignment();
-    const int maxUniformBlockSize = _resourceRegistry->GetHgi()->
+    const size_t maxUniformBlockSize = _resourceRegistry->GetHgi()->
         GetCapabilities()->GetMaxUniformBlockSize();
 
     return std::make_shared<
@@ -112,7 +112,7 @@ HdStInterleavedUBOMemoryManager::CreateBufferArray(
             role,
             bufferSpecs,
             usageHint,
-            uniformBufferOffsetAlignment,
+            static_cast<int>(uniformBufferOffsetAlignment),
             /*structAlignment=*/sizeof(float)*4,
             maxUniformBlockSize,
             HdPerfTokens->garbageCollectedUbo);
@@ -141,7 +141,7 @@ HdStInterleavedSSBOMemoryManager::CreateBufferArray(
     HdBufferSpecVector const &bufferSpecs,
     HdBufferArrayUsageHint usageHint)
 {
-    const int maxShaderStorageBlockSize = _resourceRegistry->GetHgi()->
+    const size_t maxShaderStorageBlockSize = _resourceRegistry->GetHgi()->
         GetCapabilities()->GetMaxShaderStorageBlockSize();
 
     return std::make_shared<
@@ -862,4 +862,3 @@ HdStInterleavedMemoryManager::_StripedInterleavedBufferRange::_GetAggregation() 
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-
