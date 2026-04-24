@@ -382,7 +382,7 @@ struct Exec_ComputationBuilderComputationValueSpecifier
     /// computation name doesn't match a local computation on the provider.
     ///
     /// \sa
-    /// [DispatchedPrimComputation](#Exec_ComputationBuilder::DispatchedPrimComputation)
+    /// [DispatchedPrimComputation](#ExecComputationBuilder::DispatchedPrimComputation)
     ///
     /// # Example
     ///
@@ -508,6 +508,19 @@ struct Exec_ComputationBuilderAccessor
              ExecProviderResolution::DynamicTraversal::Local});
     }
 
+    /// See [IncomingConnections()](#exec_registration::IncomingConnections)
+    template <typename ResultType>
+    ValueSpecifier
+    IncomingConnections(const TfToken &computationName)
+    {
+        return ValueSpecifier(
+            computationName,
+            ExecTypeRegistry::GetInstance().CheckForRegistration<ResultType>(),
+            {Exec_ComputationBuilderAccessorBase::_GetLocalTraversal(),
+             ExecProviderResolution::DynamicTraversal::
+                 IncomingConnectionOwningAttributes});
+    }
+
     /// See [Metadata()](#exec_registration::Metadata)
     template <typename ResultType>
     ValueSpecifier
@@ -552,11 +565,10 @@ struct Exec_ComputationBuilderAttributeAccessor
     /// \addtogroup group_Exec_ValueSpecifiers
     /// @{
 
-    /// See
-    /// [ConnectionTargetedObjects()](#exec_registration::ConnectionTargetedObjects)
+    /// See [Connections()](#exec_registration::Connections)
     template <typename ResultType>
     ValueSpecifier
-    ConnectionTargetedObjects(const TfToken &computationName)
+    Connections(const TfToken &computationName)
     {
         return ValueSpecifier(
             computationName,
@@ -569,7 +581,7 @@ struct Exec_ComputationBuilderAttributeAccessor
     /// @}
 
     // XXX:TODO
-    // Accessors for AnimSpline, IncomingConnections
+    // Accessors for AnimSpline, etc.
 };
 
 /// Relationship accessor
@@ -952,6 +964,18 @@ struct Constant final
     /// - When computation registration is configured (also TBD), allowing
     ///   registrations for a single schema to be dynamic, depending on metadata
     ///   values that drive the configuration process
+    ///
+    /// # Value Types
+    ///
+    /// All computation input value types, including value types used to provide
+    /// constant inputs, must be known to the execution system. All types that
+    /// can be used to author attribute and metadata values in USD are known to
+    /// exec by default. User-defined types must be registered by calling
+    /// ExecTypeRegistry::RegisterType.
+    ///
+    /// \note
+    /// Types that are used for constant inputs must be hashable (see
+    /// VtIsHashable()).
     /// 
     /// # Simple Example
     ///
@@ -1124,7 +1148,7 @@ struct NamespaceAncestor final
 /// Input alias that yields the value of the named attribute.
 /// 
 /// This registration must follow a
-/// [PrimComputation](#Exec_ComputationBuilder::PrimComputation) registration.
+/// [PrimComputation](#ExecComputationBuilder::PrimComputation) registration.
 ///
 /// > **Note:**  
 /// > ```{.cpp}
@@ -1174,6 +1198,14 @@ AttributeValue(const TfToken &attributeName)
 /// input values from the computation \p computationName of type \p ResultType
 /// on the objects targeted by the attribute's connections.
 ///
+/// \note
+/// Conceptually, this input registration provides access to the owning
+/// attribute's connections, but as outlined in the paragraph above, in practice
+/// it requests the named computation from the objects that are targeted by
+/// those connections. The reason we choose "Connections" as the name, rather
+/// than "ConnectionTargetedObjects," is to allow for future expansion of USD to
+/// allow for value-transforming behaviors on attribute connections themselves.
+///
 /// The default input name is \p computationName; use `InputName` to specify a
 /// different input name.
 ///
@@ -1183,8 +1215,8 @@ AttributeValue(const TfToken &attributeName)
 /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
 /// {
 ///     // Register an attribute computation on the attribute 'myAttr' that
-///     // sums the results of the integer-valued 'computeValue' computations
-///     // on the objects targeted by myAttr's connections.
+///     // sums the results of the integer values flowing over myAttr's
+///     // connections from the objects targeted by those connections.
 ///     self.AttributeComputation(_tokens->myAttr, _tokens->computeSum)
 ///         .Callback<int>(+[](const VdfContext &ctx) {
 ///             int sum = 0;
@@ -1196,14 +1228,13 @@ AttributeValue(const TfToken &attributeName)
 ///             return sum;
 ///         })
 ///         .Inputs(
-///             ConnectionTargetedObjects<int>(
-///                 ExecBuiltinComputations->computeValue));
+///             Connections<int>(ExecBuiltinComputations->computeValue));
 /// }
 /// ```
 ///
 template <typename ResultType>
 auto
-ConnectionTargetedObjects(const TfToken &computationName)
+Connections(const TfToken &computationName)
 {
     return Exec_ComputationBuilderComputationValueSpecifier<
         Exec_ComputationBuilderProviderTypes::Attribute>(
@@ -1214,38 +1245,90 @@ ConnectionTargetedObjects(const TfToken &computationName)
                  ConnectionTargetedObjects});
 }
 
+/// On any provider, requests input values from the computation \p
+/// computationName of type \p ResultType on the attributes that own any
+/// attribute connections that target the provider object.
+///
+/// When this input parameter produces multiple input values, there is no
+/// deterministic ordering.
+///
+/// \note
+/// Conceptually, this input registration provides access to the connections
+/// that target the provider, but as outlined in the paragraph above, in
+/// practice it requests the named computation from the attributes that own
+/// those connections. The reason we choose "IncomingConnections" as the name,
+/// rather than "IncomingConnectionOwningAttributes," is to allow for future
+/// expansion of USD to allow for value-transforming behaviors on attribute
+/// connections themselves.
+///
+/// The default input name is \p computationName; use `InputName` to specify a
+/// different input name.
+///
+/// # Example
+///
+/// ```{.cpp}
+/// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+/// {
+///     // Register a prim computation that sums the values of the
+///     // integer-valued attributes that own connections that target the
+///     // provider prim.
+///     self.PrimComputation(_tokens->computeSum)
+///         .Callback<int>(+[](const VdfContext &ctx) {
+///             VdfReadIteratorRange<int> range(
+///                 ctx, ExecBuiltinComputations->computeValue);
+///             return std::accumulate(range.begin(), range.end(), 0);
+///         })
+///         .Inputs(
+///             IncomingConnections<int>(ExecBuiltinComputations->computeValue));
+/// }
+/// ```
+///
+template <typename ResultType>
+auto
+IncomingConnections(const TfToken &computationName)
+{
+    return Exec_ComputationBuilderComputationValueSpecifier<
+        Exec_ComputationBuilderProviderTypes::Any>(
+            computationName,
+            ExecTypeRegistry::GetInstance().CheckForRegistration<ResultType>(),
+            {SdfPath::ReflexiveRelativePath(),
+             ExecProviderResolution::DynamicTraversal::
+                 IncomingConnectionOwningAttributes});
+}
+
 /// @} // Value Specifiers
 
 } // namespace exec_registration
 
 
 // We forward declare these classes so the generated documentation for
-// PrimComputation() and AttributeComputation() comes before the Callback() and
-// Inputs() docs.
+// PrimComputation(), AttributeComputation(), and AttributeExpression() comes
+// before the Callback() and Inputs() docs.
 // 
-class Exec_PrimComputationBuilder;
-class Exec_AttributeComputationBuilder;
+class ExecPrimComputationBuilder;
+class ExecAttributeComputationBuilder;
+class ExecAttributeExpressionBuilder;
 
-/// The top-level builder object (aka, the 'self' variable generated by
+/// The top-level builder object (aka, the `self` variable generated by
 /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA()).
 /// 
-class Exec_ComputationBuilder
+class ExecComputationBuilder
 {
     EXEC_API
-    Exec_ComputationBuilder(TfType schemaType);
+    ExecComputationBuilder(TfType schemaType);
 
 public:
     EXEC_API
-    ~Exec_ComputationBuilder();
+    ~ExecComputationBuilder();
 
     // Allows access to the constructor.
     //
     // Only schema computation registration functions should create computation
     // builders.
     struct ConstructionAccess {
-        static Exec_ComputationBuilder
+        static ExecComputationBuilder
         Construct(TfType schemaType) {
-            return Exec_ComputationBuilder(schemaType);
+            return ExecComputationBuilder(schemaType);
         }
     };
 
@@ -1266,7 +1349,7 @@ public:
     /// ```
     ///
     EXEC_API
-    Exec_PrimComputationBuilder 
+    ExecPrimComputationBuilder 
     PrimComputation(const TfToken &computationName);
 
     /// Registers an attribute computation named \p computationName on
@@ -1286,10 +1369,55 @@ public:
     /// ```
     ///
     EXEC_API
-    Exec_AttributeComputationBuilder 
+    ExecAttributeComputationBuilder 
     AttributeComputation(
         const TfToken &attributeName,
         const TfToken &computationName);
+
+    /// Registers an attribute expression for attributes named \p attributeName.
+    ///
+    /// All attributes have a *computed value* that can be consumed by
+    /// computation inputs, either by explicitly requesting the built-in
+    /// computation [computeValue](#Exec_BuiltinComputationTokens::computeValue)
+    /// or by using [AttributeValue](#exec_registration::AttributeValue).
+    /// The *attribute expression* allows plugin-writers to customize this
+    /// computed value. If no attribute expression is defined, then
+    /// [computeValue](#Exec_BuiltinComputationTokens::computeValue) simply
+    /// provides the resolved value of the attribute.
+    ///
+    /// When defining an attribute expression, it is often desired that it
+    /// consume the attribute's resolved value. The expression can obtain the
+    /// resolved value by registering an input from the computation
+    /// [computeResolvedValue](#Exec_BuiltinComputationTokens::computeResolvedValue)
+    /// on the provider attribute.
+    ///
+    /// \note
+    /// The attribute expression may produce a different type from the attribute
+    /// on which it has been registered. Though allowed, this can lead to
+    /// confusion, and this may become restricted in the future.
+    ///
+    /// # Example
+    ///
+    /// ```{.cpp}
+    /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+    /// {
+    ///     // Register an attribute expression for the string-valued attribute
+    ///     // 'myString', such that its computed value is its resolved value
+    ///     // in upper-case.
+    ///     self.AttributeExpression(_tokens->myString)
+    ///         .Inputs(
+    ///             Computation<std::string>(
+    ///                 ExecBuiltinComputations->computeResolvedValue))
+    ///         .Callback(+[](const VdfContext &ctx) -> std::string {
+    ///             return TfStringToUpper(ctx.GetInputValue<std::string>(
+    ///                 ExecBuiltinComputations->computeResolvedValue));
+    ///         });
+    /// }
+    /// ```
+    ///
+    EXEC_API
+    ExecAttributeExpressionBuilder
+    AttributeExpression(const TfToken &attributeName);
 
     /// Registers a dispatched prim computation named \p computationName.
     ///
@@ -1341,14 +1469,14 @@ public:
     /// ```
     ///
     template <class... DispatchedOntoSchemaTypes>
-    Exec_PrimComputationBuilder
+    ExecPrimComputationBuilder
     DispatchedPrimComputation(
         const TfToken &computationName,
         DispatchedOntoSchemaTypes &&...schemaTypes);
 
     // overload that takes a vector of TfTypes
     EXEC_API
-    Exec_PrimComputationBuilder 
+    ExecPrimComputationBuilder 
     DispatchedPrimComputation(
         const TfToken &computationName,
         ExecDispatchesOntoSchemas &&ontoSchemas);
@@ -1386,14 +1514,14 @@ public:
     /// ```
     ///
     template <class... DispatchedOntoSchemaTypes>
-    Exec_AttributeComputationBuilder
+    ExecAttributeComputationBuilder
     DispatchedAttributeComputation(
         const TfToken &computationName,
         DispatchedOntoSchemaTypes &&...schemaTypes);
 
     // overload that takes a vector of TfTypes
     EXEC_API
-    Exec_AttributeComputationBuilder 
+    ExecAttributeComputationBuilder 
     DispatchedAttributeComputation(
         const TfToken &computationName,
         ExecDispatchesOntoSchemas &&ontoSchemas);
@@ -1497,6 +1625,14 @@ public:
     ///   template parameter *and* the callback must call VdfContext::SetOutput
     ///   to provide the output value.
     ///
+    /// # Result Types
+    ///
+    /// Note that the types used as computation result types (and as computation
+    /// input value types) must be known to the execution system. All types that
+    /// can be used to author attribute and metadata values in USD are known to
+    /// exec by default. User-defined types must be registered by calling
+    /// ExecTypeRegistry::RegisterType.
+    ///
     /// # Example
     ///
     /// ```{.cpp}
@@ -1531,14 +1667,14 @@ public:
 
 
 /// Class used to build prim computation definitions.
-class Exec_PrimComputationBuilder final
-    : public Exec_ComputationBuilderCRTPBase<Exec_PrimComputationBuilder>
+class ExecPrimComputationBuilder final
+    : public Exec_ComputationBuilderCRTPBase<ExecPrimComputationBuilder>
 {
-    // Only Exec_ComputationBuilder can create instances.
-    friend class Exec_ComputationBuilder;
+    // Only ExecComputationBuilder can create instances.
+    friend class ExecComputationBuilder;
 
     EXEC_API
-    Exec_PrimComputationBuilder(
+    ExecPrimComputationBuilder(
         TfType schemaType,
         const TfToken &computationName,
         bool dispatched = false,
@@ -1546,7 +1682,7 @@ class Exec_PrimComputationBuilder final
 
 public:
     EXEC_API
-    ~Exec_PrimComputationBuilder();
+    ~ExecPrimComputationBuilder();
 
     /// \ingroup group_Exec_ComputationRegistrations
     ///
@@ -1571,20 +1707,20 @@ public:
     /// ```
     ///
     template <typename... Args>
-    Exec_PrimComputationBuilder&
+    ExecPrimComputationBuilder&
     Inputs(Args && ... args);
 };
 
 
 /// Class used to build attribute computation definitions.
-class Exec_AttributeComputationBuilder final
-    : public Exec_ComputationBuilderCRTPBase<Exec_AttributeComputationBuilder>
+class ExecAttributeComputationBuilder final
+    : public Exec_ComputationBuilderCRTPBase<ExecAttributeComputationBuilder>
 {
-    // Only Exec_ComputationBuilder can create instances.
-    friend class Exec_ComputationBuilder;
+    // Only ExecComputationBuilder can create instances.
+    friend class ExecComputationBuilder;
 
     EXEC_API
-    Exec_AttributeComputationBuilder(
+    ExecAttributeComputationBuilder(
         const TfToken &attributeName,
         TfType schemaType,
         const TfToken &computationName,
@@ -1593,7 +1729,7 @@ class Exec_AttributeComputationBuilder final
 
 public:
     EXEC_API
-    ~Exec_AttributeComputationBuilder();
+    ~ExecAttributeComputationBuilder();
 
     /// \ingroup group_Exec_ComputationRegistrations
     ///
@@ -1608,20 +1744,70 @@ public:
     /// ```{.cpp}
     /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
     /// {
-    ///     // Register an attribute computation that reads from two inputs.
+    ///     // Register an attribute computation that reads from another
+    ///     // computation on the same attribute, and from a sibling attribute's
+    ///     // computed value.
     ///     self.AttributeComputation(
     ///         _tokens->attr,
-    ///         _tokens->myPrimComputation)
+    ///         _tokens->myAttrComputation)
     ///         .Callback<int>(&_MyCallbackFn)
     ///         .Inputs(
-    ///             NamespaceAncestor<double>(_tokens->anotherPrimComputation));
+    ///             Computation<double>(_tokens->anotherAttrComputation),
+    ///             Prim().AttributeValue<double>(_tokens->anotherAttr));
     /// }
     /// ```
     ///
     template <typename... Args>
-    Exec_AttributeComputationBuilder&
+    ExecAttributeComputationBuilder&
     Inputs(Args && ... args);
 };
+
+/// Class used to build attribute expression definitions.
+class ExecAttributeExpressionBuilder final
+    : public Exec_ComputationBuilderCRTPBase<ExecAttributeExpressionBuilder>
+{
+    // Only ExecComputationBuilder can create instances.
+    friend class ExecComputationBuilder;
+
+    EXEC_API
+    ExecAttributeExpressionBuilder(
+        const TfToken &attributeName,
+        TfType schemaType);
+
+public:
+    EXEC_API
+    ~ExecAttributeExpressionBuilder();
+
+    /// \ingroup group_Exec_ComputationRegistrations
+    ///
+    /// Takes one or more [input registrations](#group_Exec_InputRegistrations)
+    /// that specify how to source input values for an attribute expression.
+    /// 
+    /// This registration must follow a [computation
+    /// registration](#group_Exec_ComputationRegistrations).
+    ///
+    /// # Example
+    ///
+    /// ```{.cpp}
+    /// EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(MySchemaType)
+    /// {
+    ///     // Register an attribute expression that uses the attribute's
+    ///     // resolved value, and the computed value of all connected
+    ///     // attributes.
+    ///     self.AttributeExpression(_tokens->attr)
+    ///         .Callback<int>(&_MyCallbackFn)
+    ///         .Inputs(
+    ///             Computation<double>(
+    ///                 ExecBuiltinComputations->computeResolvedValue),
+    ///             Connections<double>(ExecBuiltinComputations->computeValue));
+    /// }
+    /// ```
+    ///
+    template <typename... Args>
+    ExecAttributeExpressionBuilder&
+    Inputs(Args && ... args);
+};
+
 
 //
 // Exec_ComputationBuilderBase
@@ -1698,12 +1884,12 @@ Exec_ComputationBuilderCRTPBase<Derived>::Callback(
 }
 
 //
-// Exec_PrimComputationBuilder
+// ExecPrimComputationBuilder
 //
 
 template <typename... Args>
-Exec_PrimComputationBuilder&
-Exec_PrimComputationBuilder::Inputs(
+ExecPrimComputationBuilder&
+ExecPrimComputationBuilder::Inputs(
     Args && ... args)
 {
     // Validate inputs
@@ -1717,12 +1903,12 @@ Exec_PrimComputationBuilder::Inputs(
 }
 
 //
-// Exec_AttributeComputationBuilder
+// ExecAttributeComputationBuilder
 //
 
 template <typename... Args>
-Exec_AttributeComputationBuilder&
-Exec_AttributeComputationBuilder::Inputs(
+ExecAttributeComputationBuilder&
+ExecAttributeComputationBuilder::Inputs(
     Args && ... args)
 {
     // Validate inputs
@@ -1736,12 +1922,31 @@ Exec_AttributeComputationBuilder::Inputs(
 }
 
 //
-// Exec_ComputationBuilder
+// ExecAttributeExpressionBuilder
+//
+
+template <typename... Args>
+ExecAttributeExpressionBuilder&
+ExecAttributeExpressionBuilder::Inputs(
+    Args && ... args)
+{
+    // Validate inputs
+    (_ValidateInputs<
+         Exec_ComputationBuilderProviderTypes::Attribute, Args>(), ...);
+
+    // Add inputs
+    (_AddInputKey(&args), ...);
+
+    return *this;
+}
+
+//
+// ExecComputationBuilder
 //
 
 template <class... DispatchedOntoSchemaTypes>
-Exec_PrimComputationBuilder
-Exec_ComputationBuilder::DispatchedPrimComputation(
+ExecPrimComputationBuilder
+ExecComputationBuilder::DispatchedPrimComputation(
     const TfToken &computationName,
     DispatchedOntoSchemaTypes &&...schemaTypes)
 {
@@ -1755,8 +1960,8 @@ Exec_ComputationBuilder::DispatchedPrimComputation(
 }
 
 template <class... DispatchedOntoSchemaTypes>
-Exec_AttributeComputationBuilder
-Exec_ComputationBuilder::DispatchedAttributeComputation(
+ExecAttributeComputationBuilder
+ExecComputationBuilder::DispatchedAttributeComputation(
     const TfToken &computationName,
     DispatchedOntoSchemaTypes &&...schemaTypes)
 {

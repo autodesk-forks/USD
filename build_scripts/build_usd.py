@@ -98,7 +98,9 @@ def GetBuildTargetDefault():
 
 def GetBuildTargets():
     if MacOS():
-        return apple_utils.GetBuildTargets() + [TARGET_WASM, TARGET_WASM64]
+        appleTargets = [str.casefold(x) for x in apple_utils.GetBuildTargets()]
+        appleTargets.extend([TARGET_WASM, TARGET_WASM64])
+        return appleTargets
     elif Linux():
         return [TARGET_WASM, TARGET_WASM64]
     elif Windows():
@@ -1082,24 +1084,47 @@ def InstallTBB_MacOS(context, force, buildArgs):
                  ("ifeq ($(arch),$(filter $(arch),armv7 armv7s arm64))",
                   "ifeq ($(arch),$(filter $(arch),armv7 armv7s {0}))"
                         .format(apple_utils.GetTargetArmArch()))])
-        target_config_patches, clang_config_patches = \
-                apple_utils.GetTBBPatches(context)
-        if target_config_patches:
+
+        if (MacOSTargetEmbedded(context) and 
+            context.buildTarget != apple_utils.TARGET_IOS):
+            target_patches, clang_patches = apple_utils.GetTBBPatches(context)
+            # Create config from iOS config
+            shutil.copy(
+                src="build/ios.macos.inc",
+                dst=f"build/{context.buildTarget.lower()}.macos.inc")
+
+            PatchFile(
+                f"build/{context.buildTarget.lower()}.macos.inc",
+                target_patches)
+
+            # iOS clang just reuses the macOS one,
+            # so it's easier to copy it directly.
+            shutil.copy(src="build/macos.clang.inc",
+                        dst=f"build/{context.buildTarget.lower()}.clang.inc")
+
+            PatchFile(
+                f"build/{context.buildTarget.lower()}.clang.inc",
+                clang_patches)
+
+        primaryArch, secondaryArch = apple_utils.GetTargetArchPair(context)
+        target_patches, clang_patches = apple_utils.GetTBBPatches(context)
+
+        if target_patches:
             # Create config from iOS config
             shutil.copy(src="build/ios.macos.inc",
                         dst=f"build/{context.buildTarget.lower()}.macos.inc")
 
             PatchFile(f"build/{context.buildTarget.lower()}.macos.inc", 
-                      target_config_patches)
+                      target_patches)
 
-        if clang_config_patches:
+        if clang_patches:
             # iOS clang just reuses the macOS one,
             # so it's easier to copy it directly.
             shutil.copy(src="build/macos.clang.inc",
                         dst=f"build/{context.buildTarget.lower()}.clang.inc")
 
             PatchFile(f"build/{context.buildTarget.lower()}.clang.inc", 
-                        clang_config_patches)
+                        clang_patches)
 
         (primaryArch, secondaryArch) = apple_utils.GetTargetArchPair(context)
 
@@ -1445,10 +1470,16 @@ OPENIMAGEIO = Dependency("OpenImageIO", InstallOpenImageIO,
 ############################################################
 # OpenColorIO
 
-OCIO_URL = "https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/refs/tags/v2.2.1.zip"
+if MacOS():
+    OCIO_URL = "https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/refs/tags/v2.4.2.zip"
+else:
+    OCIO_URL = "https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/refs/tags/v2.2.1.zip"
 
 def InstallOpenColorIO(context, force, buildArgs):
-    with CurrentWorkingDirectory(DownloadURL(OCIO_URL, context, force)):
+    # build ocio dest file name based on the OCIO_URL version
+    ocioDestFileName = os.path.splitext(os.path.basename(OCIO_URL))[0]
+    with CurrentWorkingDirectory(DownloadURL(OCIO_URL, context, force,
+                                             destFileName=ocioDestFileName)):
         extraArgs = ['-DOCIO_BUILD_APPS=OFF',
                      '-DOCIO_BUILD_DOCS=OFF',
                      '-DOCIO_BUILD_TESTS=OFF',
@@ -1500,9 +1531,18 @@ def InstallOpenSubdiv(context, force, buildArgs):
             extraArgs.append('-DCMAKE_C_FLAGS="{}"'.format(compileFlags))
             extraArgs.append('-DNO_METAL=ON')
 
-        # Use Metal for macOS and all Apple embedded systems.
+        # Enable GLSL shader source so it is available for Vulkan, etc
+        # even when OpenGL is disabled.
+        extraArgs.append(
+            '-DOSD_PATCH_SHADER_SOURCE_GLSL=ON'
+        )
+
+        # Enable MSL shader source for Apple systems and disable OpenGL.
         if MacOS():
-            extraArgs.append('-DNO_OPENGL=ON')
+            extraArgs.extend([
+                '-DNO_OPENGL=ON',
+                '-DOSD_PATCH_SHADER_SOURCE_MSL=ON',
+            ])
 
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
@@ -1598,7 +1638,7 @@ DRACO = Dependency("Draco", InstallDraco, "include/draco/compression/decode.h")
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.39.3.zip"
+MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.39.4.zip"
 
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
@@ -1698,6 +1738,7 @@ def InstallUSD(context, force, buildArgs):
 
         extraArgs.append('-DPXR_PREFER_SAFETY_OVER_SPEED={}'
                          .format('ON' if context.safetyFirst else 'OFF'))
+        extraArgs.append(f"-DPXR_ENABLE_COMPILER_CACHE={'ON' if context.useCompilerCache else 'OFF'}")
 
         if context.buildOneTBB:
             extraArgs.append('-DPXR_FIND_TBB_IN_CONFIG=ON')
@@ -2035,6 +2076,7 @@ group.add_argument("--ignore-paths", type=str, nargs="*", default=[],
 group.add_argument("--build-target",
                     default=GetBuildTargetDefault(),
                     choices=GetBuildTargets(),
+                    type=str.lower,
                     help=("Build target for cross compilation. "
                             "(default: {})".format(
                             GetBuildTargetDefault())))
@@ -2069,6 +2111,12 @@ group.add_argument("--generator", type=str,
 group.add_argument("--toolset", type=str,
                    help=("CMake toolset to use when building libraries with "
                          "cmake"))
+subgroup = group.add_mutually_exclusive_group()
+subgroup.add_argument("--compiler-cache", dest="use_compiler_cache", action="store_true",
+                      default=not Windows(),
+                      help="Use ccache to enable faster iterative builds. (default on macOS and Linux)")
+subgroup.add_argument("--no-compiler-cache", dest="use_compiler_cache", action="store_false",
+                      help="Do not use ccache. (default on Windows)")
 if MacOS():
     codesignDefault = True if apple_utils.IsHostArm() else False
     group.add_argument("--codesign", dest="macos_codesign",
@@ -2343,6 +2391,7 @@ class InstallContext:
         self.cmakeGenerator = args.generator
         self.cmakeToolset = args.toolset
         self.cmakeBuildArgs = args.cmake_build_args
+        self.useCompilerCache = args.use_compiler_cache
 
         # Number of jobs
         self.numJobs = args.jobs
@@ -2386,10 +2435,10 @@ class InstallContext:
                            args.build_target == TARGET_WASM64)
         self.buildTarget = args.build_target
         if MacOS():
-            apple_utils.SetTarget(self, self.buildTarget)
+            apple_utils.SetTarget(self)
 
             self.macOSCodesign = False
-            if args.macos_codesign:
+            if args.macos_codesign and not self.targetWasm:
                 self.macOSCodesign = (args.macos_codesign_id or 
                                       apple_utils.GetCodeSignID())
             if apple_utils.IsHostArm() and args.ignore_homebrew:
@@ -2545,11 +2594,13 @@ if context.buildImaging:
     if context.enableOpenVDB:
         requiredDependencies += [ZLIB, TBB, BLOSC, BOOST, OPENEXR, OPENVDB]
     
-    if context.buildOIIO:
-        requiredDependencies += [ZLIB, BOOST, JPEG, TIFF, PNG, OPENEXR, OPENIMAGEIO]
-
+    # When OCIO is required, we need to make sure it's built before OIIO, since
+    # OIIO is dependent on OCIO.
     if context.buildOCIO:
         requiredDependencies += [ZLIB, OPENCOLORIO]
+
+    if context.buildOIIO:
+        requiredDependencies += [ZLIB, BOOST, JPEG, TIFF, PNG, OPENEXR, OPENIMAGEIO]
 
     if context.buildEmbree:
         requiredDependencies += [TBB, EMBREE]

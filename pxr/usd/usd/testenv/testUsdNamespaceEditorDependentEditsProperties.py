@@ -20,7 +20,7 @@ class TestUsdNamespaceEditorDependentEditsProperties(
     # verifies that listening to the ObjectsChanged notice will send a notice 
     # holding the expected renamed properties specified.
     def _ApplyEditWithVerification(self, editor, 
-            expectedObjectsChangedRenamedProperties = None, expectWarnings=False):
+            expectedObjectsChangedRenamedProperties = None, expectedWarnings=[]):
         # receivedObjectsChanged is used for sanity checking that the notice
         # handler was indeed called as expected.
         receivedObjectsChanged = False
@@ -47,17 +47,18 @@ class TestUsdNamespaceEditorDependentEditsProperties(
             _OnObjectsChangedVerifyRenamedPropertiesNotices)
 
         try:
-            if expectWarnings:
-                print("\n=== EXPECT WARNINGS ===", file=sys.stderr)
             # Verify CanApply and Apply
             self.assertTrue(editor.CanApplyEdits())
+            self.assertEqual(len(editor.CanApplyEdits().warnings), 
+                             len(expectedWarnings))
+            for warn, expectedWarn in zip(editor.CanApplyEdits().warnings, 
+                                          expectedWarnings):
+                self.assertTrue(expectedWarn in warn)
             self.assertTrue(editor.ApplyEdits())
             # Sanity check on the notice listener being called.
             self.assertTrue(receivedObjectsChanged)
             
         finally:
-            if expectWarnings:
-                print("\n=== END EXPECTED WARNINGS ===", file=sys.stderr)
             objectsChanged.Revoke()
 
     def _VerifyDefaultAndCustomMetadata(self, stage, propertyPath, 
@@ -1662,7 +1663,7 @@ class TestUsdNamespaceEditorDependentEditsProperties(
             expectedObjectsChangedRenamedProperties = {
             'layer1.usda' : [('/Ref1.childAttr', 'renamedChildAttr')],
             'layer2.usda' : [('/Prim.childAttr', 'renamedChildAttr')],
-        }, expectWarnings = True)
+        }, expectedWarnings = ['found conflicting specs'])
         
         # Verify on stage1 that just /Ref1.childAttr is renamed.
         self._VerifyStageContents(stage1, {
@@ -1715,7 +1716,7 @@ class TestUsdNamespaceEditorDependentEditsProperties(
             expectedObjectsChangedRenamedProperties = {
             'layer1.usda' : [('/Ref2.childAttr', 'renamedChildAttr')],
             'layer2.usda' : [('/Prim.childAttr', 'renamedChildAttr')],
-        }, expectWarnings = False)
+        })
 
         # Verify on stage1 that /Ref2.childAttr has been renamed.
         self._VerifyStageContents(stage1, {

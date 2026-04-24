@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <iosfwd>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -555,23 +556,23 @@ PXR_NAMESPACE_CLOSE_SCOPE
                                                                               \
     ARCH_ALWAYS_INLINE inline void* operator new(::std::size_t s) {           \
         PXR_NS::TfAutoMallocTag tag(name1, name2);                            \
-        return malloc(s);                                                     \
+        return ::operator new(s, std::nothrow);                               \
     }                                                                         \
                                                                               \
     ARCH_ALWAYS_INLINE inline void* operator new[](::std::size_t s) {         \
         PXR_NS::TfAutoMallocTag tag(name1, name2);                            \
-        return malloc(s);                                                     \
+        return ::operator new[](s, std::nothrow);                             \
     }                                                                         \
                                                                               \
     /* Required due to the placement-new override above. */                   \
     ARCH_ALWAYS_INLINE inline void operator delete(void* ptr, void* place) {} \
                                                                               \
     ARCH_ALWAYS_INLINE inline void operator delete(void* ptr, size_t) {       \
-        free(ptr);                                                            \
+        ::operator delete(ptr, std::nothrow);                                 \
     }                                                                         \
                                                                               \
     ARCH_ALWAYS_INLINE inline void operator delete[] (void* ptr, size_t) {    \
-        free(ptr);                                                            \
+        ::operator delete[](ptr, std::nothrow);                               \
     }                                                                         \
 
 #endif

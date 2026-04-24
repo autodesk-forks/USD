@@ -10,6 +10,7 @@
 #include "pxr/exec/esfUsd/prim.h"
 #include "pxr/exec/esfUsd/relationship.h"
 #include "pxr/exec/esfUsd/stage.h"
+#include "pxr/exec/esfUsd/stageData.h"
 
 #include "pxr/base/tf/diagnosticLite.h"
 #include "pxr/base/tf/token.h"
@@ -27,6 +28,7 @@
 #include "pxr/usd/usd/relationship.h"
 
 #include <utility>
+#include <type_traits>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -41,7 +43,12 @@ template <class InterfaceType, class UsdObjectType>
 bool
 EsfUsd_ObjectImpl<InterfaceType, UsdObjectType>::_IsValid() const
 {
-    return _GetWrapped().IsValid();
+    const UsdObjectType &object = _GetWrapped();
+    if constexpr (std::is_same_v<UsdObjectType, UsdPrim>) {
+        return object.IsValid() && UsdPrimDefaultPredicate(object);
+    } else {
+        return object.IsValid() && UsdPrimDefaultPredicate(object.GetPrim());
+    }
 }
 
 template <class InterfaceType, class UsdObjectType>
@@ -63,6 +70,14 @@ EsfStage
 EsfUsd_ObjectImpl<InterfaceType, UsdObjectType>::_GetStage() const
 {
     return {std::in_place_type<EsfUsd_Stage>, _GetWrapped().GetStage()};
+}
+
+template <class InterfaceType, class UsdObjectType>
+SdfPathVector
+EsfUsd_ObjectImpl<InterfaceType, UsdObjectType>::_GetIncomingConnections() const
+{
+    return EsfUsdStageData::GetIncomingConnections(
+        _GetWrapped().GetStage(), _GetWrapped().GetPath());
 }
 
 template <class InterfaceType, class UsdObjectType>

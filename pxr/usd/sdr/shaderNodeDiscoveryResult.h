@@ -22,9 +22,9 @@ struct SdrShaderNodeDiscoveryResult {
         const SdrIdentifier& identifier,
         const SdrVersion& version,
         const std::string& name,
-        const TfToken& family,
+        const TfToken& function,
         const TfToken& discoveryType,
-        const TfToken& sourceType,
+        const TfToken& shadingSystem,
         const std::string& uri,
         const std::string& resolvedUri,
         const std::string &sourceCode=std::string(),
@@ -34,9 +34,11 @@ struct SdrShaderNodeDiscoveryResult {
     ) : identifier(identifier),
         version(version),
         name(name),
-        family(family),
+        function(function),
+        family(this->function),
         discoveryType(discoveryType),
-        sourceType(sourceType),
+        shadingSystem(shadingSystem),
+        sourceType(this->shadingSystem),
         uri(uri),
         resolvedUri(resolvedUri),
         sourceCode(sourceCode),
@@ -44,6 +46,74 @@ struct SdrShaderNodeDiscoveryResult {
         blindData(blindData),
         subIdentifier(subIdentifier)
     { }
+
+    /// The following methods will removed in favor of implicitly defined
+    /// methods once `sourceType` is fully removed from Sdr. The sourceType
+    /// reference to shadingSystem in this class causes this group of formerly
+    /// implicit methods to be deleted.
+    /// {@
+    SdrShaderNodeDiscoveryResult(SdrShaderNodeDiscoveryResult&& other)
+      : identifier(std::move(other.identifier)),
+        version(std::move(other.version)),
+        name(std::move(other.name)),
+        function(std::move(other.function)),
+        family(this->function),
+        discoveryType(std::move(other.discoveryType)),
+        shadingSystem(std::move(other.shadingSystem)),
+        sourceType(this->shadingSystem),
+        uri(std::move(other.uri)),
+        resolvedUri(std::move(other.resolvedUri)),
+        sourceCode(std::move(other.sourceCode)),
+        metadata(std::move(other.metadata)),
+        blindData(std::move(other.blindData)),
+        subIdentifier(std::move(other.subIdentifier))
+    { }
+
+    SdrShaderNodeDiscoveryResult(const SdrShaderNodeDiscoveryResult& other)
+      : identifier(other.identifier),
+        version(other.version),
+        name(other.name),
+        function(other.function),
+        family(this->function),
+        discoveryType(other.discoveryType),
+        shadingSystem(other.shadingSystem),
+        sourceType(this->shadingSystem),
+        uri(other.uri),
+        resolvedUri(other.resolvedUri),
+        sourceCode(other.sourceCode),
+        metadata(other.metadata),
+        blindData(other.blindData),
+        subIdentifier(other.subIdentifier)
+    { }
+
+    SdrShaderNodeDiscoveryResult& operator=(
+        SdrShaderNodeDiscoveryResult&& other)
+    {
+        this->identifier = std::move(other.identifier);
+        this->version = std::move(other.version);
+        this->name = std::move(other.name);
+        this->function = std::move(other.function);
+        this->family = this->function;
+        this->discoveryType = std::move(other.discoveryType);
+        this->shadingSystem = std::move(other.shadingSystem);
+        this->sourceType = this->shadingSystem;
+        this->uri = std::move(other.uri);
+        this->resolvedUri = std::move(other.resolvedUri);
+        this->sourceCode = std::move(other.sourceCode);
+        this->metadata = std::move(other.metadata);
+        this->blindData = std::move(other.blindData);
+        this->subIdentifier = std::move(other.subIdentifier);
+        return *this;
+    }
+
+    SdrShaderNodeDiscoveryResult& operator=(
+        const SdrShaderNodeDiscoveryResult& other)
+    {
+        SdrShaderNodeDiscoveryResult copy(other);
+        *this = std::move(copy);
+        return *this;
+    }
+    /// @}
 
     /// The node's identifier.
     ///
@@ -66,12 +136,17 @@ struct SdrShaderNodeDiscoveryResult {
     /// name "mix_float".
     std::string name;
 
+    /// The node's function.
+    ///
+    /// A node's function specifies a generic grouping of nodes.
+    /// E.g a node with identifier "mix_float_2_1" might have function "mix".
+    TfToken function;
+
     /// The node's family.
     ///
-    /// A node's family is an optional piece of metadata that specifies a
-    /// generic grouping of nodes.  E.g a node with identifier
-    /// "mix_float_2_1" might have family "mix".
-    TfToken family;
+    /// \deprecated
+    /// Deprecated in favor of `function`.
+    TfToken& family;
 
     /// The node's discovery type.
     ///
@@ -81,12 +156,19 @@ struct SdrShaderNodeDiscoveryResult {
     /// information on how this value is used.
     TfToken discoveryType;
 
+    /// The node's shading system.
+    ///
+    /// This type is unique to the parsing plugin and indicates what shading
+    /// language and standard should be used to interpret this discovery
+    /// result.
+    /// \sa SdrShaderNode::GetShadingSystem
+    TfToken shadingSystem;
+
     /// The node's source type.
     ///
-    /// This type is unique to the parsing plugin
-    /// (`SdrParserPlugin::SourceType`), and determines the source of the node.
-    /// See `SdrShaderNode::GetSourceType()` for more information.
-    TfToken sourceType;
+    /// \deprecated
+    /// Deprecated in favor of `shadingSystem`
+    TfToken& sourceType;
 
     /// The node's origin.
     ///

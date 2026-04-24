@@ -51,13 +51,13 @@ UsdShadeShaderDefUtils::GetDiscoveryResults(
     const UsdPrim shaderDefPrim = shaderDef.GetPrim();
     const TfToken &identifier = shaderDefPrim.GetName();
 
-    // Get the family name, shader name and version information from the 
+    // Get the function name, shader name and version information from the 
     // identifier.
-    TfToken family;
+    TfToken function;
     TfToken name; 
     SdrVersion version; 
     if (!SdrFsHelpersSplitShaderIdentifier(shaderDefPrim.GetName(), 
-                &family, &name, &version)) {
+                &function, &name, &version)) {
         // A warning has already been issued by SplitShaderIdentifier.
         return result;
     }
@@ -108,7 +108,7 @@ UsdShadeShaderDefUtils::GetDiscoveryResults(
                     identifier,
                     version.GetAsDefault(),
                     name,
-                    family, 
+                    function, 
                     discoveryType,
                     sourceType,
                     /* uri */ sourceUri, 

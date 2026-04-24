@@ -30,23 +30,23 @@ class SdrDiscoveryPluginContext;
 ///
 
 /// Type of a function that can be used to parse a discovery result's identifier
-/// into its family, name, and version.
+/// into its function, name, and version.
 using SdrParseIdentifierFn = std::function<
     bool (const TfToken &identifier, 
-          TfToken *family,
+          TfToken *function,
           TfToken *name,
           SdrVersion *version)>;
 
 /// Given a shader's \p identifier token, computes the corresponding 
-/// SdrShaderNode's family name, implementation name and shader version 
+/// SdrShaderNode's function name, implementation name and shader version 
 /// (as SdrVersion).
 /// 
-/// * \p family is the prefix of \p identifier up to and not 
+/// * \p function is the prefix of \p identifier up to and not 
 /// including the first underscore. 
 /// * \p version is the suffix of \p identifier comprised of one or 
 /// two integers representing the major and minor version numbers.
 /// * \p name is the string we get by joining 
-/// <i>family</i> with everything that's in between <i>family</i> 
+/// <i>function</i> with everything that's in between <i>function</i>
 /// and <i>version</i> with an underscore.
 /// 
 /// Returns true if \p identifier is valid and was successfully split 
@@ -58,7 +58,7 @@ SDR_API
 bool
 SdrFsHelpersSplitShaderIdentifier(
     const TfToken &identifier, 
-    TfToken *family,
+    TfToken *function,
     TfToken *name,
     SdrVersion *version);
 
@@ -72,9 +72,9 @@ SdrFsHelpersSplitShaderIdentifier(
 ///
 /// The identifier for each discovery result is the base name of the represented
 /// file with the extension removed. The \p parseIdentifierFn is used to parse 
-/// the family, name, and version from the identifier that will set in the 
+/// the function, name, and version from the identifier that will set in the 
 /// file's discovery result. By default, SdrFsHelpersSplitShaderIdentifier is 
-/// used to parse the identifier, but the family/name/version parsing behavior 
+/// used to parse the identifier, but the function/name/version parsing behavior 
 /// can be changed by passing a custom parseIdentifierFn. Any identifiers that 
 /// cannot be parsed by whatever the parseIdentifierFn will be considered
 /// invalid and not added as a discovery result. Note that the version for 

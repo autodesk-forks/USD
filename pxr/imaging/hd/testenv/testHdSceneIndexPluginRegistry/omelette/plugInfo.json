@@ -1,0 +1,108 @@
+{
+    "Plugins": [
+        {
+            # Using type "resource" instead of "library" to avoid dynamic 
+            # library loading in the test environment.
+            # testHdSceneIndexPluginRegistry.cpp defines all of the plugins
+            # below.
+            "Type": "resource",
+            "Name": "omelettePlugins",
+            
+            "Info": {
+                "Types": {
+                    "TestHdSip_BreakEggs" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "",
+                        "loadWithApps" : "",
+
+                        # New fields to express scene index plugin ordering
+                        # via JSON.
+                        "tags" : ["prepTag"],
+                        
+                        "ordering" : {
+                            "before" : "makeTag"
+                        },
+
+                        # Unused but mandatory fields (see HfPluginRegistry).
+                        "priority": 0,
+                        "displayName": "Break Eggs Scene Index Plugin"
+                    },
+                    "TestHdSip_CutVeggies" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "",
+                        "loadWithApps" : "",
+
+                        # New fields to express scene index plugin ordering
+                        # via JSON.
+                        "tags" : ["prepTag"],
+                        
+                        "ordering" : {
+                            "before" : "makeTag"
+                        },
+
+                        # Unused but mandatory fields (see HfPluginRegistry).
+                        "priority": 0,
+                        "displayName": "Cut Veggies Scene Index Plugin"
+                    },
+                    "TestHdSip_HeatPan" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "",
+                        "loadWithApps" : "",
+
+                        # New fields to express scene index plugin ordering
+                        # via JSON.
+                        "tags" : ["makeTag"],
+                        
+                        "ordering" : {
+                            "after" : "prepTag",
+                            "before" : "enjoyTag",
+                            # This needs to happen before TestHdSip_MakeOmelette.
+                            "position" : "firstAfter"
+                        },
+
+                        # Unused but mandatory fields (see HfPluginRegistry).
+                        "priority": 0,
+                        "displayName": "Heat Pan Scene Index Plugin"
+                    },
+                    "TestHdSip_MakeOmelette" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "",
+                        "loadWithApps" : "",
+
+                        # New fields to express scene index plugin ordering
+                        # via JSON.
+                        "tags" : ["makeTag"],
+                        
+                        "ordering" : {
+                            "after" : "prepTag",
+                            "position" : "lastBefore"
+                            # Omitting "before" here because plugins with the
+                            # "enjoyTag" tag declare that they should come
+                            # after any plugin with the "makeTag" tag.
+                        },
+
+                        # Unused but mandatory fields (see HfPluginRegistry).
+                        "priority": 0,
+                        "displayName": "Make Omelette Scene Index Plugin"
+                    },
+                    "TestHdSip_EatOmelette" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "",
+                        "loadWithApps" : "",
+
+                        # New fields to express scene index plugin ordering
+                        # via JSON.
+                        "tags" : ["enjoyTag"],
+                        "ordering" : {
+                            "after" : "makeTag"
+                        },
+
+                        # Unused but mandatory fields (see HfPluginRegistry).
+                        "priority": 0,
+                        "displayName": "Eat Omelette Scene Index Plugin"
+                    }
+                }
+            }
+        }
+    ]
+}

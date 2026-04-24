@@ -92,6 +92,8 @@ HdEmbree_Light::HdEmbree_Light(SdfPath const& id, TfToken const& lightType)
         _lightData.lightVariant = HdEmbree_Cylinder();
     } else if (lightType == HdSprimTypeTokens->diskLight) {
         _lightData.lightVariant = HdEmbree_Disk();
+    } else if (lightType == HdSprimTypeTokens->distantLight) {
+        _lightData.lightVariant = HdEmbree_Distant();
     } else if (lightType == HdSprimTypeTokens->domeLight) {
         _lightData.lightVariant = HdEmbree_Dome();
     } else if (lightType == HdSprimTypeTokens->rectLight) {
@@ -181,6 +183,12 @@ HdEmbree_Light::Sync(HdSceneDelegate *sceneDelegate,
                 sceneDelegate->GetLightParamValue(id, HdLightTokens->radius)
                     .GetWithDefault(0.5f),
             };
+        } else if constexpr (std::is_same_v<T, HdEmbree_Distant>) {
+            typedLight = HdEmbree_Distant{
+                float(GfDegreesToRadians(
+                    sceneDelegate->GetLightParamValue(id, HdLightTokens->angle)
+                        .GetWithDefault(0.53f) / 2.0f)),
+            };
         } else if constexpr (std::is_same_v<T, HdEmbree_UnknownLight>) {
             // Do nothing...
         } else {
@@ -217,6 +225,42 @@ HdEmbree_Light::Sync(HdSceneDelegate *sceneDelegate,
             id, HdLightTokens->shapingConeSoftness);
         value.IsHolding<float>()) {
         _lightData.shaping.coneSoftness = value.UncheckedGet<float>();
+    }
+
+    if (const auto value = sceneDelegate->GetLightParamValue(
+            id, HdLightTokens->shapingIesFile);
+        value.IsHolding<SdfAssetPath>()) {
+        SdfAssetPath iesAssetPath = value.UncheckedGet<SdfAssetPath>();
+        std::string iesPath = iesAssetPath.GetResolvedPath();
+        if (iesPath.empty()) {
+            iesPath = iesAssetPath.GetAssetPath();
+        }
+
+        if (!iesPath.empty()) {
+            std::ifstream in(iesPath);
+            if (!in.is_open()) {
+                TF_WARN("could not open ies file %s", iesPath.c_str());
+            } else {
+                std::stringstream buffer;
+                buffer << in.rdbuf();
+
+                if (_lightData.shaping.ies.iesFile.load(buffer.str())) {
+                    TF_WARN("could not load ies file %s", iesPath.c_str());
+                }
+            }
+        }
+    }
+
+    if (const auto value = sceneDelegate->GetLightParamValue(
+            id, HdLightTokens->shapingIesNormalize);
+        value.IsHolding<bool>()) {
+        _lightData.shaping.ies.normalize = value.UncheckedGet<bool>();
+    }
+
+    if (const auto value = sceneDelegate->GetLightParamValue(
+            id, HdLightTokens->shapingIesAngleScale);
+        value.IsHolding<float>()) {
+        _lightData.shaping.ies.angleScale = value.UncheckedGet<float>();
     }
 
     HdEmbreeRenderer *renderer = embreeRenderParam->GetRenderer();

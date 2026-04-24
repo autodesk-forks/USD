@@ -22,44 +22,72 @@ PXR_NAMESPACE_OPEN_SCOPE
 //
 // Enum names should correlate directly to named API e.g. "GetLabel" or
 // "GetSdrUsdEncodingVersion"
-#define SDR_NODE_METADATA_TOKENS   \
-    ((Category, "category"))       \
-    ((Role, "role"))               \
-    ((Departments, "departments")) \
-    ((Help, "help"))               \
-    ((Label, "label"))             \
-    ((Pages, "pages"))             \
-    ((OpenPages, "openPages"))     \
-    ((PagesShownIf, "pagesShownIf")) \
-    ((Primvars, "primvars"))       \
-    ((ImplementationName, "__SDR__implementationName"))\
-    ((Target, "__SDR__target"))    \
-    ((SdrUsdEncodingVersion, "sdrUsdEncodingVersion")) \
+#define SDR_NODE_METADATA_TOKENS                         \
+    ((Category, "category")) /* deprecated */            \
+    ((Domain, "domain"))                                 \
+    ((Subdomain, "subdomain"))                           \
+    ((Context, "context"))                               \
+    ((Role, "role"))                                     \
+    ((TargetRenderer, "targetRenderer"))                 \
+    ((Collections, "collections"))                       \
+    ((Departments, "departments")) /* deprecated */      \
+    ((Help, "help"))                                     \
+    ((Label, "label"))                                   \
+    ((Pages, "pages")) /* deprecated */                  \
+    ((OpenPages, "openPages"))                           \
+    ((PagesShownIf, "pagesShownIf"))                     \
+    ((Primvars, "primvars"))                             \
+    ((ImplementationName, "__SDR__implementationName"))  \
+    ((Target, "__SDR__target")) /* deprecated */         \
+    ((SdrUsdEncodingVersion, "sdrUsdEncodingVersion"))   \
     ((SdrDefinitionNameFallbackPrefix, "sdrDefinitionNameFallbackPrefix"))
 
-// Note: The concept of context can be queried with the GetContext() method.
-// Sdr categorizes shaders by the context in which they are used inside of a
-// renderer. For instance during 'pattern' evaluation to feed into a surface
-// or volume shader. For BXDFs used in 'surface' and 'volume'
-// rendering situations.
+#define SDR_NODE_DOMAIN_TOKENS  \
+    ((Rendering, "rendering"))  \
+    ((General, "general"))
+
+#define SDR_NODE_SUBDOMAIN_TOKENS  \
+    /* rendering domain */         \
+    ((Shading, "shading"))         \
+    ((Filtering, "filtering"))     \
+    ((Lighting, "lighting"))       \
+    ((Rendering, "rendering"))
+
 #define SDR_NODE_CONTEXT_TOKENS         \
+    /* shading subdomain */             \
     ((Pattern, "pattern"))              \
     ((Surface, "surface"))              \
     ((Volume, "volume"))                \
     ((Displacement, "displacement"))    \
+    /* lighting subdomain */            \
     ((Light, "light"))                  \
-    ((DisplayFilter, "displayFilter"))  \
     ((LightFilter, "lightFilter"))      \
+    /* filtering subdomain*/            \
+    ((DisplayFilter, "displayFilter"))  \
     ((PixelFilter, "pixelFilter"))      \
-    ((SampleFilter, "sampleFilter"))    
+    ((SampleFilter, "sampleFilter"))    \
+    ((VolumeFilter, "volumeFilter"))    \
+    /* rendering subdomain */           \
+    ((Integrator, "integrator"))        \
+    ((Projection, "projection"))
 
 #define SDR_NODE_ROLE_TOKENS         \
     ((Primvar, "primvar"))           \
     ((Texture, "texture"))           \
     ((Field, "field"))               \
-    ((Math, "math"))                 \
+    ((Math, "math"))
 
+
+/// \deprecated
+/// SdrNodeMetadata->Category, SdrNodeMetadata->Departments,
+/// SdrNodeMetadata->Pages, SdrNodeMetadata->Target are deprecated.
+///
+/// All other tokens will remain intact. Note that clients can still
+/// set metadata with keys such as "category" and "departments" -- the
+/// convenience API is simply removed.
 TF_DECLARE_PUBLIC_TOKENS(SdrNodeMetadata, SDR_API, SDR_NODE_METADATA_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(SdrNodeDomain, SDR_API, SDR_NODE_DOMAIN_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(SdrNodeSubdomain, SDR_API, SDR_NODE_SUBDOMAIN_TOKENS);
 TF_DECLARE_PUBLIC_TOKENS(SdrNodeContext, SDR_API, SDR_NODE_CONTEXT_TOKENS);
 TF_DECLARE_PUBLIC_TOKENS(SdrNodeRole, SDR_API, SDR_NODE_ROLE_TOKENS);
 
@@ -78,6 +106,9 @@ TF_DECLARE_PUBLIC_TOKENS(SdrNodeRole, SDR_API, SDR_NODE_ROLE_TOKENS);
 class SdrShaderNodeMetadata
 {
 public:
+    SDR_API
+    SdrShaderNodeMetadata();
+
     /// Ingest metadata from the legacy SdrTokenMap structure.
     ///
     /// For named metadata items, conversions to richer types from
@@ -96,11 +127,6 @@ public:
 
     SDR_API
     explicit SdrShaderNodeMetadata(const VtDictionary& items);
-
-    SDR_API
-    explicit SdrShaderNodeMetadata(VtDictionary&& items);
-
-    SdrShaderNodeMetadata() {}
 
     /// Returns whether this metadata contains an item with the given key.
     SDR_API
@@ -163,6 +189,30 @@ public:
     /// Get all key-value items by-value.
     VtDictionary GetItems() && { return std::move(_items); }
 
+    /// \name Default values
+    /// Default values are populated to SdrShaderNodeMetadata at
+    /// construction time, if the corresponding metadata items are
+    /// not already specified by the ingested dictionary.
+    /// 
+    /// Note that metadata items with default values can still
+    /// be modified post-construction, and that clearing
+    /// those items will remove them from the metadata object
+    /// rather than resetting them to their default value.
+    /// {@
+
+    /// This method returns a non-empty VtValue if and only if the
+    /// key represents a metadata item with a default value.
+    SDR_API
+    static VtValue GetDefaultValue(const TfToken& key);
+
+    /// Returns all metadata items that have default values.
+    ///
+    /// The result is a dictionary with metadata keys and their
+    /// associated default values.
+    SDR_API
+    static const VtDictionary& GetDefaultValues();
+    /// @}
+
     /// Named metadata
     ///
     /// {@
@@ -176,19 +226,82 @@ public:
     SDR_API
     void ClearLabel();
 
+    /// \name Category
+    ///
+    /// Deprecated metadata item.
+    ///
+    /// \deprecated
+    /// {@
+
+    /// \deprecated
     SDR_API
     bool HasCategory() const;
+    /// \deprecated
     SDR_API
     TfToken GetCategory() const;
+    /// \deprecated
     SDR_API
     void SetCategory(const TfToken& v);
+    /// \deprecated
     SDR_API
     void ClearCategory();
+    /// @}
+
+    /// \name Domain
+    ///
+    /// Domain defines groups for the broadest system categories.
+    ///
+    /// Domain has a default value of "rendering". This means that
+    /// at SdrShaderNodeMetadata initialization time, unspecified
+    /// domains will be initialized to SdrNodeDomain->Rendering.
+    ///
+    /// SdrNodeDomain contains common domain token values.
+    /// {@
+    SDR_API
+    bool HasDomain() const;
+    SDR_API
+    TfToken GetDomain() const;
+    SDR_API
+    void SetDomain(const TfToken& v);
+    SDR_API
+    void ClearDomain();
+    /// @}
+
+    /// \name Subdomain
+    ///
+    /// Subdomain defines subsystems within the domain.
+    ///
+    /// SdrNodeSubdomain contains common subdomain token values.
+    /// {@
+    SDR_API
+    bool HasSubdomain() const;
+    SDR_API
+    TfToken GetSubdomain() const;
+    SDR_API
+    void SetSubdomain(const TfToken& v);
+    SDR_API
+    void ClearSubdomain();
+    ///@}
+
+    /// \name Context
+    ///
+    /// Context describes a node's usage group within its subdomain.
+    ///
+    /// SdrNodeContext contains common context token values.
+    /// {@
+    SDR_API
+    bool HasContext() const;
+    SDR_API
+    TfToken GetContext() const;
+    SDR_API
+    void SetContext(const TfToken& v);
+    SDR_API
+    void ClearContext();
+    ///@}
 
     /// \name Role
     ///
-    /// Role is used to annotate the role that the shader node plays inside
-    /// a shader network.
+    /// Role provides finer granularity for contexts that contain many nodes.
     /// {@
     SDR_API
     bool HasRole() const;
@@ -200,6 +313,50 @@ public:
     void ClearRole();
     /// @}
 
+    /// \name Target Renderer
+    ///
+    /// When set, the target renderer item describes that a node was designed
+    /// for (but not necessarily limited to) a specific renderer.
+    ///
+    /// For example, if a node sets its target renderer to "FooRenderer",
+    /// "BarRenderer" may still be able render the node partially, although
+    /// this isn't guaranteed. "BarRenderer" can check the node's target
+    /// renderer in addition to the node's shadingSystem for compatibility
+    /// hints.
+    ///
+    /// If a node's target renderer is unspecified, renderers should
+    /// rely on a node's shadingSystem as usual to determine compatibility.
+    /// {@
+    SDR_API
+    bool HasTargetRenderer() const;
+    SDR_API
+    TfToken GetTargetRenderer() const;
+    SDR_API
+    void SetTargetRenderer(const TfToken& v);
+    SDR_API
+    void ClearTargetRenderer();
+    /// @}
+
+    /// \name Collections
+    ///
+    /// Collections provides a way to group nodes across different categories
+    /// in the domain-subdomain-context-role-function hierarchy.
+    ///
+    /// For example, a parser plugin author may decide that all lama nodes
+    /// should have "lama" in its Collections metadata. Or that all nodes that
+    /// have something to do with subsurface scattering be annotated with a
+    /// "subsurface" collection.
+    /// {@
+    SDR_API
+    bool HasCollections() const;
+    SDR_API
+    SdrTokenVec GetCollections() const;
+    SDR_API
+    void SetCollections(const SdrTokenVec& v);
+    SDR_API
+    void ClearCollections();
+    /// @}
+
     SDR_API
     bool HasHelp() const;
     SDR_API
@@ -209,14 +366,26 @@ public:
     SDR_API
     void ClearHelp();
 
+    /// \name Departments
+    ///
+    /// Deprecated metadata item.
+    ///
+    /// \deprecated
+    /// {@
+
+    /// \deprecated
     SDR_API
     bool HasDepartments() const;
+    /// \deprecated
     SDR_API
     SdrTokenVec GetDepartments() const;
+    /// \deprecated
     SDR_API
     void SetDepartments(const SdrTokenVec& v);
+    /// \deprecated
     SDR_API
     void ClearDepartments();
+    /// @}
 
     /// \deprecated
     ///
@@ -225,12 +394,16 @@ public:
     /// deprecated.
     ///
     /// {@
+    /// \deprecated
     SDR_API
     bool HasPages() const;
+    /// \deprecated
     SDR_API
     SdrTokenVec GetPages() const;
+    /// \deprecated
     SDR_API
     void SetPages(const SdrTokenVec& v);
+    /// \deprecated
     SDR_API
     void ClearPages();
     /// @}
@@ -317,6 +490,13 @@ private:
     {
         return SdrTokenMap(f.begin(), f.end());
     }
+
+    // This method sets metadata items that have default values
+    // as indicated by GetDefaultValues.
+    //
+    // Note: This method is invoked at the ends of this class's
+    // constructors.
+    void _SetDefaultInitializations();
 
     VtDictionary _items;
 };

@@ -53,9 +53,9 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((vstructMember, "vstructmember"))
     (sdrDefinitionName)
 
-    // Discovery and source type
+    // Discovery and shading system
     ((discoveryType, "oso"))
-    ((sourceType, "OSL"))
+    ((shadingSystem, "OSL"))
 
     ((usdSchemaDefPrefix, "usdSchemaDef_"))
     ((sdrGlobalConfigPrefix, "sdrGlobalConfig_"))
@@ -73,9 +73,9 @@ SdrOslParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken& 
-SdrOslParserPlugin::GetSourceType() const
+SdrOslParserPlugin::GetShadingSystem() const
 {
-    return _tokens->sourceType;
+    return _tokens->shadingSystem;
 }
 
 SdrOslParserPlugin::SdrOslParserPlugin()
@@ -234,14 +234,16 @@ SdrOslParserPlugin::ParseShaderNode(
             CreateStringFromStringVec(openPages);
     }
 
+    // Populate context if applicable
+    _setSdrContext(metadata);
+
     return SdrShaderNodeUniquePtr(
         new SdrShaderNode(
             discoveryResult.identifier,
             discoveryResult.version,
             discoveryResult.name,
-            discoveryResult.family,
-            _getSdrContextFromSchemaBase(metadata),
-            _tokens->sourceType,    
+            discoveryResult.function,
+            _tokens->shadingSystem,    
             discoveryResult.resolvedUri,
             discoveryResult.resolvedUri,    // Definitive assertion that the
                                             // implementation is the same asset
@@ -253,39 +255,44 @@ SdrOslParserPlugin::ParseShaderNode(
     );
 }
 
-TfToken 
-SdrOslParserPlugin::_getSdrContextFromSchemaBase(
-    const SdrTokenMap& metadata) const
+void 
+SdrOslParserPlugin::_setSdrContext(SdrTokenMap& metadata) const
 {
-    auto metaIt = metadata.find(_tokens->schemaBase);
-    if (metaIt == metadata.end()) {
-        return _tokens->sourceType;
+    if (metadata.find(SdrNodeMetadata->Context) != metadata.end()) {
+        // Context metadata already exists, do nothing.
+        return;
     }
-    std::string schemaBase = metaIt->second;
+    auto metaIt = metadata.find(_tokens->schemaBase);
+    if (metaIt != metadata.end()) {
+        std::string schemaBase = metaIt->second;
 
-    static const std::unordered_map<TfToken, TfToken, TfHash> contextMapping({
-        { TfToken("displayfilter"), SdrNodeContext->DisplayFilter },
-        { TfToken("lightfilter"), SdrNodeContext->LightFilter },
-        { TfToken("samplefilter"), SdrNodeContext->SampleFilter },
-        { TfToken("integrator"), TfToken("integrator")},
-        // must check for "light" after "lightfilter" otherwise a light filter
-        // could be mistakenly classified as a light
-        { TfToken("light"), TfToken("light")} ,
-        { TfToken("projection"), TfToken("projection")}
-    });
+        static const std::unordered_map<TfToken, TfToken, TfHash>
+        contextMapping({
+            { TfToken("displayfilter"), SdrNodeContext->DisplayFilter },
+            { TfToken("lightfilter"), SdrNodeContext->LightFilter },
+            { TfToken("samplefilter"), SdrNodeContext->SampleFilter },
+            { TfToken("integrator"), TfToken("integrator")},
+            // must check for "light" after "lightfilter" otherwise a light
+            // filter could be mistakenly classified as a light
+            { TfToken("light"), TfToken("light")} ,
+            { TfToken("projection"), TfToken("projection")}
+        });
 
-    // Use the context mapping to determine the sdrContext for this schema. 
-    // Test if the schema base name contains of the map keys
-    // for example, PxrDisplayFilterPluginBase contains "displayfilter"
-    std::unordered_map<TfToken, TfToken, TfHash>::const_iterator it;
-    for (it = contextMapping.begin(); it != contextMapping.end(); ++it) {
-        if (TfStringContains(TfStringToLower(schemaBase), it->first)) {
-            return it->second;
+        // Use the context mapping to determine the sdrContext for this schema. 
+        // Test if the schema base name contains of the map keys
+        // for example, PxrDisplayFilterPluginBase contains "displayfilter"
+        std::unordered_map<TfToken, TfToken, TfHash>::const_iterator it;
+        for (it = contextMapping.begin(); it != contextMapping.end(); ++it) {
+            if (TfStringContains(TfStringToLower(schemaBase), it->first)) {
+                metadata[SdrNodeMetadata->Context] = it->second;
+                return;
+            }
         }
     }
-    
-    // fallback to sourceType as default context
-    return _tokens->sourceType;
+
+    // NOTE: This fallback will be removed and trigger a change in behavior
+    // in SdrShaderNode::GetContext in an upcoming release.
+    metadata[SdrNodeMetadata->Context] = _tokens->shadingSystem;
 }
 
 SdrShaderPropertyUniquePtrVec

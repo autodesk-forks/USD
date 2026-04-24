@@ -265,7 +265,7 @@ _MakeInput(C& connectable, const mx::ConstTypedElementPtr& mtlx)
     return usdInput;
 }
 
-// Return the nodedef with node=family, that's type compatible with
+// Return the nodedef with node=function, that's type compatible with
 // mtlxInterface, and has a compatible version.  If target isn't empty
 // then it must also match.  Returns null if there's no such nodedef.
 static
@@ -273,14 +273,14 @@ mx::ConstNodeDefPtr
 _FindMatchingNodeDef(
     const mx::ConstDocumentPtr& mtlxDocument,
     const mx::ConstInterfaceElementPtr& mtlxInterface,
-    const std::string& family,
+    const std::string& function,
     const std::string& type,
     const SdrVersion& version,
     const std::string& target)
 {
     mx::ConstNodeDefPtr result = nullptr;
 
-    for (auto&& mtlxNodeDef: mtlxDocument->getMatchingNodeDefs(family)) {
+    for (auto&& mtlxNodeDef: mtlxDocument->getMatchingNodeDefs(function)) {
         // Filter by target.
         if (!mx::targetStringsMatch(target, mtlxNodeDef->getTarget())) {
             continue;
@@ -321,7 +321,7 @@ _FindMatchingNodeDef(
     return result;
 }
 
-// Return the shader nodedef with node=family that has a compatible version.
+// Return the shader nodedef with node=function that has a compatible version.
 // If target isn't empty
 // then it must also match.  Returns null if there's no such nodedef.
 // If the nodedef is not found in the document then the standard
@@ -330,7 +330,7 @@ static
 mx::ConstNodeDefPtr
 _FindMatchingNodeDef(
     const mx::ConstNodePtr& mtlxShaderNode,
-    const std::string& family,
+    const std::string& function,
     const SdrVersion& version,
     const std::string& target,
     const mx::ConstInterfaceElementPtr& mtlxInterface = mx::NodeDefPtr())

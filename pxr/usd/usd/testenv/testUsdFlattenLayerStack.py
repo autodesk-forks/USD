@@ -561,6 +561,243 @@ class TestUsdFlattenLayerStack(unittest.TestCase):
         expectedTargets.explicitItems = [Sdf.Path('/A')]
         self.assertEqual(attrSpec.GetInfo('targetPaths'), expectedTargets)
 
+    def test_LayerOffsetsForReferencesAndPayloads(self):
+        """Tests that layer offsets are correctly applied to references and 
+        payloads for sublayers with timeCodesPerSecond values that differ
+        from the root layer stack"""
+
+        stage = Usd.Stage.Open(
+            'mixedTimeCodesPerSecondListOps/base_prepend.usda')
+        self.assertIsNotNone(stage)
+
+        layer = Usd.FlattenLayerStack(stage._GetPcpCache().layerStack)
+        self.assertIsNotNone(layer)
+        resultStage = Usd.Stage.Open(layer)
+        self.assertIsNotNone(resultStage)
+
+        primSpec = layer.GetPrimAtPath('/World/PayloadIn24')
+        self.assertTrue(primSpec)
+
+        expectedPayloadListOp = Sdf.PayloadListOp.Create(
+            prependedItems = [Sdf.Payload(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")), 
+            layerOffset=Sdf.LayerOffset(0.0, 2.5))]
+        )
+        actualPayloadListOp = primSpec.GetInfo('payload')
+        actualPayloadListOp.prependedItems = [Sdf.Payload(
+            os.path.normcase(p.assetPath), layerOffset=p.layerOffset) 
+            for p in actualPayloadListOp.prependedItems]
+        self.assertEqual(expectedPayloadListOp, actualPayloadListOp)
+
+        self.assertTrue(resultStage.GetPrimAtPath(
+            '/World/PayloadIn24/asset_child'))
+
+        primSpec = layer.GetPrimAtPath('/World/ReferenceIn24')
+        self.assertTrue(primSpec)
+
+        expectedReferenceListOp = Sdf.ReferenceListOp.Create(
+            prependedItems = [Sdf.Reference(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")), 
+            layerOffset=Sdf.LayerOffset(0.0, 2.5))]
+        )
+        actualReferenceListOp = primSpec.GetInfo('references')
+        actualReferenceListOp.prependedItems = [Sdf.Reference(
+            os.path.normcase(r.assetPath), layerOffset=r.layerOffset) 
+            for r in actualReferenceListOp.prependedItems]
+        self.assertEqual(expectedReferenceListOp, actualReferenceListOp)
+
+        self.assertTrue(resultStage.GetPrimAtPath(
+            '/World/ReferenceIn24/asset_child'))
+
+    def test_DeleteListOpsWithVaryingTimecodesPerSecond(self):
+        """Tests that list ops with offsets present in multiple sublayers
+           are correctly flattened"""
+        
+        stage = Usd.Stage.Open(
+            'mixedTimeCodesPerSecondListOps/base_delete.usda')
+        self.assertIsNotNone(stage)
+
+        layer = Usd.FlattenLayerStack(stage._GetPcpCache().layerStack)
+        self.assertIsNotNone(layer)
+        resultStage = Usd.Stage.Open(layer)
+        self.assertIsNotNone(resultStage)
+
+        primSpec = layer.GetPrimAtPath('/World/PayloadIn24')
+        self.assertTrue(primSpec)
+
+        expectedPayloadListOp = Sdf.PayloadListOp.Create(
+            deletedItems = [Sdf.Payload(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")))]
+        )
+        actualPayloadListOp = primSpec.GetInfo('payload')
+        actualPayloadListOp.deletedItems = [Sdf.Payload(
+            os.path.normcase(p.assetPath), layerOffset=p.layerOffset) 
+            for p in actualPayloadListOp.deletedItems]
+        self.assertEqual(expectedPayloadListOp, actualPayloadListOp)
+
+        self.assertFalse(resultStage.GetPrimAtPath(
+            '/World/PayloadIn24/asset_child'))
+
+        primSpec = layer.GetPrimAtPath('/World/ReferenceIn24')
+        self.assertTrue(primSpec)
+    
+        expectedReferenceListOp = Sdf.ReferenceListOp.Create(
+            deletedItems = [Sdf.Reference(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")))]
+        )
+        actualReferenceListOp = primSpec.GetInfo('references')
+        actualReferenceListOp.deletedItems = [Sdf.Reference(
+            os.path.normcase(r.assetPath), layerOffset=r.layerOffset) 
+            for r in actualReferenceListOp.deletedItems]
+        self.assertEqual(expectedReferenceListOp, actualReferenceListOp)
+
+        self.assertFalse(resultStage.GetPrimAtPath(
+            '/World/ReferenceIn24/asset_child'))
+
+    def test_DeleteListOpsWithMatchingTimecodesPerSecond(self):
+        """Tests that list items are correctly resolved across sublayer arcs
+           with a time scale applied."""
+
+        stage = Usd.Stage.Open(
+            'mixedTimeCodesPerSecondListOps/base_delete_24.usda')
+        self.assertIsNotNone(stage)
+
+        layer = Usd.FlattenLayerStack(stage._GetPcpCache().layerStack)
+        self.assertIsNotNone(layer)
+        resultStage = Usd.Stage.Open(layer)
+        self.assertIsNotNone(resultStage)
+
+        primSpec = layer.GetPrimAtPath('/World/PayloadIn24')
+        self.assertTrue(primSpec)
+
+        expectedPayloadListOp = Sdf.PayloadListOp.Create(
+            deletedItems = [Sdf.Payload(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")))]
+        )
+        actualPayloadListOp = primSpec.GetInfo('payload')
+        actualPayloadListOp.deletedItems = [Sdf.Payload(
+            os.path.normcase(p.assetPath), layerOffset=p.layerOffset) 
+            for p in actualPayloadListOp.deletedItems]
+        self.assertEqual(expectedPayloadListOp, actualPayloadListOp)
+        self.assertFalse(resultStage.GetPrimAtPath(
+            '/World/PayloadIn24/asset_child'))
+
+        primSpec = layer.GetPrimAtPath('/World/ReferenceIn24')
+        self.assertTrue(primSpec)
+    
+        expectedReferenceListOp = Sdf.ReferenceListOp.Create(
+            deletedItems = [Sdf.Reference(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")))]
+        )
+        actualReferenceListOp = primSpec.GetInfo('references')
+        actualReferenceListOp.deletedItems = [Sdf.Reference(
+            os.path.normcase(r.assetPath), layerOffset=r.layerOffset) 
+            for r in actualReferenceListOp.deletedItems]
+        self.assertEqual(expectedReferenceListOp, actualReferenceListOp)
+
+        self.assertFalse(resultStage.GetPrimAtPath(
+            '/World/ReferenceIn24/asset_child'))
+        
+    def test_ListOpsWithMultipliedScale(self):
+        """Tests that list items are correctly resolved in cases where sublayers
+        have varying timeCodesPerSecond values"""
+        stage = Usd.Stage.Open(
+            'mixedTimeCodesPerSecondListOps/base_x2.usda')
+        self.assertIsNotNone(stage)
+
+        layer = Usd.FlattenLayerStack(stage._GetPcpCache().layerStack)
+        self.assertIsNotNone(layer)
+        resultStage = Usd.Stage.Open(layer)
+        self.assertIsNotNone(resultStage)
+
+        primSpec = layer.GetPrimAtPath('/World/PayloadIn24')
+        self.assertTrue(primSpec)
+        expectedPayloadListOp = Sdf.PayloadListOp.Create(
+            prependedItems = [Sdf.Payload(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")),
+            layerOffset=Sdf.LayerOffset(0.0, 5.0))]
+        )
+        actualPayloadListOp = primSpec.GetInfo('payload')
+        actualPayloadListOp.prependedItems = [Sdf.Payload(
+            os.path.normcase(p.assetPath), layerOffset=p.layerOffset) 
+            for p in actualPayloadListOp.prependedItems]
+        self.assertEqual(expectedPayloadListOp, actualPayloadListOp)
+
+        self.assertTrue(resultStage.GetPrimAtPath(
+            '/World/PayloadIn24/asset_child'))
+        
+        primSpec = layer.GetPrimAtPath('/World/ReferenceIn24')
+        self.assertTrue(primSpec)
+
+        expectedReferenceListOp = Sdf.ReferenceListOp.Create(
+            deletedItems = [Sdf.Reference(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")),
+            layerOffset=Sdf.LayerOffset(0.0, 2.0))]
+        )
+        actualReferenceListOp = primSpec.GetInfo('references')
+        actualReferenceListOp.deletedItems = [Sdf.Reference(
+            os.path.normcase(r.assetPath), layerOffset=r.layerOffset) 
+            for r in actualReferenceListOp.deletedItems]
+        self.assertEqual(expectedReferenceListOp, actualReferenceListOp)
+
+        self.assertFalse(resultStage.GetPrimAtPath(
+            '/World/ReferenceIn24/asset_child'))
+
+    def test_ListOpsInSublayersWithScale(self):
+        """Tests that list items are correctly resolved across multiple 
+           sublayers"""
+        stage = Usd.Stage.Open(
+            'mixedTimeCodesPerSecondListOps/base_sub_scaled.usda')
+        self.assertIsNotNone(stage)
+
+        layer = Usd.FlattenLayerStack(stage._GetPcpCache().layerStack)
+        self.assertIsNotNone(layer)
+        resultStage = Usd.Stage.Open(layer)
+        self.assertIsNotNone(resultStage)
+
+        primSpec = layer.GetPrimAtPath('/World/PayloadIn24')
+        self.assertTrue(primSpec)
+
+        expectedPayloadListOp = Sdf.PayloadListOp.Create(
+            deletedItems = [Sdf.Payload(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")),
+            layerOffset=Sdf.LayerOffset(0.0, 2.0))]
+        )
+        actualPayloadListOp = primSpec.GetInfo('payload')
+        actualPayloadListOp.deletedItems = [Sdf.Payload(
+            os.path.normcase(p.assetPath), layerOffset=p.layerOffset) 
+            for p in actualPayloadListOp.deletedItems]
+        self.assertEqual(expectedPayloadListOp, actualPayloadListOp)
+
+    def test_ListOpsInSublayersWithScale(self):
+        """Tests that list ops from sublayers with multiple offsets take the
+           strongest opinion """
+        stage = Usd.Stage.Open(
+            'mixedTimeCodesPerSecondListOps/base_multi_offset_sublayer.usda')
+        self.assertIsNotNone(stage)
+
+        layer = Usd.FlattenLayerStack(stage._GetPcpCache().layerStack)
+        self.assertIsNotNone(layer)
+        resultStage = Usd.Stage.Open(layer)
+        self.assertIsNotNone(resultStage)
+
+        primSpec = layer.GetPrimAtPath('/World/PayloadIn24')
+        self.assertTrue(primSpec)
+        self.assertTrue(primSpec)
+
+        expectedPayloadListOp = Sdf.PayloadListOp.Create(
+            prependedItems = [Sdf.Payload(os.path.normcase(
+                os.path.abspath("mixedTimeCodesPerSecondListOps/asset.usda")),
+            layerOffset=Sdf.LayerOffset(0.0, 2.0))]
+        )
+        actualPayloadListOp = primSpec.GetInfo('payload')
+        actualPayloadListOp.prependedItems = [Sdf.Payload(
+            os.path.normcase(p.assetPath), layerOffset=p.layerOffset) 
+            for p in actualPayloadListOp.prependedItems]
+        
+        self.assertEqual(expectedPayloadListOp, actualPayloadListOp)
+
+
 if __name__=="__main__":
     # Register test plugin defining timecode metadata fields.
     testDir = os.path.abspath(os.getcwd())

@@ -129,7 +129,7 @@ SdrShaderNodeQueryResult::GetAllShaderNodes() const
     std::sort(result.begin(), result.end(),
         [](SdrShaderNodeConstPtr a, SdrShaderNodeConstPtr b) {
                 return a->GetIdentifier() < b->GetIdentifier() ||
-                       a->GetSourceType() < b->GetSourceType();
+                       a->GetShadingSystem() < b->GetShadingSystem();
         });
     return result;
 }

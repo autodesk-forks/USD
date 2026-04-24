@@ -42,17 +42,28 @@ struct Pcp_FindInstanceableDataVisitor
 };
 
 bool
-Pcp_PrimIndexIsInstanceable(
+Pcp_InstancingIsEnabled(
     const PcpPrimIndex& primIndex)
 {
-    TRACE_FUNCTION();
-
     // For now, instancing functionality is limited to USD mode,
     // unless the special env var is set for testing.
     static const int instancing(TfGetEnvSetting(PCP_OVERRIDE_INSTANCEABLE));
 
     if ((instancing == 0) ||
         ((!primIndex.IsUsd() && (instancing == -1)))) {
+        return false;
+    }
+
+    return true;
+}
+
+bool
+Pcp_PrimIndexIsInstanceable(
+    const PcpPrimIndex& primIndex)
+{
+    TRACE_FUNCTION();
+
+    if (!Pcp_InstancingIsEnabled(primIndex)) {
         return false;
     }
 

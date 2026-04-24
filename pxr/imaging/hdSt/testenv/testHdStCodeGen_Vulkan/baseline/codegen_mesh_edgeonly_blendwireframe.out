@@ -44,7 +44,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -980,7 +980,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -1792,7 +1792,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -2654,7 +2654,9 @@ vec4 ApplyFinalEdgeOpacity(vec4 Cfill, float p)
 vec4 ApplyEdgeColor(vec4 Cfill, vec4 patchCoord)
 {
     float p = GetEdgeOpacity();
-    if (p < 0.5) discard;
+    if (p < 0.5) {
+        discard;
+    }
 
     vec4 wireColor = GetWireframeColor();
 
@@ -3065,7 +3067,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -4001,7 +4003,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -4842,7 +4844,7 @@ struct hgi_dmat3 { double m00, m01, m02,
                           m20, m21, m22; };
 
 // //////// Codegen Defines //////// 
-#define HD_SHADER_API 2
+#define HD_SHADER_API 3
 #define MAT4 mat4
 // Alias hgi vec and matrix types to hd.
 #define hd_ivec3 hgi_ivec3
@@ -5704,7 +5706,9 @@ vec4 ApplyFinalEdgeOpacity(vec4 Cfill, float p)
 vec4 ApplyEdgeColor(vec4 Cfill, vec4 patchCoord)
 {
     float p = GetEdgeOpacity();
-    if (p < 0.5) discard;
+    if (p < 0.5) {
+        discard;
+    }
 
     vec4 wireColor = GetWireframeColor();
 

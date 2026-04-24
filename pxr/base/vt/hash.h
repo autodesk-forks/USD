@@ -7,6 +7,8 @@
 #ifndef PXR_BASE_VT_HASH_H
 #define PXR_BASE_VT_HASH_H
 
+/// \file
+
 #include "pxr/pxr.h"
 #include "pxr/base/vt/api.h"
 #include "pxr/base/tf/hash.h"
@@ -14,6 +16,8 @@
 #include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+#ifndef doxygen
 
 namespace Vt_HashDetail {
 
@@ -46,8 +50,9 @@ _HashValueImpl(T const &val, ...)
 
 } // Vt_HashDetail
 
+#endif // ifndef doxygen
 
-/// A constexpr function that returns true if T is hashable via VtHashValue,
+/// A constexpr function that returns true if T is hashable via VtHashValue(),
 /// false otherwise.  This is true if we can invoke TfHash()() on a T instance.
 template <class T>
 constexpr bool

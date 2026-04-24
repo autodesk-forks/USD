@@ -17,8 +17,14 @@ import os
 
 inputFiles = sys.argv[1:]
 
+# Pattern and replacement used to obscure hex values.
 pattern = re.compile(r'0x\w*')
 replacement = 'xxxxxxx'
+
+# Pattern used to identify constant node indices, which are not stable across
+# runs.
+constantPattern = re.compile(
+    "(.*disambiguatingId=&apos;constant_.*_)[0-9]+(&apos;.*)")
 
 for inputFile in inputFiles:
     outputFile = os.path.splitext(inputFile)[0] + '.out'
@@ -28,6 +34,9 @@ for inputFile in inputFiles:
     with open(inputFile, "r") as f:
         for line in f:
             updatedLine = pattern.sub(replacement, line)
+            match = constantPattern.match(updatedLine)
+            if match:
+                updatedLine = match[1] + match[2] + "\n"
             lines.append(updatedLine)
 
     # Sort the lines and write them to the output file. Compare lines without

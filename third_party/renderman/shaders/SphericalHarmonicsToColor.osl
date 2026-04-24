@@ -1,0 +1,116 @@
+// Converts spherical harmonics from particle fields 
+// (and seperated by the particle field conversion scene index) 
+// into a display color.
+shader SphericalHarmonicsToColor(
+    output color resultRGB = color(0, 0, 0)
+)
+{
+    // Read how many degrees we have from primvar
+    int degree = 0;
+    getattribute("primvar", "radiance:sphericalHarmonicsDegree", degree);
+
+    // Read our coefficients from primvars
+    color sh00 = color(0, 0, 0);
+    getattribute("primvar", "radiance:sphericalHarmonicsCoefficients00", sh00);
+
+    color sh10 = color(0, 0, 0);
+    color sh11 = color(0, 0, 0);
+    color sh12 = color(0, 0, 0);
+    if (degree > 0) {
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients10", sh10);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients11", sh11);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients12", sh12);
+    }
+
+    color sh20 = color(0, 0, 0);
+    color sh21 = color(0, 0, 0);
+    color sh22 = color(0, 0, 0);
+    color sh23 = color(0, 0, 0);
+    color sh24 = color(0, 0, 0);
+    if (degree > 1) {
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients20", sh20);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients21", sh21);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients22", sh22);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients23", sh23);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients24", sh24);
+    }
+
+    color sh30 = color(0, 0, 0);
+    color sh31 = color(0, 0, 0);
+    color sh32 = color(0, 0, 0);
+    color sh33 = color(0, 0, 0);
+    color sh34 = color(0, 0, 0);
+    color sh35 = color(0, 0, 0);
+    color sh36 = color(0, 0, 0);
+    if (degree > 2) {
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients30", sh30);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients31", sh31);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients32", sh32);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients33", sh33);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients34", sh34);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients35", sh35);
+        getattribute("primvar", "radiance:sphericalHarmonicsCoefficients36", sh36);
+    }
+
+    // Get the view direction
+    vector dir = normalize(I);
+    float x = dir[0];
+    float y = dir[1];
+    float z = dir[2];
+
+    // Constants
+    float C0 = 0.28209479177387814;
+    float C1 = 0.4886025119029199;
+    float C2[5] = {
+         1.0925484305920792,
+        -1.0925484305920792,
+         0.31539156525252005,
+        -1.0925484305920792,
+         0.5462742152960396 
+    };
+    float C3[7] = {
+        -0.5900435899266435,
+         2.890611442640554,
+        -0.4570457994644658,
+         0.3731763325901154,
+        -0.4570457994644658,
+         1.445305721320277,
+        -0.5900435899266435
+    };
+
+    // Calculate the display color
+    resultRGB = C0 * sh00;
+
+    if (degree > 0) {
+        resultRGB -= C1 * y * sh10;
+        resultRGB += C1 * z * sh11;
+        resultRGB -= C1 * x * sh12;
+
+        if (degree > 1) {
+            float xx = x * x;
+            float yy = y * y;
+            float zz = z * z;
+            float xy = x * y;
+            float yz = y * z;
+            float xz = x * z;
+
+            resultRGB += C2[0] * xy * sh20;
+            resultRGB += C2[1] * yz * sh21;
+            resultRGB += C2[2] * (2.0 * zz - xx - yy) * sh22;
+            resultRGB += C2[3] * xz * sh23;
+            resultRGB += C2[4] * (xx - yy) * sh24;
+
+            if (degree > 2) {
+                resultRGB += C3[0] * y * (3.0 * xx - yy) * sh30;
+                resultRGB += C3[1] * xy * z * sh31;
+                resultRGB += C3[2] * y * (4.0 * zz - xx - yy) * sh32;
+                resultRGB += C3[3] * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * sh33;
+                resultRGB += C3[4] * x * (4.0 * zz - xx - yy) * sh34;
+                resultRGB += C3[5] * z * (xx - yy) * sh35;
+                resultRGB += C3[6] * x * (xx - 3.0 * yy) * sh36;
+            }
+        }
+    }
+    resultRGB = resultRGB + 0.5;
+    resultRGB = clamp(resultRGB, color(0, 0, 0), color(1, 1, 1));
+}

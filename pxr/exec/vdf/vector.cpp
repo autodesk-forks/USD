@@ -24,6 +24,15 @@ std::ostream &operator<<(std::ostream &o, const VdfVector::DebugPrintable &v)
 }
 
 void
+VdfVector::Clear()
+{
+    Vdf_VectorData::DataHolder tmp;
+    _data.Get()->NewEmpty(0, &tmp);
+    tmp.Get()->MoveInto(&_data);
+    tmp.Destroy();
+}
+
+void
 VdfVector::Merge(const VdfVector &rhs, const VdfMask::Bits &bits)
 {
     _CheckType(rhs);

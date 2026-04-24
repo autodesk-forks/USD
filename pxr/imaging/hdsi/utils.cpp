@@ -8,10 +8,13 @@
 
 #include "pxr/imaging/hd/collectionExpressionEvaluator.h"
 #include "pxr/imaging/hd/collectionsSchema.h"
+#include "pxr/imaging/hd/materialBindingsSchema.h"
 #include "pxr/imaging/hd/sceneIndex.h"
+
+#include "pxr/base/trace/trace.h"
 #include "pxr/usd/sdf/pathExpression.h"
 #include "pxr/usd/sdf/predicateLibrary.h"
-#include "pxr/base/trace/trace.h"
+#include "pxr/usd/usdShade/tokens.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -196,6 +199,53 @@ HdsiUtilsRemovePrunedChildren(
                 return eval.Match(childPath);
             }),
         children->end());
+}
+
+SdfPath
+HdsiUtilsGetBoundMaterial(
+    const HdSceneIndexPrim& prim)
+{
+    if (!prim) {
+        return {};
+    }
+
+    // Does this prim have a material binding data source ?
+    HdMaterialBindingsSchema matBindingsSchema = 
+        HdMaterialBindingsSchema::GetFromParent(prim.dataSource);
+    if (!matBindingsSchema.IsDefined()) {
+        return {};
+    }
+
+    // Find a material bound for a purpose of rendering the final frame
+    // We will check these purposes in order, and take the first one that is
+    // specified: 'full', 'allPurpose'.
+    // These are the binding purposes expected to be used in a RenderMan
+    // context. Material Overrides are not currently supported for 
+    // preview materials.
+    static const std::array<TfToken, 2> purposes = {
+        UsdShadeTokens->full,
+        HdMaterialBindingsSchemaTokens->allPurpose
+    };
+
+    std::optional<HdMaterialBindingSchema> materialBindingSchemaOpt;
+    for (const TfToken& purpose : purposes) {
+        materialBindingSchemaOpt = matBindingsSchema.GetMaterialBinding(purpose);
+        if (materialBindingSchemaOpt.has_value() && 
+            materialBindingSchemaOpt.value().IsDefined()) {
+            break;
+        }
+    }
+    
+    if (!materialBindingSchemaOpt) {
+        return {};
+    }
+
+    const HdPathDataSourceHandle materialPathDs = 
+        materialBindingSchemaOpt.value().GetPath();
+    if (!materialPathDs) {
+        return {};
+    }
+    return materialPathDs->GetTypedValue(0.0f);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

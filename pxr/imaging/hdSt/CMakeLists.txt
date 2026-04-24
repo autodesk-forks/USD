@@ -29,8 +29,7 @@ if (${PXR_ENABLE_MATERIALX_SUPPORT})
     )
 endif()
 if (PXR_ENABLE_PTEX_SUPPORT)
-    list(APPEND optionalLibs ${PTEX_LIBRARY})
-    list(APPEND optionalIncludeDirs ${PTEX_INCLUDE_DIR})
+    list(APPEND optionalLibs Ptex::Ptex_dynamic)
     list(APPEND optionalPublicClasses ptexMipmapTextureLoader)
 endif()
 
@@ -72,7 +71,6 @@ pxr_library(hdSt
         drawItemInstance
         drawTarget
         drawTargetRenderPassState
-        dynamicCubemapTextureObject
         dynamicUvTextureObject
         extComputation
         extCompCpuComputation
@@ -142,7 +140,6 @@ pxr_library(hdSt
 
     PUBLIC_HEADERS
         api.h
-        dynamicCubemapTextureImplementation.h
         dynamicUvTextureImplementation.h
         enums.h
 

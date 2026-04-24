@@ -491,7 +491,19 @@ char* asitoa(char* s, long x)
 void aswrite(int fd, const char* msg)
 {
     int saved = errno;
-    write(fd, msg, asstrlen(msg));
+    size_t len = asstrlen(msg);
+    size_t written = 0;
+    while (written < len) {
+        ptrdiff_t n = write(fd, msg + written, len - written);
+        if (n < 0) {
+            // retry if the write is interrupted by a signal.
+            if (errno == EINTR)
+                continue;
+            // Fail on any other error.
+            break;
+        }
+        written += n;
+    }
     errno = saved;
 }
 

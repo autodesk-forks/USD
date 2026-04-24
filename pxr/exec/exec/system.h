@@ -10,6 +10,7 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/exec/api.h"
+#include "pxr/exec/exec/valueOverride.h"
 
 #include "pxr/exec/esf/stage.h"
 
@@ -29,6 +30,7 @@ class SdfPath;
 class TfToken;
 template <typename> class TfFunctionRef;
 template <typename> class TfSpan;
+class VdfExecutorInterface;
 class VdfMaskedOutput;
 class VdfRequest;
 class VdfSchedule;
@@ -73,6 +75,15 @@ protected:
     void _Compute(
         const VdfSchedule &schedule,
         const VdfRequest &computeRequest);
+
+    /// Computes the values in the \p computeRequest using the provided
+    /// \p schedule in the presence of \p valueOverrides.
+    ///
+    EXEC_API
+    std::unique_ptr<VdfExecutorInterface> _ComputeWithOverrides(
+        const VdfSchedule &schedule,
+        const VdfRequest &computeRequest,
+        ExecValueOverrideVector &&valueOverrides);
 
     /// Invoke \p f on each outstanding exec request.
     ///

@@ -12,6 +12,7 @@ pxr_library(usdImaging
         geomUtil
         hd
         hdar
+        hdsi
         hio
         pxOsd
         sdf
@@ -62,6 +63,7 @@ pxr_library(usdImaging
         geomXformVectorsSchema
         geomSubsetAdapter
         indexProxy
+        legacyRenderSettingsSceneIndex
         materialParamUtils
         modelSchema
         primvarUtils

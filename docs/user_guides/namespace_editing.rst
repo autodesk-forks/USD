@@ -560,13 +560,18 @@ The batch is validated before applying, so if any of the edit operations would
 fail, none of the batch is actually applied, and :code:`ApplyEdits()` will 
 return false. If you want to sanity-check whether your edits can successfully 
 be applied to the stage, use :python:`UsdNamespaceEditor.CanApplyEdits()`. This 
-will verify any queued edits and return true if the edits can be applied to 
-the current stage, and false otherwise.
+will verify any queued edits and return a class that can be evaluated to 
+:python:`True` if the edits can be applied to the current stage, and 
+:python:`False` otherwise (along with potential errors and warnings). See 
+:ref:`nsedit_canapplyedits_validate_operations` for more details on using 
+:code:`CanApply()`.
 
 .. code-block:: python
 
     canApply = editor.CanApplyEdits()
     if canApply:
+        # ...check canApply.warnings if desired...
+        # now apply edits
         editor.ApplyEdits()
 
 Executing batches of edits will usually be more efficient than applying each 
@@ -590,10 +595,11 @@ When you call edit operations, operation parameters like paths are
 sanity-checked, but the operation itself is not applied until you call 
 :code:`ApplyEdits()`. If you want to confirm if your operation can be applied, 
 use :code:`CanApplyEdits()` before calling :code:`ApplyEdits()`. 
-:code:`CanApplyEdits()` will return an annotated bool that evaluates to 
+:code:`CanApplyEdits()` will return a class that evaluates to 
 :python:`True` if the edits can be applied, and :python:`False` if the edits 
-cannot be applied, with the return result including a :code:`whyNot` attribute 
-with further details.
+cannot be applied. The return result also includes :code:`errors` and 
+:code:`warnings` fields that contain any error or warning messages generated
+during the sanity-checks that :code:`CanApply()` does.
 
 For example, you might have a delete operation that uses a path to a prim that 
 unbeknownst to you does not exist in the current stage. The 
@@ -607,9 +613,21 @@ indicating the path does not resolve to a valid prim.
     # Check first if we can delete /primDoesNotExist
     canApplyResult = editor.CanApplyEdits()  
     if canApplyResult:
+        # Edit can be applied, but check for warnings
+        if len(canApplyResult.warnings) > 0:
+            # ...Handle warnings as needed, or pass on to user...
+        # apply edits 
         editor.ApplyEdits()
     else:
-        # Handle error, using canApplyResult.whyNot as needed, etc.
+        # Edit cannot be applied
+        # ...Handle canApplyResult.errors as needed...
+
+It is possible to get warnings from the :code:`CanApplyEdits()` call even if 
+the edits would succeed. For example, you might have an edit that can be
+applied to the editor stage, but can't be applied to a dependent stage. You
+should check for possible warnings even if the edits can be applied, and 
+inform the user or caller that there might be undesired behavior based on the
+warning descriptions.
 
 .. _nsedit_builtin_properties_not_editable:
 
@@ -636,8 +654,8 @@ would fail.
 
 .. code-block:: python
 
-    editor.DeletePropertyAtPath("/testSphere/customProp")  # This is allowed
-    editor.DeletePropertyAtPath("/testSphere/radius")  # This is not allowed and will cause an error
+    editor.DeletePropertyAtPath("/testSphere.customProp")  # This is allowed
+    editor.DeletePropertyAtPath("/testSphere.radius")  # This is not allowed and will cause an error
 
 .. _nsedit_relocates_performance_impact:
 
@@ -664,9 +682,9 @@ be needed.
     # This editor is configured to not use relocates, so an error will be shown
     removeResult = noRelocatesEditor.MovePrimAtPath("/mainModelA/modelAChild", "/mainModelA/renamedChild")
     applyResult = noRelocatesEditor.CanApplyEdits()
-    if applyResult is not True:
+    if not applyResult:
         # We should get a "The prim to edit requires authoring relocates since 
         # it composes opinions introduced by ancestral composition arcs; 
         # relocates authoring must be enabled to perform this edit" error
-        print ("noRelocatesEditor: Cannot apply edits, reason: " + applyResult.whyNot)
+        print (f"noRelocatesEditor: Cannot apply edits, errors: {applyResult.errors}")
  

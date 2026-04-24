@@ -493,12 +493,68 @@ pxr_register_test(testPcpMuseum_ImpliedArcsAndInstancing
     DIFF_COMPARE compositionResults_ImpliedArcsAndInstancing.txt
 )
 
+pxr_register_test(testPcpMuseum_InternalReferenceInOffsetSublayer
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd InternalReferenceInOffsetSublayer/root.usda" 
+    TESTENV testenv/testPcpMuseum_InternalReferenceInOffsetSublayer.testenv
+    STDOUT_REDIRECT compositionResults_InternalReferenceInOffsetSublayer.txt
+    DIFF_COMPARE compositionResults_InternalReferenceInOffsetSublayer.txt
+)
+
 pxr_register_test(testPcpMuseum_ImpliedAndAncestralInherits_ComplexEvaluation
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ImpliedAndAncestralInherits_ComplexEvaluation/root.usda" 
     TESTENV testenv/testPcpMuseum_ImpliedAndAncestralInherits_ComplexEvaluation.testenv
     STDOUT_REDIRECT compositionResults_ImpliedAndAncestralInherits_ComplexEvaluation.txt
     DIFF_COMPARE compositionResults_ImpliedAndAncestralInherits_ComplexEvaluation.txt
+)
+
+pxr_register_test(testPcpMuseum_ListOpsWithLayerOffsets_prepend
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ListOpsWithLayerOffsets/base_prepend.usda" 
+    TESTENV testenv/testPcpMuseum_ListOpsWithLayerOffsets.testenv
+    STDOUT_REDIRECT compositionResults_ListOps_prepend.txt
+    DIFF_COMPARE compositionResults_ListOps_prepend.txt
+)
+
+pxr_register_test(testPcpMuseum_ListOpsWithLayerOffsets_delete
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ListOpsWithLayerOffsets/base_delete.usda" 
+    TESTENV testenv/testPcpMuseum_ListOpsWithLayerOffsets.testenv
+    STDOUT_REDIRECT compositionResults_ListOps_delete.txt
+    DIFF_COMPARE compositionResults_ListOps_delete.txt
+)
+
+pxr_register_test(testPcpMuseum_ListOpsWithLayerOffsets_delete_24
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ListOpsWithLayerOffsets/base_delete_24.usda" 
+    TESTENV testenv/testPcpMuseum_ListOpsWithLayerOffsets.testenv
+    STDOUT_REDIRECT compositionResults_ListOps_delete_24.txt
+    DIFF_COMPARE compositionResults_ListOps_delete_24.txt
+)
+
+pxr_register_test(testPcpMuseum_ListOpsWithLayerOffsets_x2
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ListOpsWithLayerOffsets/base_x2.usda" 
+    TESTENV testenv/testPcpMuseum_ListOpsWithLayerOffsets.testenv
+    STDOUT_REDIRECT compositionResults_ListOps_x2.txt
+    DIFF_COMPARE compositionResults_ListOps_x2.txt
+)
+
+pxr_register_test(testPcpMuseum_ListOpsWithLayerOffsets_sub_scaled
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ListOpsWithLayerOffsets/base_sub_scaled.usda" 
+    TESTENV testenv/testPcpMuseum_ListOpsWithLayerOffsets.testenv
+    STDOUT_REDIRECT compositionResults_ListOps_sub_scaled.txt
+    DIFF_COMPARE compositionResults_ListOps_sub_scaled.txt
+)
+
+pxr_register_test(testPcpMuseum_ListOpsWithLayerOffsets_multi_offset_sublayer
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPcpCompositionResults --usd ListOpsWithLayerOffsets/base_multi_offset_sublayer.usda" 
+    TESTENV testenv/testPcpMuseum_ListOpsWithLayerOffsets.testenv
+    STDOUT_REDIRECT compositionResults_ListOps_multi_offset_sublayer.txt
+    DIFF_COMPARE compositionResults_ListOps_multi_offset_sublayer.txt
 )
 
 pxr_register_test(testPcpMuseum_PayloadsAndAncestralArcs

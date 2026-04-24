@@ -885,6 +885,17 @@ pxr_register_test(testUsdImagingGLSphere
     TESTENV testenv/testUsdImagingGLSphere
 )
 
+pxr_register_test(testUsdImagingGLSphere_transformed
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingGLBasicDrawing -offscreen -stage transformedSphere.usda -camera /main_cam -write testUsdImagingGLSphere_transformed.png"
+    IMAGE_DIFF_COMPARE
+        testUsdImagingGLSphere_transformed.png
+    FAIL 1
+    FAIL_PERCENT 1
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+    TESTENV testenv/testUsdImagingGLSphere
+)
+
 # There is a bug for sphere with float radius:
 # authoring a float radius doesn't actually pick up the authored float radius but the schema default value.
 # In the test, the attribute has animation and at frame 6, the value is the schema default value.

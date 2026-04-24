@@ -79,12 +79,12 @@ SdrRegistry_ValidateProperty(
                     "Default value type does not match specified type for "
                     "property.\n"
                     "Node identifier: %s\n"
-                    "Source type: %s\n"
+                    "Shading system: %s\n"
                     "Property name: %s.\n"
                     "Type from SdfType: %s.\n"
                     "Type from default value: %s.\n",
                     node->GetIdentifier().GetString().c_str(),
-                    node->GetSourceType().GetString().c_str(),
+                    node->GetShadingSystem().GetString().c_str(),
                     property->GetName().GetString().c_str(),
                     sdfType.GetType().GetTypeName().c_str(),
                     defaultValue.GetType().GetTypeName().c_str());
@@ -105,28 +105,28 @@ template <typename T> struct _SdrObjectAccess { };
 template <> struct _SdrObjectAccess<SdrShaderNodeDiscoveryResult> {
     typedef SdrShaderNodeDiscoveryResult Type;
     static const std::string& GetName(const Type& x) { return x.name; }
-    static const TfToken& GetFamily(const Type& x) { return x.family; }
+    static const TfToken& GetFunction(const Type& x) { return x.function; }
     static SdrVersion GetShaderVersion(const Type& x) { return x.version; }
 };
 template <> struct _SdrObjectAccess<SdrShaderNodeUniquePtr> {
     typedef SdrShaderNodeUniquePtr Type;
     static const std::string& GetName(const Type& x) { return x->GetName(); }
-    static const TfToken& GetFamily(const Type& x) { return x->GetFamily(); }
+    static const TfToken& GetFunction(const Type& x) { return x->GetFunction(); }
     static SdrVersion GetShaderVersion(const Type& x) { return x->GetShaderVersion(); }
 };
 
 template <typename T>
 static
 bool
-_MatchesFamilyAndFilter(
+_MatchesFunctionAndFilter(
     const T& object,
-    const TfToken& family,
+    const TfToken& function,
     SdrVersionFilter filter)
 {
     using Access = _SdrObjectAccess<T>;
 
-    // Check the family.
-    if (!family.IsEmpty() && family != Access::GetFamily(object)) {
+    // Check the function.
+    if (!function.IsEmpty() && function != Access::GetFunction(object)) {
         return false;
     }
 
@@ -149,7 +149,7 @@ static SdrIdentifier
 _GetIdentifierForAsset(const SdfAssetPath &asset,
                        const SdrTokenMap &metadata,
                        const TfToken &subIdentifier,
-                       const TfToken &sourceType)
+                       const TfToken &shadingSystem)
 {
     size_t h = TfHash()(asset);
     for (const auto &i : metadata) {
@@ -160,7 +160,7 @@ _GetIdentifierForAsset(const SdfAssetPath &asset,
         "%s<%s><%s>",
         std::to_string(h).c_str(),
         subIdentifier.GetText(),
-        sourceType.GetText()));
+        shadingSystem.GetText()));
 }
 
 static SdrIdentifier 
@@ -200,7 +200,7 @@ _ValidateNode(const SdrShaderNodeUniquePtr &newNode,
             dr.resolvedUri.c_str(), dr.discoveryType.GetText());
         return false;
     }
-    
+
     // The node is invalid; continue without further error checking.
     // 
     // XXX -- WBN if these were just automatically copied and parser plugins
@@ -209,24 +209,25 @@ _ValidateNode(const SdrShaderNodeUniquePtr &newNode,
         !(newNode->GetIdentifier() == dr.identifier &&
           newNode->GetName() == dr.name &&
           newNode->GetShaderVersion() == dr.version &&
-          newNode->GetFamily() == dr.family &&
-          newNode->GetSourceType() == dr.sourceType)) {
+          newNode->GetFunction() == dr.function &&
+          newNode->GetShadingSystem() == dr.shadingSystem)) {
         TF_RUNTIME_ERROR(
                "Parsed node %s:%s:%s:%s:%s doesn't match discovery result "
                "created for asset @%s@ - "
-               "%s:%s:%s:%s:%s (identifier:version:name:family:source type); "
+               "%s:%s:%s:%s:%s: "
+               "(identifier:version:name:function:shading system); "
                "discarding.",
                SdrGetIdentifierString(newNode->GetIdentifier()).c_str(),
                newNode->GetShaderVersion().GetString().c_str(),
                newNode->GetName().c_str(),
-               newNode->GetFamily().GetText(),
-               newNode->GetSourceType().GetText(),
+               newNode->GetFunction().GetText(),
+               newNode->GetShadingSystem().GetText(),
                dr.resolvedUri.c_str(),
                SdrGetIdentifierString(dr.identifier).c_str(),
                dr.version.GetString().c_str(),
                dr.name.c_str(),
-               dr.family.GetText(),
-               dr.sourceType.GetText());
+               dr.function.GetText(),
+               dr.shadingSystem.GetText());
         return false;
     }
 
@@ -260,10 +261,10 @@ public:
     _DiscoveryContext(const SdrRegistry& registry) : _registry(registry) { }
     ~_DiscoveryContext() override = default;
 
-    TfToken GetSourceType(const TfToken& discoveryType) const override
+    TfToken GetShadingSystem(const TfToken& discoveryType) const override
     {
         auto parser = _registry._GetParserForDiscoveryType(discoveryType);
-        return parser ? parser->GetSourceType() : TfToken();
+        return parser ? parser->GetShadingSystem() : TfToken();
     }
 
 private:
@@ -409,7 +410,7 @@ SdrRegistry::GetSearchURIs() const
 
 SdrIdentifierVec
 SdrRegistry::GetShaderNodeIdentifiers(
-    const TfToken& family,
+    const TfToken& function,
     SdrVersionFilter filter) const
 {
     //
@@ -424,7 +425,7 @@ SdrRegistry::GetShaderNodeIdentifiers(
 
     for (const auto& it : _discoveryResultsByIdentifier) {
         const SdrShaderNodeDiscoveryResult& dr = it.second;
-        if (_MatchesFamilyAndFilter(dr, family, filter)) {
+        if (_MatchesFunctionAndFilter(dr, function, filter)) {
             // Since the discovery results are keyed by identifier in a
             // multimap, any duplicate idenitfiers will show up in order so we
             // only have to check the last identifier we added to avoid
@@ -439,7 +440,7 @@ SdrRegistry::GetShaderNodeIdentifiers(
 }
 
 SdrStringVec
-SdrRegistry::GetShaderNodeNames(const TfToken& family) const
+SdrRegistry::GetShaderNodeNames(const TfToken& function) const
 {
     //
     // This should not trigger a parse because node names come directly from
@@ -453,7 +454,7 @@ SdrRegistry::GetShaderNodeNames(const TfToken& family) const
 
     for (const auto& it : _discoveryResultPtrsByName) {
         const SdrShaderNodeDiscoveryResult& dr = *(it.second);
-        if (family.IsEmpty() || dr.family == family) {
+        if (function.IsEmpty() || dr.function == function) {
             // Since the discovery results are keyed by name in a multimap, any
             // duplicate names will show up in order so we only have to check
             // the last name we added to avoid duplicates. 
@@ -469,7 +470,7 @@ SdrRegistry::GetShaderNodeNames(const TfToken& family) const
 
 SdrShaderNodeConstPtr
 SdrRegistry::GetShaderNodeByIdentifier(
-    const SdrIdentifier& identifier, const SdrTokenVec& typePriority)
+    const SdrIdentifier& identifier, const SdrTokenVec& systemPriority)
 {
     TRACE_FUNCTION();
     std::lock_guard<std::mutex> drLock(_discoveryResultMutex);
@@ -482,9 +483,9 @@ SdrRegistry::GetShaderNodeByIdentifier(
         return nullptr;
     }
 
-    if (typePriority.empty()) {
-        // If the type priority specifier is empty, pick the first valid node
-        // that matches the identifier regardless of source type.
+    if (systemPriority.empty()) {
+        // If the shading system priority specifier is empty, pick the first
+        // valid node that matches the identifier regardless of source type.
         for (auto it = range.first; it != range.second; ++it) {
             if (SdrShaderNodeConstPtr node =
                     _FindOrParseNodeInCache(it->second)) {
@@ -494,9 +495,10 @@ SdrRegistry::GetShaderNodeByIdentifier(
     } else {
         // Otherwise we attempt to get a node for matching the identifier for 
         // each source type in priority order.
-        for (const TfToken& sourceType : typePriority) {
+        for (const TfToken& shadingSystem : systemPriority) {
             SdrShaderNodeConstPtr node =
-                _GetNodeInIdentifierRangeWithSourceType(range, sourceType);
+                _GetNodeInIdentifierRangeWithShadingSystem(
+                    range, shadingSystem);
             if (node) {
                 return node;
             }
@@ -507,8 +509,8 @@ SdrRegistry::GetShaderNodeByIdentifier(
 }
 
 SdrShaderNodeConstPtr
-SdrRegistry::GetShaderNodeByIdentifierAndType(
-    const SdrIdentifier& identifier, const TfToken& nodeType)
+SdrRegistry::GetShaderNodeByIdentifierAndSystem(
+    const SdrIdentifier& identifier, const TfToken& shadingSystem)
 {
     TRACE_FUNCTION();
     std::lock_guard<std::mutex> drLock(_discoveryResultMutex);
@@ -520,7 +522,14 @@ SdrRegistry::GetShaderNodeByIdentifierAndType(
     if (range.first == range.second) {
         return nullptr;
     }
-    return _GetNodeInIdentifierRangeWithSourceType(range, nodeType);
+    return _GetNodeInIdentifierRangeWithShadingSystem(range, shadingSystem);
+}
+
+SdrShaderNodeConstPtr
+SdrRegistry::GetShaderNodeByIdentifierAndType(
+    const SdrIdentifier& identifier, const TfToken& nodeType)
+{
+    return GetShaderNodeByIdentifierAndSystem(identifier, nodeType);
 }
 
 SdrShaderNodeConstPtr 
@@ -528,7 +537,7 @@ SdrRegistry::GetShaderNodeFromAsset(
     const SdfAssetPath &shaderAsset,
     const SdrTokenMap &metadata,
     const TfToken &subIdentifier,
-    const TfToken &sourceType)
+    const TfToken &shadingSystem)
 {
     // Ensure there is a parser plugin that can handle this asset.
     std::string resolvedUri = shaderAsset.GetResolvedPath().empty() ? 
@@ -547,21 +556,21 @@ SdrRegistry::GetShaderNodeFromAsset(
         return nullptr;
     }
 
-    SdrIdentifier identifier =
-        _GetIdentifierForAsset(shaderAsset, metadata, subIdentifier, sourceType);
+    SdrIdentifier identifier = _GetIdentifierForAsset(
+        shaderAsset, metadata, subIdentifier, shadingSystem);
 
-    // Use given sourceType if there is one, else use sourceType from the parser
-    // plugin.
-    const TfToken &thisSourceType = (!sourceType.IsEmpty()) ? sourceType :
-        parserIt->second->GetSourceType();
-    _ShaderNodeMapKey key{identifier, thisSourceType};
+    // Use given shadingSystem if there is one, else use shadingSystem from the
+    // parser plugin.
+    const TfToken &thisShadingSystem = (!shadingSystem.IsEmpty()) ? shadingSystem :
+        parserIt->second->GetShadingSystem();
+    _ShaderNodeMapKey key{identifier, thisShadingSystem};
 
     // Return the existing node in the map if an entry for the identifier and
-    // sourceType already exists. Note that the existing node may not yet be 
-    // parsed, so this will parse and return the node if it should exist 
+    // shadingSystem already exists. Note that the existing node may not yet be
+    // parsed, so this will parse and return the node if it should exist
     // already.
     if (SdrShaderNodeConstPtr node = 
-            GetShaderNodeByIdentifierAndType(identifier, sourceType)) {
+            GetShaderNodeByIdentifierAndSystem(identifier, shadingSystem)) {
         return node;
     }
 
@@ -570,9 +579,9 @@ SdrRegistry::GetShaderNodeFromAsset(
     SdrShaderNodeDiscoveryResult dr(identifier,
                                     SdrVersion(), /* use an invalid version */
                                     /* name */ TfGetBaseName(resolvedUri),
-                                    /*family*/ TfToken(), 
+                                    /*function*/ TfToken(), 
                                     discoveryType, 
-                                    /* sourceType */ thisSourceType,
+                                    /* shadingSystem */ thisShadingSystem,
                                     /* uri */ shaderAsset.GetAssetPath(),
                                     resolvedUri, 
                                     /* sourceCode */ "",
@@ -586,25 +595,26 @@ SdrRegistry::GetShaderNodeFromAsset(
 SdrShaderNodeConstPtr 
 SdrRegistry::GetShaderNodeFromSourceCode(
     const std::string &sourceCode,
-    const TfToken &sourceType,
+    const TfToken &shadingSystem,
     const SdrTokenMap &metadata)
 {
     // Ensure that there is a parser registered corresponding to the 
-    // given sourceType.
-    SdrParserPlugin *parserForSourceType = nullptr;
+    // given shadingSystem.
+    SdrParserPlugin *parserForShadingSystem = nullptr;
     for (const auto &parserIt : _parserPlugins) {
-        if (parserIt->GetSourceType() == sourceType) {
-            parserForSourceType = parserIt.get();
+        if (parserIt->GetShadingSystem() == shadingSystem) {
+            parserForShadingSystem = parserIt.get();
         }
     }
 
-    if (!parserForSourceType) {
-        // XXX: Should we try looking for sourceType in _parserPluginMap, 
+    if (!parserForShadingSystem) {
+        // XXX: Should we try looking for shadingSystem in _parserPluginMap, 
         // in case it corresponds to a discovery type in Sdr?
        
-        TF_DEBUG(SDR_PARSING).Msg("Encountered source code of type [%s], but "
-                                  "a parser for the type could not be found; "
-                                  "ignoring.\n", sourceType.GetText());
+        TF_DEBUG(SDR_PARSING).Msg("Encountered source code of shading system "
+                                  "[%s], but a parser for that system could "
+                                  "not be found; ignoring.\n",
+                                  shadingSystem.GetText());
         return nullptr;
     }
 
@@ -612,33 +622,33 @@ SdrRegistry::GetShaderNodeFromSourceCode(
             metadata);
 
     // Return the existing node in the map if an entry for the identifier and
-    // sourceType already exists. Note that the existing node may not yet be 
+    // shadingSystem already exists. Note that the existing node may not yet be
     // parsed, so this will parse and return the node if it should exist 
     // already.
     if (SdrShaderNodeConstPtr node = 
-            GetShaderNodeByIdentifierAndType(identifier, sourceType)) {
+            GetShaderNodeByIdentifierAndType(identifier, shadingSystem)) {
         return node;
     }
 
     SdrShaderNodeDiscoveryResult dr(identifier, 
                                     SdrVersion(), /* use an invalid version */
                                     /* name */ identifier, 
-                                    /*family*/ TfToken(), 
+                                    /*function*/ TfToken(), 
                                     // XXX: Setting discoveryType also to
-                                    // sourceType. Do ParserPlugins rely on it?
-                                    // If yes, should they?
-                                    /* discoveryType */ sourceType, 
-                                    sourceType, 
+                                    // shadingSystem. Do ParserPlugins rely on
+                                    // it? If yes, should they?
+                                    /* discoveryType */ shadingSystem, 
+                                    shadingSystem, 
                                     /* uri */ "",
                                     /* resolvedUri */ "",
                                     sourceCode,
                                     metadata);
 
-    SdrShaderNodeConstPtr node = 
-        _ParseNodeFromAssetOrSourceCode(*parserForSourceType, std::move(dr));
+    SdrShaderNodeConstPtr node = _ParseNodeFromAssetOrSourceCode(
+        *parserForShadingSystem, std::move(dr));
     if (!node) {
         TF_RUNTIME_ERROR("Could not create node for the given source code of "
-            "source type '%s'.", sourceType.GetText());
+            "shading system '%s'.", shadingSystem.GetText());
         return nullptr;
     }
     return node;
@@ -646,7 +656,7 @@ SdrRegistry::GetShaderNodeFromSourceCode(
 
 SdrShaderNodeConstPtr
 SdrRegistry::GetShaderNodeByName(
-    const std::string& name, const SdrTokenVec& typePriority,
+    const std::string& name, const SdrTokenVec& systemPriority,
     SdrVersionFilter filter)
 {
     TRACE_FUNCTION();
@@ -662,12 +672,12 @@ SdrRegistry::GetShaderNodeByName(
 
     // If the type priority specifier is empty, pick the first node that
     // matches the name
-    if (typePriority.empty()) {
+    if (systemPriority.empty()) {
         // If the type priority specifier is empty, pick the first valid node
         // that passes the version filter regardless of source type.
         for (auto it = range.first; it != range.second; ++ it) {
             const SdrShaderNodeDiscoveryResult &dr = *(it->second);
-            if (!_MatchesFamilyAndFilter(dr, TfToken(), filter)) {
+            if (!_MatchesFunctionAndFilter(dr, TfToken(), filter)) {
                 continue;
             }
             if (SdrShaderNodeConstPtr node = _FindOrParseNodeInCache(dr)) {
@@ -677,9 +687,9 @@ SdrRegistry::GetShaderNodeByName(
     } else {
         // Otherwise we attempt to get a node that passes the version filter
         // for each source type in priority order.
-        for (const TfToken& sourceType : typePriority) {
-            SdrShaderNodeConstPtr node = _GetNodeInNameRangeWithSourceType(
-                range, sourceType, filter);
+        for (const TfToken& shadingSystem : systemPriority) {
+            SdrShaderNodeConstPtr node = _GetNodeInNameRangeWithShadingSystem(
+                range, shadingSystem, filter);
             if (node) {
                 return node;
             }
@@ -690,8 +700,8 @@ SdrRegistry::GetShaderNodeByName(
 }
 
 SdrShaderNodeConstPtr
-SdrRegistry::GetShaderNodeByNameAndType(
-    const std::string& name, const TfToken& nodeType,
+SdrRegistry::GetShaderNodeByNameAndSystem(
+    const std::string& name, const TfToken& shadingSystem,
     SdrVersionFilter filter)
 {
     TRACE_FUNCTION();
@@ -705,7 +715,15 @@ SdrRegistry::GetShaderNodeByNameAndType(
         return nullptr;
     }
     
-    return _GetNodeInNameRangeWithSourceType(range, nodeType, filter);
+    return _GetNodeInNameRangeWithShadingSystem(range, shadingSystem, filter);
+}
+
+SdrShaderNodeConstPtr
+SdrRegistry::GetShaderNodeByNameAndType(
+    const std::string& name, const TfToken& nodeType,
+    SdrVersionFilter filter)
+{
+    return GetShaderNodeByNameAndSystem(name, nodeType, filter);
 }
 
 SdrShaderNodePtrVec
@@ -748,7 +766,7 @@ SdrRegistry::GetShaderNodesByName(
 
     for (auto it = range.first; it != range.second; ++ it) {
         const SdrShaderNodeDiscoveryResult &dr = *(it->second);
-        if (!_MatchesFamilyAndFilter(dr, TfToken(), filter)) {
+        if (!_MatchesFunctionAndFilter(dr, TfToken(), filter)) {
             continue;
         }
         if (SdrShaderNodeConstPtr node =
@@ -765,6 +783,14 @@ SdrRegistry::GetShaderNodesByFamily(
     const TfToken& family,
     SdrVersionFilter filter)
 {
+    return GetShaderNodesByFunction(family, filter);
+}
+
+SdrShaderNodePtrVec
+SdrRegistry::GetShaderNodesByFunction(
+    const TfToken& function,
+    SdrVersionFilter filter)
+{
     // Locking the discovery results for the entire duration of the parse is a
     // bit heavy-handed, but it needs to be 100% guaranteed that the results
     // are not modified while they are being iterated over.
@@ -775,7 +801,7 @@ SdrRegistry::GetShaderNodesByFamily(
     std::unique_lock<std::mutex> nmLock(_nodeMapMutex);
 
     // This method does a multi-threaded "bulk parse" of all discovered nodes
-    // (or a partial parse if a family is specified). It's possible that another
+    // (or partial parse if function is specified). It's possible that another
     // node access method (potentially triggering a parse) could be called in
     // another thread during bulk parse. In that scenario, the worst that should
     // happen is that one of the parses (either from the other method, or this
@@ -800,7 +826,7 @@ SdrRegistry::GetShaderNodesByFamily(
             WorkParallelForEach(_discoveryResultsByIdentifier.begin(),
                                 _discoveryResultsByIdentifier.end(),
                 [&](const _DiscoveryResultsByIdentifier::value_type &val) {
-                    if (_MatchesFamilyAndFilter(val.second, family, filter)) {
+                    if (_MatchesFunctionAndFilter(val.second, function, filter)) {
                         _FindOrParseNodeInCache(val.second);
                     }
                 });
@@ -814,7 +840,7 @@ SdrRegistry::GetShaderNodesByFamily(
     SdrShaderNodeConstPtrVec nodeVec;
     nodeVec.reserve(_nodeMap.size());
     for (const auto& nodePair : _nodeMap) {
-        if (_MatchesFamilyAndFilter(nodePair.second, family, filter)) {
+        if (_MatchesFunctionAndFilter(nodePair.second, function, filter)) {
             nodeVec.push_back(nodePair.second.get());
         }
     }
@@ -834,18 +860,25 @@ SdrRegistry::GetAllShaderNodes()
 }
 
 SdrTokenVec
-SdrRegistry::GetAllShaderNodeSourceTypes() const
+SdrRegistry::GetAllShaderNodeShadingSystems() const
 {
-    // We're using the _discoveryResultMutex because we populate/udpate the
-    // _allSourceTypes in tandem with the population of the discovery results
+    // We're using the _discoveryResultMutex because we populate/update the
+    // _allShadingSystems in tandem with the population of the discovery results
     // structures.
     //
-    // We also have to return the source types by value instead of by const
+    // We also have to return the shading systems by value instead of by const
     // reference because we don't want a client holding onto the reference
     // to read from it when _RunDiscoveryPlugins could potentially be running
-    // and modifying _allSourceTypes
+    // and modifying _allShadingSystems
     std::lock_guard<std::mutex> drLock(_discoveryResultMutex);
-    return SdrTokenVec(_allSourceTypes.begin(), _allSourceTypes.end());
+    return SdrTokenVec(_allShadingSystems.begin(), _allShadingSystems.end());
+
+}
+
+SdrTokenVec
+SdrRegistry::GetAllShaderNodeSourceTypes() const
+{
+    return GetAllShaderNodeShadingSystems();
 }
 
 SdrShaderNodeQueryResult
@@ -988,12 +1021,12 @@ SdrRegistry::RunQuery(const SdrShaderNodeQuery& query)
     }
 
     // Sort each SdrShaderNodePtrVec alphabetically by identifier,
-    // then sourceType to provide a stable order for the query result.
+    // then shadingSystem to provide a stable order for the query result.
     for (SdrShaderNodePtrVec& innerNodes : result._nodes) {
         std::sort(innerNodes.begin(), innerNodes.end(),
             [](SdrShaderNodeConstPtr a, SdrShaderNodeConstPtr b) {
                 return a->GetIdentifier() < b->GetIdentifier() ||
-                       a->GetSourceType() < b->GetSourceType();
+                       a->GetShadingSystem() < b->GetShadingSystem();
             });
     }
 
@@ -1135,7 +1168,7 @@ SdrRegistry::_RunDiscoveryPlugins(const DiscoveryPluginRefPtrVec& discoveryPlugi
     size_t num_plugins = discoveryPlugins.size();
     std::vector<SdrShaderNodeDiscoveryResultVec> results_vec(num_plugins);
 
-    // Discover nodes in parallel. Following the pattern in GetNodesByFamily,
+    // Discover nodes in parallel. Following the pattern in GetNodesByFunction,
     // pre-emptively release the Python GIL here to avoid
     // deadlocks since the code running in the worker threads may call into
     // Python and try to take the GIL when discovering nodes. We also need
@@ -1175,9 +1208,8 @@ SdrRegistry::_AddDiscoveryResultNoLock(SdrShaderNodeDiscoveryResult&& drMoved)
     // The "by name" map holds a pointer to each discovery result in the 
     // "by identifier" map.
     _discoveryResultPtrsByName.emplace(dr.name, &dr);
-    // All possible source types are determined by all available discoveries.
-    _allSourceTypes.insert(dr.sourceType);
-
+    // All possible shading systems are determined by all available discoveries.
+    _allShadingSystems.insert(dr.shadingSystem);
 }
 
 SdrShaderNodeConstPtr 
@@ -1191,12 +1223,12 @@ SdrRegistry::_ParseNodeFromAssetOrSourceCode(
     }
 
     // Create the node map key before we move the discovery result.
-    _ShaderNodeMapKey key{dr.identifier, dr.sourceType};
+    _ShaderNodeMapKey key{dr.identifier, dr.shadingSystem};
 
     // Move the discovery result into _discoveryResults so the node can be found
     // in the Get*() methods. Note that we keep this locked while caching the
     // node itself so that in the extraordinarily unlikely case that another
-    // thread tries to add a node with the same identifier and sourceType 
+    // thread tries to add a node with the same identifier and shadingSystem 
     // through this code path, that THIS node is the one that ends up cached.
     std::lock_guard<std::mutex> drLock(_discoveryResultMutex);
     _AddDiscoveryResultNoLock(std::move(dr));
@@ -1205,16 +1237,16 @@ SdrRegistry::_ParseNodeFromAssetOrSourceCode(
 }
 
 SdrShaderNodeConstPtr 
-SdrRegistry::_GetNodeInIdentifierRangeWithSourceType(
-    _DiscoveryResultsByIdentifierRange range, const TfToken& sourceType)
+SdrRegistry::_GetNodeInIdentifierRangeWithShadingSystem(
+    _DiscoveryResultsByIdentifierRange range, const TfToken& shadingSystem)
 {
     // Return the first node that we can successfully find or parse with the
-    // given source type. We expect there to be at most a few (and frequently 
-    // just one) source types for a particular identifier so there should be 
-    // little impact from this linear search.
+    // given shading system. We expect there to be at most a few (and
+    // frequently just one) shading systems for a particular identifier so
+    // there should be little impact from this linear search.
     for (auto it = range.first; it != range.second; ++ it) {
         const SdrShaderNodeDiscoveryResult &dr = it->second;
-        if (dr.sourceType != sourceType) {
+        if (dr.shadingSystem != shadingSystem) {
             continue;
         }
         if (SdrShaderNodeConstPtr node = _FindOrParseNodeInCache(dr)) {
@@ -1225,16 +1257,16 @@ SdrRegistry::_GetNodeInIdentifierRangeWithSourceType(
 }
 
 SdrShaderNodeConstPtr 
-SdrRegistry::_GetNodeInNameRangeWithSourceType(
-    _DiscoveryResultPtrsByNameRange range, const TfToken& sourceType,
+SdrRegistry::_GetNodeInNameRangeWithShadingSystem(
+    _DiscoveryResultPtrsByNameRange range, const TfToken& shadingSystem,
     SdrVersionFilter filter)
 {
     for (auto it = range.first; it != range.second; ++ it) {
         const SdrShaderNodeDiscoveryResult &dr = *(it->second);
-        if (dr.sourceType != sourceType) {
+        if (dr.shadingSystem != shadingSystem) {
             continue;
         }
-        if (!_MatchesFamilyAndFilter(dr, TfToken(), filter)) {
+        if (!_MatchesFunctionAndFilter(dr, TfToken(), filter)) {
             continue;
         }
         if (SdrShaderNodeConstPtr node = _FindOrParseNodeInCache(dr)) {
@@ -1273,7 +1305,7 @@ SdrShaderNodeConstPtr
 SdrRegistry::_FindOrParseNodeInCache(const SdrShaderNodeDiscoveryResult& dr)
 {
     // Return an existing node in the map if it already exists.
-    _ShaderNodeMapKey key{dr.identifier, dr.sourceType};
+    _ShaderNodeMapKey key{dr.identifier, dr.shadingSystem};
     if (SdrShaderNodeConstPtr node = _FindNodeInCache(key)) {
         return node;
     }
@@ -1281,9 +1313,9 @@ SdrRegistry::_FindOrParseNodeInCache(const SdrShaderNodeDiscoveryResult& dr)
     // Ensure there is a parser plugin that can handle this node
     auto i = _parserPluginMap.find(dr.discoveryType);
     if (i == _parserPluginMap.end()) {
-        TF_DEBUG(SDR_PARSING).Msg("Encountered a node of type [%s], "
-                                  "with name [%s], but a parser for that type "
-                                  "could not be found; ignoring.\n", 
+        TF_DEBUG(SDR_PARSING).Msg("Encountered a node of shading system [%s], "
+                                  "with name [%s], but a parser for that "
+                                  "system could not be found; ignoring.\n", 
                                   dr.discoveryType.GetText(),  dr.name.c_str());
         return nullptr;
     }

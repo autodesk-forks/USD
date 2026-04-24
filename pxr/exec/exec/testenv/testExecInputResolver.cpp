@@ -28,6 +28,7 @@
 #include "pxr/exec/esf/object.h"
 #include "pxr/exec/esf/stage.h"
 #include "pxr/exec/esfUsd/sceneAdapter.h"
+#include "pxr/exec/esfUsd/stageData.h"
 #include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/usd/stage.h"
 
@@ -225,19 +226,23 @@ public:
 
 private:
 
-    static EsfStage _NewStageFromLayer(const char *layerContents)
+    EsfStage _NewStageFromLayer(const char *layerContents)
     {
         const SdfLayerRefPtr layer = SdfLayer::CreateAnonymous(".usda");
         layer->ImportFromString(layerContents);
         TF_AXIOM(layer);
         UsdStageRefPtr usdStage = UsdStage::Open(layer);
         TF_AXIOM(usdStage);
+        _stageData =
+            EsfUsdStageData::RegisterStage(usdStage, /* listener */ nullptr);
+        TF_AXIOM(_stageData);
         return EsfUsdSceneAdapter::AdaptStage(usdStage);
     }
 
 private:
     // Hold an EsfStage by unique_ptr because it's not default-constructible.
     std::unique_ptr<EsfStage> _stage;
+    std::shared_ptr<EsfUsdStageData> _stageData;
 };
 
 // Test that Exec_ResolveInput finds a computation on the origin prim.
@@ -685,6 +690,61 @@ TestResolveToConnectionTargetedObjects_MissingConnectionTarget(
     ASSERT_EQ(fixture.journal, expectedJournal);
 }
 
+// Test that Exec_ResolveInput finds computations on attributes that have
+// connections to a prim and the dynamic traversal is
+// IncomingConnectionOwningAttributes.
+//
+static void
+TestResolveToIncomingConnectionOwningAttributes(Fixture &fixture)
+{
+    fixture.NewStageFromLayer(R"usd(#usda 1.0
+        def CustomSchema "Origin" {
+            def CustomSchema "A" {
+                int attr.connect = [</Origin>]
+            }
+            def CustomSchema "B" {
+                int attr.connect = [</Origin>]
+            }
+        }
+    )usd");
+
+    const Exec_OutputKeyVector outputKeys = fixture.ResolveInput(
+        fixture.GetObjectAtPath("/Origin"),
+        _tokens->attributeComputation,
+        TfType::Find<int>(),
+        EsfSchemaConfigKey(),
+        SdfPath("."),
+        ExecProviderResolution::DynamicTraversal::
+            IncomingConnectionOwningAttributes);
+
+    ASSERT_EQ(outputKeys.size(), 2);
+
+    // The order of the input keys isn't deterministic for incoming connections.
+    const bool swap =
+        outputKeys[0].GetProviderObject()->GetPath(/* journal */ nullptr) ==
+        SdfPath("/Origin/B.attr");
+    ASSERT_OUTPUT_KEY(
+        outputKeys[swap ? 1 : 0],
+        fixture.GetObjectAtPath("/Origin/A.attr"), 
+        EsfSchemaConfigKey(),
+        fixture.attributeComputationDefinition);
+    ASSERT_OUTPUT_KEY(
+        outputKeys[swap ? 0 : 1],
+        fixture.GetObjectAtPath("/Origin/B.attr"), 
+        EsfSchemaConfigKey(),
+        fixture.attributeComputationDefinition);
+
+    EsfJournal expectedJournal;
+    expectedJournal
+        .Add(SdfPath("/Origin"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin"), EsfEditReason::ChangedIncomingConnections)
+        .Add(SdfPath("/Origin/A"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/A.attr"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/B"), EsfEditReason::ResyncedObject)
+        .Add(SdfPath("/Origin/B.attr"), EsfEditReason::ResyncedObject);
+    ASSERT_EQ(fixture.journal, expectedJournal);
+}
+
 // Test that Exec_ResolveInput finds a computation on the stage (i.e., on the
 // pseudoroot prim), and the local traversal is "/".
 //
@@ -883,6 +943,7 @@ int main()
         TestResolveToTargetedObjects_MissingTarget,
         TestResolveToConnectionTargetedObjects,
         TestResolveToConnectionTargetedObjects_MissingConnectionTarget,
+        TestResolveToIncomingConnectionOwningAttributes,
         TestResolveToStage,
         TestResolveForDispatchedPrimComputation,
         TestResolveForDispatchedAttributeComputation,

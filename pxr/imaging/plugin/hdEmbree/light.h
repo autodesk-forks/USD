@@ -11,6 +11,7 @@
 #include "pxr/base/gf/matrix3f.h"
 #include "pxr/base/gf/matrix4f.h"
 #include "pxr/imaging/hd/light.h"
+#include "pxr/imaging/plugin/hdEmbree/pxrIES/pxrIES.h"
 
 #include <embree4/rtcore_common.h>
 #include <embree4/rtcore_geometry.h>
@@ -36,6 +37,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///   - inputs:color
 ///   - inputs:enableColorTemperature
 ///   - inputs:colorTemperature
+/// - DistantLight
+///   - inputs:angle
 /// - DiskLight
 ///   - inputs:radius
 /// - RectLight
@@ -54,6 +57,9 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///   - inputs:shaping:focusTint
 ///   - inputs:shaping:cone:angle
 ///   - inputs:shaping:cone:softness
+///   - inputs:shaping:ies:file
+///   - inputs:shaping:ies:angleScale
+///   - inputs:shaping:ies:normalize
 /// - Respects double-sidedness of meshes
 ///
 /// Currently Unsupported Features / Limitations:
@@ -63,7 +69,6 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// - Unsupported light types:
 ///   - MeshLightAPI
 ///   - VolumeLightAPI
-///   - DistantLight
 ///   - GeometryLight
 ///   - PortalLight
 ///   - PluginLight
@@ -86,14 +91,15 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///     - inputs:treatAsLine
 ///   - DomeLight:
 ///     - inputs:texture:format (always assumed to be "latlong")
-/// - ShapingAPI
-///   - inputs:shaping:ies:file
-///   - inputs:shaping:ies:angleScale
-///   - inputs:shaping:ies:normalize
 /// - No support for direct-camera visibility
 /// - No support for motion blur (currently, if motion blur is enabled, all
 ///   samples taken at the first time sample, ie, when the shutter opens).
 /// - No support for instanced lights
+
+/// Known Bugs / Issues:
+/// - if animating the ies:file property, and an ies file is removed (ie,
+///   set to blank), no update is registered, and the ies file will continue to
+///   be used
 
 class HdEmbreeRenderer;
 
@@ -108,6 +114,11 @@ struct HdEmbree_Cylinder
 struct HdEmbree_Disk
 {
     float radius;
+};
+
+struct HdEmbree_Distant
+{
+    float halfAngleRadians;
 };
 
 // Needed for HdEmbree_LightVariant
@@ -129,6 +140,7 @@ using HdEmbree_LightVariant = std::variant<
     HdEmbree_UnknownLight,
     HdEmbree_Cylinder,
     HdEmbree_Disk,
+    HdEmbree_Distant,
     HdEmbree_Dome,
     HdEmbree_Rect,
     HdEmbree_Sphere>;
@@ -140,12 +152,20 @@ struct HdEmbree_LightTexture
     int height = 0;
 };
 
+struct HdEmbree_IES
+{
+    PxrIESFile iesFile;
+    bool normalize = false;
+    float angleScale = 0.0f;
+};
+
 struct HdEmbree_Shaping
 {
     GfVec3f focusTint;
     float focus = 0.0f;
     float coneAngle = 180.0f;
     float coneSoftness = 0.0f;
+    HdEmbree_IES ies;
 };
 
 struct HdEmbree_LightData

@@ -1008,6 +1008,14 @@ class ComplianceChecker(object):
     def __init__(self, arkit=False, skipARKitRootLayerCheck=False,
                  rootPackageOnly=False, skipVariants=False, verbose=False,
                  assetLevelChecks=True):
+        import warnings
+        warnings.warn(
+            "Use of UsdUtils.ComplianceChecker is deprecated. usdchecker "
+            "itself does not use it and has been migrated to use the Usd "
+            "Validation Framework. This utility will be removed in a "
+            "future version, please migrate your compliance checker "
+            "logic to the new Usd Validation Framework validators.",
+            DeprecationWarning, stacklevel=2)
         self._rootPackageOnly = rootPackageOnly
         self._doVariants = not skipVariants
         self._verbose = verbose

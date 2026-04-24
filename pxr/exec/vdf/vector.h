@@ -264,6 +264,13 @@ public:
             _data.New< Vdf_VectorImplContiguous<TYPE> >(bits);
     }
 
+    /// Destroys contents of this vector.
+    ///
+    /// Resets the vector to have zero size but maintains the held type.
+    ///
+    VDF_API
+    void Clear();
+
     /// Copies the contents of \p rhs into this vector.
     ///
     /// \p rhs and this vector must be type compatible.

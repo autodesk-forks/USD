@@ -85,10 +85,25 @@ def _testCompleteResyncWithNativeInstances(appController):
     appController._dataModel._viewSettingsDataModel.cameraPath = Sdf.Path('/main_cam')
     appController._takeShot("completeResyncWithNativeInstances2.png")
 
+#
+# Tests whether making prim instanceable does not cause duplicate due to
+# https://github.com/PixarAnimationStudios/OpenUSD/issues/3563.
+#
+def _testMakePrimInstanceable(appController):
+
+    appController._dataModel.stage.GetRootLayer().Clear()
+
+    appController._dataModel.stage.GetRootLayer().subLayerPaths = ["usd-10752/cube.usda"]
+    appController._takeShot("primNotInstanceable.png")
+
+    appController._dataModel.stage.GetPrimAtPath('/instance').SetInstanceable(True)
+    appController._takeShot("primInstanceable.png")
+
 def testUsdviewInputFunction(appController):
     _modifySettings(appController)
     _testInstancingEdits6146(appController)
     _testDeactivatingInstanceParent11237(appController)
     _testInstancerVisibilityEdits(appController)
+    _testMakePrimInstanceable(appController)
     # Last since it changes the camera.
     _testCompleteResyncWithNativeInstances(appController)

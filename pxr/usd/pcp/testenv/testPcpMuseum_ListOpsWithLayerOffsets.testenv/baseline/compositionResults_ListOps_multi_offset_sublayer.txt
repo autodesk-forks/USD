@@ -1,0 +1,52 @@
+Loading @ListOpsWithLayerOffsets/base_multi_offset_sublayer.usda@
+
+------------------------------------------------------------------------
+Layer Stack:
+     base_multi_offset_sublayer.usda
+     layer_scale_2.usda
+     layer_scale_3.usda
+
+------------------------------------------------------------------------
+Results for composing </World>
+
+Prim Stack:
+    layer_scale_2.usda   /World
+    layer_scale_3.usda   /World
+
+Time Offsets:
+    base_multi_offset_sublayer.usda /World          root       (offset=0.00, scale=1.00)
+        layer_scale_2.usda               sublayer   (offset=0.00, scale=2.00)
+        layer_scale_3.usda               sublayer   (offset=0.00, scale=3.00)
+
+Child names:
+     ['PayloadIn24']
+
+------------------------------------------------------------------------
+Results for composing </World/PayloadIn24>
+
+Prim Stack:
+    layer_scale_2.usda   /World/PayloadIn24
+    layer_scale_3.usda   /World/PayloadIn24
+    asset.usda           /World
+
+Time Offsets:
+    base_multi_offset_sublayer.usda /World/PayloadIn24 root       (offset=0.00, scale=1.00)
+        layer_scale_2.usda               sublayer   (offset=0.00, scale=2.00)
+        layer_scale_3.usda               sublayer   (offset=0.00, scale=3.00)
+    asset.usda           /World          payload    (offset=0.00, scale=2.00)
+
+Child names:
+     ['asset_child']
+
+------------------------------------------------------------------------
+Results for composing </World/PayloadIn24/asset_child>
+
+Prim Stack:
+    asset.usda           /World/asset_child
+
+Time Offsets:
+    base_multi_offset_sublayer.usda /World/PayloadIn24/asset_child root       (offset=0.00, scale=1.00)
+        layer_scale_2.usda               sublayer   (offset=0.00, scale=2.00)
+        layer_scale_3.usda               sublayer   (offset=0.00, scale=3.00)
+    asset.usda           /World/asset_child payload    (offset=0.00, scale=2.00)
+

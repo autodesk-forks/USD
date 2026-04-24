@@ -85,6 +85,14 @@ class SdfAssetPath;
 /// \ref UsdShadeMaterial_BaseMaterial "specialize" child materials from 
 /// parent materials.
 /// 
+/// For UsdShade schema domain any connectable child prim of UsdShadeMaterial 
+/// must be either UsdShadeShader derived or UsdShadeNodeGraph derived but not 
+/// UsdShadeMaterial, that is, UsdShadeMaterial can not be nested. It also must
+/// not contain any imageable prims as its descendants (UsdGeomScope,
+/// UsdGeomCamera, UsdGeomMesh etc).
+/// 
+/// Other derived classes of UsdShadeNodeGraph from other schema domains may 
+/// define their own stricter rules.
 /// 
 ///
 /// For any described attribute \em Fallback \em Value or \em Allowed \em Values below

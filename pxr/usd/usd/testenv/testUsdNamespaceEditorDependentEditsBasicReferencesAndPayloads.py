@@ -885,12 +885,11 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
             "/Prim2" : self.PrimResyncType.UnchangedPrimStack
         })
 
-        # Now load /Prim1 and /Prim3 again. Loading /Prim3 will emit warnings
-        # because of the payload points to path that no longer exists in layer1.
+        # Now load /Prim1 and /Prim3 again. 
         stage2.Load('/Prim1')
-        print("\n=== EXPECT WARNINGS ===", file=sys.stderr)
+        # XXX: Verify that loading /Prim3 will emit warnings
+        # because of the payload points to path that no longer exists in layer1.
         stage2.Load('/Prim3')
-        print("\n=== END EXPECTED WARNINGS ===", file=sys.stderr)
 
         # Verify the post-edit contents for stage 2 now with all prims loaded.
         #
@@ -1878,8 +1877,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         })
 
         # Edit: Rename /Ref to /RenamedRef
-        with self.ApplyEdits(editor, "Rename /Ref -> /RenamedRef",
-                expectWarnings = False):
+        with self.ApplyEdits(editor, "Rename /Ref -> /RenamedRef"):
             self.assertTrue(editor.MovePrimAtPath("/Ref", "/RenamedRef"))
 
         # Verify the default prim has been updated to "RenamedRef" because of 
@@ -1898,8 +1896,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         })
 
         # Edit: Reparent /RenamedRef to /World/RenamedRef.
-        with self.ApplyEdits(editor, "Reparent /RenamedRef -> /World/RenamedRef",
-                expectWarnings = False):
+        with self.ApplyEdits(editor, "Reparent /RenamedRef -> /World/RenamedRef"):
             self.assertTrue(editor.MovePrimAtPath("/RenamedRef", "/World/RenamedRef"))
 
         # Verify the default prim has been updated to "/World/RenamedRef" 
@@ -1921,8 +1918,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         })
 
         # Edit: Rename /World to /NewWorld.
-        with self.ApplyEdits(editor, "Reparent /World -> /NewWorld",
-                expectWarnings = False):
+        with self.ApplyEdits(editor, "Reparent /World -> /NewWorld"):
             self.assertTrue(editor.MovePrimAtPath("/World", "/NewWorld"))
 
         # Verify the default prim has been updated to "/NewWorld/RenamedRef" 
@@ -1941,8 +1937,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         })
 
         # Edit: Reparent and rename /NewWorld/RenamedRef back to /Ref
-        with self.ApplyEdits(editor, "Reparent /NewWorld/RenamedRef -> /Ref",
-                expectWarnings = False):
+        with self.ApplyEdits(editor, "Reparent /NewWorld/RenamedRef -> /Ref"):
             self.assertTrue(
                 editor.MovePrimAtPath("/NewWorld/RenamedRef", "/Ref"))
 
@@ -2062,9 +2057,9 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
             'PayloadToExplicit' : refContents,
         })
 
-        # Edit: Rename /Ref to /RenamedRef.
-        with self.ApplyEdits(editor, "Rename /Ref -> /RenamedRef",
-                expectWarnings = True):
+        # Edit: Rename /Ref to /RenamedRef. 
+        # This will cause stage 3 to produce warnings.
+        with self.ApplyEdits(editor, "Rename /Ref -> /RenamedRef"): 
             self.assertTrue(editor.MovePrimAtPath("/Ref", "/RenamedRef"))
 
         # Like before, the default prim is updated in layer1 and the rename
@@ -2122,6 +2117,8 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         # their contents unchanged since the default prim is updated in layer1
         # The explicit path prims however lose their contents since we couldn't 
         # update the paths when not added as a dependent stage.
+        # XXX: Verify that the stage issues a warning indicating that the 
+        # explicit paths to /Ref could not be resolved.
         self._VerifyStageContents(stage3, {
             'RefToDefault' : refContents,
             'PayloadToDefault' : refContents,
@@ -2164,9 +2161,8 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         })
 
         # Edit: Reparent /RenamedRef to /NewWorld/RenamedRef with the payloads
-        # unloaded
-        with self.ApplyEdits(editor, "Reparent /RenamedRef -> /NewWorld/RenamedRef",
-                expectWarnings = True):
+        # unloaded.
+        with self.ApplyEdits(editor, "Reparent /RenamedRef -> /NewWorld/RenamedRef"):
             self.assertTrue(
                 editor.MovePrimAtPath("/RenamedRef", "/NewWorld/RenamedRef"))
 
@@ -2235,15 +2231,15 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         # Load all payloads on both stages.
         stage2.Load('/PayloadToDefault')
         stage3.Load('/PayloadToDefault')
-        print("\n=== EXPECT WARNINGS ===", file=sys.stderr)              
+        # XXX: Verify that unresolved prim path warnings are issued for the
+        # payload paths to /RenamedRef.
         stage2.Load('/PayloadToExplicit')
         stage3.Load('/PayloadToExplicit')
-        print("\n=== END EXPECTED WARNINGS ===", file=sys.stderr)              
 
         # On stage2 the default prim payload has its contents again as we didn't
         # need to update an payload paths while the payload was unloaded. The
         # explicit path payload prim's contents are not restored since we didn't
-        # update its path while unloaded.       
+        # update its path while unloaded. 
         self._VerifyStageContents(stage2, {
             'RefToDefault' : refContents,
             'PayloadToDefault' : refContents,
@@ -2262,8 +2258,9 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         })
 
         # Edit: Delete /NewWorld/RenamedRef
-        with self.ApplyEdits(editor, "Delete /NewWorld/RenamedRef",
-                expectWarnings = True):
+        # XXX: Verify that the stage issues unresolved prim path warnings for 
+        # the ref and payloads to default in both stage2 and stage3. 
+        with self.ApplyEdits(editor, "Delete /NewWorld/RenamedRef"):
             self.assertTrue(editor.DeletePrimAtPath("/NewWorld/RenamedRef"))
         
         # This time the defaultPrim field is completely removed in layer1 as

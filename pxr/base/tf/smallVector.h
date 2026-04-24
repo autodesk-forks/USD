@@ -795,7 +795,7 @@ private:
     // Free the remotely allocated storage.
     void _FreeStorage() {
         if (!_IsLocal()) {
-            free(_GetRemoteStorage());
+            ::operator delete(_data.GetRemoteStorage(), std::nothrow);
         }
     }
 
@@ -810,7 +810,8 @@ private:
 
     // Allocate a buffer on the heap.
     static value_type *_Allocate(size_type size) {
-        return static_cast<value_type *>(malloc(sizeof(value_type) * size));
+        return static_cast<value_type *>(
+            ::operator new(sizeof(value_type) * size, std::nothrow));
     }
 
     // Initialize the vector with new storage, updating the capacity and size.

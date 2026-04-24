@@ -22,6 +22,7 @@
 #include "hdPrman/sceneIndexObserverApi.h"
 #include "hdPrman/tokens.h"
 #include "hdPrman/volume.h"
+#include "hdPrman/volumeFilter.h"
 
 #include "pxr/imaging/hd/aov.h"
 #include "pxr/imaging/hd/bprim.h"
@@ -99,11 +100,13 @@ static bool _enableParallelPrimSync =
 // HD_PRMAN_EXPERIMENTAL_RILEY_SCENE_INDEX_OBSERVER is true).
 //
 // Overall, the scene indices are as follows:
+// XXX HdPrman_RileyGlobalsSceneIndex is not mentioned here ...
 //
-// 1. HdPrman_RileyFallbackMaterialSceneIndexPlugin
-//    Adds a hard-coded riley material at GetFallbackMaterialPath().
+// 1. HdPrman_RileyFallbackMaterial::AppendSceneIndex
+//    Adds a hard-coded riley material at
+//    HdPrman_RileyFallbackMaterial::GetPrimPath().
 //
-// 2. HdPrman_RileyConversionSceneIndexPlugin
+// 2. HdPrman_RileyConversionSceneIndex
 //
 //    Converts some hydra prims to riley prims (following, e.g.,
 //    HdPrmanRileyGeometryPrototypeSchema).
@@ -203,6 +206,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (__FnKat_bbox)
     (viewerMouseClick)
     ((houdiniInteractive, "houdini:interactive"))
+    (volumeFilter)
 );
 
 TF_DEFINE_PUBLIC_TOKENS(HdPrmanRenderSettingsTokens,
@@ -257,6 +261,9 @@ const TfTokenVector HdPrmanRenderDelegate::SUPPORTED_SPRIM_TYPES =
     HdPrimTypeTokens->diskLight,
     HdPrimTypeTokens->cylinderLight,
     HdPrimTypeTokens->sphereLight,
+#if _PRMANAPI_VERSION_MAJOR_ >= 27
+    _tokens->volumeFilter,
+#endif
 #if PXR_VERSION <= 2211
     HdPrmanTokens->meshLight,
 #else
@@ -559,6 +566,10 @@ HdPrmanRenderDelegate::CreateSprim(TfToken const& typeId,
         sprim = new HdPrmanMaterial(sprimId);
     } else if (typeId == HdPrimTypeTokens->coordSys) {
         sprim = new HdPrmanCoordSys(sprimId);
+#if _PRMANAPI_VERSION_MAJOR_ >= 27
+    } else if (typeId == _tokens->volumeFilter) {
+        sprim = new HdPrman_VolumeFilter(sprimId);
+#endif
     } else if (typeId == HdPrimTypeTokens->lightFilter) {
         sprim = new HdPrmanLightFilter(sprimId, typeId);
     } else if (typeId == HdPrimTypeTokens->light ||
@@ -617,6 +628,10 @@ HdPrmanRenderDelegate::CreateFallbackSprim(TfToken const& typeId)
         return new HdPrmanCoordSys(SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->lightFilter) {
         return new HdPrmanLightFilter(SdfPath::EmptyPath(), typeId);
+#if _PRMANAPI_VERSION_MAJOR_ >= 27
+    } else if (typeId == _tokens->volumeFilter) {
+        return new HdPrman_VolumeFilter(SdfPath::EmptyPath());
+#endif
     } else if (typeId == HdPrimTypeTokens->light ||
                typeId == HdPrimTypeTokens->distantLight ||
                typeId == HdPrimTypeTokens->domeLight ||

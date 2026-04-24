@@ -95,7 +95,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 
     ((discoveryType, "args"))
-    ((sourceType, "RmanCpp"))
+    ((shadingSystem, "RmanCpp"))
     ((bxdfType, "bxdf"))
 );
 
@@ -216,9 +216,13 @@ RmanArgsParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken& 
+#if PXR_VERSION >= 2605
+RmanArgsParserPlugin::GetShadingSystem() const
+#else
 RmanArgsParserPlugin::GetSourceType() const
+#endif
 {
-    return _tokens->sourceType;
+    return _tokens->shadingSystem;
 }
 
 static
@@ -290,7 +294,8 @@ _GetSdrContextFromShaderType(const TfToken &shaderType)
         { TfToken("displayfilter"), SdrNodeContext->DisplayFilter },
         { TfToken("lightfilter"), SdrNodeContext->LightFilter },
         { TfToken("pixelfilter"), SdrNodeContext->PixelFilter },
-        { TfToken("samplefilter"), SdrNodeContext->SampleFilter }
+        { TfToken("samplefilter"), SdrNodeContext->SampleFilter },
+        { TfToken("volumefilter"), SdrNodeContext->VolumeFilter }
     });
 
     const auto it = contextMapping.find(shaderType);
@@ -423,17 +428,26 @@ RmanArgsParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
     //
     _Parse(shaderRepresentation, rootElem, /* page = */ "");
 
-    const auto metadata = _CollectMetadata(
+    auto metadata = _CollectMetadata(
         shaderRepresentation, discoveryResult);
+    
+#if PXR_VERSION >= 2605
+    metadata.SetContext(
+        _GetSdrContextFromShaderType(shaderRepresentation.type));
+#endif
 
     return SdrShaderNodeUniquePtr(
         new SdrShaderNode(
             discoveryResult.identifier,
             discoveryResult.version,
             shaderRepresentation.name,
+#if PXR_VERSION >= 2605
+            discoveryResult.function,
+#else
             discoveryResult.family,
             _GetSdrContextFromShaderType(shaderRepresentation.type),
-            _tokens->sourceType,
+#endif
+            _tokens->shadingSystem,
             discoveryResult.resolvedUri,
             _GetDsoPathFromArgsPath(discoveryResult.resolvedUri),
             std::move(shaderRepresentation.properties),

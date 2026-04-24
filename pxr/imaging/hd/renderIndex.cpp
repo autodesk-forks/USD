@@ -165,6 +165,7 @@ HdRenderIndex::HdRenderIndex(
     , _drivers(drivers)
     , _instanceName(instanceName)
     , _rprimDirtyList(*this)
+    , _syncAllDepth(0)
 {
     // Note: HdRenderIndex::New(...) guarantees renderDelegate is non-null.
 
@@ -1328,6 +1329,7 @@ namespace {
 
         void Sync(size_t begin, size_t end)
         {
+            TRACE_FUNCTION_SCOPE("RPrimSync Worker");
             for (size_t i = begin; i < end; ++i)
             {
                 HdRprim &rprim = *_r.rprims[i];
@@ -1575,11 +1577,32 @@ HdRenderIndex::EnqueueCollectionToSync(HdRprimCollection const &col)
     _collectionsToSync.push_back(col);
 }
 
+// RAII helper to manage scope depth.
+struct _AutoScopeCount {
+    std::atomic<int> *_count;
+    _AutoScopeCount(std::atomic<int> *count) : _count(count) {
+        ++(*_count);
+    }
+    ~_AutoScopeCount() {
+        --(*_count);
+    }
+};
+
+bool
+HdRenderIndex::IsSyncAllInProgress() const
+{
+    return _syncAllDepth.load() > 0;
+}
+
 void
 HdRenderIndex::SyncAll(HdTaskSharedPtrVector *tasks,
                        HdTaskContext *taskContext)
 {
     HD_TRACE_FUNCTION();
+
+    // Track SyncAll() depth.
+    TF_VERIFY(!IsSyncAllInProgress(), "Re-entrant SyncAll() detected");
+    _AutoScopeCount syncAllScope(&_syncAllDepth);
 
     ////////////////////////////////////////////////////////////////////////////
     //
@@ -2041,26 +2064,20 @@ HdRenderIndex::_RemoveInstancerSubtree(const SdfPath &root,
 HdInstancer *
 HdRenderIndex::GetInstancer(SdfPath const &id) const
 {
-    HD_TRACE_FUNCTION();
-    HF_MALLOC_TAG_FUNCTION();
-
-    HdInstancer *instancer = nullptr;
-    TfMapLookup(_instancerMap, id, &instancer);
-
-    return instancer;
+    _InstancerMap::const_iterator it = _instancerMap.find(id);
+    if (it != _instancerMap.end()) {
+        return it->second;
+    }
+    return nullptr;
 }
 
 HdRprim const *
 HdRenderIndex::GetRprim(SdfPath const &id) const
 {
-    HD_TRACE_FUNCTION();
-    HF_MALLOC_TAG_FUNCTION();
-
     _RprimMap::const_iterator it = _rprimMap.find(id);
     if (it != _rprimMap.end()) {
         return it->second.rprim;
     }
-
     return nullptr;
 }
 

@@ -8,6 +8,7 @@
 
 #include "pxr/exec/vdf/context.h"
 #include "pxr/exec/vdf/executionTypeRegistry.h"
+#include "pxr/exec/vdf/executor.h"
 #include "pxr/exec/vdf/parallelExecutorEngine.h"
 #include "pxr/exec/vdf/readIterator.h"
 #include "pxr/exec/vdf/readWriteIterator.h"
@@ -17,8 +18,6 @@
 #include "pxr/exec/vdf/speculationExecutor.h"
 #include "pxr/exec/vdf/speculationNode.h"
 #include "pxr/exec/vdf/testUtils.h"
-
-#include "pxr/exec/ef/executor.h"
 
 #include "pxr/base/gf/vec3d.h"
 #include "pxr/base/tf/staticTokens.h"
@@ -317,7 +316,7 @@ testNestedSpeculation(const bool useParallelParentExecutor)
 
     std::unique_ptr<VdfExecutorInterface> parentExec;
     if (useParallelParentExecutor) {
-        parentExec = std::make_unique<EfExecutor<VdfParallelExecutorEngine, 
+        parentExec = std::make_unique<VdfExecutor<VdfParallelExecutorEngine, 
             VdfParallelDataManagerVector>>();
     } else {
         parentExec = std::make_unique<VdfSimpleExecutor>();

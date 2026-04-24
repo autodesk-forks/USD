@@ -28,11 +28,9 @@
 #include <tbb/concurrent_unordered_map.h>
 
 #include <algorithm>
-#include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class Exec_RegistrationBarrier;
 class Exec_ValueExtractor;
 class VdfMask;
 
@@ -65,6 +63,13 @@ public:
     /// arbitrary value of type \p ValueType must be produced, \p fallback will
     /// be used.
     ///
+    /// All types that can be used to author attribute and metadata values in
+    /// USD are known to exec by default. User-defined types must be registered
+    /// using this function.
+    ///
+    /// \note
+    /// Exec value types must be equality comparable. 
+    ///
     /// \warning
     /// If a given \p ValueType is registered more than once, all calls must
     /// specify the same \p fallback; otherwise, which fallback value wins is
@@ -72,6 +77,25 @@ public:
     /// operator will be used to verify that all fallback values have the same
     /// value. Otherwise, multiple registrations are allowed, with no
     /// verification that the fallback values match.
+    ///
+    /// # Example
+    ///
+    /// ```cpp
+    /// struct CustomType {
+    ///     int i;
+    ///     std::string s;
+    /// 
+    ///     friend
+    ///     bool operator==(const CustomType &a, const CustomType &b) {
+    ///         return a.i == b.i && a.s == b.s;
+    ///     }
+    /// };
+    /// 
+    /// TF_REGISTRY_FUNCTION(ExecTypeRegistry)
+    /// {
+    ///     ExecTypeRegistry::RegisterType(CustomType{});
+    /// }
+    /// ```
     ///
     template <typename ValueType>
     static void RegisterType(const ValueType &fallback) {
@@ -94,7 +118,9 @@ public:
     ///
     template <typename ValueType>
     TfType CheckForRegistration() const {
-        return VdfExecutionTypeRegistry::CheckForRegistration<ValueType>();
+        return VdfExecutionTypeRegistry::CheckForRegistration<ValueType>(
+            "Use ExecTypeRegistry::RegisterType<T>() to register execution "
+            "value types.");
     }
 
     /// Construct a VdfVector whose value is copied from \p value.
@@ -152,7 +178,6 @@ private:
         Exec_ValueExtractorFunction &extractor);
 
 private:
-    std::unique_ptr<Exec_RegistrationBarrier> _registrationBarrier;
 
     VdfTypeDispatchTable<_CreateVector> _createVector;
 

@@ -26,6 +26,10 @@ class FreeCamera(QtCore.QObject):
 
     defaultNear = 1
     defaultFar = 2000000
+    # When some of the scene is behind the camera, this is the largest fraction
+    # of the scene still-in-front-of-the-camera that we are willing to clip
+    # while computing a non-zero near-clipping plane
+    maxAllowableSceneClipFactor = .01
     # Experimentally on Nvidia M6000, if Far/Near is greater than this,
     # then geometry in the back half of the volume will disappear
     maxSafeZResolution = 1e6
@@ -181,11 +185,16 @@ class FreeCamera(QtCore.QObject):
             print("Projected bounds near/far: %f, %f" % (minDist, maxDist))
 
         # if part of the bbox is behind the ray origin (i.e. camera),
-        # we clamp minDist to be positive.  Otherwise, reduce minDist by a bit
-        # so that geometry at exactly the edge of the bounds won't be clipped -
-        # do the same for maxDist, also!
-        if minDist < FreeCamera.defaultNear:
-            minDist = FreeCamera.defaultNear
+        # minDist will be zero, which is not usefull as a near-clip
+        # distance.  In this case, give it a non-zero value that is
+        # responsive to the actual scale of the scene.  If the scene
+        # is fully in front of the camera, instead reduce minDist by a
+        # bit so that geometry at exactly the edge of the bounds won't
+        # be clipped - do the same for maxDist, also!
+        if minDist == 0:
+            minDist = min(FreeCamera.defaultNear,
+                          (maxDist - minDist) *
+                          FreeCamera.maxAllowableSceneClipFactor)
         else:
             minDist *= 0.99
         maxDist *= 1.01

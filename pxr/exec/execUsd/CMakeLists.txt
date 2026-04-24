@@ -13,6 +13,7 @@ pxr_library(execUsd
         
     PUBLIC_HEADERS
         api.h
+        valueOverride.h
 
     PUBLIC_CLASSES
         cacheView
@@ -52,6 +53,25 @@ pxr_register_test(testExecUsdAttributeComputations
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeComputations"
     TESTENV testenv/testExecUsdAttributeComputations
     EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdAttributeExpressions
+    LIBRARIES
+        tf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdAttributeExpressions.cpp
+)
+
+pxr_register_test(testExecUsdAttributeExpressions
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeExpressions"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testenv/testExecUsdAttributeExpressions
 )
 
 pxr_build_test(testExecUsdAttributeValueInput
@@ -94,6 +114,26 @@ pxr_register_test(testExecUsdBasicCompilation
     DIFF_COMPARE testCompiler.out
 )
 
+pxr_build_test(testExecUsdBuiltinComputations
+    LIBRARIES
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        tf
+        usd
+        vdf
+    CPPFILES
+        testenv/testExecUsdBuiltinComputations.cpp
+)
+
+pxr_register_test(testExecUsdBuiltinComputations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdBuiltinComputations"
+    TESTENV testenv/testExecUsdBuiltinComputations
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_build_test(testExecUsdCallbacks
     LIBRARIES
         tf
@@ -112,7 +152,7 @@ pxr_register_test(testExecUsdCallbacks
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_build_test(testExecUsdConnectionTargetedObjects
+pxr_build_test(testExecUsdConnections
     LIBRARIES
         tf
         esf
@@ -121,12 +161,54 @@ pxr_build_test(testExecUsdConnectionTargetedObjects
         vdf
         usdGeom
     CPPFILES
-        testenv/testExecUsdConnectionTargetedObjects.cpp
+        testenv/testExecUsdConnections.cpp
 )
 
-pxr_register_test(testExecUsdConnectionTargetedObjects
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConnectionTargetedObjects"
-    TESTENV testenv/testExecUsdConnectionTargetedObjects
+pxr_register_test(testExecUsdConnections
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConnections"
+    TESTENV testenv/testExecUsdConnections
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdConnectionsStochastic
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        usd
+        usdGeom
+        vdf
+        work
+    CPPFILES
+        testenv/testExecUsdConnectionsStochastic.cpp
+)
+
+pxr_register_test(testExecUsdConnectionsStochastic
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConnectionsStochastic"
+    TESTENV testenv/testExecUsdConnectionsStochastic
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdComputeWithOverrides
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdComputeWithOverrides.cpp
+)
+
+pxr_register_test(testExecUsdComputeWithOverrides
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdComputeWithOverrides"
+    TESTENV testenv/testExecUsdComputeWithOverrides
     EXPECTED_RETURN_CODE 0
 )
 

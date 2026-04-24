@@ -15,23 +15,27 @@ scene and the **scene index observer** which takes a scene index as input
 and is informed about scene changes. A **filtering scene index**
 (or **scene index filter** or **filter** for short) takes an input scene and
 provides a transformed view of that scene. It is (or has) thus both a scene
-index observer and a scene index.
+index observer and a scene index. A **scene index plugin** bundles one or more
+filtering scene indices together, and enables runtime discovery and usage of
+these filters by applications and renderers.
 
 \section Hydra_Getting_Started_How_Does_Hydra_Compare_To_legacy How does Hydra 2.0 compare to Legacy Hydra 1.0?
 
 Hydra 2.0 replaces the following legacy Hydra 1.0 classes with scene indices and
 scene index observers and components built around the scene index API:
-- HdSceneDelegate
-  - The UsdImagingDelegate is replaced by a chain of scene indices created
-    with UsdImagingCreateSceneIndices which starts with the
-    UsdImagingStageSceneIndex.
-  - The HdxTaskController is replaced by the HdxTaskControllerSceneIndex.
-- HdRenderIndex is replaced by a chain of application-specific and renderer-specific
-  filtering scene indices. They are created by the application and by calling
-  the HdSceneIndexPluginRegistry. Note that this provides new plugin points
-  for proceduralism.
+- HdSceneDelegate is replaced by one or more scene indices. For example:
+  - UsdImagingDelegate is replaced by a chain of scene indices 
+  created with UsdImagingCreateSceneIndices which starts with the
+  UsdImagingStageSceneIndex. Each scene index that follows it is a filtering
+  scene index (that observes the previous scene index).
+  - HdxTaskController (which houses a scene delegate for the free camera) is 
+  replaced by HdxTaskControllerSceneIndex.
+- HdRenderIndex is replaced by the scene index graph, which is a chain of 
+  application-specific and renderer-specific filtering scene indices. It is
+  created by the application using the HdSceneIndexPluginRegistry.
+
 - HdRenderDelegate is replaced by the HdRenderer which is (or has) a scene
-  index observerer.
+  index observer.
 
 Note that the transition from Hydra 1.0 to 2.0 has been happening in several
 stages:
@@ -39,14 +43,12 @@ stages:
   within the HdRenderIndex itself. This allowed applications to benefit from
   some of the new Hydra 2.0 features while using the Hydra 1.0 API itself.
   It also allowed the switch away from the UsdImagingDelegate.
-  This could be disabled by setting the now deprecated
+  This can be disabled by setting the now deprecated
   \c HD_ENABLE_SCENE_INDEX_EMULATION to \c false.
 
   \image html legacy_scene_delegate_emulation.png
 
 - The switch from the HdxTaskController to the HdxTaskControllerSceneIndex.
-  This could be disabled by setting the now depreacted
-  \c USDIMAGINGGL_ENGINE_ENABLE_TASK_SCENE_INDEX to \c false.
 - The switch from UsdImagingDelegate to the usd imaging scene indices.
   This can be disabled by setting \c USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX to
   \c false.
@@ -58,12 +60,13 @@ stages:
   Hydra 1.0 scene delegates by instantiating the HdRenderIndexAdapterSceneIndex.
   This can be disabled by setting
   \c USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX_OBSERVERER_RENDERER to \c false.
-- **The future:** Applications fully switch to a pure Hydra 2.0 API.
+- **The future:**
+  Applications fully switch to a pure Hydra 2.0 API.
   This requires new API on the HdRenderer for:
   - Render settings. The HdRenderer will have API to query renderer-specific
     render settings (such as volume ray-marching size in Storm). The choices
     for these render settings are communicated in band. That is, by a Hydra prim
-    in a scene index that is either orginating from, say, a USD render settings
+    in a scene index that is either originating from, say, a USD render settings
     prim or viewer settings in the application.
   - AOVs and tasks.
   - Renderer capabilities influencing the scene indices. This is useful for
@@ -72,7 +75,7 @@ stages:
     support motion blur, such a scene index does not need to cache samples. If
     such a renderer does not support a particular type of material network
     (currently communicated through
-    HdLegacyRenderControlInterface::GetMaterialRenderContexts),
+    `HdLegacyRenderControlInterface::GetMaterialRenderContexts`),
     exec does not need to evaluate these networks.
 
 \section Hydra_Getting_Started_Scene_Index_API The Scene Index API
@@ -109,12 +112,12 @@ as a resync; if the notice has a new type, the prim type should be updated, and
 all prim data should be considered dirty (as if there were a PrimsDirtied message
 invalidating the root locator).
 
-_Comparison to Hydra 1.0: PrimsAdded conceptually maps to the HdRenderIndex Insert(R,S,B)prim() calls._
+\note Comparison to Hydra 1.0: PrimsAdded conceptually maps to the HdRenderIndex Insert(R,S,B)prim() calls.
 
 PrimsRemoved takes a subtree path, rather than a prim path.  Sparse removals
 can be accomplished by resyncing prims to the empty type.
 
-_Comparison to Hydra 1.0: PrimsRemoved conceptually maps to the HdRenderIndex Remove(R,S,B)prim() calls._
+\note Comparison to Hydra 1.0: PrimsRemoved conceptually maps to the HdRenderIndex Remove(R,S,B)prim() calls.
 
 PrimsRenamed offers a way to rename a subtree, updating all prims under the old
 subtree to have paths with the old subtree prefix swapped for the new one. This
@@ -122,7 +125,7 @@ is semantically equivalent to removing the old subtree and adding it in the new
 location, but provided as a separate notice for optimization purposes since
 frequently a rename can be handled by updating map keys at much less cost.
 
-_Comparison to Hydra 1.0: Note that the legacy HdRenderIndex does not have any concept of renaming._
+\note Comparison to Hydra 1.0: Note that the legacy HdRenderIndex does not have any concept of renaming.
 
 PrimsDirtied takes an individual prim path, and a set of locators to datasources.
 Datasources are the attribute model in the scene index API, and are grouped
@@ -131,7 +134,7 @@ A dirty locator on a prim means that attribute and all child attributes are
 invalidated. Any caches containing a datasource handle for that attribute or
 any child attributes need to be cleared and re-fetched.
 
-_Comparison to Hydra 1.0: PrimsDirtied conceptually maps to the HdChangeTracker Mark(R,S,B)primDirty() calls._
+\note Comparison to Hydra 1.0: PrimsDirtied conceptually maps to the HdChangeTracker Mark(R,S,B)primDirty() calls.
 
 An important invariant of the system is that the list of prim paths produced by
 evaluating PrimsAdded and PrimsRemoved messages should match the list of prim
@@ -193,11 +196,11 @@ standard points/index buffers.
 
 Named children of a container are retrieved with 
 \ref HdContainerDataSource::Get "Get()" calls. It's expected that 
-Get() will return something for all of the names defined by GetNames(), and will 
-return null otherwise (but be safe to call). This is useful, for example, 
+`Get()` will return something for all of the names defined by `GetNames()`, and
+will return null otherwise (but be safe to call). This is useful, for example, 
 if a consumer only wants to check for certain named primvars on a geometry prim, 
 since primvar enumeration at the USD level can sometimes be expensive but it's 
-also lazily deferred to the GetNames() call.
+also lazily deferred to the `GetNames()` call.
 
 HdDataSourceLocator is the attribute addressing scheme used in 
 \ref HdSceneIndexObserver::DirtiedPrimEntries "DirtiedPrimEntries". Since 
@@ -212,10 +215,10 @@ For example, you might expect mesh orientation at: `HdDataSourceLocator("mesh", 
 
 Locators can identify individual attributes to invalidate, which allows for much 
 more specificity than the HdDirtyBits API. An originating scene can invalidate 
-"primvars/displayColor" and "primvars/displayOpacity" separately. However, to 
+`primvars/displayColor` and `primvars/displayOpacity` separately. However, to 
 capture some of the conciseness of dirty bits, Hydra will interpret the locators 
-in a DirtiedPrimEntry hierarchically, meaning if "primvars" is dirty on a prim, 
-this implies that "primvars/displayColor" and "primvars/displayOpacity" are also 
+in a DirtiedPrimEntry hierarchically, meaning if `primvars` is dirty on a prim, 
+this implies that `primvars/displayColor` and `primvars/displayOpacity` are also 
 dirty.
 
 \subsection Hydra_Getting_Started_Schemas Hydra Schemas
@@ -256,9 +259,9 @@ provide a base class for this behavior in HdSingleInputFilteringSceneIndexBase.
 \snippet examples_hydra_getting_started.cpp HdSingleInputFilteringSceneIndexBaseExcerpt
 
 This class will register itself as an observer of `inputSceneIndex` and 
-registers handlers for PrimsAdded(), etc. notices. Note that it's expected to 
-forward these notices appropriately to its own observers. GetPrim() can be 
-implemented with the help of _GetInputSceneIndex()->GetPrim().
+registers handlers for `PrimsAdded()`, etc. notices. Note that it's expected to 
+forward these notices appropriately to its own observers. `GetPrim()` can be 
+implemented with the help of `_GetInputSceneIndex()->GetPrim()`.
 
 \image html scene_index_filter.png
 
@@ -285,22 +288,21 @@ input scenes.
 You can insert this scene into your application by adding it to the
 application's merging scene index, see \ref Hydra_Getting_Started_Application.
 
-_Comparision to emulation in the legacy render index:
-For applications not yet managing their own merging scene index, 
-you can insert this scene (as a unit) from a render index by calling
-HdRenderIndex::InsertSceneIndex, and remove the scene 
-using HdRenderIndex::RemoveSceneIndex. Under the hood, HdRenderIndex::InsertSceneIndex works 
-by using a filtering scene index to re-root the scene, and passes the re-rooted 
-scene to HdMergingSceneIndex. This last scene index takes multiple input scenes 
-and composes them at a prim and attribute level, meaning a single prim can have 
-attribute data from multiple input scenes. Note also that, unlike with scene 
-delegates, a single scene index can be inserted into multiple render indexes 
-without any issues._
+\note Comparison to emulation in the legacy render index: For applications not
+yet managing their own merging scene index, you can insert this scene (as a
+unit) from a render index by calling HdRenderIndex::InsertSceneIndex, and
+remove the scene using HdRenderIndex::RemoveSceneIndex. Under the hood,
+HdRenderIndex::InsertSceneIndex works by using a filtering scene index to
+re-root the scene, and passes the re-rooted scene to HdMergingSceneIndex. This
+last scene index takes multiple input scenes and composes them at a prim and
+attribute level, meaning a single prim can have attribute data from multiple
+input scenes. Note also that, unlike with scene delegates, a single scene index
+can be inserted into multiple render indexes without any issues.
 
-_The scenePathPrefix is the same as the scene delegate ID concept: if your 
-app-native scene has an embedded USD scene at `/Path/to/USD`, for example, you 
-can set `scenePathPrefix = "/Path/to/USD"` to re-root the USD data at the new 
-prefix._
+\note The `scenePathPrefix` is the same as the scene delegate ID concept: if
+your app-native scene has an embedded USD scene at `/Path/to/USD`, for example,
+you can set `scenePathPrefix = "/Path/to/USD"` to re-root the USD data at the
+new prefix.
 
 A more sophisticated scene data implementation with the scene index API would be 
 expected to implement \ref HdSceneIndexBase::GetChildPrimPaths() "GetChildPrimPaths()" 
@@ -376,10 +378,10 @@ core architectural examples in `pxr/imaging/hd`:
   HdDependenciesSchema. This filter will use those dependencies to propagate 
   PrimsDirtied calls. This is especially helpful for managing invalidation 
   across relationships. For an example use case, Storm uses a scene index filter 
-  that adds dependencies to meshes from their bound material, so that when the 
-  material changes the mesh can re-tesselate. We then run the dependency 
+  that adds dependencies to meshes from their bound material, so that when the
+  material changes the mesh can re-tessellate. We then run the dependency 
   forwarding scene index to forward those invalidations.
-- HdFlatteningSceneIndex: does top-down attribute flattening. For example, 
+- HdFlatteningSceneIndex: does top-down attribute flattening. For example,
   transform concatenation, inherited attribute resolution, etc.
 - HdMergingSceneIndex: merges multiple input scenes into a single output scene.
 - \ref noticeBatchingSceneIndex.h "HdNoticeBatchingSceneIndex": captures, holds, and merges scene index 
@@ -416,9 +418,8 @@ inserted into the HdMergingSceneIndex. As mentioned earlier,
 UsdImagingCreateSceneIndices can be used to create a UsdImagingStageSceneIndex
 and all of its associated filters.
 
-_Remark about the legacy render index: The render index maintains its own
-merging scene index and HdRenderIndex::InsertSceneIndex can be used to add a
-scene index to it._
+\remark The render index maintains its own merging scene index and HdRenderIndex::InsertSceneIndex can be used to add a scene index to
+it.
 
 <b>Renderer-specific Scene Index Filters</b>
 
@@ -429,9 +430,8 @@ to insert these between the HdMergingSceneIndex and HdRenderer. The order is def
 by the scene index plugins through the HdSceneIndexPluginRegistry::InsertionPhase
 passed to HdSceneIndexPluginRegistry::RegisterSceneIndexForRenderer.
 
-_Remark about the legacy render index: The render index automatically inserted
-these plugin scene indices between its internal merging scene index and the
-render delegate._
+\remark The render index automatically inserted these plugin scene indices 
+between its internal merging scene index and the render delegate.
 
 The following example shows a simple scene index filter plugin:
 
@@ -600,17 +600,17 @@ A Hydra 2.0-native HdRenderer implementation can use:
 - The HdsiPrimTypeNoticeBatchingSceneIndex to customize the order in which
   to update prims based on the prim type.
 
-  _Comparison to Hydra 1.0: This replaces HdRenderIndex::SyncAll updating the
-  b-, s-, and r-prims in that order. The concept of b-, s-, and r-prim is gone in
-  Hydra 2.0._
+  \note Comparison to Hydra 1.0: This replaces HdRenderIndex::SyncAll updating
+  the b-, s-, and r-prims in that order. The concept of b-, s-, and r-prim is
+  gone in Hydra 2.0.
 - HdsiPrimManagingSceneIndexObserver instantiates and dirties renderer defined
   RAII-subclasses of HdsiPrimManagingSceneIndexObserver::PrimBase based on the
   content and messages from its input scene index. Threading-behavior will be
   customizable by future input arguments.
   
-  _Comparison to Hydra 1.0: An HdRenderer subclasses
-  from HdsiPrimManagingSceneIndexObserver::PrimBase rather than from HdBprim,
-  HdSprim, or HdRprim._
+  \note Comparison to Hydra 1.0: An HdRenderer subclasses from
+  HdsiPrimManagingSceneIndexObserver::PrimBase rather than from HdBprim,
+  HdSprim, or HdRprim.
 
 Note that there is no pure Hydra 2.0 HdRenderer implementation yet.
 

@@ -106,6 +106,10 @@ private:
         const std::string &refPath, 
         bool *isRelativePathOut);
 
+    bool _AddExternalAssetDependenciesToPackage(
+        SdfLayerRefPtr sourceLayer, 
+        const std::string &destPath);
+
     bool _AddLayerToPackage(
         SdfLayerRefPtr sourceLayer, 
         const std::string &destPath);

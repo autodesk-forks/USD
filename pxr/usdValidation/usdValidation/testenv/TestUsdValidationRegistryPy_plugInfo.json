@@ -8,10 +8,25 @@
             "LibraryPath": "@TEST_PLUG_INFO_LIBRARY_PATH@",
             "Info": {
                 "Validators": {
-                    "PlaceholderValidator": {
-                        "doc": "Placeholder to initialize plugin.",
-                        "keywords": ["PlaceHolderValidator"],
+                    "PyPluginLayerValidator": {
+                        "doc": "Layer validator registered from Python.",
+                        "keywords": ["testPyPlugin"],
                         "isSuite": false
+                    },
+                    "PyPluginStageValidator": {
+                        "doc": "Stage validator registered from Python.",
+                        "keywords": ["testPyPlugin"],
+                        "isSuite": false
+                    },
+                    "PyPluginPrimValidator": {
+                        "doc": "Prim validator registered from Python.",
+                        "keywords": ["testPyPlugin"],
+                        "isSuite": false
+                    },
+                    "PyPluginSuite": {
+                        "doc": "Validator suite registered from Python.",
+                        "keywords": ["testPyPlugin"],
+                        "isSuite": true
                     }
                 }
             }

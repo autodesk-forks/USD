@@ -94,16 +94,22 @@ HdxShadowTask::Sync(HdSceneDelegate* delegate,
 
     if (numShadowMaps > 0) {
         // Make sure we have the right number of shadow render passes.
-        // Because we would like to render only prims with the 
-        // "defaultMaterialTag" or "masked" material tag, we need to make two 
-        // collections and thus two render passes for what would be the same 
-        // shadow map pass. Thus we must make a distinction between the number 
-        // of render passes and the number of shadow maps indicated by the 
-        // shadow array.
-        static const TfToken shadowMaterialTags[2] = 
+        // We would like to render only prims with the "defaultMaterialTag"
+        // (i.e. opaque) or "masked" material tag. Prims with
+        // "occludedSelectionShowsThrough" are grouped in a special material
+        // tag "translucentToSelection", but otherwise behave the same as
+        // opaque/masked.
+        // Therefore, we need to make three collections and render passes for
+        // what would be the same shadow map pass. This means we must make a
+        // distinction between the number of render passes and the number of
+        // shadow maps indicated by the shadow array.
+        static const TfToken shadowMaterialTags[3] = 
             { HdStMaterialTagTokens->defaultMaterialTag, 
-              HdStMaterialTagTokens->masked };
+              HdStMaterialTagTokens->masked,
+              HdStMaterialTagTokens->translucentToSelection };
         _passes.resize( TfArraySize(shadowMaterialTags) * numShadowMaps);
+        const size_t maskedPassOffset = numShadowMaps;
+        const size_t ttsPassOffset = numShadowMaps * 2;
 
         // Mostly we can populate the renderpasses from shadow info, but the 
         // lights contain the shadow collection; so we need to loop through the 
@@ -133,12 +139,14 @@ HdxShadowTask::Sync(HdSceneDelegate* delegate,
                     : HdRprimCollection();
 
             // Only want opaque or masked prims to appear in shadow pass, so 
-            // make two copies of the shadow collection with appropriate 
+            // make copies of the shadow collection with appropriate 
             // material tags
             HdRprimCollection newColDefault = col;
             newColDefault.SetMaterialTag(shadowMaterialTags[0]);
             HdRprimCollection newColMasked = col;
             newColMasked.SetMaterialTag(shadowMaterialTags[1]);
+            HdRprimCollection newColTranslucentToSelection = col;
+            newColTranslucentToSelection.SetMaterialTag(shadowMaterialTags[2]);
 
             int shadowStart = glfLights[lightId].GetShadowIndexStart();
             int shadowEnd = glfLights[lightId].GetShadowIndexEnd();
@@ -148,8 +156,9 @@ HdxShadowTask::Sync(HdSceneDelegate* delegate,
             // SetRprimCollection checks for identity changes on the collection
             // and no-ops in that case.
             for (int shadowId = shadowStart; shadowId <= shadowEnd; ++shadowId){
-                // Remember, we have two render passes (one for each collection)
-                // per shadow map. First the "defaultMaterialTag" passes.
+                // Remember, we have three render passes (one for each
+                // collection) per shadow map.
+                // First the "defaultMaterialTag" passes.
                 if (_passes[shadowId]) {
                     _passes[shadowId]->SetRprimCollection(newColDefault);
                 } else {
@@ -158,13 +167,23 @@ HdxShadowTask::Sync(HdSceneDelegate* delegate,
                 }
 
                 // Then the "masked" materialTag passes
-                if (_passes[shadowId + numShadowMaps]) {
-                    _passes[shadowId + numShadowMaps]->SetRprimCollection(
+                if (_passes[shadowId + maskedPassOffset]) {
+                    _passes[shadowId + maskedPassOffset]->SetRprimCollection(
                         newColMasked);
                 } else {
-                    _passes[shadowId + numShadowMaps] = 
+                    _passes[shadowId + maskedPassOffset] = 
                         std::make_shared<HdSt_RenderPass>
                         (&renderIndex, newColMasked);
+                }
+
+                // Then the "translucentToSelection" materialTag passes
+                if (_passes[shadowId + ttsPassOffset]) {
+                    _passes[shadowId + ttsPassOffset]->SetRprimCollection(
+                        newColTranslucentToSelection);
+                } else {
+                    _passes[shadowId + ttsPassOffset] =
+                        std::make_shared<HdSt_RenderPass>
+                        (&renderIndex, newColTranslucentToSelection);
                 }
             }
         }
@@ -263,8 +282,8 @@ HdxShadowTask::Sync(HdSceneDelegate* delegate,
                 continue;
             }
 
-            // Because we create two render passes for each shadow map, we must 
-            // convert the index
+            // Because we create three render passes for each shadow map,
+            // we must convert the index.
             size_t shadowMapId = passId % numShadowMaps;
 
             GfVec2i shadowMapRes = shadows->GetShadowMapSize(shadowMapId);
@@ -283,7 +302,8 @@ HdxShadowTask::Sync(HdSceneDelegate* delegate,
                     _renderPassStates[passId]->SetAovBindings(
                         { shadowAovBindings[shadowMapId] });
                 } else {
-                    // Don't want "masked" render passes to clear.
+                    // Don't want "masked"/"translucentToSelection"
+                    // render passes to clear.
                     HdRenderPassAovBinding aovBindingCopy = 
                         shadowAovBindings[shadowMapId];
                     aovBindingCopy.clearValue = VtValue();
@@ -340,7 +360,9 @@ HdxShadowTask::Execute(HdTaskContext* ctx)
 
     // Generate the actual shadow maps
     GlfSimpleShadowArrayRefPtr const shadows = lightingContext->GetShadows();
-    size_t numShadowMaps = shadows->GetNumShadowMapPasses();
+    const size_t numShadowMaps = shadows->GetNumShadowMapPasses();
+    const size_t maskedPassOffset = numShadowMaps;
+    const size_t ttsPassOffset = numShadowMaps * 2;
 
     // Get AOV bindings.
     HdRenderPassAovBindingVector shadowAovBindings;
@@ -386,7 +408,8 @@ HdxShadowTask::Execute(HdTaskContext* ctx)
         // Make sure each pass got created. Light shadow indices are supposed
         // to be compact (see simpleLightTask.cpp).
         if (!TF_VERIFY(_passes[shadowId]) || 
-            !TF_VERIFY(_passes[shadowId + numShadowMaps])) {
+            !TF_VERIFY(_passes[shadowId + maskedPassOffset]) ||
+            !TF_VERIFY(_passes[shadowId + ttsPassOffset])) {
             continue;
         }
 
@@ -396,11 +419,21 @@ HdxShadowTask::Execute(HdTaskContext* ctx)
             _renderPassStates[shadowId],
             GetRenderTags());
 
-        if (_HasDrawItems(_passes[shadowId + numShadowMaps], GetRenderTags())) {
+        if (_HasDrawItems(_passes[shadowId + maskedPassOffset],
+            GetRenderTags())) {
             // Render the actual geometry in the "masked" materialTag collection
-            _passes[shadowId + numShadowMaps]->Execute(
-               _renderPassStates[shadowId + numShadowMaps],
+            _passes[shadowId + maskedPassOffset]->Execute(
+               _renderPassStates[shadowId + maskedPassOffset],
                GetRenderTags());
+        }
+
+        if (_HasDrawItems(_passes[shadowId + ttsPassOffset],
+            GetRenderTags())) {
+            // Render the actual geometry in the "translucentToSelection"
+            // materialTag collection
+            _passes[shadowId + ttsPassOffset]->Execute(
+                _renderPassStates[shadowId + ttsPassOffset],
+                GetRenderTags());
         }
     }
 

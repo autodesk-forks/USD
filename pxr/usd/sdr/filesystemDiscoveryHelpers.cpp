@@ -66,14 +66,14 @@ _FsHelpersExamineFiles(
                 continue;
             }
 
-            TfToken family, name;
+            TfToken function, name;
             SdrVersion version;
             const bool parsed = parseIdentifierFn ?
-                parseIdentifierFn(identifier, &family, &name, &version) :
+                parseIdentifierFn(identifier, &function, &name, &version) :
                 SdrFsHelpersSplitShaderIdentifier(
-                    identifier, &family, &name, &version);
+                    identifier, &function, &name, &version);
             if (!parsed) {
-                TF_WARN("Could not parse the family, name, and version "
+                TF_WARN("Could not parse the function, name, and version "
                         "from shader indentifier '%s' for shader file '%s'. "
                         "Skipping.", 
                         identifier.GetText(), uri.c_str());
@@ -92,14 +92,14 @@ _FsHelpersExamineFiles(
                 // Name
                 name,
 
-                // Family
-                family,
+                // Function
+                function,
 
                 // Discovery type
                 discoveryType,
 
-                // Source type
-                context ? context->GetSourceType(discoveryType) : TfToken(),
+                // Shading system
+                context ? context->GetShadingSystem(discoveryType) : TfToken(),
 
                 // URI
                 uri,
@@ -126,7 +126,7 @@ _IsNumber(const std::string& s)
 bool
 SdrFsHelpersSplitShaderIdentifier(
     const TfToken &identifier, 
-    TfToken *family,
+    TfToken *function,
     TfToken *name,
     SdrVersion *version)
 {
@@ -137,10 +137,10 @@ SdrFsHelpersSplitShaderIdentifier(
         return false;
     }
 
-    *family = TfToken(tokens[0]);
+    *function = TfToken(tokens[0]);
 
     if (tokens.size() == 1) {
-        *family = identifier;
+        *function = identifier;
         *name = identifier;
         *version = SdrVersion();
         return true;
@@ -150,7 +150,7 @@ SdrFsHelpersSplitShaderIdentifier(
         if (_IsNumber(tokens.back())) {
             const int major = std::stoi(tokens.back());
             *version = SdrVersion(major);
-            *name = *family;
+            *name = *function;
         } else {
             *version = SdrVersion();
             *name = identifier;

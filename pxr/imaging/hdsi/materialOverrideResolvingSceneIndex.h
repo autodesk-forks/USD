@@ -229,13 +229,6 @@ private:
     HdMaterialOverrideSchema _GetMaterialOverrides(
         const SdfPath& primPath) const;
 
-    /// Returns the path of the material bound to the prim at location 
-    /// \p primPath for the 'full' or 'allPurpose' purposes (whichever is found 
-    /// first).
-    /// If no material is bound to this prim for either of those purposes, an
-    /// empty path is returned.
-    SdfPath _GetBoundMaterial(const SdfPath& primPath) const;
-
     /// Given a vector of AddedPrimEntry \p entries, decide whether new 
     /// materials need be generated to resolve material overrides.
     /// Returns a vector of AddedPrimEntry that includes all elements of

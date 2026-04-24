@@ -90,10 +90,10 @@ void wrapRegistry()
             &This::AddDiscoveryResult)
         .def("GetSearchURIs", &This::GetSearchURIs)
         .def("GetShaderNodeIdentifiers", &This::GetShaderNodeIdentifiers,
-            (args("family") = TfToken(),
+            (args("function") = TfToken(),
              args("filter") = SdrVersionFilterDefaultOnly))
         .def("GetShaderNodeNames", &This::GetShaderNodeNames,
-            (args("family") = TfToken()))
+            (args("function") = TfToken()))
         .def("GetShaderNodeByIdentifier", &This::GetShaderNodeByIdentifier,
             (args("identifier"),
              args("typePriority") = SdrTokenVec()),
@@ -129,6 +129,9 @@ void wrapRegistry()
             (args("identifier")))
         .def("GetShaderNodesByName", &This::GetShaderNodesByName,
             (args("name"),
+             args("filter") = SdrVersionFilterDefaultOnly))
+        .def("GetShaderNodesByFunction", &This::GetShaderNodesByFunction,
+            (args("function") = TfToken(),
              args("filter") = SdrVersionFilterDefaultOnly))
         .def("GetShaderNodesByFamily", &This::GetShaderNodesByFamily,
             (args("family") = TfToken(),

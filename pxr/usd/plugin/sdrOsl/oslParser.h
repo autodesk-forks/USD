@@ -109,12 +109,15 @@ public:
     const SdrTokenVec& GetDiscoveryTypes() const override;
 
     SDROSL_API
-    const TfToken& GetSourceType() const override;
+    const TfToken& GetShadingSystem() const override;
 
 private:
-    // Determines the sdrContext for the shader from the schema base defined
-    // in the node's metadata
-    TfToken _getSdrContextFromSchemaBase(const SdrTokenMap& metadata) const;
+    // Sets the shader's sdr metadata context.
+    // - If the metadata already has a "context" item, this does nothing.
+    // - If the metadata has a "schemaBase" item, sets "context" mapped
+    //   from the "schemaBase" item value.
+    // - Otherwise, does nothing
+    void _setSdrContext(SdrTokenMap& metadata) const;
 
     // Gets a vector of properties that are present on the specified OSL
     // query object

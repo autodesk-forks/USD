@@ -33,7 +33,7 @@ public:
 
     const SdrTokenVec &GetDiscoveryTypes() const override;
 
-    const TfToken &GetSourceType() const override;    
+    const TfToken &GetShadingSystem() const override;    
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

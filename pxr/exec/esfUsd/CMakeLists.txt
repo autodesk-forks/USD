@@ -14,6 +14,7 @@ pxr_library(esfUsd
 
     PUBLIC_CLASSES
         sceneAdapter
+        stageData
 
     PRIVATE_CLASSES
         attribute
@@ -29,6 +30,70 @@ pxr_library(esfUsd
 
     DOXYGEN_FILES
         README.md        
+)
+
+# Tests
+
+pxr_build_test(testEsfUsdConnectionTables
+    LIBRARIES
+        esf
+        esfUsd
+        sdf
+        tf
+        usd
+        usdGeom
+    CPPFILES
+        testenv/testEsfUsdConnectionTables.cpp
+)
+
+pxr_register_test(testEsfUsdConnectionTables
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testEsfUsdConnectionTables"
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+)
+
+pxr_build_test(testEsfUsdConnectionTablesStochastic
+    LIBRARIES
+        arch
+        esf
+        esfUsd
+        sdf
+        tf
+        trace
+        usd
+        usdGeom
+        work
+    CPPFILES
+        testenv/testEsfUsdConnectionTablesStochastic.cpp
+)
+
+pxr_register_test(testEsfUsdConnectionTables_Threading
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testEsfUsdConnectionTablesStochastic"
+             --numStages 50 --treeDepth 5 --branchingFactor 5
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+)
+
+pxr_register_test(testEsfUsdConnectionTables_Perf
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testEsfUsdConnectionTablesStochastic"
+             --numStages 10 --treeDepth 5 --branchingFactor 5 --trace
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+)
+
+pxr_register_test(testEsfUsdConnectionTables_Perf_SingleThreaded
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testEsfUsdConnectionTablesStochastic"
+             --numStages 10 --treeDepth 5 --branchingFactor 5 --trace
+             --numThreads 1
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+)
+
+pxr_register_test(testEsfUsdConnectionTables_Mem
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testEsfUsdConnectionTablesStochastic"
+             --numStages 10 --treeDepth 5 --branchingFactor 5 --memory
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
 )
 
 pxr_build_test(testEsfUsdSceneObjects

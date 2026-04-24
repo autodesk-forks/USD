@@ -179,7 +179,7 @@ public:
     /// Checks if there is an existing field relationship with a given name.
     /// This query will return \c true even for a field relationship that
     /// has been blocked and therefore will not contribute to the map
-    /// returned by GetFieldRelationships()
+    /// returned by GetFieldPaths()
     ///
     /// The name lookup automatically applies the field relationship
     /// namespacing, if it isn't specified in the name token.

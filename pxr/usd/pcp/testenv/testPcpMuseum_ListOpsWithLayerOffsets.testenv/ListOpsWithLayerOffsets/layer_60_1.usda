@@ -1,0 +1,8 @@
+#usda 1.0
+(
+    subLayers = [
+        @./layer_60_1a.usda@,
+        @./layer_60_1b.usda@
+    ]
+    timeCodesPerSecond = 60
+)

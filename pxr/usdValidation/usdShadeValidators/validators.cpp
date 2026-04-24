@@ -35,9 +35,80 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 static UsdValidationErrorVector
+_EncapsulationMaterialValidator(const UsdPrim &usdPrim,
+                                const UsdValidationTimeRange &/*timeRange*/)
+{
+    if (!usdPrim.IsA<UsdShadeMaterial>()) {
+        return {};
+    }
+
+    UsdValidationErrorVector errors;
+    for (const UsdPrim &descPrim : usdPrim.GetDescendants()) {
+
+        if (descPrim.IsA<UsdGeomImageable>()) {
+            // Imageable prims must not be descPrim of a Material, and
+            // hence violating the UsdShade OM and its contract with the
+            // rendering infrastructure.
+            errors.emplace_back(
+                UsdShadeValidationErrorNameTokens
+                    ->invalidImageableInMaterial,
+                UsdValidationErrorType::Error,
+                UsdValidationErrorSites {
+                    UsdValidationErrorSite(usdPrim.GetStage(),
+                                           usdPrim.GetPath()),
+                    UsdValidationErrorSite(usdPrim.GetStage(),
+                                           descPrim.GetPath()) },
+                TfStringPrintf("Imageable <%s> of type %s is not a valid "
+                               "descendant of Material <%s>.",
+                               descPrim.GetPath().GetText(),
+                               descPrim.GetTypeName().GetText(),
+                               usdPrim.GetPath().GetText()));
+        }
+
+        const UsdShadeConnectableAPI connectableChild =
+            UsdShadeConnectableAPI(descPrim);
+        if (connectableChild) {
+            // connectable descendant of a Material in usdShade must be IsA
+            // UsdShadeShader or UsdShadeNodeGraph and can not be a 
+            // UsdShadeMaterial.
+            if (descPrim.IsA<UsdShadeMaterial>() || 
+                    !(descPrim.IsA<UsdShadeShader>() || 
+                      descPrim.IsA<UsdShadeNodeGraph>())) {
+                errors.emplace_back(
+                    UsdShadeValidationErrorNameTokens
+                        ->invalidConnectableInMaterial,
+                    UsdValidationErrorType::Error,
+                    UsdValidationErrorSites {
+                        UsdValidationErrorSite(usdPrim.GetStage(),
+                                               usdPrim.GetPath()),
+                        UsdValidationErrorSite(usdPrim.GetStage(),
+                                               descPrim.GetPath()) },
+                    TfStringPrintf("Connectable <%s> of type %s is not a "
+                                   "valid connectable descendant of Material "
+                                   "<%s>.",
+                                   descPrim.GetPath().GetText(),
+                                   descPrim.GetTypeName().GetText(),
+                                   usdPrim.GetPath().GetText()));
+            }
+        }
+    }
+    return errors;
+}
+
+static UsdValidationErrorVector
 _EncapsulationValidator(const UsdPrim &usdPrim, 
                         const UsdValidationTimeRange &/*timeRange*/)
 {
+    // Encapsulation rules for connections are only relevant for UsdShadeShader,
+    // UsdShadeMaterial, and UsdShadeNodeGraph prims. (Even though
+    // UsdShadeMaterial IsA UsdShadeNodeGraph, we explicitly check for it, to
+    // express the intent.
+    if (! (usdPrim.IsA<UsdShadeShader>() || 
+           usdPrim.IsA<UsdShadeMaterial>() ||
+           usdPrim.IsA<UsdShadeNodeGraph>())) {
+        return {};
+    }
+
     const UsdShadeConnectableAPI &connectable = UsdShadeConnectableAPI(usdPrim);
 
     if (!connectable) {
@@ -895,6 +966,10 @@ TF_REGISTRY_FUNCTION(UsdValidationRegistry)
     registry.RegisterPluginValidator(
         UsdShadeValidatorNameTokens->subsetsMaterialBindFamily,
         _SubsetsMaterialBindFamily);
+
+    registry.RegisterPluginValidator(
+        UsdShadeValidatorNameTokens->encapsulationMaterialValidator,
+        _EncapsulationMaterialValidator);
 
     registry.RegisterPluginValidator(
         UsdShadeValidatorNameTokens->encapsulationValidator,

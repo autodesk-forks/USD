@@ -28,10 +28,6 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     , _cpuStagingAddress(nullptr)
     , _mappable(false)
 {
-    if (_descriptor.byteSize == 0) {
-        TF_CODING_ERROR("The size of buffer [%p] is zero.", this);
-        return;
-    }
     HgiVulkanDevice* device = hgi->GetPrimaryDevice();
     VmaAllocator vma = device->GetVulkanMemoryAllocator();
 
@@ -75,12 +71,15 @@ HgiVulkanBuffer::HgiVulkanBuffer(
         vmaCreateBuffer(vma, &bi, &ai, &_vkBuffer, &_vmaAllocation, 0));
 
     // Debug label
-    if (!_descriptor.debugName.empty()) {
+    if (!_descriptor.debugName.empty() && HgiVulkanIsDebugEnabled()) {
         HgiVulkanSetDebugName(
             device,
             (uint64_t)_vkBuffer,
             VK_OBJECT_TYPE_BUFFER,
             _descriptor.debugName.c_str());
+
+        vmaSetAllocationName(device->GetVulkanMemoryAllocator(),
+            _vmaAllocation, _descriptor.debugName.c_str());
     }
 
     if (_descriptor.initialData) {

@@ -36,8 +36,6 @@
 #include "pxr/base/vt/value.h"
 #include "pxr/base/work/dispatcher.h"
 
-#include <tbb/concurrent_vector.h>
-#include <tbb/concurrent_unordered_set.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_rw_mutex.h>
 

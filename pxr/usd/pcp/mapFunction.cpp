@@ -234,6 +234,14 @@ _IsRedundant(const PairIter &entry, const PairIter &begin, const PairIter &end)
 
     // We still need to check that this entry doesn't map the source differently
     // than the other mapping. 
+
+    // Early out; if the best match is the identity mapping then the entry is
+    // redundant if it maps the source to the same path.
+    if (bestSourceMatch->first.IsAbsoluteRootPath() &&
+        bestSourceMatch->second.IsAbsoluteRootPath() &&
+        entrySource == entryTarget) {
+        return true;
+    }
     
     // Early out; if the best match would map the source path to a different 
     // namespace depth than the entry does, then entry cannot be redundant.
@@ -294,9 +302,7 @@ _Canonicalize(PairIter &begin, PairIter &end)
             // efficient as we're guaranteed to call _IsRedundant on every
             // entry but very few entries will actually be redundant and require
             // erasure.
-            for (PairIter j = i; j != end - 1; ++j) {
-                *j = std::move(*(j+1));
-            }
+            std::move(i + 1, end, i);
             --end;
         } else {
             ++i;
@@ -318,7 +324,7 @@ PcpMapFunction
 PcpMapFunction::Create(const PathMap &sourceToTarget,
                        const SdfLayerOffset &offset)
 {
-    TfAutoMallocTag2 tag("Pcp", "PcpMapFunction");
+    TfAutoMallocTag tag("Pcp", "PcpMapFunction::Create");
     TRACE_FUNCTION();
 
     // If we're creating the identity map function, just return it directly.
@@ -374,6 +380,23 @@ PcpMapFunction::Create(const PathMap &sourceToTarget,
     std::sort(begin, end, _PathPairOrder());
     bool hasRootIdentity = _Canonicalize(begin, end);
     return PcpMapFunction(begin, end, offset, hasRootIdentity);
+}
+
+PcpMapFunction
+PcpMapFunction::ImpliedClass(const PcpMapFunction& transferFunc,
+                             const PcpMapFunction& classArc)
+{
+    TfAutoMallocTag tag("Pcp", "PcpMapFunction::ImpliedClass");
+    TRACE_FUNCTION();
+
+    if (transferFunc.IsIdentity()) {
+        return classArc;
+    }
+
+    PcpMapFunction f = transferFunc.Compose(
+        classArc.Compose(transferFunc.GetInverse()));
+    f._data.hasRootIdentity = true;
+    return f;
 }
 
 bool
@@ -664,7 +687,7 @@ PcpMapFunction::_MapPathExpressionImpl(
 PcpMapFunction
 PcpMapFunction::Compose(const PcpMapFunction &inner) const
 {
-    TfAutoMallocTag2 tag("Pcp", "PcpMapFunction");
+    TfAutoMallocTag tag("Pcp", "PcpMapFunction::Compose");
     TRACE_FUNCTION();
 
     // Fast path identities.  These do occur in practice and are
@@ -766,7 +789,8 @@ PcpMapFunction::ComposeOffset(const SdfLayerOffset &offset) const
 PcpMapFunction
 PcpMapFunction::GetInverse() const
 {
-    TfAutoMallocTag2 tag("Pcp", "PcpMapFunction");
+    TfAutoMallocTag tag("Pcp", "PcpMapFunction::GetInverse");
+    TRACE_FUNCTION();
 
     PathPairVector targetToSource;
     targetToSource.reserve(_data.numPairs);

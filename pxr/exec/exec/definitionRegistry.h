@@ -45,7 +45,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class Exec_RegistrationBarrier;
 class EsfAttributeInterface;
 class EsfJournal;
 class EsfObjectInterface;
@@ -119,9 +118,10 @@ public:
     ///
     class RegistrationAccess
     {
-        friend class Exec_ComputationBuilder;
-        friend class Exec_PrimComputationBuilder;
-        friend class Exec_AttributeComputationBuilder;
+        friend class ExecComputationBuilder;
+        friend class ExecPrimComputationBuilder;
+        friend class ExecAttributeComputationBuilder;
+        friend class ExecAttributeExpressionBuilder;
         friend struct Exec_ComputationBuilderConstantValueSpecifier;
 
         static Exec_DefinitionRegistry& _GetInstanceForRegistration() {
@@ -211,6 +211,16 @@ private:
     const Exec_ComputationDefinition *_LookUpLocalAttributeComputation(
         const EsfAttributeInterface &providerAttribute,
         const TfToken &computationName,
+        EsfJournal *journal) const;
+
+    // Selects a computation definition for computeValue on the provider
+    // attribute. This returns the first of:
+    //   1. A definition of a registered built-in expression.
+    //   2. TODO: A built-in expression for single-connection dataflow.
+    //   3. The definition of computeResolvedValue.
+    //
+    const Exec_ComputationDefinition *_GetComputeValueDefinition(
+        const EsfAttributeInterface &providerAttribute,
         EsfJournal *journal) const;
 
     // Returns a reference to the singleton that is suitable for registering
@@ -303,12 +313,6 @@ private:
     void _DidRegisterPlugins(const PlugNotice::DidRegisterPlugins &notice);
 
 private:
-
-    // This barrier ensures singleton access returns a fully-constructed
-    // instance. This is the case for GetInstance(), but not required for
-    // _GetInstanceForRegistration() which is called by exec definition registry
-    // functions.
-    std::unique_ptr<Exec_RegistrationBarrier> _registrationBarrier;
 
     // Comparator for ordering plugin computation definitions in a set.
     struct _PluginComputationDefinitionComparator {

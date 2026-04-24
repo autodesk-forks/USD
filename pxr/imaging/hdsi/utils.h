@@ -22,6 +22,8 @@ class HdCollectionExpressionEvaluator;
 class HdCollectionsSchema;
 class SdfPathExpression;
 
+struct HdSceneIndexPrim;
+
 /// --------------------------------------------------------------------------
 /// General use collection utilities.
 /// --------------------------------------------------------------------------
@@ -59,6 +61,20 @@ HdsiUtilsRemovePrunedChildren(
     const SdfPath &parentPath,
     const HdCollectionExpressionEvaluator &eval,
     SdfPathVector *children);
+
+/// --------------------------------------------------------------------------
+/// Utilities for working with materials
+/// --------------------------------------------------------------------------
+
+/// Returns the path of the material bound to \p prim for the 'full' or 
+/// 'allPurpose' purposes (whichever is found first).
+///
+/// If no material is bound to this prim for either of those purposes, an
+/// empty path is returned.
+HDSI_API
+SdfPath 
+HdsiUtilsGetBoundMaterial(
+    const HdSceneIndexPrim& prim);
 
 /// ------------------------------------------------------------------------
 

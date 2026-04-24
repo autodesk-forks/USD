@@ -93,7 +93,7 @@ UsdShadeShaderDefParserPlugin::ParseShaderNode(
 
     SdfAssetPath nodeUriAssetPath;
     if (!shaderDef.GetSourceAsset(&nodeUriAssetPath,
-                                  discoveryResult.sourceType)) {
+                                  discoveryResult.shadingSystem)) {
         return SdrParserPlugin::GetInvalidShaderNode(discoveryResult);
     }
 
@@ -109,9 +109,12 @@ UsdShadeShaderDefParserPlugin::ParseShaderNode(
         discoveryResult.identifier, 
         discoveryResult.version,
         discoveryResult.name,
-        discoveryResult.family,
-        discoveryResult.discoveryType, /* discoveryType */
-        discoveryResult.sourceType, /* sourceType */
+        discoveryResult.function,
+        // NOTE: discoveryType as context will be replaced in a future
+        // release with shader-specific terms that have correct "context"
+        // semantics
+        discoveryResult.discoveryType, /* context */
+        discoveryResult.shadingSystem, /* shadingSystem */
         rootLayerPath,
         resolvedImplementationUri,
         UsdShadeShaderDefUtils::GetProperties(
@@ -132,10 +135,10 @@ UsdShadeShaderDefParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken &
-UsdShadeShaderDefParserPlugin::GetSourceType() const
+UsdShadeShaderDefParserPlugin::GetShadingSystem() const
 {
-    // The sourceType if this parser plugin is empty, because it can generate 
-    // nodes of any sourceType.
+    // The shadingSystem of this parser plugin is empty, because it can 
+    // generate nodes of any shadingSystem.
     static TfToken empty;
     return empty;
 }

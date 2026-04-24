@@ -65,10 +65,54 @@ TestNodeOpenPages()
 }
 
 void
+TestNodeDomain()
+{
+    // Domain should be initialized to Rendering by default.
+    SdrShaderNodeMetadata m;
+    TF_VERIFY(m.HasDomain());
+    TF_VERIFY(m.HasItem(SdrNodeMetadata->Domain));
+    TF_VERIFY(m.GetDomain() == SdrNodeDomain->Rendering);
+    TF_VERIFY(m.GetItemValueAs<TfToken>(SdrNodeMetadata->Domain)
+              == SdrNodeDomain->Rendering);
+
+    // Empty token values for Domain don't cause re-initialization
+    // to Rendering; they are still considered valid values.
+    VtDictionary d;
+    d[SdrNodeMetadata->Domain] = TfToken();
+    m = SdrShaderNodeMetadata(d);
+    TF_VERIFY(m.HasItem(SdrNodeMetadata->Domain));
+    TF_VERIFY(m.GetDomain() == TfToken());
+    TF_VERIFY(m.GetItemValueAs<TfToken>(SdrNodeMetadata->Domain)
+              == TfToken());
+
+    // Domain can be cleared.
+    m.ClearItem(SdrNodeMetadata->Domain);
+    TF_VERIFY(!m.HasDomain());
+    TF_VERIFY(!m.HasItem(SdrNodeMetadata->Domain));
+    
+    // Domain can be set to a non-empty token value
+    m.SetItem(SdrNodeMetadata->Domain, TfToken("foo"));
+    TF_VERIFY(m.HasItem(SdrNodeMetadata->Domain));
+    TF_VERIFY(m.GetDomain() == TfToken("foo"));
+    TF_VERIFY(m.GetItemValueAs<TfToken>(SdrNodeMetadata->Domain)
+              == TfToken("foo"));
+    TF_VERIFY(m.GetDomain() == TfToken("foo"));
+
+    // Non-empty token values for Domain at construction time persist
+    d[SdrNodeMetadata->Domain] = TfToken("bar");
+    m = SdrShaderNodeMetadata(d);
+    TF_VERIFY(m.HasItem(SdrNodeMetadata->Domain));
+    TF_VERIFY(m.GetDomain() == TfToken("bar"));
+    TF_VERIFY(m.GetItemValueAs<TfToken>(SdrNodeMetadata->Domain)
+              == TfToken("bar"));
+}
+
+void
 TestSdrShaderNodeMetadata()
 {
     TestNodeLabel();
     TestNodeOpenPages();
+    TestNodeDomain();
 }
 
 int main()

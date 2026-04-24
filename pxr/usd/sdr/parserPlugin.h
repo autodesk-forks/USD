@@ -45,14 +45,14 @@ TF_REGISTRY_FUNCTION(TfType)                                            \
 /// in its `GetDiscoveryTypes()` return value, `SomeParserPlugin` will parse
 /// that discovery result.
 ///
-/// Another kind of 'type' within the parser plugin is the 'source type'. The
+/// Another categorization within the parser plugin is the 'shading system'. The
 /// discovery type simply acts as a way to link a discovery result to a parser
-/// plugin. On the other hand, a 'source type' acts as an umbrella type that
+/// plugin. On the other hand, a 'shading system' acts as an category that
 /// groups all of the discovery types together. For example, if a plugin handled
 /// discovery types 'foo', 'bar', and 'baz' (which are all related because they
 /// are all handled by the same parser), they may all be grouped under one
-/// unifying source type. This type is available on the node via
-/// `SdrShaderNode::GetSourceType()`.
+/// unifying shading system. This type is available on the node via
+/// `SdrShaderNode::GetShadingSystem()`.
 ///
 /// \section create How to Create a Parser Plugin
 /// There are three steps to creating a parser plugin:
@@ -116,7 +116,7 @@ public:
 
     /// Takes the specified `SdrShaderNodeDiscoveryResult` instance, which was a
     /// result of the discovery process, and generates a new `SdrShaderNode`.
-    /// The node's name, source type, and family must match.
+    /// The node's name, shading system, and function must match.
     SDR_API
     virtual SdrShaderNodeUniquePtr ParseShaderNode(
         const SdrShaderNodeDiscoveryResult& discoveryResult) = 0;
@@ -131,14 +131,14 @@ public:
     SDR_API
     virtual const SdrTokenVec& GetDiscoveryTypes() const = 0;
 
-    /// Returns the source type that this parser operates on.
-    ///
-    /// A source type is the most general type for a node. The parser plugin is
-    /// responsible for parsing all discovery results that have the types
-    /// declared under `GetDiscoveryTypes()`, and those types are collectively
-    /// identified as one "source type".
+    /// Returns the shading system that this parser operates in.
     SDR_API
-    virtual const TfToken& GetSourceType() const = 0;
+    virtual const TfToken& GetShadingSystem() const;
+
+    /// \deprecated
+    /// Deprecated in favor of `GetShadingSystem`
+    SDR_API
+    virtual const TfToken& GetSourceType() const;
 
     /// Gets an invalid node based on the discovery result provided. An invalid
     /// node is a node that has no properties, but may have basic data found

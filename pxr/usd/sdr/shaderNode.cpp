@@ -6,6 +6,7 @@
 //
 
 #include "pxr/pxr.h"
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/refPtr.h"
 #include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdr/debugCodes.h"
@@ -20,13 +21,20 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PUBLIC_TOKENS(SdrNodeFieldKey, SDR_NODE_FIELD_KEY_TOKENS);
 
+TF_DEFINE_ENV_SETTING(SDR_SHADER_NODE_LEGACY_GET_ROLE, true,
+    "When this environment variable is set to true, GetRole will return "
+    "a role if the node has a role, and otherwise the node's name by "
+    "default -- this is the legacy behavior of SdrShaderNode::GetRole. "
+    "When this environment variable is false, GetRole will return "
+    "a role if the node has a role, and an empty TfToken otherwise.");
+
 SdrShaderNode::SdrShaderNode(
     const SdrIdentifier& identifier,
     const SdrVersion& version,
     const std::string& name,
-    const TfToken& family,
+    const TfToken& function,
     const TfToken& context,
-    const TfToken& sourceType,
+    const TfToken& shadingSystem,
     const std::string& definitionURI,
     const std::string& implementationURI,
     SdrShaderPropertyUniquePtrVec&& properties,
@@ -35,9 +43,9 @@ SdrShaderNode::SdrShaderNode(
     : _identifier(identifier),
       _version(version),
       _name(name),
-      _family(family),
+      _function(function),
       _context(context),
-      _sourceType(sourceType),
+      _shadingSystem(shadingSystem),
       _definitionURI(definitionURI),
       _implementationURI(implementationURI),
       _properties(std::move(properties)),
@@ -69,6 +77,8 @@ SdrShaderNode::SdrShaderNode(
 
     // Store named metadata. These can be inlined to their corresponding
     // getters on SdrShaderNode once legacy metadata is removed.
+    _domain = _metadata.GetDomain();
+    _subdomain = _metadata.GetSubdomain();
     _label = _metadata.GetLabel();
     _category = _metadata.GetCategory();
     _departments = _metadata.GetDepartments();
@@ -130,10 +140,10 @@ std::string
 SdrShaderNode::GetInfoString() const
 {
     return TfStringPrintf(
-        "%s (context: '%s', version: '%s', family: '%s'); definition URI: '%s';"
+        "%s (context: '%s', version: '%s', function: '%s'); definition URI: '%s';"
         " implementation URI: '%s'",
         SdrGetIdentifierString(_identifier).c_str(), _context.GetText(),
-        _version.GetString().c_str(), _family.GetText(), 
+        _version.GetString().c_str(), _function.GetText(), 
         _definitionURI.c_str(), _implementationURI.c_str()
     );
 }
@@ -228,7 +238,10 @@ SdrShaderNode::GetImplementationName() const
 TfToken
 SdrShaderNode::GetRole() const
 {
-    return _metadata.HasRole() ? _metadata.GetRole() : TfToken(GetName());
+    if (TfGetEnvSetting(SDR_SHADER_NODE_LEGACY_GET_ROLE)) {
+        return _metadata.HasRole() ? _metadata.GetRole() : TfToken(GetName());
+    }
+    return _metadata.GetRole();
 }
 
 SdrTokenVec
@@ -401,6 +414,10 @@ SdrShaderNode::GetDataForKey(const TfToken& key) const
         return VtValue(GetName());
     } else if (key == SdrNodeFieldKey->Family) {
         return VtValue(GetFamily());
+    } else if (key == SdrNodeFieldKey->Function) {
+        return VtValue(GetFunction());
+    } else if (key == SdrNodeFieldKey->ShadingSystem) {
+        return VtValue(GetShadingSystem());
     } else if (key == SdrNodeFieldKey->SourceType) {
         return VtValue(GetSourceType());
     }

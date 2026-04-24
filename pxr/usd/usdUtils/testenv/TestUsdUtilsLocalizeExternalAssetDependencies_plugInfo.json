@@ -1,0 +1,28 @@
+{
+    "Plugins": [
+        {
+            "Type": "library",
+            "Name": "TestUsdUtilsLocalizeExternalAssetDependencies",
+            "Root": "@TEST_PLUG_INFO_ROOT@",
+            "LibraryPath": "@TEST_PLUG_INFO_LIBRARY_PATH@",
+            "ResourcePath": "@TEST_PLUG_INFO_RESOURCE_PATH@",
+            "Info": {
+                "Types": {
+                    "ExternalAssetFileFormat": {
+                        "bases": [
+                            "SdfFileFormat"
+                        ],
+                        "displayName": "Test File Format with Dependencies",
+                        "extensions": [
+                            "testformat"
+                        ],
+                        "formatId": "testformat",
+                        "primary": true,
+                        "supportsWriting": false,
+                        "target": "usd"
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -14,6 +14,7 @@
 #include "pxr/base/tf/diagnosticLite.h"
 
 #include <atomic>
+#include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -45,6 +46,13 @@ public:
     /// Construct a mutex, initially unlocked.
     TfSpinMutex() : _lockState(false) {}
 
+    /// Tag type for constructing a ScopedLock associated with a mutex but not
+    /// yet acquired.  Use with TfSpinMutex::deferAcquire.
+    struct DeferAcquire {};
+
+    /// Tag value for deferred-acquisition ScopedLock construction.
+    static constexpr DeferAcquire deferAcquire {};
+
     /// Scoped lock utility class.  API modeled roughly after
     /// tbb::spin_rw_mutex::scoped_lock.
     struct ScopedLock {
@@ -54,8 +62,31 @@ public:
             Acquire();
         }
 
+        /// Construct a scoped lock associated with mutex \p m but not yet
+        /// acquired.  Use Acquire() or TryAcquire() to acquire the lock.
+        ScopedLock(TfSpinMutex &m, TfSpinMutex::DeferAcquire) : _mutex(&m) {}
+
         /// Construct a scoped lock not associated with a \p mutex.
         ScopedLock() = default;
+
+        /// Construct a new lock taking the \p other lock's mutex association
+        /// and acquisition state. Leave \p other not associated with a mutex.
+        ScopedLock(ScopedLock &&other) noexcept
+            : _mutex(std::exchange(other._mutex, nullptr))
+            , _acquired(std::exchange(other._acquired, false)) {}
+
+        /// If \p this is not the same object as \p other, Release(), take the
+        /// \p other lock's mutex association and acquisition state, and leave
+        /// \p other not associated with a mutex.  If \p this is the same object
+        /// as \p other, do nothing.  In either case, return \p *this.
+        ScopedLock &operator=(ScopedLock &&other) noexcept {
+            if (this != &other) {
+                Release();
+                _mutex = std::exchange(other._mutex, nullptr);
+                _acquired = std::exchange(other._acquired, false);
+            }
+            return *this;
+        }        
 
         /// If this scoped lock is acquired, Release() it.
         ~ScopedLock() {

@@ -11,6 +11,7 @@ pxr_library(hdsi
         sdf
         cameraUtil
         usdShade
+        usdVol
         geomUtil
         hf
         hd
@@ -28,12 +29,14 @@ pxr_library(hdsi
         implicitSurfaceSceneIndex
         legacyDisplayStyleOverrideSceneIndex
         lightLinkingSceneIndex
+        locatorCachingSceneIndex
         materialBindingResolvingSceneIndex
         materialOverrideResolvingSceneIndex
         materialPrimvarTransferSceneIndex
         materialRenderContextFilteringSceneIndex
         nodeIdentifierResolvingSceneIndex
         nurbsApproximatingSceneIndex
+        particleFieldConversionSceneIndex
         prefixPathPruningSceneIndex
         pinnedCurveExpandingSceneIndex
         primManagingSceneIndexObserver

@@ -2071,8 +2071,7 @@ class TestUsdNamespaceEditorDependentEditsBasicRelocates(
         # Edit:
         # Rename /World_2/Ref_2/Child_2 to RenamedChild_2
         with self.ApplyEdits(editor, 
-                "Rename /World_2/Ref_2/Child_2 -> /World_2/Ref_2/RenamedChild_2",
-                expectWarnings = False):
+                "Rename /World_2/Ref_2/Child_2 -> /World_2/Ref_2/RenamedChild_2"):
             self.assertTrue(editor.MovePrimAtPath(
                 "/World_2/Ref_2/Child_2", 
                 "/World_2/Ref_2/RenamedChild_2"))

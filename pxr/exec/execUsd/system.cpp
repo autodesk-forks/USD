@@ -10,40 +10,46 @@
 #include "pxr/exec/execUsd/request.h"
 #include "pxr/exec/execUsd/requestImpl.h"
 #include "pxr/exec/execUsd/valueKey.h"
+#include "pxr/exec/execUsd/valueOverride.h"
 
 #include "pxr/base/tf/declarePtrs.h"
-#include "pxr/base/tf/functionRef.h"
-#include "pxr/base/tf/notice.h"
 #include "pxr/base/trace/trace.h"
-#include "pxr/exec/exec/systemChangeProcessor.h"
 #include "pxr/exec/esfUsd/sceneAdapter.h"
+#include "pxr/exec/esfUsd/stageData.h"
+#include "pxr/exec/exec/systemChangeProcessor.h"
 #include "pxr/usd/usd/notice.h"
 
 #include <tbb/concurrent_vector.h>
+
+#include <algorithm>
+#include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DECLARE_WEAK_PTRS(UsdStage);
 
-// TfNotice requires that notice listeners implement TfWeakPtrFacace.
-class ExecUsdSystem::_NoticeListener : public TfWeakBase
+class ExecUsdSystem::_NoticeListener : EsfUsdStageData::ListenerBase
 {
 public:
-    // Subscribe to notices in the constructor.
     _NoticeListener(
         ExecUsdSystem *system,
-        const UsdStageConstRefPtr &stage);
+        const UsdStageConstRefPtr &stage)
+      : _system(system)
+      , _stageData(EsfUsdStageData::RegisterStage(stage, this))
+    {}
 
-    // Revoke notice subscriptions in the destructor.
-    ~_NoticeListener();
+    ~_NoticeListener() override {
+        _stageData->Unregister(this);
+    }
 
 private:
-    // Delivers UsdNotice::ObjectsChanged notices to the ExecSystem.
     void _DidObjectsChanged(
-        const UsdNotice::ObjectsChanged &objectsChanged);
+        const UsdNotice::ObjectsChanged &objectsChanged,
+        const EsfUsdStageData::ChangedPathSet &changedTargetPaths)
+        const override;
 
     ExecUsdSystem *const _system;
-    TfNotice::Key _objectsChangedNoticeKey;
+    const std::shared_ptr<EsfUsdStageData> _stageData;
 };
 
 ExecUsdSystem::ExecUsdSystem(const UsdStageConstRefPtr &stage)
@@ -110,26 +116,31 @@ ExecUsdSystem::Compute(const ExecUsdRequest &request)
     return requestImpl.Compute();
 }
 
-ExecUsdSystem::_NoticeListener::_NoticeListener(
-    ExecUsdSystem *const system,
-    const UsdStageConstRefPtr &stage)
-    : _system(system)
-    , _objectsChangedNoticeKey(
-        TfNotice::Register(
-            TfCreateWeakPtr(this),
-            &ExecUsdSystem::_NoticeListener::_DidObjectsChanged,
-            UsdStageConstPtr(stage)))
+ExecUsdCacheView
+ExecUsdSystem::ComputeWithOverrides(
+    const ExecUsdRequest &request,
+    ExecUsdValueOverrideVector &&valueOverrides)
 {
-}
+    TRACE_FUNCTION();
 
-ExecUsdSystem::_NoticeListener::~_NoticeListener()
-{
-    TfNotice::Revoke(_objectsChangedNoticeKey);
+    if (!request.IsValid()) {
+        TF_CODING_ERROR("Cannot compute an expired request");
+        return ExecUsdCacheView();
+    }
+
+    ExecUsd_RequestImpl &requestImpl = request._GetImpl();
+
+    // Before computing values, make sure that the request has been prepared.
+    requestImpl.Compile();
+    requestImpl.Schedule();
+
+    return requestImpl.ComputeWithOverrides(std::move(valueOverrides));
 }
 
 void
 ExecUsdSystem::_NoticeListener::_DidObjectsChanged(
-    const UsdNotice::ObjectsChanged &objectsChanged)
+    const UsdNotice::ObjectsChanged &objectsChanged,
+    const EsfUsdStageData::ChangedPathSet &changedTargetPaths) const
 {
     TRACE_FUNCTION();
 
@@ -152,7 +163,7 @@ ExecUsdSystem::_NoticeListener::_DidObjectsChanged(
         };
         _system->_ParallelForEachRequest(expireRequests);
 
-        for (ExecUsd_RequestImpl *impl : expired) {
+        for (ExecUsd_RequestImpl *const impl : expired) {
             impl->Discard();
         }
     }
@@ -164,15 +175,18 @@ ExecUsdSystem::_NoticeListener::_DidObjectsChanged(
     }
 
     for (const SdfPath &path :
-        objectsChanged.GetResolvedAssetPathsResyncedPaths()) {
+             objectsChanged.GetResolvedAssetPathsResyncedPaths()) {
         changeProcessor.DidResync(path);
     }
 
     for (const SdfPath &path : objectsChanged.GetChangedInfoOnlyPaths()) {
         changeProcessor.DidChangeInfoOnly(
-            path,
-            objectsChanged.GetChangedFields(path));
+            path, objectsChanged.GetChangedFields(path));
     }
+
+    for (const SdfPath &path : changedTargetPaths) {
+        changeProcessor.DidChangeIncomingConnections(path);
+    };
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

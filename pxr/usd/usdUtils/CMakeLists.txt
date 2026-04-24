@@ -108,6 +108,18 @@ pxr_build_test_shared_lib(TestUsdUtilsDependenciesCustomResolver
         testenv/TestUsdUtilsDependenciesCustomResolver_plugin.cpp
 )
 
+pxr_build_test_shared_lib(TestUsdUtilsLocalizeExternalAssetDependencies
+    INSTALL_PREFIX UsdUtilsPlugins
+    LIBRARIES
+        ar
+        sdf
+        tf
+        usd
+
+    CPPFILES
+        testenv/TestUsdUtilsLocalizeExternalAssetDependencies_plugin.cpp
+)
+
 pxr_build_test(testUsdUtilsCoalescingDiagnosticDelegateCpp
     LIBRARIES
         tf

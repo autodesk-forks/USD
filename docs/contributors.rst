@@ -252,6 +252,10 @@ USD public.
 
    .. grid-item::
 
+      * Ryan Kautzman
+
+   .. grid-item::
+
       * Nick Kendall-Bar
 
    .. grid-item::

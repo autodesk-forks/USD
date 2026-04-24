@@ -427,32 +427,41 @@ UsdShadeNodeDefAPI::GetSourceTypes() const
 }
 
 SdrShaderNodeConstPtr 
-UsdShadeNodeDefAPI::GetShaderNodeForSourceType(const TfToken &sourceType) const
+UsdShadeNodeDefAPI::GetShaderNodeForShadingSystem(
+    const TfToken &shadingSystem) const
 {
     TfToken implSource = GetImplementationSource();
     if (implSource == UsdShadeTokens->id) {
         TfToken shaderId;
         if (GetShaderId(&shaderId)) {
-            return SdrRegistry::GetInstance().GetShaderNodeByIdentifierAndType(
-                    shaderId, sourceType);
+            return SdrRegistry::GetInstance()
+                .GetShaderNodeByIdentifierAndSystem(
+                    shaderId, shadingSystem);
         }
     } else if (implSource == UsdShadeTokens->sourceAsset) {
         SdfAssetPath sourceAsset;
-        if (GetSourceAsset(&sourceAsset, sourceType)) {
+        if (GetSourceAsset(&sourceAsset, shadingSystem)) {
             TfToken subIdentifier;
-            GetSourceAssetSubIdentifier(&subIdentifier, sourceType);
+            GetSourceAssetSubIdentifier(&subIdentifier, shadingSystem);
             return SdrRegistry::GetInstance().GetShaderNodeFromAsset(
-                sourceAsset, _GetSdrMetadata(GetPrim()), subIdentifier, sourceType);
+                sourceAsset, _GetSdrMetadata(GetPrim()),
+                subIdentifier, shadingSystem);
         }
     } else if (implSource == UsdShadeTokens->sourceCode) {
         std::string sourceCode;
-        if (GetSourceCode(&sourceCode, sourceType)) {
+        if (GetSourceCode(&sourceCode, shadingSystem)) {
             return SdrRegistry::GetInstance().GetShaderNodeFromSourceCode(
-                sourceCode, sourceType, _GetSdrMetadata(GetPrim()));
+                sourceCode, shadingSystem, _GetSdrMetadata(GetPrim()));
         }
     }
 
     return nullptr;
+}
+
+SdrShaderNodeConstPtr 
+UsdShadeNodeDefAPI::GetShaderNodeForSourceType(const TfToken &sourceType) const
+{
+    return GetShaderNodeForShadingSystem(sourceType);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

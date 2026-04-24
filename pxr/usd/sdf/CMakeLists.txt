@@ -462,6 +462,14 @@ pxr_build_test(testSdfUsdcInvalidPrimChildren
         testenv/testSdfUsdcInvalidPrimChildren.cpp
 )
 
+pxr_build_test(testSdfUsdcVersioning
+    LIBRARIES
+        tf
+        sdf
+    CPPFILES
+        testenv/testSdfUsdcVersioning.cpp
+)
+
 pxr_register_test(testSdfAbstractData_Cpp
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfAbstractData_Cpp"
 )
@@ -683,7 +691,7 @@ pxr_register_test(testSdfTextFile
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
     EXPECTED_RETURN_CODE 0
 )
-pxr_register_test(testSdfTextFile_1.1
+pxr_register_test(testSdfTextFile_1_1
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfTextFile"
     EXPECTED_RETURN_CODE 0
     ENV
@@ -744,3 +752,15 @@ pxr_register_test(testSdfUsdcInvalidPrimChildren
     TESTENV testenv/testSdfUsdcInvalidPrimChildren.testenv
     EXPECTED_RETURN_CODE 0
 )
+
+# This test is disabled for emscripten builds because it depends on
+# environment variables, which are currently unsupported in that configuration.
+if (NOT EMSCRIPTEN)
+    pxr_register_test(testSdfUsdcVersioning
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdcVersioning"
+        TESTENV testenv/testSdfUsdcVersioning
+        EXPECTED_RETURN_CODE 0
+        ENV 
+            PXR_USDC_EMIT_DEPRECATION_WARNINGS=1
+    )
+endif()

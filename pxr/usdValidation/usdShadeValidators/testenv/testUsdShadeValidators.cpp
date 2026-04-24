@@ -42,6 +42,7 @@ TestUsdShadeValidators()
     // UsdShadeValidators keyword.
     const std::set<TfToken> expectedUsdShadeValidatorNames
         = { UsdShadeValidatorNameTokens->encapsulationValidator,
+            UsdShadeValidatorNameTokens->encapsulationMaterialValidator,
             UsdShadeValidatorNameTokens->materialBindingApiAppliedValidator,
             UsdShadeValidatorNameTokens->materialBindingRelationships,
             UsdShadeValidatorNameTokens->materialBindingCollectionValidator,
@@ -61,7 +62,7 @@ TestUsdShadeValidators()
     UsdValidationValidatorMetadataVector metadata
         = registry.GetValidatorMetadataForPlugin(
             _tokens->usdShadeValidatorsPlugin);
-    TF_AXIOM(metadata.size() == 8);
+    TF_AXIOM(metadata.size() == 9);
     for (const UsdValidationValidatorMetadata &m : metadata) {
         validatorMetadataNameSet.insert(m.name);
     }
@@ -466,6 +467,147 @@ TestUsdShadeMaterialBindingAPIAppliedValidator()
 }
 
 void
+TestUsdShadeEncapsulationMaterialValidator()
+{
+    UsdValidationRegistry &registry = UsdValidationRegistry::GetInstance();
+    const UsdValidationValidator *validator = registry.GetOrLoadValidatorByName(
+        UsdShadeValidatorNameTokens->encapsulationMaterialValidator);
+    TF_AXIOM(validator);
+
+    UsdStageRefPtr usdStage = UsdStage::CreateInMemory();
+
+    // Create a Material > Scope hierarchy
+    UsdShadeMaterial::Define(usdStage, SdfPath("/RootMaterial"));
+    // Its legal to have a non-connectable descendant which is not a Shader or a
+    // NodeGraph. But try a Material or a Light / LightFilter and thats not
+    // allowed.
+    UsdGeomScope::Define(usdStage, SdfPath("/RootMaterial/Scope"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/RootMaterial")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidImageableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/RootMaterial"), SdfPath("/RootMaterial/Scope")
+        };
+        const std::string expectedErrorMsg
+            = "Imageable </RootMaterial/Scope> of type Scope is not a valid "
+              "descendant of Material </RootMaterial>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths,
+            expectedErrorMsg);
+    }
+
+    // Create a Material > Material hierarchy, which is also not allowed.
+    UsdShadeMaterial::Define(usdStage, SdfPath("/NestedMaterialRoot"));
+    UsdShadeMaterial::Define(
+        usdStage, SdfPath("/NestedMaterialRoot/NestedMaterial"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/NestedMaterialRoot")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidConnectableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/NestedMaterialRoot"), 
+            SdfPath("/NestedMaterialRoot/NestedMaterial")
+        };
+        const std::string expectedErrorMsg
+            = "Connectable </NestedMaterialRoot/NestedMaterial> of type "
+              "Material is not a valid connectable descendant of Material "
+              "</NestedMaterialRoot>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths, 
+            expectedErrorMsg);
+    }
+
+    // Create a Material -> NodeGraph -> Material hierarchy, which is also not
+    // allowed.
+    UsdShadeMaterial::Define(usdStage, SdfPath("/NodeGraphMaterialRoot"));
+    UsdShadeNodeGraph::Define(
+        usdStage, SdfPath("/NodeGraphMaterialRoot/NodeGraph"));
+    UsdShadeMaterial::Define(
+        usdStage, SdfPath("/NodeGraphMaterialRoot/NodeGraph/Material"));
+    {
+        const UsdValidationErrorVector errors =
+            validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/NodeGraphMaterialRoot")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidConnectableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/NodeGraphMaterialRoot"),
+            SdfPath("/NodeGraphMaterialRoot/NodeGraph/Material")
+        };
+        const std::string expectedErrorMsg
+            = "Connectable </NodeGraphMaterialRoot/NodeGraph/Material> of type "
+              "Material is not a valid connectable descendant of Material "
+              "</NodeGraphMaterialRoot>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths,
+            expectedErrorMsg);
+    }
+
+    // Create an nested imageable under Material, which is also not allowed.
+    UsdShadeMaterial::Define(usdStage, SdfPath("/ImageableMaterialRoot"));
+    UsdShadeNodeGraph::Define(
+        usdStage, SdfPath("/ImageableMaterialRoot/NodeGraph"));
+    UsdGeomXform::Define(
+        usdStage, SdfPath("/ImageableMaterialRoot/NodeGraph/Xform"));
+    {
+        const UsdValidationErrorVector errors =
+            validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/ImageableMaterialRoot")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidImageableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/ImageableMaterialRoot"),
+            SdfPath("/ImageableMaterialRoot/NodeGraph/Xform")
+        };
+        const std::string expectedErrorMsg
+            = "Imageable </ImageableMaterialRoot/NodeGraph/Xform> of type "
+              "Xform is not a valid descendant of Material "
+              "</ImageableMaterialRoot>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths,
+            expectedErrorMsg);
+    }
+
+    // GoodMaterials -- just shader and nodegraph
+    UsdShadeMaterial::Define(usdStage, SdfPath("/GoodMaterial"));
+    UsdShadeShader::Define(usdStage, SdfPath("/GoodMaterial/Shader"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/GoodMaterial")));
+        TF_AXIOM(errors.empty());
+    }
+    UsdShadeNodeGraph::Define(usdStage, SdfPath("/GoodMaterial/NodeGraph"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/GoodMaterial")));
+        TF_AXIOM(errors.empty());
+    }
+}
+
+void
 TestUsdShadeEncapsulationRulesValidator()
 {
     UsdValidationRegistry &registry = UsdValidationRegistry::GetInstance();
@@ -795,6 +937,7 @@ main()
     TestUsdShadeShaderPropertyCompliance();
     TestUsdShadeSubsetMaterialBindFamilyName();
     TestUsdShadeSubsetsMaterialBindFamily();
+    TestUsdShadeEncapsulationMaterialValidator();
     TestUsdShadeEncapsulationRulesValidator();
 
     return EXIT_SUCCESS;

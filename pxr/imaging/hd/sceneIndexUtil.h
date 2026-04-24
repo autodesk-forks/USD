@@ -21,8 +21,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 HD_API
 extern TfEnvSetting<bool> HD_USE_ENCAPSULATING_SCENE_INDICES;
 
-/// Make a scene index that encapsulates the given scene and (recursively)
-/// all its inputs until a given input scene is hit.
+/// Make a scene index that encapsulates the given \p encapsulatedScene and 
+/// (recursively) all its inputs until a scene in \p inputScenes is hit.
 ///
 /// The resulting scene index is simply forwarding any calls to the
 /// given encapsulated scene index.

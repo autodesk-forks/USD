@@ -455,10 +455,20 @@ public:
     HD_API
     virtual bool IsPrimvarFilteringNeeded() const;
 
+
+    ///
+    /// Returns the ordered list of shading systems that the render delegate 
+    /// supports.
+    /// 
+    HD_API
+    virtual TfTokenVector GetShadingSystems() const;
+
     ///
     /// Returns the ordered list of shader source types that the render delegate 
     /// supports.
     /// 
+    /// \deprecated
+    /// Deprecated in favor of GetShadingSystems
     HD_API
     virtual TfTokenVector GetShaderSourceTypes() const;
 

@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    subLayers = [
+        @./layer_24_x2.usda@
+    ]
+    timeCodesPerSecond = 60
+)
+
+def Xform "World"
+{
+    over "ReferenceIn24" (
+        delete references = @./asset.usda@ (scale = 2.0)
+    )
+    {
+    }
+}

@@ -300,7 +300,7 @@ def TestBasicNode(node, nodeSourceType, nodeDefinitionURI, nodeImplementationURI
     assert node.GetName() == nodeName
     assert node.GetContext() == nodeContext
     assert node.GetSourceType() == nodeSourceType
-    assert node.GetFamily() == ""
+    assert node.GetFunction() == ""
     assert node.GetResolvedDefinitionURI() == nodeDefinitionURI
     assert node.GetResolvedImplementationURI() == nodeImplementationURI
     assert node.IsValid()

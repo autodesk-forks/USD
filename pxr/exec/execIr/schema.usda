@@ -24,6 +24,9 @@ class IrFkController "IrFkController" (
     FK attributes, and a parent space, and produces a posed space. The inverse
     computation takes a desired posed space and the parent space as input and
     produces the FK attribute values that produce the desired space.
+
+    Note: The functionality here is extremely limited, subject to change, and
+    not yet ready for production use.
     """
     inherits = </Typed>
     customData = {
@@ -79,7 +82,6 @@ class IrFkController "IrFkController" (
 
     token In:RotationOrder = "XYZ" (
         irRole = "SwitchAttribute"
-        irIsInvertible = True
         allowedTokens = ["XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]
     )
 }

@@ -33,9 +33,9 @@ class TestShaderNode(unittest.TestCase):
             "TestNodeOSL",   # Identifier
             Sdr.Version(),   # Version
             "TestNodeOSL",   # Name
-            "",              # Family
+            "",              # Function
             "oso",           # Discovery type (extension)
-            "OSL",           # Source type
+            "OSL",           # Shading system
             cls.uri,         # URI
             cls.resolvedUri, # Resolved URI
             sourceCode=cls.sourceCode,
@@ -93,9 +93,9 @@ class TestShaderNode(unittest.TestCase):
             "TestShaderPropertiesNodeOSL",  # Identifier
             Sdr.Version(),                  # Version
             "TestShaderPropertiesNodeOSL",  # Name
-            "",                             # Family
+            "",                             # Function
             "oso",                          # Discovery type (extension)
-            "OSL",                          # Source type
+            "OSL",                          # Shading system
             uri,                            # URI
             resolvedUri,                    # Resolved URI
             sourceCode,                     # sourceCode

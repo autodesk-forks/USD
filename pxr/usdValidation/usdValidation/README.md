@@ -137,11 +137,18 @@ A custom validator must implement a validator task function
 [UsdValidatePrimTaskFn](@ref UsdValidatePrimTaskFn()))
 which gets passed to the registry during registration, and called when the
 validator's test is run. Validators should implement the task function at the
-appropriate or desired granularity level. For example, if the validation logic 
-can be succinctly defined to be applied to a prim, the UsdValidatePrimTaskFn
-function should be implemented, rather than implementing a 
-UsdValidateStageTaskFn or UsdValidateLayerTaskFn that has to traverse the 
-stage/layer to validate the prim.
+appropriate granularity level. For example, if the validation logic 
+can be succinctly defined to be applied to a prim, implement 
+UsdValidatePrimTaskFn rather than UsdValidateStageTaskFn or 
+UsdValidateLayerTaskFn. Using too broad a granularity can impact performance 
+&mdash; for instance, a validator task that only needs to operate at the prim 
+level but is implemented as a stage task may incur unnecessary stage traversal 
+each time it runs.
+
+Similarly, when a prim-level validator only applies to prims of a specific 
+schema type, ensure `schemaTypes` is set appropriately. This allows the 
+validation framework to skip non-matching prims and avoid unnecessary 
+validator invocations.
 
 ### Plugin Validators
 
@@ -255,6 +262,23 @@ const UsdValidationValidatorMetadata explicitValidatorMetadata = {
 registry.RegisterValidator(explicitValidatorMetadata, explicitStageTaskFn);
 ```
 
+### Choosing a Registration Path  {#choosing_registration_path}
+
+The decision comes down to how you want other code to discover your
+validator:
+
+| | Explicit | Plugin |
+|---|---|---|
+| Metadata source | Caller provides `ValidatorMetadata` | `plugInfo.json` |
+| Discoverability | Only after registration code has run | Metadata visible at startup; validator lazily loaded |
+| Lazy loading | No; must register each session | Yes; validator loaded when first queried by name |
+| Use when | Prototyping, one-off scripts, tests, runtime-generated rules | Shipping validators in a distributed plugin |
+
+If other code needs to query your validator's metadata (keywords,
+schema types) before the validator is loaded, use plugin registration.
+If the validator is created dynamically or is only used by the code
+that creates it, explicit registration is simpler.
+
 ### Adding Fixers
 
 UsdValidationRegistry::RegisterPluginValidator() and 
@@ -313,6 +337,369 @@ registry.RegisterPluginValidator(validatorName, stageTaskFn, _ValidatorFixers())
 
 Note that UsdValidationRegistry does not manage fixers directly, and these are 
 held by their respective UsdValidationValidator(s).
+
+## Creating Custom Validators in Python  {#python_validators}
+
+Custom validators can be implemented in Python using either of the two
+registration paths described in
+["Creating Custom Validators"](#creating_custom_validators):
+
+* **Plugin registration** (`RegisterPluginLayerValidator`,
+  `RegisterPluginStageValidator`, `RegisterPluginPrimValidator`) — 
+  the caller provides only the validator name as a `TfToken`.
+  Metadata comes from the plugin's `plugInfo.json` and is parsed
+  automatically during registry initialization.
+
+* **Explicit registration** (`RegisterLayerValidator`,
+  `RegisterStageValidator`, `RegisterPrimValidator`) —  the caller
+  provides full `ValidatorMetadata`.  No plugin infrastructure is
+  required; the validator is available immediately after registration.
+
+### Performance Considerations  {#python_validator_performance}
+
+When a `ValidationContext` runs validators, all validator tasks — C++ and
+Python — are dispatched into the same shared TBB worker thread pool.  Python
+task functions must acquire the Python GIL on each invocation.  A TBB worker 
+thread executing one of these Python validator tasks is blocked waiting for the 
+GIL. This has two consequences:
+
+* **Python validators do not benefit from parallelism among themselves.**
+  Even with task parallelism available via UsdValidationContext, only one 
+  Python validator task runs at a time; the rest are blocked waiting for the 
+  GIL.
+
+* **Python validators can starve C++ validators.**  If enough Python
+  validator tasks are scheduled simultaneously to occupy all TBB worker
+  threads, C++ validator tasks that are ready to run will sit in the queue
+  with no available workers until a GIL-blocked thread finishes and is freed.
+
+For performance-sensitive validation pipelines, prefer C++ implementations
+for validators.  Python validators are best suited for prototyping, tooling, or
+validators that run rarely and on small scenes.
+
+### Task Function Signatures
+
+Each registration method accepts a Python callable with a specific
+signature, matching the corresponding C++ task function type:
+
+| Method | Callable signature |
+|---|---|
+| `RegisterLayerValidator` / `RegisterPluginLayerValidator` | `(layer: Sdf.Layer) -> list[ValidationError]` |
+| `RegisterStageValidator` / `RegisterPluginStageValidator` | `(stage: Usd.Stage, timeRange: UsdValidation.TimeRange) -> list[ValidationError]` |
+| `RegisterPrimValidator` / `RegisterPluginPrimValidator` | `(prim: Usd.Prim, timeRange: UsdValidation.TimeRange) -> list[ValidationError]` |
+
+The callable must return a list (or any iterable) of
+`UsdValidation.ValidationError` objects. Return an empty list when the
+validation passes.
+
+### Explicit Registration Examples
+
+#### Layer Validator
+
+```python
+from pxr import Sdf, UsdValidation
+
+registry = UsdValidation.ValidationRegistry()
+
+metadata = UsdValidation.ValidatorMetadata(
+    name="myPackage:RequiresDefaultPrim",
+    doc="Warn when a layer has no default prim set.",
+    keywords=["myPackage"],
+)
+
+def _CheckDefaultPrim(layer):
+    if not layer.defaultPrim:
+        return [
+            UsdValidation.ValidationError(
+                "MissingDefaultPrim",
+                UsdValidation.ValidationErrorType.Warn,
+                [UsdValidation.ValidationErrorSite(
+                    layer, Sdf.Path.absoluteRootPath)],
+                f"Layer '{layer.identifier}' has no defaultPrim.",
+            )
+        ]
+    return []
+
+registry.RegisterLayerValidator(metadata, _CheckDefaultPrim)
+```
+
+#### Stage Validator
+
+```python
+from pxr import Sdf, Usd, UsdGeom, UsdValidation
+
+registry = UsdValidation.ValidationRegistry()
+
+metadata = UsdValidation.ValidatorMetadata(
+    name="myPackage:RequiresUpAxis",
+    doc="Error when a stage has no upAxis metadata.",
+    keywords=["myPackage"],
+)
+
+def _CheckUpAxis(stage, timeRange):
+    if not stage.HasAuthoredMetadata(UsdGeom.Tokens.upAxis):
+        return [
+            UsdValidation.ValidationError(
+                "MissingUpAxis",
+                UsdValidation.ValidationErrorType.Error,
+                [UsdValidation.ValidationErrorSite(
+                    stage, Sdf.Path.absoluteRootPath)],
+                "Stage is missing upAxis metadata.",
+            )
+        ]
+    return []
+
+registry.RegisterStageValidator(metadata, _CheckUpAxis)
+```
+
+#### Prim Validator
+
+```python
+from pxr import Sdf, Usd, UsdValidation
+
+registry = UsdValidation.ValidationRegistry()
+
+metadata = UsdValidation.ValidatorMetadata(
+    name="myPackage:NoPrimsMissingKind",
+    doc="Warn when a prim has no kind set.",
+    keywords=["myPackage"],
+)
+
+def _CheckKind(prim, timeRange):
+    if prim.IsPseudoRoot():   # skip pseudo-root
+        return []
+    model = Usd.ModelAPI(prim)
+    if not model.GetKind():
+        return [
+            UsdValidation.ValidationError(
+                "MissingKind",
+                UsdValidation.ValidationErrorType.Warn,
+                [UsdValidation.ValidationErrorSite(
+                    prim.GetStage(), prim.GetPath())],
+                f"Prim '{prim.GetPath()}' has no kind.",
+            )
+        ]
+    return []
+
+registry.RegisterPrimValidator(metadata, _CheckKind)
+```
+
+### Plugin Registration Example
+
+When a validator is declared in `plugInfo.json`, only the name is
+needed at registration time; all other metadata is already known to
+the registry.
+
+Given a `plugInfo.json` that declares:
+
+```json
+{
+    "Plugins": [{
+        "Info": {
+            "Validators": {
+                "CheckUpAxis": {
+                    "doc": "Error when upAxis is missing.",
+                    "keywords": ["stageMetadata"]
+                }
+            }
+        },
+        "Name": "myPlugin",
+        "Type": "library",
+        ...
+    }]
+}
+```
+
+The Python implementation registers the task function by name:
+
+```python
+from pxr import Sdf, UsdGeom, UsdValidation
+
+registry = UsdValidation.ValidationRegistry()
+
+def _CheckUpAxis(stage, timeRange):
+    if not stage.HasAuthoredMetadata(UsdGeom.Tokens.upAxis):
+        return [
+            UsdValidation.ValidationError(
+                "MissingUpAxis",
+                UsdValidation.ValidationErrorType.Error,
+                [UsdValidation.ValidationErrorSite(
+                    stage, Sdf.Path.absoluteRootPath)],
+                "Stage is missing upAxis metadata.",
+            )
+        ]
+    return []
+
+# Name must match "pluginName:validatorName" from plugInfo.json.
+registry.RegisterPluginStageValidator(
+    "myPlugin:CheckUpAxis", _CheckUpAxis
+)
+```
+
+Plugin validator suites work the same way:
+
+```python
+registry.RegisterPluginValidatorSuite(
+    "myPlugin:MySuite",
+    [registry.GetOrLoadValidatorByName("myPlugin:CheckUpAxis")]
+)
+```
+
+### How Python Plugin Validators Are Triggered  {#python_plugin_triggering}
+
+For C++ plugins the Plug system loads the shared library and the 
+`TF_REGISTRY_FUNCTION(UsdValidationRegistry)` macro ensures the registration 
+code runs automatically at load time.
+
+Python plugins work the same way, but will rely on module-level registration 
+code in `__init__.py` instead of `TF_REGISTRY_FUNCTION`.
+
+The lazy-load flow for a Python plugin:
+
+1. **Startup**: `ValidationRegistry` parses `plugInfo.json` for all
+   discovered plugins. Validator metadata (name, doc, keywords,
+   schemaTypes) is available immediately, before any code is loaded.
+
+2. **Query**: Client code calls
+   `registry.GetOrLoadValidatorByName("myPlugin:CheckUpAxis")`.
+   The registry finds metadata for this name and sees it belongs to a plugin 
+   that has not been loaded yet. The same load is triggered when validators are 
+   accessed via UsdValidationContext.
+
+3. **Load**: The registry calls `plugin->Load()`. For a Python-type
+   plugin, the Plug system executes
+   `import <module_name>` (where `<module_name>` matches the `"Name"`
+   field in `plugInfo.json`).
+
+4. **Register**: The module's `__init__.py` runs at import time.
+   Its top-level code calls `RegisterPluginStageValidator` (or
+   the layer/prim variant) to register task functions with the
+   registry.
+
+5. **Return**: The registry now has a fully registered validator and
+   returns it to the caller.
+
+#### Python Plugin Directory Structure
+
+The module directory name must match the `"Name"` field in
+`plugInfo.json`, and the `plugInfo.json` lives inside the module
+directory alongside `__init__.py`:
+
+```
+myPlugin/
+    __init__.py       # Registration code runs at import time
+    plugInfo.json     # "Type": "python", "Name": "myPlugin"
+```
+
+#### Example plugInfo.json (Python scenario)
+
+```json
+{
+    "Plugins": [{
+        "Type": "python",
+        "Name": "myPlugin",
+        "Info": {
+            "Validators": {
+                "CheckUpAxis": {
+                    "doc": "Error when upAxis is missing.",
+                    "keywords": ["stageMetadata"]
+                }
+            }
+        }
+    }]
+}
+```
+
+#### Example __init__.py
+
+```python
+from pxr import Sdf, UsdGeom, UsdValidation
+
+_PLUGIN_NAME = "myPlugin"
+
+def _CheckUpAxis(stage, timeRange):
+    if not stage.HasAuthoredMetadata(UsdGeom.Tokens.upAxis):
+        return [
+            UsdValidation.ValidationError(
+                "MissingUpAxis",
+                UsdValidation.ValidationErrorType.Error,
+                [UsdValidation.ValidationErrorSite(
+                    stage, Sdf.Path.absoluteRootPath)],
+                "Stage is missing upAxis metadata.",
+            )
+        ]
+    return []
+
+# Registration at import time — equivalent to TF_REGISTRY_FUNCTION
+_registry = UsdValidation.ValidationRegistry()
+_registry.RegisterPluginStageValidator(
+    _PLUGIN_NAME + ":CheckUpAxis", _CheckUpAxis)
+```
+
+The plugin directory must be discoverable by `Plug.Registry` (either
+on `PXR_PLUGINPATH_NAME` or registered via
+`Plug.Registry().RegisterPlugins()`). The parent directory of the
+module must be on `sys.path` so the `import` succeeds.
+
+### Running a Python Validator
+
+Retrieve the registered validator by name and call `Validate()`, or
+pass it to a `ValidationContext` to run it alongside other validators.
+
+```python
+# Direct invocation
+validator = registry.GetOrLoadValidatorByName(
+    "myPackage:RequiresUpAxis"
+)
+stage = Usd.Stage.Open("asset.usda")
+errors = validator.Validate(stage)
+for error in errors:
+    print(error.GetErrorAsString())
+
+# Via ValidationContext (runs all provided validators in parallel)
+context = UsdValidation.ValidationContext([validator])
+errors = context.Validate(stage)
+```
+
+### Grouping Validators Into a Suite
+
+```python
+stage_validator = registry.GetOrLoadValidatorByName(
+    "myPackage:RequiresUpAxis"
+)
+prim_validator = registry.GetOrLoadValidatorByName(
+    "myPackage:NoPrimsMissingKind"
+)
+
+suite_metadata = UsdValidation.ValidatorMetadata(
+    name="myPackage:BaselineChecks",
+    doc="Suite of baseline asset checks.",
+    keywords=["myPackage"],
+    isSuite=True,
+)
+registry.RegisterValidatorSuite(
+    suite_metadata, [stage_validator, prim_validator]
+)
+```
+
+### Notes
+
+* The `ValidationRegistry` is a singleton; validators registered in
+  one module are visible to all other modules in the same process.
+* Validator names must be unique across the registry. Re-registering
+  an existing name will fail silently; use `HasValidator()` to check
+  before registering if needed.
+* Python exceptions raised inside a task function are converted to Tf
+  errors and the validator returns an empty error list for that
+  invocation. Add explicit error handling inside the callable if you
+  need richer diagnostics.
+* Explicitly registered validators have no associated plugin and are
+  not lazily loaded. They must be registered each session before they
+  can be used.
+* Plugin-registered validators get their metadata from `plugInfo.json`.
+  The metadata is discoverable at startup even before the Python task
+  function is registered, enabling tools to enumerate available
+  validators without loading every plugin.
 
 ## Additional Examples
 

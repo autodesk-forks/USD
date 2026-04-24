@@ -97,6 +97,13 @@ HdRenderDelegate::GetMaterialBindingPurpose() const
 }
 
 TfTokenVector 
+HdRenderDelegate::GetShadingSystems() const
+{
+    return GetShaderSourceTypes();
+}
+
+
+TfTokenVector 
 HdRenderDelegate::GetShaderSourceTypes() const
 {
     return TfTokenVector();

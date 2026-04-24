@@ -6,6 +6,8 @@
 //
 #include "pxr/imaging/hdsi/materialOverrideResolvingSceneIndex.h"
 
+#include "pxr/imaging/hdsi/utils.h"
+
 #include "pxr/imaging/hd/containerDataSourceEditor.h"
 #include "pxr/imaging/hd/dataSource.h"
 #include "pxr/imaging/hd/dataSourceTypeDefs.h"
@@ -878,56 +880,6 @@ HdsiMaterialOverrideResolvingSceneIndex::_GetMaterialOverrides(
 }
 
 SdfPath
-HdsiMaterialOverrideResolvingSceneIndex::_GetBoundMaterial(
-    const SdfPath& primPath) const
-{
-    const HdSceneIndexBaseRefPtr inputScene = _GetInputSceneIndex();
-    const HdSceneIndexPrim prim = inputScene->GetPrim(primPath);
-    if (!prim.dataSource) {
-        return {};
-    }
-
-    // Does this prim have a material binding data source ?
-    HdMaterialBindingsSchema matBindingsSchema = 
-        HdMaterialBindingsSchema::GetFromParent(prim.dataSource);
-    if (!matBindingsSchema.IsDefined()) {
-        return {};
-    }
-
-    // Find a material bound for a purpose of rendering the final frame
-    // We will check these purposes in order, and take the first one that is
-    // specified: 'full', 'allPurpose' and ''
-    // These are the binding purposes expected to be used in a RenderMan
-    // context. Material Overrides are not currently supported for 
-    // preview materials.
-    static const std::array<TfToken, 3> purposes = {
-        UsdShadeTokens->full,
-        HdMaterialBindingsSchemaTokens->_allPurposeToken,
-        HdMaterialBindingsSchemaTokens->allPurpose
-    };
-
-    std::optional<HdMaterialBindingSchema> materialBindingSchemaOpt;
-    for (const TfToken& purpose : purposes) {
-        materialBindingSchemaOpt = matBindingsSchema.GetMaterialBinding(purpose);
-        if (materialBindingSchemaOpt.has_value() && 
-            materialBindingSchemaOpt.value().IsDefined()) {
-            break;
-        }
-    }
-    
-    if (!materialBindingSchemaOpt) {
-        return {};
-    }
-
-    const HdPathDataSourceHandle materialPathDs = 
-        materialBindingSchemaOpt.value().GetPath();
-    if (!materialPathDs) {
-        return {};
-    }
-    return materialPathDs->GetTypedValue(0.0f);
-}
-
-SdfPath
 HdsiMaterialOverrideResolvingSceneIndex::_AddGeneratedMaterial(
     const TfToken& primType,
     const SdfPath& primPath)
@@ -952,7 +904,8 @@ HdsiMaterialOverrideResolvingSceneIndex::_AddGeneratedMaterial(
 
     // If this geom with material overrides does not have
     // any materials bound to it, no further processing is required
-    const SdfPath materialPath = _GetBoundMaterial(primPath);
+    const SdfPath materialPath = HdsiUtilsGetBoundMaterial(
+        _GetInputSceneIndex()->GetPrim(primPath));
     if (materialPath.IsEmpty()) {
         return {};
     }

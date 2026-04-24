@@ -25,9 +25,9 @@ SDR_REGISTER_PARSER_PLUGIN(SdrGlslfxParserPlugin);
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 
-    // Discovery and source type
+    // Discovery and shading system
     ((discoveryType, "glslfx"))
-    ((sourceType, "glslfx"))
+    ((shadingSystem, "glslfx"))
 );
 
 const SdrTokenVec& 
@@ -38,9 +38,9 @@ SdrGlslfxParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken& 
-SdrGlslfxParserPlugin::GetSourceType() const
+SdrGlslfxParserPlugin::GetShadingSystem() const
 {
-    return _tokens->sourceType;
+    return _tokens->shadingSystem;
 }
 
 static VtValue
@@ -281,9 +281,10 @@ SdrGlslfxParserPlugin::ParseShaderNode(
         nodeIdentifier,
         discoveryResult.version,
         discoveryResult.name,
-        discoveryResult.family,
-        _tokens->sourceType,
-        _tokens->sourceType,
+        discoveryResult.function,
+        // NOTE: Context = "glslfx" will be removed in an upcoming release.
+        _tokens->shadingSystem, /* context */
+        _tokens->shadingSystem,
         discoveryResult.resolvedUri,
         discoveryResult.resolvedUri,
         std::move(nodeProperties),

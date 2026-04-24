@@ -13,6 +13,8 @@
 #include "pxr/imaging/hgiVulkan/api.h"
 #include "pxr/imaging/hgiVulkan/vulkan.h"
 
+#include "pxr/base/tf/span.h"
+
 #include <atomic>
 #include <mutex>
 #include <thread>
@@ -103,7 +105,7 @@ public:
     HGIVULKAN_API
     void Flush(
         HgiSubmitWaitType wait,
-        VkSemaphore signalSemaphore = VK_NULL_HANDLE);
+        TfSpan<const std::pair<VkSemaphore, uint64_t>> signalSemaphores = {});
 
     /// Checks if the timeline semaphore has passed the desiredValue,
     /// and can optionally force a wait on this. This may cause a flush.
@@ -119,6 +121,11 @@ private:
     // Thread safety: This call is thread safe.
     HgiVulkan_CommandPool* _AcquireThreadCommandPool(
         std::thread::id const& threadId);
+
+    // Adds the _resourceCommandBuffer to _queuedBuffers, ensuring that
+    // resource commands not encapsulated by HgiCmds are submitted before
+    // HgiCmds and are included in calls to 'Flush'.
+    void _FlushResourceCommandBuffer();
 
     // Returns an id-bit that uniquely identifies the cmd buffer amongst all
     // in-flight cmd buffers. Returns an empty result if all bits have been

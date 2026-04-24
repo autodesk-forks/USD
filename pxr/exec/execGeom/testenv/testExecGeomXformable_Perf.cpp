@@ -84,7 +84,7 @@ _CreateDescendantPrims(
             const SdfAttributeSpecHandle transformAttr =
                 SdfAttributeSpec::New(
                     primSpec,
-                    "xformOps:transform",
+                    "xformOp:transform",
                     SdfGetValueTypeNameForValue(transformValue));
             transformAttr->SetDefaultValue(transformValue);
 
@@ -138,7 +138,7 @@ _CreateStage(
     const SdfAttributeSpecHandle transformAttr =
         SdfAttributeSpec::New(
             primSpec,
-            "xformOps:transform",
+            "xformOp:transform",
             SdfGetValueTypeNameForValue(transformValue));
     transformAttr->SetDefaultValue(transformValue);
 
@@ -313,7 +313,7 @@ public:
             return;
         }
 
-        const size_t memInBytes = TfMallocTag::GetMaxTotalBytes();
+        const size_t memInBytes = TfMallocTag::GetTotalBytes();
 
         TfMallocTag::CallTree tree;
         const bool success = TfMallocTag::GetCallTree(&tree);
@@ -406,7 +406,7 @@ TestExecGeomXformable_Perf(
         TRACE_SCOPE("Preroll stage access");
         UsdPrim prim = usdStage->GetPrimAtPath(SdfPath("/Root"));
         UsdAttribute attribute =
-            prim.GetAttribute(TfToken("xformOps:transform"));
+            prim.GetAttribute(TfToken("xformOp:transform"));
         TF_AXIOM(attribute.IsValid());
     }
 

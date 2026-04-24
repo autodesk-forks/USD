@@ -52,6 +52,11 @@ class SdfAssetPath;
 /// Linking is specified as a collection (UsdCollectionAPI) which can
 /// be accessed via GetFilterLinkCollection().
 /// 
+/// <b>Encapsulation</b>
+/// 
+/// UsdLuxLightFilter must not be parented under a UsdShadeMaterial.
+/// See \ref usdLux_Encapsulation for more details.
+/// 
 ///
 /// For any described attribute \em Fallback \em Value or \em Allowed \em Values below
 /// that are text/tokens, the actual token is published and defined in \ref UsdLuxTokens.

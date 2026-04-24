@@ -432,8 +432,7 @@ UsdSkelImagingSkeletonResolvingSceneIndex::_AddDependenciesForResolvedSkeleton(
 {
     TRACE_FUNCTION();
 
-    for (const SdfPath &animSource : 
-        resolvedSkeleton->GetResolvedAnimationSources()) {
+    for (const SdfPath &animSource : resolvedSkeleton->GetAnimationSource()) {
         if (!animSource.IsEmpty()) {
             // Note that we add the dependency even if there is no prim at
             // animationSource or the prim is not a skelAnimation.
@@ -488,8 +487,7 @@ _RemoveDependenciesForResolvedSkeleton(
         return;
     }
 
-    for (const SdfPath &animSource : 
-        resolvedSkeleton->GetResolvedAnimationSources()) {
+    for (const SdfPath &animSource : resolvedSkeleton->GetAnimationSource()) {
         if (!animSource.IsEmpty()) {
             _Remove(animSource, skeletonPath, &_skelAnimPathToSkeletonPaths);
         }

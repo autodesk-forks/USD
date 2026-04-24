@@ -7,6 +7,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/staticTokens.h"
+#include "pxr/base/tf/stl.h"
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/usd/sdr/shaderNodeMetadata.h"
@@ -14,6 +15,8 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PUBLIC_TOKENS(SdrNodeMetadata, SDR_NODE_METADATA_TOKENS);
+TF_DEFINE_PUBLIC_TOKENS(SdrNodeDomain, SDR_NODE_DOMAIN_TOKENS);
+TF_DEFINE_PUBLIC_TOKENS(SdrNodeSubdomain, SDR_NODE_SUBDOMAIN_TOKENS);
 TF_DEFINE_PUBLIC_TOKENS(SdrNodeContext, SDR_NODE_CONTEXT_TOKENS);
 TF_DEFINE_PUBLIC_TOKENS(SdrNodeRole, SDR_NODE_ROLE_TOKENS);
 
@@ -29,7 +32,7 @@ using FromLegacyFnMap =
     std::unordered_map<TfToken, FromLegacyFn, TfToken::HashFunctor>;
 using ToLegacyFnMap =
     std::unordered_map<TfToken, ToLegacyFn, TfToken::HashFunctor>;
-using DefaultsMap =
+using InstantiatedTypeMap =
     std::unordered_map<TfToken, VtValue, TfToken::HashFunctor>;
 
 std::string _LegacyStringFromString(const VtValue& value) {
@@ -133,12 +136,18 @@ const ToLegacyFnMap& _GetToLegacyFnMap() {
 
 // When a client attempts to set a "named metadata" item with
 // SdrShaderNodeMetadata::SetItem (bypassing the named metadata API e.g. SetLabel),
-// _defaults helps enforce that these metadata items have the expected types.
-const DefaultsMap& _GetDefaultsMap() {
-    static const DefaultsMap _defaults = {
+// _instantiatedTypes helps enforce that these metadata items have the
+// expected types.
+const InstantiatedTypeMap& _GetInstantiatedTypeMap() {
+    static const InstantiatedTypeMap _instantiatedTypes = {
         {SdrNodeMetadata->Label, VtValue(TfToken(""))},
-        {SdrNodeMetadata->Category, VtValue(TfToken(""))},
+        {SdrNodeMetadata->Domain, VtValue(SdrNodeDomain->Rendering)},
+        {SdrNodeMetadata->Subdomain, VtValue(TfToken(""))},
+        {SdrNodeMetadata->Context, VtValue(TfToken(""))},
         {SdrNodeMetadata->Role, VtValue(TfToken(""))},
+        {SdrNodeMetadata->TargetRenderer, VtValue(TfToken(""))},
+        {SdrNodeMetadata->Collections, VtValue(SdrTokenVec())},
+        {SdrNodeMetadata->Category, VtValue(TfToken(""))},
         {SdrNodeMetadata->Help, VtValue(std::string(""))},
         {SdrNodeMetadata->Departments, VtValue(SdrTokenVec())},
         {SdrNodeMetadata->Pages, VtValue(SdrTokenVec())},
@@ -150,9 +159,30 @@ const DefaultsMap& _GetDefaultsMap() {
         {SdrNodeMetadata->SdrDefinitionNameFallbackPrefix,
             VtValue(std::string(""))}
     };
-    return _defaults;
+    return _instantiatedTypes;
+}
+
+// Returns a map containing _just_ the metadata keys with
+// default values.
+const VtDictionary& _GetDefaultsMap() {
+    static const VtDictionary metadataWithDefaults = []() {
+        const InstantiatedTypeMap& _instantiatedTypes =
+            _GetInstantiatedTypeMap();
+        VtDictionary m;
+        m[SdrNodeMetadata->Domain] =
+            _instantiatedTypes.at(SdrNodeMetadata->Domain);
+        m[SdrNodeMetadata->SdrUsdEncodingVersion] =
+            _instantiatedTypes.at(SdrNodeMetadata->SdrUsdEncodingVersion);
+        return m;
+    }();
+    return metadataWithDefaults;
 }
 } // anonymous namespace
+
+SdrShaderNodeMetadata::SdrShaderNodeMetadata()
+{
+    _SetDefaultInitializations();
+}
 
 SdrShaderNodeMetadata::SdrShaderNodeMetadata(const SdrTokenMap& legacyMetadata)
 {
@@ -168,8 +198,9 @@ SdrShaderNodeMetadata::SdrShaderNodeMetadata(const SdrTokenMap& legacyMetadata)
         } else {
             SetItem(key, it->second(value));
         }
-
     }
+
+    _SetDefaultInitializations();
 }
 
 SdrShaderNodeMetadata::SdrShaderNodeMetadata(const VtDictionary& items) {
@@ -178,14 +209,7 @@ SdrShaderNodeMetadata::SdrShaderNodeMetadata(const VtDictionary& items) {
     for (const auto& kv : items) {
         SetItem(TfToken(kv.first), kv.second);
     }
-}
-
-SdrShaderNodeMetadata::SdrShaderNodeMetadata(VtDictionary&& items) {
-    // Run SetItem on each metadata item to process valid casts for named
-    // metadata items.
-    for (const auto& kv : items) {
-        SetItem(TfToken(kv.first), kv.second);
-    }
+    _SetDefaultInitializations();
 }
 
 bool
@@ -204,9 +228,9 @@ SdrShaderNodeMetadata::SetItem(
         return;
     }
 
-    const DefaultsMap& _defaults = _GetDefaultsMap();
-    const auto it = _defaults.find(key);
-    if (it == _defaults.end()) {
+    const InstantiatedTypeMap& _instantiatedTypes = _GetInstantiatedTypeMap();
+    const auto it = _instantiatedTypes.find(key);
+    if (it == _instantiatedTypes.end()) {
         _items[key] = value;
     } else {
         const VtValue cast = VtValue::CastToTypeOf(value, it->second);
@@ -236,6 +260,30 @@ void
 SdrShaderNodeMetadata::ClearItem(const TfToken& key)
 {
     _items.erase(key);
+}
+
+VtValue
+SdrShaderNodeMetadata::GetDefaultValue(const TfToken& key)
+{
+    return TfMapLookupByValue(GetDefaultValues(), key, VtValue());
+}
+
+const VtDictionary&
+SdrShaderNodeMetadata::GetDefaultValues()
+{
+    return _GetDefaultsMap();
+}
+
+void
+SdrShaderNodeMetadata::_SetDefaultInitializations()
+{
+    for (const auto& kv : GetDefaultValues()) {
+        const TfToken key = TfToken(kv.first);
+        const VtValue& defaultValue = kv.second;
+        if (!HasItem(key)) {
+            SetItem(key, defaultValue);
+        }
+    }
 }
 
 SdrTokenMap
@@ -286,7 +334,12 @@ SdrShaderNodeMetadata::_EncodeLegacyMetadata() const
 
 SDR_NODE_METADATA_DEFINE_ITEM_API(Label, TfToken)
 SDR_NODE_METADATA_DEFINE_ITEM_API(Category, TfToken)
+SDR_NODE_METADATA_DEFINE_ITEM_API(Domain, TfToken)
+SDR_NODE_METADATA_DEFINE_ITEM_API(Subdomain, TfToken)
+SDR_NODE_METADATA_DEFINE_ITEM_API(Context, TfToken)
 SDR_NODE_METADATA_DEFINE_ITEM_API(Role, TfToken)
+SDR_NODE_METADATA_DEFINE_ITEM_API(TargetRenderer, TfToken)
+SDR_NODE_METADATA_DEFINE_ITEM_API(Collections, SdrTokenVec)
 SDR_NODE_METADATA_DEFINE_ITEM_API(Help, std::string)
 SDR_NODE_METADATA_DEFINE_ITEM_API(Departments, SdrTokenVec)
 SDR_NODE_METADATA_DEFINE_ITEM_API(Pages, SdrTokenVec)
@@ -298,6 +351,5 @@ SDR_NODE_METADATA_DEFINE_ITEM_API(SdrUsdEncodingVersion, int)
 SDR_NODE_METADATA_DEFINE_ITEM_API(SdrDefinitionNameFallbackPrefix, std::string)
 
 #undef SDR_METADATA_DEFINE_ITEM_API
-
 
 PXR_NAMESPACE_CLOSE_SCOPE

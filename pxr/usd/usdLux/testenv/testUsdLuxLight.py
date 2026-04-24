@@ -521,7 +521,7 @@ class TestUsdLuxLight(unittest.TestCase):
             # The context is always 'light' for lights. 
             # Source type is 'USD'
             self.assertEqual(node.GetContext(), 'light')
-            self.assertEqual(node.GetSourceType(), 'USD')
+            self.assertEqual(node.GetShadingSystem(), 'USD')
 
             # Help string is generated and encoded in the node's metadata (no
             # need to verify the specific wording).
@@ -536,7 +536,7 @@ class TestUsdLuxLight(unittest.TestCase):
             # Other classifications are left empty.
             self.assertFalse(node.GetCategory())
             self.assertFalse(node.GetDepartments())
-            self.assertFalse(node.GetFamily())
+            self.assertFalse(node.GetFunction())
             self.assertFalse(node.GetLabel())
             self.assertFalse(node.GetShaderVersion())
             self.assertFalse(node.GetAllVstructNames())

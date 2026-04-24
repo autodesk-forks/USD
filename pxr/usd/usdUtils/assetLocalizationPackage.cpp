@@ -20,6 +20,7 @@
 #include "pxr/usd/usdUtils/assetLocalizationPackage.h"
 #include "pxr/usd/usdUtils/debugCodes.h"
 
+#include <filesystem>
 #include <unordered_set>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -303,7 +304,12 @@ UsdUtils_AssetLocalizationPackage::_ProcessAssetPath(
         // resolver contexts.
         const std::string refAssetPath = 
                 SdfComputeAssetPathRelativeToLayer(layer, refPath);
-        const std::string refFilePath = resolver.Resolve(refAssetPath);
+
+        const std::pair<std::string, std::string> splitIdentifier = 
+            SdfLayer::SplitIdentifier(refAssetPath);
+
+        const std::string refFilePath = resolver.Resolve(
+            splitIdentifier.first);
 
         const bool resolveOk = !refFilePath.empty();
 
@@ -359,6 +365,67 @@ UsdUtils_AssetLocalizationPackage::_ProcessAssetPath(
     return _directoryRemapper.Remap(result);
 }
 
+// Ensure that External Asset Dependencies are included with the layer.
+// Note that these paths come as fully resolved paths.  We attempt to
+// make these paths relative to the layer in order to preserve the structure
+// of the format and give us the best chance of loading it from within the
+// package.  Failure to place these files in the resulting package will result
+// in warnings, but not trigger a package creation failure.
+bool
+UsdUtils_AssetLocalizationPackage::_AddExternalAssetDependenciesToPackage(
+    SdfLayerRefPtr sourceLayer,
+    const std::string &destPath)
+{
+    const std::set<std::string> externalAssetDeps = 
+        sourceLayer->GetExternalAssetDependencies();
+    const std::string layerResolvedPath = TfNormPath(
+        sourceLayer->GetResolvedPath());
+    const std::string layerDir = TfGetPathName(layerResolvedPath);
+    const std::string packageDestDir = TfGetPathName(destPath);
+
+    if (!TfPathExists(layerDir)) {
+        TF_WARN("Skipping External Asset Dependencies for layer %s."
+                "Non-filesystem based path.", 
+                sourceLayer->GetResolvedPath().GetPathString().c_str());
+        return true;
+    }
+
+    // Only valid filesystem paths can be canonicalized
+    const std::filesystem::path layerDirPath = layerDir;
+    
+    for (const auto& externalDep : externalAssetDeps) {
+        if (!TfPathExists(externalDep)) {
+            TF_WARN("Skipping external asset dependency %s for layer %s. "
+                    "Path does not exist.",
+                    externalDep.c_str(),
+                    sourceLayer->GetResolvedPath().GetPathString().c_str());
+            continue;
+        }
+
+        // Check if the dep is under the layer's directory
+        const std::filesystem::path relPath = 
+            std::filesystem::relative(TfNormPath(externalDep), layerDirPath);
+
+        if (!relPath.empty() && *relPath.begin() != "..") {
+            const std::string depPackagePath = TfStringCatPaths(packageDestDir, 
+                relPath.string());
+
+            // In the event we actually fail to write the file, we want to
+            // signal package creation filed.
+            if (!_WriteToPackage(externalDep, depPackagePath)) {
+                return false;
+            }
+        } else {
+            TF_WARN("Failed to add external asset dependency %s to layer %s. "
+                    "Could not determine package relative path.",
+                    externalDep.c_str(),
+                    sourceLayer->GetResolvedPath().GetPathString().c_str());
+        }
+    }
+
+    return true;
+}
+
 bool
 UsdUtils_AssetLocalizationPackage::_AddLayerToPackage(
     SdfLayerRefPtr sourceLayer,
@@ -370,7 +437,10 @@ UsdUtils_AssetLocalizationPackage::_AddLayerToPackage(
         ".. adding layer @%s@ to package at path '%s'.\n", 
         layer->GetIdentifier().c_str(), destPath.c_str());
 
-            
+    if (!_AddExternalAssetDependenciesToPackage(sourceLayer, destPath)) {
+        return false;
+    }
+
     // This returns true of src and dest have the same file extension.
     const auto extensionsMatch = [](const std::string &src, 
                                     const std::string &dest) {

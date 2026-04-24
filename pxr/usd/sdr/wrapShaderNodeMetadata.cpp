@@ -22,9 +22,14 @@ void wrapShaderNodeMetadata()
         "NodeMetadata", SdrNodeMetadata, SDR_NODE_METADATA_TOKENS
     );
     TF_PY_WRAP_PUBLIC_TOKENS(
+        "NodeDomain", SdrNodeDomain, SDR_NODE_DOMAIN_TOKENS
+    );
+    TF_PY_WRAP_PUBLIC_TOKENS(
+        "NodeSubdomain", SdrNodeSubdomain, SDR_NODE_SUBDOMAIN_TOKENS
+    );
+    TF_PY_WRAP_PUBLIC_TOKENS(
         "NodeContext", SdrNodeContext, SDR_NODE_CONTEXT_TOKENS
     );
-
     TF_PY_WRAP_PUBLIC_TOKENS(
         "NodeRole", SdrNodeRole, SDR_NODE_ROLE_TOKENS
     );
@@ -36,10 +41,21 @@ void wrapShaderNodeMetadata()
              +[](const SdrShaderNodeMetadata& metadata) {
                 return metadata.GetItems();
              }, return_value_policy<return_by_value>())
+        .def("GetDefaultValue", &This::GetDefaultValue)
+        .staticmethod("GetDefaultValue")
+        .def("GetDefaultValues", &This::GetDefaultValues,
+            return_value_policy<return_by_value>())
+        .staticmethod("GetDefaultValues")
         .def("HasLabel", &This::HasLabel)
         .def("GetLabel", &This::GetLabel)
         .def("HasCategory", &This::HasCategory)
         .def("GetCategory", &This::GetCategory)
+        .def("HasDomain", &This::HasDomain)
+        .def("GetDomain", &This::GetDomain)
+        .def("HasSubdomain", &This::HasSubdomain)
+        .def("GetSubomain", &This::GetSubdomain)
+        .def("HasContext", &This::HasContext)
+        .def("GetContext", &This::GetContext)
         .def("HasRole", &This::HasRole)
         .def("GetRole", &This::GetRole)
         .def("HasHelp", &This::HasHelp)

@@ -166,13 +166,13 @@ public:
     /// It is invalid to call this method on any node that does not have
     /// exactly one output.
     ///
-    template<typename T>
-    inline void SetEmptyOutput() const;
+    VDF_API
+    void SetEmptyOutput() const;
 
     /// Sets an empty value on the output named \p outputName.
     ///
-    template<typename T>
-    inline void SetEmptyOutput(const TfToken &outputName) const;
+    VDF_API
+    void SetEmptyOutput(const TfToken &outputName) const;
 
     /// Sets the one and only output to have the same output value
     /// as the value on the output connected to input \p inputName.
@@ -448,44 +448,6 @@ VdfContext::SetOutput(const TfToken &outputName,
     if (output && _IsRequiredOutput(*output))
         if (VdfVector *v = _GetExecutor()._GetOutputValueForWriting(*output))
             v->Set(std::forward<T>(value));
-}
-
-template<typename T>
-void
-VdfContext::SetEmptyOutput() const
-{
-    // GetOutput emits an error if it returns null. Note that there is no need
-    // to check _IsRequiredOutput: By virtue of the owning node being scheduled,
-    // we can conclude that its only output is therefore scheduled.
-    const VdfOutput *const output = _node.GetOutput();
-    if (!output) {
-        return;
-    }
-
-    VdfVector *const vector = _GetExecutor()._GetOutputValueForWriting(*output);
-    if (!vector) {
-        VDF_FATAL_ERROR(_GetNode(), "Couldn't get output vector.");
-    }
-
-    *vector = VdfTypedVector<T>();
-}
-
-template<typename T>
-void
-VdfContext::SetEmptyOutput(const TfToken &outputName) const
-{
-    // GetOutput emits an error if it returns null.
-    const VdfOutput *const output = _node.GetOutput(outputName);
-    if (!(output && _IsRequiredOutput(*output))) {
-        return;
-    }
-
-    VdfVector *const vector = _GetExecutor()._GetOutputValueForWriting(*output);
-    if (!vector) {
-        VDF_FATAL_ERROR(_GetNode(), "Couldn't get output vector.");
-    }
-
-    *vector = VdfTypedVector<T>();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

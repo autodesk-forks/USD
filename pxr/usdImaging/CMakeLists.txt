@@ -2,7 +2,6 @@ set(DIRS
     usdImaging
     usdImagingGL
     usdProcImaging
-    usdRiPxrImaging
     usdSkelImaging
     usdVolImaging
     usdAppUtils

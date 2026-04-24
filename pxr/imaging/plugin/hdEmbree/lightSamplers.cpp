@@ -13,6 +13,8 @@
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/gf/vec3f.h"
 
+#include "pxr/imaging/plugin/hdEmbree/pxrPbrt/pbrtUtils.h"
+
 namespace {
 
 PXR_NAMESPACE_USING_DIRECTIVE
@@ -295,6 +297,26 @@ _SampleCylinder(GfMatrix4f const& xf, GfMatrix3f const& normalXform,
     };
 }
 
+float
+_EvalIES(HdEmbree_LightData const& light, GfVec3f const& wI)
+{
+    HdEmbree_IES const& ies = light.shaping.ies;
+    if (!ies.iesFile.valid()) {
+        // Either none specified or there was an error loading. In either case,
+        // just ignore.
+        return 1.0f;
+    }
+
+    // emission direction in light space
+    GfVec3f wE = light.xformWorldToLight.TransformDir(wI).GetNormalized();
+
+    float theta = _Theta(wE);
+    float phi = _Phi(wE);
+    float norm = ies.normalize ? ies.iesFile.power() : 1.0f;
+
+    return ies.iesFile.eval(theta, phi, ies.angleScale) / norm;
+}
+
 GfVec3f
 _EvalLightBasic(HdEmbree_LightData const& light)
 {
@@ -357,6 +379,9 @@ _EvalAreaLight(HdEmbree_LightData const& light, _ShapeSample const& ss,
     const float thetaOffZ = acosf(cosThetaOffZ);
     Le *= 1.0f - _Smoothstep(thetaOffZ, GfRange1f(thetaSoft, thetaCone));
 
+    // Apply IES
+    Le *= _EvalIES(light, wI);
+
     return HdEmbreeLightSampler::LightSample {
         Le,
         wI,
@@ -403,6 +428,51 @@ _EvalDomeLight(HdEmbree_LightData const& light, GfVec3f const& W,
     ls.invPdfW = 2.0f * _pi<float>; // We only picked from the hemisphere
 
     return ls;
+}
+
+HdEmbreeLightSampler::LightSample
+_EvalDistantLight(HdEmbree_LightData const& light, GfVec3f const& position,
+                  float u1, float u2)
+{
+    auto const& distant = std::get<HdEmbree_Distant>(light.lightVariant);
+
+    GfVec3f Le = _EvalLightBasic(light);
+
+    if (distant.halfAngleRadians > 0.0f)
+    {
+        if (light.normalize)
+        {
+            float sinTheta = sinf(distant.halfAngleRadians);
+            Le /= _Sqr(sinTheta) * _pi<float>;
+        }
+
+        // There's an implicit double-negation of the wI direction here
+        GfVec3f localDir = pxr_pbrt::SampleUniformCone(GfVec2f(u1, u2),
+            distant.halfAngleRadians);
+        GfVec3f wI = light.xformLightToWorld.TransformDir(localDir);
+        wI.Normalize();
+
+        return HdEmbreeLightSampler::LightSample {
+            Le,
+            wI,
+            std::numeric_limits<float>::max(),
+            pxr_pbrt::InvUniformConePDF(distant.halfAngleRadians)
+        };
+    }
+    else
+    {
+        // delta case, infinite pdf
+        GfVec3f wI = light.xformLightToWorld.TransformDir(
+            GfVec3f(0.0f, 0.0f, 1.0f));
+        wI.Normalize();
+
+        return HdEmbreeLightSampler::LightSample {
+            Le,
+            wI,
+            std::numeric_limits<float>::max(),
+            1.0f,
+        };
+    }
 }
 
 } // namespace ""
@@ -465,6 +535,11 @@ HdEmbreeLightSampler::LightSample HdEmbreeLightSampler::operator()(
             _u1,
             _u2);
     return _EvalAreaLight(_lightData, shapeSample, _hitPosition);
+}
+
+HdEmbreeLightSampler::LightSample HdEmbreeLightSampler::operator()(
+        HdEmbree_Distant const& distant) {
+    return _EvalDistantLight(_lightData, _hitPosition, _u1, _u2);
 }
 
 HdEmbreeLightSampler::LightSample HdEmbreeLightSampler::operator()(

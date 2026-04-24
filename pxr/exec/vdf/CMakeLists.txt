@@ -27,6 +27,7 @@ pxr_library(vdf
         defaultInitAllocator.h
         estimateSize.h
         execNodeDebugName.h
+        executor.h
         executorDataManager.h
         executorDataManagerInterface.h
         executorFactory.h
@@ -58,6 +59,7 @@ pxr_library(vdf
         scheduleTasks.h
         speculationExecutor.h
         speculationExecutorEngine.h
+        subExecutor.h
         subrangeView.h
         traits.h
         typedVector.h

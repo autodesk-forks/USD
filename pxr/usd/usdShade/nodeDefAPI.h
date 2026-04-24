@@ -421,8 +421,19 @@ public:
 
     /// This method attempts to ensure that there is a ShaderNode in the shader 
     /// registry (i.e. \ref SdrRegistry) representing this shader for the 
+    /// given \p shadingSystem. It may return a null pointer if none could be
+    /// found or created.
+    USDSHADE_API
+    SdrShaderNodeConstPtr GetShaderNodeForShadingSystem(const TfToken &system)
+        const;
+
+    /// This method attempts to ensure that there is a ShaderNode in the shader 
+    /// registry (i.e. \ref SdrRegistry) representing this shader for the 
     /// given \p sourceType. It may return a null pointer if none could be 
     /// found or created.
+    ///
+    /// \deprecated
+    /// Deprecated in favor of GetShaderNodeForShadingSystem
     USDSHADE_API
     SdrShaderNodeConstPtr GetShaderNodeForSourceType(const TfToken &sourceType) 
         const; 

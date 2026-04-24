@@ -11,6 +11,8 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/usd/sdf/path.h"
 
+#include <prmanapi.h>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 namespace HdPrmanDebugUtil {
@@ -18,7 +20,7 @@ namespace HdPrmanDebugUtil {
 static const int cw = 3; // length of "─"
 static const char empty[] = "";
 static const char line[] = "────────────────────";
-static const char fmt[] = 
+static const char fmt[] =
              "%01$+*20$.*17$f  %02$+*21$.*17$f  %03$+*22$.*17$f │ %04$+*23$.*17$f\n"
     "%19$*18$s%05$+*20$.*17$f  %06$+*21$.*17$f  %07$+*22$.*17$f │ %08$+*23$.*17$f\n"
     "%19$*18$s%09$+*20$.*17$f  %10$+*21$.*17$f  %11$+*22$.*17$f │ %12$+*23$.*17$f\n"
@@ -40,8 +42,8 @@ MatrixToString(const GfMatrix4d& mat, const int indent, const int precision)
         mat[0][0], mat[1][0], mat[2][0], mat[3][0],
         mat[0][1], mat[1][1], mat[2][1], mat[3][1],
         mat[0][2], mat[1][2], mat[2][2], mat[3][2],
-        mat[0][3], mat[1][3], mat[2][3], mat[3][3], 
-        precision, indent, empty, 
+        mat[0][3], mat[1][3], mat[2][3], mat[3][3],
+        precision, indent, empty,
         width[0], width[1], width[2], width[3],
         cw * width[0], cw * width[1], cw * width[2], cw * width[3],
         line);
@@ -62,8 +64,8 @@ MatrixToString(const RtMatrix4x4& mat, const int indent, const int precision)
         mat.m[0][0], mat.m[1][0], mat.m[2][0], mat.m[3][0],
         mat.m[0][1], mat.m[1][1], mat.m[2][1], mat.m[3][1],
         mat.m[0][2], mat.m[1][2], mat.m[2][2], mat.m[3][2],
-        mat.m[0][3], mat.m[1][3], mat.m[2][3], mat.m[3][3], 
-        precision, indent, empty, 
+        mat.m[0][3], mat.m[1][3], mat.m[2][3], mat.m[3][3],
+        precision, indent, empty,
         width[0], width[1], width[2], width[3],
         cw * width[0], cw * width[1], cw * width[2], cw * width[3],
         line);
@@ -98,6 +100,9 @@ _GetParamPrefix(const RtParamList::ParamInfo& info)
         case RtDataType::k_samplefilter: out += "samplefilter"; break;
         case RtDataType::k_displayfilter: out += "displayfilter"; break;
         case RtDataType::k_struct: out += "struct"; break;
+#if _PRMANAPI_VERSION_MAJOR_ >= 27
+        case RtDataType::k_volumefilter: out += "volumefilter"; break;
+#endif
         default:
             TF_WARN("Unknown type %d", static_cast<int>(info.type));
     }
@@ -115,7 +120,7 @@ _GetParamPrefix(const RtParamList::ParamInfo& info)
     return out;
 }
 
-std::string 
+std::string
 _FormatParam(
     const RtParamList::ParamInfo& info,
     const RtParamList& _params,
@@ -123,7 +128,7 @@ _FormatParam(
 
     static const char* Vec3Fmt = "(%f, %f, %f)";
     static const char* Vec4Fmt = "(%f, %f, %f, %f)";
-    
+
     const std::string prefix = _GetParamPrefix(info);
     const int fullIndent = indent + (int)prefix.size();
     RtParamList& params = const_cast<RtParamList&>(_params);
@@ -562,7 +567,7 @@ _FormatParam(
             }
             break;
         }
-        case RtDataType::k_struct: 
+        case RtDataType::k_struct:
         {
             if (info.detail == RtDetailType::k_reference) {
                 RtUString value;
@@ -572,6 +577,29 @@ _FormatParam(
             }
             break;
         }
+#if _PRMANAPI_VERSION_MAJOR_ >= 27
+        case RtDataType::k_volumefilter: {
+            if (info.array && info.detail == RtDetailType::k_reference) {
+                const RtUString* value = params.GetVolumeFilterReferenceArray(
+                    info.name, info.length);
+                for (uint32_t i = 0; i < info.length; ++i) {
+                    if (!val.empty()) {
+                        val += ", ";
+                    } else {
+                        val += "[";
+                    }
+                    val += TfStringPrintf("<%s>", (*(value+i)).CStr());
+                }
+                val += "]";
+            } else if (info.detail == RtDetailType::k_reference) {
+                RtUString value;
+                if (params.GetVolumeFilterReference(info.name, value)) {
+                    val = TfStringPrintf("<%s>", value.CStr());
+                }
+            }
+            break;
+        }
+#endif
         default:
         {
             TF_WARN("Unknown type %d", static_cast<int>(info.type));
@@ -596,7 +624,7 @@ RtParamListToString(const RtParamList& params, const int indent)
                 out += "\n";
             }
             out += TfStringPrintf(
-                "%*s%s", (pi == 0 ? 0 : indent), "", 
+                "%*s%s", (pi == 0 ? 0 : indent), "",
                 _FormatParam(info, params, indent).c_str());
         }
     }
@@ -615,7 +643,7 @@ GetCallerAsString(const TfCallContext& ctx)
     }
     if (i < 9) {
         const std::string& line = lines[i+1];
-        return line.substr(28, line.find_first_of("(") - 28) + " at " + 
+        return line.substr(28, line.find_first_of("(") - 28) + " at " +
             line.substr(line.find_last_of("/") + 1);
     }
     return "*** couldn't find caller ***";

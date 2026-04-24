@@ -9,8 +9,8 @@
 #include "pxr/usd/usd/prim.h"
 #include "pxr/usd/usd/property.h"
 
-#include "pxr/base/tf/pyAnnotatedBoolResult.h"
 #include "pxr/base/tf/pyResultConversions.h"
+#include "pxr/base/tf/pyContainerConversions.h"
 
 #include "pxr/external/boost/python/class.hpp"
 #include "pxr/external/boost/python/enum.hpp"
@@ -21,37 +21,21 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 using namespace pxr_boost::python;
 
-struct Usd_UsdNamespaceEditorCanEditResult : 
-    public TfPyAnnotatedBoolResult<std::string>
-{
-    Usd_UsdNamespaceEditorCanEditResult(bool val, const std::string &msg) :
-        TfPyAnnotatedBoolResult<std::string>(val, std::move(msg)) {}
-};
-
-template <typename Fn>
-Usd_UsdNamespaceEditorCanEditResult
-_CallWithAnnotatedResult(const Fn& func) 
-{
-    std::string whyNot;
-    bool result = func(&whyNot);
-    return Usd_UsdNamespaceEditorCanEditResult(result, whyNot);
-}
-
 static
-Usd_UsdNamespaceEditorCanEditResult
+UsdNamespaceEditor::CanApplyResult
 _CanApplyEdits(const UsdNamespaceEditor &editor)
 {
-    return _CallWithAnnotatedResult([&](std::string *whyNot){
-        return editor.CanApplyEdits(whyNot);
-    });
+    return editor.CanApplyEdits();
+}
+static
+std::string 
+_FormatWhyNot(const UsdNamespaceEditor::CanApplyResult &result) {
+    return TfStringJoin(result.errors, "; ");
 }
 
 void wrapUsdNamespaceEditor()
 {
     using This = UsdNamespaceEditor;
-
-    Usd_UsdNamespaceEditorCanEditResult::Wrap<Usd_UsdNamespaceEditorCanEditResult>(
-        "_UsdNamespaceEditorCanEditResult", "whyNot");
 
     scope s = class_<This>("NamespaceEditor", no_init)
         .def(init<const UsdStagePtr &>())
@@ -96,5 +80,15 @@ void wrapUsdNamespaceEditor()
         .add_property("allowRelocatesAuthoring", 
             &This::EditOptions::allowRelocatesAuthoring, 
             &This::EditOptions::allowRelocatesAuthoring)
+    ;
+
+    class_<This::CanApplyResult>("CanApplyResult")
+        .def(init<>())
+        .def("__bool__", &This::CanApplyResult::operator bool)
+        .add_property("whyNot", &_FormatWhyNot)
+        .add_property("errors", make_getter(&This::CanApplyResult::errors, 
+            return_value_policy<TfPySequenceToList>()))
+        .add_property("warnings", make_getter(&This::CanApplyResult::warnings, 
+            return_value_policy<TfPySequenceToList>()))
     ;
 }

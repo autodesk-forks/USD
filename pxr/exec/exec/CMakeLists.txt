@@ -21,6 +21,7 @@ pxr_library(exec
         request.h
         types.h
         valueExtractorFunction.h
+        valueOverride.h
 
     PUBLIC_CLASSES
         builtinComputations
@@ -44,6 +45,7 @@ pxr_library(exec
     PRIVATE_CLASSES
         attributeInputNode
         builtinAttributeComputations
+        builtinComputationRegistry
         builtinObjectComputations
         builtinStageComputations
         callbackNode
@@ -71,7 +73,6 @@ pxr_library(exec
         pluginData
         privateBuiltinComputations
         program
-        registrationBarrier
         requestTracker
         runtime
         taskCycleDetector
@@ -128,22 +129,22 @@ pxr_build_test_shared_lib(TestExecConflictingPluginRegistration2
 
 # Build tests
 
-pxr_build_test(testExecComputationRegistration
-    LIBRARIES
-        ef
-        esf
-        esfUsd
-        exec
-        plug
-        sdf
-        tf
-        usd
-    CPPFILES
-        testenv/testExecComputationRegistration.cpp
-)
-
 # Tests that rely on plugins aren't currently supported in static builds.
 if (BUILD_SHARED_LIBS)
+    pxr_build_test(testExecComputationRegistration
+        LIBRARIES
+            ef
+            esf
+            esfUsd
+            exec
+            plug
+            sdf
+            tf
+            usd
+        CPPFILES
+            testenv/testExecComputationRegistration.cpp
+    )
+
     pxr_register_test(testExecComputationRegistration
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecComputationRegistration"
         TESTENV testenv/testExecComputationRegistration

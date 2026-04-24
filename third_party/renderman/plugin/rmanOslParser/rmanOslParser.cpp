@@ -71,7 +71,7 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     // Discovery and source type
     ((discoveryType, "oso"))
-    ((sourceType, "OSL"))
+    ((shadingSystem, "OSL"))
 
     ((usdSchemaDefPrefix, "usdSchemaDef_"))
     ((sdrGlobalConfigPrefix, "sdrGlobalConfig_"))
@@ -87,9 +87,13 @@ RmanOslParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken& 
+#if PXR_VERSION >= 2605
+RmanOslParserPlugin::GetShadingSystem() const
+#else
 RmanOslParserPlugin::GetSourceType() const
+#endif
 {
-    return _tokens->sourceType;
+    return _tokens->shadingSystem;
 }
 
 static std::unique_ptr<RixShaderQuery>
@@ -314,6 +318,15 @@ RmanOslParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
     }
 #endif
 
+#if PXR_VERSION >= 2605
+    // Set Sdr context if it's not already set in metadata, and if it's
+    // a semantically valid context defined by USD 26.05.
+    if (metadata.find(SdrNodeMetadata->Context) == metadata.end()) {
+        metadata[SdrNodeMetadata->Context] = 
+            _getSdrContextFromSchemaBase(metadata);
+    }
+#endif
+
 #if PXR_VERSION >= 2505
     return SdrShaderNodeUniquePtr(
 #else
@@ -323,9 +336,13 @@ RmanOslParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
             discoveryResult.identifier,
             discoveryResult.version,
             discoveryResult.name,
+#if PXR_VERSION >= 2605
+            discoveryResult.function,
+#else
             discoveryResult.family,
             _getSdrContextFromSchemaBase(metadata),
-            _tokens->sourceType,
+#endif
+            _tokens->shadingSystem,
             discoveryResult.resolvedUri,
             discoveryResult.resolvedUri,    // Definitive assertion that the
                                             // implementation is the same asset
@@ -343,7 +360,7 @@ RmanOslParserPlugin::_getSdrContextFromSchemaBase(
 {
     auto metaIt = metadata.find(_tokens->schemaBase);
     if (metaIt == metadata.end()) {
-        return _tokens->sourceType;
+        return _tokens->shadingSystem;
     }
     std::string schemaBase = metaIt->second;
 
@@ -368,8 +385,10 @@ RmanOslParserPlugin::_getSdrContextFromSchemaBase(
         }
     }
     
-    // fallback to sourceType as default context
-    return _tokens->sourceType;
+    // fallback to shadingSystem as default context
+    // NOTE: This fallback will be removed and trigger a change in behavior
+    // in SdrShaderNode::GetContext in an upcoming release.
+    return _tokens->shadingSystem;
 }
 
 #if PXR_VERSION >= 2505

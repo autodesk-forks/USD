@@ -1760,7 +1760,8 @@ PcpGatherDependentNamespaceEdits(
             // Find all prim index or property paths which depend on the old 
             // path in this layer. Note that oldPath can be a prim or property
             // path, and FindSiteDependencies will return prim paths or property 
-            // paths, respectively.
+            // paths, respectively. We include virtual dependencies to make sure
+            // we see if the source or target of a relocate needs to be updated.
             // We recurse on site because moving or deleting a prim spec
             // also moves all descendant specs and we need to fix up 
             // direct dependencies on those paths as well. We do not recurse
@@ -1774,7 +1775,7 @@ PcpGatherDependentNamespaceEdits(
             PcpDependencyVector deps =
                 cache->FindSiteDependencies(
                     layer, oldPath,
-                    PcpDependencyTypeAnyNonVirtual,
+                    PcpDependencyTypeAnyIncludingVirtual,
                     /* recurseOnSite */ true,
                     /* recurseOnIndex */ false,
                     /* filter */ true);

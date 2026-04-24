@@ -18,7 +18,7 @@ class TestUsdNamespaceEditorDependentEditsBase(unittest.TestCase):
     PrimResyncType = Usd.Notice.ObjectsChanged.PrimResyncType
 
     @contextlib.contextmanager
-    def ApplyEdits(self, editor, label, expectWarnings = False):
+    def ApplyEdits(self, editor, label, expectedWarnings = []):
         '''Context manager for adding a namespace edit on a Usd.NameespaceEditor
         that will automatically verify that it can be applied and will apply it
         verifying a successful apply. It also prints out useful information to 
@@ -40,9 +40,13 @@ class TestUsdNamespaceEditorDependentEditsBase(unittest.TestCase):
 
         yield
         
-        if expectWarnings:
-            print("\n=== EXPECT WARNINGS ===", file=sys.stderr)
-        self.assertTrue(editor.CanApplyEdits())
+        # Verify that the edit can be applied, potentially with expected 
+        # warnings if provided.
+        result = editor.CanApplyEdits()
+        self.assertTrue(result)
+        self.assertEqual(len(result.warnings), len(expectedWarnings))
+        for warn, expectedWarn in zip(result.warnings, expectedWarnings):
+            self.assertTrue(expectedWarn in warn)
 
         # Register an ObjectsChanged notice handler while applying the edits
         # to store the resynced objects and their resync types for verification.
@@ -51,9 +55,6 @@ class TestUsdNamespaceEditorDependentEditsBase(unittest.TestCase):
             Usd.Notice.ObjectsChanged, self._OnObjectsChanged)
         self.assertTrue(editor.ApplyEdits())       
         objectsChanged.Revoke()
-
-        if expectWarnings:
-            print("\n=== END EXPECTED WARNINGS ===", file=sys.stderr)
 
         print("==== End ApplyEdits : {} ====".format(msg))
         print("==== End ApplyEdits : {} ====".format(msg), file=sys.stderr)

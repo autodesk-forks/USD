@@ -83,9 +83,13 @@ public:
     /// issued. The intent is to make sure that all required types are
     /// registered at the time this method is called.
     ///
+    /// Use \p additionalErrorMsg to append a custom message if a fatal error is
+    /// emitted.
+    ///
     template <typename T>
-    static TfType CheckForRegistration() {
-        return CheckForRegistration(typeid(T));
+    static TfType CheckForRegistration(
+        const char *const additionalErrorMsg=nullptr) {
+        return CheckForRegistration(typeid(T), additionalErrorMsg);
     }
 
     /// Checks if \p ti is defined as an execution value type.
@@ -93,7 +97,9 @@ public:
     /// This method will issue a fatal error if the type isn't registered.
     ///
     VDF_API
-    static TfType CheckForRegistration(const std::type_info &typeInfo);
+    static TfType CheckForRegistration(
+        const std::type_info &typeInfo,
+        const char *const additionalErrorMsg);
 
     /// Create an empty VdfVector holding empty data of the given TfType.
     ///

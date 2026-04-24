@@ -38,6 +38,20 @@ public:
         bool allowRelocatesAuthoring = true;
     };
 
+    // Structure returned by CanApplyEdits that stores errors and warnings 
+    // encountered while processing the edits. This struct evaluates to false
+    // if any errors were found, and true otherwise (even if there are warnings).
+    struct CanApplyResult 
+    {
+        std::vector<std::string> errors;
+        std::vector<std::string> warnings;
+
+        operator bool() const
+        {
+            return errors.empty();
+        }
+    }; 
+
     USD_API
     explicit UsdNamespaceEditor(const UsdStageRefPtr &stage);
 
@@ -231,6 +245,7 @@ public:
     USD_API
     bool ApplyEdits();
 
+    /// \deprecated Use CanApplyEdits() overload below.
     /// Returns whether all the added namespace edits stored in this to 
     /// namespace editor can be applied to its stage. 
     ///
@@ -238,7 +253,19 @@ public:
     /// it were called right now. If this would return false and \p whyNot is 
     /// provided, the reasons ApplyEdits would fail will be copied to whyNot.
     USD_API
-    bool CanApplyEdits(std::string *whyNot = nullptr) const;
+    bool CanApplyEdits(std::string *whyNot) const;
+
+    /// Returns whether all the added namespace edits stored in this to 
+    /// namespace editor can be applied to its stage. 
+    ///
+    /// In other words, this returns whether ApplyEdits should be successful if
+    /// it were called right now. If that call would return false, the reasons 
+    /// ApplyEdits would fail will be copied to the return struct's errors field.
+    /// If the call would return true, but the edit might create a result
+    /// that is confusing to the user due to split opinions, the return struct's
+    /// warnings field will contain information about the sources of confusion.
+    USD_API
+    CanApplyResult CanApplyEdits() const;
 
     /// Returns the list of layers that will be edited if ApplyEdits() is called.
     /// This function can only be called if CanApplyEdits() returns true and 
@@ -283,6 +310,11 @@ private:
         // edit of the composed stage object from being completed successfully.
         std::vector<std::string> errors;
 
+        // List of warnings encountered that will not prevent the main edit from 
+        // being completed but indicate that some supporting operations may not 
+        // have been performed.
+        std::vector<std::string> warnings;
+
         // The edit description of the primary edit.
         _EditDescription editDescription;
 
@@ -317,17 +349,13 @@ private:
         // initial spec move edits.
         PcpDependentNamespaceEdits dependentStageNamespaceEdits;
 
-        // List of errors encountered that would prevent connection and 
-        // relationship target edits from being performed in response to the
-        // namespace edits.
-        std::vector<std::string> targetPathListOpErrors;
-
         // Applies this processed edit, performing the individual edits 
         // necessary to each layer that needs to be updated.
         bool Apply();
 
-        // Returns whether this processed edit can be applied.
-        bool CanApply(std::string *whyNot) const;
+        // Returns whether this processed edit can be applied and any errors
+        // or warnings that it would produce.
+        UsdNamespaceEditor::CanApplyResult CanApply() const;
     };
 
     // Adds an edit description for a prim delete operation.

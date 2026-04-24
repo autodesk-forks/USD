@@ -446,6 +446,7 @@ HdSt_BasisCurvesShaderKey::HdSt_BasisCurvesShaderKey(
 
             PTCS[ptcsIndex++] = _tokens->instancing;
             PTCS[ptcsIndex++] = _tokens->curvesCommonControl;
+            PTCS[ptcsIndex++] = HdSt_BasisToShaderKey(basis);
             PTCS[ptcsIndex++] = _tokens->curvesPostTessControlCubicPatch;
             PTCS[ptcsIndex++] = _tokens->curvesCommonControlCubicHalfTube;
             PTCS[ptcsIndex++] = TfToken();

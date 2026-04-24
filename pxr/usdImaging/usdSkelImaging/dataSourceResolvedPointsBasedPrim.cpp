@@ -105,7 +105,7 @@ private:
 
 } // namespace
 
-UsdSkelImagingDataSourceResolvedPointsBasedPrim::Handle
+UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle
 UsdSkelImagingDataSourceResolvedPointsBasedPrim::New(
     HdSceneIndexBaseRefPtr const &sceneIndex,
     SdfPath primPath,
@@ -118,13 +118,13 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::New(
     const UsdSkelImagingBindingSchema bindingSchema =
         UsdSkelImagingBindingSchema::GetFromParent(primSource);
 
-    HdBoolDataSourceHandle const hasSkelRootDs =
+    const HdBoolDataSourceHandle hasSkelRootDs =
         bindingSchema.GetHasSkelRoot();
 
     const bool hasSkelRoot =
         hasSkelRootDs && hasSkelRootDs->GetTypedValue(0.0f);
 
-    HdPathDataSourceHandle const skeletonPathDataSource =
+    const HdPathDataSourceHandle skeletonPathDataSource =
         bindingSchema.GetSkeleton();
     if (!skeletonPathDataSource) {
         return nullptr;
@@ -393,31 +393,43 @@ public:
         }
         if (name == HdSkinningInputTokens->numJoints) {
             return UsdSkelImaging_DataSourcePrimvar::New(
-                _ToDataSource<int>(_GetNumJoints()));
+                _ToDataSource(_GetNumJoints()));
         }
         if (name == HdSkinningInputTokens->numBlendShapeWeights) {
-            return UsdSkelImaging_DataSourcePrimvar::New(_ToDataSource<int>(
-                _resolvedPrimSource->GetBlendShapeData()->numSubShapes));
+            return UsdSkelImaging_DataSourcePrimvar::New(
+                _ToDataSource(_GetNumBlendShapeWeights()));
         }
         return _resolvedPrimSource->Get(name);
     }
 
 private:
     _SkinningPrimvarsDataSource(
-        UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle const& 
+        UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle
             resolvedPrimSource,
-        HdContainerDataSourceHandle const& skeletonPrimSource)
-
+        HdContainerDataSourceHandle skeletonPrimSource,
+        bool useInstanceOffset)
      : _resolvedPrimSource(std::move(resolvedPrimSource)),
-       _skeletonPrimSource(std::move(skeletonPrimSource))
+       _skeletonPrimSource(std::move(skeletonPrimSource)),
+       _useInstanceOffset(useInstanceOffset)
     {
     }
 
-
     int _GetNumJoints() const {
+        if (!_useInstanceOffset) {
+            // A hack to zero out the instanceOffset in skinning vertex
+            // shader if we only have one instance or when there's no 
+            // instance animation source override.
+            return 0;
+        }
         const UsdSkelImagingSkeletonSchema& schema =
             UsdSkelImagingSkeletonSchema::GetFromParent(_skeletonPrimSource);
-        return schema? schema.GetJoints()->GetValue(0.0f).GetArraySize(): 0;
+        return schema? static_cast<int>(
+            schema.GetJoints()->GetValue(0.0f).GetArraySize()) : 0;
+    }
+
+    int _GetNumBlendShapeWeights() const {
+        return _useInstanceOffset ? static_cast<int>(
+            _resolvedPrimSource->GetBlendShapeData()->numSubShapes) : 0;
     }
 
     const UsdSkelImagingResolvedSkeletonSchema &_GetResolvedSkeletonSchema() {
@@ -430,9 +442,10 @@ private:
     }
 
 
-    UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle const 
+    const UsdSkelImagingDataSourceResolvedPointsBasedPrimHandle
         _resolvedPrimSource;
-    HdContainerDataSourceHandle const _skeletonPrimSource;
+    const HdContainerDataSourceHandle _skeletonPrimSource;
+    const bool _useInstanceOffset;
 };
 
 void
@@ -458,8 +471,14 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::Get(const TfToken &name)
         // skeleton guide primvars are handled in 
         // UsdSkelImagingDataSourceResolvedSkeletonPrim
         if (_primPath != _skeletonPath && _skeletonPrimSource) {
+            // if we only have a single animation source then we don't need to
+            // instance offset the index into skinning primvars.
+            const VtArray<GfVec2i>& blendShapeRanges = 
+                UsdSkelImagingGetTypedValue(
+                    _resolvedSkeletonSchema.GetBlendShapeRanges(), 0.0f);
+            const bool useInstanceOffset = blendShapeRanges.size() > 1;
             return _SkinningPrimvarsDataSource::New(
-                shared_from_this(), _skeletonPrimSource);
+                shared_from_this(), _skeletonPrimSource, useInstanceOffset);
         }
     }
 
@@ -559,8 +578,8 @@ private:
     {
     }
 
-    std::shared_ptr<UsdSkelImagingJointInfluencesData> const _jointInfluencesData;
-    HdMatrix4fArrayDataSourceHandle const _skelSkinningXforms;
+    const std::shared_ptr<UsdSkelImagingJointInfluencesData> _jointInfluencesData;
+    const HdMatrix4fArrayDataSourceHandle _skelSkinningXforms;
 };
 
 // Data source for locator extComputations:inputValues:blendShapeWeights on
@@ -654,10 +673,10 @@ private:
     {
     }
 
-    std::shared_ptr<UsdSkelImagingBlendShapeData> const _blendShapeData;
-    HdTokenArrayDataSourceHandle const _blendShapes;
-    HdFloatArrayDataSourceHandle const _blendShapeWeights;
-    HdVec2iArrayDataSourceHandle const _blendShapeRanges;
+    const std::shared_ptr<UsdSkelImagingBlendShapeData> _blendShapeData;
+    const HdTokenArrayDataSourceHandle _blendShapes;
+    const HdFloatArrayDataSourceHandle _blendShapeWeights;
+    const HdVec2iArrayDataSourceHandle _blendShapeRanges;
 };
 
 // Extract the Scale & Shear parts of 4x4 matrix by removing the
@@ -995,8 +1014,8 @@ HdDataSourceBaseHandle
 UsdSkelImagingDataSourceResolvedPointsBasedPrim::GetNumBlendShapeOffsetRanges()
 {
     TRACE_FUNCTION();
-    return _ToDataSource<int>(
-        GetBlendShapeData()->blendShapeOffsetRanges.size());
+    return _ToDataSource(static_cast<int>(
+        GetBlendShapeData()->blendShapeOffsetRanges.size()));
 }
 
 HdSampledDataSourceHandle 

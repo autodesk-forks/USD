@@ -16,6 +16,42 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 void
+VdfContext::SetEmptyOutput() const
+{
+    // GetOutput emits an error if it returns null. Note that there is no need
+    // to check _IsRequiredOutput: By virtue of the owning node being scheduled,
+    // we can conclude that its only output is therefore scheduled.
+    const VdfOutput *const output = _node.GetOutput();
+    if (!output) {
+        return;
+    }
+
+    VdfVector *const vector = _GetExecutor()._GetOutputValueForWriting(*output);
+    if (!vector) {
+        VDF_FATAL_ERROR(_GetNode(), "Couldn't get output vector.");
+    }
+
+    vector->Clear();
+}
+
+void
+VdfContext::SetEmptyOutput(const TfToken &outputName) const
+{
+    // GetOutput emits an error if it returns null.
+    const VdfOutput *const output = _node.GetOutput(outputName);
+    if (!(output && _IsRequiredOutput(*output))) {
+        return;
+    }
+
+    VdfVector *const vector = _GetExecutor()._GetOutputValueForWriting(*output);
+    if (!vector) {
+        VDF_FATAL_ERROR(_GetNode(), "Couldn't get output vector.");
+    }
+
+    vector->Clear();
+}
+
+void
 VdfContext::SetOutputToReferenceInput(const TfToken &inputName) const
 {
     TfAutoMallocTag2 tag("Vdf", "VdfContext::SetOutputToReferenceInput");

@@ -98,7 +98,7 @@ class TestUsdShadeShaderDef(unittest.TestCase):
         for n in nodes:
             self.assertEqual(n.GetShaderVersion(), Sdr.Version(2, 0))
             self.assertTrue(n.IsValid())
-            self.assertEqual(n.GetFamily(), 'Primvar')
+            self.assertEqual(n.GetFunction(), 'Primvar')
             self.assertEqual(n.GetIdentifier(), 'Primvar_float_2')
             self.assertEqual(n.GetImplementationName(), 'Primvar_float')
             self.assertEqual(n.GetRole(), Sdr.NodeRole.Primvar)
@@ -110,8 +110,10 @@ class TestUsdShadeShaderDef(unittest.TestCase):
 
             self.assertEqual(assetIdentifierInputNames[0], 'primvarFile')
             self.assertEqual(n.GetMetadata(), 
-                    {'primvars': '$primvarName',
-                     'role': 'primvar'})
+                    {'domain': 'rendering',
+                     'primvars': '$primvarName',
+                     'role': 'primvar',
+                     'sdrUsdEncodingVersion': '-1'})
             self.assertEqual(n.GetShaderInputNames(), 
                 ['fallback', 'float2Val', 'float3Val', 
                  'float4Val', 'int2Val', 'int3Val', 'int4Val', 'normalVector', 

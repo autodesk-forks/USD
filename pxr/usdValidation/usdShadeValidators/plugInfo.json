@@ -3,8 +3,19 @@
         {
             "Info": {
                 "Validators": {
+                    "EncapsulationMaterialValidator": {
+                        "doc": "UsdShadeNodeGraph derived and UsdShadeShader derived are the only connectable types found within a UsdShadeMaterial prim, but not UsdShadeMaterial (which is UsdShadeNodeGraph derived) itself. Additionally no imageable prims should be found within a UsdShadeMaterial.",
+                        "schemaTypes": [
+                            "UsdShadeMaterial"
+                        ]
+                    },
                     "EncapsulationRulesValidator": {
-                        "doc": "Connectable prims (e.g. Shader, Material, etc) can only be nested inside other Container-like Connectable prims. Container-like prims include Material, NodeGraph, Light, LightFilter. Shader is not a Container-like prim."
+                        "doc": "Connectable prims (e.g. Shader, Material, etc) can only be nested inside other Container-like Connectable prims. Container-like prims include Material, NodeGraph. Shader is not a Container-like prim.",
+                        "schemaTypes": [
+                            "UsdShadeShader",
+                            "UsdShadeMaterial",
+                            "UsdShadeNodeGraph"
+                        ]
                     }, 
                     "MaterialBindingApiAppliedValidator": {
                         "doc": "Verify a prim has the MaterialBindingAPI applied if it has a material binding relationship."

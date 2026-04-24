@@ -42,12 +42,12 @@ class TestDiscovery(unittest.TestCase):
              'pxr_nd_string',
              'pxr_nd_vector'])
 
-        # Get by family.  Non-default versions should be dropped.
+        # Get by function.  Non-default versions should be dropped.
         #
         # Because pxr_nd_vector_noversion has no version at all the
         # discovery assumes it's the default version despite appearances
         # to the human eye.
-        nodes = registry.GetShaderNodesByFamily('UsdMtlxTestNode')
+        nodes = registry.GetShaderNodesByFunction('UsdMtlxTestNode')
         names = sorted([node.GetIdentifier() for node in nodes])
         self.assertEqual(names,
             ['pxr_nd_boolean',

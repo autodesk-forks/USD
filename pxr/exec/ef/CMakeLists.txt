@@ -17,12 +17,10 @@ pxr_library(ef
 
     PUBLIC_HEADERS
         api.h
-        executor.h
         firstValidInputValue.h
         pageCacheBasedExecutor.h
         pageCacheExecutor.h
         pageCacheSubExecutor.h
-        subExecutor.h
 
     PUBLIC_CLASSES
         dependencyCache

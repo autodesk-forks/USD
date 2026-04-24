@@ -5,12 +5,25 @@
 # Licensed under the terms set forth in the LICENSE.txt file available at
 # https://openusd.org/license.
 
-from pxr import Ar, Tf, UsdUtils, Sdf, Usd
+from pxr import Ar, Tf, UsdUtils, Sdf, Usd, Plug
 from pathlib import Path
 import os
 import unittest
 
 class TestUsdUtilsDependencies(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Register test file format plugin
+        # Test plugins are installed relative to this script
+        testRoot = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "UsdUtilsPlugins")
+
+        pr = Plug.Registry()
+
+        testFileFormatPath = os.path.join(testRoot,
+            "lib/TestUsdUtilsLocalizeExternalAssetDependencies*/Resources/")
+        pr.RegisterPlugins(testFileFormatPath)
+
     def test_ComputeAllDependencies(self):
         """Basic test for UsdUtils.ComputeAllDependencies"""
 
@@ -112,6 +125,23 @@ class TestUsdUtilsDependencies(unittest.TestCase):
                     os.path.abspath("computeAllDependenciesUdims/" + f))
                     for f in ["image_d.<UDIM>.exr",
                             "image_e.<UDIM>.exr"]]))
+
+    def test_ComputeAllDependenciesSdfFormatArgs(self):
+        """Test that SDF_FORMAT_ARGS are stripped before resolving assets."""
+
+        rootLayer = "computeAllDependenciesFormatArgs/root.usda"
+        layers, assets, unresolved = \
+            UsdUtils.ComputeAllDependencies(rootLayer)
+
+        self.assertEqual(set(layers), set([Sdf.Layer.Find(rootLayer)]))
+
+        expectedAsset = os.path.abspath(
+            "computeAllDependenciesFormatArgs/material.sbsar")
+        self.assertEqual(
+            set([os.path.normcase(f) for f in assets]),
+            set([os.path.normcase(expectedAsset)]))
+
+        self.assertEqual(unresolved, [])
 
     def test_ComputeAllDependenciesAnonymousLayer(self):
         """Test for resolving dependencies of anonymous layers"""
@@ -316,6 +346,31 @@ class TestUsdUtilsDependencies(unittest.TestCase):
         unfiltered = delegate.TakeUncoalescedDiagnostics()
         self.assertEqual(len(unfiltered), 1)
         self.assertTrue(unfiltered[0].commentary.startswith("Failed to open dependency layer: ./invalid.usd "))
+
+    def test_ComputeAllDependenciesExternalAssets(self):
+        """Tests that external asset dependencies are included in the output"""
+        testFolder = "computeAllDependenciesExternalAssets"
+
+        layers, assets, unresolved = \
+            UsdUtils.ComputeAllDependencies(f"{testFolder}/root.usda")
+
+        expectedLayers = [
+            Sdf.Layer.FindOrOpen(os.path.join(testFolder, "root.usda")),
+            Sdf.Layer.FindOrOpen(
+                os.path.join(testFolder, "asset", "asset.testformat"))]
+        self.assertEqual(layers, expectedLayers)
+
+        expectedAssets = [
+            os.path.normcase(os.path.abspath(
+                os.path.join(testFolder, "aboveAssetRoot.external"))),
+            os.path.normcase(os.path.abspath(
+                os.path.join(testFolder, "asset", "file1.external"))),
+            os.path.normcase(os.path.abspath(
+                os.path.join(testFolder,"asset", "subdir", "file2.external")))
+        ]
+
+        self.assertEqual([os.path.normcase(f) for f in assets], expectedAssets)
+        self.assertEqual(unresolved, [])
 
 if __name__=="__main__":
     unittest.main()

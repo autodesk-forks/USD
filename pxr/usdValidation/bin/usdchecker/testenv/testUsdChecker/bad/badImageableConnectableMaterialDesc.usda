@@ -1,0 +1,20 @@
+#usda 1.0
+(
+    endFrame = 10
+    startFrame = 1
+    upAxis = "Y"
+    metersPerUnit = 1
+    defaultPrim = "Material"
+)
+
+def Material "Material"
+{
+    def LightFilter "IllegalLightFilter"
+    {
+        # LightFilter is not allowed implicitly in a Material,
+        # but also not allowed because its an imageable, which is also not
+        # allowed in a Material. We should get 3 errors (2 from
+        # usdShadeValidators and 1 from usdLuxValidators).
+    }
+}
+

@@ -69,29 +69,6 @@ static float _shutterClose = HDPRMAN_SHUTTEROPEN_DEFAULT;
 
 using TfTokenSet = std::unordered_set<TfToken, TfToken::HashFunctor>;
 
-TF_REGISTRY_FUNCTION(TfType)
-{
-    HdSceneIndexPluginRegistry::Define<HdPrman_MotionBlurSceneIndexPlugin>();
-}
-
-TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
-{
-    // This plug-in should be inserted *after* the extComp plug-in,
-    // so that disabling of blur, etc. will also affect points from extComp.
-    // It must also be *after* velocity motion resolving plug-in.
-    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 3;
-
-    for(const auto& pluginDisplayName : HdPrman_GetPluginDisplayNames()) {
-        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
-            pluginDisplayName,
-            HdPrmanPluginTokens->motionBlur,
-            nullptr, /* inputArgs */
-            insertionPhase,
-            // XXX this needs to run before HdPrman_MaterialPrimvarTransferSceneIndexPlugin
-            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
-    }
-}
-
 namespace
 {
 
@@ -634,6 +611,7 @@ HD_DECLARE_DATASOURCE_HANDLES(_PrimvarDataSource);
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+#if HD_API_VERSION < 96
 /// \class _Visitor
 ///
 /// VtVisitValue visitor for constructing the right type of typed data source
@@ -663,6 +641,7 @@ struct _Visitor
             samplesSource, key, primPath, primType, primvarsSource);
     }
 };
+#endif
 
 HdDataSourceBaseHandle
 _PrimvarDataSource::Get(const TfToken &name)
@@ -675,9 +654,23 @@ _PrimvarDataSource::Get(const TfToken &name)
 
     if (name == HdPrimvarSchemaTokens->primvarValue) {
         if (const auto source = HdSampledDataSource::Cast(result)) {
-            return VtVisitValue(source->GetValue(0.0f),
-                _Visitor { source, _primvarName, _primPath,
-                    _primType, _primvarsSource });
+#if HD_API_VERSION >= 96
+            return HdCopySampledDataSourceType<
+                _MotionBlurTypedSampledDataSource,
+                _MotionBlurUntypedSampledDataSource>(
+                source, source, _primvarName, _primPath, _primType,
+                _primvarsSource);
+#else
+            if (_primvarName == HdPrimvarsSchemaTokens->points) {
+                return _MotionBlurTypedSampledDataSource<VtVec3fArray>::New(
+                    source, _primvarName, _primPath,
+                    _primType, _primvarsSource);
+            } else {
+                return VtVisitValue(source->GetValue(0.0f),
+                    _Visitor { source, _primvarName, _primPath,
+                        _primType, _primvarsSource });
+            }
+#endif
         }
     }
 
@@ -825,9 +818,17 @@ _XformDataSource::Get(const TfToken& name)
 
     if (name == HdXformSchemaTokens->matrix) {
         if (const auto source = HdSampledDataSource::Cast(result)) {
+#if HD_API_VERSION >= 96
+            return HdCopySampledDataSourceType<
+                _MotionBlurTypedSampledDataSource,
+                _MotionBlurUntypedSampledDataSource>(
+                source, source, name, _primPath, _primType,
+                _primvarsSource);
+#else
             return VtVisitValue(source->GetValue(0.0f),
                 _Visitor { source, name, _primPath,
                     _primType, _primvarsSource });
+#endif
         }
     }
     return result;
@@ -1088,7 +1089,41 @@ _HdPrmanMotionBlurSceneIndex::_PrimsDirtied(
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+TF_REGISTRY_FUNCTION(TfType)
+{
+    HdSceneIndexPluginRegistry::Define<HdPrman_MotionBlurSceneIndexPlugin>();
+}
+
+TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
+{
+    for(const auto& pluginDisplayName : HdPrman_GetPluginDisplayNames()) {
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            pluginDisplayName,
+            HdPrmanPluginTokens->motionBlur,
+            nullptr, /* inputArgs */
+            HdPrman_MotionBlurSceneIndexPlugin::GetInsertionPhase(),
+            // XXX this needs to run before HdPrman_MaterialPrimvarTransferSceneIndexPlugin
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+    }
+}
+
 // Implementation of HdPrman_MotionBlurSceneIndexPlugin.
+
+
+// TODO: Query the camera's shutter interval in a better way!
+// This method is called by the camera to update
+// with its shutter interval, which is necessary
+// when we're doing velocity blur and UsdImaging doesn't have the sample times.
+/* static */
+void
+HdPrman_MotionBlurSceneIndexPlugin::SetShutterInterval(
+    float shutterOpen, float shutterClose)
+{
+    TF_DEBUG(HDPRMAN_MOTION_BLUR).Msg("SetShutterInterval(%f, %f)\n",
+        shutterOpen, shutterClose);
+    _shutterOpen = shutterOpen;
+    _shutterClose = shutterClose;
+}
 
 HdPrman_MotionBlurSceneIndexPlugin::
 HdPrman_MotionBlurSceneIndexPlugin() = default;
@@ -1099,20 +1134,6 @@ HdPrman_MotionBlurSceneIndexPlugin::_AppendSceneIndex(
     const HdContainerDataSourceHandle& /* inputArgs */)
 {
     return _HdPrmanMotionBlurSceneIndex::New(inputScene);
-}
-
-// TODO: Query the camera's shutter interval in a better way!
-// This method is called by the camera to update
-// with its shutter interval, which is necessary
-// when we're doing velocity blur and UsdImaging doesn't have the sample times.
-void
-HdPrman_MotionBlurSceneIndexPlugin::SetShutterInterval(
-    float shutterOpen, float shutterClose)
-{
-    TF_DEBUG(HDPRMAN_MOTION_BLUR).Msg("SetShutterInterval(%f, %f)\n",
-        shutterOpen, shutterClose);
-    _shutterOpen = shutterOpen;
-    _shutterClose = shutterClose;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -160,7 +160,6 @@ PyObject* function::call(PyObject* args, PyObject* keywords) const
                     else
                     {
                         // build a new arg tuple, will adjust its size later
-                        assert(max_arity <= static_cast<std::size_t>(ssize_t_max));
                         inner_args = handle<>(
                             PyTuple_New(static_cast<ssize_t>(max_arity)));
 
@@ -300,7 +299,8 @@ object function::signatures(bool show_return_type) const
 
 void function::argument_error(PyObject* args, PyObject* /*keywords*/) const
 {
-    static handle<> exception(
+    // Intentionally leak to avoid unsafe refcount operations during shutdown.
+    static handle<>* exception = new handle<>(
         PyErr_NewException(const_cast<char*>("Boost.Python.ArgumentError"), PyExc_TypeError, 0));
 
     object message = "Python argument types in\n    %s.%s("
@@ -319,7 +319,7 @@ void function::argument_error(PyObject* args, PyObject* /*keywords*/) const
 #if PXR_BOOST_PYTHON_DEBUG_ERROR_MESSAGES
     std::printf("\n--------\n%s\n--------\n", extract<const char*>(message)());
 #endif 
-    PyErr_SetObject(exception.get(), message.ptr());
+    PyErr_SetObject(exception->get(), message.ptr());
     throw_error_already_set();
 }
 
@@ -406,13 +406,13 @@ namespace
   
   handle<function> not_implemented_function()
   {
-      
-      static object keeper(
+      // Intentionally leak to avoid unsafe refcount operations during shutdown.
+      static object* keeper = new object(
           function_object(
               py_function(&not_implemented, type_list<void>(), 2)
             , python::detail::keyword_range())
           );
-      return handle<function>(borrowed(downcast<function>(keeper.ptr())));
+      return handle<function>(borrowed(downcast<function>(keeper->ptr())));
   }
 }
 
@@ -426,6 +426,30 @@ namespace detail
 {
     extern char py_signature_tag[];
     extern char cpp_signature_tag[];
+}
+
+object const& function::add_doc(object const& attribute, char const* doc)
+{
+    str _doc;
+
+    if (docstring_options::show_py_signatures_)
+    {
+        _doc += str(const_cast<const char*>(detail::py_signature_tag));
+    }
+    if (doc != 0 && docstring_options::show_user_defined_)
+        _doc += doc;
+
+    if (docstring_options::show_cpp_signatures_)
+    {
+        _doc += str(const_cast<const char*>(detail::cpp_signature_tag));
+    }
+    if(_doc)
+    {    
+        object mutable_attribute(attribute);
+        mutable_attribute.attr("__doc__")= _doc;
+    }
+
+    return attribute;
 }
 
 void function::add_to_namespace(
@@ -498,11 +522,24 @@ void function::add_to_namespace(
 
         assert(!PyErr_Occurred());
         handle<> name_space_name(
-            allow_null(::PyObject_GetAttrString(name_space.ptr(), const_cast<char*>("__name__"))));
+            allow_null(::PyObject_GetAttrString(name_space.ptr(), const_cast<char*>(
+#if PY_VERSION_HEX < 0x03030000
+                "__name__"
+#else
+                "__qualname__"
+#endif
+            ))));
         PyErr_Clear();
         
         if (name_space_name)
             new_func->m_namespace = object(name_space_name);
+
+        object module_name(
+          PyObject_IsInstance(name_space.ptr(), upcast<PyObject>(&PyModule_Type))
+          ? object(name_space.attr("__name__"))
+          : api::getattr(name_space, "__module__", str())
+        );
+        new_func->m_module = module_name;
     }
 
     if (PyObject_SetAttr(ns, name.ptr(), attribute.ptr()) < 0)
@@ -541,24 +578,7 @@ void function::add_to_namespace(
           "C++ signature:", f->signature(true)));
     }
     */
-    str _doc;
-
-    if (docstring_options::show_py_signatures_)
-    {
-        _doc += str(const_cast<const char*>(detail::py_signature_tag));
-    }
-    if (doc != 0 && docstring_options::show_user_defined_)
-        _doc += doc;
-
-    if (docstring_options::show_cpp_signatures_)
-    {
-        _doc += str(const_cast<const char*>(detail::cpp_signature_tag));
-    }
-    if(_doc)
-    {    
-        object mutable_attribute(attribute);
-        mutable_attribute.attr("__doc__")= _doc;
-    }
+    add_doc(attribute, doc);
 }
 
 PXR_BOOST_PYTHON_DECL void add_to_namespace(
@@ -571,6 +591,18 @@ PXR_BOOST_PYTHON_DECL void add_to_namespace(
     object const& name_space, char const* name, object const& attribute, char const* doc)
 {
     function::add_to_namespace(name_space, name, attribute, doc);
+}
+
+PXR_BOOST_PYTHON_DECL object const& add_doc(object const& attribute, char const* doc)
+{
+#if PY_VERSION_HEX >= 0x03000000
+    if (PyInstanceMethod_Check(attribute.ptr())) {
+#else
+    if (PyMethod_Check(attribute.ptr())) {
+#endif
+        return attribute;
+    }
+    return function::add_doc(attribute, doc);
 }
 
 
@@ -679,7 +711,7 @@ extern "C"
     static PyObject* function_get_module(PyObject* op, void*)
     {
         function* f = downcast<function>(op);
-        object const& ns = f->get_namespace();
+        object const& ns = f->get_module();
         if (!ns.is_none()) {
             return python::incref(ns.ptr());
         }
@@ -781,11 +813,12 @@ namespace detail
 {
   object PXR_BOOST_PYTHON_DECL make_raw_function(objects::py_function f)
   {
-      static keyword k;
+      // Intentionally leak to avoid unsafe refcount operations during shutdown.
+      static keyword* k = new keyword;
     
       return objects::function_object(
           f
-          , keyword_range(&k,&k));
+          , keyword_range(k,k));
   }
   void PXR_BOOST_PYTHON_DECL pure_virtual_called()
   {

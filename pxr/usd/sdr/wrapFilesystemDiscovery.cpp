@@ -48,7 +48,7 @@ class _SdrContext : public SdrDiscoveryPluginContext {
 public:
     ~_SdrContext() override = default;
 
-    TfToken GetSourceType(const TfToken& discoveryType) const override
+    TfToken GetShadingSystem(const TfToken& discoveryType) const override
     {
         return discoveryType;
     }

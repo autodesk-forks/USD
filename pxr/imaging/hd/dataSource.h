@@ -14,6 +14,7 @@
 
 #include "pxr/base/tf/token.h"
 #include "pxr/base/vt/value.h"
+#include "pxr/base/vt/visitValue.h"
 
 #include <iosfwd>
 #include <memory>
@@ -180,6 +181,12 @@ public:
         Time startTime, 
         Time endTime,
         std::vector<Time> * outSampleTimes) = 0;
+
+protected:
+    friend class Hd_SampledDataSourceDefaultValueAccessor;
+    
+    HD_API
+    virtual VtValue _GetDefaultValue();
 };
 
 HD_DECLARE_DATASOURCE_HANDLES(HdSampledDataSource);
@@ -198,8 +205,16 @@ public:
     /// Returns the value of this data source at frame-relative time
     /// \p shutterOffset, as type \p T.
     virtual T GetTypedValue(Time shutterOffset) = 0;
-};
 
+protected:
+    virtual VtValue _GetDefaultValue() override {
+        if constexpr (VtIsKnownValueType<T>()) {
+            return VtValue(T());
+        } else {
+            return VtValue();
+        }
+    }
+};
 
 /// \class HdBlockDataSource
 ///
@@ -219,6 +234,106 @@ public:
 HD_DECLARE_DATASOURCE_HANDLES(HdBlockDataSource);
 
 // Utilities //////////////////////////////////////////////////////////////////
+
+// Helper to let HdVisitSampledDataSourceType access a source's value type.
+class Hd_SampledDataSourceDefaultValueAccessor
+{
+public:
+    static VtValue
+    GetDefaultValue(const HdSampledDataSourceHandle &dataSource) {
+        return dataSource ? dataSource->_GetDefaultValue() : VtValue {};
+    }
+};
+
+/// Helper function to determine the type of a TypeSampledDataSource and perform
+/// some operations.
+/// Takes a "SampledDataSource", a "Visitor" class (which has a static "Visit"
+/// function) and some arguments. The data source's type "T" will be determined
+/// and Visitor<T>::Visit will be called with your arguments. If the data
+/// source's type cannot be determined or it is an untyped SampledDataSource,
+/// Visitor<VtValue>::Visit will be called.
+///
+/// This is identical to `VtVisitValueType<Visitor, TypeArgs...>(value,
+/// args...)` except that instead of a VtValue `value`, the value type is
+/// determined by the passed `dataSource`.
+template <
+    template <class T, class ...> class Visitor,
+    typename ...TypeArgs,
+    typename ...FnArgs
+    >
+auto
+HdVisitSampledDataSourceType(
+    const HdSampledDataSourceHandle& dataSource, FnArgs&&... args)
+{
+    return VtVisitValueType<Visitor, TypeArgs...>(
+        Hd_SampledDataSourceDefaultValueAccessor::GetDefaultValue(dataSource),
+        std::forward<FnArgs>(args)...);
+}
+
+/// Overload that accepts a leading class template argument that is passed to
+/// the visitor as the second template argument.
+///
+/// This is identical to `VtVisitValueType<Visitor, Tmpl, TypeArgs...>(value,
+/// args...)` except that instead of a VtValue `value`, the value type is
+/// determined by the passed `dataSource`.
+template <
+    template <class T, template <class...> class, class ...> class Visitor,
+    template <class...> class Tmpl,
+    typename ...TypeArgs,
+    typename ...FnArgs
+    >
+auto
+HdVisitSampledDataSourceType(
+    const HdSampledDataSourceHandle& dataSource, FnArgs&&... args)
+{
+    return VtVisitValueType<Visitor, Tmpl, TypeArgs...>(
+        Hd_SampledDataSourceDefaultValueAccessor::GetDefaultValue(dataSource),
+        std::forward<FnArgs>(args)...);
+}
+
+/// A VtValue visitor that invokes DataSource<T>::New(args...) if T is one of
+/// the "known" Vt value types (see VtVisitValue).  If T is not one of the known
+/// types, then if `UntypedDataSource` is `void` return `nullptr`, otherwise
+/// return UntypedDataSource::New(args...).
+template <
+    typename T,
+    template <typename...> class DataSource,
+    class UntypedDataSource>
+struct Hd_CopySampledDataSourceTypeVisitor
+{
+    template <class ...Args>
+    static HdDataSourceBaseHandle Visit(Args&&... args)
+    {
+        if constexpr (std::is_same_v<T, VtValue>) {
+            if constexpr (std::is_void_v<UntypedDataSource>) {
+                return nullptr;
+            }
+            else {
+                return UntypedDataSource::New(std::forward<Args>(args)...);
+            }
+        }
+        else {
+            return DataSource<T>::New(std::forward<Args>(args)...);
+        }
+    }
+};
+
+/// Helper function to create a new typed data source with the same type as the
+/// input sampled data source. DataSource<T>::New will be returned using the
+/// provided args. For untyped input data sources nullptr or
+/// UntypedDataSource::New will be returned (if UntypedDataSource was provided).
+template <
+    template <typename...> class DataSource,
+    class UntypedDataSource = void,
+    typename... Args>
+HdDataSourceBaseHandle
+HdCopySampledDataSourceType(
+    const HdSampledDataSourceHandle& dataSource, Args&&... args)
+{
+    return HdVisitSampledDataSourceType<
+        Hd_CopySampledDataSourceTypeVisitor, DataSource, UntypedDataSource>(
+            dataSource, std::forward<Args>(args)...);
+}
 
 /// Merges contributing sample times from several data sources.
 HD_API

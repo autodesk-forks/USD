@@ -654,15 +654,15 @@ _FindStartingNodeForImpliedClasses(const PcpNodeRef& n)
 }
 
 // This is a convenience function to create a map expression
-// that maps a given source path to a target node, composing in
+// that maps a given source path to a path in the target node, composing in
 // relocations and layer offsets if any exist.
 static PcpMapExpression
 _CreateMapExpressionForArc(const SdfPath &sourcePath, 
+                           const SdfPath &targetNodePath,
                            const PcpNodeRef &targetNode,
-                           const PcpPrimIndexInputs &inputs,
                            const SdfLayerOffset &offset = SdfLayerOffset())
 {
-    const SdfPath targetPath = targetNode.GetPath().StripAllVariantSelections();
+    const SdfPath targetPath = targetNodePath.StripAllVariantSelections();
 
     PcpMapFunction::PathMap sourceToTargetMap;
     sourceToTargetMap[sourcePath] = targetPath;
@@ -677,6 +677,15 @@ _CreateMapExpressionForArc(const SdfPath &sourcePath,
         arcExpr = reloMapExpr.Compose(arcExpr);
     }
     return arcExpr;
+}
+
+static PcpMapExpression
+_CreateMapExpressionForArc(const SdfPath &sourcePath, 
+                           const PcpNodeRef &targetNode,
+                           const SdfLayerOffset &offset = SdfLayerOffset())
+{
+    return _CreateMapExpressionForArc(
+        sourcePath, targetNode.GetPath(), targetNode, offset);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -2220,6 +2229,7 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
         }
 
         const bool isNegativeScale = layerOffset.GetScale() < 0.0;
+        const bool isInternal = refOrPayload.GetAssetPath().empty();
 
         // Validate layer offset in original reference or payload.
         if (isNegativeScale ||
@@ -2238,9 +2248,11 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
 
             // Don't set fail, just reset the offset.
             layerOffset = SdfLayerOffset();
-        } else {
+        } else if (!isInternal) {
             // Apply the layer stack offset for the introducing layer to the 
-            // reference or payload's layer offset.
+            // reference or payload's layer offset. This should only be done
+            // in cases where the ref or payload is not internal, thus avoiding
+            // a double scale during map function composition.
             layerOffset = info.sourceLayerStackOffset * layerOffset;
         }
 
@@ -2254,7 +2266,6 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
         SdfLayerRefPtr layer;
         PcpLayerStackRefPtr layerStack;
 
-        const bool isInternal = refOrPayload.GetAssetPath().empty();
         if (isInternal) {
             layer = node.GetLayerStack()->GetIdentifier().rootLayer;
             layerStack = node.GetLayerStack();
@@ -2419,21 +2430,20 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
         SdfPath primPath = defaultPrimPath.IsEmpty() ? 
             refOrPayload.GetPrimPath() : defaultPrimPath;
 
-        if (nodePathAtIntroduction != node.GetPath()) {
-            primPath = node.GetPath().ReplacePrefix(nodePathAtIntroduction, primPath);
-        }
-
         // The mapping for a reference (or payload) arc makes the source
         // and target map to each other.  Paths outside these will not map,
         // except for the case of internal references.
-        PcpMapExpression mapExpr = 
+        PcpMapExpression mapExpr =
             _CreateMapExpressionForArc(
-                /* source */ primPath, /* targetNode */ node, 
-                indexer->inputs, layerOffset);
+                primPath, nodePathAtIntroduction, node, layerOffset);
         if (isInternal) {
             // Internal references maintain full namespace visibility
             // outside the source & target.
             mapExpr = mapExpr.AddRootIdentity();
+        }
+
+        if (nodePathAtIntroduction != node.GetPath()) {
+            primPath = node.GetPath().ReplacePrefix(nodePathAtIntroduction, primPath);
         }
 
         _ArcOptions opts;
@@ -3455,8 +3465,7 @@ _AddClassBasedArcs(
         // Every other path maps to itself.
         PcpMapExpression mapExpr = 
             _CreateMapExpressionForArc(
-                /* source */ arcPath, /* targetNode */ node,
-                indexer->inputs)
+                /* source */ arcPath, /* targetNode */ node)
             .AddRootIdentity();
 
         _AddClassBasedArc(arcType,
@@ -3518,12 +3527,7 @@ static PcpMapExpression
 _GetImpliedClass( const PcpMapExpression & transfer,
                   const PcpMapExpression & classArc )
 {
-    if (transfer.IsConstantIdentity()) {
-        return classArc;
-    }
-
-    return transfer.Compose( classArc.Compose( transfer.Inverse() ))
-        .AddRootIdentity();
+    return PcpMapExpression::ImpliedClass(transfer, classArc);
 }
 
 // Check the given node for class-based children, and add corresponding
@@ -4004,6 +4008,8 @@ _FindPriorVariantSelection(
     PcpNodeRef *nodeWithVsel,
     Pcp_PrimIndexer *indexer)
 {
+    TRACE_FUNCTION();
+
     auto& traverser = 
         indexer->GetVariantTraversalCache(startNode, pathInStartNode);
 
@@ -4060,6 +4066,8 @@ _ComposeVariantSelectionAcrossNodes(
     PcpNodeRef *nodeWithVsel,
     Pcp_PrimIndexer *indexer)
 {
+    TRACE_FUNCTION();
+
     // Compose variant selection in strong-to-weak order.
     auto& traverser = 
         indexer->GetVariantTraversalCache(startNode, pathInStartNode);
@@ -5025,15 +5033,67 @@ _BuildInitialPrimIndexFromAncestor(
         const PcpLayerStackSite parentSite(site.layerStack,
                                            site.path.GetParentPath());
 
-        Pcp_BuildPrimIndex(parentSite, parentSite,
+        Pcp_BuildPrimIndex(parentSite, rootSite,
                            ancestorRecursionDepth+1,
                            evaluateImpliedSpecializes,
                            evaluateVariantsAndDynamicPayloads,
                            /* rootNodeShouldContributeSpecs = */ true,
                            previousFrame, inputs, outputs);
 
-        ancestorIsInstanceable = 
-            Pcp_PrimIndexIsInstanceable(outputs->primIndex);
+        // When recursively computing a prim index for ancestral opinions,
+        // there are cases where the ancestorIsInstanceable flag cannot be
+        // computed correctly from the prim index computed above. One example
+        // is captured in the ImpliedArcsAndInstancing museum test. 
+        //
+        // In that case, we have (names altered for brevity) prim /A in the root
+        // layer stack referencing /B, and /B/C inheriting from /B/D. This means
+        // there's an implied inherit arc from /A/C to /A/D in the root layer
+        // stack as well. Prim /A is marked as instanceable.
+        // 
+        // When we compute /A/C, we recursively compute /A/D when evaluating
+        // the implied inherit arc, which means we wind up in here to recompute
+        // /A to include its ancestral opinions. However, the recomputed index
+        // for /A elides the reference arc to /B because it duplicates the
+        // ancestral reference arc in /A/C. That causes the recomputed index
+        // for /A to be non-instanceable, which is incorrect.
+        //
+        // To avoid that issue, we check if the index we're computing for
+        // ancestral opinions is an ancestor of the originating prim index.
+        // If so, we retrieve the instanceable bit from the cached prim
+        // index instead of the one we just computed. We expect to find
+        // this prim index in the cache because ancestors must be computed
+        // before any children.
+        //
+        // In the above example, that means we'll try to retrieve the prim
+        // index for /A from the cache and use its instanceable bit. We know
+        // that /A must be in the cache, because we're in the middle of
+        // computing /A/C and /A is an ancestor that must've already been
+        // computed.
+        //
+        // XXX: This (clearly) seems overly tricky and there may be other
+        // cases outside the root layer stack this doesn't cover. This may
+        // (hopefully?) be subsumed by whatever fix we come up with for
+        // USD-9919.
+        ancestorIsInstanceable = [&]() {
+            if (!Pcp_InstancingIsEnabled(outputs->primIndex)) {
+                return false;
+            }
+
+            if (inputs.cache->GetLayerStack() == parentSite.layerStack &&
+                rootSite.path.HasPrefix(parentSite.path)) {
+
+                if (inputs.ancestorIsInstanceablePredicate) {
+                    return inputs.ancestorIsInstanceablePredicate(
+                        parentSite.path);
+                }
+
+                if (const PcpPrimIndex* cachedParentPrimIndex =
+                        inputs.cache->FindPrimIndex(parentSite.path)) {
+                    return cachedParentPrimIndex->IsInstanceable();
+                }
+            }
+            return Pcp_PrimIndexIsInstanceable(outputs->primIndex);
+        }();
     }
 
     // If the ancestor graph is an instance, mark every node that cannot

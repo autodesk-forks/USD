@@ -15,6 +15,7 @@
 #include "pxr/usd/usdUtils/debugCodes.h"
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/fileFormat.h"
+#include "pxr/usd/sdf/layer.h"
 #include "pxr/usd/sdf/layerUtils.h"
 
 #include "pxr/base/tf/diagnostic.h"
@@ -119,7 +120,12 @@ struct UsdUtils_ComputeAllDependenciesClient
     {
         const std::string anchoredPath = 
             SdfComputeAssetPathRelativeToLayer(layer, dependency);
-        const std::string resolvedPath = ArGetResolver().Resolve(anchoredPath);
+
+        const std::pair<std::string, std::string> splitIdentifier =
+            SdfLayer::SplitIdentifier(anchoredPath);
+
+        const std::string resolvedPath = ArGetResolver().Resolve(
+            splitIdentifier.first);
 
         if (resolvedPath.empty()) {
             if (PathShouldResolve(layer, resolvedPath, dependencyType)) {
@@ -130,8 +136,18 @@ struct UsdUtils_ComputeAllDependenciesClient
             SdfLayerRefPtr dependencyLayer = SdfLayer::FindOrOpen(anchoredPath);
             if (dependencyLayer) {
                 layers.insert(dependencyLayer);
+
+                // Note: for layers we also want to include any additional asset
+                // dependencies.
+                const std::set<std::string> externalAssetDependencies = 
+                    dependencyLayer->GetExternalAssetDependencies();
+
+                for (const auto& dependency : externalAssetDependencies) {
+                    assets.insert(dependency);
+                }
             } else {
-                TF_WARN("Failed to open dependency layer: %s (%s)", dependency.c_str(), anchoredPath.c_str());
+                TF_WARN("Failed to open dependency layer: %s (%s)", 
+                    dependency.c_str(), anchoredPath.c_str());
             }
         }
         else {

@@ -20,6 +20,8 @@
 #include "pxr/base/gf/vec3f.h"
 #include "pxr/base/gf/vec4d.h"
 #include "pxr/base/gf/vec4f.h"
+#include "pxr/base/gf/quath.h"
+#include "pxr/base/gf/quatf.h"
 #include "pxr/base/plug/plugin.h"
 #include "pxr/base/plug/registry.h"
 #include "pxr/base/tf/envSetting.h"
@@ -183,6 +185,15 @@ struct _VtValueToRtParamList
         }
         return (*this)(v);
     }
+    bool operator()(const VtArray<GfVec2i> &vi) {
+        // Convert int->float
+        VtArray<GfVec2f> v;
+        v.resize(vi.size());
+        for (size_t i=0,n=vi.size(); i<n; ++i) {
+            v[i] = GfVec2f(vi[i]);
+        }
+        return (*this)(v);
+    }
     bool operator()(const VtArray<GfVec3f> &v) {
         if (role == HdPrimvarRoleTokens->color) {
             return params->SetColorArray(
@@ -215,6 +226,15 @@ struct _VtValueToRtParamList
         }
         return (*this)(v);
     }
+    bool operator()(const VtArray<GfVec3i> &vi) {
+        // int->float
+        VtArray<GfVec3f> v;
+        v.resize(vi.size());
+        for (size_t i=0,n=vi.size(); i<n; ++i) {
+            v[i] = GfVec3f(vi[i]);
+        }
+        return (*this)(v);
+    }
     bool operator()(const VtArray<GfVec4f> &v) {
         return params->SetFloatArray(
             name, reinterpret_cast<const float*>(v.cdata()), 4*v.size());
@@ -225,6 +245,15 @@ struct _VtValueToRtParamList
         v.resize(vd.size());
         for (size_t i=0,n=vd.size(); i<n; ++i) {
             v[i] = GfVec4f(vd[i]);
+        }
+        return (*this)(v);
+    }
+    bool operator()(const VtArray<GfVec4i> &vi) {
+        // int->float
+        VtArray<GfVec4f> v;
+        v.resize(vi.size());
+        for (size_t i=0,n=vi.size(); i<n; ++i) {
+            v[i] = GfVec4f(vi[i]);
         }
         return (*this)(v);
     }
@@ -378,6 +407,15 @@ struct _VtValueToRtPrimVar : _VtValueToRtParamList
         }
         return (*this)(v);
     }
+    bool operator()(const VtArray<pxr_half::half> &vh) {
+        // Convert half->float
+        VtArray<float> v;
+        v.resize(vh.size());
+        for (size_t i=0,n=vh.size(); i<n; ++i) {
+            v[i] = float(vh[i]);
+        }
+        return (*this)(v);
+    }
 
     //
     // Arrays of Gf types
@@ -427,6 +465,15 @@ struct _VtValueToRtPrimVar : _VtValueToRtParamList
         }
         return (*this)(v);
     }
+    bool operator()(const VtArray<GfVec3h> &vh) {
+        // double->float
+        VtArray<GfVec3f> v;
+        v.resize(vh.size());
+        for (size_t i=0,n=vh.size(); i<n; ++i) {
+            v[i] = GfVec3f(vh[i]);
+        }
+        return (*this)(v);
+    }
     bool operator()(const VtArray<GfVec4f> &v) {
         return primvars->SetFloatArrayDetail(
             name, reinterpret_cast<const float*>(v.cdata()), 4, detail);
@@ -437,6 +484,18 @@ struct _VtValueToRtPrimVar : _VtValueToRtParamList
         v.resize(vd.size());
         for (size_t i=0,n=vd.size(); i<n; ++i) {
             v[i] = GfVec4f(vd[i]);
+        }
+        return (*this)(v);
+    }
+    bool operator()(const VtArray<GfQuatf> &v) {
+        return primvars->SetFloatArrayDetail(
+            name, reinterpret_cast<const float*>(v.cdata()), 4, detail);
+    }
+    bool operator()(const VtArray<GfQuath> &vh) {
+        VtArray<GfQuatf> v;
+        v.resize(vh.size());
+        for (size_t i=0,n=vh.size(); i<n; ++i) {
+            v[i] = GfQuatf(vh[i]);
         }
         return (*this)(v);
     }
@@ -679,6 +738,27 @@ SetPrimVarFromVtValue(
     }
     return VtVisitValue(val, _VtValueToRtPrimVar(
         name, detail, role, params));
+}
+
+SdfPath
+GetPathFromVtValue(VtValue const& value)
+{
+    if (value.IsHolding<SdfPath>()) {
+        return value.UncheckedGet<SdfPath>();
+    } else if (value.IsHolding<std::string>()) {
+        const std::string& str = value.UncheckedGet<std::string>();
+        // Avoid SdfPath runtime error constructing from empty string.
+        if (!str.empty()) {
+            return SdfPath(str);
+        }
+    } else if (value.IsHolding<TfToken>()) {
+        const TfToken& token = value.UncheckedGet<TfToken>();
+        // Avoid SdfPath runtime error constructing from empty token.
+        if (!token.IsEmpty()) {
+            return SdfPath(token);
+        }
+    }
+    return SdfPath();
 }
 
 RtUString

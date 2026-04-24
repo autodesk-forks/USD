@@ -11,6 +11,7 @@ Describes the use of low-level programming macros to issue coding errors, runtim
 \li \ref DiagnosticTF_ERROR 
 \li \ref DiagnosticTF_WARN 
 \li \ref DiagnosticTF_STATUS 
+\li \ref DiagnosticTfDiagnosticTrap
 \li \ref DiagnosticTF_FUNC_NAME 
 
 \section DiagnosticQuickStart Quick Guide to Functions and Macros
@@ -184,6 +185,72 @@ For situations where it is important to inform the user of an undesirable situat
 \section DiagnosticTF_STATUS Status Messages
 
 For situations where it is important to inform the user of some expected status information, use TF_STATUS().  This will generally be displayed in the application (in a status bar, for instance).
+
+\section DiagnosticTfDiagnosticTrap Intercepting Diagnostics
+
+For situations where you need to programmatically inspect, filter, or suppress diagnostics -- commonly in unit tests -- the Tf library provides \c TfDiagnosticTrap, a scoped, stack-based interceptor.
+
+When a \c TfDiagnosticTrap is active on the current thread, any \c TfWarning, \c TfStatus, or \c TfError that would otherwise be forwarded to registered delegates is instead captured by the trap.  Traps nest: if multiple traps are active on the same thread, the innermost trap captures all diagnostics.
+
+A possible unit test usage:
+
+\code
+#include "pxr/base/tf/diagnosticTrap.h"
+
+// Assert that a function issues exactly one deprecation warning
+// and no errors.
+{
+    TfDiagnosticTrap trap;
+    DoSomethingExpectedToWarnAboutDeprecation();
+    // Expect one deprecation warning.
+    TF_AXIOM((trap.CountMatching([](TfWarning const &w) {
+        return TfStringContains(w.GetCommentary(), "deprecated");
+    }) == 1));
+    // Expect no errors.
+    TF_AXIOM(!trap.HasErrors());
+    trap.Clear();
+    // No diagnostics re-reported since we cleared.
+}
+\endcode
+
+Any diagnostics not explicitly removed via the \c Clear() or \c EraseMatching() member functions are re-posted when the trap is destroyed, propagating to the next enclosing trap, or to diagnostic delegates if no traps remain.  This means a trap is safe to use even in code paths where you only want to intercept specific diagnostics.  Unexpected diagnostics will still reach their intended destination.
+
+\c TfDiagnosticTrap also supports predicate-based inspection and erasure via \c ForEach(), \c HasAnyMatching(), \c HasAllMatching(), \c CountMatching() and \c EraseMatching(), and can be used with \c TfOverloads to dispatch by diagnostic type:
+
+\code
+// Erase only deprecation warnings, let everything else through.
+trap.EraseMatching([](TfWarning const &w) {
+    return TfStringContains(w.GetCommentary(), "deprecated");
+});
+\endcode
+
+\note \c TfDiagnosticTrap operates at \em report time, not at \em post time.  When a \c TfErrorMark is active on the current thread, errors are accumulated in the mark rather than reported, and will \em not be captured by the trap.  Warnings and status messages are not affected by this distinction and are always captured.  See \c TfDiagnosticTrap for full details.
+
+\subsection DiagnosticTfDiagnosticTrapCrossThread Cross-Thread Diagnostic Propagation
+
+For parallel workloads where child threads may issue diagnostics that should be reported on the parent thread, \c TfDiagnosticTransport provides a mechanism analogous to \c TfErrorTransport for errors.
+
+Install a \c TfDiagnosticTrap in each child thread, call \c TfDiagnosticTrap::Transport() at task completion to move accumulated diagnostics into a \c TfDiagnosticTransport, and call \c TfDiagnosticTransport::Post() on the parent thread after joining:
+
+\code
+#include "pxr/base/tf/diagnosticTransport.h"
+
+tbb::concurrent_vector<TfDiagnosticTransport> transports;
+
+// In each child task:
+TfDiagnosticTrap trap;
+DoWork();
+if (!trap.IsClean()) {
+    transports.push_back(trap.Transport());
+}
+
+// After joining, in the parent thread:
+for (auto &transport : transports) {
+    transport.Post();
+}
+\endcode
+
+The transported diagnostics are re-posted in their original interleaved order, and will be caught by any active \c TfDiagnosticTrap on the parent thread or forwarded to global delegates.
 
 \section DiagnosticTF_FUNC_NAME Function Names
 

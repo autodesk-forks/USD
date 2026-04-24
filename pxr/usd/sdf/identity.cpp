@@ -69,7 +69,7 @@ public:
         // since we're just trying to make sure we clean up occasionally without
         // constantly thrashing.
         int64_t newDeadCount = ++_deadCount;
-        if (newDeadCount >= _deadThreshold &&
+        if (newDeadCount >= _deadThreshold.load(std::memory_order_relaxed) &&
             _deadCount.compare_exchange_strong(newDeadCount, 0)) {
             TfSpinMutex::ScopedLock lock(_idsMutex);
             for (auto iter = _ids.begin(); iter != _ids.end();) {
@@ -130,7 +130,7 @@ private:
             (static_cast<int64_t>(_ids.size()) / (8 * _MinDeadThreshold) + 1) *
             _MinDeadThreshold;
         if (newThreshold != curThreshold) {
-            _deadThreshold = newThreshold;
+            _deadThreshold.store(newThreshold, std::memory_order_relaxed);
         }
     }
     

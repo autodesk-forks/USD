@@ -41,7 +41,17 @@ public:
     virtual ~SdrDiscoveryPluginContext() = default;
 
     SDR_API
-    virtual TfToken GetSourceType(const TfToken& discoveryType) const = 0;
+    virtual TfToken GetShadingSystem(const TfToken& discoveryType) const {
+        static const TfToken empty;
+        return empty;
+    }
+
+    /// \deprecated
+    /// Deprecated in favor of GetShadingSystem
+    SDR_API
+    virtual TfToken GetSourceType(const TfToken& discoveryType) const {
+        return GetShadingSystem(discoveryType);
+    }
 };
 
 TF_DECLARE_WEAK_AND_REF_PTRS(SdrDiscoveryPlugin);

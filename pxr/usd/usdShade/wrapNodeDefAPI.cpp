@@ -217,6 +217,10 @@ WRAP_CUSTOM {
              arg("sourceType")=UsdShadeTokens->universalSourceType)
         .def("GetSourceTypes", 
              &UsdShadeNodeDefAPI::GetSourceTypes)
+        .def("GetShaderNodeForShadingSystem", 
+             &UsdShadeNodeDefAPI::GetShaderNodeForShadingSystem,
+             (arg("system")),
+             return_internal_reference<>())
         .def("GetShaderNodeForSourceType", 
              &UsdShadeNodeDefAPI::GetShaderNodeForSourceType,
              (arg("sourceType")),

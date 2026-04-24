@@ -51,21 +51,21 @@ TF_REGISTRY_FUNCTION(TfType)
 
 TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
 {
-    if (TfGetEnvSetting(HDPRMAN_ENABLE_LIGHT_LINKING_SCENE_INDEX)) {
-
-        // XXX Picking an arbitrary phase for now. If a procedural were to
-        //     generate light prims, we'd want this to be after it.
-        //     HdGpSceneIndexPlugin::GetInsertionPhase() currently returns 2.
-        //
-        const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 4;
-        for( auto const& rendererDisplayName : HdPrman_GetPluginDisplayNames()) {
-            HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
-                rendererDisplayName,
-                _tokens->sceneIndexPluginName,
-                /* inputArgs = */ nullptr,
-                insertionPhase,
-                HdSceneIndexPluginRegistry::InsertionOrderAtStart);
-        }
+    // Safe to register the plugin always. If the env var isn't set, the plugin
+    // won't be considered when creating the scene index plugin chain.
+    //
+    // XXX Picking an arbitrary phase for now. If a procedural were to
+    //     generate light prims, we'd want this to be after it.
+    //     HdGpSceneIndexPlugin::GetInsertionPhase() currently returns 2.
+    //
+    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 4;
+    for( auto const& rendererDisplayName : HdPrman_GetPluginDisplayNames()) {
+        HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
+            rendererDisplayName,
+            _tokens->sceneIndexPluginName,
+            /* inputArgs = */ nullptr,
+            insertionPhase,
+            HdSceneIndexPluginRegistry::InsertionOrderAtStart);
     }
 }
 
@@ -84,12 +84,24 @@ protected:
         const HdSceneIndexBaseRefPtr &inputScene,
         const HdContainerDataSourceHandle &inputArgs) override
     {
-        TF_UNUSED(inputArgs);
+        // We don't expect this to called when the plugin is disabled.
+        if (!TF_VERIFY(_IsEnabled(inputArgs))) {
+            return inputScene;
+        }
+        
         // XXX Update inputArgs to provide the list of geometry and light types
         //     supported by hdPrman instead of using the fallback behavior in
         //     HdsiLightLinkingSceneIndex that uses the hardcoded tokens in hd.
         static const HdContainerDataSourceHandle localInputArgs = nullptr;
         return HdsiLightLinkingSceneIndex::New(inputScene, localInputArgs);
+    }
+
+    bool _IsEnabled(
+        const HdContainerDataSourceHandle &/* inputArgs */) const override
+    {
+        static bool enabled =
+            TfGetEnvSetting(HDPRMAN_ENABLE_LIGHT_LINKING_SCENE_INDEX);
+        return enabled;
     }
 };
 

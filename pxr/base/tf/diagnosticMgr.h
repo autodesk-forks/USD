@@ -15,6 +15,7 @@
 #include "pxr/base/tf/diagnosticLite.h"
 #include "pxr/base/tf/error.h"
 #include "pxr/base/tf/singleton.h"
+#include "pxr/base/tf/spinRWMutex.h"
 #include "pxr/base/tf/status.h"
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/warning.h"
@@ -27,7 +28,6 @@
 #include "pxr/base/arch/functionLite.h"
 
 #include <tbb/enumerable_thread_specific.h>
-#include <tbb/spin_rw_mutex.h>
 
 #include <atomic>
 #include <cstdarg>
@@ -44,6 +44,7 @@ TF_DEBUG_CODES(
     TF_PRINT_ALL_POSTED_ERRORS_TO_STDERR
     );
 
+class TfDiagnosticTrap;
 class TfError;
 class TfErrorMark;
 
@@ -113,6 +114,12 @@ public:
         TF_API 
         virtual ~Delegate() = 0;
 
+        /// Called when a \c TF_STATUS() is issued.
+        virtual void IssueStatus(TfStatus const &status) = 0;
+
+        /// Called when a \c TF_WARNING() is issued.
+        virtual void IssueWarning(TfWarning const &warning) = 0;
+
         /// Called when a \c TfError is posted.
         virtual void IssueError(TfError const &err) = 0;
 
@@ -120,13 +127,6 @@ public:
         /// \c TF_AXIOM).
         virtual void IssueFatalError(TfCallContext const &context,
                                      std::string const &msg) = 0;
-
-        /// Called when a \c TF_STATUS() is issued.
-        virtual void IssueStatus(TfStatus const &status) = 0;
-
-        /// Called when a \c TF_WARNING() is issued.
-        virtual void IssueWarning(TfWarning const &warning) = 0;
-
     protected:
         /// Abort the program, but avoid the session logging mechanism. This
         /// is intended to be used for fatal error cases where any information
@@ -211,14 +211,14 @@ public:
     TF_API
     void PostWarning(TfEnum warningCode, const char *warningCodeString,
         TfCallContext const &context, std::string const &commentary,
-        TfDiagnosticInfo info, bool quiet) const;
+        TfDiagnosticInfo info, bool quiet);
 
     /// This method will create a TfWarning and pass it to all delegates.
     ///
     /// If no delegates have been registered, this method will print the
     /// warning msg to stderr.
     TF_API
-    void PostWarning(const TfDiagnosticBase& diagnostic) const;
+    void PostWarning(const TfDiagnosticBase& diagnostic);
 
     /// This method will create a TfStatus and pass it to all delegates.
     ///
@@ -227,14 +227,14 @@ public:
     TF_API
     void PostStatus(TfEnum statusCode, const char *statusCodeString,
         TfCallContext const &context, std::string const &commentary,
-        TfDiagnosticInfo info, bool quiet) const;
+        TfDiagnosticInfo info, bool quiet);
 
     /// This method will create a TfStatus and pass it to all delegates.
     ///
     /// If no delegates have been registered, this method will print the
     /// status msg to stderr.
     TF_API
-    void PostStatus(const TfDiagnosticBase& diagnostic) const;
+    void PostStatus(const TfDiagnosticBase& diagnostic);
 
     /// This method will issue a fatal error to all delegates.
     ///
@@ -389,6 +389,14 @@ private:
     // Invoked by ErrorMark dtor.
     inline bool _DestroyErrorMark() { return --_errorMarkCounts.local() == 0; }
 
+    // Invoked by TfDiagnosticTrap constructor.
+    void _PushTrap(TfDiagnosticTrap *trap);
+
+    // Invoked by TfDiagnosticTrap destructor.
+    void _PopTrap(TfDiagnosticTrap *trap);
+
+    TfDiagnosticTrap *_GetActiveTrap();
+
     // Report an error, either via delegate or print to stderr, and issue a
     // notice if this thread of execution is the main thread.
     void _ReportError(const TfError &err);
@@ -399,43 +407,60 @@ private:
     void _SpliceErrors(ErrorList &src);
 
     // Helper to append pending error messages to the crash log.
-    void _AppendErrorsToLogText(ErrorIterator i);
+    void _AppendPendingErrorsLogText(ErrorIterator i);
 
     // Helper to fully rebuild the crash log error text when errors are erased
     // from the middle.
-    void _RebuildErrorLogText();
+    void _RebuildPendingErrorLogText();
 
-    // Helper to actually publish log text into the Arch crash handler.
-    void _SetLogInfoForErrors(std::vector<std::string> const &logText) const;
+    // Similar log text for trapped diagnostics.
+    void _AppendTrappedDiagnosticsLogText(TfDiagnosticBase const &d);
+    void _RebuildTrappedDiagnosticsLogText();
+
+    // Helper to apply a function to all the delegates.  Return true if `fn` was
+    // invoked (i.e. there were delegates to call).
+    template <class Fn>
+    bool _ForEachDelegate(Fn const &fn) const;
 
     // A guard used to protect reentrency when adding/removing
     // delegates as well as posting errors/warnings/statuses
     mutable tbb::enumerable_thread_specific<bool> _reentrantGuard;
 
-    // The registered delegates.
+    // The registered delegates global delegates.
     std::vector<Delegate*> _delegates;
+   
+    mutable TfSpinRWMutex _delegatesMutex;
 
-    mutable tbb::spin_rw_mutex _delegatesMutex;
-
+    // Thread-local stack of active diagnostic traps, innermost last.
+    tbb::enumerable_thread_specific<
+        std::vector<TfDiagnosticTrap*>> _scopedTrapStack;
+    
     // Global serial number for sorting.
     std::atomic<size_t> _nextSerial;
 
     // Thread-specific error list.
     tbb::enumerable_thread_specific<ErrorList> _errorList;
 
-    // Thread-specific diagnostic log text for pending errors.
-    struct _LogText {
-        void AppendAndPublish(ErrorIterator i, ErrorIterator end);
-        void RebuildAndPublish(ErrorIterator i, ErrorIterator end);
-        
-        std::pair<std::vector<std::string>,
-                  std::vector<std::string>> texts;
-        bool parity = false;
+    // Double-buffered vector<string> that publishes to
+    // ArchSetExtraLogInfoForErrors under a fixed label.  Update calls
+    // fn(active-text) *twice* in order to update the text in both buffers, and
+    // it must produce the same results on each call.
+    struct _LogTextBuffer {
+        _LogTextBuffer() = default;
+        explicit _LogTextBuffer(std::string &&label);
+        template <class Fn> void Update(Fn &&fn);
     private:
-        void _AppendAndPublishImpl(bool clear,
-                                   ErrorIterator i, ErrorIterator end);
+        std::string _label;
+        std::pair<std::vector<std::string>,
+                  std::vector<std::string>> _texts;
+        bool _parity = false;
     };
-    tbb::enumerable_thread_specific<_LogText> _logText;
+
+    // Thread-specific diagnostic log text for pending errors.
+    tbb::enumerable_thread_specific<_LogTextBuffer> _pendingErrorsLogText;
+
+    // Thread-specific log text for trapped diagnostics.
+    tbb::enumerable_thread_specific<_LogTextBuffer> _trappedDiagnosticsLogText;
 
     // Thread-specific error mark counts.  Use a native key for best performance
     // here.
@@ -445,6 +470,9 @@ private:
 
     bool _quiet;
 
+    friend class Tf_DiagnosticContainer;
+    friend class TfDiagnosticTransport;
+    friend class TfDiagnosticTrap;
     friend class TfError;
     friend class TfErrorTransport;
     friend class TfErrorMark;

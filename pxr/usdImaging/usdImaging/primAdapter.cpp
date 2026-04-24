@@ -660,6 +660,17 @@ _GetUsdPrimAttribute(
     return value;
 }
 
+VtValue
+UsdImagingPrimAdapter::GetVolumeParamValue(
+    const UsdPrim& prim,
+    const SdfPath& cachePath,
+    const TfToken& paramName,
+    UsdTimeCode time) const
+{
+    // Fallback to USD attributes.
+    return _GetUsdPrimAttribute(prim, paramName, time);
+}
+
 /*static*/
 UsdAttribute
 UsdImagingPrimAdapter::LookupLightParamAttribute(
@@ -948,12 +959,17 @@ UsdImagingPrimAdapter::_IsPrimvarFilteringNeeded() const
         IsPrimvarFilteringNeeded();
 }
 
+TfTokenVector 
+UsdImagingPrimAdapter::_GetShadingSystems() const
+{
+    return _delegate->GetRenderIndex().GetRenderDelegate()->
+            GetShadingSystems();
+}
 
 TfTokenVector 
 UsdImagingPrimAdapter::_GetShaderSourceTypes() const
 {
-    return _delegate->GetRenderIndex().GetRenderDelegate()->
-            GetShaderSourceTypes();
+    return _GetShadingSystems();
 }
 
 bool 

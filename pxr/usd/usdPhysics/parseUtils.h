@@ -42,12 +42,12 @@ std::function<void(UsdPhysicsObjectType type,
     TfSpan<const UsdPhysicsObjectDesc> objectDescs,
     const VtValue& userData)>;
 
-/// \struct CustomUsdPhysicsTokens
+/// \struct UsdPhysicsCustomTokens
 ///
 /// Token lists for custom physics objects that allow for custom physics
 /// objects to be reported by parsing.
 ///
-struct CustomUsdPhysicsTokens
+struct UsdPhysicsCustomTokens
 {
     /// Custom joints to be reported by parsing
     std::vector<TfToken> jointTokens;
@@ -57,6 +57,12 @@ struct CustomUsdPhysicsTokens
     /// skipped and expected to be parsed individually
     std::vector<TfToken> instancerTokens;
 };
+
+/// \deprecated Use UsdPhysicsCustomTokens instead of CustomUsdPhysicsTokens,
+/// this struct is kept for backward compatibility and will be removed in the
+/// future.
+using CustomUsdPhysicsTokens
+    [[deprecated("Use UsdPhysicsCustomTokens")]] = UsdPhysicsCustomTokens;
 
 /// Load USD physics from a given list of paths. This helper function traverses
 /// the provided USD stage by constructing UsdPrimRanges from given include
@@ -86,18 +92,38 @@ struct CustomUsdPhysicsTokens
 ///                       UsdPrims from the parsing UsdPrimRange traversals
 ///                       constructed from the include paths.
 /// \param[in] customPhysicsTokens Custom tokens to be reported by the parsing
-///                       see \sa CustomUsdPhysicsTokens
+///                       see \sa UsdPhysicsCustomTokens
 /// \param[in] simulationOwners List of simulation owners that should be parsed, 
 ///                       adding SdfPath() indicates that objects without a 
 ///                       simulation owner should be parsed too.
 /// \return True if load was successful
-USDPHYSICS_API bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
+USDPHYSICS_API 
+bool UsdPhysicsLoadStageFromPrimRange(
+    const UsdStageWeakPtr& stage,
     const std::vector<SdfPath>& includePaths,
     UsdPhysicsReportFn reportFn,
     const VtValue& userData,
     const std::vector<SdfPath>* excludePaths = nullptr,
-    const CustomUsdPhysicsTokens* customPhysicsTokens = nullptr,
+    const UsdPhysicsCustomTokens* customPhysicsTokens = nullptr,
     const std::vector<SdfPath>* simulationOwners = nullptr);
+
+/// \deprecated Use UsdPhysicsLoadStageFromPrimRange instead of
+/// LoadUsdPhysicsFromRange, this function is kept for backward compatibility
+/// and will be removed in the future.
+[[deprecated("Use UsdPhysicsLoadStageFromPrimRange")]]
+inline bool LoadUsdPhysicsFromRange(
+    const UsdStageWeakPtr& stage,
+    const std::vector<SdfPath>& includePaths,
+    UsdPhysicsReportFn reportFn,
+    const VtValue& userData,
+    const std::vector<SdfPath>* excludePaths = nullptr,
+    const UsdPhysicsCustomTokens* customPhysicsTokens = nullptr,
+    const std::vector<SdfPath>* simulationOwners = nullptr)
+{
+    return UsdPhysicsLoadStageFromPrimRange(
+        stage, includePaths, reportFn, userData, excludePaths, 
+        customPhysicsTokens, simulationOwners);
+}
 
 
 PXR_NAMESPACE_CLOSE_SCOPE

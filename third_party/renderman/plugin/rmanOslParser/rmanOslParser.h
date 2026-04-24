@@ -119,7 +119,11 @@ public:
 
     const SdrTokenVec& GetDiscoveryTypes() const override;
 
+#if PXR_VERSION >= 2605
+    const TfToken& GetShadingSystem() const override;
+#else
     const TfToken& GetSourceType() const override;
+#endif
 
 private:
     // Determines the sdrContext for the shader from the schema base defined
