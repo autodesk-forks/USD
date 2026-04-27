@@ -176,6 +176,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (instBasisCurvesTopology)                   \
     (instBasisCurvesTopologyRange)              \
     (instExtComputationDataRange)               \
+    (instGlslProgram)                           \
     (instMeshTopology)                          \
     (instMeshTopologyRange)                     \
     (instPrimvarRange)                          \

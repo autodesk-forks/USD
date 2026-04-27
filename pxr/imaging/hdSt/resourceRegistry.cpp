@@ -649,7 +649,12 @@ HdInstance<HdStGLSLProgramSharedPtr>
 HdStResourceRegistry::RegisterGLSLProgram(
         HdInstance<HdStGLSLProgramSharedPtr>::ID id)
 {
-    return _glslProgramRegistry.GetInstance(id);
+    HdInstance<HdStGLSLProgramSharedPtr> instance =
+        _glslProgramRegistry.GetInstance(id);
+    if (instance.IsFirstInstance()) {
+        HD_PERF_COUNTER_INCR(HdPerfTokens->instGlslProgram);
+    }
+    return instance;
 }
 
 HdInstance<HioGlslfxSharedPtr>
@@ -1115,7 +1120,10 @@ HdStResourceRegistry::_GarbageCollect()
     // Cleanup Shader registries
     _geometricShaderRegistry.GarbageCollect();
     _renderPassShaderRegistry.GarbageCollect();
-    _glslProgramRegistry.GarbageCollect();
+    {
+        size_t count = _glslProgramRegistry.GarbageCollect();
+        HD_PERF_COUNTER_SET(HdPerfTokens->instGlslProgram, count);
+    }
     _glslfxFileRegistry.GarbageCollect();
 #ifdef PXR_MATERIALX_SUPPORT_ENABLED
     _materialXShaderRegistry.GarbageCollect();

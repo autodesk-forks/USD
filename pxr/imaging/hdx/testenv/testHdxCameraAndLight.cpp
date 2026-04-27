@@ -69,46 +69,9 @@ static void CameraAndLightTest()
     tasks.push_back(index->GetTask(renderSetupTask));
     tasks.push_back(index->GetTask(renderTask));
     
-    // Setup AOVs
-    const SdfPath colorAovId = SdfPath("/aov_color");
-    const SdfPath depthAovId = SdfPath("/aov_depth");
-    HdRenderPassAovBindingVector aovBindings;
-
-    // Color AOV
-    {
-        HdRenderPassAovBinding colorAovBinding;
-        const HdAovDescriptor colorAovDesc = 
-            renderDelegate.GetDefaultAovDescriptor(HdAovTokens->color);
-        colorAovBinding.aovName = HdAovTokens->color;
-        colorAovBinding.clearValue = VtValue(GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
-        colorAovBinding.renderBufferId = colorAovId;
-        colorAovBinding.aovSettings = colorAovDesc.aovSettings;
-        aovBindings.push_back(std::move(colorAovBinding));
-
-        HdRenderBufferDescriptor colorRbDesc;
-        colorRbDesc.dimensions = GfVec3i(512, 512, 1);
-        colorRbDesc.format = colorAovDesc.format;
-        colorRbDesc.multiSampled = false;
-        delegate->AddRenderBuffer(colorAovId, colorRbDesc);
-    }
-
-    // Depth AOV
-    {
-        HdRenderPassAovBinding depthAovBinding;
-        const HdAovDescriptor depthAovDesc = 
-            renderDelegate.GetDefaultAovDescriptor(HdAovTokens->depth);
-        depthAovBinding.aovName = HdAovTokens->depth;
-        depthAovBinding.clearValue = VtValue(1.f);
-        depthAovBinding.renderBufferId = depthAovId;
-        depthAovBinding.aovSettings = depthAovDesc.aovSettings;
-        aovBindings.push_back(std::move(depthAovBinding));
-
-        HdRenderBufferDescriptor depthRbDesc;
-        depthRbDesc.dimensions = GfVec3i(512, 512, 1);
-        depthRbDesc.format = depthAovDesc.format;
-        depthRbDesc.multiSampled = false;
-        delegate->AddRenderBuffer(depthAovId, depthRbDesc);
-    }
+    // setup AOVs
+    const HdRenderPassAovBindingVector aovBindings =
+        delegate->AddAovBindings(GfVec2i(512, 512));
     
     // Set render task param
     delegate->SetTaskParam(

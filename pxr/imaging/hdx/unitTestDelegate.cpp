@@ -13,7 +13,9 @@
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/imaging/hd/sprim.h"
 #include "pxr/imaging/hd/camera.h"
+#include "pxr/imaging/hd/aov.h"
 #include "pxr/imaging/hd/renderBuffer.h"
+#include "pxr/imaging/hd/renderDelegate.h"
 #include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/imaging/hdSt/hioConversions.h"
@@ -22,6 +24,8 @@
 #include "pxr/imaging/hdSt/light.h"
 
 #include "pxr/imaging/hdx/drawTargetTask.h"
+#include "pxr/imaging/hdx/oitRenderTask.h"
+#include "pxr/imaging/hdx/oitResolveTask.h"
 #include "pxr/imaging/hdx/pickTask.h"
 #include "pxr/imaging/hdx/renderTask.h"
 #include "pxr/imaging/hdx/selectionTask.h"
@@ -306,50 +310,98 @@ Hdx_UnitTestDelegate::AddDrawTarget(SdfPath const &id)
 
     {
         const TfToken attachmentName("color");
-        
+
         const SdfPath path = id.AppendProperty(attachmentName);
-        
+
         HdRenderBufferDescriptor desc;
         desc.dimensions = GfVec3i(256, 256, 1);
         desc.format = HdFormatUNorm8Vec4;
         desc.multiSampled = true;
 
         AddRenderBuffer(path, desc);
-        
+
         HdRenderPassAovBinding aovBinding;
         aovBinding.aovName = attachmentName;
         aovBinding.renderBufferId = path;
         aovBinding.clearValue = VtValue(GfVec4f(1,1,0,1));
         aovBindings.push_back(aovBinding);
     }
-    
+
     {
         const TfToken attachmentName("depth");
-        
+
         const SdfPath path = id.AppendProperty(attachmentName);
-        
+
         HdRenderBufferDescriptor desc;
         desc.dimensions = GfVec3i(256, 256, 1);
         desc.format = HdFormatFloat32;
         desc.multiSampled = true;
 
         AddRenderBuffer(path, desc);
-        
+
         HdRenderPassAovBinding aovBinding;
         aovBinding.aovName = attachmentName;
         aovBinding.renderBufferId = path;
         aovBinding.clearValue = VtValue(GfVec4f(1,1,1,1));
         aovBindings.push_back(aovBinding);
     }
-    
+
     cache[HdStDrawTargetTokens->aovBindings] = VtValue(aovBindings);
 
     cache[HdStDrawTargetTokens->resolution]      = VtValue(GfVec2i(256, 256));
     cache[HdStDrawTargetTokens->enable]          = VtValue(true);
     cache[HdStDrawTargetTokens->camera]          = VtValue(SdfPath());
     cache[HdStDrawTargetTokens->collection]      =
-        VtValue(HdRprimCollection(HdTokens->geometry, 
+        VtValue(HdRprimCollection(HdTokens->geometry,
             HdReprSelector(HdReprTokens->hull)));
+}
+
+HdRenderPassAovBindingVector
+Hdx_UnitTestDelegate::AddAovBindings(
+    GfVec2i const &resolution, bool multiSampled)
+{
+    HdRenderDelegate *renderDelegate = GetRenderIndex().GetRenderDelegate();
+
+    const SdfPath colorId =
+        GetDelegateID().AppendChild(TfToken("aov_color"));
+    const SdfPath depthId =
+        GetDelegateID().AppendChild(TfToken("aov_depth"));
+
+    HdRenderPassAovBindingVector aovBindings;
+
+    {
+        const HdAovDescriptor colorDesc =
+            renderDelegate->GetDefaultAovDescriptor(HdAovTokens->color);
+        HdRenderBufferDescriptor rbDesc;
+        rbDesc.dimensions = GfVec3i(resolution[0], resolution[1], 1);
+        rbDesc.format = colorDesc.format;
+        rbDesc.multiSampled = multiSampled;
+        AddRenderBuffer(colorId, rbDesc);
+        HdRenderPassAovBinding binding;
+        binding.aovName = HdAovTokens->color;
+        binding.renderBufferId = colorId;
+        binding.clearValue = VtValue(GfVec4f(0.1f, 0.1f, 0.1f, 1.0f));
+        binding.aovSettings = colorDesc.aovSettings;
+        aovBindings.push_back(std::move(binding));
+    }
+
+    {
+        const HdAovDescriptor depthDesc =
+            renderDelegate->GetDefaultAovDescriptor(HdAovTokens->depth);
+        HdRenderBufferDescriptor rbDesc;
+        rbDesc.dimensions = GfVec3i(resolution[0], resolution[1], 1);
+        rbDesc.format = depthDesc.format;
+        rbDesc.multiSampled = multiSampled;
+        AddRenderBuffer(depthId, rbDesc);
+        HdRenderPassAovBinding binding;
+        binding.aovName = HdAovTokens->depth;
+        binding.renderBufferId = depthId;
+        binding.clearValue = VtValue(1.f);
+        binding.aovSettings = depthDesc.aovSettings;
+        aovBindings.push_back(std::move(binding));
+    }
+
+    return aovBindings;
 }
 
 void
@@ -402,6 +454,34 @@ Hdx_UnitTestDelegate::AddRenderSetupTask(SdfPath const &id)
     params.camera = _cameraId;
     params.viewport = GfVec4f(0, 0, 512, 512);
     cache[HdTokens->params] = VtValue(params);
+}
+
+void
+Hdx_UnitTestDelegate::AddOitRenderTask(SdfPath const &id)
+{
+    const HdRenderPassAovBindingVector aovBindings =
+        AddAovBindings(GfVec2i(256, 256), /*multiSampled=*/false);
+
+    GetRenderIndex().InsertTask<HdxOitRenderTask>(this, id);
+    _ValueCache &cache = _valueCacheMap[id];
+    HdxRenderTaskParams params;
+    params.camera = _cameraId;
+    params.viewport = GfVec4d(0, 0, 256, 256);
+    params.aovBindings = aovBindings;
+    cache[HdTokens->params] = VtValue(params);
+    cache[HdTokens->collection] = VtValue(HdRprimCollection(
+        HdTokens->geometry,
+        HdReprSelector(HdReprTokens->smoothHull)));
+    cache[HdTokens->renderTags] =
+        VtValue(TfTokenVector{HdRenderTagTokens->geometry});
+}
+
+void
+Hdx_UnitTestDelegate::AddOitResolveTask(SdfPath const &id)
+{
+    GetRenderIndex().InsertTask<HdxOitResolveTask>(this, id);
+    _ValueCache &cache = _valueCacheMap[id];
+    cache[HdTokens->params] = VtValue(HdxOitResolveTaskParams());
 }
 
 void

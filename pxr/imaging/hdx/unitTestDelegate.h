@@ -8,6 +8,7 @@
 #define PXR_IMAGING_HDX_UNIT_TEST_DELEGATE_H
 
 #include "pxr/pxr.h"
+#include "pxr/imaging/hd/renderPassState.h"
 #include "pxr/imaging/hd/sceneDelegate.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/glf/simpleLight.h"
@@ -62,6 +63,8 @@ public:
                          HdRenderBufferDescriptor const &desc);
     void UpdateRenderBuffer(SdfPath const &id, 
                             HdRenderBufferDescriptor const &desc);
+    HdRenderPassAovBindingVector AddAovBindings(GfVec2i const &resolution,
+                                                bool multiSampled = false);
 
     // draw target
     void AddDrawTarget(SdfPath const &id);
@@ -70,6 +73,8 @@ public:
     // tasks
     void AddRenderTask(SdfPath const &id);
     void AddRenderSetupTask(SdfPath const &id);
+    void AddOitRenderTask(SdfPath const &id);
+    void AddOitResolveTask(SdfPath const &id);
     void AddSimpleLightTask(SdfPath const &id);
     void AddShadowTask(SdfPath const &id);
     void AddSelectionTask(SdfPath const &id);
