@@ -461,6 +461,15 @@ pxr_build_test(testSdfUsdcInvalidPrimChildren
         testenv/testSdfUsdcInvalidPrimChildren.cpp
 )
 
+pxr_build_test(testSdfCrateCorrupt
+    LIBRARIES
+        arch
+        tf
+        sdf
+    CPPFILES
+        testenv/testSdfCrateCorrupt.cpp
+)
+
 pxr_install_test_dir(
     SRC testenv/testSdfBatchNamespaceEdit.testenv
     DEST testSdfBatchNamespaceEdit/testSdfBatchNamespaceEdit.testenv
@@ -778,5 +787,10 @@ pxr_register_test(testSdfVariants
 )
 pxr_register_test(testSdfUsdcInvalidPrimChildren
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfUsdcInvalidPrimChildren"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testSdfCrateCorrupt
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testSdfCrateCorrupt"
     EXPECTED_RETURN_CODE 0
 )

@@ -8,6 +8,7 @@
 #include "pxr/pxr.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/errorMark.h"
 
 #include "../integerCoding.h"
 
@@ -19,6 +20,34 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 int main(int argc, char** argv) {
+
+    // Empty input: LZ4 step may return 0 bytes; that is not failure.
+    {
+        std::vector<uint32_t> empty;
+        std::unique_ptr<char[]> compressed(
+            new char[Sdf_IntegerCompression::GetCompressedBufferSize(
+                empty.size())]);
+        TfErrorMark m;
+        size_t const compressedSize = Sdf_IntegerCompression::CompressToBuffer(
+            empty.data(), empty.size(), compressed.get());
+        TF_AXIOM(compressedSize > 0);
+        size_t const nDecoded = Sdf_IntegerCompression::DecompressFromBuffer(
+            compressed.get(), compressedSize, empty.data(), empty.size());
+        TF_AXIOM(nDecoded == 0);
+        TF_AXIOM(m.IsClean());
+    }
+
+    // Corrupt compressed payload must fail without decoding integers.
+    {
+        unsigned char const corrupt[] = { 0, 0x01, 0x02, 0x03, 0x04 };
+        std::vector<uint32_t> decoded(4, 999);
+        TfErrorMark m;
+        size_t const nDecoded = Sdf_IntegerCompression::DecompressFromBuffer(
+            reinterpret_cast<char const *>(corrupt), sizeof(corrupt),
+            decoded.data(), decoded.size());
+        TF_AXIOM(nDecoded == 0);
+        TF_AXIOM(!m.IsClean());
+    }
 
     std::vector<uint32_t> ints {
         0, 4, 13, 15, 17, 20, 23, 26, 29, 29, 32, 29, 29,

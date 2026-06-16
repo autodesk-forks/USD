@@ -6,6 +6,7 @@
 //
 #include "pxr/pxr.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/errorMark.h"
 #include "pxr/base/tf/fastCompression.h"
 #include "pxr/usd/sdf/integerCoding.h"
 #include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
@@ -381,11 +382,13 @@ size_t _DecompressIntegers(char const *compressed, size_t compressedSize,
         workingSpace = tmpSpace.get();
     }
 
-    size_t decompSz = TfFastCompression::DecompressFromBuffer(
+    TfErrorMark err;
+    TfFastCompression::DecompressFromBuffer(
         compressed, workingSpace, compressedSize, workingSpaceSize);
 
-    if (decompSz == 0)
+    if (!err.IsClean()) {
         return 0;
+    }
 
     return _DecodeIntegers(workingSpace, numInts, ints);
 }

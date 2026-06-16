@@ -2065,7 +2065,7 @@ _ReadPossiblyCompressedArray(
 struct _CompressedIntsReader
 {
     template <class Reader, class Int>
-    void Read(Reader &reader, Int *out, size_t numInts) {
+    bool Read(Reader &reader, Int *out, size_t numInts) {
         using Compressor = typename std::conditional<
             sizeof(Int) == 4,
             Sdf_IntegerCompression,
@@ -2078,9 +2078,13 @@ struct _CompressedIntsReader
             compressedSize = _compBufferSize;
         }
         reader.ReadContiguous(_compBuffer.get(), compressedSize);
-        Compressor::DecompressFromBuffer(
+        // DecompressFromBuffer returns the number of integers decoded on
+        // success (including 0 when numInts is 0), not a boolean.
+        TfErrorMark err;
+        size_t const nDecoded = Compressor::DecompressFromBuffer(
             _compBuffer.get(), compressedSize, out, numInts,
             _workingSpace.get());
+        return err.IsClean() && nDecoded == numInts;
     }
 
 private:
@@ -2105,11 +2109,11 @@ private:
 };
 
 template <class Reader, class Int>
-static inline void
+static inline bool
 _ReadCompressedInts(Reader &reader, Int *out, size_t size)
 {
     _CompressedIntsReader r;
-    r.Read(reader, out, size);
+    return r.Read(reader, out, size);
 }
 
 template <class Reader, class T>
@@ -2134,7 +2138,10 @@ _ReadPossiblyCompressedArray(
         if (out->size() < MinCompressedArraySize) {
             reader.ReadContiguous(out->data(), out->size());
         } else {
-            _ReadCompressedInts(reader, out->data(), out->size());
+            if (!_ReadCompressedInts(reader, out->data(), out->size())) {
+                out->clear();
+                return;
+            }
         }
     }
 }
@@ -2171,7 +2178,10 @@ _ReadPossiblyCompressedArray(
     if (code == 'i') {
         // Compressed integers.
         vector<int32_t> ints(osize);
-        _ReadCompressedInts(reader, ints.data(), ints.size());
+        if (!_ReadCompressedInts(reader, ints.data(), ints.size())) {
+            out->clear();
+            return;
+        }
         std::copy(ints.begin(), ints.end(), odata);
     } else if (code == 't') {
         // Lookup table & indexes.
@@ -2179,7 +2189,10 @@ _ReadPossiblyCompressedArray(
         vector<T> lut(lutSize);
         reader.ReadContiguous(lut.data(), lut.size());
         vector<uint32_t> indexes(osize);
-        _ReadCompressedInts(reader, indexes.data(), indexes.size());
+        if (!_ReadCompressedInts(reader, indexes.data(), indexes.size())) {
+            out->clear();
+            return;
+        }
         auto o = odata;
         for (auto index: indexes) {
             *o++ = lut[index];
@@ -3470,7 +3483,10 @@ CrateFile::_ReadFieldSets(Reader reader)
             auto numFieldSets = reader.template Read<uint64_t>();
             _fieldSets.resize(numFieldSets);
             vector<uint32_t> tmp(numFieldSets);
-            _ReadCompressedInts(reader, tmp.data(), numFieldSets);
+            if (!_ReadCompressedInts(reader, tmp.data(), numFieldSets)) {
+                _fieldSets.clear();
+                return;
+            }
             for (size_t i = 0; i != numFieldSets; ++i) {
                 _fieldSets[i].value = tmp[i];
             }
@@ -3498,7 +3514,10 @@ CrateFile::_ReadFields(Reader reader)
             auto numFields = reader.template Read<uint64_t>();
             _fields.resize(numFields);
             vector<uint32_t> tmp(numFields);
-            _ReadCompressedInts(reader, tmp.data(), tmp.size());
+            if (!_ReadCompressedInts(reader, tmp.data(), tmp.size())) {
+                _fields.clear();
+                return;
+            }
             for (size_t i = 0; i != numFields; ++i) {
                 _fields[i].tokenIndex.value = tmp[i];
             }
@@ -3509,9 +3528,19 @@ CrateFile::_ReadFields(Reader reader)
             reader.ReadContiguous(compBuffer.get(), repsSize);
             vector<uint64_t> repsData;
             repsData.resize(numFields);
-            TfFastCompression::DecompressFromBuffer(
-                compBuffer.get(), reinterpret_cast<char *>(repsData.data()),
-                repsSize, repsData.size() * sizeof(repsData[0]));
+            size_t const repsBytes = repsData.size() * sizeof(repsData[0]);
+            if (repsSize == 0) {
+                TF_RUNTIME_ERROR("Empty value-rep block in crate file");
+                _fields.clear();
+                return;
+            }
+            if (TfFastCompression::DecompressFromBuffer(
+                    compBuffer.get(),
+                    reinterpret_cast<char *>(repsData.data()),
+                    repsSize, repsBytes) != repsBytes) {
+                _fields.clear();
+                return;
+            }
 
             for (size_t i = 0; i != numFields; ++i) {
                 _fields[i].valueRep.data = repsData[i];
@@ -3544,19 +3573,28 @@ CrateFile::_ReadSpecs(Reader reader)
             vector<uint32_t> tmp(numSpecs);
 
             // pathIndexes.
-            cr.Read(reader, tmp.data(), numSpecs);
+            if (!cr.Read(reader, tmp.data(), numSpecs)) {
+                _specs.clear();
+                return;
+            }
             for (size_t i = 0; i != numSpecs; ++i) {
                 _specs[i].pathIndex.value = tmp[i];
             }
 
             // fieldSetIndexes.
-            cr.Read(reader, tmp.data(), numSpecs);
+            if (!cr.Read(reader, tmp.data(), numSpecs)) {
+                _specs.clear();
+                return;
+            }
             for (size_t i = 0; i != numSpecs; ++i) {
                 _specs[i].fieldSetIndex.value = tmp[i];
             }
             
             // specTypes.
-            cr.Read(reader, tmp.data(), numSpecs);
+            if (!cr.Read(reader, tmp.data(), numSpecs)) {
+                _specs.clear();
+                return;
+            }
             for (size_t i = 0; i != numSpecs; ++i) {
                 _specs[i].specType = static_cast<SdfSpecType>(tmp[i]);
             }
@@ -3671,8 +3709,16 @@ CrateFile::_ReadTokens(Reader reader)
         charsEnd = chars.get() + uncompressedSize;
         RawDataPtr compressed(new char[compressedSize]);
         reader.ReadContiguous(compressed.get(), compressedSize);
-        TfFastCompression::DecompressFromBuffer(
+        // DecompressFromBuffer returns the number of bytes written. A return
+        // of 0 is valid when uncompressedSize is 0; otherwise require an exact
+        // match to avoid parsing an unterminated buffer in the loop below.
+        TfErrorMark m;
+        size_t const decompressedSize = TfFastCompression::DecompressFromBuffer(
             compressed.get(), chars.get(), compressedSize, uncompressedSize);
+        if (!m.IsClean() || decompressedSize != uncompressedSize) {
+            _tokens.clear();
+            return;
+        }
     }
 
     // Check/ensure that we're null terminated.
@@ -3816,7 +3862,9 @@ CrateFile::_ReadCompressedPaths(Reader reader,
 
     // pathIndexes.
     pathIndexes.resize(numPaths);
-    cr.Read(reader, pathIndexes.data(), numPaths);
+    if (!cr.Read(reader, pathIndexes.data(), numPaths)) {
+        return;
+    }
 
     // Range check the pathIndexes, which index into _paths, and also ensure
     // there are no duplicates in pathIndexes.  If there are this file is
@@ -3842,7 +3890,9 @@ CrateFile::_ReadCompressedPaths(Reader reader,
     
     // elementTokenIndexes.
     elementTokenIndexes.resize(numPaths);
-    cr.Read(reader, elementTokenIndexes.data(), numPaths);
+    if (!cr.Read(reader, elementTokenIndexes.data(), numPaths)) {
+        return;
+    }
 
     // Range check the elementTokenIndexes, which index (by absolute value) into
     // _tokens.
@@ -3860,7 +3910,9 @@ CrateFile::_ReadCompressedPaths(Reader reader,
 
     // jumps.
     jumps.resize(numPaths);
-    cr.Read(reader, jumps.data(), numPaths);
+    if (!cr.Read(reader, jumps.data(), numPaths)) {
+        return;
+    }
 
     // Now build the paths.
     _BuildDecompressedPathsImpl(pathIndexes, elementTokenIndexes, jumps, 0,
