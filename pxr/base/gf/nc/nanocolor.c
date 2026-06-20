@@ -61,6 +61,10 @@ NCAPI const char* NcGetDescription(const NcColorSpace* cs) {
 #define _WpD65 { 0.3127f, 0.3290f }
 #define _WpACES { 0.32168f, 0.33767f }
 
+// Please note that adding color spaces to this list has implications that extend beyond
+// OpenUSD. New additions should be discussed with the ASWF Color Interop Forum to ensure
+// all projects stay in sync.
+
 static NcColorSpace _colorSpaces[] = {
     {
         // extractPrimaries(cmx %*% AP1Mx)
@@ -140,7 +144,11 @@ static NcColorSpace _colorSpaces[] = {
          1.0,
          0.0},
         0, 0,
-        { 0,0,0, 0,0,0, 0,0,0 }
+        // Define this color space using the rgbToXYZ matrix since it should be equal to
+        // the CIE XYZ connection space. The usual NPM calculation from RP 177 is not
+        // satisfactory since a D65 neutral should have an XYZ of [0.95046, 1., 1.08906]
+        // rather than [1., 1., 1].
+        { 1.,0.,0., 0.,1.,0., 0.,0.,1. }
     },
     {
         {"sRGB Encoded Rec.709 (sRGB)", "srgb_rec709_scene",
@@ -225,7 +233,9 @@ static NcColorSpace _colorSpaces[] = {
          { 0.21, 0.71 },
          { 0.15, 0.06 },
          _WpD65,
-         2.2,
+        // The specified gamma is approximately 2.199.
+        // https://en.wikipedia.org/wiki/Adobe_RGB_color_space
+         563.f / 256.f,
          0.0},
         0, 0,
         { 0,0,0, 0,0,0, 0,0,0 }
@@ -998,32 +1008,9 @@ NcYxy NcKelvinToYxy(float T, float luminance) {
     return _NcYuv2Yxy((NcYuvPrime) {luminance, u, 3.f * v / 2.f });
 }
 
-static NcYxy _NormalizeYxy(NcYxy c) {
-    return (NcYxy) {
-        c.Y,
-        c.Y * c.x / c.y,
-        c.Y * (1.f - c.x - c.y) / c.y
-    };
-}
-
-static inline float _SignOf(float x) {
-    return x > 0 ? 1.f : (x < 0) ? -1.f : 0.f;
-}
-
 NcRGB NcYxyToRGB(const NcColorSpace* cs, NcYxy c) {
-    NcYxy cYxy = _NormalizeYxy(c);
-    NcRGB rgb = NcXYZToRGB(cs, (NcXYZ) { cYxy.x, cYxy.Y, cYxy.y });
-    NcRGB magRgb = {
-        fabsf(rgb.r),
-        fabsf(rgb.g),
-        fabsf(rgb.b) };
+    NcXYZ cXYZ = NcYxyToXYZ(c);
+    NcRGB rgb = NcXYZToRGB(cs, cXYZ);
 
-    float maxc = (magRgb.r > magRgb.g) ? magRgb.r : magRgb.g;
-    maxc = maxc > magRgb.b ? maxc : magRgb.b;
-    NcRGB ret = (NcRGB) {
-        _SignOf(rgb.r) * rgb.r / maxc,
-        _SignOf(rgb.g) * rgb.g / maxc,
-        _SignOf(rgb.b) * rgb.b / maxc };
-    return ret;
+    return rgb;
 }
-

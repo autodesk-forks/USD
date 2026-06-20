@@ -357,7 +357,7 @@ NCAPI NcXYZ NcYxyToXYZ(NcYxy Yxy);
  *
  * @param cs The color space.
  * @param c The Yxy color coordinate.
- * @return The RGB color coordinate.
+ * @return The RGB color coordinate, with the scaling determined by Y.
  */
 NCAPI NcRGB NcYxyToRGB(const NcColorSpace* cs, NcYxy c);
 

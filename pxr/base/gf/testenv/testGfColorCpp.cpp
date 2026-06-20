@@ -417,6 +417,19 @@ void testPlanckianLocus() {
     GfColor lowKelvinColor(GfColorSpace(GfColorSpaceNames->LinearRec709));
     lowKelvinColor.SetFromPlanckianLocus(999.0f, 1.0f);  // Below 1000K
     
+    // Test that the luminance argument scales output linearly.
+    {
+        GfColorSpace csLinearRec709(GfColorSpaceNames->LinearRec709);
+        GfColor c1(csLinearRec709);
+        GfColor c2(csLinearRec709);
+        GfColor cHalf(csLinearRec709);
+        c1.SetFromPlanckianLocus(6500.0f, 1.0f);
+        c2.SetFromPlanckianLocus(6500.0f, 2.0f);
+        cHalf.SetFromPlanckianLocus(6500.0f, 0.5f);
+        TF_AXIOM(GfIsClose(c2.GetRGB(), c1.GetRGB() * 2.0f, 1e-5f));
+        TF_AXIOM(GfIsClose(cHalf.GetRGB(), c1.GetRGB() * 0.5f, 1e-5f));
+    }
+
     // Should clamp to valid range and produce finite values
     GfVec3f lowKelvinRGB = lowKelvinColor.GetRGB();
     bool lowKelvinValid = !std::isnan(lowKelvinRGB[0]) && !std::isnan(lowKelvinRGB[1]) && 
@@ -646,6 +659,19 @@ void testKnownColors() {
         TF_AXIOM(GfIsClose(t7, g22_rec709_scene, 1e-5f));
         GfColor t8(t4, csG22Rec709);
         TF_AXIOM(GfIsClose(t8, g22_rec709_scene, 1e-4f));
+    }
+
+    // Test that the XYZ connection space is equal to lin_ciexyzd65_scene.
+    {
+        GfColorSpace csLinearRec709(GfColorSpaceNames->LinearRec709);
+        GfColorSpace csXYZ(GfColorSpaceNames->CIEXYZ);
+        GfColor linear_rec709_scene(GfVec3f(1.f, 1.f, 1.f), csLinearRec709);
+        GfColor whiteD65(GfVec3f(0.95045593f, 1.f, 1.08905775f), csXYZ);
+
+        GfColor t1(whiteD65, csLinearRec709);
+        TF_AXIOM(GfIsClose(t1, linear_rec709_scene, 1e-5f));
+        GfColor t2(linear_rec709_scene, csXYZ);
+        TF_AXIOM(GfIsClose(t2, whiteD65, 1e-5f));
     }
 }
 
