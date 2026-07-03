@@ -358,7 +358,7 @@ void testColorSpace() {
     TF_AXIOM(customSpace.GetLinearBias() == linearBias);
 
     auto transferParams = customSpace.GetTransferFunctionParams();
-    bool transferParamsExist = (transferParams.first != 0.0f || transferParams.second != 0.0f);
+    bool transferParamsExist = (transferParams.first != 0.0f && transferParams.second != 0.0f);
     TF_AXIOM(transferParamsExist);
 
     // Define a custom RGB to XYZ matrix (Rec.709 matrix)
@@ -376,6 +376,19 @@ void testColorSpace() {
     TF_AXIOM(GfIsClose(returnedMatrix, rgbToXYZ, 1e-5f));
     TF_AXIOM(GfIsClose(matrixSpace.GetGamma(), gamma, 1e-6f));
     TF_AXIOM(GfIsClose(matrixSpace.GetLinearBias(), linearBias, 1e-6f));
+
+    // Check that the K0 and Phi have been initialized
+    auto matrixTransferParams = matrixSpace.GetTransferFunctionParams();
+    bool matrixTransferParamsExist = (matrixTransferParams.first != 0.0f && matrixTransferParams.second != 0.0f);
+    TF_AXIOM(matrixTransferParamsExist);
+
+    // Exercise the gamma == 1.0 branch of the transfer function initialization
+    // for a color space defined directly by a matrix.
+    TfToken linearMatrixSpaceName("linear_matrix_space");
+    GfColorSpace linearMatrixSpace(linearMatrixSpaceName, rgbToXYZ, 1.0f, 0.0f);
+    auto linearTransferParams = linearMatrixSpace.GetTransferFunctionParams();
+    bool linearTransferParamsExist = (linearTransferParams.first != 0.0f && linearTransferParams.second != 0.0f);
+    TF_AXIOM(linearTransferParamsExist);
 }
 
 void testPlanckianLocus() {

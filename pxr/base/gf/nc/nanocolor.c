@@ -338,12 +338,15 @@ static NcM33f _M33fMultiply(NcM33f lh, NcM33f rh) {
 }
 
 static void _InitColorSpace(NcColorSpace* cs) {
-    if (!cs || cs->rgbToXYZ.m[8] != 0.0)
+    if (!cs)
         return;
 
     const float a = cs->desc.linearBias;
     const float gamma = cs->desc.gamma;
 
+    // Always initialise K0 and phi from the transfer function parameters.
+    // These are needed by _ToLinear/_FromLinear regardless of whether the
+    // color space was constructed from chromaticities or a matrix directly.
     if (gamma == 1.f) {
         cs->K0 = 1.e9f;
         cs->phi = 1.f;
@@ -361,6 +364,14 @@ static void _InitColorSpace(NcColorSpace* cs) {
                        (gamma - 1.f);
         }
     }
+
+    // If the matrix is already set, skip the chromaticity-to-matrix
+    // computation below. This handles two cases:
+    //   1. NcCreateColorSpaceM33: matrix supplied directly by the caller.
+    //   2. Re-initialisation guard: built-in spaces whose matrix has already
+    //      been computed by a prior _InitColorSpace call.
+    if (cs->rgbToXYZ.m[8] != 0.0)
+        return;
 
     // if the primaries are zero, the color space was defined by the 3x3 matrix,
     if (cs->desc.whitePoint.x == 0.f)
