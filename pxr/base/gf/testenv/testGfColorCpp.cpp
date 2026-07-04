@@ -378,6 +378,123 @@ void testColorSpace() {
     TF_AXIOM(GfIsClose(matrixSpace.GetLinearBias(), linearBias, 1e-6f));
 }
 
+// Raw, Data, Identity, and Unknown are non-colorimetric placeholder color
+// spaces. Converting to/from any of them must be an exact no-op: the RGB
+// (and alpha) values must pass through completely unchanged, regardless of
+// the other color space's matrix or transfer curve.
+void testNoOpColorSpaceConversions() {
+    std::vector<TfToken> noOpSpaces = {
+        GfColorSpaceNames->Identity,
+        GfColorSpaceNames->Data,
+        GfColorSpaceNames->Raw,
+        GfColorSpaceNames->Unknown
+    };
+
+    // Regular color spaces with non-trivial matrices and/or transfer curves.
+    std::vector<TfToken> regularSpaces = {
+        GfColorSpaceNames->SRGBRec709,
+        GfColorSpaceNames->LinearAP0
+    };
+
+    // A colorimetrically non-neutral value, so a bug that silently applies
+    // a real transform is caught.
+    const GfVec3f testRGB(0.2f, 0.4f, 0.8f);
+
+    for (const auto& noOpToken : noOpSpaces) {
+        GfColorSpace noOpSpace(noOpToken);
+        for (const auto& regularToken : regularSpaces) {
+            GfColorSpace regularSpace(regularToken);
+
+            // regular -> no-op must leave values unchanged.
+            {
+                GfColor regularColor(testRGB, regularSpace);
+                GfColor converted(regularColor, noOpSpace);
+                TF_AXIOM(converted.GetRGB() == testRGB);
+            }
+
+            // no-op -> regular must leave values unchanged.
+            {
+                GfColor noOpColor(testRGB, noOpSpace);
+                GfColor converted(noOpColor, regularSpace);
+                TF_AXIOM(converted.GetRGB() == testRGB);
+            }
+
+            // GetRGBToRGB must report an identity matrix in both directions
+            // whenever either endpoint is a no-op placeholder space.
+            {
+                GfMatrix3f toNoOp = noOpSpace.GetRGBToRGB(regularSpace);
+                GfMatrix3f fromNoOp = regularSpace.GetRGBToRGB(noOpSpace);
+                TF_AXIOM(GfIsClose(toNoOp, GfMatrix3f(1.0f), 1e-7f));
+                TF_AXIOM(GfIsClose(fromNoOp, GfMatrix3f(1.0f), 1e-7f));
+            }
+
+            // Same checks via the array conversion path (RGB and RGBA).
+            {
+                std::vector<float> rgbValues = {
+                    testRGB[0], testRGB[1], testRGB[2],
+                    testRGB[0], testRGB[1], testRGB[2]
+                };
+                std::vector<float> original = rgbValues;
+                TfSpan<float> rgbSpan(rgbValues.data(), rgbValues.size());
+                regularSpace.ConvertRGBSpan(noOpSpace, rgbSpan);
+                TF_AXIOM(rgbValues == original);
+                noOpSpace.ConvertRGBSpan(regularSpace, rgbSpan);
+                TF_AXIOM(rgbValues == original);
+            }
+            {
+                std::vector<float> rgbaValues = {
+                    testRGB[0], testRGB[1], testRGB[2], 0.6f,
+                    testRGB[0], testRGB[1], testRGB[2], 0.6f
+                };
+                std::vector<float> original = rgbaValues;
+                TfSpan<float> rgbaSpan(rgbaValues.data(), rgbaValues.size());
+                regularSpace.ConvertRGBASpan(noOpSpace, rgbaSpan);
+                TF_AXIOM(rgbaValues == original);
+                noOpSpace.ConvertRGBASpan(regularSpace, rgbaSpan);
+                TF_AXIOM(rgbaValues == original);
+            }
+        }
+    }
+}
+
+// A GfColorSpace constructed from an unregistered name token falls back to a
+// sentinel color space with an identity matrix and gamma=1/linearBias=0 (see
+// the GfColorSpace(TfToken) constructor), which is numerically identical to
+// Raw's descriptor in every field except isData and name. Equality must not
+// conflate a genuine no-op/data space with a regular space that merely
+// happens to have the same (degenerate) matrix and transfer curve, nor
+// conflate two distinct no-op spaces (e.g. Raw and Data) with each other.
+void testColorSpaceEqualityIsData() {
+    GfColorSpace raw(GfColorSpaceNames->Raw);
+    GfColorSpace data(GfColorSpaceNames->Data);
+    GfColorSpace identity(GfColorSpaceNames->Identity);
+    GfColorSpace unknown(GfColorSpaceNames->Unknown);
+    GfColorSpace sentinel(TfToken("not_a_registered_color_space"));
+
+    TF_AXIOM(raw == raw);
+
+    // IsData() must be true for all four built-in data/no-op spaces, and
+    // false for a regular color space or the numerically-identical sentinel.
+    TF_AXIOM(raw.IsData());
+    TF_AXIOM(data.IsData());
+    TF_AXIOM(identity.IsData());
+    TF_AXIOM(unknown.IsData());
+    TF_AXIOM(!sentinel.IsData());
+    TF_AXIOM(!GfColorSpace(GfColorSpaceNames->LinearRec709).IsData());
+
+    // Same isData, but different names: Raw, Data, Identity, and Unknown
+    // are distinct color spaces and must not compare equal to each other.
+    TF_AXIOM(raw != data);
+    TF_AXIOM(raw != unknown);
+    TF_AXIOM(data != identity);
+
+    // Same matrix/gamma/linearBias, but different isData: a no-op space
+    // must not compare equal to a regular space with the same numeric
+    // descriptor.
+    TF_AXIOM(!(data == sentinel));
+    TF_AXIOM(data != sentinel);
+}
+
 void testPlanckianLocus() {
     // Test Kelvin to Yxy conversion for values that are 1000K apart from
     // 1000 to 15000 Kelvin
@@ -680,6 +797,8 @@ main(int argc, char *argv[])
 {
     basicColorTests();
     testColorSpace();
+    testNoOpColorSpaceConversions();
+    testColorSpaceEqualityIsData();
     testKnownColors();
     testKnownColorSpanConversion();
     testSpanConversions();

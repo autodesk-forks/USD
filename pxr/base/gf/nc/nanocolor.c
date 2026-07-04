@@ -32,6 +32,10 @@ struct NcColorSpace {
     NcColorSpaceDescriptor desc;
     float K0, phi;
     NcM33f rgbToXYZ;
+    // True for non-colorimetric placeholder spaces (such as Raw and Data).
+    // Conversions to or from these spaces must leave RGB values unchanged
+    // rather than being treated as a transform through the rgbToXYZ matrix.
+    bool isData;
 };
 
 static void _InitColorSpace(NcColorSpace* cs);
@@ -232,47 +236,51 @@ static NcColorSpace _colorSpaces[] = {
     },
     {
         {"Data", "data",
-         { 1.0, 0.0 }, // these chromaticities generate identity
+         { 1.0, 0.0 },
          { 0.0, 1.0 },
          { 0.0, 0.0 },
          { 1.0/3.0, 1.0/3.0 },
          1.0,
          0.0},
         0, 0,
-        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+        { 1,0,0, 0,1,0, 0,0,1 },
+        true // data/no-op color space: conversions don't modify RGB values
     },
     {
         {"Identity", "identity",
-         { 1.0, 0.0 }, // these chromaticities generate identity
+         { 1.0, 0.0 },
          { 0.0, 1.0 },
          { 0.0, 0.0 },
          { 1.0/3.0, 1.0/3.0 },
          1.0,
          0.0},
         0, 0,
-        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+        { 1,0,0, 0,1,0, 0,0,1 },
+        true // data/no-op color space: conversions don't modify RGB values
     },
     {
         {"Raw", "raw",
-         { 1.0, 0.0 }, // these chromaticities generate identity
+         { 1.0, 0.0 },
          { 0.0, 1.0 },
          { 0.0, 0.0 },
          { 1.0/3.0, 1.0/3.0 },
          1.0,
          0.0},
         0, 0,
-        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+        { 1,0,0, 0,1,0, 0,0,1 },
+        true // data/no-op color space: conversions don't modify RGB values
     },
     {
         {"Unknown", "unknown",
-         { 1.0, 0.0 }, // these chromaticities generate identity
+         { 1.0, 0.0 },
          { 0.0, 1.0 },
          { 0.0, 0.0 },
          { 1.0/3.0, 1.0/3.0 },
          1.0,
          0.0},
         0, 0,
-        { 1,0,0, 0,1,0, 0,0,1 } // initialized as identity
+        { 1,0,0, 0,1,0, 0,0,1 },
+        true // data/no-op color space: conversions don't modify RGB values
     }
 };
 
@@ -285,7 +293,11 @@ bool NcColorSpaceEqual(const NcColorSpace* cs1, const NcColorSpace* cs2) {
         return false;
     }
 
-    if (strcmp(cs1->desc.shortName, cs1->desc.shortName) != 0) {
+    if (strcmp(cs1->desc.shortName, cs2->desc.shortName) != 0) {
+        return false;
+    }
+
+    if (cs1->isData != cs2->isData) {
         return false;
     }
 
@@ -302,6 +314,10 @@ bool NcColorSpaceEqual(const NcColorSpace* cs1, const NcColorSpace* cs2) {
         return false;
     }
     return true;
+}
+
+bool NcIsDataColorSpace(const NcColorSpace* cs) {
+    return cs && cs->isData;
 }
 
 static NcM33f _M3ffInvert(NcM33f m) {
@@ -527,6 +543,13 @@ NcM33f NcGetRGBToRGBMatrix(const NcColorSpace* src, const NcColorSpace* dst) {
         return (NcM33f){1,0,0,0,1,0,0,0,1};
     }
 
+    // Raw/Data/Identity/Unknown are non-colorimetric placeholder spaces;
+    // a conversion involving one of them must be a no-op, not a transform
+    // through their (identity) rgbToXYZ matrix.
+    if (src->isData || dst->isData) {
+        return (NcM33f){1,0,0,0,1,0,0,0,1};
+    }
+
     NcM33f toXYZ = NcGetRGBToXYZMatrix(src);
     NcM33f fromXYZ = NcGetXYZToRGBMatrix(dst);
     NcM33f tx = _M33fMultiply(fromXYZ, toXYZ);
@@ -536,6 +559,9 @@ NcM33f NcGetRGBToRGBMatrix(const NcColorSpace* src, const NcColorSpace* dst) {
 
 NcRGB NcTransformColor(const NcColorSpace* dst, const NcColorSpace* src, NcRGB rgb) {
     if (!dst || !src) {
+        return rgb;
+    }
+    if (src->isData || dst->isData) {
         return rgb;
     }
 
@@ -562,6 +588,9 @@ void NcTransformColorsRef(const NcColorSpace* dst, const NcColorSpace* src, NcRG
 {
     if (!dst || !src || !rgb || count == 0)
         return;
+    if (src->isData || dst->isData) {
+        return;
+    }
 
     NcM33f tx = _M33fMultiply(NcGetRGBToXYZMatrix(src),
                                NcGetXYZToRGBMatrix(dst));
@@ -602,6 +631,9 @@ void NcTransformColorsWithAlphRef(const NcColorSpace* dst, const NcColorSpace* s
 {
     if (!dst || !src || !rgba || count == 0)
         return;
+    if (src->isData || dst->isData) {
+        return;
+    }
 
     NcM33f tx = NcGetRGBToRGBMatrix(src, dst);
 
@@ -639,6 +671,9 @@ void NcTransformColors(const NcColorSpace* dst, const NcColorSpace* src, NcRGB* 
 {
     if (!dst || !src || !rgb || count == 0)
         return;
+    if (src->isData || dst->isData) {
+        return;
+    }
 
     NcM33f tx = NcGetRGBToRGBMatrix(src, dst);
 
@@ -753,6 +788,9 @@ void NcTransformColorsWithAlpha(const NcColorSpace* dst, const NcColorSpace* src
 {
     if (!dst || !src || !rgba || count == 0)
         return;
+    if (src->isData || dst->isData) {
+        return;
+    }
 
     NcM33f tx = NcGetRGBToRGBMatrix(src, dst);
 
