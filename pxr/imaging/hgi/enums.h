@@ -63,6 +63,18 @@ using HgiBits = uint32_t;
 /// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
 ///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
 ///   regardless of the body of the shader</li>
+/// <li>HgiDeviceCapabilitiesBitsGeometricStage:
+///   Support for geometric shader stage</li>
+/// <li>HgiDeviceCapabilitiesBitsPushConstants:
+///   Support for push constants</li>
+/// <li>HgiDeviceCapabilitiesBitsTimestamps:
+///   Supports GPU timestamps</li>
+/// <li>HgiDeviceCapabilitiesBitsTriangleLineFill:
+///   Triangles can be rasterized as their edge lines.</li>
+/// <li>HgiDeviceCapabilitiesBitsTessellation:
+///   Supports tessellation, either Metal tessellation or
+///   OpenGL/Vulkan style. If this is true, then so is
+///   HgiDeviceCapabilitiesBitsMetalTessellation</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
@@ -88,6 +100,11 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsRoundPoints              = 1 << 18,
     HgiDeviceCapabilitiesBitsSingleSlotResourceArrays = 1 << 19,
     HgiDeviceCapabilitiesForceEarlyFragmentTest       = 1 << 20,
+    HgiDeviceCapabilitiesBitsGeometricStage           = 1 << 21,
+    HgiDeviceCapabilitiesBitsPushConstants            = 1 << 22,
+    HgiDeviceCapabilitiesBitsTimestamps               = 1 << 23,
+    HgiDeviceCapabilitiesBitsTriangleLineFill         = 1 << 24,
+    HgiDeviceCapabilitiesBitsTessellation             = 1 << 25,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -802,6 +819,8 @@ enum HgiStorageType
 ///   Indicates an array texture.</li>
 /// <li>HgiShaderTextureTypeCubemapTexture:
 ///   Indicates a cubemap texture.</li>
+/// <li>HgiShaderTextureTypeDepth:
+///   Indicates a depth texture.</li>
 /// </ul>
 ///
 enum HgiShaderTextureType
@@ -809,7 +828,8 @@ enum HgiShaderTextureType
     HgiShaderTextureTypeTexture = 0,
     HgiShaderTextureTypeShadowTexture,
     HgiShaderTextureTypeArrayTexture,
-    HgiShaderTextureTypeCubemapTexture
+    HgiShaderTextureTypeCubemapTexture,
+    HgiShaderTextureTypeDepth
 };
 
 /// \enum HgiComputeDispatch
