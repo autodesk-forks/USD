@@ -97,7 +97,7 @@ CurveData PopulatePeyeAndNeye()
 CurveData PopulatePeyeAndNeye()
 {
     CurveData vertexData;
-    for (int i = 0; i < gl_MaxPatchVertices; i++) {
+    for (int i = 0; i < 4; i++) {
         vertexData.Peye[i] = inData[i].Peye;
         vertexData.Neye[i] = inData[i].Neye;
     }
@@ -110,7 +110,7 @@ CurveData PopulatePeyeAndNeye()
 CurveData PopulatePeye()
 {
     CurveData vertexData;
-    for (int i = 0; i < gl_MaxPatchVertices; i++) {
+    for (int i = 0; i < 4; i++) {
         vertexData.Peye[i] = inData[i].Peye;
     }
     return vertexData;

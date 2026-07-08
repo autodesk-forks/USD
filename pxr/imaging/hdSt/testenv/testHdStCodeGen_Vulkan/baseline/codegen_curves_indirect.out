@@ -1490,7 +1490,7 @@ float GetScreenSpaceWidth(int index, CurveData vertexData, MAT4 projMat)
 CurveData PopulatePeye()
 {
     CurveData vertexData;
-    for (int i = 0; i < gl_MaxPatchVertices; i++) {
+    for (int i = 0; i < 4; i++) {
         vertexData.Peye[i] = inData[i].Peye;
     }
     return vertexData;
@@ -2229,7 +2229,7 @@ bool IsFlipped()
 CurveData PopulatePeye()
 {
     CurveData vertexData;
-    for (int i = 0; i < gl_MaxPatchVertices; i++) {
+    for (int i = 0; i < 4; i++) {
         vertexData.Peye[i] = inData[i].Peye;
     }
     return vertexData;
