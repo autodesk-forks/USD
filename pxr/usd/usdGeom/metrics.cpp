@@ -152,19 +152,6 @@ UsdGeomGetFallbackUpAxis()
     return *_fallbackUpAxis;
 }
 
-
-constexpr double UsdGeomLinearUnits::nanometers;
-constexpr double UsdGeomLinearUnits::micrometers;
-constexpr double UsdGeomLinearUnits::millimeters;
-constexpr double UsdGeomLinearUnits::centimeters;
-constexpr double UsdGeomLinearUnits::meters;
-constexpr double UsdGeomLinearUnits::kilometers;
-constexpr double UsdGeomLinearUnits::lightYears;
-constexpr double UsdGeomLinearUnits::inches;
-constexpr double UsdGeomLinearUnits::feet;
-constexpr double UsdGeomLinearUnits::yards;
-constexpr double UsdGeomLinearUnits::miles;
-
 double 
 UsdGeomGetStageMetersPerUnit(const UsdStageWeakPtr &stage)
 {

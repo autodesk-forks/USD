@@ -5,4 +5,10 @@ def "Model"
     float attr_1.timeSamples = {
         0: 10.0
     }
+    float attr_3.spline = {
+        -1:1; post linear,
+        2:2; post linear,
+        pre: loop reset,
+        post: sloped(1)
+    }
 }

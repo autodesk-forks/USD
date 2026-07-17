@@ -237,6 +237,15 @@ private:
     /// (clips or samples).
     bool _defaultCanComposeOverWeakerTimeVaryingSources;
 
+    enum class _ValueClipsSourceFormat
+    {
+        TimeSamples,
+        Spline
+    };
+    /// Valid only when _source is UsdResolveInfoSourceValueClips. Indicates
+    /// the underlying data format for the represented attribute.
+    _ValueClipsSourceFormat _clipsSourceFormat;
+
     friend class UsdAttribute;
     friend class UsdAttributeQuery;
     friend class UsdStage;

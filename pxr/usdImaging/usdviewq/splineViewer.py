@@ -123,10 +123,7 @@ class SplineViewer(QtWidgets.QWidget):
             return False
 
         # Check if the value source is a spline
-        if attr.GetResolveInfo().GetSource() != Usd.ResolveInfoSourceSpline:
-            return False
-
-        return True
+        return attr.HasSpline()
 
     def Clear(self):
         """
@@ -157,21 +154,21 @@ class SplineViewer(QtWidgets.QWidget):
             t = knot.GetTime()
 
             if self.startTime <= t:
-                pv = knot.GetPreValue()
+                pv = float(knot.GetPreValue())
                 values.append(pv)
                 # Only include tangents if we would draw them
                 if prevCurve:
                     values.append(
-                        pv - knot.GetPreTanWidth() * knot.GetPreTanSlope())
+                        pv - knot.GetPreTanWidth() * float(knot.GetPreTanSlope()))
 
             if t <= self.endTime:
-                v = knot.GetValue()
+                v = float(knot.GetValue())
                 values.append(v)
                 prevCurve = (knot.GetNextInterpolation() == Ts.InterpCurve)
                 # Only include tangents if we would draw them
                 if prevCurve and knot != self.knots[-1]:
                     values.append(
-                        v + knot.GetPostTanWidth() * knot.GetPostTanSlope())
+                        v + knot.GetPostTanWidth() * float(knot.GetPostTanSlope()))
 
         if not values:
             return None
@@ -352,22 +349,22 @@ class SplineViewer(QtWidgets.QWidget):
 
             for knot in self.knots:
                 t = knot.GetTime()
-                v = knot.GetValue()
+                v = float(knot.GetValue())
                 valuePoint = self.xform.map(QtCore.QPointF(t, v))
 
                 dualValued = knot.IsDualValued()
                 if dualValued:
-                    pv = knot.GetPreValue()
+                    pv = float(knot.GetPreValue())
                     preValuePoint = self.xform.map(QtCore.QPointF(t, pv))
                 else:
                     pv = v
                     preValuePoint = valuePoint
 
                 preTanWidth = knot.GetPreTanWidth()
-                preTanSlope = knot.GetPreTanSlope()
+                preTanSlope = float(knot.GetPreTanSlope())
 
                 postTanWidth = knot.GetPostTanWidth()
-                postTanSlope = knot.GetPostTanSlope()
+                postTanSlope = float(knot.GetPostTanSlope())
 
                 # preTanPoint is relative to preValuePoint
                 preTanPoint = self.xform.map(
@@ -431,6 +428,8 @@ class SplineViewer(QtWidgets.QWidget):
             return
         height = self.height()
         cv = self.attr.Get(self.currentFrame)
+        if cv is not None:
+            cv = float(cv)
         cf = self.currentFrame.GetValue()
         px = self.xform.map(QtCore.QPointF(cf, self.minY)).x()
         pen = QtGui.QPen(self.PLAYHEAD_COLOR, 2)

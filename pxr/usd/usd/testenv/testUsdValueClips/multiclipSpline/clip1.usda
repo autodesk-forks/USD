@@ -1,0 +1,23 @@
+#usda 1.0
+
+def "Model"
+{
+    double attrDualValuedBoundary.spline = {
+        0: 0; post linear,
+        10: 1; post none,
+        pre: none
+    }
+    double attrTruncatedLooping.spline = {
+        # The spline looks like this stretched out towards negative infinity,
+        # with the dots denoting the looped region
+        #              .   ._______
+        #     /\  /\  /\  /
+        #    /  \/  \/  \/
+        # The lowest points are 5 and the highest points are 10, switching every 5 timecode steps
+        15:10; post linear,
+        20:5; post linear,
+        25:10; post held,
+        pre: loop repeat,
+        post: held
+    }
+}

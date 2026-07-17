@@ -21,6 +21,7 @@
 /// \file
 
 #include "pxr/usdImaging/usdImaging/api.h"
+#include "pxr/imaging/hd/schemaTypeDefs.h"
 
 #include "pxr/imaging/hd/schema.h"
 
@@ -30,6 +31,8 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 // --(BEGIN CUSTOM CODE: Declares)--
+using HdTokenDataSourceContainerSchema =
+    HdContainerOfTypedSampledDataSourcesSchema<HdTokenDataSource>;
 // --(END CUSTOM CODE: Declares)--
 
 #define USD_IMAGING_USD_PRIM_INFO_SCHEMA_TOKENS \
@@ -39,6 +42,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (isLoaded) \
     (apiSchemas) \
     (kind) \
+    (variantSelections) \
     (niPrototypePath) \
     (isNiPrototype) \
     (piPropagatedPrototypes) \
@@ -52,6 +56,8 @@ TF_DECLARE_PUBLIC_TOKENS(UsdImagingUsdPrimInfoSchemaTokens, USDIMAGING_API,
 //-----------------------------------------------------------------------------
 
 
+/// \class UsdImagingUsdPrimInfoSchema
+///
 class UsdImagingUsdPrimInfoSchema : public HdSchema
 {
 public:
@@ -92,6 +98,9 @@ public:
 
     USDIMAGING_API
     HdTokenDataSourceHandle GetKind() const;
+
+    USDIMAGING_API
+    HdTokenDataSourceContainerSchema GetVariantSelections() const;
 
     USDIMAGING_API
     HdPathDataSourceHandle GetNiPrototypePath() const;
@@ -151,6 +160,7 @@ public:
         const HdBoolDataSourceHandle &isLoaded,
         const HdTokenArrayDataSourceHandle &apiSchemas,
         const HdTokenDataSourceHandle &kind,
+        const HdContainerDataSourceHandle &variantSelections,
         const HdPathDataSourceHandle &niPrototypePath,
         const HdBoolDataSourceHandle &isNiPrototype,
         const HdContainerDataSourceHandle &piPropagatedPrototypes
@@ -181,6 +191,9 @@ public:
         Builder &SetKind(
             const HdTokenDataSourceHandle &kind);
         USDIMAGING_API
+        Builder &SetVariantSelections(
+            const HdContainerDataSourceHandle &variantSelections);
+        USDIMAGING_API
         Builder &SetNiPrototypePath(
             const HdPathDataSourceHandle &niPrototypePath);
         USDIMAGING_API
@@ -200,6 +213,7 @@ public:
         HdBoolDataSourceHandle _isLoaded;
         HdTokenArrayDataSourceHandle _apiSchemas;
         HdTokenDataSourceHandle _kind;
+        HdContainerDataSourceHandle _variantSelections;
         HdPathDataSourceHandle _niPrototypePath;
         HdBoolDataSourceHandle _isNiPrototype;
         HdContainerDataSourceHandle _piPropagatedPrototypes;

@@ -40,6 +40,14 @@
                         "primTypeName": "PxrDisplayFilterPluginBase",
                         "includeDerivedPrimTypes": true
                     },
+                    "UsdRiPxrImagingEnergyFilterAdapter": {
+                        "bases": [
+                            "UsdImagingPrimAdapter"
+                        ],
+                        "isInternal": true,
+                        "primTypeName": "PxrEnergyFilterPluginBase",
+                        "includeDerivedPrimTypes": true
+                    },
                     "UsdRiPxrImagingIntegratorAdapter": {
                         "bases": [
                             "UsdImagingPrimAdapter"

@@ -68,6 +68,35 @@ def _testInstancerVisibilityEdits(appController):
     vis.Set(UsdGeom.Tokens.inherited)
     appController._takeShot("instancerVisible.png")
 
+# Tests that when a prim goes from being a "prototype" to no longer, we image
+# it properly.
+# 
+# Since we will sometimes use a type-less "over" to store prototypes, that is
+# included here.
+def _testMakePrototypeNotAPrototype(appController):
+    from pxr import Sdf
+
+    # The scene has 4 cubes:
+    # "left", "Over", "PointInstancer", "right"
+    stageRootLayer = appController._dataModel.stage.GetRootLayer()
+    stageRootLayer.TransferContent(Sdf.Layer.FindOrOpen("usd-12098/test.usda"))
+
+    # This image should contain just the other "left" and "right" cubes.
+    # The cubes under the "Over" and "PointInstancer" prims do not draw
+    # since they are considered prototypes (without any instances).
+    appController._takeShot("unprototyping-before.png")
+
+    # Turn the over to a def.  This should result in the prim underneath
+    # getting added.
+    stageRootLayer.GetPrimAtPath("/Over").specifier = Sdf.SpecifierDef
+
+    # Turn the prototype into a Scope.  Ensure it's children get imaged.
+    stageRootLayer.GetPrimAtPath("/PointInstancer").typeName = "Scope"
+
+    # This image should contain all 4 cubes.
+    appController._takeShot("unprototyping-after.png")
+
+
 #
 # Tests where we force a resync by changing subLayerPaths in a shot that has
 # native instances.
@@ -105,5 +134,6 @@ def testUsdviewInputFunction(appController):
     _testDeactivatingInstanceParent11237(appController)
     _testInstancerVisibilityEdits(appController)
     _testMakePrimInstanceable(appController)
+    _testMakePrototypeNotAPrototype(appController)
     # Last since it changes the camera.
     _testCompleteResyncWithNativeInstances(appController)

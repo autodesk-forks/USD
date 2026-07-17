@@ -8,6 +8,7 @@
 #include "pxr/usd/usd/interpolators.h"
 
 #include "pxr/usd/usd/attribute.h"
+#include "pxr/usd/usd/clipSet.h"
 #include "pxr/usd/usd/interpolation.h"
 #include "pxr/usd/usd/stage.h"
 
@@ -102,16 +103,6 @@ struct _LerpVisitor
             lowerVal.Swap(result);
         }
         // else leave lowerVal alone.
-    }
-    
-    void operator()(VtValue const &lower) {
-        // SdfTimeCode isn't a VtValue-known value type, so handle it specially.
-        if (lower.IsHolding<SdfTimeCode>()) {
-            (*this)(lower.UncheckedGet<SdfTimeCode>());
-        }
-        else if (lower.IsHolding<VtArray<SdfTimeCode>>()) {
-            (*this)(lower.UncheckedGet<VtArray<SdfTimeCode>>());
-        }
     }
 };
 

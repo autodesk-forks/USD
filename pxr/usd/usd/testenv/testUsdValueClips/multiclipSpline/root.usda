@@ -1,0 +1,101 @@
+#usda 1.0
+
+def "ModelMissingWithNoManifestDefaults" (
+    references = @./refMissing.usda@</Model>
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./missing_clip0.usda@, @./missing_clip1.usda@,
+                                  @./missing_clip2.usda@, @./missing_clip3.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]
+            asset manifestAssetPath = @./manifest_with_no_defaults.usda@
+        }
+    }
+)
+{
+}
+
+def "ModelMissingWithManifestDefaults" (
+    references = @./refMissing.usda@</Model>
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./missing_clip0.usda@, @./missing_clip1.usda@,
+                                  @./missing_clip2.usda@, @./missing_clip3.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]
+            asset manifestAssetPath = @./manifest_with_defaults.usda@
+        }
+    }
+)
+{
+}
+
+def "ModelMissingWithNoManifestDefaultsWithInterpolation" (
+    references = @./refMissing.usda@</Model>
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./missing_clip0.usda@, @./missing_clip1.usda@,
+                                  @./missing_clip2.usda@, @./missing_clip3.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]
+            asset manifestAssetPath = @./manifest_with_no_defaults.usda@
+            bool interpolateMissingClipValues = true
+        }
+    }
+)
+{
+}
+
+def "ModelMissingWithManifestDefaultsWithInterpolation" (
+    references = @./refMissing.usda@</Model>
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./missing_clip0.usda@, @./missing_clip1.usda@,
+                                  @./missing_clip2.usda@, @./missing_clip3.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]
+            asset manifestAssetPath = @./manifest_with_defaults.usda@
+            bool interpolateMissingClipValues = true
+        }
+    }
+)
+{
+    # This should have exactly the same behavior as ModelMissingWithManifestDefaults
+}
+
+def "ModelWithNoTimes" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clip1.usda@, @./clip2.usda@, @./clip3.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0, 0), (10, 1), (20, 2)]
+        }
+    }
+)
+{
+    double attrDualValuedBoundary
+    double attrTruncatedLooping
+}
+
+def "ModelWithTimesSpanningClips" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./spanning_clip1.usda@, @./spanning_clip2.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0, 0), (10, 1)]
+
+            double2[] times = [
+                (0, 0),
+                (5, 10),  # clip sped up 2x
+                (15, 15), # clips slowed down 2x, changes to clip2
+                (20, 25)  # clip sped up 2x
+            ]
+        }
+    }
+)
+{
+    double attr1
+    double attr2
+    double attr3
+    double attr4
+}

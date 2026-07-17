@@ -255,12 +255,9 @@ class ViewSplineMenuItem(AttributeViewContextMenuItem):
         return self._role == PropertyViewDataRoles.ATTRIBUTE
 
     def IsEnabled(self):
-        from pxr import Usd
         # Check if this attributes has a spline value source
         attr = self._getUsdAttribute()
-        return (
-            attr and 
-            attr.GetResolveInfo().GetSource() == Usd.ResolveInfoSourceSpline)
+        return attr and attr.HasSpline()
 
     def GetText(self):
         return "View Spline"

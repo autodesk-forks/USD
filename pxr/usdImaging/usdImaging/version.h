@@ -46,8 +46,13 @@ PXR_NAMESPACE_OPEN_SCOPE
 // Version 22 - Deprecates UsdImagingPrimAdapter::_GetShaderSourceTypes
 //              in favor of added UsdImagingPrimAdapter::_GetShadingSystems
 // Version 23 - UsdImagingDataSourceMaterial constructor gets USDIMAGING_API
+// Version 24 - Adding UsdImagingSceneIndex. Making UsdImagingStageSceneIndex's
+//              inputArgs conform to UsdImagingUsdSceneIndexInputArgsSchema and
+//              dropping UsdImagingStageSceneIndexTokens.
+// Version 25 - Renaming UsdImagingUsdSceneIndexInputArgsSchema to
+//              UsdImagingSceneIndexCreateArgsSchema.
 
-#define USD_IMAGING_API_VERSION 23
+#define USD_IMAGING_API_VERSION 25
 
 
 PXR_NAMESPACE_CLOSE_SCOPE

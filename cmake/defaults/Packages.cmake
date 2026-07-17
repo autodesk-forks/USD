@@ -66,10 +66,11 @@ if(PXR_ENABLE_PYTHON_SUPPORT)
             endif()
         endif()
 
-        # This option indicates that we don't want to explicitly link to the
-        # python libraries. See BUILDING.md for details.
+        # This option indicates that we don't want libraries to explicitly link
+        # to the Python libraries. However, executables must link to the Python
+        # libraries to avoid missing symbol errors. See BUILDING.md for details.
         if(PXR_PY_UNDEFINED_DYNAMIC_LOOKUP AND NOT WIN32)
-            set(PYTHON_LIBRARIES "")
+            set(PYTHON_LIBRARIES "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:${package}::Python>")
         else()
             set(PYTHON_LIBRARIES "${package}::Python")
         endif()
@@ -77,6 +78,27 @@ if(PXR_ENABLE_PYTHON_SUPPORT)
 
     # USD builds only work with Python3
     setup_python_package(Python3)
+
+    # Set the default Python bindings install directory if the user has not
+    # provided an explicit value. The default is "lib/pythonX.Y/site-packages"
+    # relative to the install prefix, matching the directory where the USD
+    # shared libraries are installed. On Windows the convention is simply
+    # "Lib/site-packages" (no version component).
+    if(NOT PXR_PYTHON_INSTALL_DIR)
+        if(WIN32)
+            set(_pxr_default_python_install_dir "Lib/site-packages")
+        else()
+            set(_pxr_default_python_install_dir
+                "lib/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}/site-packages")
+        endif()
+        set(PXR_PYTHON_INSTALL_DIR "${_pxr_default_python_install_dir}"
+            CACHE STRING
+            "Directory for installing Python bindings."
+            FORCE)
+        unset(_pxr_default_python_install_dir)
+    endif()
+
+    message(STATUS "Installing Python bindings to ${PXR_PYTHON_INSTALL_DIR}")
 
     # --Jinja2
     find_package(Jinja2)
@@ -301,10 +323,6 @@ if(PXR_ENABLE_OSL_SUPPORT)
     find_package(OSL REQUIRED)
     set(REQUIRES_Imath TRUE)
     add_definitions(-DPXR_OSL_SUPPORT_ENABLED)
-endif()
-
-if (PXR_BUILD_ANIMX_TESTS)
-    find_package(AnimX REQUIRED)
 endif()
 
 # ----------------------------------------------

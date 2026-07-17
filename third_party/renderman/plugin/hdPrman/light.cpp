@@ -215,7 +215,7 @@ _AddLightFilterCombiner(std::vector<riley::ShadingNode>* lightFilterNodes)
             modeMap[mode].push_back(lightFilterNode.handle);
         }
 
-        shouldCombineShadows = 
+        shouldCombineShadows =
             (shouldCombineShadows ||
             lightFilterNode.name == cheatShadowName);
     }
@@ -238,6 +238,7 @@ _AddLightFilterCombiner(std::vector<riley::ShadingNode>* lightFilterNodes)
 static void
 _PopulateLightFilterNodes(
         const SdfPath &lightId,
+        const RtUString &lightShaderType,
         const SdfPathVector &lightFilterPaths,
         HdSceneDelegate *sceneDelegate,
         HdRenderParam *renderParam,
@@ -294,6 +295,16 @@ _PopulateLightFilterNodes(
         // TODO: We should be able to look up the SdrShaderNode entry
         // and query it for the existence of this parameter.
         filter->params.SetString(RtUString("coordsys"), filterPathAsString);
+
+        static const RtUString us_PxrBarnLightFilter("PxrBarnLightFilter");
+        static const RtUString us_PxrCookieLightFilter("PxrCookieLightFilter");
+        static const RtUString us_PxrGoboLightFilter("PxrGoboLightFilter");
+        if (filter->name == us_PxrBarnLightFilter ||
+            filter->name == us_PxrCookieLightFilter ||
+            filter->name == us_PxrGoboLightFilter) {
+            filter->params.SetString(RtUString("__lightFilterParentShader"),
+                lightShaderType);
+        }
 
         // Light filter linking
         VtValue val = sceneDelegate->GetLightParamValue(filterPath,
@@ -819,7 +830,7 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
         // dirty shader *and* dirty instance; the coordinate systems are why,
         // and are the only piece of derived state that needs to be shared by
         // both the shader and instance update branches.
-        _PopulateLightFilterNodes(id, filters, sceneDelegate, renderParam,
+        _PopulateLightFilterNodes(id, _lightShaderType, filters, sceneDelegate, renderParam,
             riley, &filterNodes, &coordSysIds, &_lightFilterLinks);
 
         const riley::ShadingNetwork light {
@@ -929,20 +940,24 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
             }
             _lightLink = lightLink;
         }
-        if (!_lightLink.IsEmpty()) {
-            // For lights to link geometry, the lights must be assigned a
-            // grouping membership and the geometry must subscribe to that
-            // grouping.
-            attrs.SetString(RixStr.k_grouping_membership,
-                RtUString(_lightLink.GetText()));
-            TF_DEBUG(HDPRMAN_LIGHT_LINKING).Msg("HdPrman: Light <%s> grouping "
-                "membership '%s'\n", id.GetText(), _lightLink.GetText());
-        } else {
-            // Default light group
-            attrs.SetString(RixStr.k_grouping_membership, us_default);
-            TF_DEBUG(HDPRMAN_LIGHT_LINKING).Msg("HdPrman: Light <%s> grouping "
-                "membership 'default'\n", id.GetText());
+
+        // For lights to link geometry, the lights must be assigned a
+        // grouping membership and the geometry must subscribe to that
+        // grouping.
+        std::string membership = us_default.CStr();
+        if(!_lightLink.IsEmpty()) {
+            membership = _lightLink.GetText();
         }
+        // Fetch incoming grouping:membership and append to membership
+        RtUString inputGrouping("");
+        attrs.GetString(RixStr.k_grouping_membership, inputGrouping);
+        if (inputGrouping != RtUString("")) {
+            membership += std::string(" ") + inputGrouping.CStr();
+        }
+        attrs.SetString(RixStr.k_grouping_membership,
+            RtUString(membership.c_str()));
+        TF_DEBUG(HDPRMAN_LIGHT_LINKING).Msg("HdPrman: Light <%s> grouping "
+            "membership '%s'\n", id.GetText(), membership.c_str());
 
         // Convert coordinate system ids to list
         const riley::CoordinateSystemList coordSysList = {
@@ -1050,7 +1065,7 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
             if (domeOffset.IsHolding<GfMatrix4d>()) {
                 orientMat = orientMat * domeOffset.UncheckedGet<GfMatrix4d>();
             }
-#ifdef HD_PRMAN_HIDE_DEFAULT_DOMELIGHT_TEXTURE
+#ifdef HDPRMAN_HIDE_DEFAULT_DOMELIGHT_TEXTURE
             // XXX: For Solaris compatability, we expect any default domelight
             // added to the scene to be camera-invisible. Until Solaris is
             // updated to use renderSettings + domeLightCameraVisibility, builds
@@ -1159,14 +1174,14 @@ HdPrmanLight::Sync(HdSceneDelegate *sceneDelegate,
                 // require a lot more state. So we will set DirtyTransform
                 // as a token value to signal to the instancer to update the
                 // instances.
-                HdDirtyBits instanceDirtyBits(DirtyTransform
+                HdDirtyBits instanceDirtyBits(((*dirtyBits) & HdLight::DirtyTransform ? HdChangeTracker::DirtyTransform : 0)
 #if HD_API_VERSION >= 49
-                    |(*dirtyBits & DirtyInstancer)
+                    |((*dirtyBits) & HdLight::DirtyInstancer ? HdChangeTracker::DirtyInstancer : 0)
 #endif
                 );
                 instancer->Populate(
                     renderParam,
-                    &instanceDirtyBits,
+                    instanceDirtyBits,
                     id,
                     { _geometryPrototypeId },
                     coordSysList,

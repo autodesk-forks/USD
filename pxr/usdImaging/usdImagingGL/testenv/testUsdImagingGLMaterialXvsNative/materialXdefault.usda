@@ -7,7 +7,7 @@ def Sphere "MxUsdDefault_01" (
     prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
-    rel material:binding = </Materials/MaterialX/Materials/USD_Default_01>
+    rel material:binding = </MxMaterials/USD_Default_01>
     color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
     double3 xformOp:translate = (-5.0, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -16,7 +16,7 @@ def Sphere "MxUsdDefault_02" (
     prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
-    rel material:binding = </Materials/MaterialX/Materials/USD_Default_02>
+    rel material:binding = </MxMaterials/USD_Default_02>
     color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
     double3 xformOp:translate = (-2.5, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -25,7 +25,7 @@ def Sphere "MxUsdDefault_03" (
     prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
-    rel material:binding = </Materials/MaterialX/Materials/USD_Default_03>
+    rel material:binding = </MxMaterials/USD_Default_03>
     color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
     double3 xformOp:translate = (0, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -34,7 +34,7 @@ def Sphere "MxUsdDefault_04" (
     prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
-    rel material:binding = </Materials/MaterialX/Materials/USD_Default_04>
+    rel material:binding = </MxMaterials/USD_Default_04>
     color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
     double3 xformOp:translate = (2.5, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -43,19 +43,67 @@ def Sphere "MxUsdDefault_05" (
     prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
-    rel material:binding = </Materials/MaterialX/Materials/USD_Default_05>
+    rel material:binding = </MxMaterials/USD_Default_05>
     color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
     double3 xformOp:translate = (5.0, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate"]
 }
 
-def Scope "Materials" {
-    def Material "MaterialX" (
-        references = [
-            @./mtlxFiles/defaultMaterials.mtlx@</MaterialX>,
-        ]
-    )
-    {
+def Scope "MxMaterials" {
+    def Material "USD_Default_01" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Default_01/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            float inputs:roughness = 0.0
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Default_02" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Default_02/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            float inputs:roughness = 0.25
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Default_03" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Default_03/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            float inputs:roughness = 0.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Default_04" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Default_04/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            float inputs:roughness = 0.75
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Default_05" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Default_05/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            float inputs:roughness = 1.0
+
+            token outputs:surface
+        }
     }
 }
 

@@ -1,0 +1,24 @@
+#usda 1.0
+
+def "Model" {
+    # Resolves to time samples format
+    float aWithDefault = 5
+    float aDeclared
+    float aTimeSamples.timeSamples = {}
+    float aDefinedTimeSamples.timeSamples = { 1: 1, 2: 2 }
+    float aBothFormats.timeSamples = {}
+    float aBothFormats.spline = {}
+    float aTimeSamplesSkipClipsAtTimes.timeSamples = { 0: None }
+    float aTimeSamplesNonEmptyClip
+    float aTimeSamplesPreActiveTime
+
+    # Resolves to spline format
+    float aSpline.spline = {}
+    float aSplineWithDefault = 5
+    float aSplineWithDefault.spline = {}
+    float aSplineSkipClipsAtTimes.spline = {
+        0: 0; post none
+    }
+    float aSplineNonEmptyClip.spline = {}
+    float aSplinePreActiveTime.spline = {}
+}

@@ -6,12 +6,27 @@
 //
 #include "hdPrman/debugUtil.h"
 
-#include "pxr/base/arch/stackTrace.h"
-#include "pxr/base/tf/callContext.h"
-#include "pxr/base/tf/stringUtils.h"
 #include "pxr/usd/sdf/path.h"
 
+#include "pxr/base/arch/stackTrace.h"
+#include "pxr/base/gf/matrix4d.h"
+#include "pxr/base/tf/callContext.h"
+#include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/stringUtils.h"
+
+#include "pxr/pxr.h"
+
 #include <prmanapi.h>
+#include <RiTypesHelper.h>
+#include <Riley.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -632,19 +647,23 @@ RtParamListToString(const RtParamList& params, const int indent)
 }
 
 std::string
-GetCallerAsString(const TfCallContext& ctx)
+GetCallerAsString(const TfCallContext& ctx, const size_t offset)
 {
+    static const size_t MAX_FRAMES = 100;
+    // See Arch_GetStackTrace() in pxr/base/arch/stackTrace.cpp
+    static const size_t PREFIX_LEN =
+        TfStringPrintf(" #%-3i 0x%016lx in ", 0, 0L).length();
     const std::string locator = TfStringPrintf("%s:%lu",
         ctx.GetFile(), ctx.GetLine());
-    const std::vector<std::string>& lines = ArchGetStackTrace(10);
+    const std::vector<std::string>& lines = ArchGetStackTrace(MAX_FRAMES);
     size_t i = 0;
-    while (i < 9 && lines[i].find(locator) == lines[i].npos) {
+    while (i < lines.size() && lines[i].find(locator) == lines[i].npos) {
         i++;
     }
-    if (i < 9) {
-        const std::string& line = lines[i+1];
-        return line.substr(28, line.find_first_of("(") - 28) + " at " +
-            line.substr(line.find_last_of("/") + 1);
+    if (i < lines.size() - 1) {
+        const std::string& line = lines[i+1 + offset];
+        return line.substr(PREFIX_LEN, line.find_first_of('(') - PREFIX_LEN)
+            + " at " + line.substr(line.find_last_of('/') + 1);
     }
     return "*** couldn't find caller ***";
 }

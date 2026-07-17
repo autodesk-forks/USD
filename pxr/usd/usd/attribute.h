@@ -546,21 +546,26 @@ public:
     USD_API
     bool Set(const VtValue& value, UsdTimeCode time = UsdTimeCode::Default()) const;
 
-    /// Returns true if this attribute has a spline as the strongest value
-    /// source.
+    /// Returns true if this attribute has a spline or value clips with
+    /// an underlying spline format as the strongest value source.
     USD_API
     bool HasSpline() const;
 
     /// Returns a copy of the resolved spline if the spline is the strongest value
-    /// source.
+    /// source, or if value clips with underlying data format spline is the
+    /// strongest value source.
     ///
     /// If the strongest opinion is not a spline, returns an empty spline.
+    ///
+    /// When the strongest value source is value clips, this function returns
+    /// a spline built from the splines authored in clips.
     USD_API
     TsSpline GetSpline() const;
 
-    /// Set the spline using the current edit target.
+    /// Set the spline using the current edit target, authoring a spline as
+    /// a local opinion to the corresponding attribute.
     USD_API
-    bool SetSpline(const TsSpline &spline);
+    bool SetSpline(const TsSpline &spline) const;
 
     /// Clears the authored default value, all time samples and spline for this
     /// attribute at the current EditTarget and returns true on success.

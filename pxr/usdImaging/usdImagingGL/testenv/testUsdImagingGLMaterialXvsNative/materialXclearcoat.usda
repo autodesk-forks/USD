@@ -8,7 +8,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_01>
+        rel material:binding = </MxMaterials/USD_Clearcoat_01>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-5.0, 0, 1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -17,7 +17,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_02>
+        rel material:binding = </MxMaterials/USD_Clearcoat_02>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-2.5, 0, 1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -26,7 +26,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_03>
+        rel material:binding = </MxMaterials/USD_Clearcoat_03>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (0, 0, 1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -35,7 +35,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_04>
+        rel material:binding = </MxMaterials/USD_Clearcoat_04>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (2.5, 0, 1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -44,7 +44,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_05>
+        rel material:binding = </MxMaterials/USD_Clearcoat_05>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (5.0, 0, 1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -53,7 +53,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_06>
+        rel material:binding = </MxMaterials/USD_Clearcoat_06>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-2.5, 0, -1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -62,7 +62,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_07>
+        rel material:binding = </MxMaterials/USD_Clearcoat_07>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (0, 0, -1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -71,20 +71,130 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Clearcoat_08>
+        rel material:binding = </MxMaterials/USD_Clearcoat_08>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (2.5, 0, -1.5)
         uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 }
 
-def Scope "Materials" {
-    def Material "MaterialX" (
-        references = [
-            @./mtlxFiles/clearcoatMaterials.mtlx@</MaterialX>,
-        ]
-    )
-    {
+def Scope "MxMaterials" {
+    def Material "USD_Clearcoat_01" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_01/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.0
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Clearcoat_02" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_02/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.25
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Clearcoat_03" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_03/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Clearcoat_04" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_04/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.75
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Clearcoat_05" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_05/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 1.0
+
+            token outputs:surface
+        }
+    }
+
+    # Changing IOR 
+    def Material "USD_Clearcoat_06" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_06/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:ior = 0.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Clearcoat_07" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_07/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:ior = 5.0
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Clearcoat_08" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Clearcoat_08/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.1, 0.6, 0.85)
+            float inputs:roughness = 0.5
+            float inputs:clearcoat = 1.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:ior = 25.0
+
+            token outputs:surface
+        }
     }
 }
 

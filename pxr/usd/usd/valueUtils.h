@@ -327,27 +327,27 @@ Usd_ApplyLayerOffsetToValue(VtValue *value, const SdfLayerOffset &offset);
 
 /// \overload
 inline void
-Usd_ApplyLayerOffsetToValue(SdfTimeCode *value, const SdfLayerOffset &offset)
+Usd_ApplyLayerOffsetToValue(GfTimeCode *value, const SdfLayerOffset &offset)
 {
     *value = offset * (*value);
 }
 
 /// \overload
 inline void
-Usd_ApplyLayerOffsetToValue(VtArray<SdfTimeCode> *value, 
+Usd_ApplyLayerOffsetToValue(VtArray<GfTimeCode> *value, 
                             const SdfLayerOffset &offset)
 {
-    for (SdfTimeCode &timeCode : *value) {
+    for (GfTimeCode &timeCode : *value) {
         timeCode = offset * timeCode;
     }
 }
 
 /// \overload
 inline void
-Usd_ApplyLayerOffsetToValue(VtArrayEdit<SdfTimeCode> *value, 
+Usd_ApplyLayerOffsetToValue(VtArrayEdit<GfTimeCode> *value, 
                             const SdfLayerOffset &offset)
 {
-    for (SdfTimeCode &timeCode : value->GetMutableLiterals()) {
+    for (GfTimeCode &timeCode : value->GetMutableLiterals()) {
         timeCode = offset * timeCode;
     }
 }
@@ -389,6 +389,14 @@ Usd_ApplyLayerOffsetToValue(VtDictionary *value, const SdfLayerOffset &offset)
              Usd_ApplyLayerOffsetToValue(v, offset);
         });
 }
+
+template <class T>
+bool
+Usd_QuerySpline(
+    const TsSpline& spline,
+    UsdTimeCode timeCode,
+    const SdfLayerOffset& layerToStageOffset,
+    T* result);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

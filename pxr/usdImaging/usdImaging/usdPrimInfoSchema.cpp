@@ -67,6 +67,13 @@ UsdImagingUsdPrimInfoSchema::GetKind() const
         UsdImagingUsdPrimInfoSchemaTokens->kind);
 }
 
+HdTokenDataSourceContainerSchema
+UsdImagingUsdPrimInfoSchema::GetVariantSelections() const
+{
+    return HdTokenDataSourceContainerSchema(_GetTypedDataSource<HdContainerDataSource>(
+        UsdImagingUsdPrimInfoSchemaTokens->variantSelections));
+}
+
 HdPathDataSourceHandle
 UsdImagingUsdPrimInfoSchema::GetNiPrototypePath() const
 {
@@ -96,13 +103,14 @@ UsdImagingUsdPrimInfoSchema::BuildRetained(
         const HdBoolDataSourceHandle &isLoaded,
         const HdTokenArrayDataSourceHandle &apiSchemas,
         const HdTokenDataSourceHandle &kind,
+        const HdContainerDataSourceHandle &variantSelections,
         const HdPathDataSourceHandle &niPrototypePath,
         const HdBoolDataSourceHandle &isNiPrototype,
         const HdContainerDataSourceHandle &piPropagatedPrototypes
 )
 {
-    TfToken _names[8];
-    HdDataSourceBaseHandle _values[8];
+    TfToken _names[9];
+    HdDataSourceBaseHandle _values[9];
 
     size_t _count = 0;
 
@@ -129,6 +137,11 @@ UsdImagingUsdPrimInfoSchema::BuildRetained(
     if (kind) {
         _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->kind;
         _values[_count++] = kind;
+    }
+
+    if (variantSelections) {
+        _names[_count] = UsdImagingUsdPrimInfoSchemaTokens->variantSelections;
+        _values[_count++] = variantSelections;
     }
 
     if (niPrototypePath) {
@@ -189,6 +202,14 @@ UsdImagingUsdPrimInfoSchema::Builder::SetKind(
 }
 
 UsdImagingUsdPrimInfoSchema::Builder &
+UsdImagingUsdPrimInfoSchema::Builder::SetVariantSelections(
+    const HdContainerDataSourceHandle &variantSelections)
+{
+    _variantSelections = variantSelections;
+    return *this;
+}
+
+UsdImagingUsdPrimInfoSchema::Builder &
 UsdImagingUsdPrimInfoSchema::Builder::SetNiPrototypePath(
     const HdPathDataSourceHandle &niPrototypePath)
 {
@@ -221,6 +242,7 @@ UsdImagingUsdPrimInfoSchema::Builder::Build()
         _isLoaded,
         _apiSchemas,
         _kind,
+        _variantSelections,
         _niPrototypePath,
         _isNiPrototype,
         _piPropagatedPrototypes

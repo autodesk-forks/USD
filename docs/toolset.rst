@@ -493,3 +493,19 @@ with the module dependencies.
    :language: none
    :start-after: ==== usdInitSchema start ====
    :end-before: ==== usdInitSchema end ====
+
+**************
+usdupdatecrate
+**************
+
+Use :program:`usdupdatecrate` to find and update OpenUSD crate (.usd/.usdc) 
+files older than a given version. :program:`usdupdatecrate` identifies and
+optionally updates binary crate files whose version is older than a threshold, 
+including files packaged inside .usdz archives. See "How Do I Update Deprecated 
+and Obsolete USD Assets?" in the :doc:`usdfaq` for examples using 
+:program:`usdupdatecrate` to update crate files.
+
+.. literalinclude:: toolset.help
+   :language: none
+   :start-after: ==== usdupdatecrate start ====
+   :end-before: ==== usdupdatecrate end ====

@@ -904,6 +904,9 @@ UsdImagingDataSourcePrim::Invalidate(
         }
     }
 
+    // Changes to the variant selections for a prim should result in a resync
+    // of the prim and its descendants, so we don't need to handle that here.
+
     return locators;
 }
 

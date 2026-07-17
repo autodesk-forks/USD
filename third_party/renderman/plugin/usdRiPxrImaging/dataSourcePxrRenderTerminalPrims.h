@@ -15,7 +15,10 @@
 #include "pxr/imaging/hd/materialNodeSchema.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 
+#include "pxr/usdImaging/usdImaging/dataSourceAttribute.h"
 #include "pxr/usdImaging/usdImaging/dataSourcePrim.h"
+
+#include "pxr/base/trace/trace.h"
 
 #include "pxr/pxr.h"
 
@@ -97,21 +100,28 @@ static HdContainerDataSourceHandle
 _ComputeResourceDS(
     UsdPrim const& prim,
     TfToken const& shaderId,
-    TfToken const& primType)
+    TfToken const& primType,
+    UsdImagingDataSourceStageGlobals const& stageGlobals,
+    const SdfPath &sceneIndexPath,
+    const HdDataSourceLocator &locatorPrefix)
 {
     std::vector<TfToken> paramsNames;
     std::vector<HdDataSourceBaseHandle> paramsValues;
 
     UsdAttributeVector attrs = prim.GetAuthoredAttributes();
     for (const auto& attr : attrs) {
-        VtValue value;
         std::string inputName;
-        if (_HasInputPrefix(attr.GetName(), &inputName) && attr.Get(&value)) {
+        if (_HasInputPrefix(attr.GetName(), &inputName)) {
+            const HdDataSourceLocator paramValueLocator(
+                TfToken(inputName), HdMaterialNodeParameterSchemaTokens->value);
             paramsNames.push_back(TfToken(inputName));
             paramsValues.push_back(
                 HdMaterialNodeParameterSchema::Builder()
                     .SetValue(
-                        HdRetainedTypedSampledDataSource<VtValue>::New(value))
+                        UsdImagingDataSourceAttributeNew(
+                            attr, stageGlobals,
+                            sceneIndexPath,
+                            locatorPrefix.Append(paramValueLocator)))
                     .Build()
             );
         }
@@ -163,7 +173,12 @@ UsdRiPxrImaging_DataSourceRenderTerminalPrim<TerminalSchema>::Get(
         return
             HdRetainedContainerDataSource::New(
                 TfToken("resource"),
-                _ComputeResourceDS(_GetUsdPrim(), _shaderId, name));
+                _ComputeResourceDS(
+                    _GetUsdPrim(), _shaderId, name,
+                    _GetStageGlobals(),
+                    _GetSceneIndexPath(),
+                    TerminalSchema::GetResourceLocator()
+                        .Append(HdMaterialNodeSchemaTokens->parameters)));
     }
 
     // Note: Skip properties on UsdImagingDataSourcePrim.

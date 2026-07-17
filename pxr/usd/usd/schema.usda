@@ -189,6 +189,9 @@ class "ColorSpaceAPI"
 #include "pxr/base/gf/colorSpace.h"
 #include "pxr/base/tf/bigRWMutex.h"
 """
+        dictionary extraPlugInfo = {
+            string[] impliesCapabilities = ["usd.core.colorspace"]
+        }
     }
 )
 {
@@ -222,6 +225,9 @@ class "ColorSpaceDefinitionAPI"
         string extraIncludes = """
 #include "pxr/base/gf/colorSpace.h"
 """
+        dictionary extraPlugInfo = {
+            string[] impliesCapabilities = ["usd.core.colorspace"]
+        }
     }
 )
 {

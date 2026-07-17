@@ -8,26 +8,42 @@
     dict(
         SCHEMA_NAME = 'ALL_SCHEMAS',
         LIBRARY_PATH = 'pxr/usdImaging/usdImaging',
+        HD_LIBRARY_PATH = 'pxr/imaging/hd',
     ),        
 
     #--------------------------------------------------------------------------
+    # usdImaging/sceneIndexCreateArgs
     dict(
-        SCHEMA_NAME = 'UsdSceneIndexInputArgs',
-        SCHEMA_TOKEN = 'usdSceneIndex',
+        SCHEMA_NAME = 'SceneIndexCreateArgs',
+        SCHEMA_TOKEN = 'usdImagingSceneIndexCreateArgs',
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
-            ('stage', 'UsdStageRefPtrDataSource', {}),
+            ('stage', 'UsdStageRefPtrDataSource',
+             dict(DOC='''
+                The USD stage used to populate the usd imaging scene indices.
+                Note that a client of usd imaging can specify the stage either
+                in this schema or later by calling
+                UsdStageSceneIndex::SetStage, for example after all scene
+                indices and the renderer have been created. The results of
+                either are equivalent but there might differences in the
+                performance.''')),
             ('includeUnloadedPrims', T_BOOL, {}),
-            ('displayUnloadedPrimsWithBounds', T_BOOL, {}),
-            ('addDrawModeSceneIndex', T_BOOL, {}),
+            ('displayUnloadedPrimsWithBounds', T_BOOL,
+             dict(DOC='''
+                If true, switch the draw mode for unloaded prims to bounds.''')),
+            ('addDrawModeSceneIndex', T_BOOL,
+             dict(DOC='''
+                If true, add scene index resolving usd draw mode (from
+                GeomModelAPI, e.g., "cards").'''))
         ],
     ),
-    
+
     #--------------------------------------------------------------------------
     # usdImaging/usdPrimInfo
     dict(
         SCHEMA_NAME = 'UsdPrimInfo',
         SCHEMA_TOKEN = '__usdPrimInfo',
+        SCHEMA_INCLUDES = ['{{HD_LIBRARY_PATH}}/schemaTypeDefs'],
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('specifier', T_TOKEN, {}),
@@ -36,8 +52,7 @@
             # Skipping isModel and isGroup, which can be inferred from 'kind'.
             ('apiSchemas', T_TOKENARRAY, {}),
             ('kind', T_TOKEN, {}),
-            # XXX Add variantSets. Is it a token array, or a container of token
-            #     to token array?
+            ('variantSelections', 'HdTokenDataSourceContainerSchema', {}),
             ('niPrototypePath', T_PATH, dict(ADD_LOCATOR=True)),
             ('isNiPrototype', T_BOOL, {}),
             ('piPropagatedPrototypes', T_CONTAINER, {}),
@@ -72,6 +87,7 @@
             ('applyDrawMode', T_BOOL, {}),
             ('drawModeColor', T_VEC3F, {}),
             ('cardGeometry', T_TOKEN, {}),
+            ('cardVisibility', T_TOKEN, {}),
             ('cardTextureXPos', T_ASSETPATH, {}),
             ('cardTextureYPos', T_ASSETPATH, {}),
             ('cardTextureZPos', T_ASSETPATH, {}),
@@ -90,6 +106,10 @@
                 'cross',
                 'box',
                 'fromTexture']),
+            ('cardVisibility', [
+                'inherited',
+                'simple',
+                'full']),
         ],
     ),
 
@@ -256,6 +276,19 @@
 
             # note: namespacedSettings isn't in the USD schema.
             ('namespacedSettings', T_CONTAINER, dict(ADD_LOCATOR=True)),
+        ],
+    ),
+
+    #--------------------------------------------------------------------------
+    # usdImaging/usdUpAxis
+    dict(
+        SCHEMA_NAME = 'UsdUpAxis',
+        SCHEMA_TOKEN = '__usdUpAxis',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR=True)),
+
+            ('upAxis', T_TOKEN, {}),
         ],
     ),
 ] 

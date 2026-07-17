@@ -90,6 +90,50 @@ static constexpr bool SafetyOverSpeed = true;
 static constexpr bool SafetyOverSpeed = false;
 #endif
 
+/// \class SdfReadOutOfBoundsError
+///
+/// Sdf throws this exception when code attempts to read memory outside of the
+/// allocated range.
+class SdfReadOutOfBoundsError : public TfBaseException
+{
+public:
+    using TfBaseException::TfBaseException;
+    SDF_API virtual ~SdfReadOutOfBoundsError() override;
+};
+
+SdfReadOutOfBoundsError::~SdfReadOutOfBoundsError()
+{
+}
+
+// True if cursor lies in [lo, hi] and at least nBytes are available starting at
+// cursor.  Comparing nBytes against (hi - cursor) after ensuring cursor <= hi
+// makes the subtraction-then-cast safe.  The perhaps more obvious (cursor +
+// nBytes) <= hi approach could pointer/unsigned wrap past hi for (malformedly)
+// huge nBytes values and falsely pass.
+template <class T>
+static inline bool
+_IsReadInRange(T lo, T cursor, T hi, size_t nBytes)
+{
+    return lo <= cursor && cursor <= hi && nBytes <= size_t(hi - cursor);
+}
+
+// Throws SdfReadOutOfBoundsError when SafetyOverSpeed is enabled and the (lo,
+// cursor, hi, nBytes) range check fails.  When SafetyOverSpeed is false the
+// body is discarded by if constexpr; the bounds arithmetic and message args at
+// the call site are left for the compiler to dead-code-eliminate.
+template <class T, class... Args>
+static inline void
+_ThrowIfReadOutOfRange(T lo, T cursor, T hi, size_t nBytes,
+                       char const *fmt, Args&&... args)
+{
+    if constexpr (SafetyOverSpeed) {
+        if (ARCH_UNLIKELY(!_IsReadInRange(lo, cursor, hi, nBytes))) {
+            PXR_TF_THROW(SdfReadOutOfBoundsError,
+                TfStringPrintf(fmt, std::forward<Args>(args)...));
+        }
+    }
+}
+
 static inline unsigned int
 _GetPageShift(unsigned int mask)
 {
@@ -146,7 +190,7 @@ TF_DEFINE_ENV_SETTING(
     "implementations.");
 
 TF_DEFINE_ENV_SETTING(
-    PXR_USDC_EMIT_DEPRECATION_WARNINGS, false,
+    PXR_USDC_EMIT_DEPRECATION_WARNINGS, true,
     "If set, emit warnings when reading binary USD files with deprecated "
     "versions prior to " OLDEST_CURRENT_VERSION ".");
 
@@ -190,21 +234,6 @@ WriteToAsset(ArWritableAsset* asset,
         nwritten = 0;
     }
     return nwritten;
-}
-
-/// \class SdfReadOutOfBoundsError
-///
-/// Sdf throws this exception when code attempts to read
-/// memory outside of the allocated range.
-class SdfReadOutOfBoundsError : public TfBaseException
-{
-public:
-    using TfBaseException::TfBaseException;
-    SDF_API virtual ~SdfReadOutOfBoundsError() override;
-};
-
-SdfReadOutOfBoundsError::~SdfReadOutOfBoundsError()
-{
 }
 
 namespace Sdf_CrateFile
@@ -353,6 +382,8 @@ using std::unordered_map;
 using std::vector;
 
 // Version history:
+// 0.15.0: Added support for loopBoundaryTime-delimited spline extrapolation
+//         loops and GfTimeCode-native splines.
 // 0.14.0: Added support for ArrayEdits.
 // 0.13.0: Support for splines with tangent algorithms None, Custom, AutoEase.
 // 0.12.0: Added support for splines.
@@ -372,7 +403,7 @@ using std::vector;
 //         See _PathItemHeader_0_0_1.
 //  0.0.1: Initial release.
 constexpr uint8_t USDC_MAJOR = 0;
-constexpr uint8_t USDC_MINOR = 14;
+constexpr uint8_t USDC_MINOR = 15;
 constexpr uint8_t USDC_PATCH = 0;
 
 constexpr CrateFile::Version
@@ -580,24 +611,24 @@ struct _MmapStream {
         _prefetchKB = 0;
         return *this;
     }
-    
+
+    inline void DemandAvailable(size_t nBytes) {
+        char const *mapStart = _mapping->GetMapStart();
+        size_t mapLen = _mapping->GetLength();
+        _ThrowIfReadOutOfRange(
+            mapStart, _cur, mapStart + mapLen, nBytes,
+            "Demand for %zu bytes at offset %td exceeds mapping length %zu",
+            nBytes, _cur - mapStart, mapLen);
+    }
+
     inline void Read(void *dest, size_t nBytes) {
-        // Range check first.
-        if constexpr (SafetyOverSpeed) {
-            char const *mapStart = _mapping->GetMapStart();
-            size_t mapLen = _mapping->GetLength();
-            
-            bool inRange = mapStart <= _cur &&
-                (_cur + nBytes) <= (mapStart + mapLen);
-            
-            if (ARCH_UNLIKELY(!inRange)) {
-                ptrdiff_t offset = _cur - mapStart;
-                PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
-                    "Read out-of-bounds: %zd bytes at offset %td in "
-                    "a mapping of length %zd",
-                    nBytes, offset, mapLen));
-            }
-        }
+        char const *mapStart = _mapping->GetMapStart();
+        size_t mapLen = _mapping->GetLength();
+        _ThrowIfReadOutOfRange(
+            mapStart, _cur, mapStart + mapLen, nBytes,
+            "Read out-of-bounds: %zd bytes at offset %td in "
+            "a mapping of length %zd",
+            nBytes, _cur - mapStart, mapLen);
 
         if (ARCH_UNLIKELY(_debugPageMap)) {
             auto mapStart = _mapping->GetMapStart();
@@ -645,15 +676,12 @@ struct _MmapStream {
         char const *mapStart = _mapping->GetMapStart();
         char const *chAddr = static_cast<char const *>(addr);
         size_t mapLen = _mapping->GetLength();
-        bool inRange = mapStart <= chAddr &&
-            (chAddr + numBytes) <= (mapStart + mapLen);
-        
-        if (ARCH_UNLIKELY(!inRange)) {
-            ptrdiff_t offset = chAddr - mapStart;
+        if (ARCH_UNLIKELY(!_IsReadInRange(
+                              mapStart, chAddr, mapStart + mapLen, numBytes))) {
             TF_RUNTIME_ERROR(
                 "Zero-copy data range out-of-bounds: %zd bytes at offset "
                 "%td in a mapping of length %zd",
-                numBytes, offset, mapLen);
+                numBytes, chAddr - mapStart, mapLen);
             return nullptr;
         }
         return _mapping->AddRangeReference(addr, numBytes);
@@ -683,9 +711,22 @@ struct _PreadStream {
     template <class FileRange>
     explicit _PreadStream(FileRange const &fr)
         : _start(fr.startOffset)
+        , _length(fr.length)
         , _cur(0)
         , _file(fr.file) {}
+    inline void DemandAvailable(size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, _length, nBytes,
+            "Demand for %zu bytes at offset %" PRId64
+            " exceeds file-range length %" PRId64,
+            nBytes, _cur, _length);
+    }
     inline void Read(void *dest, size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, _length, nBytes,
+            "Read out-of-bounds: %zu bytes at offset %" PRId64
+            " in a file-range of length %" PRId64,
+            nBytes, _cur, _length);
         int64_t nRead = ArchPRead(_file, dest, nBytes, _start + _cur);
         if constexpr (SafetyOverSpeed) {
             if (ARCH_UNLIKELY(nRead != static_cast<int64_t>(nBytes))) {
@@ -704,6 +745,7 @@ struct _PreadStream {
 
 private:
     int64_t _start;
+    int64_t _length;
     int64_t _cur;
     FILE *_file;
 };
@@ -714,8 +756,21 @@ struct _AssetStream {
 
     explicit _AssetStream(ArAssetSharedPtr const &asset)
         : _asset(asset)
+        , _size(asset ? asset->GetSize() : 0)
         , _cur(0) {}
+    inline void DemandAvailable(size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, static_cast<int64_t>(_size), nBytes,
+            "Demand for %zu bytes at offset %" PRId64
+            " exceeds asset size %zu",
+            nBytes, _cur, _size);
+    }
     inline void Read(void *dest, size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, static_cast<int64_t>(_size), nBytes,
+            "Read out-of-bounds: %zu bytes at offset %" PRId64
+            " in an asset of size %zu",
+            nBytes, _cur, _size);
         size_t nRead = _asset->Read(dest, nBytes, _cur);
         if constexpr (SafetyOverSpeed) {
             if (nRead != nBytes) {
@@ -734,6 +789,7 @@ struct _AssetStream {
 
 private:
     ArAssetSharedPtr _asset;
+    size_t _size;
     int64_t _cur;
 };
 
@@ -1199,8 +1255,8 @@ public:
                            std::is_same_v<T, SdfPathExpression>) {
             return T(Read<string>());
         }
-        else if constexpr (std::is_same_v<T, SdfTimeCode>) {
-            return SdfTimeCode(Read<double>());
+        else if constexpr (std::is_same_v<T, GfTimeCode>) {
+            return GfTimeCode(Read<double>());
         }
         else if constexpr (std::is_same_v<T, SdfUnregisteredValue>) {
             VtValue val = Read<VtValue>();
@@ -1343,6 +1399,13 @@ public:
             src.Read(static_cast<void *>(values), sz * sizeof(*values));
         }
         else {
+            // Each non-bitwise per-element Read<T> consumes at least 1 byte
+            // from the source (4+ in practice for index types,
+            // sizeof(_ListOpHeader) for list ops, 8+ for nested vectors).
+            // Reject up-front if the source can't possibly satisfy the loop, so
+            // we don't touch destination pages for a doomed read.
+            // DemandAvailable is a no-op when SafetyOverSpeed is false.
+            src.DemandAvailable(sz);
             std::for_each(values, values + sz, [this](T &v) { v = Read<T>(); });
         }
     }
@@ -1443,7 +1506,7 @@ public:
     void Write(SdfPath const &path) { Write(crate->_AddPath(path)); }
     void Write(VtDictionary const &dict) { WriteMap(dict); }
     void Write(SdfAssetPath const &ap) { Write(ap.GetAssetPath()); }
-    void Write(SdfTimeCode const &tc) { 
+    void Write(GfTimeCode const &tc) { 
         crate->_packCtx->RequestWriteVersionUpgrade(
             Version(0, 9, 0),
             "A timecode or timecode[] value type was detected which requires "
@@ -1569,6 +1632,14 @@ public:
                 Version(0,13,0),
                 "A spline tangent algorithm was detected which requires crate"
                 " version 0.13.0.");
+            break;
+          case 3: // looped extrapolation with loopBoundaryTime set
+                  // or GfTimeCode-native spline
+            crate->_packCtx->RequestWriteVersionUpgrade(
+                Version(0,15,0),
+                "A spline loopBoundaryTime parameter on looping extrapolation "
+                "or GfTimeCode-native spline was detected which requires "
+                "crate version 0.15.0.");
             break;
 
           default:
@@ -2028,6 +2099,20 @@ _ReadUncompressedArray(
         reader.template Read<uint32_t>() :
         reader.template Read<uint64_t>();
 
+    // Reject sizes that would overflow size_t when multiplied by sizeof(T).
+    // Without this, the numBytes computation below wraps and the downstream
+    // CreateZeroCopyDataSource bound check is meaningless, leaving a VtArray
+    // claiming `size` elements while pointing at a much smaller mapped range.
+    if constexpr (SafetyOverSpeed) {
+        if (ARCH_UNLIKELY(
+                size > std::numeric_limits<size_t>::max() / sizeof(T))) {
+            PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
+                             "Zero-copy array element count %" PRIu64
+                             " overflows size_t for element size %zu",
+                             size, sizeof(T)));
+        }
+    }
+
     // Check size and alignment -- the standard requires that alignments
     // are power-of-two.
     size_t numBytes = sizeof(T) * size;
@@ -2175,7 +2260,7 @@ _ReadPossiblyCompressedArray(
         reader.ReadContiguous(odata, osize);
         return;
     }
-    
+
     // Read the code
     char code = reader.template Read<int8_t>();
     if (code == 'i') {
@@ -3857,7 +3942,7 @@ CrateFile::_ReadCompressedPaths(Reader reader,
 
     // Read number of encoded paths.
     size_t numPaths = reader.template Read<uint64_t>();
-    
+
     _CompressedIntsReader cr;
 
     // pathIndexes.

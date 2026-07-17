@@ -42,7 +42,7 @@ def Xform "Scene" (
             float3[] extent = [(-1, -1, -1), (1, 1, 1)]
             int[] faceVertexCounts = [4]
             int[] faceVertexIndices = [0, 1, 2, 3]
-            rel material:binding = </Materials/MaterialX/Materials/USD_NormalMap>
+            rel material:binding = </MxMaterials/USD_NormalMap>
             point3f[] points = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)]
             color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
             float2[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
@@ -61,7 +61,7 @@ def Xform "Scene" (
             float3[] extent = [(-1, -1, -1), (1, 1, 1)]
             int[] faceVertexCounts = [4]
             int[] faceVertexIndices = [0, 1, 2, 3]
-            rel material:binding = </Materials/MaterialX/Materials/USD_NormalMap>
+            rel material:binding = </MxMaterials/USD_NormalMap>
             point3f[] points = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)]
             color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
             float2[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
@@ -87,13 +87,55 @@ def Camera "Camera"
     uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:translate"]
 }
 
-
-def Scope "Materials" {
-    def Material "MaterialX" (
-        references = [
-            @./mtlxFiles/normalMap.mtlx@</MaterialX>,
-        ]
-    )
+def Scope "MxMaterials"
+{
+    def Material "USD_NormalMap"
     {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_NormalMap/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.2, 0.2, 0.2)
+            float3 inputs:normal.connect = </MxMaterials/USD_NormalMap/NG_NormalMap.outputs:out_normal>
+            float inputs:roughness = 0.2
+            token outputs:surface
+        }
+
+        def NodeGraph "NG_NormalMap"
+        {
+            float3 outputs:out_normal.connect = </MxMaterials/USD_NormalMap/NG_NormalMap/normalMap.outputs:out>
+
+            def Shader "Image"
+            {
+                uniform token info:id = "ND_image_vector3"
+                asset inputs:file = @./normalMap.png@
+                float3 outputs:out
+            }
+
+            def Shader "normalMap"
+            {
+                uniform token info:id = "ND_normalize_vector3"
+                float3 inputs:in.connect = </MxMaterials/USD_NormalMap/NG_NormalMap/subtract.outputs:out>
+                float3 outputs:out
+            }
+
+            def Shader "multiply"
+            {
+                uniform token info:id = "ND_multiply_vector3FA"
+                float3 inputs:in1.connect = </MxMaterials/USD_NormalMap/NG_NormalMap/Image.outputs:out>
+                float inputs:in2 = 2
+                float3 outputs:out
+            }
+
+            def Shader "subtract"
+            {
+                uniform token info:id = "ND_subtract_vector3FA"
+                float3 inputs:in1.connect = </MxMaterials/USD_NormalMap/NG_NormalMap/multiply.outputs:out>
+                float inputs:in2 = 1
+                float3 outputs:out
+            }
+        }
     }
 }
+

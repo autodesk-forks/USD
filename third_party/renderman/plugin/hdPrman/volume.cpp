@@ -225,11 +225,6 @@ HdPrman_Volume::Sync(HdSceneDelegate *sceneDelegate,
 #if _PRMANAPI_VERSION_MAJOR_ >= 27 && HD_API_VERSION >= 93
     const SdfPath& id = GetId();
 
-    auto* param = static_cast<HdPrman_RenderParam*>(renderParam);
-    riley::Riley* riley = param->AcquireRiley();
-    HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
-    HdChangeTracker& changeTracker = renderIndex.GetChangeTracker();
-
     bool dirtyFilters = false;
     SdfPathVector volumeFilterPaths;
     VtValue val = sceneDelegate->GetVolumeParamValue(id, HdTokens->filters);
@@ -244,6 +239,11 @@ HdPrman_Volume::Sync(HdSceneDelegate *sceneDelegate,
     }
 
     if (dirtyFilters) {
+        auto* param = static_cast<HdPrman_RenderParam*>(renderParam);
+        riley::Riley* riley = param->AcquireRiley();
+        HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
+        HdChangeTracker& changeTracker = renderIndex.GetChangeTracker();
+    
         // Clear and recreate dependencies.
         if (volumeFilterPaths != _volumeFilterPaths) {
             for (const SdfPath& filterPath : _volumeFilterPaths) {

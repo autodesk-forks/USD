@@ -53,7 +53,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
       - name: Install Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
         with:
@@ -84,7 +84,7 @@ jobs:
           # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP flag will ensure that we never try to
           # link against this library anyway, so it doesn't matter.
           docker exec usdmanylinux ${{ matrix.PYTHON.INTERPRETER }} -c "import pathlib,sysconfig; pathlib.Path(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')).touch()"
-          docker exec usdmanylinux ${{ matrix.PYTHON.INTERPRETER }}  build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build /opt/USD/gen/build --src /opt/USD/gen/src /opt/USD/inst -v
+          docker exec usdmanylinux ${{ matrix.PYTHON.INTERPRETER }}  build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo -DPXR_PYTHON_INSTALL_DIR=lib/python" --no-materialx --no-imaging --no-examples --no-tutorials --build /opt/USD/gen/build --src /opt/USD/gen/src /opt/USD/inst -v
       - name: Creating packaging directory
         run: |
           docker exec usdmanylinux mkdir ./packaging
@@ -139,7 +139,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.15
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
       - name: Install Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
         with:
@@ -153,7 +153,7 @@ jobs:
       - name: Build USD
         run: |
           sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
-          ${{ matrix.PYTHON.INTERPRETER }} build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --generator Xcode --build-target universal --build $GITHUB_WORKSPACE/USDgen/build --src $GITHUB_WORKSPACE/USDgen/src $GITHUB_WORKSPACE/USDinst -v
+          ${{ matrix.PYTHON.INTERPRETER }} build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pluginfo -DPXR_PYTHON_INSTALL_DIR=lib/python" --no-materialx --no-imaging --no-examples --no-tutorials --generator Xcode --build-target universal --build $GITHUB_WORKSPACE/USDgen/build --src $GITHUB_WORKSPACE/USDgen/src $GITHUB_WORKSPACE/USDinst -v
       - name: Packaging USD
         run: |
           pwd
@@ -213,7 +213,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
       - name: Install Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 #v5.6.0
         with:
@@ -229,7 +229,7 @@ jobs:
           call C:\"Program Files (x86)"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           set BOOST_ROOT=
           python --version
-          python build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_ENABLE_PRECOMPILED_HEADERS=OFF -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo" --no-materialx --no-imaging --no-examples --no-tutorials --build USDgen/build --src USDgen/src USDinst -v
+          python build_scripts/build_usd.py --build-monolithic --build-args USD,"-DPXR_ENABLE_PRECOMPILED_HEADERS=OFF -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON -DPXR_BUILD_USD_TOOLS=OFF -DPXR_BUILD_EXEC=OFF -DPXR_INSTALL_LOCATION=../pxr/pluginfo -DPXR_PYTHON_INSTALL_DIR=lib/python" --no-materialx --no-imaging --no-examples --no-tutorials --build USDgen/build --src USDgen/src USDinst -v
         shell: cmd
       - name: Packaging USD
         run: |
@@ -363,7 +363,7 @@ jobs:
           python-version: ${{ matrix.BUILD_CONFIG.PYTHON_VERSION_SPEC }}
           check-latest: false
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4.3.0
         with:
           name: dist

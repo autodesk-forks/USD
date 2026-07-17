@@ -5,6 +5,29 @@
     "Plugins": [
         {
             "Info": {
+                "Profiles": {
+                    "Capabilities": {
+                        "usd.mtlx": {
+                            "docstring": "Capabilities introduced by the pxr/usd/usdMtlx library.", 
+                            "name": "usdMtlx library", 
+                            "predecessors": [
+                                "usd.core"
+                            ], 
+                            "style": "core", 
+                            "subgraph": "Foundation"
+                        }, 
+                        "usd.mtlx.fileformat": {
+                            "docstring": "Support for referencing .mtlx files as USD layers via UsdMtlxFileFormat.", 
+                            "name": "MaterialX File Format", 
+                            "predecessors": [
+                                "usd.mtlx", 
+                                "usd.core.fileformat"
+                            ], 
+                            "style": "core", 
+                            "subgraph": "Foundation"
+                        }
+                    }
+                }, 
                 "Types": {
                     "UsdMtlxDiscoveryPlugin": {
                         "bases": [
@@ -21,6 +44,9 @@
                             "mtlx"
                         ], 
                         "formatId": "mtlx", 
+                        "impliesCapabilities": [
+                            "usd.mtlx.fileformat"
+                        ], 
                         "primary": true, 
                         "supportsEditing": false, 
                         "supportsWriting": false, 

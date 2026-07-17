@@ -81,7 +81,6 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/ts/spline.h"
 #include "pxr/base/ts/types.h"
-#include "pxr/base/ts/valueTypeDispatch.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/base/vt/valueComposeOver.h"
 #include "pxr/base/vt/valueTransform.h"
@@ -374,7 +373,7 @@ namespace {
 // value resolution functions below. This allows to only resolve the layer 
 // offset once we've determined that a value is holding a type that can be 
 // resolved layer offsets while caching this computation for types that may
-// use it multiple times (e.g. SdfTimeCodeMap and VtDictionary)
+// use it multiple times (e.g. SdfTimeSampleMap and VtDictionary)
 struct LayerOffsetAccess
 {
 public:
@@ -677,8 +676,8 @@ _TransformSpline(TsSpline const &spline, Xf const &xf)
 }
 
 template <class Xf>
-SdfTimeCode
-_TransformTimeCode(SdfTimeCode const &timeCode, Xf const &xf)
+GfTimeCode
+_TransformTimeCode(GfTimeCode const &timeCode, Xf const &xf)
 {
     return xf.GetLayerOffset() * timeCode;
 }
@@ -5709,7 +5708,7 @@ _CopyProperty(const UsdProperty &prop,
 
         UsdResolveInfo resolveInfo = attr.GetResolveInfo();
 
-        if (resolveInfo.GetSource() == UsdResolveInfoSourceSpline) {
+        if (attr.HasSpline()) {
             TsSpline spline = attr.GetSpline();
             if (!timeOffset.IsIdentity()) {
                 TsSpline mappedSpline = spline;
@@ -6587,8 +6586,8 @@ UsdStage::_GetMetadata(const UsdObject &obj, const TfToken &fieldName,
 {
     TRACE_FUNCTION();
 
-    // XXX: HORRIBLE HACK.  Special-case timeSamples for now, since its
-    // resulting value is a complicated function influenced by "model clips",
+    // XXX: HORRIBLE HACK.  Special-case timeSamples and splines for now, since
+    // their resulting values are a complicated function influenced by "clips",
     // not a single value from scene description or fallbacks.  We special-case
     // it upfront here, since the Composer mechanism cannot deal with it.  We'd
     // like to consider remove "attribute value" fields from the set of stuff
@@ -6598,6 +6597,13 @@ UsdStage::_GetMetadata(const UsdObject &obj, const TfToken &fieldName,
             SdfTimeSampleMap timeSamples;
             if (_GetTimeSampleMap(obj.As<UsdAttribute>(), &timeSamples)) {
                 *result = timeSamples;
+                return true;
+            }
+            return false;
+        } else if (fieldName == SdfFieldKeys->Spline) {
+            TsSpline spline;
+            if (_GetSpline(obj.As<UsdAttribute>(), &spline)) {
+                *result = spline;
                 return true;
             }
             return false;
@@ -6632,8 +6638,8 @@ UsdStage::_GetMetadata(const UsdObject &obj,
 {
     TRACE_FUNCTION();
 
-    // XXX: HORRIBLE HACK.  Special-case timeSamples for now, since its
-    // resulting value is a complicated function influenced by "model clips",
+    // XXX: HORRIBLE HACK.  Special-case timeSamples and splines for now, since
+    // their resulting values are a complicated function influenced by "clips",
     // not a single value from scene description or fallbacks.  We special-case
     // it upfront here, since the Composer mechanism cannot deal with it.  We'd
     // like to consider remove "attribute value" fields from the set of stuff
@@ -6646,6 +6652,13 @@ UsdStage::_GetMetadata(const UsdObject &obj,
             }
             return false;
         }
+    } else if (fieldName == SdfFieldKeys->Spline) {
+        TsSpline spline;
+        if (_GetSpline(obj.As<UsdAttribute>(), &spline)) {
+            return result->StoreValue(spline);
+            return true;
+        }
+        return false;
     }
 
     // Another hack: the previous implementation would allow queries of
@@ -7166,34 +7179,6 @@ _ClipsApplyToNode(
             && node.GetPath().HasPrefix(clips->sourcePrimPath));
 }
 
-static bool
-_ClipsContainValueForAttribute(
-    const Usd_ClipSetRefPtr& clips,
-    const SdfPath& attrSpecPath)
-{
-    // Only look for samples in clips for attributes that are
-    // marked as varying in the clip manifest (if one is present).
-    // This gives users a way to indicate that an attribute will
-    // never have samples in a clip, which can help performance.
-    // 
-    // We normally do not consider variability during value 
-    // resolution to avoid the cost of composing variability on 
-    // each value fetch. We can use it here because we're only 
-    // fetching it from a single layer, which should be cheap. 
-    // This is also convenient for users, since it allows them 
-    // to reuse assets that may have both uniform and varying 
-    // attributes as manifests.
-    if (clips->manifestClip) {
-        SdfVariability attrVariability = SdfVariabilityUniform;
-        if (clips->manifestClip->HasField(
-                attrSpecPath, SdfFieldKeys->Variability, &attrVariability)
-            && attrVariability == SdfVariabilityVarying) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static
 const std::vector<Usd_ClipSetRefPtr>
 _GetClipsThatApplyToNode(
@@ -7205,7 +7190,8 @@ _GetClipsThatApplyToNode(
 
     for (const auto& localClips : clipsAffectingPrim) {
         if (_ClipsApplyToNode(localClips, node)
-            && _ClipsContainValueForAttribute(localClips, specPath)) {
+            && localClips->ContainsValueForAttribute(specPath))
+        {
             relevantClips.push_back(localClips);
         }
     }
@@ -7238,7 +7224,7 @@ _HasTimeSamples(const Usd_ClipSetRefPtr& sourceClips,
 {
     // Bail out immediately if this clip set does not contain values
     // for this attribute.
-    if (!_ClipsContainValueForAttribute(sourceClips, specPath)) {
+    if (!sourceClips->ContainsTimeSamplesForAttribute(specPath)) {
         return false;
     }
 
@@ -7327,35 +7313,6 @@ UsdStage::_GetValue(UsdTimeCode time, const UsdAttribute &attr,
     return Usd_AttrGetValueHelper<SdfAbstractDataValue>::GetValue(
         *this, time, attr, result);
 }
-
-// Define a helper struct which is used with TsDispatchToValueTypeTemplate
-// to dispatch to the appropriate Eval function based on the value type.
-template <typename S>
-struct _EvalSplineFunctor
-{
-    template <typename T>
-    void operator()(const TsSpline& spline, UsdTimeCode localTime,
-                    const SdfLayerOffset& layerToStageOffset, T* result,
-                    bool* successOut)
-    {
-        S val;
-        auto evalFunc = !localTime.IsPreTime() ?
-                            &TsSpline::Eval<S> : &TsSpline::EvalPreValue<S>;
-        if (!(spline.*evalFunc)(localTime.GetValue(), &val)) {
-            return;
-        }
-        *successOut = true;
-        if (spline.IsTimeValued()) {
-            val = layerToStageOffset * val;
-        }
-        // save the values in the result
-        if constexpr (std::is_base_of<SdfAbstractDataValue, T>::value) {
-            *successOut = result->StoreValue(val);
-        } else {
-            *result = val;
-        }
-    }
-};
 
 class UsdStage_ResolveInfoAccess
 {
@@ -7447,17 +7404,33 @@ public:
             localTime);
 
         const TsSpline& spline = *(info._spline);
-
-        bool success = false;
-
         const UsdTimeCode localTimeCode = time.IsPreTime() ?
             UsdTimeCode::PreTime(localTime) : UsdTimeCode(localTime);
-        // Use the Spline's value type to dispatch to the appropriate Evaluator.
-        TsDispatchToValueTypeTemplate<_EvalSplineFunctor>(
-            spline.GetValueType(), spline, localTimeCode, 
-            info._layerToStageOffset, result, &success);
 
-        return success;
+        return Usd_QuerySpline(spline, localTimeCode,
+                               info._layerToStageOffset, result);
+    }
+
+    template <class T>
+    static bool _GetClipsSplineValue(
+        UsdTimeCode time, const UsdAttribute& attr,
+        const UsdResolveInfo &info,
+        const Usd_ClipSetRefPtr &clipSet, 
+        T *result)
+    {
+        const SdfPath path =
+            info._primPathInLayerStack.AppendProperty(attr.GetName());
+            
+        const double localTime = time.GetValue();
+        TF_DEBUG(USD_VALUE_RESOLUTION).Msg(
+            "RESOLVE: reading field %s:%s from clip set %s, "
+            "with requested time = %.3f \n",
+            path.GetText(),
+            SdfFieldKeys->Spline.GetText(),
+            clipSet->name.c_str(),
+            localTime);
+        
+        return clipSet->QuerySpline(path, time, result);
     }
 
     static bool _GetInterpolatingClipSamples(
@@ -7584,10 +7557,10 @@ struct UsdStage::_ExtraResolveInfo
     std::shared_ptr<_ExtraResolveInfo> nextWeaker;
 
     // If the resolve info source is UsdResolveInfoSourceTimeSamples or
-    // UsdResolveInfoSourceValueClips and an explicit time is given to
-    // _GetResolveInfo, this will be the lower and upper bracketing time samples
-    // for that time in either the Layer's local time or the stage's time in the
-    // case of clips.
+    // UsdResolveInfoSourceValueClips where the underlying value format is time
+    // samples, and an explicit time is given to _GetResolveInfo, this will be
+    // the lower and upper bracketing time samples for that time in either the
+    // Layer's local time or the stage's time in the case of clips.
     double lowerSample = 0;
     double upperSample = 0;
 
@@ -7627,13 +7600,12 @@ UsdStage::_GetAssetPathContext(UsdTimeCode time, const UsdAttribute &attr) const
         // clip boundary.
         Usd_ClipRefPtr activeClip = clipSet->GetActiveClip(time, false);
 
-        // If we are querying for a pre-time, and land on a time sample, and the
-        // active clip we retrieved has it start time same as the time, that
+        // If we are querying for a pre-time, and the active clip we
+        // retrieved has its start time same as the time, that
         // means we are on a clip boundary, and we should use the previous
         // clip as the active clip. This will automatically also cover jump 
         // discontinuity scenarios.
         if (time.IsPreTime() && 
-                extraResolveInfo.lowerSample == extraResolveInfo.upperSample &&
                 activeClip->startTime == time.GetValue()) {
             activeClip = clipSet->GetPreviousClip(activeClip);
         }
@@ -7644,7 +7616,15 @@ UsdStage::_GetAssetPathContext(UsdTimeCode time, const UsdAttribute &attr) const
         // If the active clip has authored time samples, the value will
         // come from it (or at least be interpolated from it) so use that
         // clip's layer. Otherwise the value will come from the manifest.
-        resultLayer = activeClip->HasAuthoredTimeSamples(resultSpecPath) ? 
+        const bool hasAuthoredValues =
+            (resolveInfo._clipsSourceFormat ==
+                    UsdResolveInfo::_ValueClipsSourceFormat::TimeSamples
+                && activeClip->HasAuthoredTimeSamples(resultSpecPath))
+            ||
+            (resolveInfo._clipsSourceFormat ==
+                    UsdResolveInfo::_ValueClipsSourceFormat::Spline
+                && activeClip->HasField(resultSpecPath, SdfFieldKeys->Spline));
+        resultLayer = hasAuthoredValues ?
             activeClip->GetLayer() : clipSet->manifestClip->GetLayer();
     }
 
@@ -7752,21 +7732,21 @@ _GetClipLayer(Usd_ClipSetRefPtr const &clipSet,
     // clip boundary.
     Usd_ClipRefPtr activeClip = clipSet->GetActiveClip(time, false);
 
-    // If we are querying for a pre-time, and land on a time sample, and the
-    // active clip we retrieved has it start time same as the time, that means
+    // If we are querying for a pre-time, and the active clip we
+    // retrieved has its start time same as the time, that means
     // we are on a clip boundary, and we should use the previous clip as the
     // active clip. This will automatically also cover jump discontinuity
     // scenarios.
     if (time.IsPreTime() &&
-        TF_VERIFY(lowerSample && upperSample) &&
-        *lowerSample == *upperSample &&
         activeClip->startTime == time.GetValue()) {
         activeClip = clipSet->GetPreviousClip(activeClip);
     }
     // If the active clip has authored time samples, the value will come from it
     // (or at least be interpolated from it) so use that clip's layer. Otherwise
     // the value will come from the manifest.
-    return activeClip->HasAuthoredTimeSamples(specPath)
+    const bool hasAuthoredValues = activeClip->HasAuthoredTimeSamples(specPath)
+        || activeClip->HasField(specPath, SdfFieldKeys->Spline);
+    return hasAuthoredValues
         ? activeClip->GetLayer() : clipSet->manifestClip->GetLayer();
 };
 
@@ -7959,9 +7939,20 @@ UsdStage::_GetValueFromResolveInfoImpl(
             return UsdStage_ResolveInfoAccess::_GetSplineValue(
                 time, attr, *curResolveInfo, result);
         }
-        
-        if (curResolveInfo->_source == UsdResolveInfoSourceTimeSamples ||
-            curResolveInfo->_source == UsdResolveInfoSourceValueClips) {
+
+        if (curResolveInfo->_source == UsdResolveInfoSourceValueClips &&
+            curResolveInfo->_clipsSourceFormat ==
+                UsdResolveInfo::_ValueClipsSourceFormat::Spline)
+        {
+            return UsdStage_ResolveInfoAccess::_GetClipsSplineValue(
+                time, attr, *curResolveInfo, curExtraResolveInfo->clipSet,
+                result);
+        }
+        else if (curResolveInfo->_source == UsdResolveInfoSourceTimeSamples ||
+            (curResolveInfo->_source == UsdResolveInfoSourceValueClips &&
+             curResolveInfo->_clipsSourceFormat ==
+                UsdResolveInfo::_ValueClipsSourceFormat::TimeSamples))
+        {
             // Fetch the sample values from either time samples or clips.
             if (curResolveInfo->_source == UsdResolveInfoSourceTimeSamples) {
                 UsdStage_ResolveInfoAccess::_GetInterpolatingTimeSamples(
@@ -8000,7 +7991,7 @@ UsdStage::_GetValueFromResolveInfoImpl(
                     // XXX Clips automatically transform time values to the
                     // stage's time, so skip transforming time-valued values.
                     // WBN to refactor to avoid this hacky bit.
-                    std::type_info const &timeCodeType = typeid(SdfTimeCode);
+                    std::type_info const &timeCodeType = typeid(GfTimeCode);
                     const bool isTimeValued =
                         sample.value.GetTypeid() == timeCodeType ||
                         sample.value.GetElementTypeid() == timeCodeType;
@@ -8158,39 +8149,32 @@ struct UsdStage::_PropertyStackResolver {
                  const PcpNodeRef& node,
                  const UsdTimeCode* time) 
     {
-        // Look through clips to see if they have a time sample for
-        // this attribute. If a time is given, examine just the clips
-        // that are active at that time.
-        double lowerSample = 0.0, upperSample = 0.0;
-        std::optional<double> localTime;
-        if (time) {
-            localTime = time->GetValue();
-        }
-        if (_HasTimeSamples(
-                clipSet, specPath, 
-                localTime ? std::addressof(*localTime) : nullptr, 
-                &lowerSample, &upperSample)) {
-
+        if (clipSet->ContainsValueForAttribute(specPath)) {
             // Get the active clip assuming no jump discontinuity or time not at
             // any clip boundary.
             Usd_ClipRefPtr activeClip = clipSet->GetActiveClip(*time, false);
 
-            // If we are querying for a pre-time, and land on a time sample, and
-            // the active clip we retrieved has it start time same as the time,
+            // If we are querying for a pre-time, and the active clip we
+            // retrieved has its start time same as the time,
             // that means we are on a clip boundary, and we should use the
             // previous clip as the active clip. This will automatically also
             // cover jump discontinuity scenarios.
-            if (time->IsPreTime() && lowerSample == upperSample &&
+            if (time->IsPreTime() &&
                     activeClip->startTime == time->GetValue()) {
                 activeClip = clipSet->GetPreviousClip(activeClip);
             }
 
-            // If the active clip has authored time samples, the value will
+            // If the active clip has relevant authored attrs, the value will
             // come from it (or at least be interpolated from it) so use the
             // property spec from that clip. Otherwise the value will come
             // from the manifest.
+            const bool hasTimeSamples =
+                clipSet->ContainsTimeSamplesForAttribute(specPath);
+            const bool hasAuthoredValues = hasTimeSamples
+                ? activeClip->HasAuthoredTimeSamples(specPath)
+                : activeClip->HasField(specPath, SdfFieldKeys->Spline);
             const Usd_ClipRefPtr& sourceClip = 
-                activeClip->HasAuthoredTimeSamples(specPath) ?
+                hasAuthoredValues ?
                 activeClip : clipSet->manifestClip;
 
             if (!TF_VERIFY(sourceClip)) {
@@ -8618,7 +8602,7 @@ struct UsdStage::_SamplesInIntervalResolver
             return true;
         }
 
-        if (!_ClipsContainValueForAttribute(clipSet, specPath)) {
+        if (!clipSet->ContainsTimeSamplesForAttribute(specPath)) {
             return false;
         }
 
@@ -8841,7 +8825,8 @@ struct UsdStage::_TimeSampleMapResolver
         }
 
         if (_processingAnimationBlock ||
-            !_ClipsContainValueForAttribute(clipSet, specPath)) {
+            !clipSet->ContainsTimeSamplesForAttribute(specPath))
+        {
             return false;
         }
 
@@ -8855,7 +8840,7 @@ struct UsdStage::_TimeSampleMapResolver
             // XXX Clips automatically transform time values to the
             // stage's time, so skip transforming time-valued values.
             // WBN to refactor to avoid this hacky bit.
-            std::type_info const &timeCodeType = typeid(SdfTimeCode);
+            std::type_info const &timeCodeType = typeid(GfTimeCode);
             VtValue clipValue;
             if (!clipSet->QueryTimeSample(
                     specPath, clipTime,
@@ -9217,17 +9202,30 @@ struct UsdStage::_ResolveInfoResolver
         if (time) {
             localTime = time->GetValue();
         }
+
+        const bool hasSpline = clipSet->ContainsSplineForAttribute(specPath);
         double lowerSample, upperSample;
-        if (!_HasTimeSamples(clipSet, specPath, 
-                             localTime ? std::addressof(*localTime) : nullptr,
-                             &lowerSample, &upperSample)) {
+        const bool hasTimeSamples = _HasTimeSamples(
+            clipSet, specPath, 
+            localTime ? std::addressof(*localTime) : nullptr,
+            &lowerSample, &upperSample);
+
+        if (!hasSpline && !hasTimeSamples) {
             return false;
         }
 
         if (_SetSource(_resolveInfo, UsdResolveInfoSourceValueClips)) {
             _extraInfo->clipSet = clipSet;
-            _extraInfo->lowerSample = lowerSample;
-            _extraInfo->upperSample = upperSample;
+            if (hasTimeSamples) {
+                _resolveInfo->_clipsSourceFormat =
+                    UsdResolveInfo::_ValueClipsSourceFormat::TimeSamples;
+                _extraInfo->lowerSample = lowerSample;
+                _extraInfo->upperSample = upperSample;
+            } else {
+                _resolveInfo->_clipsSourceFormat =
+                    UsdResolveInfo::_ValueClipsSourceFormat::Spline;
+            }
+
             _resolveInfo->_source = UsdResolveInfoSourceValueClips;
             _resolveInfo->_layerStack = node.GetLayerStack();
             _resolveInfo->_primPathInLayerStack = node.GetPath();
@@ -9237,7 +9235,7 @@ struct UsdStage::_ResolveInfoResolver
         // If we're working at a time, check if the samples are composing types,
         // and if either are, add a next weaker resolve info to the chain and
         // continue.
-        if (time) {
+        if (time && hasTimeSamples) {
             const auto [lowerComposes, upperComposes] =
                 _GetSamplesComposability(
                     clipSet, specPath,
@@ -9457,7 +9455,7 @@ _GetResolvedValueAtTimeWithClipsImpl(
                 // We only care about clips that were introduced at this
                 // position within the LayerStack.
                 if (clipSet->sourceLayer == res->GetLayer()) {
-                    // Look through clips to see if they have a time sample for
+                    // Look through clips to see if they have a value for
                     // this attribute. If a time is given, examine just the
                     // clips that are active at that time.
                     if (resolver->ProcessClips(
@@ -9620,6 +9618,85 @@ UsdStage::_GetBracketingTimeSamples(
     return bsr._hasAnyValue;
 }
 
+bool
+UsdStage::_HasSpline(const UsdAttribute &attr) const
+{
+    UsdResolveInfo info;
+    _GetResolveInfo(attr, &info);
+    return _HasSplineFromResolveInfo(info, attr, /* resolveTarget */ nullptr);
+}
+
+bool
+UsdStage::_GetSpline(const UsdAttribute& attr, TsSpline* spline) const
+{
+    UsdResolveInfo info;
+    _GetResolveInfo(attr, &info);
+    return _GetSplineFromResolveInfo(
+        info, attr, /* resolveTarget */ nullptr, spline);
+}
+
+bool
+UsdStage::_HasSplineFromResolveInfo(
+    const UsdResolveInfo &info,
+    const UsdAttribute &attr,
+    const UsdResolveTarget *resolveTarget) const
+{
+    if (info.GetSource() == UsdResolveInfoSourceSpline) {
+        return true;
+    }
+    if (info.GetSource() == UsdResolveInfoSourceValueClips) {
+        return info._clipsSourceFormat ==
+            UsdResolveInfo::_ValueClipsSourceFormat::Spline;
+    }
+    return false;
+}
+
+bool
+UsdStage::_GetSplineFromResolveInfo(
+    const UsdResolveInfo &info,
+    const UsdAttribute &attr,
+    const UsdResolveTarget *resolveTarget,
+    TsSpline *spline) const
+{
+    if (info.GetSource() == UsdResolveInfoSourceSpline) {
+        if (!TF_VERIFY(info._spline,
+                "Spline should be valid when source is Spline")) {
+            return false;
+        }
+        *spline = *info._spline;
+
+        if (!info._layerToStageOffset.IsIdentity()) {
+            Usd_ApplyLayerOffsetToValue(spline, info._layerToStageOffset);
+        }
+    } else if (info.GetSource() == UsdResolveInfoSourceValueClips &&
+        info._clipsSourceFormat ==
+            UsdResolveInfo::_ValueClipsSourceFormat::Spline)
+    {
+        UsdResolveInfo clipInfo;
+        _ExtraResolveInfo extraInfo;
+        if (resolveTarget) {
+            _GetResolveInfoWithResolveTarget(
+                attr, *resolveTarget, &clipInfo, /* time */ nullptr,
+                &extraInfo);
+        } else {
+            _GetResolveInfo(attr, &clipInfo, /* time */ nullptr, &extraInfo);
+        }
+        if (!extraInfo.clipSet) {
+            return false;
+        }
+
+        // Note that we don't need to apply the layer offset, since it's baked
+        // into clip times upon clipset construction.
+        const SdfPath specPath =
+            clipInfo._primPathInLayerStack.AppendProperty(attr.GetName());
+        if (!extraInfo.clipSet->BuildSpline(specPath, spline)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static bool
 _ValueFromClipsMightBeTimeVarying(const Usd_ClipSetRefPtr &clipSet,
                                   const SdfPath &attrSpecPath)
@@ -9628,9 +9705,15 @@ _ValueFromClipsMightBeTimeVarying(const Usd_ClipSetRefPtr &clipSet,
     // time sample for the attribute, it might be time varying. Otherwise the
     // attribute's value must be constant over all time.
     if (clipSet->valueClips.size() == 1) {
-        const size_t numTimeSamples = 
-            clipSet->valueClips.front()->GetNumTimeSamplesForPath(attrSpecPath);
-        return numTimeSamples > 1;
+        if (clipSet->ContainsSplineForAttribute(attrSpecPath)) {
+            // All splines are defined to be possibly time varying.
+            return true;
+        } else {
+            const size_t numTimeSamples = 
+                clipSet->valueClips.front()->GetNumTimeSamplesForPath(
+                    attrSpecPath);
+            return numTimeSamples > 1;
+        }
     }
 
     // Since there are multiple clips active across all time, we can't say
@@ -9692,7 +9775,7 @@ UsdStage::_ValueMightBeTimeVaryingFromResolveInfo(
                 continue;
             }
 
-            if (_HasTimeSamples(clipSet, specPath)) {
+            if (clipSet->ContainsValueForAttribute(specPath)) {
                 return _ValueFromClipsMightBeTimeVarying(clipSet, specPath);
             }
         }

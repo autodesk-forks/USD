@@ -8,7 +8,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Metallic_Workflow_01>
+        rel material:binding = </MxMaterials/USD_MetallicWorkflow_01>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-4.0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -17,7 +17,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Metallic_Workflow_02>
+        rel material:binding = </MxMaterials/USD_MetallicWorkflow_02>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-1.5, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -26,7 +26,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Spec_Workflow_01>
+        rel material:binding = </MxMaterials/USD_SpecWorkflow_01>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (1.5, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -35,20 +35,99 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Spec_Workflow_02>
+        rel material:binding = </MxMaterials/USD_SpecWorkflow_02>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (4.0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 }
 
-def Scope "Materials" {
-    def Material "MaterialX" (
-        references = [
-            @./mtlxFiles/workflowMaterials.mtlx@</MaterialX>,
-        ]
-    )
-    {
+def Scope "MxMaterials" {
+    def Material "USD_MetallicWorkflow_01" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_MetallicWorkflow_01/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (1.0, 0.0, 0.0)
+            color3f inputs:emissiveColor = (0.0, 0.0, 0.0)
+            int inputs:useSpecularWorkflow = 0
+            color3f inputs:specularColor = (0.0, 0.0, 1.0)
+            float inputs:metallic = 0.0
+            float inputs:roughness = 0.15
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 1
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_MetallicWorkflow_02" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_MetallicWorkflow_02/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (1.0, 0.0, 0.0)
+            color3f inputs:emissiveColor = (0.0, 0.0, 0.0)
+            int inputs:useSpecularWorkflow = 0
+            color3f inputs:specularColor = (0.0, 0.0, 1.0)
+            float inputs:metallic = 0.0
+            float inputs:roughness = 0.75
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 1
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_SpecWorkflow_01" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_SpecWorkflow_01/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (1.0, 0.0, 0.0)
+            color3f inputs:emissiveColor = (0.0, 0.0, 0.0)
+            int inputs:useSpecularWorkflow = 1
+            color3f inputs:specularColor = (0.0, 0.0, 1.0)
+            float inputs:roughness = 0.5
+            float inputs:metallic = 0.0
+            float inputs:roughness = 0.15
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 1
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_SpecWorkflow_02" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_SpecWorkflow_02/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (1.0, 0.0, 0.0)
+            color3f inputs:emissiveColor = (0.0, 0.0, 0.0)
+            int inputs:useSpecularWorkflow = 1
+            color3f inputs:specularColor = (0.0, 0.0, 1.0)
+            float inputs:roughness = 0.75
+            float inputs:metallic = 0.0
+            float inputs:roughness = 0.75
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 1
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.5
+
+            token outputs:surface
+        }
     }
 }
 

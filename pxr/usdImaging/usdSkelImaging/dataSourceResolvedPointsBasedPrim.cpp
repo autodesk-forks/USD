@@ -473,7 +473,7 @@ UsdSkelImagingDataSourceResolvedPointsBasedPrim::Get(const TfToken &name)
         if (_primPath != _skeletonPath && _skeletonPrimSource) {
             // if we only have a single animation source then we don't need to
             // instance offset the index into skinning primvars.
-            const VtArray<GfVec2i>& blendShapeRanges = 
+            const VtVec2iArray& blendShapeRanges = 
                 UsdSkelImagingGetTypedValue(
                     _resolvedSkeletonSchema.GetBlendShapeRanges(), 0.0f);
             const bool useInstanceOffset = blendShapeRanges.size() > 1;
@@ -597,11 +597,15 @@ public:
     GetTypedValue(const HdSampledDataSource::Time shutterOffset) override {
         TRACE_FUNCTION();
 
-        const TfSpan<const TfToken> blendShapes(  
+        const VtTokenArray blendShapesValue(
             UsdSkelImagingGetTypedValue(_blendShapes, shutterOffset));
-        const TfSpan<const float> blendShapeWeights(
+        const TfSpan<const TfToken> blendShapes(blendShapesValue);
+
+        const VtFloatArray blendShapeWeightsValue(
             UsdSkelImagingGetTypedValue(_blendShapeWeights, shutterOffset));
-        const TfSpan<const GfVec2i> blendShapeRanges(
+        const TfSpan<const float> blendShapeWeights(blendShapeWeightsValue);
+
+        const VtVec2iArray blendShapeRanges(
             UsdSkelImagingGetTypedValue(_blendShapeRanges, shutterOffset));
 
         const size_t numSubShapes = _blendShapeData->numSubShapes;

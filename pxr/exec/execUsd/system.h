@@ -31,7 +31,7 @@ class ExecUsdValueKey;
 class UsdTimeCode;
 
 /// The implementation of a system to procedurally compute values based on USD
-/// scene description and computation definitions.
+/// scene description and computation definitions published for USD schemas.
 /// 
 /// ExecUsdSystem specializes the base ExecSystem class and owns USD-specific
 /// structures and logic necessary to compile, schedule and evaluate requested

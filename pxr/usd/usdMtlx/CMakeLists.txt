@@ -87,9 +87,34 @@ pxr_library(usdMtlx
         overview.dox
 )
 
+if(NOT "${PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES}" STREQUAL "")
+    target_compile_definitions(usdMtlx
+        PRIVATE
+        PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES="${PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES}"
+    )
+endif()
+
+pxr_build_test(testUsdMtlxFileFormatImplication
+    LIBRARIES
+        tf
+        vt
+        sdf
+        usd
+        usdMtlx
+        usdProfiles
+    CPPFILES
+        testenv/testUsdMtlxFileFormatImplication.cpp
+)
+
+pxr_register_test(testUsdMtlxFileFormatImplication
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdMtlxFileFormatImplication"
+    TESTENV testenv/testUsdMtlxFileFormatImplication
+)
+
 pxr_test_scripts(
     testenv/testUsdMtlxDiscovery.py
     testenv/testUsdMtlxFileFormat.py
+    testenv/testUsdMtlxFileFormatImplicationPy.py
     testenv/testUsdMtlxParser.py
 )
 
@@ -106,6 +131,12 @@ pxr_register_test(testUsdMtlxFileFormat
     TESTENV testenv/testUsdMtlxFileFormat.testenv
     DIFF_COMPARE Looks.usda NodeGraphs.usda GraphlessNodes.usda usd_preview_surface_gold.usda Include.usda Include_From_Usdz.usda LocalCustomNodes.usda NestedLocalCustomNodes.usda
     EXPECTED_RETURN_CODE 0
+)
+
+pxr_register_test(testUsdMtlxFileFormatImplicationPy
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdMtlxFileFormatImplicationPy"
+    TESTENV testenv/testUsdMtlxFileFormatImplication
 )
 
 pxr_register_test(testUsdMtlxParser

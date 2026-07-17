@@ -1,0 +1,18 @@
+#usda 1.0
+
+def "Model"
+{
+    float gEmptyTimeSamples.timeSamples = {}
+    float gTimeSamplesOutsideClipRange.timeSamples = {
+        2:2, 3:3, 4:4, 5:5
+    }
+    float gBothFormats.spline = {}
+    float gBothFormats.timeSamples = {0:1}
+    float gBothFormatsAcrossClips.spline = {0:1; post held}
+
+    float gDefinedSpline.spline = {0:1; post held}
+    float gSplineAcrossClips.spline = {0:1; post held}
+    float gBothFormatsSplineWins.spline = {}
+    float gBothFormatsSplineWins.timeSamples = {}
+    float gBothFormatsSplineWinsAcrossClips.spline = {}
+}

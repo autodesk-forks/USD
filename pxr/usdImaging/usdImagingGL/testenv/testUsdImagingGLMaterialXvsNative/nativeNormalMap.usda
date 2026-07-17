@@ -105,7 +105,7 @@ def Scope "Materials"
         def Shader "Texture"
         {
             uniform token info:id = "UsdUVTexture"
-            asset inputs:file = @mtlxFiles/normalMap.png@ (
+            asset inputs:file = @normalMap.png@ (
                 colorSpace = "raw"
             )
             token inputs:sourceColorSpace = "raw"

@@ -19,6 +19,7 @@ pxr_library(hd
 
     PUBLIC_CLASSES
         aov
+        backPlateSchema
         basisCurves
         basisCurvesSchema
         basisCurvesTopology
@@ -40,6 +41,7 @@ pxr_library(hd
         collectionSchema
         collectionsSchema
         command
+        concatenatedVectorDataSource
         coneSchema
         containerDataSourceEditor
         containerSchema
@@ -61,6 +63,7 @@ pxr_library(hd
         dirtyBitsTranslator
         dirtyList
         displayFilterSchema
+        energyFilterSchema
         drawingCoord
         drawItem
         engine
@@ -94,9 +97,11 @@ pxr_library(hd
         instanceCategoriesSchema
         instancedBySchema
         instanceIndicesSchema
+        instanceProxySchema
         instancer
         instanceRegistry
         instancerTopologySchema
+        instanceProxyViewSceneIndex
         instanceSchema
         integratorSchema
         lazyContainerDataSource
@@ -180,7 +185,7 @@ pxr_library(hd
         sceneGlobalsSchema
         sceneIndex
         sceneIndexAdapterSceneDelegate
-        sceneIndexInputArgsSchema
+        sceneIndexCreateArgsSchema
         sceneIndexObserver
         sceneIndexPlugin
         sceneIndexPluginRegistry

@@ -60,18 +60,22 @@ Pull Request Guidelines
       repository. Please make sure the base branch of your pull request is set
       to the "**dev**" branch when filing your pull request.
 
-    * Please make pull requests that are small and atomic. In general, it is
-      easier for us to merge pull requests that serve a single
-      purpose than those that combine several functional pieces.
+    * Please create scoped pull requests. In general, it is easier for us to
+      merge pull requests that serve a single purpose than those that combine
+      several functional pieces.
 
-    * Please make sure that your pull requests are clean. Use the rebase and
-      squash git facilities as needed to ensure that the pull request is as
-      clean as possible.
+    * Please make sure that your pull requests show a clean git history without
+      an aggregation of exploratory or unrelated intermediate work. Use the
+      rebase and squash git facilities as needed to ensure that the pull request
+      is as clean as possible.
 
-    * Please make sure all tests are passing with your change prior to
-      submitting a pull request. The current GitHub CI pipeline only runs build 
-      tests; additional tests will be run when reviewing your submitted change 
-      for consideration.
+    * Tests and documentation should cover new functionality. Make sure all
+      tests are passing with your change prior to submitting a pull request. The
+      current GitHub CI pipeline only runs build tests; additional tests will be
+      run when reviewing your submitted change for consideration.
+
+    * The PR description should cover what changed and why, and be organized by
+      logical concern.
 
     * Please search through 
       `existing open GitHub issues <https://github.com/PixarAnimationStudios/OpenUSD/issues>`__
@@ -79,6 +83,20 @@ Pull Request Guidelines
       no issues related to your change, you do not need to create a new issue. 
       However, if your change requires multiple pull requests, it can be helpful 
       to create a single issue to link together and organize related PRs.
+
+*************************
+AI-Assisted Contributions
+*************************
+
+Contributions created with the assistance of AI are subject to the guidelines
+noted above. Please disclose the use of AI assistance in the PR description. Do
+not use git authorship trailers on commits, do restrict the disclosure to the
+description.
+
+Note that reviewers may use this information as seen fit, including requesting
+further information or follow up as deemed necessary by the reviewers. The 
+person noted on the CLA covering a contribution bears the responsibility for 
+any such PRs, just as they would in an unassisted contribution.
 
 .. _git_workflow:
 

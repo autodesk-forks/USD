@@ -29,6 +29,11 @@
                     }
                 },
                 "Types": {
+                    "UsdImagingBackPlateAPIAdapter" : {
+                        "bases": ["UsdImagingAPISchemaAdapter"],
+                        "isInternal": true,
+                        "apiSchemaName": "BackPlateAPI"
+                    },
                     "UsdImagingBasisCurvesAdapter": {
                         "bases": [
                             "UsdImagingGprimAdapter"
@@ -136,6 +141,11 @@
                         ],
                         "isInternal": true,
                         "primTypeName": "Mesh"
+                    },
+                    "UsdImagingMotionAPIAdapter": {
+                        "bases": ["UsdImagingAPISchemaAdapter"],
+                        "isInternal": true,
+                        "apiSchemaName": "MotionAPI"
                     },
                     "UsdImagingTetMeshAdapter": {
                         "bases": [

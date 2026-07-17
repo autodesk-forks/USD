@@ -26,6 +26,8 @@ using HdRenderProductVectorSchema =
     HdVectorOfSchemasSchema<class HdRenderProductSchema>;
 using HdRenderVarVectorSchema =
     HdVectorOfSchemasSchema<class HdRenderVarSchema>;
+using HdInstanceVectorSchema =
+    HdVectorOfSchemasSchema<class HdInstanceSchema>;
 using HdInstanceIndicesVectorSchema =
     HdVectorOfSchemasSchema<class HdInstanceIndicesSchema>;
 using HdMaterialInterfaceMappingVectorSchema =
@@ -38,6 +40,8 @@ using HdSampledDataSourceContainerSchema =
     HdContainerOfTypedSampledDataSourcesSchema<HdSampledDataSource>;
 
 // Containers of schemas
+using HdBackPlateContainerSchema =
+    HdContainerOfSchemasSchema<class HdBackPlateSchema>;
 using HdMaterialNodeContainerSchema =
     HdContainerOfSchemasSchema<class HdMaterialNodeSchema>;
 using HdMaterialNodeParameterContainerSchema =

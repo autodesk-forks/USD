@@ -30,6 +30,7 @@ pxr_library(usdImaging
         adapterRegistry
         collectionCache
         collectionMaterialBindingSchema
+        collectionPredicateLibrary
         directMaterialBindingSchema
         dataSourceAttribute
         dataSourceAttributeColorSpace
@@ -74,6 +75,7 @@ pxr_library(usdImaging
         selectionSceneIndex
         tokens
         apiSchemaAdapter
+        backPlateAPIAdapter
         basisCurvesAdapter
         capsuleAdapter
         cameraAdapter
@@ -108,6 +110,7 @@ pxr_library(usdImaging
         materialBindingsSchema
         materialBindingsResolvingSceneIndex
         meshAdapter
+        motionAPIAdapter
         niPrototypePropagatingSceneIndex
         nurbsCurvesAdapter
         nurbsPatchAdapter
@@ -126,7 +129,7 @@ pxr_library(usdImaging
         usdRenderProductSchema
         usdRenderSettingsSchema
         usdRenderVarSchema
-        usdSceneIndexInputArgsSchema
+        usdUpAxisSchema
         rectLightAdapter
         renderPassAdapter
         renderProductAdapter
@@ -136,6 +139,8 @@ pxr_library(usdImaging
         representedByAncestorPrimAdapter
         rerootingContainerDataSource
         rerootingSceneIndex
+        sceneIndex
+        sceneIndexCreateArgsSchema
         sceneIndexPlugin
         sceneIndexPrimAdapter
         sceneIndices
@@ -264,6 +269,17 @@ pxr_build_test(testUsdImagingRootPrim
     CPPFILES
         testenv/testUsdImagingRootPrim.cpp
 )
+pxr_build_test(testUsdImagingPiPrototypeSceneIndex
+    LIBRARIES
+        usdImaging
+        usdGeom
+        usd
+        sdf
+        hd
+        tf
+    CPPFILES
+        testenv/testUsdImagingPiPrototypeSceneIndex.cpp
+)
 pxr_build_test(testUsdImagingStageSceneIndex
     LIBRARIES
         usdImaging
@@ -288,6 +304,26 @@ pxr_build_test(testUsdImagingColorSpace
         hd
     CPPFILES
         testenv/testUsdImagingColorSpace.cpp
+)
+pxr_build_test(testUsdImagingInstanceProxyTraversal
+    LIBRARIES
+        usdImaging
+        hd
+        usd
+        sdf
+    CPPFILES
+        testenv/testUsdImagingInstanceProxyTraversal.cpp
+)
+pxr_build_test(testUsdImagingCollectionPredicateLibrary
+    LIBRARIES
+        usdImaging
+        hd
+        usd
+        kind
+        tf
+        sdf
+    CPPFILES
+        testenv/testUsdImagingCollectionPredicateLibrary.cpp
 )
 
 # Register tests to be run
@@ -341,6 +377,10 @@ pxr_register_test(testUsdImagingRootPrim
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingRootPrim"
     EXPECTED_RETURN_CODE 0
 )
+pxr_register_test(testUsdImagingPiPrototypeSceneIndex
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingPiPrototypeSceneIndex"
+    EXPECTED_RETURN_CODE 0
+)
 pxr_register_test(testUsdImagingStageSceneIndex
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingStageSceneIndex"
     TESTENV testenv/testUsdImagingStageSceneIndex
@@ -350,8 +390,34 @@ pxr_register_test(testUsdImagingStageSceneIndexContents
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingStageSceneIndexContents basic.usda basic.txt"
     TESTENV testenv/testUsdImagingStageSceneIndexContents
     EXPECTED_RETURN_CODE 0
-    DIFF_COMPARE 
+    DIFF_COMPARE
         basic.txt
+)
+pxr_register_test(testUsdImagingInstanceProxyTraversal_1
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingInstanceProxyTraversal 1_simple.usda"
+    TESTENV testenv/testUsdImagingInstanceProxyTraversal
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        1_simple_usdTraversal.txt
+        1_simple_sceneIndexTraversal.txt
+        1_simple_sceneIndexInstanceProxyTraversal.txt
+    ENV
+        USD_ASSIGN_PROTOTYPES_DETERMINISTICALLY=1
+)
+pxr_register_test(testUsdImagingInstanceProxyTraversal_2
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingInstanceProxyTraversal 2_ni-2-levels.usda"
+    TESTENV testenv/testUsdImagingInstanceProxyTraversal
+    EXPECTED_RETURN_CODE 0
+    DIFF_COMPARE
+        2_ni-2-levels_usdTraversal.txt
+        2_ni-2-levels_sceneIndexTraversal.txt
+        2_ni-2-levels_sceneIndexInstanceProxyTraversal.txt
+    ENV
+        USD_ASSIGN_PROTOTYPES_DETERMINISTICALLY=1
+)
+pxr_register_test(testUsdImagingCollectionPredicateLibrary
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdImagingCollectionPredicateLibrary"
+    EXPECTED_RETURN_CODE 0
 )
 
 # This test requires MaterialX support and is not currently supported on static 

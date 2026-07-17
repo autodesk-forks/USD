@@ -35,8 +35,6 @@ option(PXR_ENABLE_HDF5_SUPPORT "Enable HDF5 backend in the Alembic plugin for US
 option(PXR_ENABLE_OSL_SUPPORT "Enable OSL (OpenShadingLanguage) based components" OFF)
 option(PXR_ENABLE_PTEX_SUPPORT "Enable Ptex support" OFF)
 option(PXR_ENABLE_OPENVDB_SUPPORT "Enable OpenVDB support" OFF)
-option(PXR_BUILD_MAYAPY_TESTS "Build mayapy spline tests" OFF)
-option(PXR_BUILD_ANIMX_TESTS "Build AnimX spline tests" OFF)
 option(PXR_ENABLE_NAMESPACES "Enable C++ namespaces." ON)
 option(PXR_PREFER_SAFETY_OVER_SPEED
        "Enable certain checks designed to avoid crashes or out-of-bounds memory reads with malformed input files.  These checks may negatively impact performance."
@@ -70,6 +68,10 @@ if(APPLE)
             set(PXR_ENABLE_OPENVDB_SUPPORT OFF)
         endif()
     endif ()
+
+    option(PXR_BUILD_APPLE_FRAMEWORK "Builds an Apple Framework." ${PXR_APPLE_EMBEDDED})
+    set(PXR_APPLE_FRAMEWORK_NAME "OpenUSD" CACHE STRING "Name to provide Apple Framework build")
+    set(PXR_APPLE_IDENTIFIER_DOMAIN "org.openusd" CACHE STRING "Name to provide Apple Framework build")
 endif()
 
 
@@ -105,6 +107,15 @@ set(PXR_INSTALL_LOCATION ""
     CACHE
     STRING
     "Intended final location for plugin resource files."
+)
+
+set(PXR_PYTHON_INSTALL_DIR ""
+    CACHE
+    STRING
+    "Directory for installing Python bindings (relative to \
+    CMAKE_INSTALL_PREFIX or absolute). If unspecified, defaults to \
+    'lib/pythonX.Y/site-packages' on Linux and MacOS and 'Lib\\site-packages' \
+    on Windows."
 )
 
 set(PXR_OVERRIDE_PLUGINPATH_NAME ""
@@ -166,6 +177,23 @@ set(PXR_EXTRA_PLUGINS ""
     INTERNAL
     "Aggregation of extra plugin directories containing a plugInfo.json.")
 
+if (PXR_BUILD_APPLE_FRAMEWORK)
+    MESSAGE(STATUS "Framework build requires monolithic builds.")
+    set(PXR_BUILD_MONOLITHIC ON)
+    set(BUILD_SHARED_LIBS ON)
+
+    set(PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES ""
+        CACHE
+        STRING
+        "Relative path to search for resources within an Apple framework.")
+    mark_as_advanced(PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES)
+
+    if(PXR_APPLE_EMBEDDED)
+        set(PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES "Assets")
+    else()
+        set(PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES "Resources")
+    endif()
+endif ()
 # Resolve options that depend on one another so that subsequent .cmake scripts
 # all have the final value for these options.
 if (${PXR_BUILD_USD_IMAGING} AND NOT ${PXR_BUILD_IMAGING})
@@ -264,6 +292,17 @@ if (EMSCRIPTEN)
             "supported when targeting wasm")
         set(BUILD_SHARED_LIBS "OFF")
     endif()
+endif()
+
+if (PXR_BUILD_APPLE_FRAMEWORK)
+    if(PXR_BUILD_USD_TOOLS)
+        MESSAGE(STATUS "Setting PXR_BUILD_USD_TOOLS=OFF because PXR_BUILD_APPLE_FRAMEWORK is enabled.")
+    endif()
+    set(PXR_BUILD_USD_TOOLS OFF)
+    if(PXR_ENABLE_PYTHON_SUPPORT)
+        MESSAGE(STATUS "Setting PXR_ENABLE_PYTHON_SUPPORT=OFF because PXR_BUILD_APPLE_FRAMEWORK is enabled.")
+    endif ()
+    set(PXR_ENABLE_PYTHON_SUPPORT OFF)
 endif()
 
 # Configure the use of compiler caches for faster compilation

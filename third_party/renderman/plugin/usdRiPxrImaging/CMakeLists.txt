@@ -28,6 +28,7 @@ pxr_library(usdRiPxrImaging
         pxrCameraProjectionAdapter
         pxrCameraProjectionAPIAdapter
         pxrDisplayFilterAdapter
+        pxrEnergyFilterAdapter
         pxrIntegratorAdapter
         pxrVolumeAPIAdapter
         pxrSampleFilterAdapter

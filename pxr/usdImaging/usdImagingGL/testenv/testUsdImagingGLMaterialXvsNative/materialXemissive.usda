@@ -8,7 +8,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Emissive_01>
+        rel material:binding = </MxMaterials/USD_Emissive_01>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-5.0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -17,7 +17,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Emissive_02>
+        rel material:binding = </MxMaterials/USD_Emissive_02>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (-2.5, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -26,7 +26,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Emissive_03>
+        rel material:binding = </MxMaterials/USD_Emissive_03>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -35,7 +35,7 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Emissive_04>
+        rel material:binding = </MxMaterials/USD_Emissive_04>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (2.5, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -44,20 +44,79 @@ def Scope "UsdMaterialX" {
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </Materials/MaterialX/Materials/USD_Emissive_05>
+        rel material:binding = </MxMaterials/USD_Emissive_05>
         color3f[] primvars:displayColor = [(0.1, 0.5, 0.8)]
         double3 xformOp:translate = (5.0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 }
 
-def Scope "Materials" {
-    def Material "MaterialX" (
-        references = [
-            @./mtlxFiles/emissiveMaterials.mtlx@</MaterialX>,
-        ]
-    )
-    {
+
+def Scope "MxMaterials" {
+    def Material "USD_Emissive_01" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Emissive_01/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.7, 0.2, 0.0)
+            color3f inputs:emissiveColor = (0.2, 0.7, 0.)
+            float inputs:roughness = 0.0
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Emissive_02" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Emissive_02/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.7, 0.2, 0.0)
+            color3f inputs:emissiveColor = (0.2, 0.7, 0.)
+            float inputs:roughness = 0.25
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Emissive_03" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Emissive_03/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.7, 0.2, 0.0)
+            color3f inputs:emissiveColor = (0.2, 0.7, 0.)
+            float inputs:roughness = 0.5
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Emissive_04" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Emissive_04/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.7, 0.2, 0.0)
+            color3f inputs:emissiveColor = (0.2, 0.7, 0.)
+            float inputs:roughness = 0.75
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Emissive_05" {
+        token outputs:mtlx:surface.connect = </MxMaterials/USD_Emissive_05/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"
+            color3f inputs:diffuseColor = (0.7, 0.2, 0.0)
+            color3f inputs:emissiveColor = (0.2, 0.7, 0.)
+            float inputs:roughness = 1.0
+
+            token outputs:surface
+        }
     }
 }
 

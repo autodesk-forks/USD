@@ -192,6 +192,17 @@
                         "bases": [
                             "UsdTyped"
                         ], 
+                        "extraArrayInfo": [
+                            "ExtraInfo1", 
+                            "ExtraInfo2"
+                        ], 
+                        "extraDictInfo": {
+                            "extraArrayInfo": [
+                                "ExtraInfo1", 
+                                "ExtraInfo2"
+                            ], 
+                            "extraInfo": "ExtraInfo"
+                        }, 
                         "extraInfo": "ExtraInfo", 
                         "schemaIdentifier": "TestPxHairman", 
                         "schemaKind": "concreteTyped"

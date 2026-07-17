@@ -159,6 +159,20 @@
                             "position": "firstAfter"
                         }
                     },
+                    "HdSt_BackPlateSceneIndexPlugin" : {
+                        "bases": ["HdSceneIndexPlugin"],
+                        "loadWithRenderer" : "GL",
+                        "priority": 0,
+                        "displayName": "Scene index to convert back plates to meshes and materials",
+
+                        # phase=4, InsertionOrderAtStart
+                        "tags": ["hdSt:phase4", "hdSt:backPlate"],
+                        "ordering": {
+                            "before": "hdSt:dependencyForwarding",
+                            "after": ["hdSt:phase3", "hdGp:proceduralResolution", "hd:sceneGlobals"],
+                            "position": "firstAfter"
+                        }
+                    },
                     "HdSt_VelocityMotionResolvingSceneIndexPlugin" : {
                         "bases": ["HdSceneIndexPlugin"],
                         "loadWithRenderer": "GL",

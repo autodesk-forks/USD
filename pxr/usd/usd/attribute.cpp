@@ -265,35 +265,22 @@ UsdAttribute::Set(const VtValue& value, UsdTimeCode time) const
 bool
 UsdAttribute::HasSpline() const
 {
-    UsdResolveInfo resolveInfo = GetResolveInfo();
-    return resolveInfo.GetSource() == UsdResolveInfoSourceSpline;
+    return _GetStage()->_HasSpline(*this);
 }
 
 TsSpline
 UsdAttribute::GetSpline() const
 {
-    UsdResolveInfo resolveInfo = GetResolveInfo();
-    if (resolveInfo.GetSource() == UsdResolveInfoSourceSpline) {
-        // Don't return resolveInfo._spline directly because we need
-        // to compute layer offsets
-        TsSpline spline;
-        _GetStage()->_GetMetadata(
-            *this,                 // read a field in our attribute spec
-            SdfFieldKeys->Spline,  // read the Spline field
-            TfToken(),             // not a dict field, so no dict key
-            false,                 // want authored opinions only
-            &spline);              // read into this variable
-        return spline;
-    } else {
-        return TsSpline();
-    }
+    TsSpline spline;
+    _GetStage()->_GetSpline(*this, &spline);
+    return spline;
 }
 
 bool
-UsdAttribute::SetSpline(const TsSpline &spline)
+UsdAttribute::SetSpline(const TsSpline &spline) const
 {
     static const TfType doubleType = TfType::Find<double>();
-    static const TfType timecodeType = TfType::Find<SdfTimeCode>();
+    static const TfType timecodeType = TfType::Find<GfTimeCode>();
 
     // Find the attribute's value type.
     const TfType attrType = _GetStage()->_GetAttributeValueType(*this);
@@ -305,8 +292,7 @@ UsdAttribute::SetSpline(const TsSpline &spline)
     const bool attrIsTimeValued = (attrType == timecodeType);
 
     // Verify splines are supported for this value type.
-    if (!TsSpline::IsSupportedValueType(attrType)
-        && attrType != timecodeType) {
+    if (!TsSpline::IsSupportedValueType(attrType)) {
         TF_CODING_ERROR("Can't set spline on <%s>: splines are only "
                         "supported on scalar floating-point attributes",
                         GetPath().GetText());
@@ -314,8 +300,14 @@ UsdAttribute::SetSpline(const TsSpline &spline)
     }
 
     // Verify a spline of the correct value type has been provided.
+    // Note that the legacySplineTimeValued check can be removed once
+    // the deprecated TsSpline::SetTimeValued is removed.
+    const bool legacySplineTimeValued =
+        spline.GetValueType() == doubleType
+        && spline.IsTimeValued()
+        && attrIsTimeValued;
     const TfType expectedSplineValueType =
-        (attrIsTimeValued ? doubleType : attrType);
+        (legacySplineTimeValued ? doubleType : attrType);
     if (spline.GetValueType() != expectedSplineValueType) {
         TF_CODING_ERROR("Can't set spline of type '%s' on <%s>, "
                         "which requires splines of type '%s'",

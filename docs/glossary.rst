@@ -84,40 +84,7 @@ value using :ref:`TimeSamples <usdglossary-timesample>` or
 specific :ref:`timecode <usdglossary-timecode>` will be determined based on the 
 authored animated value, using interpolation if necessary. 
 
-The following example defines a Sphere with an animated value for 
-:usda:`radius` that uses timeSamples.
-
-.. code-block:: usda
-
-    def Sphere "SphereWithTimeSamples"
-    {
-        double radius.timeSamples = {
-            1: 100,
-            20: 500,
-            50: 250
-        }
-    }
-
-Similarly, the following example defines a Sphere with an animated value for
-:usda:`radius` using a spline.
-
-.. code-block:: usda
-
-    def Sphere "SphereWithSpline"
-    {
-        double radius.spline = {
-            bezier,
-            1: 10; pre (0, 0); post curve (5, 0.0125),
-            30: 20; pre (10, -0.001); post curve (10, 0.001),
-            60: 10; pre (5, -0.005); post curve (0, 0),
-        }
-    }
-
-As described in :ref:`Attribute <usdglossary-attribute>`, an attribute may have
-both a default value and an animated value authored. It is also possible to have
-a default value, timeSamples, and spline data authored on the same attribute at 
-the same spec level, however only one value source will be used for evaluation,
-as described in :ref:`Value Resolution <usdglossary-valueresolution>`.
+See :ref:`time_animating_attribute_values` for more details and examples.
 
 .. _usdglossary-animationblock:
 
@@ -137,39 +104,7 @@ in a VFX pipeline you might have assets with animated values authored by one
 department that a different department needs to block, but the authored default 
 values are still needed.
 
-In the following example, "BigBallWithoutAnimation" blocks the animated value of
-:usda:`radius` referenced from "BigBall", causing :usda:`radius`'s
-value to resolve to the default value (100) from "BigBall".
-
-.. code-block:: usda
-
-    def Sphere "BigBall"
-    {
-        double radius = 100
-        double radius.timeSamples = {
-            1: 100,
-            24: 500,
-        }
-    }
-
-    def "BigBallWithoutAnimation" (
-        references = </BigBall>
-    )
-    {
-        double radius = AnimationBlock
-    }
-
-If an attribute block was used instead of the animation block in the above
-example, the default value from "BigBall" would also be blocked, and the
-value would resolve to the :ref:`schema fallback value <usdglossary-fallback>` 
-for :usda:`radius`.
-
-.. note:: 
-
-  You can only use animation blocks to completely block an attribute's 
-  animated value. You cannot use animation blocks on individual 
-  timeSamples or spline knots, unlike attribute blocks that support this 
-  functionality.
+See :ref:`time_using_animation_blocks` for more details and examples.
 
 .. _usdglossary-apischema:
 
@@ -438,131 +373,9 @@ Similarly to how `prims can be deactivated <#usdglossary-active-inactive>`_
 through composing overriding opinions, the value that an attribute produces can
 be **blocked** by an overriding opinion of :usda:`None`, which can be authored 
 using :usdcpp:`UsdAttribute::Block() <UsdAttribute::Block>`. A block itself can, 
-of course be overridden by an even stronger opinion. The following example 
-extends the previous attribute example, adding a :usda:`DefaultBall` prim that 
-blocks the value of :usda:`radius` it references from :usda:`BigBall`, causing 
-:usda:`radius`'s value to resolve back to 
-`its fallback <#usdglossary-fallback>`_ at :cpp:`UsdTimeCode` :mono:`t` (any 
-blocked attribute that has no fallback will report that it has no value when we 
-invoke :usdcpp:`UsdAttribute::Get() <UsdAttribute::Get>`):
+of course be overridden by an even stronger opinion. 
 
-.. code-block:: usda
-   :caption: :usda:`DefaultBall` **Blocks** the radius values referenced from :usda:`BigBall`
-
-   def Sphere "BigBall" 
-   {
-       double radius = 100
-       double radius.timeSamples = {
-           1: 100,
-           24: 500,
-       }
-   }
-   
-   def "DefaultBall" (
-       references = </BigBall>
-   )
-   {
-       double radius = None
-   }
-
-In addition to completely blocking an attribute's value, sub time-ranges can be
-separately blocked, by blocking individual timeSamples. Consider the following
-examples:
-
-**Example 1:**
-
-.. code-block:: usda
-
-   def Sphere "BigBall"
-   { 
-       double radius.timeSamples = { 
-           101: 12, 
-           102: None, 
-       } 
-   }
-
-For the attribute :usda:`radius` on :usda:`BigBall`:
-
-  * :python:`Usd.Attribute.Get(t)` will return 12 for :python:`Usd.TimeCode`
-    :mono:`t` in (-|infin|, 102).
-
-  * :python:`Usd.Attribute.Get(t)` will return :mono:`None` for
-    :python:`Usd.TimeCode` :mono:`t` in [102, |infin|).
-
-**Example 2:**
-
-.. code-block:: usda
-
-   def Sphere "BigBall"
-   { 
-       double radius.timeSamples = { 
-           101: None, 
-           102: 12, 
-       } 
-   }
-
-For the attribute :usda:`radius` on :usda:`BigBall`:
-
-  * :python:`Usd.Attribute.Get(t)` will return :mono:`None` for
-    :python:`Usd.TimeCode` :mono:`t` in (-|infin|, 102).
- 
-  * :python:`Usd.Attribute.Get(t)` will return 12 for :python:`Usd.TimeCode`
-    :mono:`t` in [102, |infin|).
-
-Note that the per-timeSample-blocking ability does **not** allow us to sparsely
-**override** timeSamples, i.e. in the following example:
-
-.. code-block:: usda
-
-   def Sphere "BigBall"
-   { 
-       double radius.timeSamples = { 
-           101: 1, 
-           102: 2, 
-       } 
-   } 
-   
-   def "DefaultBall" ( 
-       references = </BigBall> 
-   ) 
-   { 
-       double radius.timeSamples = { 
-           101: None, 
-       } 
-   }
-
-For the attribute :usda:`radius` on :usda:`DefaultBall`:
-
-  * :python:`Usd.Attribute.Get(t)` will return :mono:`None` for
-    :python:`Usd.TimeCode` :mono:`t` in (-|infin|, |infin|).
-
-Attribute blocks can also be used to block segments of a 
-:ref:`usdglossary-spline`, similar to blocking individual timeSamples.
-In the following example, we start blocking from the knot at timecode 30
-(note the "none" interpolation mode) to the knot at timecode 60.
-
-.. code-block:: usda
-
-    def Sphere "Sphere"
-    {
-        double radius.spline = {
-            bezier,
-            1: 10; pre (0, 0); post curve (5, 0.0125),
-            20: 20; pre (0, 0); post curve (0, 0),
-            30: 0; pre (0, 0); post none,
-            60: 10; post curve (0, 0),
-        }
-    }
-
-:python:`Usd.Attribute.Get(t)` will return :mono:`None` for 
-:python:`Usd.TimeCode` :mono:`t` in [30, 60)
-
-Note that setting an empty spline (with no knots) for an attribute will result
-in the attribute being completely blocked.
-
-OpenUSD also provides a way to just block animated data (timesamples and 
-splines) but not default values for an attribute, using an 
-:ref:`Animation Block <usdglossary-animationblock>`.
+See :ref:`time_using_attribute_blocks` for more details and examples.
 
 .. _usdglossary-attributeconnection:
 
@@ -3579,50 +3392,7 @@ The spline is primarily defined by its collection of *knots*. Mathematically,
 a spline is a piecewise curve made up of knots and the *curve segments* between 
 them. 
 
-Each knot has a time and a value (and an optional pre-value) and information 
-about how to interpolate the value over the segments between it and its 
-neighboring knots. This interpolation can be a curve (Bezier or Hermite 
-depending on the spline), linear, flat, or even a 
-:ref:`value block <usdglossary-attributeblock>` (no value at all).
-For curved segments, the knots provide tangents which control and shape the 
-curve. 
-
-In addition to its knots, a spline also contains the type of the value 
-(double, float, or half), type of curved segments (Bezier or Hermite), how 
-to extrapolate beyond the times controlled by the knots, and how a section of 
-the knots can be repeated with looping. For more details on splines see 
-:usdcpp:`TsSpline`.
-
-In OpenUSD, splines can be used as a source of 
-:ref:`animated values <usdglossary-animatedvalue>` for an 
-:ref:`Attribute <usdglossary-attribute>`, similar to 
-:ref:`TimeSamples <usdglossary-timesample>`. Each 
-:ref:`PropertySpec <usdglossary-propertyspec>` for an 
-Attribute can contain a collection called *spline* that maps 
-:ref:`TimeCode <usdglossary-timecode>` coordinates to a knot value of the 
-Attribute's type, along with any knot configuration.
-
-The following simple example shows a Bezier spline source for the *radius* 
-attribute, with three knots (and associated tangents) at TimeCodes 1, 30, and 
-60.
-
-.. code-block:: usda
-
-    def "PrimA"
-    {
-        double radius.spline = {
-            bezier,
-            1: 10; pre (0, 0); post curve (5, 0.0125),
-            30: 20; pre (10, -0.001); post curve (10, 0.001),
-            60: 10; pre (5, -0.005); post curve (0, 0),
-        }
-    }
-
-.. image:: glossary_radiusSpline.png
-    :width: 500
-
-See :ref:`usdglossary-valueresolution` for additional details on how splines 
-are used during value resolution.
+See :ref:`time_using_splines` for more details and examples.
 
 .. _usdglossary-stage:
 
@@ -3793,7 +3563,8 @@ The term *timeSample* is used in two related contexts in USD:
       Each `PropertySpec <#usdglossary-propertyspec>`_ for an `Attribute
       <#usdglossary-attribute>`_ can contain a collection called *timeSamples*
       that maps `TimeCode <#usdglossary-timecode>`_ coordinates to values of the
-      Attribute's type.
+      Attribute's type. For more details and examples, see 
+      :ref:`time_using_timesamples`
 
     * **The time-coordinate for an Attribute** 
 
@@ -3857,9 +3628,8 @@ created to include validators for ancestor schema types (see examples below).
 
 Validators are made available through the **validator registry**. The registry
 lets you query for validators by various metadata filters (name, schema types,
-keywords). Validators can be registered and retrieved dynamically via the 
-OpenUSD plugin infrastructure, supporting complex validation scenarios across 
-different modules or plugins.
+keywords). Validators can be registered via the **OpenUSD plugin infrastructure**
+for lazy loading, or registered directly via the Registry API.
 
 The registry also provides access to **validator suites** which are predefined 
 sets of validators that can be used to create validator contexts (suites cannot 
@@ -3976,62 +3746,13 @@ Value Clips
 ***********
 
 *Value Clips* are a feature that allows one to partition varying attribute
-`TimeSample <#usdglossary-timesample>`_ overrides into multiple files, and 
+:ref:`TimeSample <usdglossary-timesample>` overrides into multiple files, and 
 combine them in a manner similar to how non-linear video editing tools allow 
-one to combine video clips. Value clips are especially useful for solving two 
-important problems in computer graphics production pipelines:
+one to combine video clips. 
 
-    #. **Crowd/background animation at scale** 
-
-       Crowd animators will often create animation clips that can apply to many
-       background characters, and be sequenced and cycled to generate a large
-       variety of animation. Value clips provide the ability to encode the
-       sequencing and non-uniform time-mapping of baked animation clips that
-       this task requires.
-
-    #. **File-per-frame "big data"** 
-
-       The results of some simulations and other types of sequentially-generated
-       special effects generate so much data that it is most practical for the
-       simulator to write out each time-step or frame's worth of data into a
-       different file. Value clips make it possible to stitch all of these files
-       together into a continuous (even though the data may itself be
-       topologically varying over time) animation, without needing to move,
-       merge, or perturb the files that the simulator produced. The USD toolset
-       includes a utility :ref:`toolset:usdstitchclips` that efficiently
-       assembles a sequence of file-per-frame layers into a Value Clips
-       representation.
-
-The key advantage of the value clips feature is that the resulting resolved 
-animation on a :cpp:`UsdStage` is indistinguishable from data collected or 
-aggregated into a single layer. In other words, consuming clients can be 
-completely unaware of the existence of value clips: there is no special schema 
-or API required to access the data. The disadvantages of using value clips are:
-
-    #. Encoding value clips on a stage is more complicated than simply recording
-       samples on attributes, or adding references (see :usdcpp:`UsdClipsAPI`
-       for details on encoding)
-
-        ..
-
-    #. There is some performance overhead associated with the use of value 
-       clips, both in the number of files that must be opened to play back 
-       animation (but that's what we asked for in using clips!), and also in 
-       extra overhead in
-       `resolving attribute values <#usdglossary-valueresolution>`_ in the
-       presence of clips. Value clips are the reason that
-       :usdcpp:`UsdProperty::GetPropertyStack` requires a :cpp:`timeCode`
-       argument, because the set of layers that contribute to an attribute's
-       value can change over time when it is affected by value clips.
-
-.. note::
-
-   For performance and scalability reasons, a :cpp:`UsdStage` will ignore any
-   composition arcs contained in a "clip" USD file, which means that value clips 
-   can only *usefully* contain direct (local) opinions about the attributes they
-   wish to modify.  For more information on value clip behavior and how clips
-   are encoded, see `Sequenceable, Re-timeable Animated Value Clips
-   <api/_usd__page__value_clips.html>`_ in the USD Manual.
+For more details and examples, see :ref:`time_using_value_clips`. For details
+on how clips are encoded, see 
+`Sequenceable, Re-timeable Animated Value Clips <api/_usd__page__value_clips.html>`__
 
 .. _usdglossary-valueresolution:
 
@@ -4222,6 +3943,8 @@ unique in three ways:
    that is consulted when 
    :usdcpp:`UsdTimeCode::Default() <UsdTimeCode::Default>` is the given time
    coordinate.
+
+See also: :ref:`time_understanding_value_resolution`   
 
 .. _usdglossary-variability:
 

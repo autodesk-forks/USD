@@ -195,23 +195,10 @@ UsdAttributeQuery::GetTimeSamples(std::vector<double>* times) const
 TsSpline
 UsdAttributeQuery::GetSpline() const
 {
-    if (_resolveInfo.GetSource() != UsdResolveInfoSourceSpline) {
-        return TsSpline();
-    }
-
-    if (!TF_VERIFY(_resolveInfo._spline, 
-        "Spline should be valid when source is Spline")) {
-        return TsSpline();
-    }
-
-    if (_resolveInfo._layerToStageOffset.IsIdentity()) {
-        return _resolveInfo._spline.value();
-    }
-
-    TsSpline mappedSpline = _resolveInfo._spline.value();
-    Usd_ApplyLayerOffsetToValue(
-        &mappedSpline, _resolveInfo._layerToStageOffset);
-    return mappedSpline;
+    TsSpline spline;
+    _attr._GetStage()->_GetSplineFromResolveInfo(
+        _resolveInfo, _attr, _resolveTarget.get(), &spline);
+    return spline;
 }
 
 bool
@@ -300,7 +287,8 @@ UsdAttributeQuery::HasValue() const
 bool
 UsdAttributeQuery::HasSpline() const
 {
-    return _resolveInfo._source == UsdResolveInfoSourceSpline;
+    return _attr._GetStage()->_HasSplineFromResolveInfo(
+        _resolveInfo, _attr, _resolveTarget.get());
 }
 
 bool 

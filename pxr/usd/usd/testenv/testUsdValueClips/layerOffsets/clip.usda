@@ -10,6 +10,15 @@ def "Model"
         20: -20.0
     }
 
+    float attrSpline.spline = {
+        5: 5; post linear,
+        10: 10; post none,
+        15: 15; post linear,
+        16: 17; post held,
+        pre: sloped(2),
+        post: sloped(-2)
+    }
+
     timecode time = -1.0
     timecode time.timeSamples = {
         5: -5.0,

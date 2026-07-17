@@ -109,6 +109,7 @@ usage: usdview [-h]
                                                        [--tracePython]
                                                        [--memstats {none,stage,stageAndImaging}]
                                                        [--dumpFirstImage DUMPFIRSTIMAGE]
+                                                       [--viewportSize VIEWPORTSIZE]
                                                        [--numThreads NUMTHREADS]
                                                        [--ff FIRSTFRAME]
                                                        [--lf LASTFRAME]
@@ -177,6 +178,9 @@ optional arguments:
                         MallocTags are not supported in the USD installation.
   --dumpFirstImage DUMPFIRSTIMAGE
                         Dumps the first image to file (as png)
+  --viewportSize VIEWPORTSIZE
+                        Fix the viewport to a specific size (WxH) for
+                        deterministic rendering, e.g. 601x458                        
   --numThreads NUMTHREADS
                         Number of threads used for processing(0 is max,
                         negative numbers imply max - N)
@@ -231,7 +235,7 @@ usage: usdrecord [-h] [--mask PRIMPATH[,PRIMPATH...]]
                  [--renderPassPrimPath RPPRIMPATH]
                  [--renderSettingsPrimPath RSPRIMPATH]
                  [--traceToFile TRACETOFILE] [--traceFormat {chrome,trace}]
-                 [--memstats]
+                 [--memstats] [--abortOnError]
                  usdFilePath outputImagePath
 
 Generates images from a USD file
@@ -340,6 +344,8 @@ optional arguments:
                         profile USD, saving results to a tmp file, with a
                         summary to the console. Will have no effect if
                         MallocTags are not supported in the USD installation.
+  --abortOnError        Abort recording and return a non-zero exit code if a
+                        Tf error is raised during rendering.
 
 ==== usdrecord end ====
 
@@ -944,3 +950,77 @@ optional arguments:
                         /lib/usd/usd/resources/codegenTemplates]
 
 ==== usdInitSchema end ====
+
+==== usdupdatecrate start ====
+usage: usdupdatecrate [-h] [--root DIR] [--olderThan VERSION] [--exclude PATTERN]
+                      [--output FILE] [--saveWorkList FILE] [--fromWorkList FILE]
+                      [--update | --cleanup] [--noCleanup]
+                      [--preserveAttrs | --noPreserveAttrs] [--workers N]
+                      [--batchSize N] [--walkThreads N] [--quiescenceTimeout SECONDS]
+                      [--perFileTimeout SECONDS]
+
+Find and optionally update Pixar USD crate (.usd/.usdc) files older than a
+given version.
+
+By default the script reports matching files to stdout and takes no action.
+With --update it opens each file via Sdf.Layer.FindOrOpen() and re-exports
+it, which causes USD to write the file at the current crate version.
+
+Updates are performed safely: each file is exported to a sibling temp path,
+its new crate version is verified, and only then is the temp atomically
+renamed over the original.  The original is left untouched on any failure.
+
+Note on hard links: an update replaces the original directory entry via
+os.replace().  Any other names that were hard-linked to the original inode
+continue to refer to the unchanged inode and so retain the old content.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --root DIR            Root directory to search (default: current working directory).
+  --olderThan VERSION   Identify crate files with version older than this
+                        (major.minor.patch, default: 0.8.0).
+  --exclude PATTERN     Exclude files whose path relative to --root matches this
+                        fnmatch pattern. May be specified multiple times. Excluded
+                        subdirectories are pruned before descent.
+  --output FILE         Write matching file list to FILE instead of stdout.
+  --saveWorkList FILE   Save the deduplicated to-update file list to FILE before any
+                        update runs. Useful as a manual two-step staging point or for
+                        crash recovery.
+  --fromWorkList FILE   Read candidate files from FILE instead of walking --root.
+                        --root, --exclude, and --walkThreads are ignored when this is
+                        set.
+  --update              Update matched files by re-exporting them via Sdf.Layer.
+  --cleanup             Standalone mode: walk --root and remove stale
+                        *.usdupdatecrate.*.tmp.* files left behind by crashed or
+                        killed prior runs, then exit. Honors --exclude and
+                        --walkThreads.
+  --noCleanup           During an --update run, skip the implicit removal of stale
+                        temp files discovered by the walk. Has no effect in --cleanup
+                        mode (which is itself a cleanup).
+  --preserveAttrs       Preserve the original file's mode and ownership on the updated
+                        file. If the mode or ownership cannot be matched (e.g.
+                        insufficient privilege to chown), the update for that file is
+                        treated as failed and the original is left untouched. Default:
+                        on (POSIX), unsupported (Windows).
+  --noPreserveAttrs     Disable preservation of original mode and ownership. Updated
+                        files take on the running user's uid/gid and umask-respecting
+                        mode.
+  --workers N           Explicit number of worker processes. Overrides --batchSize.
+  --batchSize N         Number of files per pool task (default: 16). Files are split
+                        into batches of this size and dispatched across workers via
+                        imap_unordered. Smaller is safer (smaller crash blast radius,
+                        better work-stealing); larger amortizes per-task overhead.
+                        Ignored if --workers is given.
+  --walkThreads N       Number of threads for parallel directory enumeration (default:
+                        32). Set to 1 to use a single-threaded os.walk() instead.
+  --quiescenceTimeout SECONDS
+                        Update pool driver: if no chunk-result arrives for this many
+                        seconds, treat any not-yet-completed chunks as crashed/hung
+                        and recover them via per-file subprocess isolation (default:
+                        120). Raise this if you have legitimately long-running chunks.
+  --perFileTimeout SECONDS
+                        Recovery: hard cap on a single file's isolated subprocess
+                        (default: 60). If exceeded, the subprocess is terminated and
+                        the file recorded as an ERROR_CRASH.
+
+==== usdupdatecrate end ====

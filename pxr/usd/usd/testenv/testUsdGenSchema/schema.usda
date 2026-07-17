@@ -466,6 +466,11 @@ class TestPxHairman "TestPxHairman" (
         string className = "TestHairman"
         dictionary extraPlugInfo = {
             string extraInfo = "ExtraInfo"
+            string[] extraArrayInfo = ["ExtraInfo1", "ExtraInfo2"]
+            dictionary extraDictInfo = {
+                string extraInfo = "ExtraInfo"
+                string[] extraArrayInfo = ["ExtraInfo1", "ExtraInfo2"]
+            }
         }
     }
 )

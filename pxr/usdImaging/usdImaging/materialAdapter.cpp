@@ -5,6 +5,7 @@
 // https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/materialAdapter.h"
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/usdImaging/usdImaging/dataSourceMaterial.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
@@ -211,12 +212,35 @@ UsdImagingMaterialAdapter::InvalidateImagingSubprim(
 
     // If we dirtied an interface input dirty that terminal
     for (UsdShadeOutput& output : material.GetOutputs()) {
+        bool terminalDirty = false;
+        for (const TfToken& property : properties) {
+            if (output.GetFullName() == property) {
+                // Invalidate the affected terminal.
+                result.insert(_CreateTerminalLocator(output.GetBaseName()));
+                // Due to the way UsdImagingDataSourceMaterial::Get() returns
+                // a retained nodegraph, and only includes nodes that were
+                // reachable at the time, we must also invalidate the nodes
+                // locator here as well.
+                result.insert(HdMaterialSchema::GetDefaultLocator());
+                terminalDirty = true;
+                break;
+            }
+        }
+        if (terminalDirty) {
+            continue;
+        }
         for (UsdShadeConnectionSourceInfo& connection :
              output.GetConnectedSources()) {
             _ConnectionSet seenConnections;
             if (_IsConnectionDirty(prim, properties, material, connection,
                                    seenConnections)) {
                 result.insert(_CreateTerminalLocator(output.GetBaseName()));
+                // An upstream node or material interface input changed.
+                // Invalidate the nodes locator so node parameter values
+                // (including those resolved via material interface connections)
+                // are re-read.  The same logic applies as for the output-dirty
+                // case above.  Fixes FLOW-7634.
+                result.insert(HdMaterialSchema::GetDefaultLocator());
             }
         }
     }
@@ -257,6 +281,22 @@ UsdImagingMaterialAdapter::InvalidateImagingSubprimFromDescendent(
 
     UsdShadeMaterial material(prim);
     if (!TF_VERIFY(material)) {
+        return result;
+    }
+
+    // Check whether the only changes made were UI related.
+    // If so do not invalidate the material, since UI changes are not propagated
+    // to Hydra
+    bool onlyUIChanges = true;
+    static const std::string uiNodegraph("ui:nodegraph:");
+    for (const TfToken& property : properties) {
+        if (!TfStringStartsWith(property.GetString(), uiNodegraph)) {
+            onlyUIChanges = false;
+            break;
+        }
+    }
+
+    if (onlyUIChanges) {
         return result;
     }
 
@@ -422,8 +462,9 @@ UsdImagingMaterialAdapter::ProcessPropertyChange(
     SdfPath const& cachePath,
     TfToken const& propertyName)
 {
-    if (propertyName == UsdGeomTokens->visibility) {
-        // Materials aren't affected by visibility
+    if (propertyName == UsdGeomTokens->visibility ||
+        UsdGeomXformable::IsTransformationAffectedByAttrNamed(propertyName)) {
+        // Materials aren't affected by visibility or transforms
         return HdChangeTracker::Clean;
     }
 

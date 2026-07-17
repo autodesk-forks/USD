@@ -193,6 +193,13 @@ HdCameraSchema::GetNamespacedProperties() const
         HdCameraSchemaTokens->namespacedProperties));
 }
 
+HdBackPlateContainerSchema
+HdCameraSchema::GetBackPlate() const
+{
+    return HdBackPlateContainerSchema(_GetTypedDataSource<HdContainerDataSource>(
+        HdCameraSchemaTokens->backPlate));
+}
+
 /*static*/
 HdContainerDataSourceHandle
 HdCameraSchema::BuildRetained(
@@ -218,11 +225,12 @@ HdCameraSchema::BuildRetained(
         const HdFloatDataSourceHandle &dofAspect,
         const HdContainerDataSourceHandle &splitDiopter,
         const HdContainerDataSourceHandle &lensDistortion,
-        const HdContainerDataSourceHandle &namespacedProperties
+        const HdContainerDataSourceHandle &namespacedProperties,
+        const HdContainerDataSourceHandle &backPlate
 )
 {
-    TfToken _names[23];
-    HdDataSourceBaseHandle _values[23];
+    TfToken _names[24];
+    HdDataSourceBaseHandle _values[24];
 
     size_t _count = 0;
 
@@ -339,6 +347,11 @@ HdCameraSchema::BuildRetained(
     if (namespacedProperties) {
         _names[_count] = HdCameraSchemaTokens->namespacedProperties;
         _values[_count++] = namespacedProperties;
+    }
+
+    if (backPlate) {
+        _names[_count] = HdCameraSchemaTokens->backPlate;
+        _values[_count++] = backPlate;
     }
     return HdRetainedContainerDataSource::New(_count, _names, _values);
 }
@@ -527,6 +540,14 @@ HdCameraSchema::Builder::SetNamespacedProperties(
     return *this;
 }
 
+HdCameraSchema::Builder &
+HdCameraSchema::Builder::SetBackPlate(
+    const HdContainerDataSourceHandle &backPlate)
+{
+    _backPlate = backPlate;
+    return *this;
+}
+
 HdContainerDataSourceHandle
 HdCameraSchema::Builder::Build()
 {
@@ -553,7 +574,8 @@ HdCameraSchema::Builder::Build()
         _dofAspect,
         _splitDiopter,
         _lensDistortion,
-        _namespacedProperties
+        _namespacedProperties,
+        _backPlate
     );
 }
 
@@ -671,6 +693,16 @@ HdCameraSchema::GetNamespacedPropertiesLocator()
     static const HdDataSourceLocator locator =
         GetDefaultLocator().Append(
             HdCameraSchemaTokens->namespacedProperties);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+HdCameraSchema::GetBackPlateLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            HdCameraSchemaTokens->backPlate);
     return locator;
 }
 

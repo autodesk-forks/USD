@@ -43,6 +43,13 @@ pxr_library(plug
         overview.dox
 )
 
+if(NOT "${PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES}" STREQUAL "")
+    target_compile_definitions(plug
+        PRIVATE
+        PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES="${PXR_APPLE_FRAMEWORK_RELATIVE_RESOURCES}"
+    )
+endif()
+
 pxr_test_scripts(
     testPlug.py
 )
@@ -176,4 +183,3 @@ pxr_register_test(testPlug
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testPlug"
 )
-
