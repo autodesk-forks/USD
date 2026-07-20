@@ -40,24 +40,17 @@ HgiWebGPUCapabilities::HgiWebGPUCapabilities(wgpu::Device device)
     // https://github.com/gfx-rs/wgpu/issues/158#issuecomment-490653129
     _uniformBufferOffsetAlignment = 256;
     _SetFlag(HgiDeviceCapabilitiesBitsCppShaderPadding, false);
-    _SetFlag(HgiDeviceCapabilitiesBitsGeometricStage, false);
     _SetFlag(HgiDeviceCapabilitiesBitsBuiltinBarycentrics, false);
-    _SetFlag(HgiDeviceCapabilitiesBitsPushConstants, false);
     _SetFlag(HgiDeviceCapabilitiesBitsDepthRangeMinusOnetoOne, false);
     _SetFlag(
         HgiDeviceCapabilitiesBitsMultiDrawIndirect, multiDrawIndirectEnabled);
     // This might be available in the future
     // https://github.com/gpuweb/gpuweb/issues/4891
     _SetFlag(HgiDeviceCapabilitiesForceEarlyFragmentTest, false);
-    _SetFlag(HgiDeviceCapabilitiesBitsTimestamps,
-        device.HasFeature(wgpu::FeatureName::TimestampQuery));
     _SetFlag(HgiDeviceCapabilitiesBitsBindlessTextures,
         false); // WGSL not support bindless textures as of 06/2025
     _SetFlag(HgiDeviceCapabilitiesBitsBindlessBuffers,
         false); // WGSL can use similar "storage" buffers
-    // https://github.com/gpuweb/gpuweb/issues/695
-    _SetFlag(HgiDeviceCapabilitiesBitsTriangleLineFill, false);
-    _SetFlag(HgiDeviceCapabilitiesBitsTessellation, false);
     // Note that HgiDeviceCapabilitiesBitsPrimitiveIdEmulation requires Metal
     // tessellation, so we never support it, regardless of the state of
     // wgpu::FeatureName::PrimitiveIndex (it's not a fallback).
