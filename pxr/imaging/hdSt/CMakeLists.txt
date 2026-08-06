@@ -85,6 +85,7 @@ pxr_library(hdSt
         extCompPrimvarBufferSource
         extGpuBuffer
         extGpuBufferArrayRange
+        extGpuBufferConsumer
         extGpuBufferSource
         fallbackLightingShader
         field

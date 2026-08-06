@@ -12,8 +12,7 @@
 #include "pxr/imaging/hdSt/drawItem.h"
 #include "pxr/imaging/hdSt/extBufferDesc.h"
 #include "pxr/imaging/hdSt/extCompGpuComputation.h"
-#include "pxr/imaging/hdSt/extGpuBufferArrayRange.h"
-#include "pxr/imaging/hdSt/extGpuBufferSource.h"
+#include "pxr/imaging/hdSt/extGpuBufferConsumer.h"
 #include "pxr/imaging/hdSt/flatNormals.h"
 #include "pxr/imaging/hdSt/geometricShader.h"
 #include "pxr/imaging/hdSt/instancer.h"
@@ -80,172 +79,6 @@ namespace {
     constexpr HdStComputeQueue _RefinePrimvarCompQueue = HdStComputeQueueOne;
     constexpr HdStComputeQueue _NormalsCompQueue = HdStComputeQueueTwo;
     constexpr HdStComputeQueue _RefineNormalsCompQueue = HdStComputeQueueThree;
-
-// Map the active Hgi backend to the token expected in the descriptor.
-static TfToken
-_GetHgiBackendToken(Hgi *hgi)
-{
-    // Hgi driver strings: "OpenGL", "Vulkan", "Metal"
-    // We normalize to short tokens matching HdExtGpuBufferSchema
-    // backendApi convention.
-    if (!hgi) {
-        return TfToken();
-    }
-    static const TfToken glToken("GL");
-    static const TfToken vkToken("Vulkan");
-    static const TfToken mtlToken("Metal");
-
-    TfToken const &driver = hgi->GetAPIName();
-    if (driver == HgiTokens->OpenGL) {
-        return glToken;
-    }
-    if (driver == HgiTokens->Vulkan) {
-        return vkToken;
-    }
-    if (driver == HgiTokens->Metal) {
-        return mtlToken;
-    }
-    return driver;
-}
-
-// Fetch the HdExtGpuBufferSchema (if any) for a primvar off the prim's
-// container data source in the terminal scene index.  Returns an undefined
-// schema when the prim / primvar / extGpuBuffer child is absent (e.g. a legacy
-// scene delegate that never authors it), which the caller treats as "no
-// external buffer -> CPU path".
-static HdExtGpuBufferSchema
-_GetExtGpuBufferSchema(
-    HdSceneDelegate *sceneDelegate,
-    SdfPath const &id,
-    TfToken const &name)
-{
-    HdSceneIndexBaseRefPtr si =
-        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
-    if (!si) {
-        return HdExtGpuBufferSchema(nullptr);
-    }
-    const HdContainerDataSourceHandle primDs = si->GetPrim(id).dataSource;
-    const HdPrimvarSchema pv =
-        HdPrimvarsSchema::GetFromParent(primDs).GetPrimvar(name);
-    return HdExtGpuBufferSchema::GetFromParent(pv.GetContainer());
-}
-
-// Try to create an HdStExtGpuBufferSource from a primvar's
-// HdExtGpuBufferSchema.  Returns nullptr if the schema is absent/incomplete or
-// enrichment fails (backend mismatch, out-of-bounds), in which case the caller
-// should fall through to the existing CPU path.
-static HdBufferSourceSharedPtr
-_TryCreateExternalGpuBufferSource(
-    TfToken const &name,
-    HdExtGpuBufferSchema const &ext,
-    HdStResourceRegistry *registry)
-{
-    if (!ext || !ext.IsComplete()) {
-        return nullptr;
-    }
-
-    std::optional<HdStExtGpuBufferDesc> hdDescOpt =
-        HdStExtGpuBufferDesc::FromSchema(ext);
-    if (!hdDescOpt) {
-        return nullptr;
-    }
-    HdStExtGpuBufferDesc const &hdDesc = *hdDescOpt;
-
-    // Validate backend matches active Hgi.
-    Hgi *hgi = registry->GetHgi();
-    TfToken activeBackend = _GetHgiBackendToken(hgi);
-    if (hdDesc.backendApi != activeBackend) {
-        HD_PERF_COUNTER_INCR(HdStPerfTokens->extGpuBufferFallbackCount);
-        return nullptr;
-    }
-
-    // Bounds check (if size known).  Required fields (numElements, rawHandle,
-    // tupleType) are already guaranteed non-degenerate by IsComplete/FromSchema.
-    if (hdDesc.rawHandleByteSize > 0) {
-        size_t elemSize = HdDataSizeOfTupleType(hdDesc.tupleType);
-        size_t stride = (hdDesc.byteStride > 0)
-            ? hdDesc.byteStride : elemSize;
-        size_t requiredEnd =
-            hdDesc.byteOffset + hdDesc.numElements * stride;
-        if (requiredEnd > hdDesc.rawHandleByteSize) {
-            HD_PERF_COUNTER_INCR(
-                HdStPerfTokens->extGpuBufferFallbackCount);
-            return nullptr;
-        }
-    }
-
-    // The source owns its non-owning HgiBuffer wrapper internally.
-    return std::make_shared<HdStExtGpuBufferSource>(name, hdDesc);
-}
-
-// Check if all sources in \p sources are direct-bindable external GPU
-// sources.  If so, return a BAR wrapping the external handles (zero-copy).
-//
-// When \p existingBar is already an HdStExtGpuBufferArrayRange,
-// update it in-place and return the same shared_ptr — this avoids
-// triggering HdStMarkDrawBatchesDirty via HdStUpdateDrawItemBAR since the
-// BAR pointer is unchanged.
-static HdBufferArrayRangeSharedPtr
-_TryCreateAliasBAR(
-    HdBufferSourceSharedPtrVector const &sources,
-    HdStResourceRegistry *registry,
-    HdBufferArrayRangeSharedPtr const &existingBar = nullptr)
-{
-    if (sources.empty()) {
-        return nullptr;
-    }
-
-    // All sources must be direct-bindable external GPU sources.
-    for (auto const &src : sources) {
-        auto const *extSrc =
-            dynamic_cast<HdStExtGpuBufferSource const *>(src.get());
-        if (!extSrc) {
-            return nullptr;
-        }
-        if (!extSrc->GetDescriptor().directBindable) {
-            return nullptr;
-        }
-    }
-
-    // Fast path: reuse existing alias BAR in-place.
-    if (existingBar) {
-        auto *aliasRange = dynamic_cast<HdStExtGpuBufferArrayRange *>(
-            existingBar.get());
-        if (aliasRange) {
-            if (aliasRange->UpdateExternalResources(sources)) {
-                return existingBar;
-            }
-            if (aliasRange->MergeExternalResources(sources)) {
-                return existingBar;
-            }
-        }
-    }
-
-    // Slow path: create a new alias BAR.
-    auto aliasBAR = std::make_shared<HdStExtGpuBufferArrayRange>(
-        registry);
-
-    for (auto const &src : sources) {
-        auto const *extSrc =
-            static_cast<HdStExtGpuBufferSource const *>(src.get());
-        auto const &hdDesc = extSrc->GetDescriptor();
-
-        size_t elemSize = HdDataSizeOfTupleType(hdDesc.tupleType);
-        size_t byteSize = hdDesc.rawHandleByteSize > 0
-            ? hdDesc.rawHandleByteSize
-            : hdDesc.numElements * elemSize;
-
-        aliasBAR->SetExternalResource(
-            src->GetName(),
-            hdDesc.rawHandle,
-            byteSize,
-            hdDesc.tupleType,
-            hdDesc.numElements,
-            hdDesc.byteOffset);
-    }
-
-    return aliasBAR;
-}
 }
 
 HdStMesh::HdStMesh(SdfPath const& id)
@@ -1638,9 +1471,9 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
 
             // --- External GPU buffer fast path ---
             if (HdBufferSourceSharedPtr extSource =
-                    _TryCreateExternalGpuBufferSource(
+                    HdSt_TryCreateExtGpuBufferSource(
                         primvar.name,
-                        _GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                        HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
                         resourceRegistry.get())) {
                 if (primvar.name == HdTokens->points) {
                     _pointsDataType = extSource->GetTupleType().type;
@@ -1845,9 +1678,9 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
             // mode); otherwise fall back to the authored CPU array.  The
             // element-count guards below apply equally to the external source.
             HdBufferSourceSharedPtr source =
-                _TryCreateExternalGpuBufferSource(
+                HdSt_TryCreateExtGpuBufferSource(
                     HdTokens->points,
-                    _GetExtGpuBufferSchema(sceneDelegate, id, HdTokens->points),
+                    HdSt_GetExtGpuBufferSchema(sceneDelegate, id, HdTokens->points),
                     resourceRegistry.get());
             if (!source && HdStIsPrimvarValidForDrawItem(
                 drawItem, HdTokens->points, value)) {
@@ -2026,7 +1859,7 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
     // updated in-place, avoiding draw-batch invalidation.
     if (computations.empty()) {
         if (HdBufferArrayRangeSharedPtr aliasBAR =
-                _TryCreateAliasBAR(sources, resourceRegistry.get(), bar)) {
+                HdSt_TryCreateExtGpuBufferAliasBAR(sources, resourceRegistry.get(), bar)) {
             range = aliasBAR;
             HdStUpdateDrawItemBAR(
                 range,
@@ -2317,9 +2150,9 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
 
         // --- External GPU buffer fast path ---
         if (HdBufferSourceSharedPtr extSource =
-                _TryCreateExternalGpuBufferSource(
+                HdSt_TryCreateExtGpuBufferSource(
                     primvar.name,
-                    _GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                    HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
                     resourceRegistry.get())) {
             if (extSource->GetName() == HdTokens->normals) {
                 _sceneNormalsInterpolation = HdInterpolationFaceVarying;
@@ -2422,7 +2255,7 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
     // --- Zero-copy direct-bind path ---
     if (computations.empty()) {
         if (HdBufferArrayRangeSharedPtr aliasBAR =
-                _TryCreateAliasBAR(sources, resourceRegistry.get(), bar)) {
+                HdSt_TryCreateExtGpuBufferAliasBAR(sources, resourceRegistry.get(), bar)) {
             HdStUpdateDrawItemBAR(
                 aliasBAR,
                 drawItem->GetDrawingCoord()->GetFaceVaryingPrimvarIndex(),
@@ -2531,9 +2364,9 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
 
             // --- External GPU buffer fast path ---
             if (HdBufferSourceSharedPtr extSource =
-                    _TryCreateExternalGpuBufferSource(
+                    HdSt_TryCreateExtGpuBufferSource(
                         primvar.name,
-                        _GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                        HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
                         resourceRegistry.get())) {
                 if (extSource->GetName() == HdTokens->normals) {
                     _sceneNormalsInterpolation = HdInterpolationUniform;
@@ -2647,7 +2480,7 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
     // --- Zero-copy direct-bind path ---
     if (computations.empty()) {
         if (HdBufferArrayRangeSharedPtr aliasBAR =
-                _TryCreateAliasBAR(sources, resourceRegistry.get(), bar)) {
+                HdSt_TryCreateExtGpuBufferAliasBAR(sources, resourceRegistry.get(), bar)) {
             HdStUpdateDrawItemBAR(
                 aliasBAR,
                 drawItem->GetDrawingCoord()->GetElementPrimvarIndex(),
