@@ -75,6 +75,29 @@
     ),
 
     #--------------------------------------------------------------------------
+    # extGpuBuffer
+    dict(
+        SCHEMA_NAME = 'ExtGpuBuffer',
+        SCHEMA_TOKEN = 'extGpuBuffer',
+        MEMBERS = [
+            ('backendApi',        T_TOKEN,  {}),
+            ('rawHandle',         T_UINT64, {}),
+            ('rawHandleByteSize', T_SIZET,  {}),
+            ('numElements',       T_SIZET,  {}),
+            ('elementType',       T_TUPLE,  {}),
+            ('byteOffset',        T_SIZET,  {}),
+            ('byteStride',        T_SIZET,  {}),
+            ('directBindable',    T_BOOL,   {}),
+        ],
+
+        STATIC_TOKEN_DATASOURCE_BUILDERS = [
+            ('backendApi', ['GL', 'Vulkan', 'Metal']),
+        ],
+
+        ADD_DEFAULT_LOCATOR = True,
+    ),
+
+    #--------------------------------------------------------------------------
     # mesh
     dict(
         SCHEMA_NAME = 'Mesh',

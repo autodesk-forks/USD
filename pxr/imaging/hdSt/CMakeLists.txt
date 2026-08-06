@@ -83,6 +83,9 @@ pxr_library(hdSt
         extCompGpuComputationResource
         extCompGpuPrimvarBufferSource
         extCompPrimvarBufferSource
+        extGpuBuffer
+        extGpuBufferArrayRange
+        extGpuBufferSource
         fallbackLightingShader
         field
         fieldSubtextureIdentifier
@@ -148,6 +151,7 @@ pxr_library(hdSt
         api.h
         dynamicUvTextureImplementation.h
         enums.h
+        extBufferDesc.h
 
     PRIVATE_CLASSES
         assetUvTextureCpuData

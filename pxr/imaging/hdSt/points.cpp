@@ -8,6 +8,12 @@
 
 #include "pxr/imaging/hdSt/drawItem.h"
 #include "pxr/imaging/hdSt/extCompGpuComputation.h"
+
+#include "pxr/imaging/hd/extGpuBufferSchema.h"
+#include "pxr/imaging/hd/primvarSchema.h"
+#include "pxr/imaging/hd/primvarsSchema.h"
+#include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hdSt/geometricShader.h"
 #include "pxr/imaging/hdSt/instancer.h"
 #include "pxr/imaging/hdSt/material.h"
@@ -30,6 +36,44 @@
 #include "pxr/base/vt/value.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+namespace {
+
+// Returns true if the primvar carries an externally-owned GPU buffer
+// (HdExtGpuBufferSchema).  HdStPoints does not upload such primvars through
+// the CPU path; it skips them.
+static bool
+_PrimvarHasExtGpuBuffer(HdSceneDelegate *sceneDelegate,
+                        SdfPath const &id, TfToken const &name)
+{
+    const HdSceneIndexBaseRefPtr si =
+        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
+    if (!si) {
+        return false;
+    }
+    const HdPrimvarSchema pv =
+        HdPrimvarsSchema::GetFromParent(si->GetPrim(id).dataSource)
+            .GetPrimvar(name);
+    const bool hasExtBuffer = static_cast<bool>(
+        HdExtGpuBufferSchema::GetFromParent(pv.GetContainer()));
+    if (hasExtBuffer) {
+        // External GPU buffer sharing is only implemented for meshes; on
+        // points we drop the primvar, so warn once rather than silently
+        // producing geometry with a missing attribute.
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            TF_WARN("[hdSt] HdStPoints <%s>: primvar '%s' carries an external "
+                    "GPU buffer (HdExtGpuBufferSchema), which is only "
+                    "supported for meshes. Skipping it; the primvar will be "
+                    "absent from the drawn points. (Warned once.)",
+                    id.GetText(), name.GetText());
+        }
+    }
+    return hasExtBuffer;
+}
+
+} // anonymous namespace
 
 HdStPoints::HdStPoints(SdfPath const& id)
   : HdPoints(id)
@@ -290,6 +334,9 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
         }
 
         VtValue value = GetPrimvar(sceneDelegate, primvar.name);
+        if (_PrimvarHasExtGpuBuffer(sceneDelegate, id, primvar.name)) {
+            continue;
+        }
         if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
             continue;
         }

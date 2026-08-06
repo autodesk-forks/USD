@@ -8,6 +8,13 @@
 
 #include "pxr/imaging/hdSt/basisCurves.h"
 #include "pxr/imaging/hdSt/basisCurvesComputations.h"
+
+#include "pxr/imaging/hd/extGpuBufferSchema.h"
+#include "pxr/imaging/hd/primvarSchema.h"
+#include "pxr/imaging/hd/primvarsSchema.h"
+#include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hd/sceneDelegate.h"
+#include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hdSt/basisCurvesShaderKey.h"
 #include "pxr/imaging/hdSt/basisCurvesTopology.h"
 #include "pxr/imaging/hdSt/bufferArrayRange.h"
@@ -43,6 +50,44 @@
 #include "pxr/imaging/hd/sceneIndexAdapterSceneDelegate.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+namespace {
+
+// Returns true if the primvar carries an externally-owned GPU buffer
+// (HdExtGpuBufferSchema).  HdStBasisCurves does not upload such primvars
+// through the CPU path; it skips them.
+static bool
+_PrimvarHasExtGpuBuffer(HdSceneDelegate *sceneDelegate,
+                        SdfPath const &id, TfToken const &name)
+{
+    const HdSceneIndexBaseRefPtr si =
+        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
+    if (!si) {
+        return false;
+    }
+    const HdPrimvarSchema pv =
+        HdPrimvarsSchema::GetFromParent(si->GetPrim(id).dataSource)
+            .GetPrimvar(name);
+    const bool hasExtBuffer = static_cast<bool>(
+        HdExtGpuBufferSchema::GetFromParent(pv.GetContainer()));
+    if (hasExtBuffer) {
+        // External GPU buffer sharing is only implemented for meshes; on
+        // basis curves we drop the primvar, so warn once rather than silently
+        // producing geometry with a missing attribute.
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            TF_WARN("[hdSt] HdStBasisCurves <%s>: primvar '%s' carries an "
+                    "external GPU buffer (HdExtGpuBufferSchema), which is only "
+                    "supported for meshes. Skipping it; the primvar will be "
+                    "absent from the drawn curves. (Warned once.)",
+                    id.GetText(), name.GetText());
+        }
+    }
+    return hasExtBuffer;
+}
+
+} // anonymous namespace
 
 HdStBasisCurves::HdStBasisCurves(SdfPath const& id)
     : HdBasisCurves(id)
@@ -915,6 +960,9 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
 
             //assert name not in range.bufferArray.GetResources()
             VtValue value = GetPrimvar(sceneDelegate, primvar.name);
+            if (_PrimvarHasExtGpuBuffer(sceneDelegate, id, primvar.name)) {
+                continue;
+            }
             if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
                 continue;
             }
@@ -1110,6 +1158,9 @@ HdStBasisCurves::_PopulateVaryingPrimvars(HdSceneDelegate *sceneDelegate,
 
         //assert name not in range.bufferArray.GetResources()
         VtValue value = GetPrimvar(sceneDelegate, primvar.name);
+        if (_PrimvarHasExtGpuBuffer(sceneDelegate, id, primvar.name)) {
+            continue;
+        }
         if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
             continue;
         }
@@ -1198,6 +1249,9 @@ HdStBasisCurves::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
             continue;
 
         VtValue value = GetPrimvar(sceneDelegate, primvar.name);
+        if (_PrimvarHasExtGpuBuffer(sceneDelegate, id, primvar.name)) {
+            continue;
+        }
         if (!HdStIsPrimvarValidForDrawItem(drawItem, primvar.name, value)) {
             continue;
         }
