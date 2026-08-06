@@ -20,42 +20,10 @@
 #include "pxr/imaging/hd/types.h"
 
 #include "pxr/imaging/hgi/hgi.h"
-#include "pxr/imaging/hgi/tokens.h"
 
 #include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
-namespace {
-
-// Map the active Hgi backend to the token expected in the descriptor.
-static TfToken
-_GetHgiBackendToken(Hgi *hgi)
-{
-    // Hgi driver strings: "OpenGL", "Vulkan", "Metal"
-    // We normalize to short tokens matching HdExtGpuBufferSchema
-    // backendApi convention.
-    if (!hgi) {
-        return TfToken();
-    }
-    static const TfToken glToken("GL");
-    static const TfToken vkToken("Vulkan");
-    static const TfToken mtlToken("Metal");
-
-    TfToken const &driver = hgi->GetAPIName();
-    if (driver == HgiTokens->OpenGL) {
-        return glToken;
-    }
-    if (driver == HgiTokens->Vulkan) {
-        return vkToken;
-    }
-    if (driver == HgiTokens->Metal) {
-        return mtlToken;
-    }
-    return driver;
-}
-
-} // anonymous namespace
 
 HdExtGpuBufferSchema
 HdSt_GetExtGpuBufferSchema(
@@ -91,10 +59,11 @@ HdSt_TryCreateExtGpuBufferSource(
     }
     HdStExtGpuBufferDesc const &hdDesc = *hdDescOpt;
 
-    // Validate backend matches active Hgi.
+    // Validate the buffer's backend matches the active Hgi. backendApi carries
+    // the same token Hgi reports (HgiTokens->OpenGL / Vulkan / Metal), so we
+    // compare directly against GetAPIName() -- no local token mapping needed.
     Hgi *hgi = registry->GetHgi();
-    TfToken activeBackend = _GetHgiBackendToken(hgi);
-    if (hdDesc.backendApi != activeBackend) {
+    if (!hgi || hdDesc.backendApi != hgi->GetAPIName()) {
         HD_PERF_COUNTER_INCR(HdStPerfTokens->extGpuBufferFallbackCount);
         return nullptr;
     }

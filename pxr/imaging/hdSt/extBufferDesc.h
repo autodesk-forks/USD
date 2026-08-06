@@ -23,15 +23,14 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 /// \struct HdStExtGpuBufferDesc
 ///
-/// Storm-private, decoded form of an HdExtGpuBufferSchema.  This is the only
-/// place the external-buffer fields are flattened into a POD; there is no
-/// shared hd-level descriptor type anymore.  Constructed by Storm's enrichment
-/// step during \c _PopulateVertexPrimvars via \c FromSchema and never placed
-/// into \c VtValue.
+/// Storm-private, decoded form of an HdExtGpuBufferSchema.  This is the place
+/// the external-buffer fields are flattened into a POD.  Constructed by Storm's
+/// enrichment step during \c _PopulateVertexPrimvars via \c FromSchema and
+/// never placed into \c VtValue.
 ///
 struct HdStExtGpuBufferDesc
 {
-    // --- Decoded descriptor fields (formerly the hd-level POD) ---
+    // --- Decoded descriptor fields (the hd-level POD) ---
 
     /// Element type and tuple count.  Named tupleType to match HdBufferSpec /
     /// HdBufferSource::GetTupleType(); sourced from the schema's elementType

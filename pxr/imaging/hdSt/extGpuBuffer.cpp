@@ -14,9 +14,12 @@ PXR_NAMESPACE_OPEN_SCOPE
 uint64_t
 HdSt_GetNextExtGpuBufferHandleId()
 {
-    // Single shared counter for all external GPU buffer alias handles.
+    // Single shared counter for all external GPU buffer alias handles. The
+    // reserved tag bit (see HdStExternalHandleIdBit) keeps these ids in a region
+    // disjoint from Hgi's own sequential ids and from other external kinds --
+    // HgiHandle equality is id-only, so distinct buffers must not share an id.
     static std::atomic<uint64_t> nextId{1};
-    return nextId.fetch_add(1);
+    return (uint64_t(1) << HdStExtGpuBufferHandleIdBit) | nextId.fetch_add(1);
 }
 
 HdStExtGpuBuffer::HdStExtGpuBuffer(
