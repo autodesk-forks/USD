@@ -42,7 +42,7 @@ API-agnostic**:
 
 | Member | Type | Meaning |
 | --- | --- | --- |
-| `backendApi` | `TfToken` | GPU API the handle belongs to (`GL`, `Vulkan`, `Metal`). A consumer ignores the buffer if it does not match the active backend. |
+| `backendApi` | `TfToken` | GPU API the handle belongs to — the same token Hgi reports via `Hgi::GetAPIName()` (`HgiTokens->OpenGL` / `Vulkan` / `Metal`). A consumer ignores the buffer if it does not match the active backend. |
 | `rawHandle` | `uint64` | The native GPU buffer handle (GL buffer id, `VkBuffer`, `MTLBuffer`, …). |
 | `rawHandleByteSize` | `size_t` (optional) | Total byte size of the underlying allocation; enables a bounds check. |
 | `numElements` | `size_t` | Number of elements (e.g. vertices) the primvar addresses. |
@@ -152,6 +152,54 @@ depends on the mode:
 A static mesh can therefore aggregate and batch from the first frame, while an
 animating mesh backed by a stable GPU handle can reach a near-zero per-frame
 publish cost.
+
+### Instancing
+
+Instancing meets buffer sharing on two independent axes, matching Hydra's split
+between a prototype rprim and its instancer.
+
+**Prototype primvars.** A prototype's geometry (points/normals/uv) is stored
+once and drawn N times by an instanced draw — instances inherently refer to that
+single buffer. So an external GPU buffer on a prototype primvar needs no
+instancing-specific handling: it is the same prototype vertex buffer, bound once
+and drawn N times, whether direct-bound or copied. A zero-copy alias range is
+compatible with instanced draws because the draw reads each item's base offset
+and element count independently of the instance count. (The only nuance is batch
+aggregation — a direct-bound prototype forms its own draw batch instead of
+aggregating with normally-uploaded prototypes; a cost/parallelism trade-off, not
+a correctness issue.) `numElements` here is the prototype's vertex count, exactly
+as in the non-instanced case.
+
+**Instancer primvars.** The per-instance data an instancer carries (instance
+transforms, or translate/rotate/scale) is a *separate* buffer published on the
+**instancer** prim, not the prototype. When a producer computes this on the GPU
+(a GPU/particle instancer), it can publish `extGpuBuffer` on the instance primvar
+exactly as for geometry, with `numElements` equal to the **instance count**. The
+consumer builds the source in its instance-primvar population step and
+direct-binds or copies it as usual. This is often the higher-value share: for
+large, animating instance counts the transform buffer dominates, and sharing it
+avoids reading back and re-uploading one transform per instance every frame,
+whereas the prototype geometry is bound once regardless.
+
+A single GPU buffer can even back several per-instance streams at once: each
+primvar publishes its own schema pointing at the same `rawHandle`, with
+`byteOffset`/`byteStride` selecting its region. So both layouts work:
+
+- **AoS** (each instance = `{mat4 xform, vec4 color, …}`): xform → offset 0,
+  stride = struct size; color → offset 64, stride = struct size.
+- **SoA** (all transforms, then all colors): xform → offset 0, stride 64;
+  color → offset = transforms-region size, stride 16.
+
+Nested instancing needs no special handling — each nesting level is its own
+instancer with its own instance-primvar buffer, so the same per-instancer
+consumption applies at every level.
+
+Two considerations are specific to instancer primvars: `numElements` must be the
+instance count (the consumer uses it to bound instance indices), and a shared
+instance-transform buffer must already be in the renderer's expected matrix
+layout/precision, since the GPU path skips the CPU matrix conversion the value
+path would otherwise perform (sharing plain translate/rotate/scale vectors avoids
+that).
 
 ## Future Considerations
 
