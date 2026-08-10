@@ -310,6 +310,36 @@ gives typed accessors plus an `IsComplete()` check, composes onto the existing
 primvar without disturbing its value, and follows the same idiom as
 `HdPrimvarSchema` and `HdExtComputationSchema`.
 
+**Extend a polymorphic `HdBuffer` type and carry it in the value.** A refinement
+of the above: define a buffer type that can be either CPU- or GPU-backed (ask it
+for bytes or for a handle) and return it as the primvar value, so one type serves
+both consumers. The abstraction is sound, but its placement is wrong:
+
+- **It already exists one layer down.** The render delegate's buffer-source layer
+  is exactly this abstraction — `HdBufferSource` (base), `HdVtBufferSource` (CPU
+  bytes), `HdStExtGpuBufferSource` (GPU handle, no CPU payload). GPU concepts
+  belong *inside* the delegate; the scene index above it is deliberately renderer-
+  and API-agnostic, and pushing a GPU-capable buffer up into the primvar value
+  leaks device concepts into the scene description.
+- **It changes the universal value contract.** Every render delegate and every
+  value-inspecting scene-index filter is written to "`GetValue()` returns a
+  `VtValue` holding `VtArray<T>`." Redefining the value to "an `HdBuffer`" forces
+  all of them to migrate, whereas the additive child schema leaves old code
+  untouched. `VtArray` also remains the wrong container — a length-1 array of one
+  buffer object is a category error against consumers that expect
+  `value.size() == numElements`.
+- **It converges with the lazy value anyway.** For a CPU consumer such a buffer's
+  "give me bytes" accessor would have to read back from the GPU on demand — which
+  is exactly the lazy CPU value described under *Fallback*. So the same "one thing
+  serves both consumers" benefit is available without touching the value contract:
+  the `extGpuBuffer` child carries the handle, and a lazy value data source
+  supplies bytes only if pulled.
+
+If a single scene-level source of truth were genuinely wanted instead of "child
+schema + lazy value," it would have to be a **new data-source type**, not an
+`HdBuffer` smuggled through the legacy `VtArray` value slot — a large breaking
+change for little gain over the additive schema.
+
 ## Future Considerations
 
 - **Synchronization and ownership handshake.** This proposal assumes the
