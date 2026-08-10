@@ -58,6 +58,40 @@ understand it simply reads the CPU value as before.
 
 ## How it works
 
+### The CPU path (baseline)
+
+The GPU path mirrors the existing CPU primvar path, so it helps to state that
+baseline first.
+
+A producer publishes a primvar as a container data source under
+`primvars/<name>`, holding the value, its `interpolation`, and its `role`. The
+value is a `HdSampledDataSource` whose `GetValue()` returns a `VtValue` wrapping
+a `VtArray<T>` — e.g. `VtArray<GfVec3f>` for points — that owns N elements of
+CPU data. This container flows through the scene indices unchanged and is read
+by the render delegate at the emulation boundary.
+
+The render delegate then turns that `VtArray` into its own draw resources. In
+Storm the steps are:
+
+- **Buffer source** — the array is wrapped in an `HdVtBufferSource`, an
+  `HdBufferSource` that *holds the CPU bytes* and knows its element type and
+  count. This is the type the external-GPU source (`HdStExtGpuBufferSource`)
+  substitutes for.
+- **Aggregation** — the source is registered with the resource registry, which
+  places it in a **buffer array range (BAR)** — a sub-allocation inside a larger
+  aggregated vertex buffer (VBO) shared with other prims of compatible layout,
+  so many prims draw from few buffers.
+- **Upload** — on commit, the registry copies the source's CPU bytes into that
+  VBO region (**CPU → GPU**). On a `DirtyPoints`, the producer republishes the
+  `VtArray`, and the delegate re-runs the upload to refresh the region.
+
+So the CPU array is copied at least twice on the way to the GPU: once when the
+producer materializes it (often itself a **GPU → CPU** readback if the data was
+computed on-device), and again on the delegate's upload. The GPU buffer path
+replaces the `HdVtBufferSource` with a source that carries a handle instead of
+bytes, and either aliases that handle as its own BAR (direct bind) or blits it
+GPU → GPU into the aggregated VBO — removing both copies.
+
 ### Producer side
 
 A producer publishes the schema as the `extGpuBuffer` child of a primvar
@@ -134,6 +168,51 @@ The GPU path is an optimization that always degrades safely to the CPU path:
 - **No CPU coupling** — the schema is a child of the primvar, so a consumer that
   does not implement it falls through to the CPU value automatically.
 
+### Fallback and capability negotiation
+
+The mechanism above is safe — a consumer that does not understand `extGpuBuffer`
+simply reads the primvar value — but whether that fallback actually *renders*
+depends on what the producer left in the value slot. A producer that publishes
+GPU-only (empty `VtArray` + `extGpuBuffer`) avoids the readback the proposal
+exists to remove, but a non-supporting consumer then reads an empty array and
+the prim disappears. Publishing both a full CPU `VtArray` and the schema is
+always fallback-correct, but pays the GPU → CPU readback every frame — defeating
+the optimization. So the producer is otherwise forced to choose between "fast"
+and "portable."
+
+The robust way out is a **lazy CPU value**: the producer publishes the
+`extGpuBuffer` child alongside a value data source whose `GetValue()`
+materializes the CPU array *only if it is actually pulled*.
+
+- A GPU-aware consumer reads the child and never pulls the value → no readback.
+- A non-supporting consumer pulls the value → the readback runs on demand →
+  correct fallback.
+
+Because Hydra is pull-based, this needs no negotiation and scales to multiple
+simultaneous consumers (e.g. two viewports, or Storm plus a path tracer):
+whichever consumer needs CPU data triggers the readback; the others never do.
+The cost is that the fallback readback then happens mid-frame on the consuming
+thread, which is acceptable for a correctness path that only fires when needed.
+
+Providing the GPU buffer plus a lazy CPU value is enough on its own, and is the
+recommended approach. A separate renderer-capability query — e.g. a new
+`HdRenderDelegate::IsExtGpuBufferSharingSupported()` — was considered as a way to
+let the producer skip wiring up the lazy readback entirely, but it turns out to
+add little:
+
+- **Support is per-primvar, not per-renderer.** In practice a scene mixes CPU-
+  and GPU-backed primvars within a single renderer, so a renderer-wide boolean
+  cannot tell the producer what to do for any given prim. The lazy value already
+  resolves this at the right granularity, one primvar at a time, with no query.
+- **It would only avoid setting up the lazy path**, not change correctness —
+  and the lazy path costs nothing until it is pulled. With multiple active
+  consumers the flag would also have to be combined as an intersection (drop CPU
+  only if *every* delegate supports sharing), adding negotiation logic for a
+  marginal saving.
+
+So the capability check stays out of the schema contract; publishing the GPU
+buffer with a lazy CPU value is both sufficient and correct.
+
 ### Dirtying
 
 Updating shared geometry uses the ordinary primvar dirtying model: the producer
@@ -200,6 +279,36 @@ instance-transform buffer must already be in the renderer's expected matrix
 layout/precision, since the GPU path skips the CPU matrix conversion the value
 path would otherwise perform (sharing plain translate/rotate/scale vectors avoids
 that).
+
+### Alternatives considered
+
+**Carry the GPU buffer in the primvar value itself.** Rather than add a schema,
+the GPU handle could ride in the same value slot that holds CPU data — either as
+a custom struct wrapped in a `VtValue`, or stuffed into a `VtArray`. It is
+tempting because the primvar value plumbing already exists, but it was rejected:
+
+- **It is not an array.** A GPU buffer is one opaque descriptor of eight
+  heterogeneous fields (handle, backend, offset, stride, type, count, …), not N
+  elements of vertex data. A `VtArray` holds a single typed array, so it can
+  carry at most the handle; the remaining fields would need sibling data sources
+  anyway — a hand-rolled schema without the type safety. Wrapping the descriptor
+  as a struct in a `VtValue` is the other option, but that is exactly the older
+  POD-in-`VtValue` design this schema replaced.
+- **It breaks un-updated consumers.** Every reader of a primvar does
+  `value.Get<VtArray<GfVec3f>>()` / `IsHolding<…>()` — extent and bounds
+  computation, CPU fallback, refinement, picking, other render delegates. If the
+  value slot holds a GPU descriptor instead of points, those either read empty or
+  misinterpret it. Keeping the GPU info in a *separate child* leaves the value
+  slot legitimately empty, so a consumer that does not understand the child falls
+  through to the CPU value automatically.
+- **Value semantics fight GPU ownership.** `VtArray` is copy-on-write and freely
+  copied, detached, and mutated; the shared handle is non-owning and must not be.
+  A container built for value-semantic CPU arrays is the wrong home for it.
+
+The child-schema overlay avoids all three: it is discoverable and introspectable,
+gives typed accessors plus an `IsComplete()` check, composes onto the existing
+primvar without disturbing its value, and follows the same idiom as
+`HdPrimvarSchema` and `HdExtComputationSchema`.
 
 ## Future Considerations
 
