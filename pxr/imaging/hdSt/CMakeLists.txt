@@ -611,6 +611,39 @@ pxr_build_test(testHdStSubResourceRegistry
 )
 endif()
 
+# The GL-drawing tests above are gated to X11/Apple, but the GarchGLDebugWindow
+# harness also has a Win32 backend, so this one builds on Windows too.
+if (X11_FOUND OR APPLE OR WIN32)
+pxr_build_test(testHdStExtGpuBuffer
+    LIBRARIES
+        hdSt
+        hd
+        hgi
+        garch
+        glf
+        tf
+        gf
+    CPPFILES
+        testenv/testHdStExtGpuBuffer.cpp
+)
+endif()
+
+if (${PXR_ENABLE_MATERIALX_SUPPORT})
+pxr_build_test(testHdStMaterialXShaderGen
+    LIBRARIES
+        hdSt
+        hdMtlx
+        tf
+    CPPFILES
+        testenv/testHdStMaterialXShaderGen.cpp
+)
+pxr_register_test(testHdStMaterialXShaderGen_intGeomprop
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStMaterialXShaderGen --filename integer_geomprop.mtlx --primvarMap body_textureIdx:integer"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testenv/testHdStMaterialXShaderGen
+)
+endif()
+
 if (X11_FOUND)
 # Most HdSt tests require setup of a GL context and window. This is the 
 # exception.
@@ -634,6 +667,31 @@ pxr_register_test(testHdStQualifiers
     TESTENV testenv/testHdStQualifiers
     ENV
         TF_DEBUG=HD_SAFE_MODE
+)
+
+# Registered before the platform-skip returns below so they run on Windows too
+# (the GarchGLDebugWindow harness has a Win32 backend). These are self-comparing
+# (CPU vs GPU-shared, in-process) so they need no baseline/IMAGE_DIFF_COMPARE.
+#
+# On Windows the spawned test exe needs the USD DLLs and the Python runtime
+# (python313.dll, next to the interpreter) on PATH, or it fails to load
+# (0xC0000135). PRE_PATH is prepended to PATH by the test wrapper.
+get_filename_component(_hdSt_pyRuntimeDir "${Python3_EXECUTABLE}" DIRECTORY)
+pxr_register_test(testHdStExtGpuBuffer
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen"
+    EXPECTED_RETURN_CODE 0
+    PRE_PATH
+        ${CMAKE_INSTALL_PREFIX}/lib
+        ${CMAKE_INSTALL_PREFIX}/bin
+        ${_hdSt_pyRuntimeDir}
+)
+pxr_register_test(testHdStExtGpuBuffer_Instancing
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen --instancing"
+    EXPECTED_RETURN_CODE 0
+    PRE_PATH
+        ${CMAKE_INSTALL_PREFIX}/lib
+        ${CMAKE_INSTALL_PREFIX}/bin
+        ${_hdSt_pyRuntimeDir}
 )
 
 if (APPLE)
