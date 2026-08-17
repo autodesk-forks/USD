@@ -87,6 +87,7 @@ pxr_library(hdSt
         extGpuBufferArrayRange
         extGpuBufferConsumer
         extGpuBufferSource
+        extGpuImportedBuffer
         fallbackLightingShader
         field
         fieldSubtextureIdentifier
@@ -612,17 +613,19 @@ pxr_build_test(testHdStSubResourceRegistry
 endif()
 
 # The GL-drawing tests above are gated to X11/Apple, but the GarchGLDebugWindow
-# harness also has a Win32 backend, so this one builds on Windows too.
-if (X11_FOUND OR APPLE OR WIN32)
+# harness also has a Win32 backend, so this builds on Linux and Windows. macOS is
+# excluded: the external-GPU-buffer interop path is not yet supported there.
+if (X11_FOUND OR WIN32)
+# The --vulkanSync producer records and submits its own command buffer on the
+# consumer's Vulkan device, which needs the concrete HgiVulkan types. Link it
+# only when Vulkan is built (PXR_VULKAN_SUPPORT_ENABLED is defined globally then).
+set(_testHdStExtGpuBufferLibs hdSt hd hgi garch glf tf gf)
+if (PXR_ENABLE_VULKAN_SUPPORT)
+    list(APPEND _testHdStExtGpuBufferLibs hgiVulkan)
+endif()
 pxr_build_test(testHdStExtGpuBuffer
     LIBRARIES
-        hdSt
-        hd
-        hgi
-        garch
-        glf
-        tf
-        gf
+        ${_testHdStExtGpuBufferLibs}
     CPPFILES
         testenv/testHdStExtGpuBuffer.cpp
 )
@@ -677,6 +680,9 @@ pxr_register_test(testHdStQualifiers
 # (python313.dll, next to the interpreter) on PATH, or it fails to load
 # (0xC0000135). PRE_PATH is prepended to PATH by the test wrapper.
 get_filename_component(_hdSt_pyRuntimeDir "${Python3_EXECUTABLE}" DIRECTORY)
+# Registered on Linux (X11) and Windows only, matching the build gate above; macOS
+# is excluded because the external-GPU-buffer path is not yet supported there.
+if (X11_FOUND OR WIN32)
 pxr_register_test(testHdStExtGpuBuffer
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen"
     EXPECTED_RETURN_CODE 0
@@ -693,6 +699,56 @@ pxr_register_test(testHdStExtGpuBuffer_Instancing
         ${CMAKE_INSTALL_PREFIX}/bin
         ${_hdSt_pyRuntimeDir}
 )
+# Phase A: same scenes, but Storm runs on Vulkan (HGI_ENABLE_VULKAN=1), so the
+# external buffer is a real HgiVulkanBuffer adopted via Hgi::CreateExternalBuffer.
+# Only meaningful when Vulkan is actually built (else CreatePlatformDefaultHgi
+# falls back to GL and this just re-runs the GL case).
+if (PXR_ENABLE_VULKAN_SUPPORT)
+pxr_register_test(testHdStExtGpuBuffer_Vulkan
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen"
+    EXPECTED_RETURN_CODE 0
+    PRE_PATH
+        ${CMAKE_INSTALL_PREFIX}/lib
+        ${CMAKE_INSTALL_PREFIX}/bin
+        ${_hdSt_pyRuntimeDir}
+    ENV
+        HGI_ENABLE_VULKAN=1
+)
+# Sync: a Vulkan producer allocates the buffer on the CONSUMER's own device but
+# writes it as its own work, in an independent command buffer it submits itself
+# on the device's graphics queue. Storm adopts the VkBuffer (adopt route, logical
+# device matches), so no memory import happens; the producer's write and Storm's
+# read are ordered by a native RAW/WAR binary semaphore pair the producer
+# publishes and Storm's draw waits on and signals.
+if (WIN32)
+pxr_register_test(testHdStExtGpuBuffer_Vulkan_Sync
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen --vulkanSync"
+    EXPECTED_RETURN_CODE 0
+    PRE_PATH
+        ${CMAKE_INSTALL_PREFIX}/lib
+        ${CMAKE_INSTALL_PREFIX}/bin
+        ${_hdSt_pyRuntimeDir}
+    ENV
+        HGI_ENABLE_VULKAN=1
+)
+# Phase E/F: "two devices" -- a second VkDevice stands in for a producer that
+# owns its own device, so the schema carries only the OS memory handle and Storm
+# imports it (Hgi::CreateBufferFromExternalMemory) instead of adopting a
+# VkBuffer. The semaphores are imported the same way. Asserts both devices
+# resolve to the same physical device, since opaque handles cannot cross GPUs.
+pxr_register_test(testHdStExtGpuBuffer_Vulkan_Interop
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen --vulkanInterop"
+    EXPECTED_RETURN_CODE 0
+    PRE_PATH
+        ${CMAKE_INSTALL_PREFIX}/lib
+        ${CMAKE_INSTALL_PREFIX}/bin
+        ${_hdSt_pyRuntimeDir}
+    ENV
+        HGI_ENABLE_VULKAN=1
+)
+endif()
+endif()
+endif()
 
 if (APPLE)
     message(STATUS "Skipping rest of ${PXR_PACKAGE} tests because they are currently unsupported on macOS")

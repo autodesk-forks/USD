@@ -18,6 +18,17 @@ HdStExtGpuBufferSource::HdStExtGpuBufferSource(
     HdStExtGpuBufferDesc const &hdDesc)
     : _name(name)
 {
+    _descriptor = hdDesc;
+
+    if (hdDesc.importedBuffer) {
+        // Imported route: routing already resolved a real backend buffer
+        // aliasing the producer's memory, so there is nothing to wrap. The
+        // descriptor copied above shares ownership of it, which is what keeps
+        // it alive until it reaches a buffer array range.
+        _descriptor.cachedHgiHandle = hdDesc.GetImportedHandle();
+        return;
+    }
+
     size_t byteSize = hdDesc.rawHandleByteSize > 0
         ? hdDesc.rawHandleByteSize
         : hdDesc.numElements * HdDataSizeOfTupleType(hdDesc.tupleType);
@@ -25,11 +36,8 @@ HdStExtGpuBufferSource::HdStExtGpuBufferSource(
     _ownedExternalGpuBuffer = std::make_unique<HdStExtGpuBuffer>(
         hdDesc.rawHandle, byteSize);
 
-    HgiBufferHandle aliasHandle(
+    _descriptor.cachedHgiHandle = HgiBufferHandle(
         _ownedExternalGpuBuffer.get(), HdSt_GetNextExtGpuBufferHandleId());
-
-    _descriptor = hdDesc;
-    _descriptor.cachedHgiHandle = aliasHandle;
 }
 
 HdStExtGpuBufferSource::~HdStExtGpuBufferSource() = default;
@@ -73,7 +81,11 @@ HdStExtGpuBufferSource::ComputeHash() const
         _descriptor.numElements,
         _descriptor.byteOffset,
         _descriptor.byteStride,
-        _descriptor.rawHandle);
+        _descriptor.rawHandle,
+        // An import-only producer leaves rawHandle at 0, so the memory identity
+        // is what distinguishes its streams from each other.
+        _descriptor.externalMemoryHandle,
+        _descriptor.memoryOffset);
 }
 
 void const *
@@ -103,7 +115,7 @@ HdStExtGpuBufferSource::GetNumElements() const
 bool
 HdStExtGpuBufferSource::_CheckValid() const
 {
-    return _descriptor.rawHandle != 0
+    return (_descriptor.rawHandle != 0 || _descriptor.importedBuffer)
         && _descriptor.numElements > 0
         && _descriptor.tupleType.type != HdTypeInvalid;
 }

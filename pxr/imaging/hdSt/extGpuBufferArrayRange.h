@@ -11,7 +11,9 @@
 #include "pxr/imaging/hdSt/api.h"
 #include "pxr/imaging/hdSt/bufferArrayRange.h"
 #include "pxr/imaging/hdSt/bufferResource.h"
+#include "pxr/imaging/hdSt/extBufferDesc.h"
 #include "pxr/imaging/hd/bufferSource.h"
+#include "pxr/imaging/hgi/buffer.h"
 
 #include <atomic>
 #include <vector>
@@ -28,7 +30,10 @@ class HdStExtGpuBuffer;
 /// HgiBufferHandle directly.
 ///
 /// This BAR does not own the underlying GPU memory — the producer
-/// manages its lifetime.
+/// manages its lifetime.  On the import route it does share ownership of the
+/// consumer-side buffer aliasing that memory, since the import consumes a
+/// device-memory reference that has to be returned when nobody is bound to it
+/// any more.
 ///
 class HdStExtGpuBufferArrayRange final : public HdStBufferArrayRange
 {
@@ -40,16 +45,14 @@ public:
     HDST_API
     ~HdStExtGpuBufferArrayRange() override;
 
-    /// Bind an external buffer resource by primvar name.
-    /// Creates a non-owning HgiBuffer wrapper around the raw GPU handle.
+    /// Bind an external buffer resource by primvar name, using whichever route
+    /// the consumer's routing step resolved: the buffer it imported from the
+    /// producer's memory, a backend buffer adopting the producer's native
+    /// handle, or a plain non-owning wrapper around it.
     HDST_API
     void SetExternalResource(
         TfToken const &name,
-        uint64_t rawHandle,
-        size_t rawHandleByteSize,
-        HdTupleType tupleType,
-        size_t numElements,
-        size_t byteOffset);
+        HdStExtGpuBufferDesc const &desc);
 
     /// Reset all external resources and prepare for re-population via
     /// SetExternalResource.
@@ -106,8 +109,29 @@ protected:
     HDST_API const void *_GetAggregation() const override;
 
 private:
+    // One wrapper per external resource. Exactly one field is set, and the
+    // field says who frees it:
+    //  - generic:  GL path -- a plain non-owning HgiBuffer we `delete` on
+    //    release (bound via the resource binder's generic GetRawResource path).
+    //  - native:   a real backend buffer adopted via Hgi (e.g. Vulkan, whose
+    //    vertex binding downcasts to the concrete HgiBuffer); freed via the
+    //    resource registry's Hgi->DestroyBuffer.
+    //  - imported: a real backend buffer aliasing memory imported from a
+    //    foreign device, shared with any other range naming the same producer
+    //    allocation (imports are too expensive to redo per Sync). Refcounted:
+    //    releasing this reference frees the buffer if we were its last holder.
+    struct _OwnedExtBuffer {
+        HdStExtGpuBuffer *generic = nullptr;
+        HgiBufferHandle   native;
+        HdSt_ImportedExtGpuBufferSharedPtr imported;
+    };
+
+    // Release every owned wrapper (generic via delete, native via Hgi,
+    // imported by dropping our share of it) and clear.
+    void _DestroyOwnedBuffers();
+
     HdStBufferResourceNamedList _resources;
-    std::vector<HdStExtGpuBuffer *> _ownedExternalGpuBuffers;
+    std::vector<_OwnedExtBuffer> _ownedExternalGpuBuffers;
     size_t _numElements;
     std::atomic<size_t> _version;
     bool _valid;

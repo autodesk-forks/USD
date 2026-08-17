@@ -8,10 +8,13 @@
 #include "pxr/imaging/hdSt/debugCodes.h"
 #include "pxr/imaging/hdSt/extGpuBuffer.h"
 #include "pxr/imaging/hdSt/extGpuBufferSource.h"
+#include "pxr/imaging/hdSt/resourceRegistry.h"
 #include "pxr/imaging/hdSt/tokens.h"
 
 #include "pxr/imaging/hd/perfLog.h"
 #include "pxr/imaging/hd/tokens.h"
+
+#include "pxr/imaging/hgi/hgi.h"
 
 #include "pxr/base/tf/debug.h"
 #include "pxr/base/tf/diagnostic.h"
@@ -32,41 +35,88 @@ HdStExtGpuBufferArrayRange::HdStExtGpuBufferArrayRange(
 
 HdStExtGpuBufferArrayRange::~HdStExtGpuBufferArrayRange()
 {
-    for (auto *buf : _ownedExternalGpuBuffers) {
-        delete buf;
+    _DestroyOwnedBuffers();
+    HD_PERF_COUNTER_DECR(HdStPerfTokens->extGpuBufferAliasCount);
+}
+
+void
+HdStExtGpuBufferArrayRange::_DestroyOwnedBuffers()
+{
+    Hgi *hgi = GetResourceRegistry() ? GetResourceRegistry()->GetHgi() : nullptr;
+    for (auto &owned : _ownedExternalGpuBuffers) {
+        if (owned.generic) {
+            delete owned.generic;                 // GL: plain non-owning wrapper
+        } else if (owned.native && hgi) {
+            hgi->DestroyBuffer(&owned.native);    // Vulkan: adopted, non-owning
+        }
+        // owned.imported needs nothing here: clearing the vector below drops
+        // our share of it, which releases the import if we were the last holder.
     }
     _ownedExternalGpuBuffers.clear();
-    HD_PERF_COUNTER_DECR(HdStPerfTokens->extGpuBufferAliasCount);
 }
 
 void
 HdStExtGpuBufferArrayRange::SetExternalResource(
     TfToken const &name,
-    uint64_t rawHandle,
-    size_t rawHandleByteSize,
-    HdTupleType tupleType,
-    size_t numElements,
-    size_t byteOffset)
+    HdStExtGpuBufferDesc const &desc)
 {
-    int const stride = static_cast<int>(HdDataSizeOfTupleType(tupleType));
+    int const stride =
+        static_cast<int>(HdDataSizeOfTupleType(desc.tupleType));
+    size_t const byteSize = desc.rawHandleByteSize > 0
+        ? desc.rawHandleByteSize
+        : desc.numElements * stride;
 
-    auto *aliasBuffer = new HdStExtGpuBuffer(rawHandle, rawHandleByteSize);
-    _ownedExternalGpuBuffers.push_back(aliasBuffer);
+    HgiBufferHandle aliasHandle;
+    _OwnedExtBuffer owned;
 
-    HgiBufferHandle aliasHandle(
-        aliasBuffer, HdSt_GetNextExtGpuBufferHandleId());
+    if (desc.importedBuffer) {
+        // The routing step imported the producer's memory into a buffer of this
+        // backend; take a share of it, since other ranges may name it too.
+        owned.imported = desc.importedBuffer;
+        aliasHandle = desc.GetImportedHandle();
+    } else if (Hgi *hgi = GetResourceRegistry()
+            ? GetResourceRegistry()->GetHgi() : nullptr) {
+        // Prefer a real backend buffer when the active Hgi can adopt the
+        // foreign handle (required by e.g. Vulkan, whose vertex binding
+        // downcasts to the concrete HgiBuffer). Backends that return an empty
+        // handle (GL) fall back to the generic non-owning wrapper bound via
+        // GetRawResource.
+        HgiBufferHandle native = hgi->CreateExternalBuffer(
+            desc.rawHandle, byteSize,
+            HgiBufferUsageVertex | HgiBufferUsageStorage);
+        if (native) {
+            // Hold the producer's allocation until this wrapper is collected,
+            // which the backend defers past the submissions that could name it.
+            native->SetKeepalive(desc.producerKeepalive);
+            owned.native = native;
+            aliasHandle = native;
+        }
+    }
+    if (!aliasHandle) {
+        auto *aliasBuffer = new HdStExtGpuBuffer(desc.rawHandle, byteSize);
+        // Same intent as above, but this wrapper is deleted directly rather than
+        // collected, so the reference is released as soon as this range goes away
+        // -- the producer learns the range let go, not that the GPU is done. GL,
+        // the only backend that lands here, defers its own object deletion, so
+        // the missing half comes from GL rather than from us.
+        aliasBuffer->SetKeepalive(desc.producerKeepalive);
+        owned.generic = aliasBuffer;
+        aliasHandle = HgiBufferHandle(
+            aliasBuffer, HdSt_GetNextExtGpuBufferHandleId());
+    }
+    _ownedExternalGpuBuffers.push_back(owned);
 
     auto resource = std::make_shared<HdStBufferResource>(
         HdTokens->primvar,
-        tupleType,
-        static_cast<int>(byteOffset),
+        desc.tupleType,
+        static_cast<int>(desc.byteOffset),
         stride);
 
-    size_t const bufferSize = numElements * stride;
+    size_t const bufferSize = desc.numElements * stride;
     resource->SetAllocation(aliasHandle, bufferSize);
 
     _resources.push_back(std::make_pair(name, resource));
-    _numElements = numElements;
+    _numElements = desc.numElements;
     _valid = true;
 }
 
@@ -74,10 +124,7 @@ void
 HdStExtGpuBufferArrayRange::ReleaseExternalResources()
 {
     _resources.clear();
-    for (auto *buf : _ownedExternalGpuBuffers) {
-        delete buf;
-    }
-    _ownedExternalGpuBuffers.clear();
+    _DestroyOwnedBuffers();
     _numElements = 0;
     _valid = false;
     IncrementVersion();
@@ -89,6 +136,15 @@ HdStExtGpuBufferArrayRange::UpdateExternalResources(
 {
     if (sources.size() != _resources.size()) {
         return false;
+    }
+
+    // Only the generic wrapper can be repointed at a new handle in place.
+    // Adopted and imported buffers force a full rebuild (Release + Set) so the
+    // handle is re-adopted or re-fetched from the import cache.
+    for (auto const &owned : _ownedExternalGpuBuffers) {
+        if (owned.native || owned.imported) {
+            return false;
+        }
     }
 
     // Verify all sources are direct-bindable external GPU sources, names
@@ -124,7 +180,13 @@ HdStExtGpuBufferArrayRange::UpdateExternalResources(
             ? hdDesc.rawHandleByteSize
             : hdDesc.numElements * stride;
 
-        _ownedExternalGpuBuffers[i]->UpdateRawHandle(hdDesc.rawHandle, byteSize);
+        _ownedExternalGpuBuffers[i].generic->UpdateRawHandle(
+            hdDesc.rawHandle, byteSize);
+        // Repointing at a new handle means the old allocation is no longer bound
+        // here, so the keepalive has to move with it or we would pin the wrong
+        // one and never release it.
+        _ownedExternalGpuBuffers[i].generic->SetKeepalive(
+            hdDesc.producerKeepalive);
 
         auto &resource = _resources[i].second;
         size_t const bufferSize = hdDesc.numElements * stride;
@@ -147,6 +209,14 @@ HdStExtGpuBufferArrayRange::MergeExternalResources(
         }
     }
 
+    // As in UpdateExternalResources, only the generic wrapper can be updated in
+    // place; adopted and imported buffers force a full rebuild.
+    for (auto const &owned : _ownedExternalGpuBuffers) {
+        if (owned.native || owned.imported) {
+            return false;
+        }
+    }
+
     for (auto const &src : sources) {
         auto const *extSrc =
             static_cast<HdStExtGpuBufferSource const *>(src.get());
@@ -164,9 +234,12 @@ HdStExtGpuBufferArrayRange::MergeExternalResources(
             if (_resources[i].first != src->GetName()) {
                 continue;
             }
-            // Update the existing alias buffer and resource in-place.
-            _ownedExternalGpuBuffers[i]->UpdateRawHandle(
+            // Update the existing alias buffer and resource in-place. The
+            // keepalive moves with the handle, as in UpdateExternalResources.
+            _ownedExternalGpuBuffers[i].generic->UpdateRawHandle(
                 hdDesc.rawHandle, byteSize);
+            _ownedExternalGpuBuffers[i].generic->SetKeepalive(
+                hdDesc.producerKeepalive);
 
             auto &resource = _resources[i].second;
             size_t const bufferSize = hdDesc.numElements * stride;
@@ -177,25 +250,7 @@ HdStExtGpuBufferArrayRange::MergeExternalResources(
         }
 
         if (!found) {
-            // Append as a new resource (same logic as SetExternalResource).
-            auto *aliasBuffer =
-                new HdStExtGpuBuffer(hdDesc.rawHandle, byteSize);
-            _ownedExternalGpuBuffers.push_back(aliasBuffer);
-
-            HgiBufferHandle aliasHandle(
-                aliasBuffer, HdSt_GetNextExtGpuBufferHandleId());
-
-            auto resource = std::make_shared<HdStBufferResource>(
-                HdTokens->primvar,
-                hdDesc.tupleType,
-                static_cast<int>(hdDesc.byteOffset),
-                stride);
-
-            size_t const bufferSize = hdDesc.numElements * stride;
-            resource->SetAllocation(aliasHandle, bufferSize);
-
-            _resources.push_back(
-                std::make_pair(src->GetName(), resource));
+            SetExternalResource(src->GetName(), hdDesc);
         }
 
         _numElements = hdDesc.numElements;
@@ -366,12 +421,14 @@ HdStExtGpuBufferArrayRange::_GetAggregation() const
         return this;
     }
     auto const &res = _resources.front().second;
-    auto *aliasBuffer =
-        static_cast<HdStExtGpuBuffer *>(res->GetHandle().Get());
-    if (!aliasBuffer) {
+    // Read through HgiBuffer, not HdStExtGpuBuffer: depending on the route this
+    // resource took the handle may be an adopted or imported backend buffer
+    // (e.g. HgiVulkanBuffer) rather than our generic wrapper.
+    HgiBuffer *buffer = res->GetHandle().Get();
+    if (!buffer) {
         return this;
     }
-    uint64_t const rawHandle = aliasBuffer->GetRawResource();
+    uint64_t const rawHandle = buffer->GetRawResource();
     TF_DEBUG(HDST_DRAW).Msg(
         "[ExternalGpuBAR] aggregation key: rawHandle=0x%llx, "
         "resources=%zu, first=%s\n",

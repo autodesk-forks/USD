@@ -1,5 +1,5 @@
 //
-// Copyright 2026 Pixar
+// Copyright 2023 Pixar
 //
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
@@ -36,14 +36,10 @@ bool
 HdExtGpuBufferSchema::IsComplete() const
 {
     const HdTokenDataSourceHandle api = GetBackendApi();
-    const HdUInt64DataSourceHandle handle = GetRawHandle();
     const HdSizetDataSourceHandle count = GetNumElements();
     const HdTupleTypeDataSourceHandle elementType = GetElementType();
 
-    if (!api || !handle || !count || !elementType) {
-        return false;
-    }
-    if (handle->GetTypedValue(0.0f) == 0) {
+    if (!api || !count || !elementType) {
         return false;
     }
     if (count->GetTypedValue(0.0f) == 0) {
@@ -52,7 +48,20 @@ HdExtGpuBufferSchema::IsComplete() const
     if (elementType->GetTypedValue(0.0f).type == HdTypeInvalid) {
         return false;
     }
-    return true;
+
+    // The buffer must be reachable by at least one route. A native rawHandle
+    // is only usable by a consumer on the same API and device; the import
+    // cluster works for anyone who can import the memory. Producers may
+    // publish both.
+    const HdUInt64DataSourceHandle rawHandle = GetRawHandle();
+    if (rawHandle && rawHandle->GetTypedValue(0.0f) != 0) {
+        return true;
+    }
+    const HdUInt64DataSourceHandle memHandle = GetExternalMemoryHandle();
+    const HdTokenDataSourceHandle handleType = GetExternalHandleType();
+    return memHandle && handleType &&
+           memHandle->GetTypedValue(0.0f) != 0 &&
+           !handleType->GetTypedValue(0.0f).IsEmpty();
 }
 
 // --(END CUSTOM CODE: Schema Methods)--
@@ -113,6 +122,55 @@ HdExtGpuBufferSchema::GetDirectBindable() const
         HdExtGpuBufferSchemaTokens->directBindable);
 }
 
+HdUInt64DataSourceHandle
+HdExtGpuBufferSchema::GetExternalMemoryHandle() const
+{
+    return _GetTypedDataSource<HdUInt64DataSource>(
+        HdExtGpuBufferSchemaTokens->externalMemoryHandle);
+}
+
+HdTokenDataSourceHandle
+HdExtGpuBufferSchema::GetExternalHandleType() const
+{
+    return _GetTypedDataSource<HdTokenDataSource>(
+        HdExtGpuBufferSchemaTokens->externalHandleType);
+}
+
+HdSizetDataSourceHandle
+HdExtGpuBufferSchema::GetMemoryBlockSize() const
+{
+    return _GetTypedDataSource<HdSizetDataSource>(
+        HdExtGpuBufferSchemaTokens->memoryBlockSize);
+}
+
+HdSizetDataSourceHandle
+HdExtGpuBufferSchema::GetMemoryOffset() const
+{
+    return _GetTypedDataSource<HdSizetDataSource>(
+        HdExtGpuBufferSchemaTokens->memoryOffset);
+}
+
+HdBoolDataSourceHandle
+HdExtGpuBufferSchema::GetDedicated() const
+{
+    return _GetTypedDataSource<HdBoolDataSource>(
+        HdExtGpuBufferSchemaTokens->dedicated);
+}
+
+HdTokenDataSourceHandle
+HdExtGpuBufferSchema::GetDeviceUuid() const
+{
+    return _GetTypedDataSource<HdTokenDataSource>(
+        HdExtGpuBufferSchemaTokens->deviceUuid);
+}
+
+HdUInt64DataSourceHandle
+HdExtGpuBufferSchema::GetLogicalDeviceId() const
+{
+    return _GetTypedDataSource<HdUInt64DataSource>(
+        HdExtGpuBufferSchemaTokens->logicalDeviceId);
+}
+
 /*static*/
 HdContainerDataSourceHandle
 HdExtGpuBufferSchema::BuildRetained(
@@ -123,11 +181,18 @@ HdExtGpuBufferSchema::BuildRetained(
         const HdTupleTypeDataSourceHandle &elementType,
         const HdSizetDataSourceHandle &byteOffset,
         const HdSizetDataSourceHandle &byteStride,
-        const HdBoolDataSourceHandle &directBindable
+        const HdBoolDataSourceHandle &directBindable,
+        const HdUInt64DataSourceHandle &externalMemoryHandle,
+        const HdTokenDataSourceHandle &externalHandleType,
+        const HdSizetDataSourceHandle &memoryBlockSize,
+        const HdSizetDataSourceHandle &memoryOffset,
+        const HdBoolDataSourceHandle &dedicated,
+        const HdTokenDataSourceHandle &deviceUuid,
+        const HdUInt64DataSourceHandle &logicalDeviceId
 )
 {
-    TfToken _names[8];
-    HdDataSourceBaseHandle _values[8];
+    TfToken _names[15];
+    HdDataSourceBaseHandle _values[15];
 
     size_t _count = 0;
 
@@ -169,6 +234,41 @@ HdExtGpuBufferSchema::BuildRetained(
     if (directBindable) {
         _names[_count] = HdExtGpuBufferSchemaTokens->directBindable;
         _values[_count++] = directBindable;
+    }
+
+    if (externalMemoryHandle) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->externalMemoryHandle;
+        _values[_count++] = externalMemoryHandle;
+    }
+
+    if (externalHandleType) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->externalHandleType;
+        _values[_count++] = externalHandleType;
+    }
+
+    if (memoryBlockSize) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->memoryBlockSize;
+        _values[_count++] = memoryBlockSize;
+    }
+
+    if (memoryOffset) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->memoryOffset;
+        _values[_count++] = memoryOffset;
+    }
+
+    if (dedicated) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->dedicated;
+        _values[_count++] = dedicated;
+    }
+
+    if (deviceUuid) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->deviceUuid;
+        _values[_count++] = deviceUuid;
+    }
+
+    if (logicalDeviceId) {
+        _names[_count] = HdExtGpuBufferSchemaTokens->logicalDeviceId;
+        _values[_count++] = logicalDeviceId;
     }
     return HdRetainedContainerDataSource::New(_count, _names, _values);
 }
@@ -237,6 +337,62 @@ HdExtGpuBufferSchema::Builder::SetDirectBindable(
     return *this;
 }
 
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetExternalMemoryHandle(
+    const HdUInt64DataSourceHandle &externalMemoryHandle)
+{
+    _externalMemoryHandle = externalMemoryHandle;
+    return *this;
+}
+
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetExternalHandleType(
+    const HdTokenDataSourceHandle &externalHandleType)
+{
+    _externalHandleType = externalHandleType;
+    return *this;
+}
+
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetMemoryBlockSize(
+    const HdSizetDataSourceHandle &memoryBlockSize)
+{
+    _memoryBlockSize = memoryBlockSize;
+    return *this;
+}
+
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetMemoryOffset(
+    const HdSizetDataSourceHandle &memoryOffset)
+{
+    _memoryOffset = memoryOffset;
+    return *this;
+}
+
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetDedicated(
+    const HdBoolDataSourceHandle &dedicated)
+{
+    _dedicated = dedicated;
+    return *this;
+}
+
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetDeviceUuid(
+    const HdTokenDataSourceHandle &deviceUuid)
+{
+    _deviceUuid = deviceUuid;
+    return *this;
+}
+
+HdExtGpuBufferSchema::Builder &
+HdExtGpuBufferSchema::Builder::SetLogicalDeviceId(
+    const HdUInt64DataSourceHandle &logicalDeviceId)
+{
+    _logicalDeviceId = logicalDeviceId;
+    return *this;
+}
+
 HdContainerDataSourceHandle
 HdExtGpuBufferSchema::Builder::Build()
 {
@@ -248,7 +404,14 @@ HdExtGpuBufferSchema::Builder::Build()
         _elementType,
         _byteOffset,
         _byteStride,
-        _directBindable
+        _directBindable,
+        _externalMemoryHandle,
+        _externalHandleType,
+        _memoryBlockSize,
+        _memoryOffset,
+        _dedicated,
+        _deviceUuid,
+        _logicalDeviceId
     );
 }
 
@@ -303,5 +466,25 @@ HdExtGpuBufferSchema::BuildBackendApiDataSource(
     // fallback for unknown token
     return HdRetainedTypedSampledDataSource<TfToken>::New(backendApi);
 }
+
+/*static*/
+HdTokenDataSourceHandle
+HdExtGpuBufferSchema::BuildExternalHandleTypeDataSource(
+    const TfToken &externalHandleType)
+{
+
+    if (externalHandleType == HdExtGpuBufferSchemaTokens->opaqueWin32) {
+        static const HdRetainedTypedSampledDataSource<TfToken>::Handle ds =
+            HdRetainedTypedSampledDataSource<TfToken>::New(externalHandleType);
+        return ds;
+    }
+    if (externalHandleType == HdExtGpuBufferSchemaTokens->opaqueFd) {
+        static const HdRetainedTypedSampledDataSource<TfToken>::Handle ds =
+            HdRetainedTypedSampledDataSource<TfToken>::New(externalHandleType);
+        return ds;
+    }
+    // fallback for unknown token
+    return HdRetainedTypedSampledDataSource<TfToken>::New(externalHandleType);
+} 
 
 PXR_NAMESPACE_CLOSE_SCOPE
