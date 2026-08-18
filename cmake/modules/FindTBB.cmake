@@ -246,13 +246,22 @@ if(NOT TBB_FOUND)
         set(_lib_name ${_comp})
       endif()
 
+      set(_lib_names_release ${_lib_name})
+      set(_lib_names_debug ${_lib_name}_debug)
+
+      if(TBB_USE_STATIC_LIBS)
+        # force searching for static libs
+        set(_lib_names_release ${CMAKE_STATIC_LIBRARY_PREFIX}${_lib_name}${CMAKE_STATIC_LIBRARY_SUFFIX})
+        set(_lib_names_debug ${CMAKE_STATIC_LIBRARY_PREFIX}${_lib_name}_debug${CMAKE_STATIC_LIBRARY_SUFFIX})
+      endif()
+
       # Search for the libraries
-      find_library(TBB_${_comp}_LIBRARY_RELEASE ${_lib_name}
+      find_library(TBB_${_comp}_LIBRARY_RELEASE NAMES ${_lib_names_release}
           HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
           PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
           PATH_SUFFIXES ${TBB_LIB_PATH_SUFFIX})
 
-      find_library(TBB_${_comp}_LIBRARY_DEBUG ${_lib_name}_debug
+      find_library(TBB_${_comp}_LIBRARY_DEBUG NAMES ${_lib_names_debug}
           HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
           PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
           PATH_SUFFIXES ${TBB_LIB_PATH_SUFFIX})
@@ -260,26 +269,30 @@ if(NOT TBB_FOUND)
       # On Windows platforms also looks for .dll binaries.
       # If we find some, assume TBB is built as a shared library with the .lib/.dll pair,
       # otherwise assume it is built as a static library
-      set(TBB_${_comp}_TARGET_TYPE SHARED)
-      if(WIN32)
-        find_file(TBB_${_comp}_SHARED_LIBRARY_RELEASE
-            NAMES ${CMAKE_SHARED_LIBRARY_PREFIX}${_lib_name}${CMAKE_SHARED_LIBRARY_SUFFIX}
-            HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
-            PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
-            PATH_SUFFIXES ${TBB_RUNTIME_PATH_SUFFIX})
+      if(TBB_USE_STATIC_LIBS)
+        set(TBB_${_comp}_TARGET_TYPE STATIC)
+      else()
+        set(TBB_${_comp}_TARGET_TYPE SHARED)
+        if(WIN32)
+          find_file(TBB_${_comp}_SHARED_LIBRARY_RELEASE
+              NAMES ${CMAKE_SHARED_LIBRARY_PREFIX}${_lib_name}${CMAKE_SHARED_LIBRARY_SUFFIX}
+              HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
+              PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
+              PATH_SUFFIXES ${TBB_RUNTIME_PATH_SUFFIX})
+
+          find_file(TBB_${_comp}_SHARED_LIBRARY_DEBUG
+              NAMES ${CMAKE_SHARED_LIBRARY_PREFIX}${_lib_name}_debug${CMAKE_SHARED_LIBRARY_SUFFIX}
+              HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
+              PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
+              PATH_SUFFIXES ${TBB_RUNTIME_PATH_SUFFIX})
         
-        find_file(TBB_${_comp}_SHARED_LIBRARY_DEBUG
-            NAMES ${CMAKE_SHARED_LIBRARY_PREFIX}${_lib_name}_debug${CMAKE_SHARED_LIBRARY_SUFFIX}
-            HINTS ${TBB_LIBRARY} ${TBB_SEARCH_DIR}
-            PATHS ${TBB_DEFAULT_SEARCH_DIR} ENV LIBRARY_PATH
-            PATH_SUFFIXES ${TBB_RUNTIME_PATH_SUFFIX})
-      
-        if(TBB_${_comp}_LIBRARY_RELEASE AND TBB_${_comp}_SHARED_LIBRARY_RELEASE)
-          set(TBB_${_comp}_TARGET_TYPE SHARED)
-        elseif(TBB_${_comp}_LIBRARY_DEBUG AND TBB_${_comp}_SHARED_LIBRARY_DEBUG)
-          set(TBB_${_comp}_TARGET_TYPE SHARED)
-        else()
-          set(TBB_${_comp}_TARGET_TYPE STATIC)
+          if(TBB_${_comp}_LIBRARY_RELEASE AND TBB_${_comp}_SHARED_LIBRARY_RELEASE)
+            set(TBB_${_comp}_TARGET_TYPE SHARED)
+          elseif(TBB_${_comp}_LIBRARY_DEBUG AND TBB_${_comp}_SHARED_LIBRARY_DEBUG)
+            set(TBB_${_comp}_TARGET_TYPE SHARED)
+          else()
+            set(TBB_${_comp}_TARGET_TYPE STATIC)
+          endif()
         endif()
       endif()
 

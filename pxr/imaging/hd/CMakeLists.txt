@@ -19,6 +19,7 @@ pxr_library(hd
 
     PUBLIC_CLASSES
         aov
+        backPlateSchema
         basisCurves
         basisCurvesSchema
         basisCurvesTopology
@@ -28,6 +29,7 @@ pxr_library(hd
         bufferArrayRange
         bufferSource
         bufferSpec
+        builtinMaterialSchema
         cachingSceneIndex
         camera
         cameraSchema
@@ -39,6 +41,7 @@ pxr_library(hd
         collectionSchema
         collectionsSchema
         command
+        concatenatedVectorDataSource
         coneSchema
         containerDataSourceEditor
         containerSchema
@@ -60,6 +63,7 @@ pxr_library(hd
         dirtyBitsTranslator
         dirtyList
         displayFilterSchema
+        energyFilterSchema
         drawingCoord
         drawItem
         engine
@@ -93,15 +97,18 @@ pxr_library(hd
         instanceCategoriesSchema
         instancedBySchema
         instanceIndicesSchema
+        instanceProxySchema
         instancer
         instanceRegistry
         instancerTopologySchema
+        instanceProxyViewSceneIndex
         instanceSchema
         integratorSchema
         lazyContainerDataSource
         legacyDisplayStyleSchema
         legacyGeomSubsetSceneIndex
         legacyPrimSceneIndex
+        legacyRenderControlInterface
         legacyTaskFactory
         legacyTaskSchema
         lensDistortionSchema
@@ -114,6 +121,8 @@ pxr_library(hd
         materialConnectionSchema
         materialFilteringSceneIndexBase
         materialInterfaceMappingSchema
+        materialInterfaceParameterSchema
+        materialInterfaceSchema
         materialNetworkSchema
         materialNetwork2Interface
         materialNodeSchema
@@ -134,9 +143,9 @@ pxr_library(hd
         perfLog
         planeSchema
         pluginRenderDelegateUniqueHandle
+        pluginRendererUniqueHandle
         points
         prefixingSceneIndex
-        primDataSourceOverlayCache
         primGather
         primOriginSchema
         primTypeIndex
@@ -147,10 +156,15 @@ pxr_library(hd
         renderBufferSchema
         renderCapabilitiesSchema
         renderDelegate
+        renderDelegateAdapterRenderer
+        renderDelegateInfo
+        renderer
+        rendererCreateArgsSchema
         rendererPlugin
         rendererPluginHandle
         rendererPluginRegistry
         renderIndex
+        renderIndexAdapterSceneIndex
         renderPass
         renderPassSchema
         renderPassState
@@ -171,6 +185,7 @@ pxr_library(hd
         sceneGlobalsSchema
         sceneIndex
         sceneIndexAdapterSceneDelegate
+        sceneIndexCreateArgsSchema
         sceneIndexObserver
         sceneIndexPlugin
         sceneIndexPluginRegistry
@@ -180,6 +195,7 @@ pxr_library(hd
         selection
         selectionSchema
         selectionsSchema
+        skinningSettings
         smoothNormals
         sortedIds
         sphereSchema
@@ -206,6 +222,7 @@ pxr_library(hd
         volume
         volumeFieldBindingSchema
         volumeFieldSchema
+        volumeSchema
         vtBufferSource
         xformSchema
 
@@ -215,6 +232,7 @@ pxr_library(hd
         driver.h
         invalidatableContainerDataSource.h
         materialNetworkInterface.h
+        rendererCreateArgs.h
         schemaTypeDefs.h
         vectorSchemaTypeDefs.h
         version.h
@@ -334,6 +352,16 @@ pxr_build_test(testHdDataSource
        testenv/testHdDataSource.cpp
 )
 
+pxr_build_test(testHdMergingSceneIndex
+   LIBRARIES
+       hd
+       sdf
+       tf
+
+   CPPFILES
+       testenv/testHdMergingSceneIndex.cpp
+)
+
 pxr_build_test(testHdSceneIndex
    LIBRARIES
        hd
@@ -391,12 +419,6 @@ pxr_build_test(testHdCollectionExpressionEvaluator
         testenv/testHdCollectionExpressionEvaluator.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testHdSortedIds
-    DEST testHdSortedIds
-)
-
-
 pxr_register_test(testHdBufferSourceEmptyVal
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdBufferSourceEmptyVal"
 )
@@ -437,12 +459,17 @@ pxr_register_test(testHdDataSource
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdDataSource"
 )
 
+pxr_register_test(testHdMergingSceneIndex
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdMergingSceneIndex"
+)
+
 pxr_register_test(testHdSceneIndex
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdSceneIndex"
 )
 
 pxr_register_test(testHdSortedIds
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdSortedIds"
+    TESTENV testenv/testHdSortedIds
     # XXX Disabling compare for now. testHdSortedId_removeTest.txt differs on Mac and Windows.
     # DIFF_COMPARE testHdSortedId_populateTest.txt testHdSortedId_singleInsertTest.txt testHdSortedId_multiInsertTest.txt testHdSortedId_removeOnlyElementTest.txt testHdSortedId_removeRangeTest.txt testHdSortedId_removeBatchTest.txt testHdSortedId_removeSortedTest.txt testHdSortedId_removeUnsortedTest.txt testHdSortedId_removeAfterInsertNoSyncTest.txt
 )

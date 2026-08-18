@@ -30,13 +30,18 @@ HdSt_TextureObjectRegistry::HdSt_TextureObjectRegistry(
 
 HdSt_TextureObjectRegistry::~HdSt_TextureObjectRegistry() = default;
 
+namespace
+{
+
+template <typename SubTexIdType>
 bool
-static
-_IsDynamic(const HdStTextureIdentifier &textureId)
+_IsSubTexIdType(const HdStTextureIdentifier &textureId)
 {
     return
-        dynamic_cast<const HdStDynamicUvSubtextureIdentifier*>(
+        dynamic_cast<const SubTexIdType*>(
             textureId.GetSubtextureIdentifier());
+}
+
 }
 
 HdStTextureObjectSharedPtr
@@ -46,7 +51,7 @@ HdSt_TextureObjectRegistry::_MakeTextureObject(
 {
     switch(textureType) {
     case HdStTextureType::Uv:
-        if (_IsDynamic(textureId)) {
+        if (_IsSubTexIdType<HdStDynamicUvSubtextureIdentifier>(textureId)) {
             return
                 std::make_shared<HdStDynamicUvTextureObject>(textureId, this);
         } else {
@@ -59,6 +64,14 @@ HdSt_TextureObjectRegistry::_MakeTextureObject(
         return std::make_shared<HdStPtexTextureObject>(textureId, this);
     case HdStTextureType::Udim:
         return std::make_shared<HdStUdimTextureObject>(textureId, this);
+    case HdStTextureType::Cubemap:
+        if (_IsSubTexIdType<HdStDynamicCubemapSubtextureIdentifier>(
+                textureId)) {
+            return
+                std::make_shared<HdStDynamicUvTextureObject>(
+                    textureId,
+                    this);
+        }
     }
 
     TF_CODING_ERROR(

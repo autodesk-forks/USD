@@ -20,6 +20,36 @@ class HgiVulkanDevice;
 using HgiVulkanDeviceAddress = VkDeviceOrHostAddressKHR;
 using HgiVulkanConstDeviceAddress = VkDeviceOrHostAddressConstKHR;
 ///
+/// \struct HgiVulkanMappedBufferUniquePointerDeleter
+///
+/// For use with std::unique_ptr. Unmaps a pointer to host visible memory when
+/// the owning pointer is destroyed.
+///
+struct HgiVulkanMappedBufferUniquePointerDeleter
+{
+    void operator()([[maybe_unused]] void* memory) const
+    {
+        vmaUnmapMemory(_vma, _allocation);
+    }
+
+    HgiVulkanMappedBufferUniquePointerDeleter() = default;
+
+    HgiVulkanMappedBufferUniquePointerDeleter(VmaAllocator vma,
+        VmaAllocation allocation)
+        : _vma(vma)
+        , _allocation(allocation)
+    {
+    }
+
+private:
+    VmaAllocator _vma;
+    VmaAllocation _allocation;
+};
+
+using HgiVulkanMappedBufferUniquePointer =
+    std::unique_ptr<void, HgiVulkanMappedBufferUniquePointerDeleter>;
+
+///
 /// \class HgiVulkanBuffer
 ///
 /// Vulkan implementation of HgiBuffer
@@ -70,27 +100,30 @@ public:
     /// Creates a staging buffer.
     /// The caller is responsible for the lifetime (destruction) of the buffer.
     HGIVULKAN_API
-        static HgiVulkanBuffer* CreateStagingBuffer(
-            HgiVulkanDevice* device,
-            HgiBufferDesc const& desc);
+    static std::unique_ptr<HgiVulkanBuffer> CreateStagingBuffer(
+        HgiVulkan* hgi,
+        HgiBufferDesc const& desc);
+
+    /// Returns a device local, host writeable pointer to the buffer allocation.
+    /// Writing sequentially to this pointer should be the fastest way to write
+    /// to device memory.
+    /// This should only be called on buffers with usage HgiBufferUsageUpload
+    /// or on UMA/ReBAR enabled systems.
+    HGIVULKAN_API
+    HgiVulkanMappedBufferUniquePointer Map() const;
+
+    /// Returns the Vk device address for this buffer (for ray tracing).
+    HGIVULKAN_API
+    uint64_t GetDeviceAddress() const;
 
 protected:
     friend class HgiVulkan;
 
     // Constructor for making buffers
     HGIVULKAN_API
-        HgiVulkanBuffer(
-            HgiVulkan* hgi,
-            HgiVulkanDevice* device,
-            HgiBufferDesc const& desc);
-
-    // Constructor for making staging buffers
-    HGIVULKAN_API
-        HgiVulkanBuffer(
-            HgiVulkanDevice* device,
-            VkBuffer vkBuffer,
-            VmaAllocation vmaAllocation,
-            HgiBufferDesc const& desc);
+    HgiVulkanBuffer(
+        HgiVulkan* hgi,
+        HgiBufferDesc const& desc);
 
 private:
     void allocateDirect(const VkBufferCreateInfo& bufferCreateInfo, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, const void* data);
@@ -99,13 +132,14 @@ private:
     HgiVulkanBuffer& operator=(const HgiVulkanBuffer&) = delete;
     HgiVulkanBuffer(const HgiVulkanBuffer&) = delete;
 
-    HgiVulkanDevice* _device;
+    HgiVulkan* _hgi;
     VkBuffer _vkBuffer;
     VkDeviceMemory _vkDeviceMemory;
     VmaAllocation _vmaAllocation;
     uint64_t _inflightBits;
-    HgiVulkanBuffer* _stagingBuffer;
-    void* _cpuStagingAddress;
+    std::unique_ptr<HgiVulkanBuffer> _stagingBuffer;
+    HgiVulkanMappedBufferUniquePointer _cpuStagingAddress;
+    bool _mappable;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -10,7 +10,7 @@
 # below may wind up stomping over this value.
 set(build_shared_libs "${BUILD_SHARED_LIBS}")
 
-# Core USD Package Requirements
+# Core USD Package Requirements 
 # ----------------------------------------------
 
 # Threads.  Save the libraries needed in PXR_THREAD_LIBS;  we may modify
@@ -66,10 +66,11 @@ if(PXR_ENABLE_PYTHON_SUPPORT)
             endif()
         endif()
 
-        # This option indicates that we don't want to explicitly link to the
-        # python libraries. See BUILDING.md for details.
+        # This option indicates that we don't want libraries to explicitly link
+        # to the Python libraries. However, executables must link to the Python
+        # libraries to avoid missing symbol errors. See BUILDING.md for details.
         if(PXR_PY_UNDEFINED_DYNAMIC_LOOKUP AND NOT WIN32)
-            set(PYTHON_LIBRARIES "")
+            set(PYTHON_LIBRARIES "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:${package}::Python>")
         else()
             set(PYTHON_LIBRARIES "${package}::Python")
         endif()
@@ -77,6 +78,27 @@ if(PXR_ENABLE_PYTHON_SUPPORT)
 
     # USD builds only work with Python3
     setup_python_package(Python3)
+
+    # Set the default Python bindings install directory if the user has not
+    # provided an explicit value. The default is "lib/pythonX.Y/site-packages"
+    # relative to the install prefix, matching the directory where the USD
+    # shared libraries are installed. On Windows the convention is simply
+    # "Lib/site-packages" (no version component).
+    if(NOT PXR_PYTHON_INSTALL_DIR)
+        if(WIN32)
+            set(_pxr_default_python_install_dir "Lib/site-packages")
+        else()
+            set(_pxr_default_python_install_dir
+                "lib/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}/site-packages")
+        endif()
+        set(PXR_PYTHON_INSTALL_DIR "${_pxr_default_python_install_dir}"
+            CACHE STRING
+            "Directory for installing Python bindings."
+            FORCE)
+        unset(_pxr_default_python_install_dir)
+    endif()
+
+    message(STATUS "Installing Python bindings to ${PXR_PYTHON_INSTALL_DIR}")
 
     # --Jinja2
     find_package(Jinja2)
@@ -106,12 +128,23 @@ if(WIN32)
 endif()
 
 # --TBB
-find_package(TBB CONFIG COMPONENTS tbb)
-if(TBB_FOUND) 
-    set(PXR_FIND_TBB_IN_CONFIG ON)
+if (DEFINED PXR_FIND_TBB_IN_CONFIG)
+    if (PXR_FIND_TBB_IN_CONFIG)
+        find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+    else()
+        find_package(TBB REQUIRED COMPONENTS tbb)
+    endif()
 else()
-    find_package(TBB REQUIRED COMPONENTS tbb)
-    set(PXR_FIND_TBB_IN_CONFIG OFF)
+    # Set PXR_FIND_TBB_IN_CONFIG appropriately so that downstream
+    # pxrConfig knows how TBB was found and appropriately encodes the 
+    # dependency.
+    find_package(TBB CONFIG COMPONENTS tbb)
+    if (TBB_FOUND)
+        set(PXR_FIND_TBB_IN_CONFIG ON)
+    else()
+        find_package(TBB REQUIRED COMPONENTS tbb)
+        set(PXR_FIND_TBB_IN_CONFIG OFF)
+    endif()
 endif()
 
 # --math
@@ -134,10 +167,10 @@ if (PXR_BUILD_DOCUMENTATION)
     find_program(DOXYGEN_EXECUTABLE
         NAMES doxygen
     )
-    if (EXISTS ${DOXYGEN_EXECUTABLE})
-        message(STATUS "Found doxygen: ${DOXYGEN_EXECUTABLE}")
+    if (EXISTS ${DOXYGEN_EXECUTABLE})                                        
+        message(STATUS "Found doxygen: ${DOXYGEN_EXECUTABLE}") 
     else()
-        message(FATAL_ERROR
+        message(FATAL_ERROR 
                 "doxygen not found, required for PXR_BUILD_DOCUMENTATION")
     endif()
 
@@ -189,15 +222,8 @@ if (PXR_BUILD_IMAGING)
     if (PXR_ENABLE_VULKAN_SUPPORT)
         message(STATUS "Enabling experimental feature Vulkan support")
         if (EXISTS $ENV{VULKAN_SDK})
-            # Prioritize the VULKAN_SDK includes and packages before any system
-            # installed headers. This is to prevent linking against older SDKs
-            # that may be installed by the OS.
-            # XXX This is fixed in cmake 3.18+
-            include_directories(BEFORE SYSTEM $ENV{VULKAN_SDK} $ENV{VULKAN_SDK}/include $ENV{VULKAN_SDK}/lib $ENV{VULKAN_SDK}/source)
-            set(ENV{PATH} "$ENV{VULKAN_SDK}:$ENV{VULKAN_SDK}/include:$ENV{VULKAN_SDK}/lib:$ENV{VULKAN_SDK}/source:$ENV{PATH}")
-            find_package(Vulkan MODULE REQUIRED COMPONENTS shaderc_combined)
-            list(APPEND VULKAN_LIBS Vulkan::Vulkan)
-            list(APPEND VULKAN_LIBS Vulkan::shaderc_combined)
+            find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
+            list(APPEND VULKAN_LIBS Vulkan::Vulkan Vulkan::shaderc_combined)
 
             # Find the OS specific libs we need
             if (UNIX AND NOT APPLE)
@@ -297,10 +323,6 @@ if(PXR_ENABLE_OSL_SUPPORT)
     find_package(OSL REQUIRED)
     set(REQUIRES_Imath TRUE)
     add_definitions(-DPXR_OSL_SUPPORT_ENABLED)
-endif()
-
-if (PXR_BUILD_ANIMX_TESTS)
-    find_package(AnimX REQUIRED)
 endif()
 
 # ----------------------------------------------

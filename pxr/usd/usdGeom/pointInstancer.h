@@ -94,12 +94,6 @@ class SdfAssetPath;
 /// (i.e. less locally than) the local to parent transformation computed at 
 /// the root of the prototype it is instancing. 
 /// 
-/// If your processing of prototype geometry naturally takes into account the 
-/// transform of the prototype root, then this term can be omitted from the 
-/// computation of each instance transform, and this can be controlled when 
-/// computing instance transformation matrices using the 
-/// UsdGeomPointInstancer::PrototypeXformInclusion enumeration.
-/// 
 /// To understand the computation of the instance transform, in order to put
 /// an instance of a PointInstancer into the space of the PointInstancer's 
 /// parent prim we do the following:
@@ -228,17 +222,18 @@ class SdfAssetPath;
 /// traversals when they encounter a PointInstancer prim; this is what the
 /// UsdGeomBBoxCache and UsdImaging engines do.
 /// 
-/// There \em is a pattern one can deploy for organizing the prototypes
-/// such that they will automatically be skipped by basic UsdPrim::GetChildren()
-/// or UsdPrimRange traversals.  Usd prims each have a 
-/// \ref Usd_PrimSpecifiers "specifier" of "def", "over", or "class".  The
-/// default traversals skip over prims that are "pure overs" or classes.  So
-/// to protect prototypes from all generic traversals and processing, place
-/// them under a prim that is just an "over".  For example,
+/// There \em is a pattern one can deploy for organizing the prototypes such
+/// that they will automatically be skipped by basic UsdPrim::GetChildren() or
+/// UsdPrimRange traversals.  Usd prims each have a \ref Usd_PrimSpecifiers
+/// "specifier" of "def", "over", or "class".  The default traversals skip over
+/// prims that are "pure overs" or classes.  So to protect prototypes from all
+/// generic traversals and processing, place them under a prim that is a "class"
+/// or "over". "class" is recommended , while "over" should be used when
+/// backwards compatibility with older versions of USD is needed. For example,
 /// \code
 /// 01 def PointInstancer "Crowd_Mid"
 /// 02 {
-/// 03     rel prototypes = [ </Crowd_Mid/Prototypes/MaleThin_Business>, </Crowd_Mid/Prototypes/MaleThin_Casual> ]
+/// 03     rel prototypes = [ </Crowd_Mid/Prototypes/MaleThin_Business>, </Crowd_Mid/OtherPrototypes/MaleThin_Casual> ]
 /// 04     
 /// 05     over "Prototypes" 
 /// 06     {
@@ -250,11 +245,14 @@ class SdfAssetPath;
 /// 12              }
 /// 13          )
 /// 14          { ... }
-/// 15          
-/// 16          def "MaleThin_Casual"
-/// 17          ...
-/// 18     }
-/// 19 }
+/// 15     }
+/// 16
+/// 17     class "OtherPrototypes"
+/// 18     {
+/// 19          def "MaleThin_Casual"
+/// 20          ...
+/// 21     }
+/// 22 }
 /// \endcode
 /// 
 ///
@@ -834,7 +832,9 @@ public:
     // --------------------------------------------------------------------- //
  
     /// \enum ProtoXformInclusion
-    /// 
+    ///
+    /// Flag for \sa ComputeInstanceTransformsAtTime and
+    /// \sa ComputeInstanceTransformsAtTimes.
     /// Encodes whether to include each prototype's root prim's transformation
     /// as the most-local component of computed instance transforms.
     enum ProtoXformInclusion {
@@ -845,9 +845,10 @@ public:
     
     /// \enum MaskApplication
     /// 
+    /// Flag for \sa ComputeInstanceTransformsAtTime and
+    /// \sa ComputeInstanceTransformsAtTimes.
     /// Encodes whether to evaluate and apply the PointInstancer's
     /// mask to computed results.
-    /// \sa ComputeMaskAtTime()
     enum MaskApplication {
         ApplyMask,    //!< Compute and apply the PointInstancer mask
         IgnoreMask    //!< Ignore the PointInstancer mask

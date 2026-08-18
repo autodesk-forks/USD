@@ -1,0 +1,43 @@
+Loading @ListOpsWithLayerOffsets/base_delete_24.usda@
+
+------------------------------------------------------------------------
+Layer Stack:
+     base_delete_24.usda
+     layer_24.usda
+
+------------------------------------------------------------------------
+Results for composing </World>
+
+Prim Stack:
+    base_delete_24.usda  /World
+    layer_24.usda        /World
+
+Time Offsets:
+    base_delete_24.usda  /World          root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.00)
+
+Child names:
+     ['PayloadIn24', 'ReferenceIn24']
+
+------------------------------------------------------------------------
+Results for composing </World/PayloadIn24>
+
+Prim Stack:
+    base_delete_24.usda  /World/PayloadIn24
+    layer_24.usda        /World/PayloadIn24
+
+Time Offsets:
+    base_delete_24.usda  /World/PayloadIn24 root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.00)
+
+------------------------------------------------------------------------
+Results for composing </World/ReferenceIn24>
+
+Prim Stack:
+    base_delete_24.usda  /World/ReferenceIn24
+    layer_24.usda        /World/ReferenceIn24
+
+Time Offsets:
+    base_delete_24.usda  /World/ReferenceIn24 root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.00)
+

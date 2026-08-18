@@ -22,6 +22,10 @@ class "TestDuplicatePropsAPI" (
         }
         displayGroup = "Basic"
         displayName = "Map Gamma"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Map Gamma"
+        }
     )
     color3f outputs:resultRGB
 }

@@ -36,6 +36,7 @@ HdSt_TextureBinder::GetBufferSpecs(
     for (const NamedTextureHandle & texture : textures) {
         switch (texture.type) {
         case HdStTextureType::Uv:
+        case HdStTextureType::Cubemap:
             if (useBindlessHandles) {
                 specs->emplace_back(
                     texture.name,
@@ -66,22 +67,6 @@ HdSt_TextureBinder::GetBufferSpecs(
                     HdTypeDoubleMat4 : HdTypeFloatMat4), 1});
             break;
         case HdStTextureType::Ptex:
-            if (useBindlessHandles) {
-                specs->emplace_back(
-                    texture.name,
-                    HdTupleType{ HdTypeUInt32Vec2, texture.handles.size() });
-                specs->emplace_back(
-                    _Concat(
-                        texture.name,
-                        HdSt_ResourceBindingSuffixTokens->layout),
-                        HdTupleType{ HdTypeUInt32Vec2, texture.handles.size() });
-            }
-            specs->emplace_back(
-                _Concat(
-                    texture.name,
-                    HdSt_ResourceBindingSuffixTokens->valid),
-                HdTupleType{HdTypeBool, 1});
-            break;
         case HdStTextureType::Udim:
             if (useBindlessHandles) {
                 specs->emplace_back(
@@ -108,11 +93,11 @@ namespace {
 // A bindless GL sampler buffer.
 // This identifies a texture as a 64-bit handle, passed to GLSL as "uvec2".
 // See https://www.khronos.org/opengl/wiki/Bindless_Texture
-class HdSt_BindlessSamplerBufferSource : public HdBufferSource {
+class HdSt_BindlessSamplerBufferSource : public HdResolvedBufferSource {
 public:
     HdSt_BindlessSamplerBufferSource(TfToken const &name,
                                      const VtArray<uint64_t>& value)
-    : HdBufferSource()
+    : HdResolvedBufferSource()
     , _name(name)
     , _value(value)
     {
@@ -134,11 +119,6 @@ public:
     }
     void GetBufferSpecs(HdBufferSpecVector *specs) const override {
         specs->emplace_back(_name, GetTupleType());
-    }
-    bool Resolve() override {
-        if (!_TryLock()) return false;
-        _SetResolved();
-        return true;
     }
 
 protected:
@@ -548,6 +528,10 @@ void _Dispatch(
         break;
     case HdStTextureType::Udim:
         _CastAndCompute<HdStTextureType::Udim, Functor>(
+            namedTextureHandle, std::forward<Args>(args)...);
+        break;
+    case HdStTextureType::Cubemap:
+        _CastAndCompute<HdStTextureType::Cubemap, Functor>(
             namedTextureHandle, std::forward<Args>(args)...);
         break;
     }

@@ -28,10 +28,13 @@
 #include "pxr/usd/sdr/shaderProperty.h"
 #include "pxr/usd/plugin/sdrOsl/oslParser.h"
 
+#include <map>
+#include <optional>
 #include <tuple>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+using ShaderMetadataHelpers::CreateStringFromStringVec;
 using ShaderMetadataHelpers::IsPropertyAnAssetIdentifier;
 using ShaderMetadataHelpers::IsPropertyATerminal;
 using ShaderMetadataHelpers::IsTruthy;
@@ -44,13 +47,15 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     ((arraySize, "arraySize"))
     ((pageStr, "page"))
+    ((pageOpenStr, "page_open"))
+    ((openStr, "open"))
     ((oslPageDelimiter, "."))
     ((vstructMember, "vstructmember"))
     (sdrDefinitionName)
 
-    // Discovery and source type
+    // Discovery and shading system
     ((discoveryType, "oso"))
-    ((sourceType, "OSL"))
+    ((shadingSystem, "OSL"))
 
     ((usdSchemaDefPrefix, "usdSchemaDef_"))
     ((sdrGlobalConfigPrefix, "sdrGlobalConfig_"))
@@ -68,9 +73,9 @@ SdrOslParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken& 
-SdrOslParserPlugin::GetSourceType() const
+SdrOslParserPlugin::GetShadingSystem() const
 {
-    return _tokens->sourceType;
+    return _tokens->shadingSystem;
 }
 
 SdrOslParserPlugin::SdrOslParserPlugin()
@@ -94,6 +99,56 @@ _ParseFromSourceCode(OSL::OSLQuery* query, const String& sourceCode)
 #else
     return query->open_bytecode(sourceCode);
 #endif
+}
+
+static SdrStringVec
+_GetOpenPages(const SdrShaderPropertyUniquePtrVec& properties)
+{
+    // Extract open pages from parameter metadata (pages are considered to be
+    // closed by default, unless marked open). Look for parameters that specify
+    // both a page and a page open status. If all such parameters agree the
+    // page is open, add that page to the result vector.
+
+    // Map page name to open status
+    std::map<std::string, bool> openStatusMap;
+
+    for (const auto& prop : properties) {
+        const SdrTokenMap& metadata = prop->GetMetadata();
+        std::optional<std::string> page;
+        std::optional<bool> openState;
+
+        for (const auto& it : metadata) {
+            // Check for page and open metadata. Openness may be indicated by
+            // either "open" or "page_open".
+            if (it.first == _tokens->pageStr) {
+                page = it.second;
+            }
+            else if (it.first == _tokens->openStr) {
+                openState = IsTruthy(_tokens->openStr, metadata);
+            }
+            else if (it.first == _tokens->pageOpenStr) {
+                openState = IsTruthy(_tokens->pageOpenStr, metadata);
+            }
+        }
+
+        if (page && openState) {
+            // And-together all "open" values for prop's page, so it's only
+            // marked open if all props that have an opinion agree
+            auto result = openStatusMap.insert({ *page, *openState });
+            if (!result.second) {
+                result.first->second &= *openState;
+            }
+        }
+    }
+
+    SdrStringVec openPages;
+    for (const auto& it : openStatusMap) {
+        if (it.second) {
+            openPages.push_back(it.first);
+        }
+    }
+
+    return openPages;
 }
 
 SdrShaderNodeUniquePtr
@@ -168,58 +223,76 @@ SdrOslParserPlugin::ParseShaderNode(
         fallbackPrefix = it->second;
     }
 
+    // Generate properties
+    SdrShaderPropertyUniquePtrVec properties =
+        _getNodeProperties(oslQuery, discoveryResult, fallbackPrefix);
+
+    // Populate open pages from property metadata
+    const SdrStringVec openPages = _GetOpenPages(properties);
+    if (!openPages.empty()) {
+        metadata[SdrNodeMetadata->OpenPages] =
+            CreateStringFromStringVec(openPages);
+    }
+
+    // Populate context if applicable
+    _setSdrContext(metadata);
+
     return SdrShaderNodeUniquePtr(
         new SdrShaderNode(
             discoveryResult.identifier,
             discoveryResult.version,
             discoveryResult.name,
-            discoveryResult.family,
-            _getSdrContextFromSchemaBase(metadata),
-            _tokens->sourceType,    
+            discoveryResult.function,
+            _tokens->shadingSystem,    
             discoveryResult.resolvedUri,
             discoveryResult.resolvedUri,    // Definitive assertion that the
                                             // implementation is the same asset
                                             // as the definition
-            _getNodeProperties(oslQuery, discoveryResult, fallbackPrefix),
+            std::move(properties),
             metadata,
             discoveryResult.sourceCode
         )
     );
 }
 
-TfToken 
-SdrOslParserPlugin::_getSdrContextFromSchemaBase(
-    const SdrTokenMap& metadata) const
+void 
+SdrOslParserPlugin::_setSdrContext(SdrTokenMap& metadata) const
 {
-    auto metaIt = metadata.find(_tokens->schemaBase);
-    if (metaIt == metadata.end()) {
-        return _tokens->sourceType;
+    if (metadata.find(SdrNodeMetadata->Context) != metadata.end()) {
+        // Context metadata already exists, do nothing.
+        return;
     }
-    std::string schemaBase = metaIt->second;
+    auto metaIt = metadata.find(_tokens->schemaBase);
+    if (metaIt != metadata.end()) {
+        std::string schemaBase = metaIt->second;
 
-    static const std::unordered_map<TfToken, TfToken, TfHash> contextMapping({
-        { TfToken("displayfilter"), SdrNodeContext->DisplayFilter },
-        { TfToken("lightfilter"), SdrNodeContext->LightFilter },
-        { TfToken("samplefilter"), SdrNodeContext->SampleFilter },
-        { TfToken("integrator"), TfToken("integrator")},
-        // must check for "light" after "lightfilter" otherwise a light filter
-        // could be mistakenly classified as a light
-        { TfToken("light"), TfToken("light")} ,
-        { TfToken("projection"), TfToken("projection")}
-    });
+        static const std::unordered_map<TfToken, TfToken, TfHash>
+        contextMapping({
+            { TfToken("displayfilter"), SdrNodeContext->DisplayFilter },
+            { TfToken("lightfilter"), SdrNodeContext->LightFilter },
+            { TfToken("samplefilter"), SdrNodeContext->SampleFilter },
+            { TfToken("integrator"), TfToken("integrator")},
+            // must check for "light" after "lightfilter" otherwise a light
+            // filter could be mistakenly classified as a light
+            { TfToken("light"), TfToken("light")} ,
+            { TfToken("projection"), TfToken("projection")}
+        });
 
-    // Use the context mapping to determine the sdrContext for this schema. 
-    // Test if the schema base name contains of the map keys
-    // for example, PxrDisplayFilterPluginBase contains "displayfilter"
-    std::unordered_map<TfToken, TfToken, TfHash>::const_iterator it;
-    for (it = contextMapping.begin(); it != contextMapping.end(); ++it) {
-        if (TfStringContains(TfStringToLower(schemaBase), it->first)) {
-            return it->second;
+        // Use the context mapping to determine the sdrContext for this schema. 
+        // Test if the schema base name contains of the map keys
+        // for example, PxrDisplayFilterPluginBase contains "displayfilter"
+        std::unordered_map<TfToken, TfToken, TfHash>::const_iterator it;
+        for (it = contextMapping.begin(); it != contextMapping.end(); ++it) {
+            if (TfStringContains(TfStringToLower(schemaBase), it->first)) {
+                metadata[SdrNodeMetadata->Context] = it->second;
+                return;
+            }
         }
     }
-    
-    // fallback to sourceType as default context
-    return _tokens->sourceType;
+
+    // NOTE: This fallback will be removed and trigger a change in behavior
+    // in SdrShaderNode::GetContext in an upcoming release.
+    metadata[SdrNodeMetadata->Context] = _tokens->shadingSystem;
 }
 
 SdrShaderPropertyUniquePtrVec

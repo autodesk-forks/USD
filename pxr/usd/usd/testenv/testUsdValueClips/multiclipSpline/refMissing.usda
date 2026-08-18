@@ -1,0 +1,11 @@
+#usda 1.0
+
+def "Model" {
+    double missingAll
+    double missingFirst
+    double missingMiddle
+    double missingLast
+    double missingMiddle2
+    double missingLast2
+    double missingFirst2
+}

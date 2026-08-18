@@ -119,8 +119,6 @@ class "NodeGraphNodeAPI"(
         """
         displayName = "Doc Link"
 
-        displayGroup = "Help"
-
         customData = {
             string apiName = "docURI"
         }
@@ -198,23 +196,20 @@ class "AccessibilityAPI" (
     Accessibility information is provided as a standard triplet of label,
     description and priority.
 
-    OpenUSD does not provide a accessibility runtime itself, but endeavours
+    OpenUSD does not provide an accessibility runtime itself, but endeavours
     to provide the information needed for compatible runtimes to extract and
     present this information.
 
     This is a multiple apply schema, and so may have multiple namespaced
-    accessibility triplets, where a instance name may reflect a given purpose
+    accessibility triplets, where an instance name may reflect a given purpose
     for that triplet. For example, you may desire to express different
     information for different aspects of the prim, such as size or color.
-
-    \\note The API will use \\em "default" as an instance name if no
-    namespace is specified.
     
-    There are several best practices for using this schema.:
+    There are several best practices for using this schema:
 
     \\li Most accessibility runtimes support a single accessibility description.
-    Therefore we recommend placing any critical information in the default
-    instance.
+    Therefore we recommend using a namespace labeled "default" for any critical 
+    information.
 
     \\li A default value should be authored if using time sampled accessibility
     information. This helps accessibility runtimes that do not currently
@@ -273,15 +268,13 @@ class "AccessibilityAPI" (
         """
     )
 
-    uniform token priority = "standard" (
+    token priority = "standard" (
         doc = """A hint to the accessibility runtime of how to prioritize this
         instance's label and description, relative to others.
 
         This attribute is optional and is considered a hint that runtimes may
         ignore, if they feel there are other necessities that take precedence
         over the prioritization values.
-
-        Priority may not be time varying.
         """
         allowedTokens = ["low", "standard", "high"]
     )

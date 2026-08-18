@@ -6,8 +6,13 @@
 //
 #include "pxr/imaging/hd/rendererPlugin.h"
 
+#include "pxr/imaging/hd/driver.h"
+#include "pxr/imaging/hd/renderDelegateAdapterRenderer.h"
+#include "pxr/imaging/hd/renderer.h"
+#include "pxr/imaging/hd/rendererCreateArgsSchema.h"
 #include "pxr/imaging/hd/rendererPluginRegistry.h"
 #include "pxr/imaging/hd/pluginRenderDelegateUniqueHandle.h"
+#include "pxr/imaging/hd/pluginRendererUniqueHandle.h"
 
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/type.h"
@@ -41,9 +46,10 @@ HdRendererPlugin::CreateRenderDelegate(HdRenderSettingsMap const& settingsMap)
 HdRendererPlugin::~HdRendererPlugin() = default;
 
 HdPluginRenderDelegateUniqueHandle
-HdRendererPlugin::CreateDelegate(HdRenderSettingsMap const& settingsMap)
+HdRendererPlugin::CreateDelegate(
+    HdRenderSettingsMap const& settingsMap)
 {
-    if (!IsSupported()) {
+    if (!IsSupported(HdRendererCreateArgsSchema(nullptr))) {
         return nullptr;
     }
 
@@ -74,6 +80,27 @@ HdRendererPlugin::CreateDelegate(HdRenderSettingsMap const& settingsMap)
     return result;
 }
 
+HdPluginRendererUniqueHandle
+HdRendererPlugin::CreateRenderer(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const HdRendererCreateArgsSchema &rendererCreateArgs)
+{
+    if (!IsSupported(rendererCreateArgs)) {
+        TF_CODING_ERROR(
+            "Clients are supposed to check HdRendererPlugin::IsSupported(...) "
+            "before calling HdRendererPlugin::CreateRenderer.");
+        return nullptr;
+    }
+
+    HdRendererPluginRegistry::GetInstance().AddPluginReference(this);
+
+    return
+        HdPluginRendererUniqueHandle(
+            HdRendererPluginHandle(this),
+            _CreateRenderer(
+                sceneIndex, rendererCreateArgs));
+}
+
 TfToken
 HdRendererPlugin::GetPluginId() const
 {
@@ -98,5 +125,35 @@ HdRendererPlugin::GetDisplayName() const
     return desc.displayName;
 }
 
-PXR_NAMESPACE_CLOSE_SCOPE
+HdContainerDataSourceHandle
+HdRendererPlugin::GetSceneIndexCreateArgs() const
+{
+    return {};
+}
 
+std::unique_ptr<HdRenderer>
+HdRendererPlugin::_CreateRenderer(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const HdRendererCreateArgsSchema &rendererCreateArgs)
+{
+    return _CreateRendererFromRenderDelegate(
+        sceneIndex,
+        rendererCreateArgs);
+}
+
+std::unique_ptr<HdRenderer>
+HdRendererPlugin::_CreateRendererFromRenderDelegate(
+    HdSceneIndexBaseRefPtr const &sceneIndex,
+    const HdRendererCreateArgsSchema &rendererCreateArgs)
+{
+    HdPluginRenderDelegateUniqueHandle renderDelegate = CreateDelegate();
+    if (!renderDelegate) {
+        return nullptr;
+    }
+
+    return
+        std::make_unique<HdRenderDelegateAdapterRenderer>(
+            std::move(renderDelegate), sceneIndex, rendererCreateArgs);
+}
+
+PXR_NAMESPACE_CLOSE_SCOPE

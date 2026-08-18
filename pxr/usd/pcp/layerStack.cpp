@@ -52,14 +52,10 @@ TF_DEFINE_ENV_SETTING(
     "non-USD caches/layer stacks; the legacy behavior cannot be enabled in USD "
     "mode");
 
-TF_DEFINE_ENV_SETTING(
-    PCP_ALLOW_NEGATIVE_LAYER_OFFSET_SCALE, false,
-    "Enables the use of negative layer offset scale. This behavior is "
-    "deprecated and a warning will be issued if this setting is enabled, "
-    "otherwise a composition error will be issued. Negative layer offset scale "
-    "on a composed property doesn't make sense, as it reverses the direction "
-    "of time, and can lead to incorrect and non intuitive results.");
-
+TF_DEFINE_ENV_SETTING(PCP_ENABLE_SESSION_OWNER_SUBLAYER_REORDERING, true,
+    "When enabled, sublayer reordering is based on the session owner. "                     
+    "When disabled, sublayer order always follows declaration order; session owner "
+    "metadata is ignored.");
 
 struct Pcp_SublayerInfo {
     Pcp_SublayerInfo() = default;
@@ -996,8 +992,15 @@ _FilterRelocationsForPath(const PcpLayerStack& layerStack,
 
     siteRelocates[SdfPath::AbsoluteRootPath()] = SdfPath::AbsoluteRootPath();
 
-    // Return a map function representing the relocates.
-    return PcpMapFunction::Create(siteRelocates, SdfLayerOffset());
+    // Return a map function representing the relocates. There may be an
+    // arbitrarily large number of relocates so we use a deferred-composition
+    // map function to improve performance in those cases.
+    // 
+    // XXX: Might want to explore tuning this to only return
+    // deferred-composition map functions if relocates are larger than a
+    // certain size.
+    return PcpMapFunction::DeferredComposition(
+        PcpMapFunction::Create(siteRelocates, SdfLayerOffset()));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -1068,6 +1071,11 @@ Pcp_NeedToRecomputeLayerStackTimeCodesPerSecond(
     // The layer stack's overall TCPS is cached so if it doesn't match, we
     // need to recompute the layer stack.
     return newLayerStackTcps != layerStack->GetTimeCodesPerSecond();
+}
+
+bool PcpIsSessionOwnerSublayerReorderingEnabled()
+{
+    return TfGetEnvSetting(PCP_ENABLE_SESSION_OWNER_SUBLAYER_REORDERING);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -1548,6 +1556,10 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
 
     // The session owner.  This will be empty if there is no session owner
     // in the session layer.
+    //
+    // This will also be empty if sublayer reordering is disabled. In this case, 
+    // we want to skip any reordering based on the session owner, so we don't 
+    // bother computing the session owner at all.
     std::string sessionOwner;
 
     PcpErrorVector errors;
@@ -1605,26 +1617,29 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
                                  std::string(), mutedLayers, &seenLayers, 
                                  &errors);
 
-            // Get the session owner.
-            struct _Helper {
-                static bool FindSessionOwner(const SdfLayerTreeHandle& tree,
-                                             std::string* sessionOwner)
-                {
-                    if (tree->GetLayer()->HasField(SdfPath::AbsoluteRootPath(), 
-                                                   SdfFieldKeys->SessionOwner,
-                                                   sessionOwner)) {
-                        return true;
-                    }
-                    TF_FOR_ALL(subtree, tree->GetChildTrees()) {
-                        if (FindSessionOwner(*subtree, sessionOwner)) {
+            // Get the session owner if we want to reorder sublayers based on 
+            // the session owner.
+            if (PcpIsSessionOwnerSublayerReorderingEnabled()) {
+                struct _Helper {
+                    static bool FindSessionOwner(const SdfLayerTreeHandle& tree,
+                                                std::string* sessionOwner)
+                    {
+                        if (tree->GetLayer()->HasField(SdfPath::AbsoluteRootPath(), 
+                                                    SdfFieldKeys->SessionOwner,
+                                                    sessionOwner)) {
                             return true;
                         }
+                        TF_FOR_ALL(subtree, tree->GetChildTrees()) {
+                            if (FindSessionOwner(*subtree, sessionOwner)) {
+                                return true;
+                            }
+                        }
+                        return false;
                     }
-                    return false;
-                }
-            };
+                };
 
-            _Helper::FindSessionOwner(_sessionLayerTree, &sessionOwner);
+                _Helper::FindSessionOwner(_sessionLayerTree, &sessionOwner);
+            }
         }
     }
 
@@ -1656,14 +1671,6 @@ PcpLayerStack::_Compute(const std::string &fileFormatTarget,
         _localErrors.reset(new PcpErrorVector);
         _localErrors->swap(errors);
     }
-}
-
-bool
-PcpNegativeLayerOffsetScaleAllowed()
-{
-    static bool allowed = 
-        TfGetEnvSetting(PCP_ALLOW_NEGATIVE_LAYER_OFFSET_SCALE);
-    return allowed;
 }
 
 SdfLayerTreeHandle
@@ -1805,16 +1812,8 @@ PcpLayerStack::_BuildLayerStack(
         SdfLayerOffset sublayerOffset = sublayerOffsets[i];
 
         const bool isNegativeScale = sublayerOffset.GetScale() < 0.0;
-        const bool negativeScaleAllowed = PcpNegativeLayerOffsetScaleAllowed();
 
-        if (isNegativeScale && negativeScaleAllowed) {
-            // Report warning.
-            TF_WARN("Layer @%s@ has a negative offset scale. Negative scale "
-                    "offsets are deprecated.",
-                    layer->GetIdentifier().c_str());
-        }
-
-        if ((isNegativeScale && !negativeScaleAllowed) ||
+        if (isNegativeScale ||
             !sublayerOffset.IsValid() || 
             !sublayerOffset.GetInverse().IsValid()) {
             // Report error, but continue with an identity layer offset.
@@ -1857,9 +1856,11 @@ PcpLayerStack::_BuildLayerStack(
     }
     localSourceInfo.clear();
 
-    // Reorder sublayers according to sessionOwner.
-    _ApplyOwnedSublayerOrder(_identifier, layer, sessionOwner, &sublayerInfo,
-                             errors);
+    // Reorder sublayers according to sessionOwner if needed.
+    if (PcpIsSessionOwnerSublayerReorderingEnabled()) {
+        _ApplyOwnedSublayerOrder(_identifier, layer, sessionOwner, &sublayerInfo,
+                                errors);
+    }
 
     // Recurse over sublayers to build subtrees.  We must do this after
     // applying the sublayer order, otherwise _layers and

@@ -1,0 +1,91 @@
+//
+// Copyright 2026 Pixar
+//
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
+//
+
+////////////////////////////////////////////////////////////////////////////////
+// Helper Functions
+
+float
+ToLinear(float val, float K0, float phi, float linearBias, float gamma)
+{
+    if (val < K0) {
+        return val / phi;
+    }
+    float base = (val + linearBias) / (1.0 + linearBias);
+    return pow(base, gamma);
+}
+
+float 
+FromLinear(float val, float K0, float phi, float linearBias, float gamma)
+{
+    if (val < K0 / phi) {
+        return val * phi;
+    }
+    return (1.0 + linearBias) * pow(val, 1.0 / gamma) - linearBias;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+shader UsdTransformColor
+(
+    color ColorIn = (0),
+
+    // Variables defining the source color space 
+    float srcK0 = 0.0,
+    float srcPhi = 0.0, 
+    float srcGamma = 1.0,
+    float srcLinearBias = 0.0, 
+    // Variables defining the destination color space
+    float dstK0 = 0.0, 
+    float dstPhi = 0.0, 
+    float dstGamma = 1.0,
+    float dstLinearBias = 0.0, 
+    // 3x3 transformation from the source to destination color space in 
+    // it's three row vectors. 
+    vector tRow1 = vector(1.0, 0.0, 0.0),
+    vector tRow2 = vector(0.0, 1.0, 0.0),
+    vector tRow3 = vector(0.0, 0.0, 1.0),
+
+    output color ResultColor = (0) [[ string widget = "null" ]],
+    output float ResultR = 0.  [[ string widget = "null" ]],
+    output float ResultG = 0.  [[ string widget = "null" ]],
+    output float ResultB = 0.  [[ string widget = "null" ]],
+)
+{
+    // Duplicate of Nano color transform functions
+    // if the source color space indicates a curve remove it.
+    color inColor = ColorIn;
+    vector colorAsVector;
+    colorAsVector.x = ToLinear(inColor.r, srcK0, srcPhi, srcLinearBias, srcGamma);
+    colorAsVector.y = ToLinear(inColor.g, srcK0, srcPhi, srcLinearBias, srcGamma);
+    colorAsVector.z = ToLinear(inColor.b, srcK0, srcPhi, srcLinearBias, srcGamma);
+
+    color outColor;
+    outColor.r = dot(tRow1, colorAsVector);
+    outColor.g = dot(tRow2, colorAsVector);
+    outColor.b = dot(tRow3, colorAsVector);
+
+    // If the destination color space indicates a curve apply it.
+    outColor.r = FromLinear(outColor.r, dstK0, dstPhi, dstLinearBias, dstGamma);
+    outColor.g = FromLinear(outColor.g, dstK0, dstPhi, dstLinearBias, dstGamma);
+    outColor.b = FromLinear(outColor.b, dstK0, dstPhi, dstLinearBias, dstGamma);
+
+    ResultColor = outColor;
+    ResultR = ResultColor[0];
+    ResultG = ResultColor[1];
+    ResultB = ResultColor[2];
+}
+
+#ifdef DocumentationText
+**UsdTransformColor** returns the input color, **ColorIn**, tranformed from 
+source color space to the destination color space.  The source and 
+destination color spaces are specified by their respective **K0**, **Phi**, 
+**Gamma**, and **LinearBasis**.  The 3x3 transformation matrix from the
+source to destination color basis is specified in the three row vectors;
+**tRow1**,  **tRow2**, **tRow3**. Note that these functions are based on the
+ones defined by nano color.
+#endif
+

@@ -12,6 +12,8 @@
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/pathPattern.h"
 #include "pxr/base/tf/hash.h"
+#include "pxr/base/vt/value.h"
+#include "pxr/base/vt/traits.h"
 
 #include <iosfwd>
 #include <string>
@@ -255,7 +257,9 @@ public:
         TfFunctionRef<void (PathPattern const &)> pattern) const;
 
     /// Return a new expression created by replacing literal path prefixes that
-    /// start with \p oldPrefix with \p newPrefix.
+    /// start with \p oldPrefix with \p newPrefix. If \p newPrefix is an empty
+    /// path, PathPatterns and ExpressionReferences with \p oldPrefix will be 
+    /// removed from the returned expression.
     SdfPathExpression
     ReplacePrefix(SdfPath const &oldPrefix,
                   SdfPath const &newPrefix) const & {
@@ -263,7 +267,9 @@ public:
     }
 
     /// Return a new expression created by replacing literal path prefixes that
-    /// start with \p oldPrefix with \p newPrefix.
+    /// start with \p oldPrefix with \p newPrefix. If \p newPrefix is an empty
+    /// path, PathPatterns and ExpressionReferences with \p oldPrefix will be 
+    /// removed from the returned expression.
     SDF_API
     SdfPathExpression
     ReplacePrefix(SdfPath const &oldPrefix,
@@ -323,8 +329,7 @@ public:
     /// expression" (i.e. "%_") in this expression with \p weaker.  This is a
     /// restricted form of ResolveReferences() that only resolves "weaker"
     /// references, replacing them by \p weaker, leaving other references
-    /// unmodified.  As a special case, if this expression IsEmpty(), return \p
-    /// weaker.
+    /// unmodified.
     SdfPathExpression
     ComposeOver(SdfPathExpression const &weaker) const & {
         return SdfPathExpression(*this).ComposeOver(weaker);
@@ -407,6 +412,9 @@ private:
     std::string _parseError;
 };
 
+// Path expressions support composing-over and value transforms.
+VT_VALUE_TYPE_CAN_COMPOSE(SdfPathExpression);
+VT_VALUE_TYPE_CAN_TRANSFORM(SdfPathExpression);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

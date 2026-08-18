@@ -65,10 +65,11 @@ currently used.
 Linux
 =====
 
-* **OS**: CentOS Linux 7
-* **CPU**: AMD EPYC 7763 64-Core Processor, 2450 Mhz
-* **RAM**: 117GB
-* **GPU**: NVIDIA RTXA6000-24Q
+* **OS**: AlmaLinux 9
+* **CPU**: AMD EPYC 9654 96-Core Processor
+* **CPU Utilization**: 47 Core(s), 47 Logical Processor(s) (no hyperthreading)
+* **RAM**: 145GB
+* **GPU**: NVIDIA L40S-24Q
 
 macOS
 =====
@@ -82,7 +83,8 @@ Windows
 =======
 
 * **OS**: Microsoft Windows 11 Enterprise
-* **CPU**: AMD EPYC 7763 64-Core Processor, 2450 Mhz, 31 Core(s), 31 Logical Processor(s)
+* **CPU**: AMD EPYC 7763 64-Core Processor, 2450 Mhz
+* **CPU Utilization**: 31 Core(s), 31 Logical Processor(s) (no hyperthreading)
 * **RAM**: 128GB
 * **GPU**: NVIDIA RTXA6000-24Q
 
@@ -107,23 +109,17 @@ Performance Graphs Per Platform
 
 The following graphs show the time (in seconds) to open and close 
 :program:`usdview` for each asset. Graphs are provided for Linux, macOS, and
-Windows platforms (as described in :ref:`perf_environments`).
+Windows platforms (as described in :ref:`perf_environments`). Performance
+data from the four most recent releases is reported on a rolling basis.
 
 .. note::
+    A full historical rerun on linux was performed for the 26.03 release due
+    to changes in machine configuration.
 
-    Linux and Windows machine configurations changed as of 25.08; historical
-    numbers have been rerun for consistency.
-
-    A small increase or decrease in performance metrics over different releases
-    may not necessarily indicate an overall performance improvement or
-    regression in USD. Best-case minimum measurements are taken over multiple
-    iterations, but these measurements may still be subject to some variation,
-    so use the below results with caution. We are investigating these sources
-    of variation.
-
-    There are known issues with obtaining the create_first_image
-    metric on macOS. We will update published metrics when this issue is
-    resolved.
+    Interpret the metrics on this page with caution. Variation may arise from
+    a variety of sources, including run-to-run inconsistency in how the GL
+    driver schedules its flushes against our requests. Investigation on these
+    is ongoing.
 
 .. image:: performance/linux.svg
     :width: 500
@@ -151,7 +147,7 @@ run; the primary intention is not necessarily to exercise specific renderers.
 
 The shader ball asset can be `downloaded here <https://github.com/usd-wg/assets/tree/main/full_assets/StandardShaderBall>`__.
 
-.. datatemplate:yaml:: performance/24.11_linux_shaderball.yaml
+.. datatemplate:yaml:: performance/25.11_linux_shaderball.yaml
    :template: perf_metric_shaderball_template.tmpl
 
 Kitchen Set
@@ -164,7 +160,7 @@ This asset provides a complex kitchen scene.
 
 The Kitchen Set asset can be `downloaded here <https://openusd.org/release/dl_kitchen_set.html>`__.
 
-.. datatemplate:yaml:: performance/24.11_linux_kitchenset.yaml
+.. datatemplate:yaml:: performance/25.11_linux_kitchenset.yaml
    :template: perf_metric_kitchenset_template.tmpl
 
 ALab
@@ -182,9 +178,9 @@ The metrics have been measured with the base asset merged with the additional
 .. image:: https://animallogic.com/wp-content/uploads/2022/08/LoopySequence02.gif
     :width: 500
 
-The ALab asset can be `downloaded here <https://animallogic.com/alab/>`__.
+The ALab asset can be `downloaded here <https://animallogic.com/technology/alab/>`__.
 
-.. datatemplate:yaml:: performance/24.11_linux_alab.yaml
+.. datatemplate:yaml:: performance/25.11_linux_alab.yaml
    :template: perf_metric_alab_template.tmpl
 
 Moore Lane
@@ -208,7 +204,7 @@ The metrics have been measured using the contained
 
 The Moore Lane asset can be `downloaded here <https://dpel.aswf.io/4004-moore-lane/>`__.
 
-.. datatemplate:yaml:: performance/24.11_linux_moorelane.yaml
+.. datatemplate:yaml:: performance/25.11_linux_moorelane.yaml
    :template: perf_metric_moorelane_template.tmpl
 
 ***********************************

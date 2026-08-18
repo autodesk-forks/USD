@@ -25,9 +25,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_SPEC(
-    SdfSchema, SdfSpecTypeAttribute, SdfAttributeSpec, SdfPropertySpec);
-
 SdfAttributeSpecHandle
 SdfAttributeSpec::New(
     const SdfPrimSpecHandle& owner,
@@ -149,6 +146,7 @@ SdfAttributeSpec::ClearConnectionPaths()
 
 // Attribute Value API
 
+SDF_DEFINE_HAS(Spline, SdfFieldKeys->Spline)
 SDF_DEFINE_GET(Spline, SdfFieldKeys->Spline, TsSpline)
 
 void
@@ -254,7 +252,11 @@ SdfAttributeSpec::EraseTimeSample(double time)
 
 SDF_DEFINE_GET_SET_HAS_CLEAR(AllowedTokens, SdfFieldKeys->AllowedTokens, VtTokenArray)
 
+SDF_DEFINE_GET_SET_HAS_CLEAR(Limits, SdfFieldKeys->Limits, VtDictionary)
+
 SDF_DEFINE_GET_SET_HAS_CLEAR(ColorSpace, SdfFieldKeys->ColorSpace, TfToken)
+
+SDF_DEFINE_GET_SET_HAS_CLEAR(ArraySizeConstraint, SdfFieldKeys->ArraySizeConstraint, int64_t)
 
 TfEnum
 SdfAttributeSpec::GetDisplayUnit() const

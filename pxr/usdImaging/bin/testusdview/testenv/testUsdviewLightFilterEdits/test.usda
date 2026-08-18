@@ -1,0 +1,80 @@
+#usda 1.0
+(
+    upAxis = "Y"
+    renderSettingsPrimPath = "/Render/Settings"
+)
+
+def Camera "main_cam"
+{
+    float focalLength = 30
+    float focusDistance = 30
+    float horizontalAperture = 36
+    float verticalAperture = 24
+    float xformOp:rotateX = -20
+    double3 xformOp:translate = (0, 10, 40)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateX"]
+}
+
+def Scope "Render"
+{
+    # Barebones without camera or render products since the latter isn't yet
+    # supported for interactive workflows.
+
+    def RenderSettings "Settings"
+    {
+        bool ri:hider:jitter = 0
+        float ri:Ri:PixelVariance = 0.0
+        int ri:hider:minsamples = 4
+        int ri:hider:maxsamples = 4
+    }
+}
+
+def Cube "ground"
+{
+    float3 xformOp:scale = (20, 0.1, 20)
+    uniform token[] xformOpOrder = ["xformOp:scale"]
+}
+
+def DistantLight "light"
+{
+    # Start with no filters connected.
+    rel light:filters = []
+    # rel light:filters = [</Filters/RodMult_A>, </Filters/RodMult_B>, </Filters/RodMax_C>]
+
+    float inputs:exposure = 1
+    float inputs:width = 20
+    float inputs:height = 20
+    float xformOp:rotateX = -90
+    double3 xformOp:translate = (0, 12, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateX"]
+}
+
+def Scope "Filters"
+{
+    def PxrRodLightFilter "RodMult_A"
+    {
+        token inputs:ri:lightFilter:combineMode = "mult"
+        float inputs:ri:lightFilter:density = 0.8
+        float inputs:ri:lightFilter:radius = 5
+        double3 xformOp:translate = (2, 0, 2)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def PxrRodLightFilter "RodMult_B"
+    {
+        token inputs:ri:lightFilter:combineMode = "mult"
+        float inputs:ri:lightFilter:density = 0.8
+        float inputs:ri:lightFilter:radius = 7
+        double3 xformOp:translate = (8, 0, 2)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def PxrRodLightFilter "RodMax_C"
+    {
+        token inputs:ri:lightFilter:combineMode = "max"
+        float inputs:ri:lightFilter:density = 0.8
+        float inputs:ri:lightFilter:radius = 7
+        double3 xformOp:translate = (-4, 0, 2)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

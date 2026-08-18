@@ -1,0 +1,67 @@
+#usda 1.0
+(
+    "Test schema file for testExecIrController"
+    subLayers = [
+        @usd/schema.usda@
+    ]
+)
+
+def "GLOBAL" (
+    customData = {
+        string libraryName = "testExecIrController"
+        string libraryPath = "pxr/exec/execIr"
+        bool skipCodeGeneration = true
+    }
+)
+{
+}
+
+class AddOneController "AddOneController" (
+    inherits = </Typed>
+)
+{
+    double input = 0 (
+        irIsInvertible = true
+        irRole = "InputAttribute"
+    )
+    double output = 0 (
+        irIsInvertible = true
+        irRole = "OutputAttribute"
+    )
+}
+
+class AddWithClampController "AddWithClampController" (
+    inherits = </Typed>
+)
+{
+    double invertibleInput = 0 (
+        irIsInvertible = true
+        irRole = "InputAttribute"
+    )
+    double nonInvertibleInput = 0 (
+        irIsInvertible = false
+        irRole = "InputAttribute"
+    )
+    double output = 0 (
+        irIsInvertible = true
+        irRole = "OutputAttribute"
+    )
+}
+
+class AddController "AddController" (
+    inherits = </Typed>
+)
+{
+    double invertibleInput = 0 (
+        irIsInvertible = true
+        irRole = "InputAttribute"
+    )
+    double nonInvertibleInput = 0 (
+        irIsInvertible = false
+        irRole = "InputAttribute"
+    )
+    double output = 0 (
+        irIsInvertible = true
+        irRole = "OutputAttribute"
+    )
+}

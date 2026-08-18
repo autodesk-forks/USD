@@ -37,13 +37,13 @@ TF_DEFINE_ENV_SETTING(
     "Warn when reading a text file (.usda or .usda derived) larger than this "
     "number of MB (no warnings if set to 0)");
 
-TF_DEFINE_ENV_SETTING(SDF_FILE_FORMAT_LEGACY_IMPORT, "allow",
-    "By default, we allow imported strings with the legacy `#sdf 1.4.32` "
-    "header format to be read as .usda version 1.0. When this is set to "
-    "'warn,' a warning will be emitted when the usda file format attempts "
-    "to import a string with header `#sdf 1.4.32`. When this is set to "
+TF_DEFINE_ENV_SETTING(SDF_FILE_FORMAT_LEGACY_IMPORT, "warn",
+    "By default, we warn when imported strings are encounted with the legacy "
+    "`#sdf 1.4.32` header format; these legacy strings are read in as "
+    ".usda version 1.0`. When this environment variable is set to "
     "'error', strings imported with the sdf header will no longer be ingested "
-    "and an error will be emitted.");
+    "and an error will be emitted. This environment variable can be set to "
+    "'allow' to silence warnings and allow legacy sdf header ingestion.");
 
 #define DEFAULT_NEW_VERSION "1.0"
 TF_DEFINE_ENV_SETTING(
@@ -64,13 +64,15 @@ TF_DEFINE_PRIVATE_TOKENS(
 );
 
 // Version history
+// 1.3: Support for loopBoundaryTime-delimited spline extrapolation loops.
+// 1.2: Support for VtArrayEdit values.
 // 1.1: Support for splines with tangent algorithms None, Custom, or AutoEase.
 // 1.0: Initial release of usda format (plus numerous unfortunately unversioned
 //      updates).
 
 // Current version of usda that can be read/written
 constexpr uint8_t USDA_MAJOR = 1;
-constexpr uint8_t USDA_MINOR = 1;
+constexpr uint8_t USDA_MINOR = 3;
 constexpr uint8_t USDA_PATCH = 0;
 
 // Caveat developer!

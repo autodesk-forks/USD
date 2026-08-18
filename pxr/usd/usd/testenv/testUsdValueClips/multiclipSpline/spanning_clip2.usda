@@ -1,0 +1,26 @@
+#usda 1.0
+
+def "Model"
+{
+    double attr1.spline = {
+        5: 10; post curve,
+        10: 5; post none,
+        post: loop oscillate
+    }
+
+    double attr2.spline = {
+        12.5: 5; post held,
+        15: 0; post none,
+        30: 0; post held,
+    }
+
+    double attr3.spline = {}
+
+    double attr4.spline = {
+        15: 10; post linear,
+        20: 5; post linear,
+        25: 10; post none,
+        pre: loop repeat,
+        post: none
+    }
+}

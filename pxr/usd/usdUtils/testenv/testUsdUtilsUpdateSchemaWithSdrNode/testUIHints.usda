@@ -1,0 +1,239 @@
+#usda 1.0
+
+# Input USD File to test UI hint population
+
+def Shader "TestUIHintsAPI" (
+    sdrMetadata = {
+        token schemaName = "TestUIHintsAPI"
+        token schemaKind = "singleApply"
+        token schemaBase = "APISchemaBase"
+        string openPages = "OpenGroup|OpenGroup:Nested"
+    }
+)
+{
+    uniform token info:implementationSource = "sourceAsset"
+    uniform asset info:glslfx:sourceAsset = @testDummy.glslfx@
+
+    # Basic hint metadata: label, page, etc.
+    int inputs:displayName = 1 (
+        sdrMetadata = {
+            token label = "A Display Name"
+        }
+    )
+
+    int inputs:displayGroup = 1 (
+        sdrMetadata = {
+            token page = "A Display Group"
+        }
+    )
+
+    # Specifying a null widget sets hidden=true
+    int inputs:hidden = 1 (
+        sdrMetadata = {
+            token widget = "null"
+        }
+    )
+
+    int inputs:help = 1 (
+        sdrMetadata = {
+            token help = "Some help."
+        }
+    )
+
+    # Open-by-default pages
+    int inputs:inOpenGroup = 1 (
+        sdrMetadata = {
+            token page = "OpenGroup"
+        }
+    )
+
+    int inputs:inOpenNestedGroup = 1 (
+        sdrMetadata = {
+            token page = "OpenGroup:Nested"
+        }
+    )
+
+    int inputs:inClosedGroup = 1 (
+        sdrMetadata = {
+            token page = "ClosedGroup"
+        }
+    )
+
+    # Page with a shownIf expression
+    int inputs:inShownIfGroup = 1 (
+        sdrMetadata = {
+            token page = "ShownIf Group"
+        }
+    )
+
+    # Array-related values
+    int[] inputs:arrayDynamic = [1, 2, 3] (
+        sdrMetadata = {
+            token isDynamicArray = "True"
+            token arraySize = "-1"
+        }
+    )
+
+    int[] inputs:arrayStatic = [1, 2, 3, 4, 5] (
+        sdrMetadata = {
+            token arraySize = "5"
+        }
+    )
+
+    int[] inputs:arrayTuples = [1, 2, 3, 4, 5, 6] (
+        sdrMetadata = {
+            token tupleSize = "3"
+        }
+    )
+
+    int[] inputs:arraySizeAndTuples = [1, 2, 3, 4, 5, 6, 7, 8, 9] (
+        sdrMetadata = {
+            token arraySize = "9"
+            token tupleSize = "3"
+        }
+    )
+
+    int[] inputs:arraySizeTuplesMismatch = [1, 2, 3, 4, 5, 6, 7, 8, 9] (
+        sdrMetadata = {
+            token arraySize = "9"
+            token tupleSize = "5"
+        }
+    )
+
+    # int and float arrays of sizes 2, 3, and 4 become "tuple" types float2,
+    # int3, etc. in USD. These should not have arraySizeConstraint populated
+    # in the result.
+    int2 inputs:intArrayTupleConversion2 = (1, 2)
+    int3 inputs:intArrayTupleConversion3 = (1, 2, 3)
+    int4 inputs:intArrayTupleConversion4 = (1, 2, 3, 4)
+    float2 inputs:floatArrayTupleConversion2 = (1.1, 2.2)
+    float3 inputs:floatArrayTupleConversion3 = (1.1, 2.2, 3.3)
+    float4 inputs:floatArrayTupleConversion4 = (1.1, 2.2, 3.3, 4.4)
+
+    # min/max by default become hard limits
+    int inputs:hardLimitsBasic = 1 (
+        sdrMetadata = {
+            token min = "0"
+            token max = "10"
+        }
+    )
+
+    # slidermin/slidermax by default become soft limits
+    int inputs:softLimitsBasic = 1 (
+        sdrMetadata = {
+            token slidermin = "0"
+            token slidermax = "10"
+        }
+    )
+
+    # Hard and soft limits both specified
+    int inputs:hardAndSoftLimits = 1 (
+        sdrMetadata = {
+            token min = "0"
+            token max = "10"
+            token slidermin = "1"
+            token slidermax = "5"
+        }
+    )
+
+    # If strictLimits=false, min/max "demotes" to soft limits, even if
+    # slidermin/slidermax are also specified
+    int inputs:hardDemoteToSoftLimits = 1 (
+        sdrMetadata = {
+            token min = "0"
+            token max = "10"
+            token strictLimits = "False"
+        }
+    )
+
+    int inputs:hardClobberSoftLimits = 1 (
+        sdrMetadata = {
+            token min = "0"
+            token max = "10"
+            token slidermin = "1"
+            token slidermax = "5"
+            token strictLimits = "False"
+        }
+    )
+
+    # If min/max are not present, strictLimits=true will promote
+    # slidermin/slidermax to hard limits
+    int inputs:softPromoteToHardLimits = 1 (
+        sdrMetadata = {
+            token slidermin = "1"
+            token slidermax = "5"
+            token strictLimits = "True"
+        }
+    )
+
+    # strictLimits=True here won't promote slidermin/slidermax over min/max,
+    # it's taken as (redundantly) saying that min/max are hard limits
+    int inputs:softCantClobberHardLimits = 1 (
+        sdrMetadata = {
+            token min = "0"
+            token max = "10"
+            token slidermin = "1"
+            token slidermax = "5"
+            token strictLimits = "True"
+        }
+    )
+
+    # minimum and maximum values can be specified by themselves
+    int inputs:sparseSpecificationLimits = 1 (
+        sdrMetadata = {
+            token min = "0"
+            token slidermax = "5"
+        }
+    )
+
+    # List-valued options on a string/token-valued attribute become
+    # allowedTokens
+    token inputs:allowedTokens = "foo" (
+        sdrMetadata = {
+            token options = "foo|bar|baz"
+        }
+    )
+
+    # Dict-valued options become valueLabels
+    int inputs:valueLabels = 1 (
+        sdrMetadata = {
+            token options = "low:1|med:2|high:3"
+        }
+    )
+
+    # Dict-valued options on a string/token-valued attribute populate both
+    # allowedTokens and valueLabels (see USD_POPULATE_LEGACY_ALLOWED_TOKENS)
+    string inputs:allowedTokensAndValueLabels = "prov" (
+        sdrMetadata = {
+            token options = "Cheddar:ched|Swiss:sws|Provelone:prov"
+        }
+    )
+
+    # conditionalVisOps become shownIf expressions
+    int inputs:convertedShownIf = 1 (
+        sdrMetadata = {
+            token conditionalVisOp = "greaterThanOrEqualTo"
+            token conditionalVisPath = "hidden"
+            token conditionalVisValue = "1"
+        }
+    )
+
+    # shownIf expressions can also be provided directly
+    int inputs:shownIf = 1 (
+        sdrMetadata = {
+            token shownIf = "hidden >= 1"
+        }
+    )
+
+    # Regression test case (USD-11606) - if a shownIf expression references a
+    # param name that has another param name as a substring, the "inputs"
+    # namespace would get prepended multiple times (for example here,
+    # "inputs:inputs:some_param_also")
+    int inputs:some_param = 1
+    int inputs:some_param_also = 1
+    int inputs:shownIfParamNameSubStrings = 1 (
+        sdrMetadata = {
+            token shownIf = "some_param >= some_param_also"
+        }
+    )
+}

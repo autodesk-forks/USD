@@ -35,6 +35,7 @@ HdChangeTracker::HdChangeTracker()
     , _instancerInstancerDependencies()
     , _sprimSprimTargetDependencies()
     , _sprimSprimSourceDependencies()
+    , _sprimRprimTargetDependencies()
     // Note: Version numbers start at 1, with observers resetting theirs to 0.
     // This is to cause a version mismatch during first-time processing.
     , _varyingStateVersion(1)
@@ -48,6 +49,7 @@ HdChangeTracker::HdChangeTracker()
     , _rprimRenderTagVersion(1)
     , _taskRenderTagsVersion(1)
     , _emulationSceneIndex(nullptr)
+    , _disableEmulationAPI(false)
 {
     /*NOTHING*/
 }
@@ -99,25 +101,6 @@ HdChangeTracker::MarkRprimDirty(SdfPath const& id, HdDirtyBits bits)
     }
 
     if (_emulationSceneIndex) {
-
-        // There's a set of dirty bits that are used as internal signalling
-        // in hydra, and aren't related to scene data.  These, we need to
-        // pass through directly.
-        const HdDirtyBits internalDirtyBits =
-            HdChangeTracker::InitRepr |
-            HdChangeTracker::Varying |
-            HdChangeTracker::NewRepr |
-            HdChangeTracker::CustomBitsMask;
-
-        if (bits & internalDirtyBits) {
-            _MarkRprimDirty(id, bits & internalDirtyBits);
-        }
-
-         // If we're only processing internal bits, skip calling DirtyPrims.
-        if ((bits & ~internalDirtyBits) == 0) {
-            return;
-        }
-
         // We need to dispatch based on prim type.
         HdSceneIndexPrim prim = _emulationSceneIndex->GetPrim(id);
         HdDataSourceLocatorSet locators;
@@ -127,6 +110,10 @@ HdChangeTracker::MarkRprimDirty(SdfPath const& id, HdDirtyBits bits)
             _emulationSceneIndex->DirtyPrims({{id, locators}});
         }
     } else {
+        if (_disableEmulationAPI) {
+            TF_CODING_ERROR(
+                "Calling method on HdChangeTracker that requires emulation.");
+        }
         // XXX: During the migration, "DirtyPrimvar" implies DirtyPoints/etc.
         if (bits & DirtyPrimvar) {
             bits |= DirtyPoints | DirtyNormals | DirtyWidths;
@@ -317,6 +304,20 @@ HdChangeTracker::RemoveSprimSprimDependency(SdfPath const& parentSprimId,
 }
 
 void
+HdChangeTracker::AddSprimRprimDependency(SdfPath const& sprimId,
+                                         SdfPath const& rprimId)
+{
+    _AddDependency(_sprimRprimTargetDependencies, sprimId, rprimId);
+}
+
+void
+HdChangeTracker::RemoveSprimRprimDependency(SdfPath const& sprimId,
+                                            SdfPath const& rprimId)
+{
+    _RemoveDependency(_sprimRprimTargetDependencies, sprimId, rprimId);
+}
+
+void
 HdChangeTracker::RemoveSprimFromSprimSprimDependencies(SdfPath const& sprimId)
 {
     if (_sprimSprimTargetDependencies.empty()) {
@@ -409,6 +410,10 @@ HdChangeTracker::MarkTaskDirty(SdfPath const& id, HdDirtyBits bits)
             _emulationSceneIndex->DirtyPrims({{id, locators}});
         }
     } else {
+        if (_disableEmulationAPI) {
+            TF_CODING_ERROR(
+                "Calling method on HdChangeTracker that requires emulation.");
+        }
         _MarkTaskDirty(id, bits);
     }
 }
@@ -496,6 +501,10 @@ HdChangeTracker::MarkInstancerDirty(SdfPath const& id, HdDirtyBits bits)
             _emulationSceneIndex->DirtyPrims({{id, locators}});
         }
     } else {
+        if (_disableEmulationAPI) {
+            TF_CODING_ERROR(
+                "Calling method on HdChangeTracker that requires emulation.");
+        }
         _MarkInstancerDirty(id, bits);
     }
 }
@@ -623,6 +632,10 @@ HdChangeTracker::MarkSprimDirty(SdfPath const& id, HdDirtyBits bits)
             _emulationSceneIndex->DirtyPrims({{id, locators}});
         }
     } else {
+        if (_disableEmulationAPI) {
+            TF_CODING_ERROR(
+                "Calling method on HdChangeTracker that requires emulation.");
+        }
         _MarkSprimDirty(id, bits);
     }
 }
@@ -641,7 +654,12 @@ HdChangeTracker::_MarkSprimDirty(SdfPath const& id, HdDirtyBits bits)
     _DependencyMap::const_accessor aIR;
     if (_sprimSprimTargetDependencies.find(aIR, id)) {
         for (SdfPath const& dep : aIR->second) {
-            MarkSprimDirty(dep, ~Clean);
+            _MarkSprimDirty(dep, ~Clean);
+        }
+    }
+    if (_sprimRprimTargetDependencies.find(aIR, id)) {
+        for (SdfPath const& dep : aIR->second) {
+            _MarkRprimDirty(dep, ~Clean);
         }
     }
 
@@ -720,6 +738,10 @@ HdChangeTracker::MarkBprimDirty(SdfPath const& id, HdDirtyBits bits)
             _emulationSceneIndex->DirtyPrims({{id, locators}});
         }
     } else {
+        if (_disableEmulationAPI) {
+            TF_CODING_ERROR(
+                "Calling method on HdChangeTracker that requires emulation.");
+        }
         _MarkBprimDirty(id, bits);
     }
 }
@@ -991,6 +1013,11 @@ HdChangeTracker::MarkAllRprimsDirty(HdDirtyBits bits)
             MarkRprimDirty(it->first, bits);
         }
         return;
+    }
+
+    if (_disableEmulationAPI) {
+        TF_CODING_ERROR(
+            "Calling method on HdChangeTracker that requires emulation.");
     }
 
     //
@@ -1284,6 +1311,12 @@ void
 HdChangeTracker::_SetTargetSceneIndex(HdRetainedSceneIndex *emulationSceneIndex)
 {
     _emulationSceneIndex = emulationSceneIndex;
+}
+
+void
+HdChangeTracker::_SetDisableEmulationAPI(bool disable)
+{
+    _disableEmulationAPI = disable;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

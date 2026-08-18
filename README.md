@@ -43,6 +43,9 @@ and supported on macOS and Windows.
 It is also possible to build USD libraries that can be embedded
 in iOS and visionOS apps.
 
+Additionally, USD can be built to run in a WebAssembly virtual machine for use
+on the web or in other runtime environments such as Node.js.
+
 Please see [VERSIONS.md](VERSIONS.md) for explicitly tested versions. 
 
 Dependencies
@@ -171,6 +174,29 @@ Or for visionOS:
 ```
 > python OpenUSD/build_scripts/build_usd.py --build-target visionOS --build-monolithic /path/to/my_usd_install_dir
 ```
+###### Framework Builds (Experimental)
+
+Builds for Apple platforms may optionally build as a framework using the `--build-apple-framework` flag.
+
+**NOTE:** This feature is experimental and may change how it functions in future OpenUSD versions.
+
+- Framework builds are enabled by default for iOS and visionOS build targets. It can optionally be enabled for macOS.
+- Framework builds require monolithic builds.
+- Building a universal macOS framework is currently not supported. Please generate the arches separately and `lipo`
+  them together after.
+
+To add the Framework to your application, add `OpenUSD.framework` to your Xcode project.
+It is recommended to set it to `Embed and Sign`.
+
+To setup headers, configure the Xcode `SYSTEM_HEADER_SEARCH_PATHS` to add the path to your headers. e.g
+`$(SRCROOT)/OpenUSD.framework/Headers` if the framework exists in your projects root.
+
+OpenUSD also supports building a combined XCFramework of multiple targets.
+This command takes an optional list of targets to build, but will otherwise build all supported platforms.
+
+```
+> python OpenUSD/build_scripts/apple_utils.py xcframework /path/to/my_usd_install_dir
+```
 
 ##### Windows:
 
@@ -190,6 +216,28 @@ then build and install USD into `C:\path\to\my_usd_install_dir`.
 
 ```
 C:\> python OpenUSD\build_scripts\build_usd.py "C:\path\to\my_usd_install_dir"
+```
+
+##### WebAssembly:
+
+A WebAssembly (Wasm) build can be produced using the Emscripten Compiler Toolchain on
+Linux, macOS or Windows. Before building, follow the instructions for 
+[downloading and installing](https://emscripten.org/docs/getting_started/downloads.html)
+the toolchain.
+
+The WebAssembly build will produce static libraries built in monolithic mode.
+Command line tools are not built for this target.
+
+The following will download dependencies and produce a 32 bit Wasm build.
+
+```
+> python OpenUSD/build_scripts/build_usd.py --build-target wasm /path/to/my_usd_wasm_build_dir
+```
+
+Or for a 64 bit Wasm build:
+
+```
+> python OpenUSD/build_scripts/build_usd.py --build-target wasm64 /path/to/my_usd_wasm64_build_dir
 ```
 
 #### 4. Try it out

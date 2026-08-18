@@ -11,6 +11,7 @@
 #include "pxr/exec/exec/leafCompilationTask.h"
 #include "pxr/exec/exec/program.h"
 #include "pxr/exec/exec/runtime.h"
+#include "pxr/exec/exec/taskCycleDetector.h"
 #include "pxr/exec/exec/valueKey.h"
 
 #include "pxr/base/arch/functionLite.h"
@@ -42,6 +43,9 @@ Exec_Compiler::Compile(TfSpan<const ExecValueKey> valueKeys)
     TRACE_FUNCTION();
     TfAutoMallocTag tag("Exec", __ARCH_PRETTY_FUNCTION__);
 
+    // This begins a new round of compilation.
+    _program->BeginCompilation();
+
     // Note that the returned vector should always have the same size as
     // valueKeys.  Any key that failed to compile should yield a null masked
     // output at the corresponding index in the result.
@@ -55,21 +59,31 @@ Exec_Compiler::Compile(TfSpan<const ExecValueKey> valueKeys)
         // Compiler state shared between all compilation tasks.
         Exec_CompilationState state(dispatcher, stage, program);
 
-        WorkParallelForN(valueKeys.size(),
-            [&state, valueKeys, &leafOutputs](size_t b, size_t e) {
-            for (size_t i = b; i != e; ++i) {
-                Exec_CompilationState::NewTask<Exec_LeafCompilationTask>(
-                    state, valueKeys[i], &leafOutputs[i]);
-            }
-        });
+        {
+            // The main thread remains busy until all LeafCompilationTasks and
+            // InputRecompilationTasks have been spawned. This prevents
+            // detecting task cycles until all entry tasks have been created.
+            const auto busyScope = state.GetTaskCycleDetector().NewBusyScope();
 
-        // These VdfInputs have been disconnected by previous rounds of
-        // uncompilation and need to be recompiled.
-        const std::unordered_set<VdfInput *> &inputsRequiringRecompilation =
-            program->GetInputsRequiringRecompilation();
+            WorkParallelForN(valueKeys.size(),
+                [&state, valueKeys, &leafOutputs](size_t b, size_t e) {
+                const auto busyScope =
+                    state.GetTaskCycleDetector().NewBusyScope();
+                for (size_t i = b; i != e; ++i) {
+                    Exec_CompilationState::NewTask<Exec_LeafCompilationTask>(
+                        state, valueKeys[i], &leafOutputs[i]);
+                }
+            });
+
+            // These VdfInputs have been disconnected by previous rounds of
+            // uncompilation and need to be recompiled.
+            const std::unordered_set<VdfInput *> &inputsRequiringRecompilation =
+                program->GetInputsRequiringRecompilation();
             
-        WorkParallelForN(inputsRequiringRecompilation.bucket_count(),
-            [&state, &inputsRequiringRecompilation](size_t b, size_t e) {
+            WorkParallelForN(inputsRequiringRecompilation.bucket_count(),
+                [&state, &inputsRequiringRecompilation](size_t b, size_t e) {
+                const auto busyScope =
+                    state.GetTaskCycleDetector().NewBusyScope();
                 for (size_t bucketIdx = b; bucketIdx != e; ++bucketIdx) {
                     auto bucketIter =
                         inputsRequiringRecompilation.cbegin(bucketIdx);
@@ -80,18 +94,21 @@ Exec_Compiler::Compile(TfSpan<const ExecValueKey> valueKeys)
                             Exec_InputRecompilationTask>(state, *bucketIter);
                     }
                 }
-        });
+            });
+        }
 
         {
             TRACE_FUNCTION_SCOPE("waiting for tasks");
             dispatcher.Wait();
         }
+
+        program->EndCompilation(state);
     });
 
-    // All inputs requiring recompilation have been recompiled.
-    _program->ClearInputsRequiringRecompilation();
-
-    {
+    // If compilation was interrupted, we do not clean up any isolated
+    // subnetworks, because they may no longer be isolated after the next round
+    // of compilation.
+    if (!_program->WasInterrupted()) {
         TRACE_FUNCTION_SCOPE("uncompiling isolated subnetwork");
 
         // We hold onto the isolated subnetwork object until we are done

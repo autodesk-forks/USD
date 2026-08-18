@@ -10,10 +10,12 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/exec/api.h"
+#include "pxr/exec/exec/valueOverride.h"
 
 #include "pxr/exec/esf/stage.h"
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -25,8 +27,10 @@ class Exec_RequestTracker;
 class Exec_Runtime;
 class ExecValueKey;
 class SdfPath;
+class TfToken;
 template <typename> class TfFunctionRef;
 template <typename> class TfSpan;
+class VdfExecutorInterface;
 class VdfMaskedOutput;
 class VdfRequest;
 class VdfSchedule;
@@ -72,6 +76,15 @@ protected:
         const VdfSchedule &schedule,
         const VdfRequest &computeRequest);
 
+    /// Computes the values in the \p computeRequest using the provided
+    /// \p schedule in the presence of \p valueOverrides.
+    ///
+    EXEC_API
+    std::unique_ptr<VdfExecutorInterface> _ComputeWithOverrides(
+        const VdfSchedule &schedule,
+        const VdfRequest &computeRequest,
+        ExecValueOverrideVector &&valueOverrides);
+
     /// Invoke \p f on each outstanding exec request.
     ///
     /// \p f is executed with the request tracker mutex held so it must not
@@ -104,9 +117,20 @@ private:
     EXEC_API
     void _InvalidateDisconnectedInputs();
 
-    // Notifies the system of authored value invalidation.
+    // Notifies the system of attribute value invalidation.
     EXEC_API
-    void _InvalidateAuthoredValues(TfSpan<const SdfPath> invalidProperties);
+    void _InvalidateAttributeValues(TfSpan<const SdfPath> invalidAttributes);
+
+    // Notifies the system of metadata value invalidation.
+    EXEC_API
+    void _InvalidateMetadataValues(
+        TfSpan<const std::pair<SdfPath, TfToken>> invalidObjects);
+
+    // Notifies the system to invalidate value keys that don't have a compiled
+    // leaf node.
+    //
+    EXEC_API
+    void _InvalidateUnknownValues();
 
 private:
     EsfStage _stage;

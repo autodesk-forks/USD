@@ -39,7 +39,11 @@ void
 TfSpinMutex::_AcquireContended()
 {
     WaitWithBackoff([this]() {
-        return _lockState.exchange(true, std::memory_order_acquire) == false;
+        // Test-and-test-and-set: check with a relaxed load before attempting
+        // the acquire exchange, to avoid issuing a cache-invalidating RMW on
+        // every spin iteration while the lock is held by another thread.
+        return !_lockState.load(std::memory_order_relaxed) &&
+               (_lockState.exchange(true, std::memory_order_acquire) == false);
     });
 }
 

@@ -161,8 +161,8 @@ public:
 
     /// Returns a copy of the TsSpline associated with the resolved value.
     ///
-    /// If the resolve value source is not a Spline, an empty Spline is 
-    /// returned.
+    /// If the resolve value source is not a Spline or value clips with
+    /// an underlying data format of Spline, an empty Spline is returned.
     USD_API
     TsSpline GetSpline() const;
 
@@ -232,8 +232,9 @@ public:
     USD_API
     bool HasValue() const;
 
-    /// Return true if the attribute associated with this query has an
-    /// a spline value as the strongest opinion.
+    /// Return true if the attribute associated with this query has
+    /// a spline value or value clips with underlying data format of
+    /// spline as the strongest opinion.
     ///
     /// \sa UsdAttribute::HasSpline
     /// \sa UsdAttributeQuery::GetSpline
@@ -266,6 +267,22 @@ public:
     /// \sa UsdAttribute::HasFallbackValue
     USD_API
     bool HasFallbackValue() const;
+
+    /// If this attribute is a builtin attribute with a fallback value provided
+    /// by a schema, fetch that value and return true. Otherwise return false.
+    ///
+    /// \sa UsdAttribute::GetFallbackValue
+    template <typename T>
+    bool GetFallbackValue(T* value) const {
+        return _attr.GetFallbackValue<T>(value);
+    }
+
+    /// \overload
+    /// Type-erased accessor for getting the fallback value.
+    ///
+    /// \sa UsdAttribute::GetFallbackValue
+    USD_API
+    bool GetFallbackValue(VtValue* value) const;
 
     /// Return true if it is possible, but not certain, that this attribute's
     /// value changes over time, false otherwise. 

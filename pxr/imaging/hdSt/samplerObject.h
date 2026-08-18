@@ -19,6 +19,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 class Hgi;
+class HdStCubemapTextureObject;
 class HdStUvTextureObject;
 class HdStFieldTextureObject;
 class HdStPtexTextureObject;
@@ -61,6 +62,10 @@ protected:
 /// \class HdStUvSamplerObject
 ///
 /// A sampler suitable for HdStUvTextureObject.
+///
+/// Note that when this sampler is used with an HdStUvTextureObject referring
+/// to a cubemap, the wrap modes in the sampler parameters will be ignored
+/// because we default to using seamless cubemap sampling.
 ///
 class HdStUvSamplerObject final : public HdStSamplerObject {
 public:
@@ -200,6 +205,11 @@ struct HdSt_TypedSamplerObjectHelper<HdStTextureType::Ptex> {
 template<>
 struct HdSt_TypedSamplerObjectHelper<HdStTextureType::Udim> {
     using type = HdStUdimSamplerObject;
+};
+
+template<>
+struct HdSt_TypedSamplerObjectHelper<HdStTextureType::Cubemap> {
+    using type = HdStUvSamplerObject;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

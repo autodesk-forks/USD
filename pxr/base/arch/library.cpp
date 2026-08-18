@@ -11,6 +11,7 @@
 
 #if defined(ARCH_OS_WINDOWS)
 #include <Windows.h>
+#include <filesystem>
 #else
 #include <dlfcn.h>
 #endif
@@ -27,7 +28,7 @@ void* ArchLibraryOpen(const std::string &filename, int flag)
 {
 #if defined(ARCH_OS_WINDOWS)
     arch_lastLibraryError = 0;
-    if (void* result = LoadLibrary(filename.c_str())) {
+    if (void* result = LoadLibraryW(std::filesystem::u8path(filename).c_str())) {
         return result;
     }
     else {

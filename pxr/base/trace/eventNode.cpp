@@ -12,24 +12,21 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 TraceEventNodeRefPtr
-TraceEventNode::Append(
-    const TfToken &key, 
-    TraceCategoryId category, 
-    TimeStamp beginTime, 
-    TimeStamp endTime,
-    bool separateEvents)
+TraceEventNode::New() {
+    return TraceEventNode::New(
+        TfToken("root"), TraceCategory::Default,
+        /*beginTime=*/0, /*endTime=*/0, /*separateEvents=*/false);
+}
+
+TraceEventNode::~TraceEventNode()
 {
-    TraceEventNodeRefPtr n = 
-        TraceEventNode::New(
-            key, category, beginTime, endTime, {}, separateEvents);
-    _children.push_back(n);
-    return n;
+    delete _attributesAndSeparateEvents.Get();
 }
 
 void
-TraceEventNode::Append(TraceEventNodeRefPtr node)
+TraceEventNode::Append(TraceEventNodeRefPtr &&node)
 {
-    _children.push_back(node);
+    _children.emplace_back(std::move(node));
 }
 
 void 
@@ -48,14 +45,30 @@ TraceEventNode::SetBeginAndEndTimesFromChildren()
         _beginTime = std::min(_beginTime, c->GetBeginTime());
         _endTime   = std::max(_endTime, c->GetEndTime());
     }
+}
 
+const TraceEventNode::AttributeMap&
+TraceEventNode::GetAttributes() const
+{
+    static const AttributeMap empty;
+    if (AttributeMap const *attrMap = _attributesAndSeparateEvents.Get()) {
+        return *attrMap;
+    }
+    return empty;
 }
 
 void
 TraceEventNode::AddAttribute(
-    const TfToken& key, const AttributeData& attr)
+    const TfToken& key, AttributeData&& attr)
 {
-    _attributes.emplace(key, attr);
+    if (!_attributesAndSeparateEvents.Get()) {
+        _attributesAndSeparateEvents.Set(new AttributeMap);
+    }
+    // Place `attr` at the head of the list to facilitate event tree building --
+    // that process iterates events in reverse order, so this ends up placing
+    // events in forward order.
+    _attributesAndSeparateEvents->emplace_hint(
+        _attributesAndSeparateEvents->find(key), key, std::move(attr));
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

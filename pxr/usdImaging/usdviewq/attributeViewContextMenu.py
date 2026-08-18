@@ -109,8 +109,8 @@ class CopyAttributeNameMenuItem(AttributeViewContextMenuItem):
             return
 
         cb = QtWidgets.QApplication.clipboard()
-        cb.setText(self._name, QtGui.QClipboard.Selection)
-        cb.setText(self._name, QtGui.QClipboard.Clipboard)
+        cb.setText(self._name, QtGui.QClipboard.Mode.Selection)
+        cb.setText(self._name, QtGui.QClipboard.Mode.Clipboard)
 
 #
 # Copy the attribute's value to clipboard.
@@ -139,8 +139,8 @@ class CopyAttributeValueMenuItem(AttributeViewContextMenuItem):
                     valueStr = str(rawVal)
 
         cb = QtWidgets.QApplication.clipboard()
-        cb.setText(valueStr, QtGui.QClipboard.Selection)
-        cb.setText(valueStr, QtGui.QClipboard.Clipboard)
+        cb.setText(valueStr, QtGui.QClipboard.Mode.Selection)
+        cb.setText(valueStr, QtGui.QClipboard.Mode.Clipboard)
 
 # --------------------------------------------------------------------
 # Individual target selection menus
@@ -167,8 +167,8 @@ class CopyTargetPathMenuItem(AttributeViewContextMenuItem):
 
         value = ", ".join([s.text(PropertyViewIndex.NAME) for s in self.GetSelectedOfType()])
         cb = QtWidgets.QApplication.clipboard()
-        cb.setText(value, QtGui.QClipboard.Selection)
-        cb.setText(value, QtGui.QClipboard.Clipboard)
+        cb.setText(value, QtGui.QClipboard.Mode.Selection)
+        cb.setText(value, QtGui.QClipboard.Mode.Clipboard)
 
 #
 # Jump to the target path in the prim browser
@@ -244,8 +244,8 @@ class CopyAllTargetPathsMenuItem(SelectAllTargetPathsMenuItem):
         value = ", ".join(_GetTargetPathsForItem(self._item))
         
         cb = QtWidgets.QApplication.clipboard()
-        cb.setText(value, QtGui.QClipboard.Selection)
-        cb.setText(value, QtGui.QClipboard.Clipboard)
+        cb.setText(value, QtGui.QClipboard.Mode.Selection)
+        cb.setText(value, QtGui.QClipboard.Mode.Clipboard)
 
 class ViewSplineMenuItem(AttributeViewContextMenuItem):
     _viewerByAttrPath = {}
@@ -255,12 +255,9 @@ class ViewSplineMenuItem(AttributeViewContextMenuItem):
         return self._role == PropertyViewDataRoles.ATTRIBUTE
 
     def IsEnabled(self):
-        from pxr import Usd
         # Check if this attributes has a spline value source
         attr = self._getUsdAttribute()
-        return (
-            attr and 
-            attr.GetResolveInfo().GetSource() == Usd.ResolveInfoSourceSpline)
+        return attr and attr.HasSpline()
 
     def GetText(self):
         return "View Spline"
@@ -282,7 +279,7 @@ class ViewSplineMenuItem(AttributeViewContextMenuItem):
         # Show a minimal dialog box with info
         splineViewer = SplineViewer(
             attr, currentFrame = self._dataModel.currentFrame)
-        splineViewer.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        splineViewer.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
         splineViewer.SetStartAndEndTime(
             self._dataModel.frameRangeBegin,
             self._dataModel.frameRangeEnd)

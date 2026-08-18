@@ -76,6 +76,9 @@ enum class Sdf_TextParserCurrentParsingContext {
     SplinePreExtrapItem,
     SplineExtrapSloped,
     SplineKeywordLoop,
+    SplineKeywordRepeat,
+    SplineKeywordReset,
+    SplineKeywordOscillate,
     SplineKnotParam,
     SplineTangent,
     SplineTangentWithWidth,
@@ -223,6 +226,13 @@ public:
     bool splineTanIsPre;
     TsInterpMode splineInterp;
     std::array<double, 5> splineLoopItem;
+
+    // Working state for array edits.
+    std::unique_ptr<Sdf_ParserHelpers::ArrayEditFactoryBase> arrayEditFactory;
+    int64_t arrayEditSizeArg = -1;
+    bool arrayEditHasFill = false;
+    int64_t arrayEditReferenceIndexes[2] = {0, 0};
+    uint8_t arrayEditReferencePresence = 0; // low bits indicate index presence.
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -85,9 +85,9 @@ geometry.
     }
 
 In addition, we might create an applied schema called :mono:`CarDoorRotator` 
-that publishes an :mono:`openness` attribute for which 0 represents fully 
-closed and 100 represents fully opened, as well as an API 
-:mono:`computeTransformFromOpenness`, which converts the value of 
+that publishes an :mono:`openness` attribute, where 0 represents fully 
+closed and 100 represents fully opened. Additionally the schema has an API, 
+:mono:`ComputeTransformFromOpenness()`, which converts the value of 
 :mono:`openness` to a rotation transform.
 
 Working only with OpenUSD, we must take care of several things. First, for 
@@ -389,9 +389,9 @@ providers. The following code demonstrates building and executing a request:
 
     // Builds a request for values. Reminder, value keys refer to computations.
     ExecUsdRequest request = exec.BuildRequest({
-    ExecUsdValueKey(primA, tokens->fooComputation),
-    ExecUsdValueKey(primB, tokens->barComputation),
-    ...
+        ExecUsdValueKey(primA, tokens->fooComputation),
+        ExecUsdValueKey(primB, tokens->barComputation),
+        ...
     });
 
     // Computes all the requested values.
@@ -421,10 +421,10 @@ also provides a time range over which the value keys have been invalidated.
 
     // Builds a request with an invalidation callback.
     ExecRequest request = exec.BuildRequest(
-    { /* value keys in the request */ },
-    [](const ExecRequestIndexSet &indexSet, const EfTimeInterval &timeRange){
-        // Invalidation callback code.
-    });
+        { /* value keys in the request */ },
+        [](const ExecRequestIndexSet &indexSet, const EfTimeInterval &timeRange){
+            // Invalidation callback code.
+        });
 
 .. _openexec_conclusion:
 

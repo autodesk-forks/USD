@@ -43,12 +43,6 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DEFINE_PRIVATE_TOKENS(
-    _rendererPluginNameTokens,
-
-    ((storm, "HdStormRendererPlugin"))
-);
-
-TF_DEFINE_PRIVATE_TOKENS(
     _primNameTokens,
 
     (camera)
@@ -77,7 +71,7 @@ TF_DEFINE_PRIVATE_TOKENS(
 
     (lightShader)
 
-    (PxrDistantLight) 
+    (PxrDistantLight)
     (PxrDomeLight)
 );
 
@@ -1067,27 +1061,15 @@ HD_DECLARE_DATASOURCE_HANDLES(_LightPrimDataSource);
 // Task controller implementation.
 
 HdxTaskControllerSceneIndexRefPtr
-HdxTaskControllerSceneIndex::New(
-    const SdfPath &prefix,
-    const TfToken &rendererPluginName,
-    const AovDescriptorCallback &aovDescriptorCallback,
-    const bool gpuEnabled)
+HdxTaskControllerSceneIndex::New(const Parameters& params)
 {
-    return TfCreateRefPtr(
-        new HdxTaskControllerSceneIndex(
-            prefix, rendererPluginName, aovDescriptorCallback, gpuEnabled));
+    return TfCreateRefPtr(new HdxTaskControllerSceneIndex(params));
 }
 
 
 HdxTaskControllerSceneIndex::HdxTaskControllerSceneIndex(
-    const SdfPath &prefix,
-    const TfToken &rendererPluginName,
-    const AovDescriptorCallback &aovDescriptorCallback,
-    const bool gpuEnabled)
- : _prefix(prefix)
- , _isForStorm(rendererPluginName == _rendererPluginNameTokens->storm)
- , _aovDescriptorCallback(aovDescriptorCallback)
- , _runGpuAovTasks(gpuEnabled || _isForStorm)
+    const Parameters& params)
+ : _params(params)
  , _retainedSceneIndex(HdRetainedSceneIndex::New())
  , _renderBufferSize(0, 0)
  , _viewport(0, 0, 1, 1)
@@ -1096,7 +1078,7 @@ HdxTaskControllerSceneIndex::HdxTaskControllerSceneIndex(
     _retainedSceneIndex->AddObserver(HdSceneIndexObserverPtr(&_observer));
 
     if (_IsForStorm()) {
-        if (!gpuEnabled) {
+        if (!_params.gpuEnabled) {
             TF_WARN("Trying to use Storm while disabling the GPU.");
         }
 
@@ -1119,7 +1101,7 @@ HdxTaskControllerSceneIndex::HdxTaskControllerSceneIndex(
     }
 
     _retainedSceneIndex->AddPrims(
-        {{ _CameraPath(_prefix),
+        {{ _CameraPath(_params.prefix),
            HdPrimTypeTokens->camera,
            HdxFreeCameraPrimDataSource::New() }});
 }
@@ -1127,7 +1109,13 @@ HdxTaskControllerSceneIndex::HdxTaskControllerSceneIndex(
 bool
 HdxTaskControllerSceneIndex::_IsForStorm() const
 {
-    return _isForStorm;
+    return _params.isForStorm;
+}
+
+bool
+HdxTaskControllerSceneIndex::_RunGpuAovTasks() const
+{
+    return _params.isForStorm || _params.gpuEnabled;
 }
 
 HdxTaskControllerSceneIndex::~HdxTaskControllerSceneIndex() = default;
@@ -1149,10 +1137,10 @@ HdxTaskControllerSceneIndex::_CreateStormTasks()
 {
     _retainedSceneIndex->AddPrims({
         _TaskAddEntry<HdxSimpleLightTask>(
-            _prefix,
-            _SimpleLightTaskParams(_prefix)),
+            _params.prefix,
+            _SimpleLightTaskParams(_params.prefix)),
         _TaskAddEntry<HdxShadowTask>(
-            _prefix,
+            _params.prefix,
             HdxShadowTaskParams(),
             HdRprimCollection(),
             { HdRenderTagTokens->geometry })
@@ -1161,27 +1149,27 @@ HdxTaskControllerSceneIndex::_CreateStormTasks()
     // All tasks using HdxRenderTaskParams.
     const HdRetainedSceneIndex::AddedPrimEntries renderTaskAddEntries{
         _TaskAddEntry<HdxSkydomeTask>(
-            _prefix,
+            _params.prefix,
             HdxRenderTaskParams(),
             _SkydomeTaskCollection()),
         _StormRenderTaskAddEntry<HdxRenderTask>(
-            _prefix,
+            _params.prefix,
             HdStMaterialTagTokens->defaultMaterialTag,
             _StormRenderTaskParamsDefaultMaterialTagAndMasked()),
         _StormRenderTaskAddEntry<HdxRenderTask>(
-            _prefix,
+            _params.prefix,
             HdStMaterialTagTokens->masked,
             _StormRenderTaskParamsDefaultMaterialTagAndMasked()),
         _StormRenderTaskAddEntry<HdxRenderTask>(
-            _prefix,
+            _params.prefix,
             HdStMaterialTagTokens->additive,
             _StormRenderTaskParamsAdditive()),
         _StormRenderTaskAddEntry<HdxOitRenderTask>(
-            _prefix,
+            _params.prefix,
             HdStMaterialTagTokens->translucent,
             _StormRenderTaskParamsTranslucent()),
         _StormRenderTaskAddEntry<HdxOitVolumeRenderTask>(
-            _prefix,
+            _params.prefix,
             HdStMaterialTagTokens->volume,
             _StormRenderTaskParamsVolume()),
     };
@@ -1195,23 +1183,23 @@ HdxTaskControllerSceneIndex::_CreateStormTasks()
 
     _retainedSceneIndex->AddPrims({
         _TaskAddEntry<HdxAovInputTask>(
-            _prefix),
+            _params.prefix),
         _TaskAddEntry<HdxOitResolveTask>(
-            _prefix,
+            _params.prefix,
             _OitResolveTaskParams()),
         _TaskAddEntry<HdxSelectionTask>(
-            _prefix,
+            _params.prefix,
             _SelectionTaskParams()),
         _TaskAddEntry<HdxColorCorrectionTask>(
-            _prefix),
+            _params.prefix),
         _TaskAddEntry<HdxVisualizeAovTask>(
-            _prefix),
+            _params.prefix),
         _TaskAddEntry<HdxPresentTask>(
-            _prefix),
+            _params.prefix),
         _TaskAddEntry<HdxPickTask>(
-            _prefix),
+            _params.prefix),
         _TaskAddEntry<HdxBoundingBoxTask>(
-            _prefix)
+            _params.prefix)
     });
 }
 
@@ -1221,7 +1209,7 @@ HdxTaskControllerSceneIndex::_CreateGenericTasks()
     // All tasks using HdxRenderTaskParams.
     const HdRetainedSceneIndex::AddedPrimEntries renderTaskAddEntries{
         _TaskAddEntry<HdxRenderTask>(
-            _prefix,
+            _params.prefix,
             HdxRenderTaskParams(),
             _RenderTaskCollection(),
             { HdRenderTagTokens->geometry })};
@@ -1233,23 +1221,23 @@ HdxTaskControllerSceneIndex::_CreateGenericTasks()
 
     _retainedSceneIndex->AddPrims(renderTaskAddEntries);
 
-    if (_runGpuAovTasks) {
+    if (_RunGpuAovTasks()) {
         _retainedSceneIndex->AddPrims({
             _TaskAddEntry<HdxAovInputTask>(
-                _prefix),
+                _params.prefix),
             _TaskAddEntry<HdxColorizeSelectionTask>(
-                _prefix,
+                _params.prefix,
                 _ColorizeSelectionTaskParams()),
             _TaskAddEntry<HdxColorCorrectionTask>(
-                _prefix),
+                _params.prefix),
             _TaskAddEntry<HdxVisualizeAovTask>(
-                _prefix),
+                _params.prefix),
             _TaskAddEntry<HdxPresentTask>(
-                _prefix),
+                _params.prefix),
             _TaskAddEntry<HdxPickFromRenderBufferTask>(
-                _prefix),
+                _params.prefix),
             _TaskAddEntry<HdxBoundingBoxTask>(
-                _prefix)
+                _params.prefix)
         });
     }
 }
@@ -1274,41 +1262,41 @@ HdxTaskControllerSceneIndex::_GetRenderingTaskPathsForStorm() const
 {
     SdfPathVector paths;
 
-    paths.push_back(_TaskPrimPath<HdxSimpleLightTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxSimpleLightTask>(_params.prefix));
 
-    if (_StormShadowsEnabled(_retainedSceneIndex, _prefix)) {
+    if (_StormShadowsEnabled(_retainedSceneIndex, _params.prefix)) {
         // Only enable the shadow task (which renders shadow maps) if shadows
         // are enabled.
-        paths.push_back(_TaskPrimPath<HdxShadowTask>(_prefix));
+        paths.push_back(_TaskPrimPath<HdxShadowTask>(_params.prefix));
     }
 
-    paths.push_back(_TaskPrimPath<HdxSkydomeTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxSkydomeTask>(_params.prefix));
     paths.push_back(
         _StormRenderTaskPath(
-            _prefix, HdStMaterialTagTokens->defaultMaterialTag));
+            _params.prefix, HdStMaterialTagTokens->defaultMaterialTag));
     paths.push_back(
         _StormRenderTaskPath(
-            _prefix, HdStMaterialTagTokens->masked));
+            _params.prefix, HdStMaterialTagTokens->masked));
     paths.push_back(
         _StormRenderTaskPath(
-            _prefix, HdStMaterialTagTokens->additive));
+            _params.prefix, HdStMaterialTagTokens->additive));
     paths.push_back(
         _StormRenderTaskPath(
-            _prefix, HdStMaterialTagTokens->translucent));
+            _params.prefix, HdStMaterialTagTokens->translucent));
     // Take the aov results from the render tasks, resolve the multisample
     // images and put the results into gpu textures onto shared context.
-    paths.push_back(_TaskPrimPath<HdxAovInputTask>(_prefix));
-    paths.push_back(_TaskPrimPath<HdxBoundingBoxTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxAovInputTask>(_params.prefix));
+    paths.push_back(_TaskPrimPath<HdxBoundingBoxTask>(_params.prefix));
 
     // The volume render pass needs to read the (resolved) depth AOV (with
     // the opaque geometry) and thus runs after the HdxAovInputTask.
     paths.push_back(
         _StormRenderTaskPath(
-            _prefix, HdStMaterialTagTokens->volume));
+            _params.prefix, HdStMaterialTagTokens->volume));
     // Resolve OIT data from translucent and volume and merge into color
     // target.
-    paths.push_back(_TaskPrimPath<HdxOitResolveTask>(_prefix));
-    paths.push_back(_TaskPrimPath<HdxSelectionTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxOitResolveTask>(_params.prefix));
+    paths.push_back(_TaskPrimPath<HdxSelectionTask>(_params.prefix));
 
     return paths;
 }
@@ -1318,18 +1306,18 @@ HdxTaskControllerSceneIndex::_GetRenderingTaskPathsForGenericRenderer() const
 {
     SdfPathVector paths;
 
-    paths.push_back(_TaskPrimPath<HdxRenderTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxRenderTask>(_params.prefix));
 
-    if (!_runGpuAovTasks) {
+    if (!_RunGpuAovTasks()) {
         return paths;
     }
 
-    paths.push_back(_TaskPrimPath<HdxAovInputTask>(_prefix));
-    paths.push_back(_TaskPrimPath<HdxBoundingBoxTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxAovInputTask>(_params.prefix));
+    paths.push_back(_TaskPrimPath<HdxBoundingBoxTask>(_params.prefix));
 
     if (_viewportAov == HdAovTokens->color) {
         // Only non-color AOVs need special colorization for viz.
-        paths.push_back(_TaskPrimPath<HdxColorizeSelectionTask>(_prefix));
+        paths.push_back(_TaskPrimPath<HdxColorizeSelectionTask>(_params.prefix));
     }
 
     return paths;
@@ -1363,22 +1351,22 @@ HdxTaskControllerSceneIndex::GetRenderingTaskPaths() const
         paths = _GetRenderingTaskPathsForGenericRenderer();
     }
 
-    if (!_runGpuAovTasks) {
+    if (!_RunGpuAovTasks()) {
         return paths;
     }
 
-    if (_ColorCorrectionEnabled(_retainedSceneIndex, _prefix)) {
+    if (_ColorCorrectionEnabled(_retainedSceneIndex, _params.prefix)) {
         // Apply color correction / grading (convert to display colors)
-        paths.push_back(_TaskPrimPath<HdxColorCorrectionTask>(_prefix));
+        paths.push_back(_TaskPrimPath<HdxColorCorrectionTask>(_params.prefix));
     }
 
     // Only non-color AOVs need special colorization for viz.
     if (_viewportAov != HdAovTokens->color) {
-        paths.push_back(_TaskPrimPath<HdxVisualizeAovTask>(_prefix));
+        paths.push_back(_TaskPrimPath<HdxVisualizeAovTask>(_params.prefix));
     }
 
     // Render pixels to screen
-    paths.push_back(_TaskPrimPath<HdxPresentTask>(_prefix));
+    paths.push_back(_TaskPrimPath<HdxPresentTask>(_params.prefix));
 
     return paths;
 }
@@ -1387,16 +1375,16 @@ SdfPathVector
 HdxTaskControllerSceneIndex::GetPickingTaskPaths() const
 {
     if (_IsForStorm()) {
-        return { _TaskPrimPath<HdxPickTask>(_prefix) };
+        return { _TaskPrimPath<HdxPickTask>(_params.prefix) };
     } else {
-        return { _TaskPrimPath<HdxPickFromRenderBufferTask>(_prefix) };
+        return { _TaskPrimPath<HdxPickFromRenderBufferTask>(_params.prefix) };
     }
 }
 
 SdfPath
 HdxTaskControllerSceneIndex::GetRenderBufferPath(const TfToken &aovName) const
 {
-    return _AovPath(_prefix, aovName);
+    return _AovPath(_params.prefix, aovName);
 }
 
 // When we're asked to render "color", we treat that as final color,
@@ -1412,32 +1400,47 @@ _ResolvedRenderOutputs(const TfTokenVector &aovNames,
     bool hasPrimId = false;
     bool hasElementId = false;
     bool hasInstanceId = false;
+    bool hasNeye = false;
 
     for (const TfToken &renderOutput : aovNames) {
         if (renderOutput == HdAovTokens->color) {
             hasColor = true;
-        }
-        if (renderOutput == HdAovTokens->depth) {
+        } else if (renderOutput == HdAovTokens->depth) {
             hasDepth = true;
-        }
-        if (renderOutput == HdAovTokens->primId) {
+        } else if (renderOutput == HdAovTokens->primId) {
             hasPrimId = true;
-        }
-        if (renderOutput == HdAovTokens->elementId) {
+        }else if (renderOutput == HdAovTokens->elementId) {
             hasElementId = true;
-        }
-        if (renderOutput == HdAovTokens->instanceId) {
+        } else if (renderOutput == HdAovTokens->instanceId) {
             hasInstanceId = true;
+        } else if (renderOutput == HdAovTokens->Neye) {
+            hasNeye = true;
         }
     }
 
-    TfTokenVector result = aovNames;
+    TfTokenVector result;
 
     if (isForStorm) {
-        if (!hasDepth) {
-            result.push_back(HdAovTokens->depth);
+        // For Storm, we rearrange AOVs to be a certain order to match how we
+        // order outputs in the fragment shader. This order is specified via
+        // HdSt_RenderPassShaderKey and the render pass shader snippets it
+        // gathers.
+        if (hasColor) {
+            result.push_back(HdAovTokens->color);
         }
+        if (hasPrimId || hasInstanceId) {
+            result.push_back(HdAovTokens->primId);
+            result.push_back(HdAovTokens->instanceId);
+        }
+        if (hasNeye) {
+            result.push_back(HdAovTokens->Neye);
+        }
+
+        // Even if not requested, add depth.
+        result.push_back(HdAovTokens->depth);
     } else {
+        result = aovNames;
+
         // For a backend like PrMan/Embree we fill not just the color buffer,
         // but also buffers that are used during picking.
         if (hasColor) {
@@ -1466,7 +1469,7 @@ HdxTaskControllerSceneIndex::SetRenderOutputs(
     if (_aovNames == aovNames) {
         return;
     }
-    _aovNames = _aovNames;
+    _aovNames = aovNames;
 
     _SetRenderOutputs(_ResolvedRenderOutputs(aovNames, _IsForStorm()));
 
@@ -1513,7 +1516,7 @@ void
 HdxTaskControllerSceneIndex::_SetRenderOutputs(
     const TfTokenVector &aovNames)
 {
-    _retainedSceneIndex->RemovePrims({_AovScopePath(_prefix)});
+    _retainedSceneIndex->RemovePrims({_AovScopePath(_params.prefix)});
 
     const GfVec3i dimensions = _RenderBufferDimensions();
 
@@ -1525,7 +1528,7 @@ HdxTaskControllerSceneIndex::_SetRenderOutputs(
     int depthAovBindingIndex = -1;
 
     for (const TfToken &aovName : aovNames) {
-        if (!_aovDescriptorCallback) {
+        if (!_params.aovDescriptorCallback) {
             TF_CODING_ERROR(
                 "No aovDescriptorCallback given to "
                 "HdxTaskControllerSceneIndex.");
@@ -1533,13 +1536,13 @@ HdxTaskControllerSceneIndex::_SetRenderOutputs(
         }
 
         // Use callback to get default AOV descriptors from render delegate.
-        const HdAovDescriptor desc = _aovDescriptorCallback(aovName);
+        const HdAovDescriptor desc = _params.aovDescriptorCallback(aovName);
         if (desc.format == HdFormatInvalid) {
             // The backend doesn't support this AOV, so skip it.
             continue;
         }
 
-        const SdfPath aovPath = _AovPath(_prefix, aovName);
+        const SdfPath aovPath = _AovPath(_params.prefix, aovName);
 
         addedPrimEntries.push_back(
             { aovPath,
@@ -1566,7 +1569,7 @@ HdxTaskControllerSceneIndex::_SetRenderOutputs(
     _retainedSceneIndex->AddPrims(addedPrimEntries);
 
     const SdfPath volumeId =
-        _StormRenderTaskPath(_prefix, HdStMaterialTagTokens->volume);
+        _StormRenderTaskPath(_params.prefix, HdStMaterialTagTokens->volume);
 
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
@@ -1617,17 +1620,17 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
         using Task = HdxAovInputTask;
 
         if (HdxAovInputTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             params->aovBufferPath = SdfPath::EmptyPath();
             params->depthBufferPath = SdfPath::EmptyPath();
             if (!aovName.IsEmpty()) {
-                params->aovBufferPath = _AovPath(_prefix, aovName);
+                params->aovBufferPath = _AovPath(_params.prefix, aovName);
             }
             if (aovName == HdAovTokens->color) {
-                params->depthBufferPath = _AovPath(_prefix, HdAovTokens->depth);
+                params->depthBufferPath = _AovPath(_params.prefix, HdAovTokens->depth);
             }
 
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -1635,23 +1638,23 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
         using Task = HdxColorizeSelectionTask;
 
         if (HdxColorizeSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (aovName == HdAovTokens->color) {
                 // If we're rendering color, make sure the colorize selection
                 // task has the proper id buffers...
                 params->primIdBufferPath =
-                    _AovPath(_prefix, HdAovTokens->primId);
+                    _AovPath(_params.prefix, HdAovTokens->primId);
                 params->instanceIdBufferPath =
-                    _AovPath(_prefix, HdAovTokens->instanceId);
+                    _AovPath(_params.prefix, HdAovTokens->instanceId);
                 params->elementIdBufferPath =
-                    _AovPath(_prefix, HdAovTokens->elementId);
+                    _AovPath(_params.prefix, HdAovTokens->elementId);
             } else {
                 params->primIdBufferPath = SdfPath::EmptyPath();
                 params->instanceIdBufferPath = SdfPath::EmptyPath();
                 params->elementIdBufferPath = SdfPath::EmptyPath();
             }
 
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -1659,18 +1662,18 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
         using Task = HdxPickFromRenderBufferTask;
 
         if (HdxPickFromRenderBufferTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (aovName == HdAovTokens->color) {
                 // If we're rendering color, make sure the pick task has the
                 // proper id & depth buffers...
                 params->primIdBufferPath =
-                    _AovPath(_prefix, HdAovTokens->primId);
+                    _AovPath(_params.prefix, HdAovTokens->primId);
                 params->instanceIdBufferPath =
-                    _AovPath(_prefix, HdAovTokens->instanceId);
+                    _AovPath(_params.prefix, HdAovTokens->instanceId);
                 params->elementIdBufferPath =
-                    _AovPath(_prefix, HdAovTokens->elementId);
+                    _AovPath(_params.prefix, HdAovTokens->elementId);
                 params->depthBufferPath =
-                    _AovPath(_prefix, HdAovTokens->depth);
+                    _AovPath(_params.prefix, HdAovTokens->depth);
             } else {
                 params->primIdBufferPath = SdfPath::EmptyPath();
                 params->instanceIdBufferPath = SdfPath::EmptyPath();
@@ -1678,7 +1681,7 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
                 params->depthBufferPath = SdfPath::EmptyPath();
             }
 
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -1686,10 +1689,10 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
         using Task = HdxColorCorrectionTask;
 
         if (HdxColorCorrectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             params->aovName = aovName;
 
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -1697,10 +1700,10 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
         using Task = HdxVisualizeAovTask;
 
         if (HdxVisualizeAovTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             params->aovName = aovName;
 
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -1708,10 +1711,10 @@ HdxTaskControllerSceneIndex::SetViewportRenderOutput(const TfToken &aovName)
         using Task = HdxBoundingBoxTask;
 
         if (HdxBoundingBoxTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             params->aovName = aovName;
 
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -1730,7 +1733,7 @@ HdxTaskControllerSceneIndex::SetRenderOutputSettings(
 
     // Render buffer descriptor
 
-    const SdfPath renderBufferPath = _AovPath(_prefix, aovName);
+    const SdfPath renderBufferPath = _AovPath(_params.prefix, aovName);
 
     HdSceneIndexPrim const prim =
         _retainedSceneIndex->GetPrim(renderBufferPath);
@@ -1810,7 +1813,7 @@ HdxTaskControllerSceneIndex::SetRenderOutputSettings(
 HdAovDescriptor
 HdxTaskControllerSceneIndex::GetRenderOutputSettings(const TfToken &aovName) const
 {
-    const SdfPath renderBufferPath = _AovPath(_prefix, aovName);
+    const SdfPath renderBufferPath = _AovPath(_params.prefix, aovName);
 
     HdSceneIndexPrim const prim =
         _retainedSceneIndex->GetPrim(renderBufferPath);
@@ -1944,32 +1947,14 @@ HdxTaskControllerSceneIndex::SetRenderParams(const HdxRenderTaskParams &params)
         dirtiedPrimEntries.push_back({ taskPath, locators });
     }
 
-    // Update shadow task in case materials have been enabled/disabled
-    {
-        using Task = HdxShadowTask;
-        if (HdxShadowTaskParams * const taskParams =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
-            if (taskParams->enableSceneMaterials !=
-                                params.enableSceneMaterials) {
-                taskParams->enableSceneMaterials =
-                                params.enableSceneMaterials;
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
-            }
-        }
-    }
-
     // Update pick task
     {
         using Task = HdxPickTask;
         if (HdxPickTaskParams * const taskParams =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
-            if (taskParams->cullStyle != params.cullStyle ||
-                taskParams->enableSceneMaterials !=
-                                params.enableSceneMaterials) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
+            if (taskParams->cullStyle != params.cullStyle) {
                 taskParams->cullStyle = params.cullStyle;
-                taskParams->enableSceneMaterials =
-                                params.enableSceneMaterials;
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2006,11 +1991,11 @@ HdxTaskControllerSceneIndex::SetRenderTags(const TfTokenVector &renderTags)
         using Task = HdxPickTask;
 
         if (TfTokenVector * const taskRenderTags =
-                _GetRenderTagsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetRenderTagsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (*taskRenderTags != renderTags) {
                 *taskRenderTags = renderTags;
 
-                const SdfPath taskPath = _TaskPrimPath<Task>(_prefix);
+                const SdfPath taskPath = _TaskPrimPath<Task>(_params.prefix);
                 static const HdDataSourceLocatorSet locators{
                     HdLegacyTaskSchema::GetRenderTagsLocator() };
                 dirtiedPrimEntries.push_back({ taskPath, locators });
@@ -2030,20 +2015,17 @@ HdxTaskControllerSceneIndex::SetShadowParams(const HdxShadowTaskParams &params)
     using Task = HdxShadowTask;
 
     HdxShadowTaskParams * const taskParams =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!taskParams) {
         return;
     }
 
-    HdxShadowTaskParams newParams = params;
-    newParams.enableSceneMaterials = taskParams->enableSceneMaterials;
-
-    if (*taskParams == newParams) {
+    if (*taskParams == params) {
         return;
     }
-    *taskParams = newParams;
+    *taskParams = params;
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2052,7 +2034,7 @@ HdxTaskControllerSceneIndex::SetEnableShadows(const bool enable)
     using Task = HdxSimpleLightTask;
 
     HdxSimpleLightTaskParams * const params =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!params) {
         return;
     }
@@ -2060,7 +2042,7 @@ HdxTaskControllerSceneIndex::SetEnableShadows(const bool enable)
         return;
     }
     params->enableShadows = enable;
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2072,13 +2054,13 @@ HdxTaskControllerSceneIndex::SetEnableSelection(const bool enable)
         using Task = HdxSelectionTask;
 
         if (HdxSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->enableSelectionHighlight != enable ||
                 params->enableLocateHighlight != enable) {
                 params->enableSelectionHighlight = enable;
                 params->enableLocateHighlight = enable;
 
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2087,13 +2069,13 @@ HdxTaskControllerSceneIndex::SetEnableSelection(const bool enable)
         using Task = HdxColorizeSelectionTask;
 
         if (HdxColorizeSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->enableSelectionHighlight != enable ||
                 params->enableLocateHighlight != enable) {
                 params->enableSelectionHighlight = enable;
                 params->enableLocateHighlight = enable;
 
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2112,10 +2094,10 @@ HdxTaskControllerSceneIndex::SetSelectionColor(const GfVec4f &color)
         using Task = HdxSelectionTask;
 
         if (HdxSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->selectionColor != color) {
                 params->selectionColor = color;
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2124,10 +2106,10 @@ HdxTaskControllerSceneIndex::SetSelectionColor(const GfVec4f &color)
         using Task = HdxColorizeSelectionTask;
 
         if (HdxColorizeSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->selectionColor != color) {
                 params->selectionColor = color;
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2146,10 +2128,10 @@ HdxTaskControllerSceneIndex::SetSelectionLocateColor(const GfVec4f &color)
         using Task = HdxSelectionTask;
 
         if (HdxSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->locateColor != color) {
                 params->locateColor = color;
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2158,10 +2140,10 @@ HdxTaskControllerSceneIndex::SetSelectionLocateColor(const GfVec4f &color)
         using Task = HdxColorizeSelectionTask;
 
         if (HdxColorizeSelectionTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->locateColor != color) {
                 params->locateColor = color;
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2177,7 +2159,7 @@ HdxTaskControllerSceneIndex::SetSelectionEnableOutline(const bool enableOutline)
     using Task = HdxColorizeSelectionTask;
 
     HdxColorizeSelectionTaskParams * const params =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!params) {
         return;
     }
@@ -2186,7 +2168,7 @@ HdxTaskControllerSceneIndex::SetSelectionEnableOutline(const bool enableOutline)
         return;
     }
     params->enableOutline = enableOutline;
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2196,7 +2178,7 @@ HdxTaskControllerSceneIndex::SetSelectionOutlineRadius(
     using Task = HdxColorizeSelectionTask;
 
     HdxColorizeSelectionTaskParams * const params =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!params) {
         return;
     }
@@ -2205,7 +2187,7 @@ HdxTaskControllerSceneIndex::SetSelectionOutlineRadius(
         return;
     }
     params->outlineRadius = outlineRadius;
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 static
@@ -2226,10 +2208,10 @@ void
 HdxTaskControllerSceneIndex::_SetLights(const GlfSimpleLightVector &lights)
 {
     // HdxTaskController inserts a set of light prims to represent the lights
-    // passed in through the simple lighting context (lights vector). These are 
+    // passed in through the simple lighting context (lights vector). These are
     // managed by the task controller scene index, and not by scene description;
     // they represent the application state.
-    
+
     size_t i = 0;
 
     HdRetainedSceneIndex::AddedPrimEntries addedPrimEntries;
@@ -2238,8 +2220,8 @@ HdxTaskControllerSceneIndex::_SetLights(const GlfSimpleLightVector &lights)
 
     for (; i < lights.size(); ++i) {
         const GlfSimpleLight &light = lights[i];
-        const SdfPath primPath = _LightPath(_prefix, i);
-        const TfToken &primType = _GetPrimType(light, _isForStorm);
+        const SdfPath primPath = _LightPath(_params.prefix, i);
+        const TfToken &primType = _GetPrimType(light, _params.isForStorm);
 
         const HdSceneIndexPrim prim = _retainedSceneIndex->GetPrim(primPath);
         if (prim.primType == primType) {
@@ -2267,7 +2249,7 @@ HdxTaskControllerSceneIndex::_SetLights(const GlfSimpleLightVector &lights)
     }
 
     while (true) {
-        const SdfPath primPath = _LightPath(_prefix, i);
+        const SdfPath primPath = _LightPath(_params.prefix, i);
         const HdSceneIndexPrim prim = _retainedSceneIndex->GetPrim(primPath);
         if (!prim.dataSource) {
             break;
@@ -2301,7 +2283,7 @@ HdxTaskControllerSceneIndex::_SetSimpleLightTaskParams(
     using Task = HdxSimpleLightTask;
 
     HdxSimpleLightTaskParams * const params =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!params) {
         return;
     }
@@ -2314,7 +2296,7 @@ HdxTaskControllerSceneIndex::_SetSimpleLightTaskParams(
     params->sceneAmbient = src->GetSceneAmbient();
     params->material = src->GetMaterial();
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2378,7 +2360,7 @@ HdxTaskControllerSceneIndex::SetFreeCameraMatrices(
     const GfMatrix4d &viewMatrix,
     const GfMatrix4d &projectionMatrix)
 {
-    const SdfPath primPath = _CameraPath(_prefix);
+    const SdfPath primPath = _CameraPath(_params.prefix);
 
     HdSceneIndexPrim const prim = _retainedSceneIndex->GetPrim(primPath);
     auto const ds = HdxFreeCameraPrimDataSource::Cast(prim.dataSource);
@@ -2405,7 +2387,7 @@ void
 HdxTaskControllerSceneIndex::
 SetFreeCameraClipPlanes(const std::vector<GfVec4d> &clippingPlanes)
 {
-    const SdfPath primPath = _CameraPath(_prefix);
+    const SdfPath primPath = _CameraPath(_params.prefix);
 
     HdSceneIndexPrim const prim = _retainedSceneIndex->GetPrim(primPath);
     auto const ds = HdxFreeCameraPrimDataSource::Cast(prim.dataSource);
@@ -2416,7 +2398,8 @@ SetFreeCameraClipPlanes(const std::vector<GfVec4d> &clippingPlanes)
     }
 
     HdDataSourceLocatorSet locators;
-    ds->SetClippingPlanes({clippingPlanes.begin(), clippingPlanes.end()});
+    ds->SetClippingPlanes(
+        {clippingPlanes.begin(), clippingPlanes.end()}, &locators);
 
     if (locators.IsEmpty()) {
         return;
@@ -2426,6 +2409,13 @@ SetFreeCameraClipPlanes(const std::vector<GfVec4d> &clippingPlanes)
         { { primPath, std::move(locators) } });
 }
 
+SdfPath
+HdxTaskControllerSceneIndex::
+GetFreeCameraPath()
+{
+    return _CameraPath(_params.prefix);
+}
+
 void
 HdxTaskControllerSceneIndex::SetColorCorrectionParams(
     const HdxColorCorrectionTaskParams &params)
@@ -2433,7 +2423,7 @@ HdxTaskControllerSceneIndex::SetColorCorrectionParams(
     using Task = HdxColorCorrectionTask;
 
     HdxColorCorrectionTaskParams * const taskParams =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!taskParams) {
         return;
     }
@@ -2445,7 +2435,7 @@ HdxTaskControllerSceneIndex::SetColorCorrectionParams(
     }
     *taskParams = newParams;
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2455,7 +2445,7 @@ HdxTaskControllerSceneIndex::SetBBoxParams(
     using Task = HdxBoundingBoxTask;
 
     HdxBoundingBoxTaskParams * const taskParams =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!taskParams) {
         return;
     }
@@ -2472,7 +2462,7 @@ HdxTaskControllerSceneIndex::SetBBoxParams(
     }
     *taskParams = newParams;
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2481,7 +2471,7 @@ HdxTaskControllerSceneIndex::SetEnablePresentation(const bool enabled)
     using Task = HdxPresentTask;
 
     HdxPresentTaskParams * const params =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!params) {
         return;
     }
@@ -2490,7 +2480,7 @@ HdxTaskControllerSceneIndex::SetEnablePresentation(const bool enabled)
     }
     params->enabled = enabled;
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2500,7 +2490,7 @@ HdxTaskControllerSceneIndex::SetPresentationOutput(
     using Task = HdxPresentTask;
 
     HdxPresentTaskParams * const params =
-        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix);
+        _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix);
     if (!params) {
         return;
     }
@@ -2510,7 +2500,7 @@ HdxTaskControllerSceneIndex::SetPresentationOutput(
     params->dstApi = api;
     params->dstFramebuffer = framebuffer;
 
-    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _prefix);
+    _SendDirtyParamsEntry<Task>(_retainedSceneIndex, _params.prefix);
 }
 
 void
@@ -2543,9 +2533,9 @@ HdxTaskControllerSceneIndex::SetCameraPath(const SdfPath &id)
         using Task = HdxSimpleLightTask;
 
         if (HdxSimpleLightTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             params->cameraPath = _activeCameraId;
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -2553,9 +2543,9 @@ HdxTaskControllerSceneIndex::SetCameraPath(const SdfPath &id)
         using Task = HdxPickFromRenderBufferTask;
 
         if (HdxPickFromRenderBufferTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             params->cameraId = _activeCameraId;
-            _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+            _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
         }
     }
 
@@ -2588,7 +2578,7 @@ HdxTaskControllerSceneIndex::_SetCameraFramingForTasks()
     // The composition step (i.e., the present task) uses the viewport
     // offset to update the unmasked region of the bound framebuffer.
     const GfVec4d adjustedViewport =
-        _UsingAovs(_retainedSceneIndex, _prefix)
+        _UsingAovs(_retainedSceneIndex, _params.prefix)
             ? GfVec4d(0, 0, _viewport[2], _viewport[3])
             : _viewport;
 
@@ -2621,7 +2611,7 @@ HdxTaskControllerSceneIndex::_SetCameraFramingForTasks()
         using Task = HdxPickFromRenderBufferTask;
 
         if (HdxPickFromRenderBufferTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             if (params->viewport != adjustedViewport ||
                 params->framing != _framing ||
                 params->overrideWindowPolicy != _overrideWindowPolicy) {
@@ -2630,7 +2620,7 @@ HdxTaskControllerSceneIndex::_SetCameraFramingForTasks()
                 params->overrideWindowPolicy = _overrideWindowPolicy;
                 params->viewport = adjustedViewport;
 
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2639,7 +2629,7 @@ HdxTaskControllerSceneIndex::_SetCameraFramingForTasks()
         using Task = HdxPresentTask;
 
         if (HdxPresentTaskParams * const params =
-                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _prefix)) {
+                _GetTaskParamsForTask<Task>(_retainedSceneIndex, _params.prefix)) {
             // The composition step uses the viewport passed in by the
             // application, which may have a non-zero offset for things like
             // camera masking.
@@ -2651,7 +2641,7 @@ HdxTaskControllerSceneIndex::_SetCameraFramingForTasks()
             if (params->dstRegion != dstRegion) {
                 params->dstRegion = dstRegion;
 
-                _AddDirtyParamsEntry<Task>(_prefix, &dirtiedPrimEntries);
+                _AddDirtyParamsEntry<Task>(_params.prefix, &dirtiedPrimEntries);
             }
         }
     }
@@ -2668,7 +2658,7 @@ HdxTaskControllerSceneIndex::_SetRenderBufferSize()
 
     HdSceneIndexObserver::DirtiedPrimEntries dirtiedPrimEntries;
 
-    const SdfPath path = _AovScopePath(_prefix);
+    const SdfPath path = _AovScopePath(_params.prefix);
     for (const SdfPath &renderBufferPath :
              _retainedSceneIndex->GetChildPrimPaths(path)) {
         HdSceneIndexPrim const prim =

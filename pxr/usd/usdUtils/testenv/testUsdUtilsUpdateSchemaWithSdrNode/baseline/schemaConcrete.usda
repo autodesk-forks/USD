@@ -32,6 +32,10 @@ class TestSchemaConcrete "TestSchemaConcrete" (
         }
         displayGroup = "Basic"
         displayName = "Exposure"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Exposure"
+        }
     )
     float inputs:intensity = 1 (
         connectability = "interfaceOnly"
@@ -45,6 +49,10 @@ class TestSchemaConcrete "TestSchemaConcrete" (
         }
         displayGroup = "Basic"
         displayName = "Intensity"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Intensity"
+        }
     )
     vector3f inputs:sunDirection = (0, 1, 0) (
         connectability = "interfaceOnly"
@@ -64,6 +72,10 @@ class TestSchemaConcrete "TestSchemaConcrete" (
         }
         displayGroup = "Basic"
         displayName = "Direction"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Direction"
+        }
     )
     float propNS:testShaderPropWithNS = 0
 }

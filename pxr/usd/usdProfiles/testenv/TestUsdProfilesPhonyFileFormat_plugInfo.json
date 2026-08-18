@@ -1,0 +1,53 @@
+{
+    "Plugins": [
+        {
+            "Info": {
+                "Profiles": {
+                    "Capabilities": {
+                        "test": {
+                            "name": "Test root capability",
+                            "docstring": "Root of the test capability sub-graph for usdProfiles tests.",
+                            "style": "core",
+                            "subgraph": "Foundation"
+                        },
+                        "test.phony": {
+                            "predecessors": ["test"],
+                            "name": "Phony test domain",
+                            "docstring": "Phony test capability sub-domain.",
+                            "style": "core",
+                            "subgraph": "Foundation"
+                        },
+                        "test.phony.fileformat": {
+                            "predecessors": ["test.phony", "usd.core.fileformat"],
+                            "name": "Phony File Format",
+                            "docstring": "Support for the phony test file format.",
+                            "style": "core",
+                            "subgraph": "Foundation"
+                        }
+                    }
+                },
+                "Types": {
+                    "UsdProfilesTestPhonyFileFormat": {
+                        "bases": [
+                            "SdfFileFormat"
+                        ],
+                        "extensions": [
+                            "phony"
+                        ],
+                        "formatId": "phony",
+                        "target": "usd",
+                        "primary": true,
+                        "supportsEditing": false,
+                        "supportsWriting": false,
+                        "impliesCapabilities": ["test.phony.fileformat"]
+                    }
+                }
+            },
+            "LibraryPath": "@TEST_PLUG_INFO_LIBRARY_PATH@",
+            "Name": "TestUsdProfilesPhonyFileFormat",
+            "ResourcePath": "@TEST_PLUG_INFO_RESOURCE_PATH@",
+            "Root": "@TEST_PLUG_INFO_ROOT@",
+            "Type": "library"
+        }
+    ]
+}

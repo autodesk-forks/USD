@@ -252,6 +252,20 @@ public:
     PCP_API
     bool IsDueToAncestor() const;
 
+    // Get/set whether this node or any of its ancestor nodes represents a
+    // direct dependency.
+    PCP_API
+    void SetHasTransitiveDirectDependency(bool hasDep);
+    PCP_API
+    bool HasTransitiveDirectDependency() const;
+
+    // Get/set whether this node or any of its ancestor nodes represents an
+    // ancestral dependency.
+    PCP_API
+    void SetHasTransitiveAncestralDependency(bool hasDep);
+    PCP_API
+    bool HasTransitiveAncestralDependency() const;
+
     /// Get/set whether this node provides any symmetry opinions, either
     /// directly or from a namespace ancestor.
     PCP_API
@@ -319,6 +333,13 @@ public:
     void SetHasSpecs(bool hasSpecs);
     PCP_API
     bool HasSpecs() const;
+
+    /// Returns true if this node's site or a namespace ancestor
+    /// has authored value clips.
+    PCP_API
+    void SetHasValueClips(bool hasValueClips);
+    PCP_API
+    bool HasValueClips() const;
 
     /// @}
 

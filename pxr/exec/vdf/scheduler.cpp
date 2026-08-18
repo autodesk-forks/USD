@@ -329,10 +329,28 @@ _SetBufferPassDataForOutputs(
 
             if ( *c != currMaxConnection ) {
 
+                const VdfNode &targetNode = (*c)->GetTargetNode();
+
+                // Skip speculation nodes.
+                //
+                // Accumulating the keep mask for a speculation node has
+                // worst-case cubic time complexity: for each of the n
+                // connections, we visit n speculation outputs, each of whose
+                // input dependency computation looks up the corresponding
+                // output by name, which is currently implemented as linear
+                // search over n outputs.
+                //
+                // Because speculation nodes are used to resolve topological
+                // cycles, they do not read from their inputs like typical
+                // nodes and do not need to contribute to the keep mask at all.
+                if (targetNode.IsSpeculationNode()) {
+                    continue;
+                }
+
                 // Iterate over all outputs on the target node to determine
                 // the which data on the input connection the target output
                 // depends on.
-                TF_FOR_ALL(o, (*c)->GetTargetNode().GetOutputsIterator()) {
+                TF_FOR_ALL(o, targetNode.GetOutputsIterator()) {
                     const VdfOutput *output = o->second;
 
                     // Determine whether the target output is requested and

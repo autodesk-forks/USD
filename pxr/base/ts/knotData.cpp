@@ -52,7 +52,7 @@ namespace
 Ts_KnotData* Ts_KnotData::Create(const TfType valueType)
 {
     Ts_KnotData *result = nullptr;
-    TsDispatchToValueTypeTemplate<_DataCreator>(
+    TsDispatchToStorageValueTypeTemplate<_DataCreator>(
         valueType, &result);
     return result;
 }
@@ -241,13 +241,11 @@ Ts_TypedKnotData<T>::_UpdateTangentAutoEase(
 
     // See if we overflowed the type.
     //
-    // XXX: There is currently an issue on Mac where std::isfinite(GfHalf) is
-    // failing because std::is_arithmetic<GfHalf>::value is false. Work around
-    // it by casting the T back to a double. If it overflowed to infinity,
-    // casting it back will preserve the infinite value.
-    if (!std::isfinite(double(typedSlope))) {
+    // std::isfinite<GfHalf>() is not fully implemented. Use the help method
+    // in typeHelpers.h instead.
+    if (!Ts_IsFinite(typedSlope)) {
         double height = slope * width;
-        T typedSlope = T(std::copysign(double(std::numeric_limits<T>::max()),
+        typedSlope = T(std::copysign(double(std::numeric_limits<T>::max()),
                                        slope));
         width = height / typedSlope;
     }
@@ -268,8 +266,11 @@ std::unique_ptr<Ts_KnotDataProxy>
 Ts_KnotDataProxy::Create(Ts_KnotData *data, const TfType valueType)
 {
     Ts_KnotDataProxy *result = nullptr;
-    TsDispatchToValueTypeTemplate<_ProxyCreator>(
+    TsDispatchToStorageValueTypeTemplate<_ProxyCreator>(
         valueType, data, &result);
+    if (result) {
+        result->valueType = valueType;
+    }
     return std::unique_ptr<Ts_KnotDataProxy>(result);
 }
 
@@ -294,7 +295,7 @@ template bool                                                           \
         const Ts_TypedKnotData<TS_SPLINE_VALUE_CPP_TYPE(tuple)>* nextData, \
         bool updatePre);
 
-TF_PP_SEQ_FOR_EACH(_MAKE_CLAUSE, ~, TS_SPLINE_SUPPORTED_VALUE_TYPES)
+TF_PP_SEQ_FOR_EACH(_MAKE_CLAUSE, ~, TS_SPLINE_STORAGE_VALUE_TYPES)
 #undef _MAKE_CLAUSE
 
 PXR_NAMESPACE_CLOSE_SCOPE

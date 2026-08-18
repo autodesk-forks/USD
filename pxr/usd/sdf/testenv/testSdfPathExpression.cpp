@@ -12,6 +12,7 @@
 #include "pxr/usd/sdf/pathExpressionEval.h"
 #include "pxr/usd/sdf/pathPattern.h"
 #include "pxr/usd/sdf/predicateLibrary.h"
+#include "pxr/base/vt/valueComposeOver.h"
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -60,7 +61,10 @@ TestBasics()
     {
         auto eval = MatchEval { SdfPathExpression("/foo//") };
         TF_AXIOM(eval.Match(SdfPath("/foo")));
-    }    
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar/baz")));
+        TF_AXIOM(!eval.Match(SdfPath("/bar")));
+    }
 
     {
         auto eval = MatchEval { 
@@ -224,6 +228,67 @@ TestBasics()
     }
 
     {
+        auto eval = MatchEval { SdfPathExpression("/[abc]") };
+        TF_AXIOM(eval.Match(SdfPath("/a")));
+        TF_AXIOM(eval.Match(SdfPath("/b")));
+        TF_AXIOM(eval.Match(SdfPath("/c")));
+        TF_AXIOM(!eval.Match(SdfPath("/d")));
+        TF_AXIOM(!eval.Match(SdfPath("/abc")));
+    }
+
+    {
+        // Bracket class at start, wildcard after
+        auto eval = MatchEval { SdfPathExpression("/[abc]*") };
+        TF_AXIOM(eval.Match(SdfPath("/a")));
+        TF_AXIOM(eval.Match(SdfPath("/aXYZ")));
+        TF_AXIOM(eval.Match(SdfPath("/bFoo")));
+        TF_AXIOM(!eval.Match(SdfPath("/dFoo")));
+    }
+
+    {
+        // Range in bracket class
+        auto eval = MatchEval { SdfPathExpression("/[a-z]*") };
+        TF_AXIOM(eval.Match(SdfPath("/foo")));
+        TF_AXIOM(eval.Match(SdfPath("/bar")));
+        TF_AXIOM(!eval.Match(SdfPath("/Foo")));
+        TF_AXIOM(!eval.Match(SdfPath("/123")));
+    }    
+    
+    {
+        auto eval = MatchEval { SdfPathExpression("/foo/bar.*") };
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar.x")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar.myProp")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/bar")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/bar/x")));
+    }
+
+    {
+        // Namespaced property wildcard
+        auto eval = MatchEval { SdfPathExpression("/foo/bar.ns:*") };
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar.ns:x")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar.ns:myProp")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/bar.otherNs:x")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/bar.x")));
+    }
+
+    {
+        // Bare predicate on an element (no wildcard text)
+        auto eval = MatchEval { SdfPathExpression("/foo/{isPrimPath}") };
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/anything")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/bar.prop")));
+    }
+
+    {
+        // Wildcard + predicate combined
+        auto eval = MatchEval { SdfPathExpression("/foo/bar*{isPrimPath}") };
+        TF_AXIOM(eval.Match(SdfPath("/foo/bar")));
+        TF_AXIOM(eval.Match(SdfPath("/foo/barXYZ")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/bar.prop")));
+        TF_AXIOM(!eval.Match(SdfPath("/foo/baz")));
+    }
+
+    {
         // ComposeOver
         SdfPathExpression a("/a");
         SdfPathExpression b("%_ /b");
@@ -255,6 +320,40 @@ TestBasics()
         TF_AXIOM(nothing.ComposeOver(a) == nothing);
         TF_AXIOM(nothing.ComposeOver(b) == nothing);
         TF_AXIOM(nothing.ComposeOver(c) == nothing);
+
+        // Test VtValueComposeOver with PathExpressions.
+        {
+            TF_AXIOM(VtValueCanComposeOver(b, a));
+            TF_AXIOM(VtValueCanComposeOver(c, b));
+            
+            VtValue composedVal =
+                VtValueComposeOver(c, VtValueComposeOver(b, a));
+
+            TF_AXIOM(composedVal.IsHolding<SdfPathExpression>());
+
+            SdfPathExpression composed = composedVal.Get<SdfPathExpression>();
+
+            TF_AXIOM(!composed.ContainsExpressionReferences());
+            TF_AXIOM(!composed.ContainsWeakerExpressionReference());
+            TF_AXIOM(composed.IsComplete());
+            TF_AXIOM(composed == SdfPathExpression { "/a /b /c" });
+
+            // Composing over the VtBackground should resolve out `%_`.
+            {
+                VtValue composedBCVal = VtValueComposeOver(
+                    VtValueComposeOver(c, b), VtBackground);
+                
+                TF_AXIOM(composedBCVal.IsHolding<SdfPathExpression>());
+
+                SdfPathExpression composed =
+                    composedBCVal.Get<SdfPathExpression>();
+                
+                TF_AXIOM(!composed.ContainsExpressionReferences());
+                TF_AXIOM(!composed.ContainsWeakerExpressionReference());
+                TF_AXIOM(composed.IsComplete());
+                TF_AXIOM(composed == SdfPathExpression { "/b /c" });
+            }
+        }
     }
 
     {
@@ -329,6 +428,43 @@ TestBasics()
             TF_AXIOM(eval.Match(SdfPath("/Home/bar")));
             TF_AXIOM(eval.Match(SdfPath("/Home/test/baz/qux")));
             TF_AXIOM(eval.Match(SdfPath("/Home/test/baz/a/b/c/qux")));
+
+            // Test ReplacePrefix when newPrefix is empty. This should remove all
+            // expression refs and path patterns that had oldPrefix.
+            SdfPathExpression noPrefix("/World/test/foo /World/bar "
+                "/World/test/baz//qux %/World/test:otherRef /Other/foo* //World");
+
+            SdfPathExpression after = noPrefix.ReplacePrefix(
+                SdfPath("/World"), SdfPath());
+            TF_AXIOM(after.GetText() == "/Other/foo* //World");
+
+            auto evl = MatchEval { after };
+            TF_AXIOM(!evl.Match(SdfPath("/World/test/foo")));
+            TF_AXIOM(!evl.Match(SdfPath("/World/bar")));
+            TF_AXIOM(!evl.Match(SdfPath("/World/test/baz/qux")));
+            TF_AXIOM(evl.Match(SdfPath("/Other/foobar")));
+            TF_AXIOM(evl.Match(SdfPath("/World")));
+
+            // Ensure the path expression resolves to nothing if its only contents are
+            // a prefix that is deleted.
+            noPrefix = SdfPathExpression("/World/bar");
+            after = noPrefix.ReplacePrefix(SdfPath("/World/bar"), SdfPath(""));
+            TF_AXIOM(after == SdfPathExpression::Nothing());
+
+            evl = MatchEval { after };
+            TF_AXIOM(!evl.Match(SdfPath("/World/bar")));
+
+            // Ensure the path expression can resolve to everything
+            SdfPathExpression everything("~/foo/bar");
+            evl = MatchEval { everything };
+            TF_AXIOM(!evl.Match(SdfPath("/foo/bar")));
+            TF_AXIOM(evl.Match(SdfPath("/baz")));
+            after = everything.ReplacePrefix(SdfPath("/foo"), SdfPath(""));
+
+            evl = MatchEval { after };
+            TF_AXIOM(after == SdfPathExpression::Everything());
+            TF_AXIOM(evl.Match(SdfPath("/foo/bar")));
+            TF_AXIOM(evl.Match(SdfPath("/baz")));
         }
     }
 
@@ -397,22 +533,69 @@ TestSearch()
             SdfPathExpression(exprStr), predLib);
         auto search = eval.MakeIncrementalSearcher(PathIdentity {});
 
-        std::vector<std::string> searchMatches;
-        for (SdfPath const &p: paths) {
-            if (search.Next(p)) {
-                searchMatches.push_back(p.GetAsString());
+        auto getSearchMatches = [&](bool skipConstantSubtrees) {
+            std::vector<std::string> searchMatches;
+            SdfPath constantMatchPrefix;
+            SdfPath constantNoMatchPrefix;
+            for (SdfPath const &p: paths) {
+                if (!constantMatchPrefix.IsEmpty() &&
+                    p.HasPrefix(constantMatchPrefix)) {
+                    searchMatches.push_back(p.GetAsString());
+                    if (!skipConstantSubtrees) {
+                        auto result = search.Next(p);
+                        TF_AXIOM(result && result.IsConstant());
+                    }
+                }
+                else if (!constantNoMatchPrefix.IsEmpty() &&
+                    p.HasPrefix(constantNoMatchPrefix)) {
+                    if (!skipConstantSubtrees) {
+                        auto result = search.Next(p);
+                        TF_AXIOM(!result && result.IsConstant());
+                    }
+                }
+                else {
+                    auto result = search.Next(p);
+                    if (result) {
+                        searchMatches.push_back(p.GetAsString());
+                        if (result.IsConstant()) {
+                            constantMatchPrefix = p;
+                        }
+                    }
+                    else {
+                        if (result.IsConstant()) {
+                            constantNoMatchPrefix = p;
+                        }
+                    }
+                }
             }
-        }
-        if (searchMatches != expected) {
-            TF_FATAL_ERROR("Incremental search for '%s' yielded unexpected "
-                           "results.\n"
+            return searchMatches;
+        };
+
+        auto searchMatchesNoSkip = getSearchMatches(false);
+        auto searchMatchesSkip = getSearchMatches(true);
+        
+        if (searchMatchesNoSkip != expected) {
+            TF_FATAL_ERROR("No-skip incremental search for '%s' yielded "
+                           "unexpected results.\n"
                            "Expected:\n"
                            "  %s\n"
                            "Actual:\n"
                            "  %s\n",
                            exprStr.c_str(),
                            TfStringJoin(expected, "\n  ").c_str(),
-                           TfStringJoin(searchMatches, "\n  ").c_str());
+                           TfStringJoin(searchMatchesNoSkip, "\n  ").c_str());
+        }
+
+        if (searchMatchesSkip != expected) {
+            TF_FATAL_ERROR("Skip incremental search for '%s' yielded "
+                           "unexpected results.\n"
+                           "Expected:\n"
+                           "  %s\n"
+                           "Actual:\n"
+                           "  %s\n",
+                           exprStr.c_str(),
+                           TfStringJoin(expected, "\n  ").c_str(),
+                           TfStringJoin(searchMatchesSkip, "\n  ").c_str());
         }
 
         std::vector<std::string> matchMatches;
@@ -421,7 +604,7 @@ TestSearch()
                 matchMatches.push_back(p.GetAsString());
             }
         }
-        if (matchMatches != searchMatches) {
+        if (matchMatches != searchMatchesNoSkip) {
             TF_FATAL_ERROR("Incremental search for '%s' inconsistent with "
                            "individual Match()es.\n"
                            "Search Results:\n"
@@ -429,7 +612,7 @@ TestSearch()
                            "Match Results:\n"
                            "  %s\n",
                            exprStr.c_str(),
-                           TfStringJoin(searchMatches, "\n  ").c_str(),
+                           TfStringJoin(searchMatchesNoSkip, "\n  ").c_str(),
                            TfStringJoin(matchMatches, "\n  ").c_str());
         }
     };
@@ -439,7 +622,7 @@ TestSearch()
         std::vector<std::string> const &expected) {
         return testSearchWithPaths(paths, exprStr, expected);
     };
-
+    
     testSearch("/World",
                { "/World" });
 
@@ -513,6 +696,16 @@ TestSearch()
                { "/World/anim/chars/Mike",
                  "/World/anim/sets/Bedroom/Furniture" });
 
+    // Prims named 'geom' that aren't descendant to a 'Sully'
+    testSearch("//geom - //Sully//",
+               { "/World/anim/chars/Mike/geom",
+                 "/Foo/geom" });
+
+    // Prims named 'geom' under a 'chars' or under a 'Foo'
+    testSearch("//chars//geom //Foo//geom",
+               { "/World/anim/chars/Mike/geom",
+                 "/World/anim/chars/Sully/geom",
+                 "/Foo/geom" });
     
     testSearch("//",
                { "/",
@@ -881,6 +1074,54 @@ TestErrors()
     fprintf(stderr, "=== End expected errors ===\n");
 }
 
+static void
+TestErrorMessages()
+{
+    auto expectError = [](std::string const &exprTxt,
+                          std::string const &expectedMsg) {
+        SdfPathExpression expr(exprTxt);
+        if (!expr.IsEmpty()) {
+            TF_FATAL_ERROR("Expected '%s' to produce the empty expression",
+                           exprTxt.c_str());
+        }
+        std::string const &err = expr.GetParseError();
+        if (err.empty()) {
+            TF_FATAL_ERROR("Expected parsing '%s' to yield a parse error",
+                           exprTxt.c_str());
+        }
+        if (err.find(expectedMsg) == std::string::npos) {
+            TF_FATAL_ERROR("Parsing '%s' produced error:\n  %s\n"
+                           "Expected it to contain:\n  %s",
+                           exprTxt.c_str(), err.c_str(),
+                           expectedMsg.c_str());
+        }
+    };
+
+    fprintf(stderr, "=== Expected error messages =======\n");
+
+    // Path expression level errors.
+    expectError("/foo &",  "expected path expression after operator");
+    expectError("/foo +",  "expected path expression after operator");
+    expectError("/foo - ", "expected path expression after operator");
+    expectError("(/foo",   "expected ')' to close expression group");
+    expectError("()",      "expected path expression after '('");
+    expectError("/foo)",   "expected end of path expression");
+    expectError("%:",      "expected identifier");
+    expectError("%/",      "expected expression reference path after '/'");
+
+    // Path pattern level errors.
+    expectError("/foo/",        "expected path pattern element");
+    expectError("/foo/bar.",    "expected property pattern element after '.'");
+    expectError("/foo/{unclosed", "expected '}' to close predicate expression");
+    expectError("/[abc",        "expected ']' to close bracket class");
+
+    // Predicate expression level errors.
+    expectError("/foo{a and}",  "expected predicate expression after operator");
+    expectError("/foo{bar(}",   "expected ')' to close function call");
+
+    fprintf(stderr, "=== End expected error messages ===\n");
+}
+
 
 int
 main(int argc, char **argv)
@@ -889,7 +1130,8 @@ main(int argc, char **argv)
     TestSearch();
     TestPathPattern();
     TestErrors();
-    
+    TestErrorMessages();
+
     printf(">>> Test SUCCEEDED\n");
     return 0;
 }

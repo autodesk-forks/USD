@@ -156,11 +156,14 @@ class TestUsdLuxLight(unittest.TestCase):
         self.assertFalse(filterOutput.CanConnect(lightGraphOutput))
         self.assertFalse(filterOutput.CanConnect(filterGraphOutput))
 
-        # Light filters inputs diverge from the default behavior and should be 
-        # connectable across its own scope (encapsulation is not required)
-        self.assertTrue(filterInput.CanConnect(filterOutput))
+        # Light filters follow encapsulation rules, so should not be connectable
+        # across its own scope. (encapsulation is required) and
+        # cannot connect its own input to its own output
+        self.assertFalse(filterInput.CanConnect(filterOutput))
         self.assertTrue(filterInput.CanConnect(filterGraphOutput))
-        self.assertTrue(filterInput.CanConnect(lightGraphOutput))
+        # cannot connect its own input to another light's output which is
+        # outside its own encapsulated scope
+        self.assertFalse(filterInput.CanConnect(lightGraphOutput))
 
         # The shaping API can add more connectable attributes to the light 
         # and implements the same connectable interface functions. We test 
@@ -521,7 +524,7 @@ class TestUsdLuxLight(unittest.TestCase):
             # The context is always 'light' for lights. 
             # Source type is 'USD'
             self.assertEqual(node.GetContext(), 'light')
-            self.assertEqual(node.GetSourceType(), 'USD')
+            self.assertEqual(node.GetShadingSystem(), 'USD')
 
             # Help string is generated and encoded in the node's metadata (no
             # need to verify the specific wording).
@@ -536,7 +539,7 @@ class TestUsdLuxLight(unittest.TestCase):
             # Other classifications are left empty.
             self.assertFalse(node.GetCategory())
             self.assertFalse(node.GetDepartments())
-            self.assertFalse(node.GetFamily())
+            self.assertFalse(node.GetFunction())
             self.assertFalse(node.GetLabel())
             self.assertFalse(node.GetShaderVersion())
             self.assertFalse(node.GetAllVstructNames())

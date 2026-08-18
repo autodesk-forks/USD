@@ -22,26 +22,31 @@
 /// In header file:
 ///
 /// \code
-///    #define MF_TOKENS \.     <--- please ignore '.'
-///        (transform)   \.
-///        (moves)       \.
+///    #define MYLIB_TOKENS \.     <--- please ignore '.'
+///        (token1)         \.
+///        (token2)         \.
 ///
 ///        // Syntax when string name differs from symbol.
 ///        ((foo, "bar"))
 ///
-///    TF_DECLARE_PUBLIC_TOKENS(MfTokens, MF_TOKENS);
+///    // Use this form if the symbols for the static tokens must be exported,
+///    // passing in the associated import/export macro (e.g. MY_LIB_API) as 
+///    // the second argument.
+///    TF_DECLARE_PUBLIC_TOKENS(MyLibTokens, MYLIB_API, MYLIB_TOKENS);
+///    // Use this form otherwise.
+///    // TF_DECLARE_PUBLIC_TOKENS(MyLibTokens, MYLIB_TOKENS);
 /// \endcode
 ///
 /// In cpp file:
 ///
 /// \code
-///     TF_DEFINE_PUBLIC_TOKENS(MfTokens, MF_TOKENS);
+///     TF_DEFINE_PUBLIC_TOKENS(MyLibTokens, MYLIB_TOKENS);
 /// \endcode
 ///
 /// Access the token by using the key as though it were a pointer, like this:
 ///
 /// \code
-///    MfTokens->transform;
+///    MyLibTokens->token1;
 /// \endcode
 ///
 /// An additional member, allTokens, is a std::vector<TfToken> populated

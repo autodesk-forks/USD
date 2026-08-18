@@ -28,11 +28,9 @@
 #include <tbb/concurrent_unordered_map.h>
 
 #include <algorithm>
-#include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class Exec_RegistrationBarrier;
 class Exec_ValueExtractor;
 class VdfMask;
 
@@ -65,6 +63,13 @@ public:
     /// arbitrary value of type \p ValueType must be produced, \p fallback will
     /// be used.
     ///
+    /// All types that can be used to author attribute and metadata values in
+    /// USD are known to exec by default. User-defined types must be registered
+    /// using this function.
+    ///
+    /// \note
+    /// Exec value types must be equality comparable. 
+    ///
     /// \warning
     /// If a given \p ValueType is registered more than once, all calls must
     /// specify the same \p fallback; otherwise, which fallback value wins is
@@ -73,10 +78,33 @@ public:
     /// value. Otherwise, multiple registrations are allowed, with no
     /// verification that the fallback values match.
     ///
+    /// # Example
+    ///
+    /// ```cpp
+    /// struct CustomType {
+    ///     int i;
+    ///     std::string s;
+    /// 
+    ///     friend
+    ///     bool operator==(const CustomType &a, const CustomType &b) {
+    ///         return a.i == b.i && a.s == b.s;
+    ///     }
+    /// };
+    /// 
+    /// TF_REGISTRY_FUNCTION(ExecTypeRegistry)
+    /// {
+    ///     ExecTypeRegistry::RegisterType(CustomType{});
+    /// }
+    /// ```
+    ///
     template <typename ValueType>
     static void RegisterType(const ValueType &fallback) {
-        static_assert(!VtIsArray<ValueType>::value,
-                      "VtArray is not a supported execution value type");
+        static_assert(
+            !VtIsArray<ValueType>::value,
+            "VtArray is not a supported execution value type.");
+        static_assert(
+            VdfIsEqualityComparable<ValueType>,
+            "Equality comparison is required for execution value types.");
         _GetInstanceForRegistration()._RegisterType(fallback);
     }
 
@@ -90,7 +118,9 @@ public:
     ///
     template <typename ValueType>
     TfType CheckForRegistration() const {
-        return VdfExecutionTypeRegistry::CheckForRegistration<ValueType>();
+        return VdfExecutionTypeRegistry::CheckForRegistration<ValueType>(
+            "Use ExecTypeRegistry::RegisterType<T>() to register execution "
+            "value types.");
     }
 
     /// Construct a VdfVector whose value is copied from \p value.
@@ -145,10 +175,9 @@ private:
     EXEC_API
     void _RegisterExtractor(
         TfType type,
-        const Exec_ValueExtractorFunction &extractor);
+        Exec_ValueExtractorFunction &extractor);
 
 private:
-    std::unique_ptr<Exec_RegistrationBarrier> _registrationBarrier;
 
     VdfTypeDispatchTable<_CreateVector> _createVector;
 
@@ -218,7 +247,6 @@ ExecTypeRegistry::_MakeExtractorFunction()
                 v.GetReadAccessor<T>();
 
             if (access.IsEmpty()) {
-                TF_VERIFY(mask.GetNumSet() == 0);
                 return VtValue();
             }
 

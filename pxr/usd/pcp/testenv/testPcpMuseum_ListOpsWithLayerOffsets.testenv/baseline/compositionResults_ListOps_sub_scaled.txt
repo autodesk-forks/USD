@@ -1,0 +1,29 @@
+Loading @ListOpsWithLayerOffsets/base_sub_scaled.usda@
+
+------------------------------------------------------------------------
+Layer Stack:
+     base_sub_scaled.usda
+     layer_60_1.usda
+     layer_60_1a.usda
+     layer_60_1b.usda
+     layer_60_2.usda
+
+------------------------------------------------------------------------
+Results for composing </World>
+
+Prim Stack:
+    layer_60_1a.usda     /World
+    layer_60_1b.usda     /World
+    layer_60_2.usda      /World
+
+Child names:
+     ['PayloadIn24']
+
+------------------------------------------------------------------------
+Results for composing </World/PayloadIn24>
+
+Prim Stack:
+    layer_60_1a.usda     /World/PayloadIn24
+    layer_60_1b.usda     /World/PayloadIn24
+    layer_60_2.usda      /World/PayloadIn24
+

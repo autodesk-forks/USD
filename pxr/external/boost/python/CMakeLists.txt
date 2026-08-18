@@ -137,6 +137,7 @@ pxr_library(python
         detail/pointee.hpp
         detail/prefix.hpp
         detail/preprocessor.hpp
+        detail/pymutex.hpp
         detail/python_type.hpp
         detail/raw_pyobject.hpp
         detail/referent_storage.hpp
@@ -366,10 +367,10 @@ function(boost_python_cpp_target TARGET_NAME)
         set(destination "tests")
     endif()
 
-    # If the monolithic shared library target exists the build will
+    # If the monolithic library target exists the build will
     # fold our library into that target, so link against that instead.
-    if (TARGET usd_ms)
-        target_link_libraries(${TARGET_NAME} usd_ms)
+    if (TARGET usd_m)
+        target_link_libraries(${TARGET_NAME} usd_m)
     else()
         target_link_libraries(${TARGET_NAME} python)
     endif()
@@ -500,6 +501,7 @@ boost_python_test("enum"
 )
 
 boost_python_test("exception_translator")
+boost_python_test("module_nogil")
 
 boost_python_test("pearu1"
     SCRIPT "test/test_cltree.py"

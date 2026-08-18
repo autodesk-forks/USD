@@ -382,10 +382,16 @@ public:
     /// Returns whether this prim spec will be hidden in browsers.
     ///
     /// The default value for hidden is false.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     bool GetHidden() const;
 
     /// Sets whether this prim spec will be hidden in browsers.
+    ///
+    /// \deprecated
+    /// See UsdUIObjectHints.
     SDF_API
     void SetHidden( bool value );
 
@@ -406,6 +412,33 @@ public:
     /// Remove the kind opinion from this prim spec if there is one.
     SDF_API
     void ClearKind();
+
+    /// \name ClipSets
+    /// @{
+
+    /// Returns a proxy for the prim's value clip sets.
+    ///
+    /// Clip sets for this prim may be modified through the proxy.
+    SDF_API
+    SdfNameEditorProxy GetClipSetsList() const;
+
+    /// Returns true if this prim has value clip sets set.
+    SDF_API
+    bool HasClipSets() const;
+
+    /// Returns the value clips for this prim.
+    ///
+    /// The default value for value clips is an empty dictionary.
+    SDF_API
+    SdfDictionaryProxy GetClips() const;
+
+    /// Sets the value clips for this prim spec.
+    ///
+    /// If \p value is empty, then this removes the setting
+    /// for the given value clips \p name.
+    void SetClips(const std::string& name, const VtValue& value);
+
+    /// @}
 
     /// Returns the symmetry function for this prim.
     ///

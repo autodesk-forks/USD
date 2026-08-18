@@ -1,0 +1,8 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    subLayers = [
+        @./layer_scale_2.usda@ (scale = 2.0),
+        @./layer_scale_3.usda@ (scale = 3.0)
+    ]
+)

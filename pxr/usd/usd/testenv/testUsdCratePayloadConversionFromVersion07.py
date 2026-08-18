@@ -6,7 +6,7 @@
 # https://openusd.org/license.
 
 import unittest, shutil
-from pxr import Sdf, Usd
+from pxr import Gf, Sdf, Usd
 
 class TestUsdCrateForPayloadLists(unittest.TestCase):
     # Verify that a payload list has a specific set of explicit items
@@ -60,19 +60,19 @@ class TestUsdCrateForPayloadLists(unittest.TestCase):
 
     # Verifies a crate file is the pre-payload list op 0.7.0 crate version
     def _VerifyCrateVersion07(self, filename):
-        info = Usd.CrateInfo.Open(filename)
+        info = Sdf.CrateInfo.Open(filename)
         self.assertEqual(info.GetFileVersion(), '0.7.0')
 
     # Verifies a crate file is the 0.8.0 crate version that introduced payload
     # list ops.
     def _VerifyCrateVersion08(self, filename):
-        info = Usd.CrateInfo.Open(filename)
+        info = Sdf.CrateInfo.Open(filename)
         self.assertEqual(info.GetFileVersion(), '0.8.0')
 
     # Verifies a crate file is the 0.9.0 crate version that introduced timecode
     # value types.
     def _VerifyCrateVersion09(self, filename):
-        info = Usd.CrateInfo.Open(filename)
+        info = Sdf.CrateInfo.Open(filename)
         self.assertEqual(info.GetFileVersion(), '0.9.0')
 
     def test_ExportPayloadCrate(self):
@@ -351,7 +351,7 @@ class TestUsdCrateForPayloadLists(unittest.TestCase):
         attr = Sdf.AttributeSpec(payloadNoOpinion, "TimeCode",
                                  Sdf.ValueTypeNames.TimeCode)
         self.assertTrue(attr)
-        attr.default = Sdf.TimeCode(10)
+        attr.default = Gf.TimeCode(10)
         self.assertEqual(attr.default, 10)
 
         # Save the layer and verify the 0.9 version.

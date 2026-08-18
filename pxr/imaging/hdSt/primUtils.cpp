@@ -315,7 +315,7 @@ _ComputeMaterialTag(HdSceneDelegate * const delegate,
         static_cast<const HdStMaterial *>(
             delegate->GetRenderIndex().GetSprim(
                 HdPrimTypeTokens->material, materialId));
-    if (material) {
+    if (material && !material->IsUsingFallbackShader()) {
         return material->GetMaterialTag();
     }
 
@@ -779,10 +779,12 @@ HdStShouldPopulateConstantPrimvars(
     HdDirtyBits const *dirtyBits,
     SdfPath const& id)
 {
-    return HdChangeTracker::IsAnyPrimvarDirty(*dirtyBits, id) ||
-           HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
-           HdChangeTracker::IsExtentDirty(*dirtyBits, id) ||
-           HdChangeTracker::IsPrimIdDirty(*dirtyBits, id);
+    return (*dirtyBits & HdChangeTracker::DirtyNormals ||
+            *dirtyBits & HdChangeTracker::DirtyWidths ||
+            *dirtyBits & HdChangeTracker::DirtyPrimvar ||
+            HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
+            HdChangeTracker::IsExtentDirty(*dirtyBits, id) ||
+            HdChangeTracker::IsPrimIdDirty(*dirtyBits, id));
 }
 
 void
@@ -793,8 +795,14 @@ HdStPopulateConstantPrimvars(
     HdRenderParam *renderParam,
     HdStDrawItem *drawItem,
     HdDirtyBits *dirtyBits,
-    HdPrimvarDescriptorVector const& constantPrimvars,
-    bool *hasMirroredTransform)
+    HdReprSharedPtr const &repr,
+    HdMeshGeomStyle descGeomStyle,
+    int geomSubsetDescIndex,
+    size_t numGeomSubsets,
+    HdBufferSpecVector const& customSpecs,
+    bool *hasMirroredTransform,
+    bool *hasDisplayOpacity,
+    bool *hasNormals)
 {
     HD_TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
@@ -833,13 +841,23 @@ HdStPopulateConstantPrimvars(
         // also push the instancer transform separately.
         if (!instancerId.IsEmpty()) {
             // Gather all instancer transforms in the instancing hierarchy
-            const VtMatrix4dArray rootTransforms = 
-                prim->GetInstancerTransforms(delegate);
-            VtMatrix4dArray rootInverseTransforms(rootTransforms.size());
-            for (size_t i = 0; i < rootTransforms.size(); ++i) {
-                rootInverseTransforms[i] = rootTransforms[i].GetInverse();
+            VtMatrix4dArray rootTransforms;
+            VtMatrix4dArray rootInverseTransforms;
+            SdfPath nextInstancerId = instancerId;
+
+            while (!nextInstancerId.IsEmpty()) {
+                HdStInstancer *instancer = 
+                    static_cast<HdStInstancer*>(
+                        renderIndex.GetInstancer(nextInstancerId));
+                if (!instancer) {
+                    break;
+                }
+                rootTransforms.push_back(instancer->GetTransform());
+                rootInverseTransforms.push_back(
+                    instancer->GetTransformInverse());
                 // Flip the handedness if necessary
-                leftHanded ^= rootTransforms[i].IsLeftHanded();
+                leftHanded ^= rootTransforms.back().IsLeftHanded();
+                nextInstancerId = instancer->GetParentId();
             }
 
             sources.push_back(
@@ -854,11 +872,6 @@ HdStPopulateConstantPrimvars(
                     rootInverseTransforms,
                     rootInverseTransforms.size(),
                     doublesSupported));
-
-            // XXX: It might be worth to consider to have isFlipped
-            // for non-instanced prims as well. It can improve
-            // the drawing performance on older-GPUs by reducing
-            // fragment shader cost, although it needs more GPU memory.
 
             // Set as int (GLSL needs 32-bit align for bool)
             sources.push_back(
@@ -906,9 +919,23 @@ HdStPopulateConstantPrimvars(
         sources.push_back(source);
     }
 
-    if (HdChangeTracker::IsAnyPrimvarDirty(*dirtyBits, id)) {
+    HdPrimvarDescriptorVector constantPrimvars;
+    if ((*dirtyBits & HdChangeTracker::DirtyNormals) ||
+        (*dirtyBits & HdChangeTracker::DirtyWidths) ||
+        (*dirtyBits & HdChangeTracker::DirtyPrimvar)) {
+
+        // Note: avoid pulling the primvar list until we know we need it...
+        constantPrimvars = HdStGetPrimvarDescriptors(
+            prim, drawItem, delegate, HdInterpolationConstant,
+            repr, descGeomStyle, geomSubsetDescIndex, numGeomSubsets);
+
         sources.reserve(sources.size()+constantPrimvars.size());
         for (const HdPrimvarDescriptor& pv: constantPrimvars) {
+            if (pv.name == HdTokens->points) {
+                HF_VALIDATION_WARN(id, "constant-interpolation points!");
+                continue;
+            }
+
             if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, pv.name)) {
                 VtValue value = delegate->Get(id, pv.name);
                 if (!HdStIsPrimvarValidForDrawItem(drawItem, pv.name, value)) {
@@ -973,6 +1000,13 @@ HdStPopulateConstantPrimvars(
                 }
 
                 sources.push_back(source);
+
+                if (hasDisplayOpacity && pv.name == HdTokens->displayOpacity) {
+                    *hasDisplayOpacity = true;
+                }
+                if (hasNormals && pv.name == HdTokens->normals) {
+                    *hasNormals = true;
+                }
             }
         }
     }
@@ -987,8 +1021,18 @@ HdStPopulateConstantPrimvars(
     HdBufferSpecVector bufferSpecs;
     HdBufferSpec::GetBufferSpecs(sources, &bufferSpecs);
 
+    if (!customSpecs.empty()) {
+        bufferSpecs.insert(bufferSpecs.end(),
+                           customSpecs.begin(),
+                           customSpecs.end());
+    }
+
     // XXX: This should be based off the DirtyPrimvarDesc bit.
-    bool hasDirtyPrimvarDesc = (*dirtyBits & HdChangeTracker::DirtyPrimvar);
+    bool hasDirtyPrimvarDesc =
+        (*dirtyBits & HdChangeTracker::DirtyPrimvar) ||
+        (*dirtyBits & HdChangeTracker::DirtyNormals) ||
+        (*dirtyBits & HdChangeTracker::DirtyWidths);
+
     HdBufferSpecVector removedSpecs;
     if (hasDirtyPrimvarDesc) {
         static TfTokenVector internallyGeneratedPrimvars =
@@ -1026,6 +1070,42 @@ HdStPopulateConstantPrimvars(
     }
 }
 
+void
+HdStPopulateConstantPrimvars(
+    HdRprim *prim,
+    HdRprimSharedData *sharedData,
+    HdSceneDelegate *delegate,
+    HdRenderParam *renderParam,
+    HdStDrawItem *drawItem,
+    HdDirtyBits *dirtyBits,
+    HdReprSharedPtr const &repr,
+    HdMeshGeomStyle descGeomStyle,
+    int geomSubsetDescIndex,
+    size_t numGeomSubsets,
+    bool *hasMirroredTransform,
+    bool *hasDisplayOpacity,
+    bool *hasNormals)
+{
+    HD_TRACE_FUNCTION();
+    HF_MALLOC_TAG_FUNCTION();
+
+    HdStPopulateConstantPrimvars(
+        prim,
+        sharedData,
+        delegate,
+        renderParam,
+        drawItem,
+        dirtyBits,
+        repr,
+        descGeomStyle,
+        geomSubsetDescIndex,
+        numGeomSubsets,
+        HdBufferSpecVector(),
+        hasMirroredTransform,
+        hasDisplayOpacity,
+        hasNormals);
+}
+
 // -----------------------------------------------------------------------------
 // Instancer processing utilities
 // -----------------------------------------------------------------------------
@@ -1037,11 +1117,20 @@ HdStUpdateInstancerData(
     HdRprim *prim,
     HdStDrawItem *drawItem,
     HdRprimSharedData *sharedData,
-    HdDirtyBits rprimDirtyBits)
+    HdDirtyBits rprimDirtyBits,
+    bool *hasDisplayOpacity,
+    bool *hasNormals)
 {
     // If there's nothing to do, bail.
     if (!(rprimDirtyBits & HdChangeTracker::DirtyInstancer)) {
         return;
+    }
+
+    if (hasDisplayOpacity) {
+        *hasDisplayOpacity = false;
+    }
+    if (hasNormals) {
+        *hasNormals = false;
     }
 
     // XXX: This belongs in HdRenderIndex!!!
@@ -1054,21 +1143,19 @@ HdStUpdateInstancerData(
     // rebuild even if the index dirty bit isn't set...
     bool forceIndexRebuild = false;
 
-    if (rprimDirtyBits & HdChangeTracker::DirtyInstancer) {
-        // If the instancer topology has changed, we might need to change
-        // how many levels we allocate in the drawing coord.
-        int instancerLevels = HdInstancer::GetInstancerNumLevels(
+    // If the instancer topology has changed, we might need to change
+    // how many levels we allocate in the drawing coord.
+    int instancerLevels = HdInstancer::GetInstancerNumLevels(
             renderIndex, *prim); 
 
-        if (instancerLevels != sharedData->instancerLevels) {
-            sharedData->barContainer.Resize(
+    if (instancerLevels != sharedData->instancerLevels) {
+        sharedData->barContainer.Resize(
                 drawingCoord->GetInstancePrimvarIndex(0) + instancerLevels);
-            sharedData->instancerLevels = instancerLevels;
+        sharedData->instancerLevels = instancerLevels;
 
-            HdStMarkGarbageCollectionNeeded(renderParam);
-            HdStMarkDrawBatchesDirty(renderParam);
-            forceIndexRebuild = true;
-        }
+        HdStMarkGarbageCollectionNeeded(renderParam);
+        HdStMarkDrawBatchesDirty(renderParam);
+        forceIndexRebuild = true;
     }
 
     /* INSTANCE PRIMVARS */
@@ -1097,6 +1184,15 @@ HdStUpdateInstancerData(
             sharedData,
             renderParam,
             &changeTracker);
+
+        if (hasDisplayOpacity) {
+            *hasDisplayOpacity = *hasDisplayOpacity ||
+                static_cast<HdStInstancer*>(instancer)->HasDisplayOpacity();
+        }
+        if (hasNormals) {
+            *hasNormals = *hasNormals ||
+                static_cast<HdStInstancer*>(instancer)->HasNormals();
+        }
 
         parentId = instancer->GetParentId();
         ++level;

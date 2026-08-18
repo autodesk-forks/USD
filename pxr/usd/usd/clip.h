@@ -14,6 +14,7 @@
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/propertySpec.h"
 #include "pxr/base/tf/declarePtrs.h"
+#include "pxr/base/ts/spline.h"
 
 #include <iosfwd>
 #include <memory>
@@ -24,7 +25,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_DECLARE_WEAK_PTRS(PcpLayerStack);
 
-class Usd_InterpolatorBase;
+class Usd_Interpolator;
 class UsdTimeCode;
 
 /// Returns true if the given scene description metadata \p fieldName is
@@ -37,8 +38,8 @@ std::vector<TfToken>
 UsdGetClipRelatedFields();
 
 /// Sentinel values authored on the edges of a clipTimes range.
-constexpr double Usd_ClipTimesEarliest = -std::numeric_limits<double>::max();
-constexpr double Usd_ClipTimesLatest = std::numeric_limits<double>::max();
+constexpr double Usd_ClipTimesEarliest = -std::numeric_limits<double>::infinity();
+constexpr double Usd_ClipTimesLatest = std::numeric_limits<double>::infinity();
 
 /// \class Usd_Clip
 ///
@@ -106,6 +107,13 @@ public:
         {
             return x.externalTime < y.externalTime;
         }
+
+        bool
+        operator()(const Usd_Clip::ExternalTime x,
+                   const Usd_Clip::TimeMapping& y) const
+        {
+            return x < y.externalTime;
+        }
     };
 
     Usd_Clip();
@@ -151,7 +159,38 @@ public:
     template <class T>
     bool QueryTimeSample(
         const SdfPath& path, UsdTimeCode time, 
-        Usd_InterpolatorBase* interpolator, T* value) const;
+        Usd_Interpolator const &interpolator, T* value) const;
+
+    /// If there is a time sample for \p path at \p time, return its value's
+    /// typeid(), otherwise return typeid(void).
+    const std::type_info &QueryTimeSampleTypeid(
+        const SdfPath &path, UsdTimeCode time) const;
+
+    /// Evaluates the clip's spline at external time `time` and stores the
+    /// result in `value`.
+    ///
+    /// If there is no spline, or if the resulting value is value block,
+    /// returns false.
+    template <class T>
+    bool QuerySpline(
+        const SdfPath& path, UsdTimeCode time, T* value) const;
+
+    /// Output a spline representative of this clip for the given external
+    /// path.
+    ///
+    /// Returns false if no spline exists for this clip, true otherwise.
+    ///
+    /// If the clip has a spline that's empty, returns a spline with knots
+    /// at startTime and endTime if the boundaries are finite with
+    /// value block interpolation and value block extrapolation if not.
+    ///
+    /// If there are no clip times, writes a spline truncated to the clip's
+    /// startTime and endTime.
+    ///
+    /// If there are clip times, scales and transforms the underlying spline
+    /// for each timing section, and writes the result of concatenating
+    /// those splines.
+    bool BuildSpline(const SdfPath& path, TsSpline* result) const;
 
     /// Return true if this clip has authored time samples for the attribute
     /// corresponding to the given \p path. Clips may add time sample times
@@ -159,6 +198,11 @@ public:
     /// in the clip. This method ignores these time samples and returns
     /// whether there truly is a time sample value for the attribute.
     bool HasAuthoredTimeSamples(const SdfPath& path) const;
+
+    /// Return true if this clip has an authored spline for the attribute
+    /// corresponding to the given \p path. Analogous to
+    /// \ref HasAuthoredTimeSamples.
+    bool HasAuthoredSpline(const SdfPath& path) const;
 
     /// Return true if a value block is authored for the attribute
     /// corresponding to the given \p path at \p time.

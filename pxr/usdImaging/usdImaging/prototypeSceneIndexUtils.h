@@ -7,22 +7,18 @@
 #ifndef PXR_USD_IMAGING_USD_IMAGING_PROTOTYPE_SCENE_INDEX_UTILS_H
 #define PXR_USD_IMAGING_USD_IMAGING_PROTOTYPE_SCENE_INDEX_UTILS_H
 
-#include "pxr/imaging/hd/sceneIndex.h"
-
-#include "pxr/imaging/hd/sceneIndexObserver.h"
 #include "pxr/pxr.h"
+
+#include "pxr/base/tf/token.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-namespace UsdImaging_PrototypeSceneIndexUtils {
+namespace UsdImaging_PrototypeSceneIndexUtils
+{
 
-HdSceneIndexPrim&
-SetEmptyPrimType(HdSceneIndexPrim& prim);
+bool IsRenderablePrimType(const TfToken &primType);
 
-HdSceneIndexObserver::AddedPrimEntry&
-SetEmptyPrimType(HdSceneIndexObserver::AddedPrimEntry& entry);
-
-};
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

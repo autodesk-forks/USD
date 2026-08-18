@@ -13,6 +13,7 @@
 #include "pxr/imaging/hd/changeTracker.h"
 #include "pxr/imaging/hd/command.h"
 #include "pxr/imaging/hd/dataSource.h"
+#include "pxr/imaging/hd/rendererCreateArgs.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/tf/token.h"
 
@@ -29,6 +30,7 @@ class HdRenderIndex;
 class HdRenderPass;
 class HdInstancer;
 class HdDriver;
+class Hgi;
 
 TF_DECLARE_REF_PTRS(HdSceneIndexBase);
 
@@ -453,10 +455,20 @@ public:
     HD_API
     virtual bool IsPrimvarFilteringNeeded() const;
 
+
+    ///
+    /// Returns the ordered list of shading systems that the render delegate 
+    /// supports.
+    /// 
+    HD_API
+    virtual TfTokenVector GetShadingSystems() const;
+
     ///
     /// Returns the ordered list of shader source types that the render delegate 
     /// supports.
     /// 
+    /// \deprecated
+    /// Deprecated in favor of GetShadingSystems
     HD_API
     virtual TfTokenVector GetShaderSourceTypes() const;
 
@@ -537,6 +549,13 @@ public:
     /// specified prim type.
     HD_API
     virtual bool IsParallelSyncEnabled(const TfToken &primType) const;
+
+    /// API to aid Hydra 2.0 renderer transition.
+    /// Provides a way to detect if the application task graph
+    /// should include tasks that are specific to Storm.
+    /// The base implementation returns false.
+    HD_API
+    virtual bool RequiresStormTasks() const;
 
 protected:
     /// This class must be derived from.

@@ -46,6 +46,7 @@ HdStMaterial::HdStMaterial(SdfPath const &id)
  , _hasPtex(false)
  , _hasLimitSurfaceEvaluation(false)
  , _hasDisplacement(false)
+ , _isUsingFallbackShader(false)
  , _materialTag(HdStMaterialTagTokens->defaultMaterialTag)
  , _textureHash(0)
 {
@@ -131,7 +132,9 @@ HdStMaterial::_ProcessTextureDescriptors(
         
         // Note about batching hashes:
         // If this is our first sync, try to hash using the asset path.
-        // If we're on our 2nd+ sync, just use the texture prim path.
+        // If we're on our 2nd+ sync, just use the texture prim name + material 
+        // id. (We include the material id to avoid collisions on texture prims 
+        // with the same name.)
         //
         // This will aggressively batch textured prims together as long as
         // they are 100% static; if they are dynamic, we assume that the
@@ -155,9 +158,9 @@ HdStMaterial::_ProcessTextureDescriptors(
             { desc.name,
               desc.type,
               { textureHandle },
-              _isInitialized
-                  ? hash_value(desc.texturePrim)
-                  : _GetTextureHandleHash(textureHandle) });
+              _isInitialized ? 
+                TfHash::Combine(GetId(), desc.texturePrim)
+                : _GetTextureHandleHash(textureHandle) });
     }
 
     bool const doublesSupported = resourceRegistry->GetHgi()->
@@ -222,6 +225,10 @@ HdStMaterial::Sync(HdSceneDelegate *sceneDelegate,
         _InitFallbackShader();
         fragmentSource = _fallbackGlslfx->GetSurfaceSource();
         materialMetadata = _fallbackGlslfx->GetMetadata();
+
+        _isUsingFallbackShader = true;
+    } else {
+        _isUsingFallbackShader = false;
     }
 
     // Update volume material data.

@@ -24,18 +24,22 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define USD_PHYSICS_VALIDATOR_KEYWORD_TOKENS  (UsdPhysicsValidators) 
 
-#define USD_PHYSICS_VALIDATION_ERROR_NAME_TOKENS                        \
-    ((nestedRigidBody, "NestedRigidBody"))                              \
-    ((nestedArticulation, "NestedArticulation"))                        \
-    ((articulationOnStaticBody, "ArticulationOnStaticBody"))            \
-    ((articulationOnKinematicBody, "ArticulationOnKinematicBody"))      \
-    ((rigidBodyOrientationScale,  "RigidBodyOrientationScale"))         \
-    ((rigidBodyNonXformable,  "RigidBodyNonXformable"))                 \
-    ((rigidBodyNonInstanceable,  "RigidBodyNonInstanceable"))           \
-    ((jointInvalidPrimRel,  "JointInvalidPrimRel"))                     \
-    ((jointMultiplePrimsRel,  "JointMultiplePrimsRel"))                 \
-    ((colliderNonUniformScale, "ColliderNonUniformScale"))              \
-    ((colliderSpherePointsDataMissing, "ColliderSpherePointsDataMissing"))
+#define USD_PHYSICS_VALIDATION_ERROR_NAME_TOKENS                           \
+    ((nestedArticulation, "NestedArticulation"))                           \
+    ((articulationOnStaticBody, "ArticulationOnStaticBody"))               \
+    ((rigidBodyOrientationScale,  "RigidBodyOrientationScale"))            \
+    ((rigidBodyNonXformable,  "RigidBodyNonXformable"))                    \
+    ((rigidBodyNonInstanceable,  "RigidBodyNonInstanceable"))              \
+    ((jointInvalidPrimRel,  "JointInvalidPrimRel"))                        \
+    ((jointRelNotXformable, "JointRelNotXformable"))                       \
+    ((jointNoEnabledRigidBody, "JointNoEnabledRigidBody"))                 \
+    ((jointMultiplePrimsRel,  "JointMultiplePrimsRel"))                    \
+    ((colliderNonUniformScale, "ColliderNonUniformScale"))                 \
+    ((colliderPlaneDynamic, "ColliderPlaneDynamic"))                       \
+    ((colliderSpherePointsDataMissing, "ColliderSpherePointsDataMissing")) \
+    ((massInvalidValues, "MassInvalidValues"))                             \
+    ((densityInvalidValues, "DensityInvalidValues"))                       \
+    ((inertiaInvalidValues, "InertiaInvalidValues"))
 
 /// \def USD_PHYSICS_VALIDATOR_NAME_TOKENS
 /// Tokens representing validator names. Note that for plugin provided

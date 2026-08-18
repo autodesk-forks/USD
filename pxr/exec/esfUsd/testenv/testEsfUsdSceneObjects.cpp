@@ -7,17 +7,22 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/esfUsd/sceneAdapter.h"
+#include "pxr/exec/esfUsd/stageData.h"
 
 #include "pxr/base/tf/diagnosticLite.h"
+#include "pxr/base/tf/preprocessorUtilsLite.h"
 #include "pxr/base/tf/token.h"
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/exec/esf/attribute.h"
 #include "pxr/exec/esf/attributeQuery.h"
 #include "pxr/exec/esf/object.h"
 #include "pxr/exec/esf/prim.h"
 #include "pxr/exec/esf/property.h"
+#include "pxr/exec/esf/relationship.h"
 #include "pxr/exec/esf/stage.h"
 #include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdf/types.h"
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usd/attributeQuery.h"
@@ -25,34 +30,62 @@
 #include "pxr/usd/usd/timeCode.h"
 #include "pxr/usd/usdGeom/scope.h"
 
+#include <iostream>
 #include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE;
+
+#define ASSERT_EQ(expr, expected)                                       \
+    [&] {                                                               \
+        std::cout << std::flush;                                        \
+        std::cerr << std::flush;                                        \
+        auto&& expr_ = expr;                                            \
+        if (expr_ != expected) {                                        \
+            TF_FATAL_ERROR(                                             \
+                "Expected " TF_PP_STRINGIZE(expr) " == '%s'; got '%s'", \
+                TfStringify(expected).c_str(),                          \
+                TfStringify(expr_).c_str());                            \
+        }                                                               \
+    }()
 
 namespace
 {
 
 struct Fixture
 {
-    SdfLayerRefPtr layer;
-    UsdStageConstRefPtr stage;
+    SdfLayerRefPtr payloadLayer;
+    UsdStageRefPtr stage;
+    std::shared_ptr<EsfUsdStageData> stageData;
     EsfJournal * const journal = nullptr;
 
     Fixture()
     {
-        layer = SdfLayer::CreateAnonymous(".usda");
-        const bool importedLayer = layer->ImportFromString(R"usd(
+        payloadLayer = SdfLayer::CreateAnonymous(".usda");
+        const bool payloadLayerImported = payloadLayer->ImportFromString(R"usd(
+            #usda 1.0
+            def Scope "Prim" {
+            })usd");
+        TF_AXIOM(payloadLayerImported);
+
+        SdfLayerRefPtr rootLayer = SdfLayer::CreateAnonymous(".usda");
+        const bool rootLayerImported = rootLayer->ImportFromString(R"usd(
             #usda 1.0
             def Scope "Prim1" (
                 prepend apiSchemas = ["CollectionAPI:collection1"]
+                doc = "prim doc"
             ) {
+                int attr1 (doc = "attr doc")
                 int attr1 = 1
+                int attr1.connect = [</Prim1.ns1:ns2:attr2>, </Prim1.attr3>]
+                int ns1:ns2:attr2 (doc = "prop doc")
                 int ns1:ns2:attr2 = 2
                 double attr3.spline = {
                     1: 0,
                     2: 1,
                 }
-                rel rel1
+                rel rel1 (doc = "rel doc")
+                rel rel1 = [</Prim1.attr1>, </Prim1.rel2>]
+                rel rel2 = [</Prim2>, </Prim3>]
             }
             def Scope "Prim2" (
                 prepend apiSchemas = ["CollectionAPI:collection1"]
@@ -62,15 +95,46 @@ struct Fixture
                 prepend apiSchemas = ["CollectionAPI:collection2"]
             ) {
             }
+            over "LoadablePrim" (
+                payload = @)usd" + payloadLayer->GetIdentifier() + R"usd(@</Prim>
+            ) {
+            }
+            over "UndefinedPrim" {
+            }
+            class "AbstractPrim" {
+            }
             )usd");
-        TF_AXIOM(importedLayer);
+        TF_AXIOM(rootLayerImported);
 
-        stage = UsdStage::Open(layer);
+        stage = UsdStage::Open(rootLayer);
         TF_AXIOM(stage);
+
+        stageData =
+            EsfUsdStageData::RegisterStage(stage, /* listener */ nullptr);
+        TF_AXIOM(stageData);
     }
 };
 
 } // anonymous namespace
+
+template <typename ObjectType>
+static void
+_TestMetadata(
+    Fixture &fixture,
+    const ObjectType &object,
+    const std::string &expectedValue)
+{
+    TF_AXIOM(
+        object->IsValidMetadataKey(SdfFieldKeys->Documentation));
+    TF_AXIOM(
+        !object->IsValidMetadataKey(TfToken("bogusMetadataKey")));
+    ASSERT_EQ(
+        object->GetMetadataValueType(SdfFieldKeys->Documentation),
+        TfType::Find<std::string>());
+    ASSERT_EQ(
+        object->GetMetadata(SdfFieldKeys->Documentation),
+        expectedValue);
+}
 
 // Tests that EsfUsd_Stage behaves as UsdStage.
 static void
@@ -91,34 +155,61 @@ TestStage(Fixture &fixture)
     TF_AXIOM(prop->IsValid(fixture.journal));
 }
 
-// Tests that ExecUsd_Objects behave as UsdObjects.
+// Tests that EsfUsd_Objects behave as UsdObjects.
 static void
 TestObject(Fixture &fixture)
 {
     const EsfObject primObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Prim1")));
     TF_AXIOM(primObject->IsValid(fixture.journal));
+    _TestMetadata(fixture, primObject, "prim doc");
 
     const EsfObject attrObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Prim1.attr1")));
     TF_AXIOM(attrObject->IsValid(fixture.journal));
+    _TestMetadata(fixture, attrObject, "attr doc");
 
     const EsfObject relObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Prim1.rel1")));
     TF_AXIOM(relObject->IsValid(fixture.journal));
+    _TestMetadata(fixture, relObject, "rel doc");
 
     const EsfObject invalidObject = EsfUsdSceneAdapter::AdaptObject(
         fixture.stage->GetObjectAtPath(SdfPath("/Does/Not/Exist")));
     TF_AXIOM(!invalidObject->IsValid(fixture.journal));
+
+    // Deactivate the prim and ensure it and its properties become invalid.
+    fixture.stage->GetPrimAtPath(SdfPath("/Prim1")).SetActive(false);
+    TF_AXIOM(!primObject->IsValid(fixture.journal));
+    TF_AXIOM(!attrObject->IsValid(fixture.journal));
+    TF_AXIOM(!relObject->IsValid(fixture.journal));
+
+    // Ensure unloaded objects are invalid.
+    const EsfObject loadablePrimObject = EsfUsdSceneAdapter::AdaptObject(
+        fixture.stage->GetObjectAtPath(SdfPath("/LoadablePrim")));
+    TF_AXIOM(loadablePrimObject->IsValid(fixture.journal));
+    fixture.stage->Unload(SdfPath("/LoadablePrim"));
+    TF_AXIOM(!loadablePrimObject->IsValid(fixture.journal));
+
+    // Ensure undefined objects are invalid.
+    const EsfObject undefinedPrimObject = EsfUsdSceneAdapter::AdaptObject(
+        fixture.stage->GetObjectAtPath(SdfPath("/UndefinedPrim")));
+    TF_AXIOM(!undefinedPrimObject->IsValid(fixture.journal));
+
+    // Ensure abstract objects are invalid.
+    const EsfObject abstractPrimObject = EsfUsdSceneAdapter::AdaptObject(
+        fixture.stage->GetObjectAtPath(SdfPath("/AbstractPrim")));
+    TF_AXIOM(!abstractPrimObject->IsValid(fixture.journal));
 }
 
-// Tests that ExecUsd_Prims behave as UsdPrims.
+// Tests that EsfUsd_Prims behave as UsdPrims.
 static void
 TestPrim(Fixture &fixture)
 {
     const EsfPrim prim = EsfUsdSceneAdapter::AdaptPrim(
         fixture.stage->GetPrimAtPath(SdfPath("/Prim1")));
     TF_AXIOM(prim->IsValid(fixture.journal));
+    _TestMetadata(fixture, prim, "prim doc");
 
     const EsfPrim pseudoRootPrim = prim->GetParent(fixture.journal);
     TF_AXIOM(pseudoRootPrim->IsValid(fixture.journal));
@@ -136,31 +227,65 @@ TestPrim(Fixture &fixture)
     TF_AXIOM(attr->GetPath(fixture.journal) == SdfPath("/Prim1.attr1"));
 }
 
-// Tests that ExecUsd_Properties behave as UsdProperties.
+// Tests that EsfUsd_Properties behave as UsdProperties.
 static void
 TestProperty(Fixture &fixture)
 {
     const EsfProperty prop = EsfUsdSceneAdapter::AdaptProperty(
         fixture.stage->GetPropertyAtPath(SdfPath("/Prim1.ns1:ns2:attr2")));
     TF_AXIOM(prop->IsValid(fixture.journal));
+    _TestMetadata(fixture, prop, "prop doc");
 
     TF_AXIOM(prop->GetBaseName(fixture.journal) == TfToken("attr2"));
     TF_AXIOM(prop->GetNamespace(fixture.journal) == TfToken("ns1:ns2"));
 }
 
-// Tests that ExecUsd_Attributes behave as UsdAttributes.
+// Tests that EsfUsd_Relationships behave as UsdRelationships.
+static void
+TestRelationship(Fixture &fixture)
+{
+    const EsfObject object = EsfUsdSceneAdapter::AdaptObject(
+        fixture.stage->GetObjectAtPath(SdfPath("/Prim1.rel1")));
+    TF_AXIOM(object->IsRelationship());
+    const EsfRelationship rel = object->AsRelationship();
+    TF_AXIOM(rel->IsValid(fixture.journal));
+    _TestMetadata(fixture, rel, "rel doc");
+
+    const SdfPathVector targets = rel->GetTargets(fixture.journal);
+    ASSERT_EQ(targets.size(), 2);
+    TF_AXIOM(
+        targets ==
+        SdfPathVector({SdfPath("/Prim1.attr1"), SdfPath("/Prim1.rel2")}));
+
+    const SdfPathVector forwardedTargets =
+        rel->GetForwardedTargets(fixture.journal);
+    ASSERT_EQ(forwardedTargets.size(), 3);
+    TF_AXIOM(
+        forwardedTargets ==
+        SdfPathVector(
+            {SdfPath("/Prim1.attr1"), SdfPath("/Prim2"), SdfPath("/Prim3")}));
+}
+
+// Tests that EsfUsd_Attributes behave as UsdAttributes.
 static void
 TestAttribute(Fixture &fixture)
 {
     const EsfAttribute attr = EsfUsdSceneAdapter::AdaptAttribute(
         fixture.stage->GetAttributeAtPath(SdfPath("/Prim1.attr1")));
     TF_AXIOM(attr->IsValid(fixture.journal));
+    _TestMetadata(fixture, attr, "attr doc");
 
     TF_AXIOM(attr->GetValueTypeName(fixture.journal) == SdfValueTypeNames->Int);
+
+    const SdfPathVector targets = attr->GetConnections(fixture.journal);
+    ASSERT_EQ(targets.size(), 2);
+    TF_AXIOM(
+        targets ==
+        SdfPathVector({
+            SdfPath("/Prim1.ns1:ns2:attr2"), SdfPath("/Prim1.attr3")}));
 }
 
-
-// Tests that ExecUsd_AttributeQuery behaves as UsdAttributeQuery.
+// Tests that EsfUsd_AttributeQuery behaves as UsdAttributeQuery.
 static void
 TestAttributeQuery(Fixture &fixture)
 {
@@ -187,7 +312,7 @@ TestAttributeQuery(Fixture &fixture)
         UsdTimeCode::Default(), UsdTimeCode(0.0)));
 }
 
-// Tests ExecUsd_AttributeQuery with a time-varying spline attribute.
+// Tests EsfUsd_AttributeQuery with a time-varying spline attribute.
 static void
 TestSplineAttributeQuery(Fixture &fixture)
 {
@@ -262,6 +387,7 @@ int main()
         TestObject,
         TestPrim,
         TestProperty,
+        TestRelationship,
         TestAttribute,
         TestAttributeQuery,
         TestSplineAttributeQuery,

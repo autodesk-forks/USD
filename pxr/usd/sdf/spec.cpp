@@ -23,8 +23,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_BASE_SPEC(SdfSchema, SdfSpec);
-
 //
 // SdfSpec
 //

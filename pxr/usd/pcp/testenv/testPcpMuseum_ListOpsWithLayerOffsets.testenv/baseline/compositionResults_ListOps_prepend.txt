@@ -1,0 +1,72 @@
+Loading @ListOpsWithLayerOffsets/base_prepend.usda@
+
+------------------------------------------------------------------------
+Layer Stack:
+     base_prepend.usda
+     layer_24.usda
+
+------------------------------------------------------------------------
+Results for composing </World>
+
+Prim Stack:
+    layer_24.usda        /World
+
+Time Offsets:
+    base_prepend.usda    /World          root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.50)
+
+Child names:
+     ['PayloadIn24', 'ReferenceIn24']
+
+------------------------------------------------------------------------
+Results for composing </World/PayloadIn24>
+
+Prim Stack:
+    layer_24.usda        /World/PayloadIn24
+    asset.usda           /World
+
+Time Offsets:
+    base_prepend.usda    /World/PayloadIn24 root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.50)
+    asset.usda           /World          payload    (offset=0.00, scale=2.50)
+
+Child names:
+     ['asset_child']
+
+------------------------------------------------------------------------
+Results for composing </World/PayloadIn24/asset_child>
+
+Prim Stack:
+    asset.usda           /World/asset_child
+
+Time Offsets:
+    base_prepend.usda    /World/PayloadIn24/asset_child root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.50)
+    asset.usda           /World/asset_child payload    (offset=0.00, scale=2.50)
+
+------------------------------------------------------------------------
+Results for composing </World/ReferenceIn24>
+
+Prim Stack:
+    layer_24.usda        /World/ReferenceIn24
+    asset.usda           /World
+
+Time Offsets:
+    base_prepend.usda    /World/ReferenceIn24 root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.50)
+    asset.usda           /World          reference  (offset=0.00, scale=2.50)
+
+Child names:
+     ['asset_child']
+
+------------------------------------------------------------------------
+Results for composing </World/ReferenceIn24/asset_child>
+
+Prim Stack:
+    asset.usda           /World/asset_child
+
+Time Offsets:
+    base_prepend.usda    /World/ReferenceIn24/asset_child root       (offset=0.00, scale=1.00)
+        layer_24.usda                    sublayer   (offset=0.00, scale=2.50)
+    asset.usda           /World/asset_child reference  (offset=0.00, scale=2.50)
+

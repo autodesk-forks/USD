@@ -621,7 +621,12 @@ HdSt_IndirectDrawBatch::_CompileBatch(
             drawItem->GetGeometricShader()->GetPrimitiveIndexSize();
 
         uint32_t const baseVertex = vertexDC;
-        uint32_t const vertexCount = _GetElementCount(dc.vertexBar);
+
+        // Query fallback vertex count from geometric shader if the vertex bar
+        // is empty
+        uint32_t const vertexCount = dc.vertexBar ?
+                    _GetElementCount(dc.vertexBar) : 
+                    drawItem->GetGeometricShader()->GetVertexCountFallback();
 
         // if delegate fails to get vertex primvars, it could be empty.
         // skip the drawitem to prevent drawing uninitialized vertices.
@@ -1247,6 +1252,7 @@ HdSt_IndirectDrawBatch::_ExecuteDrawIndirect(
             0, drawCount,
             stride);
     }
+    GLF_POST_PENDING_GL_ERRORS();
 }
 
 void
@@ -1341,6 +1347,7 @@ HdSt_IndirectDrawBatch::_ExecuteDrawImmediate(
                 cmd->baseInstance);
         }
     }
+    GLF_POST_PENDING_GL_ERRORS();
 }
 
 ////////////////////////////////////////////////////////////
@@ -1372,6 +1379,7 @@ _GetCullPipeline(
         pipeDesc.primitiveType = HgiPrimitiveTypePointList;
         pipeDesc.shaderProgram = shaderProgram->GetProgram();
         pipeDesc.rasterizationState.rasterizerEnabled = false;
+        pipeDesc.debugName = "FrustumCulling Pipeline";
 
         Hgi* hgi = resourceRegistry->GetHgi();
         HgiGraphicsPipelineHandle pso = hgi->CreateGraphicsPipeline(pipeDesc);

@@ -14,33 +14,33 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-
 #define HDX_TOKENS              \
     (hdxOitCounterBuffer)       \
+    (hdxOitColorBuffer)         \
     (hdxOitDataBuffer)          \
     (hdxOitDepthBuffer)         \
+    (hdxOitTransmissionDepthBuffer)\
     (hdxOitIndexBuffer)         \
+    (hdxOitJointBuffer)         \
     (hdxSelectionBuffer)        \
-    (imagerVersion)             \
+    (imagerVersion) /* \deprecated */ \
     (lightingContext)           \
     (lightingShader)            \
     (occludedSelectionOpacity)  \
     (oitCounter)                \
+    (oitJointBuffer)            \
     (oitData)                   \
-    (oitDepth)                  \
-    (oitIndices)                \
     (oitUniforms)               \
     (oitCounterBufferBar)       \
     (oitDataBufferBar)          \
-    (oitDepthBufferBar)         \
-    (oitIndexBufferBar)         \
+    (oitJointBufferBar)         \
     (oitUniformBar)             \
     (oitRenderPassState)        \
     (oitScreenSize)             \
     (oitRequestFlag)            \
     (oitClearedFlag)            \
     (renderPassState)           \
-    (renderIndexVersion)        \
+    (renderIndexVersion) /* \deprecated */ \
     (selection)                 \
     (selectionState)            \
     (selectionOffsets)          \
@@ -130,6 +130,7 @@ TF_DECLARE_PUBLIC_TOKENS(HdxAovTokens, HDX_API,
     (lightingContext)              \
     (useLighting)                  \
     (useColorMaterialDiffuse)      \
+    (lightCount)                   \
     (lightSource)                  \
     (position)                     \
     (ambient)                      \

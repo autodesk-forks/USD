@@ -11,11 +11,12 @@
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/instantiateSingleton.h"
 #include "pxr/base/tf/iterator.h"
-#include "pxr/base/tf/mallocTag.h"
+#include "pxr/base/tf/scoped.h"
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/arch/demangle.h"
 
 #include <typeinfo>
+#include <optional>
 
 using std::string;
 using std::vector;
@@ -156,8 +157,6 @@ _EndDelivery(const std::vector<TfNotice::WeakProbePtr> &probes)
 TfNotice::Key
 Tf_NoticeRegistry::_Register(TfNotice::_DelivererBase* deliverer)
 {
-    TfAutoMallocTag2 tag("Tf", "Tf_NoticeRegistry::_Register");
-
     TfType noticeType = deliverer->GetNoticeType();
     
     if (noticeType.IsUnknown()) {
@@ -189,8 +188,13 @@ Tf_NoticeRegistry::_Revoke(TfNotice::Key& key, bool wait)
             // No need to wait because nothing can be invoking the handler.
             wait = false;
         } else {
-            // Otherwise deactivate it.
-            key._deliverer->_Deactivate();
+            // Otherwise deactivate it and arrange for its removal.
+            TfNotice::_DelivererBase *deliverer = get_pointer(key._deliverer);
+            if (!deliverer->_IsMarkedForRemoval()) {
+                deliverer->_Deactivate();
+                deliverer->_MarkForRemoval();
+                _deadEntries.push_back(key._deliverer);
+            }
             // If we're waiting, we need to ensure that the deliverer survives
             // after we drop the lock above, so it can do the waiting.
             if (wait) {
@@ -221,11 +225,28 @@ Tf_NoticeRegistry::_Send(const TfNotice &n, const TfType & noticeType,
 
     _IncrementUserCount(1);
 
+    // Ensure that even if an exception is thrown within a handler,
+    // we still decrement _userCount.
+    TfScoped cleanup([this]() {
+        // Decrement _userCount, and if there are no other execution contexts
+        // using the notice registry, clean out expired deliverers.
+        _Lock lock(_userCountMutex);
+
+        if (_userCount == 1 && !_deadEntries.empty()) {
+            for (const auto & deadEntry : _deadEntries) {
+                _FreeDeliverer(deadEntry);
+            }
+            _deadEntries.clear();
+        }
+
+        --_userCount;
+    });
+
     size_t nSent = 0;
 
     vector< TfNotice::WeakProbePtr > probeList;
-    bool doProbing = _doProbing;
-    if (doProbing) {
+    std::optional< TfScoped<> > endProbeScope;
+    if (_doProbing) {
         // Copy off a list of the probes.
         _Lock lock(_probeMutex);
         probeList.reserve(_probes.size());
@@ -234,9 +255,12 @@ Tf_NoticeRegistry::_Send(const TfNotice &n, const TfType & noticeType,
                 probeList.push_back(*i);
             }
         }
-        doProbing = !probeList.empty();
-        if (doProbing) {
+        if (!probeList.empty()) {
             _BeginSend(n, s, senderType, probeList);
+
+            endProbeScope.emplace([this, &probeList]() {
+                _EndSend(probeList);
+            });
         }
     }
 
@@ -261,25 +285,6 @@ Tf_NoticeRegistry::_Send(const TfNotice &n, const TfType & noticeType,
             _BadTypeFatalMsg(t, typeid(n));
         }
     } while (t != TfType::GetRoot());
-
-    if (doProbing) {
-        _EndSend(probeList);
-    }
-
-    // Decrement _userCount, and if there are no other execution contexts
-    // using the notice registry, clean out expired deliverers.
-    {
-        _Lock lock(_userCountMutex);
-
-        if (_userCount == 1 && !_deadEntries.empty()) {
-            for (size_t i=0, n=_deadEntries.size(); i!=n; ++i) {
-                _FreeDeliverer(_deadEntries[i]);
-            }
-            _deadEntries.clear();
-        }
-                
-        --_userCount;
-    }
 
     return nSent;
 }

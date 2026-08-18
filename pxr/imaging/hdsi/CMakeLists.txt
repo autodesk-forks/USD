@@ -10,6 +10,8 @@ pxr_library(hdsi
         work
         sdf
         cameraUtil
+        usdShade
+        usdVol
         geomUtil
         hf
         hd
@@ -17,6 +19,7 @@ pxr_library(hdsi
         TBB::tbb
 
     PUBLIC_CLASSES
+        backPlateSceneIndex
         computeSceneIndexDiff
         coordSysPrimSceneIndex
         debuggingSceneIndex
@@ -27,19 +30,24 @@ pxr_library(hdsi
         implicitSurfaceSceneIndex
         legacyDisplayStyleOverrideSceneIndex
         lightLinkingSceneIndex
+        locatorCachingSceneIndex
         materialBindingResolvingSceneIndex
         materialOverrideResolvingSceneIndex
         materialPrimvarTransferSceneIndex
+        materialRenderContextFilteringSceneIndex
         nodeIdentifierResolvingSceneIndex
         nurbsApproximatingSceneIndex
+        particleFieldConversionSceneIndex
         prefixPathPruningSceneIndex
         pinnedCurveExpandingSceneIndex
         primManagingSceneIndexObserver
         primTypeAndPathPruningSceneIndex
         primTypeNoticeBatchingSceneIndex
         primTypePruningSceneIndex
+        renderPassPruneSceneIndex
         renderSettingsFilteringSceneIndex
         sceneGlobalsSceneIndex
+        sceneMaterialPruningSceneIndex
         switchingSceneIndex
         tetMeshConversionSceneIndex
         unboundMaterialPruningSceneIndex

@@ -23,13 +23,17 @@ TF_DECLARE_REF_PTRS(UsdStage);
 TF_DECLARE_REF_PTRS(UsdImagingStageSceneIndex);
 TF_DECLARE_REF_PTRS(UsdImagingSelectionSceneIndex);
 
+using UsdImagingSceneIndexAppendCallback =
+    std::function<
+        HdSceneIndexBaseRefPtr(HdSceneIndexBaseRefPtr const &)>;
+
+///
 /// Info needed to create a chain of filtering scene indices (resolving
 /// e.g. USD native instancing) for clients to consume a UsdStage.
+///
 struct UsdImagingCreateSceneIndicesInfo
 {
-    using SceneIndexAppendCallback =
-        std::function<
-            HdSceneIndexBaseRefPtr(HdSceneIndexBaseRefPtr const &)>;
+    using SceneIndexAppendCallback = UsdImagingSceneIndexAppendCallback;
 
     /// Stage. Note that it can be set after the scene indices have been
     /// created later by UsdImagingStageSceneIndex::SetStage.
@@ -57,12 +61,32 @@ struct UsdImagingSceneIndices
     HdSceneIndexBaseRefPtr finalSceneIndex;    
 };
 
+/// \deprecated Use encapsulating UsdImagingSceneIndex instead
+///
 /// Creates a chain of filtering scene indices for clients to consume
 /// a UsdStage.
 USDIMAGING_API
 UsdImagingSceneIndices
 UsdImagingCreateSceneIndices(
     const UsdImagingCreateSceneIndicesInfo &createInfo);
+
+/// \deprecated Use encapsulating UsdImagingSceneIndex instead
+///
+/// New API that gets us closer to the direction that all scene indices are
+/// created with createArgs which come by overlaying the container data
+/// sources from the application and from
+/// HdRendererPlugin::GetSceneIndexCreateArgs().
+///
+/// We have not moved UsdImagingSceneIndexAppendCallback into inputArgs because
+/// a std::function is not a value type (no operator==) and, thus, cannot be
+/// returned by a HdTypedSampledDataSource. We might also revisit the return
+/// type.
+///
+USDIMAGING_API
+UsdImagingSceneIndices
+UsdImagingCreateSceneIndices(
+    HdContainerDataSourceHandle const &createArgs,
+    const UsdImagingSceneIndexAppendCallback &overridesSceneIndexCallback);
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

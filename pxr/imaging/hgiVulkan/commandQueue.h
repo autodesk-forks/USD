@@ -13,10 +13,13 @@
 #include "pxr/imaging/hgiVulkan/api.h"
 #include "pxr/imaging/hgiVulkan/vulkan.h"
 
+#include "pxr/base/tf/span.h"
+
 #include <atomic>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <deque>
 #include <vector>
 #include <optional>
 
@@ -96,6 +99,19 @@ public:
     void ResetConsumedCommandBuffers(
         HgiSubmitWaitType wait = HgiSubmitWaitTypeNoWait);
 
+    /// Flushes the buffered commands in the queue. Ideally this wouldn't be
+    /// necessary, but Hgi's current structure makes this necessary.
+    /// Additionally we must support passing a semaphore for interop signaling
+    HGIVULKAN_API
+    void Flush(
+        HgiSubmitWaitType wait,
+        TfSpan<const std::pair<VkSemaphore, uint64_t>> signalSemaphores = {});
+
+    /// Checks if the timeline semaphore has passed the desiredValue,
+    /// and can optionally force a wait on this. This may cause a flush.
+    HGIVULKAN_API
+    bool IsTimelinePastValue(uint64_t desiredValue, bool wait = false);
+
 private:
     HgiVulkanCommandQueue() = delete;
     HgiVulkanCommandQueue & operator=(const HgiVulkanCommandQueue&) = delete;
@@ -105,6 +121,11 @@ private:
     // Thread safety: This call is thread safe.
     HgiVulkan_CommandPool* _AcquireThreadCommandPool(
         std::thread::id const& threadId);
+
+    // Adds the _resourceCommandBuffer to _queuedBuffers, ensuring that
+    // resource commands not encapsulated by HgiCmds are submitted before
+    // HgiCmds and are included in calls to 'Flush'.
+    void _FlushResourceCommandBuffer();
 
     // Returns an id-bit that uniquely identifies the cmd buffer amongst all
     // in-flight cmd buffers. Returns an empty result if all bits have been
@@ -127,6 +148,12 @@ private:
 
     std::thread::id _threadId;
     HgiVulkanCommandBuffer* _resourceCommandBuffer;
+
+    std::deque<HgiVulkanCommandBuffer*> _queuedBuffers;
+
+    VkSemaphore _timelineSemaphore;
+    uint64_t _timelineNextVal;
+    uint64_t _timelineCachedVal;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

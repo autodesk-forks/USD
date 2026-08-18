@@ -33,13 +33,13 @@ TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 
     (mtlx)
-    ((defaultSourceType, ""))
 
     (defaultgeomprop)
     (defaultinput)
     (doc)
     ((enum_, "enum"))
     (enumvalues)
+    (mtlxNodeType)
     (nodecategory)
     (nodegroup)
     (target)
@@ -98,9 +98,8 @@ public:
                 new SdrShaderNode(discoveryResult.identifier,
                                   discoveryResult.version,
                                   discoveryResult.name,
-                                  discoveryResult.family,
-                                  context,
-                                  discoveryResult.sourceType,
+                                  discoveryResult.function,
+                                  discoveryResult.shadingSystem,
                                   definitionURI,
                                   implementationURI,
                                   std::move(properties),
@@ -127,7 +126,6 @@ public:
 
     std::string definitionURI;
     std::string implementationURI;
-    TfToken context;
     SdrShaderPropertyUniquePtrVec properties;
     SdrTokenMap metadata;
 
@@ -455,13 +453,18 @@ ParseElement(ShaderBuilder* builder, const mx::ConstNodeDefPtr& nodeDef)
 
     // Build the basic shader node info. We are filling in implementationURI
     // as a placeholder - it should get set to a more acccurate value by caller.
-    builder->context           = context;
     builder->definitionURI     = UsdMtlxGetSourceURI(nodeDef);
     builder->implementationURI = builder->definitionURI;
 
     // Metadata
+    builder->metadata[SdrNodeMetadata->Context] = context;
     builder->metadata[SdrNodeMetadata->Label] = nodeDef->getNodeString();
+
+    // NOTE: Category will be removed in an upcoming release in favor of mtlx
+    // custom metadata "mtlxNodeType"
     builder->metadata[SdrNodeMetadata->Category] = nodeDef->getType();
+    builder->metadata[_tokens->mtlxNodeType] = nodeDef->getType();
+
     ParseMetadata(builder, SdrNodeMetadata->Help, nodeDef, _tokens->doc);
     ParseMetadata(builder, SdrNodeMetadata->Target, nodeDef, _tokens->target);
     ParseMetadata(builder, SdrNodeMetadata->Role, nodeDef, _tokens->nodegroup);
@@ -561,7 +564,7 @@ public:
     SdrShaderNodeUniquePtr ParseShaderNode(
         const SdrShaderNodeDiscoveryResult& discoveryResult) override;
     const SdrTokenVec& GetDiscoveryTypes() const override;
-    const TfToken& GetSourceType() const override;
+    const TfToken& GetShadingSystem() const override;
 };
 
 SdrShaderNodeUniquePtr
@@ -633,11 +636,11 @@ UsdMtlxParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken&
-UsdMtlxParserPlugin::GetSourceType() const
+UsdMtlxParserPlugin::GetShadingSystem() const
 {
     TRACE_FUNCTION();
 
-    return _tokens->defaultSourceType;
+    return _tokens->mtlx;
 }
 
 SDR_REGISTER_PARSER_PLUGIN(UsdMtlxParserPlugin)

@@ -84,9 +84,9 @@ UsdLux_DiscoveryPlugin::DiscoverShaderNodes(const Context &context)
                 typeName,
                 SdrVersion().GetAsDefault(),
                 typeName,
-                /*family*/ TfToken(),
+                /*function*/ TfToken(),
                 UsdLux_LightDefParserPlugin::_GetDiscoveryType(),
-                UsdLux_LightDefParserPlugin::_GetSourceType(),
+                UsdLux_LightDefParserPlugin::_GetShadingSystem(),
                 /*uri=*/ "",
                 /*resolvedUri=*/ "");
     }

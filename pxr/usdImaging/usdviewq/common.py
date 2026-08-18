@@ -70,17 +70,17 @@ class UIFonts(ConstantsGroup):
     BASE_POINT_SIZE = 10
     
     ITALIC = QtGui.QFont()
-    ITALIC.setWeight(QtGui.QFont.Light)
+    ITALIC.setWeight(QtGui.QFont.Weight.Light)
     ITALIC.setItalic(True)
 
     NORMAL = QtGui.QFont()
-    NORMAL.setWeight(QtGui.QFont.Normal)
+    NORMAL.setWeight(QtGui.QFont.Weight.Normal)
 
     BOLD = QtGui.QFont()
-    BOLD.setWeight(QtGui.QFont.Bold)
+    BOLD.setWeight(QtGui.QFont.Weight.Bold)
 
     BOLD_ITALIC = QtGui.QFont()
-    BOLD_ITALIC.setWeight(QtGui.QFont.Bold)
+    BOLD_ITALIC.setWeight(QtGui.QFont.Weight.Bold)
     BOLD_ITALIC.setItalic(True)
 
     OVER_PRIM = ITALIC
@@ -89,22 +89,24 @@ class UIFonts(ConstantsGroup):
 
     INHERITED = QtGui.QFont()
     INHERITED.setPointSizeF(BASE_POINT_SIZE * 0.8)
-    INHERITED.setWeight(QtGui.QFont.Normal)
+    INHERITED.setWeight(QtGui.QFont.Weight.Normal)
     INHERITED.setItalic(True)
 
 class KeyboardShortcuts(ConstantsGroup):
-    FramingKey = QtCore.Qt.Key_F
+    FramingKey = QtCore.Qt.Key.Key_F
 
 class PropertyViewIndex(ConstantsGroup):
     TYPE, NAME, VALUE = range(3)
 
-ICON_DIR_ROOT = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons')
+def GetIconPath(name):
+    iconDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons')
+    return os.path.join(iconDir, name)
 
 # We use deferred loading because icons can't be constructed before
 # application initialization time.
 _icons = {}
-def _DeferredIconLoad(path):
-    fullPath = os.path.join(ICON_DIR_ROOT, path)
+def _DeferredIconLoad(name):
+    fullPath = GetIconPath(name)
     try:
         icon = _icons[fullPath]
     except KeyError:
@@ -113,13 +115,13 @@ def _DeferredIconLoad(path):
     return icon
 
 class PropertyViewIcons(ConstantsGroup):
-    ATTRIBUTE                  = lambda: _DeferredIconLoad('usd-attr-plain-icon.png')
-    ATTRIBUTE_WITH_CONNECTIONS = lambda: _DeferredIconLoad('usd-attr-with-conn-icon.png')
-    RELATIONSHIP               = lambda: _DeferredIconLoad('usd-rel-plain-icon.png')
-    RELATIONSHIP_WITH_TARGETS  = lambda: _DeferredIconLoad('usd-rel-with-target-icon.png')
-    TARGET                     = lambda: _DeferredIconLoad('usd-target-icon.png')
-    CONNECTION                 = lambda: _DeferredIconLoad('usd-conn-icon.png')
-    COMPOSED                   = lambda: _DeferredIconLoad('usd-cmp-icon.png')
+    ATTRIBUTE                  = lambda: _DeferredIconLoad('usd-attr-plain-icon.svg')
+    ATTRIBUTE_WITH_CONNECTIONS = lambda: _DeferredIconLoad('usd-attr-with-conn-icon.svg')
+    RELATIONSHIP               = lambda: _DeferredIconLoad('usd-rel-plain-icon.svg')
+    RELATIONSHIP_WITH_TARGETS  = lambda: _DeferredIconLoad('usd-rel-with-target-icon.svg')
+    TARGET                     = lambda: _DeferredIconLoad('usd-target-icon.svg')
+    CONNECTION                 = lambda: _DeferredIconLoad('usd-conn-icon.svg')
+    COMPOSED                   = lambda: _DeferredIconLoad('usd-cmp-icon.svg')
 
 class PropertyViewDataRoles(ConstantsGroup):
     ATTRIBUTE = "Attr"
@@ -129,7 +131,7 @@ class PropertyViewDataRoles(ConstantsGroup):
     TARGET = "Tgt"
     CONNECTION = "Conn"
     COMPOSED = "Cmp"
-    NORMALIZED_NAME = QtCore.Qt.UserRole + 1
+    NORMALIZED_NAME = QtCore.Qt.ItemDataRole.UserRole + 1
 
 class RenderModes(ConstantsGroup):
     # Render modes
@@ -317,7 +319,7 @@ def GetPropertyTextFont(prop, frame):
     if bracketing and (len(bracketing) == 2) and (bracketing[0] != frameVal):
         return UIFonts.ITALIC
 
-    if prop.GetResolveInfo(frame).GetSource() == Usd.ResolveInfoSourceSpline:
+    if prop.HasSpline():
         spline = prop.GetSpline()
         if frameVal not in spline.GetKnots().keys():
             return UIFonts.ITALIC
@@ -510,9 +512,16 @@ class Timer(object):
        if wantToPrintTime:
            t.PrintTime()
     """
+
+    # Annotate for performance tools if we're in the Pixar environment.
+    # Silently skip this if the IttUtil module is not available.
+    try:
+        from pixar import IttUtil
+    except ImportError:
+        IttUtil = None
+
     def __init__(self, label, printTiming=False):
         self._printTiming = printTiming
-        self._ittUtilTaskEnd = lambda : None
         self._label = label
         self._isValid = False
 
@@ -522,22 +531,17 @@ class Timer(object):
         self._stopwatch.Start()
         self._isValid = True
         self.interval = 0
-        # Annotate for performance tools if we're in the Pixar environment.
-        # Silently skip this if the IttUtil module is not available.
-        try:
-            from pixar import IttUtil
-            self._ittUtilTaskEnd = IttUtil.TaskEnd
-            IttUtil.TaskBegin(self._label)
-        except ImportError:
-            pass
+        if Timer.IttUtil:
+            Timer.IttUtil.TaskBegin(self._label)
         return self
 
     def __exit__(self, excType, excVal, excTB):
         Trace.Collector().EndEvent(self._label)
         self._stopwatch.Stop()
         self.interval = self._stopwatch.seconds
-        # Annotate for performance tools if we're in the Pixar environment
-        self._ittUtilTaskEnd()
+        if Timer.IttUtil:
+            Timer.IttUtil.TaskEnd()
+
         # Only report if we are valid and exiting cleanly (i.e. no exception).
         if self._printTiming and excType is None:
             self.PrintTime()
@@ -554,7 +558,7 @@ class BusyContext(object):
     will set Qt's busy cursor upon entry and pop it on exit.
     """
     def __enter__(self):
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.BusyCursor)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BusyCursor)
 
     def __exit__(self, *args):
         QtWidgets.QApplication.restoreOverrideCursor()

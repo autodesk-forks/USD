@@ -12,10 +12,10 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/ef/pageCacheBasedExecutor.h"
-#include "pxr/exec/ef/subExecutor.h"
 
 #include "pxr/exec/vdf/executorFactory.h"
 #include "pxr/exec/vdf/speculationExecutor.h"
+#include "pxr/exec/vdf/subExecutor.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -48,7 +48,7 @@ class EfPageCacheExecutor :
     // Executor factory.
     typedef
         VdfExecutorFactory<
-            EfSubExecutor<EngineType, DataManagerType>,
+            VdfSubExecutor<EngineType, DataManagerType>,
             VdfSpeculationExecutor<SpeculationEngineType, DataManagerType>>
         _Factory;
 
@@ -74,7 +74,7 @@ private:
 
     // Clear all data in the local data manager.
     //
-    virtual void _ClearData();
+    virtual void _ClearData() override;
 
     // The factory shared amongst executors of this type.
     //

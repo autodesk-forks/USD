@@ -11,12 +11,14 @@
 #include "pxr/base/ts/raii.h"
 #include "pxr/base/ts/regressionPreventer.h"
 #include "pxr/base/ts/sample.h"
+#include "pxr/base/ts/diff.h"
 
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/enum.h"
 #include "pxr/base/tf/stl.h"
 #include "pxr/base/tf/registryManager.h"
+#include "pxr/base/trace/trace.h"
 
 #include <algorithm>
 #include <iterator>
@@ -25,6 +27,13 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+namespace {
+
+// Constants for constructing GfInterval objects
+constexpr bool OPEN = false;
+constexpr bool CLOSED = true;
+
+} // annonymous namespace
 
 TF_REGISTRY_FUNCTION(TfType)
 {
@@ -58,6 +67,12 @@ TsSpline::TsSpline(const TsSpline &other)
     : _data(other._data)
 {
 }
+
+TsSpline::TsSpline(Ts_SplineData* data)
+    : _data(data)
+{
+}
+
 
 TsSpline& TsSpline::operator=(const TsSpline &other)
 {
@@ -96,13 +111,19 @@ TfType TsSpline::GetValueType() const
 
 void TsSpline::SetTimeValued(const bool timeValued)
 {
+    if (GetValueType() == Ts_GetType<GfTimeCode>()) {
+        TF_CODING_ERROR("SetTimeValued is deprecated and cannot be invoked "
+                        "when this spline's value type is GfTimeCode.");
+        return;
+    }
     _PrepareForWrite();
     _data->timeValued = timeValued;
 }
 
 bool TsSpline::IsTimeValued() const
 {
-    return _GetData()->timeValued;
+    return _GetData()->valueType == Ts_GetType<GfTimeCode>() ||
+           _GetData()->timeValued;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -135,6 +156,14 @@ void TsSpline::SetPreExtrapolation(
     const TsExtrapolation &extrap)
 {
     _PrepareForWrite();
+    if (extrap.IsLooping() && extrap.loopBoundaryTime.has_value() &&
+        _data->loopParams != TsLoopParams())
+    {
+        TF_CODING_ERROR("Cannot set extrapolation looping with a non-null "
+                        "loopBoundaryTime when inner loops are possibly "
+                        "present.");
+        return;
+    }
     _data->preExtrapolation = extrap;
 }
 
@@ -147,12 +176,48 @@ void TsSpline::SetPostExtrapolation(
     const TsExtrapolation &extrap)
 {
     _PrepareForWrite();
+    if (extrap.IsLooping() && extrap.loopBoundaryTime.has_value() &&
+        _data->loopParams != TsLoopParams())
+    {
+        TF_CODING_ERROR("Cannot set extrapolation looping with a non-null "
+                        "loopBoundaryTime when inner loops are possibly "
+                        "present.");
+        return;
+    }
     _data->postExtrapolation = extrap;
 }
 
 TsExtrapolation TsSpline::GetPostExtrapolation() const
 {
     return _GetData()->postExtrapolation;
+}
+
+bool
+TsSpline::IsPreExtrapolationValid() const
+{
+    const TsExtrapolation& extrap = _GetData()->preExtrapolation;
+    if (!extrap.IsLooping() || !extrap.loopBoundaryTime.has_value()) {
+        return true;
+    }
+
+    const std::vector<TsTime>& times = _GetData()->times;
+    return std::binary_search(times.begin(),
+                              times.end(),
+                              extrap.loopBoundaryTime.value());
+}
+
+bool
+TsSpline::IsPostExtrapolationValid() const
+{
+    const TsExtrapolation& extrap = _GetData()->postExtrapolation;
+    if (!extrap.IsLooping() || !extrap.loopBoundaryTime.has_value()) {
+        return true;
+    }
+
+    const std::vector<TsTime>& times = _GetData()->times;
+    return std::binary_search(times.begin(),
+                              times.end(),
+                              extrap.loopBoundaryTime.value());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,6 +227,21 @@ void TsSpline::SetInnerLoopParams(
     const TsLoopParams &params)
 {
     _PrepareForWrite();
+
+    // Don't set inner looping if it causes non-default inner looping and
+    // extrapolation looping with loopBoundaryTime to be active simultaneously.
+    if (params != TsLoopParams()) {
+        const TsExtrapolation& preExtrap = GetPreExtrapolation();
+        const TsExtrapolation& postExtrap = GetPostExtrapolation();
+        if ((preExtrap.IsLooping() && preExtrap.loopBoundaryTime.has_value()) ||
+            (postExtrap.IsLooping() && postExtrap.loopBoundaryTime.has_value()))
+        {
+            TF_CODING_ERROR("Cannot set non-default inner loop params when "
+                            "spline has extrapolation looping with non-null "
+                            "loopBoundaryTime.");
+            return;
+        }
+    }
 
     // Store a copy.
     _data->loopParams = params;
@@ -247,6 +327,9 @@ bool TsSpline::SetKnot(
     _PrepareForWrite(knot.GetValueType());
 
     // Copy knot data.
+    // Note that if we're setting a double knot on a TsTimeCode spline,
+    // we don't need to convert the knot to TsTimeCode -- all TsSpline knot
+    // getters convert the result knots' value types to that of the spline.
     const size_t idx = _data->SetKnot(knot._GetData(), knot.GetCustomData());
 
     // Update algorithmic tangents and deregress.
@@ -265,6 +348,11 @@ void TsSpline::_SetKnotUnchecked(
 TsKnotMap TsSpline::GetKnots() const
 {
     return TsKnotMap(_GetData());
+}
+
+TsKnotMap TsSpline::GetKnots(const GfInterval& timeInterval) const
+{
+    return TsKnotMap(_GetData(), timeInterval);
 }
 
 bool TsSpline::GetKnot(
@@ -309,6 +397,88 @@ void TsSpline::RemoveKnot(
     _data->RemoveKnotAtTime(time);
 
     // XXX TODO: compute affected interval
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Loop Baking
+
+bool TsSpline::BakeInnerLoops()
+{
+    if (!_data || !_data->HasInnerLoops()) {
+        // No inner loops to bake, we're done.
+        return true;
+    }
+
+    const GfInterval allTime = GfInterval::GetFullInterval();
+    const bool noExtrapLoops = false;
+
+    Ts_SplineData* bakedData = Ts_Bake(_GetData(),
+                                       allTime,
+                                       noExtrapLoops);
+
+    if (bakedData) {
+        // It worked, store the baked results back in this spline, releasing the
+        // old data.
+        _data.reset(bakedData);
+
+        return true;
+    }
+
+    return false;
+}
+
+TsKnotMap TsSpline::GetKnotsWithInnerLoopsBaked() const
+{
+    TsKnotMap result;
+
+    if (_data && _data->HasInnerLoops()) {
+        const GfInterval allTime = GfInterval::GetFullInterval();
+        const bool noExtrapLoops = false;
+
+        Ts_SplineData* bakedData = Ts_Bake(_GetData(),
+                                           allTime,
+                                           noExtrapLoops);
+
+        if (bakedData) {
+            result = TsKnotMap(bakedData);
+            delete bakedData;
+
+            return result;
+        }
+    }
+
+    result = GetKnots();
+    return result;
+}
+
+TsKnotMap TsSpline::GetKnotsWithLoopsBaked(
+    const GfInterval& timeInterval) const
+{
+    TsKnotMap result;
+
+    if (_data &&
+        !_data->times.empty() &&
+        (_data->HasInnerLoops() ||
+         _data->preExtrapolation.IsLooping() ||
+         _data->postExtrapolation.IsLooping()))
+    {
+        // We have looping somewhere.
+        const bool includeExtrapLoops = true;
+
+        Ts_SplineData* bakedData = Ts_Bake(_GetData(),
+                                           timeInterval,
+                                           includeExtrapLoops);
+
+        if (bakedData) {
+            result = TsKnotMap(bakedData);
+            delete bakedData;
+        }
+
+        return result;
+    }
+
+    result = GetKnots(timeInterval);
+    return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -414,6 +584,169 @@ TF_PP_SEQ_FOR_EACH(_INSTANTIATE_SAMPLE_METHOD,
 
 #undef _INSTANTIATE_SAMPLE_METHOD
 
+////////////////////////////////////////////////////////////////////////////////
+// Transformation
+
+TsSpline
+TsSpline::GetTruncated(
+    const GfInterval& interval,
+    TsExtrapolation preFallback,
+    TsExtrapolation postFallback) const
+{
+    if (interval.IsEmpty() || _data == nullptr || _data->times.empty()) {
+        return TsSpline();
+    }
+
+    Ts_SplineData* truncatedData = Ts_Truncate(_GetData(), interval,
+                                               preFallback, postFallback);
+
+    if (truncatedData) {
+        return TsSpline(truncatedData);
+    }
+
+    // Ts_Truncate issued a coding error already if truncatedData is null.
+    return TsSpline();
+}
+
+TsSpline
+TsSpline::GetTimeScaled(double timeScale, double timeOffset) const
+{
+    if (timeScale == 0) {
+        TF_CODING_ERROR("Cannot scale spline by scale factor of 0. Returning "
+                        "empty spline.");
+        return TsSpline();
+    }
+
+    if (_data == nullptr || _data->times.empty()) {
+        return TsSpline(GetValueType());
+    }
+
+    Ts_SplineData* scaledData;
+    if (timeScale < 0 && HasInnerLoops()) {
+        scaledData = Ts_Bake(_GetData(), GfInterval::GetFullInterval(),
+                             /* includeExtrapLoops */ false);
+    } else {
+        scaledData = _GetData()->Clone();
+    }
+
+    if (!TF_VERIFY(scaledData, "Failed to clone or bake spline data")) {
+        return TsSpline();
+    }
+
+    scaledData->ApplyOffsetAndScale(timeOffset, timeScale);
+    return TsSpline(scaledData);
+}
+
+// static
+TsSpline
+TsSpline::Concatenate(const std::vector<TsSpline>& splines)
+{
+    // Note: This function could be optimized slightly for performance by
+    // lowering it to interface with spline data directly.
+    TRACE_FUNCTION();
+    if (splines.empty()) {
+        return TsSpline();
+    }
+
+    if (splines.size() == 1) {
+        return splines[0];
+    }
+
+    TfType valueType;
+    TsExtrapolation preExtrapolation;
+    for (const TsSpline& spline : splines) {
+        if (!spline.IsEmpty()) {
+            valueType = spline.GetValueType();
+            preExtrapolation = spline.GetPreExtrapolation();
+            break;
+        }
+    }
+    if (valueType == TfType()) {
+        return TsSpline();
+    }
+
+    TsSpline resultSpline(valueType);
+    TsKnot prevKnot(valueType);
+    TsExtrapolation postExtrapolation;
+    for (size_t i = 0; i < splines.size(); ++i) {
+        const TsSpline& spline = splines[i];
+        if (spline.IsEmpty()) {
+            continue;
+        }
+
+        if (spline.GetValueType() != valueType) {
+            TF_CODING_ERROR("Concatenation of splines with varying value types "
+                            "is not supported, returning empty spline.");
+            return TsSpline();
+        }
+
+        if (spline.HasInnerLoops()) {
+            TF_CODING_ERROR("Concatenation of splines with inner loops is "
+                            "not supported, returning empty spline.");
+            return TsSpline();
+        }
+
+        postExtrapolation = spline.GetPostExtrapolation();
+        TsKnotMap knots = spline.GetKnots();
+        TsKnot& startKnot = *knots.begin();
+
+        // Modify the start knot so that it has the pre values of the previous
+        // knot
+        if (i > 0) {
+            if (prevKnot.GetTime() != startKnot.GetTime()) {
+                TF_CODING_ERROR("Got boundary knots to TsSpline::Concatenate "
+                                "at mismatched times, returning empty spline");
+                return TsSpline();
+            }
+
+            // Set the pre value only if the prev knot's pre value is different
+            // from the start knot's value.
+            VtValue startKnotValue, prevKnotPreValue;
+            startKnot.ClearPreValue();
+            startKnot.GetValue(&startKnotValue);
+            if (prevKnot.GetPreValue(&prevKnotPreValue)
+                && startKnotValue != prevKnotPreValue)
+            {
+                startKnot.SetPreValue(prevKnotPreValue);
+            }
+
+            VtValue value;
+            if (prevKnot.GetPreTanSlope(&value)) {
+                startKnot.SetPreTanSlope(value);
+            }
+            startKnot.SetPreTanWidth(prevKnot.GetPreTanWidth());
+            startKnot.SetPreTanAlgorithm(prevKnot.GetPreTanAlgorithm());
+        }
+
+        for (const TsKnot& knot: knots) {
+            resultSpline.SetKnot(knot);
+        }
+
+        // Store the boundary knot's pre values.
+        prevKnot = *knots.rbegin();
+    }
+
+    resultSpline.SetPreExtrapolation(preExtrapolation);
+    resultSpline.SetPostExtrapolation(postExtrapolation);
+    return resultSpline;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Comparison
+
+GfInterval
+TsSpline::Diff(const TsSpline& other) const
+{
+    return Diff(other, GfInterval::GetFullInterval());
+}
+
+GfInterval
+TsSpline::Diff(const TsSpline& other,
+               const GfInterval& compareInterval) const
+{
+    return Ts_Diff(_GetData(), other._GetData(), compareInterval);
+}    
 
 ////////////////////////////////////////////////////////////////////////////////
 // Whole-Spline Queries
@@ -539,9 +872,11 @@ void TsSpline::_PrepareForWrite(TfType valueType)
     else if (_data && !_data->isTyped && valueType)
     {
         // If we guessed correctly, upgrade to real storage by marking typed.
-        if (valueType == Ts_GetType<double>())
+        if (valueType == Ts_GetType<double>()
+            || valueType == Ts_GetType<GfTimeCode>())
         {
             _data->isTyped = true;
+            _data->valueType = valueType;
         }
 
         // Otherwise create new storage and transfer.  The second parameter to
@@ -559,6 +894,47 @@ void TsSpline::_PrepareForWrite(TfType valueType)
     {
         _data.reset(_data->Clone());
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Breakdown
+bool
+TsSpline::Breakdown(
+    TsTime time,
+    GfInterval *affectedIntervalOut /* = nullptr */)
+{
+    std::string reason;
+
+    GfInterval localAffectedInterval;
+    GfInterval* affectedIntervalPtr = (affectedIntervalOut
+                                       ? affectedIntervalOut
+                                       : &localAffectedInterval);
+
+    _PrepareForWrite();
+    return Ts_Breakdown(_data.get(),
+                        time,
+                        false,  // testOnly
+                        affectedIntervalPtr,
+                        &reason);
+}
+
+bool
+TsSpline::CanBreakdown(
+    TsTime time,
+    std::string *reason /* = nullptr */)
+{
+    std::string localReason;
+    std::string* reasonPtr = (reason
+                              ? reason
+                              : &localReason);
+
+    GfInterval affectedInterval;
+
+    return Ts_Breakdown(_data.get(),
+                        time,
+                        true,  // testOnly
+                        &affectedInterval,
+                        reasonPtr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

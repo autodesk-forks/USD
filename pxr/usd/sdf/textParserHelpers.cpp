@@ -219,7 +219,7 @@ _KeyValueMetadataEnd(SdfSpecType specType, Sdf_TextParserContext& context,
             // values. We want to store the parsed string, but we need to
             // determine whether to unpack it into an SdfUnregisteredListOp
             // or to just store the string directly.
-            auto getOldValue = [context]() {
+            auto getOldValue = [&context]() {
                 VtValue v;
                 if (context.data->Has(context.path,
                     context.genericMetadataKey, &v)
@@ -232,7 +232,7 @@ _KeyValueMetadataEnd(SdfSpecType specType, Sdf_TextParserContext& context,
                 return v;
             };
 
-            auto getRecordedStringAsUnregisteredValue = [context]() {
+            auto getRecordedStringAsUnregisteredValue = [&context]() {
                 std::string s = context.values.GetRecordedString();
                 if (s == "None") { 
                     return std::vector<SdfUnregisteredValue>(); 
@@ -674,6 +674,18 @@ _ContextToString(Sdf_TextParserCurrentParsingContext parsingContext)
         case Sdf_TextParserCurrentParsingContext::SplineKeywordLoop:
         {
             return "SplineKeywordLoop";
+        }
+        case Sdf_TextParserCurrentParsingContext::SplineKeywordRepeat:
+        {
+            return "SplineKeywordRepeat";
+        }
+        case Sdf_TextParserCurrentParsingContext::SplineKeywordReset:
+        {
+            return "SplineKeywordReset";
+        }
+        case Sdf_TextParserCurrentParsingContext::SplineKeywordOscillate:
+        {
+            return "SplineKeywordOscillate";
         }
         case Sdf_TextParserCurrentParsingContext::SplineKnotParam:
         {

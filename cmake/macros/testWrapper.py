@@ -90,6 +90,9 @@ def _parseArgs():
     parser.add_argument('--tempdirprefix', metavar='PREFIX', type=str,
             help='temp directory names will begin with PREFIX',
             default=None)
+    parser.add_argument('--test-runner', type=str,
+            help=('Application that will run the test. '
+                  'Currently used for emscripten builds.'))
     parser.add_argument('--expected-return-code', type=int, default=0,
             help='Expected return code of this test.')
     parser.add_argument('--env-var', dest='envVars', default=[], type=str, 
@@ -384,8 +387,9 @@ if __name__ == '__main__':
     if args.pre_command:
         _runCommand(args.pre_command, args.pre_command_stdout_redirect,
                     args.pre_command_stderr_redirect, env, 0)
-        
-    _runCommand(args.cmd, args.stdout_redirect, args.stderr_redirect,
+
+    testCommand = f'{args.test_runner} {args.cmd}' if args.test_runner else args.cmd
+    _runCommand(testCommand, args.stdout_redirect, args.stderr_redirect,
                 env, args.expected_return_code)
 
     if args.post_command:

@@ -78,6 +78,43 @@ For other versions of Visual Studio, use the following cmake arguments:
 For more information on Visual Studio generators for cmake, see 
 [Visual Studio Generators](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html#visual-studio-generators).
 
+
+#### WebAssembly
+
+To produce a Wasm build, you will first need to
+[download and install the Emscripten Compiler Toolchain](https://emscripten.org/docs/getting_started/downloads.html).
+
+USD requires oneTBB, which can be built for 32 and 64 bit wasm out of the box.
+Begin by [Downloading](https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.12.0.zip),
+building for Wasm, and installing the library.
+
+Next build USD:
+```bash
+emcmake cmake \
+    -DCMAKE_INSTALL_PREFIX="/path/to/build/openusd_wasm" \
+    -DCMAKE_PREFIX_PATH="/path/to/build/openusd_wasm" \
+    -DPXR_BUILD_TESTS=ON \
+    -DPXR_BUILD_EXAMPLES=OFF \
+    -DPXR_BUILD_IMAGING=OFF \
+    -DCMAKE_FIND_ROOT_PATH="/path/to/build/tbb_wasm" \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_CXX_FLAGS="-pthread --use-port=zlib" \
+    -DCMAKE_C_FLAGS="-pthread --use-port=zlib" \
+    -DCMAKE_EXE_LINKER_FLAGS="-pthread" \
+    "/path/to/src/OpenUSD"
+
+emmake cmake --build . --config Release --target install -j 8
+```
+
+By default, 32 bit Wasm is built.  To produce 64 bit output, ensure that
+`-sMEMORY64=1` is appended to `CMAKE_C_FLAGS` above. Additionally, ensure that
+you have built a Wasm64 version of oneTBB as well.
+
+When performing a Wasm build, resource files will be embedded in the resulting
+binary as part of the linking process.  These files, which consist of the
+`plugInfo.json` files required for the usd library to correctly load types
+and schemas are placed under `/usd` in the virtual file system.
+
 ## Optional Components
 
 USD contains several optional components that are enabled by default
@@ -96,6 +133,31 @@ Please refer to [VERSIONS.md](VERSIONS.md) for supported Python versions.
 
 Support for Python can optionally be disabled by specifying the cmake flag
 `PXR_ENABLE_PYTHON_SUPPORT=FALSE`.
+
+By default, Python bindings are installed into the standard Python site-packages
+directory under `CMAKE_INSTALL_PREFIX`. This directory varies depending on the
+platform and version of Python used to build USD:
+
+- Linux / macOS:
+  - `<prefix>/lib/pythonX.Y/site-packages`
+
+- Windows:
+  - `<prefix>/Lib/site-packages`
+
+To install into a custom directory instead, set `PXR_PYTHON_INSTALL_DIR` to a
+path relative to `CMAKE_INSTALL_PREFIX` or to an absolute path.  For example,
+to restore the layout used by older USD releases:
+
+```
+-DPXR_PYTHON_INSTALL_DIR=lib/python
+```
+
+Python must be set up to discover the bindings in order to use them and the
+components that depend on them. This is typically done by adding the install
+directory to the `PYTHONPATH` environment variable. Note that with the default
+settings, no additional configuration is required if USD is built into a
+virtualenv (i.e., `CMAKE_INSTALL_PREFIX` is set to the virtual environment's
+root directory).
 
 ##### OpenGL
 
@@ -466,6 +528,26 @@ pxrusdGeom.dylib on Mac for the usdGeom component.
 
 > Note: This prefix does not apply to shared objects used for Python bindings.
 
+##### Address Sanitizer
+
+Address Sanitizer's memory leak detection will trigger many assertions that
+are more the responsibility of Leak Sanitizer than Address Sanitizer. To get an
+address sanitized build of OpenUSD without leak detection, build with 
+the flag `-fsanitize=address` and set the following option:
+
+```bash
+export ASAN_OPTIONS=detect_leaks=0
+```
+
+This can also be defaulted within code by defining the following function
+(see [ASAN runtime flags](https://github.com/google/sanitizers/wiki/AddressSanitizerFlags#run-time-flags))
+
+```cpp
+const char *__asan_default_options() {
+  return "detect_leaks=0";
+}
+```
+
 ## USD Developer Options
 
 ##### C++ Namespace Configuration
@@ -530,7 +612,7 @@ There are four ways to link USD controlled by the following options:
 | ---------------------- | --------- | ----------------------------------------- |
 | BUILD_SHARED_LIBS      | `ON`      | Build shared or static libraries          |
 | PXR_BUILD_MONOLITHIC   | `OFF`     | Build single or several libraries         |
-| PXR_MONOLITHIC_IMPORT  |           | CMake file defining usd_ms import library |
+| PXR_MONOLITHIC_IMPORT  |           | CMake file defining usd_m import library  |
 
 ##### Shared Libraries
 
@@ -568,24 +650,40 @@ cmake -DBUILD_SHARED_LIBS=OFF ...
 ##### Internal Monolithic Library
 
 This mode builds the core libraries (i.e. everything under `pxr/`) into a
-single archive library, 'usd_m', and from that it builds a single shared
-library, 'usd_ms'.  It builds plugins outside of `pxr/` and Python modules
-as usual except they link against 'usd_ms' instead of the individual
-libraries of the default mode.  Plugins inside of `pxr/` are compiled into
-'usd_m' and 'usd_ms'.  plugInfo.json files under `pxr/` refer to 'usd_ms'.
+single library, `usd_m`. The monolithic library will be static or shared based
+on the value of `BUILD_SHARED_LIBS`. It builds plugins outside of `pxr/`
+and Python modules as usual except they link against 'usd_m' instead of the
+individual libraries of the default mode.  Plugins inside of `pxr/` are compiled
+into 'usd_m'.  plugInfo.json files under `pxr/` refer to 'usd_m'.
 
 This mode is useful to reduce the number of installed files and simplify
 linking against USD.
 
 | Option Name            | Value        |
 | ---------------------- | ----------   |
-| BUILD_SHARED_LIBS      | _Don't care_ |
+| BUILD_SHARED_LIBS      | `ON` / `OFF` |
 | PXR_BUILD_MONOLITHIC   | `ON`         |
 | PXR_MONOLITHIC_IMPORT  |              |
 
 ```bash
-cmake -DPXR_BUILD_MONOLITHIC=ON ...
+# Configuring to build a monolithic shared USD library
+cmake -DPXR_BUILD_MONOLITHIC=ON -DBUILD_SHARED_LIBS=ON ...
+
+# Configuring to build a monolithic static USD library
+cmake -DPXR_BUILD_MONOLITHIC=ON -DBUILD_SHARED_LIBS=OFF ...
 ```
+
+> [!NOTE]
+> For historical consistency, the output filename of the USD shared monolithic
+> library is `usd_ms` while the static monolithic library is named `usd_m`. In
+> both cases the CMake target is `usd_m`.
+
+> [!WARNING]
+> Due to the need to link to the static monolithic library with the
+> `WHOLE_ARCHIVE` option (see [Linking Whole Archives](#linking-whole-archives)),
+> consumers should be aware that resulting executables and shared libraries will
+> be quite large as they are effectively bringing in every object file from USD.
+
 
 ##### External Monolithic Library
 
@@ -604,7 +702,7 @@ significantly more complicated and are described below.
 To build in this mode:
 
 1. Choose a path where the import file will be.  You'll be creating a cmake
-file with `add_library(usd_ms SHARED IMPORTED)` and one or more `set_property`
+file with `add_library(usd_m SHARED IMPORTED)` and one or more `set_property`
 calls.  The file doesn't need to exist.  If it does exist it should be empty
 or valid cmake code.
 1. Configure the build in the usual way but with `PXR_BUILD_MONOLITHIC=ON`
@@ -620,22 +718,22 @@ for more details.
 1. Edit the import file to describe your library.  Your cmake build may
 be able to generate the file directly via `export()`.  The USD build
 will include this file and having done so must be able to link against
-your library by adding 'usd_ms' as a target link library.  The file
+your library by adding 'usd_m' as a target link library.  The file
 should look something like this:
     ```cmake
-    add_library(usd_ms SHARED IMPORTED)
-    set_property(TARGET usd_ms PROPERTY IMPORTED_LOCATION ...)
+    add_library(usd_m SHARED IMPORTED)
+    set_property(TARGET usd_m PROPERTY IMPORTED_LOCATION ...)
     # The following is necessary on Windows.
-    #set_property(TARGET usd_ms PROPERTY IMPORTED_IMPLIB ...)
-    set_property(TARGET usd_ms PROPERTY INTERFACE_COMPILE_DEFINITIONS ...)
-    set_property(TARGET usd_ms PROPERTY INTERFACE_INCLUDE_DIRECTORIES ...)
-    set_property(TARGET usd_ms PROPERTY INTERFACE_LINK_LIBRARIES ...)
+    #set_property(TARGET usd_m PROPERTY IMPORTED_IMPLIB ...)
+    set_property(TARGET usd_m PROPERTY INTERFACE_COMPILE_DEFINITIONS ...)
+    set_property(TARGET usd_m PROPERTY INTERFACE_INCLUDE_DIRECTORIES ...)
+    set_property(TARGET usd_m PROPERTY INTERFACE_LINK_LIBRARIES ...)
     ```
 1. Complete the USD build by building the usual way, either with the
 default target or the 'install' target.
 
 Two notes:
-1. Your library does **not** need to be named usd_ms. That's simply the
+1. Your library does **not** need to be named usd_m. That's simply the
 name given to it by the import file. The IMPORTED_LOCATION  has the real
 name and path to your library.
 1. USD currently only supports installations where your library is in
@@ -654,25 +752,13 @@ link would not include them. The side effects will not occur and USD
 will not work.
 
 To include everything you need to tell the linker to include the whole
-archive.  That's platform dependent and you'll want code something like
-this:
+archive.  The exact link flags to achieve this are platform-dependent
+but CMake 3.24 and above support the following platform-agnostic generator
+expression:
 
 ```cmake
-if(MSVC)
-    target_link_libraries(mylib -WHOLEARCHIVE:$<TARGET_FILE:usd_m> usd_m)
-elseif(CMAKE_COMPILER_IS_GNUCXX)
-    target_link_libraries(mylib -Wl,--whole-archive usd_m -Wl,--no-whole-archive)
-elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    target_link_libraries(mylib -Wl,-force_load usd_m)
-endif()
+target_link_libraries(mylib "$<LINK_LIBRARY:WHOLE_ARCHIVE,usd_m>")
 ```
-
-On Windows cmake cannot recognize 'usd_m' as a library when appended to
- -WHOLEARCHIVE: because it's not a word to itself so we use TARGET_FILE
-to get the path to the library. We also link 'usd_m' separately so cmake
-will add usd_m's interface link libraries, etc. This second instance
-doesn't increase the resulting file size because all symbols will be
-found in the first (-WHOLEARCHIVE) instance.
 
 ###### Avoiding linking statically to Python
 

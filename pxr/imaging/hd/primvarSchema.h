@@ -38,6 +38,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (indices) \
     (interpolation) \
     (role) \
+    (colorSpace) \
     (elementSize) \
     (transform) \
     (constant) \
@@ -61,6 +62,8 @@ TF_DECLARE_PUBLIC_TOKENS(HdPrimvarSchemaTokens, HD_API,
 //-----------------------------------------------------------------------------
 
 
+/// \class HdPrimvarSchema
+///
 class HdPrimvarSchema : public HdSchema
 {
 public:
@@ -120,6 +123,9 @@ public:
     HD_API
     HdTokenDataSourceHandle GetRole() const;
 
+    HD_API
+    HdTokenDataSourceHandle GetColorSpace() const;
+
     /// The number of values in the value array that must be aggregated for
     /// each element on the the primitive (same as UsdGeomPrimvar).
     HD_API
@@ -145,6 +151,7 @@ public:
         const HdIntArrayDataSourceHandle &indices,
         const HdTokenDataSourceHandle &interpolation,
         const HdTokenDataSourceHandle &role,
+        const HdTokenDataSourceHandle &colorSpace,
         const HdIntDataSourceHandle &elementSize
     );
 
@@ -173,6 +180,9 @@ public:
         Builder &SetRole(
             const HdTokenDataSourceHandle &role);
         HD_API
+        Builder &SetColorSpace(
+            const HdTokenDataSourceHandle &colorSpace);
+        HD_API
         Builder &SetElementSize(
             const HdIntDataSourceHandle &elementSize);
 
@@ -186,6 +196,7 @@ public:
         HdIntArrayDataSourceHandle _indices;
         HdTokenDataSourceHandle _interpolation;
         HdTokenDataSourceHandle _role;
+        HdTokenDataSourceHandle _colorSpace;
         HdIntDataSourceHandle _elementSize;
 
     };

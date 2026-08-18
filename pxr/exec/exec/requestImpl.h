@@ -11,7 +11,7 @@
 
 #include "pxr/exec/exec/api.h"
 #include "pxr/exec/exec/request.h"
-#include "pxr/exec/exec/types.h"
+#include "pxr/exec/exec/valueOverride.h"
 
 #include "pxr/base/tf/bits.h"
 #include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
@@ -25,9 +25,10 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 class EfTime;
-class Exec_AuthoredValueInvalidationResult;
+struct Exec_AttributeValueInvalidationResult;
 class Exec_CacheView;
-class Exec_DisconnectedInputsInvalidationResult;
+struct Exec_DisconnectedInputsInvalidationResult;
+struct Exec_MetadataInvalidationResult;
 class Exec_TimeChangeInvalidationResult;
 class Exec_ValueExtractor;
 class ExecSystem;
@@ -46,16 +47,27 @@ class Exec_RequestImpl
 {
 public:
     /// Notify the request of invalid computed values as a consequence of
-    /// authored value invalidation.
+    /// attribute authored value invalidation.
     /// 
     void DidInvalidateComputedValues(
-        const Exec_AuthoredValueInvalidationResult &invalidationResult);
+        const Exec_AttributeValueInvalidationResult &invalidationResult);
+
+    /// Notify the request of invalid computed values as a consequence of
+    /// metadata authored value invalidation.
+    /// 
+    void DidInvalidateComputedValues(
+        const Exec_MetadataInvalidationResult &invalidationResult);
 
     /// Notify the request of invalid computed values as a consequence of
     /// uncompilation.
     /// 
     void DidInvalidateComputedValues(
         const Exec_DisconnectedInputsInvalidationResult &invalidationResult);
+
+    /// Notify the request to invalidate value keys that don't have a compiled
+    /// leaf node.
+    ///
+    void DidInvalidateUnknownValues();
 
     /// Notify the request of time having changed.
     void DidChangeTime(
@@ -92,6 +104,13 @@ protected:
     /// Computes the value keys in the request.
     EXEC_API
     Exec_CacheView _Compute();
+
+    /// Computes the value keys in the request in the presence of the provided
+    /// \p valueOverrides.
+    ///
+    EXEC_API
+    Exec_CacheView _ComputeWithOverrides(
+        ExecValueOverrideVector &&valueOverrides);
 
     /// Returns true if the request needs to be compiled.
     ///

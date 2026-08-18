@@ -71,6 +71,7 @@ public:
 
     VdfNode *CompileNode(
         const EsfObjectInterface &providerObject,
+        const TfToken &disambiguatingId,
         EsfJournal *nodeJournal,
         Exec_Program *program) const override;
 

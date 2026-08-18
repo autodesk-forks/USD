@@ -1,7 +1,7 @@
-[rmanUsdValidators:PxrRenderTerminalsAPIRelationships]:
-	Doc: Ensures that RenderSettings prims with PxrRenderTerminalsAPI do not define connection attributes for terminal displayFilters, sampleFilters, and integrators. Relationships should be used instead.
-	Keywords: RmanUsdValidators
-	SchemaTypes: UsdRiPxrRenderTerminalsAPI
+[usdGeomValidators:EncapsulationChecker]:
+	Doc: Validates there are no nested Gprims.
+	Keywords: UsdGeomValidators
+	SchemaTypes: UsdGeomBoundable
 	isSuite: False
 [usdGeomValidators:StageMetadataChecker]:
 	Doc: All stages must declare their 'upAxis' and 'metersPerUnit'.
@@ -16,6 +16,11 @@
 	Doc: Validates that GeomSubset prims are direct descendants of an Imageable prim.
 	Keywords: UsdGeomValidators, UsdGeomSubset
 	SchemaTypes: UsdGeomSubset
+	isSuite: False
+[usdLuxValidators:EncapsulationRulesValidator]:
+	Doc: Connectable prims in UsdLux (e.g. Light, LightFilters) can only be nested inside other Container-like Connectable prims (UsdShadeNodeGraph, UsdLuxLight or UsdLuxLightFilter).
+	Keywords: UsdLuxValidators
+	SchemaTypes: UsdLuxLightAPI, UsdLuxLightFilter
 	isSuite: False
 [usdPhysicsValidators:ArticulationChecker]:
 	Doc: Validates all of the UsdPhysicsArticulationRootAPIs applied to a prim.
@@ -37,9 +42,15 @@
 	Keywords: UsdPhysicsValidators, UsdPhysicsRigidBodyAPI
 	SchemaTypes: UsdPhysicsRigidBodyAPI
 	isSuite: False
-[usdShadeValidators:EncapsulationRulesValidator]:
-	Doc: Connectable prims (e.g. Shader, Material, etc) can only be nested inside other Container-like Connectable prims. Container-like prims include Material, NodeGraph, Light, LightFilter. Shader is not a Container-like prim.
+[usdShadeValidators:EncapsulationMaterialValidator]:
+	Doc: UsdShadeNodeGraph derived and UsdShadeShader derived are the only connectable types found within a UsdShadeMaterial prim, but not UsdShadeMaterial (which is UsdShadeNodeGraph derived) itself. Additionally no imageable prims should be found within a UsdShadeMaterial.
 	Keywords: UsdShadeValidators
+	SchemaTypes: UsdShadeMaterial
+	isSuite: False
+[usdShadeValidators:EncapsulationRulesValidator]:
+	Doc: Connectable prims (e.g. Shader, Material, etc) can only be nested inside other Container-like Connectable prims. Container-like prims include Material, NodeGraph. Shader is not a Container-like prim.
+	Keywords: UsdShadeValidators
+	SchemaTypes: UsdShadeShader, UsdShadeMaterial, UsdShadeNodeGraph
 	isSuite: False
 [usdShadeValidators:MaterialBindingApiAppliedValidator]:
 	Doc: Verify a prim has the MaterialBindingAPI applied if it has a material binding relationship.
@@ -83,9 +94,25 @@
 	Keywords: UsdSkelValidators
 	SchemaTypes: UsdSkelBindingAPI
 	isSuite: False
+[usdUtilsValidators:FileExtensionValidator]:
+	Doc: Only valid core layer extensions (.usd, .usda, .usdc, .usdz), valid core texture extensions (.exr, .jpg, .jpeg, .png) and embedded audio files (.M4A, .MP3, .WAV) are allowed in a package.
+	Keywords: UsdUtilsValidators, UsdzValidators
+	isSuite: False
 [usdUtilsValidators:MissingReferenceValidator]:
 	Doc: The composed USD stage should not contain any unresolvable asset dependencies (in every possible variation of the asset), when using the default asset resolver.
 	Keywords: UsdUtilsValidators
+	isSuite: False
+[usdUtilsValidators:PackageEncapsulationValidator]:
+	Doc: If the root layer is a package, then its recommended for the composed stage to not contain references to files outside the package. The package should be self-contained, warn if not.
+	Keywords: UsdUtilsValidators, UsdzValidators
+	isSuite: False
+[usdUtilsValidators:UsdzPackageValidator]:
+	Doc: Files within all usdz packages within a stage should not be compressed or encrypted, and should be aligned to 64 bytes.
+	Keywords: UsdUtilsValidators, UsdzValidators
+	isSuite: False
+[usdValidation:AttributeTypeMismatch]:
+	Doc: Validator that checks for attribute type mismatch with the schema definition.
+	Keywords: UsdCoreValidators
 	isSuite: False
 [usdValidation:CompositionErrorTest]:
 	Doc: Validator aims at providing all composition errors, which were generated while composing the stage.
@@ -95,6 +122,3 @@
 	Doc: Stages that can be consumed as referenceable assets must have a valid 'defaultPrim' specified.
 	Keywords: UsdCoreValidators
 	isSuite: False
-
-Validation Result with no explicit variants set
-Success!

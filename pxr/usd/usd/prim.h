@@ -283,8 +283,13 @@ public:
     /// false otherwise. \sa SdfIsDefiningSpecifier.
     bool IsDefined() const { return _Prim()->IsDefined(); }
 
-    /// Return true if this prim has a specifier of type SdfSpecifierDef
-    /// or SdfSpecifierClass. \sa SdfIsDefiningSpecifier
+    /// Return true if this prim has the specifier SdfSpecifierClass.
+    bool HasClassSpecifier() const {
+        return _Prim()->HasClassSpecifier();
+    }
+    
+    /// Return true if this prim has the specifier SdfSpecifierDef or
+    /// SdfSpecifierClass. \sa SdfIsDefiningSpecifier
     bool HasDefiningSpecifier() const { 
         return _Prim()->HasDefiningSpecifier(); 
     }
@@ -454,6 +459,14 @@ public:
         SetMetadata(SdfFieldKeys->PropertyOrder, order);
     }
 
+    /// Change the order of items in 'names' so that all the things in 'order' 
+    /// that are also in 'names' are at the beginning in the order that they 
+    /// appear in 'order', followed by any remaining items in 'names' in their 
+    /// existing order.
+    USD_API
+    static void
+    ApplyPropertyOrder(const TfTokenVector &order, TfTokenVector *names);
+
     /// Remove the opinion for propertyOrder metadata on this prim at the current
     /// EditTarget.
     void ClearPropertyOrder() const {
@@ -467,7 +480,10 @@ public:
     /// Because this method can only remove opinions about the property from
     /// the current EditTarget, you may generally find it more useful to use
     /// UsdAttribute::Block(), which will ensure that all values from the 
-    /// EditTarget and weaker layers for the property will be ignored.
+    /// EditTarget and weaker layers for the property will be ignored, or 
+    /// UsdAttribute::BlockAnimation(), which will ensure that all timeSamples
+    /// or spline values from the EditTarget and weaker layers for the property
+    /// will be ignored.
     USD_API
     bool RemoveProperty(const TfToken &propName);
 

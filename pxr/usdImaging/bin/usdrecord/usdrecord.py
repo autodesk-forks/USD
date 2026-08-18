@@ -6,8 +6,9 @@
 # https://openusd.org/license.
 #
 
+from pxr import Ar
 from pxr import Usd
-from pxr import UsdGeom, UsdRender
+from pxr import UsdGeom, UsdRender, UsdHydra
 from pxr import Sdf
 from pxr import UsdUtils, UsdAppUtils
 from pxr import Tf
@@ -170,6 +171,16 @@ def main() -> int:
             'Indicates if the default camera lights should not be used '
             'for rendering.'))
 
+    parser.add_argument('--resolverContext',
+        dest='resolverContext',
+        choices=['root', 'inherit'],
+        default='root',
+        help=(
+            'Indicates which resolver context to use. '
+            'Choosing "root" will create a resolver based on the '
+            'rootLayer. Choosing "inherit" will inherit the '
+            'incoming resolver from the environment.'))
+
     UsdAppUtils.cameraArgs.AddCmdlineArgs(parser)
     UsdAppUtils.framesArgs.AddCmdlineArgs(parser)
     UsdAppUtils.complexityArgs.AddCmdlineArgs(parser)
@@ -227,6 +238,12 @@ def main() -> int:
             'Will have no effect if MallocTags are not supported in the '
             'USD installation.'))
 
+    parser.add_argument('--abortOnError', action='store_true',
+        default=False, dest='abortOnError',
+        help=(
+            'Abort recording and return a non-zero exit code if a Tf '
+            'error is raised during rendering.'))
+
     args = parser.parse_args()
 
     args.imageWidth = max(args.imageWidth, 1)
@@ -259,6 +276,13 @@ def main() -> int:
     else:
         sessionLayer = Sdf.Layer.CreateAnonymous()
 
+    # Create the proper resolver to pass to the usd stage.
+    resolver = Ar.GetResolver()
+    if args.resolverContext == 'inherit':
+        resolverContext = resolver.CreateDefaultContext()
+    else:
+        resolverContext = resolver.CreateDefaultContextForAsset(args.usdFilePath)
+
     # Open the USD stage, using a population mask if paths were given.
     if args.populationMask:
         populationMaskPaths = args.populationMask.replace(',', ' ').split()
@@ -267,9 +291,9 @@ def main() -> int:
         for maskPath in populationMaskPaths:
             populationMask.Add(maskPath)
 
-        usdStage = Usd.Stage.OpenMasked(rootLayer, sessionLayer, populationMask)
+        usdStage = Usd.Stage.OpenMasked(rootLayer, sessionLayer, resolverContext, populationMask)
     else:
-        usdStage = Usd.Stage.Open(rootLayer, sessionLayer)
+        usdStage = Usd.Stage.Open(rootLayer, sessionLayer, resolverContext)
 
     if not usdStage:
         _Err('Could not open USD stage: %s' % args.usdFilePath)
@@ -331,8 +355,19 @@ def main() -> int:
         # the output image. We just pass it along for cleanliness.
         glWidget = _SetupOpenGLContext(args.imageWidth, args.imageWidth)
 
+    # Determine Hydra renderer plugin to use. 
+    rendererName = ''
+    if args.rendererPlugin:
+        # Renderer plugin was specified on the command-line.
+        rendererName = args.rendererPlugin
+    elif args.rpPrimPath:
+        # Check render pass prim for a renderer plugin name.
+        renderPass = UsdRender.Pass(usdStage.GetPrimAtPath(args.rpPrimPath))
+        hydraAPI = UsdHydra.RenderPassAPI(renderPass)
+        if hydraAPI:
+            rendererName = hydraAPI.GetHydraRendererNameAttr().Get()
     rendererPluginId = UsdAppUtils.rendererArgs.GetPluginIdFromArgument(
-        args.rendererPlugin) or ''
+        rendererName) or ''
 
     # Initialize FrameRecorder 
     frameRecorder = UsdAppUtils.FrameRecorder(
@@ -358,9 +393,14 @@ def main() -> int:
         try:
             frameRecorder.Record(usdStage, usdCamera, timeCode, outputImagePath)
         except Tf.ErrorException as e:
-            _Err("Recording aborted due to the following failure at time code "
-                 "{0}: {1}".format(timeCode, str(e)))
-            return 1
+            if args.abortOnError:
+                _Err("Recording aborted due to the following failure at "
+                     "time code {0}: {1}".format(timeCode, str(e)))
+                return 1
+            else:
+                # By default just print the errors and contine.
+                _Msg("Errors encountered at time code {0}: "
+                     "{1}".format(timeCode, str(e)))
 
     # Release our reference to the frame recorder so it can be deleted before
     # the Qt stuff.

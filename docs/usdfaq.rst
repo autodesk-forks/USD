@@ -690,6 +690,66 @@ when assembled into an aggregate or scene), and the reality for Pixar is that we
 rarely instance single gprims, rather instancing entire models or parts of
 models.
 
+Why Am I Unable to Author Opinions on a Relocated Prim Path?
+############################################################
+
+If you are seeing warnings similar to the following when trying to author an 
+opinion, or create a new prim at a given path:
+
+.. code-block:: none
+   
+   Warning: In </A/Relocated/Prim/Path>: The layer @your-layer.usda@ has an 
+   invalid opinion at the relocation source path </Path/That/Gets/Relocated>, 
+   which will be ignored.
+
+This means you attempted to author an opinion on a prim path that was 
+**relocated**. Paths most often get relocated when a user moves or renames 
+a prim that is defined across a reference or other composition arc, so we must 
+add another composition arc called a "relocates" in the referencing layer to 
+instruct the composition engine to remap all the referenced scene description 
+on-the-fly.
+
+For example, the following layer has a referenced :sdfpath:`/Prim1/PrimB` that 
+is relocated to :sdfpath:`/Prim1/RelocatedPrim` in the layer. The attempt to 
+author an opinion for :sdfpath:`/Prim1/PrimB.attr1` will result in the 
+previously mentioned warning, and the attribute opinion will be ignored.
+
+.. code-block:: usda
+
+    #usda 1.0
+    (
+        relocates = {
+            </Prim1/PrimB> : </Prim1/RelocatedPrim>
+        }
+    )
+
+    def "Prim1" (
+        references = @/path/to/another-layer.usda@</Prim1>
+    ) 
+    {
+        def "PrimB"
+        {
+            # We can't have local opinions for /Prim1/PrimB because this has 
+            # been relocated in this LayerStack
+            bool attr1 = False
+        }
+    }
+
+When a prim is relocated, the original 'source' prim path is marked so that no 
+opinions can be authored at that path, or any path that has that path prefix. 
+This "marker" is sometimes referred to as a "tombstone". Tombstones are created 
+to ensure there's one, and only one location in the layer namespace that can 
+have opinions, to avoid ambiguity. Tombstones carry through any subsequent 
+reference operations, so any further references of a prim path that contains a 
+tombstone will continue to prohibit authoring at that tombstone path. For 
+example, in the previous example a prim that referenced :sdfpath:`/Prim1` would 
+still not be allowed to author an opinion at 
+:sdfpath:`/PrimC/PrimChild/ReferencingPrim/PrimB`.
+
+For more details and examples about relocates, see 
+:ref:`Relocates <usdglossary-relocates>`. For more details about using the
+namespace editor to move or rename prims, see :ref:`namespace_editing`.
+
 Build and Runtime Issues
 ========================
 
@@ -752,15 +812,9 @@ If you get an error message when using USD's Python bindings like this:
    ImportError: No module named pxr
 
 Make sure that the :envvar:`PYTHONPATH` environment variable includes
-the directory containing the USD Python modules:
-
-.. code-block:: sh
-
-   $ export PYTHONPATH=$PYTHONPATH:<inst>/lib/python
-
-Where :file:`<inst>` represents the :makevar:`CMAKE_INSTALL_PREFIX` set in your
-build configuration. See `Advanced Build Configuration
-<https://github.com/PixarAnimationStudios/OpenUSD/blob/release/BUILDING.md>`_ for
+the directory containing the USD Python modules. See the
+`Python docs
+<https://github.com/PixarAnimationStudios/OpenUSD/blob/release/BUILDING.md#Python>`__ for
 more information.
 
 Why Isn't This Plugin Being Built?
@@ -830,3 +884,50 @@ single monolithic USD DLL using the :code:`PXR_BUILD_MONOLITHIC` cmake flag. See
 <https://github.com/PixarAnimationStudios/OpenUSD/blob/release/BUILDING.md>`_ for
 more information. Note that you will still need to install the USD plugins 
 directory along with the monolithic USD DLL.
+
+How Do I Update Deprecated and Obsolete USD Assets?
+###################################################
+
+OpenUSD binary files carry a crate-file version. Older-but-supported versions
+produce a **warning** when opened and can be updated with current tools.
+Versions no longer supported at all produce an **error** and fail to open --
+these require older OpenUSD software to bridge them forward.
+
+**Deprecated Versions** -- If you get a warning like:
+
+.. code-block:: text
+
+   Warning: Asset @foo.usd@ has deprecated version 'X.Y.Z'
+
+You can update an individual binary ``.usd`` or ``.usdc`` file to a current
+supported version by re-exporting it over itself, e.g. ``usdcat foo.usd -o
+foo.usd``.
+
+For ``.usdz`` archives, or for bulk updates across many files, use the
+``usdupdatecrate`` tool included in the OpenUSD software distribution. It
+searches for and identifies binary crate files whose version is older than a
+threshold, including those packaged inside ``.usdz`` archives. By default it
+reports matches. Pass ``--update`` to update them in place.
+
+**Obsolete Versions** -- If you get an error like:
+
+.. code-block:: text
+
+   ERROR: Cannot read asset @foo.usd@ with obsolete version 'X.Y.Z'
+
+The file's crate version is no longer supported by your current OpenUSD
+software.  To bring it forward, use an older OpenUSD release that still supports
+the obsolete version and update the file via ``usdcat`` or ``usdupdatecrate
+--update``.
+
+The table below lists the last OpenUSD release supporting each obsolete crate
+version.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 30
+
+   * - Obsolete Crate File Version
+     - Last Supporting OpenUSD Release
+   * - (none yet)
+     - --

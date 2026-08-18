@@ -34,8 +34,7 @@ class VDF_API_TYPE Vdf_VectorImplSingle final
 
 public:
 
-    Vdf_VectorImplSingle() : _data(TYPE()) {
-    }
+    Vdf_VectorImplSingle() = default;
 
     explicit Vdf_VectorImplSingle(const TYPE &value) :
         _data(value) {

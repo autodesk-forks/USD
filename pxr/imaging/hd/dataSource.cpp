@@ -51,6 +51,12 @@ HdContainerDataSource::Get(
     return child;
 }
 
+VtValue 
+HdSampledDataSource::_GetDefaultValue() 
+{ 
+    return VtValue(); 
+}
+
 // ----------------------------------------------------------------------------
 
 // Wrapper around std::set_union to compute the set-wise union of two

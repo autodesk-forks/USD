@@ -36,7 +36,7 @@ HdInstancer::GetInstancerNumLevels(HdRenderIndex& index,
     while (!parent.IsEmpty()) {
         instancerLevels++;
         instancer = index.GetInstancer(parent);
-        TF_VERIFY(instancer);
+        TF_VERIFY(instancer, "Expected instancer for path: %s.", parent.GetText());
         parent = instancer ? instancer->GetParentId()
             : SdfPath::EmptyPath();
     }
@@ -78,7 +78,8 @@ HdInstancer::_SyncInstancerAndParents(HdRenderIndex &renderIndex,
     SdfPath id = instancerId;
     while (!id.IsEmpty()) {
         HdInstancer *instancer = renderIndex.GetInstancer(id);
-        if (!TF_VERIFY(instancer)) {
+        if (!TF_VERIFY(instancer, 
+                       "Expected instancer for path: %s.", id.GetText())) {
             return;
         }
 

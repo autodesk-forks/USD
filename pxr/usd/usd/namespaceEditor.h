@@ -18,11 +18,24 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-/// @warning
-/// This code is a work in progress and should not be used in production 
-/// scenarios. It is currently not feature-complete and subject to change.
+/// Provides namespace editing operations, where a namespace edit is an 
+/// operation that removes or changes the namespace path of a composed prim 
+/// or property on a stage. Edit operations currently consist of deleting and 
+/// moving (renaming and/or reparenting) a composed prim or property.
 ///
-/// Provides namespace editing operations 
+/// The namespace editor is designed to perform these editing operations on a 
+/// given stage, with the option of registering dependent stages that will be
+/// edited along with the primary stage.
+///
+/// In addition to performing the main edit, the namespace editor will also fix up
+/// relationship targets and connection paths, as well as path expressions, that
+/// refer to the path being edited.
+///
+/// Namespace editing also provides non-destructive editing of prims defined across 
+/// composition arcs by adding the relocates composition arc if needed. By using 
+/// relocates, namespace editing ensures non-destructive edits by not modifying 
+/// the source of a composition arc. The user can control whether relocates are
+/// allowed to be authored by using the EditOptions.
 class UsdNamespaceEditor 
 {
 public:
@@ -37,6 +50,20 @@ public:
         /// that require relocates as errors and will not apply the edit.
         bool allowRelocatesAuthoring = true;
     };
+
+    // Structure returned by CanApplyEdits that stores errors and warnings 
+    // encountered while processing the edits. This struct evaluates to false
+    // if any errors were found, and true otherwise (even if there are warnings).
+    struct CanApplyResult 
+    {
+        std::vector<std::string> errors;
+        std::vector<std::string> warnings;
+
+        operator bool() const
+        {
+            return errors.empty();
+        }
+    }; 
 
     USD_API
     explicit UsdNamespaceEditor(const UsdStageRefPtr &stage);
@@ -231,6 +258,7 @@ public:
     USD_API
     bool ApplyEdits();
 
+    /// \deprecated Use CanApplyEdits() overload below.
     /// Returns whether all the added namespace edits stored in this to 
     /// namespace editor can be applied to its stage. 
     ///
@@ -238,7 +266,25 @@ public:
     /// it were called right now. If this would return false and \p whyNot is 
     /// provided, the reasons ApplyEdits would fail will be copied to whyNot.
     USD_API
-    bool CanApplyEdits(std::string *whyNot = nullptr) const;
+    bool CanApplyEdits(std::string *whyNot) const;
+
+    /// Returns whether all the added namespace edits stored in this to 
+    /// namespace editor can be applied to its stage. 
+    ///
+    /// In other words, this returns whether ApplyEdits should be successful if
+    /// it were called right now. If that call would return false, the reasons 
+    /// ApplyEdits would fail will be copied to the return struct's errors field.
+    /// If the call would return true, but the edit might create a result
+    /// that is confusing to the user due to split opinions, the return struct's
+    /// warnings field will contain information about the sources of confusion.
+    USD_API
+    CanApplyResult CanApplyEdits() const;
+
+    /// Returns the list of layers that will be edited if ApplyEdits() is called.
+    /// This function can only be called if CanApplyEdits() returns true and 
+    /// will throw a coding error if not.
+    USD_API
+    SdfLayerHandleVector GetLayersToEdit();
 
 private:
 
@@ -277,6 +323,11 @@ private:
         // edit of the composed stage object from being completed successfully.
         std::vector<std::string> errors;
 
+        // List of warnings encountered that will not prevent the main edit from 
+        // being completed but indicate that some supporting operations may not 
+        // have been performed.
+        std::vector<std::string> warnings;
+
         // The edit description of the primary edit.
         _EditDescription editDescription;
 
@@ -287,41 +338,35 @@ private:
         // Whether performing the edit will author new relocates.
         bool willAuthorRelocates = false;
 
-        // Layer edits that need to be performed to update connection and 
-        // relationship targets of other properties in order to keep them 
-        // targeting the same object after applying this processed edit.
-        struct TargetPathListOpEdit {
-            // Property spec to author the new targets value to. Note that we
-            // store the spec handle for the property as the property spec's
-            // path could change if the property is moved or deleted by the 
-            // primary namespace edit.
-            SdfPropertySpecHandle propertySpec;
+        // Layer edits that need to be performed to update path-bearing fields 
+        // (like connection and relationship targets) in order to keep them 
+        // referring to the same object after applying this processed edit.
+        struct PathBearingFieldEdit {
+            // Prim or property spec to author the new value to. Note that we
+            // store the spec handle for the object as the object's path could 
+            // change if it is moved or deleted by the primary namespace edit.
+            SdfSpecHandle spec;
 
-            // Name of the field that holds the path targets for the property
-            // which differs for attributes vs relationships.  
+            // Name of the path-bearing field.  
             TfToken fieldName;
 
-            // Updated list op value to set for the property spec.
-            SdfPathListOp newFieldValue;
+            // Updated field value to set.
+            VtValue newFieldValue;
         };
-        std::vector<TargetPathListOpEdit> targetPathListOpEdits;
+        std::vector<PathBearingFieldEdit> pathBearingFieldEdits;
 
         // Full set of namespace edits that need to be performed for all the
         // dependent stages of this editor as a result of dependencies on the
         // initial spec move edits.
         PcpDependentNamespaceEdits dependentStageNamespaceEdits;
 
-        // List of errors encountered that would prevent connection and 
-        // relationship target edits from being performed in response to the
-        // namespace edits.
-        std::vector<std::string> targetPathListOpErrors;
-
         // Applies this processed edit, performing the individual edits 
         // necessary to each layer that needs to be updated.
         bool Apply();
 
-        // Returns whether this processed edit can be applied.
-        bool CanApply(std::string *whyNot) const;
+        // Returns whether this processed edit can be applied and any errors
+        // or warnings that it would produce.
+        UsdNamespaceEditor::CanApplyResult CanApply() const;
     };
 
     // Adds an edit description for a prim delete operation.

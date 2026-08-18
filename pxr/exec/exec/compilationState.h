@@ -10,6 +10,10 @@
 #include "pxr/pxr.h"
 
 #include "pxr/exec/exec/compilerTaskSync.h"
+#include "pxr/exec/exec/interruptState.h"
+#include "pxr/exec/exec/taskCycleDetector.h"
+
+#include "pxr/base/work/dispatcher.h"
 
 #include <utility>
 
@@ -34,10 +38,20 @@ public:
         WorkDispatcher &dispatcher,
         const EsfStage &stage,
         Exec_Program *program)
-        : _stage(stage)
+        : _dispatcher(dispatcher)
+        , _stage(stage)
+        , _taskCycleDetector(this)
+        , _interruptState(this)
         , _outputTasks(dispatcher)
+        , _inputRecompilationTasks(dispatcher)
+        , _cycleDetectingTasks(dispatcher)
         , _program(program) {
         TF_VERIFY(_program);
+    }
+
+    /// The dispatcher for running tasks.
+    WorkDispatcher &GetDispatcher() {
+        return _dispatcher;
     }
 
     /// The scene adapter stage.
@@ -50,12 +64,34 @@ public:
         return _program;
     }
 
-    /// Extends access to the Exec_CompilerTaskSync member.
-    class OutputTasksAccess {
-        friend class Exec_CompilationTask;
+    /// Gets object for tracking potential task cycles.
+    Exec_TaskCycleDetector &GetTaskCycleDetector() {
+        return _taskCycleDetector;
+    }
 
-        static Exec_CompilerTaskSync &_Get(Exec_CompilationState *state) {
+    /// Gets the object for interrupting compilation.
+    Exec_InterruptState &GetInterruptState() {
+        return _interruptState;
+    }
+
+    /// Extends access to the various Exec_CompilerTaskSync<T> members.
+    class TaskSyncAccess {
+        friend class Exec_CompilationTask;
+        friend class Exec_InterruptState;
+
+        static Exec_OutputProvidingTaskSync &
+        _GetOutputProvidingTaskSync(Exec_CompilationState *state) {
             return state->_outputTasks;
+        }
+
+        static Exec_InputRecompilationTaskSync &
+        _GetInputRecompilationTaskSync(Exec_CompilationState *state) {
+            return state->_inputRecompilationTasks;
+        }
+
+        static Exec_CycleDetectingTaskSync &
+        _GetCycleDetectingTaskSync(Exec_CompilationState *state) {
+            return state->_cycleDetectingTasks;
         }
     };
 
@@ -64,8 +100,13 @@ public:
     static void NewTask(Exec_CompilationState &state, Args&&... args);
 
 private:
+    WorkDispatcher &_dispatcher;
     const EsfStage &_stage;
-    Exec_CompilerTaskSync _outputTasks;
+    Exec_TaskCycleDetector _taskCycleDetector;
+    Exec_InterruptState _interruptState;
+    Exec_OutputProvidingTaskSync _outputTasks;
+    Exec_InputRecompilationTaskSync _inputRecompilationTasks;
+    Exec_CycleDetectingTaskSync _cycleDetectingTasks;
     Exec_Program *_program;
 };
 
@@ -76,7 +117,7 @@ Exec_CompilationState::NewTask(Exec_CompilationState &state, Args&&... args)
     // TODO: We need a small-object task allocator.
     // Tasks manage their own lifetime, and delete themselves after completion.
     TaskType *const task = new TaskType(state, std::forward<Args>(args)...);
-    state._outputTasks.Run(task);
+    state._dispatcher.Run(std::ref(*task));
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

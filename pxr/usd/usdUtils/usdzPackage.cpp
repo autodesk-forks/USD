@@ -15,8 +15,8 @@
 #include "pxr/usd/ar/resolver.h"
 #include "pxr/usd/sdf/assetPath.h"
 #include "pxr/usd/sdf/usdcFileFormat.h"
+#include "pxr/usd/sdf/zipFile.h"
 #include "pxr/usd/usd/stage.h"
-#include "pxr/usd/usd/zipFile.h"
 
 #include "pxr/base/tf/fileUtils.h"
 #include "pxr/base/tf/pathUtils.h"
@@ -32,7 +32,7 @@ public:
     Write(
         const std::string &usdzFilePath) override
     {
-        _writer = UsdZipFileWriter::CreateNew(usdzFilePath);
+        _writer = SdfZipFileWriter::CreateNew(usdzFilePath);
 
         const bool success = 
             UsdUtils_AssetLocalizationPackage::Write(usdzFilePath);
@@ -46,13 +46,20 @@ protected:
         const std::string& source,
         const std::string& dest) override
     {
-        std::string inPackagePath = _writer.AddFile(source, dest);
+        const ArResolvedPath resolvedPath = ArGetResolver().Resolve(source);
+
+        if (resolvedPath.IsEmpty()) {
+            return false;
+        }
+
+        std::string inPackagePath = 
+            _writer.AddFile(resolvedPath.GetPathString(), dest);
 
         return !inPackagePath.empty();
     }
 
     private:
-        UsdZipFileWriter _writer;
+        SdfZipFileWriter _writer;
 };
 
 static 

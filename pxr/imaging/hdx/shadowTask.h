@@ -45,7 +45,6 @@ struct HdxShadowTaskParams
         : overrideColor(0.0)
         , wireframeColor(0.0)
         , enableLighting(false)
-        , enableSceneMaterials(true)
         , alphaThreshold(0.0)
         , depthBiasEnable(false)
         , depthBiasConstantFactor(0.0f)
@@ -58,7 +57,6 @@ struct HdxShadowTaskParams
     GfVec4f overrideColor;
     GfVec4f wireframeColor;
     bool enableLighting;
-    bool enableSceneMaterials;
     float alphaThreshold;
     bool  depthBiasEnable;
     float depthBiasConstantFactor;

@@ -5,9 +5,12 @@
 // https://openusd.org/license.
 //
 #include "pxr/imaging/hd/legacyPrimSceneIndex.h"
+
 #include "pxr/imaging/hd/dataSourceLegacyPrim.h"
 #include "pxr/imaging/hd/dataSourceLegacyTaskPrim.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
+
 #include "pxr/base/trace/trace.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -34,7 +37,9 @@ void
 HdLegacyPrimSceneIndex::RemovePrim(SdfPath const &id)
 {
     if (!GetChildPrimPaths(id).empty()) {
-        AddPrims({{id, TfToken(), nullptr}});
+        static HdContainerDataSourceHandle const empty =
+            HdRetainedContainerDataSource::New();
+        AddPrims({{id, TfToken(), empty}});
     }
     else {
         RemovePrims({id});

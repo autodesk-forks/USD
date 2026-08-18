@@ -52,6 +52,8 @@
 #include "pxr/base/ts/binary.h"
 #include "pxr/base/ts/spline.h"
 #include "pxr/base/trace/trace.h"
+#include "pxr/base/vt/arrayEdit.h"
+#include "pxr/base/vt/arrayEditBuilder.h"
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/vt/value.h"
 #include "pxr/base/work/dispatcher.h"
@@ -88,6 +90,50 @@ static constexpr bool SafetyOverSpeed = true;
 static constexpr bool SafetyOverSpeed = false;
 #endif
 
+/// \class SdfReadOutOfBoundsError
+///
+/// Sdf throws this exception when code attempts to read memory outside of the
+/// allocated range.
+class SdfReadOutOfBoundsError : public TfBaseException
+{
+public:
+    using TfBaseException::TfBaseException;
+    SDF_API virtual ~SdfReadOutOfBoundsError() override;
+};
+
+SdfReadOutOfBoundsError::~SdfReadOutOfBoundsError()
+{
+}
+
+// True if cursor lies in [lo, hi] and at least nBytes are available starting at
+// cursor.  Comparing nBytes against (hi - cursor) after ensuring cursor <= hi
+// makes the subtraction-then-cast safe.  The perhaps more obvious (cursor +
+// nBytes) <= hi approach could pointer/unsigned wrap past hi for (malformedly)
+// huge nBytes values and falsely pass.
+template <class T>
+static inline bool
+_IsReadInRange(T lo, T cursor, T hi, size_t nBytes)
+{
+    return lo <= cursor && cursor <= hi && nBytes <= size_t(hi - cursor);
+}
+
+// Throws SdfReadOutOfBoundsError when SafetyOverSpeed is enabled and the (lo,
+// cursor, hi, nBytes) range check fails.  When SafetyOverSpeed is false the
+// body is discarded by if constexpr; the bounds arithmetic and message args at
+// the call site are left for the compiler to dead-code-eliminate.
+template <class T, class... Args>
+static inline void
+_ThrowIfReadOutOfRange(T lo, T cursor, T hi, size_t nBytes,
+                       char const *fmt, Args&&... args)
+{
+    if constexpr (SafetyOverSpeed) {
+        if (ARCH_UNLIKELY(!_IsReadInRange(lo, cursor, hi, nBytes))) {
+            PXR_TF_THROW(SdfReadOutOfBoundsError,
+                TfStringPrintf(fmt, std::forward<Args>(args)...));
+        }
+    }
+}
+
 static inline unsigned int
 _GetPageShift(unsigned int mask)
 {
@@ -108,7 +154,12 @@ TF_REGISTRY_FUNCTION(TfType) {
     TfType::Define<Sdf_CrateFile::TimeSamples>();
 }
 
-#define DEFAULT_NEW_VERSION "0.8.0"
+#define OLDEST_SUPPORTED_VERSION "0.0.1" // versions prior are unsupported
+#define OLDEST_CURRENT_VERSION   "0.8.0" // versions prior until
+                                         // oldest-supported are deprecated
+
+#define DEFAULT_NEW_VERSION      "0.8.0" // default version for new files
+
 TF_DEFINE_ENV_SETTING(
     USD_WRITE_NEW_USDC_FILES_AS_VERSION, DEFAULT_NEW_VERSION,
     "When writing new Sdf Crate files, write them as this version.  "
@@ -137,6 +188,11 @@ TF_DEFINE_ENV_SETTING(
     "will not use system I/O functions like mmap or pread directly for Crate "
     "files on disk, but these functions may be used indirectly by ArAsset "
     "implementations.");
+
+TF_DEFINE_ENV_SETTING(
+    PXR_USDC_EMIT_DEPRECATION_WARNINGS, true,
+    "If set, emit warnings when reading binary USD files with deprecated "
+    "versions prior to " OLDEST_CURRENT_VERSION ".");
 
 static int _GetMMapPrefetchKB()
 {
@@ -178,21 +234,6 @@ WriteToAsset(ArWritableAsset* asset,
         nwritten = 0;
     }
     return nwritten;
-}
-
-/// \class SdfReadOutOfBoundsError
-///
-/// Sdf throws this exception when code attempts to read
-/// memory outside of the allocated range.
-class SdfReadOutOfBoundsError : public TfBaseException
-{
-public:
-    using TfBaseException::TfBaseException;
-    SDF_API virtual ~SdfReadOutOfBoundsError() override;
-};
-
-SdfReadOutOfBoundsError::~SdfReadOutOfBoundsError()
-{
 }
 
 namespace Sdf_CrateFile
@@ -274,6 +315,15 @@ static constexpr ValueRep ValueRepForArray(uint64_t payload = 0) {
 }
 
 template <class T>
+static constexpr ValueRep ValueRepForArrayEdit(uint64_t payload = 0) {
+    ValueRep r {
+        _TypeEnumFor<T>::value,
+        /*isInlined=*/false, /*isArray=*/false, payload };
+    r.SetIsArrayEdit();
+    return r;
+}
+
+template <class T>
 T *RoundToPageAddr(T *addr) {
     return reinterpret_cast<T *>(
         reinterpret_cast<uintptr_t>(addr) & CRATE_PAGEMASK);
@@ -332,6 +382,9 @@ using std::unordered_map;
 using std::vector;
 
 // Version history:
+// 0.15.0: Added support for loopBoundaryTime-delimited spline extrapolation
+//         loops and GfTimeCode-native splines.
+// 0.14.0: Added support for ArrayEdits.
 // 0.13.0: Support for splines with tangent algorithms None, Custom, AutoEase.
 // 0.12.0: Added support for splines.
 // 0.11.0: Added support for relocates in layer metadata.
@@ -350,7 +403,7 @@ using std::vector;
 //         See _PathItemHeader_0_0_1.
 //  0.0.1: Initial release.
 constexpr uint8_t USDC_MAJOR = 0;
-constexpr uint8_t USDC_MINOR = 13;
+constexpr uint8_t USDC_MINOR = 15;
 constexpr uint8_t USDC_PATCH = 0;
 
 constexpr CrateFile::Version
@@ -558,24 +611,24 @@ struct _MmapStream {
         _prefetchKB = 0;
         return *this;
     }
-    
+
+    inline void DemandAvailable(size_t nBytes) {
+        char const *mapStart = _mapping->GetMapStart();
+        size_t mapLen = _mapping->GetLength();
+        _ThrowIfReadOutOfRange(
+            mapStart, _cur, mapStart + mapLen, nBytes,
+            "Demand for %zu bytes at offset %td exceeds mapping length %zu",
+            nBytes, _cur - mapStart, mapLen);
+    }
+
     inline void Read(void *dest, size_t nBytes) {
-        // Range check first.
-        if constexpr (SafetyOverSpeed) {
-            char const *mapStart = _mapping->GetMapStart();
-            size_t mapLen = _mapping->GetLength();
-            
-            bool inRange = mapStart <= _cur &&
-                (_cur + nBytes) <= (mapStart + mapLen);
-            
-            if (ARCH_UNLIKELY(!inRange)) {
-                ptrdiff_t offset = _cur - mapStart;
-                PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
-                    "Read out-of-bounds: %zd bytes at offset %td in "
-                    "a mapping of length %zd",
-                    nBytes, offset, mapLen));
-            }
-        }
+        char const *mapStart = _mapping->GetMapStart();
+        size_t mapLen = _mapping->GetLength();
+        _ThrowIfReadOutOfRange(
+            mapStart, _cur, mapStart + mapLen, nBytes,
+            "Read out-of-bounds: %zd bytes at offset %td in "
+            "a mapping of length %zd",
+            nBytes, _cur - mapStart, mapLen);
 
         if (ARCH_UNLIKELY(_debugPageMap)) {
             auto mapStart = _mapping->GetMapStart();
@@ -623,15 +676,12 @@ struct _MmapStream {
         char const *mapStart = _mapping->GetMapStart();
         char const *chAddr = static_cast<char const *>(addr);
         size_t mapLen = _mapping->GetLength();
-        bool inRange = mapStart <= chAddr &&
-            (chAddr + numBytes) <= (mapStart + mapLen);
-        
-        if (ARCH_UNLIKELY(!inRange)) {
-            ptrdiff_t offset = chAddr - mapStart;
+        if (ARCH_UNLIKELY(!_IsReadInRange(
+                              mapStart, chAddr, mapStart + mapLen, numBytes))) {
             TF_RUNTIME_ERROR(
                 "Zero-copy data range out-of-bounds: %zd bytes at offset "
                 "%td in a mapping of length %zd",
-                numBytes, offset, mapLen);
+                numBytes, chAddr - mapStart, mapLen);
             return nullptr;
         }
         return _mapping->AddRangeReference(addr, numBytes);
@@ -661,9 +711,22 @@ struct _PreadStream {
     template <class FileRange>
     explicit _PreadStream(FileRange const &fr)
         : _start(fr.startOffset)
+        , _length(fr.length)
         , _cur(0)
         , _file(fr.file) {}
+    inline void DemandAvailable(size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, _length, nBytes,
+            "Demand for %zu bytes at offset %" PRId64
+            " exceeds file-range length %" PRId64,
+            nBytes, _cur, _length);
+    }
     inline void Read(void *dest, size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, _length, nBytes,
+            "Read out-of-bounds: %zu bytes at offset %" PRId64
+            " in a file-range of length %" PRId64,
+            nBytes, _cur, _length);
         int64_t nRead = ArchPRead(_file, dest, nBytes, _start + _cur);
         if constexpr (SafetyOverSpeed) {
             if (ARCH_UNLIKELY(nRead != static_cast<int64_t>(nBytes))) {
@@ -682,6 +745,7 @@ struct _PreadStream {
 
 private:
     int64_t _start;
+    int64_t _length;
     int64_t _cur;
     FILE *_file;
 };
@@ -692,8 +756,21 @@ struct _AssetStream {
 
     explicit _AssetStream(ArAssetSharedPtr const &asset)
         : _asset(asset)
+        , _size(asset ? asset->GetSize() : 0)
         , _cur(0) {}
+    inline void DemandAvailable(size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, static_cast<int64_t>(_size), nBytes,
+            "Demand for %zu bytes at offset %" PRId64
+            " exceeds asset size %zu",
+            nBytes, _cur, _size);
+    }
     inline void Read(void *dest, size_t nBytes) {
+        _ThrowIfReadOutOfRange(
+            int64_t(0), _cur, static_cast<int64_t>(_size), nBytes,
+            "Read out-of-bounds: %zu bytes at offset %" PRId64
+            " in an asset of size %zu",
+            nBytes, _cur, _size);
         size_t nRead = _asset->Read(dest, nBytes, _cur);
         if constexpr (SafetyOverSpeed) {
             if (nRead != nBytes) {
@@ -712,6 +789,7 @@ struct _AssetStream {
 
 private:
     ArAssetSharedPtr _asset;
+    size_t _size;
     int64_t _cur;
 };
 
@@ -1177,8 +1255,8 @@ public:
                            std::is_same_v<T, SdfPathExpression>) {
             return T(Read<string>());
         }
-        else if constexpr (std::is_same_v<T, SdfTimeCode>) {
-            return SdfTimeCode(Read<double>());
+        else if constexpr (std::is_same_v<T, GfTimeCode>) {
+            return GfTimeCode(Read<double>());
         }
         else if constexpr (std::is_same_v<T, SdfUnregisteredValue>) {
             VtValue val = Read<VtValue>();
@@ -1321,6 +1399,13 @@ public:
             src.Read(static_cast<void *>(values), sz * sizeof(*values));
         }
         else {
+            // Each non-bitwise per-element Read<T> consumes at least 1 byte
+            // from the source (4+ in practice for index types,
+            // sizeof(_ListOpHeader) for list ops, 8+ for nested vectors).
+            // Reject up-front if the source can't possibly satisfy the loop, so
+            // we don't touch destination pages for a doomed read.
+            // DemandAvailable is a no-op when SafetyOverSpeed is false.
+            src.DemandAvailable(sz);
             std::for_each(values, values + sz, [this](T &v) { v = Read<T>(); });
         }
     }
@@ -1421,7 +1506,7 @@ public:
     void Write(SdfPath const &path) { Write(crate->_AddPath(path)); }
     void Write(VtDictionary const &dict) { WriteMap(dict); }
     void Write(SdfAssetPath const &ap) { Write(ap.GetAssetPath()); }
-    void Write(SdfTimeCode const &tc) { 
+    void Write(GfTimeCode const &tc) { 
         crate->_packCtx->RequestWriteVersionUpgrade(
             Version(0, 9, 0),
             "A timecode or timecode[] value type was detected which requires "
@@ -1548,6 +1633,14 @@ public:
                 "A spline tangent algorithm was detected which requires crate"
                 " version 0.13.0.");
             break;
+          case 3: // looped extrapolation with loopBoundaryTime set
+                  // or GfTimeCode-native spline
+            crate->_packCtx->RequestWriteVersionUpgrade(
+                Version(0,15,0),
+                "A spline loopBoundaryTime parameter on looping extrapolation "
+                "or GfTimeCode-native spline was detected which requires "
+                "crate version 0.15.0.");
+            break;
 
           default:
             // This is a coding error because GetBinaryFormatVersion returned
@@ -1649,7 +1742,7 @@ struct CrateFile::_ValueHandler : _ValueHandlerBase
     }
 
     ValueRep PackArray(_Writer w, VtArray<T> const &array) {
-        auto result = ValueRepForArray<T>(0);
+        auto result = ValueRepForArray<T>();
 
         // If this is an empty array we inline it.
         if (array.empty())
@@ -1697,10 +1790,80 @@ struct CrateFile::_ValueHandler : _ValueHandlerBase
         _ReadPossiblyCompressedArray(reader, rep, out, fileVer, 0);
     }
 
+    ValueRep PackArrayEdit(_Writer w, VtArrayEdit<T> const &arrayEdit) {
+        w.crate->_packCtx->RequestWriteVersionUpgrade(
+            Version(0,14,0), "A VtArrayEdit value type was detected which "
+            "requires crate version 0.14.0.");
+        
+        auto result = ValueRepForArrayEdit<T>();
+
+        // If this is the identity arrayEdit we inline it.
+        if (arrayEdit.IsIdentity()) {
+            return result;
+        }
+
+        if (!_arrayEditDedup) {
+            _arrayEditDedup.reset(
+                new typename decltype(_arrayEditDedup)::element_type);
+        }
+
+        auto iresult = _arrayEditDedup->emplace(arrayEdit, result);
+        ValueRep &target = iresult.first->second;
+        if (iresult.second) {
+            // Wasn't already present in the dedup table -- fetch the
+            // serialization data and pack them as VtArrays.  This way we get
+            // dedup / compression / zero-copy, etc.
+            VtArray<T> valuesArray;
+            std::vector<int64_t> indexes;
+            VtArrayEditBuilder<T>::
+                GetSerializationData(arrayEdit, &valuesArray, &indexes);
+
+            const VtInt64Array indexArray { indexes.begin(), indexes.end() };
+
+            ValueRep valuesRep = w.crate->_PackValue(valuesArray);
+            ValueRep indexesRep = w.crate->_PackValue(indexArray);
+
+            target = ValueRepForArrayEdit<T>(w.Tell());
+            w.Write(valuesRep);
+            w.Write(indexesRep);
+            w.Write(false); // former 'isDense' field -- array edits no longer
+                            // represent dense arrays.
+        }
+        return target;
+    }
+
+    template <class Reader>
+    void
+    UnpackArrayEdit(Reader reader, ValueRep rep, VtArrayEdit<T> *out) const {
+        // If payload is 0, it's an identity arrayEdit.
+        if (rep.GetPayload() == 0) {
+            *out = VtArrayEdit<T>();
+            return;
+        }
+        VtArray<T> valuesArray;
+        VtInt64Array indexesArray;
+        reader.Seek(rep.GetPayload());
+
+        reader.crate->_UnpackValue(
+            reader.template Read<ValueRep>(), &valuesArray);
+        reader.crate->_UnpackValue(
+            reader.template Read<ValueRep>(), &indexesArray);
+
+        // Discard former 'isDense' field -- array edits no longer represent
+        // dense arrays.
+        reader.template Read<bool>();
+        
+        *out = VtArrayEditBuilder<T>
+            ::CreateFromSerializationData(valuesArray, indexesArray);
+    }
+
     ValueRep PackVtValue(_Writer w, VtValue const &v) {
         if constexpr (_SupportsArray<T>::value) {
             if (v.IsArrayValued()) {
                 return this->PackArray(w, v.UncheckedGet<VtArray<T>>());
+            }
+            if (v.IsArrayEditValued()) {
+                return this->PackArrayEdit(w, v.UncheckedGet<VtArrayEdit<T>>());
             }
         }
         return this->Pack(w, v.UncheckedGet<T>());
@@ -1715,6 +1878,12 @@ struct CrateFile::_ValueHandler : _ValueHandlerBase
                 out->Swap(array);
                 return;
             }
+            if (rep.IsArrayEdit()) {
+                VtArrayEdit<T> arrayEdit;
+                this->UnpackArrayEdit(r, rep, &arrayEdit);
+                out->Swap(arrayEdit);
+                return;
+            }
         }
         T obj;
         this->Unpack(r, rep, &obj);
@@ -1727,12 +1896,15 @@ struct CrateFile::_ValueHandler : _ValueHandlerBase
         }
         if constexpr (_SupportsArray<T>::value) {
             _arrayDedup.reset();
+            _arrayEditDedup.reset();
         }                
     }
     
     std::unique_ptr<std::unordered_map<T, ValueRep, _Hasher>> _valueDedup;
     std::unique_ptr<
         std::unordered_map<VtArray<T>, ValueRep, _Hasher>> _arrayDedup;
+    std::unique_ptr<
+        std::unordered_map<VtArrayEdit<T>, ValueRep, _Hasher>> _arrayEditDedup;
 
 };
 
@@ -1927,6 +2099,20 @@ _ReadUncompressedArray(
         reader.template Read<uint32_t>() :
         reader.template Read<uint64_t>();
 
+    // Reject sizes that would overflow size_t when multiplied by sizeof(T).
+    // Without this, the numBytes computation below wraps and the downstream
+    // CreateZeroCopyDataSource bound check is meaningless, leaving a VtArray
+    // claiming `size` elements while pointing at a much smaller mapped range.
+    if constexpr (SafetyOverSpeed) {
+        if (ARCH_UNLIKELY(
+                size > std::numeric_limits<size_t>::max() / sizeof(T))) {
+            PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
+                             "Zero-copy array element count %" PRIu64
+                             " overflows size_t for element size %zu",
+                             size, sizeof(T)));
+        }
+    }
+
     // Check size and alignment -- the standard requires that alignments
     // are power-of-two.
     size_t numBytes = sizeof(T) * size;
@@ -2074,7 +2260,7 @@ _ReadPossiblyCompressedArray(
         reader.ReadContiguous(odata, osize);
         return;
     }
-    
+
     // Read the code
     char code = reader.template Read<int8_t>();
     if (code == 'i') {
@@ -2784,10 +2970,6 @@ CrateFile::_AddSpec(const SdfPath &path, SdfSpecType type,
             // format instead of having a mix of formats depending on the order 
             // we wrote our payload values in.
             versionUpgradePendingFields.push_back(p);
-        } else if (p.second.IsHolding<TsSpline>()
-            && p.second.UncheckedGet<TsSpline>().IsEmpty()) {
-            // Don't serialize empty splines, because they don't affect
-            // anything.
         } else {
             ordinaryFields.push_back(_AddField(p));
         }
@@ -3241,7 +3423,7 @@ void
 CrateFile::_ReadStructuralSections(Reader reader, int64_t fileSize)
 {
     TfErrorMark m;
-    try{
+    try {
         _boot = _ReadBootStrap(reader.src, fileSize);
         if (m.IsClean()) _toc = _ReadTOC(reader, _boot);
         if (m.IsClean()) _PrefetchStructuralSections(reader);
@@ -3257,6 +3439,35 @@ CrateFile::_ReadStructuralSections(Reader reader, int64_t fileSize)
         _specs.clear();
         _fieldSets.clear();
         _fields.clear();
+    }
+
+    const Version assetVersion(_boot.version);
+
+    // Disallow loading unsupported versions.
+    static Version oldestSupportedVersion =
+        Version::FromString(OLDEST_SUPPORTED_VERSION);
+    if (assetVersion < oldestSupportedVersion) {
+        TF_RUNTIME_ERROR(
+            "Cannot read asset @%s@ with obsolete version '%s'. The oldest "
+            "version this software supports is " OLDEST_SUPPORTED_VERSION ". "
+            "See the OpenUSD FAQ for information about handling obsolete "
+            "assets. https://openusd.org/release/usdfaq.html",
+            _assetPath.c_str(), assetVersion.AsFullString().c_str());
+        return;
+    }
+    
+    // Warn if the version is less than the deprecated version.
+    static Version oldestCurrentVersion =
+        Version::FromString(OLDEST_CURRENT_VERSION);
+    if (assetVersion < oldestCurrentVersion &&
+        TfGetEnvSetting(PXR_USDC_EMIT_DEPRECATION_WARNINGS)) {
+        TF_WARN(
+            "Asset @%s@ has deprecated version '%s'. Future versions of USD "
+            "will not be able to read it. See the OpenUSD FAQ for information "
+            "about handling deprecated assets. "
+            "https://openusd.org/release/usdfaq.html  Disable this warning by "
+            "setting PXR_USDC_EMIT_DEPRECATION_WARNINGS=0 in the environment.",
+            _assetPath.c_str(), assetVersion.AsFullString().c_str());
     }
 
     if constexpr (SafetyOverSpeed) {
@@ -3659,10 +3870,30 @@ CrateFile::_ReadPathsImpl(Reader reader,
     bool hasChild = false, hasSibling = false;
     do {
         auto h = reader.template Read<Header>();
+
+        // Bounds-check path index values in safety-over-speed mode.
+        if constexpr (SafetyOverSpeed) {
+            if (h.index.value >= _paths.size()) {
+                TF_RUNTIME_ERROR("Corrupt path index in crate file (%u > %zu)",
+                                 h.index.value, _paths.size());
+                return;
+            }
+        } // SafetyOverSpeed
+        
         if (parentPath.IsEmpty()) {
             parentPath = SdfPath::AbsoluteRootPath();
             _paths[h.index.value] = parentPath;
         } else {
+            // Bounds-check token index values in safety-over-speed mode.
+            if constexpr (SafetyOverSpeed) {
+                if (h.elementTokenIndex.value >= _tokens.size()) {
+                    TF_RUNTIME_ERROR("Corrupt element token index in crate "
+                        "file (%u > %zu)",
+                        h.elementTokenIndex.value, _tokens.size());
+                    return;
+                }
+            } // SafetyOverSpeed
+
             auto const &elemToken = _tokens[h.elementTokenIndex.value];
             _paths[h.index.value] =
                 h.bits & _PathItemHeader::IsPrimPropertyPathBit ?
@@ -3685,10 +3916,6 @@ CrateFile::_ReadPathsImpl(Reader reader,
                 dispatcher.Run(
                     [this, reader,
                      siblingOffset, &dispatcher, parentPath]() {
-                        // XXX Remove these tags when bug #132031 is addressed
-                        TfAutoMallocTag tag(
-                            "Sdf", "Sdf_CrateDataImpl::Open",
-                            "Sdf_CrateFile::CrateFile::Open", "_ReadPaths");
                         auto readerCopy = reader;
                         readerCopy.Seek(siblingOffset);
                         _ReadPathsImpl<Header>(readerCopy, dispatcher, parentPath);
@@ -3715,7 +3942,7 @@ CrateFile::_ReadCompressedPaths(Reader reader,
 
     // Read number of encoded paths.
     size_t numPaths = reader.template Read<uint64_t>();
-    
+
     _CompressedIntsReader cr;
 
     // pathIndexes.
@@ -3837,10 +4064,6 @@ CrateFile::_BuildDecompressedPathsImpl(
                 dispatcher.Run(
                     [this, &pathIndexes, &elementTokenIndexes, &jumps,
                      siblingIndex, &dispatcher, parentPath]()  {
-                        // XXX Remove these tags when bug #132031 is addressed
-                        TfAutoMallocTag tag(
-                            "Sdf", "Sdf_CrateDataImpl::Open",
-                            "Sdf_CrateFile::CrateFile::Open", "_ReadPaths");
                         _BuildDecompressedPathsImpl(
                             pathIndexes, elementTokenIndexes, jumps,
                             siblingIndex, parentPath, dispatcher);
@@ -3990,6 +4213,12 @@ CrateFile::_PackValue(VtArray<T> const &v) {
     return _GetValueHandler<T>().PackArray(_Writer(this), v);
 }
 
+template <class T>
+ValueRep
+CrateFile::_PackValue(VtArrayEdit<T> const &v) {
+    return _GetValueHandler<T>().PackArrayEdit(_Writer(this), v);
+}
+
 ValueRep
 CrateFile::_PackValue(VtValue const &v)
 {
@@ -4020,12 +4249,17 @@ CrateFile::_PackValue(VtValue const &v)
             return ts.valueRep;
     }
 
-    std::type_index ti =
-        v.IsArrayValued() ? v.GetElementTypeid() : v.GetTypeid();
+    // Arrays and array-edits use the underlying element typeid, otherwise the
+    // ordinary typeid.
+    std::type_index ti = v.GetElementTypeid();
+    if (ti == typeid(void)) {
+        ti = v.GetTypeid();
+    }
 
     auto it = _packValueFunctions.find(ti);
-    if (it != _packValueFunctions.end())
+    if (it != _packValueFunctions.end()) {
         return it->second(v);
+    }
 
     TF_CODING_ERROR("Attempted to pack unsupported type '%s' "
                     "(%s)", ArchGetDemangled(ti).c_str(),
@@ -4118,7 +4352,13 @@ CrateFile::GetTypeid(ValueRep rep) const
 #define xx(ENUMNAME, _unused, T, SUPPORTSARRAY)                                \
         case TypeEnum::ENUMNAME:                                               \
             if constexpr (SUPPORTSARRAY) {                                     \
-                return rep.IsArray() ? typeid(VtArray<T>) : typeid(T);         \
+                if (rep.IsArray()) {                                           \
+                    return typeid(VtArray<T>);                                 \
+                }                                                              \
+                if (rep.IsArrayEdit()) {                                       \
+                    return typeid(VtArrayEdit<T>);                             \
+                }                                                              \
+                return typeid(T);                                              \
             }                                                                  \
             else {                                                             \
                 return typeid(T);                                              \

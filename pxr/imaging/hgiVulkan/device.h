@@ -89,31 +89,39 @@ public:
     /// Returns true if the provided extension is supported by the device
     bool IsSupportedExtension(const char* extensionName) const;
 
+    // Dumps detailed stats from VMA to VmaStatsOut.json in the working dir.
+    // Can be processed with GpuMemDumpVis.py for easier readability.
+    // https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/tree/master/tools/GpuMemDumpVis
+    void DumpMemoryStats() const;
+
     /// Device extension function pointers
-    PFN_vkCreateRenderPass2KHR vkCreateRenderPass2KHR = 0;
+    PFN_vkCreateRenderPass2KHR vkCreateRenderPass2KHR = nullptr;
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-    PFN_vkGetMemoryWin32HandleKHR vkGetMemoryWin32HandleKHR = 0;
-    PFN_vkGetSemaphoreWin32HandleKHR vkGetSemaphoreWin32HandleKHR = 0;
+    PFN_vkGetMemoryWin32HandleKHR vkGetMemoryWin32HandleKHR = nullptr;
+    PFN_vkGetSemaphoreWin32HandleKHR vkGetSemaphoreWin32HandleKHR = nullptr;
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
-    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR = 0;
-    PFN_vkGetSemaphoreFdKHR vkGetSemaphoreFdKHR = 0;
+    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR = nullptr;
+    PFN_vkGetSemaphoreFdKHR vkGetSemaphoreFdKHR = nullptr;
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
 #endif
-    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT = 0;
-    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT = 0;
-    PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT = 0;
-    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = 0;
-    PFN_vkQueueBeginDebugUtilsLabelEXT vkQueueBeginDebugUtilsLabelEXT = 0;
-    PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT = 0;
-    PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR = 0;
-    PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = 0;
-    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = 0;
-    PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = 0;
-    PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = 0;
-    PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = 0;
-    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR = 0;
-    PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR = 0;
-    PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR = 0;
+    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT = nullptr;
+    PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT = nullptr;
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = nullptr;
+    PFN_vkQueueBeginDebugUtilsLabelEXT vkQueueBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT = nullptr;
+    PFN_vkTransitionImageLayoutEXT vkTransitionImageLayoutEXT = nullptr;
+    PFN_vkCopyMemoryToImageEXT vkCopyMemoryToImageEXT = nullptr;
+    PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR = nullptr;
+    PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = nullptr;
+    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = nullptr;
+    PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = nullptr;
+    PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = nullptr;
+    PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = nullptr;
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR = nullptr;
+    PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR = nullptr;
+    PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR = nullptr;
+
 private:
     HgiVulkanDevice() = delete;
     HgiVulkanDevice& operator=(const HgiVulkanDevice&) = delete;

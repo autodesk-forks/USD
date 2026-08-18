@@ -59,6 +59,10 @@ public:
     HDST_API
     void SetTargetMemory(size_t);
 
+    /// Returns the actual amount of memory committed to the GPU.
+    HDST_API
+    virtual size_t GetCommittedSize() const = 0;
+
     /// Is texture valid? Only correct after commit phase.
     ///
     /// E.g., no file at given file path. Consulted by clients to
@@ -133,7 +137,7 @@ private:
 
 /// \class HdStUvTextureObject
 ///
-/// A base class for uv textures.
+/// A base class for uv textures (including cubemaps).
 ///
 class HdStUvTextureObject : public HdStTextureObject
 {
@@ -158,6 +162,9 @@ public:
 
     HDST_API
     HdStTextureType GetTextureType() const override final;
+
+    HDST_API
+    size_t GetCommittedSize() const override;
 
 protected:
     HDST_API
@@ -185,6 +192,7 @@ private:
     std::pair<HdWrap, HdWrap> _wrapParameters;
     std::unique_ptr<HdStTextureCpuData> _cpuData;
     HgiTextureHandle _gpuTexture;
+    HdStTextureType _textureType;
 };
 
 /// \class HdAssetStUvTextureObject
@@ -259,6 +267,9 @@ public:
     HDST_API
     HdStTextureType GetTextureType() const override;
 
+    HDST_API
+    size_t GetCommittedSize() const override;
+
 protected:
     HDST_API
     void _Load() override;
@@ -294,6 +305,11 @@ struct HdSt_TypedTextureObjectHelper<HdStTextureType::Uv> {
 template<>
 struct HdSt_TypedTextureObjectHelper<HdStTextureType::Field> {
     using type = HdStFieldTextureObject;
+};
+
+template<>
+struct HdSt_TypedTextureObjectHelper<HdStTextureType::Cubemap> {
+    using type = HdStUvTextureObject;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

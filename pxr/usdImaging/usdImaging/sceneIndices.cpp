@@ -9,7 +9,6 @@
 #include "pxr/usdImaging/usdImaging/drawModeSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/extentResolvingSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/instanceProxyPathTranslationSceneIndex.h"
-// #include "pxr/usdImaging/usdImaging/instanceProxyPathTranslationSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/materialBindingsResolvingSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/niPrototypePropagatingSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/piPrototypePropagatingSceneIndex.h"
@@ -18,16 +17,21 @@
 #include "pxr/usdImaging/usdImaging/selectionSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/stageSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/unloadedDrawModeSceneIndex.h"
+#include "pxr/usdImaging/usdImaging/usdUpAxisSchema.h"
+#include "pxr/usdImaging/usdImaging/sceneIndexCreateArgsSchema.h"
 
 #include "pxr/usdImaging/usdImaging/geomModelSchema.h"
+#include "pxr/usdImaging/usdImaging/modelSchema.h"
 #include "pxr/usdImaging/usdImaging/materialBindingsSchema.h"
 
-#include "pxr/imaging/hd/overlayContainerDataSource.h"
-#include "pxr/imaging/hd/retainedDataSource.h"
-#include "pxr/imaging/hd/tokens.h"
-#include "pxr/imaging/hd/purposeSchema.h"
+#include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/noticeBatchingSceneIndex.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
+#include "pxr/imaging/hd/purposeSchema.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/sceneIndexUtil.h"
+#include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hdsi/locatorCachingSceneIndex.h"
 
 #include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/getenv.h"
@@ -75,7 +79,7 @@ _AddPluginSceneIndices(HdSceneIndexBaseRefPtr sceneIndex)
 
 static
 HdContainerDataSourceHandle
-_AdditionalStageSceneIndexInputArgs(
+_AdditionalStageSceneIndexCreateArgs(
     const bool displayUnloadedPrimsWithBounds)
 {
     if (!displayUnloadedPrimsWithBounds) {
@@ -83,19 +87,29 @@ _AdditionalStageSceneIndexInputArgs(
     }
     static HdContainerDataSourceHandle const ds =
         HdRetainedContainerDataSource::New(
-            UsdImagingStageSceneIndexTokens->includeUnloadedPrims,
-            HdRetainedTypedSampledDataSource<bool>::New(true));
+            UsdImagingSceneIndexCreateArgsSchema::GetSchemaToken(),
+            UsdImagingSceneIndexCreateArgsSchema::Builder()
+                .SetIncludeUnloadedPrims(
+                    HdRetainedTypedSampledDataSource<bool>::New(true))
+                .Build());
     return ds;
 }
 
-// Use extentsHint (of models) for purpose geometry
+// Use extentsHint (of models) for purpose geometry, render and proxy.
+// Used by the draw mode scene index. Aligns with arguments to
+// UsdGeomBBoxCache in UsdImagingDrawModeAdapter::_ComputeExtent in
+// UsdImaging 1.0.
 static
 HdContainerDataSourceHandle
-_ExtentResolvingSceneIndexInputArgs()
+_ExtentResolvingSceneIndexCreateArgs()
 {
     HdDataSourceBaseHandle const purposeDataSources[] = {
         HdRetainedTypedSampledDataSource<TfToken>::New(
-            HdTokens->geometry) };
+            HdRenderTagTokens->geometry),
+        HdRetainedTypedSampledDataSource<TfToken>::New(
+            HdRenderTagTokens->render),
+        HdRetainedTypedSampledDataSource<TfToken>::New(
+            HdRenderTagTokens->proxy) };
 
     return
         HdRetainedContainerDataSource::New(
@@ -125,12 +139,21 @@ _InstanceDataSourceNames()
 {
     TRACE_FUNCTION();
     
+    // In order for USD instances to share a prototype they must share the
+    // following Hydra schemas, which are used for Hydra-side instance
+    // aggregation.  Due to their inheritance semantics these schemas may
+    // require different aggregation of prototypes in Hydra as compared
+    // to the underlying USD stage prototypes.
     TfTokenVector result = {
         UsdImagingMaterialBindingsSchema::GetSchemaToken(),
         HdPurposeSchema::GetSchemaToken(),
-        // We include model to aggregate scene indices
-        // by draw mode.
-        UsdImagingGeomModelSchema::GetSchemaToken()
+        UsdImagingGeomModelSchema::GetSchemaToken(),
+        // We include the model schema in order to aggregate scene indices by
+        // assetInfo, which may be used in material networks for texture
+        // asset resolution.  See HdDataSourceMaterialNetworkInterface::
+        // GetModelAssetName().
+        UsdImagingModelSchema::GetSchemaToken(),
+        UsdImagingUsdUpAxisSchema::GetSchemaToken()
     };
 
     for (const UsdImagingSceneIndexPluginUniquePtr &plugin :
@@ -178,7 +201,7 @@ UsdImagingCreateSceneIndices(
     sceneIndex = result.stageSceneIndex =
         UsdImagingStageSceneIndex::New(
             HdOverlayContainerDataSource::OverlayedContainerDataSources(
-                _AdditionalStageSceneIndexInputArgs(
+                _AdditionalStageSceneIndexCreateArgs(
                     createInfo.displayUnloadedPrimsWithBounds),
                 createInfo.stageSceneIndexInputArgs));
 
@@ -187,6 +210,14 @@ UsdImagingCreateSceneIndices(
         // haven't been chained yet.
         result.stageSceneIndex->SetStage(createInfo.stage);
     }
+
+    // Cache materials to avoid repeated queries back to UsdShade,
+    // ex: for traversing node connections.  Do this after the
+    // stage scene index so we don't need to rely on any extra
+    // dependency invalidation.
+    sceneIndex = HdsiLocatorCachingSceneIndex::New(
+        sceneIndex, HdMaterialSchema::GetDefaultLocator(),
+        HdPrimTypeTokens->material);
     
     if (createInfo.overridesSceneIndexCallback) {
         sceneIndex =
@@ -200,7 +231,7 @@ UsdImagingCreateSceneIndices(
     
     sceneIndex =
         UsdImagingExtentResolvingSceneIndex::New(
-            sceneIndex, _ExtentResolvingSceneIndexInputArgs());
+            sceneIndex, _ExtentResolvingSceneIndexCreateArgs());
 
     {
         TRACE_FUNCTION_SCOPE("UsdImagingPiPrototypePropagatingSceneIndex");
@@ -291,6 +322,36 @@ UsdImagingCreateSceneIndices(
     }
 
     return result;
+}
+
+UsdImagingSceneIndices
+UsdImagingCreateSceneIndices(
+    HdContainerDataSourceHandle const &createArgs,
+    const UsdImagingSceneIndexAppendCallback &overridesSceneIndexCallback)
+{
+    const UsdImagingSceneIndexCreateArgsSchema schema =
+        UsdImagingSceneIndexCreateArgsSchema::GetFromParent(createArgs);
+    
+    UsdImagingCreateSceneIndicesInfo info;
+
+    if (UsdStageRefPtrDataSourceHandle const ds = schema.GetStage()) {
+        info.stage = ds->GetTypedValue(0.0f);
+    }
+
+    info.stageSceneIndexInputArgs = schema.GetContainer();
+
+    if (HdBoolDataSourceHandle const ds = schema.GetAddDrawModeSceneIndex()) {
+        info.addDrawModeSceneIndex = ds->GetTypedValue(0.0f);
+    }
+
+    if (HdBoolDataSourceHandle const ds =
+            schema.GetDisplayUnloadedPrimsWithBounds()) {
+        info.displayUnloadedPrimsWithBounds = ds->GetTypedValue(0.0f);
+    }
+
+    info.overridesSceneIndexCallback = overridesSceneIndexCallback;
+
+    return UsdImagingCreateSceneIndices(info);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -31,6 +31,7 @@
 #include "pxr/imaging/hd/sceneDelegate.h"
 #include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hd/sceneIndexObserver.h"
+#include "pxr/imaging/hd/sceneIndexPrimView.h"
 #include "pxr/imaging/hd/schemaTypeDefs.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/topology.h"
@@ -48,6 +49,7 @@
 #include "pxr/imaging/hd/cubeSchema.h"
 #include "pxr/imaging/hd/cylinderSchema.h"
 #include "pxr/imaging/hd/displayFilterSchema.h"
+#include "pxr/imaging/hd/energyFilterSchema.h"
 #include "pxr/imaging/hd/extComputationInputComputationSchema.h"
 #include "pxr/imaging/hd/extComputationOutputSchema.h"
 #include "pxr/imaging/hd/extComputationPrimvarSchema.h"
@@ -84,6 +86,7 @@
 #include "pxr/imaging/hd/visibilitySchema.h"
 #include "pxr/imaging/hd/volumeFieldBindingSchema.h"
 #include "pxr/imaging/hd/volumeFieldSchema.h"
+#include "pxr/imaging/hd/volumeSchema.h"
 #include "pxr/imaging/hd/xformSchema.h"
 
 #include "pxr/imaging/hf/perfLog.h"
@@ -126,29 +129,18 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+// Defining tokens here to avoid adding a dependency on usdRiPxrImaging
+TF_DEFINE_PRIVATE_TOKENS(
+    _projectionPluginTokens,
+    (projection)
+    (resource)
+);
+
 //
 // If the input prim is a datasource prim, we need some sensible default
 // here...  For now, we pass [0,0] to turn off multisampling.
 constexpr float _fallbackStartTime = 0.0f;
 constexpr float _fallbackEndTime   = 0.0f;
-
-/* static */
-HdSceneIndexBaseRefPtr
-HdSceneIndexAdapterSceneDelegate::AppendDefaultSceneFilters(
-    HdSceneIndexBaseRefPtr inputSceneIndex, SdfPath const &delegateID)
-{
-    HdSceneIndexBaseRefPtr result = inputSceneIndex;
-
-    // if no prefix, don't add HdPrefixingSceneIndex
-    if (!delegateID.IsEmpty() && delegateID != SdfPath::AbsoluteRootPath()) {
-        result = HdPrefixingSceneIndex::New(result, delegateID);
-    }
-
-    // disabling flattening as it's not yet needed for pure emulation
-    //result = HdFlatteningSceneIndex::New(result);
-
-    return result;
-}
 
 // ----------------------------------------------------------------------------
 
@@ -163,11 +155,10 @@ HdSceneIndexAdapterSceneDelegate::HdSceneIndexAdapterSceneDelegate(
 , _cachedDirtyBits(0)
 , _cachedPrimType()
 {
-
+    // The registered name is typically used in UI tools like the HSD.
+    // Make it simple to read.
     std::string registeredName = ArchStringPrintf(
-        "delegate adapter: %s @ %s",
-            delegateID.GetString().c_str(),
-            parentIndex->GetInstanceName().c_str());
+        "[Terminal SI] %s", parentIndex->GetInstanceName().c_str());
 
     HdSceneIndexNameRegistry::GetInstance().RegisterNamedSceneIndex(
         registeredName, inputSceneIndex);
@@ -175,6 +166,11 @@ HdSceneIndexAdapterSceneDelegate::HdSceneIndexAdapterSceneDelegate(
     // XXX: note that we will likely want to move this to the Has-A observer
     // pattern we're using now...
     _inputSceneIndex->AddObserver(HdSceneIndexObserverPtr(this));
+
+
+    for (const SdfPath &primPath : HdSceneIndexPrimView(inputSceneIndex)) {
+        _PrimAdded(primPath, inputSceneIndex->GetPrim(primPath).primType);
+    }
 }
 
 HdSceneIndexAdapterSceneDelegate::~HdSceneIndexAdapterSceneDelegate()
@@ -314,7 +310,7 @@ HdSceneIndexAdapterSceneDelegate::_PrimAdded(
                 _MarkRprimDirty(indexPath, allDirtyRprim);
         } else if (GetRenderIndex().IsSprimTypeSupported(primType)) {
             const TfTokenVector renderContexts =
-                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();    
+                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();
             HdDirtyBits allDirtySprim =
                 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
                     primType, allDirty, renderContexts);
@@ -351,6 +347,9 @@ HdSceneIndexAdapterSceneDelegate::PrimsAdded(
 {
     TRACE_FUNCTION();
 
+    TF_VERIFY(!GetRenderIndex().IsSyncAllInProgress(),
+        "Unsafe scene index invalidation detected during SyncAll()");
+
     // Drop per-thread scene index input prim cache
     _inputPrimCache.clear();
 
@@ -368,6 +367,9 @@ HdSceneIndexAdapterSceneDelegate::PrimsRemoved(
     const RemovedPrimEntries &entries)
 {
     TRACE_FUNCTION();
+
+    TF_VERIFY(!GetRenderIndex().IsSyncAllInProgress(),
+        "Unsafe scene index invalidation detected during SyncAll()");
 
     // Drop per-thread scene index input prim cache
     _inputPrimCache.clear();
@@ -433,6 +435,9 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
 {
     TRACE_FUNCTION();
 
+    TF_VERIFY(!GetRenderIndex().IsSyncAllInProgress(),
+        "Unsafe scene index invalidation detected during SyncAll()");
+
     // Drop per-thread scene index input prim cache
     _inputPrimCache.clear();
 
@@ -465,7 +470,7 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
             }
         } else if (GetRenderIndex().IsSprimTypeSupported(primType)) {
             const TfTokenVector renderContexts =
-                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();    
+                GetRenderIndex().GetRenderDelegate()->GetMaterialRenderContexts();
             HdDirtyBits dirtyBits =
                 HdDirtyBitsTranslator::SprimLocatorSetToDirtyBits(
                         primType, entry.dirtyLocators, renderContexts);
@@ -502,10 +507,18 @@ HdSceneIndexAdapterSceneDelegate::PrimsDirtied(
             }
         }
 
-        if (entry.dirtyLocators.Intersects(
-                HdPrimvarsSchema::GetDefaultLocator())) {
-            std::atomic_store(&(it->second.primvarDescriptors),
-                std::shared_ptr<_PrimCacheEntry::PrimvarDescriptorsArray>());
+        for (HdDataSourceLocator const& loc : entry.dirtyLocators) {
+            if (loc.GetFirstElement() == HdPrimvarsSchemaTokens->primvars &&
+                loc.GetLastElement() != HdPrimvarSchemaTokens->primvarValue &&
+                loc.GetLastElement() !=
+                    HdPrimvarSchemaTokens->indexedPrimvarValue &&
+                loc.GetLastElement() != HdPrimvarSchemaTokens->indices) {
+                // If we've invalidated a primvar/primvars, and it's *not* just
+                // a value update, clear the cached primvar descriptors.
+                std::atomic_store(&(it->second.primvarDescriptors),
+                    std::shared_ptr<_PrimCacheEntry::PrimvarDescriptorsArray>());
+                break;
+            }
         }
 
         if (entry.dirtyLocators.Intersects(
@@ -654,50 +667,9 @@ HdSceneIndexAdapterSceneDelegate::GetMeshTopology(SdfPath const &id)
     TRACE_FUNCTION();
     HF_MALLOC_TAG_FUNCTION();
 
-    HdSceneIndexPrim prim = _GetInputPrim(id);
-
-    HdMeshSchema meshSchema = HdMeshSchema::GetFromParent(prim.dataSource);
-
-
-    HdMeshTopologySchema meshTopologySchema = meshSchema.GetTopology();
-    if (!meshTopologySchema.IsDefined()) {
-        return HdMeshTopology();
-    }
-
-    HdIntArrayDataSourceHandle faceVertexCountsDataSource =
-            meshTopologySchema.GetFaceVertexCounts();
-
-    HdIntArrayDataSourceHandle faceVertexIndicesDataSource =
-            meshTopologySchema.GetFaceVertexIndices();
-
-    if (!faceVertexCountsDataSource || !faceVertexIndicesDataSource) {
-        return HdMeshTopology();
-    }
-
-    TfToken scheme = PxOsdOpenSubdivTokens->none;
-    if (HdTokenDataSourceHandle schemeDs =
-            meshSchema.GetSubdivisionScheme()) {
-        scheme = schemeDs->GetTypedValue(0.0f);
-    }
-
-    VtIntArray holeIndices;
-    if (HdIntArrayDataSourceHandle holeDs =
-            meshTopologySchema.GetHoleIndices()) {
-        holeIndices = holeDs->GetTypedValue(0.0f);
-    }
-
-    TfToken orientation = PxOsdOpenSubdivTokens->rightHanded;
-    if (HdTokenDataSourceHandle orientDs =
-            meshTopologySchema.GetOrientation()) {
-        orientation = orientDs->GetTypedValue(0.0f);
-    }
-
     HdMeshTopology meshTopology(
-        scheme,
-        orientation,
-        faceVertexCountsDataSource->GetTypedValue(0.0f),
-        faceVertexIndicesDataSource->GetTypedValue(0.0f),
-        holeIndices);
+        HdMeshSchema::GetFromParent(
+            _GetInputPrim(id).dataSource));
 
     if (_geomSubsetParents.find(id) != _geomSubsetParents.end()) {
         const TfToken purpose =
@@ -759,7 +731,7 @@ HdSceneIndexAdapterSceneDelegate::GetExtent(SdfPath const &id)
 static
 bool
 _IsLegacyInstancer(const HdSceneIndexPrim &prim)
-{    
+{
     if (prim.primType != HdPrimTypeTokens->instancer) {
         return false;
     }
@@ -793,7 +765,7 @@ HdSceneIndexAdapterSceneDelegate::GetVisible(SdfPath const &id)
         // instancer by deleting all the prototype prims.
         return true;
     }
-    
+
     HdVisibilitySchema visibilitySchema =
         HdVisibilitySchema::GetFromParent(prim.dataSource);
     if (!visibilitySchema.IsDefined()) {
@@ -1010,6 +982,31 @@ HdSceneIndexAdapterSceneDelegate::GetVolumeFieldDescriptors(
     }
 
     return result;
+}
+
+VtValue
+HdSceneIndexAdapterSceneDelegate::GetVolumeParamValue(
+        SdfPath const &id, TfToken const &paramName)
+{
+    TRACE_FUNCTION();
+
+    HdSceneIndexPrim prim = _GetInputPrim(id);
+    if (!prim.dataSource) {
+        return VtValue();
+    }
+
+    HdContainerDataSourceHandle volume =
+        HdContainerDataSource::Cast(
+            prim.dataSource->Get(HdVolumeSchemaTokens->volume));
+    if (volume) {
+        HdSampledDataSourceHandle valueDs = HdSampledDataSource::Cast(
+                volume->Get(paramName));
+        if (valueDs) {
+            return valueDs->GetValue(0);
+        }
+    }
+
+    return VtValue();
 }
 
 SdfPath
@@ -1236,17 +1233,11 @@ _ToDictionary(HdSampledDataSourceContainerSchema schema)
 {
     VtDictionary dict;
     for (const TfToken& name : schema.GetNames()) {
-        if (HdSampledDataSourceHandle valueDs = schema.Get(name)) {
+        if (HdSampledDataSourceHandle const valueDs = schema.Get(name)) {
             dict[name.GetString()] = valueDs->GetValue(0);
         }
     }
     return dict;
-}
-
-VtDictionary
-_ToDictionary(HdContainerDataSourceHandle const &cds)
-{
-    return _ToDictionary(HdSampledDataSourceContainerSchema(cds));
 }
 
 static
@@ -1618,22 +1609,13 @@ _ToRenderProducts(HdRenderProductVectorSchema productsSchema)
 VtValue
 _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
 {
-    HdContainerDataSourceHandle renderSettingsDs =
-            HdContainerDataSource::Cast(prim.dataSource->Get(
-                HdRenderSettingsSchemaTokens->renderSettings));
-
-    HdRenderSettingsSchema rsSchema = HdRenderSettingsSchema(renderSettingsDs);
+    const auto rsSchema = HdRenderSettingsSchema::GetFromParent(prim.dataSource);
     if (!rsSchema.IsDefined()) {
         return VtValue();
     }
 
     if (key == HdRenderSettingsPrimTokens->namespacedSettings) {
-        VtDictionary settings;
-        if (HdContainerDataSourceHandle namespacedSettingsDs =
-                rsSchema.GetNamespacedSettings()) {
-
-            return VtValue(_ToDictionary(namespacedSettingsDs));
-        }
+        return VtValue(_ToDictionary(rsSchema.GetNamespacedSettings()));
     }
 
     if (key == HdRenderSettingsPrimTokens->active) {
@@ -1674,11 +1656,30 @@ _GetRenderSettings(HdSceneIndexPrim prim, TfToken const &key)
         }
     }
 
-    if (key == HdRenderSettingsPrimTokens->shutterInterval) {
-        if (HdVec2dDataSourceHandle shutterIntervalDS =
-                rsSchema.GetShutterInterval()) {
+    if (key == HdRenderSettingsPrimTokens->unionedSamplingInterval) {
+        if (HdVec2dDataSourceHandle unionedSamplingIntervalDS =
+            rsSchema.GetUnionedSamplingInterval()) {
+            return VtValue(unionedSamplingIntervalDS->GetTypedValue(0.f));
+        }
+    }
 
-            return VtValue(shutterIntervalDS->GetTypedValue(0));
+    if (key == HdRenderSettingsPrimTokens->camera) {
+        if (HdPathDataSourceHandle cameraDS = rsSchema.GetCamera()) {
+            return VtValue(cameraDS->GetTypedValue(0.f));
+        }
+    }
+
+    if (key == HdRenderSettingsPrimTokens->disableDepthOfField) {
+        if (HdBoolDataSourceHandle disableDepthOfFieldDS =
+            rsSchema.GetDisableDepthOfField()) {
+            return VtValue(disableDepthOfFieldDS->GetTypedValue(0.f));
+        }
+    }
+
+    if (key == HdRenderSettingsPrimTokens->disableMotionBlur) {
+        if (HdBoolDataSourceHandle disableMotionBlurDS =
+            rsSchema.GetDisableMotionBlur()) {
+            return VtValue(disableMotionBlurDS->GetTypedValue(0.f));
         }
     }
 
@@ -1836,44 +1837,53 @@ HdSceneIndexAdapterSceneDelegate::_ComputePrimvarDescriptors(
                 continue;
             }
 
-            HdTokenDataSourceHandle interpolationDataSource =
-                primvar.GetInterpolation();
+            HdPrimvarDescriptor desc =
+                HdPrimvarDescriptorFromSchema(name, primvar);
 
-            if (!interpolationDataSource) {
-                TF_WARN("HdSceneIndexAdapterSceneDelegate: Skipping primvar "
-                        "'%s' due to missing interpolation data source",
-                        name.GetText());
-                continue;
-            }
-
-            TfToken interpolationToken =
-                interpolationDataSource->GetTypedValue(0.0f);
-            HdInterpolation interpolation =
-                Hd_InterpolationAsEnum(interpolationToken);
-
-            if (interpolation >= HdInterpolationCount) {
+            if (desc.interpolation >= HdInterpolationCount) {
                 TF_WARN("HdSceneIndexAdapterSceneDelegate: Skipping primvar "
                         "'%s' due to invalid interpolation value %i",
-                        name.GetText(), interpolation);
+                        name.GetText(), desc.interpolation);
                 continue;
             }
 
-            TfToken roleToken;
-            if (HdTokenDataSourceHandle roleDataSource =
-                    primvar.GetRole()) {
-                roleToken = roleDataSource->GetTypedValue(0.0f);
-            }
-
-            bool indexed = primvar.IsIndexed();
-
-            descriptors[interpolation].push_back(
-                {name, interpolation, roleToken, indexed});
+            descriptors[desc.interpolation].push_back(desc);
         }
     }
 
     return std::make_shared<_PrimCacheEntry::PrimvarDescriptorsArray>(
             std::move(descriptors));
 }
+
+HdPrimvarDescriptor
+HdPrimvarDescriptorFromSchema(TfToken const& name, HdPrimvarSchema primvar)
+{
+    HdPrimvarDescriptor desc;
+
+    desc.name = name;
+
+    HdTokenDataSourceHandle interpolationDataSource =
+        primvar.GetInterpolation();
+    if (!interpolationDataSource) {
+        // Using "Count" as invalid here...
+        desc.interpolation = HdInterpolationCount;
+        return desc;
+    }
+
+    TfToken interpolationToken =
+        interpolationDataSource->GetTypedValue(0.0f);
+    desc.interpolation =
+        Hd_InterpolationAsEnum(interpolationToken);
+
+    if (HdTokenDataSourceHandle roleDataSource = primvar.GetRole()) {
+        desc.role = roleDataSource->GetTypedValue(0.0f);
+    }
+
+    desc.indexed = primvar.IsIndexed();
+
+    return desc;
+}
+
 
 HdExtComputationPrimvarDescriptorVector
 HdSceneIndexAdapterSceneDelegate::GetExtComputationPrimvarDescriptors(
@@ -1932,54 +1942,64 @@ HdSceneIndexAdapterSceneDelegate::_ComputeExtCmpPrimvarDescriptors(
                 continue;
             }
 
-            HdTokenDataSourceHandle interpolationDataSource =
-                primvar.GetInterpolation();
-            if (!interpolationDataSource) {
+            HdExtComputationPrimvarDescriptor desc =
+                HdExtComputationPrimvarDescriptorFromSchema(name, primvar);
+
+            if (desc.interpolation >= HdInterpolationCount) {
                 continue;
             }
 
-            TfToken interpolationToken =
-                interpolationDataSource->GetTypedValue(0.0f);
-            HdInterpolation interpolation =
-                Hd_InterpolationAsEnum(interpolationToken);
-
-            if (interpolation >= HdInterpolationCount) {
-                continue;
-            }
-
-            TfToken roleToken;
-            if (HdTokenDataSourceHandle roleDataSource =
-                    primvar.GetRole()) {
-                roleToken = roleDataSource->GetTypedValue(0.0f);
-            }
-
-            SdfPath sourceComputation;
-            if (HdPathDataSourceHandle sourceComputationDs =
-                    primvar.GetSourceComputation()) {
-                sourceComputation = sourceComputationDs->GetTypedValue(0.0f);
-            }
-
-            TfToken sourceComputationOutputName;
-            if (HdTokenDataSourceHandle sourceComputationOutputDs =
-                    primvar.GetSourceComputationOutputName()) {
-                sourceComputationOutputName =
-                    sourceComputationOutputDs->GetTypedValue(0.0f);
-            }
-
-            HdTupleType valueType;
-            if (HdTupleTypeDataSourceHandle valueTypeDs =
-                    primvar.GetValueType()) {
-                valueType = valueTypeDs->GetTypedValue(0.0f);
-            }
-
-            descriptors[interpolation].push_back(
-                    {name, interpolation, roleToken, sourceComputation,
-                     sourceComputationOutputName, valueType});
+            descriptors[desc.interpolation].push_back(desc);
         }
     }
 
     return std::make_shared<_PrimCacheEntry::ExtCmpPrimvarDescriptorsArray>(
             std::move(descriptors));
+}
+
+HdExtComputationPrimvarDescriptor
+HdExtComputationPrimvarDescriptorFromSchema(TfToken const& name,
+        HdExtComputationPrimvarSchema primvar)
+{
+    HdExtComputationPrimvarDescriptor desc;
+
+    desc.name = name;
+
+    HdTokenDataSourceHandle interpolationDataSource =
+        primvar.GetInterpolation();
+    if (!interpolationDataSource) {
+        // Using "Count" as invalid here...
+        desc.interpolation = HdInterpolationCount;
+        return desc;
+    }
+
+    TfToken interpolationToken =
+        interpolationDataSource->GetTypedValue(0.0f);
+    desc.interpolation =
+        Hd_InterpolationAsEnum(interpolationToken);
+
+    if (HdTokenDataSourceHandle roleDataSource =
+            primvar.GetRole()) {
+        desc.role = roleDataSource->GetTypedValue(0.0f);
+    }
+
+    if (HdPathDataSourceHandle sourceComputationDs =
+            primvar.GetSourceComputation()) {
+        desc.sourceComputationId = sourceComputationDs->GetTypedValue(0.0f);
+    }
+
+    if (HdTokenDataSourceHandle sourceComputationOutputDs =
+            primvar.GetSourceComputationOutputName()) {
+        desc.sourceComputationOutputName =
+            sourceComputationOutputDs->GetTypedValue(0.0f);
+    }
+
+    if (HdTupleTypeDataSourceHandle valueTypeDs =
+            primvar.GetValueType()) {
+        desc.valueType = valueTypeDs->GetTypedValue(0.0f);
+    }
+
+    return desc;
 }
 
 VtValue
@@ -2075,6 +2095,21 @@ HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
     if (prim.primType == HdPrimTypeTokens->displayFilter) {
         if (key == HdDisplayFilterSchemaTokens->resource) {
             return _GetRenderTerminalResource<HdDisplayFilterSchema>(prim);
+        }
+        return VtValue();
+    }
+
+    // energyFilter use of Get().
+    if (prim.primType == HdPrimTypeTokens->energyFilter) {
+        if (key == HdEnergyFilterSchemaTokens->resource) {
+            return _GetRenderTerminalResource<HdEnergyFilterSchema>(prim);
+        }
+        // enabled, lpe, order are stored as flat attributes in the container.
+        if (prim.dataSource) {
+            if (const HdSampledDataSourceHandle ds =
+                    HdSampledDataSource::Cast(prim.dataSource->Get(key))) {
+                return ds->GetValue(0.0f);
+            }
         }
         return VtValue();
     }
@@ -2178,6 +2213,31 @@ HdSceneIndexAdapterSceneDelegate::Get(SdfPath const &id, TfToken const &key)
         if (key == HdTokens->renderTags) {
             if (HdTokenVectorDataSourceHandle const ds = task.GetRenderTags()) {
                 return ds->GetValue(0.0f);
+            }
+        }
+    }
+
+    if (prim.primType == _projectionPluginTokens->projection) {
+        if (key == _projectionPluginTokens->resource) {
+            auto projection = HdContainerDataSource::Cast(
+                prim.dataSource->Get(_projectionPluginTokens->projection));
+            if (projection) {
+                HdMaterialNodeSchema resource =
+                    HdContainerDataSource::Cast(
+                        projection->Get(_projectionPluginTokens->resource));
+                if (resource) {
+                    HdMaterialNode2 hdNode2;
+                    HdTokenDataSourceHandle nodeTypeDS =
+                        resource.GetNodeIdentifier();
+                    if (nodeTypeDS) {
+                        hdNode2.nodeTypeId = nodeTypeDS->GetTypedValue(0);
+                    }
+
+                    hdNode2.parameters = _GetHdParamsFromDataSource(
+                        resource.GetParameters());
+
+                    return VtValue(hdNode2);
+                }
             }
         }
     }
@@ -2736,19 +2796,32 @@ HdSceneIndexAdapterSceneDelegate::SampleExtComputationInput(
         valueDs->GetContributingSampleTimesForInterval(
                 std::numeric_limits<float>::lowest(),
                 std::numeric_limits<float>::max(), &times);
+
+        // XXX fallback to include a single sample
+        if (times.empty()) {
+            times.push_back(0.0f);
+        }
     } else {
-        valueDs->GetContributingSampleTimesForInterval(
+        const bool isVarying =
+            valueDs->GetContributingSampleTimesForInterval(
                 startTime, endTime, &times);
+        if (isVarying) {
+            if (times.empty()) {
+                TF_CODING_ERROR("No contributing sample times returned for "
+                                "%s %s even though "
+                                "GetContributingSampleTimesForInterval "
+                                "indicated otherwise.",
+                                computationId.GetText(), input.GetText());
+                times.push_back(0.0f);
+            }
+        } else {
+            times = { 0.0f };
+        }
     }
 
-    size_t authoredSamples = times.size();
+    const size_t authoredSamples = times.size();
     if (authoredSamples > maxSampleCount) {
         times.resize(maxSampleCount);
-    }
-
-    // XXX fallback to include a single sample
-    if (times.empty()) {
-        times.push_back(0.0f);
     }
 
     for (size_t i = 0; i < times.size(); ++i) {
@@ -2885,7 +2958,7 @@ HdSceneIndexAdapterSceneDelegate::GetTaskRenderTags(SdfPath const &taskId)
     return ds->GetTypedValue(0.0f);
 }
 
-void 
+void
 HdSceneIndexAdapterSceneDelegate::Sync(HdSyncRequestVector* request)
 {
     TRACE_FUNCTION();
@@ -2894,9 +2967,6 @@ HdSceneIndexAdapterSceneDelegate::Sync(HdSyncRequestVector* request)
     if (!request || request->IDs.size() == 0) {
         return;
     }
-
-    // Drop per-thread scene index input prim cache
-    _inputPrimCache.clear();
 
     if (!_sceneDelegatesBuilt) {
         tbb::concurrent_unordered_set<HdSceneDelegate*> sds;
@@ -2940,9 +3010,6 @@ HdSceneIndexAdapterSceneDelegate::PostSyncCleanup()
             sd->PostSyncCleanup();
         }
     }
-
-    // Drop per-thread scene index input prim cache
-    _inputPrimCache.clear();
 }
 
 // ----------------------------------------------------------------------------

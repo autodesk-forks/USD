@@ -60,7 +60,9 @@ using HgiBits = uint32_t;
 ///   Indirect command buffers are supported</li>
 /// <li>HgiDeviceCapabilitiesBitsRoundPoints:
 ///   Points can be natively rasterized as disks</li>
-/// </ul>
+/// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
+///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
+///   regardless of the body of the shader</li>
 /// <li>HgiDeviceCapabilitiesBitsRayTracing:
 ///   The device supports ray tracing</li>
 /// </ul>
@@ -87,7 +89,8 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsIndirectCommandBuffers   = 1 << 17,
     HgiDeviceCapabilitiesBitsRoundPoints              = 1 << 18,
     HgiDeviceCapabilitiesBitsSingleSlotResourceArrays = 1 << 19,
-    HgiDeviceCapabilitiesBitsRayTracing               = 1 << 20,
+    HgiDeviceCapabilitiesForceEarlyFragmentTest       = 1 << 20,
+    HgiDeviceCapabilitiesBitsRayTracing               = 1 << 21,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -103,6 +106,8 @@ using HgiDeviceCapabilities = HgiBits;
 ///   A two-dimensional texture.</li>
 /// <li>HgiTextureType3D:
 ///   A three-dimensional texture.</li>
+/// <li>HgiTextureTypeCubemap:
+///   A cubemap texture.</li>
 /// <li>HgiTextureType1DArray:
 ///   An array of one-dimensional textures.</li>
 /// <li>HgiTextureType2DArray:
@@ -114,6 +119,7 @@ enum HgiTextureType
     HgiTextureType1D = 0,
     HgiTextureType2D,
     HgiTextureType3D,
+    HgiTextureTypeCubemap,
     HgiTextureType1DArray,
     HgiTextureType2DArray,
 
@@ -301,6 +307,8 @@ enum HgiAttachmentStoreOp
 ///   Vertex attributes.</li>
 /// <li>HgiBufferUsageStorage:
 ///   Shader storage buffer / Argument buffer.</li>
+/// <li>HgiBufferUsageUpload:
+///   Buffer will be used to upload data.</li>
 ///
 /// <li>HgiBufferUsageCustomBitsBegin:
 ///   This bit (and any bit after) can be used to attached custom, backend
@@ -314,14 +322,15 @@ enum HgiBufferUsageBits : HgiBits
     HgiBufferUsageVertex = 1 << 2,
     HgiBufferUsageStorage = 1 << 3,
     HgiBufferUsageIndirect = 1 << 4,
-    HgiBufferUsageAccelerationStructureBuildInputReadOnly = 1 << 5,
-    HgiBufferUsageAccelerationStructureStorage = 1 << 6,
-    HgiBufferUsageShaderDeviceAddress = 1 << 7,
-    HgiBufferUsageShaderBindingTable = 1 << 8,
-    HgiBufferUsageNoTransfer = 1 << 9,
-    HgiBufferUsageRayTracingExtensions = 1 << 10,
+    HgiBufferUsageUpload   = 1 << 5,
+    HgiBufferUsageAccelerationStructureBuildInputReadOnly = 1 << 6,
+    HgiBufferUsageAccelerationStructureStorage = 1 << 7,
+    HgiBufferUsageShaderDeviceAddress = 1 << 8,
+    HgiBufferUsageShaderBindingTable = 1 << 9,
+    HgiBufferUsageNoTransfer = 1 << 10,
+    HgiBufferUsageRayTracingExtensions = 1 << 11,
 
-    HgiBufferUsageCustomBitsBegin = 1 << 11,
+    HgiBufferUsageCustomBitsBegin = 1 << 12,
 };
 using HgiBufferUsage = HgiBits;
 
@@ -808,13 +817,16 @@ enum HgiStorageType
 ///   Indicates a shadow texture.</li>
 /// <li>HgiShaderTextureTypeArrayTexture:
 ///   Indicates an array texture.</li>
+/// <li>HgiShaderTextureTypeCubemapTexture:
+///   Indicates a cubemap texture.</li>
 /// </ul>
 ///
 enum HgiShaderTextureType
 {
     HgiShaderTextureTypeTexture = 0,
     HgiShaderTextureTypeShadowTexture,
-    HgiShaderTextureTypeArrayTexture
+    HgiShaderTextureTypeArrayTexture,
+    HgiShaderTextureTypeCubemapTexture
 };
 
 enum HgiAccelerationStructureGeometryFlags {

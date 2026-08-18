@@ -16,6 +16,7 @@
 #include "pxr/base/tf/diagnostic.h"
 #include <iostream>
 
+#include <fstream>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -115,7 +116,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
             continue;
         }
 
-        if (props.apiVersion < VK_API_VERSION_1_2) continue;
+        if (props.apiVersion < VK_API_VERSION_1_3) continue;
 
         // Try to find a preferred device type. Until we find one, store the
         // first non-preferred device as fallback in case we never find a
@@ -278,6 +279,11 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         extensions.push_back(VK_KHR_LINE_RASTERIZATION_EXTENSION_NAME);
     }
 
+    // Allow use of host image copy
+    if (IsSupportedExtension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
+        extensions.push_back(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+    }
+
     // This extension is needed to allow the viewport to be flipped in Y so that
     // shaders and vertex data can remain the same between opengl and vulkan.
     extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
@@ -336,6 +342,20 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     vulkan11Features.pNext = features2.pNext;
     features2.pNext = &vulkan11Features;
 
+    VkPhysicalDeviceVulkan12Features vulkan12Features =
+        {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    vulkan12Features.timelineSemaphore =
+        _capabilities->vkVulkan12Features.timelineSemaphore;
+    vulkan12Features.pNext = features2.pNext;
+    features2.pNext = &vulkan12Features;
+
+    VkPhysicalDeviceVulkan13Features vulkan13Features =
+        {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    vulkan13Features.shaderDemoteToHelperInvocation =
+        _capabilities->vkVulkan13Features.shaderDemoteToHelperInvocation;
+    vulkan13Features.pNext = features2.pNext;
+    features2.pNext = &vulkan13Features;
+
     // Vertex attribute divisor features ext
     VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT vertexAttributeDivisorFeatures
     { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT };
@@ -363,6 +383,16 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
             _capabilities->vkLineRasterizationFeatures.bresenhamLines;
         lineRasterFeatures.pNext = features2.pNext;
         features2.pNext = &lineRasterFeatures;
+    }
+
+    VkPhysicalDeviceHostImageCopyFeaturesEXT hostImageCopyFeatures {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT
+    };
+    if (IsSupportedExtension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
+        hostImageCopyFeatures.hostImageCopy =
+            _capabilities->supportsHostImageCopy;
+        hostImageCopyFeatures.pNext = features2.pNext;
+        features2.pNext = &hostImageCopyFeatures;
     }
 
     VkPhysicalDeviceVulkan12Features vulkan12Features = {};
@@ -415,24 +445,32 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     //
 
     vkCreateRenderPass2KHR = (PFN_vkCreateRenderPass2KHR)
-    vkGetDeviceProcAddr(_vkDevice, "vkCreateRenderPass2KHR");
+        vkGetDeviceProcAddr(_vkDevice, "vkCreateRenderPass2KHR");
 
     if (_capabilities->supportsNativeInterop) {
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
         vkGetMemoryWin32HandleKHR = (PFN_vkGetMemoryWin32HandleKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryWin32HandleKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryWin32HandleKHR");
 
         vkGetSemaphoreWin32HandleKHR = (PFN_vkGetSemaphoreWin32HandleKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreWin32HandleKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreWin32HandleKHR");
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
         vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryFdKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetMemoryFdKHR");
 
         vkGetSemaphoreFdKHR = (PFN_vkGetSemaphoreFdKHR)
-        vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreFdKHR");
+            vkGetDeviceProcAddr(_vkDevice, "vkGetSemaphoreFdKHR");
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
 #endif
     }
+
+    if (_capabilities->supportsHostImageCopy) {
+        vkTransitionImageLayoutEXT = (PFN_vkTransitionImageLayoutEXT)
+            vkGetDeviceProcAddr(_vkDevice, "vkTransitionImageLayoutEXT");
+        vkCopyMemoryToImageEXT = (PFN_vkCopyMemoryToImageEXT)
+            vkGetDeviceProcAddr(_vkDevice, "vkCopyMemoryToImageEXT");
+    }
+
     vkGetBufferDeviceAddressKHR = (PFN_vkGetBufferDeviceAddressKHR)(vkGetDeviceProcAddr(_vkDevice, "vkGetBufferDeviceAddressKHR"));
     vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)(vkGetDeviceProcAddr(_vkDevice, "vkCreateAccelerationStructureKHR"));
     vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)(vkGetDeviceProcAddr(_vkDevice, "vkDestroyAccelerationStructureKHR"));
@@ -442,7 +480,7 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
     vkCreateRayTracingPipelinesKHR = (PFN_vkCreateRayTracingPipelinesKHR)(vkGetDeviceProcAddr(_vkDevice, "vkCreateRayTracingPipelinesKHR"));
     vkGetRayTracingShaderGroupHandlesKHR = (PFN_vkGetRayTracingShaderGroupHandlesKHR)(vkGetDeviceProcAddr(_vkDevice, "vkGetRayTracingShaderGroupHandlesKHR"));
     vkCmdTraceRaysKHR = (PFN_vkCmdTraceRaysKHR)(vkGetDeviceProcAddr(_vkDevice, "vkCmdTraceRaysKHR"));
-    
+
     //
     // Memory allocator
     //
@@ -637,9 +675,9 @@ const VkPhysicalDeviceAccelerationStructureFeaturesKHR& HgiVulkanDevice::GetAcce
 void
 HgiVulkanDevice::WaitForIdle()
 {
-    HGIVULKAN_VERIFY_VK_RESULT(
-        vkDeviceWaitIdle(_vkDevice)
-    );
+    // HgiVulkan only uses a single command queue at the moment,
+    // so we flush that queue and wait.
+    GetCommandQueue()->Flush(HgiSubmitWaitTypeWaitUntilCompleted);
 }
 
 bool
@@ -654,5 +692,17 @@ HgiVulkanDevice::IsSupportedExtension(const char* extensionName) const
     return false;
 }
 
+void
+HgiVulkanDevice::DumpMemoryStats() const
+{
+    char* statsString;
+    vmaBuildStatsString(_vmaAllocator, &statsString, true);
+    
+    std::fstream output("VmaStatsOut.json", std::ios::out);
+    output << statsString;
+    output.close();
+
+    vmaFreeStatsString(_vmaAllocator, statsString);
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE

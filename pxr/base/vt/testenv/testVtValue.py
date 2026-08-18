@@ -63,6 +63,17 @@ class TestVtValue(unittest.TestCase):
         self.assertEqual(Vt._test_ValueTypeName(u'hello'), 'string')
         self.assertEqual(Vt._test_ValueTypeName(Vt.Token('hello')), 'TfToken')
 
+        # Test that VtArrayEdit instances box into VtValue from-python
+        # correctly.  If they did not the returned type name would be
+        # 'TfPyObjWrapper'.
+        self.assertEqual(Vt._test_ValueTypeName(Vt.IntArrayEdit()),
+                         'VtArrayEdit<int>')
+        self.assertEqual(Vt._test_ValueTypeName(Vt.StringArrayEdit()),
+                         'VtArrayEdit<string>')
+        self.assertEqual(Vt._test_ValueTypeName(Vt.FloatArrayEdit()),
+                         'VtArrayEdit<float>')
+                         
+
     def test_IntValueRoundTrip(self):
         '''Make sure we correctly convert ints of various sizes in the value
         python bindings
@@ -126,6 +137,12 @@ class TestVtValue(unittest.TestCase):
         self.assertNotEqual(t1, f1)
         self.assertEqual(f1, f2)
         self.assertNotEqual(f1, d1)
+
+    def test_ValueRef(self):
+        '''Check that wrapped functions taking VtValueRef work'''
+        self.assertEqual(Vt._test_ValueRefFromPython(123), 123)
+        self.assertEqual(Vt._test_ValueRefFromPython('hello'), 'hello')
+        self.assertIs(Vt._test_ValueRefFromPython(Vt.Bool(True)), True)
 
 if __name__ == '__main__':
     unittest.main()

@@ -236,6 +236,9 @@ HgiGLGraphicsPipeline::BindPipeline()
     // we use first for GL, too.
     glProvokingVertex(GL_FIRST_VERTEX_CONVENTION);
 
+    // Default to seamless cubemap sampling.
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
     //
     // Shader program
     //

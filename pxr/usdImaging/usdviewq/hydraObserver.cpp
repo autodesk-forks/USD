@@ -67,7 +67,7 @@ UsdviewqHydraObserver::TargetToNamedSceneIndex(const std::string &name)
 }
 
 bool
-UsdviewqHydraObserver::_Target(const HdSceneIndexBaseRefPtr &sceneIndex)
+UsdviewqHydraObserver::_Target(HdSceneIndexBaseRefPtr sceneIndex)
 {
     _nestedInputSceneIndices.reset();
     

@@ -27,6 +27,7 @@ TF_WRAP_MODULE
     TF_WRAP(ArrayQuaternion);
     TF_WRAP(ArrayRange);
     TF_WRAP(ArrayString);
+    TF_WRAP(ArrayTimeCode);
     TF_WRAP(ArrayToken);
     TF_WRAP(ArrayVec);
 
@@ -35,4 +36,5 @@ TF_WRAP_MODULE
 
     TF_WRAP(Dictionary);
     TF_WRAP(Value);
+    TF_WRAP(ValueRef);
 }

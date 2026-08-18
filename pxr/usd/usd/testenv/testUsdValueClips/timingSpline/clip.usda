@@ -1,0 +1,26 @@
+#usda 1.0
+
+def "Model"
+{
+    double a.spline = {
+        0:0; post held,
+        8:8; post linear,
+        12:12; post curve,
+        20: 18 & 20; post linear,
+        pre: loop oscillate,
+        post: sloped(2)
+    }
+
+    double attr2.spline = {
+        0: 1; post held,
+        5: 4&5; post linear,
+        10: 9&10; post held,
+        post: held
+    }
+
+    double attr3.timeSamples = {
+        0:4,
+        5:5,
+        10:10
+    }
+}

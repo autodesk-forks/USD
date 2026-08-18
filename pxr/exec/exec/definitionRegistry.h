@@ -22,11 +22,22 @@
 #include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/singleton.h"
 #include "pxr/base/tf/token.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
 #include "pxr/base/tf/type.h"
 #include "pxr/base/tf/weakBase.h"
+#include "pxr/base/vt/value.h"
 
 #include <tbb/concurrent_unordered_map.h>
 
+#ifdef TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS
+#include <tbb/concurrent_map.h>
+#else
+#define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
+#include <tbb/concurrent_map.h>
+#undef TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS
+#endif
+
+#include <functional>
 #include <memory>
 #include <set>
 #include <unordered_map>
@@ -34,7 +45,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-class Exec_RegistrationBarrier;
 class EsfAttributeInterface;
 class EsfJournal;
 class EsfObjectInterface;
@@ -84,6 +94,7 @@ public:
     const Exec_ComputationDefinition *GetComputationDefinition(
         const EsfAttributeInterface &providerAttribute,
         const TfToken &computationName,
+        EsfSchemaConfigKey dispatchingConfigKey,
         EsfJournal *journal) const;
 
     /// Returns the definition for the computation named \p computationName
@@ -102,26 +113,70 @@ public:
         EsfSchemaConfigKey dispatchingConfigKey,
         EsfJournal *journal) const;
 
-    // Provides selective access for computation builder classes.
-    class ComputationBuilderAccess
+    /// Selectively allow non-const access to the definition registry for
+    /// performing registration.
+    ///
+    class RegistrationAccess
     {
-        friend class Exec_ComputationBuilder;
-        friend class Exec_PrimComputationBuilder;
+        friend class ExecComputationBuilder;
+        friend class ExecPrimComputationBuilder;
+        friend class ExecAttributeComputationBuilder;
+        friend class ExecAttributeExpressionBuilder;
+        friend struct Exec_ComputationBuilderConstantValueSpecifier;
 
-        inline static void _RegisterPrimComputation(
-            TfType schemaType,
-            const TfToken &computationName,
-            TfType resultType,
-            ExecCallbackFn &&callback,
-            Exec_InputKeyVectorRefPtr &&inputKeys,
-            std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas);
-
-        static void _SetComputationRegistrationComplete(
-            const TfType schemaType) {
-            _GetInstanceForRegistration()._SetComputationRegistrationComplete(
-                schemaType);
+        static Exec_DefinitionRegistry& _GetInstanceForRegistration() {
+            return Exec_DefinitionRegistry::_GetInstanceForRegistration();
         }
     };
+
+    /// Registers a prim computation on \p schemaType.
+    ///
+    /// If \p dispatchesOntoSchemas is null, the computation is local
+    /// (non-dispatched). Otherwise, it is a dispatched computation that
+    /// dispatches onto prims with the given list of schemas, or onto all prims,
+    /// if the list is empty.
+    /// 
+    void RegisterPrimComputation(
+        TfType schemaType,
+        const TfToken &computationName,
+        TfType resultType,
+        ExecCallbackFn &&callback,
+        Exec_InputKeyVectorRefPtr &&inputKeys,
+        std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas);
+
+    /// Registers an attribute computation on \p schemaType for attributes named
+    /// \p attributeName.
+    ///
+    /// If \p dispatchesOntoSchemas is null, the computation is local
+    /// (non-dispatched). Otherwise, it is a dispatched computation that
+    /// dispatches onto attributes owned by prims with the given list of
+    /// schemas, or onto all attributes, if the list is empty.
+    /// 
+    void RegisterAttributeComputation(
+        const TfToken &attributeName,
+        TfType schemaType,
+        const TfToken &computationName,
+        TfType resultType,
+        ExecCallbackFn &&callback,
+        Exec_InputKeyVectorRefPtr &&inputKeys,
+        std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas);
+
+    /// Should be called when plugin computation registration for \p schemaType
+    /// is complete.
+    ///
+    void SetComputationRegistrationComplete(const TfType schemaType);
+
+    /// Registers \p value as a value that can be used for constant value inputs.
+    ///
+    /// Returns a token to be used to identify the constant value and be used as
+    /// a disambiguating ID in input and output keys.
+    ///
+    TfToken RegisterConstantValue(VtValue &&value);
+
+    /// Given the \p uniqueKey that identifies a constant value (returned by
+    /// _RegisterConstantValue), returns the corresponding constant value.
+    ///
+    VtValue GetConstantValue(const TfToken &uniqueKey) const;
 
 private:
 
@@ -139,13 +194,33 @@ private:
         const TfToken &computationName,
         EsfJournal *journal) const;
 
-    // Looks for a dispatched prim computation using the given \p
+    // Looks for a dispatched prim or attribute computation using the given \p
     // dispatchingConfigKey.
     //
-    const Exec_ComputationDefinition *_LookUpDispatchedPrimComputation(
+    const Exec_ComputationDefinition *_LookUpDispatchedComputation(
         const EsfPrimInterface &providerPrim,
         const TfToken &computationName,
+        bool isPrimComputation,
         EsfSchemaConfigKey dispatchingConfigKey,
+        EsfJournal *journal) const;
+
+    // Looks for a local (non-dispatched) plugin attribute computation on the
+    // given \p providerPrim, composing the prim definition if it's not already
+    // composed.
+    //
+    const Exec_ComputationDefinition *_LookUpLocalAttributeComputation(
+        const EsfAttributeInterface &providerAttribute,
+        const TfToken &computationName,
+        EsfJournal *journal) const;
+
+    // Selects a computation definition for computeValue on the provider
+    // attribute. This returns the first of:
+    //   1. A definition of a registered built-in expression.
+    //   2. TODO: A built-in expression for single-connection dataflow.
+    //   3. The definition of computeResolvedValue.
+    //
+    const Exec_ComputationDefinition *_GetComputeValueDefinition(
+        const EsfAttributeInterface &providerAttribute,
         EsfJournal *journal) const;
 
     // Returns a reference to the singleton that is suitable for registering
@@ -160,18 +235,35 @@ private:
     // be found on a prim of a given type.
     //
     struct _ComposedPrimDefinition {
-        // Map from computation name to plugin prim computation definition.
-        using _ComposedPrimDefinitionMap =
+        // Map from computation name to plugin computation definition.
+        using _ComputationDefinitionMap =
             std::unordered_map<
                 TfToken,
                 const Exec_PluginComputationDefinition *,
                 TfHash>;
 
-        _ComposedPrimDefinitionMap primComputationDefinitions;
-        _ComposedPrimDefinitionMap dispatchedPrimComputationDefinitions;
+        _ComputationDefinitionMap primComputationDefinitions;
+        _ComputationDefinitionMap dispatchedPrimComputationDefinitions;
 
-        // TODO: Add plugin attribute computation definitions.
+        // Map from (attribute name, computation name) to plugin attribute
+        // computation definition.
+        using _AttributeComputationDefinitionMap =
+            std::unordered_map<
+                std::pair<TfToken, TfToken>,
+                const Exec_PluginComputationDefinition *,
+                TfHash>;
+
+        _AttributeComputationDefinitionMap attributeComputationDefinitions;
+        _ComputationDefinitionMap dispatchedAttributeComputationDefinitions;
     };
+
+    // Returns the composed prim definition for \p providerPrim, composing it
+    // if necessary.
+    //
+    const Exec_DefinitionRegistry::_ComposedPrimDefinition &
+    _GetOrCreateComposedPrimDefinition(
+        const EsfPrimInterface &providerPrim,
+        EsfJournal *journal) const;
 
     // Creates and returns the composed prim definition for a prim on \p stage
     // with typed schema \p schemaType and API schemas \p appliedSchemas.
@@ -181,20 +273,12 @@ private:
         TfType schemaType,
         const TfTokenVector &appliedSchemas) const;
 
-    // Registers a prim computation on \p schemaType.
+    // Returns true if it's valid to register a computation named \p
+    // computationName for \p schemaType.
     //
-    // If \p dispatchesOntoSchemas is null, the computation is local
-    // (non-dispatched). Otherwise, it is a dispatched computation that
-    // dispatches onto prims with the given list of schemas, or onto all prims,
-    // if the list is empty.
-    // 
-    void _RegisterPrimComputation(
+    bool _ValidateComputationRegistration(
         TfType schemaType,
-        const TfToken &computationName,
-        TfType resultType,
-        ExecCallbackFn &&callback,
-        Exec_InputKeyVectorRefPtr &&inputKeys,
-        std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas);
+        const TfToken &computationName) const;
 
     void _RegisterBuiltinStageComputation(
         const TfToken &computationName,
@@ -213,12 +297,7 @@ private:
     // Returns true if plugin computation registration for \p schemaType is
     // complete.
     //
-    bool _IsComputationRegistrationComplete(const TfType schemaType);
-
-    // Should be called when plugin computation registration for \p schemaType
-    // is complete.
-    //
-    void _SetComputationRegistrationComplete(const TfType schemaType);
+    bool _IsComputationRegistrationComplete(const TfType schemaType) const;
 
     // Load plugin computations for the given schemaType, if we haven't loaded
     // them yet.
@@ -235,12 +314,6 @@ private:
 
 private:
 
-    // This barrier ensures singleton access returns a fully-constructed
-    // instance. This is the case for GetInstance(), but not required for
-    // _GetInstanceForRegistration() which is called by exec definition registry
-    // functions.
-    std::unique_ptr<Exec_RegistrationBarrier> _registrationBarrier;
-
     // Comparator for ordering plugin computation definitions in a set.
     struct _PluginComputationDefinitionComparator {
         bool operator()(
@@ -252,9 +325,10 @@ private:
 
     // Map from schemaType to plugin prim computation definitions.
     //
-    // This is a concurrent map to allow computation lookup to happen in
-    // parallel with loading of plugin computations.
-    using _PrimPluginComputationMap =
+    // This is a concurrent map to allow lazy caching of composed prim
+    // definitions (which reads from these maps) to happen in parallel with
+    // loading of plugin computations (which writes to them).
+    using _PluginComputationMap =
         tbb::concurrent_unordered_map<
             TfType,
             std::set<
@@ -262,8 +336,25 @@ private:
                 _PluginComputationDefinitionComparator>,
             TfHash>;
 
-    _PrimPluginComputationMap _pluginPrimComputationDefinitions;
-    _PrimPluginComputationMap _pluginDispatchedPrimComputationDefinitions;
+    _PluginComputationMap _pluginPrimComputationDefinitions;
+    _PluginComputationMap _pluginDispatchedPrimComputationDefinitions;
+
+    // Map from schemaType to map from attribute name to plugin attribute
+    // computation definitions.
+    //
+    // This is a concurrent map to allow lazy caching of composed prim
+    // defintitions (which reads from these maps) to happen in parallel with
+    // loading of plugin computations (which writes to them).
+    using _PluginAttributeComputationMap =
+        tbb::concurrent_map<
+            std::pair<TfType, TfToken>,
+            std::set<
+                Exec_PluginComputationDefinition,
+                _PluginComputationDefinitionComparator>,
+            std::less<>>;
+
+    _PluginAttributeComputationMap _pluginAttributeComputationDefinitions;
+    _PluginComputationMap _pluginDispatchedAttributeComputationDefinitions;
 
     // Map from an opaque key to composed prim exec definition.
     //
@@ -284,48 +375,34 @@ private:
     mutable tbb::concurrent_unordered_map<TfType, bool, TfHash>
     _computationsRegisteredForSchema;
 
+    using _BuiltinComputationMap =
+        std::unordered_map<
+            TfToken,
+            std::unique_ptr<Exec_ComputationDefinition>,
+            TfHash>;
+
     // Map from computationName to builtin stage computation
     // definition.
-    std::unordered_map<
-        TfToken,
-        std::unique_ptr<Exec_ComputationDefinition>,
-        TfHash>
-    _builtinStageComputationDefinitions;
+    _BuiltinComputationMap _builtinStageComputationDefinitions;
 
     // Map from computationName to builtin prim computation
     // definition.
-    std::unordered_map<
-        TfToken,
-        std::unique_ptr<Exec_ComputationDefinition>,
-        TfHash>
-    _builtinPrimComputationDefinitions;
+    _BuiltinComputationMap _builtinPrimComputationDefinitions;
 
     // Map from computationName to builtin attribute computation
     // definition.
-    std::unordered_map<
-        TfToken,
-        std::unique_ptr<Exec_ComputationDefinition>,
-        TfHash>
-    _builtinAttributeComputationDefinitions;
-};
+    _BuiltinComputationMap _builtinAttributeComputationDefinitions;
 
-void
-Exec_DefinitionRegistry::ComputationBuilderAccess::_RegisterPrimComputation(
-    const TfType schemaType,
-    const TfToken &computationName,
-    const TfType resultType,
-    ExecCallbackFn &&callback,
-    Exec_InputKeyVectorRefPtr &&inputKeys,
-    std::unique_ptr<ExecDispatchesOntoSchemas> &&dispatchesOntoSchemas)
-{
-    _GetInstanceForRegistration()._RegisterPrimComputation(
-        schemaType,
-        computationName,
-        resultType,
-        std::move(callback),
-        std::move(inputKeys),
-        std::move(dispatchesOntoSchemas));
-}
+    // Map from constant value to the unique key used to identify it.
+    pxr_tsl::robin_map<VtValue, TfToken, TfHash> _constantValueToToken;
+
+    // Map from constant value unique key to the constant value it identifies.
+    pxr_tsl::robin_map<TfToken, VtValue, TfHash> _tokenToConstantValue;
+
+    // An index that is used to generate unique keys for registered constant
+    // input values.
+    unsigned int _constantValueIndex = 0;
+};
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

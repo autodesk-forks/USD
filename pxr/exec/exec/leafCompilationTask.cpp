@@ -10,6 +10,7 @@
 #include "pxr/exec/exec/inputKey.h"
 #include "pxr/exec/exec/inputResolvingCompilationTask.h"
 #include "pxr/exec/exec/program.h"
+#include "pxr/exec/exec/providerResolution.h"
 
 #include "pxr/base/tf/delegatedCountPtr.h"
 #include "pxr/base/trace/trace.h"
@@ -18,7 +19,7 @@
 #include "pxr/exec/esf/journal.h"
 #include "pxr/exec/esf/object.h"
 #include "pxr/exec/esf/schemaConfigKey.h"
-#include "pxr/exec/exec/providerResolution.h"
+#include "pxr/exec/vdf/maskedOutput.h"
 
 #include <initializer_list>
 #include <utility>
@@ -93,20 +94,33 @@ Exec_LeafCompilationTask::_Compile(
             _valueKey.GetProvider()->GetPath(nullptr),
             EsfEditReason::ResyncedObject);
 
+        const TfType outputType = sourceOutput.GetOutput()->GetSpec().GetType();
         EfLeafNode *const leafNode =
             compilationState.GetProgram()->CreateNode<EfLeafNode>(
                 nodeJournal,
-                sourceOutput.GetOutput()->GetSpec().GetType());
+                outputType);
 
         // Value keys are not durable across scene changes so their debug name
         // must be collected eagerly.
         leafNode->SetDebugName(_valueKey.GetDebugName());
 
+        // Make a copy of the stored input key to inform input recompilation 
+        // along with the resolved result type. 
+        const Exec_InputKey &inputKey = _inputKeys->Get()[0];
+        Exec_InputKeyVectorConstRefPtr inputKeys =
+            Exec_InputKeyVector::MakeConstShared({{
+                inputKey.inputName, 
+                inputKey.computationName, 
+                inputKey.disambiguatingId,
+                outputType,
+                inputKey.providerResolution
+            }});
+
         compilationState.GetProgram()->SetNodeRecompilationInfo(
             leafNode, 
             _valueKey.GetProvider(), 
             EsfSchemaConfigKey(),
-            std::move(_inputKeys));
+            std::move(inputKeys));
 
         compilationState.GetProgram()->SetCompiledLeafNode(_valueKey, leafNode);
 
@@ -119,6 +133,15 @@ Exec_LeafCompilationTask::_Compile(
     );
 }
 
+void
+Exec_LeafCompilationTask::_Interrupt(Exec_CompilationState &)
+{
+    // We were not able to resolve the leaf output. By setting the leaf output
+    // to an empty output, clients will extract an empty VtValue for the
+    // corresponding value key.
+    *_leafOutput = VdfMaskedOutput();
+}
+
 static Exec_InputKeyVectorConstRefPtr
 _MakeInputKeyVector(const ExecValueKey &valueKey)
 {
@@ -127,6 +150,7 @@ _MakeInputKeyVector(const ExecValueKey &valueKey)
             Exec_InputKey {
                 EfLeafTokens->in,
                 valueKey.GetComputationName(),
+                /* disambiguatingId */ TfToken(),
                 TfType(),
                 ExecProviderResolution {
                     SdfPath::ReflexiveRelativePath(),

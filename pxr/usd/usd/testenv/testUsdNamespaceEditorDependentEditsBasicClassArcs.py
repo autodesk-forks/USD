@@ -2917,6 +2917,82 @@ class TestUsdNamespaceEditorDependentEditsBasicClassArcs(
 
         self._RunTestNestedClassClassArcs("specializes")
 
+    def _RunTestSiblingClassArcs(self, classArcType):
+        layer1 = Sdf.Layer.CreateAnonymous("layer1.usda")
+        layer1ImportString = '''#usda 1.0
+            def "Model"
+            {
+                def "Child"
+                {
+                    int modelChildAttr
+                }
+
+                def "SiblingArc" (
+                    ''' + classArcType + ''' = </Model/Child>
+                ) {
+                    int siblingArcAttr
+                }
+            }
+
+        '''
+        layer1.ImportFromString(layer1ImportString)
+
+        stage1 = Usd.Stage.Open(layer1, Usd.Stage.LoadAll)
+        editor = Usd.NamespaceEditor(stage1)
+
+        # Verify the initial composition fields.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer1), {
+            '/Model/SiblingArc' : {
+                classArcType : ('/Model/Child',)
+            },
+        })
+
+        modelContents = {
+            'Child': {
+                '.' : ['modelChildAttr']
+            },
+            'SiblingArc': {
+                '.': ['siblingArcAttr', 'modelChildAttr']
+            }
+        }
+
+        # Verify the expected contents of stage 1
+        self._VerifyStageContents(stage1, {
+            'Model': modelContents, 
+        })
+
+        # Edit: Rename /Model to /RenamedModel
+        # This is to check that class arcs targeting sibling prims have their 
+        # paths correctly updated when a parent is renamed.
+        with self.ApplyEdits(editor, "Move /Model-> /RenamedModel"):
+            self.assertTrue(editor.MovePrimAtPath(
+                '/Model', '/RenamedModel'))
+            
+        # Verify the updated composition fields in layer1.
+        self.assertEqual(self._GetCompositionFieldsInLayer(layer1), {
+            '/RenamedModel/SiblingArc' : {
+                classArcType : ('/RenamedModel/Child',)
+            },
+        })
+
+        self._VerifyStageContents(stage1, {
+            'RenamedModel' : modelContents
+        })
+        self._VerifyStageResyncNotices(stage1, {
+            "/Model" : self.PrimResyncType.RenameSource,
+            "/RenamedModel" : self.PrimResyncType.RenameDestination,
+        })
+
+    def test_TestSiblingInherits(self):
+        """Test that a prim that inherits from a sibling has its inherit path 
+        correctly updated when the parent path is changed."""
+        self._RunTestSiblingClassArcs("inherits")
+
+    def test_TestSiblingSpecializes(self):
+        """Test that a prim that specializes from a sibling has its specializes 
+        path correctly updated when the parent path is changed."""
+        self._RunTestSiblingClassArcs("specializes")
+
     def test_TestMixedInheritAndSpecializesClassHierarchies(self):
         """Tests downstream dependency namespace edits across a mix of inherits
         and specializes arcs in a single nested class hierarchy."""

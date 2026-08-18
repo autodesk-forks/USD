@@ -245,7 +245,9 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
         })
    
     def _ApplyCompareAndReset(self, editor, rootContents, sub1Contents, sub2Contents):
-        self.assertTrue(editor.CanApplyEdits())
+        result = editor.CanApplyEdits()
+        self.assertTrue(result)
+        self.assertFalse(result.warnings)
         self.assertTrue(editor.ApplyEdits())
         self._VerifyLayerContents(self.rootLayer, rootContents)
         self._VerifyLayerContents(self.sub1Layer, sub1Contents)
@@ -2353,7 +2355,7 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
         # prim that is speculatively targeted by /Model/B. Also provides an
         # over to A that adds targets to /Root/C.
         rootLayer = Sdf.Layer.CreateAnonymous("root.usda")
-        rootLayer.ImportFromString('''#usda 1.0
+        rootLayerString = '''#usda 1.0
             def "Root" (
                 references = @''' + refLayer.identifier + '''@</Model>
             )
@@ -2371,7 +2373,8 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
                     append int a_attr.connect = [</Root/C.c_attr>]
                 }
             }
-        ''')
+        '''
+        rootLayer.ImportFromString(rootLayerString)
 
         # Create a stage and editor.
         stage = Usd.Stage.Open(rootLayer)
@@ -2406,9 +2409,50 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
         self.assertEqual(
             stage.GetAttributeAtPath("/Root/C.c_attr").GetConnections(),
             ["/Root/A.a_attr", "/Root/B.b_attr"])
+        
+        # Rename /Root to /Moved_Root
+        # This is to check that editing a parent of a referenced connection
+        # does not produce any warnings.
+        self.assertTrue(editor.MovePrimAtPath("/Root", "/Moved_Root"))
+        self.assertEqual(len(editor.CanApplyEdits().warnings), 0)
+        self.assertTrue(editor.ApplyEdits())
+
+        # Verify the prim was renamed and retains children.
+        self.assertEqual(stage.GetPrimAtPath("/Moved_Root").GetChildrenNames(), 
+                         ["A", "B", "C"])
+        # Verify no relocates
+        self.assertEqual(rootLayer.relocates, [])
+
+        # /Moved_Root/A properties have been updated to target Moved_A
+        self.assertEqual(
+            stage.GetRelationshipAtPath("/Moved_Root/A.a_rel").GetTargets(),
+            ["/Moved_Root/B", "/Moved_Root/C"])
+        self.assertEqual(
+            stage.GetAttributeAtPath("/Moved_Root/A.a_attr").GetConnections(),
+            ["/Moved_Root/B.b_attr", "/Moved_Root/C.c_attr"])
+
+        # /Moved_Root/B properties have been updated to target Moved_A
+        self.assertEqual(
+            stage.GetRelationshipAtPath("/Moved_Root/B.b_rel").GetTargets(),
+            ["/Moved_Root/A", "/Moved_Root/C"])
+        self.assertEqual(
+            stage.GetAttributeAtPath("/Moved_Root/B.b_attr").GetConnections(),
+            ["/Moved_Root/A.a_attr", "/Moved_Root/C.c_attr"])
+
+        # /Moved_Root/C properties have been updated to target Moved_A
+        self.assertEqual(
+            stage.GetRelationshipAtPath("/Moved_Root/C.c_rel").GetTargets(),
+            ["/Moved_Root/A", "/Moved_Root/B"])
+        self.assertEqual(
+            stage.GetAttributeAtPath("/Moved_Root/C.c_attr").GetConnections(),
+            ["/Moved_Root/A.a_attr", "/Moved_Root/B.b_attr"])
+
+        # Reset edit for the following tests
+        rootLayer.ImportFromString(rootLayerString)
 
         # Rename /Root/A to Moved_A
         self.assertTrue(editor.MovePrimAtPath("/Root/A", "/Root/Moved_A"))
+        self.assertEqual(len(editor.CanApplyEdits().warnings), 0)
         self.assertTrue(editor.ApplyEdits())
 
         # Verify the prim was renamed.
@@ -2443,6 +2487,7 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
 
         # Rename /Root/B to Moved_B
         self.assertTrue(editor.MovePrimAtPath("/Root/B", "/Root/Moved_B"))
+        self.assertEqual(len(editor.CanApplyEdits().warnings), 0)
         self.assertTrue(editor.ApplyEdits())
 
         # Verify that B is now also renamed.
@@ -2479,6 +2524,7 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
 
         # Rename /Root/C to Moved_C
         self.assertTrue(editor.MovePrimAtPath("/Root/C", "/Root/Moved_C"))
+        self.assertEqual(len(editor.CanApplyEdits().warnings), 2)
         self.assertTrue(editor.ApplyEdits())
 
         # Verify that C is now also renamed.
@@ -2519,6 +2565,7 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
 
         # Delete /Root/Moved_A
         self.assertTrue(editor.DeletePrimAtPath("/Root/Moved_A"))
+        self.assertEqual(len(editor.CanApplyEdits().warnings), 0)
         self.assertTrue(editor.ApplyEdits())
 
         # Verify Moved_A is no longer a prim
@@ -2559,6 +2606,135 @@ class TestUsdNamespaceEditorTargetPathFixup(unittest.TestCase):
         self.assertEqual(
             stage.GetAttributeAtPath("/Root/Moved_C.c_attr").GetConnections(),
             ["/Root/Moved_B.b_attr"])
+
+    def test_NonDefaultPrims(self):
+        # The goal of this test is to verify that relationships and attribute 
+        # connections located on prims that are abstract, undefined, unloaded, 
+        # or inactive are correctly updated when the targets are changed.
+
+        def _EditAndVerifyNonDefaultPrims(layer, stage):
+            editor = Usd.NamespaceEditor(stage)
+
+            # Reparent and rename /Root/PrimA -> /Foo
+            self.assertTrue(editor.MovePrimAtPath("/Root/PrimA", "/Foo"))
+            result = editor.CanApplyEdits()
+            self.assertTrue(result)
+            self.assertFalse(result.warnings)
+            self.assertTrue(editor.ApplyEdits())
+            
+            self._VerifyLayerContents(layer, {
+                "/Foo" : {
+                    ".otherAttr" : Sdf.PathListOp.Create(
+                        prependedItems = ["/Foo.targetAttr"]),
+                },
+                "/Root" : {
+                    "/PrimB" : {
+                        ".otherRel" : Sdf.PathListOp.Create(
+                            appendedItems = [
+                                "/Foo"
+                            ])
+                    }
+                }
+            })
+        
+        undefinedLayer = Sdf.Layer.CreateAnonymous()
+        undefinedLayer.ImportFromString('''#usda 1.0
+        over "Root"
+        {
+            over "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            over "PrimB"
+            {
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+        _EditAndVerifyNonDefaultPrims(undefinedLayer, Usd.Stage.Open(undefinedLayer))
+
+        abstractLayer = Sdf.Layer.CreateAnonymous()
+        abstractLayer.ImportFromString('''#usda 1.0
+        class "Root"
+        {
+            class "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            class "PrimB"
+            { 
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+        _EditAndVerifyNonDefaultPrims(abstractLayer, Usd.Stage.Open(abstractLayer))
+
+        inactiveLayer = Sdf.Layer.CreateAnonymous()
+        inactiveLayer.ImportFromString('''#usda 1.0
+        def "Root"
+        {
+            def "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            def "PrimB"
+            { 
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+
+        inactiveStage = Usd.Stage.Open(inactiveLayer)
+        inactiveStage.GetPrimAtPath("/Root/PrimA").SetActive(False)
+        inactiveStage.GetPrimAtPath("/Root/PrimB").SetActive(False)
+
+        _EditAndVerifyNonDefaultPrims(inactiveLayer, inactiveStage)
+
+        # A prim with an unloaded payload (/Root/PrimB) has a connection
+        # for which the target has changed path (/Root/PrimA -> /Foo). Verify
+        # that the target path is updated correctly.
+        payloadLayer = Sdf.Layer.CreateAnonymous()
+        payloadLayer.ImportFromString('''#usda 1.0
+        def "Payload"
+        {
+        }
+        ''')
+
+        unloadedLayer = Sdf.Layer.CreateAnonymous("abstract.usda")
+        unloadedLayer.ImportFromString('''#usda 1.0
+        def "Root" 
+        {
+            def "PrimA"
+            {
+                custom int otherAttr
+                prepend int otherAttr.connect = [<.targetAttr>]
+            }
+
+            def "PrimB" (
+                payload = @''' + payloadLayer.identifier + '''@</Payload>
+            )
+            { 
+                custom rel otherRel
+                append rel otherRel = </Root/PrimA>
+            }
+        }
+        ''')
+
+        unloadedStage = Usd.Stage.Open(unloadedLayer)
+        bPrim = unloadedStage.GetPrimAtPath("/Root/PrimB")
+        self.assertTrue(bPrim.HasPayload())
+        bPrim.Unload()
+
+        _EditAndVerifyNonDefaultPrims(unloadedLayer, unloadedStage)
 
 if __name__ == '__main__':
     unittest.main()

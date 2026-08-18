@@ -31,6 +31,7 @@
 #include "pxr/base/vt/dictionary.h"
 
 #include <deque>
+#include <iterator>
 #include <map>
 #include <set>
 #include <vector>
@@ -441,7 +442,7 @@ _AddStandardTypesToRegistry(Sdf_ValueTypeRegistry* r)
     r->AddType(T("half",   GfHalf(0.0)).CPPTypeName("GfHalf"));
     r->AddType(T("float",  float()));
     r->AddType(T("double", double()));
-    r->AddType(T("timecode", SdfTimeCode()));
+    r->AddType(T("timecode", GfTimeCode()));
     // TfType reports "string" as the typename for "std::string", but we want
     // the fully-qualified name for documentation purposes.
     r->AddType(T("string", std::string()).CPPTypeName("std::string"));
@@ -698,10 +699,14 @@ SdfSchemaBase::_RegisterStandardFields()
     // Regular Fields
     _DoRegisterField(SdfFieldKeys->Active, true);
     _DoRegisterField(SdfFieldKeys->AllowedTokens, VtTokenArray());
+    _DoRegisterField(SdfFieldKeys->ArraySizeConstraint,
+                     static_cast<int64_t>(0));
     _DoRegisterField(SdfFieldKeys->AssetInfo, VtDictionary())
         .MapKeyValidator(&_ValidateIdentifier)
         .MapValueValidator(&_ValidateIsSceneDescriptionValue);
     _DoRegisterField(SdfFieldKeys->TimeSamples, SdfTimeSampleMap());
+    _DoRegisterField(SdfFieldKeys->Clips, VtDictionary());
+    _DoRegisterField(SdfFieldKeys->ClipSets, SdfStringListOp());
     _DoRegisterField(SdfFieldKeys->ColorConfiguration, SdfAssetPath());
     _DoRegisterField(SdfFieldKeys->ColorManagementSystem, TfToken());
     _DoRegisterField(SdfFieldKeys->ColorSpace, TfToken());
@@ -742,6 +747,7 @@ SdfSchemaBase::_RegisterStandardFields()
     _DoRegisterField(SdfFieldKeys->InheritPaths, SdfPathListOp())
         .ListValueValidator(&_ValidateInheritPath);
     _DoRegisterField(SdfFieldKeys->Kind, TfToken());
+    _DoRegisterField(SdfFieldKeys->Limits, VtDictionary());
     _DoRegisterField(SdfFieldKeys->Owner, "");
     _DoRegisterField(SdfFieldKeys->PrimOrder, std::vector<TfToken>())
         .ListValueValidator(&_ValidateIdentifierToken);
@@ -876,6 +882,10 @@ SdfSchemaBase::_RegisterStandardFields()
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->AssetInfo,
                        SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->Clips,
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->ClipSets,
+                       SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->CustomData,
                        SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->DisplayGroupOrder,
@@ -960,7 +970,11 @@ SdfSchemaBase::_RegisterStandardFields()
 
         .MetadataField(SdfFieldKeys->AllowedTokens,
                        SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->ArraySizeConstraint,
+                       SdfMetadataDisplayGroupTokens->core)
         .MetadataField(SdfFieldKeys->ColorSpace, 
+                       SdfMetadataDisplayGroupTokens->core)
+        .MetadataField(SdfFieldKeys->Limits,
                        SdfMetadataDisplayGroupTokens->core)
         ;
 
@@ -1519,13 +1533,15 @@ _AccumulateTypedValues(const JsValue &value, std::deque<Value> *values) {
 // calls to BeginTuple(), EndTuple(), and TupleItem() in between calls to
 // AppendValue().
 static void
-_AddValuesToValueContext(std::deque<Value> *values, Sdf_ParserValueContext *context, int level = 0) {
+_AddValuesToValueContext(std::deque<Value> *values,
+                         Sdf_ParserValueContext *context, size_t level = 0) {
     if (context->valueTupleDimensions.size == 0) {
         while (!values->empty()) {
             context->AppendValue(values->front());
             values->pop_front();
         }
-    } else if (static_cast<size_t>(level) < context->valueTupleDimensions.size) {
+    } else if (level < context->valueTupleDimensions.size) {
+        TF_AXIOM(level < std::size(context->valueTupleDimensions.d));
         context->BeginTuple();
         for (size_t i = 0; i < context->valueTupleDimensions.d[level]; i++) {
             _AddValuesToValueContext(values, context, level + 1);

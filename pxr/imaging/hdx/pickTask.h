@@ -33,6 +33,16 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#define HDX_PICK_RESOLVE_MODE_TOKENS \
+    (resolveNearestToCamera)         \
+    (resolveNearestToCenter)         \
+    (resolveUnique)                  \
+    (resolveAll)                     \
+    (resolveDeep)
+
+TF_DECLARE_PUBLIC_TOKENS(
+    HdxPickResolveModeTokens, HDX_API, HDX_PICK_RESOLVE_MODE_TOKENS);
+
 #define HDX_PICK_TOKENS              \
     /* Task context */               \
     (pickParams)                     \
@@ -44,14 +54,10 @@ PXR_NAMESPACE_OPEN_SCOPE
     (pickPoints)                     \
     (pickPointsAndInstances)         \
                                      \
-    /* Resolve mode */               \
-    (resolveNearestToCamera)         \
-    (resolveNearestToCenter)         \
-    (resolveUnique)                  \
-    (resolveAll)                     \
-    (resolveDeep)
+    HDX_PICK_RESOLVE_MODE_TOKENS
 
-TF_DECLARE_PUBLIC_TOKENS(HdxPickTokens, HDX_API, HDX_PICK_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(
+    HdxPickTokens, HDX_API, HDX_PICK_TOKENS);
 
 class HdStRenderBuffer;
 class HdStRenderPassState;
@@ -66,11 +72,9 @@ struct HdxPickTaskParams
 {
     HdxPickTaskParams()
         : cullStyle(HdCullStyleNothing)
-        , enableSceneMaterials(true)
     {}
 
     HdCullStyle cullStyle;
-    bool enableSceneMaterials;
 };
 
 /// Picking hit structure. This is output by the pick task as a record of
@@ -79,6 +83,8 @@ struct HdxPickHit
 {
     /// delegateID of HdSceneDelegate that provided the picked prim.
     /// Irrelevant for scene indices.
+    ///
+    /// \deprecated
     SdfPath delegateId;
     /// Path computed from scenePath's in primOrigin data source of
     /// picked prim and instancers if provided by scene index.
@@ -86,6 +92,9 @@ struct HdxPickHit
     SdfPath objectId;
     /// Only supported for scene delegates, see HdxPrimOriginInfo for
     /// scene indices.
+    ///
+    /// \deprecated Query terminal scene index for prim and extract instancer
+    /// from HdInstancedBySchema instead.
     SdfPath instancerId;
     int instanceIndex;
     int elementIndex;
@@ -161,21 +170,39 @@ struct HdxInstancerContext
 ///
 struct HdxPrimOriginInfo
 {
+    /// Query terminal scene index for information about picked prim.
+    HDX_API
+    static HdxPrimOriginInfo
+    FromPickHit(HdSceneIndexBaseRefPtr const &terminalSceneIndex,
+                const HdxPickHit &hit);
+
     /// Query terminal scene index of render index for information about
     /// picked prim.
+    ///
+    /// \deprecated Use overload taking scene index.
     HDX_API
     static HdxPrimOriginInfo
     FromPickHit(HdRenderIndex * renderIndex,
                 const HdxPickHit &hit);
 
     /// Vectorized implementation of function to query terminal scene index
+    /// for information about picked prim. Amortizes the cost of computing the
+    /// array of all instance indices and locations for instancers.
+    HDX_API
+    static std::vector<HdxPrimOriginInfo>
+    FromPickHits(HdSceneIndexBaseRefPtr const &terminalSceneIndex,
+                 const std::vector<HdxPickHit> &hits);
+
+    /// Vectorized implementation of function to query terminal scene index
     /// of render index for information about picked prim. Amortizes the cost
     /// of computing the array of all instace indices and locations for
     /// instancers.
+    ///
+    /// \deprecated Use overload taking scene index.
     HDX_API
     static std::vector<HdxPrimOriginInfo>
     FromPickHits(HdRenderIndex * renderIndex,
-                const std::vector<HdxPickHit> &hits);
+                 const std::vector<HdxPickHit> &hits);
 
     /// Combines instance scene paths and prim scene path to obtain the full
     /// scene path.
@@ -255,6 +282,11 @@ struct HdxPickTaskContextParams
         , depthMaskCallback(nullptr)
         , collection()
         , alphaThreshold(0.0001f)
+        , pointSize(3.0f)
+        , pointSelectedSize(5.0f)
+        , depthBiasEnable(false)
+        , depthBiasConstantFactor(0.0f)
+        , depthBiasSlopeFactor(0.0f)
         , outHits(nullptr)
     {}
 
@@ -269,6 +301,11 @@ struct HdxPickTaskContextParams
     DepthMaskCallback depthMaskCallback;
     HdRprimCollection collection;
     float alphaThreshold;
+    float pointSize;
+    float pointSelectedSize;
+    bool depthBiasEnable;
+    float depthBiasConstantFactor;
+    float depthBiasSlopeFactor;
     HdxPickHitVector *outHits;
 };
 

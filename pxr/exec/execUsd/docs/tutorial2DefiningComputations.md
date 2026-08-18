@@ -1,5 +1,8 @@
 # OpenExec Tutorial 2: Defining Schema Computations
 
+The code used in this tutorial is available in
+`USD/extras/exec/examples/definingComputations/`
+
 ## Overview
 
 The purpose of this tutorial is to demonstrate how to define OpenExec
@@ -29,7 +32,8 @@ The following `plugInfo.json` file shows what this looks like in practice.
 Here, we declare `UsdSchemaExamplesParamsAPI` as a schema that allows plugin
 computations. The existence of this plugin metadata identifies the library that
 contains it as the library to load when OpenExec reguires computation
-definitions for any prim that has the `ParamsAPI` schema applied.
+definitions for any prim that has the `ParamsAPI` schema (which has the full
+type name `UsdSchemaExamplesParamsAPI`) applied to it.
 
 ```
 {
@@ -43,12 +47,7 @@ definitions for any prim that has the `ParamsAPI` schema applied.
                         }
                     }
                 }
-            },
-            "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@",
-            "Name": "execComputationExamples",
-            "ResourcePath": "@PLUG_INFO_RESOURCE_PATH@",
-            "Root": "@PLUG_INFO_ROOT@",
-            "Type": "library"
+            }
         }
     ]
 }
@@ -138,11 +137,11 @@ from the computed values of attributes. Internally, this input parameter
 requests the [builtin computation](#group_Exec_Builtin_Computations)
 `computeValue` on the attribute of the specified name.
 
-OpenExec supports a growing variety of input parameters, each of which requests
-the result of a computation on some provider object. It is possible to request
-input values from computations provided by the prim or attribute that the
-computation lives on, or by the owning prim, a sibling property, objects
-targeted by relationship targets, etc. See the [Input
+OpenExec supports a variety of input parameters, each of which requests the
+result of a computation on some provider object. It is possible to request input
+values from computations provided by the prim or attribute that the computation
+lives on, or by the owning prim, a sibling property, objects targeted by
+relationship targets, etc. See the [Input
 Registrations](#group_Exec_InputRegistrations) section of the [Computation
 Definition Language](#group_Exec_ComputationDefinitionLanguage) documentation
 for more information on the different kinds of input parameters that are
@@ -174,7 +173,7 @@ Language](#group_Exec_ComputationDefinitionLanguage) for more information on
 registering callback functions.
 
 
-## Bringing it all together
+## Putting it all together
 
 The following code would appear in a cpp file, in the same library as the
 `plugInfo.json` file given above. Here, we also add a second computation, to
@@ -183,17 +182,44 @@ demonstrate how multiple computations can be registered for a single schema.
 ```cpp
 #include "pxr/pxr.h"
 
-#include "pxr/extras/usd/examples/usdSchemaExamples/tokens.h"
-
+#include "pxr/base/plug/plugin.h"
+#include "pxr/base/plug/registry.h"
+#include "pxr/base/tf/pathUtils.h"
+#include "pxr/base/tf/staticTokens.h"
+#include "pxr/base/tf/token.h"
 #include "pxr/exec/exec/registerSchema.h"
+#include "pxr/exec/execUsd/cacheView.h"
+#include "pxr/exec/execUsd/request.h"
+#include "pxr/exec/execUsd/system.h"
+#include "pxr/exec/execUsd/valueKey.h"
+#include "pxr/exec/vdf/context.h"
+#include "pxr/usd/sdf/layer.h"
+#include "pxr/usd/usd/stage.h"
+
+#include <string>
+#include <utility>
+#include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
+TF_DEFINE_PRIVATE_TOKENS(
+    _tokens,
+
+    (computeDensity)
+    (computeMomentum)
+);
+
+// Note: This code is slightly different from the published
+// `definingComputations` example code because that code has to contruct
+// ParamsAPI property tokens manually. Here, we assume the tokens have been
+// generated and made available in the UsdSchemaExamplesTokens struct, since
+// this is the pattern we expect most schema computations to follow.
+//
 EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(UsdSchemaExamplesParamsAPI)
 {
     // Define a computation that reads the values of the attributes params:mass
     // and params:velocity and computes the momentum.
-    self.PrimComputation(TfToken("computeMomentum"))
+    self.PrimComputation(_tokens->computeMomentum)
         .Callback<double>(+[](const VdfContext &context) {
             const double mass = context.GetInputValue<double>(
                 UsdSchemaExamplesTokens->paramsMass);
@@ -209,7 +235,7 @@ EXEC_REGISTER_COMPUTATIONS_FOR_SCHEMA(UsdSchemaExamplesParamsAPI)
 
     // Define a computation that reads the values of the attributes params:mass
     // and params:volume and computes the density.
-    self.PrimComputation(TfToken("computeDensity"))
+    self.PrimComputation(_tokens->computeDensity)
         .Callback<double>(+[](const VdfContext &context) {
             const double mass = context.GetInputValue<double>(
                 UsdSchemaExamplesTokens->paramsMass);

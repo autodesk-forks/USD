@@ -17,7 +17,9 @@
 #include "pxr/usd/usdShade/material.h"
 #include "pxr/usd/usdShade/materialBindingAPI.h"
 #include "pxr/usd/usdShade/nodeDefAPI.h"
+#include "pxr/usd/usdShade/utils.h"
 
+#include "pxr/imaging/hd/dataSource.h"
 #include "pxr/imaging/hd/lazyContainerDataSource.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -27,7 +29,10 @@
 #include "pxr/imaging/hd/materialNodeSchema.h"
 #include "pxr/imaging/hd/materialNodeParameterSchema.h"
 #include "pxr/imaging/hd/materialSchema.h"
+#include "pxr/imaging/hd/materialInterfaceSchema.h"
+#include "pxr/imaging/hd/materialInterfaceParameterSchema.h"
 #include "pxr/imaging/hd/materialInterfaceMappingSchema.h"
+#include "pxr/imaging/hd/schemaTypeDefs.h"
 #include "pxr/imaging/hd/utils.h"
 
 #include "pxr/base/work/utils.h"
@@ -60,72 +65,176 @@ _GetRenderContextForShaderOutput(UsdShadeOutput const& output)
     return TfToken();
 }
 
+// For the fixed terminal cases, such as light and lightFilter, there are
+// no output connections to examine for authored renderContexts.  Instead,
+// we must examine the nodes for renderContextNodeIdentifiers.
+TfTokenVector
+_CollectRenderContextsFromNodeIdentifiers(UsdPrim const& usdPrim)
+{
+    TRACE_FUNCTION();
+
+    // Always offer the universal render context and the "all nodes"
+    // context.
+    TfTokenVector result = {
+        HdMaterialSchemaTokens->universalRenderContext,
+        HdMaterialSchemaTokens->all
+    };
+
+    // Determine the appropriate suffix for the shaderId property.
+    TfToken shaderIdSuffix;
+    if (UsdLuxLightAPI(usdPrim)) {
+        // Light
+        static const TfToken lightSuffix(
+            ":" + UsdLuxTokens->lightShaderId.GetString());
+        shaderIdSuffix = lightSuffix;
+    } else if (UsdLuxLightFilter(usdPrim)) {
+        // Light filter
+        static const TfToken lightFilterSuffix(
+            ":" + UsdLuxTokens->lightFilterShaderId.GetString());
+        shaderIdSuffix = lightFilterSuffix;
+    } else {
+        // Not a known case that requires special handling.  We don't warn
+        // since this isn't necessarily problematic.  Provide the default
+        // render contexts from above.
+        return result;
+    }
+
+    // Scan contained prims for renderContexts.
+    for (TfToken const& propName: usdPrim.GetPropertyNames()) {
+        if (!TfStringEndsWith(propName, shaderIdSuffix)) {
+            continue;
+        }
+        // Extract from "{renderContext}:{shaderId}"
+        TfToken renderContext(
+            propName.GetString()
+                .substr(0, propName.size() - shaderIdSuffix.size()));
+        // Accumulate unique renderContext values.
+        // (Note: we expect property names to be unique, but guard against
+        // duplicating the universal or all tokens contexts above.)
+        if (std::find(result.begin(), result.end(),
+                      renderContext) == result.end()) {
+            result.push_back(renderContext);
+        }
+    }
+    return result;
+}
+
 bool
 _Contains(const TfTokenVector &v, const TfToken &t)
 {
     return std::find(v.begin(), v.end(), t) != v.end();
 }
 
-class _UsdImagingDataSourceInterfaceMappings : public HdContainerDataSource
+TfSmallVector<HdDataSourceBaseHandle, 2>
+_GetMappings(
+    const UsdShadeMaterial &material,
+    const UsdShadeNodeGraph::InterfaceInputConsumersMap &consumerMap,
+    const TfToken& parameterName)
+{
+    const auto it = 
+        consumerMap.find(material.GetInput(parameterName));
+
+    if (it == consumerMap.end()) {
+        return {};
+    }
+
+    const std::vector<UsdShadeInput> &consumers = it->second;
+    if (consumers.empty()) {
+        return {};
+    }
+
+    TfSmallVector<HdDataSourceBaseHandle, 2> consumerContainers;
+    consumerContainers.reserve(consumers.size());
+
+    for (const UsdShadeInput &input : consumers) {
+        consumerContainers.push_back(
+            HdMaterialInterfaceMappingSchema::Builder()
+                .SetNodePath(
+                    HdRetainedTypedSampledDataSource<TfToken>::New(
+                        _RelativePath(material.GetPrim().GetPath(),
+                            input.GetPrim().GetPath()).GetToken()))
+                .SetInputName(
+                    HdRetainedTypedSampledDataSource<TfToken>::New(
+                        input.GetBaseName()))
+                .Build()
+        );
+    }
+
+    return consumerContainers;
+}
+
+HdVectorDataSourceHandle
+_GetMappingsDataSource(
+    const UsdShadeMaterial &material,
+    const UsdShadeNodeGraph::InterfaceInputConsumersMap &consumerMap,
+    const TfToken& parameterName)
+{
+    const TfSmallVector<HdDataSourceBaseHandle, 2> consumerContainers =
+        _GetMappings(material, consumerMap, parameterName);
+
+    return HdRetainedSmallVectorDataSource::New(
+        consumerContainers.size(), consumerContainers.data()); 
+}
+
+HdContainerDataSourceHandle
+_BuildMaterialInterfaceParameter(
+    const UsdShadeMaterial &material,
+    const UsdShadeNodeGraph::InterfaceInputConsumersMap &consumerMap,
+    const TfToken& parameterName)
+{
+    // Need usdInput to identify the displayGroup and displayName
+    const UsdShadeInput usdInput = material.GetInput(parameterName);
+    
+    // Only fetch display name if UsdAttribute isn't expired
+    TfToken displayName;
+    if (const UsdAttribute usdInputAttr = usdInput.GetAttr()) {
+        displayName = TfToken(usdInputAttr.GetDisplayName());
+    }        
+    
+    return HdMaterialInterfaceParameterSchema::Builder()
+        .SetDisplayGroup(
+            HdRetainedTypedSampledDataSource<TfToken>::New(
+                TfToken(usdInput.GetDisplayGroup())))
+        .SetDisplayName(
+            HdRetainedTypedSampledDataSource<TfToken>::New(
+                displayName))
+        .SetMappings(
+            _GetMappingsDataSource(material, consumerMap, parameterName))
+        .Build();
+}
+
+class _UsdImagingDataSourceInterfaceParameters : public HdContainerDataSource
 {
 public:
-    HD_DECLARE_DATASOURCE(_UsdImagingDataSourceInterfaceMappings);
+    HD_DECLARE_DATASOURCE(_UsdImagingDataSourceInterfaceParameters);
 
     TfTokenVector GetNames() override
     {
-        TfTokenVector result;
-        result.reserve(_consumerMap.size());
-
-        for (const auto &nameConsumersPair : _consumerMap) {
-
-            result.push_back(nameConsumersPair.first.GetBaseName());
-        }
-        return result;
+        return _consumerMapKeys;
     }
 
     HdDataSourceBaseHandle Get(const TfToken &name) override
     {
-        const auto it = _consumerMap.find(_material.GetInput(name));
-        if (it == _consumerMap.end()) {
-            return nullptr;
-        }
-
-        const std::vector<UsdShadeInput> &consumers = it->second;
-        if (consumers.empty()) {
-            return nullptr;
-        }
-
-        TfSmallVector<HdDataSourceBaseHandle, 2> consumerContainers;
-        consumerContainers.reserve(consumers.size());
-
-        for (const UsdShadeInput &input : consumers) {
-            consumerContainers.push_back(
-                HdMaterialInterfaceMappingSchema::Builder()
-                    .SetNodePath(
-                        HdRetainedTypedSampledDataSource<TfToken>::New(
-                            _RelativePath(_material.GetPrim().GetPath(),
-                                input.GetPrim().GetPath()).GetToken()))
-                    .SetInputName(
-                        HdRetainedTypedSampledDataSource<TfToken>::New(
-                            input.GetBaseName()))
-                    .Build()
-            );
-        }
-
-        return HdRetainedSmallVectorDataSource::New(
-            consumerContainers.size(), consumerContainers.data());
+        return _BuildMaterialInterfaceParameter(_material, _consumerMap, name);
     }
 
 private:
 
-    _UsdImagingDataSourceInterfaceMappings(const UsdShadeMaterial &material)
+    _UsdImagingDataSourceInterfaceParameters(const UsdShadeMaterial &material)
     : _material(material)
     {
         _consumerMap = _material.ComputeInterfaceInputConsumersMap(true);
+
+        _consumerMapKeys.reserve(_consumerMap.size());
+        for (const auto &nameConsumersPair : _consumerMap) {
+            // The interface parameters are only known by their basenames
+            _consumerMapKeys.push_back(nameConsumersPair.first.GetBaseName());
+        }
     }
 
     UsdShadeMaterial _material;
     UsdShadeNodeGraph::InterfaceInputConsumersMap _consumerMap;
+    TfTokenVector _consumerMapKeys;
 };
 
 class _UsdImagingDataSourceShadingNodeParameters : public HdContainerDataSource
@@ -167,6 +276,12 @@ public:
             UsdShadeAttributeType attrType =
                 UsdShadeUtils::GetType(attr.GetName());
             if (attrType == UsdShadeAttributeType::Input) {
+                // Skip UsdUVTextureNode's inputs:sourceColorSpace as this will
+                // be consolidated as the color space on the node's input:file 
+                // parameter
+                if (attr.GetName() == "inputs:sourceColorSpace") {
+                    continue;
+                }
                 const HdDataSourceLocator paramValueLocator(
                     name, HdMaterialNodeParameterSchemaTokens->value);
                 return HdMaterialNodeParameterSchema::Builder()
@@ -175,7 +290,10 @@ public:
                             _sceneIndexPath,
                             _locatorPrefix.Append(paramValueLocator)))
                     .SetColorSpace(
-                        UsdImagingDataSourceAttributeColorSpace::New(attr))
+                        (attr.GetRoleName() == SdfValueRoleNames->Color ||
+                         attr.GetTypeName() == SdfValueTypeNames->Asset)
+                            ? UsdImagingDataSourceAttributeColorSpace::New(attr)
+                            : nullptr)
                     .SetTypeName(
                         UsdImagingDataSourceAttributeTypeName::New(attr))
                     .Build();
@@ -489,12 +607,15 @@ public:
         }
 
         if (name == HdMaterialNodeSchemaTokens->parameters) {
+            const TfToken nodeName = 
+                _RelativePath(_materialPrefix, _shaderNode.GetPath())
+                .GetToken();
             return _UsdImagingDataSourceShadingNodeParameters::New(
                 _shaderNode, _stageGlobals, _sceneIndexPath,
                     _locatorPrefix.IsEmpty()
                         ? _locatorPrefix
                         : _locatorPrefix
-                            .Append(_shaderNode.GetPrim().GetPath().GetToken())
+                            .Append(nodeName)
                             .Append(HdMaterialNodeSchemaTokens->parameters)
                             );
 
@@ -549,19 +670,19 @@ UsdImagingDataSourceMaterial::UsdImagingDataSourceMaterial(
 
 UsdImagingDataSourceMaterial::~UsdImagingDataSourceMaterial()
 {
-    WorkMoveDestroyAsync(_networks);
 }
 
 TfTokenVector 
 UsdImagingDataSourceMaterial::GetNames()
 {
     if (!_fixedTerminalName.IsEmpty()) {
-        return { HdMaterialSchemaTokens->universalRenderContext };
+        // Fixed terminal materials require scanning the nodes for
+        // shaderId attributes providing a renderContext.
+        return _CollectRenderContextsFromNodeIdentifiers(_usdPrim);
     }
 
     TfTokenVector renderContexts;
-    for (const UsdShadeOutput &output :
-             UsdShadeNodeGraph(_usdPrim).GetOutputs()) {
+    for (const auto& output: UsdShadeNodeGraph(_usdPrim).GetOutputs()) {
         const TfToken renderContext = _GetRenderContextForShaderOutput(output);
         // Only add a renderContext if it has not been added before so
         // we do not have duplicates (there may be multiple outputs for
@@ -572,7 +693,10 @@ UsdImagingDataSourceMaterial::GetNames()
     }
 
     // Always add the 'all' render context
+    // This context is provided to support tools that want to
+    // show every node, including disconnected ones.
     renderContexts.push_back(HdMaterialSchemaTokens->all);
+
     return renderContexts;
 }
 
@@ -628,6 +752,52 @@ _WalkGraph(
 }
 
 static
+VtTokenArray
+_GetParameterOrder(
+    const UsdShadeMaterial &material)
+{
+    VtTokenArray parameterOrder;
+
+    for (const TfToken& propertyName : 
+        material.GetPrim().GetPropertyOrder()) 
+    {
+        // We only need to transmit inputs (and only their basename too)
+        const auto [baseName, attrType] = 
+            UsdShadeUtils::GetBaseNameAndType(TfToken(propertyName));
+
+        if (attrType != UsdShadeAttributeType::Input) {
+            continue;
+        }
+
+        parameterOrder.push_back(baseName);
+    }
+
+    return parameterOrder;
+}
+
+static
+HdTokenArrayDataSourceHandle
+_GetParameterOrderDataSource(
+    const UsdShadeMaterial &material)
+{
+    return HdRetainedTypedSampledDataSource<VtTokenArray>::New(
+        _GetParameterOrder(material));  
+}
+
+static
+HdContainerDataSourceHandle
+_BuildMaterialInterface(
+    const UsdShadeMaterial &material)
+{
+    return HdMaterialInterfaceSchema::Builder()
+        .SetParameters(
+            _UsdImagingDataSourceInterfaceParameters::New(material))
+        .SetParameterOrder(
+            _GetParameterOrderDataSource(material))
+        .Build();
+}
+
+static
 HdDataSourceBaseHandle
 _BuildNetwork(
     UsdShadeConnectableAPI const &terminalNode,
@@ -648,6 +818,11 @@ _BuildNetwork(
                     : locatorPrefix.Append(
                         HdMaterialNetworkSchemaTokens->nodes));
 
+    // No nodes found for this renderContext.
+    if (nodeDataSources.empty()) {
+        return nullptr;
+    }
+
     TfTokenVector nodeNames;
     std::vector<HdDataSourceBaseHandle> nodeValues;
     nodeNames.reserve(nodeDataSources.size());
@@ -656,7 +831,6 @@ _BuildNetwork(
         nodeNames.push_back(tokenDsPair.first);
         nodeValues.push_back(tokenDsPair.second);
     }
-
 
     HdContainerDataSourceHandle terminalsDs = 
         HdRetainedContainerDataSource::New(
@@ -682,13 +856,11 @@ _BuildNetwork(
     return HdMaterialNetworkSchema::Builder()
             .SetNodes(nodesDs)
             .SetTerminals(terminalsDs)
-            .SetInterfaceMappings(
+            .SetInterface(
                 HdLazyContainerDataSource::New([material](){
-                    return _UsdImagingDataSourceInterfaceMappings
-                        ::New(material);
+                    return _BuildMaterialInterface(material);
                 }))
             .Build();
-
 }
 
 static
@@ -874,8 +1046,8 @@ _BuildMaterial(
         .SetNodes(nodesDs)
         .SetTerminals(terminalsDs)
         .SetConfig(configDefaultContext)
-        .SetInterfaceMappings(_UsdImagingDataSourceInterfaceMappings::New(
-            UsdShadeMaterial(usdMat.GetPrim())))
+        .SetInterface(
+            _BuildMaterialInterface(UsdShadeMaterial(usdMat.GetPrim())))
         .Build();
 }
 
@@ -884,34 +1056,21 @@ UsdImagingDataSourceMaterial::Get(const TfToken &name)
 {
     TRACE_FUNCTION();
 
-    const auto it = _networks.find(name);
-
-    if (it != _networks.end()) {
-        return it->second;
-    }
-
-    HdDataSourceBaseHandle networkDs;
-
     // sceneIndexPath and dataSourceLocator are sent along so that discovery
     // of time-varying shader parameters are managed for the hydra material
     // prim and not individual USD shader prims.
-
     if (_fixedTerminalName.IsEmpty()) {
-        networkDs = _BuildMaterial(
+        return _BuildMaterial(
             UsdShadeNodeGraph(_usdPrim), _stageGlobals, name,
             _usdPrim.GetPath(),
             HdMaterialSchema::GetDefaultLocator().Append(name));
     } else {
-        networkDs = _BuildNetwork(
+        return _BuildNetwork(
             UsdShadeConnectableAPI(_usdPrim),
             _fixedTerminalName, _stageGlobals, name,
             _usdPrim.GetPath(),
             HdMaterialSchema::GetDefaultLocator().Append(name));
     }
-
-
-    _networks[name] = networkDs;
-    return networkDs;
 }
 
 UsdImagingDataSourceMaterialPrim::UsdImagingDataSourceMaterialPrim(

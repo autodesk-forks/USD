@@ -52,6 +52,8 @@ pxr_library(gf
         rotation
         size2
         size3
+        timeCode
+        traits
         transform
         vec2d
         vec2f
@@ -75,7 +77,6 @@ pxr_library(gf
         ilmbase_halfLimits.h
         limits.h
         numericCast.h
-        traits.h
 
     CPPFILES
         nc/nanocolor.c
@@ -84,6 +85,7 @@ pxr_library(gf
         ostreamHelpers
 
     PRIVATE_HEADERS
+        colorSpace_data.h
         ilmbase_eLut.h
         ilmbase_toFloat.h
         nc/nanocolor.h
@@ -129,6 +131,8 @@ pxr_library(gf
         wrapRotation.cpp
         wrapSize2.cpp
         wrapSize3.cpp
+        wrapTimeCode.cpp
+        wrapTraits.cpp
         wrapTransform.cpp
         wrapVec2d.cpp
         wrapVec2f.cpp
@@ -184,6 +188,14 @@ pxr_build_test(testGfColorCpp
         testenv/testGfColorCpp.cpp
 )
 
+pxr_build_test(testGfIsFloatingPoint
+    LIBRARIES
+        gf
+        tf
+    CPPFILES
+        testenv/testGfIsFloatingPoint.cpp
+)
+
 pxr_test_scripts(
     testenv/testGfBBox3d.py
     testenv/testGfCamera.py
@@ -206,6 +218,8 @@ pxr_test_scripts(
     testenv/testGfRect2i.py
     testenv/testGfRotation.py
     testenv/testGfSize.py
+    testenv/testGfTimeCode.py
+    testenv/testGfTraits.py
     testenv/testGfTransform.py
     testenv/testGfVec.py
 )
@@ -241,6 +255,9 @@ pxr_register_test(testGfGamma
 )
 pxr_register_test(testGfHardToReach
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfHardToReach"
+)
+pxr_register_test(testGfIsFloatingPoint
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfIsFloatingPoint"
 )
 pxr_register_test(testGfHomogeneous
     PYTHON
@@ -297,6 +314,14 @@ pxr_register_test(testGfRotation
 pxr_register_test(testGfSize
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfSize"
+)
+pxr_register_test(testGfTimeCode
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfTimeCode"
+)
+pxr_register_test(testGfTraits
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testGfTraits"
 )
 pxr_register_test(testGfTransform
     PYTHON

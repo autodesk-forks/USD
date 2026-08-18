@@ -16,6 +16,9 @@
 
 #include "pxr/base/tf/iterator.h"
 #include "pxr/base/tf/staticData.h"
+#include "pxr/base/vt/array.h"
+#include "pxr/base/vt/arrayEdit.h"
+#include "pxr/base/vt/value.h"
 
 #include "pxr/base/plug/registry.h"
 #include "pxr/base/plug/plugin.h"
@@ -25,7 +28,10 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_ABSTRACT_SPEC(SdfSchema, SdfPropertySpec, SdfSpec);
+TF_DEFINE_ENV_SETTING(
+    SDF_LEGACY_UI_HINTS_WARN_ON_WRITE, false,
+    "Issue a warning when calling 'set' API for deprecated UI-related "
+    "metadata fields (displayName, displayGroup, and hidden).");
 
 //
 // Name
@@ -96,10 +102,11 @@ SdfPropertySpec::GetOwner() const
 #define SDF_ACCESSOR_WRITE_PREDICATE(key_)   SDF_NO_PREDICATE
 
 // Metadata
-SDF_DEFINE_GET_SET(DisplayGroup,     SdfFieldKeys->DisplayGroup,     std::string)
-SDF_DEFINE_GET_SET(DisplayName,      SdfFieldKeys->DisplayName,      std::string)
+SDF_DEFINE_GET(DisplayGroup, SdfFieldKeys->DisplayGroup, std::string)
+SDF_DEFINE_GET(DisplayName,  SdfFieldKeys->DisplayName,  std::string)
+SDF_DEFINE_GET(Hidden,       SdfFieldKeys->Hidden,       bool)
+
 SDF_DEFINE_GET_SET(Documentation,    SdfFieldKeys->Documentation,    std::string)
-SDF_DEFINE_GET_SET(Hidden,           SdfFieldKeys->Hidden,           bool)
 SDF_DEFINE_GET_SET(Prefix,           SdfFieldKeys->Prefix,           std::string)
 SDF_DEFINE_GET_SET(Suffix,           SdfFieldKeys->Suffix,           std::string)
 SDF_DEFINE_GET_SET(SymmetricPeer,    SdfFieldKeys->SymmetricPeer,    std::string)
@@ -143,6 +150,36 @@ SDF_DEFINE_GET_PRIVATE(AttributeValueTypeName, SdfFieldKeys->TypeName, TfToken)
 // (methods requiring additional logic)
 //
 
+void
+SdfPropertySpec::SetDisplayGroup(const std::string &value)
+{
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayGroup'");
+    }
+
+    SetField(SdfFieldKeys->DisplayGroup, value);
+}
+
+void
+SdfPropertySpec::SetDisplayName(const std::string &value)
+{
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'displayName'");
+    }
+
+    SetField(SdfFieldKeys->DisplayName, value);
+}
+
+void
+SdfPropertySpec::SetHidden(bool value)
+{
+    if (TfGetEnvSetting(SDF_LEGACY_UI_HINTS_WARN_ON_WRITE)) {
+        TF_WARN("Writing to deprecated metadata field 'hidden'");
+    }
+
+    SetField(SdfFieldKeys->Hidden, value);
+}
+
 bool
 SdfPropertySpec::SetDefaultValue(const VtValue &defaultValue)
 {
@@ -183,9 +220,17 @@ SdfPropertySpec::SetDefaultValue(const VtValue &defaultValue)
         }
     }
     else {
-        // Otherwise check if defaultValue is castable to valueType
+        // Otherwise check if defaultValue is castable to valueType.
         VtValue value =
             VtValue::CastToTypeid(defaultValue, valueType.GetTypeid());
+
+        // If we failed to cast, but the value type accepts the defaultValue
+        // (e.g. if the defaultValue is an array edit for the corresponding
+        // array type), allow the authoring.
+        if (value.IsEmpty() && GetTypeName().CanRepresent(defaultValue)) {
+            value = defaultValue;
+        }
+        
         if (!value.IsEmpty()) {
             // If this value is a pathExpression, make all embedded paths
             // absolute using this property's prim path as the anchor.
@@ -204,6 +249,8 @@ SdfPropertySpec::SetDefaultValue(const VtValue &defaultValue)
                             expr = expr.MakeAbsolute(anchor);
                         }
                     });
+//            } else if (value.IsHolding<VtArrayEdit<SdfPathExpression>>()) {
+                // XXX MakeAbsolute() all the literals.
             }
             /*
             // If this value is a path (relationship default-values are paths),

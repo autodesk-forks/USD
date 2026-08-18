@@ -5,31 +5,36 @@
 // https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/renderSettingsAdapter.h"
+
 #include "pxr/usdImaging/usdImaging/dataSourceRenderPrims.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 
-#include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/renderSettings.h"
-#include "pxr/base/gf/vec4f.h"
-#include "pxr/base/tf/diagnostic.h"
+#include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hd/types.h"
 
+#include "pxr/usd/sdf/path.h"
 #include "pxr/usd/usd/schemaRegistry.h"
 #include "pxr/usd/usdRender/product.h"
-#include "pxr/usd/usdRender/spec.h"
 #include "pxr/usd/usdRender/settings.h"
+#include "pxr/usd/usdRender/spec.h"
+#include "pxr/usd/usdRender/tokens.h"
 #include "pxr/usd/usdRender/var.h"
+
+#include "pxr/base/arch/stackTrace.h"
+#include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/vt/value.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_ENV_SETTING(LEGACY_PXR_RENDER_TERMINALS_API_ALLOWED_AND_WARN, true,
-    "By default, we allow specification of connections for display "
-    "filters, sample filters, and integrators to propagate to RenderSettings "
-    "while producing a warning prompting users to specify relationships "
-    "instead. In a future release, this will be updated to 'false', "
-    "disallowing specification of connections and requiring relationships "
-    "to specify display filters, sample filters, and integrators.");
+TF_DEFINE_ENV_SETTING(LEGACY_PXR_RENDER_TERMINALS_API_ALLOWED_AND_WARN, false,
+    "By default, we disallow specification of connections for display "
+    "filters, sample filters, and integrators to propagate to RenderSettings. "
+    "We require relationships to specify the aforementioned propagations to "
+    "RenderSettings instead. If set to true, warnings will be emitted "
+    "when connections are used.");
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
@@ -37,6 +42,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((riIntegrator, "ri:integrator"))
     ((riSampleFilters, "ri:sampleFilters"))
     ((riDisplayFilters, "ri:displayFilters"))
+    ((riEnergyFilters, "ri:energyFilters"))
     // Deprecated in favor of corresponding ri* tokens
     ((outputsRiIntegrator, "outputs:ri:integrator"))
     ((outputsRiSampleFilters, "outputs:ri:sampleFilters"))
@@ -51,7 +57,7 @@ TF_REGISTRY_FUNCTION(TfType)
     t.SetFactory< UsdImagingPrimAdapterFactory<Adapter> >();
 }
 
-UsdImagingRenderSettingsAdapter::~UsdImagingRenderSettingsAdapter() 
+UsdImagingRenderSettingsAdapter::~UsdImagingRenderSettingsAdapter()
 {
 }
 
@@ -130,7 +136,8 @@ _StripRelsFromSettings(
         UsdRelationship rel = prim.GetRelationship(name);
         if (rel && name != _tokens->riIntegrator
                 && name != _tokens->riSampleFilters
-                && name != _tokens->riDisplayFilters) {
+                && name != _tokens->riDisplayFilters
+                && name != _tokens->riEnergyFilters) {
             toErase.push_back(it.first);
         }
     }
@@ -142,7 +149,7 @@ _StripRelsFromSettings(
 
 SdfPath
 UsdImagingRenderSettingsAdapter::Populate(
-    UsdPrim const& prim, 
+    UsdPrim const& prim,
     UsdImagingIndexProxy* index,
     UsdImagingInstancerContext const* instancerContext)
 {
@@ -159,7 +166,7 @@ UsdImagingRenderSettingsAdapter::Populate(
     //
     // XXX Populate a cache to hold the targeting settings prim for each product
     //     and var to aid with change processing.
-    {   
+    {
         UsdRenderSettings rs(prim);
         SdfPathVector targets;
         rs.GetProductsRel().GetForwardedTargets(&targets);
@@ -206,7 +213,8 @@ UsdImagingRenderSettingsAdapter::Populate(
         const TfToken outputTokens[] = {
             _tokens->riIntegrator,
             _tokens->riSampleFilters,
-            _tokens->riDisplayFilters
+            _tokens->riDisplayFilters,
+            _tokens->riEnergyFilters
         };
 
         for (const auto &token : outputTokens) {
@@ -283,14 +291,14 @@ UsdImagingRenderSettingsAdapter::_RemovePrim(
     index->RemoveBprim(HdPrimTypeTokens->renderSettings, cachePath);
 }
 
-void 
+void
 UsdImagingRenderSettingsAdapter::TrackVariability(
     UsdPrim const& prim,
     SdfPath const& cachePath,
     HdDirtyBits* timeVaryingBits,
     UsdImagingInstancerContext const* instancerContext) const
 {
-    // If any of the RenderSettings attributes are time varying 
+    // If any of the RenderSettings attributes are time varying
     // we will assume all RenderSetting params are time-varying.
     const std::vector<UsdAttribute> &attrs = prim.GetAttributes();
     TF_FOR_ALL(attrIter, attrs) {
@@ -303,10 +311,10 @@ UsdImagingRenderSettingsAdapter::TrackVariability(
 
 // Thread safe.
 //  * Populate dirty bits for the given \p time.
-void 
+void
 UsdImagingRenderSettingsAdapter::UpdateForTime(
     UsdPrim const& prim,
-    SdfPath const& cachePath, 
+    SdfPath const& cachePath,
     UsdTimeCode time,
     HdDirtyBits requestedBits,
     UsdImagingInstancerContext const* instancerContext) const
@@ -316,7 +324,7 @@ UsdImagingRenderSettingsAdapter::UpdateForTime(
 HdDirtyBits
 UsdImagingRenderSettingsAdapter::ProcessPropertyChange(
     UsdPrim const& prim,
-    SdfPath const& cachePath, 
+    SdfPath const& cachePath,
     TfToken const& propertyName)
 {
     if (propertyName == UsdRenderTokens->includedPurposes) {
@@ -329,8 +337,19 @@ UsdImagingRenderSettingsAdapter::ProcessPropertyChange(
         return HdRenderSettings::DirtyRenderingColorSpace;
     }
     // XXX Bucket all other changes as product or namespaced setting related.
-    return HdRenderSettings::DirtyNamespacedSettings |
-           HdRenderSettings::DirtyRenderProducts;
+    HdDirtyBits bits =
+        HdRenderSettings::DirtyNamespacedSettings |
+        HdRenderSettings::DirtyRenderProducts;
+
+    // XXX: But also include the finer bit if appropriate.
+    if (propertyName == UsdRenderTokens->disableMotionBlur) {
+        bits |= HdRenderSettings::DirtyDisableMotionBlur;
+    } else if (propertyName == UsdRenderTokens->disableDepthOfField) {
+        bits |= HdRenderSettings::DirtyDisableDepthOfField;
+    } else if (propertyName == UsdRenderTokens->camera) {
+        bits |= HdRenderSettings::DirtyCamera;
+    }
+    return bits;
 }
 
 void
@@ -436,6 +455,29 @@ UsdImagingRenderSettingsAdapter::Get(
         TfToken colorSpace;
         UsdRenderSettings(prim).GetRenderingColorSpaceAttr().Get(&colorSpace);
         return VtValue(colorSpace);
+    }
+
+    if (key == HdRenderSettingsPrimTokens->camera) {
+        SdfPathVector camPaths;
+        UsdRenderSettings(prim).GetCameraRel().GetForwardedTargets(&camPaths);
+        if (camPaths.empty() || camPaths.front().IsEmpty()) {
+            return VtValue(); // avoid VtValue holding empty SdfPath
+        }
+        return VtValue(camPaths.front());
+    }
+
+    if (key == HdRenderSettingsPrimTokens->disableDepthOfField) {
+        bool disableDepthOfField = false;
+        UsdRenderSettings(prim).GetDisableDepthOfFieldAttr()
+            .Get(&disableDepthOfField);
+        return VtValue(disableDepthOfField);
+    }
+
+    if (key == HdRenderSettingsPrimTokens->disableMotionBlur) {
+        bool disableMotionBlur = false;
+        UsdRenderSettings(prim).GetDisableMotionBlurAttr()
+            .Get(&disableMotionBlur);
+        return VtValue(disableMotionBlur);
     }
 
     TF_CODING_ERROR(

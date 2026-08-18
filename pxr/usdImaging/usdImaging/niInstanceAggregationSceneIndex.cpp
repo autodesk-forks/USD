@@ -29,14 +29,10 @@
 
 #include "pxr/base/trace/trace.h"
 
+#include <string>
 #include <variant>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
-TF_DEFINE_PRIVATE_TOKENS(
-    _tokens,
-    ((propagatedPrototypesScope, "UsdNiPropagatedPrototypes")));
-
 
 namespace UsdImaging_NiInstanceAggregationSceneIndex_Impl {
 
@@ -206,20 +202,27 @@ class _PrimvarValueDataSourceFactory
 {
 public:
     template <class T>
-    HdDataSourceBaseHandle operator()(const T &v) const
+    HdDataSourceBaseHandle operator()(const T &) const
     {
-        return _PrimvarValueDataSource<T>::New(
-            _inputSceneIndex, _instances, _primvarName);
-
+        return _MakeDataSource<T>();
     }
 
     template <class T>
-    HdDataSourceBaseHandle operator()(const VtArray<T> &array) const {
-        return _PrimvarValueDataSource<T>::New(
-            _inputSceneIndex, _instances, _primvarName);
+    HdDataSourceBaseHandle operator()(const VtArray<T> &) const {
+        return _MakeDataSource<T>();
     }
 
     HdDataSourceBaseHandle operator()(const VtValue &v) const {
+        if (v.IsHolding<SdfAssetPath>()) {
+            return _MakeDataSource<SdfAssetPath>();
+        }
+        // we make an exception for SdfPath primvars for skel:animationSource.
+        // Not sure if there's a better way to allow SdfPath to flow through
+        // primvar aggregation. Otherwise we'll have to convert it to TfToken
+        // and then convert it back downstream.
+        else if (v.IsHolding<SdfPath>()) {
+            return _MakeDataSource<SdfPath>();
+        }
         return nullptr;
     }
 
@@ -234,6 +237,13 @@ public:
     }
 
 private:
+    template<class T>
+    HdDataSourceBaseHandle _MakeDataSource() const
+    {
+        return _PrimvarValueDataSource<T>::New(
+            _inputSceneIndex, _instances, _primvarName);
+    }
+
     HdSceneIndexBaseRefPtr const _inputSceneIndex;
     std::shared_ptr<SdfPathSet> const _instances;
     TfToken const _primvarName;
@@ -727,7 +737,7 @@ private:
 std::string
 _ComputeConstantPrimvarsRoleHash(HdPrimvarsSchema primvarsSchema)
 {
-    std::map<TfToken, TfToken> nameToRole;
+    std::map<std::string, std::string> nameToRole;
 
     for (const TfToken &name : primvarsSchema.GetPrimvarNames()) {
         HdPrimvarSchema primvarSchema = primvarsSchema.GetPrimvar(name);
@@ -740,7 +750,7 @@ _ComputeConstantPrimvarsRoleHash(HdPrimvarsSchema primvarsSchema)
                            primvarSchema.GetRole()) {
                     role = roleSrc->GetTypedValue(0.0f);
                 }
-                nameToRole[name] = role;
+                nameToRole[name.GetString()] = role.GetString();
             }
         }
     }
@@ -864,7 +874,7 @@ struct _InstanceInfo {
     SdfPath GetBindingPrimPath() const {
         return
             enclosingPrototypeRoot
-                .AppendChild(_tokens->propagatedPrototypesScope)
+                .AppendChild(UsdImagingTokens->niPropagatedPrototypesScope)
                 .AppendChild(bindingHash);
     }
 
@@ -1064,7 +1074,6 @@ private:
         const SdfPath &primPath,
         _RetainedSceneIndexOperations * retainedSceneIndexOperations);
     _PathToInstanceInfo::iterator _RemoveInstance(
-        const SdfPath &primPath,
         const _PathToInstanceInfo::iterator &it,
         _RetainedSceneIndexOperations * retainedSceneIndexOperations);
     void _ResyncPrim(
@@ -1310,7 +1319,7 @@ _InstanceObserver::PrimsRemoved(const HdSceneIndexBase &sender,
         auto it = _instanceToInfo.lower_bound(path);
         while (it != _instanceToInfo.end() &&
                it->first.HasPrefix(path)) {
-            it = _RemoveInstance(path, it, &retainedSceneIndexOperations);
+            it = _RemoveInstance(it, &retainedSceneIndexOperations);
         }
     }
 }
@@ -1498,7 +1507,7 @@ _InstanceObserver::_RemovePrim(
 {
     auto it = _instanceToInfo.find(primPath);
     if (it != _instanceToInfo.end()) {
-        _RemoveInstance(primPath, it, retainedSceneIndexOperations);
+        _RemoveInstance(it, retainedSceneIndexOperations);
     }
 }
 
@@ -1513,21 +1522,20 @@ _InstanceObserver::_ResyncPrim(
 
 _InstanceObserver::_PathToInstanceInfo::iterator
 _InstanceObserver::_RemoveInstance(
-    const SdfPath &primPath,
     const _PathToInstanceInfo::iterator &it,
     _RetainedSceneIndexOperations * const retainedSceneIndexOperations)
 {
+    const SdfPath &instancePath = it->first;
     const _InstanceInfo &info = it->second;
-
     const SdfPath instancerPath = info.GetInstancerPath();
 
     const _RemovalLevel level =
-        _RemoveInstanceFromInfoToInstance(primPath, info);
+        _RemoveInstanceFromInfoToInstance(instancePath, info);
 
     if (level > _RemovalLevel::None) {
         // Remove instance data source we added in _AddInstance.
         retainedSceneIndexOperations->RemovePrim(
-            primPath);
+            instancePath);
     }
 
     if (level == _RemovalLevel::Instance) {

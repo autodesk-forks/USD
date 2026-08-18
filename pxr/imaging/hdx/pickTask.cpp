@@ -42,7 +42,11 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-TF_DEFINE_PUBLIC_TOKENS(HdxPickTokens, HDX_PICK_TOKENS);
+TF_DEFINE_PUBLIC_TOKENS(
+    HdxPickResolveModeTokens, HDX_PICK_RESOLVE_MODE_TOKENS);
+
+TF_DEFINE_PUBLIC_TOKENS(
+    HdxPickTokens, HDX_PICK_TOKENS);
 
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
@@ -383,6 +387,8 @@ HdxPickTask::_ConditionStencilWithGLCallback(
             glFrontFace(GL_CCW);
             glDisable(GL_STENCIL_TEST);
         }
+
+        GLF_POST_PENDING_GL_ERRORS();
     };
 
     glGfxCmds->InsertFunctionOp(executeMaskCallback);
@@ -547,6 +553,15 @@ HdxPickTask::Sync(HdSceneDelegate* delegate,
         state->SetCullStyle(_params.cullStyle);
         state->SetLightingEnabled(false);
 
+        state->SetPointSize(_contextParams.pointSize);
+        state->SetPointSelectedSize(_contextParams.pointSelectedSize);
+
+        // Match depth bias from visual pass so surface depth is consistent.
+        state->SetDepthBiasUseDefault(false);
+        state->SetDepthBiasEnabled(_contextParams.depthBiasEnable);
+        state->SetDepthBias(_contextParams.depthBiasConstantFactor,
+                            _contextParams.depthBiasSlopeFactor);
+
         state->SetVolumeRenderingConstants(stepSize, stepSizeLighting);
         
         // Enable conservative rasterization, if available.
@@ -561,7 +576,6 @@ HdxPickTask::Sync(HdSceneDelegate* delegate,
                 _contextParams.projectionMatrix,
                 viewport,
                 _contextParams.clipPlanes);
-            extState->SetUseSceneMaterials(_params.enableSceneMaterials);
         }
     }
 
@@ -1209,41 +1223,49 @@ _FromPickHitWithCache(HdSceneIndexBaseRefPtr const &sceneIndex,
 }
 
 HdxPrimOriginInfo
+HdxPrimOriginInfo::FromPickHit(HdSceneIndexBaseRefPtr const &terminalSceneIndex,
+                               const HdxPickHit &hit)
+{
+    // Fallback value.
+    if (!terminalSceneIndex) {
+        return {};
+    }
+
+    return _FromPickHitWithCache(terminalSceneIndex, hit, nullptr);
+}
+
+HdxPrimOriginInfo
 HdxPrimOriginInfo::FromPickHit(HdRenderIndex * const renderIndex,
                                const HdxPickHit &hit)
 {
-    HdSceneIndexBaseRefPtr const sceneIndex =
-        renderIndex->GetTerminalSceneIndex();
-
-    // Fallback value.
-    if (!sceneIndex) {
-        return HdxPrimOriginInfo();
-    }
-
-    return _FromPickHitWithCache(sceneIndex, hit, nullptr);
+    return FromPickHit(renderIndex->GetTerminalSceneIndex(), hit);
 }
 
 std::vector<HdxPrimOriginInfo>
-HdxPrimOriginInfo::FromPickHits(HdRenderIndex * const renderIndex,
+HdxPrimOriginInfo::FromPickHits(HdSceneIndexBaseRefPtr const &terminalSceneIndex,
                                 const std::vector<HdxPickHit> &hits)
 {
     std::vector<HdxPrimOriginInfo> resultVec;
     std::map<SdfPath, _InstanceInfo> infoCache;
 
     resultVec.resize(hits.size());
-    HdSceneIndexBaseRefPtr const sceneIndex =
-        renderIndex->GetTerminalSceneIndex();
-
     // Fallback value.
-    if (!sceneIndex) {
+    if (!terminalSceneIndex) {
         return resultVec;
     }
 
     for (size_t i = 0, n = hits.size(); i < n; i++) {
-        resultVec[i] = _FromPickHitWithCache(sceneIndex, hits[i], &infoCache);
+        resultVec[i] = _FromPickHitWithCache(terminalSceneIndex, hits[i], &infoCache);
     }
 
     return resultVec;
+}
+
+std::vector<HdxPrimOriginInfo>
+HdxPrimOriginInfo::FromPickHits(HdRenderIndex * const renderIndex,
+                                const std::vector<HdxPickHit> &hits)
+{
+    return FromPickHits(renderIndex->GetTerminalSceneIndex(), hits);
 }
 
 // Consults given prim source for origin path to either replace
@@ -1622,8 +1644,7 @@ operator<<(std::ostream& out, HdxPickHit const& h)
 bool
 operator==(HdxPickTaskParams const& lhs, HdxPickTaskParams const& rhs)
 {
-    return lhs.cullStyle == rhs.cullStyle
-        && lhs.enableSceneMaterials == rhs.enableSceneMaterials;
+    return lhs.cullStyle == rhs.cullStyle;
 }
 
 bool
@@ -1635,9 +1656,7 @@ operator!=(HdxPickTaskParams const& lhs, HdxPickTaskParams const& rhs)
 std::ostream&
 operator<<(std::ostream& out, HdxPickTaskParams const& p)
 {
-    out << "PickTask Params: (...) "
-        << p.cullStyle << " "
-        << p.enableSceneMaterials;
+    out << "PickTask Params: (...) " << p.cullStyle;
     return out;
 }
 

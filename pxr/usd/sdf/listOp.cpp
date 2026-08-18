@@ -6,19 +6,24 @@
 //
 
 #include "pxr/pxr.h"
+#include "pxr/usd/sdf/debugCodes.h"
 #include "pxr/usd/sdf/listOp.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/usd/sdf/payload.h"
 #include "pxr/usd/sdf/reference.h"
 #include "pxr/usd/sdf/types.h"
+#include "pxr/base/tf/debug.h"
 #include "pxr/base/tf/denseHashSet.h"
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/error.h"
 #include "pxr/base/tf/iterator.h"
 #include "pxr/base/tf/registryManager.h"
-#include "pxr/base/tf/type.h"
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/token.h"
-#include "pxr/base/trace/trace.h"
+#include "pxr/base/tf/type.h"
 #include "pxr/base/tf/pxrTslRobinMap/robin_set.h"
+#include "pxr/base/trace/trace.h"
+#include "pxr/base/vt/valueComposeOver.h"
 
 #include <ostream>
 
@@ -63,6 +68,64 @@ TF_REGISTRY_FUNCTION(TfEnum)
     TF_ADD_ENUM_NAME(SdfListOpTypeOrdered);
 }
 
+template <class ListOp>
+static inline std::string _TruncateListOpString(ListOp const &listOp, 
+                                                size_t displayWidth){
+    std::string res = TfStringify(listOp);
+    // Shows displayWidth - 3 to ensure that the ellipsis is replacing at least
+    // 2 chars.
+    if (res.length() > displayWidth && displayWidth > 3) {
+        res = res.substr(0, displayWidth - 3) + "...";
+    }
+    return res;
+}
+
+template <class ListOp>
+static void _RegisterVtComposeOver() {
+    VtRegisterComposeOver(
+        +[](ListOp const &strong, ListOp const &weak) {
+            // Here "weak" is "inner", "strong" is "outer".  If we fail to
+            // compose (because either strong or weak use 'ordered' or 'added'
+            // lists) we issue a warning and return "strong" only.
+            if (auto optComposed = strong.ApplyOperations(weak)) {
+                return *optComposed;
+            }
+            std::string failedComposeMsg = TfStringPrintf(
+                "Failed to compose %s over %s because one or both use 'ordered'" 
+                " or 'added' operations.  Returning the stronger.",
+                _TruncateListOpString(strong, 100).c_str(),
+                _TruncateListOpString(weak, 100).c_str());
+            if (TfDebug::IsEnabled(SDF_ERROR_ON_FAILED_LISTOP_COMPOSE)) {
+                TF_RUNTIME_ERROR(failedComposeMsg);
+            } else {
+                TF_WARN(failedComposeMsg);
+            }
+            return strong;
+        });
+
+    VtRegisterComposeOver(
+        +[](ListOp const &strong, VtBackgroundType const &) {
+            // To finalize a listop, we call ApplyOperations over an empty list
+            // and return a list op with the result as explicit items.
+            typename ListOp::ItemVector items;
+            strong.ApplyOperations(&items);
+            return ListOp::CreateExplicit(std::move(items));
+        });
+}
+
+TF_REGISTRY_FUNCTION(VtValue)
+{
+    _RegisterVtComposeOver<SdfTokenListOp>();
+    _RegisterVtComposeOver<SdfPathListOp>();
+    _RegisterVtComposeOver<SdfStringListOp>();
+    _RegisterVtComposeOver<SdfReferenceListOp>();
+    _RegisterVtComposeOver<SdfPayloadListOp>();
+    _RegisterVtComposeOver<SdfIntListOp>();
+    _RegisterVtComposeOver<SdfUIntListOp>();
+    _RegisterVtComposeOver<SdfInt64ListOp>();
+    _RegisterVtComposeOver<SdfUInt64ListOp>();
+    _RegisterVtComposeOver<SdfUnregisteredValueListOp>();
+}
 
 template <typename T>
 SdfListOp<T>::SdfListOp()
@@ -369,6 +432,7 @@ SdfListOp<T>::ApplyOperations(ItemVector* vec, const ApplyCallback& cb) const
         size_t numToPrepend = _prependedItems.size();
         size_t numToAppend = _appendedItems.size();
         size_t numToOrder = _orderedItems.size();
+
 
         if (!cb &&
             ((numToDelete+numToAdd+numToPrepend+numToAppend+numToOrder) == 0)) {

@@ -10,6 +10,7 @@
 #include <string>
 
 #include "pxr/base/vt/array.h"
+#include "pxr/base/vt/arrayEdit.h"
 
 #include "pxr/base/tf/token.h"
 
@@ -37,6 +38,7 @@
 #include "pxr/base/gf/range3d.h"
 #include "pxr/base/gf/range3f.h"
 #include "pxr/base/gf/rect2i.h"
+#include "pxr/base/gf/timeCode.h"
 #include "pxr/base/gf/vec2d.h"
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/gf/vec2h.h"

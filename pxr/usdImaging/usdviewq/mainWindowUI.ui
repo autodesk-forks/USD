@@ -154,7 +154,6 @@
             <font>
              <family>Roboto</family>
              <pointsize>9</pointsize>
-             <weight>50</weight>
              <italic>false</italic>
              <bold>false</bold>
             </font>
@@ -254,7 +253,6 @@
               <font>
                <family>Roboto</family>
                <pointsize>9</pointsize>
-               <weight>75</weight>
                <bold>true</bold>
               </font>
              </property>
@@ -293,7 +291,6 @@
               <font>
                <family>Roboto</family>
                <pointsize>9</pointsize>
-               <weight>50</weight>
                <italic>false</italic>
                <bold>false</bold>
               </font>
@@ -321,7 +318,6 @@
               <font>
                <family>Roboto</family>
                <pointsize>9</pointsize>
-               <weight>50</weight>
                <italic>false</italic>
                <bold>false</bold>
               </font>
@@ -711,7 +707,6 @@
               <font>
                <family>Roboto</family>
                <pointsize>9</pointsize>
-               <weight>50</weight>
                <italic>false</italic>
                <bold>false</bold>
               </font>
@@ -751,7 +746,6 @@
               <font>
                <family>Roboto</family>
                <pointsize>9</pointsize>
-               <weight>50</weight>
                <italic>false</italic>
                <bold>false</bold>
               </font>
@@ -779,7 +773,6 @@
               <font>
                <family>Roboto</family>
                <pointsize>9</pointsize>
-               <weight>50</weight>
                <italic>false</italic>
                <bold>false</bold>
               </font>
@@ -1602,7 +1595,6 @@
              <font>
               <family>Roboto</family>
               <pointsize>9</pointsize>
-              <weight>50</weight>
               <italic>false</italic>
               <bold>false</bold>
              </font>
@@ -1708,8 +1700,9 @@
     <addaction name="separator"/>
     <addaction name="showInterpreter"/>
     <addaction name="actionPreferences"/>
+    <addaction name="showUsdValidation"/>
     <addaction name="showDebugFlags"/>
-    <addaction name="showHydraSceneBrowser"/>
+    <addaction name="showHydraSceneDebugger"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -2294,6 +2287,20 @@
    </property>
    <property name="shortcut">
     <string>I</string>
+   </property>
+  </action>
+  <action name="showUsdValidation">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>USD Validation</string>
+   </property>
+   <property name="toolTip">
+    <string>Show USD Validation Widget</string>
+   </property>
+   <property name="shortcut">
+    <string>V</string>
    </property>
   </action>
   <action name="showDebugFlags">
@@ -2980,9 +2987,9 @@
     <string>F</string>
    </property>
   </action>
-  <action name="showHydraSceneBrowser">
+  <action name="showHydraSceneDebugger">
    <property name="text">
-    <string>Hydra Scene Browser</string>
+    <string>Hydra Scene Debugger</string>
    </property>
   </action>
   <actiongroup name="actionGroupCameraMask">

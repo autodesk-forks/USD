@@ -11,9 +11,11 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/vt/api.h"
+#include "pxr/base/vt/traits.h"
 #include "pxr/base/vt/value.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/functionRef.h"
 #include "pxr/base/tf/hash.h"
 #include "pxr/base/tf/mallocTag.h"
 
@@ -21,8 +23,15 @@
 #include <iosfwd>
 #include <map>
 #include <memory>
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+// VtDictionary can compose over itself and must support value transforms in
+// general, since it can contain values that support transforms.
+class VtDictionary;
+VT_VALUE_TYPE_CAN_COMPOSE(VtDictionary);
+VT_VALUE_TYPE_CAN_TRANSFORM(VtDictionary);
 
 /// \defgroup group_vtdict_functions VtDictionary Functions
 /// Functions for manipulating VtDictionary objects.
@@ -313,6 +322,59 @@ public:
     VT_API
     std::pair<iterator, bool> insert(const value_type& obj);
 
+    /// Attempts to insert \p value into the \p VtDictionary at \p key.
+    template<class... Args>
+    std::pair<iterator, bool>
+    try_emplace(const key_type& key, 
+                Args&&... args)
+    {
+        TfAutoMallocTag tag("Vt", "VtDictionary::try_emplace");
+        _CreateDictIfNeeded();
+        std::pair<_Map::iterator, bool> inserted = 
+            _dictMap->try_emplace(key, std::forward<Args>(args)...);
+        return {iterator(_dictMap.get(), inserted.first), inserted.second};
+    }
+
+    /// Attempts to insert \p value into the \p VtDictionary at \p key.
+    template<class... Args>
+    std::pair<iterator, bool>
+    try_emplace(key_type&& key, 
+                Args&&... args)
+    {
+        TfAutoMallocTag tag("Vt", "VtDictionary::try_emplace");
+        _CreateDictIfNeeded();
+        std::pair<_Map::iterator, bool> inserted = 
+            _dictMap->try_emplace(std::move(key), std::forward<Args>(args)...);
+        return {iterator(_dictMap.get(), inserted.first), inserted.second};
+    }
+
+    /// Inserts or assigns \p value into the \p VtDictionary at \p key.
+    template<class... Args>
+    std::pair<iterator, bool> 
+    insert_or_assign(const key_type& key, 
+                     Args&&... args)
+    {
+        TfAutoMallocTag tag("Vt", "VtDictionary::insert_or_assign");
+        _CreateDictIfNeeded();
+        std::pair<_Map::iterator, bool> inserted = 
+            _dictMap->insert_or_assign(key, std::forward<Args>(args)...);
+        return {iterator(_dictMap.get(), inserted.first), inserted.second};
+    }
+
+    /// Inserts or assigns \p value into the \p VtDictionary at \p key.
+    template<class... Args>
+    std::pair<iterator, bool> 
+    insert_or_assign(key_type&& key, 
+                     Args&&... args)
+    {
+        TfAutoMallocTag tag("Vt", "VtDictionary::insert_or_assign");
+        _CreateDictIfNeeded();
+        std::pair<_Map::iterator, bool> inserted = 
+            _dictMap->insert_or_assign(
+                std::move(key), std::forward<Args>(args)...);
+        return {iterator(_dictMap.get(), inserted.first), inserted.second};
+    }
+
     /// Return a pointer to the value at \p keyPath if one exists.  \p keyPath
     /// is a delimited string of sub-dictionary names.  Key path elements are
     /// produced by calling TfStringTokenize() with \p keyPath and
@@ -373,6 +435,7 @@ private:
         std::vector<std::string>::const_iterator curKeyElem,
         std::vector<std::string>::const_iterator keyElemEnd);
 
+    VT_API
     void _CreateDictIfNeeded();
 
 };
@@ -579,14 +642,9 @@ VtDictionaryOver(const VtDictionary &strong, VtDictionary *weak,
 /// subdict, too, will contain values from \a weak that are not found in \a
 /// strong.
 ///
-/// If \p coerceToWeakerOpinionType is \c true then coerce a strong value to
-/// the weaker value's type, if there is a weaker value.  This is mainly
-/// intended to promote to enum types.
-///
 /// \ingroup group_vtdict_functions
 VT_API VtDictionary
-VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType = false);
+VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak);
 
 /// Updates \p strong to become \p strong composed recursively over \p weak.
 ///
@@ -600,14 +658,9 @@ VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak,
 /// recursive call to this method in which \a strong's subdictionary will have
 /// entries added if they are contained in \a weak but not in \a strong
 ///
-/// If \p coerceToWeakerOpinionType is \c true then coerce a strong value to
-/// the weaker value's type, if there is a weaker value.  This is mainly
-/// intended to promote to enum types.
-///
 /// \ingroup group_vtdict_functions
 VT_API void
-VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType = false);
+VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak);
 
 /// Updates \p weak to become \p strong composed recursively over \p weak.
 ///
@@ -621,18 +674,12 @@ VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
 /// weak's subdictionary is recursively overlayed by \a strong's
 /// subdictionary.
 ///
-/// The result is that no key/value pairs of \a will be lost in nested
+/// The result is that no key/value pairs of \a weak will be lost in nested
 /// dictionaries. Rather, only non-dictionary values will be overwritten
-///
-/// If \p coerceToWeakerOpinionType is \c true then coerce a strong value to
-/// the weaker value's type, if there is a weaker value.  This is mainly
-/// intended to promote to enum types.
 ///
 /// \ingroup group_vtdict_functions
 VT_API void
-VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak,
-                          bool coerceToWeakerOpinionType = false);
-
+VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak);
 
 struct VtDictionaryHash {
     inline size_t operator()(VtDictionary const &dict) const {

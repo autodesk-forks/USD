@@ -51,6 +51,14 @@
     #define ARCH_PRAGMA_STRINGOP_OVERFLOW \
         _Pragma("GCC diagnostic ignored \"-Wstringop-overflow=\"")
 
+    #define ARCH_PRAGMA_ARRAY_BOUNDS \
+        _Pragma("GCC diagnostic ignored \"-Warray-bounds\"")
+
+    #if ARCH_COMPILER_GCC_MAJOR >= 13
+        #define ARCH_PRAGMA_SELF_MOVE \
+            _Pragma("GCC diagnostic ignored \"-Wself-move\"")
+    #endif
+
 #elif defined(ARCH_COMPILER_CLANG)
 
     #define ARCH_PRAGMA_PUSH \
@@ -87,6 +95,12 @@
 
     #define ARCH_PRAGMA_INSTANCE_METHOD_NOT_FOUND \
         _Pragma("clang diagnostic ignored \"-Wobjc-method-access\"")
+
+    #define ARCH_PRAGMA_SELF_MOVE \
+        _Pragma("clang diagnostic ignored \"-Wself-move\"")
+
+    #define ARCH_PRAGMA_SELF_ASSIGN_OVERLOADED \
+        _Pragma("clang diagnostic ignored \"-Wself-assign-overloaded\"")
 
 #elif defined(ARCH_COMPILER_MSVC)
 
@@ -134,7 +148,7 @@
     #define ARCH_PRAGMA_DESTRUCTOR_IMPLICIT_DEFINE \
         __pragma(warning(disable:4624))
 
-    #define ARCH_PRAGMA_DEPRECATED_POSIX_NAME \
+    #define ARCH_PRAGMA_DEPRECATED \
         __pragma(warning(disable:4996)) 
 
     #define ARCH_PRAGMA_FORCING_TO_BOOL \
@@ -191,6 +205,10 @@
     #define ARCH_PRAGMA_STRINGOP_OVERFLOW
 #endif
 
+#if !defined ARCH_PRAGMA_ARRAY_BOUNDS
+    #define ARCH_PRAGMA_ARRAY_BOUNDS
+#endif
+
 #if !defined ARCH_PRAGMA_UNUSED_PRIVATE_FIELD
     #define ARCH_PRAGMA_UNUSED_PRIVATE_FIELD
 #endif
@@ -227,8 +245,8 @@
     #define ARCH_PRAGMA_DESTRUCTOR_IMPLICIT_DEFINE
 #endif
 
-#if !defined ARCH_PRAGMA_DEPRECATED_POSIX_NAME
-    #define ARCH_PRAGMA_DEPRECATED_POSIX_NAME
+#if !defined ARCH_PRAGMA_DEPRECATED
+    #define ARCH_PRAGMA_DEPRECATED
 #endif
 
 #if !defined ARCH_PRAGMA_FORCING_TO_BOOL
@@ -257,6 +275,14 @@
 
 #if !defined ARCH_PRAGMA_NON_EXPORTED_BASE_CLASS
     #define ARCH_PRAGMA_NON_EXPORTED_BASE_CLASS
+#endif
+
+#if !defined ARCH_PRAGMA_SELF_MOVE
+    #define ARCH_PRAGMA_SELF_MOVE
+#endif
+
+#if !defined ARCH_PRAGMA_SELF_ASSIGN_OVERLOADED
+    #define ARCH_PRAGMA_SELF_ASSIGN_OVERLOADED
 #endif
 
 #endif // PXR_BASE_ARCH_PRAGMAS_H

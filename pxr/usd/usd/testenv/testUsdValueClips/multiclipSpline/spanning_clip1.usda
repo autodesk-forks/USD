@@ -1,0 +1,28 @@
+#usda 1.0
+
+def "Model"
+{
+    double attr1.spline = {
+        -5: -20; post linear,
+        -1: 0; post none,
+        2: 3; post held,
+        10: 10; post held,
+        11: 11; post held
+    }
+
+    double attr2.spline = {
+        1:0; post held,
+        5:5; post held,
+        pre: none,
+        post: none
+    }
+
+    double attr3.spline = {}
+
+    double attr4.spline = {
+        5:5; post linear,
+        10:10; post held,
+        pre: loop reset,
+        post: sloped(1)
+    }
+}

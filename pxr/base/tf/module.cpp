@@ -18,6 +18,7 @@ TF_WRAP_MODULE {
     // Diagnostic depends on Enum so must come after it.
     TF_WRAP( Diagnostic );
     TF_WRAP( DiagnosticBase );
+    TF_WRAP( DiagnosticTrap );
     TF_WRAP( EnvSetting );
     TF_WRAP( Error );
     TF_WRAP( Exception );
@@ -38,7 +39,6 @@ TF_WRAP_MODULE {
     TF_WRAP( StackTrace );
     TF_WRAP( Stopwatch );
     TF_WRAP( StringUtils );
-    TF_WRAP( TemplateString );
     TF_WRAP( Token );
     TF_WRAP( Type );
     TF_WRAP( Tf_TestPyAnnotatedBoolResult );

@@ -86,3 +86,22 @@ if (PXR_PREFER_SAFETY_OVER_SPEED)
 else()
    set(PXR_PREFER_SAFETY_OVER_SPEED "0")
 endif()
+
+# Set TSC timing configuration - use non-portable x86 TSC register for timing
+# (only affects x86 linux with gcc or clang compilers)
+if (PXR_ARCH_PREFER_TSC_TIMING)
+   set(PXR_ARCH_PREFER_TSC_TIMING "1")
+else()
+   set(PXR_ARCH_PREFER_TSC_TIMING "0")
+endif()
+
+# Setup CCache for C/C++ compilation
+if(PXR_ENABLE_COMPILER_CACHE)
+    find_program(COMPILER_CACHE_PROGRAM ${PXR_COMPILER_CACHE_NAME})
+    if(COMPILER_CACHE_PROGRAM)
+        set(CMAKE_C_COMPILER_LAUNCHER "${COMPILER_CACHE_PROGRAM}")
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${COMPILER_CACHE_PROGRAM}")
+    else ()
+        MESSAGE(STATUS "Compiler Caching disabled. Could not find ${PXR_COMPILER_CACHE_NAME}.")
+    endif()
+endif()

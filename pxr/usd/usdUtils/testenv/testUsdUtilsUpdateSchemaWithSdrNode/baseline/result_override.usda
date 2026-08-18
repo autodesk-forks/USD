@@ -50,6 +50,10 @@ class "TestSchemaAPI" (
         }
         displayGroup = "Basic"
         displayName = "Map Gamma"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Map Gamma"
+        }
     )
     float inputs:intensity = 1 (
         connectability = "interfaceOnly"
@@ -63,6 +67,10 @@ class "TestSchemaAPI" (
         }
         displayGroup = "Basic"
         displayName = "Intensity"
+        uiHints = {
+            string displayGroup = "Basic"
+            string displayName = "Intensity"
+        }
     )
     int inputs:intNotBool = 0
     color3f outputs:resultRGB

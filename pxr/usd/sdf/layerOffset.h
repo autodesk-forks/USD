@@ -11,13 +11,12 @@
 
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/api.h"
+#include "pxr/base/gf/timeCode.h"
 
 #include <iosfwd>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
-
-class SdfTimeCode;
 
 /// \class SdfLayerOffset 
 ///
@@ -47,8 +46,8 @@ public:
     /// @{
 
     /// Constructs a new SdfLayerOffset instance.
-    SDF_API
-    explicit SdfLayerOffset(double offset = 0.0, double scale = 1.0);
+    explicit SdfLayerOffset(double offset = 0.0, double scale = 1.0)
+        : _offset(offset), _scale(scale) {}
 
     /// @}
 
@@ -67,10 +66,17 @@ public:
     /// Sets the time scale factor.
     void SetScale(double newScale) { _scale = newScale; }
 
-    /// Returns \c true if this is an identity transformation, with
-    /// an offset of 0.0 and a scale of 1.0.
-    SDF_API
-    bool IsIdentity() const;
+    /// Returns \c true if this is an identity transformation, with an offset of
+    /// 0.0 and a scale of 1.0.  Note that for historical reasons this uses
+    /// operator==() against a default-constructed instance, which, as noted in
+    /// the documentation for equality comparison, is a "fuzzy" equality.
+    bool IsIdentity() const {
+        // Check for the common case of exact identity.
+        if (_offset == 0.0 && _scale == 1.0) {
+            return true;
+        }
+        return *this == SdfLayerOffset {};
+    }
 
     /// Returns \c true if this offset is valid, i.e. both the offset and
     /// scale are finite (not infinite or NaN).  Note that a valid layer
@@ -105,7 +111,11 @@ public:
     /// \name Operators
     /// @{
 
-    /// Returns whether the offsets are equal.
+    /// Returns whether the offsets are equal.  For historical reasons, this
+    /// performs a "fuzzy" equality comparison.  If neither `*this` nor `rhs`
+    /// are valid by IsValid(), return true.  If both are valid and their scales
+    /// and offsets are within an implementation-defined epsilon, return true.
+    /// Otherwise return false.
     SDF_API
     bool operator==(const SdfLayerOffset &rhs) const;
 
@@ -145,7 +155,7 @@ public:
 
     /// Applies the offset to the given value.
     SDF_API
-    SdfTimeCode operator*(const SdfTimeCode &rhs) const;
+    GfTimeCode operator*(const GfTimeCode &rhs) const;
 
     /// @}
 

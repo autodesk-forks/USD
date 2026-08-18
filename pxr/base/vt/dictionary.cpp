@@ -7,6 +7,8 @@
 
 #include "pxr/pxr.h"
 #include "pxr/base/vt/dictionary.h"
+#include "pxr/base/vt/valueComposeOver.h"
+#include "pxr/base/vt/valueTransform.h"
 
 #include "pxr/base/tf/iterator.h"
 #include "pxr/base/tf/mallocTag.h"
@@ -26,6 +28,75 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 TF_REGISTRY_FUNCTION(TfType) {
     TfType::Define<VtDictionary>();
+}
+
+static VtDictionary
+_OverBackground(VtDictionary const &strong, VtBackgroundType const &)
+{
+    VtDictionary result;
+    for (auto const &[key, val]: strong) {
+        if (auto compVal = VtValueTryComposeOver(val, VtBackground)) {
+            result.insert_or_assign(key, std::move(*compVal));
+        }
+        else {
+            result.insert_or_assign(key, val);
+        }
+    }
+    return result;
+}
+
+static std::optional<VtDictionary>
+_DictionaryTryTransform(
+    const VtDictionary &src, TfFunctionRef<VtValue (VtValueRef)> xform)
+{
+    if (src.empty()) {
+        return std::nullopt;
+    }
+    // Just count leading elements that didn't transform in hopes that we never
+    // have to populate dst.  If we discover an element that does transform,
+    // then we transform & copy any remaining elements from there, and tack on
+    // any leading elements we skipped after the fact.
+    size_t numLeadingNotXformed = 0;
+    VtDictionary dst;
+    for (auto const &[key, val]: src) {
+        auto optVal = xform(val);
+        if (!optVal.IsEmpty()) {
+            dst.insert_or_assign(key, std::move(optVal));
+        }
+        else if (!dst.empty()) {
+            dst.insert_or_assign(key, val);
+        }
+        else {
+            ++numLeadingNotXformed;
+        }
+    }
+    if (dst.empty()) {
+        return std::nullopt;
+    }
+    // We actually transformed elements, so the first numLeadingNotXformed from
+    // src that we skipped before we were certain must be copied over.
+    if (numLeadingNotXformed) {
+        for (auto const &[key, val]: src) {
+            dst.insert_or_assign(key, val);
+            if (--numLeadingNotXformed == 0) {
+                break;
+            }
+        }
+    }
+    return dst;
+}
+
+TF_REGISTRY_FUNCTION(VtValue)
+{
+    VtRegisterComposeOver(
+        +[](VtDictionary const &strong, VtDictionary const &weak) {
+            return VtDictionaryOverRecursive(strong, weak);
+        });
+
+    VtRegisterComposeOver(_OverBackground);
+
+    // Type-erased value transform for dictionaries.
+    VtRegisterErasedTransform(_DictionaryTryTransform);
 }
 
 TF_MAKE_STATIC_DATA(VtDictionary, _emptyDictionary) {
@@ -194,7 +265,7 @@ VtDictionary::_SetValueAtPathImpl(vector<string>::const_iterator curKeyElem,
 
     // Otherwise we'll create a new or modify an existing subdictionary at key
     // *curKeyElem.  Look up an existing value or insert a new dictionary.
-    iterator i = insert(make_pair(*curKeyElem, VtValue(VtDictionary()))).first;
+    iterator i = try_emplace(*curKeyElem, VtValue(VtDictionary())).first;
 
     // Swap the value at curKeyElem with newDict.  In case a new dictionary was
     // inserted above, this is a noop swap.  In case the existing element is not
@@ -311,15 +382,17 @@ VtDictionaryOver(VtDictionary *strong, const VtDictionary &weak,
         TF_CODING_ERROR("VtDictionaryOver: NULL dictionary pointer.");
         return;
     }
-    strong->insert(weak.begin(), weak.end());
 
     if (coerceToWeakerOpinionType) {
-        TF_FOR_ALL(i, *strong) {
-            VtDictionary::const_iterator j = weak.find(i->first);
-            if (j != weak.end()) {
-                i->second.CastToTypeOf(j->second);
+        for (auto const &[weakKey, weakValue] : weak) {
+            if (auto [strongIt, inserted] 
+                = strong->try_emplace(weakKey, weakValue); !inserted) {
+                strongIt->second.CastToTypeOf(weakValue);
             }
         }
+    } else {
+        // insert will skip existing entries in strong.
+        strong->insert(weak.begin(), weak.end());
     }
 }
 
@@ -331,119 +404,74 @@ VtDictionaryOver(const VtDictionary &strong, VtDictionary *weak,
         TF_CODING_ERROR("VtDictionaryOver: NULL dictionary pointer");
         return;
     }
+
     if (coerceToWeakerOpinionType) {
-        TF_FOR_ALL(it, strong) {
-            VtDictionary::iterator j = weak->find(it->first);
-            if (j == weak->end()) {
-                weak->insert(*it);
-            }
-            else {
-                j->second = VtValue::CastToTypeOf(it->second, j->second);
+        for (auto const &[strongKey, strongValue] : strong) {
+            if (auto [weakIt, inserted] 
+                = weak->try_emplace(strongKey, strongValue); !inserted) {
+                weakIt->second = 
+                    VtValue::CastToTypeOf(strongValue, weakIt->second);
             }
         }
-    }
-    else {
-        // Can't use map::insert here, because that doesn't overwrite
-        // values for keys in strong that are already in weak.
-        TF_FOR_ALL(it, strong) {
-            (*weak)[it->first] = it->second;
+    } else {
+        // Overwrite values for keys in strong that are already in weak.
+        for (auto const &[strongKey, strongValue] : strong) {
+            weak->insert_or_assign(strongKey, strongValue);
         }
     }
 }
 
 VtDictionary
-VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType)
+VtDictionaryOverRecursive(const VtDictionary &strong, const VtDictionary &weak)
 {
     VtDictionary result = strong;
-    VtDictionaryOverRecursive(&result, weak, coerceToWeakerOpinionType);
+    VtDictionaryOverRecursive(&result, weak);
     return result;
 }
 
 void
-VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak,
-                          bool coerceToWeakerOpinionType)
+VtDictionaryOverRecursive(VtDictionary *strong, const VtDictionary &weak)
 {
     if (!strong) {
         TF_CODING_ERROR("VtDictionaryOverRecursive: NULL dictionary pointer.");
         return;
     }
 
-    TF_FOR_ALL(it, weak) {
-        // If both dictionaries have values that are in turn dictionaries, 
-        // recurse:
-        if (VtDictionaryIsHolding<VtDictionary>(*strong, it->first) &&
-            VtDictionaryIsHolding<VtDictionary>(weak, it->first)) {
-
-            const VtDictionary &weakSubDict =
-                VtDictionaryGet<VtDictionary>(weak, it->first);
-
-            // Swap out the stored dictionary, mutate it, then swap it back in
-            // place.  This avoids expensive copying.  There may still be a copy
-            // if the VtValue storage is shared.
-            VtDictionary::iterator i = strong->find(it->first);
-            VtDictionary strongSubDict;
-            i->second.Swap(strongSubDict);
-            // Modify the extracted dict.
-            VtDictionaryOverRecursive(&strongSubDict, weakSubDict);
-            // Swap the modified dict back into place.
-            i->second.Swap(strongSubDict);
-
-        } else {
-            // Insert will set strong with value from weak only if 
-            // strong does not already have a value for that key.
-            std::pair<VtDictionary::iterator, bool> result =strong->insert(*it);
-            if (!result.second && coerceToWeakerOpinionType) {
-                result.first->second.CastToTypeOf(it->second);
+    for (auto const &[key, weakVal]: weak) {
+        // Attempt to insert into strong.
+        if (auto [i, inserted] = strong->try_emplace(key, weakVal); !inserted) {
+            if (std::optional<VtValue> composed =
+                VtValueTryComposeOver(i->second, weakVal)) {
+                i->second = std::move(*composed);
             }
         }
     }
 }
 
 void
-VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak,
-                          bool coerceToWeakerOpinionType)
+VtDictionaryOverRecursive(const VtDictionary &strong, VtDictionary *weak)
 {
     if (!weak) {
         TF_CODING_ERROR("VtDictionaryOverRecursive: NULL dictionary pointer.");
         return;
     }
 
-    TF_FOR_ALL(it, strong) {
-        // If both dictionaries have values that are in turn dictionaries, 
-        // recurse:
-        if (VtDictionaryIsHolding<VtDictionary>(strong, it->first) &&
-            VtDictionaryIsHolding<VtDictionary>(*weak, it->first)) {
-
-            VtDictionary const &strongSubDict =
-                VtDictionaryGet<VtDictionary>(strong, it->first);
-
-            // Swap out the stored dictionary, mutate it, then swap it back in
-            // place.  This avoids expensive copying.  There may still be a copy
-            // if the VtValue storage is shared.
-            VtDictionary::iterator i = weak->find(it->first);
-            VtDictionary weakSubDict;
-            i->second.Swap(weakSubDict);
-            // Modify the extracted dict.
-            VtDictionaryOverRecursive(strongSubDict, &weakSubDict);
-            // Swap the modified dict back into place.
-            i->second.Swap(weakSubDict);
-
-        } else if (coerceToWeakerOpinionType) {
-            // Else stomp over weak with strong but with type coersion.
-            VtDictionary::iterator j = weak->find(it->first);
-            if (j == weak->end()) {
-                weak->insert(*it);
-            } else {
-                j->second = VtValue::CastToTypeOf(it->second, j->second);
+    for (auto const &[key, strongVal]: strong) {
+        // Attempt to insert into weak.
+        if (auto [i, inserted] = weak->try_emplace(key, strongVal); !inserted) {
+            // If we can compose the strong value over the weak, do so and store
+            // the result in weak.
+            if (std::optional<VtValue> composed =
+                VtValueTryComposeOver(strongVal, i->second)) {
+                i->second = std::move(*composed);
             }
-        } else {
-            // Else stomp over weak with strong
-            (*weak)[it->first] = it->second;
+            else {
+                // Otherwise replace the element in weak.
+                i->second = strongVal;
+            }
         }
     }
 }
-
 
 bool operator==(VtDictionary const &lhs, VtDictionary const &rhs)
 {
@@ -488,4 +516,3 @@ operator<<(std::ostream &stream, VtDictionary const &dict)
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
-

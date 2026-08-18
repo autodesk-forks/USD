@@ -41,6 +41,8 @@ private:
         Exec_CompilationState &compilationState,
         TaskPhases &taskPhases) override;
 
+    void _Interrupt(Exec_CompilationState &compilationState) override;
+
 private:
     // The input to be recompiled.
     VdfInput *const _input;
@@ -50,8 +52,8 @@ private:
     TfSmallVector<EsfJournal, 1> _journalPerInputKey;
 
     // The new source outputs for the input, one set for each input key.
-    using _SourceOutputs = TfSmallVector<VdfMaskedOutput, 1>;
-    TfSmallVector<_SourceOutputs, 1> _resultOutputsPerInputKey;
+    TfSmallVector<
+        TfSmallVector<VdfMaskedOutput, 1>, 1> _resultOutputsPerInputKey;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

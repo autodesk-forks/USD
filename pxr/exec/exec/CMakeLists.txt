@@ -12,11 +12,8 @@ pxr_library(exec
         usd
         vdf
         vt
-        ${TBB_tbb_LIBRARY}
+        TBB::tbb
 
-    INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
-        
     PUBLIC_HEADERS
         api.h
         providerResolution.h
@@ -24,6 +21,7 @@ pxr_library(exec
         request.h
         types.h
         valueExtractorFunction.h
+        valueOverride.h
 
     PUBLIC_CLASSES
         builtinComputations
@@ -35,19 +33,20 @@ pxr_library(exec
         systemChangeProcessor
         systemDiagnostics
         typeRegistry
+        validationError
         valueKey
 
     PRIVATE_HEADERS
-        authoredValueInvalidationResult.h
         compilationState.h
-        disconnectedInputsInvalidationResult.h
         inputKey.h
-        parallelForRange.h
+        invalidationResult.h
         timeChangeInvalidationResult.h
 
     PRIVATE_CLASSES
         attributeInputNode
         builtinAttributeComputations
+        builtinComputationRegistry
+        builtinObjectComputations
         builtinStageComputations
         callbackNode
         compilationTask
@@ -55,21 +54,28 @@ pxr_library(exec
         compiledOutputCache
         compiler
         compilerTaskSync
+        compilerTaskSyncBase
         computationDefinition
+        constantValueNode
+        cycleDetectingTask
         definitionRegistry
         inputRecompilationTask
         inputResolver
         inputResolvingCompilationTask
+        interruptState
         leafCompilationTask
+        metadataInputNode
         nodeRecompilationInfo
         nodeRecompilationInfoTable
         outputKey
         outputProvidingCompilationTask
         pluginComputationDefinition
+        pluginData
+        privateBuiltinComputations
         program
-        registrationBarrier
         requestTracker
         runtime
+        taskCycleDetector
         uncompilationRuleSet
         uncompilationTable
         uncompilationTarget
@@ -80,7 +86,9 @@ pxr_library(exec
         plugInfo.json
 
     DOXYGEN_FILES
-        README.md        
+        README.md 
+        docs/executionSystemDesign.md
+        docs/images/executionSystemDesignEngineArchitecture.drawio.svg       
 )
 
 #
@@ -121,29 +129,25 @@ pxr_build_test_shared_lib(TestExecConflictingPluginRegistration2
 
 # Build tests
 
-pxr_build_test(testExecComputationRegistration
-    LIBRARIES
-        ef
-        esf
-        esfUsd
-        exec
-        plug
-        sdf
-        tf
-        usd
-    CPPFILES
-        testenv/testExecComputationRegistration.cpp
-)
-
 # Tests that rely on plugins aren't currently supported in static builds.
 if (BUILD_SHARED_LIBS)
-    pxr_install_test_dir(
-        SRC testenv/testExecComputationRegistration
-        DEST testExecComputationRegistration
+    pxr_build_test(testExecComputationRegistration
+        LIBRARIES
+            ef
+            esf
+            esfUsd
+            exec
+            plug
+            sdf
+            tf
+            usd
+        CPPFILES
+            testenv/testExecComputationRegistration.cpp
     )
 
     pxr_register_test(testExecComputationRegistration
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecComputationRegistration"
+        TESTENV testenv/testExecComputationRegistration
         EXPECTED_RETURN_CODE 0
     )
 endif()
@@ -162,13 +166,9 @@ pxr_build_test(testExecInputResolver
         testenv/testExecInputResolver.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecInputResolver
-    DEST testExecInputResolver
-)
-
 pxr_register_test(testExecInputResolver
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecInputResolver"
+    TESTENV testenv/testExecInputResolver
     EXPECTED_RETURN_CODE 0
 )
 

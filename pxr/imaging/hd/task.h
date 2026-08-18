@@ -40,7 +40,8 @@ using HdTaskContext =
 /// Developers can subclass HdTask to prepare resources, run 3d renderpasses, 
 /// run 2d renderpasses such as compositing or color correction, or coordinate 
 /// integration with the application or other renderers.
-class HdTask {
+class HdTask
+{
 public:
     /// Construct a new task.
     /// If the task is going to be added to the render index, id
@@ -52,6 +53,18 @@ public:
 
     HD_API
     virtual ~HdTask();
+
+    /// This function returns true when a (progressive) task considers its
+    /// execution results converged. Usually this means that a progressive
+    /// render delegate is finished rendering into the HdRenderBuffers used by
+    /// this task.
+    /// Returns true by default which is a good default for rasterizers.
+    ///
+    /// Applications with data-driven task lists can determine their convergence
+    /// state by determining which tasks are HdxTasks and then querying
+    /// specifically those tasks for IsConverged.
+    HD_API
+    virtual bool IsConverged() const;
 
     /// Sync Phase:  Obtain task state from Scene delegate based on
     /// change processing.

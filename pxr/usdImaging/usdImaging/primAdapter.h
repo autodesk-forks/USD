@@ -453,6 +453,18 @@ public:
                               UsdTimeCode time) const;
 
     // ---------------------------------------------------------------------- //
+    /// \name Volume Params
+    // ---------------------------------------------------------------------- //
+
+    USDIMAGING_API
+    virtual VtValue
+    GetVolumeParamValue(
+        const UsdPrim& prim,
+        const SdfPath& cachePath,
+        const TfToken& paramName,
+        UsdTimeCode time) const;
+
+    // ---------------------------------------------------------------------- //
     /// \name Light Params
     // ---------------------------------------------------------------------- //
 
@@ -784,7 +796,13 @@ protected:
     USDIMAGING_API
     bool _IsPrimvarFilteringNeeded() const;
 
-    // Returns the shader source type from the render delegate.
+    /// Returns the shading systems from the render delegate.
+    USDIMAGING_API
+    TfTokenVector _GetShadingSystems() const;
+
+    /// Returns the shader source type from the render delegate.
+    ///
+    /// \deprecated in favor of _GetShadingSystems
     USDIMAGING_API
     TfTokenVector _GetShaderSourceTypes() const;
 

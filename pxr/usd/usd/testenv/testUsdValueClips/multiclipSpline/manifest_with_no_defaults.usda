@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Model" {
+    double missingAll.spline = {}
+    double missingFirst.spline = {}
+    double missingMiddle.spline = {}
+    double missingLast.spline = {}
+
+    # Checks that the clip active at 2.0 is skipped though missingMiddle2
+    # still defines a spline in that clip
+    double missingMiddle2.spline = { 2: 0; post none }
+
+    double missingLast2.spline = {}
+    double missingFirst2.spline = {}
+}

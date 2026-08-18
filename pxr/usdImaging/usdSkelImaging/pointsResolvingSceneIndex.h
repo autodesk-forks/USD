@@ -70,6 +70,9 @@ private:
         HdSceneIndexObserver::RemovedPrimEntries * removedEntries,
         HdSceneIndexObserver::DirtiedPrimEntries * dirtiedEntries);
 
+    const TfTokenVector &_GetResolvedPrimComputations(
+        const SdfPath &primPath) const;
+
     // Helper to process dirtied prim entries.
     bool _ProcessDirtyLocators(
         const SdfPath &primPath,
@@ -84,16 +87,14 @@ private:
     // affected by a skeleton, construct the resolving data source,
     // store it, update the dependencies.
     bool _AddResolvedPrim(
-        const SdfPath &path,
-        bool * hasExtComputations = nullptr);
+        const SdfPath &path);
     void _AddDependenciesForResolvedPrim(
         const SdfPath &primPath,
         _DsHandle const &resolvedPrim);
 
     // Remove from _pathToResolvedPrim and dependencies.
     bool _RemoveResolvedPrim(
-        const SdfPath &path,
-        bool * hadExtComputations = nullptr);
+        const SdfPath &path);
     void _RemoveDependenciesForResolvedPrim(
         const SdfPath &primPath,
         _DsHandle const &resolvedPrim);
@@ -126,6 +127,9 @@ private:
     std::map<SdfPath, SdfPathSet> _skelPathToPrimPaths;
     // Same for blend shapes.
     std::map<SdfPath, SdfPathSet> _blendShapePathToPrimPaths;
+    // Instancer to prims that it instances, that are in a prototype with
+    // skelBinding:hasSkelRoot and that are posed by a skeleton.
+    std::map<SdfPath, SdfPathSet> _instancerPathToPrimPaths;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

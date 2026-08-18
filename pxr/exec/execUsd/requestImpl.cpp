@@ -10,6 +10,7 @@
 #include "pxr/exec/execUsd/request.h"
 #include "pxr/exec/execUsd/system.h"
 #include "pxr/exec/execUsd/valueKey.h"
+#include "pxr/exec/execUsd/valueOverride.h"
 #include "pxr/exec/execUsd/visitValueKey.h"
 
 #include "pxr/base/work/loops.h"
@@ -18,6 +19,7 @@
 #include "pxr/exec/exec/builtinComputations.h"
 #include "pxr/exec/exec/debugCodes.h"
 #include "pxr/exec/exec/valueKey.h"
+#include "pxr/exec/exec/valueOverride.h"
 
 #include <tbb/concurrent_vector.h>
 
@@ -41,7 +43,7 @@ struct _ValueKeyVisitor
     }
 
     ExecValueKey operator()(
-        const ExecUsd_AttributeValueKey &key) const {
+        const ExecUsd_AttributeComputationValueKey &key) const {
         return ExecValueKey(
             EsfUsdSceneAdapter::AdaptObject(key.provider),
             key.computation);
@@ -62,12 +64,13 @@ struct _IsValidVisitor
         return false;
     }
 
-    bool operator()(const ExecUsd_AttributeValueKey &key) const {
-        return key.provider.IsValid();
+    bool operator()(const ExecUsd_AttributeComputationValueKey &key) const {
+        return key.provider.IsValid() &&
+            UsdPrimDefaultPredicate(key.provider.GetPrim());
     }
 
     bool operator()(const ExecUsd_PrimComputationValueKey &key) const {
-        return key.provider.IsValid();
+        return key.provider.IsValid() && UsdPrimDefaultPredicate(key.provider);
     }
 };
 
@@ -79,8 +82,8 @@ struct _DebugStringVisitor
     }
 
     std::string operator()(
-        const ExecUsd_AttributeValueKey &key) const {
-        return _Format("[attr]", key.provider.GetPath(), key.computation);
+        const ExecUsd_AttributeComputationValueKey &key) const {
+        return _Format("[attribute]", key.provider.GetPath(), key.computation);
     }
 
     std::string operator()(
@@ -155,12 +158,31 @@ ExecUsd_RequestImpl::Compute()
     return ExecUsdCacheView(_Compute());
 }
 
+ExecUsdCacheView
+ExecUsd_RequestImpl::ComputeWithOverrides(
+    ExecUsdValueOverrideVector &&valueOverrides)
+{
+    // Transform ExecUsdValueOverrides into ExecValueOverrides.
+    ExecValueOverrideVector execValueOverrides;
+    execValueOverrides.reserve(valueOverrides.size());
+    for (ExecUsdValueOverride &valueOverride : valueOverrides) {
+        execValueOverrides.push_back({
+            ExecUsd_VisitValueKey(_ValueKeyVisitor{}, valueOverride.valueKey),
+            std::move(valueOverride.overrideValue)
+        });
+    }
+
+    return ExecUsdCacheView(
+        _ComputeWithOverrides(std::move(execValueOverrides)));
+}
+
 void
 ExecUsd_ExpireValueKey(ExecUsdValueKey *uvk)
 {
     auto& key = uvk->_key;
 
-    if (const auto *attrKey = std::get_if<ExecUsd_AttributeValueKey>(&key)) {
+    if (const auto *attrKey =
+            std::get_if<ExecUsd_AttributeComputationValueKey>(&key)) {
         key = ExecUsd_ExpiredValueKey{
             attrKey->provider.GetPath(), std::move(attrKey->computation)};
     }

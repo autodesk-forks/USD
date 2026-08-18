@@ -6,6 +6,7 @@
 //
 #include "pxr/usdImaging/usdImaging/niPrototypePropagatingSceneIndex.h"
 
+#include "pxr/usdImaging/usdImaging/dataSourceRelocatingSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/flattenedDataSourceProviders.h"
 #include "pxr/usdImaging/usdImaging/niInstanceAggregationSceneIndex.h"
 #include "pxr/usdImaging/usdImaging/niPrototypePruningSceneIndex.h"
@@ -16,8 +17,12 @@
 #include "pxr/imaging/hd/dataSourceHash.h"
 #include "pxr/imaging/hd/flatteningSceneIndex.h"
 #include "pxr/imaging/hd/mergingSceneIndex.h"
+#include "pxr/imaging/hd/primvarsSchema.h"
 #include "pxr/imaging/hd/sceneIndexPrimView.h"
+#include "pxr/imaging/hd/skinningSettings.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
+
+#include "pxr/usd/usdSkel/tokens.h"
 
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/tf/envSetting.h"
@@ -36,19 +41,13 @@ TF_DEFINE_ENV_SETTING(USDIMAGING_SHOW_NATIVE_PROTOTYPE_SCENE_INDICES, false,
 class UsdImagingNiPrototypePropagatingSceneIndex::_SceneIndexCache
 {
 public:
-    _SceneIndexCache(HdSceneIndexBaseRefPtr const &inputSceneIndex,
+    _SceneIndexCache(HdSceneIndexBasePtr const &inputSceneIndex,
                      const TfTokenVector &instanceDataSourceNames,
                      const SceneIndexAppendCallback &sceneIndexAppendCallback)
       : _inputSceneIndex(inputSceneIndex)
       , _instanceDataSourceNames(instanceDataSourceNames)
       , _sceneIndexAppendCallback(sceneIndexAppendCallback)
     {
-    }
-
-    /// Input scene Index from UsdImagingNiPrototypePropagatingSceneIndex
-    /// (constructed for scene root).
-    HdSceneIndexBaseRefPtr const &GetInputSceneIndex() const {
-        return _inputSceneIndex;
     }
 
     struct SceneIndices {
@@ -165,6 +164,9 @@ private:
     _ComputeIsolatingSceneIndex(
         const TfToken &prototypeName) const
     {
+        if (!TF_VERIFY(_inputSceneIndex)) {
+            return nullptr;
+        }
         if (prototypeName.IsEmpty()) {
             return UsdImaging_NiPrototypePruningSceneIndex::New(
                 _inputSceneIndex);
@@ -216,6 +218,30 @@ private:
         HdSceneIndexBaseRefPtr const &prototypeSceneIndex,
         const bool forPrototype)
     {
+        if (HdSkinningSettings::IsSkinningDeferred() && !forPrototype) {
+            // Relocate skelBinding:animationSource to 
+            // primvars:skel:animationSource so the skel instances
+            // with different animationSource can be aggregated.
+            // This also allows it to be aggregated to the instancer as an
+            // instance primvar.
+            //
+            // We hardcode the skelBinding tokens here so we don't have to 
+            // introduce dependency to usdSkelImaging.
+            static const HdDataSourceLocator srcSkelAnimLocator(
+                TfToken("skelBinding"), TfToken("animationSource"));
+            // This instance primvar will later be picked up by 
+            // UsdSkelImagingDataSourceXformResolver::GetInstanceAnimationSource()
+            static const HdDataSourceLocator dstPrimvarLocator(
+                HdPrimvarsSchema::GetSchemaToken(), 
+                UsdSkelTokens->skelAnimationSource);
+
+            return UsdImaging_NiInstanceAggregationSceneIndex::New(
+                UsdImaging_DataSourceRelocatingSceneIndex::New(
+                    prototypeSceneIndex,
+                    srcSkelAnimLocator, dstPrimvarLocator,
+                    /* forNativeInstance */ true),
+                forPrototype, _instanceDataSourceNames);
+        }
         return
             UsdImaging_NiInstanceAggregationSceneIndex::New(
                 prototypeSceneIndex,
@@ -242,7 +268,7 @@ private:
         hashToSceneIndices->erase(it);
     }
 
-    HdSceneIndexBaseRefPtr const _inputSceneIndex;
+    const HdSceneIndexBasePtr _inputSceneIndex;
     const TfTokenVector _instanceDataSourceNames;
     const SceneIndexAppendCallback _sceneIndexAppendCallback;
 
@@ -295,31 +321,35 @@ UsdImagingNiPrototypePropagatingSceneIndex::New(
     const TfTokenVector &instanceDataSourceNames,
     const SceneIndexAppendCallback &sceneIndexAppendCallback)
 {
-    return _New(/* prototypeName = */ TfToken(),
+    return _New(inputSceneIndex,
+                /* prototypeName = */ TfToken(),
                 /* protoypeRootDs =*/ nullptr,
                 std::make_shared<_SceneIndexCache>(
-                    inputSceneIndex,
+                    HdSceneIndexBasePtr(inputSceneIndex),
                     instanceDataSourceNames,
                     sceneIndexAppendCallback));
 }
 
 UsdImagingNiPrototypePropagatingSceneIndexRefPtr
 UsdImagingNiPrototypePropagatingSceneIndex::_New(
+    HdSceneIndexBaseRefPtr const &inputSceneIndex,
     const TfToken &prototypeName,
     HdContainerDataSourceHandle const &prototypeRootOverlayDs,
     _SceneIndexCacheSharedPtr const &cache)
 {
     return TfCreateRefPtr(
         new UsdImagingNiPrototypePropagatingSceneIndex(
-            prototypeName, prototypeRootOverlayDs, cache));
+            inputSceneIndex, prototypeName, prototypeRootOverlayDs, cache));
 }
 
 UsdImagingNiPrototypePropagatingSceneIndex::
 UsdImagingNiPrototypePropagatingSceneIndex(
+        HdSceneIndexBaseRefPtr const &inputSceneIndex,
         const TfToken &prototypeName,
         HdContainerDataSourceHandle const &prototypeRootOverlayDs,
         _SceneIndexCacheSharedPtr const &cache)
-  : _prototypeName(prototypeName)
+  : _inputSceneIndex(inputSceneIndex)
+  , _prototypeName(prototypeName)
   , _prototypeRootOverlayDsHash(
       HdDataSourceHash(prototypeRootOverlayDs, 0.0f, 0.0f))
   , _cache(cache)
@@ -368,9 +398,13 @@ UsdImagingNiPrototypePropagatingSceneIndex::
     // deleting it anyway.
     _instancersToPropagatedPrototypeSceneIndex.clear();
     _instanceAggregationSceneIndex = nullptr;
-    // Note that the Hydra Scene Browser could potentially delay the
+    // Note that the Hydra Scene Debugger could potentially delay the
     // deletion of the merging scene index.
-    _mergingSceneIndex = nullptr;
+    {
+        TRACE_SCOPE("Deleting merging scene index");
+
+        _mergingSceneIndex = nullptr;
+    }
 
     // ... before we can garbage collect.
     _cache->GarbageCollect(_prototypeName, _prototypeRootOverlayDsHash);
@@ -442,6 +476,7 @@ UsdImagingNiPrototypePropagatingSceneIndex::_AddPrim(
     propagatedPrototypeSceneIndex =
         UsdImagingRerootingSceneIndex::New(
             UsdImagingNiPrototypePropagatingSceneIndex::_New(
+                _inputSceneIndex,
                 prototypeName,
                 // Apply the container data source from the binding scope
                 // to the prototype root.
@@ -508,7 +543,7 @@ UsdImagingNiPrototypePropagatingSceneIndex::GetInputScenes() const
     if (TfGetEnvSetting(USDIMAGING_SHOW_NATIVE_PROTOTYPE_SCENE_INDICES)) {
         return _mergingSceneIndex->GetInputScenes();
     } else {
-        return { _cache->GetInputSceneIndex() };
+        return { _inputSceneIndex };
     }
 }
 

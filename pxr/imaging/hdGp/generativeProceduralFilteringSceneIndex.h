@@ -7,6 +7,8 @@
 #ifndef PXR_IMAGING_HD_GP_GENERATIVE_PROCEDURAL_FILTERING_SCENE_INDEX_H
 #define PXR_IMAGING_HD_GP_GENERATIVE_PROCEDURAL_FILTERING_SCENE_INDEX_H
 
+#include "pxr/pxr.h"
+#include "pxr/imaging/hdGp/api.h"
 #include "pxr/imaging/hdGp/generativeProcedural.h"
 #include "pxr/imaging/hd/filteringSceneIndex.h"
 #include "pxr/usd/sdf/pathTable.h"
@@ -72,8 +74,17 @@ public:
                 allowedPrimTypeName, skippedPrimTypeName));
     }
 
+    HDGP_API
     HdSceneIndexPrim GetPrim(const SdfPath &primPath) const override;
+
+    HDGP_API
     SdfPathVector GetChildPrimPaths(const SdfPath &primPath) const override;
+
+    /// Sets the allowed procedural types, replacing the existing set.
+    /// Sends _PrimsAdded notices for all prims in the input scene so that
+    /// observers re-evaluate the (possibly changed) prim types.
+    HDGP_API
+    void SetAllowedProceduralTypes(const TfTokenVector &allowedProceduralTypes);
 
 private:
     HdGpGenerativeProceduralFilteringSceneIndex(
@@ -105,7 +116,13 @@ private:
     };
     _ShouldSkipResult _ShouldSkipPrim(HdSceneIndexPrim const& prim) const;
 
-    const TfTokenVector _allowedProceduralTypes;
+    // Returns the "allowed" type, "skipped" type, or `std::nullopt`.
+    std::optional<TfToken> _GetOverridePrimTypeForPrim(
+            HdSceneIndexPrim const& prim) const;
+
+    std::set<TfToken> _allowedProceduralTypes;
+    bool _allowAny = false;
+
     const TfToken _targetPrimTypeName;
 
     TfToken _allowedPrimTypeName;

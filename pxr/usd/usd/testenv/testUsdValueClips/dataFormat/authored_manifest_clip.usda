@@ -1,0 +1,18 @@
+#usda 1.0
+
+def "Model" {
+    float aTimeSamplesNonEmptyClip.timeSamples = { 1: 1 }
+    float aTimeSamplesPreActiveTime.timeSamples = {
+        -2: -2,
+        -1: -1,
+        0: 0,
+    }
+
+    float aSplineNonEmptyClip.spline = {1:1; post held}
+    float aSplinePreActiveTime.spline = {
+        -2: -2; post held,
+        -1: -1; post held,
+         0: 0; post held
+    }
+}
+

@@ -67,7 +67,7 @@ struct XidContinue
                 if (TfIsUtf8CodePointXidContinue(static_cast<uint32_t>(utf8_char.data)))
                 {
                     // it has the property we want, consume the input
-                    in.bump(utf8_char.size); 
+                    in.bump(utf8_char.size);
                     return true;
                 }
             }
@@ -80,24 +80,17 @@ struct XidContinue
 ////////////////////////////////////////////////////////////////////////
 // SdfPath grammar:
 
-struct Slash : PEGTL_NS::one<'/'> {};
-struct Dot : PEGTL_NS::one<'.'> {};
+struct Slash  : PEGTL_NS::one<'/'> {};
+struct Dot    : PEGTL_NS::one<'.'> {};
 struct DotDot : PEGTL_NS::two<'.'> {};
-
-struct AbsoluteRoot : Slash {};
-struct ReflexiveRelative : Dot {};
 
 struct DotDots : PEGTL_NS::list<DotDot, Slash> {};
 
-// valid identifiers start with an '_' character or anything in the XidStart
-// character class, then continue with zero or more characters in the
-// XidContinue character class
-struct Utf8IdentifierStart : PEGTL_NS::sor<
-    PEGTL_NS::one<'_'>,
-    XidStart> {};
-struct Utf8Identifier : PEGTL_NS::seq<
-    Utf8IdentifierStart,
-    PEGTL_NS::star<XidContinue>> {};
+// Valid identifiers start with '_' or XidStart, then zero or more XidContinue.
+struct Utf8IdentifierStart :
+        PEGTL_NS::sor<PEGTL_NS::one<'_'>, XidStart> {};
+struct Utf8Identifier :
+        PEGTL_NS::seq<Utf8IdentifierStart, PEGTL_NS::star<XidContinue>> {};
 
 struct PrimName : Utf8Identifier {};
 
@@ -105,85 +98,116 @@ struct PrimName : Utf8Identifier {};
 // names in SdfPaths, but variant sets in layers cannot have '-' in their names.
 // For now we preserve the behavior. Internal bug USD-8321 tracks removing
 // support for '-' characters in variant set names in SdfPath.
-struct VariantSetName :
-    PEGTL_NS::seq<Utf8IdentifierStart,
-    PEGTL_NS::star<PEGTL_NS::sor<
-    XidContinue, PEGTL_NS::one<'-'>>>> {};
+struct VariantSetName : PEGTL_NS::seq<
+    Utf8IdentifierStart,
+    PEGTL_NS::star<PEGTL_NS::sor<XidContinue, PEGTL_NS::one<'-'>>>> {};
 
-struct VariantName :
-    PEGTL_NS::seq<PEGTL_NS::opt<
-    PEGTL_NS::one<'.'>>, PEGTL_NS::star<
-    PEGTL_NS::sor<XidContinue,
-    PEGTL_NS::one<'|', '-'>>>> {};
+struct VariantName : PEGTL_NS::seq<
+    PEGTL_NS::opt<PEGTL_NS::one<'.'>>,
+    PEGTL_NS::star<PEGTL_NS::sor<XidContinue, PEGTL_NS::one<'|', '-'>>>> {};
 
-struct VarSelOpen : PEGTL_NS::pad<PEGTL_NS::one<'{'>, PEGTL_NS::blank> {};
+struct VarSelOpen  : PEGTL_NS::pad<PEGTL_NS::one<'{'>, PEGTL_NS::blank> {};
 struct VarSelClose : PEGTL_NS::pad<PEGTL_NS::one<'}'>, PEGTL_NS::blank> {};
+
+// Named so we can attach a targeted error_message.
+struct VariantSelEq : PEGTL_NS::pad<PEGTL_NS::one<'='>, PEGTL_NS::blank> {};
 
 struct VariantSelection : PEGTL_NS::if_must<
     VarSelOpen,
-    VariantSetName, PEGTL_NS::pad<PEGTL_NS::one<'='>, 
-    PEGTL_NS::blank>, PEGTL_NS::opt<VariantName>,
-    VarSelClose>
-{};
+    VariantSetName, VariantSelEq, PEGTL_NS::opt<VariantName>,
+    VarSelClose> {};
 
 struct VariantSelections : PEGTL_NS::plus<VariantSelection> {};
 
-template <class Rule, class Sep>
-struct LookaheadList : PEGTL_NS::seq<Rule, PEGTL_NS::star<
-    PEGTL_NS::at<Sep, Rule>, Sep, Rule>> {};
+// '/' and commit to requiring a following prim name.
+struct PrimStep : PEGTL_NS::if_must<Slash, PrimName> {};
+
+// Variant selection used as a name separator (foo{vs=sel}bar, no slash).  The
+// lookahead ensures we only enter this branch when a prim name immediately
+// follows the selection, so trailing variant selections fall through to
+// opt<VariantSelections> below.  Note: the lookahead parses
+// VariantSelections+PrimName twice; acceptable given the bounded syntax
+// involved.
+struct VsStep : PEGTL_NS::seq<
+    PEGTL_NS::at<PEGTL_NS::seq<VariantSelections, PrimName>>,
+    VariantSelections,
+    PrimName> {};
 
 struct PrimElts : PEGTL_NS::seq<
-    LookaheadList<PrimName, PEGTL_NS::sor<Slash, VariantSelections>>,
+    PrimName,
+    PEGTL_NS::star<PEGTL_NS::sor<VsStep, PrimStep>>,
     PEGTL_NS::opt<VariantSelections>> {};
 
-struct PropertyName : PEGTL_NS::list<Utf8Identifier, PEGTL_NS::one<':'>> {};
+// PropertyName broken into a step rule so ':' commits to requiring an
+// identifier after it, enabling a targeted error_message on PropertyNamePart.
+struct PropertyNamePart : Utf8Identifier {};
+struct PropertyNameSep :
+        PEGTL_NS::if_must<PEGTL_NS::one<':'>, PropertyNamePart> {};
+struct PropertyName :
+        PEGTL_NS::seq<Utf8Identifier, PEGTL_NS::star<PropertyNameSep>> {};
 
 struct MapperPath;
 struct TargetPath;
 
-struct TargetPathOpen : PEGTL_NS::one<'['> {};
+struct TargetPathOpen  : PEGTL_NS::one<'['> {};
 struct TargetPathClose : PEGTL_NS::one<']'> {};
 
 template <class TargPath>
-struct BracketPath : PEGTL_NS::if_must<TargetPathOpen, TargPath, TargetPathClose> {};
+struct BracketPath : PEGTL_NS::if_must<
+    TargetPathOpen, TargPath, TargetPathClose> {};
 
 struct RelationalAttributeName : PropertyName {};
 
-struct MapperKW : PXR_PEGTL_KEYWORD("mapper") {};
-
+struct MapperKW  : PXR_PEGTL_KEYWORD("mapper") {};
 struct MapperArg : PEGTL_NS::identifier {};
 
-struct MapperPathSeq : PEGTL_NS::if_must<
-    PEGTL_NS::seq<Dot, MapperKW>, BracketPath<MapperPath>,
-    PEGTL_NS::opt<Dot, MapperArg>> {};
+struct ExpressionKW : PXR_PEGTL_KEYWORD("expression") {};
 
-struct Expression : PXR_PEGTL_KEYWORD("expression") {};
+struct Mapper : PEGTL_NS::seq<
+    BracketPath<MapperPath>, PEGTL_NS::opt<PEGTL_NS::if_must<Dot, MapperArg>>
+    > {};
 
+struct MapperOrExpression : PEGTL_NS::sor<
+    ExpressionKW,
+    PEGTL_NS::if_must<MapperKW, Mapper>
+    > {};
+
+// '.' commits to requiring a property name.
 struct RelAttrSeq : PEGTL_NS::if_must<
-    PEGTL_NS::one<'.'>, RelationalAttributeName,
-    PEGTL_NS::opt<PEGTL_NS::sor<BracketPath<TargetPath>,
-            MapperPathSeq,
-            PEGTL_NS::if_must<Dot, Expression>>>> {};
+    Dot, RelationalAttributeName,
+    PEGTL_NS::opt<
+        PEGTL_NS::sor<
+            BracketPath<TargetPath>,
+            PEGTL_NS::if_must<Dot, MapperOrExpression>
+            >
+        >
+    > {};
 
-struct TargetPathSeq : PEGTL_NS::seq<BracketPath<TargetPath>, 
-    PEGTL_NS::opt<RelAttrSeq>> {};
+// '.' commits to requiring a property name.
+struct PropElts : PEGTL_NS::if_must<
+    Dot, PropertyName,
+    PEGTL_NS::opt<
+        PEGTL_NS::sor<
+            PEGTL_NS::seq<BracketPath<TargetPath>, PEGTL_NS::opt<RelAttrSeq>>,
+            PEGTL_NS::if_must<Dot, MapperOrExpression>
+            >
+        >
+    > {};
 
-struct PropElts :
-    PEGTL_NS::seq<PEGTL_NS::one<'.'>, PropertyName,
-        PEGTL_NS::opt<PEGTL_NS::sor<TargetPathSeq, MapperPathSeq,
-        PEGTL_NS::if_must<Dot, Expression>>>
-    >
-{};
+struct PathElts :
+    PEGTL_NS::if_then_else<PrimElts, PEGTL_NS::opt<PropElts>, PropElts> {};
 
-struct PathElts : PEGTL_NS::if_then_else<PrimElts, PEGTL_NS::opt<PropElts>, PropElts> {};
+struct PrimFirstPathElts :
+    PEGTL_NS::seq<PrimElts, PEGTL_NS::opt<PropElts>> {};
 
-struct PrimFirstPathElts : PEGTL_NS::seq<PrimElts, PEGTL_NS::opt<PropElts>> {};
+struct AbsoluteRoot      : Slash {};
+struct ReflexiveRelative : PEGTL_NS::seq<Dot, PEGTL_NS::eolf> {};
 
 struct Path : PEGTL_NS::sor<
     PEGTL_NS::seq<AbsoluteRoot, PEGTL_NS::opt<PrimFirstPathElts>>,
-    PEGTL_NS::seq<DotDots, PEGTL_NS::opt<PEGTL_NS::seq<Slash, PathElts>>>,
-    PathElts,
-    ReflexiveRelative
+    PEGTL_NS::seq<DotDots, PEGTL_NS::opt<PEGTL_NS::if_must<Slash, PathElts>>>,
+    ReflexiveRelative,
+    PathElts
     > {};
 
 struct TargetPath : Path {};
@@ -221,7 +245,7 @@ TfToken GetToken(Input const &in) {
 template <class Rule>
 struct Action : PEGTL_NS::nothing<Rule> {};
 
-} // Sdf_PathParser
+} // namespace Sdf_PathParser
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

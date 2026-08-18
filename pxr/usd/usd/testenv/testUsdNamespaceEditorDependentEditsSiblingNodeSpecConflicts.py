@@ -238,7 +238,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         # is expected to produce warnings.
         with self.ApplyEdits(editor,
                 "Move /Ref1/Child -> /Ref1/RenamedChild",
-                expectWarnings = True):
+                expectedWarnings = ['found conflicting specs']):
             self.assertTrue(editor.MovePrimAtPath(
                 '/Ref1/Child', '/Ref1/RenamedChild'))
 
@@ -434,7 +434,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         # referenced /Ref1
         with self.ApplyEdits(editor,
                 "Move /Ref1/RenamedChild -> /MovedChild_1",
-                expectWarnings = True):
+                expectedWarnings = ['found conflicting specs']):
             self.assertTrue(editor.MovePrimAtPath(
                 '/Ref1/RenamedChild', '/MovedChild_1'))
 
@@ -690,7 +690,7 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
         # referenced /Ref2
         with self.ApplyEdits(editor,
                 "Move /Ref2/RenamedChild -> /Ref2/ChildSibling/MovedChild_2",
-                expectWarnings = True):
+                expectedWarnings = ['found conflicting specs']):
             self.assertTrue(editor.MovePrimAtPath(
                 '/Ref2/RenamedChild', '/Ref2/ChildSibling/MovedChild_2'))
 
@@ -1361,7 +1361,8 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
 
         # Edit: Delete /Ref1/SharedChild_A
         with self.ApplyEdits(editor, "Delete /Ref1/SharedChild_A",
-                expectWarnings = True):
+                expectedWarnings = ['found conflicting specs',
+                                    'found conflicting specs']):
             self.assertTrue(editor.DeletePrimAtPath('/Ref1/SharedChild_A'))
 
         # The only composition arc to update is the one reference to 
@@ -1551,7 +1552,8 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
 
         # Edit: Delete /Ref1
         with self.ApplyEdits(editor, "Delete /Ref1",
-                expectWarnings = True):
+                expectedWarnings = ['found conflicting specs', 
+                                    'found conflicting specs']):
             self.assertTrue(editor.DeletePrimAtPath('/Ref1'))
 
         # This time /Prim1's reference to /Ref1 is removed as well as the 
@@ -1897,7 +1899,8 @@ class TestUsdNamespaceEditorDependentEditsBasicReferencesAndPayloads(
 
         # Edit: Delete /Ref1/Child
         with self.ApplyEdits(editor, "Delete /Ref1/Child",
-                expectWarnings = True):
+                expectedWarnings = ['found conflicting specs', 
+                                    'found conflicting specs']):
             self.assertTrue(editor.DeletePrimAtPath("/Ref1/Child"))
 
         # Verify that layer1's composition fields haven't changed as all its

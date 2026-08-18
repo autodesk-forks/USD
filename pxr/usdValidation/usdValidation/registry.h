@@ -11,6 +11,7 @@
 #include "pxr/base/tf/singleton.h"
 #include "pxr/usdValidation/usdValidation/api.h"
 #include "pxr/usdValidation/usdValidation/validator.h"
+#include "pxr/usdValidation/usdValidation/fixer.h"
 
 #include <memory>
 #include <shared_mutex>
@@ -112,19 +113,23 @@ PXR_NAMESPACE_OPEN_SCOPE
 ///
 /// Clients can also register validators by explicitly providing
 /// UsdValidationValidatorMetadata, instead of relying on plugInfo.json for the
-/// same. Though its recommended to use appropriate APIs when validator metadata
-/// is being provided in the plugInfo.json.
+/// same. Though it's recommended to use appropriate APIs when validator
+/// metadata is being provided in the plugInfo.json. And DidRegisterValidator
+/// notice is sent for validators registered by explicitly providing metadata,
+/// but not for plugin based registration since plugin validator metadata is
+/// already available to clients at registry initialization time.
 ///
-/// Example of validator registration by explicitly providing metadata, when its
-/// not available in the plugInfo.json:
+/// Example of validator registration by explicitly providing metadata, when
+/// it's not available in the plugInfo.json:
 ///
 /// ```cpp
 /// {
 ///     UsdValidationRegistry& registry = UsdValidationRegistry::GetInstance();
 ///     const UsdValidationValidatorMetadata &metadata =
-///     GetMetadataToBeRegistered(); const UsdValidateLayerTaskFn &layerTask =
-///     GetLayerTaskForValidator(); registry.RegisterValidator(metadata,
-///     layerTask);
+///         GetMetadataToBeRegistered();
+///     const UsdValidateLayerTaskFn &layerTask =
+///         GetLayerTaskForValidator();
+///     registry.RegisterValidator(metadata, layerTask);
 /// }
 /// ```
 ///
@@ -145,8 +150,21 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// the registry) or retrieving previously registered validator are designed to
 /// be thread-safe.
 ///
+/// Validators may also have a number of fixers associated with them, which
+/// can provide potential fixes for various validation errors associated with a
+/// validation task. Fixers can be retrieved from the UsdValidationValidator or
+/// the UsdValidationError itself. Note that UsdValidationRegistry does not
+/// manage fixers directly, and these are held by respective
+/// UsdValidationValidator(s). It's the responsibility of the client to retrieve
+/// appropriate fixers for a given error and apply them, on a provided
+/// UsdEditTarget. UsdValidationErrorSite(s) associated with a validation error
+/// provide the context of the error, which may be used while applying a fix on
+/// a UsdEditTarget, or a stronger layer can be used as an edit target to apply
+/// the fix.
+///
 /// \sa UsdValidationValidator
 /// \sa UsdValidationValidatorSuite
+/// \sa UsdValidationFixer
 class UsdValidationRegistry
 {
     UsdValidationRegistry(const UsdValidationRegistry &) = delete;
@@ -173,10 +191,17 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// \p fixers can be provided to associate fixers with the validator.
+    ///
+    /// Note that **no** UsdValidationNotice::DidRegisterValidator notice is
+    /// sent for plugin-based registration, since plugin validator metadata is
+    /// already available to clients at registry initialization time.
+    ///
     /// \sa HasValidator
     USDVALIDATION_API
     void RegisterPluginValidator(const TfToken &validatorName,
-                                 const UsdValidateLayerTaskFn &layerTaskFn);
+                                 const UsdValidateLayerTaskFn &layerTaskFn,
+                                 std::vector<UsdValidationFixer> fixers = {});
 
     /// Register UsdValidationValidator defined in a plugin using \p
     /// validatorName and \p stageTaskFn with the UsdValidationRegistry.
@@ -192,10 +217,17 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// \p fixers can be provided to associate fixers with the validator.
+    ///
+    /// Note that **no** UsdValidationNotice::DidRegisterValidator notice is
+    /// sent for plugin-based registration, since plugin validator metadata is
+    /// already available to clients at registry initialization time.
+    ///
     /// \sa HasValidator
     USDVALIDATION_API
     void RegisterPluginValidator(const TfToken &validatorName,
-                                 const UsdValidateStageTaskFn &stageTaskFn);
+                                 const UsdValidateStageTaskFn &stageTaskFn,
+                                 std::vector<UsdValidationFixer> fixers = {});
 
     /// Register UsdValidationValidator defined in a plugin using \p
     /// validatorName and \p primTaskFn with the UsdValidationRegistry.
@@ -211,17 +243,26 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// \p fixers can be provided to associate fixers with the validator.
+    ///
+    /// Note that **no** UsdValidationNotice::DidRegisterValidator notice is
+    /// sent for plugin-based registration, since plugin validator metadata is
+    /// already available to clients at registry initialization time.
+    ///
     /// \sa HasValidator
     USDVALIDATION_API
     void RegisterPluginValidator(const TfToken &validatorName,
-                                 const UsdValidatePrimTaskFn &primTaskFn);
+                                 const UsdValidatePrimTaskFn &primTaskFn,
+                                 std::vector<UsdValidationFixer> fixers = {});
 
     /// Register UsdValidationValidator using \p metadata and \p layerTaskFn
     /// with the UsdValidationRegistry.
     ///
     /// Clients can explicitly provide validator metadata, which is then used to
     /// register a validator and associate it with name metadata. The metadata
-    /// here is not specified in a plugInfo.
+    /// here is not specified in a plugInfo. Upon successful registration, the
+    /// validator's metadata becomes immediately available via registry query
+    /// methods such as GetAllValidatorMetadata, etc.
     ///
     /// Note calling RegisterValidator with a validator name which is already
     /// registered will result in a coding error. HasValidator can be used to
@@ -231,17 +272,34 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// \p fixers can be provided to associate fixers with the validator.
+    ///
+    /// A UsdValidationNotice::DidRegisterValidator notice is sent globally
+    /// after a successful registration of the validator, which clients can
+    /// listen to for dynamic discovery of newly registered validators. It is
+    /// important to note that this function should not be used from within a
+    /// plugin's TF_REGISTRY_FUNCTION, which could result in a listener to
+    /// respond to the notice causing potential unexpected behavior or deadlock,
+    /// since the plugin is still being loaded at that time. Instead use
+    /// RegisterPluginValidator APIs from within a plugin's
+    /// TF_REGISTRY_FUNCTION, which does not send out any notice, since plugin
+    /// validator metadata is already available to clients at registry
+    /// initialization time.
+    ///
     /// \sa HasValidator
     USDVALIDATION_API
     void RegisterValidator(const UsdValidationValidatorMetadata &metadata,
-                           const UsdValidateLayerTaskFn &layerTaskFn);
+                           const UsdValidateLayerTaskFn &layerTaskFn,
+                           std::vector<UsdValidationFixer> fixers = {});
 
     /// Register UsdValidationValidator using \p metadata and \p stageTaskFn
     /// with the UsdValidationRegistry.
     ///
     /// Clients can explicitly provide validator metadata, which is then used to
     /// register a validator and associate it with name metadata. The metadata
-    /// here is not specified in a plugInfo.
+    /// here is not specified in a plugInfo. Upon successful registration, the
+    /// validator's metadata becomes immediately available via registry query
+    /// methods such as GetAllValidatorMetadata, etc.
     ///
     /// Note calling RegisterValidator with a validator name which is already
     /// registered will result in a coding error. HasValidator can be used to
@@ -251,17 +309,26 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// \p fixers can be provided to associate fixers with the validator.
+    ///
+    /// A UsdValidationNotice::DidRegisterValidator notice is sent globally
+    /// after a successful registration of the validator, which clients can
+    /// listen to for dynamic discovery of newly registered validators.
+    ///
     /// \sa HasValidator
     USDVALIDATION_API
     void RegisterValidator(const UsdValidationValidatorMetadata &metadata,
-                           const UsdValidateStageTaskFn &stageTaskFn);
+                           const UsdValidateStageTaskFn &stageTaskFn,
+                           std::vector<UsdValidationFixer> fixers = {});
 
     /// Register UsdValidationValidator using \p metadata and \p primTaskFn
     /// with the UsdValidationRegistry.
     ///
     /// Clients can explicitly provide validator metadata, which is then used to
     /// register a validator and associate it with name metadata. The metadata
-    /// here is not specified in a plugInfo.
+    /// here is not specified in a plugInfo. Upon successful registration, the
+    /// validator's metadata becomes immediately available via registry query
+    /// methods such as GetAllValidatorMetadata, etc.
     ///
     /// Note calling RegisterValidator with a validator name which is already
     /// registered will result in a coding error. HasValidator can be used to
@@ -271,10 +338,17 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// \p fixers can be provided to associate fixers with the validator.
+    ///
+    /// A UsdValidationNotice::DidRegisterValidator notice is sent globally
+    /// after a successful registration of the validator, which clients can
+    /// listen to for dynamic discovery of newly registered validators.
+    ///
     /// \sa HasValidator
     USDVALIDATION_API
     void RegisterValidator(const UsdValidationValidatorMetadata &metadata,
-                           const UsdValidatePrimTaskFn &primTaskFn);
+                           const UsdValidatePrimTaskFn &primTaskFn,
+                           std::vector<UsdValidationFixer> fixers = {});
 
     /// Register UsdValidationValidatorSuite defined in a plugin using
     /// \p validatorSuiteName and \p containedValidators with the
@@ -294,6 +368,10 @@ public:
     /// Also note any other failure to register a validator results in a coding
     /// error.
     ///
+    /// Note that **no** UsdValidationNotice::DidRegisterValidatorSuite notice
+    /// is sent for plugin-based registration, since plugin validator suite
+    /// metadata is already available to clients at registry initialization time.
+    ///
     /// \sa HasValidatorSuite
     USDVALIDATION_API
     void RegisterPluginValidatorSuite(
@@ -307,6 +385,10 @@ public:
     /// register a suite and associate it with name metadata. The metadata
     /// here is not specified in a plugInfo.
     ///
+    /// Upon successful registration, the validator suite's metadata becomes
+    /// immediately available via registry query methods such as
+    /// GetAllValidatorMetadata, etc.
+    ///
     /// Note UsdValidationValidatorMetadata::isSuite must be set to true in the
     /// plugInfo, else the validatorSuite will not be registered.
     ///
@@ -317,6 +399,18 @@ public:
     ///
     /// Also note any other failure to register a validator results in a coding
     /// error.
+    ///
+    /// A UsdValidationNotice::DidRegisterValidatorSuite notice is sent globally
+    /// after a successful registration of the validator suite, which clients
+    /// can listen to for dynamic discovery of newly registered validator
+    /// suites. It is important to note that this function should not be used
+    /// from within a plugin's TF_REGISTRY_FUNCTION, which could result in a
+    /// listener to respond to the notice causing potential unexpected behavior
+    /// or deadlock, since the plugin is still being loaded at that time.
+    /// Instead use RegisterPluginValidatorSuite API from within a plugin's
+    /// TF_REGISTRY_FUNCTION, which does not send out any notice, since plugin
+    /// validator suite metadata is already available to clients at registry 
+    /// initialization time.
     ///
     /// \sa HasValidatorSuite
     USDVALIDATION_API
@@ -511,13 +605,15 @@ private:
     // UsdValidateStageTaskFn or UsdValidatePrimTaskFn.
     template <typename ValidateTaskFn>
     void _RegisterPluginValidator(const TfToken &validatorName,
-                                  const ValidateTaskFn &taskFn);
+                                  const ValidateTaskFn &taskFn,
+                                  std::vector<UsdValidationFixer> fixers);
 
     // Overloaded templated _RegisterValidator, where metadata is explicitly
     // provided.
     template <typename ValidateTaskFn>
     void _RegisterValidator(const UsdValidationValidatorMetadata &metadata,
                             const ValidateTaskFn &taskFn,
+                            std::vector<UsdValidationFixer> fixers,
                             bool addMetadata = true);
 
     void _RegisterValidatorSuite(

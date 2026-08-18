@@ -330,28 +330,42 @@ Examples:
 
 Returns the result of the logical :usda:`and` operation of all arguments. If all 
 arguments evaluate to :usda:`true`, this will return :usda:`true`, otherwise 
-this returns :usda:`false`. An error results if any argument does not evaluate 
-to a boolean value. 
+this returns :usda:`false`.
+
+Arguments are evaluated in left-to-right order; if an argument evaluates to
+:usda:`false`, the function will return :usda:`false` and no other arguments
+will be evaluated.
+
+An error results if an evaluated argument does not yield a boolean value.
 
 Examples:
 
 .. code-block:: 
 
     and( ${BOOL_VAR}, True )  # if BOOL_VAR evaluates to true, this will return true, otherwise false
+    and( "str", ${BOOL_VAR} ) # results in "invalid type" error
+    and( False, "str" )  # returns false; no "invalid type" error since "str" argument is not evaluated
 
 :usda:`or(<x>, <y>, ...)`
 =========================
 
 Returns the result of the logical or operation of all arguments. If any argument 
 evaluates to :usda:`true`, this will return :usda:`true`. If all arguments 
-evaluate to :usda:`false`, this will return :usda:`false`. An error results if 
-any argument does not evaluate to a boolean value.
+evaluate to :usda:`false`, this will return :usda:`false`.
+
+Arguments are evaluated in left-to-right order; if an argument evaluates to
+:usda:`true`, the function will return :usda:`true` and no other arguments
+will be evaluated.
+
+An error results if an evaluated argument does not yield a boolean value.
 
 Examples:
 
 .. code-block:: usda
 
-    or( false, true, false )  # returns true
+    or( False, True, False )  # returns true
+    or( "str", ${BOOL_VAR} ) # results in "invalid type" error
+    or( True, "str" )  # returns true; no "invalid type" error since "str" argument is not evaluated
 
 :usda:`not(<x>)`
 ================
@@ -434,6 +448,44 @@ Examples:
 
     contains(${assetList}, "assetsExtraHigh/extraAsset.usda") # returns false
     contains("12345678", "45") # returns true
+
+:usda:`matches_regex(<list_of_string_or_string>, <pattern>)`
+============================================================
+
+Uses regular expressions to perform pattern matching. This function supports 
+the `Extended POSIX regular expression grammar <https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html#tag_09_04>`__ .
+
+If <list_of_string_or_string> is a list of strings, this function 
+checks if <pattern> matches any element in the list. If 
+<list_of_string_or_string> is a string, this function 
+checks if <pattern> matches that string.
+
+Returns :usda:`true` if <list_of_string_or_string> matches <pattern>, 
+:usda:`false` otherwise.  
+
+An error results if <list_of_string_or_string> does not evaluate to a list of 
+strings or string or <pattern> is not a string.
+
+Examples:
+
+.. code-block:: 
+
+    matches_regex("shot_10.usd", "shot_*.usd") # returns True
+    matches_regex("shot_10.usda", "shot_*.usd") # returns False
+
+    matches_regex("shot_A.usdc", "shot_[AB].usd[ac]") # returns True
+    matches_regex("shot_B.usd", "shot_[AB].usd[ac]") # returns False
+
+    matches_regex("shot_A.usdc", "shot_[A-Z].usd") # returns True
+    matches_regex("shot_b.usd", "shot_[A-Z].usd") # returns False
+
+    matches_regex("shot_1.usda", "shot_?.usd?") # returns True
+    matches_regex("shot_10.usda", "shot_?.usd?") # returns False
+
+    matches_regex(["shot1.usd", "layer1.usd"], "layer*") # returns True
+    matches_regex(["shot1.usd", "shot2.usd"], "layer*") # returns False
+
+    matches_regex(${otherExpression}, "shot*.usd") # returns True if otherExpression evaluates to a string or list of strings that contains the "shot*.usd" pattern, False otherwise.
 
 :usda:`at(<list_or_string>, <index>)`
 =====================================

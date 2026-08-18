@@ -515,7 +515,10 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
               "}\n"
 
               "template <typename T>\n"
-              "T mod(T y, T x) { return fmod(y, x); }\n\n"
+              "T mod(T x, T y) { return fmod(x, y); }\n"
+              "template <>\n"
+              "int mod(int x, int y) { return x % y; }\n\n"
+
               "template <typename T>\n"
               "T atan(T y, T x) { return atan2(y, x); }\n\n"
               "template <typename T>\n"
@@ -587,6 +590,15 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
               "template <typename T, typename Tv>\n"
               "void imageStore(T texture, int2 coords, Tv color) {\n"
               "    return texture.write(color, uint2(coords.x, coords.y));\n"
+              "}\n\n"
+
+              "template <typename T, typename Tv>\n"
+              "void imageStore(T texture, short2 coords, short face, Tv color) {\n"
+              "    return texture.write(color, ushort2(coords.x, coords.y), ushort(face));\n"
+              "}\n"
+              "template <typename T, typename Tv>\n"
+              "void imageStore(T texture, int2 coords, int face, Tv color) {\n"
+              "    return texture.write(color, uint2(coords.x, coords.y), uint(face));\n"
               "}\n\n"
 
               "constexpr sampler texelSampler(address::clamp_to_edge,\n"
@@ -916,9 +928,8 @@ ShaderStageData::AccumulateTextureBindings(
                 samplerSection,
                 textures[i].dimensions,
                 textures[i].format,
-                textures[i].textureType == HgiShaderTextureTypeArrayTexture,
+                textures[i].textureType,
                 textures[i].arraySize,
-                textures[i].textureType == HgiShaderTextureTypeShadowTexture,
                 textures[i].writable,
                 std::string());
 
@@ -1492,11 +1503,12 @@ HgiMetalShaderGenerator::HgiMetalShaderGenerator(
         << "\n";
     }
 
-    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
-        macroSection << "#define discard discard_fragment(); "
-                        "discarded_fragment = true;\n";
-    } else {
-        macroSection << "#define discard discard_fragment();\n";
+    if (_GetShaderStage() == HgiShaderStageFragment) {
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            macroSection << "#define discard set_flag_and_discard_fragment()\n";
+        } else {
+            macroSection << "#define discard discard_fragment()\n";
+        }
     }
     
     CreateShaderSection<HgiMetalMacroShaderSection>(
@@ -1552,7 +1564,7 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
 {
     HgiMetalShaderSectionUniquePtrVector * const shaderSections =
         GetShaderSections();
-    
+
     const char* translateKey = "MTL_TRANSLATE_GLSL";
     if(strnstr(_GetShaderCodeDeclarations(), translateKey, strlen(_GetShaderCodeDeclarations())) != 0)
     {
@@ -1595,10 +1607,18 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
             section->VisitScopeMemberDeclarations(ss);
         }
         ss << "\n// //////// Scope Function Definitions ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "void set_flag_and_discard_fragment() {\n"
+                      "    discarded_fragment = true;\n"
+                      "    discard_fragment();\n"
+                      "}\n";
+            }
+        }
         for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
             section->VisitScopeFunctionDefinitions(ss);
         }
-        
+
         //constructor
         ss << _generatorShaderSections->GetScopeTypeName() << "(\n";
         bool firstParam = true;

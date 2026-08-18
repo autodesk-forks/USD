@@ -17,18 +17,20 @@
 #include "pxr/base/tf/stringUtils.h"
 #include "pxr/base/tf/typeInfoMap.h"
 #include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
+#include "pxr/base/tf/pxrTslRobinMap/robin_set.h"
 #include "pxr/base/trace/trace.h"
 
 #include "pxr/base/work/dispatcher.h"
 #include "pxr/base/work/loops.h"
+#include "pxr/base/work/sort.h"
 #include "pxr/base/work/utils.h"
 #include "pxr/base/work/withScopedParallelism.h"
 
 #include "pxr/usd/sdf/payload.h"
 #include "pxr/usd/sdf/schema.h"
 
-#include <tbb/parallel_for.h>
-#include <tbb/parallel_sort.h>
+#include <tbb/blocked_range.h>
+#include <tbb/concurrent_vector.h>
 
 #include <algorithm>
 #include <functional>
@@ -115,8 +117,8 @@ public:
         for (auto const &p: _data) {
             sortedPaths.push_back(p.first);
         }
-        tbb::parallel_sort(
-            sortedPaths.begin(), sortedPaths.end(),
+        WorkParallelSort(
+            &sortedPaths,
             [](SdfPath const &p1, SdfPath const &p2) {
                 // Prim paths before property paths, then property paths grouped
                 // by property name.
@@ -640,6 +642,28 @@ public:
         return QueryTimeSample(path, time, &vtVal) && value->StoreValue(vtVal);
     }
 
+    inline const std::type_info &
+    QueryTimeSampleTypeid(const SdfPath& path, double time) const {
+        if (VtValue const *fieldValue =
+            _GetFieldValue(path, SdfDataTokens->TimeSamples)) {
+            if (fieldValue->IsHolding<TimeSamples>()) {
+                auto const &ts = fieldValue->UncheckedGet<TimeSamples>();
+                auto const &times = ts.times.Get();
+                auto iter = lower_bound(times.begin(), times.end(), time);
+                if (iter == times.end() || *iter != time) {
+                    return typeid(void);
+                }
+                auto index = iter - times.begin();
+                VtValue val = _crateFile->GetTimeSampleValue(ts, index);
+                if (val.IsHolding<ValueRep>()) {
+                    return _crateFile->GetTypeid(val.UncheckedGet<ValueRep>());
+                }
+                return val.GetTypeid();
+            }
+        }
+        return typeid(void);
+    }
+
     inline void
     SetTimeSample(const SdfPath& path, double time,
                   const VtValue & value) {
@@ -717,6 +741,7 @@ public:
 
     ////////////////////////////////////////////////////////////////////////
 private:
+    using TokenSet = pxr_tsl::robin_set<TfToken, TfToken::HashFunctor>;
 
     bool _PopulateFromCrateFile() {
 
@@ -786,10 +811,6 @@ private:
             dispatcher.Run(
                 [this, fsBegin, fsEnd, &fields, &fieldValuePairs]()  {
                     try{
-                        // XXX Won't need first two tags when bug #132031 is
-                        // addressed
-                        TfAutoMallocTag tag(
-                            "Sdf", "Sdf_CrateDataImpl::Open", "field data");
                         auto &pairs = fieldValuePairs.GetMutable();
                         pairs.resize(fsEnd-fsBegin);
                         for (size_t i = 0; i < size_t(std::distance(fsBegin,fsEnd)); ++i) {
@@ -815,10 +836,11 @@ private:
         }
 
         // Create all the specData entries and store pointers to them.
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, specs.size()),
+        auto createSpecData =
             [this, crateFile, &liveFieldSets, &specs](
-                tbb::blocked_range<size_t> const &r) {
+                tbb::blocked_range<size_t> const &r,
+                auto&& validateChildrenFn) {
+
                 for (size_t i = r.begin(),
                          end = r.end(); i != end; ++i) {
                     
@@ -830,9 +852,57 @@ private:
                     specData.fields =
                         liveFieldSets.find(spec.fieldSetIndex)->second;
                     
+                    std::forward<decltype(validateChildrenFn)>
+                        (validateChildrenFn)(spec, specData);
                 }
-            },
-            tbb::static_partitioner());
+            };
+
+#ifndef PXR_PREFER_SAFETY_OVER_SPEED
+        WorkParallelForTBBRange(
+            tbb::blocked_range<size_t>(0, specs.size()),
+            [&createSpecData](tbb::blocked_range<size_t> const& r) {
+                createSpecData(r, [](auto&&...) {});
+            });
+#else
+        // In safety-over-speed mode we perform additional validation
+        // on specs in worker threads. We need to collect runtime errors
+        // emitted in those threads and transport them back to the
+        // original thread.
+        tbb::concurrent_vector<TfErrorTransport> errorTransports;
+
+        WorkParallelForTBBRange(
+            tbb::blocked_range<size_t>(0, specs.size()),
+            [this, &createSpecData, &errorTransports](
+                tbb::blocked_range<size_t> const& r) {
+
+                // Reuse a TokenSet for duplicate checking in
+                // _ValidateSpecChildren to avoid allocating memory
+                // repeatedly.
+                TokenSet dupeTokenSet;
+                TfErrorMark m;
+
+                createSpecData(
+                    r, 
+                    [this, &dupeTokenSet](auto&&... args) {
+                        _ValidateSpecChildren(
+                            std::forward<decltype(args)>(args)..., 
+                            &dupeTokenSet);
+                    });
+
+                if (!m.IsClean()) {
+                    TfErrorTransport transport = m.Transport();
+                    errorTransports.grow_by(1)->swap(transport);
+                }
+            });
+
+        for (TfErrorTransport& transport : errorTransports) {
+            transport.Post();
+        }
+
+        if (!m.IsClean()) {
+            return false;
+        }
+#endif
 
         _lastSet = _data.end();
 
@@ -849,6 +919,73 @@ private:
             ret = rep;
         }
         return ret;
+    }
+
+    inline bool _HasValidChildren(const SdfPath &path, 
+                                  const VtValue &val,
+                                  TokenSet* dupeTokenSet) const {
+        if (!val.IsHolding<TfTokenVector>()) {
+            return false;
+        }
+
+        enum class ErrorType { Invalid, Duplicate };
+        ErrorType errorType;
+        dupeTokenSet->clear();
+
+        const TfTokenVector& children = val.UncheckedGet<TfTokenVector>();
+        auto invalidChild = std::find_if(children.begin(), children.end(),
+            [&](const TfToken& childName) {
+                // Check that the child has a valid identifier and that the
+                // child path exists in the data.
+                if (!SdfPath::IsValidIdentifier(childName) ||
+                    _data.find(path.AppendChild(childName)) == _data.end()) {
+                    errorType = ErrorType::Invalid;
+                    return true;
+                }
+
+                // Check that the child does not duplicate another child.
+                if (!dupeTokenSet->insert(childName).second) {
+                    errorType = ErrorType::Duplicate;
+                    return true;
+                }
+
+                return false;
+            });
+        if (ARCH_UNLIKELY(invalidChild != children.end())) {
+            TF_RUNTIME_ERROR(
+                "%s child identifier '%s' found on parent '%s'",
+                (errorType == ErrorType::Duplicate ? 
+                    "Duplicate" : "Invalid"),
+                invalidChild->GetText(), path.GetAsString().c_str());
+            return false;
+        }
+
+        return true;
+    }
+
+    inline bool _ValidateSpecChildren(const CrateFile::Spec& spec, 
+                                      const _SpecData &specData,
+                                      TokenSet* dupeTokenSet) const {
+        if (specData.specType == SdfSpecTypePrim) {
+            // Check for invalid children in primChildren field
+            _FieldValuePairVector const &fields = specData.fields.Get();
+            auto field = std::find_if(fields.begin(), fields.end(),
+                [](_FieldValuePair const &fieldValue) {
+                    return fieldValue.first == SdfChildrenKeys->PrimChildren;
+                });
+            if (field != fields.end()) {
+                SdfPath const &path = _crateFile->GetPath(spec.pathIndex);
+                VtValue const &value = field->second;
+                if (!_HasValidChildren(path, value, dupeTokenSet)) {
+                    TF_RUNTIME_ERROR(
+                        "Invalid children found in primChildren field for path "
+                        "'%s'", path.GetAsString().c_str());
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     inline std::vector<double> const &
@@ -1320,6 +1457,12 @@ Sdf_CrateData::QueryTimeSample(const SdfPath& path,
                                double time, SdfAbstractDataValue* value) const
 {
     return _impl->QueryTimeSample(path, time, value);
+}
+
+const std::type_info &
+Sdf_CrateData::QueryTimeSampleTypeid(const SdfPath &path, double time) const
+{
+    return _impl->QueryTimeSampleTypeid(path, time);
 }
 
 void

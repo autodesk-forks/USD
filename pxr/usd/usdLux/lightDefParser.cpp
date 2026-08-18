@@ -23,8 +23,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(
     _tokens,
 
-    /* discoveryTypes */
-    ((sourceType, "USD"))
+    /* NOTE: shadingSystem will change to 'abstract' in a future release */
+    ((shadingSystem, "USD"))
     ((discoveryType, "usd-schema-gen"))
 
     (MeshLight)
@@ -38,9 +38,9 @@ TF_DEFINE_PRIVATE_TOKENS(
 
 /*static*/
 const TfToken &
-UsdLux_LightDefParserPlugin::_GetSourceType() 
+UsdLux_LightDefParserPlugin::_GetShadingSystem() 
 {
-    return _tokens->sourceType;
+    return _tokens->shadingSystem;
 }
 
 /*static*/
@@ -78,6 +78,9 @@ _GetSdrMetadata(const UsdShadeConnectableAPI &connectable,
     if (!primvarsStr.empty()) {
         metadata[SdrNodeMetadata->Primvars] = primvarsStr;
     }
+
+    metadata[SdrNodeMetadata->Subdomain] = SdrNodeSubdomain->Lighting;
+    metadata[SdrNodeMetadata->Context] = SdrNodeContext->Light;
 
     return metadata;
 }
@@ -212,9 +215,8 @@ UsdLux_LightDefParserPlugin::ParseShaderNode(
         discoveryResult.identifier,
         discoveryResult.version,
         discoveryResult.name,
-        discoveryResult.family,
-        SdrNodeContext->Light,
-        discoveryResult.sourceType,
+        discoveryResult.function,
+        discoveryResult.shadingSystem,
         /*nodeUriAssetPath=*/ std::string(),
         /*resolvedImplementationUri=*/ std::string(),
         UsdShadeShaderDefUtils::GetProperties(connectable),
@@ -231,9 +233,9 @@ UsdLux_LightDefParserPlugin::GetDiscoveryTypes() const
 }
 
 const TfToken &
-UsdLux_LightDefParserPlugin::GetSourceType() const
+UsdLux_LightDefParserPlugin::GetShadingSystem() const
 {
-    return _GetSourceType();
+    return _GetShadingSystem();
 }
 
 SDR_REGISTER_PARSER_PLUGIN(UsdLux_LightDefParserPlugin);

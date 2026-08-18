@@ -51,13 +51,13 @@ UsdShadeShaderDefUtils::GetDiscoveryResults(
     const UsdPrim shaderDefPrim = shaderDef.GetPrim();
     const TfToken &identifier = shaderDefPrim.GetName();
 
-    // Get the family name, shader name and version information from the 
+    // Get the function name, shader name and version information from the 
     // identifier.
-    TfToken family;
+    TfToken function;
     TfToken name; 
     SdrVersion version; 
     if (!SdrFsHelpersSplitShaderIdentifier(shaderDefPrim.GetName(), 
-                &family, &name, &version)) {
+                &function, &name, &version)) {
         // A warning has already been issued by SplitShaderIdentifier.
         return result;
     }
@@ -108,7 +108,7 @@ UsdShadeShaderDefUtils::GetDiscoveryResults(
                     identifier,
                     version.GetAsDefault(),
                     name,
-                    family, 
+                    function, 
                     discoveryType,
                     sourceType,
                     /* uri */ sourceUri, 
@@ -234,6 +234,15 @@ _GetShaderPropertyTypeAndArraySize(
         _ConformIntTypeDefaultValue(typeName, defaultValue);
         return std::make_pair(SdrPropertyTypes->Int,
                               _GetArraySize(defaultValue));
+    } else if (typeName == SdfValueTypeNames->Int2 || 
+               typeName == SdfValueTypeNames->Int2Array) {
+        return std::make_pair(SdrPropertyTypes->Int, 2);
+    } else if (typeName == SdfValueTypeNames->Int3 || 
+               typeName == SdfValueTypeNames->Int3Array) {
+        return std::make_pair(SdrPropertyTypes->Int, 3);
+    } else if (typeName == SdfValueTypeNames->Int4 || 
+               typeName == SdfValueTypeNames->Int4Array) {
+        return std::make_pair(SdrPropertyTypes->Int, 4);
     } else if (typeName == SdfValueTypeNames->String ||
                typeName == SdfValueTypeNames->Token ||
                typeName == SdfValueTypeNames->Asset || 

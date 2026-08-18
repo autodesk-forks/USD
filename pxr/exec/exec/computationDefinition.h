@@ -46,6 +46,7 @@ public:
     /// Returns the type of values that are produced by this computation.
     virtual TfType GetResultType(
         const EsfObjectInterface &providerObject,
+        const TfToken &disambiguatingId,
         EsfJournal *journal) const;
 
     /// Returns the type of values returned to external clients of execution
@@ -80,6 +81,7 @@ public:
     ///
     virtual VdfNode *CompileNode(
         const EsfObjectInterface &providerObject,
+        const TfToken &disambiguatingId,
         EsfJournal *nodeJournal,
         Exec_Program *program) const = 0;
 

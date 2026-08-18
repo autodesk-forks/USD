@@ -6,6 +6,7 @@
 //
 
 #include "pxr/pxr.h"
+#include "pxr/base/ts/iterator.h"
 #include "pxr/base/ts/sample.h"
 #include "pxr/base/ts/splineData.h"
 #include "pxr/base/ts/regressionPreventer.h"
@@ -26,954 +27,139 @@ using Ts_DoubleKnotData = Ts_TypedKnotData<double>;
 
 namespace
 {
-    // Each spline can have as many as seven intervals that are populated from
-    // different sources, for example, pre-extrapolation loops, inner loops,
-    // post-extrapolation, etc.
-    //
-    // _SourceInterval holds the time interval for a source.
-    struct _SourceInterval
+
+constexpr double inf = std::numeric_limits<double>::infinity();
+
+// Constants for constructing GfInterval objects
+constexpr bool OPEN = false;
+constexpr bool CLOSED = true;
+
+// Writes the pre values of the given output data. To finalize the data,
+// call _FinalizeKnotData.
+void _SetKnotDataPreValues(
+    const Ts_Segment& segment,
+    Ts_DoubleKnotData& data
+) {
+    data.time = segment.p1[0];
+    data.preTanAlgorithm = TsTangentAlgorithmNone;
+
+    if (segment.interp == Ts_SegmentInterp::PreExtrap ||
+        segment.interp == Ts_SegmentInterp::ValueBlock)
     {
-        TsSplineSampleSource source;
-        GfInterval interval;
-
-        _SourceInterval(TsSplineSampleSource inSource,
-                        TsTime t1,
-                        TsTime t2)
-        : source(inSource)
-        , interval{t1, t2, true, false}
-        {}
-    };
-
-    // _Sampler constructs a partially unrolled version of the spline and then
-    // samples that version. Only the inner loops are unrolled and only in the
-    // region where sampling will be occurring.
-    //
-    // The unrolled version enables random access to all the relevant knots
-    // and we implement extrapolation looping with simple time and value
-    // shifting.
-    class _Sampler
-    {
-    public:
-        _Sampler(
-            const Ts_SplineData* data,
-            const GfInterval& timeInterval,
-            double timeScale,
-            double valueScale,
-            double tolerance);
-
-        bool Sample(
-            Ts_SampleDataInterface* sampledSpline);
-
-        bool SampleInterval(
-            const GfInterval& subInterval,
-            Ts_SampleDataInterface* sampledSpline);
-
-    private:
-        // Sample knots in sampleInterval. Sampled knot times are converted to
-        // sample times with _ToSampleTime and values are offset by valueOffset
-        // before being stored in sampledSpline.
-        void _SampleKnots(
-            const GfInterval& sampleInterval,
-            const TsSplineSampleSource source,
-            const double knotToSampleTimeScale,
-            const TsTime knotToSampleTimeOffset,
-            const double valueOffset,
-            Ts_SampleDataInterface* sampledSpline);
-
-        // Sample knots in sampleInterval in reverse. Sampled knot times are
-        // converted to sample times with _ToSampleTime and values are offset by
-        // valueOffset before being stored in sampledSpline.
-        void _SampleKnotsReversed(
-            const GfInterval& sampleInterval,
-            const TsSplineSampleSource source,
-            const double knotToSampleTimeScale,
-            const TsTime knotToSampleTimeOffset,
-            const double valueOffset,
-            Ts_SampleDataInterface* sampledSpline);
-
-        // Sample a segment of the spline between 2 adjacent knots.
-        void _SampleSegment(const Ts_DoubleKnotData* prevKnot,
-                            const Ts_DoubleKnotData* nextKnot,
-                            const GfInterval& segmentInterval,
-                            TsSplineSampleSource source,
-                            double knotToSampleTimeScale,
-                            double knotToSampleTimeOffset,
-                            double valueOffset,
-                            Ts_SampleDataInterface* sampledSpline);
-
-        // Sample a segment of the spline between 2 adjacent knots.
-        void _SampleCurveSegment(const Ts_DoubleKnotData* prevKnot,
-                                 const Ts_DoubleKnotData* nextKnot,
-                                 const GfInterval& segmentInterval,
-                                 TsSplineSampleSource source,
-                                 double knotToSampleTimeScale,
-                                 double knotToSampleTimeOffset,
-                                 double valueOffset,
-                                 Ts_SampleDataInterface* sampledSpline);
-
-        void _SampleBezier(GfVec2d cp[4],
-                           const GfInterval& segmentInterval,
-                           TsSplineSampleSource source,
-                           double knotToSampleTimeScale,
-                           double knotToSampleTimeOffset,
-                           double valueOffset,
-                           Ts_SampleDataInterface* sampledSpline);
-
-        // Given a set of bezier control points and a u parameter in the
-        // range [0..1], return 2 sets of control points for the left and
-        // right parts of the original curve, split at u. It is allowable
-        // for the cp input to also be one of the outputs.
-        void _SubdivideBezier(const GfVec2d cp[4],
-                              const double u,
-                              GfVec2d leftCp[4],
-                              GfVec2d rightCp[4]);
-
-        void _ExtrapLinear(
-            const GfInterval& regionInterval,
-            const TsSplineSampleSource source,
-            Ts_SampleDataInterface* sampledSpline);
-
-        void _ExtrapLoop(
-            const GfInterval& regionInterval,
-            const TsSplineSampleSource source,
-            Ts_SampleDataInterface* sampledSpline);
-
-        void _UnrollInnerLoops();
-
-        // Convert sample time to knot time.
-        TsTime _ToKnotTime(TsTime sTime,
-                           double knotToSampleTimeScale,
-                           TsTime knotToSampleTimeOffset) {
-            return (sTime - knotToSampleTimeOffset) / knotToSampleTimeScale;
-        }
-
-        // Convert knot time back to sample time.
-        TsTime _ToSampleTime(TsTime kTime,
-                             double knotToSampleTimeScale,
-                             TsTime knotToSampleTimeOffset) {
-            return kTime * knotToSampleTimeScale + knotToSampleTimeOffset;
-        }
-
-        // Inputs.
-        const Ts_SplineData* const _data;
-        const GfInterval _timeInterval;
-        const double _timeScale;
-        const double _valueScale;
-        const double _tolerance;
-
-        // Intermediate data.
-        bool _haveInnerLoops = false;
-        bool _haveMultipleKnots = false;
-        size_t _firstInnerProtoIndex = 0;
-        bool _havePreExtrapLoops = false;
-        bool _havePostExtrapLoops = false;
-        TsTime _firstTime = 0;
-        TsTime _lastTime = 0;
-        TsTime _firstInnerLoop = 0;
-        TsTime _lastInnerLoop = 0;
-        TsTime _firstInnerProto = 0;
-        TsTime _lastInnerProto = 0;
-        bool _firstTimeLooped = false;
-        bool _lastTimeLooped = false;
-        bool _doPreExtrap = false;
-        bool _doPostExtrap = false;
-        double _extrapValueOffset = 0;
-        bool _betweenPreUnloopedAndLooped = false;
-        bool _betweenLoopedAndPostUnlooped = false;
-        Ts_DoubleKnotData _extrapKnot1;
-        Ts_DoubleKnotData _extrapKnot2;
-
-        std::vector<_SourceInterval> _sourceIntervals;
-
-        // Pointers to vectors knots and their times. If there is no inner
-        // looping then these will point directly to the spline data. Otherwise,
-        // the "internal" vectors below will be populated and these will point
-        // at those. At no time does _knots nor _times ever own the data that
-        // they point to.
-        const std::vector<Ts_DoubleKnotData>* _knots;
-        const std::vector<TsTime>* _times;
-
-        // If we have to bake out the knots or times then we do so here and
-        // point _knots and _times at these arrays.
-        std::vector<Ts_DoubleKnotData> _internalKnots;
-        std::vector<TsTime> _internalTimes;
-    };
-}
-
-_Sampler::_Sampler(
-    const Ts_SplineData* const data,
-    const GfInterval& timeInterval,
-    const double timeScale,
-    const double valueScale,
-    const double tolerance)
-    : _data(data)
-    , _timeInterval(timeInterval)
-    , _timeScale(timeScale)
-    , _valueScale(valueScale)
-    , _tolerance(tolerance)
-{
-    // It should be impossible to fail this check. If we do, we're likely to
-    // crash or produce nonsense, but this error will at least leave a clue as
-    // to why.
-    TF_VERIFY((data &&
-               !data->times.empty() &&
-               !timeInterval.IsEmpty() &&
-               timeScale > 0.0 &&
-               valueScale > 0.0 &&
-               tolerance > 0.0),
-              "Invalid argument to _Sampler::_Sampler.");
-
-    // Characterize the spline
-    // Is inner looping enabled?
-    _haveInnerLoops = _data->HasInnerLoops(&_firstInnerProtoIndex);
-
-    // We have multiple knots if there are multiple authored.  We also always
-    // have at least two knots if there is valid inner looping.
-    _haveMultipleKnots =
-        (_haveInnerLoops || _data->times.size() > 1);
-
-    // Are any extrapolating loops enabled?
-    _havePreExtrapLoops =
-        _haveMultipleKnots && _data->preExtrapolation.IsLooping();
-    _havePostExtrapLoops =
-        _haveMultipleKnots && _data->postExtrapolation.IsLooping();
-
-    // Find first and last knot times.  These may be authored, or they may be
-    // echoed.
-    const TsTime rawFirstTime = _firstTime = _data->times.front();
-    const TsTime rawLastTime = _lastTime = _data->times.back();
-    if (_haveInnerLoops)
-    {
-        _firstInnerProto = _data->loopParams.protoStart;
-        _lastInnerProto = _data->loopParams.protoEnd;
-
-        const GfInterval loopedInterval = _data->loopParams.GetLoopedInterval();
-
-        _firstInnerLoop = loopedInterval.GetMin();
-        _lastInnerLoop = loopedInterval.GetMax();
-
-        if (loopedInterval.GetMin() < rawFirstTime)
-        {
-            _firstTime = loopedInterval.GetMin();
-            _firstTimeLooped = true;
-        }
-
-        if (loopedInterval.GetMax() > rawLastTime)
-        {
-            _lastTime = loopedInterval.GetMax();
-            _lastTimeLooped = true;
-        }
-    }
-
-    // Populate _sourceIntervals
-    if (_data->preExtrapolation.mode != TsExtrapValueBlock) {
-        _sourceIntervals.emplace_back(
-            _havePreExtrapLoops ? TsSourcePreExtrapLoop
-                                : TsSourcePreExtrap,
-            -std::numeric_limits<double>::infinity(),
-            _firstTime);
-    }
-
-    if (_haveInnerLoops) {
-        if (_firstTime < _firstInnerLoop) {
-            _sourceIntervals.emplace_back(
-                TsSourceKnotInterp,
-                _firstTime, _firstInnerLoop);
-        }
-        if (_firstInnerLoop < _firstInnerProto) {
-            _sourceIntervals.emplace_back(
-                TsSourceInnerLoopPreEcho,
-                _firstInnerLoop, _firstInnerProto);
-        }
-        _sourceIntervals.emplace_back(
-            TsSourceInnerLoopProto,
-            _firstInnerProto, _lastInnerProto);
-        if (_lastInnerProto < _lastInnerLoop) {
-            _sourceIntervals.emplace_back(
-                TsSourceInnerLoopPostEcho,
-                _lastInnerProto, _lastInnerLoop);
-        }
-        if (_lastInnerLoop < _lastTime) {
-            _sourceIntervals.emplace_back(
-                TsSourceKnotInterp,
-                _lastInnerLoop, _lastTime);
-        }
+        data.preTanWidth = 0.0;
+        data.preTanSlope = 0.0;
     } else {
-        if (_firstTime < _lastTime) {
-            _sourceIntervals.emplace_back(
-                TsSourceKnotInterp,
-                _firstTime, _lastTime);
-        }
+        data.preTanWidth = segment.p1[0] - segment.t1[0];
+        data.preTanSlope =
+            data.preTanWidth == 0
+            ? 0
+            : (segment.p1[1] - segment.t1[1]) / data.preTanWidth;
     }
 
-    if (_data->postExtrapolation.mode != TsExtrapValueBlock) {
-        _sourceIntervals.emplace_back(
-            _havePostExtrapLoops ? TsSourcePostExtrapLoop
-                                 : TsSourcePostExtrap,
-            _lastTime,
-            std::numeric_limits<double>::infinity());
-    }
-
-    // Setup _knots and _times
-    _UnrollInnerLoops();
-
-    TF_DEBUG_MSG(
-        TS_DEBUG_SAMPLE,
-        "\n"
-        "At _Sampler construction:\n"
-        "  _timeInterval: [%g .. %g]\n"
-        "  _haveInnerLoops: %d\n"
-        "  _havePreExtrapLoops: %d\n"
-        "  _havePostExtrapLoops: %d\n"
-        "  # of source regions: %zu\n"
-        "  _firstTime:       %g\n"
-        "  _firstInnerLoop:  %g\n"
-        "  _firstInnerProto: %g\n"
-        "  _lastInnerProto:  %g\n"
-        "  _lastInnerLoop:   %g\n"
-        "  _lastTime:        %g\n",
-        _timeInterval.GetMin(),
-        _timeInterval.GetMax(),
-        _haveInnerLoops,
-        _havePreExtrapLoops,
-        _havePostExtrapLoops,
-        _sourceIntervals.size(),
-        _firstTime,
-        _firstInnerLoop,
-        _firstInnerProto,
-        _lastInnerProto,
-        _lastInnerLoop,
-        _lastTime);
+    data.preValue = segment.p1[1];
 }
 
-bool
-_Sampler::Sample(
-    Ts_SampleDataInterface* sampledSpline)
-{
-    // Sample the entire input region _timeInterval
-    return SampleInterval(_timeInterval,
-                          sampledSpline);
-}
+// Writes the post values of the given output data. To finalize the data,
+// call _FinalizeKnotData.
+void _SetKnotDataValues(
+    const Ts_Segment& segment,
+    Ts_DoubleKnotData& data
+) {
+    data.time = segment.p0[0];
+    data.postTanAlgorithm = TsTangentAlgorithmNone;
 
-bool
-_Sampler::SampleInterval(
-    const GfInterval& subInterval,
-    Ts_SampleDataInterface* sampledSpline)
-{
-    if (_knots->empty()) {
-        TF_CODING_ERROR("Cannot sample an empty spline!");
-        return false;
+    if (segment.interp == Ts_SegmentInterp::PostExtrap ||
+        segment.interp == Ts_SegmentInterp::ValueBlock)
+    {
+        data.postTanWidth = 0.0;
+        data.postTanSlope = 0.0;
+    } else {
+        data.postTanWidth = segment.t0[0] - segment.p0[0];
+        data.postTanSlope =
+            data.postTanWidth == 0
+            ? 0
+            : (segment.t0[1] - segment.p0[1]) / data.postTanWidth;
     }
 
-    for (const auto& si : _sourceIntervals) {
-        GfInterval regionInterval = subInterval & si.interval;
-        if (regionInterval.GetSize() > 0.0) {
-            switch (si.source) {
-              case TsSourcePreExtrap:
-              case TsSourcePostExtrap:
-                // All non-looping extrapolation modes are linear
-                _ExtrapLinear(regionInterval, si.source, sampledSpline);
+    if (segment.p1[0] != +inf) {
+        data.nextInterp = segment.GetInterpMode();
+    }
+    if (data.nextInterp == TsInterpCurve) {
+        switch (segment.interp)
+        {
+            case Ts_SegmentInterp::Hermite:
+                data.curveType = TsCurveTypeHermite;
                 break;
-
-              case TsSourcePreExtrapLoop:
-              case TsSourcePostExtrapLoop:
-                _ExtrapLoop(regionInterval, si.source, sampledSpline);
+            case Ts_SegmentInterp::Bezier:
+                data.curveType = TsCurveTypeBezier;
                 break;
-
-              case TsSourceInnerLoopPreEcho:
-              case TsSourceInnerLoopProto:
-              case TsSourceInnerLoopPostEcho:
-              case TsSourceKnotInterp:
-                // Sample and knot times are the same here.
-                _SampleKnots(regionInterval,
-                             si.source,
-                             1.0,       // knotToSampleTimeScale
-                             0.0,       // knotToSampleTimeOffset
-                             0.0,       // valueOffset
-                             sampledSpline);
-            }
+            default:
+                TF_VERIFY(false,
+                            "Unable to set knot data curve type from "
+                            "unknown segment curve type.");
         }
     }
 
-    return true;
+    data.value = segment.p0[1];
 }
 
-void
-_Sampler::_ExtrapLinear(
-    const GfInterval& regionInterval,
-    const TsSplineSampleSource source,
-    Ts_SampleDataInterface* sampledSpline)
-{
-    const TsExtrapolation* extrap;
-    const Ts_DoubleKnotData* knot1;
-    const Ts_DoubleKnotData* knot2;
-
-    const bool isPre = (source == TsSourcePreExtrap);
-    if (isPre) {
-        extrap = &_data->preExtrapolation;
-        knot1 = &_knots->front();
-        knot2 = (_knots->size() > 1 ? knot1 + 1 : nullptr);
+void _FinalizeKnotData(Ts_DoubleKnotData& data) {
+    if (data.value == data.preValue) {
+        data.dualValued = false;
+        data.preValue = 0;
     } else {
-        extrap = &_data->postExtrapolation;
-        knot2 = &_knots->back();
-        knot1 = (_knots->size() > 1 ? knot2 - 1 : nullptr);
+        data.dualValued = true;
     }
-
-    double slope = 0.0;
-    switch (extrap->mode) {
-      case TsExtrapValueBlock:
-        // No extrapolation, just return
-        return;
-
-      case TsExtrapHeld:
-        // Extrapolation is flat
-        slope = 0.0;
-        break;
-
-      case TsExtrapSloped:
-        // Extrapolation slope is given
-        slope = extrap->slope;
-        break;
-
-      case TsExtrapLoopRepeat:
-      case TsExtrapLoopReset:
-      case TsExtrapLoopOscillate:
-        // Should have called _ExtrapLoop instead! This should be unreachable.
-        TF_VERIFY(false,
-                  "Invalid extrapolation mode (%s) in _Sampler::_ExtrapLinear",
-                  TfEnum::GetName(extrap->mode).c_str());
-        return;
-
-      case TsExtrapLinear:
-        // Extrapolate a straight line continuation using the slope at the
-        // interpolated side of the end knot. If the end knot is dual valued or
-        // the end segment is held or value blocked then the slope is flat. If
-        // the end segment is linear the use the slope to the next-to-end
-        // knot. And if the end segment is curved, use the slope specified by
-        // the end knot's interpolated tangent.
-        slope = 0.0;
-
-        // If we have multiple knots and the knot at the end is not dual valued.
-        if (_haveMultipleKnots &&
-            ((isPre && !knot1->dualValued) ||
-             (!isPre && !knot2->dualValued)))
-        {
-            if (knot1->nextInterp == TsInterpLinear) {
-                // The last segment of the spline is linear, use the slope
-                // between those two knots. They should never be at the
-                // same time but let's ensure we don't divide by 0.
-                if (knot1->time != knot2->time) {
-                    slope = (knot2->GetPreValue() - knot1->value) /
-                            (knot2->time - knot1->time);
-                }
-            } else if (knot1->nextInterp == TsInterpCurve) {
-                // The last segment of the spline is curved, use the tangent on
-                // the interpolated side of the edge knot.
-                slope = (isPre ? knot1->postTanSlope : knot2->preTanSlope);
-            }
-        }
-        // In all other cases, the extrapolation slope remains 0.0
-
-        break;
-    }
-
-    TsTime t1 = regionInterval.GetMin();
-    TsTime t2 = regionInterval.GetMax();
-
-    double v1, v2;
-    if (isPre) {
-        v2 = knot1->GetPreValue();
-        v1 = v2 - slope * (t2 - t1);
-    } else {
-        v1 = knot2->value;
-        v2 = v1 + slope * (t2 - t1);
-    }
-
-    // There's only ever 1 segment
-    sampledSpline->AddSegment(t1, v1, t2, v2, source);
 }
 
-void
-_Sampler::_ExtrapLoop(
-    const GfInterval& regionInterval,
-    const TsSplineSampleSource source,
-    Ts_SampleDataInterface* sampledSpline)
+TsSplineSampleSource _GetSegmentSource(
+    const Ts_Segment* segment,
+    const Ts_SplineData* const data)
 {
-    // Figure out the time and value conversions and then invoke _SampleKnots,
-    // possibly multiple times. Fortunately, for extrapolation looping we
-    // are guaranteed that there is a knot at each end of the looped region.
-    //
-    // There are two different time ranges when we are extrapolating loops,
-    // sample times and knot times. Sample times are the inputs and outputs
-    // of this _ExtrapLoop. Knot times are the times that are stored in the
-    // knots in the _knots array.
-    //
-    // Converting between these two time ranges involves both a scale and an
-    // offset. We chose these values so we can use these equations:
-    //    sampleTime = knotTime * knotToSampleScale + knotToSampleOffset
-    // or the inverse:
-    //    knotTime = (sampleTime - knotToSampleOffset) / knotToSampleScale
-    // which are embodied in the methods _ToSampleTime and _ToKnotTime.
-    //
-    // _ExtrapLoop computes the appropriate scale and offset values.
-    // _SampleKnots then samples the data using knot time values and
-    // converts the results back to sample times when they are added
-    // to sampledSpline.
+    GfInterval knotInterval(data->times.front(), data->times.back(),
+                            CLOSED, OPEN);
+    GfInterval loopedInterval = data->loopParams.GetLoopedInterval();
+    GfInterval splineInterval = data->HasInnerLoops()
+        ? knotInterval | loopedInterval
+        : knotInterval;
 
-    const bool isPre = (source == TsSourcePreExtrapLoop);
-    const TsExtrapolation* const extrap =
-        (isPre ? &_data->preExtrapolation : &_data->postExtrapolation);
-
-    const Ts_DoubleKnotData& first = _knots->front();
-    const Ts_DoubleKnotData& last  = _knots->back();
-
-    const GfInterval knotInterval(_firstTime, _lastTime);
-    const TsTime knotSpan = knotInterval.GetSize();
-
-    // Do not use pre-value for the last knot. If the last knot is dual valued
-    // we want to include that discontinuity in valueOffset.
-    const double valueOffset =
-        (extrap->mode == TsExtrapLoopRepeat ? last.value - first.value : 0.0);
-    const bool oscillate = (extrap->mode == TsExtrapLoopOscillate);
-
-    const TsTime minTime = regionInterval.GetMin();
-    const TsTime maxTime = regionInterval.GetMax();
-
-    const TsTime timeTolerance = _tolerance / _timeScale;
-
-    // The entire timeline can be divided up into knotSpan sized spans
-    // that we iterate over repeating the loop. Iteration 0 is the span
-    // that contains the knots themselves, [_firstTime .. _lastTime).
-    //
-    // Determine the iteration numbers that we're asked to sample.
-    const double minIter = (minTime - _firstTime) / knotSpan;
-    const double maxIter = (maxTime - _firstTime) / knotSpan;
-
-    // We don't want really tiny fractions of an iteration so round them
-    // toward a smaller number of iterations within iterTolerance.
-    const double iterTolerance = timeTolerance / knotSpan;
-
-    const int64_t minIterNum = int64_t(std::floor(minIter + iterTolerance));
-    const int64_t maxIterNum = int64_t(std::ceil(maxIter - iterTolerance));
-
-
-    for (int64_t iterNum = minIterNum; iterNum < maxIterNum; ++iterNum) {
-        if (iterNum == 0) continue;
-
-        const bool reversed = (oscillate && (iterNum % 2 != 0));
-
-        double knotToSampleTimeScale;
-        TsTime knotToSampleTimeOffset;
-
-        // Sample time values for the beginning and end of this
-        // iteration.
-        const TsTime firstIterTime = _firstTime + iterNum * knotSpan;
-        const TsTime lastIterTime = _firstTime + (iterNum + 1) * knotSpan;
-
-        if (reversed) {
-            // Map from knot time to sample time.
-            knotToSampleTimeScale = -1.0;
-            knotToSampleTimeOffset = _lastTime + firstIterTime;
-        } else {
-            knotToSampleTimeScale = 1.0;
-            knotToSampleTimeOffset = iterNum * knotSpan;
-        }
-        const double iterValueOffset = iterNum * valueOffset;
-
-        // Interval for this single iteration of the loop in sample time
-        const GfInterval iterInterval(firstIterTime, lastIterTime);
-        // Clamped to the input sample region.
-        const GfInterval sampleInterval = regionInterval & iterInterval;
-        if (reversed) {
-            _SampleKnotsReversed(sampleInterval,
-                                 source,
-                                 knotToSampleTimeScale,
-                                 knotToSampleTimeOffset,
-                                 iterValueOffset,
-                                 sampledSpline);
-        } else {
-            _SampleKnots(sampleInterval,
-                         source,
-                         knotToSampleTimeScale,
-                         knotToSampleTimeOffset,
-                         iterValueOffset,
-                         sampledSpline);
-        }
+    const TsTime& segmentStartTime = segment->p0[0];
+    const TsTime& segmentEndTime = segment->p1[0];
+    if (segmentStartTime < splineInterval.GetMin())
+    {
+        return data->preExtrapolation.IsLooping()
+            ? TsSourcePreExtrapLoop
+            : TsSourcePreExtrap;
     }
+    if (segmentEndTime > splineInterval.GetMax())
+    {
+        return data->postExtrapolation.IsLooping()
+            ? TsSourcePostExtrapLoop
+            : TsSourcePostExtrap;
+    }
+
+    if (!data->HasInnerLoops()) {
+        return TsSourceKnotInterp;
+    }
+
+    GfInterval segmentInterval =
+        GfInterval(segmentStartTime, segmentEndTime, CLOSED, OPEN);
+    GfInterval protoInterval = data->loopParams.GetPrototypeInterval();
+    if (protoInterval.Contains(segmentInterval)) {
+        return TsSourceInnerLoopProto;
+    } else if (loopedInterval.Contains(segmentInterval)) {
+        return segmentStartTime < protoInterval.GetMin()
+            ? TsSourceInnerLoopPreEcho
+            : TsSourceInnerLoopPostEcho;
+    }
+    return TsSourceKnotInterp;
 }
 
 void
-_Sampler::_SampleKnots(
-    const GfInterval& sampleInterval,
-    const TsSplineSampleSource source,
-    const double knotToSampleTimeScale,
-    const TsTime knotToSampleTimeOffset,
-    const double valueOffset,
-    Ts_SampleDataInterface* sampledSpline)
-{
-    const Ts_DoubleKnotData* prevKnot = nullptr;
-    const Ts_DoubleKnotData* nextKnot = nullptr;
-    const Ts_DoubleKnotData* endKnot = nullptr;
-
-    // Shift the interval from sample to knot times by subtracting time offset
-    // and clamping any rounding errors.
-    const GfInterval knotInterval = (sampleInterval - GfInterval(knotToSampleTimeOffset)) &
-                                    GfInterval(_firstTime, _lastTime);
-
-    TsTime knotTime = knotInterval.GetMin();
-    const TsTime knotEndTime = knotInterval.GetMax();
-
-    // nextIt points to the knot at the end of the segment containing knotTime.
-    // endIt points to the knot at or after knotEndTime. Since knotEndTime is
-    // clamped to never exceed _lastTime, endIt points to the beginning of the
-    // segment that should not be sampled (instead of the end of the segment
-    // that should be); it is never _times->end().
-    auto nextIt = std::upper_bound(_times->begin(), _times->end(),
-                                   knotTime);
-    auto endIt = std::lower_bound(_times->begin(), _times->end(),
-                                  knotEndTime);
-
-    // Convert the iterators to indices so we can find the corresponding
-    // item in the _knots vector.
-    ptrdiff_t nextIndex = nextIt - _times->begin();
-    ptrdiff_t endIndex = endIt - _times->begin();
-
-    // Raw pointers to knotData that corresponds to the _times values that
-    // the iterators were referencing.
-    nextKnot = _knots->data() + nextIndex;
-    prevKnot = nextKnot - 1;
-    endKnot = _knots->data() + endIndex;
-
-    for(; prevKnot < endKnot; ++prevKnot, ++nextKnot) {
-        GfInterval segmentInterval(prevKnot->time, nextKnot->time);
-        segmentInterval &= knotInterval;
-        _SampleSegment(prevKnot,
-                       nextKnot,
-                       segmentInterval,
-                       source,
-                       knotToSampleTimeScale,
-                       knotToSampleTimeOffset,
-                       valueOffset,
-                       sampledSpline);
-
-    }
-}
-
-void
-_Sampler::_SampleKnotsReversed(
-    const GfInterval& sampleInterval,
-    const TsSplineSampleSource source,
-    const double knotToSampleTimeScale,
-    const TsTime knotToSampleTimeOffset,
-    const double valueOffset,
-    Ts_SampleDataInterface* sampledSpline)
-{
-    // _SampleKnotsReversed is used only for extrapolation loops that oscillate
-    // and only for the iterations that traverse backward through time. The
-    // sampleInterval is guaranteed to fit within a single iteration of the
-    // loop.
-    const Ts_DoubleKnotData* prevKnot = nullptr;
-    const Ts_DoubleKnotData* nextKnot = nullptr;
-    const Ts_DoubleKnotData* beginKnot = nullptr;
-
-    // Shift the interval from sample to knot times and clamp any rounding
-    // errors.
-    const GfInterval knotInterval =
-        GfInterval(_ToKnotTime(sampleInterval.GetMax(),
-                               knotToSampleTimeScale,
-                               knotToSampleTimeOffset),
-                   _ToKnotTime(sampleInterval.GetMin(),
-                               knotToSampleTimeScale,
-                               knotToSampleTimeOffset)) &
-        GfInterval(_firstTime, _lastTime);
-
-    // We are time reversed, so knotInterval.GetMax() will yield the smallest
-    // sample time value when passed through _ToSampleTime.
-
-    TsTime knotTime = knotInterval.GetMax();
-    const TsTime knotBeginTime = knotInterval.GetMin();
-
-    // prevIt points to the knot at the begining of the segment containing
-    // knotTime.  beginIt points to the knot at or before knotBeginTime. Since
-    // knotBeginTime is clamped to never exceed _firstTime, beginIt points to
-    // the beginning of the segment that should not be sampled (instead of the
-    // end of the segment that should be); it is never _times->rend().
-    auto prevIt = std::upper_bound(_times->rbegin(), _times->rend(),
-                                   knotTime, std::greater<TsTime>());
-    auto beginIt = std::lower_bound(_times->rbegin(), _times->rend(),
-                                    knotBeginTime, std::greater<TsTime>());
-
-    // Convert the iterators to indices so we can find the corresponding
-    // item in the _knots vector.
-    ptrdiff_t prevRindex = prevIt - _times->rbegin();
-    ptrdiff_t beginRindex = beginIt - _times->rbegin();
-
-    // Raw pointers to knotData that corresponds to the _times values that
-    // the iterators were referencing.
-    prevKnot = _knots->data() + (_knots->size() - 1) - prevRindex;
-    prevKnot = nextKnot + 1;
-    beginKnot = _knots->data() + (_knots->size() - 1) - beginRindex;
-
-    for(; nextKnot > beginKnot; --prevKnot, --nextKnot) {
-        GfInterval segmentInterval(prevKnot->time, nextKnot->time);
-        segmentInterval &= knotInterval;
-        _SampleSegment(prevKnot,
-                       nextKnot,
-                       segmentInterval,
-                       source,
-                       knotToSampleTimeScale,
-                       knotToSampleTimeOffset,
-                       valueOffset,
-                       sampledSpline);
-    }
-}
-
-void
-_Sampler::_SampleSegment(
-    const Ts_DoubleKnotData* prevKnot,
-    const Ts_DoubleKnotData* nextKnot,
-    const GfInterval& segmentInterval,
-    const TsSplineSampleSource source,
-    const double knotToSampleTimeScale,
-    const double knotToSampleTimeOffset,
-    const double valueOffset,
-    Ts_SampleDataInterface* sampledSpline)
-{
-    // Interpolate from prevKnot to nextKnot and store sample segments into
-    // sampledSpline
-
-    if (prevKnot->nextInterp == TsInterpValueBlock) {
-        // No value, nothing to do.
-        return;
-    } else if (prevKnot->nextInterp == TsInterpCurve) {
-        _SampleCurveSegment(prevKnot,
-                            nextKnot,
-                            segmentInterval,
-                            source,
-                            knotToSampleTimeScale,
-                            knotToSampleTimeOffset,
-                            valueOffset,
-                            sampledSpline);
-        return;
-    }
-
-    // This segment is a single straight line.
-    TsTime t1 = prevKnot->time;
-    double v1 = prevKnot->value;
-    TsTime t2 = nextKnot->time;
-    double v2 = (prevKnot->nextInterp == TsInterpHeld
-                 ? prevKnot->value            // held value
-                 : nextKnot->GetPreValue());  // linear value
-
-    // Adjust for sampling just part of the segment.
-    TsTime t = segmentInterval.GetMin();
-    if (t > t1) {
-        double u = (t - t1) / (t2 - t1);
-        t1 = t;
-        // Only lerp if the value is changing to avoid rounding errors.
-        if (v1 != v2) {
-            v1 = GfLerp(u, v1, v2);
-        }
-    }
-    t = segmentInterval.GetMax();
-    if (t < t2) {
-        double u = (t - t1) / (t2 - t1);
-        t2 = t;
-        // Only lerp if the value is changing to avoid rounding errors.
-        if (v1 != v2) {
-            v2 = GfLerp(u, v1, v2);
-        }
-    }
-
-    sampledSpline->AddSegment(
-        _ToSampleTime(t1, knotToSampleTimeScale, knotToSampleTimeOffset),
-        v1 + valueOffset,
-        _ToSampleTime(t2, knotToSampleTimeScale, knotToSampleTimeOffset),
-        v2 + valueOffset,
-        source);
-}
-
-void
-_Sampler::_SampleCurveSegment(
-    const Ts_DoubleKnotData* prevKnot,
-    const Ts_DoubleKnotData* nextKnot,
-    const GfInterval& segmentInterval,
-    const TsSplineSampleSource source,
-    const double knotToSampleTimeScale,
-    const double knotToSampleTimeOffset,
-    const double valueOffset,
-    Ts_SampleDataInterface* sampledSpline)
-{
-    // Bezier control points. We sample the Bezier version even for Hermite
-    // curves since the math is equivalent.
-    GfVec2d cp[4];
-
-    // A switch statement will generate a compile error if we ever add a new
-    // curve type without adding a case for it.
-    switch (_data->curveType) {
-      case TsCurveTypeBezier:
-        {
-            // Bezier curves may be regressive, prevent that.
-            Ts_DoubleKnotData pKnot = *prevKnot;
-            Ts_DoubleKnotData nKnot = *nextKnot;
-            Ts_RegressionPreventerBatchAccess::ProcessSegment(
-                &pKnot, &nKnot, TsAntiRegressionKeepRatio);
-
-            // Get the 4 Bezier control points. Note that the value returned by
-            // GetPreTanWidth() is always non-negative, but GetPreTanHeight()
-            // has the correct sign.
-            cp[0] = GfVec2d(pKnot.time, pKnot.value);
-            cp[3] = GfVec2d(nKnot.time, nKnot.GetPreValue());
-            cp[1] = cp[0] + GfVec2d(pKnot.GetPostTanWidth(),
-                                    pKnot.GetPostTanHeight());
-            cp[2] = cp[3] + GfVec2d(-nKnot.GetPreTanWidth(),
-                                    nKnot.GetPreTanHeight());
-        }
-        break;
-
-      case TsCurveTypeHermite:
-        {
-            // Convert the Hermite curve to Bezier control points. Note, Hermite
-            // curves are never regressive so regression prevention is not
-            // needed.
-            const double dt = nextKnot->time - prevKnot->time;
-            const double dt_3 = dt / 3.0;
-
-            cp[0] = GfVec2d(prevKnot->time, prevKnot->value);
-            cp[3] = GfVec2d(nextKnot->time, nextKnot->GetPreValue());
-            cp[1] = cp[0] + GfVec2d(dt_3, dt_3 * prevKnot->GetPostTanSlope());
-            cp[2] = cp[3] - GfVec2d(dt_3, dt_3 * nextKnot->GetPreTanSlope());
-        }
-        break;
-    }
-
-    _SampleBezier(cp, segmentInterval, source,
-                  knotToSampleTimeScale, knotToSampleTimeOffset,
-                  valueOffset, sampledSpline);
-}
-
-void
-_Sampler::_SampleBezier(GfVec2d cp[4],
-                        const GfInterval& segmentInterval,
-                        TsSplineSampleSource source,
-                        double knotToSampleTimeScale,
-                        double knotToSampleTimeOffset,
-                        double valueOffset,
-                        Ts_SampleDataInterface* sampledSpline)
-{
-    // Bezier curves exist entirely within the bounds of their control points
-    // so we compute the height of the bounding box. This is the length of the
-    // vectors perpendicular to the baseline from cp[0] to cp[3].
-    //
-    // All height computations are done in "tolerance space", scaled by
-    // _timeScale and _valueScale so we can just compare the length of the
-    // perpendicular vectors to _tolerance (really compare length squared to
-    // _tolerance squared). If greater than _tolerance then we split the Bezier
-    // into 2 halves and recurse on each one.
-    GfVec2d scaleVec(_timeScale, _valueScale);
-    GfVec2d baseVec = GfCompMult(scaleVec, cp[3] - cp[0]);
-    GfVec2d vec1 = GfCompMult(scaleVec, cp[1] - cp[0]);
-    GfVec2d vec2 = GfCompMult(scaleVec, cp[2] - cp[0]);
-
-    // baseVec is the vector from cp[0] to cp[3]. Compute the perpendicular
-    // distance from that base line to each of cp[1] and cp[2]. The values
-    // t1 * baseVec and t2 * baseVec are the projections of vec1 and vec2 onto
-    // baseVec. So (vec1 - t1 * baseVec) is the perpendicular component of vec1.
-    double lenSquared = baseVec.GetLengthSq();
-    double t1 = vec1 * baseVec / lenSquared;
-    double t2 = vec2 * baseVec / lenSquared;
-
-    double h1Squared = (vec1 - t1 * baseVec).GetLengthSq();
-    double h2Squared = (vec2 - t2 * baseVec).GetLengthSq();
-
-    // If the length of both perpendiculars are <= _tolerance, we're done, baseVec
-    // is our linear approximation of this part of the curve.
-    if (std::max(h1Squared, h2Squared) <= _tolerance * _tolerance) {
-        double t1 = cp[0][0];
-        double t2 = cp[3][0];
-        double v1 = cp[0][1];
-        double v2 = cp[3][1];
-
-        if (t1 < segmentInterval.GetMin()) {
-            double u = (segmentInterval.GetMin() - t1) / (t2 - t1);
-            t1 = GfLerp(u, t1, t2);
-            v1 = GfLerp(u, v1, v2);
-        }
-        if (t2 > segmentInterval.GetMax()) {
-            double u = (segmentInterval.GetMax() - t1) / (t2 - t1);
-            t2 = GfLerp(u, t1, t2);
-            v2 = GfLerp(u, v1, v2);
-        }
-
-        sampledSpline->AddSegment(_ToSampleTime(t1,
-                                                knotToSampleTimeScale,
-                                                knotToSampleTimeOffset),
-                                  v1 + valueOffset,
-                                  _ToSampleTime(t2,
-                                                knotToSampleTimeScale,
-                                                knotToSampleTimeOffset),
-                                  v2 + valueOffset,
-                                  source);
-        return;
-    } else {
-        // The height of the control point bounding box is greater than
-        // _tolerance, so split the curve and recurse on the halves.
-        GfVec2d leftCp[4], rightCp[4];
-        _SubdivideBezier(cp, 0.5, leftCp, rightCp);
-        bool doLeft = (segmentInterval.Contains(leftCp[0][0]) ||
-                       segmentInterval.Contains(leftCp[3][0]));
-        bool doRight = (segmentInterval.Contains(rightCp[0][0]) ||
-                        segmentInterval.Contains(rightCp[3][0]));
-
-        if (knotToSampleTimeScale < 0) {
-            // time scale is negative (due to oscillating loops) so sample the
-            // right hand side first as it will get scaled to the left.
-            if (doRight) {
-                _SampleBezier(rightCp,
-                              segmentInterval,
-                              source,
-                              knotToSampleTimeScale,
-                              knotToSampleTimeOffset,
-                              valueOffset,
-                              sampledSpline);
-            }
-            if (doLeft) {
-                _SampleBezier(leftCp,
-                              segmentInterval,
-                              source,
-                              knotToSampleTimeScale,
-                              knotToSampleTimeOffset,
-                              valueOffset,
-                              sampledSpline);
-            }
-        } else {
-            if (doLeft) {
-                _SampleBezier(leftCp,
-                              segmentInterval,
-                              source,
-                              knotToSampleTimeScale,
-                              knotToSampleTimeOffset,
-                              valueOffset,
-                              sampledSpline);
-            }
-            if (doRight) {
-                _SampleBezier(rightCp,
-                              segmentInterval,
-                              source,
-                              knotToSampleTimeScale,
-                              knotToSampleTimeOffset,
-                              valueOffset,
-                              sampledSpline);
-            }
-        }
-    }
-}
-
-void
-_Sampler::_SubdivideBezier(const GfVec2d cp[4],
-                           const double u,
-                           GfVec2d leftCp[4],
-                           GfVec2d rightCp[4])
+_SubdivideBezier(const GfVec2d cp[4],
+                 const double u,
+                 GfVec2d leftCp[4],
+                 GfVec2d rightCp[4])
 {
     // Intermediate points
     GfVec2d cp01   = GfLerp(u, cp[0], cp[1]);
@@ -998,183 +184,371 @@ _Sampler::_SubdivideBezier(const GfVec2d cp[4],
     rightCp[3] = cp[3];
 }
 
-// Unroll inner loops and convert the relevant knot data to Ts_DoubleKnotData.
-// Intermediate computations are all done double precision to match eval and to
-// avoid precision problems. Since we're going to call GetKnotDataAsDouble
-// eventually, do it up front.
 void
-_Sampler::_UnrollInnerLoops()
+_SampleBezier(GfVec2d cp[4],
+              const GfInterval& segmentInterval,
+              TsSplineSampleSource source,
+              double timeScale,
+              double valueScale,
+              double tolerance,
+              Ts_SampleDataInterface* sampledSpline)
 {
-    if (!_haveInnerLoops &&
-        _data->GetValueType() == Ts_GetType<double>())
-    {
-        const Ts_TypedSplineData<double>* _doubleData =
-            dynamic_cast<const Ts_TypedSplineData<double>*>(_data);
-        // The spline data already has everything we need.
-        _knots = &_doubleData->knots;
-        _times = &_data->times;
-        return;
-    }
-
-    // We're going to have to convert the knots and times info. Point _knots and
-    // _times at the internal arrays that we're about to populate.
-    _knots = &_internalKnots;
-    _times = &_internalTimes;
-
-    // Inner loops are defined over a closed interval. The end of the looped
-    // interval has a knot that is a copy of the knot at the start of the
-    // interval. It will overrule any knot that may be in the spline data at
-    // that time. So any regular knots that come after the inner loops start
-    // with an open interval, (_lastInnerLoop .. _lastTime].
+    // Bezier curves exist entirely within the bounds of their control points
+    // so we compute the height of the bounding box. This is the length of the
+    // vectors perpendicular to the baseline from cp[0] to cp[3].
     //
-    // Also, because of the point above, there is a "fencepost" issue to keep
-    // in mind where there is one more copy of the first knot than there are
-    // loops because there is a copy at both the beginning and the end of the
-    // looped range.
-    GfInterval loopedInterval;  // empty interval;
-    if (_haveInnerLoops) {
-        loopedInterval = GfInterval(_firstInnerLoop, _lastInnerLoop);
-        if (_havePreExtrapLoops || _havePostExtrapLoops) {
-            // If we are using a looping extrapolation mode then we need to be
-            // more careful about the region of knots that we unroll. If the
-            // requested time samples extend beyond the last knot then sampling
-            // will wrap around to the beginning again. So limit loopedInterval
-            // only if _timeInterval is entirely within it. If _timeInterval is
-            // at all outside loopInterval we want to unroll the entire
-            // loopInterval.
-            if (loopedInterval.Contains(_timeInterval)) {
-                loopedInterval = _timeInterval;
-            }
-        } else {
-            // No extrapolation looping so we only need to unroll inner loop
-            // knots that affect _timeInterval
-            loopedInterval &= _timeInterval;
+    // All height computations are done in "tolerance space", scaled by
+    // timeScale and valueScale so we can just compare the length of the
+    // perpendicular vectors to _tolerance (really compare length squared to
+    // _tolerance squared). If greater than _tolerance then we split the Bezier
+    // into 2 halves and recurse on each one.
+    GfVec2d scaleVec(timeScale, valueScale);
+    GfVec2d baseVec = GfCompMult(scaleVec, cp[3] - cp[0]);
+    GfVec2d vec1 = GfCompMult(scaleVec, cp[1] - cp[0]);
+    GfVec2d vec2 = GfCompMult(scaleVec, cp[2] - cp[0]);
+
+    // baseVec is the vector from cp[0] to cp[3]. Compute the perpendicular
+    // distance from that base line to each of cp[1] and cp[2]. The values
+    // t1 * baseVec and t2 * baseVec are the projections of vec1 and vec2 onto
+    // baseVec. So (vec1 - t1 * baseVec) is the perpendicular component of vec1.
+    double lenSquared = baseVec.GetLengthSq();
+    double t1 = vec1 * baseVec / lenSquared;
+    double t2 = vec2 * baseVec / lenSquared;
+
+    double h1Squared = (vec1 - t1 * baseVec).GetLengthSq();
+    double h2Squared = (vec2 - t2 * baseVec).GetLengthSq();
+
+    // If the length of both perpendiculars are <= tolerance, we're done, baseVec
+    // is our linear approximation of this part of the curve.
+    if (std::max(h1Squared, h2Squared) <= tolerance * tolerance) {
+        double t1 = cp[0][0];
+        double t2 = cp[3][0];
+        double v1 = cp[0][1];
+        double v2 = cp[3][1];
+
+        if (t1 < segmentInterval.GetMin()) {
+            double u = (segmentInterval.GetMin() - t1) / (t2 - t1);
+            t1 = GfLerp(u, t1, t2);
+            v1 = GfLerp(u, v1, v2);
         }
-    }
-
-    // Iterators for the range that is pre-looping, looping prototype, and
-    // post-looping.
-    std::vector<TsTime>::const_iterator preBegin, preEnd;      // before looping
-    std::vector<TsTime>::const_iterator protoBegin, protoEnd;  // looping prototype
-    std::vector<TsTime>::const_iterator postBegin, postEnd;    // after looping
-
-    // Save some typing and wrapping of long lines.
-    std::vector<TsTime>::const_iterator timesBegin = _data->times.begin();
-    std::vector<TsTime>::const_iterator timesEnd = _data->times.end();
-
-    preBegin = std::lower_bound(timesBegin, timesEnd, _timeInterval.GetMin());
-    if ((preBegin == timesEnd || *preBegin > _timeInterval.GetMin()) &&
-        preBegin != timesBegin)
-    {
-        --preBegin;
-    }
-
-    // Find the knot at or after the end of _timeInterval. This is the knot on
-    // the far end of the last segment we are sampling (or is timesEnd if we're
-    // sampling past the last knot).
-    postEnd = std::lower_bound(preBegin, timesEnd, _timeInterval.GetMax());
-    if (postEnd != timesEnd) {
-        // Increment the iterator so copying [preBegin .. postEnd) will copy the
-        // last knot.
-        ++postEnd;
-    }
-
-    if (loopedInterval.IsEmpty()) {
-        // Even if there are inner loops, we're not interested in
-        // that portion of the spline. Copy what we need
-        _internalTimes.assign(preBegin, postEnd);
-
-        // Populate the knot vector with double data.
-        ptrdiff_t offset = std::distance(timesBegin, preBegin);
-        _internalKnots.reserve(_internalTimes.size());
-
-        for (size_t i = 0; i < _internalTimes.size(); ++i) {
-            _internalKnots.push_back(
-                _data->GetKnotDataAsDouble(i + offset));
+        if (t2 > segmentInterval.GetMax()) {
+            double u = (segmentInterval.GetMax() - t1) / (t2 - t1);
+            t2 = GfLerp(u, t1, t2);
+            v2 = GfLerp(u, v1, v2);
         }
 
-        return;
-    }
-
-    preEnd = std::lower_bound(preBegin, timesEnd, _firstInnerLoop);
-
-    protoBegin = std::lower_bound(preEnd, timesEnd, _firstInnerProto);
-    protoEnd = std::lower_bound(protoBegin, timesEnd, _lastInnerProto);
-
-    // There will be copy of the first prototype region knot at _lastInnerLoop.
-    // Use upper_bound because the post looping data starts after the copy.
-    postBegin = std::upper_bound(protoEnd, timesEnd, _lastInnerLoop);
-
-    // Note that Ts_SplineData::HasInnerLoops has already validated the
-    // loopParams struct so we know we have a positive size for protoSpan
-    // and at least 1 loop of the spanned range.
-    const TsLoopParams &lp = _data->loopParams;
-    const TsTime protoSpan = lp.protoEnd - lp.protoStart;
-
-    // Figure out the number of pre- and post-loops that we need. This may be
-    // less than the number of pre- and post-loops that exist because
-    // loopedInterval is only the looped portion of the spline that we want to
-    // sample.
-    const TsTime preOffset = _firstInnerProto - loopedInterval.GetMin();
-    const int preLoops = std::max(0, int(std::ceil(preOffset / protoSpan)));
-
-    const TsTime postOffset = loopedInterval.GetMax() - _lastInnerProto;
-    const int postLoops = std::max(0, int(std::ceil(postOffset / protoSpan)));
-
-    // Count the knots to minimize memory allocations
-    ptrdiff_t count = (preEnd - preBegin) +
-                      (protoEnd - protoBegin) * (preLoops + 1 + postLoops) + 1 +
-                      (postEnd - postBegin);
-
-    _internalKnots.reserve(count);
-    _internalTimes.reserve(count);
-
-    // Convert iterators to indices so they work for both knots and times.
-    ptrdiff_t preBeginIndex   = preBegin   - timesBegin;
-    ptrdiff_t preEndIndex     = preEnd     - timesBegin;
-
-    ptrdiff_t protoBeginIndex = protoBegin - timesBegin;
-    ptrdiff_t protoEndIndex   = protoEnd   - timesBegin;
-
-    ptrdiff_t postBeginIndex  = postBegin  - timesBegin;
-    ptrdiff_t postEndIndex    = postEnd    - timesBegin;
-
-    // Populate the arrays. Just copy values from before looping starts.
-    for (ptrdiff_t i = preBeginIndex; i < preEndIndex; ++i) {
-        _internalTimes.push_back(_data->times[i]);
-        _internalKnots.push_back(_data->GetKnotDataAsDouble(i));
-    }
-
-    // Copy data for the loops, offsetting the times and values.
-    for (int loopIndex = -preLoops; loopIndex <= postLoops; ++loopIndex) {
-        TsTime timeOffset = protoSpan * loopIndex;
-        double valueOffset = lp.valueOffset * loopIndex;
-        for (ptrdiff_t i = protoBeginIndex; i < protoEndIndex; ++i) {
-            _internalTimes.push_back(_data->times[i] + timeOffset);
-
-            _internalKnots.push_back(_data->GetKnotDataAsDouble(i));
-            Ts_DoubleKnotData& back = _internalKnots.back();
-            back.time += timeOffset;
-            back.value += valueOffset;
-            back.preValue += valueOffset;
+        sampledSpline->AddSegment(t1, v1, t2, v2, source);
+    } else {
+        // The height of the control point bounding box is greater than
+        // _tolerance, so split the curve and recurse on the halves.
+        GfVec2d leftCp[4], rightCp[4];
+        _SubdivideBezier(cp, 0.5, leftCp, rightCp);
+        bool doLeft = segmentInterval.Intersects(GfInterval(leftCp[0][0],
+                                                            leftCp[3][0]));
+        bool doRight = segmentInterval.Intersects(GfInterval(rightCp[0][0],
+                                                             rightCp[3][0]));
+        if (doLeft) {
+            _SampleBezier(leftCp,
+                            segmentInterval,
+                            source,
+                            timeScale,
+                            valueScale,
+                            tolerance,
+                            sampledSpline);
         }
-    }
-
-    // One last copy of the first prototype knot.
-    _internalTimes.push_back(_data->times[_firstInnerProtoIndex] +
-                             protoSpan * (postLoops + 1));
-    _internalKnots.push_back(_data->GetKnotDataAsDouble(_firstInnerProtoIndex));
-    Ts_DoubleKnotData& back = _internalKnots.back();
-    back.time += protoSpan * (postLoops + 1);
-    back.value += lp.valueOffset * (postLoops + 1);
-    back.preValue += lp.valueOffset * (postLoops + 1);
-
-    // Copy knots that are after looping ends.
-    for (ptrdiff_t i = postBeginIndex; i < postEndIndex; ++i) {
-        _internalTimes.push_back(_data->times[i]);
-        _internalKnots.push_back(_data->GetKnotDataAsDouble(i));
+        if (doRight) {
+            _SampleBezier(rightCp,
+                            segmentInterval,
+                            source,
+                            timeScale,
+                            valueScale,
+                            tolerance,
+                            sampledSpline);
+        }
     }
 }
+
+// Get simplification of a looping extrapolation. If not looping, return
+// original extrapolation.
+TsExtrapolation
+_SimplifyOuterLooping(
+    const Ts_SplineData* data,
+    const double boundaryAdjacentTime,
+    const TsExtrapolation& extrap)
+{
+    if (!extrap.IsLooping()) {
+        return extrap;
+    }
+
+    const auto& times = data->times;
+    if (times.empty()) {
+        return TsExtrapolation(TsExtrapValueBlock);
+    }
+
+    const bool hasBoundary = extrap.loopBoundaryTime.has_value();
+    if (hasBoundary) {
+        const double boundary = extrap.loopBoundaryTime.value();
+        const bool found = std::binary_search(times.begin(), times.end(),
+                                              boundary);
+        if (found && boundary == boundaryAdjacentTime) {
+            return TsExtrapolation(TsExtrapHeld);
+        } else if (!found) {
+            return TsExtrapolation(TsExtrapValueBlock);
+        }
+    } else if (data->times.size() == 1 && !data->HasInnerLoops()) {
+        return TsExtrapolation(TsExtrapHeld);
+    }
+
+    return extrap;
+}
+
+// Returns a shifted loop boundary time after baking enough knots to cover
+// numSegments into the given resultData for pre extrapolation looping.
+double
+_BakeAndShiftPreExtrapLoop(
+    const Ts_SplineData* const data,
+    const GfInterval& interval,
+    const size_t numSegments,
+    Ts_SplineData* resultData)
+{
+    const double finiteTime = interval.GetMax();
+    const GfInterval startPoint(finiteTime, finiteTime, CLOSED, CLOSED);
+
+    Ts_SegmentIterator it(data, startPoint);
+    Ts_TypedKnotData<double> d;
+    Ts_Segment segment = *it;
+    const double shiftedBoundary = segment.p0[0];
+
+    // Scenario A: First segment starts exactly at the open interval max.
+    // Scenario B: First segment starts exactly at the closed interval max.
+    // Scenario C: The interval max lies somewhere in (last knot time, +inf)
+    // Scenario D: The interval max lies between two knots.
+    const bool scenarioA = segment.p0[0] == interval.GetMax()
+                           && interval.IsMaxOpen();
+    const bool scenarioB = segment.p0[0] == interval.GetMax()
+                           && interval.IsMaxClosed();
+    const bool scenarioC = segment.p1[0] == +inf;
+    const bool scenarioD = !scenarioA && !scenarioB && !scenarioC;
+
+    // Add a pre-values-only knot if the finite max is between two knots,
+    // so that we can breakdown a knot at the max later in Ts_Truncate.
+    if (scenarioD) {
+        _SetKnotDataPreValues(segment, d);
+        d.value = d.preValue;
+        _FinalizeKnotData(d);
+        resultData->SetKnotFromDouble(&d, VtDictionary());
+        d = Ts_TypedKnotData<double>();
+    }
+
+    // Set the values of the ending knot unless we want to truncate
+    // away the values side of the knot at the open interval max.
+    if (!scenarioA) {
+        _SetKnotDataValues(segment, d);
+    }
+
+    for (size_t i = 0; i < numSegments; ++i) {
+        const bool success = it.StepBackward();
+        TF_VERIFY(success,
+                  "Ts_SegmentIterator should be able to StepBackward "
+                  "infinitely into looped extrap regions");
+
+        segment = *it;
+        _SetKnotDataPreValues(segment, d);
+
+        // If we truncated away the values side of the knot earlier, set the
+        // knot's value from the recorded pre-value so that any held
+        // extrapolation behaves as expected.
+        if (scenarioA && i == 0) {
+            d.value = d.preValue;
+        }
+
+        _FinalizeKnotData(d);
+        resultData->SetKnotFromDouble(&d, VtDictionary());
+        d = Ts_TypedKnotData<double>();
+
+        _SetKnotDataValues(segment, d);
+    }
+
+    // We never need the pre-values of the first knot, so don't call
+    // _FinalizeKnotData.
+    resultData->SetKnotFromDouble(&d, VtDictionary());
+
+    return shiftedBoundary;
+}
+
+// Returns a shifted loop boundary time after baking enough knots to cover
+// numSegments into the given resultData for post extrapolation looping.
+double
+_BakeAndShiftPostExtrapLoop(
+    const Ts_SplineData* const data,
+    const GfInterval& interval,
+    const size_t numSegments,
+    Ts_SplineData* resultData)
+{
+    const double finiteTime = interval.GetMin();
+    const GfInterval startPoint(finiteTime, finiteTime, CLOSED, CLOSED);
+
+    Ts_SegmentIterator it(data, startPoint);
+    Ts_TypedKnotData<double> d;
+    Ts_Segment segment = *it;
+
+    // Scenario A: First segment starts exactly at the interval min.
+    // Scenario B: The interval min lies somewhere in (-inf, first knot time)
+    // Scenario C: The interval min lies between two knots.
+    const bool scenarioA = segment.p0[0] == interval.GetMin();
+    const bool scenarioB = segment.p0[0] == -inf;
+    const bool scenarioC = !scenarioA && !scenarioB;
+
+    // Add a post-values-only knot if the finite min is between two knots,
+    // so that we can breakdown a knot at the min later in Ts_Truncate.
+    if (scenarioC) {
+        _SetKnotDataValues(segment, d);
+        resultData->SetKnotFromDouble(&d, VtDictionary());
+        d = Ts_TypedKnotData<double>();
+    }
+
+    // Set pre values of the next knot only if the interval contains
+    // those pre values.
+    if (scenarioB || scenarioC) {
+        _SetKnotDataPreValues(segment, d);
+    }
+
+    const double shiftedBoundary = scenarioA ? segment.p0[0]
+                                             : segment.p1[0];
+
+    for (size_t i = 0; i < numSegments; ++i) {
+        // When the iterator's first segment starts exactly at the interval
+        // min, we don't need to step the iterator forward to access the
+        // first full segment.
+        const bool scenarioAStart = scenarioA && i == 0;
+        if (!scenarioAStart) {
+            const bool success = it.StepForward();
+            TF_VERIFY(success,
+                      "Ts_SegmentIterator should be able to StepForward "
+                      "infinitely into looped extrap regions");
+            segment = *it;
+        }
+
+        _SetKnotDataValues(segment, d);
+
+        // We should only finalize knots that have both pre and post data
+        // written to them. Scenario A's first knot only has post values.
+        if (!scenarioAStart) {
+            _FinalizeKnotData(d);
+        }
+
+        resultData->SetKnotFromDouble(&d, VtDictionary());
+        d = Ts_TypedKnotData<double>();
+
+        _SetKnotDataPreValues(segment, d);
+    }
+
+    // Complete the last knot
+    bool success = it.StepForward();
+    TF_VERIFY(success,
+              "Ts_SegmentIterator should be able to step forward infinitely"
+              "into looping extrap");
+    segment = *it;
+    _SetKnotDataValues(segment, d);
+    _FinalizeKnotData(d);
+    resultData->SetKnotFromDouble(&d, VtDictionary());
+
+    return shiftedBoundary;
+}
+
+// Requires that extrap was distilled from _SimplifyOuterLooping. Updates
+// extrap parameter and creates a Ts_SplineData, which the caller is
+// responsible for deallocating.
+Ts_SplineData*
+_BakeAndShiftExtrapLoopBoundary(
+    const Ts_SplineData* const data,
+    const double boundaryOppositeTime,
+    const GfInterval& interval,
+    const bool isPre,
+    TsExtrapolation* extrap)
+{
+    if (!extrap->IsLooping()) {
+        TF_CODING_ERROR("_BakeAndShiftExtrapLoopBoundary must be called with "
+                        "looping extrap, returning 0");
+        return nullptr;
+    }
+    const auto& times = data->times;
+
+    // Get the num segments that are looped over.
+    size_t numSegments = 0;
+    double loopBoundaryTime = isPre ? times.back() : times.front();
+    if (data->HasInnerLoops()) {
+        // Inner looping being present indicates that looping extrap doesn't
+        // specifiy loopBoundaryTime. We need to count the number of segments.
+        Ts_SegmentKnotIterator it(data, GfInterval::GetFullInterval());
+        while (!it.AtEnd()) {
+            numSegments++;
+            ++it;
+        }
+        TF_VERIFY(numSegments > 0,
+                  "The number of segments in correctly looping "
+                  "extrapolation should be positive. Ensure that "
+                  "_SimplifyOuterLooping was run.");
+    } else {
+        // Because we ran _SimplifyOuterLooping earlier, the
+        // loopBoundaryTime is guaranteed to exist in the times vec.
+        if (extrap->loopBoundaryTime.has_value()) {
+            loopBoundaryTime = extrap->loopBoundaryTime.value();
+        }
+        const auto& it = std::lower_bound(times.begin(),
+                                          times.end(),
+                                          loopBoundaryTime);
+        TF_VERIFY(it != times.end() && *it == loopBoundaryTime,
+                  "The value of loopBoundaryTime must correspond to a knot "
+                  "time. Ensure that _SimplifyOuterLooping was run.");
+
+        // In the post-extrapolation case, subtract one to get the number
+        // of segments, because times.end() is one step beyond the actual
+        // looping range covered.
+        std::ptrdiff_t dist = isPre ? std::distance(times.begin(), it)
+                                    : std::distance(it, times.end()) - 1;
+        TF_VERIFY(dist >= 1,
+                  "The number of segments in correctly looping "
+                  "extrapolation should be positive. Ensure that "
+                  "_SimplifyOuterLooping was run.");
+
+        numSegments = (size_t) dist;
+    }
+
+    // When we are handling infinitely looping pre extrapolation, the max
+    // side of the interval is finite. Vice versa for post extrapolation.
+    const bool shiftBoundary = isPre ? loopBoundaryTime > interval.GetMax()
+                                     : loopBoundaryTime < interval.GetMin();
+    
+    Ts_SplineData* resultData = nullptr;
+    if (shiftBoundary) {
+
+        if (extrap->mode == TsExtrapLoopOscillate) {
+            numSegments *= 2;
+            extrap->mode = TsExtrapLoopReset;
+        }
+
+        resultData = Ts_SplineData::Create(data->GetValueType(), data);
+        if (resultData == nullptr) {
+            return resultData;
+        }
+
+        extrap->loopBoundaryTime =
+            isPre ? _BakeAndShiftPreExtrapLoop(data, interval, numSegments,
+                                               resultData)
+                  : _BakeAndShiftPostExtrapLoop(data, interval, numSegments,
+                                                resultData);
+    } else {
+        resultData = Ts_Bake(data, GfInterval::GetFullInterval(),
+                             /* includeExtrapLooops */ false);
+    }
+
+    return resultData;
+}
+
+// _ReparameterizeExtrapLoop()
+
+} // anonymous namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // SAMPLE ENTRY POINT
@@ -1205,16 +579,380 @@ Ts_Sample(
         return;
     }
 
-    // Construct a _Sampler to sort out looping and extrapolation.
-    _Sampler sampler(data,
-                     timeInterval,
-                     timeScale,
-                     valueScale,
-                     tolerance);
+    if (!timeInterval.IsFinite()) {
+        TF_CODING_ERROR("Cannot provide samples for an infinite interval.");
+        return;
+    }
 
-    // Perform the main evaluation.
-    sampler.Sample(sampledSpline);
+    Ts_SegmentIterator it(data, timeInterval);
+    TF_VERIFY(!it.AtEnd(),
+              "Prior checks in Ts_Sample should guarantee correct "
+              "Ts_SegmentIterator initialization.");
+
+    while (!it.AtEnd()) {
+        Ts_Segment segment = *it;
+
+        switch (segment.interp) {
+            case Ts_SegmentInterp::ValueBlock:
+                ++it;
+                continue;
+            case Ts_SegmentInterp::Held:
+            case Ts_SegmentInterp::Linear:
+            case Ts_SegmentInterp::PreExtrap:
+            case Ts_SegmentInterp::PostExtrap:
+            {
+                double x0, x1, y0, y1;
+                x0 = segment.p0[0];
+                y0 = segment.p0[1];
+                x1 = segment.p1[0];
+                y1 = segment.interp == Ts_SegmentInterp::Held ? y0
+                                                              : segment.p1[1];
+
+                // Clamp this segment to timeInterval. We need to interpolate
+                // the y value at the edge of timeInterval. This is a little
+                // tricky because extrapolation segments end with an infinite
+                // time value and a slope instead of a value.  We first need to
+                // clamp the infinite values so we can get rid of the
+                // infinities, then we can clamp finite segment end points.
+                //
+                // Note: We add 0.0 so that -0 converts to 0.
+                //
+                // Compute the slope. Start by assuming it is 0.0
+                double slope = 0.0;
+                if (x0 == -inf) {
+                    // Pre-extrapolation, p0[1] is the slope.
+                    slope = segment.p0[1];
+                    // Since we know it's infinite, clamp it.
+                    x0 = timeInterval.GetMin();
+                    y0 = y1 - slope * (x1 - x0) + 0.0;
+                } else if (x1 == +inf) {
+                    // Post-extrapolation, p1[1] is the slope
+                    slope = segment.p1[1];
+                    // Since we know it's infinite, clamp it.
+                    x1 = timeInterval.GetMax();
+                    y1 = y0 + slope * (x1 - x0) + 0.0;
+                } else if (segment.interp == Ts_SegmentInterp::Linear) {
+                    // Finite linear segment. The math is safe.
+                    slope = (segment.p1[1] - segment.p0[1])
+                        / (segment.p1[0] - segment.p0[0]);
+                }
+
+                // Now clamp the segment to timeInterval.
+                if (timeInterval.GetMin() > x0) {
+                    x0 = timeInterval.GetMin();
+                    y0 = y1 - slope * (x1 - x0) + 0.0;
+                }
+                if (timeInterval.GetMax() < x1) {
+                    x1 = timeInterval.GetMax();
+                    y1 = y0 + slope * (x1 - x0) + 0.0;
+                }
+                const TsSplineSampleSource source =
+                    _GetSegmentSource(&segment, data);
+                sampledSpline->AddSegment(x0, y0, x1, y1, source);
+                break;
+            }
+            case Ts_SegmentInterp::Bezier:
+                Ts_RegressionPreventerBatchAccess::ProcessSegment(
+                    &segment, TsAntiRegressionKeepRatio);
+            case Ts_SegmentInterp::Hermite:
+            {
+                // The hermite segment already has correctly scaled tangents.
+                GfVec2d cp[4];
+                cp[0] = GfVec2d(segment.p0[0], segment.p0[1]);
+                cp[1] = GfVec2d(segment.t0[0], segment.t0[1]);
+                cp[2] = GfVec2d(segment.t1[0], segment.t1[1]);
+                cp[3] = GfVec2d(segment.p1[0], segment.p1[1]);
+                const TsSplineSampleSource source =
+                    _GetSegmentSource(&segment, data);
+                _SampleBezier(cp, timeInterval, source, timeScale,
+                              valueScale, tolerance, sampledSpline);
+            }
+        }
+
+        ++it;
+    }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// BAKE ENTRY POINT
+
+Ts_SplineData* Ts_Bake(
+    const Ts_SplineData* const data,
+    const GfInterval& timeInterval,
+    const bool includeExtrapLoops)
+{
+    Ts_SplineData* bakedData = nullptr;
+    
+    // Check some special cases
+    if (!data) {
+        // We're done.
+        return nullptr;
+    }
+
+    // Only a finite number of knots allowed.
+    if (includeExtrapLoops &&
+        (data->times.size() > 1 || data->HasInnerLoops()) &&
+        ((data->preExtrapolation.IsLooping() && !timeInterval.IsMinFinite()) ||
+         (data->postExtrapolation.IsLooping() && !timeInterval.IsMaxFinite())))
+    {
+        TF_CODING_ERROR("Attempt to bake an infinite number of knots.");
+        return nullptr;
+    }
+
+    if (timeInterval.IsEmpty()) {
+        return nullptr;
+    }
+
+    // Populate baked data with an empty spline data of the right type. Copy the
+    // looping and other parameters from data.
+    bakedData = Ts_SplineData::Create(data->GetValueType(), data);
+    if (data->times.empty()) {
+        // Nothing to bake, just reset the inner loop params. Baked data no
+        // longer has inner loops.
+        bakedData->loopParams = TsLoopParams();
+        return bakedData;
+    }
+
+    // Truncate time interval to the knot span if we don't want to iterate
+    // extrap loops.
+    GfInterval inputInterval = timeInterval;
+    if (!includeExtrapLoops) {
+        GfInterval knotSpan = GfInterval(data->times.front(),
+                                         data->times.back());
+        if (data->HasInnerLoops()) {
+            knotSpan |= data->loopParams.GetLoopedInterval();
+        }
+        inputInterval &= knotSpan;
+    }
+
+    // Bake -- create the iterator.
+    Ts_SegmentIterator it(data, inputInterval);
+    TF_VERIFY(!it.AtEnd(), "Ts_SegmentIterator should not be AtEnd() given a "
+                           " valid interval and non-empty spline.");
+
+    // Step the iterator back if possible to get information about the pre-side
+    // of the first knot.
+    Ts_Segment segment = *it;
+    if (segment.p0[0] != -inf) {
+        const bool success = it.StepBackward();
+        TF_VERIFY(success,
+                  "Ts_SegmentIterator should be able to step backward "
+                  "when the current segment's start time is not -inf.");
+        segment = *it;
+    }
+    Ts_TypedKnotData<double> d;
+    _SetKnotDataPreValues(segment, d);
+
+    // Go back to the original start segment of the iterator, or the
+    // second segment if the original segment started at time -inf.
+    if (segment.p1[0] != +inf) {
+        bool success = it.StepForward();
+        TF_VERIFY(success,
+                  "Ts_SegmentIterator should be able to step forward "
+                  "when the current segment's end time is not +inf");
+    }
+
+    while (!it.AtEnd()) {
+        segment = *it;
+        _SetKnotDataValues(segment, d);
+
+        _FinalizeKnotData(d);
+        bakedData->SetKnotFromDouble(&d, VtDictionary());
+        d = Ts_TypedKnotData<double>();
+
+        _SetKnotDataPreValues(segment, d);
+        ++it;
+    }
+
+    // Step the iterator forward if possible to get information about the
+    // post-side of the last knot. Note that we don't need to add another
+    // knot if the previously added knot's time is >= the interval
+    // max.
+    const bool prevKnotDone = !bakedData->times.empty() &&
+        bakedData->times.back() >= inputInterval.GetMax();
+    if (segment.p1[0] != +inf && !prevKnotDone) {
+        if (d.time == inputInterval.GetMax() && inputInterval.IsMaxOpen()) {
+            d.value = d.preValue;
+        } else {
+            bool success = it.StepForward();
+            TF_VERIFY(success,
+                    "Ts_SegmentIterator should be able to step forward "
+                    "when the current segment's end time is not +inf");
+            segment = *it;
+            _SetKnotDataValues(segment, d);
+        }
+        _FinalizeKnotData(d);
+        bakedData->SetKnotFromDouble(&d, VtDictionary());
+    }
+
+    // reset the inner loop params. Baked data no longer has inner loops.
+    bakedData->loopParams = TsLoopParams();
+
+    return bakedData;
+}
+
+Ts_SplineData*
+Ts_Truncate(
+    const Ts_SplineData* const data,
+    const GfInterval& interval,
+    TsExtrapolation preFallback,
+    TsExtrapolation postFallback)
+{
+    if (interval.IsEmpty()) {
+        TF_CODING_ERROR("Cannot truncate spline to an empty interval");
+        return nullptr;
+    }
+
+    if (data->times.empty()) {
+        TF_CODING_ERROR("Cannot truncate empty spline");
+        return nullptr;
+    }
+
+    double firstTime = data->times.front();
+    double lastTime = data->times.back();
+    if (data->HasInnerLoops()) {
+        const GfInterval lpInterval = data->loopParams.GetLoopedInterval();
+        firstTime = std::min(firstTime, lpInterval.GetMin());
+        lastTime = std::max(lastTime, lpInterval.GetMax());
+    }
+    const bool minFinite = interval.IsMinFinite();
+    const bool maxFinite = interval.IsMaxFinite();
+
+    // Collapse any degenerate looping extrapolation modes to simpler modes.
+    TsExtrapolation preExtrap = data->preExtrapolation;
+    preExtrap = _SimplifyOuterLooping(data, firstTime, preExtrap);
+    TsExtrapolation postExtrap = data->postExtrapolation;
+    postExtrap = _SimplifyOuterLooping(data, lastTime, postExtrap);
+
+    // If both ends are infinite, clone the spline data and return
+    if (!minFinite && !maxFinite) {
+        Ts_SplineData* resultData = data->Clone();
+        if (resultData == nullptr) {
+            TF_VERIFY(false,
+                      "Ts_Truncate failed to clone input spline data");
+            return nullptr;
+        }
+        resultData->preExtrapolation = preExtrap;
+        resultData->postExtrapolation = postExtrap;
+        return resultData;
+    }
+
+    Ts_SplineData* resultData = nullptr;
+    if (minFinite && !maxFinite && postExtrap.IsLooping()) {
+        resultData = _BakeAndShiftExtrapLoopBoundary(data, firstTime, interval,
+                                                     /* isPre */ false,
+                                                     &postExtrap);
+    } else if (!minFinite && maxFinite && preExtrap.IsLooping()) {
+        resultData = _BakeAndShiftExtrapLoopBoundary(data, lastTime, interval,
+                                                     /* isPre */ true,
+                                                     &preExtrap);
+    } else {
+        // We need to clone the data to set simplified extrap if it has
+        // degenerate looping into infinite regions, so that baking succeeds.
+        // The alternative is to modify baking to allow looping
+        // in infinite regions if the looping is degenerate.
+        const bool postInfLooping =
+            !maxFinite && data->postExtrapolation.IsLooping();
+        const bool preInfLooping =
+            !minFinite && data->preExtrapolation.IsLooping();
+
+        if (firstTime == lastTime) {
+            resultData = data->Clone();
+        } else if (postInfLooping || preInfLooping) {
+            Ts_SplineData* bakeInput = data->Clone();
+            if (postInfLooping) {
+                bakeInput->postExtrapolation = postExtrap;
+            }
+            if (preInfLooping) {
+                bakeInput->preExtrapolation = preExtrap;
+            }
+
+            resultData = Ts_Bake(bakeInput, interval,
+                                 /* includeExtrapLoops */ true);
+            delete bakeInput;
+        } else {
+            resultData = Ts_Bake(data, interval,
+                                 /* includeExtrapLoops */ true);
+        }
+    }
+
+    if (resultData == nullptr) {
+        TF_VERIFY(false, "Ts_Truncate failed bake of input spline data");
+        return nullptr;
+    }
+    resultData->loopParams = TsLoopParams();
+
+    // Write back simplified extrapolation. This ensures we don't
+    // breakdown in a looped section that actually behaves like held
+    // or value block.
+    resultData->preExtrapolation = preExtrap;
+    resultData->postExtrapolation = postExtrap;
+
+    // Perform any relevant breakdowns and reduction of knot vectors.
+    // 
+    // There are three cases:
+    // 1. First time is at the interval min exactly. Do nothing.
+    // 2. Interval min is bracketed by first time and second time.
+    //    Breakdown at min and remove the first knot.
+    // 3. Interval min is before the first time. Breakdown at min.
+    if (minFinite && resultData->times.front() != interval.GetMin()) {
+        const bool removeFirstKnot =
+            resultData->times.front() < interval.GetMin();
+
+        GfInterval localAffectedInterval;
+        std::string reason;
+        const bool success = Ts_Breakdown(resultData,
+                                          interval.GetMin(),
+                                          /* testOnly */ false,
+                                          &localAffectedInterval,
+                                          &reason);
+        TF_VERIFY(success,
+                  "We should be able to breakdown, otherwise something "
+                  "has gone wrong earlier in Ts_Truncate; breakdown "
+                  "failed due to %s", reason.c_str());
+
+        if (removeFirstKnot) {
+            while (resultData->times.front() < interval.GetMin()) {
+                resultData->RemoveKnotAtTime(resultData->times.front());
+            }
+        }
+
+        TF_VERIFY(resultData->times.front() == interval.GetMin(),
+                  "Min side is not correctly truncated to the interval min.");
+    }
+
+    // Max post-processing is symmetric to min post-processing.
+    if (maxFinite && resultData->times.back() != interval.GetMax() &&
+        interval.GetMax() != interval.GetMin())
+    {
+        const bool removeLastKnot =
+            resultData->times.back() > interval.GetMax();
+
+        GfInterval localAffectedInterval;
+        std::string reason;
+        const bool success = Ts_Breakdown(resultData,
+                                          interval.GetMax(),
+                                          /* testOnly */ false,
+                                          &localAffectedInterval,
+                                          &reason);
+        TF_VERIFY(success,
+                  "We should be able to breakdown, otherwise something "
+                  "has gone wrong earlier in Ts_Truncate; breakdown "
+                  "failed due to %s", reason.c_str());
+
+        if (removeLastKnot) {
+            while (resultData->times.back() > interval.GetMax()) {
+                resultData->RemoveKnotAtTime(resultData->times.back());
+            }
+        }
+
+        TF_VERIFY(resultData->times.back() == interval.GetMax(),
+                  "Max side is not correctly truncated to the interval max.");
+    }
+    resultData->preExtrapolation = minFinite ? preFallback : preExtrap;
+    resultData->postExtrapolation = maxFinite ? postFallback : postExtrap;
+
+    return resultData;
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE

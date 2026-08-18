@@ -6,7 +6,9 @@
 //
 
 #include "pxr/pxr.h"
+#include "pxr/base/tf/envSetting.h"
 #include "pxr/base/tf/refPtr.h"
+#include "pxr/usd/sdf/schema.h"
 #include "pxr/usd/sdr/debugCodes.h"
 #include "pxr/usd/sdf/valueTypeName.h"
 #include "pxr/usd/sdr/shaderMetadataHelpers.h"
@@ -17,34 +19,33 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-using ShaderMetadataHelpers::StringVal;
-using ShaderMetadataHelpers::StringVecVal;
-using ShaderMetadataHelpers::TokenVal;
-using ShaderMetadataHelpers::TokenVecVal;
-using ShaderMetadataHelpers::IntVal;
+TF_DEFINE_PUBLIC_TOKENS(SdrNodeFieldKey, SDR_NODE_FIELD_KEY_TOKENS);
 
-TF_DEFINE_PUBLIC_TOKENS(SdrNodeMetadata, SDR_NODE_METADATA_TOKENS);
-TF_DEFINE_PUBLIC_TOKENS(SdrNodeContext, SDR_NODE_CONTEXT_TOKENS);
-TF_DEFINE_PUBLIC_TOKENS(SdrNodeRole, SDR_NODE_ROLE_TOKENS);
+TF_DEFINE_ENV_SETTING(SDR_SHADER_NODE_LEGACY_GET_ROLE, true,
+    "When this environment variable is set to true, GetRole will return "
+    "a role if the node has a role, and otherwise the node's name by "
+    "default -- this is the legacy behavior of SdrShaderNode::GetRole. "
+    "When this environment variable is false, GetRole will return "
+    "a role if the node has a role, and an empty TfToken otherwise.");
 
 SdrShaderNode::SdrShaderNode(
     const SdrIdentifier& identifier,
     const SdrVersion& version,
     const std::string& name,
-    const TfToken& family,
+    const TfToken& function,
     const TfToken& context,
-    const TfToken& sourceType,
+    const TfToken& shadingSystem,
     const std::string& definitionURI,
     const std::string& implementationURI,
     SdrShaderPropertyUniquePtrVec&& properties,
-    const SdrTokenMap& metadata,
+    const SdrShaderNodeMetadata& metadata,
     const std::string &sourceCode)
     : _identifier(identifier),
       _version(version),
       _name(name),
-      _family(family),
+      _function(function),
       _context(context),
-      _sourceType(sourceType),
+      _shadingSystem(shadingSystem),
       _definitionURI(definitionURI),
       _implementationURI(implementationURI),
       _properties(std::move(properties)),
@@ -71,14 +72,24 @@ SdrShaderNode::SdrShaderNode(
         }
     }
 
-    _InitializePrimvars();
-    _PostProcessProperties();
+    // Get legacy metadata to support deprecated function GetMetadata
+    _legacyMetadata = metadata._EncodeLegacyMetadata();
 
-    // Tokenize metadata
-    _label = TokenVal(SdrNodeMetadata->Label, _metadata);
-    _category = TokenVal(SdrNodeMetadata->Category, _metadata);
-    _departments = TokenVecVal(SdrNodeMetadata->Departments, _metadata);
+    // Store named metadata. These can be inlined to their corresponding
+    // getters on SdrShaderNode once legacy metadata is removed.
+    _domain = _metadata.GetDomain();
+    _subdomain = _metadata.GetSubdomain();
+    _label = _metadata.GetLabel();
+    _category = _metadata.GetCategory();
+    _departments = _metadata.GetDepartments();
+    _openPages = _metadata.GetOpenPages();
+    _pagesShownIf = _metadata.GetPagesShownIf();
+
+    // Compute information from property metadata
+    _InitializePrimvars();
     _pages = _ComputePages();
+
+    _PostProcessProperties();
 }
 
 void
@@ -89,9 +100,8 @@ SdrShaderNode::_PostProcessProperties()
     // this metadatum to the individual properties, since the encoding is
     // controlled there in the GetTypeAsSdfType method.
     static const int DEFAULT_ENCODING = -1;
-    int usdEncodingVersion =
-        IntVal(SdrNodeMetadata->SdrUsdEncodingVersion, _metadata,
-               DEFAULT_ENCODING);
+    int usdEncodingVersion = _metadata.HasSdrUsdEncodingVersion() ?
+        _metadata.GetSdrUsdEncodingVersion() : DEFAULT_ENCODING;
 
     const SdrTokenVec vsNames = GetAllVstructNames();
 
@@ -113,6 +123,8 @@ SdrShaderNode::_PostProcessProperties()
             shaderProperty->_ConvertToVStruct();
         }
 
+        shaderProperty->_ConvertExpressions(_properties, this);
+
         // There must not be any further modifications of this property after
         // this method has been called.
         shaderProperty->_FinalizeProperty();
@@ -128,10 +140,10 @@ std::string
 SdrShaderNode::GetInfoString() const
 {
     return TfStringPrintf(
-        "%s (context: '%s', version: '%s', family: '%s'); definition URI: '%s';"
+        "%s (context: '%s', version: '%s', function: '%s'); definition URI: '%s';"
         " implementation URI: '%s'",
         SdrGetIdentifierString(_identifier).c_str(), _context.GetText(),
-        _version.GetString().c_str(), _family.GetText(), 
+        _version.GetString().c_str(), _function.GetText(), 
         _definitionURI.c_str(), _implementationURI.c_str()
     );
 }
@@ -201,25 +213,35 @@ SdrShaderNode::GetDefaultInput() const
 const SdrTokenMap&
 SdrShaderNode::GetMetadata() const
 {
+    return _legacyMetadata;
+}
+
+const SdrShaderNodeMetadata&
+SdrShaderNode::GetMetadataObject() const
+{
     return _metadata;
 }
 
 std::string
 SdrShaderNode::GetHelp() const
 {
-    return StringVal(SdrNodeMetadata->Help, _metadata);
+    return _metadata.GetHelp();
 }
 
 std::string
 SdrShaderNode::GetImplementationName() const
 {
-    return StringVal(SdrNodeMetadata->ImplementationName, _metadata, GetName());
+    return _metadata.HasImplementationName() ?
+        _metadata.GetImplementationName() : GetName();
 }
 
-std::string
+TfToken
 SdrShaderNode::GetRole() const
 {
-    return StringVal(SdrNodeMetadata->Role, _metadata, GetName());
+    if (TfGetEnvSetting(SDR_SHADER_NODE_LEGACY_GET_ROLE)) {
+        return _metadata.HasRole() ? _metadata.GetRole() : TfToken(GetName());
+    }
+    return _metadata.GetRole();
 }
 
 SdrTokenVec
@@ -336,8 +358,7 @@ SdrShaderNode::_InitializePrimvars()
 
     // The "raw" list of primvars contains both ordinary primvars, and the names
     // of properties whose values contain additional primvar names
-    const SdrStringVec rawPrimvars =
-        StringVecVal(SdrNodeMetadata->Primvars, _metadata);
+    const SdrStringVec rawPrimvars = _metadata.GetPrimvars();
 
     for (const std::string& primvar : rawPrimvars) {
         if (TfStringStartsWith(primvar, "$")) {
@@ -382,6 +403,25 @@ SdrShaderNode::_ComputePages() const
     }
 
     return pages;
+}
+
+VtValue
+SdrShaderNode::GetDataForKey(const TfToken& key) const
+{
+    if (key == SdrNodeFieldKey->Identifier) {
+        return VtValue(GetIdentifier());
+    } else if (key == SdrNodeFieldKey->Name) {
+        return VtValue(GetName());
+    } else if (key == SdrNodeFieldKey->Family) {
+        return VtValue(GetFamily());
+    } else if (key == SdrNodeFieldKey->Function) {
+        return VtValue(GetFunction());
+    } else if (key == SdrNodeFieldKey->ShadingSystem) {
+        return VtValue(GetShadingSystem());
+    } else if (key == SdrNodeFieldKey->SourceType) {
+        return VtValue(GetSourceType());
+    }
+    return _metadata.GetItemValue(key);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

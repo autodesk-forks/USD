@@ -1,0 +1,77 @@
+Loading @InternalReferenceInOffsetSublayer/root.usda@
+
+------------------------------------------------------------------------
+Layer Stack:
+     root.usda
+     sub.usda
+
+------------------------------------------------------------------------
+Results for composing </World>
+
+Prim Stack:
+    sub.usda             /World
+
+Time Offsets:
+    root.usda            /World          root       (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+
+Child names:
+     ['Asset_00', 'Asset_01']
+
+------------------------------------------------------------------------
+Results for composing </World/Asset_00>
+
+Prim Stack:
+    sub.usda             /World/Asset_00
+    asset.usda           /World
+
+Time Offsets:
+    root.usda            /World/Asset_00 root       (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+    asset.usda           /World          payload    (offset=0.00, scale=2.00)
+
+Child names:
+     ['Plane']
+
+------------------------------------------------------------------------
+Results for composing </World/Asset_00/Plane>
+
+Prim Stack:
+    asset.usda           /World/Plane
+
+Time Offsets:
+    root.usda            /World/Asset_00/Plane root       (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+    asset.usda           /World/Plane    payload    (offset=0.00, scale=2.00)
+
+------------------------------------------------------------------------
+Results for composing </World/Asset_01>
+
+Prim Stack:
+    sub.usda             /World/Asset_01
+    sub.usda             /World/Asset_00
+    asset.usda           /World
+
+Time Offsets:
+    root.usda            /World/Asset_01 root       (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+    root.usda            /World/Asset_00 reference  (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+    asset.usda           /World          payload    (offset=0.00, scale=2.00)
+
+Child names:
+     ['Plane']
+
+------------------------------------------------------------------------
+Results for composing </World/Asset_01/Plane>
+
+Prim Stack:
+    asset.usda           /World/Plane
+
+Time Offsets:
+    root.usda            /World/Asset_01/Plane root       (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+    root.usda            /World/Asset_00/Plane reference  (offset=0.00, scale=1.00)
+        sub.usda                         sublayer   (offset=0.00, scale=2.00)
+    asset.usda           /World/Plane    payload    (offset=0.00, scale=2.00)
+

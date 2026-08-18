@@ -37,7 +37,7 @@ public:
     static VkImageUsageFlags GetTextureUsage(HgiTextureUsage tu);
 
     HGIVULKAN_API
-    static VkFormatFeatureFlags GetFormatFeature(HgiTextureUsage tu);
+    static VkFormatFeatureFlags2 GetFormatFeature2(HgiTextureUsage tu);
 
     HGIVULKAN_API
     static VkAttachmentLoadOp GetLoadOp(HgiAttachmentLoadOp op);
@@ -119,4 +119,3 @@ public:
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif
-

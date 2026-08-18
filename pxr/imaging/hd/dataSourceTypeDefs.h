@@ -13,7 +13,11 @@
 #include "pxr/imaging/hd/dataSourceLocator.h"
 #include "pxr/imaging/hd/types.h"
 
+#include "pxr/base/gf/bbox3d.h"
+#include "pxr/base/gf/matrix3f.h"
+#include "pxr/base/gf/matrix4f.h"
 #include "pxr/base/gf/matrix4d.h"
+#include "pxr/base/gf/quatf.h"
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/tf/staticTokens.h"
 #include "pxr/base/vt/array.h"
@@ -62,6 +66,8 @@ using HdPathArrayDataSourceHandle = HdPathArrayDataSource::Handle;
 
 using HdStringDataSource = HdTypedSampledDataSource<std::string>;
 using HdStringDataSourceHandle = HdStringDataSource::Handle;
+using HdStringArrayDataSource = HdTypedSampledDataSource<VtArray<std::string>>;
+using HdStringArrayDataSourceHandle = HdStringArrayDataSource::Handle;
 
 using HdAssetPathDataSource = HdTypedSampledDataSource<SdfAssetPath>;
 using HdAssetPathDataSourceHandle = HdAssetPathDataSource::Handle;
@@ -72,6 +78,8 @@ using HdPathExpressionDataSourceHandle = HdPathExpressionDataSource::Handle;
 // Linear algebra
 using HdVec2iDataSource = HdTypedSampledDataSource<GfVec2i>;
 using HdVec2iDataSourceHandle = HdVec2iDataSource::Handle;
+using HdVec2iArrayDataSource = HdTypedSampledDataSource<VtArray<GfVec2i>>;
+using HdVec2iArrayDataSourceHandle = HdVec2iArrayDataSource::Handle;
 using HdVec2fDataSource = HdTypedSampledDataSource<GfVec2f>;
 using HdVec2fDataSourceHandle = HdVec2fDataSource::Handle;
 using HdVec2dDataSource = HdTypedSampledDataSource<GfVec2d>;
@@ -122,6 +130,11 @@ using HdMatrixDataSource = HdTypedSampledDataSource<GfMatrix4d>;
 using HdMatrixDataSourceHandle = HdMatrixDataSource::Handle;
 using HdMatrixArrayDataSource = HdTypedSampledDataSource<VtArray<GfMatrix4d>>;
 using HdMatrixArrayDataSourceHandle = HdMatrixArrayDataSource::Handle;
+
+using HdBBox3dDataSource = HdTypedSampledDataSource<GfBBox3d>;
+using HdBBox3dDataSourceHandle = HdBBox3dDataSource::Handle;
+using HdBBox3dArrayDataSource = HdTypedSampledDataSource<VtArray<GfBBox3d>>;
+using HdBBox3dArrayDataSourceHandle = HdBBox3dArrayDataSource::Handle;
 
 // Locator
 using HdLocatorDataSource = HdTypedSampledDataSource<HdDataSourceLocator>;

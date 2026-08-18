@@ -13,16 +13,15 @@
 #include "pxr/usdImaging/usdImaging/dataSourceStage.h"
 #include "pxr/usdImaging/usdImaging/primAdapter.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
+#include "pxr/usdImaging/usdImaging/sceneIndexCreateArgsSchema.h"
 
-#include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/dataSourceTypeDefs.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
+#include "pxr/imaging/hd/retainedDataSource.h"
 
 #include "pxr/base/tf/denseHashSet.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
-
-TF_DEFINE_PUBLIC_TOKENS(UsdImagingStageSceneIndexTokens,
-                        USDIMAGING_STAGE_SCENE_INDEX_TOKENS);
 
 namespace
 {
@@ -187,15 +186,11 @@ _InvalidateImagingSubprim(
 }
 
 bool
-_GetIncludeUnloadedPrims(HdContainerDataSourceHandle const &inputArgs)
+_GetIncludeUnloadedPrims(HdContainerDataSourceHandle const &createArgs)
 {
-    if (!inputArgs) {
-        return false;
-    }
-    HdBoolDataSourceHandle const ds =
-        HdBoolDataSource::Cast(
-            inputArgs->Get(
-                UsdImagingStageSceneIndexTokens->includeUnloadedPrims));
+    const UsdImagingSceneIndexCreateArgsSchema schema =
+        UsdImagingSceneIndexCreateArgsSchema::GetFromParent(createArgs);
+    HdBoolDataSourceHandle const ds = schema.GetIncludeUnloadedPrims();
     if (!ds) {
         return false;
     }
@@ -207,8 +202,8 @@ _GetIncludeUnloadedPrims(HdContainerDataSourceHandle const &inputArgs)
 // ---------------------------------------------------------------------------
 
 UsdImagingStageSceneIndex::UsdImagingStageSceneIndex(
-        HdContainerDataSourceHandle const &inputArgs)
-  : _includeUnloadedPrims(_GetIncludeUnloadedPrims(inputArgs))
+        HdContainerDataSourceHandle const &createArgs)
+  : _includeUnloadedPrims(_GetIncludeUnloadedPrims(createArgs))
   , _adapterManager(std::make_unique<UsdImaging_AdapterManager>())
 {
 }
@@ -272,9 +267,18 @@ UsdImagingStageSceneIndex::GetPrim(const SdfPath &path) const
     const AdapterEntries &entries =
         _adapterManager->LookupAdapters(prim).allAdapters;
 
+    HdContainerDataSourceHandle dataSource =
+        _GetImagingSubprimData(entries, prim, subprim, _stageGlobals);
+
+    if (subprim.IsEmpty() && !dataSource) {
+        static HdContainerDataSourceHandle const empty =
+            HdRetainedContainerDataSource::New();
+        dataSource = empty;
+    }
+
     return {
         _GetImagingSubprimType(entries, prim, subprim),
-        _GetImagingSubprimData(entries, prim, subprim, _stageGlobals)
+        dataSource
     };
 }
 
@@ -297,6 +301,15 @@ UsdImagingStageSceneIndex::GetChildPrimPaths(
 
     UsdPrim prim = _stage->GetPrimAtPath(path);
     if (!prim) {
+        return {};
+    }
+
+    // _GetPrimPredicate() is configured to not traverse under instances.
+    // However, when the starting prim path is beneath an instance (i.e. an 
+    // instance proxy prim path), GetFilteredChildren below will traverse its
+    // children (see Usd_CreatePredicateForTraversal).
+    // So, we explictly bail early here.
+    if (prim.IsInstance() || prim.IsInstanceProxy()) {
         return {};
     }
 
@@ -331,8 +344,8 @@ UsdImagingStageSceneIndex::GetChildPrimPaths(
     }
 
     if (path.IsAbsoluteRootPath()) {
-        for (const UsdPrim &prim : _stage->GetPrototypes()) {
-            result.push_back(prim.GetPath());
+        for (const UsdPrim &protoPrim : _stage->GetPrototypes()) {
+            result.push_back(protoPrim.GetPath());
         }
     }
 
@@ -672,6 +685,12 @@ UsdImagingStageSceneIndex::_ApplyPendingResyncs()
         removedPrims.emplace_back(primPath);
         _PopulateSubtree(prim, &addedPrims);
 
+        if (primPath.IsAbsoluteRootPath()) {
+            for (const UsdPrim &protoPrim : _stage->GetPrototypes()) {
+                _PopulateSubtree(protoPrim, &addedPrims);
+            }
+        }
+        
         // Prune property updates of resynced prims, which are redundant.
         _DeletePrefix(primPath, &_usdPropertiesToResync);
         _DeletePrefix(primPath, &_usdPropertiesToUpdate);

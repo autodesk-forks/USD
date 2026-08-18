@@ -34,11 +34,11 @@ _WrapFsHelpersDiscoverShaderNodes(
 static object
 _WrapFsHelpersSplitShaderIdentifier(const TfToken &identifier)
 {
-    TfToken family, name;
+    TfToken function, name;
     SdrVersion version;
     if (SdrFsHelpersSplitShaderIdentifier(identifier,
-            &family, &name, &version)) {
-        return pxr_boost::python::make_tuple(family, name, version);
+            &function, &name, &version)) {
+        return pxr_boost::python::make_tuple(function, name, version);
     } else {
         return object();
     }

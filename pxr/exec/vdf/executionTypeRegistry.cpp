@@ -30,7 +30,9 @@ VdfExecutionTypeRegistry::VdfExecutionTypeRegistry()
 VdfExecutionTypeRegistry::~VdfExecutionTypeRegistry() = default;
 
 TfType
-VdfExecutionTypeRegistry::CheckForRegistration(const std::type_info &typeInfo)
+VdfExecutionTypeRegistry::CheckForRegistration(
+    const std::type_info &typeInfo,
+    const char *const additionalErrorMsg)
 {
     // Because VdfExecutionTypeRegistry::Define may also define types with
     // TfType, ensure that registration function subscription happens before
@@ -39,15 +41,17 @@ VdfExecutionTypeRegistry::CheckForRegistration(const std::type_info &typeInfo)
 
     const TfType type = TfType::Find(typeInfo);
     if (ARCH_UNLIKELY(type.IsUnknown())) {
-        TF_FATAL_ERROR("Type '%s' not registered with TfType",
-                       ArchGetDemangled(typeInfo).c_str());
+        TF_FATAL_ERROR("Type '%s' not registered with TfType. %s",
+                       ArchGetDemangled(typeInfo).c_str(),
+                       additionalErrorMsg ? additionalErrorMsg : "");
     }
 
     tbb::spin_rw_mutex::scoped_lock lock(
         self._fallbackMapMutex, /* write = */ false);
     if (self._fallbackMap.find(type) == self._fallbackMap.end()) {
-        TF_FATAL_ERROR("No fallback value registered for \"%s\"",
-            type.GetTypeName().c_str());
+        TF_FATAL_ERROR("No fallback value registered for \"%s\". %s",
+                       type.GetTypeName().c_str(),
+                       additionalErrorMsg ? additionalErrorMsg : "");
     }
 
     return type;

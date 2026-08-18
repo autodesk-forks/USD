@@ -16,12 +16,12 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 /// \class UsdviewqHydraObserver
 ///
-/// Abstracts pieces necessary for implementing a Hydra Scene Browser in a
+/// Abstracts pieces necessary for implementing a Hydra Scene Debugger in a
 /// manner convenient for exposing to python.
 /// 
 /// For C++ code, this offers no benefits over directly implementing an
 /// HdSceneIndexObserver. It exists solely in service of the python
-/// implementation of Hydra Scene Browser present in usdview.
+/// implementation of Hydra Scene Debugger present in usdview.
 /// 
 /// See extras/imaging/examples/hdui for an example of a C++ direct
 /// implementation.
@@ -140,7 +140,10 @@ public:
 
 private:
 
-    bool _Target(const HdSceneIndexBaseRefPtr &sceneIndex);
+    // Set the target scene index.  Takes a refptr, rather than a
+    // C++ reference to a refptr, to ensure that the sceneIndex
+    // remains alive during the operation.
+    bool _Target(HdSceneIndexBaseRefPtr sceneIndex);
 
     // Fill _nestedInputSceneIndices.
     void _ComputeNestedInputSceneIndices();

@@ -208,6 +208,12 @@ _FindMetadataValueOnTypeOrBase(const TfToken& metadata, const TfType& t)
 std::vector<_ResolverInfo> 
 _GetAvailableResolvers()
 {
+    // Demand that we find the type & plugin for the default resolver, which is
+    // provided by this library.  We cannot operate without it.  This call will
+    // terminate the program if the plugin is not found.
+    PlugRegistry::GetInstance().
+        DemandPluginForType(TfType::Find<ArDefaultResolver>());
+    
     std::vector<TfType> sortedResolverTypes;
     {
         std::set<TfType> resolverTypes;
@@ -1248,9 +1254,8 @@ private:
                 if (extension.empty()) {
                     continue;
                 }
-
                 _packageResolvers.push_back(std::make_shared<_PackageResolver>(
-                    extension, plugin, packageResolverType));
+                    TfStringToLowerAscii(extension), plugin, packageResolverType));
 
                 TF_DEBUG(AR_RESOLVER_INIT).Msg(
                     "ArGetResolver(): Using package resolver %s for %s "
@@ -1438,7 +1443,7 @@ private:
 
         bool HandlesFormat(const std::string& extension) const
         {
-            return _packageFormat == extension;
+            return _packageFormat == TfStringToLowerAscii(extension);
         }
 
     private:

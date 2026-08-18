@@ -58,6 +58,12 @@ class TestUsdShadeShaderDef(unittest.TestCase):
         fallbackInput.SetSdrMetadataByKey('defaultInput', "1")
 
         # Create dummy inputs of other types for testing.
+        int2Input = shaderPrim.CreateInput('int2Val',
+                Sdf.ValueTypeNames.Int2)
+        int3Input = shaderPrim.CreateInput('int3Val',
+                Sdf.ValueTypeNames.Int3)
+        int4Input = shaderPrim.CreateInput('int4Val',
+                Sdf.ValueTypeNames.Int4)
         float2Input = shaderPrim.CreateInput('float2Val', 
                 Sdf.ValueTypeNames.Float2)
         float3Input = shaderPrim.CreateInput('float3Val', 
@@ -92,7 +98,7 @@ class TestUsdShadeShaderDef(unittest.TestCase):
         for n in nodes:
             self.assertEqual(n.GetShaderVersion(), Sdr.Version(2, 0))
             self.assertTrue(n.IsValid())
-            self.assertEqual(n.GetFamily(), 'Primvar')
+            self.assertEqual(n.GetFunction(), 'Primvar')
             self.assertEqual(n.GetIdentifier(), 'Primvar_float_2')
             self.assertEqual(n.GetImplementationName(), 'Primvar_float')
             self.assertEqual(n.GetRole(), Sdr.NodeRole.Primvar)
@@ -104,12 +110,14 @@ class TestUsdShadeShaderDef(unittest.TestCase):
 
             self.assertEqual(assetIdentifierInputNames[0], 'primvarFile')
             self.assertEqual(n.GetMetadata(), 
-                    {'primvars': '$primvarName',
-                     'role': 'primvar'})
+                    {'domain': 'rendering',
+                     'primvars': '$primvarName',
+                     'role': 'primvar',
+                     'sdrUsdEncodingVersion': '-1'})
             self.assertEqual(n.GetShaderInputNames(), 
                 ['fallback', 'float2Val', 'float3Val', 
-                 'float4Val', 'normalVector', 'primvarFile', 'primvarName', 
-                 'someColor', 'someVector'])
+                 'float4Val', 'int2Val', 'int3Val', 'int4Val', 'normalVector', 
+                 'primvarFile', 'primvarName', 'someColor', 'someVector'])
             self.assertEqual(n.GetShaderOutputNames(), ['result', 'result2'])
             if n.GetSourceType() == "OSL":
                 self.assertEqual(

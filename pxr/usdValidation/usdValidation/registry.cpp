@@ -6,6 +6,7 @@
 //
 
 #include "pxr/usdValidation/usdValidation/registry.h"
+#include "pxr/usdValidation/usdValidation/notice.h"
 
 #include "pxr/base/plug/plugin.h"
 #include "pxr/base/plug/registry.h"
@@ -190,31 +191,36 @@ UsdValidationRegistry::_PopulateMetadataFromPlugInfo()
 
 void
 UsdValidationRegistry::RegisterPluginValidator(
-    const TfToken &validatorName, const UsdValidateLayerTaskFn &layerTaskFn)
+    const TfToken &validatorName, const UsdValidateLayerTaskFn &layerTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterPluginValidator<UsdValidateLayerTaskFn>(validatorName,
-                                                     layerTaskFn);
+    _RegisterPluginValidator<UsdValidateLayerTaskFn>(
+        validatorName, layerTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterPluginValidator(
-    const TfToken &validatorName, const UsdValidateStageTaskFn &stageTaskFn)
+    const TfToken &validatorName, const UsdValidateStageTaskFn &stageTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterPluginValidator<UsdValidateStageTaskFn>(validatorName,
-                                                     stageTaskFn);
+    _RegisterPluginValidator<UsdValidateStageTaskFn>(
+        validatorName, stageTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterPluginValidator(
-    const TfToken &validatorName, const UsdValidatePrimTaskFn &primTaskFn)
+    const TfToken &validatorName, const UsdValidatePrimTaskFn &primTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterPluginValidator<UsdValidatePrimTaskFn>(validatorName, primTaskFn);
+    _RegisterPluginValidator<UsdValidatePrimTaskFn>(
+        validatorName, primTaskFn, fixers);
 }
 
 template <typename ValidateTaskFn>
 void
-UsdValidationRegistry::_RegisterPluginValidator(const TfToken &validatorName,
-                                                const ValidateTaskFn &taskFn)
+UsdValidationRegistry::_RegisterPluginValidator(
+    const TfToken &validatorName, const ValidateTaskFn &taskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
     static_assert(std::is_same_v<ValidateTaskFn, UsdValidateLayerTaskFn>
                       || std::is_same_v<ValidateTaskFn, UsdValidateStageTaskFn>
@@ -236,38 +242,43 @@ UsdValidationRegistry::_RegisterPluginValidator(const TfToken &validatorName,
         return;
     }
 
-    _RegisterValidator(metadata, taskFn, /* addMetadata */ false);
+    _RegisterValidator(
+        metadata, taskFn, fixers, /* addMetadata */ false);
 }
 
 void
 UsdValidationRegistry::RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const UsdValidateLayerTaskFn &layerTaskFn)
+    const UsdValidateLayerTaskFn &layerTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterValidator(metadata, layerTaskFn);
+    _RegisterValidator(metadata, layerTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const UsdValidateStageTaskFn &stageTaskFn)
+    const UsdValidateStageTaskFn &stageTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterValidator(metadata, stageTaskFn);
+    _RegisterValidator(metadata, stageTaskFn, fixers);
 }
 
 void
 UsdValidationRegistry::RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const UsdValidatePrimTaskFn &primTaskFn)
+    const UsdValidatePrimTaskFn &primTaskFn,
+    std::vector<UsdValidationFixer> fixers)
 {
-    _RegisterValidator(metadata, primTaskFn);
+    _RegisterValidator(metadata, primTaskFn, fixers);
 }
 
 template <typename ValidateTaskFn>
 void
 UsdValidationRegistry::_RegisterValidator(
     const UsdValidationValidatorMetadata &metadata,
-    const ValidateTaskFn &taskFn, bool addMetadata)
+    const ValidateTaskFn &taskFn, std::vector<UsdValidationFixer> fixers,
+    bool addMetadata)
 {
     static_assert(std::is_same_v<ValidateTaskFn, UsdValidateLayerTaskFn>
                       || std::is_same_v<ValidateTaskFn, UsdValidateStageTaskFn>
@@ -281,6 +292,10 @@ UsdValidationRegistry::_RegisterValidator(
         return;
     }
 
+    // newValidator will be used to send notice after the lock is released on a
+    // successful registration, to avoid sending notice while holding the unique
+    // lock on the registry mutex.
+    const UsdValidationValidator *newValidator = nullptr;
     {
         // Lock for writing validators.
         std::unique_lock lock(_mutex);
@@ -307,13 +322,31 @@ UsdValidationRegistry::_RegisterValidator(
         }
 
         std::unique_ptr<UsdValidationValidator> validator
-            = std::make_unique<UsdValidationValidator>(metadata, taskFn);
-        if (!_validators.emplace(metadata.name, std::move(validator)).second) {
+            = std::make_unique<UsdValidationValidator>(
+                metadata, taskFn, fixers);
+        auto [validatorItr, inserted] =
+            _validators.emplace(metadata.name, std::move(validator));
+        if (inserted) {
+            newValidator = validatorItr->second.get();
+        } else {
             TF_CODING_ERROR(
                 "Validator with name '%s' already exists, failed to register "
                 "it again.",
                 metadata.name.GetText());
         }
+    }
+
+    // Since lock is released, it's safe to send notice now, with internal lock
+    // held by the notice system on a call from Send().
+    // Notice only needs to be sent for validator which are registered
+    // dynamically, outside the plugin registration process. addMetadata is used 
+    // to determine this, since for plugin registered validators, their metadata
+    // is already added during plugin metadata parsing, and for dynamic
+    // registration of validators, metadata needs to be added at the time of
+    // registration, so if addMetadata is true, that means this validator is
+    // dynamically registered.
+    if (newValidator && addMetadata) {
+        UsdValidationNotice::DidRegisterValidator(newValidator).Send();
     }
 }
 
@@ -492,6 +525,10 @@ UsdValidationRegistry::_RegisterValidatorSuite(
         }
     }
 
+    // newValidatorSuite will be used to send notice after the lock is released
+    // on a successful registration, to avoid sending notice while holding the
+    // unique lock on the registry mutex.
+    const UsdValidationValidatorSuite *newValidatorSuite = nullptr;
     {
         // Lock for writing validatorSuites
         std::unique_lock lock(_mutex);
@@ -503,7 +540,7 @@ UsdValidationRegistry::_RegisterValidatorSuite(
         }
 
         // Note in case validator metadata needs to be added and there is
-        // contention only the first validator's (which is being added)
+        // contention, only the first validator's (which is being added)
         // metadata will be added.
         if (addMetadata) {
             // Following call to _AddValidatorMetadata is protected by the lock
@@ -520,13 +557,30 @@ UsdValidationRegistry::_RegisterValidatorSuite(
         std::unique_ptr<UsdValidationValidatorSuite> validatorSuite
             = std::make_unique<UsdValidationValidatorSuite>(
                 metadata, containedValidators);
-        if (!_validatorSuites.emplace(metadata.name, std::move(validatorSuite))
-                 .second) {
+        auto [validatorSuiteItr, inserted] = _validatorSuites.emplace(
+            metadata.name, std::move(validatorSuite));
+        if (inserted) {
+            newValidatorSuite = validatorSuiteItr->second.get();
+        } else {
             TF_CODING_ERROR(
                 "Suite with name '%s' already exists, failed to register it "
                 "again.",
                 metadata.name.GetText());
         }
+    }
+
+    // Since lock is released, it's safe to send notice now, with internal lock
+    // held by the notice system on a call from Send().
+    // Notice only needs to be sent for validator suites which are registered
+    // dynamically, outside the plugin registration process. addMetadata is used
+    // to determine this, since for plugin registered validator suites, their 
+    // metadata is already added during plugin metadata parsing, and for dynamic
+    // registration of validator suites, metadata needs to be added at the time
+    // of registration, so if addMetadata is true, that means this validator
+    // suite is dynamically registered.
+    if (newValidatorSuite && addMetadata) {
+        UsdValidationNotice::DidRegisterValidatorSuite(
+            newValidatorSuite).Send();
     }
 }
 

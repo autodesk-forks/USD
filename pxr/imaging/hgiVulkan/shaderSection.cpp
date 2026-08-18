@@ -274,6 +274,8 @@ HgiVulkanTextureShaderSection::_WriteSamplerType(std::ostream &ss) const
     if (_writable) {
         if (_textureType == HgiShaderTextureTypeArrayTexture) {
             ss << "image" << _dimensions << "DArray";
+        } else if (_textureType == HgiShaderTextureTypeCubemapTexture) {
+            ss << "imageCube";
         } else {
             ss << "image" << _dimensions << "D";
         }
@@ -284,6 +286,8 @@ HgiVulkanTextureShaderSection::_WriteSamplerType(std::ostream &ss) const
         } else if (_textureType == HgiShaderTextureTypeArrayTexture) {
             ss << _GetTextureTypePrefix(_format) << "sampler" 
                << _dimensions << "DArray";
+        } else if (_textureType == HgiShaderTextureTypeCubemapTexture) {
+            ss << _GetTextureTypePrefix(_format) << "samplerCube";
         } else {
             ss << _GetTextureTypePrefix(_format) << "sampler" 
                << _dimensions << "D";
@@ -327,7 +331,8 @@ HgiVulkanTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         (_dimensions + 1) : _dimensions;
     const uint32_t coordDim = 
         (_textureType == HgiShaderTextureTypeShadowTexture ||
-         _textureType == HgiShaderTextureTypeArrayTexture) ? 
+         _textureType == HgiShaderTextureTypeArrayTexture  ||
+         _textureType == HgiShaderTextureTypeCubemapTexture) ? 
         (_dimensions + 1) : _dimensions;
 
     const std::string sizeType = sizeDim == 1 ? 
@@ -415,7 +420,8 @@ HgiVulkanTextureShaderSection::VisitGlobalFunctionDefinitions(std::ostream &ss)
         ss << "}\n";
         
         // HgiTexelFetch_texName()
-        if (_textureType != HgiShaderTextureTypeShadowTexture) {
+        if (_textureType != HgiShaderTextureTypeShadowTexture &&
+            _textureType != HgiShaderTextureTypeCubemapTexture) {
             _WriteSampledDataType(ss);
             ss << " HgiTexelFetch_";
             WriteIdentifier(ss);

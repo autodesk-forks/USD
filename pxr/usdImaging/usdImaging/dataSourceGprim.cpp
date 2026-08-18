@@ -41,10 +41,6 @@ _GetCustomPrimvarMappings(const UsdPrim &usdPrim)
                     UsdGeomTokens->velocities},
                 {HdTokens->accelerations,
                     UsdGeomTokens->accelerations},
-                {HdTokens->nonlinearSampleCount,
-                    UsdGeomTokens->motionNonlinearSampleCount},
-                {HdTokens->blurScale,
-                    UsdGeomTokens->motionBlurScale},
                 {HdPrimvarsSchemaTokens->normals,
                     UsdGeomTokens->normals},
             };
@@ -74,12 +70,28 @@ UsdImagingDataSourceGprim::UsdImagingDataSourceGprim(
 {
 }
 
+TfTokenVector
+UsdImagingDataSourceGprim::GetNames()
+{
+    TfTokenVector names = UsdImagingDataSourcePrim::GetNames();
+    // Add primvars if needed, to accommmodate custom primvar mappings.
+    if (std::find(names.begin(), names.end(),
+                  HdPrimvarsSchema::GetSchemaToken()) == names.end()) {
+        names.push_back( HdPrimvarsSchema::GetSchemaToken() );
+    }
+    return names;
+}
+
 HdDataSourceBaseHandle
 UsdImagingDataSourceGprim::Get(const TfToken &name)
 {
+    if (!_GetUsdPrim()) {
+        return nullptr;
+    }
+
     HdDataSourceBaseHandle const result = UsdImagingDataSourcePrim::Get(name);
     if (name == HdPrimvarsSchema::GetSchemaToken()) {
-        const UsdImagingDataSourceCustomPrimvars::Mappings &mappings = 
+        const UsdImagingDataSourceCustomPrimvars::Mappings &mappings =
             _GetCustomPrimvarMappings(_GetUsdPrim());
         if (mappings.empty()) {
             return result;
@@ -115,7 +127,7 @@ UsdImagingDataSourceGprim::Invalidate(
             prim, subprim, properties, invalidationType);
 
     if (subprim.IsEmpty()) {
-        const UsdImagingDataSourceCustomPrimvars::Mappings &mappings = 
+        const UsdImagingDataSourceCustomPrimvars::Mappings &mappings =
             _GetCustomPrimvarMappings(prim);
 
         if (!mappings.empty()) {

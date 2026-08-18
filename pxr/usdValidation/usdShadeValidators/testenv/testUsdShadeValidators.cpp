@@ -42,6 +42,7 @@ TestUsdShadeValidators()
     // UsdShadeValidators keyword.
     const std::set<TfToken> expectedUsdShadeValidatorNames
         = { UsdShadeValidatorNameTokens->encapsulationValidator,
+            UsdShadeValidatorNameTokens->encapsulationMaterialValidator,
             UsdShadeValidatorNameTokens->materialBindingApiAppliedValidator,
             UsdShadeValidatorNameTokens->materialBindingRelationships,
             UsdShadeValidatorNameTokens->materialBindingCollectionValidator,
@@ -61,7 +62,7 @@ TestUsdShadeValidators()
     UsdValidationValidatorMetadataVector metadata
         = registry.GetValidatorMetadataForPlugin(
             _tokens->usdShadeValidatorsPlugin);
-    TF_AXIOM(metadata.size() == 8);
+    TF_AXIOM(metadata.size() == 9);
     for (const UsdValidationValidatorMetadata &m : metadata) {
         validatorMetadataNameSet.insert(m.name);
     }
@@ -71,19 +72,20 @@ TestUsdShadeValidators()
 
 void ValidatePrimError(const UsdValidationError &error,
         const TfToken& expectedErrorIdentifier,
-        const SdfPath& expectedPrimPath,
+        const SdfPathVector expectedPrimPaths,
         const std::string& expectedErrorMsg,
         UsdValidationErrorType expectedErrorType =
         UsdValidationErrorType::Error)
 {
     TF_AXIOM(error.GetIdentifier() == expectedErrorIdentifier);
     TF_AXIOM(error.GetType() == expectedErrorType);
-    TF_AXIOM(error.GetSites().size() == 1u);
-    const UsdValidationErrorSite &errorSite = error.GetSites()[0];
-    TF_AXIOM(errorSite.IsValid());
-    TF_AXIOM(errorSite.IsPrim());
-    TF_AXIOM(errorSite.GetPrim().GetPath() ==
-             expectedPrimPath);
+    TF_AXIOM(error.GetSites().size() == expectedPrimPaths.size());
+    for (size_t index = 0; index < error.GetSites().size(); ++index) {
+        const UsdValidationErrorSite& errorSite = error.GetSites()[index];
+        TF_AXIOM(errorSite.IsValid());
+        TF_AXIOM(errorSite.IsPrim());
+        TF_AXIOM(errorSite.GetPrim().GetPath() == expectedPrimPaths[index]);
+    }
     TF_AXIOM(error.GetMessage() == expectedErrorMsg);
 }
 
@@ -380,8 +382,9 @@ TestUsdShadeSubsetMaterialBindFamilyName()
               "</SubsetsTest/Geom/Cube/materialBindMissingFamilyName> "
               "with material bindings applied but no authored family name "
               "should set familyName to 'materialBind'.";
-        ValidatePrimError(errors[0], expectedErrorIdentifier,
-                expectedPrimPath, expectedErrorMsg);
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, {expectedPrimPath}, 
+            expectedErrorMsg);
     }
 }
 
@@ -412,8 +415,9 @@ TestUsdShadeSubsetsMaterialBindFamily()
                 = "Imageable prim </SubsetsTest/Geom/Cube> has 'materialBind' "
                   "subset family with invalid family type 'unrestricted'. Family "
                   "type should be 'nonOverlapping' or 'partition' instead.";
-        ValidatePrimError(errors[0], expectedErrorIdentifier,
-                expectedPrimPath, expectedErrorMsg);
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, {expectedPrimPath}, 
+            expectedErrorMsg);
     }
 }
 
@@ -446,8 +450,9 @@ TestUsdShadeMaterialBindingAPIAppliedValidator()
             = "Found material bindings but no MaterialBindingAPI applied on the prim "
               "</Test>.";
 
-        ValidatePrimError(errors[0], expectedErrorIdentifier,
-                    expectedPrimPath, expectedErrorMsg);
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, {expectedPrimPath}, 
+            expectedErrorMsg);
     }
 
     // Apply the material binding API to the prim and bind the material
@@ -459,6 +464,147 @@ TestUsdShadeMaterialBindingAPIAppliedValidator()
 
     // Verify the errors are fixed
     TF_AXIOM(errors.empty());
+}
+
+void
+TestUsdShadeEncapsulationMaterialValidator()
+{
+    UsdValidationRegistry &registry = UsdValidationRegistry::GetInstance();
+    const UsdValidationValidator *validator = registry.GetOrLoadValidatorByName(
+        UsdShadeValidatorNameTokens->encapsulationMaterialValidator);
+    TF_AXIOM(validator);
+
+    UsdStageRefPtr usdStage = UsdStage::CreateInMemory();
+
+    // Create a Material > Scope hierarchy
+    UsdShadeMaterial::Define(usdStage, SdfPath("/RootMaterial"));
+    // Its legal to have a non-connectable descendant which is not a Shader or a
+    // NodeGraph. But try a Material or a Light / LightFilter and thats not
+    // allowed.
+    UsdGeomScope::Define(usdStage, SdfPath("/RootMaterial/Scope"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/RootMaterial")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidImageableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/RootMaterial"), SdfPath("/RootMaterial/Scope")
+        };
+        const std::string expectedErrorMsg
+            = "Imageable </RootMaterial/Scope> of type Scope is not a valid "
+              "descendant of Material </RootMaterial>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths,
+            expectedErrorMsg);
+    }
+
+    // Create a Material > Material hierarchy, which is also not allowed.
+    UsdShadeMaterial::Define(usdStage, SdfPath("/NestedMaterialRoot"));
+    UsdShadeMaterial::Define(
+        usdStage, SdfPath("/NestedMaterialRoot/NestedMaterial"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/NestedMaterialRoot")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidConnectableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/NestedMaterialRoot"), 
+            SdfPath("/NestedMaterialRoot/NestedMaterial")
+        };
+        const std::string expectedErrorMsg
+            = "Connectable </NestedMaterialRoot/NestedMaterial> of type "
+              "Material is not a valid connectable descendant of Material "
+              "</NestedMaterialRoot>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths, 
+            expectedErrorMsg);
+    }
+
+    // Create a Material -> NodeGraph -> Material hierarchy, which is also not
+    // allowed.
+    UsdShadeMaterial::Define(usdStage, SdfPath("/NodeGraphMaterialRoot"));
+    UsdShadeNodeGraph::Define(
+        usdStage, SdfPath("/NodeGraphMaterialRoot/NodeGraph"));
+    UsdShadeMaterial::Define(
+        usdStage, SdfPath("/NodeGraphMaterialRoot/NodeGraph/Material"));
+    {
+        const UsdValidationErrorVector errors =
+            validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/NodeGraphMaterialRoot")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidConnectableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/NodeGraphMaterialRoot"),
+            SdfPath("/NodeGraphMaterialRoot/NodeGraph/Material")
+        };
+        const std::string expectedErrorMsg
+            = "Connectable </NodeGraphMaterialRoot/NodeGraph/Material> of type "
+              "Material is not a valid connectable descendant of Material "
+              "</NodeGraphMaterialRoot>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths,
+            expectedErrorMsg);
+    }
+
+    // Create an nested imageable under Material, which is also not allowed.
+    UsdShadeMaterial::Define(usdStage, SdfPath("/ImageableMaterialRoot"));
+    UsdShadeNodeGraph::Define(
+        usdStage, SdfPath("/ImageableMaterialRoot/NodeGraph"));
+    UsdGeomXform::Define(
+        usdStage, SdfPath("/ImageableMaterialRoot/NodeGraph/Xform"));
+    {
+        const UsdValidationErrorVector errors =
+            validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/ImageableMaterialRoot")));
+        TF_AXIOM(errors.size() == 1u);
+
+        const TfToken expectedErrorIdentifier(
+            "usdShadeValidators:EncapsulationMaterialValidator."
+            "InvalidImageableInMaterial");
+        const SdfPathVector expectedPrimPaths {
+            SdfPath("/ImageableMaterialRoot"),
+            SdfPath("/ImageableMaterialRoot/NodeGraph/Xform")
+        };
+        const std::string expectedErrorMsg
+            = "Imageable </ImageableMaterialRoot/NodeGraph/Xform> of type "
+              "Xform is not a valid descendant of Material "
+              "</ImageableMaterialRoot>.";
+
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, expectedPrimPaths,
+            expectedErrorMsg);
+    }
+
+    // GoodMaterials -- just shader and nodegraph
+    UsdShadeMaterial::Define(usdStage, SdfPath("/GoodMaterial"));
+    UsdShadeShader::Define(usdStage, SdfPath("/GoodMaterial/Shader"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/GoodMaterial")));
+        TF_AXIOM(errors.empty());
+    }
+    UsdShadeNodeGraph::Define(usdStage, SdfPath("/GoodMaterial/NodeGraph"));
+    {
+        const UsdValidationErrorVector errors
+            = validator->Validate(usdStage->GetPrimAtPath(
+                SdfPath("/GoodMaterial")));
+        TF_AXIOM(errors.empty());
+    }
 }
 
 void
@@ -492,8 +638,9 @@ TestUsdShadeEncapsulationRulesValidator()
             = "Connectable Shader </RootMaterial/Shader/InsideShader> cannot "
               "reside under a non-Container Connectable Shader";
 
-        ValidatePrimError(errors[0], expectedErrorIdentifier,
-                    expectedPrimPath, expectedErrorMsg);
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, {expectedPrimPath}, 
+            expectedErrorMsg);
     }
 
     {
@@ -523,8 +670,9 @@ TestUsdShadeEncapsulationRulesValidator()
             = "Connectable Shader </RootMaterial/Scope/InsideShader> can only "
               "have Connectable Container ancestors up to Material ancestor "
               "</RootMaterial>, but its parent Scope is a Scope.";
-        ValidatePrimError(errors[0], expectedErrorIdentifier,
-                    expectedPrimPath, expectedErrorMsg);
+        ValidatePrimError(
+            errors[0], expectedErrorIdentifier, {expectedPrimPath}, 
+            expectedErrorMsg);
     }
 }
 
@@ -589,16 +737,20 @@ TestUsdShadeNormalMapTextureValidator()
         const TfToken expectedErrorIdentifier(
         "usdShadeValidators:NormalMapTextureValidator.NonCompliantBiasAndScale");
         const std::string expectedErrorMsg =
-            TfStringPrintf("UsdUVTexture prim <%s> reads 8 bit Normal Map "
+            TfStringPrintf("UsdUVTexture prim <%s> (connected through "
+                           "validating prim <%s>) reads 8 bit Normal Map "
                            "@./normalMap.jpg@, which requires that "
                            "inputs:scale be set to (2, 2, 2, 1) and "
                            "inputs:bias be set to (-1, -1, -1, 0) for proper "
                            "interpretation as per the UsdPreviewSurface and "
                            "UsdUVTexture docs.",
-                           usdUvTextureShader.GetPath().GetText());
-        ValidatePrimError(errors[0],
-            expectedErrorIdentifier,
-            usdUvTextureShader.GetPath(),
+                           usdUvTextureShader.GetPath().GetText(),
+                           usdPreviewSurfaceShaderPrim.GetPath().GetText());
+        ValidatePrimError(
+            errors[0], 
+            expectedErrorIdentifier, 
+            {usdPreviewSurfaceShaderPrim.GetPath(), 
+                usdUvTextureShader.GetPath()},
             expectedErrorMsg);
     }
 
@@ -623,21 +775,25 @@ TestUsdShadeNormalMapTextureValidator()
         const TfToken expectedErrorIdentifier(
         "usdShadeValidators:NormalMapTextureValidator.NonCompliantBiasValues");
         const std::string expectedErrorMsg =
-            TfStringPrintf("UsdUVTexture prim <%s> reads an 8 bit Normal "
-                            "Map, but has non-standard inputs:bias value of "
-                            "(%.6g, %.6g, %.6g, %.6g). inputs:bias must be "
-                            "set to [-1,-1,-1,0] so as to fulfill the "
-                            "requirements of the normals to be in tangent "
-                            "space of [(-1,-1,-1), (1,1,1)] as documented in "
-                            "the UsdPreviewSurface and UsdUVTexture docs.",
-                            usdUvTextureShader.GetPath().GetText(),
-                            nonCompliantVector[0], nonCompliantVector[1],
-                            nonCompliantVector[2], nonCompliantVector[3]);
-        ValidatePrimError(errors[0],
-            expectedErrorIdentifier,
-            usdUvTextureShader.GetPath(),
-            expectedErrorMsg,
-            UsdValidationErrorType::Warn);
+            TfStringPrintf("UsdUVTexture prim <%s> (connected through "
+                           "validating prim <%s>) reads an 8 bit Normal "
+                           "Map, but has non-standard inputs:bias value of "
+                           "(%.6g, %.6g, %.6g, %.6g). inputs:bias must be "
+                           "set to [-1,-1,-1,0] so as to fulfill the "
+                           "requirements of the normals to be in tangent "
+                           "space of [(-1,-1,-1), (1,1,1)] as documented in "
+                           "the UsdPreviewSurface and UsdUVTexture docs.",
+                           usdUvTextureShader.GetPath().GetText(),
+                           usdPreviewSurfaceShaderPrim.GetPath().GetText(),
+                           nonCompliantVector[0], nonCompliantVector[1],
+                           nonCompliantVector[2], nonCompliantVector[3]);
+        ValidatePrimError
+            (errors[0], 
+             expectedErrorIdentifier, 
+             {usdPreviewSurfaceShaderPrim.GetPath(), 
+                usdUvTextureShader.GetPath()},
+             expectedErrorMsg, 
+             UsdValidationErrorType::Warn);
     }
 
     // Update to a compliant bias and a non-compliant scale value.
@@ -653,19 +809,23 @@ TestUsdShadeNormalMapTextureValidator()
         const TfToken expectedErrorIdentifier(
         "usdShadeValidators:NormalMapTextureValidator.NonCompliantScaleValues");
         const std::string expectedErrorMsg =
-            TfStringPrintf("UsdUVTexture prim <%s> reads an 8 bit Normal "
+            TfStringPrintf("UsdUVTexture prim <%s> (connected through "
+                           "validating prim <%s>) reads an 8 bit Normal "
                            "Map, but has non-standard inputs:scale value "
                            "of (%.6g, %.6g, %.6g, %.6g). inputs:scale must "
                            "be set to (2, 2, 2, 1) so as fulfill the "
                            "requirements of the normals to be in tangent "
                            "space of [(-1,-1,-1), (1,1,1)] as documented in "
                            "the UsdPreviewSurface and UsdUVTexture docs.",
-                            usdUvTextureShader.GetPath().GetText(),
-                            nonCompliantVector[0], nonCompliantVector[1],
-                            nonCompliantVector[2], nonCompliantVector[3]);
-        ValidatePrimError(errors[0],
+                           usdUvTextureShader.GetPath().GetText(),
+                           usdPreviewSurfaceShaderPrim.GetPath().GetText(),
+                           nonCompliantVector[0], nonCompliantVector[1],
+                           nonCompliantVector[2], nonCompliantVector[3]);
+        ValidatePrimError(
+            errors[0], 
             expectedErrorIdentifier,
-            usdUvTextureShader.GetPath(),
+            {usdPreviewSurfaceShaderPrim.GetPath(), 
+                usdUvTextureShader.GetPath()},
             expectedErrorMsg,
             UsdValidationErrorType::Warn);
     }
@@ -683,14 +843,18 @@ TestUsdShadeNormalMapTextureValidator()
         const TfToken expectedErrorIdentifier(
         "usdShadeValidators:NormalMapTextureValidator.InvalidSourceColorSpace");
         const std::string expectedErrorMsg =
-            TfStringPrintf("UsdUVTexture prim <%s> that reads"
+            TfStringPrintf("UsdUVTexture prim <%s> (connected through "
+                           "validating prim <%s>) that reads"
                            " Normal Map @%s@ should set "
                            "inputs:sourceColorSpace to 'raw'.",
-                            usdUvTextureShader.GetPath().GetText(),
-                            textureAssetPath.c_str());
-        ValidatePrimError(errors[0],
+                           usdUvTextureShader.GetPath().GetText(),
+                           usdPreviewSurfaceShaderPrim.GetPath().GetText(),
+                           textureAssetPath.c_str());
+        ValidatePrimError(
+            errors[0], 
             expectedErrorIdentifier,
-            usdUvTextureShader.GetPath(),
+            {usdPreviewSurfaceShaderPrim.GetPath(), 
+                usdUvTextureShader.GetPath()},
             expectedErrorMsg);
     }
 
@@ -717,9 +881,10 @@ TestUsdShadeNormalMapTextureValidator()
             TfStringPrintf("UsdPreviewSurface.normal on prim <%s> is connected "
                            "to a non-Shader prim.",
                            usdPreviewSurfaceShaderPath.c_str());
-        ValidatePrimError(errors[0],
-            expectedErrorIdentifier,
-            usdPreviewSurfaceShader.GetPath(),
+        ValidatePrimError(
+            errors[0], 
+            expectedErrorIdentifier, 
+            {usdPreviewSurfaceShaderPrim.GetPath()},
             expectedErrorMsg);
     }
 
@@ -738,13 +903,17 @@ TestUsdShadeNormalMapTextureValidator()
         const TfToken expectedErrorIdentifier(
             "usdShadeValidators:NormalMapTextureValidator.InvalidFile");
         const std::string expectedErrorMsg =
-            TfStringPrintf("UsdUVTexture prim <%s> has invalid or "
+            TfStringPrintf("UsdUVTexture prim <%s> (connected through "
+                           "validating prim <%s>) has invalid or "
                            "unresolvable inputs:file of @%s@",
                            usdUvTextureShader.GetPath().GetText(),
+                           usdPreviewSurfaceShaderPrim.GetPath().GetText(),
                            "./doesNotExist.jpg");
-        ValidatePrimError(errors[0],
+        ValidatePrimError(
+            errors[0],
             expectedErrorIdentifier,
-            usdUvTextureShader.GetPath(),
+            {usdPreviewSurfaceShaderPrim.GetPath(), 
+                usdUvTextureShader.GetPath()},
             expectedErrorMsg);
     }
 
@@ -768,6 +937,7 @@ main()
     TestUsdShadeShaderPropertyCompliance();
     TestUsdShadeSubsetMaterialBindFamilyName();
     TestUsdShadeSubsetsMaterialBindFamily();
+    TestUsdShadeEncapsulationMaterialValidator();
     TestUsdShadeEncapsulationRulesValidator();
 
     return EXIT_SUCCESS;

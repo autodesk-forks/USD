@@ -42,17 +42,17 @@ def Xform "Root" (
     def Xform "A1"
     {
         uniform token[] xformOpOrder = [ "xformOp:transform" ]
-        matrix4d xformOps:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 0, 0, 1) )
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 0, 0, 1) )
         def Xform "B"
         {
             uniform token[] xformOpOrder = [ "xformOp:transform" ]
-            matrix4d xformOps:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (3, 0, 0, 1) )
+            matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (3, 0, 0, 1) )
         }
     }
     def Xform "A2"
     {
         uniform token[] xformOpOrder = [ "xformOp:transform" ]
-        matrix4d xformOps:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (5, 0, 0, 1) )
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (5, 0, 0, 1) )
     }
 }
 )usda";

@@ -8,13 +8,42 @@
     dict(
         SCHEMA_NAME = 'ALL_SCHEMAS',
         LIBRARY_PATH = 'pxr/usdImaging/usdImaging',
+        HD_LIBRARY_PATH = 'pxr/imaging/hd',
     ),        
+
+    #--------------------------------------------------------------------------
+    # usdImaging/sceneIndexCreateArgs
+    dict(
+        SCHEMA_NAME = 'SceneIndexCreateArgs',
+        SCHEMA_TOKEN = 'usdImagingSceneIndexCreateArgs',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('stage', 'UsdStageRefPtrDataSource',
+             dict(DOC='''
+                The USD stage used to populate the usd imaging scene indices.
+                Note that a client of usd imaging can specify the stage either
+                in this schema or later by calling
+                UsdStageSceneIndex::SetStage, for example after all scene
+                indices and the renderer have been created. The results of
+                either are equivalent but there might differences in the
+                performance.''')),
+            ('includeUnloadedPrims', T_BOOL, {}),
+            ('displayUnloadedPrimsWithBounds', T_BOOL,
+             dict(DOC='''
+                If true, switch the draw mode for unloaded prims to bounds.''')),
+            ('addDrawModeSceneIndex', T_BOOL,
+             dict(DOC='''
+                If true, add scene index resolving usd draw mode (from
+                GeomModelAPI, e.g., "cards").'''))
+        ],
+    ),
 
     #--------------------------------------------------------------------------
     # usdImaging/usdPrimInfo
     dict(
         SCHEMA_NAME = 'UsdPrimInfo',
         SCHEMA_TOKEN = '__usdPrimInfo',
+        SCHEMA_INCLUDES = ['{{HD_LIBRARY_PATH}}/schemaTypeDefs'],
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
             ('specifier', T_TOKEN, {}),
@@ -23,12 +52,10 @@
             # Skipping isModel and isGroup, which can be inferred from 'kind'.
             ('apiSchemas', T_TOKENARRAY, {}),
             ('kind', T_TOKEN, {}),
-            # XXX Add variantSets. Is it a token array, or a container of token
-            #     to token array?
+            ('variantSelections', 'HdTokenDataSourceContainerSchema', {}),
             ('niPrototypePath', T_PATH, dict(ADD_LOCATOR=True)),
             ('isNiPrototype', T_BOOL, {}),
             ('piPropagatedPrototypes', T_CONTAINER, {}),
-
         ],
         STATIC_TOKEN_DATASOURCE_BUILDERS = [
             ('specifier', ['def', 'over', '(class_, "class")']),
@@ -60,6 +87,7 @@
             ('applyDrawMode', T_BOOL, {}),
             ('drawModeColor', T_VEC3F, {}),
             ('cardGeometry', T_TOKEN, {}),
+            ('cardVisibility', T_TOKEN, {}),
             ('cardTextureXPos', T_ASSETPATH, {}),
             ('cardTextureYPos', T_ASSETPATH, {}),
             ('cardTextureZPos', T_ASSETPATH, {}),
@@ -78,6 +106,33 @@
                 'cross',
                 'box',
                 'fromTexture']),
+            ('cardVisibility', [
+                'inherited',
+                'simple',
+                'full']),
+        ],
+    ),
+
+    #--------------------------------------------------------------------------
+    # usdImaging/geomXformVectors - corresponds to the transform decomposition
+    # returned by UsdGeomXformCommonAPI::GetXformVectorsByAccumulation().
+    dict(
+        SCHEMA_NAME = 'GeomXformVectors',
+        SCHEMA_TOKEN = 'geomXformVectors',
+        DOC = '''The {{ SCHEMA_CLASS_NAME }} exposes the result of
+        UsdGeomXformCommonAPI::GetXformVectorsByAccumulation().
+        This is a decomposition of the USD transformation operations that
+        includes more information than is available in the xform matrix
+        value, such as the pivot offset.  This schema is intended for
+        read-only access to data stored in USD; it is otherwise inert and
+        does not participate in or imply any subsequent computations.''',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('translation', T_VEC3D, {}),
+            ('rotation', T_VEC3F, {}),
+            ('rotationOrder', T_TOKEN, {}),
+            ('scale', T_VEC3F, {}),
+            ('pivot', T_VEC3F, {}),
         ],
     ),
 
@@ -100,7 +155,8 @@
         SCHEMA_TOKEN = 'collectionMaterialBinding',
         ADD_DEFAULT_LOCATOR = True,
         MEMBERS = [
-            ('collectionPath', T_PATH, {}),
+            ('collectionPrimPath', T_PATH, {}),
+            ('collectionName', T_TOKEN, {}),
             ('materialPath', T_PATH, {}),
             ('bindingStrength', T_TOKEN, {}),
         ],
@@ -220,6 +276,19 @@
 
             # note: namespacedSettings isn't in the USD schema.
             ('namespacedSettings', T_CONTAINER, dict(ADD_LOCATOR=True)),
+        ],
+    ),
+
+    #--------------------------------------------------------------------------
+    # usdImaging/usdUpAxis
+    dict(
+        SCHEMA_NAME = 'UsdUpAxis',
+        SCHEMA_TOKEN = '__usdUpAxis',
+        ADD_DEFAULT_LOCATOR = True,
+        MEMBERS = [
+            ('ALL_MEMBERS', '', dict(ADD_LOCATOR=True)),
+
+            ('upAxis', T_TOKEN, {}),
         ],
     ),
 ] 

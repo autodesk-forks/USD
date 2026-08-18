@@ -560,5 +560,75 @@ class TestUsdPhysicsRigidBodyAPI(unittest.TestCase):
                                 
         self.compare_mass_information(rigidBodyAPI, 1000.0 * 2.0, expectedCoM=Gf.Vec3f(0.0))
 
+    def test_mass_rigid_body_nested(self):
+        self.setup_scene()
+
+        # Create test nested bodies
+        rbo0_xform = UsdGeom.Xform.Define(self.stage, "/rbo0")
+        rigidBodyAPI0 = UsdPhysics.RigidBodyAPI.Apply(rbo0_xform.GetPrim())
+
+        cube = UsdGeom.Cube.Define(self.stage, "/rbo0/cube")
+        cube.GetSizeAttr().Set(1.0)
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+
+        rbo1_xform = UsdGeom.Xform.Define(self.stage, "/rbo0/rbo1")
+        rigidBodyAPI1 = UsdPhysics.RigidBodyAPI.Apply(rbo1_xform.GetPrim())
+
+        cube = UsdGeom.Cube.Define(self.stage, "/rbo0/rbo1/cube")
+        cube.GetSizeAttr().Set(2.0)
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+
+        self.rigidBodyWorldTransform = UsdGeom.Xformable(
+            rbo0_xform.GetPrim()).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default())
+        self.rigidBodyPrim = rbo0_xform.GetPrim()
+                        
+        self.compare_mass_information(
+            rigidBodyAPI0, 1000.0, expectedCoM=Gf.Vec3f(0.0), 
+            expectedInertia=Gf.Vec3f(166.667))
+
+        self.rigidBodyWorldTransform = UsdGeom.Xformable(
+            rbo1_xform.GetPrim()).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default())
+        self.rigidBodyPrim = rbo1_xform.GetPrim()
+                        
+        self.compare_mass_information(
+            rigidBodyAPI1, 8000.0, expectedCoM=Gf.Vec3f(0.0))
+
+    # instance proxy collider test - collider comes from an internal reference
+    # on an instanceable prim; the instance proxy must still be found during
+    # mass aggregation.
+    def test_mass_rigid_body_instance_proxy_collider(self):
+        self.setup_scene()
+
+        # Prototype collider authored outside the rigid-body hierarchy.
+        self.stage.OverridePrim("/Prototype_Collisions")
+        cube = UsdGeom.Cube.Define(
+            self.stage, "/Prototype_Collisions/cube")
+        cube.CreateSizeAttr(1.0)
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+
+        # Body with density only; mass is computed from colliders.
+        bodyXform = UsdGeom.Xform.Define(self.stage, "/World/Body")
+        body = bodyXform.GetPrim()
+        rigidBodyAPI = UsdPhysics.RigidBodyAPI.Apply(body)
+        UsdPhysics.MassAPI.Apply(body).CreateDensityAttr().Set(1000.0)
+
+        # Reference the prototype under the body and make it instanceable.
+        collisions = self.stage.DefinePrim("/World/Body/collisions")
+        collisions.GetReferences().AddInternalReference(
+            "/Prototype_Collisions")
+        collisions.SetInstanceable(True)
+
+        self.rigidBodyWorldTransform = \
+            UsdGeom.Xformable(body).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default())
+        self.rigidBodyPrim = body
+
+        # Expected: same as a unit cube at default density (1000 * 1^3).
+        self.compare_mass_information(
+            rigidBodyAPI, 1000.0, expectedCoM=Gf.Vec3f(0.0),
+            expectedInertia=Gf.Vec3f(166.667))
+
 if __name__ == "__main__":
     unittest.main()

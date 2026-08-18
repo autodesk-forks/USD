@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Model"
+{
+    double attrDualValuedBoundary.spline = {
+        20: 5&20; post linear,
+        25: 25; post held,
+        post: linear
+    }
+    double attrTruncatedLooping.spline = {
+        10:20; post linear,
+        15:15; post held,
+        post: loop oscillate
+    }
+}

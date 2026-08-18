@@ -54,6 +54,11 @@ using std::vector;
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_ENV_SETTING(
+    PCP_ENABLE_CONSISTENCY_CHECKS, false,
+    "Enable self-consistency checks when composing prim indexes. "
+    "This is for testing and debugging only.");
+
 static inline PcpPrimIndex const *
 _GetOriginatingIndex(PcpPrimIndex_StackFrame *previousFrame,
                      PcpPrimIndexOutputs *outputs) {
@@ -649,15 +654,15 @@ _FindStartingNodeForImpliedClasses(const PcpNodeRef& n)
 }
 
 // This is a convenience function to create a map expression
-// that maps a given source path to a target node, composing in
+// that maps a given source path to a path in the target node, composing in
 // relocations and layer offsets if any exist.
 static PcpMapExpression
 _CreateMapExpressionForArc(const SdfPath &sourcePath, 
+                           const SdfPath &targetNodePath,
                            const PcpNodeRef &targetNode,
-                           const PcpPrimIndexInputs &inputs,
                            const SdfLayerOffset &offset = SdfLayerOffset())
 {
-    const SdfPath targetPath = targetNode.GetPath().StripAllVariantSelections();
+    const SdfPath targetPath = targetNodePath.StripAllVariantSelections();
 
     PcpMapFunction::PathMap sourceToTargetMap;
     sourceToTargetMap[sourcePath] = targetPath;
@@ -672,6 +677,15 @@ _CreateMapExpressionForArc(const SdfPath &sourcePath,
         arcExpr = reloMapExpr.Compose(arcExpr);
     }
     return arcExpr;
+}
+
+static PcpMapExpression
+_CreateMapExpressionForArc(const SdfPath &sourcePath, 
+                           const PcpNodeRef &targetNode,
+                           const SdfLayerOffset &offset = SdfLayerOffset())
+{
+    return _CreateMapExpressionForArc(
+        sourcePath, targetNode.GetPath(), targetNode, offset);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -783,6 +797,7 @@ struct Task {
                 return std::tie(a.node, a.vsetPath, a.vsetNum) >
                     std::tie(b.node, b.vsetPath, b.vsetNum);
             case EvalImpliedClasses:
+            {
                 // When multiple implied classes tasks are queued for different
                 // nodes, ordering matters in that ancestor nodes must be 
                 // processed after their descendants. This minimally guarantees
@@ -802,7 +817,40 @@ struct Task {
                 // minimal (though still complex) case that requires this 
                 // ordering be correct and should be referred to if a detailed
                 // explanation is desired.
-                return b.node > a.node;
+                //
+                // If a.node and b.node are not ancestrally related, a and b
+                // must be evaluated in strength order to ensure that the
+                // strongest implied arcs are added in the case where there
+                // multiple class-based arcs in the prim index that would be
+                // implied to the same site under the same parent node. In that
+                // case we want the implied arc with the strongest origin,
+                // which we get by handling these tasks in strong-to-weak
+                // order. See <test> for an example where this is relevant.
+                //
+                // XXX: See various comments throughout this file about
+                // duplicate node handling and how we might clean this up
+                // in the future.
+                //
+                auto isAncestorAndDescendant = [](PcpNodeRef x, PcpNodeRef y) {
+                    for (; !y.IsRootNode(); y = y.GetParentNode()) {
+                        if (x == y) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (b.node > a.node
+                    && isAncestorAndDescendant(a.node, b.node)) {
+                    return true;
+                }
+                else if (a.node > b.node
+                    && isAncestorAndDescendant(b.node, a.node)) {
+                    return false;
+                }
+
+                return PcpCompareNodeStrength(a.node, b.node) == 1;
+            }
             default:
                 // Arbitrary order
                 return a.node > b.node;
@@ -1673,6 +1721,11 @@ public:
     // index.
     bool skipDuplicateNodes = false;
 
+    // If set to true, the new node will copy the isDueToAncestor flag
+    // along with flags tracking direct or ancestral dependencies from
+    // the origin node.
+    bool copyAncestorFlagFromOrigin = false;
+
     // Indexing tasks to enqueue for the new node being added.
     Task::Tasks tasks = Task::AllTasks;
 };
@@ -1820,10 +1873,15 @@ _AddArc(
 
             // Compose the existence of primSpecs and update the HasSpecs field 
             // accordingly.
-            newNode.SetHasSpecs(PcpComposeSiteHasPrimSpecs(newNode));
+            newNode.SetHasSpecs(PcpComposeSiteHasSpecs(newNode));
 
             if (!newNode.IsInert() && newNode.HasSpecs()) {
-                if (!indexer->inputs.usd) {
+                if (indexer->inputs.usd) {
+                    // Compose the existence of value clips and update HasValueClips
+                    // accordingly.
+                    newNode.SetHasValueClips(
+                        PcpComposeSiteHasValueClips(newNode));
+                } else {
                     // Determine whether opinions from this site can be accessed
                     // from other sites in the graph.
                     newNode.SetPermission(
@@ -1914,10 +1972,46 @@ _AddArc(
         newNodeError->rootSite = indexer->rootSite;
         indexer->RecordError(newNodeError);
     }
-    if (!newNode) {
+
+    if (newNode) {
+        indexer->outputs->primIndex.GetGraph()->SetHasNewNodes(true);
+    }
+    else {
         TF_VERIFY(newNodeError, "Failed to create a node, but did not "
                   "specify the error.");
         return PcpNodeRef();
+    }
+
+    if (opts.copyAncestorFlagFromOrigin) {
+        newNode.SetIsDueToAncestor(origin.IsDueToAncestor());
+        newNode.SetHasTransitiveDirectDependency(
+            origin.HasTransitiveDirectDependency());
+        newNode.SetHasTransitiveAncestralDependency(
+            origin.HasTransitiveAncestralDependency());
+    }
+    else {
+        // By default, new nodes are always direct dependencies,
+        // i.e. newNode.IsDueToAncestor() == false.
+        newNode.SetHasTransitiveDirectDependency(true);
+        newNode.SetHasTransitiveAncestralDependency(
+            parent.HasTransitiveAncestralDependency());
+    }
+
+    // If we've included ancestral opinions then we need to propagate the
+    // transitive dependency flags to the subtree of nodes (if any) beneath
+    // newNode. We only do this if we're not in a recursive prim indexing
+    // call, otherwise we'll unnecessarily revisit this subtree after we
+    // finish each recursive call.
+    if (opts.includeAncestralOpinions && !indexer->previousFrame) {
+        for (PcpNodeRef n : Pcp_GetSubtreeRange(newNode)) {
+            n.SetHasTransitiveDirectDependency(
+                newNode.HasTransitiveDirectDependency() ||
+                n.HasTransitiveDirectDependency());
+            
+            n.SetHasTransitiveAncestralDependency(
+                newNode.HasTransitiveAncestralDependency() ||
+                n.HasTransitiveAncestralDependency());
+        }
     }
 
     Task::Tasks tasks = opts.tasks;
@@ -2135,18 +2229,10 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
         }
 
         const bool isNegativeScale = layerOffset.GetScale() < 0.0;
-        const bool negativeScaleAllowed = PcpNegativeLayerOffsetScaleAllowed();
-
-        if (isNegativeScale && negativeScaleAllowed) {
-            TF_WARN("Found negative scale in layer offset for %s to @%s@<%s>. "
-                    "Negative offset scale is deprecated.",
-                    ARC_TYPE == PcpArcTypePayload ? "payload" : "reference",
-                    info.authoredAssetPath.c_str(), 
-                    refOrPayload.GetPrimPath().GetText());
-        }
+        const bool isInternal = refOrPayload.GetAssetPath().empty();
 
         // Validate layer offset in original reference or payload.
-        if ((isNegativeScale && !negativeScaleAllowed) ||
+        if (isNegativeScale ||
             !layerOffset.IsValid() ||
             !layerOffset.GetInverse().IsValid()) {
             PcpErrorInvalidReferenceOffsetPtr err =
@@ -2162,9 +2248,11 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
 
             // Don't set fail, just reset the offset.
             layerOffset = SdfLayerOffset();
-        } else {
+        } else if (!isInternal) {
             // Apply the layer stack offset for the introducing layer to the 
-            // reference or payload's layer offset.
+            // reference or payload's layer offset. This should only be done
+            // in cases where the ref or payload is not internal, thus avoiding
+            // a double scale during map function composition.
             layerOffset = info.sourceLayerStackOffset * layerOffset;
         }
 
@@ -2178,7 +2266,6 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
         SdfLayerRefPtr layer;
         PcpLayerStackRefPtr layerStack;
 
-        const bool isInternal = refOrPayload.GetAssetPath().empty();
         if (isInternal) {
             layer = node.GetLayerStack()->GetIdentifier().rootLayer;
             layerStack = node.GetLayerStack();
@@ -2343,21 +2430,20 @@ _EvalRefOrPayloadArcs(PcpNodeRef node,
         SdfPath primPath = defaultPrimPath.IsEmpty() ? 
             refOrPayload.GetPrimPath() : defaultPrimPath;
 
-        if (nodePathAtIntroduction != node.GetPath()) {
-            primPath = node.GetPath().ReplacePrefix(nodePathAtIntroduction, primPath);
-        }
-
         // The mapping for a reference (or payload) arc makes the source
         // and target map to each other.  Paths outside these will not map,
         // except for the case of internal references.
-        PcpMapExpression mapExpr = 
+        PcpMapExpression mapExpr =
             _CreateMapExpressionForArc(
-                /* source */ primPath, /* targetNode */ node, 
-                indexer->inputs, layerOffset);
+                primPath, nodePathAtIntroduction, node, layerOffset);
         if (isInternal) {
             // Internal references maintain full namespace visibility
             // outside the source & target.
             mapExpr = mapExpr.AddRootIdentity();
+        }
+
+        if (nodePathAtIntroduction != node.GetPath()) {
+            primPath = node.GetPath().ReplacePrefix(nodePathAtIntroduction, primPath);
         }
 
         _ArcOptions opts;
@@ -2624,7 +2710,7 @@ _PrimSpecExistsUnderNodeAtIntroduction(
             [](const PcpNodeRef& node) { return node.HasSpecs(); }) :
         _PrimSpecExistsUnderNode(node,
             [](const PcpNodeRef& node) { 
-                return PcpComposeSiteHasPrimSpecs(
+                return PcpComposeSiteHasSpecs(
                     node.GetLayerStack(), node.GetPathAtIntroduction());
             });
 }
@@ -3015,38 +3101,18 @@ _EvalImpliedRelocations(
 ////////////////////////////////////////////////////////////////////////
 // Class-based Arcs
 
-// Walk over the child nodes of parent, looking for an existing inherit
-// node.
+// Return child node of given parent with the given site, or PcpNodeRef()
+// if no such node exists.
 static PcpNodeRef
 _FindMatchingChild(const PcpNodeRef& parent,
-                   const PcpArcType parentArcType,
-                   const PcpLayerStackSite& site,
-                   const PcpArcType arcType,
-                   const PcpMapExpression & mapToParent,
-                   int depthBelowIntroduction)
+                   const PcpLayerStackSite& site)
 {
     // Arbitrary-order traversal.
     TF_FOR_ALL(childIt, Pcp_GetChildrenRange(parent)) {
         const PcpNodeRef& child = *childIt;
-
-        // XXX:RelocatesSourceNodes: This somewhat arcane way of comparing
-        // inherits arc "identity" is necessary to handle the way implied
-        // inherits map across relocation source nodes.  In particular,
-        // comparing only the sites there would give us a collision, because
-        // the sites for implied inherits under relocates sources are
-        // not necessarily meaningful.
-        if (parentArcType == PcpArcTypeRelocate) {
-            if (child.GetArcType() == arcType &&
-                child.GetMapToParent().Evaluate() == mapToParent.Evaluate() &&
-                child.GetOriginNode().GetDepthBelowIntroduction()
-                == depthBelowIntroduction) {
-                return child;
-            }
-        }
-        else {
-            if (child.GetSite() == site) {
-                return child;
-            }
+        if (child.GetLayerStack() == site.layerStack &&
+            child.GetPath() == site.path) {
+            return child;
         }
     }
     return PcpNodeRef();
@@ -3061,19 +3127,25 @@ _FindContainingVariantSelection(SdfPath p)
     return p;
 }
 
-// Use the mapping function to figure out the path of the site to
-// inherit, by mapping the parent's site back to the source.
+// Use the transfer function to figure out the path of the site to inherit, by
+// mapping the source path to the destination through the transfer function.
 static SdfPath
 _DetermineInheritPath(
-    const SdfPath & parentPath,
-    const PcpMapExpression & inheritMap )
+    const SdfPath & destParentPath,
+    const SdfPath & sourceChildPath,
+    const PcpMapExpression & transferFunc)
 {
-    // For example, given an inherit map like this:
-    //    source: /Class
-    //    target: /Model
-    //
-    // Say we are adding this inherit arc to </Model>; we'll map
-    // the target path back to </Class>.
+    TRACE_FUNCTION();
+
+    // For example, given a transfer function like this that maps the source
+    // parent to the destination parent:
+    //    /Model -> /Char
+    //    / -> /
+    // A child of the source node child /Char/Class would map to /Model/Class
+    // under the destination node, while the source node child _class_Global
+    // would identity map to itself, _class_Global, under the destination node.
+    // If the source node had a child /Model/Class, that would fail to map to
+    // the destination node.
     //
     // Why don't we just use the source path directly?
     // The reason we use a mapping function to represent the arc,
@@ -3095,23 +3167,25 @@ _DetermineInheritPath(
     // the variant selections before mapping the path and then re-add
     // them afterwards.
     //
-    if (!parentPath.ContainsPrimVariantSelection()) {
+    if (!destParentPath.ContainsPrimVariantSelection()) {
         // Easy case: Just map the site back across the inherit.
-        return inheritMap.MapTargetToSource(parentPath);
+        return transferFunc.MapSourceToTarget(
+            sourceChildPath.StripAllVariantSelections());
     } else {
-        // Harder case: The site path has variant selections.
+        // Harder case: The destination site path has variant selections.
         // We want to map the site's namespace back across the
         // inherit, but retain the embedded variant selections.
 
         // Find the nearest containing variant selection.
-        SdfPath varPath = _FindContainingVariantSelection(parentPath);
+        SdfPath varPath = _FindContainingVariantSelection(destParentPath);
         TF_VERIFY(!varPath.IsEmpty());
 
         // Strip the variant selections from the site path, apply the
-        // inherit mapping, then re-add the variant selections.
-        return inheritMap.MapTargetToSource(
-                parentPath.StripAllVariantSelections() )
-                .ReplacePrefix( varPath.StripAllVariantSelections(), varPath );
+        // inherit mapping, then re-add the variant selections that map to the
+        // destination.
+        return transferFunc.MapSourceToTarget(
+            sourceChildPath.StripAllVariantSelections() )
+            .ReplacePrefix( varPath.StripAllVariantSelections(), varPath );
     }
 }
 
@@ -3130,6 +3204,7 @@ _PropagateNodeToRoot(
 // returns the existing node.
 static PcpNodeRef
 _AddClassBasedArc(
+    const SdfPath &inheritPath,
     PcpArcType arcType,
     PcpNodeRef parent,
     PcpNodeRef origin,
@@ -3152,10 +3227,6 @@ _AddClassBasedArc(
         inheritArcNum,
         ignoreIfSameAsSite == PcpLayerStackSite() ? 
             "<none>" : Pcp_FormatSite(ignoreIfSameAsSite).c_str());
-
-    // Use the inherit map to figure out the site path to inherit.
-    SdfPath inheritPath = 
-        _DetermineInheritPath( parent.GetPath(), inheritMap );
 
     // We need to check the parent node's arc type in a few places
     // below. PcpNode::GetArcType is insufficient because we could be in a
@@ -3194,10 +3265,34 @@ _AddClassBasedArc(
     // Check if there are multiple inherits with the same site.
     // For example, this might be an implied inherit that was also
     // broken down explicitly.
-    if (PcpNodeRef child = _FindMatchingChild(
-            parent, parentArcType, inheritSite, arcType, inheritMap,
-            origin.GetDepthBelowIntroduction())) {
+    auto findMatchingChild = [&]() {
+        if (parentArcType != PcpArcTypeRelocate) {
+            return _FindMatchingChild(parent, inheritSite);
+        }
 
+        // XXX:RelocatesSourceNodes: This somewhat arcane way of comparing
+        // inherits arc "identity" is necessary to handle the way implied
+        // inherits map across relocation source nodes.  In particular,
+        // comparing only the sites there would give us a collision, because
+        // the sites for implied inherits under relocates sources are
+        // not necessarily meaningful.
+        const int depthBelowIntroduction = origin.GetDepthBelowIntroduction();
+        const PcpMapExpression& mapToParent = inheritMap;
+        TF_FOR_ALL(childIt, Pcp_GetChildrenRange(parent)) {
+            const PcpNodeRef& child = *childIt;
+            if (child.GetArcType() == arcType &&
+                child.GetOriginNode().GetDepthBelowIntroduction()
+                    == depthBelowIntroduction &&
+                child.GetMapToParent().Evaluate()
+                    == mapToParent.Evaluate()) {
+                return child;
+            }
+        }
+        
+        return PcpNodeRef();
+    };
+
+    if (PcpNodeRef child = findMatchingChild()) {
         PCP_INDEXING_MSG(
             indexer, parent, child,
             TfEnum::GetDisplayName(arcType).c_str(),
@@ -3379,11 +3474,11 @@ _AddClassBasedArcs(
         // Every other path maps to itself.
         PcpMapExpression mapExpr = 
             _CreateMapExpressionForArc(
-                /* source */ arcPath, /* targetNode */ node,
-                indexer->inputs)
+                /* source */ arcPath, /* targetNode */ node)
             .AddRootIdentity();
 
-        _AddClassBasedArc(arcType,
+        _AddClassBasedArc(arcPath,
+            arcType,
             /* parent = */ node,
             /* origin = */ node,
             mapExpr,
@@ -3442,12 +3537,7 @@ static PcpMapExpression
 _GetImpliedClass( const PcpMapExpression & transfer,
                   const PcpMapExpression & classArc )
 {
-    if (transfer.IsConstantIdentity()) {
-        return classArc;
-    }
-
-    return transfer.Compose( classArc.Compose( transfer.Inverse() ))
-        .AddRootIdentity();
+    return PcpMapExpression::ImpliedClass(transfer, classArc);
 }
 
 // Check the given node for class-based children, and add corresponding
@@ -3570,9 +3660,7 @@ _EvalImpliedClassTree(
         // the implied class for srcChild, so we don't don't need to redo 
         // the work to process it.
         TF_FOR_ALL(destChildIt, Pcp_GetChildrenRange(destNode)) {
-            if (destChildIt->GetOriginNode() != srcChild ||
-                destChildIt->GetMapToParent().Evaluate() 
-                    != destClassFunc.Evaluate()) {
+            if (destChildIt->GetOriginNode() != srcChild) {
                 continue;
             }
 
@@ -3622,7 +3710,11 @@ _EvalImpliedClassTree(
         // a redundant inherit.
         //
         if (!destChild) {
+            SdfPath inheritPath = _DetermineInheritPath(
+                destNode.GetPath(), srcChild.GetPath(), transferFunc);
+
             destChild = _AddClassBasedArc(
+                inheritPath,
                 srcChild.GetArcType(),
                 /* parent = */ destNode,
                 /* origin = */ srcChild,
@@ -3635,23 +3727,7 @@ _EvalImpliedClassTree(
         // If we successfully added the arc (or found it already existed)
         // recurse on nested classes.  This will build up the full
         // class hierarchy that we are inheriting.
-        // Optimization: Recursion requires some cost to set up
-        // childTransferFunc, below.  Before we do that work,
-        // check if there are any nested inherits.
         if (destChild && _HasClassBasedChild(srcChild)) {
-            // Determine the transferFunc to use for the nested child,
-            // by composing the functions to walk up from the srcChild,
-            // across the transferFunc, and down to the destChild.
-            // (Since we are walking down to destChild, we use the
-            // inverse of its mapToParent.)
-            //
-            // This gives us a childTransferFunc that will map the
-            // srcChild namespace to the destChild namespace, so
-            // that can continue propagating implied classes from there.
-            //
-            PcpMapExpression childTransferFunc =
-                destClassFunc.Inverse()
-                .Compose(transferFunc.Compose(srcChild.GetMapToParent()));
 
             // If destChild is a specializes node, ensure we only add
             // implied children to its corresponding propagated node to
@@ -3663,7 +3739,7 @@ _EvalImpliedClassTree(
             }
 
             _EvalImpliedClassTree(destChild, srcChild,
-                                  childTransferFunc, 
+                                  transferFunc, 
                                   /* srcNodeIsStartOfTree = */ false,
                                   indexer);
         }
@@ -3761,15 +3837,12 @@ _PropagateNodeToRoot(
     PcpNodeRef parentNode = srcNode.GetRootNode();
     const PcpMapExpression& mapToParent = srcNode.GetMapToRoot();
 
-    PcpNodeRef newNode = _FindMatchingChild(
-        parentNode, srcNode.GetArcType(),
-        srcNode.GetSite(), srcNode.GetArcType(),
-        mapToParent, srcNode.GetDepthBelowIntroduction());
-
+    PcpNodeRef newNode = _FindMatchingChild(parentNode, srcNode.GetSite());
     if (!newNode) {
         _ArcOptions opts;
         opts.skipDuplicateNodes = true;
         opts.includeAncestralOpinions = !srcNode.GetPath().IsRootPrimPath();
+        opts.copyAncestorFlagFromOrigin = true;
 
         newNode = _AddArc(
             indexer,
@@ -3780,10 +3853,6 @@ _PropagateNodeToRoot(
             mapToParent,
             srcNode.GetSiblingNumAtOrigin(),
             opts);
-
-        if (newNode) {
-            newNode.SetIsDueToAncestor(srcNode.IsDueToAncestor());
-        }
     }
 
     return newNode;
@@ -3933,6 +4002,8 @@ _FindPriorVariantSelection(
     PcpNodeRef *nodeWithVsel,
     Pcp_PrimIndexer *indexer)
 {
+    TRACE_FUNCTION();
+
     auto& traverser = 
         indexer->GetVariantTraversalCache(startNode, pathInStartNode);
 
@@ -3989,6 +4060,8 @@ _ComposeVariantSelectionAcrossNodes(
     PcpNodeRef *nodeWithVsel,
     Pcp_PrimIndexer *indexer)
 {
+    TRACE_FUNCTION();
+
     // Compose variant selection in strong-to-weak order.
     auto& traverser = 
         indexer->GetVariantTraversalCache(startNode, pathInStartNode);
@@ -4138,6 +4211,31 @@ _ChooseBestFallbackAmongOptions(
     return std::string();
 }
 
+// Return true if the new node site could introduce variant selection opinions 
+// that would affect pending variant tasks. We check for direct variant
+// selections as well as any arc metadata (references, inherits, specializes,
+// payloads) that might transitively bring in selections through newly-added
+// nodes. Variant arcs whose sites do not bring in these composition
+// opinions will not affect pending variant tasks, so retrying variant tasks can
+// be skipped. Skipping can be a large performance gain when there a large
+// numbers of variants (and especially ancestral variants) composing a single
+// prim index.
+static bool
+_SiteMightIntroducePendingVariantSelections(
+    const PcpLayerStackSite &site)
+{   
+    for (const SdfLayerRefPtr &layer : site.layerStack->GetLayers()) {     
+        if (layer->HasField(site.path, SdfFieldKeys->VariantSelection) ||
+            layer->HasField(site.path, SdfFieldKeys->References) ||
+            layer->HasField(site.path, SdfFieldKeys->InheritPaths) ||
+            layer->HasField(site.path, SdfFieldKeys->Specializes) ||
+            layer->HasField(site.path, SdfFieldKeys->Payload)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void
 _AddVariantArc(
     Pcp_PrimIndexer *indexer,
@@ -4149,7 +4247,9 @@ _AddVariantArc(
     // storage.  For this reason, the source site includes the
     // variant selection but the mapping function is identity.
     SdfPath varPath = node.GetSite().path.AppendVariantSelection(vset, vsel);
-    if (_AddArc(indexer, PcpArcTypeVariant,
+    const PcpLayerStackSite varSite(node.GetLayerStack(), varPath);
+    if (const PcpNodeRef varNode = _AddArc(
+                indexer, PcpArcTypeVariant,
                 /* parent = */ node,
                 /* origin = */ node,
                 PcpLayerStackSite( node.GetLayerStack(), varPath ),
@@ -4157,8 +4257,11 @@ _AddVariantArc(
                 /* arcSiblingNum = */ vsetNum)) {
         // If we expanded a variant set, it may have introduced new
         // authored variant selections, so we must retry any pending
-        // variant tasks as authored tasks.
-        indexer->RetryVariantTasks();
+        // variant tasks as authored tasks if there's a chance of new
+        // selections.
+        if (_SiteMightIntroducePendingVariantSelections(varSite)) {
+            indexer->RetryVariantTasks();
+        }
     }
 }
 
@@ -4169,8 +4272,10 @@ _AddAncestralVariantArc(
     const SdfPath &vsetPath,
     const std::string &vset, int vsetNum, const std::string &vsel)
 {
+    const SdfPath ancestralVarPath =
+        vsetPath.AppendVariantSelection(vset, vsel);
     const SdfPath varPath = node.GetPath().ReplacePrefix(
-        vsetPath, vsetPath.AppendVariantSelection(vset, vsel));
+        vsetPath, ancestralVarPath);
     const int namespaceDepth =
         PcpNode_GetNonVariantPathElementCount(vsetPath);
 
@@ -4201,18 +4306,32 @@ _AddAncestralVariantArc(
         return false;
     }();
 
-    if (_AddArc(indexer, PcpArcTypeVariant,
+    const PcpLayerStackSite varSite(node.GetLayerStack(), varPath);
+    if (const PcpNodeRef varNode = _AddArc(
+                indexer, PcpArcTypeVariant,
                 /* parent = */ node,
                 /* origin = */ node,
-                PcpLayerStackSite( node.GetLayerStack(), varPath ),
+                varSite,
                 /* mapExpression = */ PcpMapExpression::Identity(),
                 /* arcSiblingNum = */ vsetNum,
                 namespaceDepth,
                 opts)) {
         // If we expanded a variant set, it may have introduced new
         // authored variant selections, so we must retry any pending
-        // variant tasks as authored tasks.
-        indexer->RetryVariantTasks();
+        // variant tasks as authored tasks if there's a chance of new
+        // selections. 
+        // Note that we're checking for the possibility of variant 
+        // selections introduced at the ancestral variant path only as
+        // tasks for authored variant selections deeper in namespace
+        // (including the non-ancestral site varSite) will not have been
+        // processed before this task. The retry here is for the variant
+        // tasks that are at the same level of namespace as this ancestral
+        // variant set that may now have new variant selection opinions
+        // because of this ancestral variant.
+        if (_SiteMightIntroducePendingVariantSelections(
+                PcpLayerStackSite(varSite.layerStack, ancestralVarPath))) {
+            indexer->RetryVariantTasks();
+        }
     }
 }
 
@@ -4499,8 +4618,7 @@ void
 Pcp_RescanForSpecs(
     PcpPrimIndex *index,
     bool usd,
-    bool updateHasSpecs,
-    const PcpCacheChanges *cacheChanges = nullptr)
+    bool updateHasSpecs)
 {
     TfAutoMallocTag2 tag("Pcp", "Pcp_RescanForSpecs");
 
@@ -4510,9 +4628,8 @@ Pcp_RescanForSpecs(
         if (updateHasSpecs) {
             TF_FOR_ALL(nodeIt, index->GetNodeRange()) {
                 auto node = *nodeIt;
-                nodeIt->SetHasSpecs(PcpComposeSiteHasPrimSpecs(
-                    node.GetLayerStack(), node.GetPath(), 
-                    cacheChanges->layersAffectedByMutingOrRemoval));
+                nodeIt->SetHasSpecs(PcpComposeSiteHasSpecs(
+                    node.GetLayerStack(), node.GetPath()));
             }
         }
     } else {
@@ -4526,10 +4643,7 @@ Pcp_RescanForSpecs(
                     node.GetLayerStack()->GetLayers();
                 const SdfPath& path = node.GetPath();
                 for (size_t i = 0, n = layers.size(); i != n; ++i) {
-                    if (layers[i]->HasSpec(path) &&
-                        (!cacheChanges ||
-                          cacheChanges->layersAffectedByMutingOrRemoval
-                            .count(layers[i]) == 0)) {
+                    if (layers[i]->HasSpec(path)) {
                         nodeHasSpecs = true;
                         primSites.push_back(node.GetCompressedSdSite(i));
                     }
@@ -4700,23 +4814,32 @@ _ConvertNodeForChild(
     // Because the child site is at a deeper level of namespace than
     // the parent, there may no longer be any specs.
     if (node.HasSpecs()) {
-        node.SetHasSpecs(PcpComposeSiteHasPrimSpecs(node));
+        node.SetHasSpecs(PcpComposeSiteHasSpecs(node));
     }
 
     // Inert nodes are just placeholders, so we can skip computing these
     // bits of information since these nodes shouldn't have any opinions to
     // contribute.
-    if (!inputs.usd && !node.IsInert() && node.HasSpecs()) {
-        // If the parent's permission is private, it will be inherited by the
-        // child. Otherwise, we recompute it here.
-        if (node.GetPermission() == SdfPermissionPublic) {
-            node.SetPermission(PcpComposeSitePermission(node));
-        }
-        
-        // If the parent had symmetry, it will be inherited by the child.
-        // Otherwise, we recompute it here.
-        if (!node.HasSymmetry()) {
-            node.SetHasSymmetry(PcpComposeSiteHasSymmetry(node));
+    if (!node.IsInert() && node.HasSpecs()) {
+        if (inputs.usd) {
+            // The child site inherits the parent's value clips status, but if
+            // no ancestor has clips, check whether it has value clips.
+            if (!node.HasValueClips()) {
+                node.SetHasValueClips(
+                    PcpComposeSiteHasValueClips(node));
+            }
+        } else {
+            // If the parent's permission is private, it will be inherited by the
+            // child. Otherwise, we recompute it here.
+            if (node.GetPermission() == SdfPermissionPublic) {
+                node.SetPermission(PcpComposeSitePermission(node));
+            }
+            
+            // If the parent had symmetry, it will be inherited by the child.
+            // Otherwise, we recompute it here.
+            if (!node.HasSymmetry()) {
+                node.SetHasSymmetry(PcpComposeSiteHasSymmetry(node));
+            }
         }
     }
 
@@ -4728,6 +4851,8 @@ _ConvertNodeForChild(
     // Initial child nodes are always due to their parent, except the root node.
     if (!isRoot) {
         node.SetIsDueToAncestor(true);
+        node.SetHasTransitiveDirectDependency(false);
+        node.SetHasTransitiveAncestralDependency(true);
     }
 
 }
@@ -4778,6 +4903,15 @@ _NodeCanBeCulled(
     // layer stack before composing across arcs, Pcp needs to keep around 
     // any node that directly OR ancestrally provides symmetry info.
     if (node.HasSymmetry()) {
+        return false;
+    }
+
+    // Nodes that have value clips or that have a namespace ancestor with
+    // value clips should not be culled. Otherwise, composition arcs without
+    // clips authored directly on them may be culled; this is undesirable
+    // because a clip authored on a namespace ancestor may contain opinions
+    // for its namespace descendants.
+    if (node.HasValueClips()) {
         return false;
     }
 
@@ -4832,60 +4966,22 @@ _NodeCanBeCulled(
     return true;
 }
 
-// Cull all nodes in the subtree rooted at the given node whose site
-// is given in culledSites.
-static bool
-_CullMatchingChildrenInSubtree(
-    PcpNodeRef node,
-    const std::unordered_set<PcpLayerStackSite, TfHash>& culledSites)
-{
-    bool allChildrenCulled = true;
-    TF_FOR_ALL(child, Pcp_GetChildrenRange(node)) {
-        allChildrenCulled &=
-            _CullMatchingChildrenInSubtree(*child, culledSites);
-    }
-
-    if (allChildrenCulled && culledSites.count(node.GetSite())) {
-        node.SetCulled(true);
-    }
-
-    return node.IsCulled();
-}
-
 // Helper that recursively culls subtrees at and under the given node.
 static void
 _CullSubtreesWithNoOpinionsHelper(
     PcpNodeRef node,
     const PcpLayerStackSite& rootSite,
-    std::vector<PcpCulledDependency>* culledDeps,
-    std::unordered_set<PcpLayerStackSite, TfHash>* culledSites = nullptr)
+    std::vector<PcpCulledDependency>* culledDeps)
 {
     // Recurse and attempt to cull all children first. Order doesn't matter.
     TF_FOR_ALL(child, Pcp_GetChildrenRange(node)) {
-        // Skip culling for specializes subtrees here; these will be handled
-        // by _CullSubtreesWithNoOpinions. See comments there for more info.
-        if (PcpIsSpecializeArc(child->GetArcType())) {
-            continue;
-        }
-
-        _CullSubtreesWithNoOpinionsHelper(
-            *child, rootSite, culledDeps, culledSites);
+        _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
     }
 
     // Now, mark this node as culled if we can. These nodes will be
     // removed from the prim index at the end of prim indexing.
     if (_NodeCanBeCulled(node, rootSite)) {
         node.SetCulled(true);
-
-        // Record any culled nodes from this subtree that introduced
-        // ancestral dependencies. These nodes may be removed from the prim
-        // index when Finalize() is called, so they must be saved separately
-        // for later use.
-        Pcp_AddCulledDependency(node, culledDeps);
-
-        if (culledSites) {
-            culledSites->insert(node.GetSite());
-        }
     }
 }
 
@@ -4895,40 +4991,15 @@ _CullSubtreesWithNoOpinions(
     const PcpLayerStackSite& rootSite,
     std::vector<PcpCulledDependency>* culledDeps)
 {
-    // We propagate and maintain duplicate node structure in the graph
-    // for specializes arcs so when we cull we need to ensure we do so
-    // in both places consistently. 
-    //
-    // The origin subtree is marked inert as part of propagation, which
-    // means culling would remove it entirely which is not what we want.
-    // Instead, we cull whatever nodes we can in the propagated subtree
-    // under the root of the prim index, then cull the corresponding
-    // nodes underneath the origin subtree.
-    //
-    // We do a first pass to handle of all these propagated specializes
-    // nodes first to ensure that nodes in the origin subtrees are marked
-    // culled before other subtrees are processed. Otherwise, subtrees
-    // containing those origin subtrees won't be culled. 
-    //
-    // Note that this first pass must be done in weakest-to-strongest order
-    // to handle hierarchies of specializes arcs. See the test case
-    // test_PrimIndexCulling_SpecializesHierarchy in testPcpPrimIndex for
-    // an example.
-    TF_REVERSE_FOR_ALL(child, Pcp_GetChildrenRange(primIndex->GetRootNode())) {
-        if (Pcp_IsPropagatedSpecializesNode(*child)) {
-            std::unordered_set<PcpLayerStackSite, TfHash> culledSites;
-            _CullSubtreesWithNoOpinionsHelper(
-                *child, rootSite, culledDeps, &culledSites);
-
-            _CullMatchingChildrenInSubtree(child->GetOriginNode(), culledSites);
-        }
-    }
-
     TF_FOR_ALL(child, Pcp_GetChildrenRange(primIndex->GetRootNode())) {
-        if (!Pcp_IsPropagatedSpecializesNode(*child)) {
-            _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
-        }
+        _CullSubtreesWithNoOpinionsHelper(*child, rootSite, culledDeps);
     }
+
+    // Record any culled nodes from this subtree that introduced
+    // ancestral dependencies. These nodes may be removed from the prim
+    // index when Finalize() is called, so they must be saved separately
+    // for later use.
+    Pcp_AddCulledDependencies(*primIndex, culledDeps);
 }    
 
 // Helper that sets any nodes that cannot have overrides on name children
@@ -5002,15 +5073,67 @@ _BuildInitialPrimIndexFromAncestor(
         const PcpLayerStackSite parentSite(site.layerStack,
                                            site.path.GetParentPath());
 
-        Pcp_BuildPrimIndex(parentSite, parentSite,
+        Pcp_BuildPrimIndex(parentSite, rootSite,
                            ancestorRecursionDepth+1,
                            evaluateImpliedSpecializes,
                            evaluateVariantsAndDynamicPayloads,
                            /* rootNodeShouldContributeSpecs = */ true,
                            previousFrame, inputs, outputs);
 
-        ancestorIsInstanceable = 
-            Pcp_PrimIndexIsInstanceable(outputs->primIndex);
+        // When recursively computing a prim index for ancestral opinions,
+        // there are cases where the ancestorIsInstanceable flag cannot be
+        // computed correctly from the prim index computed above. One example
+        // is captured in the ImpliedArcsAndInstancing museum test. 
+        //
+        // In that case, we have (names altered for brevity) prim /A in the root
+        // layer stack referencing /B, and /B/C inheriting from /B/D. This means
+        // there's an implied inherit arc from /A/C to /A/D in the root layer
+        // stack as well. Prim /A is marked as instanceable.
+        // 
+        // When we compute /A/C, we recursively compute /A/D when evaluating
+        // the implied inherit arc, which means we wind up in here to recompute
+        // /A to include its ancestral opinions. However, the recomputed index
+        // for /A elides the reference arc to /B because it duplicates the
+        // ancestral reference arc in /A/C. That causes the recomputed index
+        // for /A to be non-instanceable, which is incorrect.
+        //
+        // To avoid that issue, we check if the index we're computing for
+        // ancestral opinions is an ancestor of the originating prim index.
+        // If so, we retrieve the instanceable bit from the cached prim
+        // index instead of the one we just computed. We expect to find
+        // this prim index in the cache because ancestors must be computed
+        // before any children.
+        //
+        // In the above example, that means we'll try to retrieve the prim
+        // index for /A from the cache and use its instanceable bit. We know
+        // that /A must be in the cache, because we're in the middle of
+        // computing /A/C and /A is an ancestor that must've already been
+        // computed.
+        //
+        // XXX: This (clearly) seems overly tricky and there may be other
+        // cases outside the root layer stack this doesn't cover. This may
+        // (hopefully?) be subsumed by whatever fix we come up with for
+        // USD-9919.
+        ancestorIsInstanceable = [&]() {
+            if (!Pcp_InstancingIsEnabled(outputs->primIndex)) {
+                return false;
+            }
+
+            if (inputs.cache->GetLayerStack() == parentSite.layerStack &&
+                rootSite.path.HasPrefix(parentSite.path)) {
+
+                if (inputs.ancestorIsInstanceablePredicate) {
+                    return inputs.ancestorIsInstanceablePredicate(
+                        parentSite.path);
+                }
+
+                if (const PcpPrimIndex* cachedParentPrimIndex =
+                        inputs.cache->FindPrimIndex(parentSite.path)) {
+                    return cachedParentPrimIndex->IsInstanceable();
+                }
+            }
+            return Pcp_PrimIndexIsInstanceable(outputs->primIndex);
+        }();
     }
 
     // If the ancestor graph is an instance, mark every node that cannot
@@ -5038,6 +5161,10 @@ _BuildInitialPrimIndexFromAncestor(
     // answer.
     graph->SetHasPayloads(false);
     outputs->payloadState = PcpPrimIndexOutputs::NoPayload;
+
+    // Reset the 'has new nodes' flag on this prim index since we haven't
+    // yet added any nodes at this level of namespace.
+    graph->SetHasNewNodes(false);
 
     PcpNodeRef rootNode = outputs->primIndex.GetRootNode();
     _ConvertNodeForChild(rootNode, inputs);
@@ -5163,7 +5290,7 @@ Pcp_BuildPrimIndex(
         // Even though the pseudo root spec exists implicitly, don't
         // assume that here.
         PcpNodeRef node = outputs->primIndex.GetGraph()->GetRootNode();
-        node.SetHasSpecs(PcpComposeSiteHasPrimSpecs(node));
+        node.SetHasSpecs(PcpComposeSiteHasSpecs(node));
         // Optimization: Since no composition arcs can live on the
         // pseudo-root, we can return early.
         return;
@@ -5182,7 +5309,7 @@ Pcp_BuildPrimIndex(
         outputs->primIndex.SetGraph(PcpPrimIndex_Graph::New(site, inputs.usd));
 
         PcpNodeRef node = outputs->primIndex.GetGraph()->GetRootNode();
-        node.SetHasSpecs(PcpComposeSiteHasPrimSpecs(node));
+        node.SetHasSpecs(PcpComposeSiteHasSpecs(node));
         node.SetInert(!rootNodeShouldContributeSpecs);
     } else {
         // Start by building and cloning the namespace parent's index.
@@ -5372,6 +5499,11 @@ PcpComputePrimIndex(
     // finalization will cause outstanding PcpNodeRefs to be invalidated.
     Pcp_RescanForSpecs(&outputs->primIndex, inputs.usd,
                        /* updateHasSpecs */false );
+
+    // Run final self-consistency checks if specified.
+    if (ARCH_UNLIKELY(TfGetEnvSetting(PCP_ENABLE_CONSISTENCY_CHECKS))) {
+        Pcp_CheckConsistency(outputs->primIndex);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////

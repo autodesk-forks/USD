@@ -213,11 +213,6 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 endif()
 
-pxr_install_test_dir(
-    SRC testenv/testHioAvif
-    DEST testHioAvif
-)
-
 pxr_build_test(testHioAvif
     LIBRARIES
         hio
@@ -225,7 +220,12 @@ pxr_build_test(testHioAvif
         testenv/testHioAvif.cpp
 )
 
-pxr_register_test(testHioAvif
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHioAvif"
-    EXPECTED_RETURN_CODE 0
-)
+# Tests relying on plugins aren't supported in static builds
+if (BUILD_SHARED_LIBS)
+    pxr_register_test(testHioAvif
+        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHioAvif"
+        TESTENV testenv/testHioAvif
+        EXPECTED_RETURN_CODE 0
+    )
+endif()
+

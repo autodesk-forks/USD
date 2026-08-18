@@ -39,18 +39,25 @@ static void WaitWithBackoff(Fn &&fn) {
 void
 TfSpinRWMutex::_WaitForWriter() const
 {
-    // Wait until we see a cleared WriterFlag.
+    // Wait until we see a cleared WriterFlag.  Relaxed ordering is correct
+    // here: this is a pure poll and carries no happens-before obligation.
+    // Synchronization is established by the acquire on the subsequent lock
+    // operation, not by this load.
     WaitWithBackoff([this]() {
-        return !(_lockState.load() & WriterFlag);
+        return !(_lockState.load(std::memory_order_relaxed) & WriterFlag);
     });
 }
 
 void
 TfSpinRWMutex::_WaitForReaders() const
 {
-    // Wait until we see zero readers.
+    // Wait until we see zero readers.  Relaxed ordering is correct here for the
+    // same reason as _WaitForWriter: we are polling for a condition, not
+    // establishing synchronization.  The release on the final ReleaseRead (or
+    // the undo fetch_sub in TryAcquireRead) pairs with the acquire on the write
+    // lock operation that follows this wait, not with this load.
     WaitWithBackoff([this]() {
-        return _lockState.load() == WriterFlag;
+        return _lockState.load(std::memory_order_relaxed) == WriterFlag;
     });
 }
 

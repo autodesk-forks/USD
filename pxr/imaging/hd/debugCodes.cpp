@@ -56,6 +56,9 @@ TF_REGISTRY_FUNCTION(TfDebug)
     TF_DEBUG_ENVIRONMENT_SYMBOL(HD_FREEZE_CULL_FRUSTUM,
         "Freeze the frustum used for culling at it's current value");
 
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HD_INSTANCE_PROXY_VIEW_SCENE_INDEX,
+        "Log tracking and query operations for the instance proxy view scene index.");
+
     TF_DEBUG_ENVIRONMENT_SYMBOL(HD_INSTANCER_ADDED,
         "Report when instancers are added");
     TF_DEBUG_ENVIRONMENT_SYMBOL(HD_INSTANCER_CLEANED,
@@ -82,6 +85,13 @@ TF_REGISTRY_FUNCTION(TfDebug)
 
     TF_DEBUG_ENVIRONMENT_SYMBOL(HD_SAFE_MODE,
         "Enable additional security checks");
+
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HD_SCENE_INDEX_PLUGIN_ORDERING,
+        "Report debug info on scene index plugin ordering such as cycle "
+        "detection and topological sorting");
+
+    TF_DEBUG_ENVIRONMENT_SYMBOL(HD_SCENE_INDEX_PLUGIN_REGISTRY,
+        "Report debug info on scene index plugin registry");
 
     TF_DEBUG_ENVIRONMENT_SYMBOL(HD_SELECTION_UPDATE,
         "Report when selection is updated");

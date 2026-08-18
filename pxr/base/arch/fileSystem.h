@@ -17,6 +17,7 @@
 #include "pxr/base/arch/inttypes.h"
 #include <memory>
 #include <cstdio>
+#include <cstdint>
 #include <string>
 #include <set>
 
@@ -34,8 +35,6 @@
 #include <glob.h>
 #elif defined(ARCH_OS_WINDOWS)
 #include <io.h>
-#include <windows.h>
-#include <stringapiset.h>
 #endif
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -128,13 +127,22 @@ ArchOpenFile(char const* fileName, char const* mode);
 #   define ArchCloseFile(fd)            close(fd)
 #endif
 
-#if defined(ARCH_OS_WINDOWS)
-#   define ArchUnlinkFile(path)         _unlink(path)
-#else
-#   define ArchUnlinkFile(path)         unlink(path)
-#endif
+/// Touch \p fileName, updating access and modification time to 'now'.
+///
+/// A simple touch-like functionality. Simple in a sense that it does not
+/// offer as many options as the same-name unix touch command, but otherwise
+/// is identical to the default touch behavior. If \p create is true and 
+/// the file does not already exist, an empty file gets created, otherwise
+/// the touch call fails if the file does not already exist.
+ARCH_API bool ArchTouchFile(const std::string& fileName, bool create);
+
+/// Delete a file.
+///
+/// Returns 0 on success, or -1 otherwise.
+ARCH_API int ArchUnlinkFile(const char* path);
 
 #if defined(ARCH_OS_WINDOWS)
+    ARCH_API int ArchWindowsFileAccess(const char* path, uint32_t dwAccessMask);
     ARCH_API int ArchFileAccess(const char* path, int mode);
 #else
 #   define ArchFileAccess(path, mode)   access(path, mode)
@@ -158,6 +166,9 @@ ArchOpenFile(char const* fileName, char const* mode);
 #   define ArchFileIsaTTY(stream)       isatty(stream)
 #endif
 
+/// Delete an empty directory
+///
+/// Returns 0 on success, or -1 otherwise.
 #if defined(ARCH_OS_WINDOWS)
     ARCH_API int ArchRmDir(const char* path);
 #else
@@ -274,10 +285,10 @@ ARCH_API
 int ArchMakeTmpFile(const std::string& tmpdir,
                     const std::string& prefix, std::string* pathname = 0);
 
-/// Create a temporary sub-direcrory, in a given temporary directory.
+/// Create a temporary sub-directory, in a given temporary directory.
 ///
 /// The result returned has the form TMPDIR/prefix.XXXXXX/ where TMPDIR is the
-/// given temporary directory and XXXXXX is a unique suffix.  Returns the the
+/// given temporary directory and XXXXXX is a unique suffix.  Returns the
 /// full path to the subdir in pathname.  Returns empty string on failure and
 /// errno is set.
 ///
@@ -412,36 +423,10 @@ void ArchFileAdvise(FILE *file, int64_t offset, size_t count,
 #if defined(ARCH_OS_WINDOWS)
 
 /// Converts UTF-16 windows string to regular std::string - Windows-only
-inline std::string ArchWindowsUtf16ToUtf8(const std::wstring &wstr)
-{
-    if (wstr.empty()) return std::string();
-    // first call is only to get required size for string
-    int size = WideCharToMultiByte(
-        CP_UTF8, 0, wstr.data(), (int)wstr.size(), NULL, 0, NULL, NULL);
-    if (size == 0) return std::string();
-    std::string str(size, 0);
-    if (WideCharToMultiByte(CP_UTF8, 0, wstr.data(), (int)wstr.size(),
-                            &str[0], size, NULL, NULL) == 0) {
-        return std::string();
-    }
-    return str;
-}
+ARCH_API std::string ArchWindowsUtf16ToUtf8(const std::wstring &wstr);
 
 /// Converts regular std::string to UTF-16 windows string - Windows-only
-inline std::wstring ArchWindowsUtf8ToUtf16(const std::string &str)
-{
-    if (str.empty()) return std::wstring();
-    // first call is only to get required size for wstring
-    int size = MultiByteToWideChar(
-        CP_UTF8, 0, str.data(), (int)str.size(), NULL, 0);
-    if (size == 0) return std::wstring();
-    std::wstring wstr(size, 0);
-    if(MultiByteToWideChar(
-           CP_UTF8, 0, str.data(), (int)str.size(), &wstr[0], size) == 0) {
-        return std::wstring();
-    }
-    return wstr;
-}
+ARCH_API std::wstring ArchWindowsUtf8ToUtf16(const std::string &str);
 
 #endif
 

@@ -40,6 +40,7 @@ pxr_library(usdPhysics
         examples/usdPhysicsDistanceJoint.usda
         examples/usdPhysicsGroupFiltering.usda
         examples/usdPhysicsJoints.usda
+        examples/usdPhysicsNestedArticulation.usda
         examples/usdPhysicsPairFiltering.usda
         examples/usdPhysicsSpheresWithMaterial.usda
 )
@@ -72,5 +73,6 @@ pxr_register_test(testUsdPhysicsCollisionGroupAPI
 pxr_register_test(testUsdPhysicsParsing
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdPhysicsParsing"
+    TESTENV testenv/testUsdPhysicsParsing
     EXPECTED_RETURN_CODE 0
 )

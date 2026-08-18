@@ -82,10 +82,16 @@ public:
     HDX_API
     void Prepare(HdTaskContext* ctx,
                  HdRenderIndex* renderIndex) override;
-    
+
     /// Execute render pass task
     HDX_API
     void Execute(HdTaskContext* ctx) override;
+
+    HDX_API
+    static void
+    SyncParamsHelper(
+        const HdRenderPassStateSharedPtr& renderPassState,
+        const HdxRenderTaskParams& params);
 
 private:
     HdRenderPassStateSharedPtr _renderPassState;
@@ -127,7 +133,6 @@ struct HdxRenderTaskParams
         , pointSize(3.0)
         , enableLighting(false)
         , alphaThreshold(0.0)
-        , enableSceneMaterials(true)
         , enableSceneLights(true)
         , enableClipping(true)
         // Selection/Masking params
@@ -176,7 +181,6 @@ struct HdxRenderTaskParams
     float pointSize;
     bool enableLighting;
     float alphaThreshold;
-    bool enableSceneMaterials;
     bool enableSceneLights;
     bool enableClipping;
 

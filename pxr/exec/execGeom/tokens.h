@@ -4,8 +4,8 @@
 // Licensed under the terms set forth in the LICENSE.txt file available at
 // https://openusd.org/license.
 //
-#ifndef PXR_EXEC_EXEC_GEOM_XFORMABLE_H
-#define PXR_EXEC_EXEC_GEOM_XFORMABLE_H
+#ifndef PXR_EXEC_EXEC_GEOM_TOKENS_H
+#define PXR_EXEC_EXEC_GEOM_TOKENS_H
 
 /// \file
 
@@ -18,8 +18,7 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 #define EXEC_GEOM_XFORMABLE_TOKENS      \
-    (computeLocalToWorldTransform)      \
-    ((transform, "xformOps:transform"))
+    (computeLocalToWorldTransform)
 
 TF_DECLARE_PUBLIC_TOKENS(
     ExecGeomXformableTokens, EXECGEOM_API, EXEC_GEOM_XFORMABLE_TOKENS);

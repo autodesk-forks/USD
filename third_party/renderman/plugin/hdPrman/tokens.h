@@ -1,0 +1,99 @@
+//
+// Copyright 2022 Pixar
+//
+// Licensed under the terms set forth in the LICENSE.txt file available at
+// https://openusd.org/license.
+//
+#ifndef EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_TOKENS_H
+#define EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_TOKENS_H
+
+#include "pxr/pxr.h"
+#include "hdPrman/api.h"
+#include "pxr/base/tf/staticTokens.h"
+
+PXR_NAMESPACE_OPEN_SCOPE
+
+#define HD_PRMAN_TOKENS                         \
+    (meshLight)                                 \
+    (meshLightSourceMesh)                       \
+    (meshLightSourcePoints)                     \
+    (meshLightSourceVolume)                     \
+    (sourceGeom)                                \
+    (hdPrimOriginId)
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanTokens, HDPRMAN_API, HD_PRMAN_TOKENS);
+
+///
+/// HdPrmanRileyPrimTypeTokens correspond to Riley::Create/Modify/Delete calls.
+///
+#define HD_PRMAN_RILEY_PRIM_TYPE_TOKENS                \
+    ((camera,             "riley:camera"))             \
+    ((clippingPlane,      "riley:clippingPlane"))      \
+    ((coordinateSystem,   "riley:coordinateSystem"))   \
+    ((displacement,       "riley:displacement"))      \
+    ((display,            "riley:display"))            \
+    ((displayFilter,      "riley:displayFilter"))      \
+    ((energyFilter,       "riley:energyFilter"))       \
+    ((geometryInstance,   "riley:geometryInstance"))   \
+    ((geometryPrototype,  "riley:geometryPrototype"))  \
+    ((globals,            "riley:globals"))            \
+    ((integrator,         "riley:integrator"))         \
+    ((lightInstance,      "riley:lightInstance"))      \
+    ((lightShader,        "riley:lightShader"))        \
+    ((material,           "riley:material"))           \
+    ((renderOutput,       "riley:renderOutput"))       \
+    ((renderTarget,       "riley:renderTarget"))       \
+    ((renderView,         "riley:renderView"))         \
+    ((sampleFilter,       "riley:sampleFilter"))
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanRileyPrimTypeTokens, HDPRMAN_API,
+                         HD_PRMAN_RILEY_PRIM_TYPE_TOKENS);
+
+#define HD_PRMAN_RILEY_ADDITIONAL_ROLE_TOKENS         \
+    (colorReference)                                  \
+    (floatReference)
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanRileyAdditionalRoleTokens, HDPRMAN_API,
+                         HD_PRMAN_RILEY_ADDITIONAL_ROLE_TOKENS);
+
+#define HD_PRMAN_RENDER_PARAM_TOKENS \
+    (sceneStateId)
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanRenderParamTokens,
+                         HD_PRMAN_RENDER_PARAM_TOKENS);
+
+#define HD_PRMAN_PLUGIN_TOKENS \
+    ((idAssigning,       "HdPrman_IdSceneIndexPlugin")) \
+    ((motionBlur,        "HdPrman_MotionBlurSceneIndexPlugin")) \
+    ((extComp,           "HdPrman_ExtComputationPrimvarPruningSceneIndexPlugin")) \
+    ((retesselation,     "HdPrman_RetesselationSceneIndexPlugin")) \
+    ((vblurInterpreting, "HdPrman_VblurInterpretingSceneIndexPlugin")) \
+    ((velocityMotion,    "HdPrman_VelocityMotionResolvingSceneIndexPlugin")) \
+    ((worldOffset,      "HdPrman_WorldOffsetSceneIndexPlugin")) \
+    ((particleFieldConversion, "HdPrman_ParticleFieldConversionSceneIndexPlugin"))
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanPluginTokens, HD_PRMAN_PLUGIN_TOKENS);
+
+#define HD_PRMAN_DISPLAY_NAMES \
+    ((RenderManRIS,     "RenderMan RIS"))         \
+    ((RenderManXPU,     "RenderMan XPU"))               \
+    ((RenderManXPUCPU,  "RenderMan XPU - CPU"))         \
+    ((RenderManXPUGPU,  "RenderMan XPU - GPU"))
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanDisplayNamesTokens, HD_PRMAN_DISPLAY_NAMES);
+
+#define HD_PRMAN_ATTRIBUTE_NAMES \
+    ((riAttributesIdentifierId, \
+        "ri:attributes:identifier:id")) \
+    ((riAttributesIdentifierId2, \
+        "ri:attributes:identifier:id2"))
+
+TF_DECLARE_PUBLIC_TOKENS(HdPrmanAttributeTokens, HD_PRMAN_ATTRIBUTE_NAMES);
+
+
+const std::vector<std::string>& HdPrman_GetPluginDisplayNames();
+const TfTokenVector& HdPrman_GetRenderContexts();
+
+PXR_NAMESPACE_CLOSE_SCOPE
+
+#endif //EXT_RMANPKG_PLUGIN_RENDERMAN_PLUGIN_HD_PRMAN_TOKENS_H

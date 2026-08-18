@@ -6,20 +6,19 @@
 //
 #include "pxr/exec/exec/requestImpl.h"
 
-#include "pxr/exec/exec/authoredValueInvalidationResult.h"
 #include "pxr/exec/exec/cacheView.h"
 #include "pxr/exec/exec/debugCodes.h"
 #include "pxr/exec/exec/definitionRegistry.h"
-#include "pxr/exec/exec/disconnectedInputsInvalidationResult.h"
+#include "pxr/exec/exec/invalidationResult.h"
 #include "pxr/exec/exec/program.h"
 #include "pxr/exec/exec/requestTracker.h"
 #include "pxr/exec/exec/runtime.h"
 #include "pxr/exec/exec/system.h"
 #include "pxr/exec/exec/timeChangeInvalidationResult.h"
 #include "pxr/exec/exec/typeRegistry.h"
-#include "pxr/exec/exec/types.h"
 #include "pxr/exec/exec/valueExtractor.h"
 #include "pxr/exec/exec/valueKey.h"
+#include "pxr/exec/exec/valueOverride.h"
 
 #include "pxr/base/arch/functionLite.h"
 #include "pxr/base/tf/bits.h"
@@ -91,7 +90,7 @@ _OutputInvalidationResultDebugMsg(
 
 void 
 Exec_RequestImpl::DidInvalidateComputedValues(
-    const Exec_AuthoredValueInvalidationResult &invalidationResult)
+    const Exec_AttributeValueInvalidationResult &invalidationResult)
 {
     if (!_valueCallback || _leafOutputs.empty()) {
         TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
@@ -125,6 +124,50 @@ Exec_RequestImpl::DidInvalidateComputedValues(
     // In doing so we must dispatch to the derived class in order to let the
     // specific scene description library determine properties, which do not
     // require execution.
+
+    // Only invoke the invalidation callback if there are any invalid indices
+    // from this request.
+    if (!invalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), invalidIndices, invalidInterval);
+        }
+        TRACE_FUNCTION_SCOPE("value invalidation callback");
+        _valueCallback(invalidIndices, invalidInterval);
+    }
+}
+
+void 
+Exec_RequestImpl::DidInvalidateComputedValues(
+    const Exec_MetadataInvalidationResult &invalidationResult)
+{
+    if (!_valueCallback || _leafOutputs.empty()) {
+        TF_DEBUG(EXEC_REQUEST_INVALIDATION).Msg(
+            "[%s] %s\n", TF_FUNC_NAME().c_str(),
+            !_valueCallback
+            ? "No value invalidation callback"
+            : "Request has not been prepared");
+        return;
+    }
+
+    TRACE_FUNCTION();
+
+    // For metadata value changes, we always invalidate over the entire time
+    // range. This is considered new invalidation if the last invalidation
+    // interval isn't already over the entire time range.
+    const EfTimeInterval &invalidInterval = EfTimeInterval::GetFullInterval();
+    const bool isNewlyInvalidInterval =
+        !_lastInvalidatedInterval.IsFullInterval();
+    if (isNewlyInvalidInterval) {
+        _lastInvalidatedInterval = invalidInterval;
+    }
+
+    // Build a set of invalid indices from the provided invalid leaf nodes.
+    ExecRequestIndexSet invalidIndices;
+    _InvalidateLeafOutputs(
+        isNewlyInvalidInterval,
+        invalidationResult.invalidLeafNodes,
+        &invalidIndices);
 
     // Only invoke the invalidation callback if there are any invalid indices
     // from this request.
@@ -177,6 +220,35 @@ Exec_RequestImpl::DidInvalidateComputedValues(
     // Only invoke the invalidation callback if there are any invalid indices
     // from this request.
     if (!invalidIndices.empty()) {
+        if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
+            _OutputInvalidationResultDebugMsg(
+                TF_FUNC_NAME(), invalidIndices, invalidInterval);
+        }
+        TRACE_FUNCTION_SCOPE("value invalidation callback");
+        _valueCallback(invalidIndices, invalidInterval);
+    }
+}
+
+void
+Exec_RequestImpl::DidInvalidateUnknownValues()
+{
+    TRACE_FUNCTION();
+
+    // Gather all indices that don't have a compiled leaf output.
+    ExecRequestIndexSet invalidIndices;
+    for (size_t index = 0; index < _leafOutputs.size(); ++index) {
+        if (!_leafOutputs[index] &&
+            !_lastInvalidatedIndices.IsSet(index)) {
+            invalidIndices.insert(static_cast<int>(index));
+            _lastInvalidatedIndices.Set(index);
+        }
+    }
+
+    // Only invoke the invalidation callback if there are any invalid indices
+    // from this request.
+    if (!invalidIndices.empty()) {
+        static const EfTimeInterval invalidInterval =
+            EfTimeInterval::GetFullInterval();
         if (ARCH_UNLIKELY(TfDebug::IsEnabled(EXEC_REQUEST_INVALIDATION))) {
             _OutputInvalidationResultDebugMsg(
                 TF_FUNC_NAME(), invalidIndices, invalidInterval);
@@ -435,6 +507,21 @@ Exec_RequestImpl::_Compute()
         _system->_runtime->GetDataManager(), _leafOutputs, _extractors);
 }
 
+Exec_CacheView
+Exec_RequestImpl::_ComputeWithOverrides(
+    ExecValueOverrideVector &&valueOverrides)
+{
+    if (!TF_VERIFY(_system) || !_schedule) {
+        return Exec_CacheView();
+    }
+
+    std::unique_ptr<VdfExecutorInterface> executor =
+        _system->_ComputeWithOverrides(
+            *_schedule, *_computeRequest, std::move(valueOverrides));
+    
+    return Exec_CacheView(std::move(executor), _leafOutputs, _extractors);
+}
+
 bool
 Exec_RequestImpl::_RequiresCompilation() const
 {
@@ -488,7 +575,12 @@ Exec_RequestImpl::_ExpireIndices(const ExecRequestIndexSet &expired)
 void
 Exec_RequestImpl::_Discard()
 {
-    _system->_requestTracker->Remove(this);
+    // If we get here because the system reset its unique_ptr to the request
+    // tracker, the pointer will be null; but in that case, we don't need to
+    // remove this impl from the tracker, since the tracker is being deleted.
+    if (Exec_RequestTracker *const tracker = _system->_requestTracker.get()) {
+        tracker->Remove(this);
+    }
     _system = nullptr;
     TfReset(_leafOutputs);
     TfReset(_extractors);

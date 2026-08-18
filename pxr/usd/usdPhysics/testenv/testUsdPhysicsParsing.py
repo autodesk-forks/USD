@@ -6,7 +6,7 @@
 # https://openusd.org/license.
 
 import os, unittest
-from pxr import Usd, UsdPhysics, Gf, UsdGeom, Sdf, UsdShade
+from pxr import Usd, UsdPhysics, Gf, UsdGeom, Sdf, UsdShade, Plug, Tf, Vt
 
 
 toleranceEpsilon = 0.01
@@ -21,7 +21,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         scene = UsdPhysics.Scene.Define(stage, '/physicsScene')
         self.assertTrue(scene)        
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         
@@ -110,7 +110,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
 
             UsdPhysics.CollisionAPI.Apply(shape_prim)
 
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
             scene_found = False
             num_shape_found = 0
@@ -262,6 +262,93 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             self.assertTrue(scene_found)
             self.assertTrue(num_shape_found == 1)
 
+    def test_sphere_points_primvar_widths_parse(self):
+        stage = Usd.Stage.CreateInMemory()
+        UsdPhysics.Scene.Define(stage, '/physicsScene')
+
+        def parse_sphere_points(stage):
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(
+                stage, ["/"])
+            for key, value in ret_dict.items():
+                if key == UsdPhysics.ObjectType.SpherePointsShape:
+                    _, descs = value
+                    return descs[0] if descs else None
+            return None
+
+        # only widths attr authored
+        shape = UsdGeom.Points.Define(stage, "/points")
+        UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        shape.GetPointsAttr().Set([Gf.Vec3f(1.0), Gf.Vec3f(2.0)])
+        shape.GetWidthsAttr().Set([4.0, 6.0])
+
+        desc = parse_sphere_points(stage)
+        self.assertTrue(desc.isValid)
+        self.assertEqual(len(desc.spherePoints), 2)
+        self.assertAlmostEqual(desc.spherePoints[0].radius, 2.0)
+        self.assertAlmostEqual(desc.spherePoints[1].radius, 3.0)
+
+        # only primvars:widths authored
+        stage = Usd.Stage.CreateInMemory()
+        UsdPhysics.Scene.Define(stage, '/physicsScene')
+        shape = UsdGeom.Points.Define(stage, "/points")
+        UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        shape.GetPointsAttr().Set([Gf.Vec3f(1.0), Gf.Vec3f(2.0)])
+        primvarsAPI = UsdGeom.PrimvarsAPI(shape.GetPrim())
+        widthsPv = primvarsAPI.CreatePrimvar(
+            "widths", Sdf.ValueTypeNames.FloatArray)
+        widthsPv.Set([4.0, 6.0])
+
+        desc = parse_sphere_points(stage)
+        self.assertTrue(desc.isValid)
+        self.assertEqual(len(desc.spherePoints), 2)
+        self.assertAlmostEqual(desc.spherePoints[0].radius, 2.0)
+        self.assertAlmostEqual(desc.spherePoints[1].radius, 3.0)
+
+        # both authored, primvars:widths wins
+        stage = Usd.Stage.CreateInMemory()
+        UsdPhysics.Scene.Define(stage, '/physicsScene')
+        shape = UsdGeom.Points.Define(stage, "/points")
+        UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        shape.GetPointsAttr().Set([Gf.Vec3f(1.0), Gf.Vec3f(2.0)])
+        shape.GetWidthsAttr().Set([10.0, 20.0])
+        primvarsAPI = UsdGeom.PrimvarsAPI(shape.GetPrim())
+        widthsPv = primvarsAPI.CreatePrimvar(
+            "widths", Sdf.ValueTypeNames.FloatArray)
+        widthsPv.Set([4.0, 6.0])
+
+        desc = parse_sphere_points(stage)
+        self.assertTrue(desc.isValid)
+        self.assertAlmostEqual(desc.spherePoints[0].radius, 2.0)
+        self.assertAlmostEqual(desc.spherePoints[1].radius, 3.0)
+
+        # indexed primvars:widths
+        stage = Usd.Stage.CreateInMemory()
+        UsdPhysics.Scene.Define(stage, '/physicsScene')
+        shape = UsdGeom.Points.Define(stage, "/points")
+        UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        shape.GetPointsAttr().Set([Gf.Vec3f(1.0), Gf.Vec3f(2.0)])
+        primvarsAPI = UsdGeom.PrimvarsAPI(shape.GetPrim())
+        widthsPv = primvarsAPI.CreatePrimvar(
+            "widths", Sdf.ValueTypeNames.FloatArray)
+        widthsPv.Set([4.0])
+        widthsPv.SetIndices(Vt.IntArray([0, 0]))
+
+        desc = parse_sphere_points(stage)
+        self.assertTrue(desc.isValid)
+        self.assertEqual(len(desc.spherePoints), 2)
+        self.assertAlmostEqual(desc.spherePoints[0].radius, 2.0)
+        self.assertAlmostEqual(desc.spherePoints[1].radius, 2.0)
+
+        # neither authored — invalid
+        stage = Usd.Stage.CreateInMemory()
+        UsdPhysics.Scene.Define(stage, '/physicsScene')
+        shape = UsdGeom.Points.Define(stage, "/points")
+        UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        shape.GetPointsAttr().Set([Gf.Vec3f(1.0)])
+
+        desc = parse_sphere_points(stage)
+        self.assertFalse(desc.isValid)
+
     def test_rigidbody_parse(self):
         stage = Usd.Stage.CreateInMemory()
         self.assertTrue(stage)
@@ -284,7 +371,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         rboAPI.GetVelocityAttr().Set(velocity)
         rboAPI.GetAngularVelocityAttr().Set(angular_vel)
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         rigidbody_found = False
@@ -328,6 +415,29 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(scene_found)
         self.assertTrue(rigidbody_found)
 
+    def test_rigidbody_kinematic_parse(self):
+        stage = Usd.Stage.CreateInMemory()
+        self.assertTrue(stage)
+
+        rigidbody = UsdGeom.Xform.Define(stage, "/rigidBody")
+        rboAPI = UsdPhysics.RigidBodyAPI.Apply(rigidbody.GetPrim())
+        rboAPI.GetKinematicEnabledAttr().Set(True)
+
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
+
+        rigidbody_found = False
+
+        for key, value in ret_dict.items():
+            prim_paths, descs = value
+            if key == UsdPhysics.ObjectType.RigidBody:
+                for prim_path, desc in zip(prim_paths, descs):
+                    rigidbody_found = True
+                    self.assertEqual(prim_path, rigidbody.GetPrim().GetPrimPath())
+                    self.assertEqual(desc.rigidBodyEnabled, True)
+                    self.assertEqual(desc.kinematicBody, True)
+
+        self.assertTrue(rigidbody_found)
+
     def test_rigidbody_collision_parse(self):
         stage = Usd.Stage.CreateInMemory()
         self.assertTrue(stage)
@@ -348,7 +458,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         cube = UsdGeom.Cube.Define(stage, "/rigidBody/cube")
         UsdPhysics.CollisionAPI.Apply(cube.GetPrim())        
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         rigidbody_found = False
@@ -402,6 +512,34 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(rigidbody_found)
         self.assertTrue(cube_found)
 
+    def test_rigidbody_collision_multithreading_parse(self):
+        """Check that if a single rigid body has many collision objects, the
+        multithreaded parsing works correctly.
+        """
+        # somewhat arbitrary number - enough to reliably reproduce the
+        # multithreded multiple-colliders-under-one-rigidbody bug, but still
+        # finish in < .5s on my test machine.
+        NUM_COLLIDERS = 1000
+
+        stage = Usd.Stage.CreateInMemory()
+        body = UsdGeom.Xform.Define(stage, "/Body")
+        UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
+
+        for k in range(NUM_COLLIDERS):
+            sphere = UsdGeom.Sphere.Define(stage, f"/Body/SphereCollider_{k}")
+            UsdPhysics.CollisionAPI.Apply(sphere.GetPrim())
+
+        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, [Sdf.Path.absoluteRootPath])
+
+        collider_count = 0
+        for key, value in ret_dict.items():
+            prim_paths, descs = value
+            if key == UsdPhysics.ObjectType.SphereShape:
+                collider_count = len(prim_paths)
+
+        self.assertEqual(collider_count, NUM_COLLIDERS,
+            f"Expected {NUM_COLLIDERS} colliders, got {collider_count}")
+
     def test_filtering_pairs_parse(self):
         stage = Usd.Stage.CreateInMemory()
         self.assertTrue(stage)
@@ -427,7 +565,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         col_filter.GetFilteredPairsRel().AddTarget(
             cube_0.GetPrim().GetPrimPath())
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         rigidbody_count = 0
@@ -475,7 +613,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         bindingAPI.Bind(materialPrim, UsdShade.Tokens.weakerThanDescendants, 
                         "physics")
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         cube_found = False
@@ -569,7 +707,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         mesh.CreateDoubleSidedAttr().Set(False)
         mesh.CreateNormalsAttr().Set(normals)
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         mesh_found = False
@@ -703,7 +841,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
                 drive.GetStiffnessAttr().Set(30)
                 drive.GetDampingAttr().Set(40)
 
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
             scene_found = False
             num_joints_found = 0
@@ -921,7 +1059,167 @@ class TestUsdPhysicsParsing(unittest.TestCase):
                 UsdPhysics.ArticulationRootAPI.Apply(top_xform.GetPrim())
                 articulation_api_prim = top_xform.GetPrim()
 
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
+
+            scene_found = False
+            articulation_found = False
+
+            for key, value in ret_dict.items():
+                prim_paths, descs = value
+                if key == UsdPhysics.ObjectType.Scene:
+                    scene_found = True
+                elif key == UsdPhysics.ObjectType.Articulation:
+                    for prim_path, desc in zip(prim_paths, descs):
+                        articulation_found = True
+
+                        self.assertTrue(len(desc.rootPrims) == 1)
+
+                        if type == "floating" or type == "auto":
+                            self.assertTrue(len(desc.articulatedJoints) == 2)
+                            self.assertTrue(len(desc.articulatedBodies) == 3)
+                            
+                            self.assertTrue(desc.rootPrims[0] == 
+                                            rigid_body_1.GetPrim().GetPrimPath())
+                        else:
+                            self.assertTrue(len(desc.articulatedJoints) == 3)
+                            # SdfPath returned for the static body
+                            self.assertTrue(len(desc.articulatedBodies) == 4)
+
+                            self.assertTrue(desc.rootPrims[0] == 
+                                            fixed_joint.GetPrim().GetPrimPath())
+
+            self.assertTrue(scene_found)
+            self.assertTrue(articulation_found)
+
+    def test_nested_bodies_articulation_parse(self):
+        stage = Usd.Stage.CreateInMemory()
+        self.assertTrue(stage)
+
+        scene = UsdPhysics.Scene.Define(stage, '/physicsScene')
+        self.assertTrue(scene)
+
+        # top level xform
+        top_xform = UsdGeom.Xform.Define(stage, "/xform")
+
+        rigid_body_0 = UsdGeom.Xform.Define(stage, "/xform/rigidBody0")
+        UsdPhysics.RigidBodyAPI.Apply(rigid_body_0.GetPrim())
+        rigid_body_1 = UsdGeom.Xform.Define(stage, "/xform/rigidBody0/rigidBody1")
+        UsdPhysics.RigidBodyAPI.Apply(rigid_body_1.GetPrim())
+        rigid_body_2 = UsdGeom.Xform.Define(stage, "/xform/rigidBody0/rigidBody1/rigidBody2")
+        UsdPhysics.RigidBodyAPI.Apply(rigid_body_2.GetPrim())
+
+        joint_0 = UsdPhysics.RevoluteJoint.Define(stage, "/xform/revoluteJoint0")
+        joint_0.GetBody0Rel().AddTarget(rigid_body_0.GetPrim().GetPrimPath())
+        joint_0.GetBody1Rel().AddTarget(rigid_body_1.GetPrim().GetPrimPath())
+
+        joint_1 = UsdPhysics.RevoluteJoint.Define(stage, "/xform/revoluteJoint1")
+        joint_1.GetBody0Rel().AddTarget(rigid_body_1.GetPrim().GetPrimPath())
+        joint_1.GetBody1Rel().AddTarget(rigid_body_2.GetPrim().GetPrimPath())
+
+        articulation_api_prim = None
+        articulations = ["floating", "auto", "fixed"]
+        for type in articulations:
+            if articulation_api_prim is not None:
+                articulation_api_prim.RemoveAPI(UsdPhysics.ArticulationRootAPI)
+                articulation_api_prim = None
+
+            if type == "fixed":
+                fixed_joint = UsdPhysics.FixedJoint.Define(stage, 
+                                                           "/xform/fixedJoint")
+                fixed_joint.GetBody1Rel().AddTarget(
+                    rigid_body_0.GetPrim().GetPrimPath())
+                UsdPhysics.ArticulationRootAPI.Apply(fixed_joint.GetPrim())
+                articulation_api_prim = fixed_joint.GetPrim()
+            elif type == "floating":
+                UsdPhysics.ArticulationRootAPI.Apply(rigid_body_0.GetPrim())
+                articulation_api_prim = rigid_body_0.GetPrim()
+            elif type == "auto" or type == "auto_fixed":
+                UsdPhysics.ArticulationRootAPI.Apply(top_xform.GetPrim())
+                articulation_api_prim = top_xform.GetPrim()
+
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
+
+            scene_found = False
+            articulation_found = False
+
+            for key, value in ret_dict.items():
+                prim_paths, descs = value
+                if key == UsdPhysics.ObjectType.Scene:
+                    scene_found = True
+                elif key == UsdPhysics.ObjectType.Articulation:
+                    for prim_path, desc in zip(prim_paths, descs):
+                        articulation_found = True
+
+                        self.assertTrue(len(desc.rootPrims) == 1)
+
+                        if type == "floating" or type == "auto":
+                            self.assertTrue(len(desc.articulatedJoints) == 2)
+                            self.assertTrue(len(desc.articulatedBodies) == 3)                            
+                            self.assertTrue(desc.rootPrims[0] == 
+                                            rigid_body_0.GetPrim().GetPrimPath())
+                        else:
+                            self.assertTrue(len(desc.articulatedJoints) == 3)
+                            # SdfPath returned for the static body
+                            self.assertTrue(len(desc.articulatedBodies) == 4)
+
+                            self.assertTrue(desc.rootPrims[0] == 
+                                            fixed_joint.GetPrim().GetPrimPath())
+
+            self.assertTrue(scene_found)
+            self.assertTrue(articulation_found)
+
+    def test_articulation_kinematic_parse(self):
+        stage = Usd.Stage.CreateInMemory()
+        self.assertTrue(stage)
+
+        scene = UsdPhysics.Scene.Define(stage, '/physicsScene')
+        self.assertTrue(scene)
+
+        # top level xform
+        top_xform = UsdGeom.Xform.Define(stage, "/xform")
+
+        rigid_body_0 = UsdGeom.Xform.Define(stage, "/xform/rigidBody0")
+        rboAPI = UsdPhysics.RigidBodyAPI.Apply(rigid_body_0.GetPrim())
+        rboAPI.GetKinematicEnabledAttr().Set(True)
+        rigid_body_1 = UsdGeom.Xform.Define(stage, "/xform/rigidBody1")
+        rboAPI = UsdPhysics.RigidBodyAPI.Apply(rigid_body_1.GetPrim())
+        rboAPI.GetKinematicEnabledAttr().Set(True)
+        rigid_body_2 = UsdGeom.Xform.Define(stage, "/xform/rigidBody2")
+        rboAPI = UsdPhysics.RigidBodyAPI.Apply(rigid_body_2.GetPrim())
+        rboAPI.GetKinematicEnabledAttr().Set(True)
+
+        joint_0 = UsdPhysics.RevoluteJoint.Define(stage, "/xform/revoluteJoint0")
+        joint_0.GetBody0Rel().AddTarget(rigid_body_0.GetPrim().GetPrimPath())
+        joint_0.GetBody1Rel().AddTarget(rigid_body_1.GetPrim().GetPrimPath())
+
+        joint_1 = UsdPhysics.RevoluteJoint.Define(stage, "/xform/revoluteJoint1")
+        joint_1.GetBody0Rel().AddTarget(rigid_body_1.GetPrim().GetPrimPath())
+        joint_1.GetBody1Rel().AddTarget(rigid_body_2.GetPrim().GetPrimPath())
+
+        articulation_api_prim = None
+        fixed_joint = None
+        articulations = ["floating", "auto", "fixed", "auto_fixed"]
+
+        for type in articulations:
+            if articulation_api_prim is not None:
+                articulation_api_prim.RemoveAPI(UsdPhysics.ArticulationRootAPI)
+                articulation_api_prim = None
+
+            if type == "fixed":
+                fixed_joint = UsdPhysics.FixedJoint.Define(stage, 
+                                                           "/xform/fixedJoint")
+                fixed_joint.GetBody1Rel().AddTarget(
+                    rigid_body_0.GetPrim().GetPrimPath())
+                UsdPhysics.ArticulationRootAPI.Apply(fixed_joint.GetPrim())
+                articulation_api_prim = fixed_joint.GetPrim()
+            elif type == "floating":
+                UsdPhysics.ArticulationRootAPI.Apply(rigid_body_1.GetPrim())
+                articulation_api_prim = rigid_body_1.GetPrim()
+            elif type == "auto" or type == "auto_fixed":
+                UsdPhysics.ArticulationRootAPI.Apply(top_xform.GetPrim())
+                articulation_api_prim = top_xform.GetPrim()
+
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
             scene_found = False
             articulation_found = False
@@ -979,7 +1277,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
                 if i % 4 == 0:
                     collision_group.GetMergeGroupNameAttr().Set("four")
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         num_reported_collision_groups = 0
@@ -1044,7 +1342,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         collision_group_1.GetCollidersCollectionAPI().GetIncludesRel().AddTarget(
             cube.GetPrim().GetPrimPath())
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"])
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
 
         scene_found = False
         num_reported_collision_groups = 0
@@ -1087,10 +1385,10 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         listOp.prependedItems = ["MyCustomGeometryAPI", "PhysicsCollisionAPI"]
         primSpec.SetInfo(Usd.Tokens.apiSchemas, listOp)
 
-        custom_tokens = UsdPhysics.CustomUsdPhysicsTokens()
+        custom_tokens = UsdPhysics.UsdPhysicsCustomTokens()
         custom_tokens.shapeTokens.append("MyCustomGeometryAPI")
 
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens)
 
         scene_found = False
@@ -1107,6 +1405,66 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(scene_found)
         self.assertTrue(custom_geometry_found)
 
+    def test_custom_geometry_multithreading_parse(self):
+        """Check that many custom-shape colliders parsed in parallel produce
+        the correct customGeometryToken for every descriptor, and that the
+        token-to-descriptor ordering is deterministic.
+        """
+        NUM_CUSTOM_COLLIDERS = 500
+
+        stage = Usd.Stage.CreateInMemory()
+        scene = UsdPhysics.Scene.Define(stage, '/physicsScene')
+
+        body = UsdGeom.Xform.Define(stage, "/Body")
+        UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
+
+        layer = stage.GetEditTarget().GetLayer()
+
+        # Use two distinct custom API tokens so we can verify that the
+        # right token ends up on the right descriptor.
+        token_a = "CustomGeomA_API"
+        token_b = "CustomGeomB_API"
+
+        expected = []
+        for k in range(NUM_CUSTOM_COLLIDERS):
+            prim_path = f"/Body/CustomCollider_{k}"
+            UsdGeom.Cube.Define(stage, prim_path)
+
+            token = token_a if k % 2 == 0 else token_b
+            expected.append((prim_path, token))
+
+            primSpec = Sdf.CreatePrimInLayer(layer, prim_path)
+            listOp = Sdf.TokenListOp()
+            listOp.prependedItems = [token, "PhysicsCollisionAPI"]
+            primSpec.SetInfo(Usd.Tokens.apiSchemas, listOp)
+
+        custom_tokens = UsdPhysics.CustomUsdPhysicsTokens()
+        custom_tokens.shapeTokens.append(token_a)
+        custom_tokens.shapeTokens.append(token_b)
+
+        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(
+            stage, [Sdf.Path.absoluteRootPath], [], custom_tokens)
+
+        self.assertIn(UsdPhysics.ObjectType.CustomShape, ret_dict)
+        prim_paths, descs = ret_dict[UsdPhysics.ObjectType.CustomShape]
+
+        self.assertEqual(len(descs), NUM_CUSTOM_COLLIDERS)
+
+        # Build a map from prim path -> expected token for easy lookup,
+        # since the parser may return prims in arbitrary (but internally
+        # consistent) order.
+        expected_map = {p: t for p, t in expected}
+
+        for prim_path, desc in zip(prim_paths, descs):
+            path_str = str(prim_path)
+            self.assertIn(path_str, expected_map,
+                          f"Unexpected prim path {path_str}")
+            self.assertEqual(
+                desc.customGeometryToken, expected_map[path_str],
+                f"Wrong customGeometryToken for {path_str}: "
+                f"got {desc.customGeometryToken}, "
+                f"expected {expected_map[path_str]}")
+
     # simulation owner tests
     def test_rigid_body_simulation_owner_parse(self):
         stage = Usd.Stage.CreateInMemory()
@@ -1118,9 +1476,9 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         cube = UsdGeom.Cube.Define(stage, "/cube")
         rbo_api = UsdPhysics.RigidBodyAPI.Apply(cube.GetPrim())
 
-        custom_tokens = UsdPhysics.CustomUsdPhysicsTokens()
+        custom_tokens = UsdPhysics.UsdPhysicsCustomTokens()
         simulation_owners = [scene.GetPrim().GetPrimPath()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
 
         def check_ret_dict():
@@ -1143,7 +1501,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(not rigid_body_found)
 
         simulation_owners = [Sdf.Path()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found = check_ret_dict()
 
@@ -1152,7 +1510,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
 
         simulation_owners = [scene.GetPrim().GetPrimPath()]
         rbo_api.GetSimulationOwnerRel().AddTarget(scene.GetPrim().GetPrimPath())
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found = check_ret_dict()
 
@@ -1172,9 +1530,9 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         cube = UsdGeom.Cube.Define(stage, "/xform/cube")
         collision_api = UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
 
-        custom_tokens = UsdPhysics.CustomUsdPhysicsTokens()
+        custom_tokens = UsdPhysics.UsdPhysicsCustomTokens()
         simulation_owners = [scene.GetPrim().GetPrimPath()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
 
         def check_ret_dict():
@@ -1202,7 +1560,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(not collision_found)
 
         simulation_owners = [Sdf.Path()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, collision_found = check_ret_dict()
 
@@ -1212,7 +1570,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
 
         simulation_owners = [scene.GetPrim().GetPrimPath()]
         rbo_api.GetSimulationOwnerRel().AddTarget(scene.GetPrim().GetPrimPath())
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, collision_found = check_ret_dict()
 
@@ -1222,7 +1580,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
 
         xform.GetPrim().RemoveAPI(UsdPhysics.RigidBodyAPI)
         simulation_owners = [Sdf.Path()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, collision_found = check_ret_dict()
 
@@ -1231,7 +1589,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(collision_found)
 
         simulation_owners = [scene.GetPrim().GetPrimPath()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, collision_found = check_ret_dict()
 
@@ -1242,7 +1600,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         simulation_owners = [scene.GetPrim().GetPrimPath()]
         collision_api.GetSimulationOwnerRel().AddTarget(
             scene.GetPrim().GetPrimPath())
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, collision_found = check_ret_dict()
 
@@ -1300,10 +1658,10 @@ class TestUsdPhysicsParsing(unittest.TestCase):
                 fixed_joint.GetBody1Rel().AddTarget(
                     xform_1.GetPrim().GetPrimPath())
 
-            custom_tokens = UsdPhysics.CustomUsdPhysicsTokens()
+            custom_tokens = UsdPhysics.UsdPhysicsCustomTokens()
             simulation_owners = [scene.GetPrim().GetPrimPath()]
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
-                    custom_tokens, simulation_owners)
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(
+                stage, ["/"], [], custom_tokens, simulation_owners)
 
             scene_found, rigid_body_found, joint_found = check_ret_dict()
 
@@ -1312,8 +1670,8 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             self.assertTrue(not joint_found)
 
             simulation_owners = [Sdf.Path()]
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
-                    custom_tokens, simulation_owners)
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(
+                stage, ["/"], [], custom_tokens, simulation_owners)
             scene_found, rigid_body_found, joint_found = check_ret_dict()
 
             self.assertTrue(not scene_found)
@@ -1325,8 +1683,8 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             rbo_api_1.GetSimulationOwnerRel().AddTarget(
                 scene.GetPrim().GetPrimPath())
             simulation_owners = [scene.GetPrim().GetPrimPath()]
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
-                    custom_tokens, simulation_owners)
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(
+                stage, ["/"], [], custom_tokens, simulation_owners)
             scene_found, rigid_body_found, joint_found = check_ret_dict()
 
             self.assertTrue(scene_found)
@@ -1337,8 +1695,8 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             rbo_api_1.GetSimulationOwnerRel().AddTarget(
                 scene.GetPrim().GetPrimPath())
             simulation_owners = [scene.GetPrim().GetPrimPath()]
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
-                    custom_tokens, simulation_owners)
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(
+                stage, ["/"], [], custom_tokens, simulation_owners)
             scene_found, rigid_body_found, joint_found = check_ret_dict()
 
             self.assertTrue(scene_found)
@@ -1349,8 +1707,8 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             rbo_api_1.GetSimulationOwnerRel().AddTarget(
                 scene.GetPrim().GetPrimPath())
             simulation_owners = [Sdf.Path(), scene.GetPrim().GetPrimPath()]
-            ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
-                    custom_tokens, simulation_owners)
+            ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(
+                stage, ["/"], [], custom_tokens, simulation_owners)
             scene_found, rigid_body_found, joint_found = check_ret_dict()
 
             self.assertTrue(scene_found)
@@ -1386,9 +1744,9 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         revolute_joint_1.GetBody0Rel().AddTarget(cube_1.GetPrim().GetPrimPath())
         revolute_joint_1.GetBody1Rel().AddTarget(cube_2.GetPrim().GetPrimPath())
 
-        custom_tokens = UsdPhysics.CustomUsdPhysicsTokens()
+        custom_tokens = UsdPhysics.UsdPhysicsCustomTokens()
         simulation_owners = [scene.GetPrim().GetPrimPath()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
 
         def check_ret_dict():
@@ -1422,7 +1780,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(not articulation_found)
 
         simulation_owners = [Sdf.Path()]
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, joint_found, articulation_found = \
             check_ret_dict()
@@ -1437,7 +1795,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             scene.GetPrim().GetPrimPath())
         rigid_body_api_1.GetSimulationOwnerRel().AddTarget(
             scene.GetPrim().GetPrimPath())
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, joint_found, articulation_found = \
             check_ret_dict()
@@ -1454,7 +1812,7 @@ class TestUsdPhysicsParsing(unittest.TestCase):
             scene.GetPrim().GetPrimPath())
         rigid_body_api_2.GetSimulationOwnerRel().AddTarget(
             scene.GetPrim().GetPrimPath())
-        ret_dict = UsdPhysics.LoadUsdPhysicsFromRange(stage, ["/"], [], 
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"], [], 
                 custom_tokens, simulation_owners)
         scene_found, rigid_body_found, joint_found, articulation_found = \
             check_ret_dict()
@@ -1464,6 +1822,47 @@ class TestUsdPhysicsParsing(unittest.TestCase):
         self.assertTrue(joint_found)
         self.assertTrue(articulation_found)
 
+
+class TestUsdAppliedAPISchemas(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        pr = Plug.Registry()
+        testPlugins = pr.RegisterPlugins(os.path.abspath("resources"))
+        assert len(testPlugins) == 1, \
+            "Failed to load expected test plugin"
+        assert testPlugins[0].name == "testUsdPhysicsParsing", \
+            "Failed to load expected test plugin"
+        cls.SingleApplyAPIType = \
+            Tf.Type(Usd.SchemaBase).FindDerivedByName("TestNestedPhysicsCollisionAPI")
+ 
+    def test_SimpleTypedSchemaPrimDefinition(self):
+        stage = Usd.Stage.CreateInMemory()
+        self.assertTrue(stage)
+
+        scene = UsdPhysics.Scene.Define(stage, '/physicsScene')
+        self.assertTrue(scene)
+
+        cube = UsdGeom.Cube.Define(stage, "/cube")
+
+        cube.GetPrim().ApplyAPI("TestNestedPhysicsCollisionAPI")
+
+        self.assertTrue(cube.GetPrim().HasAPI("TestNestedPhysicsCollisionAPI"))
+        self.assertTrue(cube.GetPrim().HasAPI("PhysicsCollisionAPI"))
+
+        ret_dict = UsdPhysics.UsdPhysicsLoadStageFromPrimRange(stage, ["/"])
+
+        num_shape_found = 0
+
+        for key, value in ret_dict.items():
+            prim_paths, descs = value
+            if key == UsdPhysics.ObjectType.Scene:
+                scene_found = True
+            elif key == UsdPhysics.ObjectType.CubeShape:
+                for prim_path, desc in zip(prim_paths, descs):
+                    # cube shape
+                    num_shape_found = num_shape_found + 1
+
+        self.assertTrue(num_shape_found == 1)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Model" {
+    double missingFirst.spline = {1:1; post held}
+    double missingLast.spline = {1:1; post held}
+    double missingLast2.spline = {1:1; post held}
+}

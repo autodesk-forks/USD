@@ -23,8 +23,9 @@
 #include "pxr/imaging/hdSt/renderPass.h"
 #include "pxr/imaging/hdSt/renderPassState.h"
 #include "pxr/imaging/hdSt/renderParam.h"
-#include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hdSt/resourceRegistry.h"
+#include "pxr/imaging/hdSt/sphere.h"
+#include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hdSt/volume.h"
 
 #include "pxr/imaging/hd/aov.h"
@@ -33,6 +34,8 @@
 #include "pxr/imaging/hd/extComputation.h"
 #include "pxr/imaging/hd/imageShader.h"
 #include "pxr/imaging/hd/perfLog.h"
+#include "pxr/imaging/hd/renderDelegateInfo.h"
+#include "pxr/imaging/hd/rendererCreateArgsSchema.h"
 #include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/imaging/hgi/hgi.h"
@@ -54,13 +57,35 @@ TF_DEFINE_ENV_SETTING(HD_ENABLE_GPU_TINY_PRIM_CULLING, false,
 TF_DEFINE_ENV_SETTING(HDST_MAX_LIGHTS, 16,
                       "Maximum number of lights to render with");
 
-const TfTokenVector HdStRenderDelegate::SUPPORTED_RPRIM_TYPES =
+TF_DEFINE_ENV_SETTING(HDST_DOME_LIGHT_CUBEMAP_TARGET_MEMORY_MB, 0,
+                      "Maximum memory target in MB for the cubemap computed "
+                      "from the latlong texture for the dome light.");
+
+TF_DEFINE_ENV_SETTING(HDST_ENABLE_NATIVE_SPHERES, false,
+    "Enable native rendering of sphere primitives in Storm instead of "
+    "converting them to meshes via the implicit surface scene index.");
+
+namespace {
+const TfTokenVector _SupportedRprimTypes()
 {
-    HdPrimTypeTokens->mesh,
-    HdPrimTypeTokens->basisCurves,
-    HdPrimTypeTokens->points,
-    HdPrimTypeTokens->volume
-};
+    TfTokenVector supportedTypes = {
+        HdPrimTypeTokens->mesh,
+        HdPrimTypeTokens->basisCurves,
+        HdPrimTypeTokens->points,
+        HdPrimTypeTokens->volume
+    };
+
+    if (TfGetEnvSetting(HDST_ENABLE_NATIVE_SPHERES)) {
+        supportedTypes.emplace_back(HdPrimTypeTokens->sphere);
+    }
+
+    return supportedTypes;
+}
+}
+
+const TfTokenVector
+HdStRenderDelegate::SUPPORTED_RPRIM_TYPES = _SupportedRprimTypes();
+
 
 const TfTokenVector HdStRenderDelegate::SUPPORTED_SPRIM_TYPES =
 {
@@ -143,7 +168,7 @@ public:
         registry = result;
 
         // Also register with HdPerfLog.
-        HdPerfLog::GetInstance().AddResourceRegistry(result.get());
+        HD_PERF_ADD_RESOURCE_REGISTRY(result.get());
 
         return result;
     }
@@ -155,8 +180,8 @@ private:
 
         std::lock_guard<std::mutex> guard(_mutex);
 
-        HdPerfLog::GetInstance().RemoveResourceRegistry(registry);
-        
+        HD_PERF_REMOVE_RESOURCE_REGISTRY(registry);
+
         _map.erase(registry->GetHgi());
     }
 
@@ -207,6 +232,12 @@ HdStRenderDelegate::HdStRenderDelegate(HdRenderSettingsMap const& settingsMap)
             HdRenderSettingsTokens->domeLightCameraVisibility,
             VtValue(true) },
         HdRenderSettingDescriptor{
+            "Maximum memory target, in MB, of calculated cubemap texture for "
+            "dome light",
+            HdStRenderSettingsTokens->domeLightCubemapTargetMemory,
+            VtValue(static_cast<unsigned int>(
+                TfGetEnvSetting(HDST_DOME_LIGHT_CUBEMAP_TARGET_MEMORY_MB))) },
+        HdRenderSettingDescriptor{
             "Enable exposure compensation",
             HdRenderSettingsTokens->enableExposureCompensation,
             VtValue(true) }
@@ -239,6 +270,12 @@ HdStRenderDelegate::GetRenderStats() const
     }
 
     return ra;
+}
+
+bool
+HdStRenderDelegate::RequiresStormTasks() const
+{
+    return true;
 }
 
 HdStRenderDelegate::~HdStRenderDelegate() = default;
@@ -386,6 +423,8 @@ HdStRenderDelegate::CreateRprim(TfToken const& typeId,
         return new HdStPoints(rprimId);
     } else  if (typeId == HdPrimTypeTokens->volume) {
         return new HdStVolume(rprimId);
+    } else  if (typeId == HdPrimTypeTokens->sphere) {
+        return new HdStSphere(rprimId);
     } else {
         TF_CODING_ERROR("Unknown Rprim Type %s", typeId.GetText());
     }
@@ -546,36 +585,86 @@ HdStRenderDelegate::CommitResources(HdChangeTracker *tracker)
     _drawItemsCache->GarbageCollect();
 }
 
-bool
-HdStRenderDelegate::IsSupported()
+static
+bool _GetGpuEnabled(const HdRendererCreateArgsSchema &args)
 {
-    return Hgi::IsSupported();
+    HdBoolDataSourceHandle const ds = args.GetGpuEnabled();
+    if (!ds) {
+        return true;
+    }
+    return ds->GetTypedValue(0.0f);
+}
+
+static
+Hgi * _GetHgi(const HdRendererCreateArgsSchema &args)
+{
+    auto ds =
+        HdTypedSampledDataSource<Hgi*>::Cast(
+            args.GetDrivers().Get(HdRendererCreateArgsSchemaTokens->hgi));
+    if (!ds) {
+        return nullptr;
+    }
+    return ds->GetTypedValue(0.0f);
+}
+
+static
+const char * _NullOrReasonWhyNotSupported(
+    const HdRendererCreateArgsSchema &rendererCreateArgs)
+{
+    if (!_GetGpuEnabled(rendererCreateArgs)) {
+        return "GPU not enabled";
+    }
+    if (Hgi * const hgi = _GetHgi(rendererCreateArgs)) {
+        if (hgi->IsBackendSupported()) {
+            return nullptr;
+        } else {
+            return "Given Hgi backend not supported";
+        }
+    } else {
+        // If invalid Hgi instance is provided, check support for platform default
+        // Hgi.
+        if (Hgi::IsSupported()) {
+            return nullptr;
+        } else {
+            return "Platform default Hgi not supported";
+        }
+    }
+}
+
+bool
+HdStRenderDelegate::IsSupported(
+    const HdRendererCreateArgsSchema &rendererCreateArgs,
+    std::string * const reasonWhyNot)
+{
+    if (const char * const result =
+                _NullOrReasonWhyNotSupported(rendererCreateArgs)) {
+        TF_DEBUG(HD_RENDERER_PLUGIN).Msg(
+            "Storm renderer not supported: %s.\n", result);
+        if (reasonWhyNot) {
+            *reasonWhyNot = result;
+        }
+        return false;
+    } else {
+        return true;
+    }
 }
 
 TfTokenVector
 HdStRenderDelegate::GetShaderSourceTypes() const
 {
-#ifdef PXR_MATERIALX_SUPPORT_ENABLED
-    return {HioGlslfxTokens->glslfx, _tokens->mtlx};
-#else
-    return {HioGlslfxTokens->glslfx};
-#endif
+    return GetRenderDelegateInfo().shaderSourceTypes;
 }
 
 TfTokenVector
 HdStRenderDelegate::GetMaterialRenderContexts() const
 {
-#ifdef PXR_MATERIALX_SUPPORT_ENABLED
-    return {HioGlslfxTokens->glslfx, _tokens->mtlx};
-#else
-    return {HioGlslfxTokens->glslfx};
-#endif
+    return GetRenderDelegateInfo().materialRenderContexts;
 }
 
 bool
 HdStRenderDelegate::IsPrimvarFilteringNeeded() const
 {
-    return true;
+    return GetRenderDelegateInfo().isPrimvarFilteringNeeded;
 }
 
 HdStDrawItemsCachePtr
@@ -601,6 +690,40 @@ HdStRenderDelegate::_ApplyTextureSettings()
 
     _resourceRegistry->SetMemoryRequestForTextureType(
         HdStTextureType::Field, 1048576 * memInMb);
+}
+
+static
+HdRenderDelegateInfo
+_RenderDelegateInfo()
+{
+    HdRenderDelegateInfo info;
+
+    info.materialBindingPurpose = HdTokens->preview;
+    info.materialRenderContexts = {
+        HioGlslfxTokens->glslfx
+#ifdef PXR_MATERIALX_SUPPORT_ENABLED
+        , _tokens->mtlx
+#endif
+    };
+
+    info.isPrimvarFilteringNeeded = true;
+    info.shaderSourceTypes = info.materialRenderContexts;
+    info.isCoordSysSupported = false;
+
+    return info;
+}
+
+const HdRenderDelegateInfo &
+HdStRenderDelegate::GetRenderDelegateInfo()
+{
+    static const HdRenderDelegateInfo info = _RenderDelegateInfo();
+    return info;
+}
+
+bool
+HdStRenderDelegate::IsEnabledNativeSphereRenderingSupport()
+{
+    return TfGetEnvSetting(HDST_ENABLE_NATIVE_SPHERES);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

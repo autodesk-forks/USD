@@ -7,6 +7,7 @@
 #include "pxr/exec/exec/inputResolvingCompilationTask.h"
 
 #include "pxr/exec/exec/compilationState.h"
+#include "pxr/exec/exec/compiledOutputCache.h"
 #include "pxr/exec/exec/inputResolver.h"
 #include "pxr/exec/exec/outputProvidingCompilationTask.h"
 #include "pxr/exec/exec/program.h"
@@ -14,11 +15,6 @@
 #include "pxr/base/arch/functionLite.h"
 #include "pxr/base/tf/mallocTag.h"
 #include "pxr/base/trace/trace.h"
-#include "pxr/exec/esf/attribute.h"
-#include "pxr/exec/esf/journal.h"
-#include "pxr/exec/esf/object.h"
-#include "pxr/exec/esf/prim.h"
-#include "pxr/exec/esf/stage.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -58,18 +54,16 @@ Exec_InputResolvingCompilationTask::_Compile(
 
             const Exec_OutputKey::Identity outputKeyIdentity =
                 outputKey.MakeIdentity();
-            const auto &[output, hasOutput] =
+            const Exec_CompiledOutputCache::MappedType *const cacheHit =
                 compilationState.GetProgram()->GetCompiledOutput(
                     outputKeyIdentity);
-            if (hasOutput) {
-                *resultOutput = output;
+            if (cacheHit) {
+                *resultOutput = cacheHit->output;
                 continue;
             }
 
             // Claim the task for producing the missing output.
-            const Exec_CompilerTaskSync::ClaimResult claimResult =
-                deps.ClaimSubtask(outputKeyIdentity);
-            if (claimResult == Exec_CompilerTaskSync::ClaimResult::Claimed) {
+            if (deps.ClaimOutputProvidingTask(outputKeyIdentity)) {
                 // Run the task that produces the output.
                 deps.NewSubtask<Exec_OutputProvidingCompilationTask>(
                     compilationState,
@@ -80,13 +74,13 @@ Exec_InputResolvingCompilationTask::_Compile(
     },
 
     // Compiled outputs are now all available and can be retrieved from the
-    // compiled outputs cache.
+    // compiled output cache.
     [this, &compilationState](TaskDependencies &deps) {
         TRACE_FUNCTION_SCOPE("populate result");
 
-        // For every output key, check if we still don't have a result and if
-        // so retrieve it from the compiled output. All the task dependencies
-        // should have fulfilled at this point.
+        // For every output key, check if we have a result, and if so, retrieve
+        // it from the compiled output cache. All the task dependencies should
+        // have fulfilled at this point.
         for (size_t i = 0; i < _outputKeys.size(); ++i) {
             const Exec_OutputKey &outputKey = _outputKeys[i];
             VdfMaskedOutput *const resultOutput = &(*_resultOutputs)[i];
@@ -95,18 +89,26 @@ Exec_InputResolvingCompilationTask::_Compile(
                 continue;
             }
 
-            const auto &[output, hasOutput] =
+            const Exec_CompiledOutputCache::MappedType *const cacheHit =
                 compilationState.GetProgram()->GetCompiledOutput(
                     outputKey.MakeIdentity());
-            if (!output) {
+            if (!cacheHit) {
                 TF_VERIFY(_inputKey.optional);
                 continue;
             }
 
-            *resultOutput = output;
+            *resultOutput = cacheHit->output;
         }
     }
     );
+}
+
+void
+Exec_InputResolvingCompilationTask::_Interrupt(Exec_CompilationState &)
+{
+    // Input resolving tasks have nothing to contribute to the interrupt state.
+    // An empty implementation must be provided because _Interrupt is a
+    // pure-virtual method.
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

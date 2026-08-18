@@ -25,6 +25,9 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+#if !defined(HD_PERF_ENABLE)
+    #define HD_PERF_ENABLE 1
+#endif
 
 class SdfPath;
 class HdResourceRegistry;
@@ -32,6 +35,7 @@ class HdResourceRegistry;
 // XXX: it would be nice to move this into Trace or use the existing Trace
 // counter mechanism, however we are restricted to TraceLite in the rocks.
 
+#if HD_PERF_ENABLE
 //----------------------------------------------------------------------------//
 // PERFORMANCE INSTURMENTATION MACROS                                         //
 //----------------------------------------------------------------------------//
@@ -67,6 +71,34 @@ class HdResourceRegistry;
     HdPerfLog::GetInstance().AddCounter(name, value);
 #define HD_PERF_COUNTER_SUBTRACT(name, value) \
     HdPerfLog::GetInstance().SubtractCounter(name, value);
+
+// Add/Remove resource registry to/from HdPerfLog.
+#define HD_PERF_ADD_RESOURCE_REGISTRY(registry) \
+    HdPerfLog::GetInstance().AddResourceRegistry(registry);
+#define HD_PERF_REMOVE_RESOURCE_REGISTRY(registry) \
+    HdPerfLog::GetInstance().RemoveResourceRegistry(registry);
+
+#else // HD_PERF_ENABLE
+
+#define HD_TRACE_FUNCTION()
+#define HD_TRACE_SCOPE(tag)
+
+#define HD_PERF_CACHE_HIT(name, id)
+#define HD_PERF_CACHE_HIT_TAG(name, id, tag)
+
+#define HD_PERF_CACHE_MISS(name, id)
+#define HD_PERF_CACHE_MISS_TAG(name, id, tag)
+
+#define HD_PERF_COUNTER_INCR(name)
+#define HD_PERF_COUNTER_DECR(name)
+#define HD_PERF_COUNTER_SET(name, value) (void)(value)
+#define HD_PERF_COUNTER_ADD(name, value) (void)(value)
+#define HD_PERF_COUNTER_SUBTRACT(name, value) (void)(value)
+
+#define HD_PERF_ADD_RESOURCE_REGISTRY(registry)
+#define HD_PERF_REMOVE_RESOURCE_REGISTRY(registry)
+
+#endif
 
 //----------------------------------------------------------------------------//
 // PERFORMANCE LOG                                                            //

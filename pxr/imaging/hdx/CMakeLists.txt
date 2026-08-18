@@ -63,6 +63,7 @@ pxr_library(hdx
         selectionTracker
         shadowTask
         simpleLightTask
+        stormCheck
         skydomeTask
         task
         taskController
@@ -134,6 +135,19 @@ pxr_build_test(testHdxLightAndShadow
         tf
     CPPFILES
         testenv/testHdxLightAndShadow.cpp
+)
+pxr_build_test(testHdxNoResourceBindings
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        sdf
+        glf
+        garch
+        arch
+        tf
+    CPPFILES
+        testenv/testHdxNoResourceBindings.cpp
 )
 endif()
 
@@ -250,34 +264,6 @@ if (WIN32)
 endif()
 
 #
-# Install tests
-#
-pxr_install_test_dir(
-    SRC testenv/testHdxLightAndShadow
-    DEST testHdxLightAndShadow
-)
-pxr_install_test_dir(
-    SRC testenv/testHdxPickAndHighlight
-    DEST testHdxPickAndHighlight
-)
-pxr_install_test_dir(
-    SRC testenv/testHdxPickTarget
-    DEST testHdxPickTarget
-)
-pxr_install_test_dir(
-    SRC testenv/testHdxPickingWithReprAndRefineChanges
-    DEST testHdxPickingWithReprAndRefineChanges
-)
-pxr_install_test_dir(
-    SRC testenv/testHdxRenderTask
-    DEST testHdxRenderTask
-)
-pxr_install_test_dir(
-    SRC testenv/testHdxUnpickablesAsOccluders
-    DEST testHdxUnpickablesAsOccluders
-)
-
-#
 # Register tests
 #
 pxr_register_test(testHdxCameraAndLight
@@ -296,6 +282,7 @@ pxr_register_test(testHdxIdRender_Refined
 )
 pxr_register_test(testHdxLightAndShadow
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxLightAndShadow"
+    TESTENV testenv/testHdxLightAndShadow
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1.png
@@ -310,6 +297,7 @@ pxr_register_test(testHdxLightAndShadow
 )
 pxr_register_test(testHdxPickAndHighlight
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPickAndHighlight --offscreen"
+    TESTENV testenv/testHdxPickAndHighlight
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1_unselected.png
@@ -330,6 +318,7 @@ pxr_register_test(testHdxPickResolveMode
 )
 pxr_register_test(testHdxPickTarget
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPickTarget --offscreen"
+    TESTENV testenv/testHdxPickTarget
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1_unselected.png
@@ -350,6 +339,7 @@ pxr_register_test(testHdxPickTarget
 )
 pxr_register_test(testHdxPickingWithReprAndRefineChanges
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPickingWithReprAndRefineChanges --offscreen"
+    TESTENV testenv/testHdxPickingWithReprAndRefineChanges
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1_unselected.png
@@ -364,6 +354,7 @@ pxr_register_test(testHdxPickingWithReprAndRefineChanges
 )
 pxr_register_test(testHdxRenderTask
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxRenderTask"
+    TESTENV testenv/testHdxRenderTask
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1.png
@@ -375,8 +366,29 @@ pxr_register_test(testHdxRenderTask
     ENV
         TF_DEBUG=HD_SAFE_MODE
 )
+
+pxr_build_test(testHdxOitShaderRetention
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        sdf
+        glf
+        garch
+        arch
+        tf
+    CPPFILES
+        testenv/testHdxOitShaderRetention.cpp
+)
+pxr_register_test(testHdxOitShaderRetention
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxOitShaderRetention"
+    EXPECTED_RETURN_CODE 0
+    ENV
+        HDX_ENABLE_OIT=1
+)
 pxr_register_test(testHdxUnpickablesAsOccluders
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxUnpickablesAsOccluders --offscreen"
+    TESTENV testenv/testHdxUnpickablesAsOccluders
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1_unselected.png
@@ -386,7 +398,15 @@ pxr_register_test(testHdxUnpickablesAsOccluders
     FAIL_PERCENT 1
     PERCEPTUAL
 )
-
+pxr_register_test(testHdxNoResourceBindings
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxNoResourceBindings"
+    TESTENV testenv/testHdxNoResourceBindings
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        color.png
+    FAIL 0.01
+    FAIL_PERCENT 0.01
+)
 # Certain tests use plugins that require shared libraries.
 if (TARGET shared_libs)
 
@@ -401,12 +421,9 @@ pxr_build_test(testHdxDrawTarget
     CPPFILES
         testenv/testHdxDrawTarget.cpp
 )
-pxr_install_test_dir(
-    SRC testenv/testHdxDrawTarget
-    DEST testHdxDrawTarget
-)
 pxr_register_test(testHdxDrawTarget
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxDrawTarget"
+    TESTENV testenv/testHdxDrawTarget
     EXPECTED_RETURN_CODE 0
     IMAGE_DIFF_COMPARE
         color1.png

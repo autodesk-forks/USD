@@ -37,13 +37,13 @@ public:
     const SdrTokenVec &GetDiscoveryTypes() const override;
 
     USDLUX_API
-    const TfToken &GetSourceType() const override;
+    const TfToken &GetShadingSystem() const override;
 
 private:
     // The discovery plugin needs to match the source type and discovery types
     // that instances of this parser returns when discovering nodes.
     friend class UsdLux_DiscoveryPlugin;
-    static const TfToken &_GetSourceType();
+    static const TfToken &_GetShadingSystem();
     static const TfToken &_GetDiscoveryType();
 
     // Mapping of shaderId to Typenames for API schemas which we want to have a

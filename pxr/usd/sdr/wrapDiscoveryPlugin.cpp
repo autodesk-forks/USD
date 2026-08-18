@@ -23,6 +23,7 @@ static void wrapDiscoveryPluginContext()
 
     class_<This, ThisPtr, noncopyable>("DiscoveryPluginContext", no_init)
         .def(TfPyWeakPtr())
+        .def("GetShadingSystem", pure_virtual(&This::GetShadingSystem))
         .def("GetSourceType", pure_virtual(&This::GetSourceType))
         ;
 }

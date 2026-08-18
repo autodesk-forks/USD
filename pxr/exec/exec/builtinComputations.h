@@ -14,9 +14,9 @@
 #include "pxr/base/tf/staticData.h"
 #include "pxr/base/tf/token.h"
 
-#include <vector>
-
 PXR_NAMESPACE_OPEN_SCOPE
+
+class Exec_BuiltinComputationRegistry;
 
 /// Tokens representing the built-in computations available on various provider
 /// types.
@@ -31,10 +31,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// These computation tokens are publicly accessible by dereferencing the
 /// `ExecBuiltinComputationTokens` static data.
 ///
-struct Exec_BuiltinComputations
+class Exec_BuiltinComputationTokens
 {
+public:
     EXEC_API
-    Exec_BuiltinComputations();
+    Exec_BuiltinComputationTokens();
 
     /// \defgroup group_Mf_ExecBuiltinComputations_Stage Stage Computations
     /// 
@@ -55,7 +56,7 @@ struct Exec_BuiltinComputations
     /// 
     /// ```{.cpp}
     /// self.PrimComputation(_tokens->myComputation)
-    ///     .Callback<EfTime>( /* . . . */ )
+    ///     .Callback<EfTime>(&_MyCallback)
     ///     .Inputs(
     ///         Stage()
     ///             .Computation<EfTime>(ExecBuiltinComputations->computeTime)
@@ -65,7 +66,7 @@ struct Exec_BuiltinComputations
     /// \hideinitializer
     const TfToken computeTime;
 
-    /// @}
+    /// @} // Stage computations
 
 
     /// \defgroup group_Exec_Attribute_Comptuations Attribute Computations
@@ -75,10 +76,24 @@ struct Exec_BuiltinComputations
     /// \ingroup group_Exec_Builtin_Computations
     /// @{
 
-    /// Computes the provider attribute's value.
+    /// Computes the provider attribute's value. 
     ///
+    /// The computed value is produced by the first of the following sources 
+    /// that can be resolved:
+    ///     1. An 
+    ///        [attribute expression](#ExecComputationBuilder::AttributeExpression), 
+    ///        if registered, defines the attribute's computed value. 
+    ///     2. If the provider owns exactly one connection that targets another 
+    ///        attribute of the same type that is valid (i.e. it is active, 
+    ///        loaded, defined, and non-abstract), then its computed value is 
+    ///        the computed value of the targeted attribute. 
+    ///     3. Otherwise, the computed value is the resolved value of the 
+    ///        provider. 
+    /// 
     /// \returns a value whose type is the provider attribute's scalar value
-    /// type.
+    /// type. If the attribute has registered an
+    /// [attribute expression](#ExecComputationBuilder::AttributeExpression),
+    /// this may produce a value of any type.
     ///
     /// \note
     /// The computation provider must be an attribute.
@@ -87,7 +102,7 @@ struct Exec_BuiltinComputations
     /// 
     /// ```{.cpp}
     /// self.PrimComputation(_tokens->myComputation)
-    ///     .Callback<double>( /* . . . */ )
+    ///     .Callback<double>(&_MyCallback)
     ///     .Inputs(
     ///         Attribute(_tokens->myAttribute)
     ///             .Computation<double>(ExecBuiltinComputations->computeValue)
@@ -98,19 +113,59 @@ struct Exec_BuiltinComputations
     /// \hideinitializer
     const TfToken computeValue;
 
-    /// @}
+    /// Computes the provider attribute's resolved value as authored in scene
+    /// description.
+    ///
+    /// This computation always produces the resolved value of an attribute,
+    /// even if an attribute has registered an
+    /// [attribute expression](#ExecComputationBuilder::AttributeExpression).
+    ///
+    /// \returns a value whose type is the provider attribute's scalar value
+    /// type.
+    ///
+    /// # Example
+    ///
+    /// ```{.cpp}
+    /// self.PrimComputation(_tokens->myComputation)
+    ///     .Callback<double>(&_MyCallback)
+    ///     .Inputs(
+    ///         Attribute(_tokens->myAttribute)
+    ///             .Computation(ExecBuiltinComputations->computeResolvedValue)
+    ///     );
+    /// ```
+    ///
+    /// \hideinitializer
+    const TfToken computeResolvedValue;
 
+    /// Computes the provider's scene path.
+    ///
+    /// \returns the path of the provider object, as an SdfPath.
+    ///
+    /// # Example
+    ///
+    /// ```{.cpp}
+    /// self.PrimComputation(_tokens->pathAsString)
+    ///     .Callback<std::string>(+[](const VdfContext &ctx) {
+    ///         return ctx.GetInputValue<SdfPath>(
+    ///             ExecBuiltinComputations->computePath).GetString();
+    ///     })
+    ///     .Inputs(
+    ///         Computation(ExecBuiltinComputations->computePath)
+    ///     );
+    /// ```
+    ///
+    /// \hideinitializer
+    const TfToken computePath;
 
-    /// Returns all builtin computation tokens.
-    const std::vector<TfToken> &GetComputationTokens();
+    /// @} // Attribute computations
 
-    /// The prefix that begins all builtin computation names.
-    static constexpr char builtinComputationNamePrefix[] = "__";
+private:
+    Exec_BuiltinComputationTokens(Exec_BuiltinComputationRegistry &registry);
 };
 
 // Used to publicly access builtin computation tokens.
 EXEC_API
-extern TfStaticData<Exec_BuiltinComputations> ExecBuiltinComputations;
+extern TfStaticData<Exec_BuiltinComputationTokens> ExecBuiltinComputations;
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

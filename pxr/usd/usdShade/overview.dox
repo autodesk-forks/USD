@@ -508,7 +508,7 @@ registry:
   - The shader prim's name becomes the unique <i>identifier</i> of the 
   corresponding shader node in the registry. A shader's identifier is a 
   concatenation of the 
-    -# family name of the shader, 
+    -# function name of the shader, 
     -# any type variations pertaining to the shader and
     -# the shader version, which can contain one or two ints representing the 
     major number and an optional minor number.
@@ -516,11 +516,11 @@ registry:
     The type variations and shader version are optional parts of a shader 
     identifier (i.e. not all shader identifiers may include them). If present,
     the different parts of the identifier are delimited by an underscore.
-    Using \ref UsdShadeShaderDefUtils::SplitShaderIdentifier, a shader's 
-    identifier can be split into the family name, implementation-name 
-    of the shader node (which includes the family name and the type information),
+    Using \ref SdrFsHelpersSplitShaderIdentifier, a shader's 
+    identifier can be split into the function name, implementation-name 
+    of the shader node (which includes the function name and the type information),
     and the shader version. For example:
-      Shader Prim Name        | Family Name      | Implementation Name | Version (major.minor)
+      Shader Prim Name        | Function Name      | Implementation Name | Version (major.minor)
       ----------------------- | ---------------- | ------------------- | --------------------
       MultiTexture            | MultiTexture     | MultiTexture        | <empty>
       MultiTexture_3          | MultiTexture     | MultiTexture        | 3

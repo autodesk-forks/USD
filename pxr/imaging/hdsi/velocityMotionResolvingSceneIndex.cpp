@@ -18,6 +18,7 @@
 #include "pxr/imaging/hd/sceneIndex.h"
 #include "pxr/imaging/hd/sceneGlobalsSchema.h"
 #include "pxr/imaging/hd/sceneIndexObserver.h"
+#include "pxr/imaging/hd/sceneIndexPrimView.h"
 #include "pxr/imaging/hd/tokens.h"
 
 #include "pxr/usd/sdf/path.h"
@@ -119,7 +120,7 @@ public:
         const HdSampledDataSourceHandle& source,
         const SdfPath& primPath,
         const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
+        const HdSceneIndexBasePtr& inputSceneIndex)
       : _name(name)
       , _source(source)
       , _primPath(primPath)
@@ -504,7 +505,7 @@ private:
     HdSampledDataSourceHandle _source;
     SdfPath _primPath;
     HdContainerDataSourceHandle _primSource;
-    HdSceneIndexBaseRefPtr _inputSceneIndex;
+    HdSceneIndexBasePtr _inputSceneIndex;
 };
 
 // -----------------------------------------------------------------------------
@@ -523,7 +524,7 @@ public:
         const HdSampledDataSourceHandle& source,
         const SdfPath& primPath,
         const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
+        const HdSceneIndexBasePtr& inputSceneIndex)
       : _VelocityHelper(
             name, source, primPath, primSource, inputSceneIndex)
     { }
@@ -555,16 +556,7 @@ class _TypedValueDataSource final
 public:
     using Time = HdSampledDataSource::Time;
 
-    HD_DECLARE_DATASOURCE_ABSTRACT(_TypedValueDataSource<T>);
-
-    _TypedValueDataSource(
-        const TfToken& name,
-        const HdSampledDataSourceHandle& source,
-        const SdfPath& primPath,
-        const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
-      : _VelocityHelper(name, source, primPath, primSource, inputSceneIndex)
-    { }
+    HD_DECLARE_DATASOURCE(_TypedValueDataSource<T>);
 
     VtValue
     GetValue(Time shutterOffset) override
@@ -591,44 +583,15 @@ public:
         return T();
     }
 
-    static typename
-    _TypedValueDataSource<T>::Handle New(
+private:
+    _TypedValueDataSource(
         const TfToken& name,
         const HdSampledDataSourceHandle& source,
         const SdfPath& primPath,
         const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
-    {
-        return _TypedValueDataSource<T>::Handle(
-            new _TypedValueDataSource<T>(
-                name, source, primPath, primSource, inputSceneIndex));
-    }
-};
-
-// -----------------------------------------------------------------------------
-
-struct _PrimvarSourceTypeVisitor
-{
-    const TfToken& name;
-    const HdSampledDataSourceHandle& source;
-    const SdfPath& primPath;
-    const HdContainerDataSourceHandle& primSource;
-    const HdSceneIndexBaseRefPtr& inputSceneIndex;
-
-    template <typename T>
-    HdDataSourceBaseHandle
-    operator()(const T&)
-    {
-        return _TypedValueDataSource<T>::New(
-            name, source, primPath, primSource, inputSceneIndex);
-    }
-
-    HdDataSourceBaseHandle
-    operator()(const VtValue&)
-    {
-        return _UntypedValueDataSource::New(
-            name, source, primPath, primSource, inputSceneIndex);
-    }
+        const HdSceneIndexBasePtr& inputSceneIndex)
+      : _VelocityHelper(name, source, primPath, primSource, inputSceneIndex)
+    { }
 };
 
 // -----------------------------------------------------------------------------
@@ -644,7 +607,7 @@ public:
         const HdContainerDataSourceHandle& source,
         const SdfPath& primPath,
         const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
+        const HdSceneIndexBasePtr& inputSceneIndex)
       : _name(name)
       , _source(source)
       , _primPath(primPath)
@@ -671,12 +634,10 @@ public:
         HdDataSourceBaseHandle ds = _source->Get(name);
         if (ds && name == HdPrimvarSchemaTokens->primvarValue) {
             if (const auto source = HdSampledDataSource::Cast(ds)) {
-                // XXX: source is sampled at time 0 only to determine its type
-                return VtVisitValue(
-                    source->GetValue(0.0f),
-                    _PrimvarSourceTypeVisitor {
-                        _name, source, _primPath,
-                        _primSource, _inputSceneIndex });
+                return HdCopySampledDataSourceType<
+                    _TypedValueDataSource, _UntypedValueDataSource>(
+                    source, _name, source, _primPath, _primSource,
+                    _inputSceneIndex);
             }
         }
         return ds;
@@ -687,7 +648,7 @@ private:
     HdContainerDataSourceHandle _source;
     SdfPath _primPath;
     HdContainerDataSourceHandle _primSource;
-    HdSceneIndexBaseRefPtr _inputSceneIndex;
+    HdSceneIndexBasePtr _inputSceneIndex;
 };
 
 HD_DECLARE_DATASOURCE_HANDLES(_PrimvarDataSource);
@@ -704,7 +665,7 @@ public:
         const HdContainerDataSourceHandle& source,
         const SdfPath& primPath,
         const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
+        const HdSceneIndexBasePtr& inputSceneIndex)
       : _source(source)
       , _primPath(primPath)
       , _primSource(primSource)
@@ -738,7 +699,7 @@ private:
     HdContainerDataSourceHandle _source;
     SdfPath _primPath;
     HdContainerDataSourceHandle _primSource;
-    HdSceneIndexBaseRefPtr _inputSceneIndex;
+    HdSceneIndexBasePtr _inputSceneIndex;
 };
 
 HD_DECLARE_DATASOURCE_HANDLES(_PrimvarsDataSource);
@@ -754,7 +715,7 @@ public:
     _PrimDataSource(
         const SdfPath& primPath,
         const HdContainerDataSourceHandle& primSource,
-        const HdSceneIndexBaseRefPtr& inputSceneIndex)
+        const HdSceneIndexBasePtr& inputSceneIndex)
       : _primPath(primPath)
       , _primSource(primSource)
       , _inputSceneIndex(inputSceneIndex)
@@ -766,12 +727,7 @@ public:
         if (!_primSource) {
             return { };
         }
-        TfTokenVector names = _primSource->GetNames();
-        if (std::find(names.cbegin(), names.cend(),
-            HdDependenciesSchema::GetSchemaToken()) == names.cend()) {
-            names.push_back(HdDependenciesSchema::GetSchemaToken());
-        }
-        return names;
+        return _primSource->GetNames();
     }
 
     HdDataSourceBaseHandle
@@ -780,33 +736,11 @@ public:
         if (!_primSource) {
             return nullptr;
         }
-        HdDataSourceBaseHandle ds = _primSource->Get(name);
-        if (name == HdDependenciesSchema::GetSchemaToken()) {
-            // Entire prim depends on </.sceneGlobals.timeCodesPerSecond>
-            static const std::vector<TfToken> names = {
-                TfToken("prim_dep_globals_timeCodesPerSecond") };
-            static const std::vector<HdDataSourceBaseHandle> sources = {
-                HdDependencySchema::Builder()
-                .SetDependedOnPrimPath(
-                    HdRetainedTypedSampledDataSource<SdfPath>::New(
-                        HdSceneGlobalsSchema::GetDefaultPrimPath()))
-                .SetDependedOnDataSourceLocator(
-                    HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-                        HdSceneGlobalsSchema::GetTimeCodesPerSecondLocator()))
-                .SetAffectedDataSourceLocator(
-                    HdRetainedTypedSampledDataSource<HdDataSourceLocator>::New(
-                        HdDataSourceLocator::EmptyLocator()))
-                .Build() };
-            static const HdContainerDataSourceHandle overlayDs =
-                HdDependenciesSchema::BuildRetained(
-                    names.size(), names.data(), sources.data());
-            if (auto dependenciesDs = HdContainerDataSource::Cast(ds)) {
-                return HdOverlayContainerDataSource::New(
-                    overlayDs, dependenciesDs);
-            }
-            return overlayDs;
+        HdDataSourceBaseHandle const ds = _primSource->Get(name);
+        if (!ds) {
+            return nullptr;
         }
-        if (ds && name == HdPrimvarsSchema::GetSchemaToken()) {
+        if (name == HdPrimvarsSchema::GetSchemaToken()) {
             return _PrimvarsDataSource::New(
                 HdContainerDataSource::Cast(ds),
                 _primPath, _primSource, _inputSceneIndex);
@@ -816,7 +750,7 @@ public:
 private:
     SdfPath _primPath;
     HdContainerDataSourceHandle _primSource;
-    HdSceneIndexBaseRefPtr _inputSceneIndex;
+    HdSceneIndexBasePtr _inputSceneIndex;
 };
 
 HD_DECLARE_DATASOURCE_HANDLES(_PrimDataSource);
@@ -893,6 +827,8 @@ HdsiVelocityMotionResolvingSceneIndex::_PrimsDirtied(
     const HdSceneIndexBase&  /*sender*/,
     const HdSceneIndexObserver::DirtiedPrimEntries& entries)
 {
+    TRACE_FUNCTION();
+
     // Scales-freezing depends on whether velocity-based motion is valid, so
     // if either positions or rotations is dirty, we will dirty scales as well.
     static const HdDataSourceLocatorSet positionsLocators {
@@ -923,18 +859,65 @@ HdsiVelocityMotionResolvingSceneIndex::_PrimsDirtied(
         HdDataSourceLocator(
             HdsiVelocityMotionResolvingSceneIndexTokens->velocityMotionMode) };
 
-    // TODO: Avoid copying entries where possible
-    HdSceneIndexObserver::DirtiedPrimEntries newEntries;
-    for (const auto& entry : entries) {
-        HdSceneIndexObserver::DirtiedPrimEntry newEntry(entry);
+    bool timeCodesPerSecondDirtied = false;
+
+    size_t i = 0;
+    for (;i < entries.size(); ++i) {
+        const HdSceneIndexObserver::DirtiedPrimEntry &entry = entries[i];
+        if (entry.primPath == HdSceneGlobalsSchema::GetDefaultPrimPath()) {
+            if (entry.dirtyLocators.Contains(
+                    HdSceneGlobalsSchema::GetTimeCodesPerSecondLocator())) {
+                timeCodesPerSecondDirtied = true;
+                break;
+            }
+        }
+
         if (entry.dirtyLocators.Intersects(positionsAffectingLocators)) {
-            newEntry.dirtyLocators.insert(positionsLocators);
+            break;
         }
         if (entry.dirtyLocators.Intersects(rotationsAffectingLocators)) {
-            newEntry.dirtyLocators.insert(rotationsLocators);
+            break;
         }
-        newEntries.push_back(newEntry);
     }
+
+    if (i == entries.size()) {
+        _SendPrimsDirtied(entries);
+        return;
+    }
+
+    HdSceneIndexObserver::DirtiedPrimEntries newEntries(entries);
+
+    if (!timeCodesPerSecondDirtied) {
+        for (;i < newEntries.size(); ++i) {
+            HdSceneIndexObserver::DirtiedPrimEntry &entry = newEntries[i];
+            if (entry.primPath == HdSceneGlobalsSchema::GetDefaultPrimPath()) {
+                if (entry.dirtyLocators.Contains(
+                        HdSceneGlobalsSchema::GetTimeCodesPerSecondLocator())) {
+                    timeCodesPerSecondDirtied = true;
+                    // Stop.
+                    // We will blast all prims affected by velocity motion below.
+                    break;
+                }
+            }
+            if (entry.dirtyLocators.Intersects(positionsAffectingLocators)) {
+                entry.dirtyLocators.insert(positionsLocators);
+            }
+            if (entry.dirtyLocators.Intersects(rotationsAffectingLocators)) {
+                entry.dirtyLocators.insert(rotationsLocators);
+            }
+        }
+    }
+
+    if (timeCodesPerSecondDirtied) {
+        for (const SdfPath &primPath : HdSceneIndexPrimView(_GetInputSceneIndex())) {
+            if (PrimTypeSupportsVelocityMotion(
+                    _GetInputSceneIndex()->GetPrim(primPath).primType)) {
+                newEntries.push_back(
+                    {primPath, HdDataSourceLocatorSet::UniversalSet()});
+            }
+        }
+    }
+
     return _SendPrimsDirtied(newEntries);
 }
 

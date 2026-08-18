@@ -97,6 +97,13 @@ HdRenderDelegate::GetMaterialBindingPurpose() const
 }
 
 TfTokenVector 
+HdRenderDelegate::GetShadingSystems() const
+{
+    return GetShaderSourceTypes();
+}
+
+
+TfTokenVector 
 HdRenderDelegate::GetShaderSourceTypes() const
 {
     return TfTokenVector();
@@ -249,6 +256,11 @@ bool HdRenderDelegate::IsParallelSyncEnabled(
     if (primType == HdPrimTypeTokens->extComputation) {
         return true;
     }
+    return false;
+}
+
+bool HdRenderDelegate::RequiresStormTasks() const
+{
     return false;
 }
 

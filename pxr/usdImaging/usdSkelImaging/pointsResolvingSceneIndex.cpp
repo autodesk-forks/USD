@@ -155,8 +155,9 @@ UsdSkelImagingPointsResolvingSceneIndex::GetChildPrimPaths(
         return result;
     }
 
-    for (const TfToken &name :
-             UsdSkelImagingExtComputationNameTokens->allTokens) {
+    const TfTokenVector &computationTokens =
+        _GetResolvedPrimComputations(primPath);
+    for (const TfToken &name : computationTokens) {
         result.push_back(primPath.AppendChild(name));
     }
 
@@ -173,21 +174,31 @@ _ProcessPrimsNeedingRefreshAndSendNotices(
 {
     for (const auto &[primPath, hasAddedEntry] :
              primsNeedingRefreshToHasAddedEntry) {
-        bool hadExtComputations = false;
-        const bool removed = _RemoveResolvedPrim(primPath, &hadExtComputations);
-        bool hasExtComputations = false;
-        const bool added = _AddResolvedPrim(primPath, &hasExtComputations);
+        const TfTokenVector &oldComputationTokens =
+            _GetResolvedPrimComputations(primPath);
+        const bool hadExtComputations = !oldComputationTokens.empty();
+        const bool removed = _RemoveResolvedPrim(primPath);
+        const bool added = _AddResolvedPrim(primPath);
+        const TfTokenVector &newComputationTokens =
+            _GetResolvedPrimComputations(primPath);
+        const bool hasExtComputations = !newComputationTokens.empty();
 
         if (dirtiedEntries) {
             if (!hasAddedEntry && (removed || added)) {
                 dirtiedEntries->push_back(
                     { primPath, HdDataSourceLocatorSet::UniversalSet() });
+                if (hasExtComputations) {
+                    for (const TfToken &name : newComputationTokens) {
+                        dirtiedEntries->push_back(
+                            { primPath.AppendChild(name),
+                              HdDataSourceLocatorSet::UniversalSet() });
+                    }
+                }
             }
         }
         if (removedEntries) {
             if (hadExtComputations && !hasExtComputations) {
-                for (const TfToken &name :
-                         UsdSkelImagingExtComputationNameTokens->allTokens) {
+                for (const TfToken &name : oldComputationTokens) {
                     removedEntries->push_back(
                         { primPath.AppendChild(name) });
                 }
@@ -195,14 +206,44 @@ _ProcessPrimsNeedingRefreshAndSendNotices(
         }
         if (addedEntries) {
             if (hasExtComputations && !hadExtComputations) {
-                for (const TfToken &name :
-                         UsdSkelImagingExtComputationNameTokens->allTokens) {
+                for (const TfToken &name : newComputationTokens) {
                     addedEntries->push_back(
                         { primPath.AppendChild(name),
                           HdPrimTypeTokens->extComputation });
                 }
             }
         }
+    }
+}
+
+const TfTokenVector &
+UsdSkelImagingPointsResolvingSceneIndex::_GetResolvedPrimComputations(
+    const SdfPath &primPath) const
+{
+    static const TfTokenVector emptyComputationTokens;
+
+    const auto it = _pathToResolvedPrim.find(primPath);
+    if (it == _pathToResolvedPrim.end()) {
+        return emptyComputationTokens;
+    }
+    if (!it->second->HasExtComputations()) {
+        return emptyComputationTokens;
+    }
+
+    if (it->second->HasNormalsExtComputations()) {
+        static const TfTokenVector pointsAndNormalsComputationTokens = {
+            UsdSkelImagingExtComputationNameTokens->pointsAggregatorComputation,
+            UsdSkelImagingExtComputationNameTokens->pointsComputation,
+            UsdSkelImagingExtComputationNameTokens->normalsAggregatorComputation,
+            UsdSkelImagingExtComputationNameTokens->normalsComputation
+        };
+        return pointsAndNormalsComputationTokens;
+    } else {
+        static const TfTokenVector pointsComputationTokens = {
+            UsdSkelImagingExtComputationNameTokens->pointsAggregatorComputation,
+            UsdSkelImagingExtComputationNameTokens->pointsComputation
+        };
+        return pointsComputationTokens;
     }
 }
 
@@ -221,6 +262,7 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsAdded(
         const bool hasResolvedPrims = !_pathToResolvedPrim.empty();
         const bool hasSkelDependencies = !_skelPathToPrimPaths.empty();
         const bool hasBlendDependencies = !_blendShapePathToPrimPaths.empty();
+        const bool hasInstancerDependencies = !_instancerPathToPrimPaths.empty();
 
         for (const HdSceneIndexObserver::AddedPrimEntry &entry : entries) {
             if (// Need to refresh if this is a new mesh, ...
@@ -243,6 +285,13 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsAdded(
             if (hasBlendDependencies) {
                 for (const SdfPath &primPath :
                          _Lookup(_blendShapePathToPrimPaths, entry.primPath)) {
+                    primsNeedingRefreshToHasAddedEntry.emplace(primPath, false);
+                }
+            }
+
+            if (hasInstancerDependencies) {
+                for (const SdfPath &primPath :
+                         _Lookup(_instancerPathToPrimPaths, entry.primPath)) {
                     primsNeedingRefreshToHasAddedEntry.emplace(primPath, false);
                 }
             }
@@ -325,6 +374,7 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsDirtied(
         const bool hasResolvedPrims = !_pathToResolvedPrim.empty();
         const bool hasSkelDependencies = !_skelPathToPrimPaths.empty();
         const bool hasBlendDependencies = !_blendShapePathToPrimPaths.empty();
+        const bool hasInstancerDependencies = !_instancerPathToPrimPaths.empty();
 
         for (const HdSceneIndexObserver::DirtiedPrimEntry &entry : entries) {
             // Note that the dirty entry doesn't give us any type indication.
@@ -386,6 +436,26 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsDirtied(
                     if (_ProcessDirtyLocators(
                             primPath,
                             UsdSkelImagingPrimTypeTokens->skelBlendShape,
+                            entry.dirtyLocators,
+                            newDirtiedEntriesPtr)) {
+                        primsNeedingRefreshToHasAddedEntry.insert(
+                            {primPath, false});
+                    }
+                }
+            }
+
+            static const HdDataSourceLocatorSet instancerLocators{
+                UsdSkelImagingDataSourceXformResolver::GetInstancedByLocator(),
+                UsdSkelImagingDataSourceXformResolver::GetXformLocator(),
+                UsdSkelImagingDataSourceXformResolver::GetInstanceXformLocator()};
+            
+            if (hasInstancerDependencies &&
+                    entry.dirtyLocators.Intersects(instancerLocators)) {
+                for (const SdfPath &primPath :
+                         _Lookup(_instancerPathToPrimPaths, entry.primPath)) {
+                    if (_ProcessDirtyLocators(
+                            primPath,
+                            HdPrimTypeTokens->instancer,
                             entry.dirtyLocators,
                             newDirtiedEntriesPtr)) {
                         primsNeedingRefreshToHasAddedEntry.insert(
@@ -469,8 +539,9 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsRemoved(
 
     const bool hasSkelDependencies = !_skelPathToPrimPaths.empty();
     const bool hasBlendDependencies = !_blendShapePathToPrimPaths.empty();
+    const bool hasInstancerDependencies = !_instancerPathToPrimPaths.empty();
 
-    if (!hasSkelDependencies && !hasBlendDependencies) {
+    if (!hasSkelDependencies && !hasBlendDependencies && !hasInstancerDependencies) {
         _SendPrimsRemoved(entries);
         return;
     }
@@ -490,6 +561,11 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsRemoved(
             if (hasBlendDependencies) {
                 _PopulateFromDependencies(
                     _blendShapePathToPrimPaths, entry.primPath,
+                    &primsNeedingRefreshToHasAddedEntry);
+            }
+            if (hasInstancerDependencies) {
+                _PopulateFromDependencies(
+                    _instancerPathToPrimPaths, entry.primPath,
                     &primsNeedingRefreshToHasAddedEntry);
             }
         }
@@ -533,8 +609,7 @@ UsdSkelImagingPointsResolvingSceneIndex::_PrimsRemoved(
 
 bool
 UsdSkelImagingPointsResolvingSceneIndex::_AddResolvedPrim(
-    const SdfPath &path,
-    bool * const hasExtComputations)
+    const SdfPath &path)
 {
     TRACE_FUNCTION();
 
@@ -548,10 +623,6 @@ UsdSkelImagingPointsResolvingSceneIndex::_AddResolvedPrim(
             _GetInputSceneIndex(), path, prim.dataSource);
     if (!ds) {
         return false;
-    }
-
-    if (hasExtComputations) {
-        *hasExtComputations = bool(ds->HasExtComputations());
     }
 
     _AddDependenciesForResolvedPrim(path, ds);
@@ -575,12 +646,20 @@ UsdSkelImagingPointsResolvingSceneIndex::_AddDependenciesForResolvedPrim(
     for (const SdfPath &path : resolvedPrim->GetBlendShapeTargetPaths()) {
         _blendShapePathToPrimPaths[path].insert(primPath);
     }
+
+    // Can we move this check up for potential performance improvement?
+    if (!resolvedPrim->HasExtComputations()) {
+        return;
+    }
+
+    for (const SdfPath &path : resolvedPrim->GetInstancerPaths()) {
+        _instancerPathToPrimPaths[path].insert(primPath);
+    }
 }
 
 bool
 UsdSkelImagingPointsResolvingSceneIndex::_RemoveResolvedPrim(
-    const SdfPath &primPath,
-    bool * const hasExtComputations)
+    const SdfPath &primPath)
 {
     TRACE_FUNCTION();
 
@@ -589,15 +668,26 @@ UsdSkelImagingPointsResolvingSceneIndex::_RemoveResolvedPrim(
         return false;
     }
 
-    if (hasExtComputations) {
-        *hasExtComputations = it->second->HasExtComputations();
-    }
-
     _RemoveDependenciesForResolvedPrim(primPath, it->second);
     _pathToResolvedPrim.erase(it);
     return true;
 }
 
+static
+void _Remove(const SdfPath &key, const SdfPath &value,
+             std::map<SdfPath, SdfPathSet> * const map)
+{
+    const auto it = map->find(key);
+    if (it == map->end()) {
+        return;
+    }
+    it->second.erase(value);
+    if (!it->second.empty()) {
+        return;
+    }
+    map->erase(it);
+}
+    
 void
 UsdSkelImagingPointsResolvingSceneIndex::_RemoveDependenciesForResolvedPrim(
     const SdfPath &primPath,
@@ -611,23 +701,15 @@ UsdSkelImagingPointsResolvingSceneIndex::_RemoveDependenciesForResolvedPrim(
 
     const SdfPath skelPath = resolvedPrim->GetSkeletonPath();
     if (!skelPath.IsEmpty()) {
-        const auto it = _skelPathToPrimPaths.find(skelPath);
-        if (it != _skelPathToPrimPaths.end()) {
-            it->second.erase(primPath);
-            if (it->second.empty()) {
-                _skelPathToPrimPaths.erase(it);
-            }
-        }
+        _Remove(skelPath, primPath, &_skelPathToPrimPaths);
     }
 
     for (const SdfPath &path : resolvedPrim->GetBlendShapeTargetPaths()) {
-        const auto it = _blendShapePathToPrimPaths.find(path);
-        if (it != _blendShapePathToPrimPaths.end()) {
-            it->second.erase(primPath);
-            if (it->second.empty()) {
-                _blendShapePathToPrimPaths.erase(it);
-            }
-        }
+        _Remove(path, primPath, &_blendShapePathToPrimPaths);
+    }
+
+    for (const SdfPath &instancerPath : resolvedPrim->GetInstancerPaths()) {
+        _Remove(instancerPath, primPath, &_instancerPathToPrimPaths);
     }
 }
 

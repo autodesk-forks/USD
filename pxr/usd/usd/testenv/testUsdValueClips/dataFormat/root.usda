@@ -1,0 +1,51 @@
+#usda 1.0
+
+def "Model" (
+    clips = {
+        # authored_manifest has clips for attributes prefixed with a
+        dictionary authored_manifest = {
+            double2[] active = [(0.0, 0)]
+            asset[] assetPaths = [@./authored_manifest_clip.usda@]
+            string primPath = "/Model"
+            asset manifestAssetPath = @./manifest.usda@
+        }
+        # generated_manifest has clips for attributes prefixed with g
+        dictionary generated_manifest = {
+            double2[] active = [(0.0, 0), (1.0, 1)]
+            asset[] assetPaths = [@./generated_manifest_clip0.usda@,
+                                  @./generated_manifest_clip1.usda@]
+            string primPath = "/Model"
+        }
+    }
+)
+{
+    # Resolves to time samples format
+    float aWithDefault
+    float aDeclared
+    float aTimeSamples
+    float aDefinedTimeSamples
+    float aBothFormats
+    float aTimeSamplesSkipClipsAtTimes
+    float aTimeSamplesNonEmptyClip
+    float aTimeSamplesPreActiveTime
+
+    # Resolves to spline format
+    float aSpline
+    float aSplineWithDefault
+    float aSplineSkipClipsAtTimes
+    float aSplineNonEmptyClip
+
+    # Resolves to time samples format
+    float gEmptyTimeSamples
+    float gDefinedTimeSamples
+    float gBothFormats
+    float gBothFormatsAcrossClips
+    float gTimeSamplesOutsideClipRange
+
+    # Resolves to spline format
+    float gSpline
+    float gDefinedSpline
+    float gSplineAcrossClips
+    float gBothFormatsSplineWins
+    float gBothFormatsSplineWinsAcrossClips
+}

@@ -419,6 +419,16 @@ public:
     void RemoveSprimSprimDependency(SdfPath const& parentSprimId,
                                     SdfPath const& sprimId);
 
+    /// Insert a dependency between \p sprimId and rprim \p rprimId.
+    HD_API
+    void AddSprimRprimDependency(SdfPath const& sprimId,
+                                 SdfPath const& rprimId);
+
+    /// Remove a dependency between \p sprimId and rprim \p rprimId.
+    HD_API
+    void RemoveSprimRprimDependency(SdfPath const& sprimId,
+                                    SdfPath const& rprimId);
+
     /// Remove all dependencies involving \p sprimId as a parent or child.
     HD_API
     void RemoveSprimFromSprimSprimDependencies(SdfPath const& sprimId);
@@ -609,6 +619,8 @@ private:
     _DependencyMap _sprimSprimTargetDependencies;
     // Maps child sprim to parent sprim.
     _DependencyMap _sprimSprimSourceDependencies;
+
+    _DependencyMap _sprimRprimTargetDependencies;
     
     // Dependency map helpers
     void _AddDependency(_DependencyMap &depMap,
@@ -652,10 +664,13 @@ private:
     // based applications that rely on the HdChangeTracker for invalidating
     // state on Hydra prims.
     friend class HdRenderIndex;
+    friend class HdDirtyList;
     // Does not take ownership. The HdRenderIndex manages the lifetime of this
     // scene index.
     HdRetainedSceneIndex * _emulationSceneIndex;
+    bool _disableEmulationAPI;
     void _SetTargetSceneIndex(HdRetainedSceneIndex *emulationSceneIndex);
+    void _SetDisableEmulationAPI(bool);
 
     // Private methods which implement the behaviors of their public
     // equivalents. The public versions check to see if legacy emulation is

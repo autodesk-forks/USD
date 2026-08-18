@@ -9,10 +9,14 @@
 #include "pxr/base/tf/diagnosticMgr.h"
 
 #include "pxr/base/tf/debugCodes.h"
+#include "pxr/base/tf/diagnosticTransport.h"
+#include "pxr/base/tf/diagnosticTrap.h"
 #include "pxr/base/tf/error.h"
+#include "pxr/base/tf/errorTransport.h"
 #include "pxr/base/tf/instantiateSingleton.h"
 #include "pxr/base/tf/registryManager.h"
 #include "pxr/base/tf/stackTrace.h"
+#include "pxr/base/tf/stl.h"
 #include "pxr/base/tf/stringUtils.h"
 
 #ifdef PXR_PYTHON_SUPPORT_ENABLED
@@ -30,6 +34,7 @@
 
 #include <any>
 #include <thread>
+#include <variant>
 #include <memory>
 
 using std::list;
@@ -42,31 +47,26 @@ namespace {
 // that we wish to not have reentrant behaviors from delegates
 // that we call out to.
 struct _ReentrancyGuard {
-    public:
-        _ReentrancyGuard(bool* reentrancyGuardValue) :
-            _reentrancyGuardValue(reentrancyGuardValue),
-            _scopeWasReentered(false)
-        {
-            if (!*_reentrancyGuardValue) {
-                *_reentrancyGuardValue = true;
-            } else {
-                _scopeWasReentered = true; 
-            }
+public:
+    _ReentrancyGuard(bool *reentrancyGuardValue) :
+        _reentrancyGuardValue(reentrancyGuardValue),
+        _scopeWasReentered(false) {
+        _scopeWasReentered = std::exchange(*_reentrancyGuardValue, true);
+    }
+    
+    bool ScopeWasReentered() {
+        return _scopeWasReentered;
+    }
+    
+    ~_ReentrancyGuard() {
+        if (!_scopeWasReentered) {
+            *_reentrancyGuardValue = false;
         }
+    } 
 
-        bool ScopeWasReentered() {
-            return _scopeWasReentered;
-        }
-        
-        ~_ReentrancyGuard() {
-            if (!_scopeWasReentered) {
-                *_reentrancyGuardValue = false;
-            }
-        } 
-
-    private:
-        bool* _reentrancyGuardValue;
-        bool _scopeWasReentered;
+private:
+    bool *_reentrancyGuardValue;
+    bool _scopeWasReentered;
 };
 } // end anonymous namespace
 
@@ -126,9 +126,93 @@ TfDiagnosticMgr::Delegate::_UnhandledAbort() const
     Tf_UnhandledAbort();
 }
 
-TfDiagnosticMgr::TfDiagnosticMgr() :
-    _errorMarkCounts(static_cast<size_t>(0)),
-    _quiet(false)
+TfDiagnosticMgr::_LogTextPin::_LogTextPin(
+    std::string &&key, std::unique_ptr<std::vector<std::string>> &&lines)
+    : _key(std::move(key))
+    , _lines(std::move(lines))
+{
+    ArchSetExtraLogInfoForErrors(_key, _lines.get());
+}
+
+TfDiagnosticMgr::_LogTextPin::~_LogTextPin()
+{
+    if (_lines) {
+        ArchSetExtraLogInfoForErrors(_key, nullptr);
+    }
+}
+
+TfDiagnosticMgr::_LogTextPin &
+TfDiagnosticMgr::_LogTextPin::_LogTextPin::operator=(_LogTextPin &&other)
+{
+    if (this != &other) {
+        if (_lines) {
+            ArchSetExtraLogInfoForErrors(_key, nullptr);
+        }
+        _key   = std::move(other._key);
+        _lines = std::move(other._lines);
+    }
+    return *this;
+}
+
+// _LogTextBuffer implementation
+//
+// The requirement at the Arch level for ArchSetExtraLogInfoForErrors is that
+// the pointer we hand it must remain valid, and we can't mutate the structure
+// it points to since if another thread crashes, Arch will read it to generate
+// the crash report.  So instead we maintain two copies.  We update one copy to
+// the new text and then publish it to Arch, effectively swapping out the old
+// copy.  Then we copy it to the other buffer so they are in sync.  Next time
+// through we do it again but with the data structures swapped, tracked by
+// _parity.
+
+TfDiagnosticMgr::_LogTextBuffer::_LogTextBuffer(std::string &&label)
+    : _label(std::move(label))
+{
+}
+
+TfDiagnosticMgr::_LogTextBuffer::~_LogTextBuffer()
+{
+    if (!_label.empty()) {
+        ArchSetExtraLogInfoForErrors(_label, nullptr);
+    }
+}
+
+template <class Fn>
+void
+TfDiagnosticMgr::_LogTextBuffer::Update(Fn &&fn)
+{
+    auto *first  = &_texts.first;
+    auto *second = &_texts.second;
+
+    if (std::exchange(_parity, !_parity)) {
+        std::swap(first, second);
+    }
+
+    // Fill the text in the first buffer.
+    std::forward<Fn>(fn)(*first);
+
+    // Publish first, then fill the second so both are in sync.  Passing nullptr
+    // in case the text is empty removes the entry for our _label.
+    ArchSetExtraLogInfoForErrors(_label, first->empty() ? nullptr : first);
+
+    // Fill the text in the second buffer to keep in-sync.  We don't copy
+    // because some updates (like appending) are algorithmically cheaper than
+    // copying the whole buffer.
+    std::forward<Fn>(fn)(*second);
+
+    TF_DEV_AXIOM(*first == *second);
+}
+
+std::string
+TfDiagnosticMgr::_ThreadState::_MakeLabel(const char *suffix)
+{
+    return TfStringPrintf(
+        "Thread %s %s", TfStringify(std::this_thread::get_id()).c_str(),
+        suffix);
+}
+
+TfDiagnosticMgr::TfDiagnosticMgr()
+    : _quiet(false)
 {
     _nextSerial = 0;
     TfSingleton<This>::SetInstanceConstructed(*this);
@@ -146,7 +230,7 @@ TfDiagnosticMgr::AddDelegate(Delegate* delegate)
         return; 
     } 
 
-    tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/true);
+    TfSpinRWMutex::ScopedLock lock(_delegatesMutex, /*writer=*/true);
     _delegates.push_back(delegate);
 }
 
@@ -157,11 +241,10 @@ TfDiagnosticMgr::RemoveDelegate(Delegate* delegate)
         return;
     }
 
-    tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/true);
-    _delegates.erase(std::remove(_delegates.begin(),
-                                 _delegates.end(),
-                                 delegate),
-                     _delegates.end());
+    TfSpinRWMutex::ScopedLock lock(_delegatesMutex, /*writer=*/true);
+    _delegates.erase(
+        std::remove(_delegates.begin(), _delegates.end(), delegate),
+        _delegates.end());
 }
 
 void
@@ -169,10 +252,10 @@ TfDiagnosticMgr::AppendError(TfError const &e) {
     if (!HasActiveErrorMark()) {
         _ReportError(e);
     } else {
-        ErrorList &errorList = _errorList.local();
+        ErrorList &errorList = _threadState.local()._errorList;
         errorList.push_back(e);
         errorList.back()._serial = _nextSerial.fetch_add(1);
-        _AppendErrorsToLogText(std::prev(errorList.end())); 
+        _AppendPendingErrorsLogText(std::prev(errorList.end())); 
     }
 }
 
@@ -191,13 +274,13 @@ TfDiagnosticMgr::_SpliceErrors(ErrorList &src)
             error._serial = serial++;
         }
         // Now splice them into the main list.
-        ErrorList &errorList = _errorList.local();
+        ErrorList &errorList = _threadState.local()._errorList;
         // We store the begin iterator from the new list.  This iterator remains
         // valid *after the splice*, and iterates the spliced elements from src
         // in errorList.
         ErrorList::iterator newErrorsBegin = src.begin();
         errorList.splice(errorList.end(), src);
-        _AppendErrorsToLogText(newErrorsBegin);
+        _AppendPendingErrorsLogText(newErrorsBegin);
     }
 }
 
@@ -238,6 +321,63 @@ TfDiagnosticMgr::PostError(const TfDiagnosticBase& diagnostic)
               diagnostic._info, diagnostic.GetQuiet());
 }
 
+template <class Fn>
+bool
+TfDiagnosticMgr::_ForEachDelegate(Fn const &fn) const
+{
+    // We intentionally hold the read lock on _delegatesMutex while invoking
+    // them because this lets them synchronize their destruction and removal
+    // safely.  If we dropped the lock, we could call out to a deleted delegate.
+    TfSpinRWMutex::ScopedLock lock(_delegatesMutex, /*write=*/false);
+    if (_delegates.empty()) {
+        return false;
+    }
+    for (Delegate *delegate: _delegates) {
+        if (delegate) {
+            fn(delegate);
+        }
+    }
+    return true;
+}
+
+void *
+TfDiagnosticMgr::_PushTrap(TfDiagnosticTrap *trap)
+{
+    _TrapStack &stack = _markCountsAndTrapStacks.local().trapStack;
+    stack.push_back(trap);
+    return &stack;
+}
+
+void
+TfDiagnosticMgr::_PopTrap(TfDiagnosticTrap *trap, void *key)
+{
+    const bool wasClean = trap->IsClean();
+    auto &stack = *static_cast<_TrapStack *>(key);
+    if (TF_VERIFY(!stack.empty() && stack.back() == trap)) {
+        stack.pop_back();
+    }
+
+    // If there's an enclosing trap the diagnostics will be re-posted into it.
+    // We have to rebuild the log text to remove the existing entries -- they'll
+    // be repopulated as appropriate on re-post.  We can't just leave the log
+    // text alone since if a TfErrorMark has arrived in the meantime, it could
+    // snag a subset, for example.
+    if (!wasClean) {
+        _RebuildTrappedDiagnosticsLogText(trap->_logStart);
+        if (stack.empty()) {
+            TF_VERIFY(trap->_logStart == 0);
+        }
+    }
+}
+
+// Return the active TfDiagnosticTrap on this thread, or nullptr.
+inline TfDiagnosticTrap *
+TfDiagnosticMgr::_GetActiveTrap()
+{
+    auto &stack = _markCountsAndTrapStacks.local().trapStack;
+    return stack.empty() ? nullptr : stack.back();
+}
+
 void
 TfDiagnosticMgr::_ReportError(const TfError &err)
 {
@@ -246,23 +386,21 @@ TfDiagnosticMgr::_ReportError(const TfError &err)
         return;
     }
 
-    bool dispatchedToDelegate = false;
-    {
-        tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/false);
-        for (auto const& delegate : _delegates) {
-            if (delegate) {
-                delegate->IssueError(err);
-            }
-        }
-        dispatchedToDelegate = !_delegates.empty();
+    if (TfDiagnosticTrap *trap = _GetActiveTrap()) {
+        trap->_container.Append(err);
+        _AppendTrappedDiagnosticsLogText(err, trap);
+        return;
     }
+
+    const bool dispatchedToDelegate =
+        _ForEachDelegate([&err](Delegate *delegate) {
+            delegate->IssueError(err);
+        });
     
     if (!dispatchedToDelegate && !err.GetQuiet()) {
-        _PrintDiagnostic(stderr,
-                         err.GetDiagnosticCode(),
-                         err.GetContext(),
-                         err.GetCommentary(),
-                         err._info);
+        _PrintDiagnostic(
+            stderr, err.GetDiagnosticCode(), err.GetContext(),
+            err.GetCommentary(), err._info);
     }
 }
 
@@ -270,15 +408,16 @@ void
 TfDiagnosticMgr::PostWarning(
     TfEnum warningCode, const char *warningCodeString,
     TfCallContext const &context, std::string const &commentary,
-    TfDiagnosticInfo info, bool quiet) const
+    TfDiagnosticInfo info, bool quiet)
 {
     _ReentrancyGuard guard(&_reentrantGuard.local());
     if (guard.ScopeWasReentered()) {
         return;
     }
 
-    if (TfDebug::IsEnabled(TF_ATTACH_DEBUGGER_ON_WARNING))
+    if (TfDebug::IsEnabled(TF_ATTACH_DEBUGGER_ON_WARNING)) {
         ArchDebuggerTrap();
+    }
 
     const bool logStackTraceOnWarning =
         TfDebug::IsEnabled(TF_LOG_STACK_TRACE_ON_WARNING);
@@ -290,19 +429,19 @@ TfDiagnosticMgr::PostWarning(
 
     quiet |= _quiet;
 
-    TfWarning warning(warningCode, warningCodeString, context, commentary, info,
-                      quiet);
+    TfWarning warning(
+        warningCode, warningCodeString, context, commentary, info, quiet);
 
-    bool dispatchedToDelegate = false;
-    {
-        tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/false);
-        for (auto const& delegate : _delegates) {
-            if (delegate) {
-                delegate->IssueWarning(warning);
-            }
-        }
-        dispatchedToDelegate = !_delegates.empty();
+    if (TfDiagnosticTrap *trap = _GetActiveTrap()) {
+        trap->_container.Append(warning);
+        _AppendTrappedDiagnosticsLogText(warning, trap);
+        return;
     }
+
+    const bool dispatchedToDelegate =
+        _ForEachDelegate([&warning](Delegate *delegate) {
+            delegate->IssueWarning(warning);
+        });
     
     if (!logStackTraceOnWarning && !dispatchedToDelegate && !quiet) {
         _PrintDiagnostic(stderr, warningCode, context, commentary, info);
@@ -310,7 +449,7 @@ TfDiagnosticMgr::PostWarning(
 }
 
 void
-TfDiagnosticMgr::PostWarning(const TfDiagnosticBase& diagnostic) const
+TfDiagnosticMgr::PostWarning(const TfDiagnosticBase& diagnostic)
 {
     PostWarning(diagnostic.GetDiagnosticCode(),
                 diagnostic.GetDiagnosticCodeAsString().c_str(),
@@ -321,7 +460,7 @@ TfDiagnosticMgr::PostWarning(const TfDiagnosticBase& diagnostic) const
 void TfDiagnosticMgr::PostStatus(
     TfEnum statusCode, const char *statusCodeString,
     TfCallContext const &context, std::string const &commentary,
-    TfDiagnosticInfo info, bool quiet) const
+    TfDiagnosticInfo info, bool quiet)
 {
     _ReentrancyGuard guard(&_reentrantGuard.local());
     if (guard.ScopeWasReentered()) {
@@ -330,19 +469,19 @@ void TfDiagnosticMgr::PostStatus(
 
     quiet |= _quiet;
 
-    TfStatus status(statusCode, statusCodeString, context, commentary, info,
-                    quiet);
+    TfStatus status(
+        statusCode, statusCodeString, context, commentary, info, quiet);
 
-    bool dispatchedToDelegate = false;
-    {
-        tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/false);
-        for (auto const& delegate : _delegates) {
-            if (delegate) {
-                delegate->IssueStatus(status);
-            }
-        }
-        dispatchedToDelegate = !_delegates.empty();
+    if (TfDiagnosticTrap *trap = _GetActiveTrap()) {
+        trap->_container.Append(status);
+        _AppendTrappedDiagnosticsLogText(status, trap);
+        return;
     }
+
+    const bool dispatchedToDelegate =
+        _ForEachDelegate([&status](Delegate *delegate) {
+            delegate->IssueStatus(status);
+        });
 
     if (!dispatchedToDelegate && !quiet) {
         _PrintDiagnostic(stderr, statusCode, context, commentary, info);
@@ -350,7 +489,7 @@ void TfDiagnosticMgr::PostStatus(
 }
 
 void
-TfDiagnosticMgr::PostStatus(const TfDiagnosticBase& diagnostic) const
+TfDiagnosticMgr::PostStatus(const TfDiagnosticBase& diagnostic)
 {
     PostStatus(diagnostic.GetDiagnosticCode(),
                diagnostic.GetDiagnosticCodeAsString().c_str(),
@@ -374,14 +513,9 @@ void TfDiagnosticMgr::PostFatal(TfCallContext const &context,
         ArchDebuggerTrap();
     }
 
-    {
-        tbb::spin_rw_mutex::scoped_lock lock(_delegatesMutex, /*writer=*/false);
-        for (auto const& delegate : _delegates) {
-            if (delegate) {
-                delegate->IssueFatalError(context, msg);
-            }
-        }
-    }
+    _ForEachDelegate([&context, &msg](Delegate *delegate) {
+        delegate->IssueFatalError(context, msg);
+    });
 
     if (statusCode == TF_DIAGNOSTIC_CODING_ERROR_TYPE) {
         fprintf(stderr, "Fatal coding error: %s [%s], in %s(), %s:%zu\n",
@@ -407,7 +541,7 @@ void TfDiagnosticMgr::PostFatal(TfCallContext const &context,
 TfDiagnosticMgr::ErrorIterator
 TfDiagnosticMgr::EraseError(ErrorIterator i)
 {
-    ErrorList &errorList = _errorList.local();
+    ErrorList &errorList = _threadState.local()._errorList;
 
     return i == errorList.end() ? i : errorList.erase(i);
 }
@@ -415,7 +549,7 @@ TfDiagnosticMgr::EraseError(ErrorIterator i)
 TfDiagnosticMgr::ErrorIterator
 TfDiagnosticMgr::_GetErrorMarkBegin(size_t mark, size_t *nErrors)
 {
-    ErrorList &errorList = _errorList.local();
+    ErrorList &errorList = _threadState.local()._errorList;
 
     if (mark >= _nextSerial || errorList.empty()) {
         if (nErrors)
@@ -443,8 +577,11 @@ TfDiagnosticMgr::EraseRange(ErrorIterator first, ErrorIterator last)
     if (first == last)
         return last;
 
-    ErrorIterator result = _errorList.local().erase(first, last);
-    _RebuildErrorLogText();
+    // Capture the serial before erasing so the partial rebuild can locate
+    // the dirty boundary via the existing backward scan.
+    const size_t startSerial = first->_serial;
+    ErrorIterator result = _threadState.local()._errorList.erase(first, last);
+    _RebuildPendingErrorLogText(startSerial);
     return result;
 }
 
@@ -538,7 +675,7 @@ TfDiagnosticMgr::StatusHelper::PostWithInfo(
         _context, msg, info, false);
 }
 
-/* statuc */
+/* static */
 std::string
 TfDiagnosticMgr::GetCodeName(const TfEnum &code)
 {
@@ -552,80 +689,132 @@ TfDiagnosticMgr::GetCodeName(const TfEnum &code)
 }
 
 void
-TfDiagnosticMgr::_SetLogInfoForErrors(
-    std::vector<std::string> const &logText) const
+TfDiagnosticMgr::_AppendPendingErrorsLogText(ErrorIterator i)
 {
-    ArchSetExtraLogInfoForErrors(
-        TfStringPrintf("Thread %s Pending Diagnostics", 
-            TfStringify(std::this_thread::get_id()).c_str()),
-        logText.empty() ? nullptr : &logText);
+    auto &ts = _threadState.local();
+    // Need to be careful -- Update() calls the passed function twice to update
+    // the text double-buffer.
+    ts._pendingErrorsLogText.Update([&](std::vector<std::string> &log) {
+        for (ErrorIterator iter = i, end = ts._errorList.end();
+             iter != end; ++iter) {
+            log.push_back(_FormatDiagnostic(*iter, iter->_info));
+        }
+    });
 }
 
 void
-TfDiagnosticMgr::_LogText::AppendAndPublish(
-    ErrorIterator begin, ErrorIterator end)
+TfDiagnosticMgr::_RebuildPendingErrorLogText(size_t startSerial)
 {
-    return _AppendAndPublishImpl(/*clear=*/false, begin, end);
+    // Partial rebuild: keep log entries for errors with serial < startSerial
+    // and re-format only those with serial >= startSerial.  startSerial = 0
+    // performs a full rebuild (re-scans all errors).
+    //
+    // _GetErrorMarkBegin does a backward scan -- O(tail), not O(total) -- and
+    // returns the iterator directly, avoiding a separate forward traversal.
+    // std::list::size() is O(1) in C++11.
+    auto &ts = _threadState.local();
+    size_t nErrors;
+    ErrorIterator markBegin = _GetErrorMarkBegin(startSerial, &nErrors);
+    const size_t validLogEnd = ts._errorList.size() - nErrors;
+
+    ts._pendingErrorsLogText.Update([&](std::vector<std::string> &log) {
+        if (log.size() > validLogEnd) {
+            log.resize(validLogEnd);
+        }
+        for (ErrorIterator i = markBegin, end = ts._errorList.end();
+             i != end; ++i) {
+            log.push_back(_FormatDiagnostic(*i, i->_info));
+        }
+    });
 }
 
 void
-TfDiagnosticMgr::_LogText::RebuildAndPublish(
-    ErrorIterator begin, ErrorIterator end)
+TfDiagnosticMgr::_AppendTrappedDiagnosticsLogText(TfDiagnosticBase const &d,
+                                                  TfDiagnosticTrap *trap)
 {
-    return _AppendAndPublishImpl(/*clear=*/true, begin, end);
-}
-
-void
-TfDiagnosticMgr::_LogText::_AppendAndPublishImpl(
-    bool clear, ErrorIterator begin, ErrorIterator end)
-{
-    // The requirement at the Arch level for ArchSetExtraLogInfoForErrors is
-    // that the pointer we hand it must remain valid, and we can't mutate the
-    // structure it points to since if another thread crashes, Arch will read it
-    // to generate the crash report.  So instead we maintain two copies.  We
-    // update one copy to the new text anpd then publish it to Arch, effectively
-    // swapping out the old copy.  Then we update the old copy to match.  Next
-    // time through we do it again but with the data structures swapped, which
-    // is tracked by 'parity'.
-    auto *first = &texts.first;
-    auto *second = &texts.second;
-    if (parity)
-        std::swap(first, second);
-
-    // Update first.
-    if (clear)
-        first->clear();
-    for (ErrorIterator i = begin; i != end; ++i) {
-        first->push_back(_FormatDiagnostic(*i, i->_info));
+    _LogTextBuffer &logText = _threadState.local()._trappedDiagnosticsLogText;
+    // Establish trap's _logStart if not already established.
+    if (trap->_logStart == size_t(-1)) {
+        trap->_logStart = logText.GetSize();
     }
+    logText.Update([&](std::vector<std::string> &log) {
+        log.push_back(_FormatDiagnostic(d, d._info));
+    });
+}
 
-    // Publish.
-    ArchSetExtraLogInfoForErrors(
-        TfStringPrintf("Thread %s Pending Diagnostics", 
-                       TfStringify(std::this_thread::get_id()).c_str()),
-        first->empty() ? nullptr : first);
-
-    // Update second to match, arch is no longer looking at it.
-    if (clear)
-        second->clear();
-    for (ErrorIterator i = begin; i != end; ++i) {
-        second->push_back(_FormatDiagnostic(*i, i->_info));
+void
+TfDiagnosticMgr::_RebuildTrappedDiagnosticsLogText(size_t validLogEnd)
+{
+    // Partial rebuild: keep entries [0, validLogEnd) intact and re-scan only
+    // the portion of each trap's container that falls at or after validLogEnd.
+    // validLogEnd = 0 performs a full rebuild (clear + rescan all traps).
+    //
+    // pos tracks where each trap's entries should start in the correct log,
+    // computed from current container sizes rather than _logStart so that the
+    // algorithm stays correct even if _logStart is momentarily stale.  After
+    // the update, _logStart is resynced for all traps.
+    auto &stack = _markCountsAndTrapStacks.local().trapStack;
+    _threadState.local()._trappedDiagnosticsLogText.Update(
+        [&](std::vector<std::string> &log) {
+            if (log.size() > validLogEnd) {
+                log.resize(validLogEnd);
+            }
+            size_t pos = 0;
+            for (TfDiagnosticTrap const *trap : stack) {
+                const size_t trapSize = trap->_container.size();
+                const size_t trapEnd  = pos + trapSize;
+                if (trapEnd <= log.size()) {
+                    // This trap's entries are entirely within the clean
+                    // prefix -- already in the log, nothing to do.
+                    pos = trapEnd;
+                    continue;
+                }
+                // Scan past any entries already in the log for this trap,
+                // then format and append the remainder.
+                const size_t skip =
+                    (log.size() > pos) ? log.size() - pos : 0;
+                auto it = trap->_container.GetIterator(skip);
+                while (it.Next([&](TfDiagnosticBase const &d) {
+                    log.push_back(_FormatDiagnostic(d, d._info));
+                })) {}
+                pos = trapEnd;
+            }
+        });
+    // Resync each trap's _logStart to match its position in the rebuilt log.
+    size_t pos = 0;
+    for (TfDiagnosticTrap *trap : stack) {
+        trap->_logStart = pos;
+        pos += trap->_container.size();
     }
-
-    // Switch parity.
-    parity = !parity;
 }
 
-void
-TfDiagnosticMgr::_AppendErrorsToLogText(ErrorIterator i)
+TfDiagnosticMgr::_LogTextPin
+TfDiagnosticMgr::_PinErrorLogText(
+    ErrorIterator first, ErrorIterator last) const
 {
-    _logText.local().AppendAndPublish(i, GetErrorEnd());
+    auto lines = std::make_unique<std::vector<std::string>>();
+    lines->reserve(std::distance(first, last));
+    for (auto i = first; i != last; ++i) {
+        lines->push_back(_FormatDiagnostic(*i, i->_info));
+    }
+    std::string key = _ThreadState::_MakeLabel(
+        TfStringPrintf("Transient Errors %p", lines.get()).c_str());
+    return _LogTextPin(std::move(key), std::move(lines));
 }
 
-void
-TfDiagnosticMgr::_RebuildErrorLogText()
+TfDiagnosticMgr::_LogTextPin
+TfDiagnosticMgr::_PinDiagnosticsLogText(
+    Tf_DiagnosticContainer const &container) const
 {
-    _logText.local().RebuildAndPublish(GetErrorBegin(), GetErrorEnd());
+    auto lines = std::make_unique<std::vector<std::string>>();
+    lines->reserve(container.size());
+    auto it = container.GetIterator();
+    while (it.Next([&](TfDiagnosticBase const &d) {
+        lines->push_back(_FormatDiagnostic(d, d._info));
+    }));
+    std::string key = _ThreadState::_MakeLabel(
+        TfStringPrintf("Transient Diagnostics %p", lines.get()).c_str());
+    return _LogTextPin(std::move(key), std::move(lines));
 }
 
 std::string
@@ -635,8 +824,7 @@ TfDiagnosticMgr::FormatDiagnostic(const TfEnum &code,
 {
     string output;
     string codeName = TfDiagnosticMgr::GetCodeName(code);
-    if (context.IsHidden() ||
-        !strcmp(context.GetFunction(), "") || !strcmp(context.GetFile(), "")) {
+    if (!context || context.IsHidden()) {
         output = TfStringPrintf("%s%s: %s [%s]\n",
                                 codeName.c_str(),
                                 ArchIsMainThread() ? "" : " (secondary thread)",
@@ -675,6 +863,66 @@ _PrintDiagnostic(FILE *fout, const TfEnum &code, const TfCallContext &context,
 {
     fprintf(fout, "%s", TfDiagnosticMgr::FormatDiagnostic(code, context, msg, 
                 info).c_str());
+}
+
+////////////////////////////////////////////////////////////////////////
+// Test hooks -- not declared in any public header; tests declare them locally.
+
+class Tf_DiagnosticMgrTestAccess
+{
+public:
+    static std::vector<std::string>
+    GetPendingErrorsLogText() {
+        TfDiagnosticMgr &mgr = TfDiagnosticMgr::GetInstance();
+        return mgr._threadState.local()._pendingErrorsLogText._texts.first;
+    }
+    static std::vector<std::string>
+    GetTrappedDiagnosticsLogText() {
+        TfDiagnosticMgr &mgr = TfDiagnosticMgr::GetInstance();
+        return mgr._threadState.local()._trappedDiagnosticsLogText._texts.first;
+    }
+    static std::vector<std::string>
+    GetTransportLogTextForTesting(TfErrorTransport const &transport) {
+        if (transport._pin._lines) {
+            return *transport._pin._lines;
+        }
+        return {};
+    }
+    static std::vector<std::string>
+    GetTransportLogTextForTesting(TfDiagnosticTransport const &transport) {
+        if (transport._pin._lines) {
+            return *transport._pin._lines;
+        }
+        return {};
+    }
+};
+
+TF_API
+std::vector<std::string>
+Tf_GetPendingErrorsLogTextForTesting()
+{
+    return Tf_DiagnosticMgrTestAccess::GetPendingErrorsLogText();
+}
+
+TF_API
+std::vector<std::string>
+Tf_GetTrappedDiagnosticsLogTextForTesting()
+{
+    return Tf_DiagnosticMgrTestAccess::GetTrappedDiagnosticsLogText();
+}
+
+TF_API
+std::vector<std::string>
+Tf_GetTransportLogTextForTesting(TfErrorTransport const &transport)
+{
+    return Tf_DiagnosticMgrTestAccess::GetTransportLogTextForTesting(transport);
+}
+
+TF_API
+std::vector<std::string>
+Tf_GetTransportLogTextForTesting(TfDiagnosticTransport const &transport)
+{
+    return Tf_DiagnosticMgrTestAccess::GetTransportLogTextForTesting(transport);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

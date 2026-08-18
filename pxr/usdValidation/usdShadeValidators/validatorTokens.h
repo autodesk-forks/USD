@@ -19,6 +19,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define USD_SHADE_VALIDATOR_NAME_TOKENS                                       \
     ((encapsulationValidator,                                                 \
       "usdShadeValidators:EncapsulationRulesValidator"))                      \
+    ((encapsulationMaterialValidator,                                         \
+      "usdShadeValidators:EncapsulationMaterialValidator"))                   \
     ((materialBindingApiAppliedValidator,                                     \
       "usdShadeValidators:MaterialBindingApiAppliedValidator"))               \
     ((materialBindingRelationships,                                           \
@@ -38,6 +40,8 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define USD_SHADE_VALIDATION_ERROR_NAME_TOKENS                                 \
     ((connectableInNonContainer, "ConnectableInNonContainer"))                 \
     ((invalidConnectableHierarchy, "InvalidConnectableHierarchy"))             \
+    ((invalidConnectableInMaterial, "InvalidConnectableInMaterial"))           \
+    ((invalidImageableInMaterial, "InvalidImageableInMaterial"))               \
     ((missingMaterialBindingAPI, "MissingMaterialBindingAPI"))                 \
     ((materialBindingPropNotARel, "MaterialBindingPropNotARel"))               \
     ((invalidMaterialCollection, "InvalidMaterialCollection"))                 \

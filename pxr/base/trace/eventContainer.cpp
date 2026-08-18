@@ -103,7 +103,8 @@ TraceEventContainer::Allocate()
 TraceEventContainer::_Node *
 TraceEventContainer::_Node::New(size_t capacity)
 {
-    void *p = malloc(sizeof(_Node)+sizeof(TraceEvent)*capacity);
+    void *p = ::operator new(sizeof(_Node)+sizeof(TraceEvent)*capacity, 
+        std::nothrow);
     TraceEvent *eventEnd = reinterpret_cast<TraceEvent*>(
         reinterpret_cast<char *>(p) + sizeof(_Node));
     return new (p) _Node(eventEnd, capacity);
@@ -118,7 +119,7 @@ TraceEventContainer::_Node::DestroyList(_Node *head)
     while (head) {
         _Node *next = head->_next;
         head->~_Node();
-        free(head);
+        ::operator delete(static_cast<void *>(head), std::nothrow);
         head = next;
     }
 }

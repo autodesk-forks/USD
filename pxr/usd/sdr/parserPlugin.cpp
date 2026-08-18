@@ -5,11 +5,19 @@
 // https://openusd.org/license.
 //
 
+#include "pxr/base/tf/envSetting.h"
+#include "pxr/base/tf/type.h"
 #include "pxr/usd/sdr/parserPlugin.h"
 #include "pxr/usd/sdr/shaderNode.h"
 #include "pxr/usd/sdr/shaderNodeDiscoveryResult.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_ENV_SETTING(SDR_WARN_UNIMPLEMENTED_GET_SHADING_SYSTEM, true,
+    "By default, warns if SdrParserPlugin::GetShadingSystem is not "
+    "implemented in SdrParserPlugin subclasses. One warning is "
+    "emitted for all subclasses. When set to false, no warning is "
+    "emitted.");
 
 // Register this plugin type with Tf
 TF_REGISTRY_FUNCTION(TfType)
@@ -27,6 +35,32 @@ SdrParserPlugin::~SdrParserPlugin()
     // nothing yet
 }
 
+const TfToken&
+SdrParserPlugin::GetShadingSystem() const
+{
+    static bool warned = false;
+    if (!warned) {
+        const bool warn =
+            TfGetEnvSetting(SDR_WARN_UNIMPLEMENTED_GET_SHADING_SYSTEM);
+        if (warn) {
+            const TfType& derivedType = TfType::FindByTypeid(typeid(*this));
+            TF_WARN("%s::GetSourceType is deprecated in favor of "
+                    "GetShadingSystem. In a future release, unimplemented "
+                    "GetShadingSystem will cause a build error.",
+                    derivedType.GetTypeName().c_str());
+        }
+        warned = true;
+    }
+    return GetSourceType();
+}
+
+const TfToken&
+SdrParserPlugin::GetSourceType() const
+{
+    static const TfToken empty;
+    return empty;
+}
+
 SdrShaderNodeUniquePtr
 SdrParserPlugin::GetInvalidShaderNode(const SdrShaderNodeDiscoveryResult& dr)
 {
@@ -38,9 +72,9 @@ SdrParserPlugin::GetInvalidShaderNode(const SdrShaderNodeDiscoveryResult& dr)
             dr.identifier,
             dr.version,
             dr.name,
-            dr.family,
+            dr.function,
             TfToken("unknown discovery type"),
-            TfToken("unknown source type"),
+            TfToken("unknown shading system"),
             dr.resolvedUri,
             dr.resolvedUri,
             /* properties = */ SdrShaderPropertyUniquePtrVec()

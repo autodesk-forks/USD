@@ -9,13 +9,20 @@ import sys, os, unittest
 from pxr import Sdf, Usd, Tf, Plug
 
 class TestUsdNamespaceEditorProperties(unittest.TestCase):
+    # Verifies that the result is true and provides the expected warnings, if any.
+    def _VerifyTrueResult(self, result, expectedWarnings=[]):
+        self.assertTrue(result)
+        self.assertEqual(len(result.warnings), len(expectedWarnings))
+        for warn, expectedWarn in zip(result.warnings, expectedWarnings):
+            self.assertTrue(expectedWarn in warn)
 
     # Calls CanApplyEdits and ApplyEdits on the given editor and verifies both
-    # succeed. If expectedObjectsChangedRenamedProperties is provided, this also verifies 
-    # that listening to the ObjectsChanged notice will send a notice holding 
-    # the expected renamed properties specified.
+    # succeed. If expectedObjectsChangedRenamedProperties is provided, this also 
+    # verifies that listening to the ObjectsChanged notice will send a notice 
+    # holding the expected renamed properties specified.
     def _ApplyEditWithVerification(self, editor, 
-            expectedObjectsChangedRenamedProperties = None):
+            expectedObjectsChangedRenamedProperties = None,
+            expectedWarnings = []):
 
         # receivedObjectsChanged is used for sanity checking that the notice
         # handler was indeed called as expected.
@@ -41,7 +48,7 @@ class TestUsdNamespaceEditorProperties(unittest.TestCase):
 
         try:
             # Verify CanApply and Apply
-            self.assertTrue(editor.CanApplyEdits())
+            self._VerifyTrueResult(editor.CanApplyEdits(), expectedWarnings)
             self.assertTrue(editor.ApplyEdits())
             # Sanity check on the notice listener being called.
             self.assertTrue(receivedObjectsChanged)
@@ -824,7 +831,7 @@ class TestUsdNamespaceEditorProperties(unittest.TestCase):
             stage.GetPrimAtPath("/C/B/A")))
         # But only the root stage can apply this reparent edit as /C/B/A is only
         # a valid parent prim on the root stage and not on the sublayer stage.
-        self.assertTrue(editor.CanApplyEdits())     
+        self._VerifyTrueResult(editor.CanApplyEdits())
         self._VerifyFalseResult(subLayerEditor.CanApplyEdits(),
             "The new parent prim is not a valid prim")     
 

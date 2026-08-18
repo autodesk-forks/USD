@@ -31,12 +31,6 @@ provided that use a Mesh Gprim that consists of two quads, along with a primvar
 for displayColor, to help visualize the interpolation modes via Hydra/Storm
 (screenshots are from usdview).
 
-.. note::
-
-    Special thanks to the authors of the 
-    `USD Working Group Primvar Interpolation article <https://github.com/usd-wg/assets/tree/main/docs/PrimvarInterpolation>`__
-    for inspiration for these examples. 
-
 .. _primvar_constant_interpolation:
 
 Constant Interpolation

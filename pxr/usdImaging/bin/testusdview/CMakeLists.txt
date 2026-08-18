@@ -23,395 +23,46 @@ if (NOT BUILD_SHARED_LIBS)
     return()
 endif()
 
-pxr_install_test_dir(
-    SRC testenv/testUsdviewAlive
-    DEST testUsdviewAlive
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDetachedLayers
-    DEST testUsdviewDetachedLayers1
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDetachedLayers
-    DEST testUsdviewDetachedLayers2
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDetachedLayers
-    DEST testUsdviewDetachedLayers3
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDetachedLayers
-    DEST testUsdviewDetachedLayers4
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments1
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments2
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments3
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments4
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments5
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments6
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFileArguments
-    DEST testUsdviewFileArguments7
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewWrapper
-    DEST testUsdviewWrapper1
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewWrapper
-    DEST testUsdviewWrapper2
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewWrapper
-    DEST testUsdviewWrapper3
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewWrapper
-    DEST testUsdviewWrapper4
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewWrapper
-    DEST testUsdviewWrapper5
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPrimPathBar
-    DEST testUsdviewPrimPathBar
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPrimSearch
-    DEST testUsdviewPrimSearch
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPropertySearch
-    DEST testUsdviewPropertySearch
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewMetadatatabSelect
-    DEST testUsdviewMetadatatabSelect
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewTimeSamples
-    DEST testUsdviewTimeSamples
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewNavigationKeys
-    DEST testUsdviewNavigationKeys
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewReloadReopen
-    DEST testUsdviewReloadReopen
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewNoPlugins
-    DEST testUsdviewNoPlugins
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewInterpreterNoRender
-    DEST testUsdviewInterpreterNoRender
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLoadPlugins
-    DEST testUsdviewLoadPlugins_alive
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLoadPlugins
-    DEST testUsdviewLoadPlugins_multipleContainers
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLoadPlugins
-    DEST testUsdviewLoadPlugins_missingContainer
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLoadPlugins
-    DEST testUsdviewLoadPlugins_duplicateCommand
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLoadPlugins
-    DEST testUsdviewLoadPlugins_chained
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewUpAxis
-    DEST testUsdviewUpAxis_zUp
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewUpAxis
-    DEST testUsdviewUpAxis_yUp
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDeactivate
-    DEST testUsdviewDeactivate
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDefaultFontFamily
-    DEST testUsdviewDefaultFontFamily
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewSkinning
-    DEST testUsdviewCPUSkinning
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewSkinning
-    DEST testUsdviewGPUSkinning
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPrimTreeExpansion
-    DEST testUsdviewPrimTreeExpansion
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewInfGeom
-    DEST testUsdviewInfGeom
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewShaderEdits
-    DEST testUsdviewShaderEdits
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPrimvarEdits
-    DEST testUsdviewPrimvarEdits
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewInstancingEdits
-    DEST testUsdviewInstancingEdits
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewAnimatedBounds
-    DEST testUsdviewAnimatedBounds
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewMeshBounds
-    DEST testUsdviewMeshBounds
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewColorManagement
-    DEST testUsdviewColorManagement
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewMaterialEdits
-    DEST testUsdviewMaterialEdits
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFreeCamera
-    DEST testUsdviewFreeCamera
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFreeCameraAspect
-    DEST testUsdviewFreeCameraAspect
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewSelectionHighlighting
-    DEST testUsdviewSelectionHighlighting
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewSelectionHighlighting
-    DEST testUsdviewSelectionHighlighting_Delegate
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewRenderMode
-    DEST testUsdviewRenderMode
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLights
-    DEST testUsdviewLights
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLights
-    DEST testUsdviewLights_yup
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewSceneLights
-    DEST testUsdviewSceneLights
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewSceneLights
-    DEST testUsdviewSceneLights_Delegate
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLightVisibility
-    DEST testUsdviewLightVisibility
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewLightVisibility
-    DEST testUsdviewLightVisibility_varying
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewBackgroundColor
-    DEST testUsdviewBackgroundColor
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewComplexity
-    DEST testUsdviewComplexity
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFieldOfView
-    DEST testUsdviewFieldOfView
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewClippingPlanes
-    DEST testUsdviewClippingPlanes
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewDefaultMaterial
-    DEST testUsdviewDefaultMaterial
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewCameraMaskMode
-    DEST testUsdviewCameraMaskMode
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewFrameSelection
-    DEST testUsdviewFrameSelection
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewOIT
-    DEST testUsdviewOIT
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewAdditive
-    DEST testUsdviewAdditive
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewVariantSelection
-    DEST testUsdviewVariantSelection
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPointWidths
-    DEST testUsdviewPointWidths
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewPointInstancerVariant
-    DEST testUsdviewPointInstancerVariant
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewExpressionVariableEdits
-    DEST testUsdviewExpressionVariableEdits
-)
-
-pxr_install_test_dir(
-    SRC testenv/testUsdviewExpressionVariableEdits
-    DEST testUsdviewExpressionVariableEdits_Delegate
-)
-
 pxr_register_test(testUsdviewAlive
     PRE_COMMAND "${PYTHON_EXECUTABLE} testUsdviewAliveSetup.py"
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testAlive.py test.usda"
+    TESTENV testenv/testUsdviewAlive
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewDetachedLayers1
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_1.py --norender --detachLayers root.usd"
+    TESTENV testenv/testUsdviewDetachedLayers
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewDetachedLayers2
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_2.py --norender --detachLayersInclude 'foo,with spaces' root.usd"
+    TESTENV testenv/testUsdviewDetachedLayers
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewDetachedLayers3
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_3.py --norender --detachLayers --detachLayersExclude 'foo,with spaces' root.usd"
+    TESTENV testenv/testUsdviewDetachedLayers
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewDetachedLayers4
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testDetachedLayers_4.py --norender root.usd"
+    TESTENV testenv/testUsdviewDetachedLayers
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewFileArguments1
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testValidFileArg.py test.usda"
+    TESTENV testenv/testUsdviewFileArguments
     EXPECTED_RETURN_CODE 0
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -420,6 +71,7 @@ pxr_register_test(testUsdviewFileArguments1
 pxr_register_test(testUsdviewFileArguments2
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testValidFileArg.py test.usd"
+    TESTENV testenv/testUsdviewFileArguments
     EXPECTED_RETURN_CODE 0
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -428,6 +80,7 @@ pxr_register_test(testUsdviewFileArguments2
 pxr_register_test(testUsdviewFileArguments3
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testValidFileArg.py test.usdc"
+    TESTENV testenv/testUsdviewFileArguments
     EXPECTED_RETURN_CODE 0
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -436,6 +89,7 @@ pxr_register_test(testUsdviewFileArguments3
 pxr_register_test(testUsdviewFileArguments4
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testInvalidFileArg.py test.py"
+    TESTENV testenv/testUsdviewFileArguments
     STDERR_REDIRECT py_test_out
     DIFF_COMPARE py_test_out
     EXPECTED_RETURN_CODE 1
@@ -446,6 +100,7 @@ pxr_register_test(testUsdviewFileArguments4
 pxr_register_test(testUsdviewFileArguments5
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testInvalidFileArg.py invalidSyntax.usda"
+    TESTENV testenv/testUsdviewFileArguments
     CLEAN_OUTPUT "(?:[A-Za-z]:)?/.*(?=invalidSyntax)"
     STDERR_REDIRECT invalidSyntax_test_out
     DIFF_COMPARE invalidSyntax_test_out
@@ -457,6 +112,7 @@ pxr_register_test(testUsdviewFileArguments5
 pxr_register_test(testUsdviewFileArguments6
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testInvalidFileArg.py test.txt"
+    TESTENV testenv/testUsdviewFileArguments
     STDERR_REDIRECT txt_test_out
     DIFF_COMPARE txt_test_out
     EXPECTED_RETURN_CODE 1
@@ -467,6 +123,7 @@ pxr_register_test(testUsdviewFileArguments6
 pxr_register_test(testUsdviewFileArguments7
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testInvalidFileArg.py missing"
+    TESTENV testenv/testUsdviewFileArguments
     STDERR_REDIRECT missing_test_out
     DIFF_COMPARE missing_test_out
     EXPECTED_RETURN_CODE 1
@@ -474,10 +131,24 @@ pxr_register_test(testUsdviewFileArguments7
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
 
-pxr_register_test(testUsdviewWrapper1
+pxr_register_test(testUsdviewWrapper0
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback.py"
-    EXPECTED_RETURN_CODE 2
+    TESTENV testenv/testUsdviewWrapper
+    STDOUT_REDIRECT valid_output_no_file
+    DIFF_COMPARE valid_output_no_file
+    EXPECTED_RETURN_CODE 0
+    ENV
+        PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
+)
+
+pxr_register_test(testUsdviewWrapper1
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback.py test.usda"
+    TESTENV testenv/testUsdviewWrapper
+    STDOUT_REDIRECT valid_output
+    DIFF_COMPARE valid_output
+    EXPECTED_RETURN_CODE 0
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
 )
@@ -485,6 +156,7 @@ pxr_register_test(testUsdviewWrapper1
 pxr_register_test(testUsdviewWrapper2
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback_Invalid_1.py test.usda"
+    TESTENV testenv/testUsdviewWrapper
     EXPECTED_RETURN_CODE 1
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -493,6 +165,7 @@ pxr_register_test(testUsdviewWrapper2
 pxr_register_test(testUsdviewWrapper3
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback_Invalid_2.py test.usda"
+    TESTENV testenv/testUsdviewWrapper
     EXPECTED_RETURN_CODE 1
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -501,6 +174,7 @@ pxr_register_test(testUsdviewWrapper3
 pxr_register_test(testUsdviewWrapper4
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testCallback_Invalid_3.py test.usda"
+    TESTENV testenv/testUsdviewWrapper
     EXPECTED_RETURN_CODE 1
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -509,6 +183,7 @@ pxr_register_test(testUsdviewWrapper4
 pxr_register_test(testUsdviewWrapper5
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview test.usda"
+    TESTENV testenv/testUsdviewWrapper
     EXPECTED_RETURN_CODE 2
     ENV
         PXR_USDVIEW_SUPPRESS_STATE_SAVING=1
@@ -517,30 +192,35 @@ pxr_register_test(testUsdviewWrapper5
 pxr_register_test(testUsdviewPrimPathBar
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPrimPathBar.py test.usda"
+    TESTENV testenv/testUsdviewPrimPathBar
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewPrimSearch
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPrimSearch.py test.usda"
+    TESTENV testenv/testUsdviewPrimSearch
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewPropertySearch
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPropertySearch.py test.usda"
+    TESTENV testenv/testUsdviewPropertySearch
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewMetadatatabSelect
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewMetadatatabSelect.py test.usda"
+    TESTENV testenv/testUsdviewMetadatatabSelect
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewTimeSamples
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewTimeSamples.py test.usda"
+    TESTENV testenv/testUsdviewTimeSamples
     EXPECTED_RETURN_CODE 0
 )
 
@@ -548,84 +228,91 @@ pxr_register_test(testUsdviewNavigationKeys
     RUN_SERIAL
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewNavigationKeys.py test.usda"
+    TESTENV testenv/testUsdviewNavigationKeys
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewNoPlugins
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewNoPlugins.py --noplugins test.usda"
+    TESTENV testenv/testUsdviewNoPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewInterpreterNoRender
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewInterpreterNoRender.py --norender test.usda"
+    TESTENV testenv/testUsdviewInterpreterNoRender
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewLoadPlugins_alive
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLoadPlugins_alive.py test.usda"
+    TESTENV testenv/testUsdviewLoadPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewLoadPlugins_multipleContainers
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLoadPlugins_multipleContainers.py test.usda"
+    TESTENV testenv/testUsdviewLoadPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewLoadPlugins_missingContainer
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLoadPlugins_missingContainer.py test.usda"
+    TESTENV testenv/testUsdviewLoadPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewLoadPlugins_duplicateCommand
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLoadPlugins_duplicateCommand.py test.usda"
+    TESTENV testenv/testUsdviewLoadPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewLoadPlugins_chained
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLoadPlugins_chained.py test.usda"
+    TESTENV testenv/testUsdviewLoadPlugins
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewUpAxis_yUp
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewUpAxis_yUp.py testYUp.usda"
+    TESTENV testenv/testUsdviewUpAxis
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewDefaultFontFamily
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewDefaultFontFamily.py test.usda"
-    EXPECTED_RETURN_CODE 0
-)
-
-pxr_register_test(testUsdviewInstancingEdits
-    PYTHON
-    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewInstancingEdits.py test.usda"
+    TESTENV testenv/testUsdviewDefaultFontFamily
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewPrimTreeExpansion
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPrimTreeExpansion.py test.usda"
+    TESTENV testenv/testUsdviewPrimTreeExpansion
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewAnimatedBounds
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewAnimatedBounds.py test.usda"
+    TESTENV testenv/testUsdviewAnimatedBounds
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewMeshBounds
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewMeshBounds.py meshBounds.usda"
+    TESTENV testenv/testUsdviewMeshBounds
     EXPECTED_RETURN_CODE 0
 )
 
@@ -642,6 +329,7 @@ endif()
 pxr_register_test(testUsdviewFreeCamera
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewFreeCamera.py Block.usda"
+    TESTENV testenv/testUsdviewFreeCamera
     IMAGE_DIFF_COMPARE
         start.png
         block_F.png
@@ -664,6 +352,7 @@ pxr_register_test(testUsdviewFreeCamera
 pxr_register_test(testUsdviewFreeCameraAspect
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewFreeCameraAspect.py test.usda"
+    TESTENV testenv/testUsdviewFreeCameraAspect
     IMAGE_DIFF_COMPARE
         aspect185.png
         aspect239.png
@@ -677,6 +366,7 @@ pxr_register_test(testUsdviewFreeCameraAspect
 pxr_register_test(testUsdviewSelectionHighlighting
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSelectionHighlighting.py test.usda"
+    TESTENV testenv/testUsdviewSelectionHighlighting
     IMAGE_DIFF_COMPARE
         sel_highlight.png
         sel_highlight_none.png
@@ -684,15 +374,18 @@ pxr_register_test(testUsdviewSelectionHighlighting
         # UsdImaging 2.0 does not yet support selection highlighting of individual instances.
         # sel_highlight_instance.png
         sel_highlight_color.png
+        nestedInstanceSelection1.png
+        nestedInstanceSelection2.png
+        nestedInstanceSelection3.png
     FAIL 0.05
     FAIL_PERCENT 0.03
-    PERCEPTUAL
     EXPECTED_RETURN_CODE 0
 )
 
 pxr_register_test(testUsdviewSelectionHighlighting_Delegate
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSelectionHighlighting.py test.usda"
+    TESTENV testenv/testUsdviewSelectionHighlighting
     IMAGE_DIFF_COMPARE
         sel_highlight.png
         sel_highlight_none.png
@@ -710,6 +403,7 @@ pxr_register_test(testUsdviewSelectionHighlighting_Delegate
 pxr_register_test(testUsdviewRenderMode
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewRenderMode.py test.usda"
+    TESTENV testenv/testUsdviewRenderMode
     IMAGE_DIFF_COMPARE
         render_mode_wireframe.png
         render_mode_wireframe_on_surface.png
@@ -729,6 +423,7 @@ pxr_register_test(testUsdviewRenderMode
 pxr_register_test(testUsdviewLights
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLights.py test.usda"
+    TESTENV testenv/testUsdviewLights
     IMAGE_DIFF_COMPARE
         camera.png
         noLights.png
@@ -743,6 +438,7 @@ pxr_register_test(testUsdviewLights
 pxr_register_test(testUsdviewLights_yup
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLightsYup.py testYup.usda"
+    TESTENV testenv/testUsdviewLights
     IMAGE_DIFF_COMPARE
         domeYup.png
         bothLightsYup.png
@@ -755,6 +451,7 @@ pxr_register_test(testUsdviewLights_yup
 pxr_register_test(testUsdviewSceneLights
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneLights.py test.usda"
+    TESTENV testenv/testUsdviewSceneLights
     IMAGE_DIFF_COMPARE
         camera_noScene_Storm.png
         camera_scene_Storm.png
@@ -769,13 +466,12 @@ pxr_register_test(testUsdviewSceneLights
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
 
 pxr_register_test(testUsdviewSceneLights_Delegate
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneLights.py test.usda"
+    TESTENV testenv/testUsdviewSceneLights
     IMAGE_DIFF_COMPARE
         camera_noScene_Storm.png
         camera_scene_Storm.png
@@ -794,9 +490,24 @@ pxr_register_test(testUsdviewSceneLights_Delegate
         USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=0
 )
 
+
+pxr_register_test(testUsdviewSceneMaterials
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSceneMaterials.py test.usda"
+    TESTENV testenv/testUsdviewSceneMaterials
+    IMAGE_DIFF_COMPARE
+        enabledSceneMaterials_Storm.png
+        disabledSceneMaterials_Storm.png
+    FAIL 0.05
+    FAIL_PERCENT 0.03
+    PERCEPTUAL
+    EXPECTED_RETURN_CODE 0
+)
+
 pxr_register_test(testUsdviewLightVisibility
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewLightVisibility.py test.usda"
+    TESTENV testenv/testUsdviewLightVisibility
     IMAGE_DIFF_COMPARE
         singleInvisible1.png
         singleInvisible2.png
@@ -811,6 +522,7 @@ pxr_register_test(testUsdviewLightVisibility
 pxr_register_test(testUsdviewLightVisibility_varying
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewVaryLightVisibility.py testVarying.usda"
+    TESTENV testenv/testUsdviewLightVisibility
     IMAGE_DIFF_COMPARE
         visible.png
         invisible.png
@@ -823,6 +535,7 @@ pxr_register_test(testUsdviewLightVisibility_varying
 pxr_register_test(testUsdviewBackgroundColor
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewBackgroundColor.py test.usda"
+    TESTENV testenv/testUsdviewBackgroundColor
     IMAGE_DIFF_COMPARE
         black.png
         grey_dark.png
@@ -837,6 +550,7 @@ pxr_register_test(testUsdviewBackgroundColor
 pxr_register_test(testUsdviewComplexity
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewComplexity.py test.usda"
+    TESTENV testenv/testUsdviewComplexity
     IMAGE_DIFF_COMPARE
         low.png
         medium.png
@@ -851,6 +565,7 @@ pxr_register_test(testUsdviewComplexity
 pxr_register_test(testUsdviewFieldOfView
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewFieldOfView.py test.usda"
+    TESTENV testenv/testUsdviewFieldOfView
     IMAGE_DIFF_COMPARE
         fov45.png
         fov60.png
@@ -864,6 +579,7 @@ pxr_register_test(testUsdviewFieldOfView
 pxr_register_test(testUsdviewClippingPlanes
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewClippingPlanes.py test.usda"
+    TESTENV testenv/testUsdviewClippingPlanes
     IMAGE_DIFF_COMPARE
         no_override.png
         override_near.png
@@ -880,6 +596,7 @@ pxr_register_test(testUsdviewClippingPlanes
 pxr_register_test(testUsdviewDefaultMaterial
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewDefaultMaterial.py test.usda"
+    TESTENV testenv/testUsdviewDefaultMaterial
     IMAGE_DIFF_COMPARE
         none.png
         ambient.png
@@ -894,6 +611,7 @@ pxr_register_test(testUsdviewDefaultMaterial
 pxr_register_test(testUsdviewCameraMaskMode
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --camera /camera --renderer Storm --testScript testUsdviewCameraMaskMode.py test.usda"
+    TESTENV testenv/testUsdviewCameraMaskMode
     IMAGE_DIFF_COMPARE
         none_storm.png
         outline_storm.png
@@ -909,6 +627,7 @@ if (EMBREE_FOUND AND ${PXR_BUILD_EMBREE_PLUGIN})
     pxr_register_test(testUsdviewCameraMaskMode_Embree
         PYTHON
         COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --camera /camera --renderer Embree --testScript testUsdviewCameraMaskMode.py test.usda"
+        TESTENV testenv/testUsdviewCameraMaskMode
         IMAGE_DIFF_COMPARE
             none_embree.png
             outline_embree.png
@@ -918,13 +637,13 @@ if (EMBREE_FOUND AND ${PXR_BUILD_EMBREE_PLUGIN})
         FAIL_PERCENT 0.03
         PERCEPTUAL
         EXPECTED_RETURN_CODE 0
-        TESTENV testUsdviewCameraMaskMode
     )
 endif()
 
 pxr_register_test(testUsdviewFrameSelection
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewFrameSelection.py test.usda"
+    TESTENV testenv/testUsdviewFrameSelection
     IMAGE_DIFF_COMPARE
         framed.png
         toggleToStart.png
@@ -939,6 +658,7 @@ pxr_register_test(testUsdviewFrameSelection
 pxr_register_test(testUsdviewReloadReopen
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewReloadReopen.py test.usda"
+    TESTENV testenv/testUsdviewReloadReopen
     IMAGE_DIFF_COMPARE
         coloredAndFramed.png
         reloaded.png
@@ -952,6 +672,7 @@ pxr_register_test(testUsdviewReloadReopen
 pxr_register_test(testUsdviewMaterialEdits
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewMaterialEdits.py test.usda"
+    TESTENV testenv/testUsdviewMaterialEdits
     IMAGE_DIFF_COMPARE
         1.png
         2.png
@@ -964,6 +685,7 @@ pxr_register_test(testUsdviewMaterialEdits
 pxr_register_test(testUsdviewUpAxis_zUp
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewUpAxis_zUp.py testZUp.usda"
+    TESTENV testenv/testUsdviewUpAxis
     IMAGE_DIFF_COMPARE
         zUp.png
     FAIL 0.05
@@ -975,6 +697,7 @@ pxr_register_test(testUsdviewUpAxis_zUp
 pxr_register_test(testUsdviewDeactivate
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewDeactivate.py test.usda"
+    TESTENV testenv/testUsdviewDeactivate
     IMAGE_DIFF_COMPARE
         singleDeactivate.png
         parentDeactivate.png
@@ -989,6 +712,7 @@ pxr_register_test(testUsdviewDeactivate
 pxr_register_test(testUsdviewCPUSkinning
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSkinning.py arm.usda"
+    TESTENV testenv/testUsdviewSkinning
     IMAGE_DIFF_COMPARE
         change_complexity.png
         vis_frame_4.png
@@ -1008,6 +732,7 @@ pxr_register_test(testUsdviewCPUSkinning
 pxr_register_test(testUsdviewGPUSkinning
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewSkinning.py arm.usda"
+    TESTENV testenv/testUsdviewSkinning
     IMAGE_DIFF_COMPARE
         change_complexity.png
         vis_frame_4.png
@@ -1027,6 +752,7 @@ pxr_register_test(testUsdviewGPUSkinning
 pxr_register_test(testUsdviewInfGeom
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewInfGeom.py infGeom.usda"
+    TESTENV testenv/testUsdviewInfGeom
     IMAGE_DIFF_COMPARE
         infGeom.png
         fixedGeom.png
@@ -1041,6 +767,7 @@ pxr_register_test(testUsdviewInfGeom
 #pxr_register_test(testUsdviewShaderEdits
 #    PYTHON
 #    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewShaderEdits.py test.usda"
+#    TESTENV testenv/testUsdviewShaderEdits
 #    IMAGE_DIFF_COMPARE
 #        0.png
 #    FAIL 1
@@ -1052,6 +779,7 @@ pxr_register_test(testUsdviewInfGeom
 pxr_register_test(testUsdviewPrimvarEdits
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPrimvarEdits.py primvars.usda"
+    TESTENV testenv/testUsdviewPrimvarEdits
     IMAGE_DIFF_COMPARE
         start.png
         add_fallback_primvar_smooth.png
@@ -1071,6 +799,7 @@ pxr_register_test(testUsdviewPrimvarEdits
 pxr_register_test(testUsdviewOIT
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewOIT.py test.usda"
+    TESTENV testenv/testUsdviewOIT
     IMAGE_DIFF_COMPARE
         oit.png
     FAIL 0.05
@@ -1082,6 +811,7 @@ pxr_register_test(testUsdviewOIT
 pxr_register_test(testUsdviewAdditive
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewAdditive.py test.usda"
+    TESTENV testenv/testUsdviewAdditive
     IMAGE_DIFF_COMPARE
         additive.png
     FAIL 0.05
@@ -1093,6 +823,7 @@ pxr_register_test(testUsdviewAdditive
 pxr_register_test(testUsdviewVariantSelection
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewVariantSelection.py test.usda"
+    TESTENV testenv/testUsdviewVariantSelection
     IMAGE_DIFF_COMPARE
         capsule1.png
         cone1.png
@@ -1111,6 +842,7 @@ pxr_register_test(testUsdviewVariantSelection
 pxr_register_test(testUsdviewPointWidths
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPointWidths.py points.usda"
+    TESTENV testenv/testUsdviewPointWidths
     IMAGE_DIFF_COMPARE
         start.png
         set_point_widths_025.png
@@ -1126,6 +858,7 @@ pxr_register_test(testUsdviewPointWidths
 pxr_register_test(testUsdviewPointInstancerVariant
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewPointInstancerVariant.py test.usda"
+    TESTENV testenv/testUsdviewPointInstancerVariant
     IMAGE_DIFF_COMPARE
         variantB.png
         variantA.png
@@ -1138,6 +871,7 @@ pxr_register_test(testUsdviewPointInstancerVariant
 pxr_register_test(testUsdviewExpressionVariableEdits_Delegate
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewExpressionVariableEdits.py test.usda"
+    TESTENV testenv/testUsdviewExpressionVariableEdits
     IMAGE_DIFF_COMPARE
         start.png
         step_1.png
@@ -1153,6 +887,7 @@ pxr_register_test(testUsdviewExpressionVariableEdits_Delegate
 pxr_register_test(testUsdviewExpressionVariableEdits
     PYTHON
     COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewExpressionVariableEdits.py test.usda"
+    TESTENV testenv/testUsdviewExpressionVariableEdits
     IMAGE_DIFF_COMPARE
         start.png
         step_1.png
@@ -1161,14 +896,67 @@ pxr_register_test(testUsdviewExpressionVariableEdits
     FAIL_PERCENT 0.03
     PERCEPTUAL
     EXPECTED_RETURN_CODE 0
-    ENV
-        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=1
 )
+
+pxr_register_test(testUsdviewInstancingEdits
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewInstancingEdits.py test.usda"
+    TESTENV testenv/testUsdviewInstancingEdits
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        instanceWithParent.png
+        instanceWithParentDeactivated.png
+        completeResyncWithNativeInstances1.png
+        completeResyncWithNativeInstances2.png
+    FAIL 0.04
+    FAIL_PERCENT 0.1
+    WARN 0.02
+    WARN_PERCENT 0.2
+    ENV
+        USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX=false
+)
+
+pxr_register_test(testUsdviewInstancingEdits_SceneIndex
+    PYTHON
+    COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewInstancingEdits.py test.usda"
+    TESTENV testenv/testUsdviewInstancingEdits
+    EXPECTED_RETURN_CODE 0
+    IMAGE_DIFF_COMPARE
+        instanceWithParent.png
+        instanceWithParentDeactivated.png
+        instancerInvisible.png
+        instancerVisible.png
+        primNotInstanceable.png
+        primInstanceable.png
+        completeResyncWithNativeInstances1.png
+        completeResyncWithNativeInstances2.png
+    FAIL 0.04
+    FAIL_PERCENT 0.1
+    WARN 0.02
+    WARN_PERCENT 0.2
+)
+
+if (EMBREE_FOUND AND ${PXR_BUILD_EMBREE_PLUGIN})
+    pxr_register_test(testUsdviewInstancingEdits_SceneIndex_Embree
+        PYTHON
+        COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --renderer Embree --testScript testUsdviewInstancingEditsEmbree.py test.usda"
+        TESTENV testenv/testUsdviewInstancingEdits
+        EXPECTED_RETURN_CODE 0
+        IMAGE_DIFF_COMPARE
+            instancerInvisibleEmbree.png
+            instancerVisibleEmbree.png
+        FAIL 0.04
+        FAIL_PERCENT 0.1
+        WARN 0.02
+        WARN_PERCENT 0.2
+    )
+endif()
 
 if(OPENCOLORIO_FOUND AND ${PXR_BUILD_OPENCOLORIO_PLUGIN})
     pxr_register_test(testUsdviewColorManagement
         PYTHON
         COMMAND "${CMAKE_INSTALL_PREFIX}/bin/testusdview --testScript testUsdviewColorManagement.py test.usda"
+        TESTENV testenv/testUsdviewColorManagement
         IMAGE_DIFF_COMPARE
             colorCorrectionOCIO_g22.png
             colorCorrectionOCIO_linear.png

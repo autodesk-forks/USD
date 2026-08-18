@@ -18,7 +18,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
     # succeed. If expectedResyncNotices is provided, this also verifies that 
     # listening the ObjectsChanged notice will hold the expected resyncs of the
     # expected resync types specified.
-    def _ApplyEditWithVerification(self, editor, expectedResyncNotices = None):
+    def _ApplyEditWithVerification(self, editor, expectedResyncNotices = None, 
+        expectedLayersToEdit = None, expectedWarnings = []):
 
         # receivedObjectsChanged is used for sanity checking that the notice
         # handler was indeed called as expected.
@@ -46,8 +47,20 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         )
 
         try:
-            # Verify CanApply and Apply
-            self.assertTrue(editor.CanApplyEdits())
+            # Verify CanApply, GetLayersToEdit, and Apply
+            result = editor.CanApplyEdits()
+            self.assertTrue(result)
+            
+            # Some warning messages are too long to check explicitly or include 
+            # specific data like layer identifiers, so we check if a substring of 
+            # the warning matches instead.
+            self.assertEqual(len(result.warnings), len(expectedWarnings))
+            for warn, expectedWarn in zip(result.warnings, expectedWarnings):
+                self.assertTrue(expectedWarn in warn)
+            if expectedLayersToEdit:
+                layersToEdit = [layer.GetDisplayName() for layer in 
+                    editor.GetLayersToEdit()]
+                self.assertEqual(layersToEdit, expectedLayersToEdit)
             self.assertTrue(editor.ApplyEdits())
             # Sanity check on the notice listener being called.
             self.assertTrue(receivedObjectsChanged)
@@ -99,10 +112,17 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         self.assertEqual(prim.GetPrimTypeInfo().GetAppliedAPISchemas(), 
             ["C_Root_API", "C_Sub1_API", "C_Sub2_API"])
 
-    # Verifies that the result is false and provides the expected message.
-    def _VerifyFalseResult(self, result, expectedMessage):
+    # Verifies that the result is false and provides the expected messages.
+    def _VerifyFalseResult(self, result, expectedErrors, expectedWarnings=[]):
         self.assertFalse(result)
-        self.assertEqual(result.whyNot, expectedMessage)
+        self.assertEqual(result.errors, expectedErrors)
+
+        # Some warning messages are too long to check explicitly or include 
+        # specific data like layer identifiers, so we check if a substring of 
+        # the warning matches instead.
+        self.assertEqual(len(result.warnings), len(expectedWarnings))
+        for warn, expectedWarn in zip(result.warnings, expectedWarnings):
+            self.assertTrue(expectedWarn in warn)
 
     # Setup function for many of the basic test cases. Loads the "basic" stage
     # and gets and returns the needed layers and initial prims from this stage.
@@ -172,10 +192,10 @@ class TestUsdNamespaceEditor(unittest.TestCase):
             else:
                 self.assertTrue(editor.DeletePrim(primA))
             self.assertTrue(primA)
-
             self._ApplyEditWithVerification(editor, 
                 expectedResyncNotices = {
-                    '/C/B/A' : (self.PrimResyncType.Delete, Sdf.Path())})
+                    '/C/B/A' : (self.PrimResyncType.Delete, Sdf.Path())}, 
+                expectedLayersToEdit = ['root.usda'])
             self.assertFalse(primA)
             self.assertFalse(stage.GetPrimAtPath("/C/B/A"))
             
@@ -187,7 +207,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                 self.assertTrue(editor.DeletePrim(primB))
             self._ApplyEditWithVerification(editor, 
                 expectedResyncNotices = {
-                    '/C/B' : (self.PrimResyncType.Delete, Sdf.Path())})
+                    '/C/B' : (self.PrimResyncType.Delete, Sdf.Path())},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda'])
             self.assertFalse(primB)
             self.assertFalse(stage.GetPrimAtPath("/C/B"))
             
@@ -199,7 +220,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                 self.assertTrue(editor.DeletePrim(primC))
             self._ApplyEditWithVerification(editor, 
                 expectedResyncNotices = {
-                    '/C' : (self.PrimResyncType.Delete, Sdf.Path())})
+                    '/C' : (self.PrimResyncType.Delete, Sdf.Path())},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda', 'sub_2.usda'])
             self.assertFalse(primC)
             self.assertFalse(stage.GetPrimAtPath("/C"))
 
@@ -219,7 +241,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                 self.assertTrue(editor.DeletePrim(primC))
             self._ApplyEditWithVerification(editor, 
                 expectedResyncNotices = {
-                    '/C' : (self.PrimResyncType.Delete, Sdf.Path())})
+                    '/C' : (self.PrimResyncType.Delete, Sdf.Path())},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda', 'sub_2.usda'])
             self.assertFalse(primC)
             self.assertFalse(primB)
             self.assertFalse(primA)
@@ -263,7 +286,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/C/B/A' : (self.PrimResyncType.RenameSource, 
                                 Sdf.Path('/C/B/NewA')),
                     '/C/B/NewA' : (self.PrimResyncType.RenameDestination, 
-                                   Sdf.Path('/C/B/A'))})
+                                   Sdf.Path('/C/B/A'))},
+                expectedLayersToEdit = ['root.usda'])
             self.assertFalse(primA)
             primA = stage.GetPrimAtPath("/C/B/NewA")
             self._VerifyBasicStagePrimAValues(primA)
@@ -284,7 +308,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/C/B' : (self.PrimResyncType.RenameSource, 
                               Sdf.Path('/C/NewB')),
                     '/C/NewB' : (self.PrimResyncType.RenameDestination, 
-                                 Sdf.Path('/C/B'))})
+                                 Sdf.Path('/C/B'))},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda'])
             self.assertFalse(primB)
             primB = stage.GetPrimAtPath("/C/NewB")
             self._VerifyBasicStagePrimBValues(primB)
@@ -314,7 +339,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/C' : (self.PrimResyncType.RenameSource, 
                             Sdf.Path('/NewC')),
                     '/NewC' : (self.PrimResyncType.RenameDestination, 
-                               Sdf.Path('/C'))})
+                               Sdf.Path('/C'))},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda', 'sub_2.usda'])
             self.assertFalse(primC)
             primC = stage.GetPrimAtPath("/NewC")
             self._VerifyBasicStagePrimCValues(primC)
@@ -380,7 +406,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/C/B/A' : (self.PrimResyncType.ReparentSource, 
                                 Sdf.Path('/A')),
                     '/A' : (self.PrimResyncType.ReparentDestination, 
-                            Sdf.Path('/C/B/A'))})
+                            Sdf.Path('/C/B/A'))},
+                expectedLayersToEdit = ['root.usda'])
             self.assertFalse(primA)
             primA = stage.GetPrimAtPath("/A")
             self._VerifyBasicStagePrimAValues(primA)
@@ -414,7 +441,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/C/B' : (self.PrimResyncType.ReparentSource, 
                               Sdf.Path('/A/B')),
                     '/A/B' : (self.PrimResyncType.ReparentDestination, 
-                              Sdf.Path('/C/B'))})
+                              Sdf.Path('/C/B'))},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda'])
             self.assertFalse(primB)
             primB = stage.GetPrimAtPath("/A/B")
             self._VerifyBasicStagePrimBValues(primB)
@@ -450,7 +478,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/C' : (self.PrimResyncType.ReparentSource, 
                             Sdf.Path('/A/B/C')),
                     '/A/B/C' : (self.PrimResyncType.ReparentDestination, 
-                                Sdf.Path('/C'))})
+                                Sdf.Path('/C'))},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda', 'sub_2.usda'])
             self.assertFalse(primC)
             primC = stage.GetPrimAtPath("/A/B/C")
             self._VerifyBasicStagePrimCValues(primC)
@@ -495,7 +524,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/A/B/C' : (self.PrimResyncType.ReparentSource, 
                                 Sdf.Path('/C')),
                     '/C' : (self.PrimResyncType.ReparentDestination, 
-                            Sdf.Path('/A/B/C'))})
+                            Sdf.Path('/A/B/C'))},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda', 'sub_2.usda'])
             self.assertFalse(primC)
             primC = stage.GetPrimAtPath("/C")
             self._VerifyBasicStagePrimCValues(primC)
@@ -533,7 +563,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/A/B' : (self.PrimResyncType.ReparentSource, 
                               Sdf.Path('/C/B')),
                     '/C/B' : (self.PrimResyncType.ReparentDestination, 
-                              Sdf.Path('/A/B'))})
+                              Sdf.Path('/A/B'))},
+                expectedLayersToEdit = ['root.usda', 'sub_1.usda'])
             self.assertFalse(primB)
             primB = stage.GetPrimAtPath("/C/B")
             self._VerifyBasicStagePrimBValues(primB)
@@ -568,7 +599,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                     '/A' : (self.PrimResyncType.ReparentSource, 
                             Sdf.Path('/C/B/A')),
                     '/C/B/A' : (self.PrimResyncType.ReparentDestination, 
-                                Sdf.Path('/A'))})
+                                Sdf.Path('/A'))},
+                expectedLayersToEdit = ['root.usda'])
             self.assertFalse(primA)
             primA = stage.GetPrimAtPath("/C/B/A")
             self._VerifyBasicStagePrimAValues(primA)
@@ -759,8 +791,11 @@ class TestUsdNamespaceEditor(unittest.TestCase):
 
         # Helper to verify that CanApplyEdits returns false with the expected
         # message and that ApplyEdits fails and doesn't edit any layers.
-        def _VerifyCannotApplyEdits(expectedMessage):
-            self._VerifyFalseResult(editor.CanApplyEdits(), expectedMessage)
+        def _VerifyCannotApplyEdits(expectedErrors, expectedWarnings=[]):
+            self._VerifyFalseResult(editor.CanApplyEdits(), expectedErrors, 
+                                    expectedWarnings)
+            with self.assertRaises(Tf.ErrorException):
+                editor.GetLayersToEdit()
             with self.assertRaises(Tf.ErrorException):
                 editor.ApplyEdits()
             _VerifyNoLayersHaveChanged()
@@ -768,33 +803,38 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         # Helpers to verify that a valid edit operation (of the function's 
         # particular type) can be added but cannot be applied to the editor's 
         # stage for the expected reason.
-        def _VerifyCannotApplyDeletePrim(prim, expectedMessage):
+        def _VerifyCannotApplyDeletePrim(
+                prim, expectedErrors, expectedWarnings=[]):
             self.assertTrue(editor.DeletePrim(prim))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
-        def _VerifyCannotApplyRenamePrim(prim, newName, expectedMessage):
+        def _VerifyCannotApplyRenamePrim(
+                prim, newName, expectedErrors, expectedWarnings=[]):
             self.assertTrue(editor.RenamePrim(prim, newName))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
-        def _VerifyCannotApplyReparentPrim(prim, newParent, expectedMessage):
+        def _VerifyCannotApplyReparentPrim(
+                prim, newParent, expectedErrors, expectedWarnings=[]):
             self.assertTrue(editor.ReparentPrim(prim, newParent))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
         def _VerifyCannotApplyReparentAndRenamePrim(
-                prim, newParent, newName, expectedMessage):
+                prim, newParent, newName, expectedErrors, expectedWarnings=[]):
             self.assertTrue(editor.ReparentPrim(prim, newParent, newName))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
-        def _VerifyCannotApplyDeletePrimAtPath(path, expectedMessage):
+        def _VerifyCannotApplyDeletePrimAtPath(
+                path, expectedErrors, expectedWarnings=[]):
             self.assertTrue(editor.DeletePrimAtPath(path))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
-        def _VerifyCannotApplyMovePrimAtPath(path, newPath, expectedMessage):
+        def _VerifyCannotApplyMovePrimAtPath(
+                path, newPath, expectedErrors, expectedWarnings=[]):
             self.assertTrue(editor.MovePrimAtPath(path, newPath))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
         
         # First verify we can't apply edits if we haven't added any yet.
-        _VerifyCannotApplyEdits("There are no valid edits to perform")
+        _VerifyCannotApplyEdits(["There are no valid edits to perform"])
 
         # Test invalid edit operations that can't even be added because they
         # do not produce valid absolute prim paths.
@@ -905,31 +945,31 @@ class TestUsdNamespaceEditor(unittest.TestCase):
 
         # At this point we've only failed to add any edits so we still cannot apply
         # edits since there are no edits to perform        
-        _VerifyCannotApplyEdits("There are no valid edits to perform")
+        _VerifyCannotApplyEdits(["There are no valid edits to perform"])
 
         # /A is not a prim on the stage. We cannot edit a prim at this path.
         _VerifyCannotApplyDeletePrimAtPath("/A", 
-            "The prim to edit is not a valid prim")
+            ["The prim to edit is not a valid prim"])
         _VerifyCannotApplyMovePrimAtPath("/A", "/NewA", 
-            "The prim to edit is not a valid prim")
+            ["The prim to edit is not a valid prim"])
         _VerifyCannotApplyMovePrimAtPath("/A", "/C/A", 
-            "The prim to edit is not a valid prim")
+            ["The prim to edit is not a valid prim"])
 
         # Renames fail when an object already exists at the renamed path.
         _VerifyCannotApplyRenamePrim(primB, "C_Root_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
         _VerifyCannotApplyMovePrimAtPath("/C/B", "/C/C_Root_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
 
         _VerifyCannotApplyRenamePrim(primA, "B_Sub1_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
         _VerifyCannotApplyMovePrimAtPath("/C/B/A", "/C/B/B_Sub1_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
 
         _VerifyCannotApplyRenamePrim(primC, "C", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
         _VerifyCannotApplyMovePrimAtPath("/C", "/C", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
 
         # Test invalid reparent destinations.
 
@@ -937,30 +977,30 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         with self.assertRaises(Tf.ErrorException):
             editor.ReparentPrim(primA, stage.GetPrimAtPath("/D"))
         _VerifyCannotApplyMovePrimAtPath("/C/B/A", "/D/A", 
-            "The new parent prim is not a valid prim")
+            ["The new parent prim is not a valid prim"])
 
         # New parent prim is the prim itself
         _VerifyCannotApplyReparentPrim(primA, primA, 
-            "The new parent prim is the same as the prim to move")
+            ["The new parent prim is the same as the prim to move"])
         _VerifyCannotApplyMovePrimAtPath("/C/B/A", "/C/B/A/A", 
-            "The new parent prim is the same as the prim to move")
+            ["The new parent prim is the same as the prim to move"])
 
         # New parent prim is a descendant of the prim itself
         _VerifyCannotApplyReparentPrim(primB, primA, 
-            "The new parent prim is a descendant of the prim to move")
+            ["The new parent prim is a descendant of the prim to move"])
         _VerifyCannotApplyMovePrimAtPath("/C/B", "/C/B/A/B", 
-            "The new parent prim is a descendant of the prim to move")
+            ["The new parent prim is a descendant of the prim to move"])
 
         # Reparents fail when an object already exists at the reparented path.
         # These reparent cases rename the prim to cause the path collision.
         _VerifyCannotApplyReparentAndRenamePrim(primA, primB, "B_Root_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
         _VerifyCannotApplyMovePrimAtPath("/C/B/A", "/C/B/B_Root_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
         _VerifyCannotApplyReparentAndRenamePrim(primA, primC, "C_Sub1_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
         _VerifyCannotApplyMovePrimAtPath("/C/B/A", "/C/C_Sub1_Prim", 
-            "An object already exists at the new path")
+            ["An object already exists at the new path"])
 
         # Open one of the sublayers as a stage to test that the stage of the
         # prim doesn't matter when adding edits.
@@ -985,7 +1025,7 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         # prim on the root stage and not on the sublayer stage.
         self.assertTrue(editor.CanApplyEdits())     
         self._VerifyFalseResult(subLayerEditor.CanApplyEdits(),
-            "The prim to edit is not a valid prim")     
+            ["The prim to edit is not a valid prim"])     
 
         # Make sublayer1 uneditable. Prims /C and /C/B cannot be edited because
         # they have specs on sublayer1. Prim /C/B/A can still be edited since it 
@@ -1000,16 +1040,16 @@ class TestUsdNamespaceEditor(unittest.TestCase):
 
         # Cannot delete or rename /C (there are no valid reparent targets for 
         # /C on this stage currently regardless of layer permission)
-        expectedMsg = ("The spec @{}/basic/sub_1.usda@</C> cannot be edited "
-            "because the layer is not editable").format(getFormattedCwd())
+        expectedMsg = [("The spec @{}/basic/sub_1.usda@</C> cannot be edited "
+            "because the layer is not editable").format(getFormattedCwd())]
         _VerifyCannotApplyDeletePrim(primC, expectedMsg)
         _VerifyCannotApplyDeletePrimAtPath("/C", expectedMsg)
         _VerifyCannotApplyRenamePrim(primC, "NewC", expectedMsg)
         _VerifyCannotApplyMovePrimAtPath("/C", "/NewC", expectedMsg)
 
         # Cannot delete, rename, or reparent /C/B
-        expectedMsg = ("The spec @{}/basic/sub_1.usda@</C/B> cannot be edited "
-            "because the layer is not editable").format(getFormattedCwd())
+        expectedMsg = [("The spec @{}/basic/sub_1.usda@</C/B> cannot be edited "
+            "because the layer is not editable").format(getFormattedCwd())]
         _VerifyCannotApplyDeletePrim(primB, expectedMsg)
         _VerifyCannotApplyDeletePrimAtPath("/C/B", expectedMsg)
         _VerifyCannotApplyRenamePrim(primB, "NewB", expectedMsg)
@@ -1174,8 +1214,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
 
         # Helper to verify that CanApplyEdits returns false with the expected
         # message and that ApplyEdits fails and doesn't edit the stage.
-        def _VerifyCannotApplyEdits(expectedMessage):
-            self._VerifyFalseResult(editor.CanApplyEdits(), expectedMessage)
+        def _VerifyCannotApplyEdits(expectedErrors):
+            self._VerifyFalseResult(editor.CanApplyEdits(), expectedErrors)
             with self.assertRaises(Tf.ErrorException):
                 editor.ApplyEdits()
             self.assertFalse(stage.GetRootLayer().dirty)
@@ -1183,17 +1223,17 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         # Helpers to verify that a valid [Delete|Rename|Reparent]Prim 
         # operation can be added but cannot be applied to the editor's stage for
         # the expected reason.
-        def _VerifyCannotApplyDeletePrim(prim, expectedMessage):
+        def _VerifyCannotApplyDeletePrim(prim, expectedErrors):
             self.assertTrue(editor.DeletePrim(prim))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors)
 
-        def _VerifyCannotApplyRenamePrim(prim, newName, expectedMessage):
+        def _VerifyCannotApplyRenamePrim(prim, newName, expectedErrors):
             self.assertTrue(editor.RenamePrim(prim, newName))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors)
 
-        def _VerifyCannotApplyReparentPrim(prim, newParent, expectedMessage):
+        def _VerifyCannotApplyReparentPrim(prim, newParent, expectedErrors):
             self.assertTrue(editor.ReparentPrim(prim, newParent))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors)
 
         # Helper to verify that the prim at that path can be successfully
         # deleted. Resets the stage to be unedited afterward and returns
@@ -1293,11 +1333,11 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         # But we can't delete any of the children of the instance prims as they
         # are proxies from the prototype. 
         _VerifyCannotApplyDeletePrim(instance1.GetChild("B"), 
-            "The prim to edit is a prototype proxy descendant of an instance "
-            "prim")
+            ["The prim to edit is a prototype proxy descendant of an instance "
+            "prim"])
         _VerifyCannotApplyDeletePrim(instance2.GetChild("B"), 
-            "The prim to edit is a prototype proxy descendant of an instance "
-            "prim")
+            ["The prim to edit is a prototype proxy descendant of an instance "
+            "prim"])
         # We can delete a child of the non-instance prim but only if relocates
         # authoring is allowed as it is defined across a reference.
         _VerifyCanDeletePrimAtPath("/NonInstancePrim/B",
@@ -1338,11 +1378,11 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         # And just like with delete, we can't rename any of the children of the 
         # instance prims because they are proxies into the prototype.
         _VerifyCannotApplyRenamePrim(instance1.GetChild("B"), "NewB", 
-            "The prim to edit is a prototype proxy descendant of an instance "
-            "prim")
+            ["The prim to edit is a prototype proxy descendant of an instance "
+            "prim"])
         _VerifyCannotApplyRenamePrim(instance2.GetChild("B"), "NewB", 
-            "The prim to edit is a prototype proxy descendant of an instance "
-            "prim")
+            ["The prim to edit is a prototype proxy descendant of an instance "
+            "prim"])
         # But we can rename a child of the non-instance prim but only if 
         # relocates authoring is allowed as it is defined across a reference.
         _VerifyCanMovePrimAtPath(
@@ -1402,30 +1442,30 @@ class TestUsdNamespaceEditor(unittest.TestCase):
         # But we cannot reparent any prims under an another instance prim 
         # regardless of whether they're instanced on non-instanced
         _VerifyCannotApplyReparentPrim(instance1, instance2, 
-            "The new parent prim is an instance prim whose children are "
-            "provided exclusively by its prototype")
+            ["The new parent prim is an instance prim whose children are "
+            "provided exclusively by its prototype"])
         _VerifyCannotApplyReparentPrim(nonInstancePrim, instance2, 
-            "The new parent prim is an instance prim whose children are "
-            "provided exclusively by its prototype")
+            ["The new parent prim is an instance prim whose children are "
+            "provided exclusively by its prototype"])
 
         # No editing operations can be performed with a prototype prim or its 
         # children ever
         _VerifyCannotApplyDeletePrim(prototypePrim, 
-            "The prim to edit belongs to a prototype prim")
+            ["The prim to edit belongs to a prototype prim"])
         _VerifyCannotApplyDeletePrim(prototypePrim.GetChild("B"), 
-            "The prim to edit belongs to a prototype prim")
+            ["The prim to edit belongs to a prototype prim"])
         _VerifyCannotApplyRenamePrim(prototypePrim, "NewPrototype", 
-            "The prim to edit belongs to a prototype prim")
+            ["The prim to edit belongs to a prototype prim"])
         _VerifyCannotApplyRenamePrim(prototypePrim.GetChild("B"), "NewB", 
-            "The prim to edit belongs to a prototype prim")
+            ["The prim to edit belongs to a prototype prim"])
         _VerifyCannotApplyReparentPrim(prototypePrim, nonInstancePrim, 
-            "The prim to edit belongs to a prototype prim")
+            ["The prim to edit belongs to a prototype prim"])
         _VerifyCannotApplyReparentPrim(prototypePrim.GetChild("B"), nonInstancePrim, 
-            "The prim to edit belongs to a prototype prim")
+            ["The prim to edit belongs to a prototype prim"])
         _VerifyCannotApplyReparentPrim(nonInstancePrim, prototypePrim, 
-            "The new parent prim belongs to a prototype prim")
+            ["The new parent prim belongs to a prototype prim"])
         _VerifyCannotApplyReparentPrim(nonInstancePrim, prototypePrim.GetChild("B"), 
-            "The new parent prim belongs to a prototype prim")
+            ["The new parent prim belongs to a prototype prim"])
 
     def _RunEditPrimsWithCompositionArcs(self, allowRelocatesAuthoring, 
                                          forceInitialRelocates=True):
@@ -1563,22 +1603,24 @@ class TestUsdNamespaceEditor(unittest.TestCase):
             # Reset the stage for the next case.
             stage.Reload()
 
-        def _VerifyCannotApplyEdits(expectedMessage):
-            self._VerifyFalseResult(editor.CanApplyEdits(), expectedMessage)
+        def _VerifyCannotApplyEdits(expectedErrors, expectedWarnings=[]):
+            self._VerifyFalseResult(
+                editor.CanApplyEdits(), expectedErrors, expectedWarnings)
             with self.assertRaises(Tf.ErrorException):
                 editor.ApplyEdits()
             self.assertFalse(stage.GetRootLayer().dirty)
 
         # Helper to verify that the prim at that path cannot be deleted and 
         # fails with the expected error message.
-        def _VerifyCannotApplyDeletePrimAtPath(primPath, expectedMessage):
+        def _VerifyCannotApplyDeletePrimAtPath(
+                primPath, expectedErrors, expectedWarnings=[]):
             # Verify the prim actually exists first
             prim = stage.GetPrimAtPath(primPath)
             self.assertTrue(prim)
 
             # Verify that we cannot delete the prim.
             self.assertTrue(editor.DeletePrim(prim))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
             # Verify that the deleting root layer stack specs would indeed not
             # delete the prim.
@@ -1586,26 +1628,29 @@ class TestUsdNamespaceEditor(unittest.TestCase):
 
         # Helper to verify that the prim at that path cannot be moved and fails
         # with the expected error message.
-        def _VerifyCannotApplyMovePrimAtPath(primPath, newPrimPath, expectedMessage):
+        def _VerifyCannotApplyMovePrimAtPath(
+                primPath, newPrimPath, expectedErrors, expectedWarnings=[]):
             # Verify the prim actually exists first
             prim = stage.GetPrimAtPath(primPath)
             self.assertTrue(prim)
 
             # Verify that we cannot move the prim.
             self.assertTrue(editor.MovePrimAtPath(primPath, newPrimPath))
-            _VerifyCannotApplyEdits(expectedMessage)
+            _VerifyCannotApplyEdits(expectedErrors, expectedWarnings)
 
             # No need to verify that moving specs in the root layer stack would
             # not move the prim; the delete case is sufficient for proving this.
 
         # Helper to verify that the prim cannot be deleted nor moved.
-        def _VerifyCannotEditPrimAtPath(primPath):
-            expectedMessage = "The prim to edit requires authoring relocates " \
+        def _VerifyCannotEditPrimAtPath(primPath, expectedWarnings=[]):
+            expectedErrors = ["The prim to edit requires authoring relocates " \
                 "since it composes opinions introduced by ancestral " \
                 "composition arcs; relocates authoring must be enabled to " \
-                "perform this edit"
-            _VerifyCannotApplyDeletePrimAtPath(primPath, expectedMessage)
-            _VerifyCannotApplyMovePrimAtPath(primPath, "/Foo", expectedMessage)
+                "perform this edit"]
+            _VerifyCannotApplyDeletePrimAtPath(
+                primPath, expectedErrors, expectedWarnings)
+            _VerifyCannotApplyMovePrimAtPath(
+                primPath, "/Foo", expectedErrors, expectedWarnings)
 
         # A prim with a direct reference to another prim can be edited.
         _VerifyCanEditPrimAtPath("/PrimWithReference")
@@ -1622,13 +1667,37 @@ class TestUsdNamespaceEditor(unittest.TestCase):
                                      expectNewRelocates = not forceInitialRelocates)
         else:
             _VerifyCannotEditPrimAtPath("/PrimWithReference/ClassChild")
-            _VerifyCannotEditPrimAtPath("/PrimWithReference/B")
+            _VerifyCannotEditPrimAtPath("/PrimWithReference/B", 
+                ["found conflicting specs at node"])
             _VerifyCannotEditPrimAtPath("/PrimWithReference/B/A")
 
         # But a child prim that was added entirely in the root layer stack, even
         # though its parent is defined across the reference, can still be edited
         # since there are no specs across the ancestral reference.
         _VerifyCanEditPrimAtPath("/PrimWithReference/B/B_Root_Child")
+
+        # Relocates sources and targets are updated when edits that implicitly 
+        # affect them are applied.
+        if allowRelocatesAuthoring:
+            # Author an edit that will create a relocates arc.
+            self.assertTrue(editor.MovePrimAtPath("/PrimWithReference/B", 
+                                                  "/PrimWithReference/Moved_B"))
+            self._ApplyEditWithVerification(editor)
+            # Verify a relocate was authored.
+            self.assertEqual(rootLayer.relocates, [
+            (Sdf.Path("/PrimWithReference/B"), 
+                Sdf.Path("/PrimWithReference/Moved_B"))
+            ])
+
+            # Author an edit to an ancestor of the relocates source
+            self.assertTrue(editor.MovePrimAtPath("/PrimWithReference", 
+                                                  "/Moved_PrimWithReference"))
+            self._ApplyEditWithVerification(editor)
+            # Verify the relocate was updated.
+            self.assertEqual(rootLayer.relocates, [
+            (Sdf.Path("/Moved_PrimWithReference/B"), 
+                Sdf.Path("/Moved_PrimWithReference/Moved_B"))
+            ])
 
         # A prim with a subroot prim reference behaves the same way as a prim
         # with a root prim reference.
@@ -1637,7 +1706,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
             _VerifyCanEditPrimAtPath("/PrimWithSubrootReference/A",
                                      expectNewRelocates = not forceInitialRelocates)
         else:
-            _VerifyCannotEditPrimAtPath("/PrimWithSubrootReference/A")
+            _VerifyCannotEditPrimAtPath("/PrimWithSubrootReference/A", 
+                                        ["found conflicting specs at node"])
         _VerifyCanEditPrimAtPath("/PrimWithSubrootReference/A/A_Root_Child")
 
         # A prim with a variant selection can be edited given the variant is 
@@ -1802,8 +1872,8 @@ class TestUsdNamespaceEditor(unittest.TestCase):
             # Verify that we cannot move the prim for the expected reason
             self.assertTrue(editor.MovePrimAtPath(primPath, newPrimPath))
             self._VerifyFalseResult(editor.CanApplyEdits(), 
-                'The new path is a prohibited child of its parent path because '
-                'of existing relocates.')
+                ['The new path is a prohibited child of its parent path because '
+                'of existing relocates.'])
             with self.assertRaises(Tf.ErrorException):
                 editor.ApplyEdits()
    

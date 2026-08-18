@@ -17,7 +17,7 @@ class TestParser(unittest.TestCase):
         Test MaterialX node parser.
         """
         # Find our nodes.
-        nodes = Sdr.Registry().GetShaderNodesByFamily('UsdMtlxTestNode')
+        nodes = Sdr.Registry().GetShaderNodesByFunction('UsdMtlxTestNode')
         self.assertEqual(sorted([node.GetName() for node in nodes]), [
             'UsdMtlxTestNamespace:nd_boolean',
             'UsdMtlxTestNamespace:nd_color3',
@@ -35,8 +35,8 @@ class TestParser(unittest.TestCase):
             implementationUri = node.GetResolvedImplementationURI()
             self.assertEqual(os.path.normcase(implementationUri), 
                     os.path.normcase(os.path.abspath("test.mtlx")))
-            self.assertEqual(node.GetSourceType(), "mtlx")
-            self.assertEqual(node.GetFamily(), "UsdMtlxTestNode")
+            self.assertEqual(node.GetShadingSystem(), "mtlx")
+            self.assertEqual(node.GetFunction(), "UsdMtlxTestNode")
             self.assertEqual(sorted(node.GetShaderInputNames()), ["in", "note"])
             self.assertEqual(node.GetShaderOutputNames(), ['out'])
 

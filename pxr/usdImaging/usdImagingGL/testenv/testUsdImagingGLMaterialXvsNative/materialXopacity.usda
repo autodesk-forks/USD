@@ -69,13 +69,127 @@ def Scope "UsdMaterialX" {
     }
 }
 
+
+
 def Scope "Materials" {
-    def Material "MaterialX" (
-        references = [
-            @./mtlxFiles/opacityMaterials.mtlx@</MaterialX>,
-        ]
-    )
-    {
+    def Material "USD_Opacity_01" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_01/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.25
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.52
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Opacity_02" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_02/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.25
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0.0001
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.52
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Opacity_03" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_03/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.01
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0.0001
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 1.52
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Opacity_04" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_04/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.01
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0.0001
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 5.0
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Opacity_05" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_05/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.01
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0.0001
+            float inputs:opacityThreshold = 0
+            float inputs:ior = 25.0
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Opacity_06" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_06/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.25
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0.1
+            float inputs:opacityThreshold = 0.1
+            float inputs:ior = 1.52
+
+            token outputs:surface
+        }
+    }
+    def Material "USD_Opacity_07" {
+        token outputs:mtlx:surface.connect = </Materials/USD_Opacity_07/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (1.0, 0.0, 1.0)
+            float inputs:roughness = 0.25
+            float inputs:clearcoat = 0.0
+            float inputs:clearcoatRoughness = 0.01
+            float inputs:opacity = 0.5
+            float inputs:opacityThreshold = 0.1
+            float inputs:ior = 1.52
+
+            token outputs:surface
+        }
     }
 }
 

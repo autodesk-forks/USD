@@ -5,5 +5,6 @@ def "Model" (
 )
 {
     float attr_1 = 1.0
-    float attr_2 = 2.0   
+    float attr_2 = 2.0
+    float attr_3
 }

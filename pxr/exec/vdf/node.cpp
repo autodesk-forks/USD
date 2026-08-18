@@ -57,11 +57,8 @@ VdfNode::~VdfNode()
     _network._UnregisterNodeDebugName(*this);
 
     // Delete all inputs and outputs.
-    TF_FOR_ALL(iter, _inputs)
-        delete iter->second;
-
-    TF_FOR_ALL(iter, _outputs)
-        delete iter->second;
+    _inputs.clear();
+    _outputs.clear();
 
     _network._GetInputOutputSpecsRegistry().ReleaseSharedSpecs(_specs);
 }
@@ -493,10 +490,9 @@ VdfNode::_ReplaceInputSpecs(const VdfInputSpecs &inputSpecs)
 
     _ReleaseInputAndOutputSpecsPointer(oldSpecs);
 
-    // Deallocate old inputs.
+    // Verify that inputs are disconnected.
     TF_FOR_ALL(iter, _inputs) {
         TF_VERIFY(iter->second->GetNumConnections() == 0);
-        delete iter->second;
     }
 
     // Clear old associated inputs.
@@ -526,49 +522,58 @@ VdfNode::_AppendInputs(
         const VdfInputSpec *spec = newInputSpecs.GetInputSpec(i);
         const TfToken &outputName = spec->GetAssociatedOutputName();
         const size_t newIndex = numExistingInputs + i;
-        VdfInput *newInput = NULL;
 
         // If we have an associated output, resolve it and set it in the 
         // connector.
+        VdfOutput *output = nullptr;
         if (!outputName.IsEmpty()) {
             // Look up our corresponding output, if this fails, it will
             // issue an error.
-            VdfOutput *output = GetOutput(spec->GetAssociatedOutputName());
+            output = GetOutput(outputName);
             // If we don't have an output, a coding error will have been
             // issued and we won't add this as a valid input, so we can't
             // connect anything to it.
-            if (output) {
-                newInput = new VdfInput(*this, newIndex, output);
-                output->SetAssociatedInput(newInput);
+            if (!output) {
+                continue;
             }
-        } else {
-            if (spec->GetAccess() == VdfInputSpec::READ) {
-                newInput = new VdfInput(*this, newIndex);
-            } else {
-                TF_CODING_ERROR("Writable input connectors must specify "
-                                "valid output.");
-            }
+        } else if (spec->GetAccess() != VdfInputSpec::READ) {
+            TF_CODING_ERROR("Writable input connectors must specify "
+                            "valid output.");
+            continue;
         }
 
-        // Store the newly created input.
-        if (newInput) {
-            // XXX
-            // We should have a TF_VERIFY that fails if we have already inserted
-            // this input, rather than silently allowing inputs to be added
-            // redundantly. Unfortunately, it turns out we do this all over the
-            // place at Pixar. Doing so appears to be inadvertent but benign,
-            // but we should get to the bottom of that and add the missing
-            // verify here.
-            if (!_inputs.insert(std::make_pair(
-                    spec->GetName(), newInput)).second) {
-                delete newInput;
+        // Note that we may already have an input of the given name. We
+        // allow input names to be repeated, since this allows input
+        // connections to be aggregated so the callback can iterate over
+        // all resulting input values.
+        const auto [it, inserted] = _inputs.try_emplace(
+            spec->GetName(), *this, newIndex, output);
+        if (inserted) {
+            VdfInput *newInput = it->second;
+            if (output) {
+                output->SetAssociatedInput(newInput);
             }
-
-            else if (resultingInputs) {
+            if (resultingInputs) {
                 resultingInputs->push_back(newInput);
             }
         }
-
+        else {
+            // Associated inputs, however, must have unique names.
+            TF_VERIFY(
+                outputName.IsEmpty(),
+                "Input name '%s' is repeated, but has an associated output "
+                "'%s'",
+                spec->GetName().GetText(),
+                outputName.GetText());
+            // Also, repeated input specs have to have the same value type.
+            TF_VERIFY(
+                spec->GetType() == it->second->GetSpec().GetType(),
+                "Input name '%s' is repeated, but the spec type %s doesn't "
+                "match the previous type %s",
+                spec->GetName().GetText(),
+                spec->GetType().GetTypeName().c_str(),
+                it->second->GetSpec().GetType().GetTypeName().c_str());
+        }
     }
 }
 
@@ -588,20 +593,17 @@ VdfNode::_AppendOutputs(
 
     for(size_t i = 0; i < numNewOutputs; ++i) {
         const size_t newIndex = numExistingOutputs + i;
-        VdfOutput *const newOutput = new VdfOutput(*this, newIndex);
 
         const VdfOutputSpec *spec = newOutputSpecs.GetOutputSpec(i);
-        const bool inserted = _outputs.insert(
-            std::make_pair(spec->GetName(), newOutput)).second;
-            
-        if (!TF_VERIFY(
-            inserted,
-            "Can't add duplicate output '%s'.\n", spec->GetName().GetText())) {
-            delete newOutput;
-        }
+        const TfToken &name = spec->GetName();
+        const auto [it, inserted] = _outputs.try_emplace(
+            name, *this, newIndex);
 
-        else if (resultingOutputs) {
-            resultingOutputs->push_back(newOutput);
+        if (TF_VERIFY(inserted,
+                      "Can't add duplicate output '%s'.", name.GetText())) {
+            if (resultingOutputs) {
+                resultingOutputs->push_back(it->second);
+            }
         }
     }
 

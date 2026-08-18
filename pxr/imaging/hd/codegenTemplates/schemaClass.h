@@ -69,10 +69,12 @@ PXR_NAMESPACE_OPEN_SCOPE
 {%- endif -%}
 
 {%- if STATIC_TOKEN_DATASOURCE_BUILDERS is defined -%}
+{%- set tokensNs = namespace(tokenList=[]) -%}
 {%- for typeName, tokens in STATIC_TOKEN_DATASOURCE_BUILDERS -%}
-{%- for token in tokens %}
-    ({{token}}) \
+{%- set tokensNs.tokenList = tokensNs.tokenList + tokens -%}
 {%- endfor -%}
+{%- for token in tokensNs.tokenList | unique | list %}
+    ({{token}}) \
 {%- endfor -%}
 {%- endif %}
 
@@ -81,9 +83,12 @@ TF_DECLARE_PUBLIC_TOKENS({{SCHEMA_CLASS_NAME}}Tokens,{% if LIBRARY_API%} {{ LIBR
 
 //-----------------------------------------------------------------------------
 
+
+/// \class {{ SCHEMA_CLASS_NAME }}
+///
 {% if DOC is defined -%}
-{{ DOC | expand | makeComment }}
-{%- endif %}
+{{DOC | expand | makeComment -}}
+{%- endif -%}
 class {{ SCHEMA_CLASS_NAME }} : public HdSchema
 {
 public:

@@ -147,9 +147,11 @@
         MEMBERS = [
             ('ALL_MEMBERS', '', dict(ADD_LOCATOR=True)),
 
-            ('skelLocalToWorld', T_MATRIX,
+            ('skelLocalToCommonSpace', T_MATRIX,
              dict(DOC='''
-                Xform of skeleton prim.''')),
+                Transform to go from the local space if the skeleton prim to
+                common space (as defined by
+                UsdSkelImagingDataSourceXformResolver).''')),
 
             ('skinningTransforms', T_MATRIX4FARRAY,
              dict(DOC='''
@@ -164,7 +166,10 @@
                 Just forwarded from the skelAnim's blendShapes.''')),
             ('blendShapeWeights', T_FLOATARRAY,
              dict(DOC='''
-                Just forwarded from the skelAnim's blendShapeWeights.'''))
+                Just forwarded from the skelAnim's blendShapeWeights.''')),
+            ('blendShapeRanges', T_VEC2IARRAY,
+             dict(DOC='''
+                Ranges for concatenated blendShapes/Weights.'''))
         ],
     ),
 ]

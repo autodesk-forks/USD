@@ -16,6 +16,54 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 void
+VdfContext::SetEmptyOutput() const
+{
+    // GetOutput emits an error if it returns null. Note that there is no need
+    // to check _IsRequiredOutput: By virtue of the owning node being scheduled,
+    // we can conclude that its only output is therefore scheduled.
+    const VdfOutput *const output = _node.GetOutput();
+    if (!output) {
+        return;
+    }
+
+    if (!TF_VERIFY(!output->GetAssociatedInput(),
+                   "Attempt to set an empty value on associated output '%s'",
+                   output->GetDebugName().c_str())) {
+        return;
+    }
+
+    VdfVector *const vector = _GetExecutor()._GetOutputValueForWriting(*output);
+    if (!vector) {
+        VDF_FATAL_ERROR(_GetNode(), "Couldn't get output vector.");
+    }
+
+    vector->Clear();
+}
+
+void
+VdfContext::SetEmptyOutput(const TfToken &outputName) const
+{
+    // GetOutput emits an error if it returns null.
+    const VdfOutput *const output = _node.GetOutput(outputName);
+    if (!(output && _IsRequiredOutput(*output))) {
+        return;
+    }
+
+    if (!TF_VERIFY(!output->GetAssociatedInput(),
+                   "Attempt to set an empty value on associated output '%s'",
+                   output->GetDebugName().c_str())) {
+        return;
+    }
+
+    VdfVector *const vector = _GetExecutor()._GetOutputValueForWriting(*output);
+    if (!vector) {
+        VDF_FATAL_ERROR(_GetNode(), "Couldn't get output vector.");
+    }
+
+    vector->Clear();
+}
+
+void
 VdfContext::SetOutputToReferenceInput(const TfToken &inputName) const
 {
     TfAutoMallocTag2 tag("Vdf", "VdfContext::SetOutputToReferenceInput");
@@ -119,6 +167,35 @@ VdfContext::_GetOutputMasks(const VdfOutput &output,
     // at once.  Some of these outputs are not necessarily scheduled.
     // The caller then is responsible for checking the return value,
     // and skipping outputs that are not scheduled.
+    return false;
+}
+
+bool
+VdfContext::HasInputValue(const TfToken &name) const
+{
+    // The implementation here is similar to what _GetFirstInputValue does, and
+    // to what VdfReadIterator does.
+    const VdfInput *const input = _GetNode().GetInput(name);
+    if (!input) {
+        return false;
+    }
+
+    for (const VdfConnection *const connection : input->GetConnections()) {
+        const VdfMask &mask = connection->GetMask();
+        if (mask.IsAllZeros()) {
+            continue;
+        }
+
+        // The connection has a mask on it, return true if there's a value.
+        if (const VdfVector *const vector =
+            _GetExecutor()._GetInputValue(*connection, mask)) {
+            if (vector->GetNumStoredElements() > 0) {
+                return true;
+            }
+        }
+    }
+
+    // No values on any of the connections.
     return false;
 }
 

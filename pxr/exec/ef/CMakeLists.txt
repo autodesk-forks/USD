@@ -13,19 +13,14 @@ pxr_library(ef
         trace
         usd
         work
-        ${TBB_tbb_LIBRARY}
-
-    INCLUDE_DIRS
-        ${TBB_INCLUDE_DIRS}
+        TBB::tbb
 
     PUBLIC_HEADERS
         api.h
-        executor.h
         firstValidInputValue.h
         pageCacheBasedExecutor.h
         pageCacheExecutor.h
         pageCacheSubExecutor.h
-        subExecutor.h
 
     PUBLIC_CLASSES
         dependencyCache
@@ -33,6 +28,7 @@ pxr_library(ef
         leafNode
         leafNodeCache
         leafNodeIndexer
+        loftedOutputSet
         maskedSubExecutor
         outputValueCache
         pageCache

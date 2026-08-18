@@ -24,13 +24,19 @@
 #include "pxr/usd/usdGeom/capsule_1.h"
 #include "pxr/usd/usdGeom/cylinder.h"
 #include "pxr/usd/usdGeom/cylinder_1.h"
+#include "pxr/usd/usdGeom/plane.h"
 #include "pxr/usd/usdGeom/points.h"
+#include "pxr/usd/usdGeom/primvar.h"
+#include "pxr/usd/usdGeom/primvarsAPI.h"
 #include "pxr/usd/usdGeom/xformable.h"
 #include "pxr/usd/usdPhysics/rigidBodyAPI.h"
+#include "pxr/usd/usdPhysics/massAPI.h"
 #include "pxr/usd/usdPhysics/collisionAPI.h"
 #include "pxr/usd/usdPhysics/articulationRootAPI.h"
 #include "pxr/usd/usdPhysics/joint.h"
 #include "pxr/base/gf/transform.h"
+#include "pxr/base/gf/quatf.h"
+#include "pxr/base/gf/vec3f.h"
 
 #include <algorithm>
 #include <string>
@@ -129,6 +135,116 @@ bool CheckNestedArticulationRoot(const UsdPrim& usdPrim)
     return false;
 }
 
+void CheckMassAPI(const UsdPrim& usdPrim, UsdValidationErrorVector* errors)
+{
+    const UsdPhysicsMassAPI massAPI = UsdPhysicsMassAPI(usdPrim);
+    if (!massAPI)
+    {
+        return;
+    }
+
+    const UsdValidationErrorSites primErrorSites = {
+        UsdValidationErrorSite(usdPrim.GetStage(), usdPrim.GetPath())
+    };
+
+    float mass = 0.0f;
+    massAPI.GetMassAttr().Get(&mass);
+    if (mass < 0.0)
+    {
+        errors->emplace_back(
+            UsdPhysicsValidationErrorNameTokens->massInvalidValues,
+            UsdValidationErrorType::Error,
+            primErrorSites,
+            TfStringPrintf("Mass is negative, prim path: %s", usdPrim.GetPath().GetText())
+        );
+    }
+
+    float density = 0.0f;
+    massAPI.GetDensityAttr().Get(&density);
+    if (density < 0.0)
+    {
+        errors->emplace_back(
+            UsdPhysicsValidationErrorNameTokens->densityInvalidValues,
+            UsdValidationErrorType::Error,
+            primErrorSites,
+            TfStringPrintf("Density is negative, prim path: %s", usdPrim.GetPath().GetText())
+        );
+    }
+
+    UsdAttribute principalAxesAttr = massAPI.GetPrincipalAxesAttr();
+    UsdAttribute diagonalInertiaAttr = massAPI.GetDiagonalInertiaAttr();
+    
+    bool principalAxesAuthored = principalAxesAttr.HasAuthoredValue();
+    bool diagonalInertiaAuthored = diagonalInertiaAttr.HasAuthoredValue();
+    
+    // Check that both are authored or neither is authored
+    if (principalAxesAuthored != diagonalInertiaAuthored)
+    {
+        errors->emplace_back(
+            UsdPhysicsValidationErrorNameTokens->inertiaInvalidValues,
+            UsdValidationErrorType::Error,
+            primErrorSites,
+            TfStringPrintf(
+                "principalAxes and diagonalInertia must both be authored or neither authored, prim path: %s",
+                usdPrim.GetPath().GetText())
+        );
+    }
+    
+    // If both are authored, validate their values
+    if (principalAxesAuthored && diagonalInertiaAuthored)
+    {
+        // Check principalAxes is a valid unit quaternion
+        GfQuatf principalAxes;
+        principalAxesAttr.Get(&principalAxes);
+        GfVec3f diagonalInertia;
+        diagonalInertiaAttr.Get(&diagonalInertia);
+
+        bool principalAxesFallbackAuthored = principalAxes == GfQuatf(0.0f, 0.0f, 0.0f, 0.0f);
+        bool diagonalInertiaFallbackAuthored = diagonalInertia == GfVec3f(0.0f, 0.0f, 0.0f);
+        
+        // If the fallback values are explicitly authored, both attrs must match the fallbacks
+        if (principalAxesFallbackAuthored != diagonalInertiaFallbackAuthored)
+        {
+            errors->emplace_back(
+                UsdPhysicsValidationErrorNameTokens->inertiaInvalidValues,
+                UsdValidationErrorType::Error,
+                primErrorSites,
+                TfStringPrintf(
+                    "principalAxes and diagonalInertia must both be authored in the valid range or neither authored, prim path: %s",
+                    usdPrim.GetPath().GetText())
+                );
+        }
+
+        if (!principalAxesFallbackAuthored && !diagonalInertiaFallbackAuthored)
+        {
+            // Check principalAxes is a valid unit quaternion
+            if (std::abs(principalAxes.GetLength() - 1.0f) > 1e-5f)
+            {
+                errors->emplace_back(
+                    UsdPhysicsValidationErrorNameTokens->inertiaInvalidValues,
+                    UsdValidationErrorType::Error,
+                    primErrorSites,
+                    TfStringPrintf(
+                        "principalAxes must be a valid unit quaternion, prim path: %s",
+                        usdPrim.GetPath().GetText())
+                );
+            }
+            
+            // Check diagonalInertia has positive values
+            if (diagonalInertia[0] <= 0.0f || diagonalInertia[1] <= 0.0f || diagonalInertia[2] <= 0.0f)
+            {
+                errors->emplace_back(
+                    UsdPhysicsValidationErrorNameTokens->inertiaInvalidValues,
+                    UsdValidationErrorType::Error,
+                    primErrorSites,
+                    TfStringPrintf(
+                        "diagonalInertia elements must be positive, prim path: %s",
+                        usdPrim.GetPath().GetText())
+                );
+            }
+        }
+    }
+}
 
 static
 UsdValidationErrorVector
@@ -214,40 +330,7 @@ _GetRigidBodyErrors(const UsdPrim &usdPrim,
             }
         }
 
-        // nested rigid body check
-        {
-            UsdPrim bodyParent = UsdPrim();
-            if (HasDynamicBodyParent(usdPrim.GetParent(), &bodyParent))
-            {
-                bool hasResetXformStack = false;
-                UsdPrim parent = usdPrim;
-                while (parent != usdPrim.GetStage()->GetPseudoRoot() && parent != bodyParent)
-                {
-                    const UsdGeomXformable xform(parent);
-                    if (xform && xform.GetResetXformStack())
-                    {
-                        hasResetXformStack = true;
-                        break;
-                    }
-                    parent = parent.GetParent();
-                }
-                if (!hasResetXformStack)
-                {
-                    errors.emplace_back(
-                        UsdPhysicsValidationErrorNameTokens->nestedRigidBody,
-                        UsdValidationErrorType::Error,
-                        primErrorSites,
-                        TfStringPrintf(
-                            "Rigid Body (%s) is missing xformstack reset, when child of "
-                            "rigid body (%s) in hierarchy. Simulation of multiple "
-                            "RigidBodyAPI's in a hierarchy will cause unpredicted "
-                            "results. Please fix the hierarchy or use XformStack reset.",
-                            usdPrim.GetPrimPath().GetText(),
-                            bodyParent.GetPrimPath().GetText())
-                        );
-                }
-            }
-        }
+        CheckMassAPI(usdPrim, &errors);
     }
 
     return errors;
@@ -279,51 +362,109 @@ _GetColliderErrors(const UsdPrim &usdPrim,
             UsdValidationErrorSite(usdPrim.GetStage(), usdPrim.GetPath())
         };
 
-    if (usdPrim.IsA<UsdGeomSphere>() ||
-        usdPrim.IsA<UsdGeomCapsule>() ||
-        usdPrim.IsA<UsdGeomCapsule_1>() ||
-        usdPrim.IsA<UsdGeomCylinder>() ||
-        usdPrim.IsA<UsdGeomCylinder_1>() ||
-        usdPrim.IsA<UsdGeomCone>() ||
-        usdPrim.IsA<UsdGeomPoints>() )
-    {
-        // non uniform scale check
-        if (!CheckNonUniformScale(usdPrim))
+        if (usdPrim.IsA<UsdGeomPlane>())
         {
-            errors.emplace_back(
-                UsdPhysicsValidationErrorNameTokens->colliderNonUniformScale,
-                UsdValidationErrorType::Error,
-                primErrorSites,
-                TfStringPrintf(
-                    "Non-uniform scale is not supported for %s geometry, prim path: %s",
-                    usdPrim.GetTypeName().GetText(), usdPrim.GetPath().GetText())
-            );
-        }            
-    }
-        if (usdPrim.IsA<UsdGeomPoints>())
-        {
+            UsdPrim bodyPrim;
+            if (HasDynamicBodyParent(usdPrim, &bodyPrim))
             {
-                const UsdGeomPoints shape(usdPrim);
-
-                VtArray<float> widths;
-                VtArray<GfVec3f> positions;
-                shape.GetWidthsAttr().Get(&widths);
-                shape.GetPointsAttr().Get(&positions);
-
-                if (widths.empty() || positions.empty() || widths.size() != positions.size())
+                const UsdPhysicsRigidBodyAPI bodyAPI(bodyPrim);
+                bool isKinematic = false;
+                if (bodyAPI)
+                {
+                    bodyAPI.GetKinematicEnabledAttr().Get(&isKinematic);
+                }
+                if (!isKinematic)
                 {
                     errors.emplace_back(
-                        UsdPhysicsValidationErrorNameTokens->colliderSpherePointsDataMissing,
+                        UsdPhysicsValidationErrorNameTokens->colliderPlaneDynamic,
                         UsdValidationErrorType::Error,
                         primErrorSites,
                         TfStringPrintf(
-                            "UsdGeomPoints width or position array not filled or sizes do not match, prim path: %s",
+                            "UsdGeomPlane collider cannot be attached to a "
+                            "simulated rigid body, prim path: %s",
                             usdPrim.GetPath().GetText())
                     );
                 }
             }
         }
 
+        if (usdPrim.IsA<UsdGeomSphere>() ||
+            usdPrim.IsA<UsdGeomCapsule>() ||
+            usdPrim.IsA<UsdGeomCapsule_1>() ||
+            usdPrim.IsA<UsdGeomCylinder>() ||
+            usdPrim.IsA<UsdGeomCylinder_1>() ||
+            usdPrim.IsA<UsdGeomCone>() ||
+            usdPrim.IsA<UsdGeomPoints>() )
+        {
+            // non uniform scale check
+            if (!CheckNonUniformScale(usdPrim))
+            {
+                errors.emplace_back(
+                    UsdPhysicsValidationErrorNameTokens->colliderNonUniformScale,
+                    UsdValidationErrorType::Error,
+                    primErrorSites,
+                    TfStringPrintf(
+                        "Non-uniform scale is not supported for %s geometry, "
+                        "prim path: %s", usdPrim.GetTypeName().GetText(), 
+                        usdPrim.GetPath().GetText())
+                );
+            }            
+        }
+        if (usdPrim.IsA<UsdGeomPoints>())
+        {
+            const UsdGeomPoints shape(usdPrim);
+
+            VtArray<GfVec3f> positions;
+            shape.GetPointsAttr().Get(&positions);
+
+            const UsdGeomPrimvarsAPI primvarsAPI(usdPrim);
+            const UsdGeomPrimvar widthsPrimvar =
+                primvarsAPI.GetPrimvar(UsdGeomTokens->widths);
+
+            size_t widthsCount = 0;
+            std::string widthsSource;
+            if (widthsPrimvar && widthsPrimvar.HasAuthoredValue())
+            {
+                if (widthsPrimvar.IsIndexed())
+                {
+                    VtIntArray indices;
+                    widthsPrimvar.GetIndices(&indices);
+                    widthsCount = indices.size();
+                    widthsSource = "primvars:widths:indices";
+                }
+                else
+                {
+                    VtArray<float> widthsValues;
+                    widthsPrimvar.Get(&widthsValues);
+                    widthsCount = widthsValues.size();
+                    widthsSource = "primvars:widths";
+                }
+            }
+            else
+            {
+                VtArray<float> widthsValues;
+                shape.GetWidthsAttr().Get(&widthsValues);
+                widthsCount = widthsValues.size();
+                widthsSource = "widths";
+            }
+
+            if (widthsCount == 0 || positions.empty() ||
+                widthsCount != positions.size())
+            {
+                errors.emplace_back(
+                    UsdPhysicsValidationErrorNameTokens->colliderSpherePointsDataMissing,
+                    UsdValidationErrorType::Error,
+                    primErrorSites,
+                    TfStringPrintf(
+                        "UsdGeomPoints %s array has %zu elements but points "
+                        "has %zu elements, prim path: %s",
+                        widthsSource.c_str(), widthsCount,
+                        positions.size(), usdPrim.GetPath().GetText())
+                );
+            }
+        }
+
+        CheckMassAPI(usdPrim, &errors);
     }
 
     return errors;
@@ -363,7 +504,7 @@ _GetArticulationErrors(const UsdPrim &usdPrim,
             }
         }
 
-        // rigid body static or kinematic error
+        // rigid body static error
         {
             const UsdPhysicsRigidBodyAPI rboAPI = UsdPhysicsRigidBodyAPI(usdPrim);
 
@@ -380,22 +521,6 @@ _GetArticulationErrors(const UsdPrim &usdPrim,
                         TfStringPrintf(
                             "ArticulationRootAPI definition on a "
                             "static rigid body is not allowed. "                            
-                            "Prim: %s",
-                            usdPrim.GetPrimPath().GetText())
-                    );
-                }
-
-                bool kinematicEnabled = false;
-                rboAPI.GetKinematicEnabledAttr().Get(&kinematicEnabled);
-                if (kinematicEnabled)
-                {
-                    errors.emplace_back(
-                        UsdPhysicsValidationErrorNameTokens->articulationOnKinematicBody,
-                        UsdValidationErrorType::Error,
-                        primErrorSites,
-                        TfStringPrintf(
-                            "ArticulationRootAPI definition on a "
-                            "kinematic rigid body is not allowed. "
                             "Prim: %s",
                             usdPrim.GetPrimPath().GetText())
                     );
@@ -421,17 +546,45 @@ SdfPath GetRel(const UsdRelationship& ref)
     return targets.at(0);
 }
 
-bool CheckJointRel(const SdfPath& relPath, const UsdPrim& jointPrim)
+enum class JointRelStatus
 {
-    if (relPath == SdfPath())
-        return true;
+    Valid,
+    Empty,
+    InvalidPrim,
+    NotXformable
+};
+
+JointRelStatus CheckJointRel(const SdfPath& relPath, const UsdPrim& jointPrim)
+{
+    if (relPath == SdfPath()) {
+        return JointRelStatus::Empty;
+    }
 
     const UsdPrim relPrim = jointPrim.GetStage()->GetPrimAtPath(relPath);
     if (!relPrim)
     {
+        return JointRelStatus::InvalidPrim;
+    }
+    if (!relPrim.IsA<UsdGeomXformable>())
+    {
+        return JointRelStatus::NotXformable;
+    }
+    return JointRelStatus::Valid;
+}
+
+bool HasEnabledRigidBody(const SdfPath& relPath, const UsdPrim& jointPrim)
+{
+    if (relPath == SdfPath()) {
         return false;
     }
-    return true;
+
+    const UsdPrim relPrim = jointPrim.GetStage()->GetPrimAtPath(relPath);
+    if (!relPrim) {
+        return false;
+    }
+
+    bool physicsAPIFound = false;
+    return IsDynamicBody(relPrim, &physicsAPIFound);
 }
 
 
@@ -456,9 +609,11 @@ _GetPhysicsJointErrors(const UsdPrim &usdPrim,
             const SdfPath rel0 = GetRel(physicsJoint.GetBody0Rel());
             const SdfPath rel1 = GetRel(physicsJoint.GetBody1Rel());
 
-            // check rel validity
-            if (!CheckJointRel(rel0, usdPrim) || !CheckJointRel(
-                rel1, usdPrim))
+            const JointRelStatus status0 = CheckJointRel(rel0, usdPrim);
+            const JointRelStatus status1 = CheckJointRel(rel1, usdPrim);
+
+            if (status0 == JointRelStatus::InvalidPrim ||
+                status1 == JointRelStatus::InvalidPrim)
             {
                 errors.emplace_back(
                     UsdPhysicsValidationErrorNameTokens->jointInvalidPrimRel,
@@ -467,6 +622,34 @@ _GetPhysicsJointErrors(const UsdPrim &usdPrim,
                     TfStringPrintf(
                         "Joint (%s) body relationship points to a non "
                         "existent prim, joint will not be parsed.",
+                        usdPrim.GetPrimPath().GetText())
+                );
+            }
+
+            if (status0 == JointRelStatus::NotXformable ||
+                status1 == JointRelStatus::NotXformable)
+            {
+                errors.emplace_back(
+                    UsdPhysicsValidationErrorNameTokens->jointRelNotXformable,
+                    UsdValidationErrorType::Error,
+                    primErrorSites,
+                    TfStringPrintf(
+                        "Joint (%s) body relationship must point to an "
+                        "Xformable prim.",
+                        usdPrim.GetPrimPath().GetText())
+                );
+            }
+
+            if (!HasEnabledRigidBody(rel0, usdPrim) &&
+                !HasEnabledRigidBody(rel1, usdPrim))
+            {
+                errors.emplace_back(
+                    UsdPhysicsValidationErrorNameTokens->jointNoEnabledRigidBody,
+                    UsdValidationErrorType::Error,
+                    primErrorSites,
+                    TfStringPrintf(
+                        "Joint (%s) must have at least one body relationship "
+                        "pointing to a prim with an enabled RigidBodyAPI.",
                         usdPrim.GetPrimPath().GetText())
                 );
             }

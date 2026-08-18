@@ -15,6 +15,11 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+namespace SdfVariableExpressionASTNodes
+{
+    class Node;
+}
+
 namespace Sdf_VariableExpressionImpl
 {
     class Node;
@@ -32,6 +37,19 @@ public:
 /// Parse the given expression.
 Sdf_VariableExpressionParserResult
 Sdf_ParseVariableExpression(const std::string& expr);
+
+/// \class Sdf_VariableExpressionASTParserResult
+/// Object containing results of parsing an expression into an AST.
+class Sdf_VariableExpressionASTParserResult
+{
+public:
+    std::unique_ptr<SdfVariableExpressionASTNodes::Node> astRoot;
+    std::vector<std::string> errors;
+};
+
+/// Parse the given expression.
+Sdf_VariableExpressionASTParserResult
+Sdf_ParseVariableExpressionAST(const std::string& expr);
 
 /// Returns true if \p s is recognized as a variable expression.
 /// This does not check the syntax of the expression.

@@ -14,7 +14,9 @@
 #include "pxr/usd/pcp/diagnostic.h"
 #include "pxr/usd/pcp/iterator.h"
 #include "pxr/usd/pcp/layerStack.h"
+#include "pxr/usd/pcp/node_Iterator.h"
 #include "pxr/usd/pcp/primIndex.h"
+#include "pxr/usd/pcp/primIndex_Graph.h"
 #include "pxr/usd/sdf/pathTable.h"
 #include "pxr/usd/sdf/primSpec.h"
 #include "pxr/base/tf/diagnostic.h"
@@ -49,6 +51,16 @@ Pcp_Dependencies::~Pcp_Dependencies()
     // Do nothing
 }
 
+// Return true if the given prim index might have additional dependencies
+// to record, false otherwise.
+inline static bool
+_PrimIndexCanIntroduceDependencies(const PcpPrimIndex& primIndex)
+{
+    // If this prim index does not introduce new nodes it can't
+    // introduce any additional dependencies.
+    return primIndex.GetGraph()->HasNewNodes();
+}
+
 // Determine if Pcp_Dependencies should store an entry
 // for the arc represented by the given node.
 //
@@ -63,6 +75,27 @@ _ShouldStoreDependency(PcpDependencyFlags depFlags)
     return depFlags & PcpDependencyTypeDirect;
 }
 
+// Determine if Pcp_Dependencies should store entries for the subtree
+// of nodes rooted at the given node. If this is true, then for all
+// nodes in the subtree one of these conditions will hold:
+// 
+// - PcpClassifyNodeDependency(n) & PcpDependencyTypeDirect
+// - PcpClassifyNodeDependency(n) == PcpDependencyTypeNone.
+//   (equivalently, PcpNodeIntroducesDependency(n) == false)
+//
+// As a space optimization, Pcp_Dependencies does not store entries
+// for arcs that are implied by nearby structure and which can
+// be easily synthesized. Specifically, it does not store arcs
+// introduced purely ancestrally, nor does it store arcs for root nodes
+// (PcpDependencyTypeRoot).
+inline static bool
+_ShouldCheckSubtreeForDependencies(const PcpNodeRef& node)
+{
+    return node.GetArcType() != PcpArcTypeRoot
+        && PcpNodeIntroducesDependency(node)
+        && node.HasTransitiveDirectDependency();
+}
+
 void
 Pcp_Dependencies::Add(
     const PcpPrimIndex &primIndex,
@@ -74,7 +107,15 @@ Pcp_Dependencies::Add(
     if (!primIndex.GetRootNode()) {
         return;
     }
+
     const SdfPath& primIndexPath = primIndex.GetRootNode().GetPath();
+    if (!_PrimIndexCanIntroduceDependencies(primIndex)) {
+        TF_DEBUG(PCP_DEPENDENCIES)
+            .Msg("Pcp_Dependencies: Skip adding deps for index <%s>:\n",
+                primIndexPath.GetText());
+        return;
+    }
+
     TF_DEBUG(PCP_DEPENDENCIES)
         .Msg("Pcp_Dependencies: Adding deps for index <%s>:\n",
              primIndexPath.GetText());
@@ -93,28 +134,58 @@ Pcp_Dependencies::Add(
         deps.push_back(primIndexPath);
     };
 
-    int nodeIndex=0, count=0;
-    for (const PcpNodeRef &n: primIndex.GetNodeRange()) {
-        const int curNodeIndex = nodeIndex++;
-        const PcpDependencyFlags depFlags = PcpClassifyNodeDependency(n);
-        if (_ShouldStoreDependency(depFlags)) {
-            ++count;
-            {
-                tbb::spin_mutex::scoped_lock lock;
-                if (_concurrentPopulationContext) {
-                    lock.acquire(_concurrentPopulationContext->_mutex);
-                }
-                addDependency(n.GetLayerStack(), n.GetPath());
+    int count = 0;
+
+    for (PcpNodeRange allNodesRange = primIndex.GetNodeRange();
+         allNodesRange.first != allNodesRange.second; /* empty */) {
+
+        const PcpNodeRef depNode = *allNodesRange.first;
+        if (!_ShouldCheckSubtreeForDependencies(depNode)) {
+            ++allNodesRange.first;
+            continue;
+        }
+
+        // depNode introduces a direct dependency; we want to store
+        // its site and all of the sites it introduces into the graph.
+        tbb::spin_mutex::scoped_lock lock;
+        if (_concurrentPopulationContext) {
+            lock.acquire(_concurrentPopulationContext->_mutex);
+        }
+
+        for (PcpNodeRange depNodesRange = 
+                 primIndex.GetNodeSubtreeRange(depNode);
+             depNodesRange.first != depNodesRange.second; /* empty */) {
+
+            const PcpNodeRef n = *depNodesRange.first;
+
+            // Skipped subtrees beneath culled node since; these are handled
+            // by Pcp_AddCulledDependencies.
+            if (n.IsCulled()) {
+                depNodesRange.first.MoveToNextSubtree();
+                continue;
             }
 
+            if (!PcpNodeIntroducesDependency(n)) {
+                ++depNodesRange.first;
+                continue;
+            }
+
+            ++count;
+            addDependency(n.GetLayerStack(), n.GetPath());
+
             TF_DEBUG(PCP_DEPENDENCIES)
-                .Msg(" - Node %i (%s %s): <%s> %s\n",
-                     curNodeIndex,
-                     PcpDependencyFlagsToString(depFlags).c_str(),
+                .Msg(" - Node %zu (%s %s): <%s> %s\n",
+                     primIndex.GetGraph()->GetNodeIndexForNode(n),
+                     PcpDependencyFlagsToString(
+                         PcpClassifyNodeDependency(n)).c_str(),
                      TfEnum::GetDisplayName(n.GetArcType()).c_str(),
                      n.GetPath().GetText(),
                      TfStringify(n.GetLayerStack()->GetIdentifier()).c_str());
+
+            ++depNodesRange.first;
         }
+
+        allNodesRange.first.MoveToNextSubtree();
     }
 
     if (!culledDependencies.empty()) {
@@ -215,7 +286,16 @@ Pcp_Dependencies::Remove(const PcpPrimIndex &primIndex, PcpLifeboat *lifeboat)
     if (!primIndex.GetRootNode()) {
         return;
     }
+
     const SdfPath& primIndexPath = primIndex.GetRootNode().GetPath();
+
+    if (!_PrimIndexCanIntroduceDependencies(primIndex)) {
+        TF_DEBUG(PCP_DEPENDENCIES)
+            .Msg("Pcp_Dependencies: Skip removing deps for index <%s>\n",
+                primIndexPath.GetText());
+        return;
+    }
+
     TF_DEBUG(PCP_DEPENDENCIES)
         .Msg("Pcp_Dependencies: Removing deps for index <%s>\n",
              primIndexPath.GetText());
@@ -287,23 +367,46 @@ Pcp_Dependencies::Remove(const PcpPrimIndex &primIndex, PcpLifeboat *lifeboat)
 
     };
 
-    int nodeIndex=0;
-    for (const PcpNodeRef &n: primIndex.GetNodeRange()) {
-        const int curNodeIndex = nodeIndex++;
-        const PcpDependencyFlags depFlags = PcpClassifyNodeDependency(n);
-        if (!_ShouldStoreDependency(depFlags)) {
+    for (PcpNodeRange allNodesRange = primIndex.GetNodeRange();
+         allNodesRange.first != allNodesRange.second; /* empty */) {
+
+        const PcpNodeRef depNode = *allNodesRange.first;
+        if (!_ShouldCheckSubtreeForDependencies(depNode)) {
+            ++allNodesRange.first;
             continue;
         }
 
-        TF_DEBUG(PCP_DEPENDENCIES)
-            .Msg(" - Node %i (%s %s): <%s> %s\n",
-                 curNodeIndex,
-                 PcpDependencyFlagsToString(depFlags).c_str(),
-                 TfEnum::GetDisplayName(n.GetArcType()).c_str(),
-                 n.GetPath().GetText(),
-                 TfStringify(n.GetLayerStack()->GetIdentifier()).c_str());
+        for (PcpNodeRange depNodesRange = 
+                 primIndex.GetNodeSubtreeRange(depNode);
+             depNodesRange.first != depNodesRange.second; /* empty */) {
 
-        removeDependency(n.GetLayerStack(), n.GetPath());
+            const PcpNodeRef n = *depNodesRange.first;
+
+            if (n.IsCulled()) {
+                depNodesRange.first.MoveToNextSubtree();
+                continue;
+            }
+
+            if (!PcpNodeIntroducesDependency(n)) {
+                ++depNodesRange.first;
+                continue;
+            }
+
+            removeDependency(n.GetLayerStack(), n.GetPath());
+
+            TF_DEBUG(PCP_DEPENDENCIES)
+                .Msg(" - Node %zu (%s %s): <%s> %s\n",
+                    primIndex.GetGraph()->GetNodeIndexForNode(n),
+                    PcpDependencyFlagsToString(
+                        PcpClassifyNodeDependency(n)).c_str(),
+                    TfEnum::GetDisplayName(n.GetArcType()).c_str(),
+                    n.GetPath().GetText(),
+                    TfStringify(n.GetLayerStack()->GetIdentifier()).c_str());
+
+            ++depNodesRange.first;
+        }        
+    
+        allNodesRange.first.MoveToNextSubtree();
     }
 
     auto culledDepIt = _culledDependenciesMap.find(primIndexPath);
@@ -525,18 +628,13 @@ Pcp_Dependencies::GetExpressionVariablesFromLayerStackUsedByPrim(
     return usedExprVars ? *usedExprVars : empty;
 }
 
-void
-Pcp_AddCulledDependency(
+static void
+_AddCulledDependency(
     const PcpNodeRef& node,
     PcpCulledDependencyVector* culledDeps)
 {
-    const PcpDependencyFlags depFlags = PcpClassifyNodeDependency(node);
-    if (!_ShouldStoreDependency(depFlags)) {
-        return;
-    }
-
     PcpCulledDependency dep;
-    dep.flags = depFlags;
+    dep.flags = PcpClassifyNodeDependency(node);
     dep.arcType = node.GetArcType();
     dep.layerStack = node.GetLayerStack();
     dep.sitePath = node.GetPath();
@@ -563,6 +661,46 @@ Pcp_AddCulledDependency(
     dep.mapToRoot = node.GetMapToRoot().Evaluate();
 
     culledDeps->push_back(std::move(dep));
+}
+
+void
+Pcp_AddCulledDependencies(
+    const PcpPrimIndex& primIndex,
+    PcpCulledDependencyVector* culledDeps)
+{
+    if (!_PrimIndexCanIntroduceDependencies(primIndex)) {
+        return;
+    }
+
+    // This function may be called on a prim index that is not yet finalized,
+    // so we cannot use the various node range API on PcpPrimIndex.
+    auto allNodesRange = Pcp_GetSubtreeRange(primIndex.GetRootNode());
+    for (auto it = allNodesRange.begin(), end = allNodesRange.end(); 
+         it != end; ++it) {
+
+        const PcpNodeRef depNode = *it;
+        if (!_ShouldCheckSubtreeForDependencies(depNode)) {
+            continue;
+        }
+
+        auto depNodesRange = Pcp_GetSubtreeRange(depNode);
+        for (auto depIt = depNodesRange.begin(), depEnd = depNodesRange.end();
+             depIt != depEnd; ++depIt) {
+
+            if (depIt->IsCulled()) {
+                for (const PcpNodeRef n : Pcp_GetSubtreeRange(*depIt)) {
+                    if (!PcpNodeIntroducesDependency(n)) {
+                        continue;
+                    }
+
+                    _AddCulledDependency(n, culledDeps);
+                }
+                depIt.PruneChildren();
+            }
+        }
+
+        it.PruneChildren();
+    }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

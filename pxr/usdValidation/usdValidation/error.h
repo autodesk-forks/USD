@@ -20,6 +20,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class UsdPrim;
 class UsdValidationValidator;
+class UsdValidationFixer;
 
 /// \class UsdValidationErrorType
 ///
@@ -218,8 +219,22 @@ using UsdValidationErrorSites = std::vector<UsdValidationErrorSite>;
 ///           Such a message is provided by the validator writer, when providing
 ///           implementation for the validation task function.
 ///
-/// UsdValidationError instances will be stored in the UsdValidationContext
-/// responsible for executing a set of UsdValidationValidators.
+/// - Data - Additional data associated with the error, which can be used by
+///        the fixer(s) associated with the validator that generated the error.
+///
+/// UsdValidationError instances are typically created by the validation task
+/// functions, and returned as part of the vector of errors from a call to
+/// UsdValidationValidator::Validate() function.
+///
+/// A default constructed UsdValidationError instance signifies no error.
+///
+/// A UsdValidationError instance contains a pointer to the 
+/// UsdValidationValidator that generated it, which can be retrieved using
+/// GetValidator() method.
+///
+/// A UsdValidationError instance can also provide access to the fixers 
+/// associated with the validator that generated it, which can be retrieved
+/// using various GetFixer*() methods.
 ///
 class UsdValidationError
 {
@@ -229,12 +244,14 @@ public:
     UsdValidationError();
 
     /// Instantiate a ValidationError by providing its \p name, \p errorType,
-    /// \p errorSites and an \p errorMsg.
+    /// \p errorSites an \p errorMsg and optional \p data.
+    ///
     USDVALIDATION_API
     UsdValidationError(const TfToken &name,
                        const UsdValidationErrorType &errorType,
                        const UsdValidationErrorSites &errorSites,
-                       const std::string &errorMsg);
+                       const std::string &errorMsg,
+                       const VtValue &data = VtValue());
 
     bool operator==(const UsdValidationError &other) const
     {
@@ -298,6 +315,16 @@ public:
         return _errorMsg;
     }
 
+    /// Returns the data associated with this UsdValidationError
+    ///
+    /// Validator writers can provide additional data when creating a
+    /// UsdValidationError instance, which can then be retrieved using this
+    /// method, and may be used by the fixer associated with the validator.
+    const VtValue &GetData() const
+    {
+        return _data;
+    }
+
     /// An identifier for the error constructed from the validator name this
     /// error was generated from and its name.
     ///
@@ -327,6 +354,42 @@ public:
         return _errorType == UsdValidationErrorType::None;
     }
 
+    /// Return a vector of fixers associated with this Validator.
+    ///
+    USDVALIDATION_API
+    const std::vector<const UsdValidationFixer *> GetFixers() const;
+
+    /// Return an immutable fixer given its \p name if it exists, else return
+    /// nullptr.
+    ///
+    USDVALIDATION_API
+    const UsdValidationFixer *GetFixerByName(const TfToken &name) const;
+
+    /// Return a vector of immutable fixers catering to a specific 
+    /// \p errorName.
+    ///
+    USDVALIDATION_API
+    const std::vector<const UsdValidationFixer *> 
+    GetFixersByErrorName() const;
+
+    /// Return an immutable fixer given its \p name and catering to a specific
+    /// error name if it exists, else return nullptr.
+    /// 
+    USDVALIDATION_API
+    const UsdValidationFixer *GetFixerByNameAndErrorName(
+        const TfToken &name) const;
+
+    /// Return a vector of immutable fixers catering to any of the given
+    /// \p keywords.
+    ///
+    /// Fixers can be associated with keywords, like unit, department, etc. which
+    /// can be used to filter fixers based on the context in which they are
+    /// being queried.
+    USDVALIDATION_API
+    const std::vector<const UsdValidationFixer *> GetFixersByKeywords(
+        const TfTokenVector &keywords) const;
+
+
 private:
     // UsdValidationValidatorError holds a pointer to the UsdValidationValidator
     // that generated it, so we need to provide friend access to allow the
@@ -347,10 +410,7 @@ private:
     UsdValidationErrorType _errorType;
     UsdValidationErrorSites _errorSites;
     std::string _errorMsg;
-
-    // TODO:(Subsequent iterations)
-    // - VtValue of a random value the error wants to propagate down to the
-    // fixer
+    VtValue _data;
 
 }; // UsdValidationError
 

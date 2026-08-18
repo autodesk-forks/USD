@@ -105,6 +105,7 @@ PCP_DEFINE_GET_API(const PcpMapExpression&, GetMapToParent, mapToParent);
 PCP_DEFINE_GET_API(const PcpMapExpression&, GetMapToRoot, mapToRoot);
 
 PCP_DEFINE_API(bool, HasSymmetry, SetHasSymmetry, smallInts.hasSymmetry);
+PCP_DEFINE_API(bool, HasValueClips, SetHasValueClips, smallInts.hasValueClips);
 PCP_DEFINE_API(SdfPermission, GetPermission, SetPermission, smallInts.permission);
 PCP_DEFINE_API(bool, IsRestricted, _SetRestricted, smallInts.permissionDenied);
 
@@ -188,7 +189,11 @@ PcpNodeRef::_RecordRestrictionDepth(_Restricted isRestricted)
     if (!contributionRestricted) {
         currDepth = 0;
     }
-    else {
+    else if (currDepth == 0) {
+        // Only change the restriction depth if we're currently not
+        // restricted. We want to keep the previous restriction depth
+        // otherwise because it reflects the location in namespace
+        // where this node was first restricted.
         size_t newDepth = GetPath().GetPathElementCount();
 
         // XXX:
@@ -217,6 +222,34 @@ PcpNodeRef::SetIsDueToAncestor(bool isDueToAncestor)
 {
     TF_DEV_AXIOM(_nodeIdx < _graph->_unshared.size());
     _graph->_unshared[_nodeIdx].isDueToAncestor = isDueToAncestor;
+}
+
+void
+PcpNodeRef::SetHasTransitiveDirectDependency(bool hasArc)
+{
+    TF_DEV_AXIOM(_nodeIdx < _graph->_unshared.size());
+    _graph->_unshared[_nodeIdx].hasTransitiveDirectArc = hasArc;
+}
+
+bool
+PcpNodeRef::HasTransitiveDirectDependency() const
+{
+    TF_DEV_AXIOM(_nodeIdx < _graph->_unshared.size());
+    return _graph->_unshared[_nodeIdx].hasTransitiveDirectArc;
+}
+
+void
+PcpNodeRef::SetHasTransitiveAncestralDependency(bool hasArc)
+{
+    TF_DEV_AXIOM(_nodeIdx < _graph->_unshared.size());
+    _graph->_unshared[_nodeIdx].hasTransitiveAncestralArc = hasArc;
+}
+
+bool
+PcpNodeRef::HasTransitiveAncestralDependency() const
+{
+    TF_DEV_AXIOM(_nodeIdx < _graph->_unshared.size());
+    return _graph->_unshared[_nodeIdx].hasTransitiveAncestralArc;
 }
 
 bool

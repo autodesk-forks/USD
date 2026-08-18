@@ -52,6 +52,11 @@ class TestSdfVariableExpression(unittest.TestCase):
         self.assertFalse(expr)
         self.assertTrue(expr.GetErrors())
 
+    def assertValidExpression(self, expr, expectedValue, expressionVars = None):
+        self.assertValid(str(expr))
+        self.assertEqual(expr.Evaluate(expressionVars or {}).value, 
+                         expectedValue)
+
     def test_AuthoringExpressionVariables(self):
         layer = Sdf.Layer.CreateAnonymous()
         self.assertFalse(layer.HasExpressionVariables())
@@ -518,19 +523,34 @@ class TestSdfVariableExpression(unittest.TestCase):
                 self.assertEvaluates(
                     _MakeExpression(*testCase), {}, comparator(testCase))
 
-            # Verify that invalid combinations return the expected errors.
-            testCases = [
-                (True, 1, 
-                 "{}: Invalid type int for argument 1".format(fnName)),
-                (True, "'foo'", 
-                 "{}: Invalid type string for argument 1".format(fnName)),
-                (True, "None",
-                 "{}: Invalid type None for argument 1".format(fnName))
-            ]
+            # Verify that passing in types other than bool result in the
+            # expected errors.
+            expr = _MakeExpression(1, "'foo'", "None")
+            self.assertEvaluationErrors(
+                expr, {}, 
+                ["{}: Invalid type int for argument 0".format(fnName),
+                 "{}: Invalid type string for argument 1".format(fnName),
+                 "{}: Invalid type None for argument 2".format(fnName)
+            ])
+            
+            # Evaluating the above expression returns no value since none
+            # of the operands were valid.
+            expr = Sdf.VariableExpression(expr)
+            self.assertEqual(expr.Evaluate({}).value, None)
 
-            for testCase in testCases:
-                self.assertEvaluationErrors(
-                    _MakeExpression(*testCase[0:2]), {}, [testCase[2]])
+            # Verify that short-circuiting works. Evaluation should stop
+            # before the invalid argument is reached, avoiding the "invalid
+            # type" error.
+            if fnName == "and":
+                self.assertEvaluates(
+                    _MakeExpression(False, "1"), {}, False)
+                self.assertEvaluates(
+                    _MakeExpression(True, False, "1"), {}, False)
+            elif fnName == "or":
+                self.assertEvaluates(
+                    _MakeExpression(True, "1"), {}, True)
+                self.assertEvaluates(
+                    _MakeExpression(False, True, "1"), {}, True)
 
         _Test("and", lambda l: all(l))
         _Test("or", lambda l: any(l))
@@ -549,6 +569,69 @@ class TestSdfVariableExpression(unittest.TestCase):
             "`not('foo')`", {}, ["not: Invalid type string for argument"])
         self.assertEvaluationErrors(
             "`not(None)`", {}, ["not: Invalid type None for argument"])
+
+    def test_MatchesRegex(self):
+        """Tests matches_regex function and error conditions"""
+
+        # Test basic matching patterns
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[[:digit:]]\{2\}\.usd')`", 
+            {'S' : "shot_10.usd"}, True)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[[:digit:]]\{2\}\.usd')`", 
+            {'S' : "Shot_10.usd"}, False)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[AB]\.usd[ac]')`", 
+            {'S' : "shot_A.usdc"}, True)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[AB]\.usd[ac]')`", 
+            {'S' : "shot_B.usda"}, True)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[AB]\.usd')`", 
+            {'S' : "shot_C.usd"}, False)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[A-Z]\.usd')`", 
+            {'S' : "shot_B.usd"}, True)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[A-Z]\.usd')`", 
+            {'S' : "shot_b.usd"}, False)
+        
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[1-9]+\.usd?')`", 
+            {'S' : "shot_17.usda"}, True)
+        self.assertEvaluates(
+            "`matches_regex(${S}, 'shot_[1-9]+\.usd?')`", 
+            {'S' : "shot_09.usda"}, False)
+        
+        # Simulating startswith / endswith
+        self.assertEvaluates(
+            "`matches_regex(${S}, '^shot.*')`", 
+            {'S' : "shot_101_final.usd"}, True)
+        self.assertEvaluates(
+            "`matches_regex(${S}, '.*final.usd$')`", 
+            {'S' : "shot_101_final.usd"}, True)
+        
+        # Test list matching patterns
+        self.assertEvaluates(
+            "`matches_regex([${A}, ${B}], 'layer.*')`", 
+            {'A':'shot1.usd', 'B':'layer1.usd'}, 
+            True)
+        
+        self.assertEvaluates(
+            "`matches_regex([${A}, ${B}], 'layer.*')`", 
+            {'A':'shot1.usd', 'B':'shot2.usd'}, 
+            False)
+        
+        # Test error states
+        self.assertEvaluationErrors(
+            "`matches_regex(1, 'a')`", {},
+            ["matches_regex: Value to search must be string[] or string"])
+        self.assertEvaluationErrors(
+            "`matches_regex('shot1', 7)`", {},
+            ["matches_regex: Pattern to match must be a string"])
+        self.assertEvaluationErrors(
+            "`matches_regex(['shot1', 'shot2'], 7)`", {},
+            ["matches_regex: Pattern to match must be a string"])
 
     def test_Contains(self):
         """Test contains function."""
@@ -748,6 +831,92 @@ class TestSdfVariableExpression(unittest.TestCase):
             "`'test_${FOO}'`",
             {"FOO" : 1.234},
             ["Variable 'FOO' has unsupported type double"])
+
+    def test_MakeNone(self):
+        self.assertValidExpression(
+            Sdf.VariableExpression.MakeNone(), None)
+
+    def test_MakeVariable(self):
+        self.assertValidExpression(
+            Sdf.VariableExpression.MakeVariable("FOO"),
+            123, {"FOO": 123})
+
+    def test_MakeLiteral(self):
+        def _test(value):
+            self.assertValidExpression(
+                Sdf.VariableExpression.MakeLiteral(value), value)
+
+        _test(123)
+        _test(True)
+        _test(False)
+        _test("a string")
+        _test("'single quotes'")
+        _test(r"\'escaped single quotes\'")
+        _test('"double quotes"')
+        _test(r'\"escaped double quotes\"')
+        _test('''mixed 'single quotes' and "double quotes"''')
+        _test('contains\nnewlines')
+
+        with self.assertRaises(TypeError):
+            Sdf.VariableExpression.MakeLiteral(1.23)
+
+    def test_MakeFunction(self):
+        self.assertValidExpression(
+            Sdf.VariableExpression.MakeFunction(
+                "contains",
+                Sdf.VariableExpression.MakeListOfLiterals([1, 2, 3]),
+                Sdf.VariableExpression.MakeVariable("foo")),
+            True, {"foo" : 1})
+
+        # Calling MakeFunction with an unknown function will create an
+        # invalid Sdf.VariableExpression, but the underlying expression
+        # string can still be inspected.
+        expr = Sdf.VariableExpression.MakeFunction("blah")
+        self.assertFalse(expr)
+        self.assertEqual(str(expr), "`blah()`")
+
+        # MakeFunction currently does not support kwargs.
+        with self.assertRaises(TypeError):
+            Sdf.VariableExpression.MakeFunction(name="blah")
+
+    def test_MakeList(self):
+        self.assertValidExpression(
+            Sdf.VariableExpression.MakeList(
+                Sdf.VariableExpression.MakeLiteral(1),
+                Sdf.VariableExpression.MakeVariable("foo"),
+                Sdf.VariableExpression.MakeFunction(
+                    "if",
+                    Sdf.VariableExpression.MakeLiteral(True),
+                    Sdf.VariableExpression.MakeLiteral(3))),
+            [1, 2, 3], {"foo" : 2})
+
+        self.assertValidExpression(
+            Sdf.VariableExpression.MakeList(), [])
+
+        # MakeList currently does not support kwargs.
+        with self.assertRaises(TypeError):
+            Sdf.VariableExpression.MakeList(
+                elems=Sdf.VariableExpression.MakeLiteral(1))
+
+    def test_MakeListOfLiterals(self):
+        def _test(l):
+            self.assertValidExpression(
+                Sdf.VariableExpression.MakeListOfLiterals(l), l)
+
+        _test([])
+        _test([1, 2, 3])
+        _test([False, True])
+        _test(["a", "b"])
+
+        # Lists must be homogeneous and contain only bool, int, or str.
+        with self.assertRaises(TypeError):
+            Sdf.VariableExpression.MakeListOfLiterals([1, "a", True])
+        with self.assertRaises(TypeError):
+            Sdf.VariableExpression.MakeListOfLiterals([1.23])
+
+        # MakeListOfLiterals currently does not support kwargs.
+        with self.assertRaises(TypeError):
+            Sdf.VariableExpression.MakeListOfLiterals(elems=[1,2])
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@
 #include "pxr/exec/vdf/speculationNode.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/work/withScopedParallelism.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -195,8 +196,18 @@ VdfSpeculationExecutor<EngineType, DataManagerType>::_Run(
     TRACE_FUNCTION();
 
     TF_VERIFY(Base::GetParentExecutor());
-
-    _engine.RunSchedule(schedule, computeRequest, errorLogger);
+    // Isolate tasks for speculation to ensure that they can make progress 
+    // independently of parent execution tasks, i.e. threads that enter this 
+    // isolated region will only be able to steal other speculation tasks 
+    // spawned within the region. Note that main execution tasks are still 
+    // free to steal tasks spawned from within this isolated region when idle, 
+    // at which point they will become isolated until completion. This is a 
+    // performance optimization that ensures idle threads are making progress 
+    // on blocking tasks. 
+    WorkWithScopedParallelism(
+        [&engine = _engine, &schedule, &computeRequest, errorLogger]() {
+        engine.RunSchedule(schedule, computeRequest, errorLogger);
+    });
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

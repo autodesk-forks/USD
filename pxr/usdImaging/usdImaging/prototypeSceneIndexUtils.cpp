@@ -5,41 +5,29 @@
 // https://openusd.org/license.
 //
 
-#include "pxr/imaging/hd/sceneIndex.h"
-#include "pxr/imaging/hd/sceneIndexObserver.h"
+#include "pxr/usdImaging/usdImaging/prototypeSceneIndexUtils.h"
+
 #include "pxr/imaging/hd/tokens.h"
-
-#include "pxr/base/tf/token.h"
-
-#include "pxr/pxr.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-static const TfToken::Set primTypeWhitelist {
+static const TfToken::Set nonRenderablePrimTypes {
     HdPrimTypeTokens->material
 };
 
-static const TfToken emptyToken;
-
-namespace UsdImaging_PrototypeSceneIndexUtils {
-
-HdSceneIndexPrim&
-SetEmptyPrimType(HdSceneIndexPrim& prim)
+namespace UsdImaging_PrototypeSceneIndexUtils
 {
-    if (primTypeWhitelist.count(prim.primType) == 0) {
-        prim.primType = emptyToken;
+
+bool
+IsRenderablePrimType(const TfToken &primType)
+{
+    if (primType.IsEmpty()) {
+        return false;
     }
-    return prim;
+
+    return nonRenderablePrimTypes.count(primType) == 0;
 }
 
-HdSceneIndexObserver::AddedPrimEntry&
-SetEmptyPrimType(HdSceneIndexObserver::AddedPrimEntry& entry) {
-    if (primTypeWhitelist.count(entry.primType) == 0) {
-        entry.primType = emptyToken;
-    }
-    return entry;
 }
-
-};
 
 PXR_NAMESPACE_CLOSE_SCOPE

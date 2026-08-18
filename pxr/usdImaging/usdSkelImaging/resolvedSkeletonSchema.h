@@ -34,20 +34,23 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 #define USD_SKEL_IMAGING_RESOLVED_SKELETON_SCHEMA_TOKENS \
     (resolvedSkeleton) \
-    (skelLocalToWorld) \
+    (skelLocalToCommonSpace) \
     (skinningTransforms) \
     (blendShapes) \
     (blendShapeWeights) \
+    (blendShapeRanges) \
 
 TF_DECLARE_PUBLIC_TOKENS(UsdSkelImagingResolvedSkeletonSchemaTokens, USDSKELIMAGING_API,
     USD_SKEL_IMAGING_RESOLVED_SKELETON_SCHEMA_TOKENS);
 
 //-----------------------------------------------------------------------------
 
-// Resolved data for a skeleton and the targeted skelAnim. Populated by the
-// skeleton resolving scene index.
-//
 
+/// \class UsdSkelImagingResolvedSkeletonSchema
+///
+/// Resolved data for a skeleton and the targeted skelAnim. Populated by the
+/// skeleton resolving scene index.
+///
 class UsdSkelImagingResolvedSkeletonSchema : public HdSchema
 {
 public:
@@ -74,9 +77,10 @@ public:
     /// \name Member accessor
     /// @{
 
-    /// Xform of skeleton prim.
+    /// Transform to go from the local space if the skeleton prim to common
+    /// space (as defined by UsdSkelImagingDataSourceXformResolver).
     USDSKELIMAGING_API
-    HdMatrixDataSourceHandle GetSkelLocalToWorld() const;
+    HdMatrixDataSourceHandle GetSkelLocalToCommonSpace() const;
 
     /// Passed to the extComputations. Computed from the following: skeleton's
     /// joints (determining the topology), and bind and rest (if needed)
@@ -91,7 +95,11 @@ public:
 
     /// Just forwarded from the skelAnim's blendShapeWeights.
     USDSKELIMAGING_API
-    HdFloatArrayDataSourceHandle GetBlendShapeWeights() const; 
+    HdFloatArrayDataSourceHandle GetBlendShapeWeights() const;
+
+    /// Ranges for concatenated blendShapes/Weights.
+    USDSKELIMAGING_API
+    HdVec2iArrayDataSourceHandle GetBlendShapeRanges() const; 
 
     /// @}
 
@@ -119,9 +127,9 @@ public:
     /// HdDataSourceLocatorSet sent with HdDataSourceObserver::PrimsDirtied.
     /// @{
 
-    /// Prim-level relative data source locator to locate skelLocalToWorld.
+    /// Prim-level relative data source locator to locate skelLocalToCommonSpace.
     USDSKELIMAGING_API
-    static const HdDataSourceLocator &GetSkelLocalToWorldLocator();
+    static const HdDataSourceLocator &GetSkelLocalToCommonSpaceLocator();
 
     /// Prim-level relative data source locator to locate skinningTransforms.
     USDSKELIMAGING_API
@@ -134,6 +142,10 @@ public:
     /// Prim-level relative data source locator to locate blendShapeWeights.
     USDSKELIMAGING_API
     static const HdDataSourceLocator &GetBlendShapeWeightsLocator();
+
+    /// Prim-level relative data source locator to locate blendShapeRanges.
+    USDSKELIMAGING_API
+    static const HdDataSourceLocator &GetBlendShapeRangesLocator();
     /// @} 
 
     /// \name Schema construction
@@ -149,10 +161,11 @@ public:
     USDSKELIMAGING_API
     static HdContainerDataSourceHandle
     BuildRetained(
-        const HdMatrixDataSourceHandle &skelLocalToWorld,
+        const HdMatrixDataSourceHandle &skelLocalToCommonSpace,
         const HdMatrix4fArrayDataSourceHandle &skinningTransforms,
         const HdTokenArrayDataSourceHandle &blendShapes,
-        const HdFloatArrayDataSourceHandle &blendShapeWeights
+        const HdFloatArrayDataSourceHandle &blendShapeWeights,
+        const HdVec2iArrayDataSourceHandle &blendShapeRanges
     );
 
     /// \class UsdSkelImagingResolvedSkeletonSchema::Builder
@@ -165,8 +178,8 @@ public:
     {
     public:
         USDSKELIMAGING_API
-        Builder &SetSkelLocalToWorld(
-            const HdMatrixDataSourceHandle &skelLocalToWorld);
+        Builder &SetSkelLocalToCommonSpace(
+            const HdMatrixDataSourceHandle &skelLocalToCommonSpace);
         USDSKELIMAGING_API
         Builder &SetSkinningTransforms(
             const HdMatrix4fArrayDataSourceHandle &skinningTransforms);
@@ -176,16 +189,20 @@ public:
         USDSKELIMAGING_API
         Builder &SetBlendShapeWeights(
             const HdFloatArrayDataSourceHandle &blendShapeWeights);
+        USDSKELIMAGING_API
+        Builder &SetBlendShapeRanges(
+            const HdVec2iArrayDataSourceHandle &blendShapeRanges);
 
         /// Returns a container data source containing the members set thus far.
         USDSKELIMAGING_API
         HdContainerDataSourceHandle Build();
 
     private:
-        HdMatrixDataSourceHandle _skelLocalToWorld;
+        HdMatrixDataSourceHandle _skelLocalToCommonSpace;
         HdMatrix4fArrayDataSourceHandle _skinningTransforms;
         HdTokenArrayDataSourceHandle _blendShapes;
         HdFloatArrayDataSourceHandle _blendShapeWeights;
+        HdVec2iArrayDataSourceHandle _blendShapeRanges;
 
     };
 

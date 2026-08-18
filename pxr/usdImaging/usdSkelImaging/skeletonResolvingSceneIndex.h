@@ -64,7 +64,7 @@ private:
 
     // See whether prim at path is a skeleton. If yes, add the resolved
     // skeleton data source to internal data structures including its
-    /// dependencies - and return true.
+    // dependencies - and return true.
     bool _AddResolvedSkeleton(
         const SdfPath &path);
     // Add dependencies for skeleton at given path with given data source.
@@ -94,6 +94,9 @@ private:
     std::map<SdfPath, _DsHandle> _pathToResolvedSkeleton;
     // Prims targeted as animation by skeletons to skeletons.
     std::map<SdfPath, SdfPathSet> _skelAnimPathToSkeletonPaths;
+    // Instancer to skeletons it instances that are in a prototype
+    // with skelBinding:hasSkelRoot.
+    std::map<SdfPath, SdfPathSet> _instancerPathToSkeletonPaths;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

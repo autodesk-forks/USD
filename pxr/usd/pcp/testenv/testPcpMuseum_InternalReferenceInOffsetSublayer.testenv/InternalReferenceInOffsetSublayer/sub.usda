@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    timeCodesPerSecond = 30
+)
+
+def Xform "World"
+{
+    def Xform "Asset_00" (
+        payload = @./asset.usda@
+    )
+    {
+
+    }
+
+    def Xform "Asset_01" (
+        prepend references = </World/Asset_00>
+    )
+    {
+
+    }
+}

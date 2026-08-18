@@ -35,7 +35,10 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define _SDF_FIELDS                                                      \
 ((SdfFieldKeys->Active,                  bool))                          \
 ((SdfFieldKeys->AllowedTokens,           VtTokenArray))                  \
+((SdfFieldKeys->ArraySizeConstraint,     int64_t))                       \
 ((SdfFieldKeys->AssetInfo,               VtDictionary))                  \
+((SdfFieldKeys->Clips,                   VtDictionary))                  \
+((SdfFieldKeys->ClipSets,                SdfStringListOp))               \
 ((SdfFieldKeys->ColorConfiguration,      SdfAssetPath))                  \
 ((SdfFieldKeys->ColorManagementSystem,   TfToken))                       \
 ((SdfFieldKeys->ColorSpace,              TfToken))                       \
@@ -62,6 +65,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 ((SdfFieldKeys->Instanceable,            bool))                          \
 ((SdfFieldKeys->Kind,                    TfToken))                       \
 ((SdfFieldKeys->LayerRelocates,          SdfRelocates))                  \
+((SdfFieldKeys->Limits,                  VtDictionary))                  \
 ((SdfFieldKeys->Owner,                   std::string))                   \
 ((SdfFieldKeys->PrimOrder,               std::vector<TfToken>))          \
 ((SdfFieldKeys->NoLoadHint,              bool))                          \

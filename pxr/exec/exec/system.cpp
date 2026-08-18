@@ -6,9 +6,11 @@
 //
 #include "pxr/exec/exec/system.h"
 
-#include "pxr/exec/exec/authoredValueInvalidationResult.h"
+#include "pxr/base/tf/diagnostic.h"
+#include "pxr/exec/exec/compiledOutputCache.h"
 #include "pxr/exec/exec/compiler.h"
-#include "pxr/exec/exec/disconnectedInputsInvalidationResult.h"
+#include "pxr/exec/exec/inputResolver.h"
+#include "pxr/exec/exec/invalidationResult.h"
 #include "pxr/exec/exec/program.h"
 #include "pxr/exec/exec/requestImpl.h"
 #include "pxr/exec/exec/requestTracker.h"
@@ -20,7 +22,11 @@
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/work/withScopedParallelism.h"
 #include "pxr/exec/ef/time.h"
+#include "pxr/exec/vdf/executorInterface.h"
+#include "pxr/exec/vdf/maskedOutput.h"
+#include "pxr/exec/vdf/maskedOutputVector.h"
 
+#include <memory>
 #include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -81,17 +87,118 @@ ExecSystem::_Compute(
 {
     TRACE_FUNCTION();
 
-    // Reset the accumulated uninitialized input nodes on the program, and
-    // retain the invalidation request for executor invalidation below.
-    VdfMaskedOutputVector invalidationRequest =
-        _program->ResetUninitializedInputNodes();
-
-    // Make sure that the executor data manager is properly invalidated for any
-    // input nodes that were just initialized.
-    _runtime->InvalidateExecutor(invalidationRequest);
+    // Reset the accumulated input nodes requiring invalidation on the program,
+    // and use the returned invalidation request to make sure that the executor
+    // data manager is properly invalidated for any input nodes that were
+    // initialized.
+    _runtime->InvalidateExecutor(
+        _program->ResetInputNodesRequiringInvalidation());
 
     // Run the executor to compute the values.
     _runtime->ComputeValues(schedule, computeRequest);
+}
+
+std::unique_ptr<VdfExecutorInterface>
+ExecSystem::_ComputeWithOverrides(
+    const VdfSchedule &schedule,
+    const VdfRequest &computeRequest,
+    ExecValueOverrideVector &&valueOverrides)
+{
+    TRACE_FUNCTION();
+
+    // Transform the vector of overrides, each containing a ValueKey and
+    // override value, into two equal-length vectors. The first contains the
+    // masked outputs to be overridden, and the second contains the overridden
+    // values.
+
+    VdfMaskedOutputVector overriddenOutputs;
+    std::vector<VtValue> overriddenValues;
+    overriddenOutputs.reserve(valueOverrides.size());
+    overriddenValues.reserve(valueOverrides.size());
+
+    for (ExecValueOverride &valueOverride : valueOverrides) {
+        // Resolve the output key that provides the value specified by the
+        // value key.
+
+        Exec_InputKey inputKey {
+            TfToken(), // input name
+            valueOverride.valueKey.GetComputationName(),
+            TfToken(), // disambiguating id
+            TfType(),  // do not require a specific result type.
+            ExecProviderResolution {
+                SdfPath::ReflexiveRelativePath(),
+                ExecProviderResolution::DynamicTraversal::Local
+            },
+            false, // fallsBackToDispatched
+            false, // optional
+        };
+
+        const Exec_OutputKeyVector outputKeys = Exec_ResolveInput(
+            valueOverride.valueKey.GetProvider()->GetStage(),
+            valueOverride.valueKey.GetProvider(),
+            EsfSchemaConfigKey(),
+            inputKey,
+            nullptr /* journal */);
+
+        // If resolution found no output keys, then the computation was not
+        // found on the provider.
+        if (outputKeys.empty()) {
+            TF_CODING_ERROR(
+                "Cannot override value for value key '%s', because the "
+                "computation was not defined for the provider.",
+                valueOverride.valueKey.GetDebugName().c_str());
+            continue;
+        }
+
+        // If the computation was defined, then we should have resolved exactly
+        // one output key regardless if the output key has a compiled output
+        // in the network.
+        if (!TF_VERIFY(outputKeys.size() == 1)) {
+            return nullptr;
+        }
+
+        // Find the compiled output for the output key. If it does not exist,
+        // then we silently skip this override.
+        const Exec_CompiledOutputCache::MappedType *const cacheHit =
+            _program->GetCompiledOutput(outputKeys[0].MakeIdentity());
+        if (!cacheHit || !TF_VERIFY(cacheHit->output)) {
+            continue;
+        }
+
+        // Check that the type of the override value matches the type of the
+        // output being overridden.
+        const TfType outputType =
+            cacheHit->output.GetOutput()->GetSpec().GetType();
+        const TfType overrideType = valueOverride.overrideValue.GetType();
+        if (outputType != overrideType) {
+            TF_CODING_ERROR(
+                "Expected override of value key '%s' to have type '%s'; "
+                "got '%s'",
+                valueOverride.valueKey.GetDebugName().c_str(),
+                outputType.GetTypeName().c_str(),
+                overrideType.GetTypeName().c_str());
+            continue;
+        }
+
+        overriddenOutputs.push_back(cacheHit->output);
+        overriddenValues.push_back(std::move(valueOverride.overrideValue));
+    }
+
+    // Reset the accumulated input nodes requiring invalidation on the program,
+    // and use the returned invalidation request to make sure that the executor
+    // data manager is properly invalidated for any input nodes that were
+    // initialized.
+    _runtime->InvalidateExecutor(
+        _program->ResetInputNodesRequiringInvalidation());
+
+    // Compute the request using the overridden values. The result is a pointer
+    // to the subexecutor that performed the computation, which is returned to
+    // the caller in order to extract the computed values.
+    return _runtime->ComputeWithOverrides(
+        schedule,
+        computeRequest,
+        overriddenOutputs,
+        overriddenValues);
 }
 
 void
@@ -111,7 +218,12 @@ ExecSystem::_Compile(TfSpan<const ExecValueKey> valueKeys)
 bool
 ExecSystem::_HasPendingRecompilation() const
 {
-    return !_program->GetInputsRequiringRecompilation().empty();
+    // If there exist any inputs marked for recompilation, then the network
+    // needs to be recompiled. If not, there may still be leaf nodes requiring
+    // recompilation if the previous round of compilation was interrupted by
+    // cycle detection.
+    return !_program->GetInputsRequiringRecompilation().empty() ||
+        _program->WasInterrupted();
 }
 
 void
@@ -150,7 +262,8 @@ ExecSystem::_InvalidateDisconnectedInputs()
         (WorkDispatcher &dispatcher){
         // Invalidate the executor data manager.
         dispatcher.Run([&](){
-            runtime->InvalidateExecutor(invalidationResult.invalidationRequest);
+            runtime->InvalidateExecutor(
+                invalidationResult.invalidationRequest);
         });
 
         // Invalidate values in the page cache.
@@ -171,12 +284,12 @@ ExecSystem::_InvalidateDisconnectedInputs()
 }
 
 void
-ExecSystem::_InvalidateAuthoredValues(TfSpan<const SdfPath> invalidProperties)
+ExecSystem::_InvalidateAttributeValues(TfSpan<const SdfPath> invalidAttributes)
 {
     TRACE_FUNCTION();
 
-    const Exec_AuthoredValueInvalidationResult invalidationResult =
-        _program->InvalidateAuthoredValues(invalidProperties);
+    const Exec_AttributeValueInvalidationResult invalidationResult =
+        _program->InvalidateAttributeAuthoredValues(invalidAttributes);
 
     // Invalidate the executor and send request invalidation.
     WorkWithScopedDispatcher(
@@ -202,10 +315,47 @@ ExecSystem::_InvalidateAuthoredValues(TfSpan<const SdfPath> invalidProperties)
 
         // Notify all the requests of computed value invalidation. Not all the
         // requests will contain all the invalid leaf nodes or invalid
-        // properties, and the request impls are responsible for filtering the
+        // attributes, and the request impls are responsible for filtering the
         // provided information.
         requestTracker->DidInvalidateComputedValues(invalidationResult);
     });
+}
+
+void
+ExecSystem::_InvalidateMetadataValues(
+    TfSpan<const std::pair<SdfPath, TfToken>> invalidObjects)
+{
+    TRACE_FUNCTION();
+
+    const Exec_MetadataInvalidationResult invalidationResult =
+        _program->InvalidateMetadataValues(invalidObjects);
+
+    const EfTimeInterval fullTimeInterval = EfTimeInterval::GetFullInterval();
+
+    // Invalidate the executor and send request invalidation.
+    WorkWithScopedDispatcher(
+        [&runtime = _runtime, &invalidationResult,
+         &requestTracker = _requestTracker,
+         &fullTimeInterval]
+        (WorkDispatcher &dispatcher){
+        // Invalidate values in the page cache.
+        dispatcher.Run([&](){
+            runtime->InvalidatePageCache(
+                invalidationResult.invalidationRequest,
+                fullTimeInterval);
+        });
+
+        // Notify all the requests of computed value invalidation. Not all the
+        // requests will contain all the invalid leaf nodes, and the request
+        // impls are responsible for filtering the provided information.
+        requestTracker->DidInvalidateComputedValues(invalidationResult);
+    });
+}
+
+void
+ExecSystem::_InvalidateUnknownValues()
+{
+    _requestTracker->DidInvalidateUnknownValues();
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

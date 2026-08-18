@@ -5,6 +5,8 @@
 // https://openusd.org/license.
 //
 #include "pxr/imaging/hd/rendererPluginRegistry.h"
+
+#include "pxr/imaging/hd/rendererCreateArgsSchema.h"
 #include "pxr/imaging/hd/rendererPlugin.h"
 #include "pxr/imaging/hd/rendererPluginHandle.h"
 #include "pxr/imaging/hd/pluginRenderDelegateUniqueHandle.h"
@@ -31,8 +33,9 @@ HdRendererPluginRegistry::HdRendererPluginRegistry()
 
 HdRendererPluginRegistry::~HdRendererPluginRegistry() = default;
 
-TfToken 
-HdRendererPluginRegistry::GetDefaultPluginId(bool gpuEnabled)
+TfToken
+HdRendererPluginRegistry::GetDefaultPluginId(
+    HdRendererCreateArgsSchema const &rendererCreateArgs)
 {
     // Get all the available plugins to see if any of them is supported on this
     // platform and use the first one as the default.
@@ -50,12 +53,11 @@ HdRendererPluginRegistry::GetDefaultPluginId(bool gpuEnabled)
         // Important to bail out as soon as we found a plugin that works to
         // avoid loading plugins unnecessary as that can be arbitrarily
         // expensive.
-        if (plugin && plugin->IsSupported(gpuEnabled)) {
+        if (plugin && plugin->IsSupported(rendererCreateArgs)) {
             HdRendererPluginRegistry::GetInstance().ReleasePlugin(plugin);
 
             TF_DEBUG(HD_RENDERER_PLUGIN).Msg(
-                "Default renderer plugin (gpu: %s): %s\n",
-                gpuEnabled ? "y" : "n", desc.id.GetText());
+                "Default renderer plugin: %s\n", desc.id.GetText());
             return desc.id;
         }
 
@@ -63,8 +65,7 @@ HdRendererPluginRegistry::GetDefaultPluginId(bool gpuEnabled)
     }
 
     TF_DEBUG(HD_RENDERER_PLUGIN).Msg(
-        "Default renderer plugin (gpu: %s): none\n",
-        gpuEnabled ? "y" : "n");
+        "Default renderer plugin: none\n");
     return TfToken();
 }
 

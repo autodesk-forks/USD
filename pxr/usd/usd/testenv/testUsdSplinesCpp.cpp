@@ -18,8 +18,6 @@
 #include "pxr/base/tf/errorMark.h"
 
 #include "pxr/base/ts/spline.h"
-#include "pxr/base/ts/tsTest_Museum.h"
-#include "pxr/base/ts/tsTest_TsEvaluator.h"
 
 #include <iostream>
 
@@ -132,7 +130,7 @@ _DoSerializationTest(
     const SdfValueTypeName& attrType = SdfValueTypeNames->Double,
     bool isEmpty = false)
 {
-    std::cout << "Doing serialization test for " << desc << "with type as "
+    std::cout << "Doing serialization test for " << desc << " with type as "
         << attrType.GetAsToken().GetString() << "\n";
     for (const std::string format : {"usda", "usdc"}) {
         const std::string filename1 = TfStringPrintf(
@@ -155,14 +153,11 @@ _DoSerializationTest(
         UsdStageRefPtr stage2 = UsdStage::Open(filename2);
         const UsdAttribute attr2 = stage2->GetAttributeAtPath(
             SdfPath("/MyPrim.myAttr"));
+        TF_AXIOM(attr2.HasSpline());
 
-        if (isEmpty) {
-            TF_AXIOM(!attr2.HasSpline());
-        } else {
-            TF_AXIOM(attr2.HasSpline());
-            const TsSpline spline2 = attr2.GetSpline();
-            TF_AXIOM(spline == spline2);
-        }
+        const TsSpline spline2 = attr2.GetSpline();
+        TF_AXIOM(spline2.IsEmpty() == isEmpty);
+        TF_AXIOM(spline == spline2);
     }
 }
 
@@ -232,11 +227,74 @@ static
 void
 TestSerializationMuseum()
 {
-    for (const std::string exhibit : {"TwoKnotBezier", "ComplexParams"}) {
-        const TsSpline spline = 
-            TsTest_TsEvaluator().SplineDataToSpline(
-                TsTest_Museum::GetDataByName(exhibit));
-        _DoSerializationTest("Museum." + exhibit, spline);
+    // These test cases were adapted from the similarly-named examples in
+    // tsTest_Museum.cpp.
+
+    const TsSpline twoKnotBezier = []() {
+        TsSpline spline;
+        spline.SetCurveType(TsCurveTypeBezier);
+        
+        TsKnot knot1;
+        knot1.SetTime(1.0);
+        knot1.SetNextInterpolation(TsInterpCurve);
+        knot1.SetValue(1.0);
+        knot1.SetPostTanSlope(1.0);
+        knot1.SetPostTanWidth(0.5);
+
+        TsKnot knot2;
+        knot2.SetTime(5.0);
+        knot2.SetNextInterpolation(TsInterpCurve);
+        knot2.SetValue(2.0);
+        knot2.SetPreTanSlope(0.0);
+        knot2.SetPreTanWidth(0.5);
+
+        spline.SetKnot(knot1);
+        spline.SetKnot(knot2);
+
+        return spline;
+    }();
+
+    const TsSpline complexParams = []() {
+        TsSpline spline;
+
+        spline.SetPreExtrapolation(TsExtrapolation(TsExtrapLinear));
+        TsExtrapolation postExtrap(TsExtrapSloped);
+        postExtrap.slope = 0.57;
+        spline.SetPostExtrapolation(postExtrap);
+
+        TsKnot knot1;
+        knot1.SetTime(7);
+        knot1.SetNextInterpolation(TsInterpHeld);
+        knot1.SetPreValue(5.5);
+        knot1.SetValue(7.21);
+
+        TsKnot knot2;
+        knot2.SetTime(15);
+        knot2.SetNextInterpolation(TsInterpCurve);
+        knot2.SetValue(8.18);
+        knot2.SetPostTanSlope(1.17);
+        knot2.SetPostTanWidth(2.49);
+
+        TsKnot knot3;
+        knot3.SetTime(20);
+        knot3.SetNextInterpolation(TsInterpCurve);
+        knot3.SetValue(14.72);
+        knot3.SetPreTanSlope(-1.4);
+        knot3.SetPreTanWidth(3.77);
+        knot3.SetPostTanSlope(-1.4);
+        knot3.SetPostTanWidth(1.1);
+
+        spline.SetKnot(knot1);
+        spline.SetKnot(knot2);
+        spline.SetKnot(knot3);
+
+        return spline;
+    }();
+
+    for (const auto& [exhibit, spline] : 
+             { std::make_pair("TwoKnotBezier", twoKnotBezier),
+               std::make_pair("ComplexParams", complexParams) }) {
+        _DoSerializationTest("Museum." + std::string(exhibit), spline);
     }
 }
 
@@ -406,6 +464,67 @@ TestInvalidType()
     TF_AXIOM(!attr.ValueMightBeTimeVarying());
 }
 
+static
+void
+TestClobbered()
+{
+    UsdStageRefPtr stage = UsdStage::CreateInMemory();
+    const UsdPrim prim = stage->DefinePrim(SdfPath("/MyPrim"));
+    UsdAttribute attr = prim.CreateAttribute(
+        TfToken("myAttr"), SdfValueTypeNames->Double);
+    const TsSpline spline = _GetTestSpline(SdfValueTypeNames->Double);
+
+    attr.SetSpline(spline);
+    TF_AXIOM(attr.HasSpline());
+    TF_AXIOM(attr.GetSpline() == spline);
+    attr.Set(100.0, 1);
+
+    TF_AXIOM(!attr.HasSpline());
+    TF_AXIOM(attr.GetSpline().IsEmpty());
+    attr.SetSpline(spline);
+    TF_AXIOM(!attr.HasSpline());
+    TF_AXIOM(attr.GetSpline().IsEmpty());
+
+    double value;
+    attr.Get(&value, 1);
+    TF_AXIOM(value == 100.0);
+}
+
+static
+void
+TestWeakerSplineOpinion()
+{
+    UsdStageRefPtr stage = UsdStage::CreateInMemory();
+    SdfLayerRefPtr rootLayer = stage->GetRootLayer();
+    const SdfLayerRefPtr subLayer = SdfLayer::CreateAnonymous();
+    rootLayer->SetSubLayerPaths({subLayer->GetIdentifier()});
+
+    // Set spline in the subLayer
+    stage->SetEditTarget(stage->GetEditTargetForLocalLayer(subLayer));
+    const UsdPrim prim = stage->DefinePrim(SdfPath("/MyPrim"));
+    UsdAttribute attr = prim.CreateAttribute(TfToken("myAttr"),
+                                             SdfValueTypeNames->Double);
+    TsSpline spline = _GetTestSpline();
+    attr.SetSpline(spline);
+    TF_AXIOM(attr.HasSpline());
+    TF_AXIOM(attr.GetSpline() == spline);
+
+    // Set stronger time samples in the rootLayer
+    stage->SetEditTarget(stage->GetEditTargetForLocalLayer(rootLayer));
+    const UsdPrim rootPrim = stage->DefinePrim(SdfPath("/MyPrim"));
+    UsdAttribute rootAttr = prim.CreateAttribute(TfToken("myAttr"),
+                                                 SdfValueTypeNames->Double);
+    TF_AXIOM(attr.HasSpline());
+    TF_AXIOM(attr.GetSpline() == spline);
+    rootAttr.Set(100.0, 1);
+    TF_AXIOM(!attr.HasSpline());
+    TF_AXIOM(attr.GetSpline().IsEmpty());
+
+    double value;
+    attr.Get(&value, 1);
+    TF_AXIOM(value == 100.0);
+}
+
 int main()
 {
     TestSerializationEmpty();
@@ -416,5 +535,7 @@ int main()
     TestLayerOffsets();
     TestLayerOffsetsTimeCode();
     TestInvalidType();
+    TestClobbered();
+    TestWeakerSplineOpinion();
     return 0;
 }

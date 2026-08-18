@@ -6,11 +6,9 @@
 //
 #include "pxr/pxr.h"
 
+#include "pxr/base/work/workTBB/tbb_version.h"
 #include "pxr/base/work/workTBB/threadLimits_impl.h"
 
-// Blocked range is not used in this file, but this header happens to pull in
-// the TBB version header in a way that works in all TBB versions.
-#include <tbb/blocked_range.h>
 #include <tbb/task_arena.h>
 
 #if TBB_INTERFACE_VERSION_MAJOR >= 12
@@ -34,6 +32,24 @@ static tbb::global_control *_tbbGlobalControl = nullptr;
 static tbb::task_scheduler_init *_tbbTaskSchedInit = nullptr;
 #endif
 
+#if TBB_INTERFACE_VERSION_MAJOR >= 12
+static unsigned _WorkImplClampThreadLimit(unsigned threadLimit) {
+    // We are clamping the max concurrency to tbb::global_control's hard limit.
+    // OneTBB debug builds will abort if a thread limit exceeding 257 is issued.
+    // We are calculating it similarily to how it's done here:
+    // https://github.com/uxlfoundation/oneTBB/blob/master/src/tbb/threading_control.cpp#L44
+    // + 1 is taken into account for the external thread as done in tbb here:
+    // https://github.com/uxlfoundation/oneTBB/blob/master/src/tbb/global_control.cpp#L94
+    static unsigned factor = 
+        WorkImpl_GetPhysicalConcurrencyLimit() < 128 ? 4 : 2;
+    static unsigned limit = std::max(static_cast<size_t>(std::max(
+        factor*WorkImpl_GetPhysicalConcurrencyLimit(),256u)),
+        tbb::global_control::active_value(
+        tbb::global_control::max_allowed_parallelism)) + 1;    
+    return threadLimit > limit ? limit : threadLimit;
+}
+#endif
+
 unsigned
 WorkImpl_GetPhysicalConcurrencyLimit()
 {
@@ -55,6 +71,7 @@ WorkImpl_InitializeThreading(unsigned threadLimit)
     // previously initialized by the hosting environment (e.g. if we are running
     // as a plugin to another application.)
 #if TBB_INTERFACE_VERSION_MAJOR >= 12
+    threadLimit = _WorkImplClampThreadLimit(threadLimit);
     _tbbGlobalControl = new tbb::global_control(
         tbb::global_control::max_allowed_parallelism, threadLimit);
 #else
@@ -67,6 +84,7 @@ WorkImpl_SetConcurrencyLimit(unsigned threadLimit)
 {
 #if TBB_INTERFACE_VERSION_MAJOR >= 12
     delete _tbbGlobalControl;
+    threadLimit = _WorkImplClampThreadLimit(threadLimit);
     _tbbGlobalControl = new tbb::global_control(
         tbb::global_control::max_allowed_parallelism, threadLimit);
 #else

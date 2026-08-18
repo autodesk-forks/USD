@@ -30,6 +30,16 @@ etc. This schema also provides more advanced configuration such as specifying
 how geometry is associated with the light through 
 {ref}`light-linking <usdLux_light_linking>` or how 
 {ref}`light filters <usdLux_light_filters>` are applied.
+
+Note that a prim with LightAPI applied is considered a connectable prim for 
+UsdShade networks, and should follow the rules for 
+[UsdShade node encapsulation](https://openusd.org/release/api/usd_shade_page_front.html#UsdShadeEncapsulation).
+Additionally, a prim with LightAPI applied must not have a connectable parent.
+Lights cannot reside inside a UsdShade NodeGraph, UsdShade Material, UsdLux
+LightFilter, or any other connectable container, with the exception of prims 
+which themselves have LightAPI applied (i.e. are lights), as some light concepts 
+require to be parented under other lights (PortalLight under DomeLight as an 
+example).
 """
     }
 ) {
@@ -531,17 +541,22 @@ A higher focus value pulls light towards the center, effectively narrowing the
 spread. Values < 0 are ignored.
 
 This is implemented as a multiplication with the absolute value of the dot 
-product between the light's surface normal and the emission direction, raised to 
+product between the light's primary axis and the emission direction, raised to 
 the power `focus`. See {ref}`inputs:shaping:focusTint <ShapingAPI_inputs:shaping:focusTint>`
 for the complete formula, but if we assume a default `focusTint` of pure black, 
 then that formula simplifies to:
 
 ```{math}
 \\begin{aligned} 
-&focusFactor = ｜emissionDirection • lightNormal｜^{focus} \\\\
+&focusFactor = ｜emissionDirection • lightAxis｜^{focus} \\\\
 &L_{Color} = focusFactor ⋅ L_{Color}
 \\end{aligned} 
 ```
+
+Note that the absolute value in the formula above means that sphere and 
+cylinder lights will emit "behind" the light as well as in front. If it 
+is desired that the light emits forward only, this can be achieved by setting
+the `inputs:shaping:coneAngle` to 90 degrees or less.
 """
         }
     )
@@ -560,7 +575,7 @@ white, by the factor computed from the focus attribute, in other words:
 
 ```{math}
 \\begin{aligned} 
-&focusFactor = ｜emissionDirection • lightNormal｜^{focus} \\\\
+&focusFactor = ｜emissionDirection • lightAxis｜^{focus} \\\\
 &focusColor = lerp(focusFactor, focusTint, [1, 1, 1]) \\\\
 &L_{Color} = componentwiseMultiply(focusColor, L_{Color}) 
 \\end{aligned}
@@ -568,6 +583,11 @@ white, by the factor computed from the focus attribute, in other words:
 
 Note that this implies that a focusTint of pure white will disable
 focus.
+
+Note that the absolute value in the formula above means that sphere and 
+cylinder lights will emit "behind" the light as well as in front. If it 
+is desired that the light emits forward only, this can be achieved by setting
+the `inputs:shaping:coneAngle` to 90 degrees or less.
 """
         }
     )
@@ -690,7 +710,7 @@ formula is:
 &if \\quad angleScale = 0: \\\\
 & \\quad 𝛳_{ies} = 𝛳_{light} \\\\
 &if \\quad angleScale < 0: \\\\
-& \\quad 𝛳_{ies} = (𝛳_{light} - π) / -angleScale
+& \\quad 𝛳_{ies} = (𝛳_{light} - π) / -angleScale + π
 \\end{aligned}
 ```
 
@@ -799,6 +819,18 @@ of a light."""
 light. Light filters are associated with lights using the LightAPI 
 `light:filters` relationship. See {ref}`usdLux_light_filters` for more details 
 on light filters.
+
+Note that a LightFilter prim is considered a connectable prim for UsdShade 
+networks, and should follow the rules for 
+[UsdShade node encapsulation](https://openusd.org/release/api/usd_shade_page_front.html#UsdShadeEncapsulation).
+Additionally, a LightFilter is a connectable container and may have connectable
+children such as shaders that implement the filter. While the order of
+application of LightFilters is expressed via the LightAPI's `light:filters` 
+relationship, LightFilters may also be nested inside other LightFilters to 
+indicate they only apply to that one LightFilter's contribution in the 
+filter-chain. While LightFilters can (and are encouraged to be) nested inside 
+light prims (with LightAPI applied), they cannot be nested under 
+unrelated connectable container prims like UsdShade Material.
 """
     }
 ) {

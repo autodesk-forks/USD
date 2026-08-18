@@ -33,8 +33,22 @@ class UsdPrimDefinition
 public:
     ~UsdPrimDefinition() = default;
 
-    /// Return the list of names of builtin properties for this prim definition.
+    /// Return the list of names of builtin properties for this prim definition,
+    /// ordered by this prim definition's propertyOrder.
     const TfTokenVector &GetPropertyNames() const { return _properties; }
+
+    /// Return the list of names of "local" builtin properties for this prim
+    /// definition, ordered by this prim definition's propertyOrder.
+
+    /// Locally defined properties are the builtins defined on the most-derived
+    /// schema type (specified in the schema definition file like schema.usda)
+    /// represented by this prim definition. It excludes properties which are
+    /// inherited from base schema types or composed from applied API schemas,
+    /// unless they are explicitly marked as an API schema override by the
+    /// schema type.
+    const TfTokenVector &GetLocallyDefinedPropertyNames() const { 
+        return _locallyDefinedPropertyNames;
+    }
 
     /// Return the list of names of the API schemas that have been applied to
     /// this prim definition in order.
@@ -531,14 +545,16 @@ private:
     UsdPrimDefinition() = default;
     UsdPrimDefinition(const UsdPrimDefinition &) = default;
 
+    void _ApplyPropertyOrder();
+
     USD_API
-    void _IntializeForTypedSchema(
+    void _InitializeForTypedSchema(
         const SdfLayerHandle &schematicsLayer,
         const SdfPath &schematicsPrimPath, 
         const VtTokenArray &propertiesToIgnore);
 
     USD_API
-    void _IntializeForAPISchema(
+    void _InitializeForAPISchema(
         const TfToken &apiSchemaName,
         const SdfLayerHandle &schematicsLayer,
         const SdfPath &schematicsPrimPath, 
@@ -608,6 +624,10 @@ private:
         std::unordered_map<TfToken, _LayerAndPath, TfToken::HashFunctor>;
     _PrimTypePropNameToPathMap _propLayerAndPathMap;
     TfTokenVector _appliedAPISchemas;
+
+    // Cached list of property names that are locally sourced from this prim
+    // definition's schema.usda. This is a subset of _properties.
+    TfTokenVector _locallyDefinedPropertyNames;
 
     // Cached list of property names.
     TfTokenVector _properties;

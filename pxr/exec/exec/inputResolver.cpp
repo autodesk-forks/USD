@@ -6,6 +6,7 @@
 //
 #include "pxr/exec/exec/inputResolver.h"
 
+#include "pxr/exec/exec/builtinComputations.h"
 #include "pxr/exec/exec/computationDefinition.h"
 #include "pxr/exec/exec/definitionRegistry.h"
 #include "pxr/exec/exec/inputKey.h"
@@ -317,7 +318,8 @@ private:
     //
     Exec_OutputKeyVector _TraverseToRelationshipTargetedObjects(
         const TfToken &computationName,
-        const TfType resultType)
+        const TfType resultType,
+        const TfToken &disambiguatingId)
     {
         if (!TF_VERIFY(_currentRelationship->IsValid(_journal))) {
             return {};
@@ -332,7 +334,10 @@ private:
             }
 
             if (const Exec_ComputationDefinition *const computationDefinition =
-                _FindComputationDefinition(computationName, resultType)) {
+                _FindComputationDefinition(
+                    computationName,
+                    resultType,
+                    disambiguatingId)) {
                 outputKeys.emplace_back(
                     _currentObject->AsObject(),
                     _GetDispatchingConfigKeyForOutputKey(computationDefinition),
@@ -340,11 +345,96 @@ private:
             }
         }
 
-        // Clear the current object to make it clear that the traversal has
-        // terminated.
+        // Clear the current object, because the traversal has terminated.
         _currentObjectVariant = std::monostate{};
         _currentObject = nullptr;
         _currentRelationship = nullptr;
+
+        return outputKeys;
+    }
+
+    // Returns the ouput keys for the objects targeted by the connections of the
+    // currrent attribute, for the computation of the given name and result
+    // type.
+    //
+    // The current object must be a valid attribute prior to calling this
+    // method.
+    //
+    Exec_OutputKeyVector _TraverseToConnectionTargetedObjects(
+        const TfToken &computationName,
+        const TfType resultType,
+        const TfToken &disambiguatingId)
+    {
+        if (!TF_VERIFY(_currentAttribute->IsValid(_journal))) {
+            return {};
+        }
+
+        Exec_OutputKeyVector outputKeys;
+
+        for (const SdfPath &path : _currentAttribute->GetConnections(_journal)) {
+            if (!_TraverseToAbsolutePath(path)) {
+                continue;
+            }
+
+            if (const Exec_ComputationDefinition *const computationDefinition =
+                _FindComputationDefinition(
+                    computationName,
+                    resultType,
+                    disambiguatingId)) {
+                outputKeys.emplace_back(
+                    _currentObject->AsObject(),
+                    _GetDispatchingConfigKeyForOutputKey(computationDefinition),
+                    computationDefinition);
+            }
+        }
+
+        // Clear the current object since the traversal has terminated.
+        _currentObjectVariant = std::monostate{};
+        _currentObject = nullptr;
+        _currentAttribute = nullptr;
+
+        return outputKeys;
+    }
+
+    // Returns the ouput keys for the attributes that own connections that
+    // target the currrent object, for the computation of the given name and
+    // result type.
+    //
+    // The current object must be valid prior to calling this method.
+    //
+    Exec_OutputKeyVector _TraverseToIncomingConnectionOwningAttributes(
+        const TfToken &computationName,
+        const TfType resultType,
+        const TfToken &disambiguatingId)
+    {
+        if (!TF_VERIFY(_currentObject->IsValid(_journal))) {
+            return {};
+        }
+
+        Exec_OutputKeyVector outputKeys;
+
+        for (const SdfPath &path :
+                 _currentObject->GetIncomingConnections(_journal)) {
+            if (!_TraverseToAbsolutePath(path)) {
+                continue;
+            }
+
+            if (const Exec_ComputationDefinition *const computationDefinition =
+                _FindComputationDefinition(
+                    computationName,
+                    resultType,
+                    disambiguatingId)) {
+                outputKeys.emplace_back(
+                    _currentObject->AsObject(),
+                    _GetDispatchingConfigKeyForOutputKey(computationDefinition),
+                    computationDefinition);
+            }
+        }
+
+        // Clear the current object since the traversal has terminated.
+        _currentObjectVariant = std::monostate{};
+        _currentObject = nullptr;
+        _currentAttribute = nullptr;
 
         return outputKeys;
     }
@@ -365,6 +455,7 @@ private:
     bool _TraverseToNamespaceAncestor(
         const TfToken &computationName,
         const TfType resultType,
+        const TfToken &disambiguatingId,
         const Exec_ComputationDefinition **const foundComputationDefinition)
     {
         if (!TF_VERIFY(_currentPrim && !_currentPrim->IsPseudoRoot())) {
@@ -384,9 +475,12 @@ private:
                     computationName,
                     _dispatchingSchemaKey,
                     _journal);
-            
+
             if (computationDefinition &&
-                computationDefinition->GetResultType(*_currentPrim, _journal) ==
+                computationDefinition->GetResultType(
+                    *_currentPrim,
+                    disambiguatingId,
+                    _journal) ==
                 resultType) {
                 *foundComputationDefinition = computationDefinition;
                 return true;
@@ -411,7 +505,8 @@ private:
     // 
     const Exec_ComputationDefinition *_FindComputationDefinition(
         const TfToken &computationName,
-        const TfType resultType) const
+        const TfType resultType,
+        const TfToken &disambiguatingId) const
     {
         const Exec_ComputationDefinition *computationDefinition = nullptr;
 
@@ -428,6 +523,7 @@ private:
                 _definitionRegistry.GetComputationDefinition(
                     *_currentAttribute,
                     computationName,
+                    _dispatchingSchemaKey,
                     _journal);
         }
 
@@ -440,7 +536,8 @@ private:
         // of the found definition.
         if (resultType.IsUnknown() ||
             resultType ==
-            computationDefinition->GetResultType(*_currentObject, _journal)) {
+            computationDefinition->GetResultType(
+                *_currentObject, disambiguatingId, _journal)) {
             return computationDefinition;
         }
 
@@ -491,19 +588,36 @@ private:
         case ExecProviderResolution::DynamicTraversal::Local:
             computationDefinition = _FindComputationDefinition(
                 inputKey.computationName,
-                inputKey.resultType);
+                inputKey.resultType,
+                inputKey.disambiguatingId);
             break;
             
         case ExecProviderResolution::DynamicTraversal::
             RelationshipTargetedObjects:
             return _TraverseToRelationshipTargetedObjects(
                 inputKey.computationName,
-                inputKey.resultType);
+                inputKey.resultType,
+                inputKey.disambiguatingId);
+            
+        case ExecProviderResolution::DynamicTraversal::
+            ConnectionTargetedObjects:
+            return _TraverseToConnectionTargetedObjects(
+                inputKey.computationName,
+                inputKey.resultType,
+                inputKey.disambiguatingId);
+            
+        case ExecProviderResolution::DynamicTraversal::
+            IncomingConnectionOwningAttributes:
+            return _TraverseToIncomingConnectionOwningAttributes(
+                inputKey.computationName,
+                inputKey.resultType,
+                inputKey.disambiguatingId);
             
         case ExecProviderResolution::DynamicTraversal::NamespaceAncestor:
             if (!_TraverseToNamespaceAncestor(
                 inputKey.computationName,
                 inputKey.resultType,
+                inputKey.disambiguatingId,
                 &computationDefinition)) {
                 return {};
             }
@@ -517,7 +631,8 @@ private:
         return {
             {_currentObject->AsObject(),
              _GetDispatchingConfigKeyForOutputKey(computationDefinition),
-             computationDefinition}
+             computationDefinition,
+             inputKey.disambiguatingId}
         };
     }
 

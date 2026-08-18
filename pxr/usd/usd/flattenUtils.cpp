@@ -53,9 +53,42 @@ PXR_NAMESPACE_OPEN_SCOPE
 //   particular value types and fields.  It uses _ApplyLayerOffset()
 //   to handle time-remapping needed, depending on the field.
 
+// This struct is used to maintain state during a call to _ReduceField.
+// Its purpose is to track the layer stack index which holds the most relevant
+// opinion for the field.  This index is used when applying layer offsets to
+// the computed value.
+struct Usd_ReduceFieldContext {
+Usd_ReduceFieldContext(const PcpLayerStackRefPtr &layerStack) 
+    : layerStack(layerStack) {}
+
+    // tracks the current index of the layer in the stack.
+    size_t currentLayerStackIndex;
+
+    // tracks the most relevant layer index (if any) for a field. Used for most
+    // fields.
+    std::optional<size_t> mostRelevantLayerStackIndex;
+
+    // holds a map of ListOpItem -> layer index. Used in the case where the
+    // field is a ListOp<T>
+    VtValue listOpToIndexMap;
+
+    // layer stack used in this redudction oper
+    const PcpLayerStackRefPtr &layerStack;
+
+    void MarkCurrentIndexAsMostRelevantIfEmpty() {
+        if (!mostRelevantLayerStackIndex) {
+            MarkCurrentIndexAsMostRelevant();
+        }
+    }
+
+    void MarkCurrentIndexAsMostRelevant() {
+        mostRelevantLayerStackIndex = currentLayerStackIndex;
+    }
+};
+
 template <typename T>
 VtValue
-_Reduce(const T &lhs, const T &rhs)
+_Reduce(const T &lhs, const T &rhs, Usd_ReduceFieldContext*)
 {
     // Generic base case: take stronger opinion.
     return VtValue(lhs);
@@ -106,12 +139,79 @@ _FixListOpValue(VtValue *v)
     FIX_LISTOP_TYPE(SdfUnregisteredValueListOp);
 }
 
+// Reduces list op fields.  Note this method populates a map between ListOp
+// the layer offset from the strongest layer.  This map is later used to apply
+// the correct layer offset after the field has been fully reduced across all
+// layers in the stack.
+template <typename RefOrPayload>
+VtValue
+_ReduceRefOrPayload(
+    const SdfListOp<RefOrPayload> &lhs, 
+    const SdfListOp<RefOrPayload> &rhs,
+    Usd_ReduceFieldContext* context)
+{
+    using ListOpToIndexMap = std::map<RefOrPayload, size_t>;
+
+    if (context->listOpToIndexMap.IsEmpty()) {
+        context->listOpToIndexMap = ListOpToIndexMap();
+    }
+
+    // We assume the caller has already applied _FixListOp()
+    if (std::optional<SdfListOp<RefOrPayload>> r = lhs.ApplyOperations(rhs)) {
+        // after applying operations we want to populate the cache with the
+        // current layer index. We specifically record the the index of the
+        // strongest layer for each item. The offset for this layer index will
+        // later be multiplied with the ref or payload's own layer offset to get
+        // the final result.
+        ListOpToIndexMap listOpToIndexMap;
+        context->listOpToIndexMap.UncheckedSwap(listOpToIndexMap);
+        (*r).ModifyOperations(
+        [&listOpToIndexMap, &context](const RefOrPayload& op){
+            listOpToIndexMap.insert({op, context->currentLayerStackIndex});
+            return std::optional(op);
+        });
+        context->listOpToIndexMap.UncheckedSwap(listOpToIndexMap);
+        return VtValue(*r);
+    }
+    // The approximation used should always be composable,
+    // so error if that didn't work.
+    TF_CODING_ERROR("Could not reduce listOp %s over %s",
+                    TfStringify(lhs).c_str(), TfStringify(rhs).c_str());
+    return VtValue();
+}
+
+VtValue
+_Reduce(
+    const SdfReferenceListOp &lhs, 
+    const SdfReferenceListOp &rhs,
+    Usd_ReduceFieldContext* context)
+{
+    return _ReduceRefOrPayload(lhs, rhs, context);
+}
+
+VtValue
+_Reduce(
+    const SdfPayloadListOp &lhs, 
+    const SdfPayloadListOp &rhs,
+    Usd_ReduceFieldContext* context)
+{
+    return _ReduceRefOrPayload(lhs, rhs, context);
+}
+
+// Note: This particular overload uses a default implementation for
+// reducing all list ops except for SdfReferenceListOp and SdfPayloadListOp.
+// These list ops do not need to specifically track layer stack indicies for
+// layer offsets. 
 template <typename T>
 VtValue
-_Reduce(const SdfListOp<T> &lhs, const SdfListOp<T> &rhs)
+_Reduce(
+    const SdfListOp<T> &lhs, 
+    const SdfListOp<T> &rhs,
+    Usd_ReduceFieldContext*)
 {
     // We assume the caller has already applied _FixListOp()
-    if (std::optional<SdfListOp<T>> r = lhs.ApplyOperations(rhs)) {
+    if (std::optional<SdfListOp<T>> r = lhs.ApplyOperations(rhs)) 
+    {
         return VtValue(*r);
     }
     // The approximation used should always be composable,
@@ -123,7 +223,10 @@ _Reduce(const SdfListOp<T> &lhs, const SdfListOp<T> &rhs)
 
 template <>
 VtValue
-_Reduce(const VtDictionary &lhs, const VtDictionary &rhs)
+_Reduce(
+    const VtDictionary &lhs, 
+    const VtDictionary &rhs, 
+    Usd_ReduceFieldContext*)
 {
     // Dictionaries compose keys recursively.
     return VtValue(VtDictionaryOverRecursive(lhs, rhs));
@@ -131,7 +234,10 @@ _Reduce(const VtDictionary &lhs, const VtDictionary &rhs)
 
 template <>
 VtValue
-_Reduce(const SdfVariantSelectionMap &lhs, const SdfVariantSelectionMap &rhs)
+_Reduce(
+    const SdfVariantSelectionMap &lhs, 
+    const SdfVariantSelectionMap &rhs, 
+    Usd_ReduceFieldContext*)
 {
     SdfVariantSelectionMap result(rhs);
     for (auto const& entry: lhs) {
@@ -142,7 +248,10 @@ _Reduce(const SdfVariantSelectionMap &lhs, const SdfVariantSelectionMap &rhs)
 
 template <>
 VtValue
-_Reduce(const SdfRelocates &lhs, const SdfRelocates &rhs)
+_Reduce(
+    const SdfRelocates &lhs, 
+    const SdfRelocates &rhs, 
+    Usd_ReduceFieldContext*)
 {
     SdfRelocates result(lhs);
     result.insert(result.end(), rhs.begin(), rhs.end());
@@ -151,7 +260,10 @@ _Reduce(const SdfRelocates &lhs, const SdfRelocates &rhs)
 
 template <>
 VtValue
-_Reduce(const SdfSpecifier &lhs, const SdfSpecifier &rhs)
+_Reduce(
+    const SdfSpecifier &lhs, 
+    const SdfSpecifier &rhs, 
+    Usd_ReduceFieldContext*)
 {
     // SdfSpecifierOver is the equivalent of "no opinion"
     //
@@ -164,10 +276,23 @@ _Reduce(const SdfSpecifier &lhs, const SdfSpecifier &rhs)
 
 // This function is an overload that also accepts a field name.
 VtValue
-_Reduce(const VtValue &lhs, const VtValue &rhs, const TfToken &field)
+_Reduce(
+    const VtValue &lhs, 
+    const VtValue &rhs, 
+    const TfToken &field, 
+    Usd_ReduceFieldContext* context)
 {
+    // default behavior is to take the strongest opinion for a field.
+    context->MarkCurrentIndexAsMostRelevantIfEmpty();
     // Handle easy generic cases first.
     if (lhs.IsEmpty()) {
+        if (rhs.IsHolding<SdfReferenceListOp>()) {
+            _Reduce(SdfReferenceListOp(), 
+                rhs.UncheckedGet<SdfReferenceListOp>(), context);
+        } else if (rhs.IsHolding<SdfPayloadListOp>()) {
+            _Reduce(SdfPayloadListOp(), 
+                rhs.UncheckedGet<SdfPayloadListOp>(), context);
+        } 
         return rhs;
     }
     if (rhs.IsEmpty()) {
@@ -189,6 +314,7 @@ _Reduce(const VtValue &lhs, const VtValue &rhs, const TfToken &field)
         // If the stronger value is an animation block and the weaker value is
         // not a time sample map or spline (default values), return the
         // weaker default value.
+        context->MarkCurrentIndexAsMostRelevant();
         return rhs;
     }
     if (lhs.GetType() != rhs.GetType()) {
@@ -205,7 +331,8 @@ _Reduce(const VtValue &lhs, const VtValue &rhs, const TfToken &field)
 #define TYPE_DISPATCH(T) \
     if (lhs.IsHolding<T>()) { \
         return _Reduce(lhs.UncheckedGet<T>(),  \
-                       rhs.UncheckedGet<T>()); \
+                       rhs.UncheckedGet<T>(),  \
+                       context); \
     }
     TYPE_DISPATCH(SdfSpecifier);
     TYPE_DISPATCH(SdfIntListOp);
@@ -251,23 +378,82 @@ _ApplyLayerOffsetToClipInfo(
     }
 }
 
+// Applies a layer offset to a SdfReferenceListOp or SdfPayloadListOp
+// Note: we do not want to apply offsets to deleted items  This is
+// because the offset is part of the identifier and we want to preserve the
+// item in the flattened stack.
 template <class RefOrPayloadType>
-static std::optional<RefOrPayloadType>
-_ApplyLayerOffsetToRefOrPayload(const SdfLayerOffset &offset,
-                                const RefOrPayloadType &refOrPayload)
+SdfListOp<RefOrPayloadType>
+_ApplyLayerOffsetToRefOrPayloadListOp(
+    const SdfListOp<RefOrPayloadType> &source,
+    const Usd_ReduceFieldContext &context)
 {
-    RefOrPayloadType result = refOrPayload;
-    result.SetLayerOffset(offset * refOrPayload.GetLayerOffset());
-    return std::optional<RefOrPayloadType>(result);
+    SdfListOp<RefOrPayloadType> listOp = source;
+
+    if (context.listOpToIndexMap.IsEmpty()) {
+        return listOp;
+    }
+
+    using ListOpToIndexMap = std::map<RefOrPayloadType, size_t>;
+    const ListOpToIndexMap listOpIndexMap = 
+        context.listOpToIndexMap.UncheckedGet<ListOpToIndexMap>();
+
+    // loop over all items in the list op and record the layer stack index
+    // for each new entry. This results in the map containing the layer
+    // stack index with the strongest opinion for each item.
+    listOp.ModifyOperations(
+        [&listOpIndexMap, &context](const RefOrPayloadType &refOrPayload) {
+            RefOrPayloadType result = refOrPayload;
+            auto layerStackIndex = listOpIndexMap.find(refOrPayload);
+
+            if (layerStackIndex != listOpIndexMap.end()) {
+                const SdfLayerOffset* offset = 
+                    context.layerStack->GetLayerOffsetForLayer(
+                        layerStackIndex->second);
+                if (offset && !offset->IsIdentity()) {
+                    result.SetLayerOffset(
+                        (*offset) * refOrPayload.GetLayerOffset());
+                }
+            }
+
+            return std::optional<RefOrPayloadType>(result);
+        });
+
+    // In the event that we modified any 'deleted' items, replace them with
+    // the source's to ensure compatibility
+    if (!listOp.IsExplicit()) {
+        listOp.SetDeletedItems(source.GetDeletedItems());
+    }
+
+    return listOp;
 }
 
 // Apply layer offsets (time remapping) to time-keyed metadata.
 static void
-_ApplyLayerOffset(const SdfLayerOffset &offset,
-                  const TfToken &field, 
-                  VtValue *val)
+_ApplyLayerOffset(
+    const TfToken &field, 
+    VtValue *val,
+    const Usd_ReduceFieldContext & context)
 {
-    if (offset.IsIdentity()) {
+    if (field == SdfFieldKeys->References) {
+        if (val->IsHolding<SdfReferenceListOp>()) {
+            SdfReferenceListOp refs =_ApplyLayerOffsetToRefOrPayloadListOp(
+                val->UncheckedGet<SdfReferenceListOp>(), context);
+            val->Swap(refs);
+        }
+    }
+    else if (field == SdfFieldKeys->Payload) {
+        if (val->IsHolding<SdfPayloadListOp>()) {
+            SdfPayloadListOp pls =_ApplyLayerOffsetToRefOrPayloadListOp(
+                val->UncheckedGet<SdfPayloadListOp>(), context);
+            val->Swap(pls);
+        }
+    }
+
+    const SdfLayerOffset* offset = context.layerStack->GetLayerOffsetForLayer(
+        *context.mostRelevantLayerStackIndex);
+
+    if (!offset || offset->IsIdentity()) {
         return;
     }
 
@@ -285,33 +471,15 @@ _ApplyLayerOffset(const SdfLayerOffset &offset,
                 VtDictionary clipInfo =
                     clipInfoVal.UncheckedGet<VtDictionary>();
                 _ApplyLayerOffsetToClipInfo(
-                    offset, UsdClipsAPIInfoKeys->active, &clipInfo);
+                    *offset, UsdClipsAPIInfoKeys->active, &clipInfo);
                 _ApplyLayerOffsetToClipInfo(
-                    offset, UsdClipsAPIInfoKeys->times, &clipInfo);
+                    *offset, UsdClipsAPIInfoKeys->times, &clipInfo);
                 clipInfoVal = VtValue(clipInfo);
             }
             val->Swap(clips);
         }
-    }
-    else if (field == SdfFieldKeys->References) {
-        if (val->IsHolding<SdfReferenceListOp>()) {
-            SdfReferenceListOp refs = val->UncheckedGet<SdfReferenceListOp>();
-            refs.ModifyOperations(std::bind(
-                _ApplyLayerOffsetToRefOrPayload<SdfReference>, 
-                offset, std::placeholders::_1));
-            val->Swap(refs);
-        }
-    }
-    else if (field == SdfFieldKeys->Payload) {
-        if (val->IsHolding<SdfPayloadListOp>()) {
-            SdfPayloadListOp pls = val->UncheckedGet<SdfPayloadListOp>();
-            pls.ModifyOperations(std::bind(
-                _ApplyLayerOffsetToRefOrPayload<SdfPayload>, 
-                offset, std::placeholders::_1));
-            val->Swap(pls);
-        }
     } else {
-        Usd_ApplyLayerOffsetToValue(val, offset);
+        Usd_ApplyLayerOffsetToValue(val, *offset);
     }
 }
 
@@ -492,6 +660,8 @@ _ReduceField(const PcpLayerStackRefPtr &layerStack,
     const SdfPath &path = targetSpec->GetPath();
     const SdfSpecType specType = targetSpec->GetSpecType();
 
+    Usd_ReduceFieldContext context(layerStack);
+
     VtValue val;
     for (size_t i=0; i < layers.size(); ++i) {
         if (!layers[i]->HasSpec(path)) {
@@ -513,16 +683,21 @@ _ReduceField(const PcpLayerStackRefPtr &layerStack,
         if (!layers[i]->HasField(path, field, &layerVal)) {
             continue;
         }
-        // Apply layer offsets.
-        if (const SdfLayerOffset *offset =
-            layerStack->GetLayerOffsetForLayer(i)) {
-            _ApplyLayerOffset(*offset, field, &layerVal);
-        }
         // Fix asset paths.
         _FixAssetPaths(layers[i], field, resolveAssetPathFn, &layerVal);
         // Fix any list ops
         _FixListOpValue(&layerVal);
-        val = _Reduce(val, layerVal, field);
+        context.currentLayerStackIndex = i;
+        val = _Reduce(val, layerVal, field, &context);
+
+    }
+    // Apply layer offsets.  We want to do this after reducing in order to
+    // ensure that layer identifiers are not modified by introducing
+    // compensating layer offsets too early.  Additionally doing it once at
+    // the end ensures that offset values do not compound due to being
+    // multiplied numerous times.
+    if (context.mostRelevantLayerStackIndex) {
+        _ApplyLayerOffset(field, &val, context);
     }
     return val;
 }

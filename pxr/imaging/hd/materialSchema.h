@@ -36,6 +36,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 #define HD_MATERIAL_SCHEMA_TOKENS \
     (material) \
     ((universalRenderContext, "")) \
+    ((_universalRenderContextToken, "universalRenderContext")) \
     ((all, "__all")) \
     (terminals) \
     (surface) \
@@ -47,18 +48,20 @@ TF_DECLARE_PUBLIC_TOKENS(HdMaterialSchemaTokens, HD_API,
 
 //-----------------------------------------------------------------------------
 
-// The Material schema is a container schema that provides the correct
-// material definition per render context.
-//
-// For example, a material may specify several render contexts like the
-// universalRenderContext (""), Renderman ("ri"), Storm ("glslfx"), etc. Each
-// render context will then provide the specific definition for the renderer,
-// which is defined by the MaterialNetwork schema. The universalRenderContext
-// applies to all renderers.
-//
-// See "Custom Code: Schema Methods" section for ASCII art diagram.
-//
 
+/// \class HdMaterialSchema
+///
+/// The Material schema is a container schema that provides the correct
+/// material definition per render context.
+///
+/// For example, a material may specify several render contexts like the
+/// universalRenderContext (""), Renderman ("ri"), Storm ("glslfx"), etc. Each
+/// render context will then provide the specific definition for the renderer,
+/// which is defined by the MaterialNetwork schema. The universalRenderContext
+/// applies to all renderers.
+///
+/// See "Custom Code: Schema Methods" section for ASCII art diagram.
+///
 class HdMaterialSchema : public HdSchema
 {
 public:
@@ -111,7 +114,7 @@ public:
     /// | |  +------------------------------+ |      |  +--------------------------------------------------------------------------------------------------------------------------------------------------+  |    |
     /// | |  | interfaceValues              | |      |  | ri [materialNetwork for Renderman render context]                                                                                                |  |    |
     /// | |  |                              | |      |  |    +-----------------------+       +--------------------------------------------------------------------------------+   +-------------------+    |  |    |
-    /// | |  | *globalVal = 0.2-------------+-+----+ |  |    |interfaceMappings      |       | nodes                                                                          |   |terminals          |    |  |    |
+    /// | |  | *globalVal = 0.2-------------+-+----+ |  |    |interface [parameters] |       | nodes                                                                          |   |terminals          |    |  |    |
     /// | |  |                              | |    | |  |    |                       |       | +--------------------+                                                         |   |                   |    |  |    |
     /// | |  | *globalSpecularKface = 0.666-+-+-+  +-+--+--+-+*globalVal o-----------+---+   | |"Color_Manipulate"  |                                                         | +-+-o*surface         |    |  |    |
     /// | |  |                              | | |    |  |    |                       |   |   | |[materialNode]      |                                                         | | |                   |    |  |    |
@@ -146,14 +149,27 @@ public:
     
     /// @}
 
+    /// Convenience method to get the available render contexts.
+    /// This is preferable to HdMaterialSchema::GetContainer()->GetNames().
     HD_API
-    HdMaterialNetworkSchema GetMaterialNetwork();
+    TfTokenVector GetRenderContexts() const;
 
+    /// Return the material network schema for the universalRenderContext.
     HD_API
-    HdMaterialNetworkSchema GetMaterialNetwork(TfToken const &context);
+    HdMaterialNetworkSchema GetMaterialNetwork() const;
 
+    /// Return the material network schema for the given render context.
+    /// \note This does not fall back to the universalRenderContext.
     HD_API
-    HdMaterialNetworkSchema GetMaterialNetwork(TfTokenVector const &contexts);
+    HdMaterialNetworkSchema
+    GetMaterialNetwork(TfToken const &renderContext) const;
+
+    /// Return the first material network schema found among the given
+    /// list of render contexts, falling back to the universal context
+    /// if none of the provided contexts are found.
+    HD_API
+    HdMaterialNetworkSchema GetMaterialNetwork(
+        TfTokenVector const &renderContexts) const;
 
     // Find the terminal (surface/volume/displcement) from a given data source locator.
     HD_API
@@ -165,13 +181,13 @@ public:
     static TfToken 
     GetLocatorTerminal(
         HdDataSourceLocator const& locator, 
-        TfToken const& context);
+        TfToken const& renderContext);
 
     HD_API
     static TfToken 
     GetLocatorTerminal(
         HdDataSourceLocator const& locator, 
-        TfTokenVector const &contexts);
+        TfTokenVector const &Contexts);
 
 // --(END CUSTOM CODE: Schema Methods)--
 

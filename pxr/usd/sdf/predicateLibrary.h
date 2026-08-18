@@ -10,6 +10,7 @@
 #include "pxr/pxr.h"
 #include "pxr/usd/sdf/api.h"
 
+#include "pxr/base/arch/pragmas.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/functionTraits.h"
 #include "pxr/base/tf/pxrTslRobinMap/robin_map.h"
@@ -97,7 +98,7 @@ private:
 class SdfPredicateFunctionResult
 {
 public:
-    enum Constancy { ConstantOverDescendants, MayVaryOverDescendants };
+    enum Constancy : char { ConstantOverDescendants, MayVaryOverDescendants };
 
     /// Default construction produces a 'false' result that
     /// 'MayVaryOverDescendants'.
@@ -120,6 +121,36 @@ public:
     /// Create with \p value and 'MayVaryOverDescendants'
     static SdfPredicateFunctionResult MakeVarying(bool value) {
         return { value, MayVaryOverDescendants };
+    }
+
+    /// Return the logical and of `lhs` and `rhs` with constancy propagation.
+    /// If either value is `false` and `ConstantOverDescendants`, the result is
+    /// `false` and `ConstantOverDescendants`.  If both values are `true` and
+    /// `ConstantOverDescendants` the result is `true` and
+    /// `ConstantOverDescendants`.  Otherwise the result is the logical and of
+    /// the truth values and `MayVaryOverDescendants`.
+    static SdfPredicateFunctionResult
+    And(SdfPredicateFunctionResult lhs, SdfPredicateFunctionResult rhs) {
+        const bool lv = lhs.GetValue(), rv = rhs.GetValue();
+        const bool lc = lhs.IsConstant(), rc = rhs.IsConstant();
+        return (lc && rc) || (!lv && lc) || (!rv && rc)
+            ? MakeConstant(lv && rv)
+            : MakeVarying(lv && rv);
+    }
+
+    /// Return the logical or of `lhs` and `rhs` with constancy propagation.
+    /// If either value is `true` and `ConstantOverDescendants`, the result is
+    /// `true` and `ConstantOverDescendants`.  If both values are `false` and
+    /// `ConstantOverDescendants` the result is `false` and
+    /// `ConstantOverDescendants`.  Otherwise the result is the logical or of
+    /// the truth values and `MayVaryOverDescendants`.
+    static SdfPredicateFunctionResult
+    Or(SdfPredicateFunctionResult lhs, SdfPredicateFunctionResult rhs) {
+        const bool lv = lhs.GetValue(), rv = rhs.GetValue();
+        const bool lc = lhs.IsConstant(), rc = rhs.IsConstant();
+        return (lc && rc) || (lv && lc) || (rv && rc)
+            ? MakeConstant(lv || rv)
+            : MakeVarying(lv || rv);
     }
 
     /// Return the result value.
@@ -525,7 +556,13 @@ private:
         // A fold expression would let us just do &&, but that's '17, so we just
         // do all of them and set a bool.
         bool bound = true;
+        // vector<bool> bit-packing triggers spurious -Warray-bounds and
+        // -Wstringop-overflow from GCC 13 when its memmove is inlined here.
+        ARCH_PRAGMA_PUSH
+        ARCH_PRAGMA_ARRAY_BOUNDS
+        ARCH_PRAGMA_STRINGOP_OVERFLOW
         boundArgs.assign(args.size(), false);
+        ARCH_PRAGMA_POP
         // Need a unused array so we can use an initializer list to invoke
         // _TryBindOne N times.
         int unused[] = {

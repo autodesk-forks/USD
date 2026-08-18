@@ -17,21 +17,6 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 using namespace pxr_boost::python;
 
-namespace {
-
-// Boost treats a const ptr differently than a non-const ptr, so a custom
-// converter is needed to deal with the const-ness
-struct SdrShaderPropertyConstPtrToPythonConverter
-{
-    static PyObject* convert(SdrShaderPropertyConstPtr shaderProperty) {
-        object shaderPropertyObject(ptr(shaderProperty));
-
-        return incref(shaderPropertyObject.ptr());
-    }
-};
-
-} // anonymous namespace
-
 void wrapShaderProperty()
 {
     typedef SdrShaderProperty This;
@@ -41,20 +26,9 @@ void wrapShaderProperty()
         "PropertyTypes", SdrPropertyTypes, SDR_PROPERTY_TYPE_TOKENS
     );
 
-    TF_PY_WRAP_PUBLIC_TOKENS(
-        "PropertyMetadata", SdrPropertyMetadata, SDR_PROPERTY_METADATA_TOKENS
-    );
-
-    TF_PY_WRAP_PUBLIC_TOKENS(
-        "PropertyRole",
-        SdrPropertyRole,
-        SDR_PROPERTY_ROLE_TOKENS
-    );
-
     return_value_policy<copy_const_reference> copyRefPolicy;
 
-    to_python_converter<SdrShaderPropertyConstPtr,
-                        SdrShaderPropertyConstPtrToPythonConverter>();
+    register_ptr_to_python<SdrShaderPropertyConstPtr>();
 
     class_<This, ThisPtr, noncopyable>("ShaderProperty", no_init)
         .def("__repr__", &This::GetInfoString)
@@ -65,9 +39,11 @@ void wrapShaderProperty()
         .def("IsArray", &This::IsArray)
         .def("IsDynamicArray", &This::IsDynamicArray)
         .def("GetArraySize", &This::GetArraySize)
+        .def("GetTupleSize", &This::GetTupleSize)
         .def("GetInfoString", &This::GetInfoString)
         .def("GetMetadata", &This::GetMetadata,
             return_value_policy<TfPyMapToDictionary>())
+        .def("GetMetadataObject", &This::GetMetadataObject, copyRefPolicy)
         .def("IsConnectable", &This::IsConnectable)
         .def("CanConnectTo", &This::CanConnectTo)
         .def("GetTypeAsSdfType", &This::GetTypeAsSdfType)
@@ -82,6 +58,7 @@ void wrapShaderProperty()
         .def("GetOptions", &This::GetOptions,
             return_value_policy<TfPySequenceToList>())
         .def("GetImplementationName", &This::GetImplementationName)
+        .def("GetShownIf", &This::GetShownIf)
         .def("GetVStructMemberOf", &This::GetVStructMemberOf, copyRefPolicy)
         .def("GetVStructMemberName", &This::GetVStructMemberName, copyRefPolicy)
         .def("GetVStructConditionalExpr",

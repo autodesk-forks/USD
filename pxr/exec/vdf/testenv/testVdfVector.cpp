@@ -342,6 +342,37 @@ static bool TestCompressedVector()
     return true;
 }
 
+static bool TestBoxedVector()
+{
+    TRACE_FUNCTION();
+
+    VdfTypedVector<int> emptyBoxedVec;
+    emptyBoxedVec.Set(Vdf_BoxedContainer<int>{});
+
+    // A boxed vector is never empty because emptiness is based on the size,
+    // which is always 1.
+    TF_AXIOM(!emptyBoxedVec.IsEmpty());
+    ASSERT_EQ(emptyBoxedVec.GetSize(), 1);
+    ASSERT_EQ(emptyBoxedVec.GetNumStoredElements(), 0);
+
+    VdfTypedVector<int> boxedVec;
+    const unsigned int size = 10;
+    Vdf_BoxedContainer<int> source(size);
+    for (unsigned int i=0; i<size; ++i) {
+        source[i] = i;
+    }
+    boxedVec.Set(source);
+
+    TF_AXIOM(!boxedVec.IsEmpty());
+    ASSERT_EQ(boxedVec.GetSize(), 1);
+    ASSERT_EQ(boxedVec.GetNumStoredElements(), 1);
+    for (unsigned int i=0; i<size; ++i) {
+        ASSERT_EQ(boxedVec.GetReadAccessor<int>()[i], static_cast<int>(i));
+    }
+
+    return true;
+}
+
 struct TestStruct
 {
     TestStruct() = default;
@@ -2205,6 +2236,33 @@ TestConstructWithSize()
     return true;
 }
 
+static bool
+TestClear()
+{
+    {
+        auto empty = VdfTypedVector<int>::CreateWithSize(0);
+        empty.Clear();
+        TF_AXIOM(empty.Holds<int>());
+        TF_AXIOM(empty.IsEmpty());
+    }
+
+    {
+        auto single = VdfTypedVector<int>::CreateWithSize(1);
+        single.Clear();
+        TF_AXIOM(single.Holds<int>());
+        ASSERT_EQ(single.GetSize(), 0);
+    }
+
+    {
+        auto many = VdfTypedVector<int>::CreateWithSize(3);
+        many.Clear();
+        TF_AXIOM(many.Holds<int>());
+        ASSERT_EQ(many.GetSize(), 0);
+    }
+
+    return true;
+}
+
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -2226,6 +2284,7 @@ static Tests tests[] =
     { TestDenseVector,           "TestDenseVector"           },
     { TestSparseVector,          "TestSparseVector"          },
     { TestCompressedVector,      "TestCompressedVector"      },
+    { TestBoxedVector,           "TestBoxedVector"           },
     { TestSharedVector,          "TestSharedVector"          },
     { TestAssignmentOperator,    "TestAssignmentOperator"    },
     { TestTyping,                "TestTyping"                },
@@ -2238,8 +2297,7 @@ static Tests tests[] =
     { TestVectorMerge,           "TestVectorMerge"           },
     { TestDebugPrint,            "TestDebugPrint"            },
     { TestConstructWithSize,     "TestConstructWithSize"     },
-
-    NULL
+    { TestClear,                 "TestClear"                 },
 };
 
 
@@ -2258,11 +2316,11 @@ main(int argc, char **argv)
         // Run through all the registered tests, and if any of them fail
         // fail the whole test.
 
-        for(int i = 0; tests[i].func; ++i)
+        for (const auto& [func, name] : tests)
         {
-            printf("*** %s\n", tests[i].name);
+            printf("*** %s\n", name);
 
-            if (!tests[i].func())
+            if (!func())
                 printf("> failed...\n"),
                 res = -1;
             else

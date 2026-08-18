@@ -20,8 +20,6 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-SDF_DEFINE_SPEC(SdfSchema, SdfSpecTypeVariantSet, SdfVariantSetSpec, SdfSpec);
-
 SdfVariantSetSpecHandle 
 SdfVariantSetSpec::New(const SdfPrimSpecHandle& owner, const std::string& name)
 {

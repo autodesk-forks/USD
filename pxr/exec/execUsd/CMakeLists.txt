@@ -13,6 +13,7 @@ pxr_library(execUsd
         
     PUBLIC_HEADERS
         api.h
+        valueOverride.h
 
     PUBLIC_CLASSES
         cacheView
@@ -36,6 +37,62 @@ pxr_library(execUsd
         docs/tutorial2DefiningComputations.md
 )
 
+pxr_build_test(testExecUsdAttributeComputations
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdAttributeComputations.cpp
+)
+
+pxr_register_test(testExecUsdAttributeComputations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeComputations"
+    TESTENV testenv/testExecUsdAttributeComputations
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdAttributeExpressions
+    LIBRARIES
+        tf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdAttributeExpressions.cpp
+)
+
+pxr_register_test(testExecUsdAttributeExpressions
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeExpressions"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testenv/testExecUsdAttributeExpressions
+)
+
+pxr_build_test(testExecUsdAttributeValueInput
+    LIBRARIES
+        tf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdAttributeValueInput.cpp
+)
+
+pxr_register_test(testExecUsdAttributeValueInput
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdAttributeValueInput"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testenv/testExecUsdAttributeValueInput
+)
+
 pxr_build_test(testExecUsdBasicCompilation
     LIBRARIES
         gf
@@ -49,17 +106,132 @@ pxr_build_test(testExecUsdBasicCompilation
         testenv/testExecUsdBasicCompilation.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecUsdBasicCompilation
-    DEST testExecUsdBasicCompilation
-)
-
 pxr_register_test(testExecUsdBasicCompilation
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdBasicCompilation"
+    TESTENV testenv/testExecUsdBasicCompilation
     EXPECTED_RETURN_CODE 0
-    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFile.py testCompiler.dot testCompiler.out"
+    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py testCompiler.dot"
     DIFF_COMPARE testCompiler.out
-    TESTENV testExecUsdBasicCompilation
+)
+
+pxr_build_test(testExecUsdBuiltinComputations
+    LIBRARIES
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        tf
+        usd
+        vdf
+    CPPFILES
+        testenv/testExecUsdBuiltinComputations.cpp
+)
+
+pxr_register_test(testExecUsdBuiltinComputations
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdBuiltinComputations"
+    TESTENV testenv/testExecUsdBuiltinComputations
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdCallbacks
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdCallbacks.cpp
+)
+
+pxr_register_test(testExecUsdCallbacks
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdCallbacks"
+    TESTENV testenv/testExecUsdCallbacks
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdConnections
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdConnections.cpp
+)
+
+pxr_register_test(testExecUsdConnections
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConnections"
+    TESTENV testenv/testExecUsdConnections
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdConnectionsStochastic
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        usd
+        usdGeom
+        vdf
+        work
+    CPPFILES
+        testenv/testExecUsdConnectionsStochastic.cpp
+)
+
+pxr_register_test(testExecUsdConnectionsStochastic
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConnectionsStochastic"
+    TESTENV testenv/testExecUsdConnectionsStochastic
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdComputeWithOverrides
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdComputeWithOverrides.cpp
+)
+
+pxr_register_test(testExecUsdComputeWithOverrides
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdComputeWithOverrides"
+    TESTENV testenv/testExecUsdComputeWithOverrides
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdConstantInput
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        plug
+        sdf
+        vdf
+        usd
+    CPPFILES
+        testenv/testExecUsdConstantInput.cpp
+)
+
+pxr_register_test(testExecUsdConstantInput
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdConstantInput"
+    TESTENV testenv/testExecUsdConstantInput
+    EXPECTED_RETURN_CODE 0
+    POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py testConstantInput.dot"
+    DIFF_COMPARE testConstantInput.out
 )
 
 pxr_build_test(testExecUsdDispatchedComputations
@@ -74,15 +246,66 @@ pxr_build_test(testExecUsdDispatchedComputations
         testenv/testExecUsdDispatchedComputations.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecUsdDispatchedComputations
-    DEST testExecUsdDispatchedComputations
-)
-
 pxr_register_test(testExecUsdDispatchedComputations
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdDispatchedComputations"
+    TESTENV testenv/testExecUsdDispatchedComputations
     EXPECTED_RETURN_CODE 0
-    TESTENV testExecUsdDispatchedComputations
+)
+
+pxr_build_test(testExecUsdInvalidation
+    LIBRARIES
+        exec
+        execUsd
+        sdf
+        tf
+        ts
+        usd
+        vt
+    CPPFILES
+        testenv/testExecUsdInvalidation.cpp
+)
+
+pxr_register_test(testExecUsdInvalidation
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdInvalidation"
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdMetadataInput
+    LIBRARIES
+        tf
+        esf
+        exec
+        execUsd
+        vdf
+        usdGeom
+    CPPFILES
+        testenv/testExecUsdMetadataInput.cpp
+)
+
+pxr_register_test(testExecUsdMetadataInput
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdMetadataInput"
+    TESTENV testenv/testExecUsdMetadataInput
+    EXPECTED_RETURN_CODE 0
+)
+
+pxr_build_test(testExecUsdCycleDetection
+    LIBRARIES
+        ef
+        exec
+        execUsd
+        plug
+        sdf
+        tf
+        usd
+        vdf
+    CPPFILES
+        testenv/testExecUsdCycleDetection.cpp
+)
+
+pxr_register_test(testExecUsdCycleDetection
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdCycleDetection"
+    EXPECTED_RETURN_CODE 0
+    TESTENV testenv/testExecUsdCycleDetection
 )
 
 pxr_build_test(testExecUsdRecompilation
@@ -98,13 +321,9 @@ pxr_build_test(testExecUsdRecompilation
         testenv/testExecUsdRecompilation.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecUsdRecompilation
-    DEST testExecUsdRecompilation
-)
-
 pxr_register_test(testExecUsdRecompilation
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRecompilation"
+    TESTENV testenv/testExecUsdRecompilation
     EXPECTED_RETURN_CODE 0
     POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py                    \
         TestRecompileDisconnectedAttributeInput-1.dot                          \
@@ -172,13 +391,9 @@ pxr_build_test(testExecUsdRequest
         testenv/testExecUsdRequest.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecUsdRequest
-    DEST testExecUsdRequest
-)
-
 pxr_register_test(testExecUsdRequest
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRequest"
+    TESTENV testenv/testExecUsdRequest
     EXPECTED_RETURN_CODE 0
 )
 
@@ -213,13 +428,9 @@ pxr_build_test(testExecUsdRequestInvalidation
         testenv/testExecUsdRequestInvalidation.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecUsdRequestInvalidation
-    DEST testExecUsdRequestInvalidation
-)
-
 pxr_register_test(testExecUsdRequestInvalidation
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRequestInvalidation"
+    TESTENV testenv/testExecUsdRequestInvalidation
     EXPECTED_RETURN_CODE 0
 )
 
@@ -235,13 +446,9 @@ pxr_build_test(testExecUsdUncompilation
         testenv/testExecUsdUncompilation.cpp
 )
 
-pxr_install_test_dir(
-    SRC testenv/testExecUsdUncompilation
-    DEST testExecUsdUncompilation
-)
-
 pxr_register_test(testExecUsdUncompilation
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdUncompilation"
+    TESTENV testenv/testExecUsdUncompilation
     EXPECTED_RETURN_CODE 0
     POST_COMMAND "${PYTHON_EXECUTABLE} normalizeDotFiles.py                    \
         TestUncompileAttributeInput-compiled.dot                               \
@@ -261,4 +468,57 @@ pxr_register_test(testExecUsdUncompilation
     DIFF_COMPARE TestUncompileNamespaceAncestorInput-uncompiled.out
     DIFF_COMPARE TestUncompileRecursiveResync-compiled.out
     DIFF_COMPARE TestUncompileRecursiveResync-uncompiled.out
+)
+
+pxr_build_test(testExecUsdRecompilation_Perf
+    LIBRARIES
+        arch
+        tf
+        trace
+        plug
+        exec
+        execUsd
+        sdf
+        usd
+    CPPFILES
+        testenv/testExecUsdRecompilation_Perf.cpp
+)
+
+pxr_register_test(testExecUsdRecompilation_Perf_TouchRel
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRecompilation_Perf       \
+            TouchRel --branchingFactor 5 --treeDepth 7 --rel /Root/Prim1.rel"
+    TESTENV testenv/testExecUsdRecompilation_Perf
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+    RUN_SERIAL
+)
+
+pxr_register_test(testExecUsdRecompilation_Perf_AddTarget
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRecompilation_Perf       \
+            AddTarget --branchingFactor 5 --treeDepth 7 --rel /Root/Prim1.rel  \
+            --target /Root/Prim2"
+    TESTENV testenv/testExecUsdRecompilation_Perf
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+    RUN_SERIAL
+)
+
+pxr_register_test(testExecUsdRecompilation_Perf_AddTargetToNewHierarchy
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRecompilation_Perf       \
+            AddTargetToNewHierarchy --branchingFactor 5 --treeDepth 7          \
+            --rel /Root/Prim1.rel"
+    TESTENV testenv/testExecUsdRecompilation_Perf
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+    RUN_SERIAL
+)
+
+pxr_register_test(testExecUsdRecompilation_Perf_AddTargetToConnectedHierarchy
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testExecUsdRecompilation_Perf       \
+            AddTargetToConnectedHierarchy --branchingFactor 5 --treeDepth 7    \
+            --rel /Root/Prim1.rel --target /Root/Prim2"
+    TESTENV testenv/testExecUsdRecompilation_Perf
+    EXPECTED_RETURN_CODE 0
+    ENV TF_FATAL_VERIFY=1
+    RUN_SERIAL
 )

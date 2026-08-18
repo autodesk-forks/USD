@@ -22,6 +22,8 @@
 #include "pxr/usd/usdGeom/cone.h"
 #include "pxr/usd/usdGeom/plane.h"
 #include "pxr/usd/usdGeom/points.h"
+#include "pxr/usd/usdGeom/primvar.h"
+#include "pxr/usd/usdGeom/primvarsAPI.h"
 
 #include "pxr/usd/usdGeom/metrics.h"
 
@@ -54,6 +56,9 @@
 
 #include "pxr/base/work/dispatcher.h"
 #include "pxr/base/work/loops.h"
+
+#include <algorithm>
+#include <tbb/concurrent_vector.h>
 
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -806,34 +811,40 @@ bool _ParseSpherePointsShapeDesc(const UsdPhysicsCollisionAPI& collisionAPI,
 
             VtArray<float> widths;
             VtArray<GfVec3f> positions;
-            shape.GetWidthsAttr().Get(&widths);
-            if (widths.size())
+            shape.GetPointsAttr().Get(&positions);
+
+            const UsdGeomPrimvarsAPI primvarsAPI(usdPrim);
+            const UsdGeomPrimvar widthsPrimvar =
+                primvarsAPI.GetPrimvar(UsdGeomTokens->widths);
+
+            if (widthsPrimvar && widthsPrimvar.HasAuthoredValue())
             {
-                shape.GetPointsAttr().Get(&positions);
-                if (positions.size() == widths.size())
+                widthsPrimvar.ComputeFlattened(&widths);
+            }
+            else
+            {
+                shape.GetWidthsAttr().Get(&widths);
+            }
+
+            if (widths.size() && positions.size() == widths.size())
+            {
+                float sphereScale = 1.0f;
                 {
-                    float sphereScale = 1.0f;
-                    {
-                        const GfVec3d sc = tr.GetScale();
+                    const GfVec3d sc = tr.GetScale();
 
-                        sphereScale = fmaxf(fmaxf(fabsf(float(sc[1])), 
-                                                  fabsf(float(sc[0]))),
-                                            fabsf(float(sc[2])));
-                    }
-
-                    const size_t scount = positions.size();
-                    outSpherePointsShapeDesc->spherePoints.resize(scount);
-                    for (size_t i = 0; i < scount; i++)
-                    {
-                        outSpherePointsShapeDesc->spherePoints[i].radius =
-                            sphereScale * widths[i] * 0.5f;
-                        outSpherePointsShapeDesc->spherePoints[i].center =
-                            positions[i];
-                    }
+                    sphereScale = fmaxf(fmaxf(fabsf(float(sc[1])),
+                                              fabsf(float(sc[0]))),
+                                        fabsf(float(sc[2])));
                 }
-                else
+
+                const size_t scount = positions.size();
+                outSpherePointsShapeDesc->spherePoints.resize(scount);
+                for (size_t i = 0; i < scount; i++)
                 {
-                    outSpherePointsShapeDesc->isValid = false;
+                    outSpherePointsShapeDesc->spherePoints[i].radius =
+                        sphereScale * widths[i] * 0.5f;
+                    outSpherePointsShapeDesc->spherePoints[i].center =
+                        positions[i];
                 }
             }
             else
@@ -1984,13 +1995,20 @@ void _FinalizeCollision(UsdStageWeakPtr stage,
 // Finalize the collision desc, run in parallel
 template <typename DescType>
 void _FinalizeCollisionDescs(
-    UsdGeomXformCache& xfCache, const std::vector<UsdPrim>& physicsPrims, 
+    const std::vector<UsdPrim>& physicsPrims,
     std::vector<DescType>& physicsDesc, const RigidBodyMap& bodyMap,
-    const std::map<SdfPath, std::unordered_set<SdfPath, 
+    const std::map<SdfPath, std::unordered_set<SdfPath,
     SdfPath::Hash>>& collisionGroups)
 {
-    const auto workLambda = [physicsPrims, &physicsDesc, bodyMap, 
-        collisionGroups]
+    // Collect (body, collision path) pairs in a thread-safe container so we
+    // avoid concurrent push_back on bodyDesc->collisions (not thread-safe).
+    using BodyCollisionPair =
+        std::pair<UsdPhysicsRigidBodyDesc*, SdfPath>;
+    tbb::concurrent_vector<BodyCollisionPair> bodyCollisionPairs;
+    bodyCollisionPairs.reserve(physicsPrims.size());
+
+    const auto workLambda = [&physicsPrims, &physicsDesc, &bodyMap,
+        &collisionGroups, &bodyCollisionPairs]
     (const size_t beginIdx, const size_t endIdx)
     {
         for (size_t i = beginIdx; i < endIdx; i++)
@@ -2001,23 +2019,23 @@ void _FinalizeCollisionDescs(
                 const UsdPrim prim = physicsPrims[i];
                 // get the body
                 SdfPath bodyPath = _GetRigidBody(prim, bodyMap);
-                // body was found, add collision to the body
                 UsdPhysicsRigidBodyDesc* bodyDesc = nullptr;
                 if (bodyPath != SdfPath())
                 {
-                    RigidBodyMap::const_iterator bodyIt = 
+                    RigidBodyMap::const_iterator bodyIt =
                             bodyMap.find(bodyPath);
                     if (bodyIt != bodyMap.end())
                     {
                         bodyDesc = bodyIt->second;
-                        bodyDesc->collisions.push_back(colDesc.primPath);
+                        bodyCollisionPairs.push_back(
+                            BodyCollisionPair(bodyDesc, colDesc.primPath));
                     }
                 }
 
                 // check if collision belongs to collision groups
-                for (std::map<SdfPath, 
-                    std::unordered_set<SdfPath, 
-                        SdfPath::Hash>>::const_iterator it = 
+                for (std::map<SdfPath,
+                    std::unordered_set<SdfPath,
+                        SdfPath::Hash>>::const_iterator it =
                             collisionGroups.begin();
                     it != collisionGroups.end(); ++it)
                 {
@@ -2035,6 +2053,25 @@ void _FinalizeCollisionDescs(
 
     const size_t numPrimPerBatch = 10;
     WorkParallelForN(physicsPrims.size(), workLambda, numPrimPerBatch);
+
+    // Merge into bodyDesc->collisions single-threaded. Sort by body path
+    // so all collisions for the same body are consecutive (better locality)
+    // and by collision path for deterministic ordering.
+    if (!bodyCollisionPairs.empty())
+    {
+        std::sort(bodyCollisionPairs.begin(), bodyCollisionPairs.end(),
+            [](const BodyCollisionPair& a, const BodyCollisionPair& b) {
+                if (a.first->primPath < b.first->primPath)
+                    return true;
+                if (b.first->primPath < a.first->primPath)
+                    return false;
+                return a.second < b.second;
+            });
+        for (const BodyCollisionPair& pair : bodyCollisionPairs)
+        {
+            pair.first->collisions.push_back(pair.second);
+        }
+    }
 }
 
 struct ArticulationLink
@@ -2053,13 +2090,14 @@ TfHashMap<SdfPath, std::vector<const UsdPhysicsJointDesc*>, SdfPath::Hash>;
 using JointMap = std::map<SdfPath, UsdPhysicsJointDesc*>;
 using ArticulationMap = std::map<SdfPath, UsdPhysicsArticulationDesc*>;
 
-bool _IsInLinkMap(const SdfPath& path, 
-                 const std::vector<ArticulationLinkMap>& linkMaps)
+bool _IsInLinkMap(
+    const SdfPath& path, 
+    const std::vector<std::pair<SdfPath, ArticulationLinkMap>>& linkMaps)
 {
     for (size_t i = 0; i < linkMaps.size(); i++)
     {
-        ArticulationLinkMap::const_iterator it = linkMaps[i].find(path);
-        if (it != linkMaps[i].end())
+        ArticulationLinkMap::const_iterator it = linkMaps[i].second.find(path);
+        if (it != linkMaps[i].second.end())
             return true;
     }
 
@@ -2067,7 +2105,7 @@ bool _IsInLinkMap(const SdfPath& path,
 }
 
 // Recursive traversal of the hierarchy, adding weight for the links based on number
-// of childs and if it belongs to a joint to world
+// of children and if it belongs to a joint to world
 // Each child adds 100 weight, while if link belongs to a MC joint it adds 1000 weight
 // if link belong to a joint to world it adds 10000 weight. The weight is used
 // if an articulation root has to be decided automatically. 
@@ -2156,6 +2194,41 @@ void _TraverseChilds(const ArticulationLink& link,
             }
         }
     }
+}
+
+// If all links are nested under the topPath return the topPath
+// else return an empty path, signifying the articulation is not nested
+SdfPath _IsNestedArticulation(const SdfPath& topPath, 
+    const ArticulationLinkMap& map)
+{
+    bool nestedBodies = true;
+    for (ArticulationLinkMap::const_reference& ref : map)
+    {
+        const SdfPath& linkPath = ref.first;
+
+        bool parentFound = false;
+        for (const SdfPath& p : linkPath.GetAncestorsRange())
+        {
+            if (p == topPath)
+            {
+                parentFound = true;
+                break;
+            }
+        }
+
+        if (!parentFound)
+        {
+            nestedBodies = false;
+            break;
+        }
+    }
+
+    if (nestedBodies)
+    {
+        return topPath;
+    }
+
+    return SdfPath();
 }
 
 // Get the center of graph
@@ -2254,8 +2327,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
                     RigidBodyMap::const_iterator fit = 
                         rigidBodyMap.find(desc->body0);
                     if (fit != rigidBodyMap.end() && 
-                        fit->second->rigidBodyEnabled &&
-                        !fit->second->kinematicBody)
+                        fit->second->rigidBodyEnabled)
                     {
                         bodyJointMap[desc->body0].push_back(desc);
                     }
@@ -2265,8 +2337,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
                     RigidBodyMap::const_iterator fit = 
                         rigidBodyMap.find(desc->body1);
                     if (fit != rigidBodyMap.end() && 
-                        fit->second->rigidBodyEnabled &&
-                        !fit->second->kinematicBody)
+                        fit->second->rigidBodyEnabled)
                     {
                         bodyJointMap[desc->body1].push_back(desc);
                     }
@@ -2277,7 +2348,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
 
     // first get user defined articulation roots
     // then search for the best root in the articulation hierarchy
-    const auto workLambda = [rigidBodyMap, jointMap, stage, bodyJointMap]
+    const auto workLambda = [&rigidBodyMap, &jointMap, stage, &bodyJointMap]
     (ArticulationMap::const_reference& it)
     {
         SdfPathVector articulationLinkOrderVector;
@@ -2322,7 +2393,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
         if (!articulationPrim)
             return;
         UsdPrimRange range(articulationPrim, UsdTraverseInstanceProxies());
-        std::vector<ArticulationLinkMap> articulationLinkMaps;
+        std::vector<std::pair<SdfPath, ArticulationLinkMap>> articulationLinkMaps;
         articulationLinkOrderVector.clear();
 
         for (UsdPrimRange::const_iterator iter = range.begin(); 
@@ -2341,9 +2412,11 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
             RigidBodyMap::const_iterator bodyIt = rigidBodyMap.find(primPath);
             if (bodyIt != rigidBodyMap.end())
             {
-                articulationLinkMaps.push_back(ArticulationLinkMap());
+                articulationLinkMaps.push_back(
+                    std::make_pair(primPath, ArticulationLinkMap()));
                 uint32_t index = 0;
-                _TraverseHierarchy(stage, primPath, articulationLinkMaps.back(),
+                _TraverseHierarchy(
+                    stage, primPath, articulationLinkMaps.back().second, 
                     bodyJointMap, index, &articulationLinkOrderVector);
             }
         }
@@ -2352,7 +2425,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
         {
             for (size_t i = 0; i < articulationLinkMaps.size(); i++)
             {
-                const ArticulationLinkMap& map = articulationLinkMaps[i];
+                const ArticulationLinkMap& map = articulationLinkMaps[i].second;
                 SdfPath linkPath = SdfPath();
                 uint32_t largestWeight = 0;
                 bool hasFixedJoint = false;
@@ -2394,11 +2467,19 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
                 }
 
                 // for floating articulation lets find the body with the
-                // shortest paths (center of graph)
+                // shortest paths (top node in the nested articulation chain or
+                // center of graph)
                 if (!hasFixedJoint)
                 {
-                    linkPath = _GetCenterOfGraph(map, 
-                                                articulationLinkOrderVector);
+                    // check if we have articulation defined by nesting, 
+                    // then we pick the first body of the chain
+                    linkPath = _IsNestedArticulation(
+                        articulationLinkMaps[i].first, map);
+                    if (linkPath == SdfPath())
+                    {
+                        linkPath = _GetCenterOfGraph(map,
+                            articulationLinkOrderVector);
+                    }
                 }
 
                 if (linkPath != SdfPath())
@@ -2411,7 +2492,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
         {
             for (size_t i = 0; i < articulationLinkMaps.size(); i++)
             {
-                const ArticulationLinkMap& map = articulationLinkMaps[i];
+                const ArticulationLinkMap& map = articulationLinkMaps[i].second;
                 for (ArticulationLinkMap::const_reference& linkIt : map)
                 {
                     for (size_t j = linkIt.second.joints.size(); j--;)
@@ -2423,7 +2504,7 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
         }
         for (size_t i = 0; i < articulationLinkMaps.size(); i++)
         {
-            const ArticulationLinkMap& map = articulationLinkMaps[i];
+            const ArticulationLinkMap& map = articulationLinkMaps[i].second;
             for (ArticulationLinkMap::const_reference& linkIt : map)
             {
                 articulatedBodies.insert(linkIt.second.children.begin(), 
@@ -2450,12 +2531,13 @@ void _FinalizeArticulations(const UsdStageWeakPtr stage,
                         workLambda);
 }
 
-bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
+bool UsdPhysicsLoadStageFromPrimRange(
+    const UsdStageWeakPtr& stage,
     const std::vector<SdfPath>& includePaths,
     UsdPhysicsReportFn reportFn,
     const VtValue& userData,
     const std::vector<SdfPath>* excludePaths,
-    const CustomUsdPhysicsTokens* customPhysicsTokens,
+    const UsdPhysicsCustomTokens* customPhysicsTokens,
     const std::vector<SdfPath>* simulationOwners)
 {
     bool retVal = true;
@@ -2551,8 +2633,11 @@ bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
             const UsdPrimTypeInfo& typeInfo = prim.GetPrimTypeInfo();
 
             uint32_t apiFlags = 0;
-            const TfTokenVector& apis =
-                prim.GetPrimTypeInfo().GetAppliedAPISchemas();
+
+            // Here we need to get the applied schemas to get schemas
+            // that are also inherited.
+            const TfTokenVector& apis = prim.GetAppliedSchemas();
+
             for (const TfToken& token : apis)
             {
                 if (token == gArticulationRootAPIToken)
@@ -2885,7 +2970,8 @@ bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
     // first get the type
     std::vector<UsdPhysicsObjectType> collisionTypes;
     collisionTypes.resize(collisionPrims.size());
-    std::vector<TfToken> customTokens;
+    std::vector<TfToken> customGeomTokens;
+    customGeomTokens.resize(collisionPrims.size());
     {
         const auto workLambda = [&](const size_t beginIdx, const size_t endIdx)
         {
@@ -2895,18 +2981,18 @@ bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
                 {
                     TfToken shapeToken;
                     const UsdPhysicsObjectType shapeType =
-                        _GetCollisionType(collisionPrims[i], 
-                                         &customPhysicsTokens->shapeTokens, 
+                        _GetCollisionType(collisionPrims[i],
+                                         &customPhysicsTokens->shapeTokens,
                                          &shapeToken);
                     collisionTypes[i] = shapeType;
                     if (shapeType == UsdPhysicsObjectType::CustomShape)
                     {
-                        customTokens.push_back(shapeToken);
+                        customGeomTokens[i] = shapeToken;
                     }
                 }
                 else
                 {
-                    collisionTypes[i] = _GetCollisionType(collisionPrims[i], 
+                    collisionTypes[i] = _GetCollisionType(collisionPrims[i],
                                                          nullptr, nullptr);
                 }
             }
@@ -2927,6 +3013,7 @@ bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
     std::vector<UsdPrim> meshShapePrims;
     std::vector<UsdPrim> spherePointsShapePrims;
     std::vector<UsdPrim> customShapePrims;
+    std::vector<TfToken> customTokens;
     for (size_t i = 0; i < collisionTypes.size(); i++)
     {
         UsdPhysicsObjectType type = collisionTypes[i];
@@ -2980,6 +3067,7 @@ bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
         case UsdPhysicsObjectType::CustomShape:
         {
             customShapePrims.push_back(collisionPrims[i]);
+            customTokens.push_back(customGeomTokens[i]);
         }
         break;
         case UsdPhysicsObjectType::SpherePointsShape:
@@ -3075,41 +3163,32 @@ bool LoadUsdPhysicsFromRange(const UsdStageWeakPtr stage,
 
     // Finalize collisions
     {
-        UsdGeomXformCache xfCache;
-
         _FinalizeCollisionDescs<UsdPhysicsSphereShapeDesc>
-            (xfCache, sphereShapePrims, sphereShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (sphereShapePrims, sphereShapeDescs, bodyMap, collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsCubeShapeDesc>
-            (xfCache, cubeShapePrims, cubeShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (cubeShapePrims, cubeShapeDescs, bodyMap, collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsCapsuleShapeDesc>
-            (xfCache, capsuleShapePrims, capsuleShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (capsuleShapePrims, capsuleShapeDescs, bodyMap, collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsCapsule1ShapeDesc>
-            (xfCache, capsule1ShapePrims, capsule1ShapeDescs, bodyMap, 
-            collisionGroupSets);
+            (capsule1ShapePrims, capsule1ShapeDescs, bodyMap, 
+             collisionGroupSets);
          _FinalizeCollisionDescs<UsdPhysicsCylinderShapeDesc>
-            (xfCache, cylinderShapePrims, cylinderShapeDescs, bodyMap, 
+            (cylinderShapePrims, cylinderShapeDescs, bodyMap, 
              collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsCylinder1ShapeDesc>
-            (xfCache, cylinder1ShapePrims, cylinder1ShapeDescs, bodyMap, 
-            collisionGroupSets);
+            (cylinder1ShapePrims, cylinder1ShapeDescs, bodyMap, 
+             collisionGroupSets);
          _FinalizeCollisionDescs<UsdPhysicsConeShapeDesc>
-            (xfCache, coneShapePrims, coneShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (coneShapePrims, coneShapeDescs, bodyMap, collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsPlaneShapeDesc>
-            (xfCache, planeShapePrims, planeShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (planeShapePrims, planeShapeDescs, bodyMap, collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsMeshShapeDesc>
-            (xfCache, meshShapePrims, meshShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (meshShapePrims, meshShapeDescs, bodyMap, collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsSpherePointsShapeDesc>
-            (xfCache, spherePointsShapePrims, spherePointsShapeDescs, bodyMap, 
+            (spherePointsShapePrims, spherePointsShapeDescs, bodyMap, 
              collisionGroupSets);
         _FinalizeCollisionDescs<UsdPhysicsCustomShapeDesc>
-            (xfCache, customShapePrims, customShapeDescs, bodyMap, 
-             collisionGroupSets);
+            (customShapePrims, customShapeDescs, bodyMap, collisionGroupSets);
     }
 
     // Finalize articulations

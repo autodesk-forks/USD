@@ -5,6 +5,7 @@
 // https://openusd.org/license.
 //
 #include "pxr/usdImaging/usdImaging/materialAdapter.h"
+#include "pxr/base/tf/stringUtils.h"
 #include "pxr/usdImaging/usdImaging/dataSourceMaterial.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/indexProxy.h"
@@ -115,6 +116,9 @@ _CreateTerminalLocator(const TfToken& output)
     return HdMaterialSchema::GetDefaultLocator();
 }
 
+// Hash map used to track seen connections during notification processing.
+using _ConnectionSet = TfHashSet<UsdShadeConnectionSourceInfo, TfHash>;
+
 // Recusively check nodes starting at the terminal to find the dirty prim.
 // If the dirty prim is the source material also check the specific dirty
 // property.
@@ -123,10 +127,17 @@ _IsConnectionDirty(
     const UsdPrim& dirtyPrim,
     const TfTokenVector& dirtyProperties,
     const UsdShadeMaterial& material,
-    const UsdShadeConnectionSourceInfo& connection)
+    const UsdShadeConnectionSourceInfo& connection,
+    _ConnectionSet& seenConnections)
 {
-    if (!connection.IsValid())
+    if (seenConnections.find(connection) != seenConnections.end()) {
+        // Already visited this connection and determined it is not dirty.
         return false;
+    }
+    if (!connection.IsValid()) {
+        seenConnections.insert(connection);
+        return false;
+    }
 
     // If we reach the root material only dirty if we are connected to the
     // specific property which is dirty and don't recurse further.
@@ -145,6 +156,7 @@ _IsConnectionDirty(
                 }
             }
         }
+        seenConnections.insert(connection);
         return false;
     }
 
@@ -162,7 +174,7 @@ _IsConnectionDirty(
                  output.GetConnectedSources()) {
                 if (_IsConnectionDirty(
                         dirtyPrim, dirtyProperties, material,
-                        outputConnection)) {
+                        outputConnection, seenConnections)) {
                     return true;
                 }
             }
@@ -173,13 +185,14 @@ _IsConnectionDirty(
     for (UsdShadeInput& input : connection.source.GetInputs()) {
         for (UsdShadeConnectionSourceInfo& inputConnection :
              input.GetConnectedSources()) {
-            if (_IsConnectionDirty(
-                    dirtyPrim, dirtyProperties, material, inputConnection)) {
+            if (_IsConnectionDirty(dirtyPrim, dirtyProperties, material,
+                                   inputConnection, seenConnections)) {
                 return true;
             }
         }
     }
 
+    seenConnections.insert(connection);
     return false;
 }
 
@@ -199,10 +212,35 @@ UsdImagingMaterialAdapter::InvalidateImagingSubprim(
 
     // If we dirtied an interface input dirty that terminal
     for (UsdShadeOutput& output : material.GetOutputs()) {
+        bool terminalDirty = false;
+        for (const TfToken& property : properties) {
+            if (output.GetFullName() == property) {
+                // Invalidate the affected terminal.
+                result.insert(_CreateTerminalLocator(output.GetBaseName()));
+                // Due to the way UsdImagingDataSourceMaterial::Get() returns
+                // a retained nodegraph, and only includes nodes that were
+                // reachable at the time, we must also invalidate the nodes
+                // locator here as well.
+                result.insert(HdMaterialSchema::GetDefaultLocator());
+                terminalDirty = true;
+                break;
+            }
+        }
+        if (terminalDirty) {
+            continue;
+        }
         for (UsdShadeConnectionSourceInfo& connection :
              output.GetConnectedSources()) {
-            if (_IsConnectionDirty(prim, properties, material, connection)) {
+            _ConnectionSet seenConnections;
+            if (_IsConnectionDirty(prim, properties, material, connection,
+                                   seenConnections)) {
                 result.insert(_CreateTerminalLocator(output.GetBaseName()));
+                // An upstream node or material interface input changed.
+                // Invalidate the nodes locator so node parameter values
+                // (including those resolved via material interface connections)
+                // are re-read.  The same logic applies as for the output-dirty
+                // case above.  Fixes FLOW-7634.
+                result.insert(HdMaterialSchema::GetDefaultLocator());
             }
         }
     }
@@ -216,6 +254,21 @@ UsdImagingMaterialAdapter::InvalidateImagingSubprim(
     return result;
 }
 
+// XXX From dataSourceMaterial.cpp; can we share this somewhere?
+// Extract the renderContext from an output name, ex:
+// "outputs:surface" -> ""
+// "outputs:ri:surface" -> "ri"
+static TfToken
+_GetRenderContextForShaderOutput(UsdShadeOutput const& output)
+{
+    TfToken ns = output.GetAttr().GetNamespace();
+    if (TfStringStartsWith(ns, UsdShadeTokens->outputs)) {
+        return TfToken(ns.GetString().substr(UsdShadeTokens->outputs.size()));
+    }
+    // Empty namespace, e.g. "outputs:foo" -> ""
+    return TfToken();
+}
+
 HdDataSourceLocatorSet
 UsdImagingMaterialAdapter::InvalidateImagingSubprimFromDescendent(
         UsdPrim const& prim,
@@ -227,17 +280,51 @@ UsdImagingMaterialAdapter::InvalidateImagingSubprimFromDescendent(
     HdDataSourceLocatorSet result;
 
     UsdShadeMaterial material(prim);
-    if (!material) {
+    if (!TF_VERIFY(material)) {
+        return result;
+    }
+
+    // Check whether the only changes made were UI related.
+    // If so do not invalidate the material, since UI changes are not propagated
+    // to Hydra
+    bool onlyUIChanges = true;
+    static const std::string uiNodegraph("ui:nodegraph:");
+    for (const TfToken& property : properties) {
+        if (!TfStringStartsWith(property.GetString(), uiNodegraph)) {
+            onlyUIChanges = false;
+            break;
+        }
+    }
+
+    if (onlyUIChanges) {
         return result;
     }
 
     // Find which terminal (if any) we should dirty
     for (UsdShadeOutput& output : material.GetOutputs()) {
+        bool outputIsDirty = false;
         for (UsdShadeConnectionSourceInfo& connection :
              output.GetConnectedSources()) {
-            if (_IsConnectionDirty(
-                    descendentPrim, properties, material, connection)) {
+            _ConnectionSet seenConnections;
+            if (_IsConnectionDirty(descendentPrim, properties, material,
+                                   connection, seenConnections)) {
                 result.insert(_CreateTerminalLocator(output.GetBaseName()));
+                outputIsDirty = true;
+                break;
+            }
+        }
+        if (outputIsDirty) {
+            // Dirty the associated shader node used by this output.
+            // Also dirty the shader node in the "all" context.
+            for (TfToken const& renderContext:
+                 { _GetRenderContextForShaderOutput(output),
+                   HdMaterialSchemaTokens->all })
+            {
+                result.insert(
+                    HdMaterialSchema::GetDefaultLocator()
+                    .Append(renderContext)
+                    .Append(HdMaterialNetworkSchemaTokens->nodes)
+                    .Append(descendentPrim.GetName()));
             }
         }
     }
@@ -375,8 +462,9 @@ UsdImagingMaterialAdapter::ProcessPropertyChange(
     SdfPath const& cachePath,
     TfToken const& propertyName)
 {
-    if (propertyName == UsdGeomTokens->visibility) {
-        // Materials aren't affected by visibility
+    if (propertyName == UsdGeomTokens->visibility ||
+        UsdGeomXformable::IsTransformationAffectedByAttrNamed(propertyName)) {
+        // Materials aren't affected by visibility or transforms
         return HdChangeTracker::Clean;
     }
 
