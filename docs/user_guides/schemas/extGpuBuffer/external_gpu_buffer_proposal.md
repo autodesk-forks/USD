@@ -187,6 +187,14 @@ issues into whatever GL context is current — the producer's own — but it is 
 promise, and it is the reason a foreign-device producer cannot publish this
 shape.
 
+**There is no sync child, and it is optional here.** With a GL producer and a GL
+consumer sharing one context, commands execute in submission order, so if the
+producer records its write before Storm records its read the ordering is
+implicit — no published semaphore, and nothing more for the producer to do. The
+sync child earns its keep only when the two sides are *distinct* submissions that
+GL cannot order for free — a separate producer queue, or a foreign-device /
+foreign-API producer — which is what the Vulkan examples below add.
+
 What this publish cannot do is serve a Vulkan consumer. Storm on Vulkan sees a
 `backendApi` it does not match, finds no import cluster to fall back to, and reads
 the CPU value instead. The rest of the examples are Vulkan-consumer publishes,
@@ -445,12 +453,14 @@ picks one of three outcomes:
 1. **Adopt** — `backendApi` matches the active Hgi, both the physical device and
    the logical device match, and `rawHandle` is set. Storm wraps the handle
    non-owningly and binds it.
-2. **Import** — otherwise, if the physical device matches, the import cluster
-   is present, *and* `directBindable` is true, Storm calls
-   `Hgi::CreateBufferFromExternalMemory` to build its own buffer over the
-   producer's allocation. The `directBindable` requirement is deliberate:
-   importing memory only to blit it into a Storm-owned buffer would cost more
-   than the CPU upload it replaces.
+2. **Import** — otherwise, if the physical device matches and the import
+   cluster is present, Storm calls `Hgi::CreateBufferFromExternalMemory` to
+   build its own buffer over the producer's allocation. This serves both
+   consumption strategies: a `directBindable` stream is bound zero-copy, and a
+   non-`directBindable` one is GPU→GPU blitted from the imported buffer into
+   the aggregated VBO. Either way the CPU round trip is avoided, which for a
+   foreign-device producer — one with no cheap CPU copy of its own — is cheaper
+   than the CPU fallback, not more expensive.
 3. **Fall back** — neither route is open; bump
    `HdStPerfTokens->extGpuBufferFallbackCount` and return null, so the caller
    reads the CPU primvar.
@@ -476,10 +486,13 @@ invalidation. This path is not aggregatable — each buffer is its own binding.
 
 **Copy into aggregated storage — `directBindable = false`.** The source is
 aggregated normally, and the aggregation strategy's `CopyData` detects the
-external source and performs a **GPU → GPU blit** from the producer's buffer into
-Storm's own vertex buffer, instead of a CPU upload. The geometry stays inside
-Storm's indirect-draw batches, at the cost of one blit per dirty primvar per
-frame for animating geometry.
+external source and performs a **GPU → GPU blit** into Storm's own vertex
+buffer, instead of a CPU upload. The blit source is whatever the route
+resolved — the adopted handle on the adopt route, or the imported buffer on the
+import route — so this strategy works for both; `CopyData` reads a single
+resolved `HgiBuffer` and does not care how it was named. The geometry stays
+inside Storm's indirect-draw batches, at the cost of one blit per dirty primvar
+per frame for animating geometry.
 
 ```mermaid
 flowchart TD
@@ -500,7 +513,7 @@ flowchart TD
     A --> D2{"directBindable?"}
     I --> D2
     D2 -->|true| D["alias range<br/>binds buffer — no copy"]
-    D2 -->|"false<br/>(adopt only)"| C["GPU to GPU blit<br/>into aggregated VBO"]
+    D2 -->|false| C["GPU to GPU blit<br/>into aggregated VBO"]
   end
 
   P --> P1
@@ -1018,6 +1031,7 @@ backend implementing the interop surface.
 | Core schema, adopt route, direct-bind and blit strategies | Landed |
 | Binary RAW/WAR semaphores, native and imported | Landed |
 | Foreign-memory import route | Landed |
+| Import + blit for non-`directBindable` foreign producers | Landed — the blit is route-agnostic, reading the imported buffer with no new plumbing; covered by `testHdStExtGpuBuffer_Vulkan_Interop_Copy` |
 | Imported-buffer cache, refcounted — released when the last consumer range lets go, not at renderer teardown | Landed |
 | Imported-semaphore cache | Landed, but registry-owned for the whole session; refcounting it needs the command queue's pending wait/signal lists to hold a reference first |
 | Producer-observable allocation lifetime — keepalive on `HgiBuffer`, retained from the data source carrying the bound handle | Landed |
@@ -1030,7 +1044,7 @@ backend implementing the interop surface.
 
 Coverage comes from `testHdStExtGpuBuffer`, which renders the same cube (and an
 instanced grid) through the CPU primvar path and the shared-buffer path and
-compares pixels, in three producer topologies:
+compares pixels, in these producer topologies and consumption strategies:
 
 - default — Storm's own `Hgi` allocates a plain buffer; adopt route.
 - `--vulkanSync` (`testHdStExtGpuBuffer_Vulkan_Sync`) — a Vulkan producer
@@ -1040,10 +1054,16 @@ compares pixels, in three producer topologies:
   *second* `HgiVulkan` stands in for a producer with its own device; import route
   with imported semaphores. This is the acceptance case, since the single-device
   topology cannot by construction catch device-mismatch or UUID-negotiation bugs.
+  It publishes `directBindable = true`, so it covers import + zero-copy alias.
+- `--vulkanInterop --copy` (`testHdStExtGpuBuffer_Vulkan_Interop_Copy`) — the
+  same two-device import topology, but publishing `directBindable = false`, so
+  Storm imports the foreign allocation and then GPU → GPU blits it into its
+  aggregated VBO. This covers the import + blit path that the direct-bind interop
+  test does not.
 
-All three publish `logicalDeviceId`, so the matching path is exercised, but none
-yet publishes a `rawHandle` from a *foreign* logical device — the case the gate
-exists for. Covering it means having the two-device producer offer both handles
+All of them publish `logicalDeviceId`, so the matching path is exercised, but
+none yet publishes a `rawHandle` from a *foreign* logical device — the case the
+gate exists for. Covering it means having the two-device producer offer both handles
 and asserting the import route is still taken, which is worth adding since the
 failure it guards against is an adopted handle from the wrong namespace: undefined
 behaviour rather than a clean error.
