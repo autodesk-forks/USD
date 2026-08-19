@@ -165,7 +165,7 @@ HdSt_TryCreateExtGpuBufferSource(
     if (apiMatches && deviceMatches && namespaceMatches &&
             hdDesc.rawHandle != 0) {
         // 1. Adopt: the handle names an object this backend can bind as-is.
-    } else if (deviceMatches && hdDesc.CanImport() && hdDesc.directBindable) {
+    } else if (deviceMatches && hdDesc.CanImport()) {
         // 2. Import: the producer's memory lives elsewhere (another logical
         //    device, or another API whose object handle means nothing here), so
         //    build our own buffer aliasing that memory. Note this route ignores
@@ -173,9 +173,13 @@ HdSt_TryCreateExtGpuBufferSource(
         //    deviceMatches: an opaque handle is only importable on the physical
         //    device that exported it, and a doomed import would otherwise be
         //    retried (uncached, since failures are not cached) every Sync.
-        //    Restricted to directBindable streams: importing memory only to
-        //    blit it into a Storm-owned buffer costs more than the CPU path it
-        //    would replace.
+        //    Both consumption strategies are served from the imported buffer:
+        //    a directBindable stream is aliased and bound zero-copy, while a
+        //    non-directBindable stream is GPU-to-GPU blitted into Storm's
+        //    aggregated VBO. The blit still avoids the CPU round trip this path
+        //    exists to remove -- for a foreign-device producer, which has no
+        //    cheap CPU copy of its own, that is cheaper than the CPU fallback,
+        //    not more expensive.
         hdDesc.importedBuffer =
             registry->GetOrCreateImportedExtGpuBuffer(hdDesc);
         if (!hdDesc.importedBuffer) {

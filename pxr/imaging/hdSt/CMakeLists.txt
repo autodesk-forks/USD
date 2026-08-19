@@ -746,6 +746,20 @@ pxr_register_test(testHdStExtGpuBuffer_Vulkan_Interop
     ENV
         HGI_ENABLE_VULKAN=1
 )
+# Same two-device import topology, but with directBindable=false (--copy): Storm
+# imports the foreign allocation and then GPU->GPU blits it into its aggregated
+# VBO rather than binding it zero-copy. Covers the import + blit path, which the
+# direct-bind interop test above does not.
+pxr_register_test(testHdStExtGpuBuffer_Vulkan_Interop_Copy
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdStExtGpuBuffer --offscreen --vulkanInterop --copy"
+    EXPECTED_RETURN_CODE 0
+    PRE_PATH
+        ${CMAKE_INSTALL_PREFIX}/lib
+        ${CMAKE_INSTALL_PREFIX}/bin
+        ${_hdSt_pyRuntimeDir}
+    ENV
+        HGI_ENABLE_VULKAN=1
+)
 endif()
 endif()
 endif()

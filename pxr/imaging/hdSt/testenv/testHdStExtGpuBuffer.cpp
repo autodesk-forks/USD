@@ -33,6 +33,13 @@
 //     and native semaphores are deliberately NOT published: they belong to
 //     another logical device, so only the OS handles are meaningful.
 //
+// Orthogonal to the producer topology, --copy publishes directBindable=false,
+// which flips the consumption strategy from zero-copy direct bind to a GPU->GPU
+// blit into Storm's aggregated vertex buffer. Combined with --vulkanInterop it
+// is the interesting case: the buffer is IMPORTED from a foreign logical device
+// and then blitted (rather than aliased), exercising the import + blit path that
+// the adopt-route default and the direct-bind interop test do not.
+//
 // The geometry is published through a HdRetainedSceneIndex inserted into the
 // render index, because the schema lives as a data-source *child* of the
 // primvar -- the legacy HdUnitTestDelegate emulation path would not carry it.
@@ -276,6 +283,12 @@ private:
     // in for a producer that owns its own device, so Storm has to import the OS
     // handle rather than adopt a VkBuffer.
     bool _vulkanInterop = false;
+
+    // --copy: publish directBindable=false so the consumer copies (GPU->GPU
+    // blit) the shared buffer into its own aggregated VBO instead of binding it
+    // zero-copy. With --vulkanInterop this drives the import + blit path.
+    bool _directBindable = true;
+
     HgiUniquePtr _producerHgi;
     std::vector<HgiBufferHandle> _producerBuffers;
     std::vector<uint64_t> _producerSemaphores;
@@ -669,7 +682,7 @@ My_TestGLDrawing::_WithExtGpuBuffer(
             HdRetainedTypedSampledDataSource<HdTupleType>::New(elementType))
         .SetByteOffset(_SizeDs::New(0))
         .SetByteStride(_SizeDs::New(0))
-        .SetDirectBindable(_BoolDs::New(true));
+        .SetDirectBindable(_BoolDs::New(_directBindable));
 
     if (shared.rawHandle) {
         builder.SetRawHandle(_U64Ds::New(shared.rawHandle));
@@ -1154,6 +1167,8 @@ My_TestGLDrawing::ParseArgs(int argc, char *argv[])
             _vulkanSync = true;
         } else if (arg == "--vulkanInterop") {
             _vulkanInterop = true;
+        } else if (arg == "--copy") {
+            _directBindable = false;
         } else if (arg == "--writeCpu") {
             _writeCpu = true;   // --write emits the CPU image instead of GPU
         }
